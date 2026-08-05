@@ -1,0 +1,154 @@
+{
+  "site": {
+    "title": "ReadySetSiivous — Ammattitaitoiset siivouspalvelut",
+    "description": "Ammattitaitoiset kodin ja toimiston siivouspalvelut. Vakuutettu, taustatarkistettu henkilökunta. Varaa WhatsAppilla hetkessä."
+  },
+  "nav": {
+    "services": "Palvelut",
+    "about": "Meistä",
+    "checklist": "Tarkistuslista",
+    "contact": "Yhteystiedot",
+    "whatsappButton": "Keskustele WhatsAppissa"
+  },
+  "hero": {
+    "headline": "Ammattitaitoiset siivouspalvelut alueellasi",
+    "subheadline": "Vakuutetut, taustatarkistetut ja luotetut siivoojat. Pyydä välitön tarjous ja varaa alle 60 sekunnissa — ilman puheluita tai vaivaa.",
+    "cta": "Pyydä tarjous WhatsAppissa",
+    "secondaryCta": "Katso palvelumme"
+  },
+  "trustBadges": {
+    "insured": "Vakuutettu",
+    "vetted": "Taustatarkistettu",
+    "satisfaction": "100% Tyytyväisyys",
+    "eco": "Ympäristöystävälliset"
+  },
+  "quoteForm": {
+    "title": "Pyydä välitön tarjous",
+    "subtitle": "Täytä tiedot ja saat henkilökohtaisen tarjouksen WhatsAppissa.",
+    "serviceType": "Palvelutyyppi",
+    "selectService": "Valitse palvelu…",
+    "homeCleaning": "Kotisiivous",
+    "deepCleaning": "Syväsiivous",
+    "moveOutCleaning": "Muutosiivous",
+    "officeCleaning": "Toimistosiivous",
+    "propertySize": "Asunnon koko",
+    "sizeStudio": "Yksiö (25–35 m²)",
+    "sizeSmall": "Pieni (36–55 m²)",
+    "sizeMedium": "Keskikokoinen (56–85 m²)",
+    "sizeLarge": "Suuri (86–120 m²)",
+    "sizeXLarge": "Erittäin suuri (120+ m²)",
+    "sizeRooms1": "1–2 huonetta",
+    "sizeRooms3": "3–4 huonetta",
+    "sizeRooms5": "5–6 huonetta",
+    "sizeRooms7": "7+ huonetta",
+    "city": "Sijainti / Kaupunki",
+    "cityPlaceholder": "esim. Helsinki, Espoo, Vantaa…",
+    "date": "Toivottu siivouspäivä",
+    "datePlaceholder": "Valitse päivämäärä",
+    "submit": "Lähetä WhatsAppissa",
+    "submitting": "Avataan WhatsApp…",
+    "errorDate": "Valitse toivottu päivämäärä.",
+    "errorCity": "Syötä kaupunkisi.",
+    "errorService": "Valitse palvelu."
+  },
+  "whatsapp": {
+    "greeting": "Hei! Haluaisin tarjouksen siivouspalveluista.",
+    "serviceLabel": "Palvelu",
+    "sizeLabel": "Asunnon koko",
+    "cityLabel": "Kaupunki",
+    "dateLabel": "Toivottu päivä",
+    "languageNote": "Haluan asioida suomeksi"
+  },
+  "services": {
+    "title": "Siivouspalvelumme",
+    "subtitle": "Säännöllisestä kodin ylläpidosta syväsiivouksiin — hoidamme kaiken.",
+    "home": {
+      "title": "Kotisiivous",
+      "description": "Säännöllinen viikoittainen tai joka toinen viikko tapahtuva kodin siivous. Pölyjen pyyhintä, imurointi, lattioiden pesu, kylpyhuoneen ja keittiön perusteellinen puhdistus.",
+      "price": "Alk. 35 €/h"
+    },
+    "deep": {
+      "title": "Syväsiivous",
+      "description": "Perusteellinen koko kodin siivous. Jalkalistat, kodinkoneiden takaa, kaappien sisäpuolet, ikkunalaudat ja paljon muuta.",
+      "price": "Alk. 45 €/h"
+    },
+    "moveOut": {
+      "title": "Muutosiivous",
+      "description": "Kattava loppusiivous takuuvuokran palautuksen varmistamiseksi. Kodinkoneet, seinät, lattiat, ikkunat — kaikki.",
+      "price": "Alk. 50 €/h"
+    },
+    "office": {
+      "title": "Toimistosiivous",
+      "description": "Päivittäinen tai viikoittainen yrityssiivous. Työpöydät, roskakorit, lattiat, keittiönurkkaukset ja kosketuspintojen desinfiointi.",
+      "price": "Alk. 30 €/h"
+    }
+  },
+  "checklist": {
+    "title": "Mitä sisältyy?",
+    "subtitle": "Vertaa mitä saat kullakin siivoustasolla. Ei piilokuluja — kaikki on läpinäkyvää.",
+    "standard": "Perussiivous",
+    "deep": "Syväsiivous",
+    "included": "Sisältyy",
+    "notIncluded": "Ei sisälly",
+    "items": {
+      "dusting": "Pintojen ja hyllyjen pölyjen pyyhintä",
+      "vacuuming": "Mattojen imurointi",
+      "mopping": "Kovien lattioiden pesu",
+      "kitchenSurfaces": "Keittiön tasojen pyyhintä",
+      "bathroom": "Kylpyhuoneen puhdistus ja desinfiointi",
+      "trash": "Roskakorien tyhjennys",
+      "mirrors": "Peilien ja lasipintojen puhdistus",
+      "cabinets": "Kaappien ja vaatekaappien sisäpuolten puhdistus",
+      "baseboards": "Jalkalistojen ja kynnysten puhdistus",
+      "appliances": "Kodinkoneiden takaa ja alta siivous",
+      "oven": "Uunin sisäpuolen syväpuhdistus",
+      "fridge": "Jääkaapin sisäpuolen puhdistus",
+      "windows": "Ikkunalaudat ja karmit",
+      "fixtures": "Valaisimet ja ilmanvaihtoventtiilit",
+      "walls": "Seinien ja ovien tahranpoisto"
+    }
+  },
+  "about": {
+    "title": "Miksi valita ReadySetSiivous?",
+    "subtitle": "Emme ole vain yksi siivousyritys lisää — olemme luotettu paikallinen kumppanisi puhtaampaan ja terveellisempään tilaan.",
+    "points": {
+      "staff": {
+        "title": "Taustatarkistettu henkilökunta",
+        "description": "Jokainen siivooja käy läpi perusteellisen taustatarkistuksen ja henkilökohtaisen haastattelun ennen kuin he pukevat työasumme."
+      },
+      "insured": {
+        "title": "Täysin vakuutettu",
+        "description": "Omaisuutesi ja tavarasi on suojattu. Siivoa luottavaisin mielin tietäen, että olet turvassa."
+      },
+      "satisfaction": {
+        "title": "100% tyytyväisyystakuu",
+        "description": "Etkö ole tyytyväinen? Siivoamme uudelleen 24 tunnin kuluessa veloituksetta. Ilman kysymyksiä."
+      },
+      "eco": {
+        "title": "Ympäristöystävälliset tuotteet",
+        "description": "Käytämme biohajoavia, myrkyttömiä puhdistustuotteita, jotka ovat turvallisia lapsille, lemmikeille ja ympäristölle."
+      },
+      "local": {
+        "title": "Paikallinen ja luotettava",
+        "description": "Palvelemme Helsingin metropolialuetta ylpeydellä. Saman päivän ja viikonlopun aikoja saatavilla."
+      },
+      "simple": {
+        "title": "Varaa 60 sekunnissa",
+        "description": "Ei puhelinrumbaa, ei sähköpostiviestittelyä. Täytä vain nopea lomake ja vahvista WhatsAppissa."
+      }
+    }
+  },
+  "footer": {
+    "areasServed": "Toimialueemme",
+    "areas": ["Helsinki", "Espoo", "Vantaa", "Kauniainen", "Kirkkonummi", "Tuusula"],
+    "contact": "Yhteystiedot",
+    "hours": "Aukioloajat",
+    "hoursText": "Ma–Pe: 07:00–21:00 | La: 09:00–18:00",
+    "copyright": "© 2026 ReadySetSiivous. Kaikki oikeudet pidätetään.",
+    "privacy": "Tietosuojaseloste",
+    "terms": "Käyttöehdot"
+  },
+  "floatingWhatsApp": {
+    "tooltip": "Keskustele kanssamme!"
+  }
+}

@@ -1,0 +1,154 @@
+{
+  "site": {
+    "title": "ReadySetSiivous — Professionella städtjänster",
+    "description": "Professionella städtjänster för hem och företag. Försäkrat, bakgrundskontrollerad personal. Boka via WhatsApp på sekunder."
+  },
+  "nav": {
+    "services": "Tjänster",
+    "about": "Om oss",
+    "checklist": "Checklista",
+    "contact": "Kontakt",
+    "whatsappButton": "Chatta på WhatsApp"
+  },
+  "hero": {
+    "headline": "Professionella städtjänster i ditt område",
+    "subheadline": "Försäkrade, bakgrundskontrollerade och pålitliga städare. Få din offert direkt och boka på under 60 sekunder — inga samtal, inget krångel.",
+    "cta": "Få offert via WhatsApp",
+    "secondaryCta": "Se våra tjänster"
+  },
+  "trustBadges": {
+    "insured": "Försäkrad",
+    "vetted": "Bakgrundskontrollerad",
+    "satisfaction": "100% Nöjdhet",
+    "eco": "Miljövänliga Produkter"
+  },
+  "quoteForm": {
+    "title": "Få din offert direkt",
+    "subtitle": "Fyll i uppgifterna och få en personlig offert via WhatsApp.",
+    "serviceType": "Typ av tjänst",
+    "selectService": "Välj en tjänst…",
+    "homeCleaning": "Hemstädning",
+    "deepCleaning": "Storstädning",
+    "moveOutCleaning": "Flyttstädning",
+    "officeCleaning": "Kontorsstädning",
+    "propertySize": "Bostadsstorlek",
+    "sizeStudio": "Etta (25–35 m²)",
+    "sizeSmall": "Liten (36–55 m²)",
+    "sizeMedium": "Mellan (56–85 m²)",
+    "sizeLarge": "Stor (86–120 m²)",
+    "sizeXLarge": "Mycket stor (120+ m²)",
+    "sizeRooms1": "1–2 rum",
+    "sizeRooms3": "3–4 rum",
+    "sizeRooms5": "5–6 rum",
+    "sizeRooms7": "7+ rum",
+    "city": "Plats / Stad",
+    "cityPlaceholder": "t.ex. Helsingfors, Esbo, Vanda…",
+    "date": "Önskat städdatum",
+    "datePlaceholder": "Välj ett datum",
+    "submit": "Skicka via WhatsApp",
+    "submitting": "Öppnar WhatsApp…",
+    "errorDate": "Välj ett önskat datum.",
+    "errorCity": "Ange din stad.",
+    "errorService": "Välj en tjänst."
+  },
+  "whatsapp": {
+    "greeting": "Hej! Jag skulle vilja ha en offert för städtjänster.",
+    "serviceLabel": "Tjänst",
+    "sizeLabel": "Bostadsstorlek",
+    "cityLabel": "Stad",
+    "dateLabel": "Önskat datum",
+    "languageNote": "Jag föredrar kommunikation på svenska"
+  },
+  "services": {
+    "title": "Våra städtjänster",
+    "subtitle": "Från regelbunden hemstädning till djupgående kontorsstädning — vi gör allt.",
+    "home": {
+      "title": "Hemstädning",
+      "description": "Regelbunden vecko- eller varannan vecka-städning. Dammtorkning, dammsugning, golvtvätt, badrum och kök grundligt avtorkade.",
+      "price": "Från 35 €/h"
+    },
+    "deep": {
+      "title": "Storstädning",
+      "description": "Grundlig städning från topp till tå. Golvlister, bakom vitvaror, insida av skåp, fönsterbrädor och mycket mer.",
+      "price": "Från 45 €/h"
+    },
+    "moveOut": {
+      "title": "Flyttstädning",
+      "description": "Fullständig slutstädning för att säkra din deposition. Vitvaror, väggar, golv, fönster — allt.",
+      "price": "Från 50 €/h"
+    },
+    "office": {
+      "title": "Kontorsstädning",
+      "description": "Daglig eller veckovis kommersiell städning. Skrivbord, papperskorgar, golv, pentryn och desinfektion av högkontaktytor.",
+      "price": "Från 30 €/h"
+    }
+  },
+  "checklist": {
+    "title": "Vad ingår?",
+    "subtitle": "Jämför vad du får med varje städnivå. Inga dolda avgifter — allt är transparent.",
+    "standard": "Grundstädning",
+    "deep": "Storstädning",
+    "included": "Ingår",
+    "notIncluded": "Ingår ej",
+    "items": {
+      "dusting": "Dammtorkning av ytor och hyllor",
+      "vacuuming": "Dammsugning av mattor",
+      "mopping": "Tvätt av hårda golv",
+      "kitchenSurfaces": "Avtorkning av köksytor",
+      "bathroom": "Badrumsrengöring och desinfektion",
+      "trash": "Tömning av alla papperskorgar",
+      "mirrors": "Rengöring av speglar och glasytor",
+      "cabinets": "Invändig rengöring av skåp och garderober",
+      "baseboards": "Rengöring av golvlister och trösklar",
+      "appliances": "Städning bakom och under vitvaror",
+      "oven": "Djuprengöring av ugnens insida",
+      "fridge": "Invändig rengöring av kylskåp",
+      "windows": "Rengöring av fönsterbrädor och karmar",
+      "fixtures": "Lampor och ventilationsgaller",
+      "walls": "Fläckborttagning på väggar och dörrar"
+    }
+  },
+  "about": {
+    "title": "Varför välja ReadySetSiivous?",
+    "subtitle": "Vi är inte bara ännu ett städföretag — vi är din pålitliga lokala partner för ett renare och hälsosammare utrymme.",
+    "points": {
+      "staff": {
+        "title": "Bakgrundskontrollerad personal",
+        "description": "Varje städare genomgår en grundlig bakgrundskontroll och personlig intervju innan de bär vår uniform."
+      },
+      "insured": {
+        "title": "Fullt försäkrad",
+        "description": "Din egendom och dina tillhörigheter är skyddade. Städa med förtroende och veta att du är trygg."
+      },
+      "satisfaction": {
+        "title": "100% nöjdhetsgaranti",
+        "description": "Inte nöjd? Vi städar om inom 24 timmar utan kostnad. Inga frågor ställda."
+      },
+      "eco": {
+        "title": "Miljövänliga produkter",
+        "description": "Vi använder biologiskt nedbrytbara, giftfria rengöringsprodukter som är säkra för barn, husdjur och planeten."
+      },
+      "local": {
+        "title": "Lokal och pålitlig",
+        "description": "Vi betjänar Helsingforsregionen med stolthet. Samma dag och helgtider tillgängliga."
+      },
+      "simple": {
+        "title": "Boka på 60 sekunder",
+        "description": "Inga telefonköer, inga e-postmeddelanden fram och tillbaka. Fyll bara i ett snabbt formulär och bekräfta på WhatsApp."
+      }
+    }
+  },
+  "footer": {
+    "areasServed": "Områden vi betjänar",
+    "areas": ["Helsingfors", "Esbo", "Vanda", "Grankulla", "Kyrkslätt", "Tusby"],
+    "contact": "Kontakt",
+    "hours": "Öppettider",
+    "hoursText": "Mån–Fre: 07:00–21:00 | Lör: 09:00–18:00",
+    "copyright": "© 2026 ReadySetSiivous. Alla rättigheter förbehålls.",
+    "privacy": "Integritetspolicy",
+    "terms": "Användarvillkor"
+  },
+  "floatingWhatsApp": {
+    "tooltip": "Chatta med oss!"
+  }
+}

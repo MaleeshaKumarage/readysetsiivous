@@ -1,0 +1,154 @@
+{
+  "site": {
+    "title": "ReadySetSiivous — Professional Cleaning Services",
+    "description": "Professional residential and commercial cleaning services. Insured, vetted staff. Book via WhatsApp in seconds."
+  },
+  "nav": {
+    "services": "Services",
+    "about": "About Us",
+    "checklist": "Checklist",
+    "contact": "Contact",
+    "whatsappButton": "Chat on WhatsApp"
+  },
+  "hero": {
+    "headline": "Professional Cleaning Services in Your Area",
+    "subheadline": "Insured, vetted, and trusted cleaners. Get your instant quote and book in under 60 seconds — no calls, no hassle.",
+    "cta": "Get Instant Quote via WhatsApp",
+    "secondaryCta": "View Our Services"
+  },
+  "trustBadges": {
+    "insured": "Insured & Bonded",
+    "vetted": "Vetted Staff",
+    "satisfaction": "100% Satisfaction",
+    "eco": "Eco-Friendly Products"
+  },
+  "quoteForm": {
+    "title": "Get Your Instant Quote",
+    "subtitle": "Fill in the details and receive a personalised quote via WhatsApp.",
+    "serviceType": "Service Type",
+    "selectService": "Select a service…",
+    "homeCleaning": "Home Cleaning",
+    "deepCleaning": "Deep Cleaning",
+    "moveOutCleaning": "Move-out Cleaning",
+    "officeCleaning": "Office Cleaning",
+    "propertySize": "Property Size",
+    "sizeStudio": "Studio (25–35 m²)",
+    "sizeSmall": "Small (36–55 m²)",
+    "sizeMedium": "Medium (56–85 m²)",
+    "sizeLarge": "Large (86–120 m²)",
+    "sizeXLarge": "Extra Large (120+ m²)",
+    "sizeRooms1": "1–2 rooms",
+    "sizeRooms3": "3–4 rooms",
+    "sizeRooms5": "5–6 rooms",
+    "sizeRooms7": "7+ rooms",
+    "city": "Location / City",
+    "cityPlaceholder": "e.g. Helsinki, Espoo, Vantaa…",
+    "date": "Preferred Cleaning Date",
+    "datePlaceholder": "Select a date",
+    "submit": "Submit via WhatsApp",
+    "submitting": "Opening WhatsApp…",
+    "errorDate": "Please select a preferred date.",
+    "errorCity": "Please enter your city.",
+    "errorService": "Please select a service."
+  },
+  "whatsapp": {
+    "greeting": "Hi! I'd like a quote for cleaning services.",
+    "serviceLabel": "Service",
+    "sizeLabel": "Property Size",
+    "cityLabel": "City",
+    "dateLabel": "Preferred Date",
+    "languageNote": "I prefer communication in English"
+  },
+  "services": {
+    "title": "Our Cleaning Services",
+    "subtitle": "From regular home upkeep to deep commercial cleans — we do it all.",
+    "home": {
+      "title": "Home Cleaning",
+      "description": "Regular weekly or bi-weekly home cleaning. Dusting, vacuuming, mopping, bathroom & kitchen deep wipe-down.",
+      "price": "From €35/h"
+    },
+    "deep": {
+      "title": "Deep Cleaning",
+      "description": "Thorough top-to-bottom clean. Baseboards, behind appliances, cabinet interiors, windowsills, and more.",
+      "price": "From €45/h"
+    },
+    "moveOut": {
+      "title": "Move-out Cleaning",
+      "description": "Full end-of-tenancy clean to secure your deposit return. Appliances, walls, floors, windows — everything.",
+      "price": "From €50/h"
+    },
+    "office": {
+      "title": "Office Cleaning",
+      "description": "Daily or weekly commercial cleaning. Desks, bins, floors, kitchenettes, and sanitisation of high-touch points.",
+      "price": "From €30/h"
+    }
+  },
+  "checklist": {
+    "title": "What's Included?",
+    "subtitle": "Compare what you get with each cleaning tier. No hidden fees — everything is transparent.",
+    "standard": "Standard Clean",
+    "deep": "Deep Clean",
+    "included": "Included",
+    "notIncluded": "Not included",
+    "items": {
+      "dusting": "Dusting all surfaces & shelves",
+      "vacuuming": "Vacuuming carpets & rugs",
+      "mopping": "Mopping hard floors",
+      "kitchenSurfaces": "Kitchen surface wipe-down",
+      "bathroom": "Bathroom cleaning & sanitising",
+      "trash": "Emptying all trash bins",
+      "mirrors": "Mirror & glass surface cleaning",
+      "cabinets": "Inside cabinet & wardrobe cleaning",
+      "baseboards": "Baseboards, trims & skirting boards",
+      "appliances": "Behind/under appliance cleaning",
+      "oven": "Oven interior deep clean",
+      "fridge": "Fridge interior clean",
+      "windows": "Window sills & frame cleaning",
+      "fixtures": "Light fixtures & vent covers",
+      "walls": "Spot cleaning walls & doors"
+    }
+  },
+  "about": {
+    "title": "Why Choose ReadySetSiivous?",
+    "subtitle": "We're not just another cleaning company — we're your trusted local partner for a cleaner, healthier space.",
+    "points": {
+      "staff": {
+        "title": "Background-Checked Staff",
+        "description": "Every cleaner undergoes a thorough background check and in-person interview before they wear our uniform."
+      },
+      "insured": {
+        "title": "Fully Insured & Bonded",
+        "description": "Your property and belongings are covered. Clean with confidence knowing you're protected."
+      },
+      "satisfaction": {
+        "title": "100% Satisfaction Guarantee",
+        "description": "Not happy? We'll re-clean within 24 hours at no charge. No questions asked."
+      },
+      "eco": {
+        "title": "Eco-Friendly Products",
+        "description": "We use biodegradable, non-toxic cleaning products safe for kids, pets, and the planet."
+      },
+      "local": {
+        "title": "Local & Reliable",
+        "description": "Serving the Helsinki metropolitan area with pride. Same-day and weekend slots available."
+      },
+      "simple": {
+        "title": "Book in 60 Seconds",
+        "description": "No phone tag, no back-and-forth emails. Just fill in a quick form and confirm on WhatsApp."
+      }
+    }
+  },
+  "footer": {
+    "areasServed": "Areas We Serve",
+    "areas": ["Helsinki", "Espoo", "Vantaa", "Kauniainen", "Kirkkonummi", "Tuusula"],
+    "contact": "Contact",
+    "hours": "Operating Hours",
+    "hoursText": "Mon–Fri: 07:00–21:00 | Sat: 09:00–18:00",
+    "copyright": "© 2026 ReadySetSiivous. All rights reserved.",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Service"
+  },
+  "floatingWhatsApp": {
+    "tooltip": "Chat with us!"
+  }
+}
