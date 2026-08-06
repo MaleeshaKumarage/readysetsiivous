@@ -189,6 +189,47 @@
       }
     }
   },
+  "pricingTransparency": {
+    "title": "What's Included in Our Prices",
+    "subtitle": "No hidden fees — what you see is what you pay.",
+    "vat": "VAT included (sis. ALV 25.5%)",
+    "supplies": "Cleaning supplies & equipment included",
+    "travel": "No travel fees within the Helsinki metro area",
+    "hidden": "No hidden charges — ever"
+  },
+  "keySecurity": {
+    "title": "Key Handling & Security",
+    "subtitle": "Your home security is our priority.",
+    "insurance": "Key insurance (Avainturva) included",
+    "tracking": "Digital key tracking — you always know who has access",
+    "handover": "Flexible options: personal handover, lockbox, or trusted key holder",
+    "certified": "All staff background-checked & identity verified"
+  },
+  "ecoPetBadges": {
+    "title": "Safe for Your Family & Pets",
+    "ecoTitle": "Eco-Friendly",
+    "ecoDesc": "Biodegradable, non-toxic cleaning products",
+    "allergyTitle": "Allergy-Safe",
+    "allergyDesc": "Fragrance-free & hypoallergenic options available",
+    "petTitle": "Pet-Friendly",
+    "petDesc": "Safe for dogs, cats & all household pets",
+    "certifiedTitle": "Certified",
+    "certifiedDesc": "Products meet EU environmental standards"
+  },
+  "emergencyCta": {
+    "title": "Need Cleaning Right Now?",
+    "description": "We offer same-day cleaning slots across Helsinki, Espoo & Vantaa. Message us on WhatsApp and we'll find a time that works — often within a few hours.",
+    "button": "Ask for Same-Day Availability"
+  },
+  "responsibleEmployer": {
+    "title": "Cleaning You Can Feel Good About",
+    "subtitle": "We treat our team right — so they treat your home right.",
+    "tes": "TES collective agreement wages — fair pay for every cleaner",
+    "insured": "Full insurance coverage for staff & your property",
+    "background": "Background-checked & reference-verified staff",
+    "training": "Professional training & ongoing quality audits",
+    "taxes": "All taxes & social contributions paid in Finland"
+  },
   "footer": {
     "areasServed": "Areas We Serve",
     "areas": ["Helsinki", "Espoo", "Vantaa", "Kauniainen", "Kirkkonummi", "Tuusula"],

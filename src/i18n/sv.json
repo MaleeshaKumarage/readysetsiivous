@@ -189,6 +189,47 @@
       }
     }
   },
+  "pricingTransparency": {
+    "title": "Vad ingår i våra priser",
+    "subtitle": "Inga dolda avgifter — du betalar bara det du ser.",
+    "vat": "Moms ingår (25.5%)",
+    "supplies": "Rengöringsprodukter och utrustning ingår",
+    "travel": "Inga reseavgifter inom huvudstadsregionen",
+    "hidden": "Inga dolda avgifter — någonsin"
+  },
+  "keySecurity": {
+    "title": "Nyckelhantering & Säkerhet",
+    "subtitle": "Din hemsäkerhet är vår prioritet.",
+    "insurance": "Nyckelförsäkring (Avainturva) ingår",
+    "tracking": "Digital nyckelspårning — du vet alltid vem som har tillgång",
+    "handover": "Flexibla alternativ: personlig överlämning, nyckelskåp eller betrodd person",
+    "certified": "All personal bakgrundskontrollerad och identitetsverifierad"
+  },
+  "ecoPetBadges": {
+    "title": "Säkert för din familj och dina husdjur",
+    "ecoTitle": "Miljövänlig",
+    "ecoDesc": "Biologiskt nedbrytbara, giftfria rengöringsprodukter",
+    "allergyTitle": "Allergivänlig",
+    "allergyDesc": "Parfymfria och hypoallergena alternativ tillgängliga",
+    "petTitle": "Husdjursvänlig",
+    "petDesc": "Säkert för katter, hundar och alla husdjur",
+    "certifiedTitle": "Certifierad",
+    "certifiedDesc": "Produkterna uppfyller EU:s miljöstandarder"
+  },
+  "emergencyCta": {
+    "title": "Behöver du städning direkt?",
+    "description": "Vi erbjuder städning samma dag i Helsingfors, Esbo och Vanda. Skicka ett meddelande på WhatsApp så hittar vi en tid som passar — ofta inom några timmar.",
+    "button": "Fråga om tillgänglighet samma dag"
+  },
+  "responsibleEmployer": {
+    "title": "Städning du kan känna dig bra om",
+    "subtitle": "Vi behandlar vårt team väl — så att de behandlar ditt hem väl.",
+    "tes": "Kollektivavtalsenliga löner — rättvis lön för varje städare",
+    "insured": "Full försäkring för personal och din egendom",
+    "background": "Bakgrundskontrollerad och referensverifierad personal",
+    "training": "Professionell utbildning och löpande kvalitetskontroller",
+    "taxes": "Alla skatter och sociala avgifter betalas i Finland"
+  },
   "footer": {
     "areasServed": "Områden vi betjänar",
     "areas": ["Helsingfors", "Esbo", "Vanda", "Grankulla", "Kyrkslätt", "Tusby"],

@@ -189,6 +189,47 @@
       }
     }
   },
+  "pricingTransparency": {
+    "title": "Mitä hintoihimme sisältyy",
+    "subtitle": "Ei piilokuluja — maksat vain sen mitä näet.",
+    "vat": "Sisältää ALV:n (25.5%)",
+    "supplies": "Puhdistusaineet ja -välineet sisältyvät hintaan",
+    "travel": "Ei matkakuluja pääkaupunkiseudulla",
+    "hidden": "Ei piilokuluja — koskaan"
+  },
+  "keySecurity": {
+    "title": "Avainhallinta & Turvallisuus",
+    "subtitle": "Kotisi turvallisuus on prioriteettimme.",
+    "insurance": "Avainturva sisältyy palveluun",
+    "tracking": "Digitaalinen avainten seuranta — tiedät aina kenellä on pääsy",
+    "handover": "Joustavat vaihtoehdot: henkilökohtainen luovutus, avainlokerikko tai luottohenkilö",
+    "certified": "Kaikki työntekijät taustatarkistettu ja henkilöllisyys varmennettu"
+  },
+  "ecoPetBadges": {
+    "title": "Turvallinen perheellesi ja lemmikeillesi",
+    "ecoTitle": "Ympäristöystävällinen",
+    "ecoDesc": "Biohajoavat, myrkyttömät puhdistusaineet",
+    "allergyTitle": "Allergiaystävällinen",
+    "allergyDesc": "Hajusteettomat ja hypoallergeeniset vaihtoehdot saatavilla",
+    "petTitle": "Lemmikkiystävällinen",
+    "petDesc": "Turvallinen kissoille, koirille ja kaikille kotieläimille",
+    "certifiedTitle": "Sertifioitu",
+    "certifiedDesc": "Tuotteet täyttävät EU:n ympäristöstandardit"
+  },
+  "emergencyCta": {
+    "title": "Tarvitsetko siivouksen heti?",
+    "description": "Tarjoamme saman päivän siivousaikoja Helsingissä, Espoossa ja Vantaalla. Laita meille viestiä WhatsAppissa, niin löydämme sinulle sopivan ajan — usein jo muutaman tunnin sisällä.",
+    "button": "Kysy saman päivän aikoja"
+  },
+  "responsibleEmployer": {
+    "title": "Siivousta, josta voit olla ylpeä",
+    "subtitle": "Kohtelemme tiimiämme hyvin — jotta he kohtelevat kotiasi hyvin.",
+    "tes": "TES:n mukainen palkka — reilu korvaus jokaiselle siivoojalle",
+    "insured": "Täysi vakuutusturva henkilökunnalle ja omaisuudellesi",
+    "background": "Taustatarkistettu ja suosituksin varmennettu henkilökunta",
+    "training": "Ammatillinen koulutus ja jatkuvat laatuauditoinnit",
+    "taxes": "Kaikki verot ja sosiaalimaksut maksetaan Suomeen"
+  },
   "footer": {
     "areasServed": "Toimialueemme",
     "areas": ["Helsinki", "Espoo", "Vantaa", "Kauniainen", "Kirkkonummi", "Tuusula"],
