@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
 import LanguageSwitcher from './LanguageSwitcher';
 import ThemeToggle from './ThemeToggle';
-import { getWhatsAppChatUrl } from '@/lib/whatsapp';
+import { getWhatsAppChatUrl, baseUrl } from '@/lib/whatsapp';
 import type { Language } from '@/i18n';
 
 interface NavbarProps {
@@ -23,7 +23,7 @@ export default function Navbar({ lang }: NavbarProps) {
       <div className="container-page">
         <div className="flex items-center justify-between h-16 lg:h-18">
           {/* Logo */}
-          <a href={`/${lang}/`} className="flex items-center gap-2 shrink-0">
+          <a href={baseUrl(`/${lang}/`)} className="flex items-center gap-2 shrink-0">
             <span className="w-9 h-9 rounded-lg bg-brand-500 flex items-center justify-center">
               <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
@@ -46,7 +46,7 @@ export default function Navbar({ lang }: NavbarProps) {
               </a>
             ))}
             <a
-              href={`/${lang}/card/`}
+              href={baseUrl(`/${lang}/card/`)}
               className="px-4 py-2 text-sm font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-500/10 transition-colors"
             >
               📇 Card
@@ -101,7 +101,7 @@ export default function Navbar({ lang }: NavbarProps) {
                 </a>
               ))}
               <a
-                href={`/${lang}/card/`}
+                href={baseUrl(`/${lang}/card/`)}
                 onClick={() => setMobileOpen(false)}
                 className="px-4 py-2.5 text-sm font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-500/10 transition-colors"
               >

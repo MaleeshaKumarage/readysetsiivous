@@ -1,6 +1,6 @@
 'use client';
 
-import { getWhatsAppChatUrl, buildWhatsAppMessage, openWhatsApp } from '@/lib/whatsapp';
+import { getWhatsAppChatUrl, buildWhatsAppMessage, baseUrl } from '@/lib/whatsapp';
 import { useLanguage } from '@/hooks/useLanguage';
 import { LanguageProvider } from '@/context/LanguageContext';
 import type { Language } from '@/i18n';
@@ -85,7 +85,7 @@ function CardContent({ lang }: { lang: Language }) {
           <div className="p-5 space-y-3">
             {/* Save Contact */}
             <a
-              href="/contact.vcf"
+              href={baseUrl('/contact.vcf')}
               download
               className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-brand-500 text-white text-sm font-bold rounded-xl hover:bg-brand-600 transition-colors shadow-md shadow-brand-200 dark:shadow-brand-900/30"
             >
@@ -117,7 +117,7 @@ function CardContent({ lang }: { lang: Language }) {
             </a>
 
             <a
-              href={`/${lang}/`}
+              href={baseUrl(`/${lang}/`)}
               className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-semibold rounded-xl hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
             >
               {L.visitSite}

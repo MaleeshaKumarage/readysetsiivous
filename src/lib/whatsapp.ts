@@ -63,3 +63,12 @@ export function openWhatsApp(message: string): void {
 export function getWhatsAppChatUrl(): string {
   return `https://wa.me/${WHATSAPP_PHONE}`;
 }
+
+/**
+ * Prefix a path with the GitHub Pages basePath (e.g. /readysetsiivous).
+ * Locally the env var is unset, so paths remain absolute (/fi/, /contact.vcf).
+ */
+export function baseUrl(path: string): string {
+  const base = process.env.NEXT_PUBLIC_BASE_PATH || '';
+  return `${base}${path}`;
+}
