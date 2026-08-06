@@ -1,20 +1,23 @@
 {
   "site": {
-    "title": "ReadySetSiivous — Professional Cleaning Services",
-    "description": "Professional residential and commercial cleaning services. Insured, vetted staff. Book via WhatsApp in seconds."
+    "title": "ReadySetSiivous — Professional Cleaning Services | Helsinki, Espoo, Vantaa",
+    "description": "Professional home cleaning, deep cleaning, move-out cleaning, and office cleaning in Helsinki, Espoo & Vantaa. Insured, vetted staff. Book via WhatsApp in seconds.",
+    "locale": "en_FI"
   },
   "nav": {
     "services": "Services",
     "about": "About Us",
     "checklist": "Checklist",
+    "faq": "FAQ",
     "contact": "Contact",
     "whatsappButton": "Chat on WhatsApp"
   },
   "hero": {
-    "headline": "Professional Cleaning Services in Your Area",
-    "subheadline": "Insured, vetted, and trusted cleaners. Get your instant quote and book in under 60 seconds — no calls, no hassle.",
+    "headline": "Professional Home Cleaning in Helsinki, Espoo & Vantaa",
+    "subheadline": "Insured, vetted, and trusted cleaners. Home cleaning, deep cleaning, move-out cleaning, and office cleaning. Get your instant quote and book in under 60 seconds — no calls, no hassle.",
     "cta": "Get Instant Quote via WhatsApp",
-    "secondaryCta": "View Our Services"
+    "secondaryCta": "View Our Services",
+    "localKeywords": "Kotisiivous Espoo — Syväsiivous Helsinki — Muutosiivous Vantaa"
   },
   "trustBadges": {
     "insured": "Insured & Bonded",
@@ -24,14 +27,14 @@
   },
   "quoteForm": {
     "title": "Get Your Instant Quote",
-    "subtitle": "Fill in the details and receive a personalised quote via WhatsApp.",
+    "subtitle": "Fill in the details and receive a personalised quote via WhatsApp in your language.",
     "serviceType": "Service Type",
     "selectService": "Select a service…",
     "homeCleaning": "Home Cleaning",
     "deepCleaning": "Deep Cleaning",
     "moveOutCleaning": "Move-out Cleaning",
     "officeCleaning": "Office Cleaning",
-    "propertySize": "Property Size",
+    "propertySize": "Property Size (m²)",
     "sizeStudio": "Studio (25–35 m²)",
     "sizeSmall": "Small (36–55 m²)",
     "sizeMedium": "Medium (56–85 m²)",
@@ -41,12 +44,14 @@
     "sizeRooms3": "3–4 rooms",
     "sizeRooms5": "5–6 rooms",
     "sizeRooms7": "7+ rooms",
+    "sizeSliderLabel": "Approx. square metres: {size} m²",
     "city": "Location / City",
     "cityPlaceholder": "e.g. Helsinki, Espoo, Vantaa…",
     "date": "Preferred Cleaning Date",
     "datePlaceholder": "Select a date",
     "submit": "Submit via WhatsApp",
     "submitting": "Opening WhatsApp…",
+    "gdprNote": "By clicking, you open WhatsApp to contact us directly. We only use your info to provide a quote. No data is stored on our servers.",
     "errorDate": "Please select a preferred date.",
     "errorCity": "Please enter your city.",
     "errorService": "Please select a service."
@@ -61,27 +66,36 @@
   },
   "services": {
     "title": "Our Cleaning Services",
-    "subtitle": "From regular home upkeep to deep commercial cleans — we do it all.",
+    "subtitle": "From regular home upkeep to deep commercial cleans — we do it all across the Helsinki metropolitan area.",
     "home": {
       "title": "Home Cleaning",
-      "description": "Regular weekly or bi-weekly home cleaning. Dusting, vacuuming, mopping, bathroom & kitchen deep wipe-down.",
+      "description": "Regular weekly or bi-weekly home cleaning in Espoo, Helsinki & Vantaa. Dusting, vacuuming, mopping, bathroom & kitchen deep wipe-down.",
       "price": "From €35/h"
     },
     "deep": {
       "title": "Deep Cleaning",
-      "description": "Thorough top-to-bottom clean. Baseboards, behind appliances, cabinet interiors, windowsills, and more.",
+      "description": "Thorough top-to-bottom deep clean in Helsinki. Baseboards, behind appliances, cabinet interiors, windowsills, and more.",
       "price": "From €45/h"
     },
     "moveOut": {
       "title": "Move-out Cleaning",
-      "description": "Full end-of-tenancy clean to secure your deposit return. Appliances, walls, floors, windows — everything.",
+      "description": "Full end-of-tenancy move-out cleaning in Vantaa & Espoo. Appliances, walls, floors, windows — everything to secure your deposit.",
       "price": "From €50/h"
     },
     "office": {
       "title": "Office Cleaning",
-      "description": "Daily or weekly commercial cleaning. Desks, bins, floors, kitchenettes, and sanitisation of high-touch points.",
+      "description": "Daily or weekly commercial office cleaning. Desks, bins, floors, kitchenettes, and sanitisation of high-touch points.",
       "price": "From €30/h"
     }
+  },
+  "kotitalousvahennys": {
+    "title": "Finnish Tax Deduction — Kotitalousvähennys",
+    "description": "Did you know? In Finland, you can deduct up to 60% of the labour cost of cleaning services from your taxes.",
+    "effective": "Effective price after tax deduction",
+    "before": "List price",
+    "after": "After deduction (~60%)",
+    "note": "Applies to all household cleaning work. We'll provide the necessary documentation for your tax return.",
+    "cta": "Learn more on Vero.fi"
   },
   "checklist": {
     "title": "What's Included?",
@@ -108,9 +122,46 @@
       "walls": "Spot cleaning walls & doors"
     }
   },
+  "faq": {
+    "title": "Frequently Asked Questions",
+    "subtitle": "Everything you need to know before booking.",
+    "questions": {
+      "supplies": {
+        "q": "Do you bring your own cleaning supplies?",
+        "a": "Yes! Our cleaners arrive fully equipped with professional-grade, eco-friendly cleaning products and equipment. If you prefer we use your own products, just let us know in the WhatsApp message."
+      },
+      "keys": {
+        "q": "How does key handover work?",
+        "a": "We offer flexible options: you can be home to let us in, leave a key with a neighbour or concierge, or use a key lockbox. Many of our regular clients provide us with a key after building trust."
+      },
+      "cancellation": {
+        "q": "What is your cancellation policy?",
+        "a": "We offer free cancellation up to 24 hours before your scheduled cleaning. Cancellations within 24 hours may incur a small fee. Rescheduling is always free — just message us on WhatsApp!"
+      },
+      "pets": {
+        "q": "Are your cleaning products pet-safe?",
+        "a": "Absolutely. We use non-toxic, biodegradable products that are safe for cats, dogs, and all household pets. Just mention any allergies when booking."
+      },
+      "duration": {
+        "q": "How long does a cleaning take?",
+        "a": "A standard home cleaning (55–85 m²) typically takes 2–3 hours. Deep cleans take longer (3–5 hours). We'll confirm the estimated time in your WhatsApp quote."
+      },
+      "frequency": {
+        "q": "Can I book recurring cleanings?",
+        "a": "Yes! Most of our clients book weekly or bi-weekly. Regular clients get priority scheduling and discounted rates. Just ask on WhatsApp and we'll set it up."
+      }
+    }
+  },
+  "paymentBanner": {
+    "title": "We Accept",
+    "mobilepay": "MobilePay",
+    "invoice": "Invoice / Lasku",
+    "card": "Visa & Mastercard",
+    "cash": "Cash"
+  },
   "about": {
     "title": "Why Choose ReadySetSiivous?",
-    "subtitle": "We're not just another cleaning company — we're your trusted local partner for a cleaner, healthier space.",
+    "subtitle": "We're not just another cleaning company — we're your trusted local partner for a cleaner, healthier space in Helsinki, Espoo, and Vantaa.",
     "points": {
       "staff": {
         "title": "Background-Checked Staff",
@@ -130,7 +181,7 @@
       },
       "local": {
         "title": "Local & Reliable",
-        "description": "Serving the Helsinki metropolitan area with pride. Same-day and weekend slots available."
+        "description": "Serving Helsinki, Espoo, and Vantaa with pride. Same-day and weekend slots available."
       },
       "simple": {
         "title": "Book in 60 Seconds",
@@ -150,5 +201,10 @@
   },
   "floatingWhatsApp": {
     "tooltip": "Chat with us!"
+  },
+  "schema": {
+    "name": "ReadySetSiivous",
+    "description": "Professional residential and commercial cleaning services in the Helsinki metropolitan area.",
+    "priceRange": "€€"
   }
 }

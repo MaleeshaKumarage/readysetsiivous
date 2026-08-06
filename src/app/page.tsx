@@ -1,25 +1,24 @@
-import Navbar from '@/components/Navbar';
-import Hero from '@/components/Hero';
-import QuoteForm from '@/components/QuoteForm';
-import Services from '@/components/Services';
-import Checklist from '@/components/Checklist';
-import About from '@/components/About';
-import Footer from '@/components/Footer';
-import FloatingWhatsApp from '@/components/FloatingWhatsApp';
+'use client';
 
-export default function HomePage() {
-  return (
-    <>
-      <Navbar />
-      <main>
-        <Hero />
-        <QuoteForm />
-        <Services />
-        <Checklist />
-        <About />
-      </main>
-      <Footer />
-      <FloatingWhatsApp />
-    </>
-  );
+import { useEffect } from 'react';
+
+export default function RootPage() {
+  useEffect(() => {
+    // Detect browser language or default to Finnish
+    try {
+      const stored = localStorage.getItem('lang');
+      if (stored === 'en' || stored === 'fi' || stored === 'sv') {
+        window.location.replace(`/${stored}/`);
+        return;
+      }
+      const browser = navigator.language.slice(0, 2);
+      if (browser === 'sv') window.location.replace('/sv/');
+      else if (browser === 'en') window.location.replace('/en/');
+      else window.location.replace('/fi/');
+    } catch {
+      window.location.replace('/fi/');
+    }
+  }, []);
+
+  return null;
 }

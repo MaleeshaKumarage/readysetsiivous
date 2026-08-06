@@ -201,6 +201,11 @@ export default function QuoteForm() {
                 </>
               )}
             </button>
+
+            {/* GDPR / compliance note */}
+            <p className="mt-4 text-center text-xs text-gray-400 dark:text-gray-500 leading-relaxed px-2">
+              {t('quoteForm.gdprNote')}
+            </p>
           </form>
         </div>
       </div>

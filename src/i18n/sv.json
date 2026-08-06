@@ -1,20 +1,23 @@
 {
   "site": {
-    "title": "ReadySetSiivous — Professionella städtjänster",
-    "description": "Professionella städtjänster för hem och företag. Försäkrat, bakgrundskontrollerad personal. Boka via WhatsApp på sekunder."
+    "title": "ReadySetSiivous — Professionella städtjänster | Helsingfors, Esbo, Vanda",
+    "description": "Professionell hemstädning, storstädning, flyttstädning och kontorsstädning i Helsingfors, Esbo & Vanda. Försäkrat, bakgrundskontrollerad personal. Boka via WhatsApp på sekunder.",
+    "locale": "sv_FI"
   },
   "nav": {
     "services": "Tjänster",
     "about": "Om oss",
     "checklist": "Checklista",
+    "faq": "FAQ",
     "contact": "Kontakt",
     "whatsappButton": "Chatta på WhatsApp"
   },
   "hero": {
-    "headline": "Professionella städtjänster i ditt område",
-    "subheadline": "Försäkrade, bakgrundskontrollerade och pålitliga städare. Få din offert direkt och boka på under 60 sekunder — inga samtal, inget krångel.",
+    "headline": "Professionell hemstädning i Helsingfors, Esbo & Vanda",
+    "subheadline": "Försäkrade, bakgrundskontrollerade och pålitliga städare. Hemstädning, storstädning, flyttstädning och kontorsstädning. Få din offert direkt och boka på under 60 sekunder — inga samtal, inget krångel.",
     "cta": "Få offert via WhatsApp",
-    "secondaryCta": "Se våra tjänster"
+    "secondaryCta": "Se våra tjänster",
+    "localKeywords": "Hemstädning Esbo — Storstädning Helsingfors — Flyttstädning Vanda — Kontorsstädning huvudstadsregionen"
   },
   "trustBadges": {
     "insured": "Försäkrad",
@@ -24,14 +27,14 @@
   },
   "quoteForm": {
     "title": "Få din offert direkt",
-    "subtitle": "Fyll i uppgifterna och få en personlig offert via WhatsApp.",
+    "subtitle": "Fyll i uppgifterna och få en personlig offert via WhatsApp på ditt språk.",
     "serviceType": "Typ av tjänst",
     "selectService": "Välj en tjänst…",
     "homeCleaning": "Hemstädning",
     "deepCleaning": "Storstädning",
     "moveOutCleaning": "Flyttstädning",
     "officeCleaning": "Kontorsstädning",
-    "propertySize": "Bostadsstorlek",
+    "propertySize": "Bostadsstorlek (m²)",
     "sizeStudio": "Etta (25–35 m²)",
     "sizeSmall": "Liten (36–55 m²)",
     "sizeMedium": "Mellan (56–85 m²)",
@@ -41,12 +44,14 @@
     "sizeRooms3": "3–4 rum",
     "sizeRooms5": "5–6 rum",
     "sizeRooms7": "7+ rum",
+    "sizeSliderLabel": "Ungefär kvadratmeter: {size} m²",
     "city": "Plats / Stad",
     "cityPlaceholder": "t.ex. Helsingfors, Esbo, Vanda…",
     "date": "Önskat städdatum",
     "datePlaceholder": "Välj ett datum",
     "submit": "Skicka via WhatsApp",
     "submitting": "Öppnar WhatsApp…",
+    "gdprNote": "Genom att klicka öppnar du WhatsApp för att kontakta oss direkt. Vi använder endast din information för att ge en offert. Ingen data lagras på våra servrar.",
     "errorDate": "Välj ett önskat datum.",
     "errorCity": "Ange din stad.",
     "errorService": "Välj en tjänst."
@@ -61,27 +66,36 @@
   },
   "services": {
     "title": "Våra städtjänster",
-    "subtitle": "Från regelbunden hemstädning till djupgående kontorsstädning — vi gör allt.",
+    "subtitle": "Från regelbunden hemstädning till djupgående kontorsstädning — vi gör allt i huvudstadsregionen.",
     "home": {
       "title": "Hemstädning",
-      "description": "Regelbunden vecko- eller varannan vecka-städning. Dammtorkning, dammsugning, golvtvätt, badrum och kök grundligt avtorkade.",
+      "description": "Regelbunden vecko- eller varannan vecka hemstädning i Esbo, Helsingfors & Vanda. Dammtorkning, dammsugning, golvtvätt, badrum och kök grundligt avtorkade.",
       "price": "Från 35 €/h"
     },
     "deep": {
       "title": "Storstädning",
-      "description": "Grundlig städning från topp till tå. Golvlister, bakom vitvaror, insida av skåp, fönsterbrädor och mycket mer.",
+      "description": "Grundlig storstädning i Helsingfors. Golvlister, bakom vitvaror, insida av skåp, fönsterbrädor och mycket mer.",
       "price": "Från 45 €/h"
     },
     "moveOut": {
       "title": "Flyttstädning",
-      "description": "Fullständig slutstädning för att säkra din deposition. Vitvaror, väggar, golv, fönster — allt.",
+      "description": "Fullständig flyttstädning i Vanda & Esbo. Vitvaror, väggar, golv, fönster — allt för att säkra din deposition.",
       "price": "Från 50 €/h"
     },
     "office": {
       "title": "Kontorsstädning",
-      "description": "Daglig eller veckovis kommersiell städning. Skrivbord, papperskorgar, golv, pentryn och desinfektion av högkontaktytor.",
+      "description": "Daglig eller veckovis kontorsstädning. Skrivbord, papperskorgar, golv, pentryn och desinfektion av högkontaktytor.",
       "price": "Från 30 €/h"
     }
+  },
+  "kotitalousvahennys": {
+    "title": "Finsk skatteavdrag — Hushållsavdrag",
+    "description": "Visste du? I Finland kan du dra av upp till 60% av arbetskostnaden för städtjänster i din beskattning.",
+    "effective": "Effektivt pris efter skatteavdrag",
+    "before": "Listpris",
+    "after": "Efter avdrag (~60%)",
+    "note": "Gäller allt hushållsstädarbete. Vi tillhandahåller nödvändig dokumentation för din deklaration.",
+    "cta": "Läs mer på Skatteförvaltningens webbplats"
   },
   "checklist": {
     "title": "Vad ingår?",
@@ -108,9 +122,46 @@
       "walls": "Fläckborttagning på väggar och dörrar"
     }
   },
+  "faq": {
+    "title": "Vanliga frågor",
+    "subtitle": "Allt du behöver veta innan du bokar.",
+    "questions": {
+      "supplies": {
+        "q": "Tar ni med egna städprodukter?",
+        "a": "Ja! Våra städare kommer fullt utrustade med professionella, miljövänliga produkter och utrustning. Om du föredrar att vi använder dina egna produkter, meddela oss bara i WhatsApp-meddelandet."
+      },
+      "keys": {
+        "q": "Hur fungerar nyckelöverlämning?",
+        "a": "Vi erbjuder flexibla alternativ: du kan vara hemma för att släppa in oss, lämna en nyckel hos en granne eller använda ett nyckelskåp. Många av våra stamkunder ger oss en nyckel efter att förtroende byggts upp."
+      },
+      "cancellation": {
+        "q": "Vad är er avbokningspolicy?",
+        "a": "Vi erbjuder gratis avbokning upp till 24 timmar före din bokade städning. Avbokningar inom 24 timmar kan medföra en mindre avgift. Ombokning är alltid gratis — skicka bara ett meddelande på WhatsApp!"
+      },
+      "pets": {
+        "q": "Är era rengöringsprodukter säkra för husdjur?",
+        "a": "Absolut. Vi använder giftfria, biologiskt nedbrytbara produkter som är säkra för katter, hundar och alla husdjur. Nämn eventuella allergier vid bokning."
+      },
+      "duration": {
+        "q": "Hur lång tid tar en städning?",
+        "a": "En grundstädning (55–85 m²) tar vanligtvis 2–3 timmar. Storstädningar tar längre (3–5 timmar). Vi bekräftar den uppskattade tiden i din WhatsApp-offert."
+      },
+      "frequency": {
+        "q": "Kan jag boka återkommande städningar?",
+        "a": "Ja! De flesta av våra kunder bokar veckovis eller varannan vecka. Stamkunder får prioriterad schemaläggning och rabatterade priser. Fråga bara på WhatsApp så ordnar vi det."
+      }
+    }
+  },
+  "paymentBanner": {
+    "title": "Vi accepterar",
+    "mobilepay": "MobilePay",
+    "invoice": "Faktura",
+    "card": "Visa & Mastercard",
+    "cash": "Kontant"
+  },
   "about": {
     "title": "Varför välja ReadySetSiivous?",
-    "subtitle": "Vi är inte bara ännu ett städföretag — vi är din pålitliga lokala partner för ett renare och hälsosammare utrymme.",
+    "subtitle": "Vi är inte bara ännu ett städföretag — vi är din pålitliga lokala partner för ett renare och hälsosammare utrymme i Helsingfors, Esbo och Vanda.",
     "points": {
       "staff": {
         "title": "Bakgrundskontrollerad personal",
@@ -130,7 +181,7 @@
       },
       "local": {
         "title": "Lokal och pålitlig",
-        "description": "Vi betjänar Helsingforsregionen med stolthet. Samma dag och helgtider tillgängliga."
+        "description": "Vi betjänar Helsingfors, Esbo och Vanda med stolthet. Samma dag och helgtider tillgängliga."
       },
       "simple": {
         "title": "Boka på 60 sekunder",
@@ -150,5 +201,10 @@
   },
   "floatingWhatsApp": {
     "tooltip": "Chatta med oss!"
+  },
+  "schema": {
+    "name": "ReadySetSiivous",
+    "description": "Professionella städtjänster för hem och företag i Helsingforsregionen.",
+    "priceRange": "€€"
   }
 }

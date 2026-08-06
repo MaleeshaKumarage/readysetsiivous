@@ -1,20 +1,23 @@
 {
   "site": {
-    "title": "ReadySetSiivous — Ammattitaitoiset siivouspalvelut",
-    "description": "Ammattitaitoiset kodin ja toimiston siivouspalvelut. Vakuutettu, taustatarkistettu henkilökunta. Varaa WhatsAppilla hetkessä."
+    "title": "ReadySetSiivous — Ammattitaitoiset siivouspalvelut | Helsinki, Espoo, Vantaa",
+    "description": "Ammattitaitoinen kotisiivous, syväsiivous, muutosiivous ja toimistosiivous Helsingissä, Espoossa ja Vantaalla. Vakuutettu, taustatarkistettu henkilökunta. Varaa WhatsAppilla hetkessä.",
+    "locale": "fi_FI"
   },
   "nav": {
     "services": "Palvelut",
     "about": "Meistä",
     "checklist": "Tarkistuslista",
+    "faq": "UKK",
     "contact": "Yhteystiedot",
     "whatsappButton": "Keskustele WhatsAppissa"
   },
   "hero": {
-    "headline": "Ammattitaitoiset siivouspalvelut alueellasi",
-    "subheadline": "Vakuutetut, taustatarkistetut ja luotetut siivoojat. Pyydä välitön tarjous ja varaa alle 60 sekunnissa — ilman puheluita tai vaivaa.",
+    "headline": "Ammattitaitoista kotisiivousta Helsingissä, Espoossa & Vantaalla",
+    "subheadline": "Vakuutetut, taustatarkistetut ja luotetut siivoojat. Kotisiivous, syväsiivous, muutosiivous ja toimistosiivous. Pyydä välitön tarjous ja varaa alle 60 sekunnissa — ilman puheluita tai vaivaa.",
     "cta": "Pyydä tarjous WhatsAppissa",
-    "secondaryCta": "Katso palvelumme"
+    "secondaryCta": "Katso palvelumme",
+    "localKeywords": "Kotisiivous Espoo — Syväsiivous Helsinki — Muutosiivous Vantaa — Toimistosiivous pääkaupunkiseutu"
   },
   "trustBadges": {
     "insured": "Vakuutettu",
@@ -24,14 +27,14 @@
   },
   "quoteForm": {
     "title": "Pyydä välitön tarjous",
-    "subtitle": "Täytä tiedot ja saat henkilökohtaisen tarjouksen WhatsAppissa.",
+    "subtitle": "Täytä tiedot ja saat henkilökohtaisen tarjouksen WhatsAppissa omalla kielelläsi.",
     "serviceType": "Palvelutyyppi",
     "selectService": "Valitse palvelu…",
     "homeCleaning": "Kotisiivous",
     "deepCleaning": "Syväsiivous",
     "moveOutCleaning": "Muutosiivous",
     "officeCleaning": "Toimistosiivous",
-    "propertySize": "Asunnon koko",
+    "propertySize": "Asunnon koko (m²)",
     "sizeStudio": "Yksiö (25–35 m²)",
     "sizeSmall": "Pieni (36–55 m²)",
     "sizeMedium": "Keskikokoinen (56–85 m²)",
@@ -41,12 +44,14 @@
     "sizeRooms3": "3–4 huonetta",
     "sizeRooms5": "5–6 huonetta",
     "sizeRooms7": "7+ huonetta",
+    "sizeSliderLabel": "Noin neliömetriä: {size} m²",
     "city": "Sijainti / Kaupunki",
     "cityPlaceholder": "esim. Helsinki, Espoo, Vantaa…",
     "date": "Toivottu siivouspäivä",
     "datePlaceholder": "Valitse päivämäärä",
     "submit": "Lähetä WhatsAppissa",
     "submitting": "Avataan WhatsApp…",
+    "gdprNote": "Klikkaamalla avaat WhatsAppin ottaaksesi meihin yhteyttä suoraan. Käytämme tietojasi vain tarjouksen antamiseen. Tietoja ei tallenneta palvelimillemme.",
     "errorDate": "Valitse toivottu päivämäärä.",
     "errorCity": "Syötä kaupunkisi.",
     "errorService": "Valitse palvelu."
@@ -61,27 +66,36 @@
   },
   "services": {
     "title": "Siivouspalvelumme",
-    "subtitle": "Säännöllisestä kodin ylläpidosta syväsiivouksiin — hoidamme kaiken.",
+    "subtitle": "Säännöllisestä kodin ylläpidosta syväsiivouksiin — hoidamme kaiken pääkaupunkiseudulla.",
     "home": {
       "title": "Kotisiivous",
-      "description": "Säännöllinen viikoittainen tai joka toinen viikko tapahtuva kodin siivous. Pölyjen pyyhintä, imurointi, lattioiden pesu, kylpyhuoneen ja keittiön perusteellinen puhdistus.",
+      "description": "Säännöllinen viikoittainen tai joka toinen viikko tapahtuva kotisiivous Espoossa, Helsingissä ja Vantaalla. Pölyjen pyyhintä, imurointi, lattioiden pesu, kylpyhuoneen ja keittiön perusteellinen puhdistus.",
       "price": "Alk. 35 €/h"
     },
     "deep": {
       "title": "Syväsiivous",
-      "description": "Perusteellinen koko kodin siivous. Jalkalistat, kodinkoneiden takaa, kaappien sisäpuolet, ikkunalaudat ja paljon muuta.",
+      "description": "Perusteellinen syväsiivous Helsingissä. Jalkalistat, kodinkoneiden takaa, kaappien sisäpuolet, ikkunalaudat ja paljon muuta.",
       "price": "Alk. 45 €/h"
     },
     "moveOut": {
       "title": "Muutosiivous",
-      "description": "Kattava loppusiivous takuuvuokran palautuksen varmistamiseksi. Kodinkoneet, seinät, lattiat, ikkunat — kaikki.",
+      "description": "Kattava muutosiivous Vantaalla ja Espoossa. Kodinkoneet, seinät, lattiat, ikkunat — kaikki takuuvuokran palautuksen varmistamiseksi.",
       "price": "Alk. 50 €/h"
     },
     "office": {
       "title": "Toimistosiivous",
-      "description": "Päivittäinen tai viikoittainen yrityssiivous. Työpöydät, roskakorit, lattiat, keittiönurkkaukset ja kosketuspintojen desinfiointi.",
+      "description": "Päivittäinen tai viikoittainen toimistosiivous. Työpöydät, roskakorit, lattiat, keittiönurkkaukset ja kosketuspintojen desinfiointi.",
       "price": "Alk. 30 €/h"
     }
+  },
+  "kotitalousvahennys": {
+    "title": "Kotitalousvähennys — Säästä jopa 60 %",
+    "description": "Muista kotitalousvähennys! Voit vähentää jopa 60 % työn osuudesta verotuksessasi. Kotitalousvähennys koskee kaikkia kodin siivouspalveluita.",
+    "effective": "Tehokas hinta kotitalousvähennyksen jälkeen",
+    "before": "Listahinta",
+    "after": "Vähennyksen jälkeen (~60%)",
+    "note": "Koskee kaikkia kotitalouden siivoustöitä. Toimitamme tarvittavat dokumentit veroilmoitusta varten.",
+    "cta": "Lue lisää Verohallinnon sivuilta"
   },
   "checklist": {
     "title": "Mitä sisältyy?",
@@ -108,9 +122,46 @@
       "walls": "Seinien ja ovien tahranpoisto"
     }
   },
+  "faq": {
+    "title": "Usein kysytyt kysymykset",
+    "subtitle": "Kaikki mitä sinun tarvitsee tietää ennen varausta.",
+    "questions": {
+      "supplies": {
+        "q": "Tuletteko omilla siivousvälineillä?",
+        "a": "Kyllä! Siivoojamme saapuvat täysin varustettuina ammattitason, ympäristöystävällisillä tuotteilla ja välineillä. Jos haluat meidän käyttävän omia tuotteitasi, mainitse siitä WhatsApp-viestissä."
+      },
+      "keys": {
+        "q": "Miten avainten luovutus toimii?",
+        "a": "Tarjoamme joustavia vaihtoehtoja: voit olla kotona päästämässä meidät sisään, jättää avaimen naapurille tai käyttää avainlokerikkoa. Monet vakioasiakkaamme antavat meille avaimen luottamuksen rakennuttua."
+      },
+      "cancellation": {
+        "q": "Mikä on peruutuskäytäntönne?",
+        "a": "Tarjoamme ilmaisen peruutuksen 24 tuntia ennen sovittua siivousta. Alle 24 tunnin peruutuksista voidaan veloittaa pieni maksu. Ajankohdan siirtäminen on aina ilmaista — lähetä vain viestiä WhatsAppissa!"
+      },
+      "pets": {
+        "q": "Ovatko puhdistustuotteenne turvallisia lemmikeille?",
+        "a": "Ehdottomasti. Käytämme myrkyttömiä, biohajoavia tuotteita, jotka ovat turvallisia kissoille, koirille ja kaikille kotieläimille. Mainitse allergioista varauksen yhteydessä."
+      },
+      "duration": {
+        "q": "Kuinka kauan siivous kestää?",
+        "a": "Perussiivous (55–85 m²) kestää yleensä 2–3 tuntia. Syväsiivoukset kestävät pidempään (3–5 tuntia). Vahvistamme arvioidun ajan WhatsApp-tarjouksessasi."
+      },
+      "frequency": {
+        "q": "Voinko varata toistuvia siivouksia?",
+        "a": "Kyllä! Suurin osa asiakkaistamme varaa viikoittain tai joka toinen viikko. Vakioasiakkaat saavat etusijaa aikataulutuksessa ja alennettuja hintoja. Kysy WhatsAppissa, niin järjestämme sen."
+      }
+    }
+  },
+  "paymentBanner": {
+    "title": "Maksutavat",
+    "mobilepay": "MobilePay",
+    "invoice": "Lasku",
+    "card": "Visa & Mastercard",
+    "cash": "Käteinen"
+  },
   "about": {
     "title": "Miksi valita ReadySetSiivous?",
-    "subtitle": "Emme ole vain yksi siivousyritys lisää — olemme luotettu paikallinen kumppanisi puhtaampaan ja terveellisempään tilaan.",
+    "subtitle": "Emme ole vain yksi siivousyritys lisää — olemme luotettu paikallinen kumppanisi puhtaampaan ja terveellisempään tilaan Helsingissä, Espoossa ja Vantaalla.",
     "points": {
       "staff": {
         "title": "Taustatarkistettu henkilökunta",
@@ -130,7 +181,7 @@
       },
       "local": {
         "title": "Paikallinen ja luotettava",
-        "description": "Palvelemme Helsingin metropolialuetta ylpeydellä. Saman päivän ja viikonlopun aikoja saatavilla."
+        "description": "Palvelemme Helsinkiä, Espoota ja Vantaata ylpeydellä. Saman päivän ja viikonlopun aikoja saatavilla."
       },
       "simple": {
         "title": "Varaa 60 sekunnissa",
@@ -150,5 +201,10 @@
   },
   "floatingWhatsApp": {
     "tooltip": "Keskustele kanssamme!"
+  },
+  "schema": {
+    "name": "ReadySetSiivous",
+    "description": "Ammattitaitoiset kodin ja toimiston siivouspalvelut Helsingin metropolialueella.",
+    "priceRange": "€€"
   }
 }

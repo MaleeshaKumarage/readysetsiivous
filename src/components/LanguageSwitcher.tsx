@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
 
 export default function LanguageSwitcher() {
@@ -19,6 +19,19 @@ export default function LanguageSwitcher() {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
+
+  const switchTo = useCallback(
+    (code: 'en' | 'fi' | 'sv') => {
+      setLang(code);
+      setOpen(false);
+      // Navigate to the new language URL path
+      const newPath = window.location.pathname.replace(/^\/(en|fi|sv)\//, `/${code}/`);
+      if (newPath !== window.location.pathname) {
+        window.location.href = newPath + window.location.search + window.location.hash;
+      }
+    },
+    [setLang]
+  );
 
   return (
     <div className="relative" ref={ref}>
@@ -44,10 +57,7 @@ export default function LanguageSwitcher() {
           {languages.map((l) => (
             <button
               key={l.code}
-              onClick={() => {
-                setLang(l.code);
-                setOpen(false);
-              }}
+              onClick={() => switchTo(l.code)}
               className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left transition-colors hover:bg-brand-50 dark:hover:bg-brand-500/10 ${
                 l.code === lang
                   ? 'bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-400 font-semibold'

@@ -5,11 +5,16 @@ import { useLanguage } from '@/hooks/useLanguage';
 import LanguageSwitcher from './LanguageSwitcher';
 import ThemeToggle from './ThemeToggle';
 import { getWhatsAppChatUrl } from '@/lib/whatsapp';
+import type { Language } from '@/i18n';
 
-const navKeys = ['nav.services', 'nav.about', 'nav.checklist', 'nav.contact'] as const;
-const sectionIds = ['#services', '#about', '#checklist', '#contact'];
+interface NavbarProps {
+  lang: Language;
+}
 
-export default function Navbar() {
+const navKeys = ['nav.services', 'nav.about', 'nav.checklist', 'nav.faq', 'nav.contact'] as const;
+const sectionIds = ['#services', '#about', '#checklist', '#faq', '#contact'];
+
+export default function Navbar({ lang }: NavbarProps) {
   const { t } = useLanguage();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -18,7 +23,7 @@ export default function Navbar() {
       <div className="container-page">
         <div className="flex items-center justify-between h-16 lg:h-18">
           {/* Logo */}
-          <a href="#" className="flex items-center gap-2 shrink-0">
+          <a href={`/${lang}/`} className="flex items-center gap-2 shrink-0">
             <span className="w-9 h-9 rounded-lg bg-brand-500 flex items-center justify-center">
               <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
@@ -40,6 +45,12 @@ export default function Navbar() {
                 {t(key)}
               </a>
             ))}
+            <a
+              href={`/${lang}/card/`}
+              className="px-4 py-2 text-sm font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-500/10 transition-colors"
+            >
+              📇 Card
+            </a>
           </div>
 
           {/* Right side */}
@@ -47,7 +58,6 @@ export default function Navbar() {
             <ThemeToggle />
             <LanguageSwitcher />
 
-            {/* WhatsApp CTA (desktop) */}
             <a
               href={getWhatsAppChatUrl()}
               target="_blank"
@@ -60,7 +70,6 @@ export default function Navbar() {
               {t('nav.whatsappButton')}
             </a>
 
-            {/* Mobile hamburger */}
             <button
               onClick={() => setMobileOpen(!mobileOpen)}
               className="lg:hidden p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -91,6 +100,13 @@ export default function Navbar() {
                   {t(key)}
                 </a>
               ))}
+              <a
+                href={`/${lang}/card/`}
+                onClick={() => setMobileOpen(false)}
+                className="px-4 py-2.5 text-sm font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-500/10 transition-colors"
+              >
+                📇 {lang === 'fi' ? 'Käyntikortti' : lang === 'sv' ? 'Visitkort' : 'Business Card'}
+              </a>
               <a
                 href={getWhatsAppChatUrl()}
                 target="_blank"
