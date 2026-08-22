@@ -1,6 +1,7 @@
 'use client';
 
 import { useLanguage } from '@/hooks/useLanguage';
+import { StaggerGroup, StaggerItem } from './motion';
 
 const BADGES = [
   { key: 'ecoTitle', desc: 'ecoDesc', icon: '🌱', color: 'bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-500/20' },
@@ -21,18 +22,19 @@ export default function EcoPetBadges() {
           </h2>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl mx-auto">
+        <StaggerGroup className="grid grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl mx-auto">
           {BADGES.map(({ key, desc, icon, color }) => (
-            <div
+            <StaggerItem
               key={key}
-              className={`rounded-xl border p-5 text-center ${color} transition-all hover:shadow-md`}
+              hover
+              className={`rounded-xl border p-5 text-center ${color} hover:shadow-md`}
             >
               <span className="text-3xl block mb-2">{icon}</span>
               <h4 className="text-sm font-bold">{t(`ecoPetBadges.${key}`)}</h4>
               <p className="mt-1 text-xs opacity-80">{t(`ecoPetBadges.${desc}`)}</p>
-            </div>
+            </StaggerItem>
           ))}
-        </div>
+        </StaggerGroup>
       </div>
     </section>
   );

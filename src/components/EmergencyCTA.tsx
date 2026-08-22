@@ -2,6 +2,7 @@
 
 import { useLanguage } from '@/hooks/useLanguage';
 import { getWhatsAppChatUrl } from '@/lib/whatsapp';
+import { Reveal } from './motion';
 
 export default function EmergencyCTA() {
   const { t } = useLanguage();
@@ -9,7 +10,7 @@ export default function EmergencyCTA() {
   return (
     <section className="bg-amber-50 dark:bg-amber-500/5 border-y border-amber-200 dark:border-amber-500/10">
       <div className="container-page py-10 sm:py-12">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-6 max-w-4xl mx-auto">
+        <Reveal className="flex flex-col sm:flex-row items-center justify-between gap-6 max-w-4xl mx-auto">
           <div className="text-center sm:text-left">
             <h3 className="text-xl sm:text-2xl font-extrabold text-amber-800 dark:text-amber-300">
               ⚡ {t('emergencyCta.title')}
@@ -29,7 +30,7 @@ export default function EmergencyCTA() {
             </svg>
             {t('emergencyCta.button')}
           </a>
-        </div>
+        </Reveal>
       </div>
     </section>
   );

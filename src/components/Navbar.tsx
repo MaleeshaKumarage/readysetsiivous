@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '@/hooks/useLanguage';
 import LanguageSwitcher from './LanguageSwitcher';
 import ThemeToggle from './ThemeToggle';
@@ -17,6 +18,18 @@ const sectionIds = ['#services', '#about', '#checklist', '#faq', '#contact'];
 export default function Navbar({ lang }: NavbarProps) {
   const { t } = useLanguage();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+
+  function toggleMenu() {
+    const closing = mobileOpen;
+    setMobileOpen(!closing);
+    // The menu stays mounted (and links stay focusable) during the 250ms exit
+    // animation — if focus was inside it, restore focus to the toggle button.
+    if (closing && menuRef.current?.contains(document.activeElement)) {
+      toggleRef.current?.focus();
+    }
+  }
 
   return (
     <nav className="sticky top-0 z-50 bg-white/90 dark:bg-gray-950/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 shadow-sm">
@@ -29,7 +42,7 @@ export default function Navbar({ lang }: NavbarProps) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
               </svg>
             </span>
-            <span className="text-lg sm:text-xl font-extrabold text-gray-900 dark:text-gray-50 tracking-tight">
+            <span translate="no" className="text-lg sm:text-xl font-extrabold text-gray-900 dark:text-gray-50 tracking-tight">
               ReadySet<span className="text-brand-600 dark:text-brand-400">Siivous</span>
             </span>
           </a>
@@ -71,9 +84,12 @@ export default function Navbar({ lang }: NavbarProps) {
             </a>
 
             <button
-              onClick={() => setMobileOpen(!mobileOpen)}
+              ref={toggleRef}
+              onClick={toggleMenu}
               className="lg:hidden p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
               aria-label="Toggle menu"
+              aria-expanded={mobileOpen}
+              aria-controls="mobile-menu"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 {mobileOpen ? (
@@ -87,9 +103,18 @@ export default function Navbar({ lang }: NavbarProps) {
         </div>
 
         {/* Mobile menu */}
-        {mobileOpen && (
-          <div className="lg:hidden border-t border-gray-100 dark:border-gray-800 pb-4 animate-fade-in-up">
-            <div className="flex flex-col gap-1 pt-3">
+        <AnimatePresence>
+          {mobileOpen && (
+            <motion.div
+              id="mobile-menu"
+              ref={menuRef}
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+              className="lg:hidden border-t border-gray-100 dark:border-gray-800 overflow-hidden"
+            >
+              <div className="flex flex-col gap-1 pt-3 pb-4">
               {navKeys.map((key, i) => (
                 <a
                   key={key}
@@ -120,8 +145,9 @@ export default function Navbar({ lang }: NavbarProps) {
                 {t('nav.whatsappButton')}
               </a>
             </div>
-          </div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </nav>
   );

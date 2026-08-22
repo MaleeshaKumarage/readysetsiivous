@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '@/hooks/useLanguage';
 
 const FAQ_KEYS = ['supplies', 'keys', 'cancellation', 'pets', 'duration', 'frequency'];
@@ -43,13 +44,23 @@ export default function FAQ() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
-              {openIndex === i && (
-                <div className="px-5 pb-4 animate-fade-in-up">
-                  <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                    {t(`faq.questions.${key}.a`)}
-                  </p>
-                </div>
-              )}
+              <AnimatePresence initial={false}>
+                {openIndex === i && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.25, ease: 'easeOut' }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-5 pb-4">
+                      <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                        {t(`faq.questions.${key}.a`)}
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           ))}
         </div>

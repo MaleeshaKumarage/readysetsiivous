@@ -34,6 +34,9 @@
     "deepCleaning": "Deep Cleaning",
     "moveOutCleaning": "Move-out Cleaning",
     "officeCleaning": "Office Cleaning",
+    "windowCleaning": "Window Cleaning",
+    "ovenFridgeCleaning": "Oven & Fridge Cleaning",
+    "saunaBalconyCleaning": "Sauna & Balcony Cleaning",
     "propertySize": "Property Size (m²)",
     "sizeStudio": "Studio (25–35 m²)",
     "sizeSmall": "Small (36–55 m²)",
@@ -54,7 +57,8 @@
     "gdprNote": "By clicking, you open WhatsApp to contact us directly. We only use your info to provide a quote. No data is stored on our servers.",
     "errorDate": "Please select a preferred date.",
     "errorCity": "Please enter your city.",
-    "errorService": "Please select a service."
+    "errorService": "Please select a service.",
+    "errorDatePast": "The selected date cannot be in the past."
   },
   "whatsapp": {
     "greeting": "Hi! I'd like a quote for cleaning services.",
@@ -86,16 +90,28 @@
       "title": "Office Cleaning",
       "description": "Daily or weekly commercial office cleaning. Desks, bins, floors, kitchenettes, and sanitisation of high-touch points.",
       "price": "From €30/h"
+    },
+    "window": {
+      "title": "Window Cleaning",
+      "description": "Interior and exterior window cleaning, including frames and sills.",
+      "price": "From €45/h"
+    },
+    "ovenFridge": {
+      "title": "Oven & Fridge Cleaning",
+      "description": "Deep clean of oven interior, fridge and freezer compartments.",
+      "price": "From €40"
+    },
+    "saunaBalcony": {
+      "title": "Sauna & Balcony Cleaning",
+      "description": "Sauna benches and walls, balcony floors and railings.",
+      "price": "From €40"
     }
   },
   "kotitalousvahennys": {
-    "title": "Finnish Tax Deduction — Kotitalousvähennys",
-    "description": "Did you know? In Finland, you can deduct up to 60% of the labour cost of cleaning services from your taxes.",
-    "effective": "Effective price after tax deduction",
-    "before": "List price",
-    "after": "After deduction (~60%)",
-    "note": "Applies to all household cleaning work. We'll provide the necessary documentation for your tax return.",
-    "cta": "Learn more on Vero.fi"
+    "title": "Our Prices",
+    "description": "Transparent hourly rates for all our cleaning services — no hidden fees, no surprises.",
+    "note": "Applies to all household cleaning jobs. We'll provide the necessary documents for your tax return.",
+    "cta": "Read more on the Tax Administration's website"
   },
   "checklist": {
     "title": "What's Included?",

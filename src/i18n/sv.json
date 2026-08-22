@@ -34,6 +34,9 @@
     "deepCleaning": "Storstädning",
     "moveOutCleaning": "Flyttstädning",
     "officeCleaning": "Kontorsstädning",
+    "windowCleaning": "Fönsterputsning",
+    "ovenFridgeCleaning": "Ugns- och kylskåpsrengöring",
+    "saunaBalconyCleaning": "Bastu- och balkongstädning",
     "propertySize": "Bostadsstorlek (m²)",
     "sizeStudio": "Etta (25–35 m²)",
     "sizeSmall": "Liten (36–55 m²)",
@@ -54,7 +57,8 @@
     "gdprNote": "Genom att klicka öppnar du WhatsApp för att kontakta oss direkt. Vi använder endast din information för att ge en offert. Ingen data lagras på våra servrar.",
     "errorDate": "Välj ett önskat datum.",
     "errorCity": "Ange din stad.",
-    "errorService": "Välj en tjänst."
+    "errorService": "Välj en tjänst.",
+    "errorDatePast": "Datumet kan inte vara i det förflutna."
   },
   "whatsapp": {
     "greeting": "Hej! Jag skulle vilja ha en offert för städtjänster.",
@@ -86,14 +90,26 @@
       "title": "Kontorsstädning",
       "description": "Daglig eller veckovis kontorsstädning. Skrivbord, papperskorgar, golv, pentryn och desinfektion av högkontaktytor.",
       "price": "Från 30 €/h"
+    },
+    "window": {
+      "title": "Fönsterputsning",
+      "description": "Rengöring av fönster in- och utvändigt, inklusive karmar och fönsterbrädor.",
+      "price": "Från 45 €/h"
+    },
+    "ovenFridge": {
+      "title": "Ugns- och kylskåpsrengöring",
+      "description": "Grundlig rengöring av ugn, kylskåp och frys.",
+      "price": "Från 40 €"
+    },
+    "saunaBalcony": {
+      "title": "Bastu- och balkongstädning",
+      "description": "Bastulavar och väggar, balkonggolv och räcken.",
+      "price": "Från 40 €"
     }
   },
   "kotitalousvahennys": {
-    "title": "Finsk skatteavdrag — Hushållsavdrag",
-    "description": "Visste du? I Finland kan du dra av upp till 60% av arbetskostnaden för städtjänster i din beskattning.",
-    "effective": "Effektivt pris efter skatteavdrag",
-    "before": "Listpris",
-    "after": "Efter avdrag (~60%)",
+    "title": "Prislista",
+    "description": "Tydliga timpriser för alla våra städtjänster — inga dolda avgifter, inga överraskningar.",
     "note": "Gäller allt hushållsstädarbete. Vi tillhandahåller nödvändig dokumentation för din deklaration.",
     "cta": "Läs mer på Skatteförvaltningens webbplats"
   },

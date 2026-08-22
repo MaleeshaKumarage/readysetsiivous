@@ -34,6 +34,9 @@
     "deepCleaning": "Syväsiivous",
     "moveOutCleaning": "Muutosiivous",
     "officeCleaning": "Toimistosiivous",
+    "windowCleaning": "Ikkunanpesu",
+    "ovenFridgeCleaning": "Uunin ja jääkaapin puhdistus",
+    "saunaBalconyCleaning": "Saunan ja parvekkeen pesu",
     "propertySize": "Asunnon koko (m²)",
     "sizeStudio": "Yksiö (25–35 m²)",
     "sizeSmall": "Pieni (36–55 m²)",
@@ -54,7 +57,8 @@
     "gdprNote": "Klikkaamalla avaat WhatsAppin ottaaksesi meihin yhteyttä suoraan. Käytämme tietojasi vain tarjouksen antamiseen. Tietoja ei tallenneta palvelimillemme.",
     "errorDate": "Valitse toivottu päivämäärä.",
     "errorCity": "Syötä kaupunkisi.",
-    "errorService": "Valitse palvelu."
+    "errorService": "Valitse palvelu.",
+    "errorDatePast": "Päivämäärä ei voi olla menneisyydessä."
   },
   "whatsapp": {
     "greeting": "Hei! Haluaisin tarjouksen siivouspalveluista.",
@@ -86,14 +90,26 @@
       "title": "Toimistosiivous",
       "description": "Päivittäinen tai viikoittainen toimistosiivous. Työpöydät, roskakorit, lattiat, keittiönurkkaukset ja kosketuspintojen desinfiointi.",
       "price": "Alk. 30 €/h"
+    },
+    "window": {
+      "title": "Ikkunanpesu",
+      "description": "Ikkunoiden pesu sisältä ja ulkoa, mukaan lukien karmit ja ikkunalaudat.",
+      "price": "Alk. 45 €/h"
+    },
+    "ovenFridge": {
+      "title": "Uunin ja jääkaapin puhdistus",
+      "description": "Uunin sisäosan, jääkaapin ja pakastimen perusteellinen puhdistus.",
+      "price": "Alk. 40 €"
+    },
+    "saunaBalcony": {
+      "title": "Saunan ja parvekkeen pesu",
+      "description": "Saunan lauteet ja seinät, parvekkeen lattiat ja kaiteet.",
+      "price": "Alk. 40 €"
     }
   },
   "kotitalousvahennys": {
-    "title": "Kotitalousvähennys — Säästä jopa 60 %",
-    "description": "Muista kotitalousvähennys! Voit vähentää jopa 60 % työn osuudesta verotuksessasi. Kotitalousvähennys koskee kaikkia kodin siivouspalveluita.",
-    "effective": "Tehokas hinta kotitalousvähennyksen jälkeen",
-    "before": "Listahinta",
-    "after": "Vähennyksen jälkeen (~60%)",
+    "title": "Hinnasto",
+    "description": "Selkeät tuntihinnat kaikkiin siivouspalveluihimme — ei piilokuluja, ei yllätyksiä.",
     "note": "Koskee kaikkia kotitalouden siivoustöitä. Toimitamme tarvittavat dokumentit veroilmoitusta varten.",
     "cta": "Lue lisää Verohallinnon sivuilta"
   },

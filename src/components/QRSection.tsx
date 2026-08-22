@@ -3,6 +3,7 @@
 import { useLanguage } from '@/hooks/useLanguage';
 import { baseUrl } from '@/lib/whatsapp';
 import type { Language } from '@/i18n';
+import { Reveal } from './motion';
 
 export default function QRSection() {
   const { t, lang } = useLanguage();
@@ -36,7 +37,7 @@ export default function QRSection() {
   return (
     <section className="bg-gray-50 dark:bg-gray-900 section-padding">
       <div className="container-page">
-        <div className="max-w-sm mx-auto text-center">
+        <Reveal className="max-w-sm mx-auto text-center">
           <h2 className="text-xl font-extrabold text-gray-900 dark:text-gray-50">
             📱 {L.title}
           </h2>
@@ -76,7 +77,7 @@ export default function QRSection() {
           >
             {cardUrl}
           </a>
-        </div>
+        </Reveal>
       </div>
     </section>
   );

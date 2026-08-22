@@ -2,6 +2,7 @@
 
 import { useLanguage } from '@/hooks/useLanguage';
 import { getWhatsAppChatUrl } from '@/lib/whatsapp';
+import { Reveal } from './motion';
 
 export default function Footer() {
   const { t, ta } = useLanguage();
@@ -10,7 +11,7 @@ export default function Footer() {
   return (
     <footer className="bg-gray-900 dark:bg-gray-950 text-gray-300 dark:text-gray-400 section-padding border-t border-gray-800 dark:border-gray-800">
       <div className="container-page">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10">
+        <Reveal className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10">
           {/* Brand */}
           <div className="sm:col-span-2 lg:col-span-1">
             <a href="#" className="inline-flex items-center gap-2">
@@ -19,7 +20,7 @@ export default function Footer() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                 </svg>
               </span>
-              <span className="text-lg font-extrabold text-white tracking-tight">
+              <span translate="no" className="text-lg font-extrabold text-white tracking-tight">
                 ReadySet<span className="text-brand-400">Siivous</span>
               </span>
             </a>
@@ -97,7 +98,7 @@ export default function Footer() {
               <li><a href="#checklist" className="text-sm text-gray-400 dark:text-gray-500 hover:text-brand-400 transition-colors">{t('nav.checklist')}</a></li>
             </ul>
           </div>
-        </div>
+        </Reveal>
 
         {/* Bottom bar */}
         <div className="mt-12 pt-8 border-t border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-4">

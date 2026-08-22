@@ -1,11 +1,39 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import { useLanguage } from '@/hooks/useLanguage';
-import { getWhatsAppChatUrl } from '@/lib/whatsapp';
+import { getWhatsAppChatUrl, baseUrl } from '@/lib/whatsapp';
 import TrustBadges from './TrustBadges';
+
+/** SSR-safe matchMedia helper (framer-motion v13 does not export useMediaQuery). */
+function useMinWidth(query: string): boolean {
+  const [matches, setMatches] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    setMatches(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setMatches(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, [query]);
+  return matches;
+}
+
+const heroContainer = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.12, delayChildren: 0.1 } },
+};
+
+const heroItem = {
+  hidden: { opacity: 0, y: 24 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' as const } },
+};
 
 export default function Hero() {
   const { t } = useLanguage();
+  // The visual column is `hidden lg:flex` — the infinite float must not run
+  // (and burn rAF frames) on viewports where the element is display:none.
+  const isDesktop = useMinWidth('(min-width: 1024px)');
 
   return (
     <section className="relative overflow-hidden bg-gradient-to-br from-brand-50 via-white to-accent-50 dark:from-gray-950 dark:via-gray-950 dark:to-gray-900">
@@ -14,18 +42,23 @@ export default function Hero() {
       <div className="absolute bottom-0 left-0 translate-y-1/3 -translate-x-1/4 w-[400px] h-[400px] rounded-full bg-accent-200/25 dark:bg-accent-500/8 blur-3xl pointer-events-none" />
 
       <div className="container-page relative">
-        <div className="section-padding flex flex-col lg:flex-row items-center gap-12 lg:gap-16">
+        <motion.div
+          className="section-padding flex flex-col lg:flex-row items-center gap-12 lg:gap-16"
+          variants={heroContainer}
+          initial="hidden"
+          animate="show"
+        >
           {/* Text column */}
           <div className="flex-1 text-center lg:text-left max-w-2xl">
-            <h1 className="heading-xl text-gray-900 dark:text-gray-50 text-balance animate-fade-in-up">
+            <motion.h1 data-motion-reveal variants={heroItem} className="heading-xl text-gray-900 dark:text-gray-50 text-balance">
               {t('hero.headline')}
-            </h1>
-            <p className="mt-6 text-lg sm:text-xl text-gray-600 dark:text-gray-300 leading-relaxed text-balance animate-fade-in-up-delay">
+            </motion.h1>
+            <motion.p data-motion-reveal variants={heroItem} className="mt-6 text-lg sm:text-xl text-gray-600 dark:text-gray-300 leading-relaxed text-balance">
               {t('hero.subheadline')}
-            </p>
+            </motion.p>
 
             {/* CTAs */}
-            <div className="mt-8 flex flex-col sm:flex-row items-center gap-4 animate-fade-in-up-delay-2">
+            <motion.div data-motion-reveal variants={heroItem} className="mt-8 flex flex-col sm:flex-row items-center gap-4">
               <a
                 href={`${getWhatsAppChatUrl()}?text=${encodeURIComponent(t('whatsapp.greeting'))}`}
                 target="_blank"
@@ -46,62 +79,68 @@ export default function Hero() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </a>
-            </div>
+            </motion.div>
 
-            {/* Trust badges */}
-            <div className="mt-10 animate-fade-in-up-delay-2">
+            {/* Trust badges — plain wrapper: a variant fade here would mask the
+                StaggerGroup's own entrance (its IO fires at mount, above the fold). */}
+            <div data-motion-reveal className="mt-10">
               <TrustBadges />
             </div>
           </div>
 
           {/* Visual column */}
-          <div className="flex-1 hidden lg:flex items-center justify-center">
+          <motion.div
+            className="flex-1 hidden lg:flex items-center justify-center"
+            data-motion-reveal
+            initial={{ opacity: 0, scale: 0.94, y: 24 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.7, ease: 'easeOut', delay: 0.45 }}
+          >
+            <motion.div
+              animate={isDesktop ? { y: [0, -10, 0] } : undefined}
+              transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+            >
             <div className="relative w-80 h-80 lg:w-96 lg:h-96">
               <div className="absolute inset-0 bg-gradient-to-br from-brand-400 to-brand-600 rounded-3xl rotate-6 opacity-20 dark:opacity-15" />
               <div className="absolute inset-0 bg-white dark:bg-gray-800 rounded-3xl shadow-2xl dark:shadow-gray-950/50 overflow-hidden">
-                <div className="p-8 h-full flex flex-col justify-center">
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3 p-3 bg-brand-50 dark:bg-brand-500/10 rounded-xl">
-                      <div className="w-10 h-10 rounded-full bg-brand-500 flex items-center justify-center">
-                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                      <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">{t('services.home.title')}</span>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={baseUrl('/images/hero.jpg')}
+                  alt={t('hero.headline')}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-gray-900/70 via-gray-900/10 to-transparent" />
+                <div className="absolute bottom-4 left-4 right-4 space-y-2">
+                  <div className="flex items-center gap-2.5 bg-white/90 dark:bg-gray-900/90 backdrop-blur rounded-xl px-3 py-2">
+                    <div className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center shrink-0">
+                      <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
                     </div>
-                    <div className="flex items-center gap-3 p-3 bg-accent-50 dark:bg-accent-500/10 rounded-xl ml-6">
-                      <div className="w-10 h-10 rounded-full bg-accent-500 flex items-center justify-center">
-                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                        </svg>
-                      </div>
-                      <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">{t('services.deep.title')}</span>
-                    </div>
-                    <div className="flex items-center gap-3 p-3 bg-brand-50 dark:bg-brand-500/10 rounded-xl ml-12">
-                      <div className="w-10 h-10 rounded-full bg-brand-600 flex items-center justify-center">
-                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                      </div>
-                      <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">{t('services.moveOut.title')}</span>
-                    </div>
+                    <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{t('services.home.title')}</span>
                   </div>
-
-                  <div className="mt-8 text-center">
-                    <div className="flex items-center justify-center gap-1 text-yellow-400">
-                      {[...Array(5)].map((_, i) => (
-                        <svg key={i} className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                        </svg>
-                      ))}
+                  <div className="flex items-center gap-2.5 bg-white/90 dark:bg-gray-900/90 backdrop-blur rounded-xl px-3 py-2">
+                    <div className="w-6 h-6 rounded-full bg-accent-500 flex items-center justify-center shrink-0">
+                      <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                      </svg>
                     </div>
-                    <p className="mt-1 text-sm font-medium text-gray-500 dark:text-gray-400">4.9/5 · 200+ reviews</p>
+                    <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{t('services.deep.title')}</span>
+                  </div>
+                  <div className="flex items-center gap-2.5 bg-white/90 dark:bg-gray-900/90 backdrop-blur rounded-xl px-3 py-2">
+                    <div className="w-6 h-6 rounded-full bg-brand-600 flex items-center justify-center shrink-0">
+                      <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{t('services.moveOut.title')}</span>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
+            </motion.div>
+          </motion.div>
+        </motion.div>
       </div>
 
       {/* Wave divider */}

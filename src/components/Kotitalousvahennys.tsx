@@ -1,12 +1,15 @@
 'use client';
 
 import { useLanguage } from '@/hooks/useLanguage';
+import { Reveal, StaggerGroup, StaggerItem } from './motion';
 
 const PRICES = [
-  { key: 'services.home', list: 35, after: 14 },
-  { key: 'services.deep', list: 45, after: 18 },
-  { key: 'services.moveOut', list: 50, after: 20 },
-  { key: 'services.office', list: 30, after: 12 },
+  'services.home',
+  'services.deep',
+  'services.moveOut',
+  'services.window',
+  'services.ovenFridge',
+  'services.saunaBalcony',
 ];
 
 export default function Kotitalousvahennys() {
@@ -33,50 +36,27 @@ export default function Kotitalousvahennys() {
             </p>
           </div>
 
-          {/* Price comparison cards */}
-          <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-            {PRICES.map(({ key, list, after }) => (
-              <div
+          {/* Price cards */}
+          <StaggerGroup className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+            {PRICES.map((key) => (
+              <StaggerItem
                 key={key}
-                className="group bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-4 text-center hover:shadow-md hover:border-brand-200 dark:hover:border-brand-500/30 transition-all"
+                hover
+                className="group bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-5 text-center hover:shadow-md hover:border-brand-200 dark:hover:border-brand-500/30"
               >
                 <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
                   {t(`${key}.title`)}
                 </p>
-
-                {/* Before */}
-                <div className="mb-3">
-                  <span className="text-xs text-gray-400 dark:text-gray-500">
-                    {t('kotitalousvahennys.before')}
-                  </span>
-                  <p className="text-lg font-bold text-gray-400 dark:text-gray-500 line-through">
-                    {list} €/h
-                  </p>
-                </div>
-
-                {/* Arrow */}
-                <div className="flex justify-center mb-3">
-                  <svg className="w-5 h-5 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                  </svg>
-                </div>
-
-                {/* After */}
-                <div className="bg-brand-50 dark:bg-brand-500/10 rounded-lg py-2 px-1 -mx-1">
-                  <span className="text-[10px] font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">
-                    {t('kotitalousvahennys.after')}
-                  </span>
-                  <p className="text-xl font-extrabold text-brand-600 dark:text-brand-400">
-                    ~{after} €/h
-                  </p>
-                </div>
-              </div>
+                <p className="text-xl font-extrabold text-brand-600 dark:text-brand-400">
+                  {t(`${key}.price`)}
+                </p>
+              </StaggerItem>
             ))}
-          </div>
+          </StaggerGroup>
 
-          {/* Bottom note */}
-          <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3 text-center">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+          {/* Bottom note — two lines */}
+          <div className="mt-6 flex flex-col items-center gap-2 text-center">
+            <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xl">
               {t('kotitalousvahennys.note')}
             </p>
             <a

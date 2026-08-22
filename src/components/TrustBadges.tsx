@@ -1,6 +1,7 @@
 'use client';
 
 import { useLanguage } from '@/hooks/useLanguage';
+import { StaggerGroup, StaggerItem } from './motion';
 
 const BADGE_ICONS = [
   <svg key="shield" className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -27,17 +28,19 @@ const badgeKeys = [
 export default function TrustBadges() {
   const { t } = useLanguage();
 
+  // Used only inside Hero (above the fold), so its whileInView fires at mount;
+  // delay keeps the stagger in sync with the hero's own entrance (~0.45s).
   return (
-    <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-6">
+    <StaggerGroup className="flex flex-wrap items-center justify-center gap-3 sm:gap-6" stagger={0.1} delay={0.45}>
       {badgeKeys.map((key, i) => (
-        <div
+        <StaggerItem
           key={key}
           className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm border border-white/50 dark:border-gray-700/50 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm"
         >
           <span className="text-brand-500 dark:text-brand-400 shrink-0">{BADGE_ICONS[i]}</span>
           <span className="whitespace-nowrap">{t(key)}</span>
-        </div>
+        </StaggerItem>
       ))}
-    </div>
+    </StaggerGroup>
   );
 }

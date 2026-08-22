@@ -1,6 +1,7 @@
 'use client';
 
 import { useLanguage } from '@/hooks/useLanguage';
+import { StaggerGroup, StaggerItem } from './motion';
 
 const POINTS = [
   {
@@ -53,9 +54,9 @@ export default function ResponsibleEmployer() {
           </p>
         </div>
 
-        <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mx-auto">
+        <StaggerGroup className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mx-auto">
           {POINTS.map(({ key, icon }) => (
-            <div
+            <StaggerItem
               key={key}
               className="flex items-start gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700"
             >
@@ -67,9 +68,9 @@ export default function ResponsibleEmployer() {
               <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
                 {t(`responsibleEmployer.${key}`)}
               </p>
-            </div>
+            </StaggerItem>
           ))}
-        </div>
+        </StaggerGroup>
       </div>
     </section>
   );

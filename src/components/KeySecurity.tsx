@@ -1,6 +1,7 @@
 'use client';
 
 import { useLanguage } from '@/hooks/useLanguage';
+import { StaggerGroup, StaggerItem } from './motion';
 
 const POINTS = [
   {
@@ -45,9 +46,9 @@ export default function KeySecurity() {
             </p>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-5">
+          <StaggerGroup className="grid sm:grid-cols-2 gap-5">
             {POINTS.map(({ key, icon }) => (
-              <div
+              <StaggerItem
                 key={key}
                 className="flex gap-4 p-5 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700"
               >
@@ -61,9 +62,9 @@ export default function KeySecurity() {
                     {t(`keySecurity.${key}`)}
                   </h4>
                 </div>
-              </div>
+              </StaggerItem>
             ))}
-          </div>
+          </StaggerGroup>
         </div>
       </div>
     </section>

@@ -1,10 +1,38 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '@/hooks/useLanguage';
 import { buildWhatsAppMessage, openWhatsApp } from '@/lib/whatsapp';
+import { Reveal } from './motion';
 
-type ServiceKey = 'homeCleaning' | 'deepCleaning' | 'moveOutCleaning' | 'officeCleaning';
+/** Animated inline form error — slides open/closed. */
+function ErrorText({ msg }: { msg?: string }) {
+  return (
+    <AnimatePresence initial={false}>
+      {msg && (
+        <motion.p
+          initial={{ opacity: 0, y: -4, height: 0 }}
+          animate={{ opacity: 1, y: 0, height: 'auto' }}
+          exit={{ opacity: 0, y: -4, height: 0 }}
+          transition={{ duration: 0.2 }}
+          className="mt-1 text-xs text-red-500 overflow-hidden"
+        >
+          {msg}
+        </motion.p>
+      )}
+    </AnimatePresence>
+  );
+}
+
+type ServiceKey =
+  | 'homeCleaning'
+  | 'deepCleaning'
+  | 'moveOutCleaning'
+  | 'officeCleaning'
+  | 'windowCleaning'
+  | 'ovenFridgeCleaning'
+  | 'saunaBalconyCleaning';
 type SizeKey =
   | 'sizeStudio'
   | 'sizeSmall'
@@ -33,11 +61,29 @@ export default function QuoteForm() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
 
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const minDate = tomorrow.toISOString().split('T')[0];
+  // Computed client-side only — new Date() in render would cause a hydration mismatch.
+  const [minDate, setMinDate] = useState('');
 
-  const serviceKeys: ServiceKey[] = ['homeCleaning', 'deepCleaning', 'moveOutCleaning', 'officeCleaning'];
+  useEffect(() => {
+    // Format tomorrow in the user's LOCAL timezone. toISOString() would use UTC,
+    // which is off-by-one for timezones ahead of UTC (e.g. UTC+2 → yesterday).
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    setMinDate(`${y}-${m}-${day}`);
+  }, []);
+
+  const serviceKeys: ServiceKey[] = [
+    'homeCleaning',
+    'deepCleaning',
+    'moveOutCleaning',
+    'officeCleaning',
+    'windowCleaning',
+    'ovenFridgeCleaning',
+    'saunaBalconyCleaning',
+  ];
   const sizeKeys: SizeKey[] = [
     'sizeStudio', 'sizeSmall', 'sizeMedium', 'sizeLarge', 'sizeXLarge',
   ];
@@ -47,6 +93,7 @@ export default function QuoteForm() {
     if (!service) e.service = t('quoteForm.errorService');
     if (!city.trim()) e.city = t('quoteForm.errorCity');
     if (!date) e.date = t('quoteForm.errorDate');
+    else if (minDate && date < minDate) e.date = t('quoteForm.errorDatePast');
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -89,10 +136,10 @@ export default function QuoteForm() {
     <section id="quote" className="bg-white dark:bg-gray-950 section-padding">
       <div className="container-page">
         <div className="max-w-2xl mx-auto">
-          <div className="text-center mb-8">
+          <Reveal className="text-center mb-8">
             <h2 className="heading-lg text-gray-900 dark:text-gray-50">{t('quoteForm.title')}</h2>
             <p className="mt-3 text-gray-500 dark:text-gray-400">{t('quoteForm.subtitle')}</p>
-          </div>
+          </Reveal>
 
           <form
             onSubmit={handleSubmit}
@@ -117,9 +164,7 @@ export default function QuoteForm() {
                   </option>
                 ))}
               </select>
-              {errors.service && (
-                <p className="mt-1 text-xs text-red-500">{errors.service}</p>
-              )}
+              <ErrorText msg={errors.service} />
             </div>
 
             {/* Property Size */}
@@ -155,9 +200,7 @@ export default function QuoteForm() {
                 placeholder={t('quoteForm.cityPlaceholder')}
                 className={inputClass}
               />
-              {errors.city && (
-                <p className="mt-1 text-xs text-red-500">{errors.city}</p>
-              )}
+              <ErrorText msg={errors.city} />
             </div>
 
             {/* Date */}
@@ -173,9 +216,7 @@ export default function QuoteForm() {
                 onChange={(e) => { setDate(e.target.value); setErrors((p) => ({ ...p, date: undefined })); }}
                 className={inputClass}
               />
-              {errors.date && (
-                <p className="mt-1 text-xs text-red-500">{errors.date}</p>
-              )}
+              <ErrorText msg={errors.date} />
             </div>
 
             {/* Submit */}

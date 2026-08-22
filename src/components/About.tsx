@@ -1,6 +1,8 @@
 'use client';
 
 import { useLanguage } from '@/hooks/useLanguage';
+import { baseUrl } from '@/lib/whatsapp';
+import { Reveal, StaggerGroup, StaggerItem } from './motion';
 
 const ABOUT_POINTS = [
   {
@@ -52,11 +54,22 @@ export default function About() {
           <p className="mt-3 text-gray-500 dark:text-gray-400 text-lg">{t('about.subtitle')}</p>
         </div>
 
-        <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="mt-12 grid lg:grid-cols-2 gap-8">
+          <Reveal className="hidden lg:block">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={baseUrl('/images/about.jpg')}
+              alt={t('about.title')}
+              className="w-full h-full min-h-[440px] object-cover rounded-2xl shadow-md dark:shadow-gray-950/50"
+              loading="lazy"
+            />
+          </Reveal>
+          <StaggerGroup className="grid sm:grid-cols-2 gap-6">
           {ABOUT_POINTS.map(({ key, icon }) => (
-            <div
+            <StaggerItem
               key={key}
-              className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm dark:shadow-gray-950/30 p-6 hover:shadow-md dark:hover:shadow-gray-950/50 transition-shadow"
+              hover
+              className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm dark:shadow-gray-950/30 p-6 hover:shadow-md dark:hover:shadow-gray-950/50"
             >
               <div className="w-11 h-11 rounded-xl bg-brand-50 dark:bg-brand-500/10 flex items-center justify-center">
                 <svg className="w-5 h-5 text-brand-600 dark:text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -69,8 +82,9 @@ export default function About() {
               <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
                 {t(`about.points.${key}.description`)}
               </p>
-            </div>
+            </StaggerItem>
           ))}
+          </StaggerGroup>
         </div>
       </div>
     </section>

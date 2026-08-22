@@ -1,6 +1,7 @@
 'use client';
 
 import { useLanguage } from '@/hooks/useLanguage';
+import { Reveal } from './motion';
 
 export default function PaymentBanner() {
   const { t } = useLanguage();
@@ -8,7 +9,7 @@ export default function PaymentBanner() {
   return (
     <section className="bg-white dark:bg-gray-950 border-t border-gray-100 dark:border-gray-800 py-10">
       <div className="container-page">
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-8">
+        <Reveal className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-8">
           <span className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
             {t('paymentBanner.title')}
           </span>
@@ -46,7 +47,7 @@ export default function PaymentBanner() {
               <span>{t('paymentBanner.cash')}</span>
             </div>
           </div>
-        </div>
+        </Reveal>
       </div>
     </section>
   );
