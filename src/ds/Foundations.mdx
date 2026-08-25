@@ -1,0 +1,97 @@
+import { Meta } from '@storybook/blocks';
+import { palette, fontSize, radius, shadow } from './tokens';
+
+<Meta title="Foundations/Brand" />
+
+export function Swatch({ name, hex, size = 56 }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontFamily: "'Inter', sans-serif" }}>
+      <div
+        style={{
+          height: size,
+          borderRadius: 10,
+          background: hex,
+          boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.08)',
+        }}
+      />
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'inherit' }}>{name}</div>
+      <div style={{ fontSize: 11, opacity: 0.65, fontFamily: 'monospace' }}>{hex}</div>
+    </div>
+  );
+}
+
+export function SwatchRow({ entries, children }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 16 }}>
+      {children}
+    </div>
+  );
+}
+
+# ReadySetSiivous — brand foundations
+
+Every token below was sampled directly from `public/logo.png`: **deep navy ink** and **warm gold**. They are codified in `tailwind.config.js` as the `accent` (navy) and `brand` (gold) scales, and mirrored in `tokens.ts` as plain values.
+
+## Color — navy (the logo’s ink)
+
+<SwatchRow>
+  {Object.entries(palette.navy).map(([name, hex]) => (
+    <Swatch key={name} name={name} hex={hex} />
+  ))}
+</SwatchRow>
+
+The **logo navy `#0a1741`** is the brand’s dark base — use it for primary buttons, ink cards, and dark surfaces.
+
+## Color — gold (the logo’s accent)
+
+<SwatchRow>
+  {Object.entries(palette.gold).map(([name, hex]) => (
+    <Swatch key={name} name={name} hex={hex} />
+  ))}
+</SwatchRow>
+
+Gold is an *accent*, never a text color on white: it pairs with navy text (`text-accent-950` on `bg-brand-500`), exactly as the logo pairs the two.
+
+## Color — WhatsApp green (CTA)
+
+<SwatchRow>
+  {Object.entries(palette.whatsapp).map(([name, hex]) => (
+    <Swatch key={name} name={name} hex={hex} />
+  ))}
+</SwatchRow>
+
+The site’s established call-to-action color for WhatsApp links — kept in the DS so CTAs stay consistent.
+
+## Typography
+
+Inter, extrabold for headings with tight tracking:
+
+| Token | Class | Size | Weight |
+| --- | --- | --- | --- |
+| xl | `.heading-xl` | 3.75rem | 800 |
+| lg | `.heading-lg` | 2.25rem | 700 |
+| md | `.heading-md` | 1.875rem | 700 |
+| sm | `text-xl font-bold` | 1.25rem | 700 |
+
+## Shape & elevation
+
+| Radius | Value | Use |
+| --- | --- | --- |
+| `sm` | 0.75rem | inputs, small cards |
+| `md` | 1rem | cards |
+| `lg` | 1.5rem | hero imagery |
+| `full` | 9999px | buttons, badges |
+
+Elevation is brand-tinted: `navy-glow` (`rgb(13 20 40 / 0.25)`) behind primary buttons, `gold-glow` (`rgb(201 163 64 / 0.35)`) behind gold buttons.
+
+## Usage
+
+```tsx
+import { Button, Badge, Card, Field, Input, Heading, Eyebrow, Logo } from '@/ds';
+
+<Logo />
+<Heading as="h2" size="lg">Koti kuntoon</Heading>
+<Button variant="primary">Pyydä tarjous</Button>
+<Button variant="whatsapp">WhatsApp</Button>
+<Badge variant="subtle">Kotitalousvähennys</Badge>
+```
