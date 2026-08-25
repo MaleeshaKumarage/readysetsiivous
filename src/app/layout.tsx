@@ -1,7 +1,13 @@
 import './globals.css';
 import { MotionConfig } from 'framer-motion';
 import { ThemeProvider } from '@/context/ThemeContext';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
+
+// The site serves fi/en/sv natively — browser auto-translate would rewrite
+// the DOM and break React hydration ("Text content does not match...").
+export const viewport: Viewport = {
+  themeColor: '#0d1428',
+};
 
 const SITE_NAME = 'ReadySetSiivous';
 const SITE_URL = 'https://readysetsiivous.fi';
@@ -13,6 +19,9 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: SITE_TITLE,
   description: SITE_DESCRIPTION,
+  other: {
+    google: 'notranslate',
+  },
   openGraph: {
     type: 'website',
     url: SITE_URL,
@@ -42,7 +51,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="fi" suppressHydrationWarning>
+    <html lang="fi" suppressHydrationWarning translate="no" className="notranslate">
       <body className="min-h-screen flex flex-col bg-white dark:bg-accent-950 text-gray-900 dark:text-gray-100 transition-colors">
         <MotionConfig reducedMotion="user">
           <ThemeProvider>{children}</ThemeProvider>
