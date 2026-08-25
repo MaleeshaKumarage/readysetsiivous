@@ -13,8 +13,10 @@ interface NavbarProps {
   lang: Language;
 }
 
-const navKeys = ['nav.services', 'nav.about', 'nav.checklist', 'nav.faq', 'nav.contact'] as const;
-const sectionIds = ['#services', '#about', '#checklist', '#faq', '#contact'];
+// Removed 2026-08-25: 'nav.checklist' (#checklist section hidden) and
+// 'nav.contact' (#contact — no such section exists on the page).
+const navKeys = ['nav.services', 'nav.about', 'nav.faq'] as const;
+const sectionIds = ['#services', '#about', '#faq'];
 
 export default function Navbar({ lang }: NavbarProps) {
   const { t } = useLanguage();
