@@ -10,13 +10,16 @@
     "checklist": "Checklista",
     "faq": "FAQ",
     "contact": "Kontakt",
-    "whatsappButton": "Chatta på WhatsApp"
+    "whatsappButton": "Chatta på WhatsApp",
+    "callUs": "Ring oss"
   },
   "hero": {
     "headline": "Professionell hemstädning i Helsingfors, Esbo & Vanda",
     "subheadline": "Försäkrade, bakgrundskontrollerade och pålitliga städare. Hemstädning, storstädning, flyttstädning och kontorsstädning. Få din offert direkt och boka på under 60 sekunder — inga samtal, inget krångel.",
     "cta": "Få offert via WhatsApp",
     "secondaryCta": "Se våra tjänster",
+    "callUs": "Ring +358 46 804 4231",
+    "sameDay": "⚡ Samma dag-tider tillgängliga",
     "localKeywords": "Hemstädning Esbo — Storstädning Helsingfors — Flyttstädning Vanda — Kontorsstädning huvudstadsregionen"
   },
   "trustBadges": {
@@ -30,6 +33,7 @@
     "subtitle": "Fyll i uppgifterna och få en personlig offert via WhatsApp på ditt språk.",
     "serviceType": "Typ av tjänst",
     "selectService": "Välj en tjänst…",
+    "selectSize": "Välj en storlek…",
     "homeCleaning": "Hemstädning",
     "deepCleaning": "Storstädning",
     "moveOutCleaning": "Flyttstädning",
@@ -58,6 +62,7 @@
     "errorDate": "Välj ett önskat datum.",
     "errorCity": "Ange din stad.",
     "errorService": "Välj en tjänst.",
+    "errorSize": "Välj bostadens storlek.",
     "errorDatePast": "Datumet kan inte vara i det förflutna."
   },
   "whatsapp": {
@@ -258,6 +263,83 @@
   },
   "floatingWhatsApp": {
     "tooltip": "Chatta med oss!"
+  },
+  "testimonials": {
+    "title": "Vad våra kunder säger",
+    "subtitle": "Riktiga omdömen från hem i huvudstadsregionen.",
+    "items": [
+      {
+        "name": "Liisa M.",
+        "area": "Esbo",
+        "text": "Storstädningen var fantastisk — golvlister och skåp jag inte rört på åratal ser helt nya ut. Vänligt och punktligt team."
+      },
+      {
+        "name": "Markku V.",
+        "area": "Helsingfors",
+        "text": "Vi använder städningen varannan vecka. Pålitligt och noggrant, och bokning via WhatsApp kunde inte vara enklare. Varm rekommendation."
+      },
+      {
+        "name": "Sofia J.",
+        "area": "Vanda",
+        "text": "Beställde flyttstädning och fick hela depositionen tillbaka. Tydlig kommunikation och lägenheten glänste."
+      }
+    ]
+  },
+  "privacy": {
+    "title": "Integritetspolicy",
+    "updated": "Senast uppdaterad: augusti 2026",
+    "sections": [
+      {
+        "h": "Personuppgiftsansvarig",
+        "p": "ReadySetSiivous erbjuder städtjänster i Helsingforsregionen. Du når oss på info@readysetsiivous.fi."
+      },
+      {
+        "h": "Vilka uppgifter vi samlar in",
+        "p": "Vi behandlar endast de uppgifter du väljer att skicka till oss via WhatsApp eller e-post — vanligtvis namn, telefonnummer, stad, önskat datum och innehållet i dina meddelanden. Denna webbplats lagrar inga personuppgifter på servrar."
+      },
+      {
+        "h": "Lokala inställningar",
+        "p": "Dina språk- och temainställningar sparas endast i din egen webbläsare (localStorage) och lämnar aldrig din enhet. Inga annons- eller analyskakor används."
+      },
+      {
+        "h": "Hur vi använder dina uppgifter",
+        "p": "Dina uppgifter används enbart för att skapa offerter, schemalägga städningar och leverera tjänster. Vi säljer eller delar aldrig dina uppgifter med tredje part, utom när lagen kräver det."
+      },
+      {
+        "h": "Dina rättigheter",
+        "p": "Enligt EU:s dataskyddsförordning (GDPR) kan du när som helst begära tillgång till, rättelse av eller radering av dina personuppgifter via e-post: info@readysetsiivous.fi."
+      }
+    ]
+  },
+  "terms": {
+    "title": "Användarvillkor",
+    "updated": "Senast uppdaterad: augusti 2026",
+    "sections": [
+      {
+        "h": "Våra tjänster",
+        "p": "ReadySetSiivous erbjuder hem-, stor-, flytt-, kontors- och andra städtjänster i Helsingforsregionen enligt beskrivningen på denna webbplats."
+      },
+      {
+        "h": "Offerter och bokning",
+        "p": "Offerter som skickas via WhatsApp är uppskattningar baserade på de uppgifter du anger. Slutpriset kan variera om det faktiska skicket eller storleken avviker från beskrivningen."
+      },
+      {
+        "h": "Avbokning",
+        "p": "Du kan avboka kostnadsfritt upp till 24 timmar före planerad städning. Senare avbokningar kan medföra en mindre avgift. Ombokning är alltid kostnadsfri."
+      },
+      {
+        "h": "Betalning",
+        "p": "Betalning sker efter utförd tjänst via de metoder som anges på webbplatsen. Vi tillhandahåller de dokument som behövs för hushållsavdraget (kotitalousvähennys)."
+      },
+      {
+        "h": "Ansvar",
+        "p": "Vår personal är utbildad, bakgrundskontrollerad och försäkrad. Meddela oss i förväg om ömtåliga eller värdefulla föremål. Vårt ansvar är begränsat i den utsträckning finsk lag tillåter."
+      },
+      {
+        "h": "Tillämplig lag",
+        "p": "Dessa villkor regleras av finsk lag. Tvister avgörs i finska domstolar."
+      }
+    ]
   },
   "schema": {
     "name": "ReadySetSiivous",

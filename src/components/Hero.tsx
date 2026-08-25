@@ -57,6 +57,18 @@ export default function Hero() {
               {t('hero.subheadline')}
             </motion.p>
 
+            <motion.p
+              data-motion-reveal
+              variants={heroItem}
+              className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-brand-600 dark:text-brand-400"
+            >
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-400 opacity-60" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-brand-500" />
+              </span>
+              {t('hero.sameDay')}
+            </motion.p>
+
             {/* CTAs */}
             <motion.div data-motion-reveal variants={heroItem} className="mt-8 flex flex-col sm:flex-row items-center gap-4">
               <a
@@ -78,6 +90,15 @@ export default function Hero() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
+              </a>
+              <a
+                href="tel:+358468044231"
+                className="inline-flex items-center gap-2 px-6 py-3.5 text-gray-700 dark:text-gray-200 text-base font-semibold rounded-full hover:text-brand-700 dark:hover:text-brand-400 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                </svg>
+                {t('hero.callUs')}
               </a>
             </motion.div>
 
@@ -105,7 +126,7 @@ export default function Hero() {
               <div className="absolute inset-0 bg-white dark:bg-gray-800 rounded-3xl shadow-2xl dark:shadow-gray-950/50 overflow-hidden">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={baseUrl('/images/hero.jpg')}
+                  src={baseUrl('/images/hero.webp')}
                   alt={t('hero.headline')}
                   className="w-full h-full object-cover"
                 />

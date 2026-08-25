@@ -11,6 +11,7 @@ import KeySecurity from '@/components/KeySecurity';
 import EcoPetBadges from '@/components/EcoPetBadges';
 import FAQ from '@/components/FAQ';
 import About from '@/components/About';
+import Testimonials from '@/components/Testimonials';
 import ResponsibleEmployer from '@/components/ResponsibleEmployer';
 import QRSection from '@/components/QRSection';
 import PaymentBanner from '@/components/PaymentBanner';
@@ -43,6 +44,7 @@ export default function LangPage({
         <EcoPetBadges />
         <FAQ />
         <About />
+        <Testimonials />
         <ResponsibleEmployer />
         <QRSection />
         <PaymentBanner />

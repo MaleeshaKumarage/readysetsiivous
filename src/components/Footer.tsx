@@ -2,22 +2,23 @@
 
 import Image from 'next/image';
 import { useLanguage } from '@/hooks/useLanguage';
-import { getWhatsAppChatUrl } from '@/lib/whatsapp';
+import { getWhatsAppChatUrl, baseUrl } from '@/lib/whatsapp';
 import { Reveal } from './motion';
 
 export default function Footer() {
-  const { t, ta } = useLanguage();
+  const { t, ta, lang } = useLanguage();
   const areas = ta('footer.areas');
 
   return (
-    <footer className="bg-accent-900 dark:bg-accent-950 text-gray-300 dark:text-gray-400 section-padding border-t border-accent-800 dark:border-accent-900">
+    // pb-28 sm:pb-24 keeps the floating WhatsApp button clear of the footer links.
+    <footer className="bg-accent-900 dark:bg-accent-950 text-gray-300 dark:text-gray-400 section-padding pb-28 sm:pb-24 border-t border-accent-800 dark:border-accent-900">
       <div className="container-page">
         <Reveal className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10">
           {/* Brand */}
           <div className="sm:col-span-2 lg:col-span-1">
             <a href="#" className="inline-flex items-center gap-2">
               <Image
-                src="/logo.png"
+                src="/logo.webp"
                 alt="ReadySetSiivous"
                 width={40}
                 height={40}
@@ -107,8 +108,8 @@ export default function Footer() {
         <div className="mt-12 pt-8 border-t border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-gray-500 dark:text-gray-600">{t('footer.copyright')}</p>
           <div className="flex items-center gap-6">
-            <a href="#" className="text-xs text-gray-500 dark:text-gray-600 hover:text-gray-300 dark:hover:text-gray-400 transition-colors">{t('footer.privacy')}</a>
-            <a href="#" className="text-xs text-gray-500 dark:text-gray-600 hover:text-gray-300 dark:hover:text-gray-400 transition-colors">{t('footer.terms')}</a>
+            <a href={baseUrl(`/${lang}/privacy/`)} className="text-xs text-gray-500 dark:text-gray-600 hover:text-gray-300 dark:hover:text-gray-400 transition-colors">{t('footer.privacy')}</a>
+            <a href={baseUrl(`/${lang}/terms/`)} className="text-xs text-gray-500 dark:text-gray-600 hover:text-gray-300 dark:hover:text-gray-400 transition-colors">{t('footer.terms')}</a>
           </div>
         </div>
       </div>

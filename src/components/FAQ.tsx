@@ -15,7 +15,7 @@ export default function FAQ() {
   }
 
   return (
-    <section id="faq" className="bg-gray-50 dark:bg-gray-900 section-padding">
+    <section id="faq" className="bg-gray-50 dark:bg-accent-900 section-padding">
       <div className="container-page">
         <div className="text-center max-w-2xl mx-auto">
           <h2 className="heading-lg text-gray-900 dark:text-gray-50">{t('faq.title')}</h2>
@@ -31,11 +31,14 @@ export default function FAQ() {
               <button
                 onClick={() => toggle(i)}
                 className="w-full flex items-center justify-between px-5 py-4 text-left"
+                aria-expanded={openIndex === i}
+                aria-controls={`faq-panel-${i}`}
               >
-                <span className="text-sm sm:text-base font-semibold text-gray-900 dark:text-gray-100 pr-4">
+                <span id={`faq-question-${i}`} className="text-sm sm:text-base font-semibold text-gray-900 dark:text-gray-100 pr-4">
                   {t(`faq.questions.${key}.q`)}
                 </span>
                 <svg
+                  aria-hidden="true"
                   className={`w-5 h-5 shrink-0 text-gray-400 transition-transform ${openIndex === i ? 'rotate-180' : ''}`}
                   fill="none"
                   stroke="currentColor"
@@ -47,6 +50,9 @@ export default function FAQ() {
               <AnimatePresence initial={false}>
                 {openIndex === i && (
                   <motion.div
+                    id={`faq-panel-${i}`}
+                    role="region"
+                    aria-labelledby={`faq-question-${i}`}
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}

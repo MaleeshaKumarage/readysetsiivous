@@ -10,13 +10,16 @@
     "checklist": "Tarkistuslista",
     "faq": "UKK",
     "contact": "Yhteystiedot",
-    "whatsappButton": "Keskustele WhatsAppissa"
+    "whatsappButton": "Keskustele WhatsAppissa",
+    "callUs": "Soita meille"
   },
   "hero": {
     "headline": "Ammattitaitoista kotisiivousta Helsingissä, Espoossa & Vantaalla",
     "subheadline": "Vakuutetut, taustatarkistetut ja luotetut siivoojat. Kotisiivous, syväsiivous, muutosiivous ja toimistosiivous. Pyydä välitön tarjous ja varaa alle 60 sekunnissa — ilman puheluita tai vaivaa.",
     "cta": "Pyydä tarjous WhatsAppissa",
     "secondaryCta": "Katso palvelumme",
+    "callUs": "Soita +358 46 804 4231",
+    "sameDay": "⚡ Saman päivän aikoja saatavilla",
     "localKeywords": "Kotisiivous Espoo — Syväsiivous Helsinki — Muutosiivous Vantaa — Toimistosiivous pääkaupunkiseutu"
   },
   "trustBadges": {
@@ -30,6 +33,7 @@
     "subtitle": "Täytä tiedot ja saat henkilökohtaisen tarjouksen WhatsAppissa omalla kielelläsi.",
     "serviceType": "Palvelutyyppi",
     "selectService": "Valitse palvelu…",
+    "selectSize": "Valitse koko…",
     "homeCleaning": "Kotisiivous",
     "deepCleaning": "Syväsiivous",
     "moveOutCleaning": "Muutosiivous",
@@ -58,6 +62,7 @@
     "errorDate": "Valitse toivottu päivämäärä.",
     "errorCity": "Syötä kaupunkisi.",
     "errorService": "Valitse palvelu.",
+    "errorSize": "Valitse asunnon koko.",
     "errorDatePast": "Päivämäärä ei voi olla menneisyydessä."
   },
   "whatsapp": {
@@ -258,6 +263,83 @@
   },
   "floatingWhatsApp": {
     "tooltip": "Keskustele kanssamme!"
+  },
+  "testimonials": {
+    "title": "Mitä asiakkaamme sanovat",
+    "subtitle": "Oikeita arvioita kodeista ympäri pääkaupunkiseutua.",
+    "items": [
+      {
+        "name": "Liisa M.",
+        "area": "Espoo",
+        "text": "Syväsiivous oli uskomaton — jalkalistat ja kaapit, joihin en ollut koskenut vuosiin, näyttävät uusilta. Ystävällinen ja täsmällinen tiimi."
+      },
+      {
+        "name": "Markku V.",
+        "area": "Helsinki",
+        "text": "Käytämme kahden viikon välein -palvelua. Luotettavaa ja perusteellista, ja varaaminen WhatsAppissa ei voisi olla helpompaa. Vahva suositus."
+      },
+      {
+        "name": "Sofia J.",
+        "area": "Vantaa",
+        "text": "Tilasin muutosiivouksen ja saimme koko takuuvuokran takaisin. Viestintä oli selkeää ja asunto kimalsi."
+      }
+    ]
+  },
+  "privacy": {
+    "title": "Tietosuojaseloste",
+    "updated": "Päivitetty: elokuu 2026",
+    "sections": [
+      {
+        "h": "Rekisterinpitäjä",
+        "p": "ReadySetSiivous tarjoaa siivouspalveluita Helsingin metropolialueella. Tavoitat meidät osoitteesta info@readysetsiivous.fi."
+      },
+      {
+        "h": "Mitä tietoja keräämme",
+        "p": "Käsittelemme vain tietoja, jotka päätät lähettää meille WhatsAppissa tai sähköpostitse — yleensä nimi, puhelinnumero, kaupunki, toivottu ajankohta ja viestien sisältö. Tämä verkkosivusto ei tallenna henkilötietoja palvelimille."
+      },
+      {
+        "h": "Paikalliset asetukset",
+        "p": "Kieli- ja teemavalintasi tallennetaan vain omaan selaimeesi (localStorage), eivätkä ne poistu laitteeltasi. Emme käytä mainonta- tai analytiikkaevästeitä."
+      },
+      {
+        "h": "Miten käytämme tietojasi",
+        "p": "Tietojasi käytetään ainoastaan tarjousten tekemiseen, siivousten aikatauluttamiseen ja palveluiden tuottamiseen. Emme koskaan myy tai luovuta tietojasi kolmansille osapuolille, paitsi lain niin vaatiessa."
+      },
+      {
+        "h": "Oikeutesi",
+        "p": "EU:n yleisen tietosuoja-asetuksen (GDPR) mukaisesti voit milloin tahansa pyytää pääsyn tietoihisi, niiden oikaisua tai poistamista sähköpostitse: info@readysetsiivous.fi."
+      }
+    ]
+  },
+  "terms": {
+    "title": "Käyttöehdot",
+    "updated": "Päivitetty: elokuu 2026",
+    "sections": [
+      {
+        "h": "Palvelumme",
+        "p": "ReadySetSiivous tarjoaa koti-, syvä-, muutto-, toimisto- ja muita siivouspalveluita Helsingin metropolialueella tällä verkkosivustolla kuvatulla tavalla."
+      },
+      {
+        "h": "Tarjoukset ja varaukset",
+        "p": "WhatsAppissa lähetetyt tarjoukset ovat arvioita antamiesi tietojen perusteella. Lopullinen hinta voi vaihdella, jos todellinen kunto tai koko poikkeaa kuvauksesta."
+      },
+      {
+        "h": "Peruutus",
+        "p": "Voit perua varauksen veloituksetta 24 tuntia ennen sovittua siivousta. Myöhemmistä peruutuksista voidaan veloittaa pieni maksu. Ajankohdan siirtäminen on aina ilmaista."
+      },
+      {
+        "h": "Maksaminen",
+        "p": "Maksu suoritetaan palvelun jälkeen sivustolla luetelluilla tavoilla. Toimitamme kotitalousvähennystä varten tarvittavat asiakirjat."
+      },
+      {
+        "h": "Vastuu",
+        "p": "Henkilökuntamme on koulutettua, taustatarkistettua ja vakuutettua. Ilmoitathan etukäteen särkyvistä tai arvokkaista esineistä. Vastuumme on rajattu Suomen lain sallimaan laajuuteen."
+      },
+      {
+        "h": "Sovellettava laki",
+        "p": "Näihin ehtoihin sovelletaan Suomen lakia. Mahdolliset riidat ratkaistaan Suomen tuomioistuimissa."
+      }
+    ]
   },
   "schema": {
     "name": "ReadySetSiivous",

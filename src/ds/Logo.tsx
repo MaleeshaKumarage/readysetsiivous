@@ -22,7 +22,7 @@ export interface LogoProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 /**
- * Brand logo — the round navy/gold mark from public/logo.png plus the
+ * Brand logo — the round navy/gold mark from public/logo.webp plus the
  * wordmark with its gold "Siivous" accent.
  */
 export function Logo({ size = 'md', withWordmark = true, className, ...rest }: LogoProps) {
@@ -31,7 +31,7 @@ export function Logo({ size = 'md', withWordmark = true, className, ...rest }: L
       {/* The logo mark itself sits on a light disc so it reads on dark navy too. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/logo.png"
+        src="/logo.webp"
         alt="ReadySetSiivous logo"
         className={cx(
           'rounded-full bg-white p-1 ring-1 ring-gray-200 dark:ring-gray-700 shrink-0',

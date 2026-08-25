@@ -37,7 +37,7 @@ export default function TrustBadges() {
           key={key}
           className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm border border-white/50 dark:border-gray-700/50 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm"
         >
-          <span className="text-brand-500 dark:text-brand-400 shrink-0">{BADGE_ICONS[i]}</span>
+          <span className="text-brand-600 dark:text-brand-400 shrink-0">{BADGE_ICONS[i]}</span>
           <span className="whitespace-nowrap">{t(key)}</span>
         </StaggerItem>
       ))}

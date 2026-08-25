@@ -10,7 +10,7 @@ const meta: Meta<typeof Logo> = {
     docs: {
       description: {
         component:
-          'The brand logo: the round navy/gold mark from `public/logo.png` plus the wordmark with its gold “Siivous” accent. The mark sits on a light disc so it reads on navy backgrounds too.',
+          'The brand logo: the round navy/gold mark from `public/logo.webp` plus the wordmark with its gold “Siivous” accent. The mark sits on a light disc so it reads on navy backgrounds too.',
       },
     },
   },

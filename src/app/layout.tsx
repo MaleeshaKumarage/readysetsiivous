@@ -1,7 +1,18 @@
 import './globals.css';
+import { Inter } from 'next/font/google';
 import { MotionConfig } from 'framer-motion';
 import { ThemeProvider } from '@/context/ThemeContext';
 import type { Metadata, Viewport } from 'next';
+
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter',
+});
+
+// Applies the saved theme before first paint to prevent a light-mode flash
+// for dark-mode users (ThemeProvider applies it only after hydration).
+const themeInitScript = `try{var t=localStorage.getItem('theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}`;
 
 // The site serves fi/en/sv natively — browser auto-translate would rewrite
 // the DOM and break React hydration ("Text content does not match...").
@@ -51,8 +62,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="fi" suppressHydrationWarning translate="no" className="notranslate">
+    <html lang="fi" suppressHydrationWarning translate="no" className={`notranslate ${inter.variable}`}>
       <body className="min-h-screen flex flex-col bg-white dark:bg-accent-950 text-gray-900 dark:text-gray-100 transition-colors">
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <MotionConfig reducedMotion="user">
           <ThemeProvider>{children}</ThemeProvider>
         </MotionConfig>

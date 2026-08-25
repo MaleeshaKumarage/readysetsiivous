@@ -1,12 +1,15 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/hooks/useLanguage';
 
 export default function LanguageSwitcher() {
   const { lang, setLang, languages } = useLanguage();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const router = useRouter();
 
   const current = languages.find((l) => l.code === lang) ?? languages[0];
 
@@ -20,25 +23,40 @@ export default function LanguageSwitcher() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        buttonRef.current?.focus();
+      }
+    }
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [open]);
+
   const switchTo = useCallback(
     (code: 'en' | 'fi' | 'sv') => {
       setLang(code);
       setOpen(false);
-      // Navigate to the new language URL path
+      // Client-side navigation to the new language URL path (no full reload).
       const newPath = window.location.pathname.replace(/^\/(en|fi|sv)\//, `/${code}/`);
       if (newPath !== window.location.pathname) {
-        window.location.href = newPath + window.location.search + window.location.hash;
+        router.push(newPath + window.location.search + window.location.hash);
       }
     },
-    [setLang]
+    [setLang, router]
   );
 
   return (
     <div className="relative" ref={ref}>
       <button
+        ref={buttonRef}
         onClick={() => setOpen(!open)}
         className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-200 hover:border-brand-400 dark:hover:border-brand-500 hover:text-brand-700 dark:hover:text-brand-400 transition-colors"
         aria-label="Switch language"
+        aria-haspopup="true"
+        aria-expanded={open}
       >
         <span className="text-base">{current.flag}</span>
         <span className="hidden sm:inline">{current.label}</span>

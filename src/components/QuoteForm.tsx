@@ -6,12 +6,13 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { buildWhatsAppMessage, openWhatsApp } from '@/lib/whatsapp';
 import { Reveal } from './motion';
 
-/** Animated inline form error — slides open/closed. */
+/** Animated inline form error — slides open/closed, announced to assistive tech. */
 function ErrorText({ msg }: { msg?: string }) {
   return (
     <AnimatePresence initial={false}>
       {msg && (
         <motion.p
+          role="alert"
           initial={{ opacity: 0, y: -4, height: 0 }}
           animate={{ opacity: 1, y: 0, height: 'auto' }}
           exit={{ opacity: 0, y: -4, height: 0 }}
@@ -91,10 +92,18 @@ export default function QuoteForm() {
   function validate(): boolean {
     const e: FormErrors = {};
     if (!service) e.service = t('quoteForm.errorService');
+    if (!size) e.size = t('quoteForm.errorSize');
     if (!city.trim()) e.city = t('quoteForm.errorCity');
     if (!date) e.date = t('quoteForm.errorDate');
     else if (minDate && date < minDate) e.date = t('quoteForm.errorDatePast');
     setErrors(e);
+
+    // Move focus to the first invalid field so keyboard and screen-reader
+    // users land directly on what needs fixing.
+    const order: Array<keyof FormErrors> = ['service', 'size', 'city', 'date'];
+    const first = order.find((k) => e[k]);
+    if (first) document.getElementById(first)?.focus();
+
     return Object.keys(e).length === 0;
   }
 
@@ -175,16 +184,17 @@ export default function QuoteForm() {
               <select
                 id="size"
                 value={size}
-                onChange={(e) => setSize(e.target.value)}
+                onChange={(e) => { setSize(e.target.value); setErrors((p) => ({ ...p, size: undefined })); }}
                 className={inputClass}
               >
-                <option value="">{t('quoteForm.selectService')}</option>
+                <option value="">{t('quoteForm.selectSize')}</option>
                 {sizeKeys.map((k) => (
                   <option key={k} value={k}>
                     {t(`quoteForm.${k}`)}
                   </option>
                 ))}
               </select>
+              <ErrorText msg={errors.size} />
             </div>
 
             {/* City */}

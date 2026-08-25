@@ -10,13 +10,16 @@
     "checklist": "Checklist",
     "faq": "FAQ",
     "contact": "Contact",
-    "whatsappButton": "Chat on WhatsApp"
+    "whatsappButton": "Chat on WhatsApp",
+    "callUs": "Call Us"
   },
   "hero": {
     "headline": "Professional Home Cleaning in Helsinki, Espoo & Vantaa",
     "subheadline": "Insured, vetted, and trusted cleaners. Home cleaning, deep cleaning, move-out cleaning, and office cleaning. Get your instant quote and book in under 60 seconds — no calls, no hassle.",
     "cta": "Get Instant Quote via WhatsApp",
     "secondaryCta": "View Our Services",
+    "callUs": "Call +358 46 804 4231",
+    "sameDay": "⚡ Same-day slots available",
     "localKeywords": "Kotisiivous Espoo — Syväsiivous Helsinki — Muutosiivous Vantaa"
   },
   "trustBadges": {
@@ -30,6 +33,7 @@
     "subtitle": "Fill in the details and receive a personalised quote via WhatsApp in your language.",
     "serviceType": "Service Type",
     "selectService": "Select a service…",
+    "selectSize": "Select a size…",
     "homeCleaning": "Home Cleaning",
     "deepCleaning": "Deep Cleaning",
     "moveOutCleaning": "Move-out Cleaning",
@@ -58,6 +62,7 @@
     "errorDate": "Please select a preferred date.",
     "errorCity": "Please enter your city.",
     "errorService": "Please select a service.",
+    "errorSize": "Please select the property size.",
     "errorDatePast": "The selected date cannot be in the past."
   },
   "whatsapp": {
@@ -258,6 +263,83 @@
   },
   "floatingWhatsApp": {
     "tooltip": "Chat with us!"
+  },
+  "testimonials": {
+    "title": "What Our Customers Say",
+    "subtitle": "Real reviews from homes across the Helsinki area.",
+    "items": [
+      {
+        "name": "Liisa M.",
+        "area": "Espoo",
+        "text": "The deep clean was amazing — baseboards and cabinets I hadn't touched in years look brand new. Friendly and punctual team."
+      },
+      {
+        "name": "Markku V.",
+        "area": "Helsinki",
+        "text": "We use the bi-weekly service. Reliable, thorough, and booking via WhatsApp could not be easier. Highly recommended."
+      },
+      {
+        "name": "Sofia J.",
+        "area": "Vantaa",
+        "text": "Booked a move-out cleaning and got our full deposit back. Clear communication and the apartment sparkled."
+      }
+    ]
+  },
+  "privacy": {
+    "title": "Privacy Policy",
+    "updated": "Last updated: August 2026",
+    "sections": [
+      {
+        "h": "Who we are",
+        "p": "ReadySetSiivous provides cleaning services in the Helsinki metropolitan area. You can reach us at info@readysetsiivous.fi."
+      },
+      {
+        "h": "What data we collect",
+        "p": "We only process the information you choose to send us via WhatsApp or email — typically your name, phone number, city, preferred date, and any details in your messages. This website itself does not store personal data on servers."
+      },
+      {
+        "h": "Local preferences",
+        "p": "Your language and theme preferences are saved only in your own browser (localStorage) and never leave your device. No advertising or analytics cookies are used."
+      },
+      {
+        "h": "How we use your data",
+        "p": "Your details are used solely to prepare quotes, schedule cleanings, and provide services. We never sell or share your data with third parties, except where required by law."
+      },
+      {
+        "h": "Your rights",
+        "p": "Under the EU GDPR you may request access to, correction of, or deletion of your personal data at any time by emailing info@readysetsiivous.fi."
+      }
+    ]
+  },
+  "terms": {
+    "title": "Terms of Service",
+    "updated": "Last updated: August 2026",
+    "sections": [
+      {
+        "h": "Our services",
+        "p": "ReadySetSiivous provides home, deep, move-out, office and related cleaning services in the Helsinki metropolitan area as described on this website."
+      },
+      {
+        "h": "Quotes and booking",
+        "p": "Quotes sent via WhatsApp are estimates based on the information you provide. The final price may vary if the actual condition or size differs from what was described."
+      },
+      {
+        "h": "Cancellation",
+        "p": "You may cancel free of charge up to 24 hours before the scheduled cleaning. Later cancellations may incur a small fee. Rescheduling is always free."
+      },
+      {
+        "h": "Payment",
+        "p": "Payment is made after the service via the methods listed on the site. We provide the documents needed for the Finnish household-expenses tax credit (kotitalousvähennys)."
+      },
+      {
+        "h": "Liability",
+        "p": "Our staff are trained, background-checked, and insured. Please inform us in advance of fragile or high-value items. Our liability is limited to the extent permitted by Finnish law."
+      },
+      {
+        "h": "Governing law",
+        "p": "These terms are governed by Finnish law. Disputes are resolved in the courts of Finland."
+      }
+    ]
   },
   "schema": {
     "name": "ReadySetSiivous",
