@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '@/hooks/useLanguage';
 import LanguageSwitcher from './LanguageSwitcher';
@@ -32,16 +33,19 @@ export default function Navbar({ lang }: NavbarProps) {
   }
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/90 dark:bg-gray-950/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 shadow-sm">
+    <nav className="sticky top-0 z-50 bg-white/90 dark:bg-accent-950/90 backdrop-blur-md border-b border-gray-100 dark:border-accent-900 shadow-sm">
       <div className="container-page">
         <div className="flex items-center justify-between h-16 lg:h-18">
           {/* Logo */}
           <a href={baseUrl(`/${lang}/`)} className="flex items-center gap-2 shrink-0">
-            <span className="w-9 h-9 rounded-lg bg-brand-500 flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-              </svg>
-            </span>
+            <Image
+              src="/logo.png"
+              alt="ReadySetSiivous"
+              width={40}
+              height={40}
+              priority
+              className="w-10 h-10 rounded-full bg-white p-1 ring-1 ring-gray-200 dark:ring-gray-700"
+            />
             <span translate="no" className="text-lg sm:text-xl font-extrabold text-gray-900 dark:text-gray-50 tracking-tight">
               ReadySet<span className="text-brand-600 dark:text-brand-400">Siivous</span>
             </span>

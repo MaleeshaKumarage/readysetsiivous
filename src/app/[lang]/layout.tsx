@@ -39,6 +39,20 @@ export async function generateMetadata({
       locale: dict.site.locale,
       siteName: 'ReadySetSiivous',
       url: `${baseUrl}/${lang}/`,
+      images: [
+        {
+          url: '/og-image.png',
+          width: 1200,
+          height: 630,
+          alt: 'ReadySetSiivous',
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: dict.site.title,
+      description: dict.site.description,
+      images: ['/og-image.png'],
     },
     keywords: [
       'cleaning',
