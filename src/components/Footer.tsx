@@ -74,7 +74,7 @@ export default function Footer() {
               </li>
               <li>
                 <a href="tel:+358468044231" className="text-sm text-gray-400 dark:text-gray-500 hover:text-brand-400 transition-colors">
-                  +358 XX XXX XXXX
+                  +358 46 804 4231
                 </a>
               </li>
             </ul>
