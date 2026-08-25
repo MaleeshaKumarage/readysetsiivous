@@ -54,9 +54,9 @@ export default function SchemaScript({ lang, dict }: SchemaProps) {
       '@type': 'ContactPoint',
       contactType: 'customer service',
       availableLanguage: ['Finnish', 'English', 'Swedish'],
-      url: 'https://wa.me/358XXXXXXXXX',
+      url: 'https://wa.me/358468044231',
     },
-    sameAs: ['https://wa.me/358XXXXXXXXX'],
+    sameAs: ['https://wa.me/358468044231'],
   };
 
   return (

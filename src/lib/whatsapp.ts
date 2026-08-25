@@ -5,7 +5,7 @@
  * in international format without the '+' or leading zeros.
  * Example: 358401234567 for a Finnish number +358 40 123 4567
  */
-const WHATSAPP_PHONE = '358XXXXXXXXX'; // TODO: Replace with real number
+const WHATSAPP_PHONE = '358468044231';
 
 interface QuoteData {
   service: string;

@@ -56,7 +56,7 @@ src/
 Edit `src/lib/whatsapp.ts` and replace the placeholder:
 
 ```ts
-const WHATSAPP_PHONE = '358XXXXXXXXX'; // ← replace with your real number
+const WHATSAPP_PHONE = '358468044231'; // ← current number
 ```
 
 Use international format without `+` or leading zeros (e.g., `358401234567` for Finnish number `+358 40 123 4567`).

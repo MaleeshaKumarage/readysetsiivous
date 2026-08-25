@@ -103,7 +103,7 @@ function CardContent({ lang }: { lang: Language }) {
             </a>
 
             <a
-              href="tel:+358XXXXXXXXX"
+              href="tel:+358468044231"
               className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-semibold rounded-xl hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
             >
               {L.callUs}
