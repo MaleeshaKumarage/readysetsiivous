@@ -15,9 +15,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const lang = (params.lang as Language) ?? DEFAULT_LANGUAGE;
   const dict = getDictionary(lang);
-  const baseUrl = process.env.GITHUB_PAGES
-    ? 'https://maleeshakumarage.github.io/readysetsiivous'
-    : 'http://localhost:3000';
+  const baseUrl = 'https://readysetsiivous.fi';
 
   const alternates: Record<string, string> = {
     fi: `${baseUrl}/fi/`,

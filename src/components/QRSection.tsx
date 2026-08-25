@@ -8,7 +8,7 @@ import { Reveal } from './motion';
 export default function QRSection() {
   const { t, lang } = useLanguage();
 
-  const cardUrl = `https://maleeshakumarage.github.io/readysetsiivous/${lang}/card/`;
+  const cardUrl = `https://readysetsiivous.fi/${lang}/card/`;
   const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(cardUrl)}&bgcolor=ffffff&color=166534&format=png`;
 
   const labels: Record<Language, { title: string; desc: string; step1: string; step2: string }> = {

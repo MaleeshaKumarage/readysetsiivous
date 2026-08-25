@@ -65,8 +65,8 @@ export function getWhatsAppChatUrl(): string {
 }
 
 /**
- * Prefix a path with the GitHub Pages basePath (e.g. /readysetsiivous).
- * Locally the env var is unset, so paths remain absolute (/fi/, /contact.vcf).
+ * Returns the given path as an absolute path on the current origin.
+ * The site is served from the domain root, so no prefix is needed.
  */
 export function baseUrl(path: string): string {
   const base = process.env.NEXT_PUBLIC_BASE_PATH || '';

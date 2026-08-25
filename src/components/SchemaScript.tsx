@@ -12,7 +12,7 @@ export default function SchemaScript({ lang, dict }: SchemaProps) {
     '@type': 'CleaningService',
     name: dict.schema.name,
     description: dict.schema.description,
-    url: `https://maleeshakumarage.github.io/readysetsiivous/${lang}/`,
+    url: `https://readysetsiivous.fi/${lang}/`,
     areaServed: [
       {
         '@type': 'City',
