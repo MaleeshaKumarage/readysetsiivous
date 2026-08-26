@@ -28,6 +28,10 @@ export async function generateMetadata({
     title: dict.site.title,
     description: dict.site.description,
     metadataBase: new URL(baseUrl),
+    robots: {
+      index: true,
+      follow: true,
+    },
     alternates: {
       canonical: `${baseUrl}/${lang}/`,
       languages: alternates,

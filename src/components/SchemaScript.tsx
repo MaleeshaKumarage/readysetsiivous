@@ -13,6 +13,14 @@ export default function SchemaScript({ lang, dict }: SchemaProps) {
     name: dict.schema.name,
     description: dict.schema.description,
     url: `https://readysetsiivous.fi/${lang}/`,
+    logo: {
+      '@type': 'ImageObject',
+      url: 'https://readysetsiivous.fi/logo.webp',
+      width: 500,
+      height: 500,
+    },
+    image: 'https://readysetsiivous.fi/logo.webp',
+    telephone: '+358468044231',
     areaServed: [
       {
         '@type': 'City',
@@ -53,6 +61,7 @@ export default function SchemaScript({ lang, dict }: SchemaProps) {
     contactPoint: {
       '@type': 'ContactPoint',
       contactType: 'customer service',
+      telephone: '+358468044231',
       availableLanguage: ['Finnish', 'English', 'Swedish'],
       url: 'https://wa.me/358468044231',
     },
