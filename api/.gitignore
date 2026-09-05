@@ -1,0 +1,11 @@
+bin/
+obj/
+.vs/
+*.user
+.env
+dev/.env
+deploy/.env
+out/
+TestResults/
+*.coverage
+verify-phase*.sh

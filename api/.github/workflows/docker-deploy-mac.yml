@@ -1,0 +1,47 @@
+name: docker-deploy-mac
+
+on:
+  workflow_run:
+    workflows: ["docker-build-push"]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: cleaning-mac-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: [self-hosted, macmini]
+    permissions:
+      packages: read
+    env:
+      COMPOSE_DIR: /home/maleesha/cleaning-suite
+
+    steps:
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Set image tag
+        run: sed -i -E "s|^(IMAGE_TAG=).*|\1sha-${{ github.event.workflow_run.head_sha }}|" $COMPOSE_DIR/.env
+
+      - name: Pull new image
+        run: docker compose --env-file $COMPOSE_DIR/.env -f $COMPOSE_DIR/docker-compose.yml pull --quiet
+
+      - name: Deploy
+        run: docker compose --env-file $COMPOSE_DIR/.env -f $COMPOSE_DIR/docker-compose.yml up -d --remove-orphans
+
+      - name: Smoke test API
+        run: |
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:8090/healthz && break
+            sleep 2
+          done
+          curl -sf http://localhost:8090/healthz | grep -q '"ok"' || { docker logs cleaning-suite-api-1 --tail 50; exit 1; }
+
+      - name: Smoke test Keycloak
+        run: curl -sf -o /dev/null http://localhost:8082/realms/master
+
+      - name: Prune old images
+        run: docker image prune -f
