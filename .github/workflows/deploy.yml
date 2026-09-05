@@ -37,6 +37,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Clean stale export
+        run: rm -rf out
+
       - name: Build static export
         run: npm run build
 
