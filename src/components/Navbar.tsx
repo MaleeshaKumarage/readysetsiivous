@@ -65,6 +65,12 @@ export default function Navbar({ lang }: NavbarProps) {
               </a>
             ))}
             <a
+              href={baseUrl(`/${lang}/varaus/`)}
+              className="px-4 py-2 text-sm font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-500/10 transition-colors"
+            >
+              {t('nav.booking')}
+            </a>
+            <a
               href={baseUrl(`/${lang}/card/`)}
               className="px-4 py-2 text-sm font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-500/10 transition-colors"
             >

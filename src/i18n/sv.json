@@ -11,7 +11,8 @@
     "faq": "FAQ",
     "contact": "Kontakt",
     "whatsappButton": "Chatta på WhatsApp",
-    "callUs": "Ring oss"
+    "callUs": "Ring oss",
+    "booking": "Boka"
   },
   "hero": {
     "headline": "Professionell hemstädning i Helsingfors, Esbo & Vanda",
@@ -253,7 +254,14 @@
   },
   "footer": {
     "areasServed": "Områden vi betjänar",
-    "areas": ["Helsingfors", "Esbo", "Vanda", "Grankulla", "Kyrkslätt", "Tusby"],
+    "areas": [
+      "Helsingfors",
+      "Esbo",
+      "Vanda",
+      "Grankulla",
+      "Kyrkslätt",
+      "Tusby"
+    ],
     "contact": "Kontakt",
     "hours": "Öppettider",
     "hoursText": "Mån–Fre: 07:00–21:00 | Lör: 09:00–18:00",
@@ -345,5 +353,37 @@
     "name": "ReadySetSiivous",
     "description": "Professionella städtjänster för hem och företag i Helsingforsregionen.",
     "priceRange": "€€"
+  },
+  "varaus": {
+    "title": "Boka städning",
+    "loading": "Laddar tjänster…",
+    "unavailableTitle": "Bokning är inte tillgänglig just nu",
+    "unavailableText": "Kontakta oss på WhatsApp så bokar vi en tid som passar dig.",
+    "contactViaWhatsApp": "Kontakta via WhatsApp",
+    "whatsappMessage": "Hej! Jag vill boka en städning.",
+    "from": "från",
+    "hour": "h",
+    "duration": "Längd",
+    "minutes": "min",
+    "back": "Tillbaka",
+    "date": "Välj datum",
+    "loadingSlots": "Laddar lediga tider…",
+    "noSlots": "Inga lediga tider den här dagen.",
+    "at": "kl.",
+    "detailsTitle": "Dina uppgifter",
+    "name": "Namn",
+    "phone": "Telefon",
+    "email": "E-post",
+    "street": "Gatuadress",
+    "postalCode": "Postnummer",
+    "city": "Stad",
+    "notes": "Anteckningar (valfritt)",
+    "submitError": "Bokningen misslyckades. Prova en annan tid eller kontakta oss på WhatsApp.",
+    "submitting": "Bokar…",
+    "confirm": "Bekräfta bokning",
+    "doneTitle": "Bokning mottagen!",
+    "bookingNumber": "Bokningsnummer",
+    "reference": "Referens",
+    "backHome": "Till startsidan"
   }
 }

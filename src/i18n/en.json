@@ -11,7 +11,8 @@
     "faq": "FAQ",
     "contact": "Contact",
     "whatsappButton": "Chat on WhatsApp",
-    "callUs": "Call Us"
+    "callUs": "Call Us",
+    "booking": "Book"
   },
   "hero": {
     "headline": "Professional Home Cleaning in Helsinki, Espoo & Vantaa",
@@ -253,7 +254,14 @@
   },
   "footer": {
     "areasServed": "Areas We Serve",
-    "areas": ["Helsinki", "Espoo", "Vantaa", "Kauniainen", "Kirkkonummi", "Tuusula"],
+    "areas": [
+      "Helsinki",
+      "Espoo",
+      "Vantaa",
+      "Kauniainen",
+      "Kirkkonummi",
+      "Tuusula"
+    ],
     "contact": "Contact",
     "hours": "Operating Hours",
     "hoursText": "Mon–Fri: 07:00–21:00 | Sat: 09:00–18:00",
@@ -345,5 +353,37 @@
     "name": "ReadySetSiivous",
     "description": "Professional residential and commercial cleaning services in the Helsinki metropolitan area.",
     "priceRange": "€€"
+  },
+  "varaus": {
+    "title": "Book a cleaning",
+    "loading": "Loading services…",
+    "unavailableTitle": "Booking is not available right now",
+    "unavailableText": "Contact us on WhatsApp and we will book a suitable time for you.",
+    "contactViaWhatsApp": "Contact on WhatsApp",
+    "whatsappMessage": "Hi! I would like to book a cleaning.",
+    "from": "from",
+    "hour": "h",
+    "duration": "Duration",
+    "minutes": "min",
+    "back": "Back",
+    "date": "Pick a date",
+    "loadingSlots": "Loading available times…",
+    "noSlots": "No available times for this date.",
+    "at": "at",
+    "detailsTitle": "Your details",
+    "name": "Name",
+    "phone": "Phone",
+    "email": "Email",
+    "street": "Street address",
+    "postalCode": "Postal code",
+    "city": "City",
+    "notes": "Notes (optional)",
+    "submitError": "Booking failed. Try another time or contact us on WhatsApp.",
+    "submitting": "Booking…",
+    "confirm": "Confirm booking",
+    "doneTitle": "Booking received!",
+    "bookingNumber": "Booking number",
+    "reference": "Reference",
+    "backHome": "Back to home"
   }
 }

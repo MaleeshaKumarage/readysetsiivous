@@ -11,7 +11,8 @@
     "faq": "UKK",
     "contact": "Yhteystiedot",
     "whatsappButton": "Keskustele WhatsAppissa",
-    "callUs": "Soita meille"
+    "callUs": "Soita meille",
+    "booking": "Varaa"
   },
   "hero": {
     "headline": "Ammattitaitoista kotisiivousta Helsingissä, Espoossa & Vantaalla",
@@ -253,7 +254,14 @@
   },
   "footer": {
     "areasServed": "Toimialueemme",
-    "areas": ["Helsinki", "Espoo", "Vantaa", "Kauniainen", "Kirkkonummi", "Tuusula"],
+    "areas": [
+      "Helsinki",
+      "Espoo",
+      "Vantaa",
+      "Kauniainen",
+      "Kirkkonummi",
+      "Tuusula"
+    ],
     "contact": "Yhteystiedot",
     "hours": "Aukioloajat",
     "hoursText": "Ma–Pe: 07:00–21:00 | La: 09:00–18:00",
@@ -345,5 +353,37 @@
     "name": "ReadySetSiivous",
     "description": "Ammattitaitoiset kodin ja toimiston siivouspalvelut Helsingin metropolialueella.",
     "priceRange": "€€"
+  },
+  "varaus": {
+    "title": "Varaa siivous",
+    "loading": "Ladataan palveluita…",
+    "unavailableTitle": "Varaus ei ole juuri nyt käytettävissä",
+    "unavailableText": "Ota yhteyttä WhatsAppilla, niin varaamme sinulle sopivan ajan.",
+    "contactViaWhatsApp": "Ota yhteyttä WhatsAppissa",
+    "whatsappMessage": "Hei! Haluaisin varata siivousajan.",
+    "from": "alk.",
+    "hour": "t",
+    "duration": "Kesto",
+    "minutes": "min",
+    "back": "Takaisin",
+    "date": "Valitse päivämäärä",
+    "loadingSlots": "Ladataan vapaita aikoja…",
+    "noSlots": "Ei vapaita aikoja tälle päivälle.",
+    "at": "klo",
+    "detailsTitle": "Yhteystiedot",
+    "name": "Nimi",
+    "phone": "Puhelin",
+    "email": "Sähköposti",
+    "street": "Katuosoite",
+    "postalCode": "Postinumero",
+    "city": "Kaupunki",
+    "notes": "Lisätiedot (valinnainen)",
+    "submitError": "Varaus ei onnistunut. Kokeile toista aikaa tai ota yhteyttä WhatsAppissa.",
+    "submitting": "Varataan…",
+    "confirm": "Vahvista varaus",
+    "doneTitle": "Varaus vastaanotettu!",
+    "bookingNumber": "Varausnumero",
+    "reference": "Viitenumero",
+    "backHome": "Etusivulle"
   }
 }
