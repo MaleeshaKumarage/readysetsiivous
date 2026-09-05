@@ -5,7 +5,8 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { baseUrl } from '@/lib/whatsapp';
 import { API_URL, fetchServices, type PublicService } from '@/lib/api';
 import { serviceIcon } from '@/lib/icons';
-import { StaggerGroup, StaggerItem } from './motion';
+// Entrance animation removed from this section: cards must stay visible even
+// when JS chunks are stale (Pages deploy replaces _next assets).
 
 // i18n key → API slug mapping. Static export keeps the hardcoded cards as
 // fallback when the API is unreachable; API data wins when it answers.
@@ -85,16 +86,15 @@ export default function Services() {
           <p className="mt-3 text-gray-500 dark:text-gray-400 text-lg">{t('services.subtitle')}</p>
         </div>
 
-        <StaggerGroup className="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {apiServices.length > 0
             ? apiServices.map((s, i) => {
                 const IconCmp = serviceIcon(s.icon);
                 const gradient = GRADIENTS[i % GRADIENTS.length];
                 const bg = BGS[i % BGS.length];
                 return (
-                  <StaggerItem
+                  <div
                     key={s.id}
-                    hover
                     className="group relative bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm dark:shadow-gray-950/30 hover:shadow-xl dark:hover:shadow-gray-950/50 p-6 flex flex-col"
                   >
                     <div className="h-36 -mx-6 -mt-6 mb-4 overflow-hidden rounded-t-2xl bg-gray-100 dark:bg-gray-700">
@@ -118,13 +118,12 @@ export default function Services() {
                       {t('services.from')} {s.priceNet.toFixed(0)} € · {s.durationMinutes} min
                     </p>
                     <div className={`absolute -inset-0.5 rounded-2xl -z-10 opacity-0 group-hover:opacity-100 transition-opacity blur-sm ${bg}`} />
-                  </StaggerItem>
+                  </div>
                 );
               })
             : SERVICE_CARDS.map(({ key, image, icon, gradient, bg }) => (
-                <StaggerItem
+                <div
                   key={key}
-                  hover
                   className="group relative bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm dark:shadow-gray-950/30 hover:shadow-xl dark:hover:shadow-gray-950/50 p-6 flex flex-col"
                 >
                   <div className="h-36 -mx-6 -mt-6 mb-4 overflow-hidden rounded-t-2xl">
@@ -145,9 +144,9 @@ export default function Services() {
                   <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 leading-relaxed flex-1">{t(`${key}.description`)}</p>
                   <p className="mt-4 text-sm font-bold text-brand-600 dark:text-brand-400">{t(`${key}.price`)}</p>
                   <div className={`absolute -inset-0.5 rounded-2xl -z-10 opacity-0 group-hover:opacity-100 transition-opacity blur-sm ${bg}`} />
-                </StaggerItem>
+                </div>
               ))}
-        </StaggerGroup>
+        </div>
       </div>
     </section>
   );
