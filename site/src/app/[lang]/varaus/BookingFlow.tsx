@@ -78,10 +78,10 @@ export default function BookingFlow({ lang }: { lang: Language }) {
     return (
       <div className="mx-auto max-w-2xl px-4 text-center">
         <h1 className="mb-4 text-2xl font-bold">{t(lang, 'varaus.unavailableTitle')}</h1>
-        <p className="mb-6 text-muted-foreground">{t(lang, 'varaus.unavailableText')}</p>
+        <p className="mb-6 text-gray-500 dark:text-gray-400">{t(lang, 'varaus.unavailableText')}</p>
         <button
           onClick={() => openWhatsApp(t(lang, 'varaus.whatsappMessage'))}
-          className="rounded-full bg-brand px-6 py-3 font-semibold text-background"
+          className="rounded-full bg-brand px-6 py-3 font-semibold text-accent-950"
         >
           {t(lang, 'varaus.contactViaWhatsApp')}
         </button>
@@ -90,7 +90,7 @@ export default function BookingFlow({ lang }: { lang: Language }) {
   }
 
   if (!services) {
-    return <p className="text-center text-muted-foreground">{t(lang, 'varaus.loading')}</p>;
+    return <p className="text-center text-gray-500 dark:text-gray-400">{t(lang, 'varaus.loading')}</p>;
   }
 
   return (
@@ -106,7 +106,7 @@ export default function BookingFlow({ lang }: { lang: Language }) {
                 setService(s);
                 setStep('time');
               }}
-              className="rounded-xl border border-border bg-card p-5 text-left transition hover:border-brand"
+              className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 text-left transition hover:border-brand"
             >
               <div className="flex items-baseline justify-between gap-4">
                 <span className="text-lg font-semibold">{s.name}</span>
@@ -114,8 +114,8 @@ export default function BookingFlow({ lang }: { lang: Language }) {
                   {t(lang, 'varaus.from')} {s.priceNet.toFixed(2).replace('.', ',')} € / {t(lang, 'varaus.hour')}
                 </span>
               </div>
-              <p className="mt-1 text-sm text-muted-foreground">{s.description}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{s.description}</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 {t(lang, 'varaus.duration')}: {s.durationMinutes} {t(lang, 'varaus.minutes')}
               </p>
             </button>
@@ -136,15 +136,15 @@ export default function BookingFlow({ lang }: { lang: Language }) {
               min={today}
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full rounded-lg border border-border bg-card px-3 py-2"
+              className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2"
             />
           </label>
           {date && (
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
               {slots === null ? (
-                <p className="col-span-full text-muted-foreground">{t(lang, 'varaus.loadingSlots')}</p>
+                <p className="col-span-full text-gray-500 dark:text-gray-400">{t(lang, 'varaus.loadingSlots')}</p>
               ) : slots.length === 0 ? (
-                <p className="col-span-full text-muted-foreground">{t(lang, 'varaus.noSlots')}</p>
+                <p className="col-span-full text-gray-500 dark:text-gray-400">{t(lang, 'varaus.noSlots')}</p>
               ) : (
                 slots.map((s) => (
                   <button
@@ -153,7 +153,7 @@ export default function BookingFlow({ lang }: { lang: Language }) {
                       setSlot(s.startTime);
                       setStep('details');
                     }}
-                    className="rounded-lg border border-border bg-card px-3 py-2 text-sm hover:border-brand"
+                    className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm hover:border-brand"
                   >
                     {s.startTime}
                   </button>
@@ -170,7 +170,7 @@ export default function BookingFlow({ lang }: { lang: Language }) {
             ← {t(lang, 'varaus.back')}
           </button>
           <h2 className="mb-1 text-xl font-semibold">{t(lang, 'varaus.detailsTitle')}</h2>
-          <p className="mb-6 text-sm text-muted-foreground">
+          <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
             {service.name} · {date} · {t(lang, 'varaus.at')} {slot}
           </p>
           <div className="grid gap-4">
@@ -188,7 +188,7 @@ export default function BookingFlow({ lang }: { lang: Language }) {
                 value={form.notes}
                 onChange={update('notes')}
                 rows={3}
-                className="w-full rounded-lg border border-border bg-card px-3 py-2"
+                className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2"
               />
             </label>
             {submitError && (
@@ -197,7 +197,7 @@ export default function BookingFlow({ lang }: { lang: Language }) {
             <button
               onClick={submit}
               disabled={submitting || !form.customerName || !form.customerPhone || !form.street || !form.city}
-              className="rounded-full bg-brand px-6 py-3 font-semibold text-background disabled:opacity-50"
+              className="rounded-full bg-brand px-6 py-3 font-semibold text-accent-950 disabled:opacity-50"
             >
               {submitting ? t(lang, 'varaus.submitting') : t(lang, 'varaus.confirm')}
             </button>
@@ -208,13 +208,13 @@ export default function BookingFlow({ lang }: { lang: Language }) {
       {step === 'done' && result && (
         <div className="text-center">
           <h2 className="mb-2 text-2xl font-bold">{t(lang, 'varaus.doneTitle')}</h2>
-          <p className="mb-4 text-muted-foreground">
+          <p className="mb-4 text-gray-500 dark:text-gray-400">
             {t(lang, 'varaus.bookingNumber')}: <strong>{result.bookingNumber}</strong>
           </p>
-          <p className="mb-8 text-muted-foreground">
+          <p className="mb-8 text-gray-500 dark:text-gray-400">
             {t(lang, 'varaus.reference')}: <strong>{result.customerReference}</strong>
           </p>
-          <a href="/" className="rounded-full bg-brand px-6 py-3 font-semibold text-background">
+          <a href="/" className="rounded-full bg-brand px-6 py-3 font-semibold text-accent-950">
             {t(lang, 'varaus.backHome')}
           </a>
         </div>
@@ -238,7 +238,7 @@ function Field({
       <input
         value={value}
         onChange={onChange}
-        className="w-full rounded-lg border border-border bg-card px-3 py-2"
+        className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2"
       />
     </label>
   );

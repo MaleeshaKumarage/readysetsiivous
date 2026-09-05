@@ -27,53 +27,55 @@ export default function AdminShell({ lang, active, children }: { lang: string; a
   }, []);
 
   if (!ready) {
-    return <p className="p-8 text-center text-muted-foreground">Checking login…</p>;
+    return <p className="p-8 text-center text-gray-500 dark:text-gray-400">Checking login…</p>;
   }
 
   if (!authed || !admin) {
     return (
-      <div className="mx-auto max-w-md px-4 py-16 text-center">
-        <h1 className="mb-4 text-2xl font-bold">Admin login</h1>
-        <p className="mb-8 text-sm text-muted-foreground">
-          Admin access requires the admin role in the ReadysetSiivous Keycloak realm.
-        </p>
-        <button
-          onClick={() => login()}
-          className="rounded-full bg-brand px-6 py-3 font-semibold text-background"
-        >
-          Sign in with Keycloak
-        </button>
+      <div className="container-page py-16">
+        <div className="mx-auto max-w-md rounded-2xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 shadow-sm p-8 text-center">
+          <h1 className="mb-2 text-2xl font-bold text-gray-900 dark:text-gray-50">Admin login</h1>
+          <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
+            Admin access requires the admin role in the ReadySetSiivous Keycloak realm.
+          </p>
+          <button
+            onClick={() => login()}
+            className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 font-semibold text-accent-950 hover:bg-brand-400 transition-all"
+          >
+            Sign in with Keycloak
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col lg:flex-row">
-      <aside className="border-b border-border bg-card lg:w-56 lg:border-b-0 lg:border-r">
-        <nav className="flex gap-1 overflow-x-auto p-3 lg:flex-col">
+    <div className="container-page py-8">
+      <div className="mb-6 flex flex-wrap items-center gap-2 border-b border-gray-100 dark:border-accent-900 pb-4">
+        <nav className="flex flex-wrap items-center gap-2">
           {LINKS.map((link) => (
             <a
               key={link.href}
               href={baseUrl(`/${lang}/admin/${link.href}/`)}
               className={
-                'whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium ' +
+                'rounded-full px-4 py-2 text-sm font-semibold transition-colors ' +
                 (active === link.href
-                  ? 'bg-brand text-background'
-                  : 'text-muted-foreground hover:bg-brand/10')
+                  ? 'bg-brand text-accent-950 hover:bg-brand-400'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-brand-50 dark:hover:bg-brand-500/10 hover:text-brand-700 dark:hover:text-brand-400')
               }
             >
               {link.label}
             </a>
           ))}
-          <button
-            onClick={() => logout()}
-            className="whitespace-nowrap rounded-lg px-4 py-2 text-left text-sm text-red-500 hover:bg-red-500/10"
-          >
-            Sign out
-          </button>
         </nav>
-      </aside>
-      <main className="flex-1 p-6">{children}</main>
+        <button
+          onClick={() => logout()}
+          className="ml-auto rounded-full border border-gray-200 dark:border-gray-700 px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:border-red-300 hover:text-red-500 transition-colors"
+        >
+          Sign out
+        </button>
+      </div>
+      {children}
     </div>
   );
 }

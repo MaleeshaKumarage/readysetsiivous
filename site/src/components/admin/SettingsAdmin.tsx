@@ -54,17 +54,17 @@ export default function SettingsAdmin() {
     );
   }
 
-  if (!profile) return <p className="text-muted-foreground">Loading…</p>;
+  if (!profile) return <p className="text-gray-500 dark:text-gray-400">Loading…</p>;
 
   const set = (key: keyof TenantProfile, value: unknown) =>
     setProfile((p) => (p ? { ...p, [key]: value } : p));
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold">Tenant settings</h1>
+      <h1 className="mb-6 text-2xl font-bold text-gray-900 dark:text-gray-50">Tenant settings</h1>
       {message && <p className="mb-4 text-sm text-brand">{message}</p>}
 
-      <div className="mb-8 grid gap-3 rounded-xl border border-border bg-card p-4 md:grid-cols-2">
+      <div className="mb-8 grid gap-3 rounded-2xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm p-5 md:grid-cols-2">
         <Field label="Company name" value={profile.companyName} onChange={(v) => set('companyName', v)} />
         <Field label="Business id (Y-tunnus)" value={profile.businessId} onChange={(v) => set('businessId', v)} />
         <Field label="Email" value={profile.email} onChange={(v) => set('email', v)} />
@@ -108,18 +108,18 @@ export default function SettingsAdmin() {
         />
         <button
           onClick={saveProfile}
-          className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-background"
+          className="rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-accent-950 hover:bg-brand-400 transition-all"
         >
           Save settings
         </button>
       </div>
 
-      <h2 className="mb-4 text-lg font-semibold">Public page content</h2>
-      <div className="grid gap-3 rounded-xl border border-border bg-card p-4 md:grid-cols-2">
+      <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-50">Public page content</h2>
+      <div className="grid gap-3 rounded-2xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm p-5 md:grid-cols-2">
         <select
           value={pageKey}
           onChange={(e) => setPageKey(e.target.value)}
-          className="rounded-lg border border-border bg-card px-3 py-2 text-sm"
+          className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:border-brand-400 focus:ring-1 focus:ring-brand-400 outline-none transition-colors"
         >
           {['home', 'services', 'about', 'faq', 'footer'].map((k) => (
             <option key={k} value={k}>
@@ -132,7 +132,7 @@ export default function SettingsAdmin() {
         <Field label="sv" value={pageSv} onChange={setPageSv} />
         <button
           onClick={savePage}
-          className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-background"
+          className="rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-accent-950 hover:bg-brand-400 transition-all"
         >
           Save page
         </button>
@@ -156,7 +156,7 @@ function Field({
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+        className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:border-brand-400 focus:ring-1 focus:ring-brand-400 outline-none transition-colors"
       />
     </label>
   );

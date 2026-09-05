@@ -12,7 +12,7 @@ export default function VarausPage({ params }: { params: { lang: string } }) {
   return (
     <>
       <Navbar lang={lang} />
-      <main className="min-h-screen bg-background pt-24 pb-16">
+      <main className="min-h-screen bg-white dark:bg-accent-950 pt-24 pb-16">
         <BookingFlow lang={lang} />
       </main>
       <Footer />

@@ -32,7 +32,7 @@ export default function BookingsAdmin() {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold">Bookings</h1>
+      <h1 className="mb-6 text-2xl font-bold text-gray-900 dark:text-gray-50">Bookings</h1>
       {message && <p className="mb-4 text-sm text-brand">{message}</p>}
 
       <label className="mb-6 block">
@@ -40,7 +40,7 @@ export default function BookingsAdmin() {
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
-          className="rounded-lg border border-border bg-card px-3 py-2 text-sm"
+          className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:border-brand-400 focus:ring-1 focus:ring-brand-400 outline-none transition-colors"
         >
           <option value="">All</option>
           <option value="New">New</option>
@@ -50,10 +50,10 @@ export default function BookingsAdmin() {
         </select>
       </label>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto rounded-2xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm px-5 py-2">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-border text-left text-muted-foreground">
+            <tr className="border-b border-gray-100 dark:border-gray-700 text-left text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
               <th className="py-2 pr-2">Number</th>
               <th className="py-2 pr-2">When</th>
               <th className="py-2 pr-2">Customer</th>
@@ -65,7 +65,7 @@ export default function BookingsAdmin() {
           </thead>
           <tbody>
             {bookings?.map((b) => (
-              <tr key={b.id} className="border-b border-border/50 align-top">
+              <tr key={b.id} className="border-b border-gray-100 dark:border-gray-700/60 align-top">
                 <td className="py-2 pr-2 font-mono">{b.bookingNumber}</td>
                 <td className="py-2 pr-2 whitespace-nowrap">
                   {b.startLocalDate} {b.startLocalTime}
@@ -73,7 +73,7 @@ export default function BookingsAdmin() {
                 <td className="py-2 pr-2">
                   {b.customer.name}
                   <br />
-                  <span className="text-muted-foreground">{b.customer.phone}</span>
+                  <span className="text-gray-500 dark:text-gray-400">{b.customer.phone}</span>
                 </td>
                 <td className="py-2 pr-2">{b.service.nameFi}</td>
                 <td className="py-2 pr-2">
@@ -96,7 +96,7 @@ export default function BookingsAdmin() {
                   <select
                     value={''}
                     onChange={(e) => assign(b.id, e.target.value)}
-                    className="rounded-lg border border-border bg-card px-2 py-1 text-xs"
+                    className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1 text-xs focus:border-brand-400 outline-none"
                   >
                     <option value="">{b.employeeName ?? '—'}</option>
                     {employees?.map((emp) => (
@@ -112,7 +112,7 @@ export default function BookingsAdmin() {
                     {b.status === 'New' && (
                       <button
                         onClick={() => action(b.id, () => adminBookings.confirm(b.id), 'Confirm')}
-                        className="rounded bg-brand px-2 py-1 text-xs font-semibold text-background"
+                        className="rounded-full bg-brand px-3 py-1.5 text-xs font-semibold text-accent-950 hover:bg-brand-400 transition-colors"
                       >
                         confirm
                       </button>
@@ -121,13 +121,13 @@ export default function BookingsAdmin() {
                       <>
                         <button
                           onClick={() => action(b.id, () => adminBookings.complete(b.id), 'Complete')}
-                          className="rounded bg-green-600 px-2 py-1 text-xs font-semibold text-white"
+                          className="rounded-full bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-500 transition-colors"
                         >
                           complete
                         </button>
                         <button
                           onClick={() => action(b.id, () => adminBookings.cancel(b.id), 'Cancel')}
-                          className="rounded bg-red-600 px-2 py-1 text-xs font-semibold text-white"
+                          className="rounded-full bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-500 transition-colors"
                         >
                           cancel
                         </button>

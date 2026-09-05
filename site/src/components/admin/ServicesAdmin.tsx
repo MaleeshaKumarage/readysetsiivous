@@ -95,16 +95,16 @@ export default function ServicesAdmin() {
           [key]: type === 'number' ? Number(e.target.value) : e.target.value,
         }))
       }
-      className="w-full rounded-lg border border-border bg-card px-3 py-1.5 text-sm"
+      className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm focus:border-brand-400 focus:ring-1 focus:ring-brand-400 outline-none transition-colors"
     />
   );
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold">Services</h1>
+      <h1 className="mb-6 text-2xl font-bold text-gray-900 dark:text-gray-50">Services</h1>
       {message && <p className="mb-4 text-sm text-brand">{message}</p>}
 
-      <div className="mb-8 grid gap-3 rounded-xl border border-border bg-card p-4 md:grid-cols-3">
+      <div className="mb-8 grid gap-3 rounded-2xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm p-5 md:grid-cols-3">
         {input('slug')}
         {input('category')}
         {input('nameFi')}
@@ -126,7 +126,7 @@ export default function ServicesAdmin() {
         </label>
         <button
           onClick={save}
-          className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-background"
+          className="rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-accent-950 hover:bg-brand-400 transition-all"
         >
           Create service
         </button>
@@ -134,7 +134,7 @@ export default function ServicesAdmin() {
 
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-border text-left text-muted-foreground">
+          <tr className="border-b border-gray-100 dark:border-gray-700 text-left text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
             <th className="py-2 pr-2">Name (fi)</th>
             <th className="py-2 pr-2">Slug</th>
             <th className="py-2 pr-2">Duration</th>
@@ -145,7 +145,7 @@ export default function ServicesAdmin() {
         </thead>
         <tbody>
           {services?.map((s) => (
-            <tr key={s.id} className="border-b border-border/50">
+            <tr key={s.id} className="border-b border-gray-100 dark:border-gray-700/60">
               <td className="py-2 pr-2">{s.name.values.fi}</td>
               <td className="py-2 pr-2">{s.slug}</td>
               <td className="py-2 pr-2">{s.durationMinutes} min</td>

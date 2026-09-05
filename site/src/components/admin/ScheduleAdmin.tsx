@@ -34,14 +34,14 @@ export default function ScheduleAdmin() {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold">Schedule</h1>
+      <h1 className="mb-6 text-2xl font-bold text-gray-900 dark:text-gray-50">Schedule</h1>
       <div className="mb-6 flex flex-wrap items-end gap-3">
         <label className="block">
           <span className="mb-1 block text-sm font-medium">Employee</span>
           <select
             value={employeeId}
             onChange={(e) => setEmployeeId(e.target.value)}
-            className="rounded-lg border border-border bg-card px-3 py-2 text-sm"
+            className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:border-brand-400 focus:ring-1 focus:ring-brand-400 outline-none transition-colors"
           >
             <option value="">Select…</option>
             {employees?.map((e) => (
@@ -57,15 +57,15 @@ export default function ScheduleAdmin() {
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="rounded-lg border border-border bg-card px-3 py-2 text-sm"
+            className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:border-brand-400 focus:ring-1 focus:ring-brand-400 outline-none transition-colors"
           />
         </label>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto rounded-2xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm px-5 py-2">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-border text-left text-muted-foreground">
+            <tr className="border-b border-gray-100 dark:border-gray-700 text-left text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
               <th className="py-2 pr-2">Time</th>
               <th className="py-2 pr-2">Booking</th>
               <th className="py-2 pr-2">Customer</th>
@@ -75,7 +75,7 @@ export default function ScheduleAdmin() {
           </thead>
           <tbody>
             {bookings?.map((b) => (
-              <tr key={b.id} className="border-b border-border/50">
+              <tr key={b.id} className="border-b border-gray-100 dark:border-gray-700/60">
                 <td className="py-2 pr-2">{b.startLocalTime}</td>
                 <td className="py-2 pr-2 font-mono">{b.bookingNumber}</td>
                 <td className="py-2 pr-2">{b.customer.name}</td>
@@ -85,7 +85,7 @@ export default function ScheduleAdmin() {
             ))}
             {bookings !== null && bookings.length === 0 && (
               <tr>
-                <td colSpan={5} className="py-4 text-muted-foreground">
+                <td colSpan={5} className="py-4 text-gray-500 dark:text-gray-400">
                   No bookings for this day.
                 </td>
               </tr>
