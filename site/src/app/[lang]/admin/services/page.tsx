@@ -45,7 +45,6 @@ interface FormState {
   additionalFi: string;
   additionalEn: string;
   additionalSv: string;
-  durationMinutes: number;
   priceNet: number;
   vatRatePercent: number;
   icon: string;
@@ -60,7 +59,6 @@ const EMPTY: FormState = {
   nameFi: '', nameEn: '', nameSv: '',
   descriptionFi: '', descriptionEn: '', descriptionSv: '',
   additionalFi: '', additionalEn: '', additionalSv: '',
-  durationMinutes: 120,
   priceNet: 0,
   vatRatePercent: 25.5,
   icon: 'Sparkles',
@@ -100,7 +98,6 @@ export default function ServicesPage() {
       nameFi: s.name.values.fi ?? '', nameEn: s.name.values.en ?? '', nameSv: s.name.values.sv ?? '',
       descriptionFi: s.description.values.fi ?? '', descriptionEn: s.description.values.en ?? '', descriptionSv: s.description.values.sv ?? '',
       additionalFi: s.additionalInfo?.values.fi ?? '', additionalEn: s.additionalInfo?.values.en ?? '', additionalSv: s.additionalInfo?.values.sv ?? '',
-      durationMinutes: s.durationMinutes,
       priceNet: s.priceNet,
       vatRatePercent: s.vatRatePercent,
       icon: s.icon,
@@ -118,7 +115,7 @@ export default function ServicesPage() {
       name: { fi: form.nameFi, en: form.nameEn, sv: form.nameSv },
       description: { fi: form.descriptionFi, en: form.descriptionEn, sv: form.descriptionSv },
       additionalInfo: { fi: form.additionalFi, en: form.additionalEn, sv: form.additionalSv },
-      durationMinutes: Number(form.durationMinutes),
+      durationMinutes: 120,
       priceNet: Number(form.priceNet),
       vatRatePercent: Number(form.vatRatePercent),
       currency: 'EUR',
@@ -216,7 +213,6 @@ export default function ServicesPage() {
               <Field label="Additional info (fi)" value={form.additionalFi} onChange={set('additionalFi')} />
               <Field label="Additional info (en)" value={form.additionalEn} onChange={set('additionalEn')} />
               <Field label="Additional info (sv)" value={form.additionalSv} onChange={set('additionalSv')} />
-              <Field label="Duration (min)" value={String(form.durationMinutes)} onChange={set('durationMinutes')} />
               <Field label="VAT %" value={String(form.vatRatePercent)} onChange={set('vatRatePercent')} />
 
               <div className="space-y-1.5">
@@ -304,7 +300,6 @@ export default function ServicesPage() {
                       </span>
                       <div>
                         <p className="font-medium">{s.name.values.fi}</p>
-                        <p className="text-xs text-muted-foreground">{s.durationMinutes} min</p>
                       </div>
                     </div>
                   </TableCell>

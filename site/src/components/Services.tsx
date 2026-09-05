@@ -115,7 +115,7 @@ export default function Services() {
                       <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">{s.additionalInfo}</p>
                     )}
                     <p className="mt-4 text-sm font-bold text-brand-600 dark:text-brand-400">
-                      {t('services.from')} {s.priceNet.toFixed(0)} € · {s.durationMinutes} min
+                      {t('services.from')} {s.priceNet.toFixed(0)} €
                     </p>
                     <div className={`absolute -inset-0.5 rounded-2xl -z-10 opacity-0 group-hover:opacity-100 transition-opacity blur-sm ${bg}`} />
                   </div>

@@ -27,7 +27,6 @@ public record PublicServiceDto(
     string Icon,
     string ImageUrl,
     int SortOrder,
-    int DurationMinutes,
     decimal PriceNet,
     decimal VatRatePercent,
     string Currency);
@@ -52,7 +51,6 @@ public class GetPublicServicesHandler : IRequestHandler<GetPublicServicesQuery, 
                 s.Icon,
                 s.ImageUrl,
                 s.SortOrder,
-                s.DurationMinutes,
                 s.PriceNet,
                 s.VatRatePercent,
                 s.Currency))

@@ -115,9 +115,6 @@ export default function BookingFlow({ lang }: { lang: Language }) {
                 </span>
               </div>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{s.description}</p>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {t(lang, 'varaus.duration')}: {s.durationMinutes} {t(lang, 'varaus.minutes')}
-              </p>
             </button>
           ))}
         </div>

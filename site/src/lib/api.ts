@@ -14,7 +14,6 @@ export interface PublicService {
   icon: string;
   imageUrl: string;
   sortOrder: number;
-  durationMinutes: number;
   priceNet: number;
   vatRatePercent: number;
   currency: string;
