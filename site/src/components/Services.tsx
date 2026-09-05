@@ -70,6 +70,12 @@ export default function Services() {
 
   const GRADIENTS = ['from-brand-500 to-brand-600', 'from-accent-500 to-accent-600', 'from-violet-500 to-purple-600', 'from-amber-500 to-orange-600'];
   const BGS = ['bg-brand-50 dark:bg-brand-500/10', 'bg-accent-50 dark:bg-accent-500/10', 'bg-violet-50 dark:bg-violet-500/10', 'bg-amber-50 dark:bg-amber-500/10'];
+  const FALLBACK_IMAGES: Record<string, string> = {
+    'home-cleaning': 'service-home.webp',
+    'deep-cleaning': 'service-deep.webp',
+    'move-out-cleaning': 'service-moveout.webp',
+    'office-cleaning': 'service-office.webp',
+  };
 
   return (
     <section id="services" className="bg-gray-50 dark:bg-gray-900 section-padding">
@@ -94,7 +100,7 @@ export default function Services() {
                     <div className="h-36 -mx-6 -mt-6 mb-4 overflow-hidden rounded-t-2xl bg-gray-100 dark:bg-gray-700">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={s.imageUrl ? `${API_URL}${s.imageUrl}` : baseUrl('/images/service-home.webp')}
+                        src={s.imageUrl ? `${API_URL}${s.imageUrl}` : baseUrl(`/images/${FALLBACK_IMAGES[s.slug] ?? 'service-home.webp'}`)}
                         alt={s.name}
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                         loading="lazy"
@@ -109,7 +115,7 @@ export default function Services() {
                       <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">{s.additionalInfo}</p>
                     )}
                     <p className="mt-4 text-sm font-bold text-brand-600 dark:text-brand-400">
-                      {t('services.from')} {Math.round((s.priceNet / s.durationMinutes) * 60)} €/{t('services.hour')}
+                      {t('services.from')} {s.priceNet.toFixed(0)} € · {s.durationMinutes} min
                     </p>
                     <div className={`absolute -inset-0.5 rounded-2xl -z-10 opacity-0 group-hover:opacity-100 transition-opacity blur-sm ${bg}`} />
                   </StaggerItem>
