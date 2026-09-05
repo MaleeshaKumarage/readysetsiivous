@@ -54,7 +54,7 @@ services:
           memory: 1536m
 
   api:
-    image: ghcr.io/maleeshakumarage/cleaning-suite-api:${IMAGE_TAG:-latest}
+    image: ghcr.io/maleeshakumarage/readysetsiivous-api:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: Production

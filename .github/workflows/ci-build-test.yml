@@ -2,12 +2,21 @@ name: ci-build-test
 
 on:
   pull_request:
+    paths:
+      - 'api/**'
+      - '.github/workflows/ci-build-test.yml'
   push:
     branches: [main]
+    paths:
+      - 'api/**'
+      - '.github/workflows/ci-build-test.yml'
 
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4

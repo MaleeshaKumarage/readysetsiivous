@@ -3,6 +3,9 @@ name: docker-build-push
 on:
   push:
     branches: [main]
+    paths:
+      - 'api/**'
+      - '.github/workflows/docker-build-push.yml'
 
 concurrency:
   group: docker-build-push
@@ -31,7 +34,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ghcr.io/maleeshakumarage/readysetsiivous-api
           tags: |
             type=sha,format=long,prefix=sha-
             type=raw,value=latest
@@ -39,19 +42,9 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: docker/Dockerfile
+          context: ./api
+          file: api/docker/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-    outputs:
-      image_tag: sha-${{ github.sha }}
-
-  deploy-trigger:
-    needs: build-push
-    runs-on: ubuntu-latest
-    steps:
-      - name: "Deploy job follows in docker-deploy-mac (workflow_run)"
-        run: echo "image sha-${{ github.sha }} pushed"
