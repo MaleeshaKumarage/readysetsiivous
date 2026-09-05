@@ -65,6 +65,12 @@ export default function Navbar({ lang }: NavbarProps) {
               </a>
             ))}
             <a
+              href={baseUrl(`/${lang}/admin/`)}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-brand-600 dark:text-brand-400 border border-brand-300 dark:border-brand-700 rounded-full hover:bg-brand-50 dark:hover:bg-brand-500/10 transition-colors"
+            >
+              🔐 {t('nav.login')}
+            </a>
+            <a
               href={baseUrl(`/${lang}/varaus/`)}
               className="px-4 py-2 text-sm font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-500/10 transition-colors"
             >
@@ -147,6 +153,13 @@ export default function Navbar({ lang }: NavbarProps) {
                   {t(key)}
                 </a>
               ))}
+              <a
+                href={baseUrl(`/${lang}/admin/`)}
+                onClick={() => setMobileOpen(false)}
+                className="px-4 py-2.5 text-sm font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-500/10 transition-colors"
+              >
+                🔐 {t('nav.login')}
+              </a>
               <a
                 href={baseUrl(`/${lang}/varaus/`)}
                 onClick={() => setMobileOpen(false)}
