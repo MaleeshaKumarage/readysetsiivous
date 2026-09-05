@@ -110,10 +110,9 @@ export default function Services() {
                       <IconCmp className="w-6 h-6 text-white" />
                     </div>
                     <h3 className="mt-4 text-lg font-bold text-gray-900 dark:text-gray-100">{s.name}</h3>
-                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 leading-relaxed flex-1">{s.description}</p>
-                    {s.additionalInfo && (
-                      <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">{s.additionalInfo}</p>
-                    )}
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 leading-relaxed flex-1">
+                      {[s.description, s.additionalInfo].filter(Boolean).join(' ')}
+                    </p>
                     <p className="mt-4 text-sm font-bold text-brand-600 dark:text-brand-400">
                       {t('services.from')} {s.priceNet.toFixed(0)} €
                     </p>
