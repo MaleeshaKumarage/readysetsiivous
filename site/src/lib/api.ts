@@ -10,6 +10,10 @@ export interface PublicService {
   category: string;
   name: string;
   description: string;
+  additionalInfo: string | null;
+  icon: string;
+  imageUrl: string;
+  sortOrder: number;
   durationMinutes: number;
   priceNet: number;
   vatRatePercent: number;

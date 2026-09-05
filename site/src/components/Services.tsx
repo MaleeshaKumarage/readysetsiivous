@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { baseUrl } from '@/lib/whatsapp';
-import { fetchServices, type PublicService } from '@/lib/api';
+import { API_URL, fetchServices, type PublicService } from '@/lib/api';
+import { serviceIcon } from '@/lib/icons';
 import { StaggerGroup, StaggerItem } from './motion';
 
 // i18n key → API slug mapping. Static export keeps the hardcoded cards as
@@ -56,15 +57,19 @@ const SERVICE_CARDS = [
 
 export default function Services() {
   const { t, lang } = useLanguage();
-  const [apiServices, setApiServices] = useState<Map<string, PublicService>>(new Map());
+  const [apiServices, setApiServices] = useState<PublicService[]>([]);
 
   useEffect(() => {
     fetchServices(lang).then((services) => {
       if (services && services.length > 0) {
-        setApiServices(new Map(services.map((s) => [s.slug, s])));
+        // First four active services, admin-controlled order.
+        setApiServices([...services].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)).slice(0, 4));
       }
     });
   }, [lang]);
+
+  const GRADIENTS = ['from-brand-500 to-brand-600', 'from-accent-500 to-accent-600', 'from-violet-500 to-purple-600', 'from-amber-500 to-orange-600'];
+  const BGS = ['bg-brand-50 dark:bg-brand-500/10', 'bg-accent-50 dark:bg-accent-500/10', 'bg-violet-50 dark:bg-violet-500/10', 'bg-amber-50 dark:bg-amber-500/10'];
 
   return (
     <section id="services" className="bg-gray-50 dark:bg-gray-900 section-padding">
@@ -75,51 +80,67 @@ export default function Services() {
         </div>
 
         <StaggerGroup className="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {SERVICE_CARDS.map(({ key, image, icon, gradient, bg }) => {
-            const api = KEY_TO_SLUG[key] ? apiServices.get(KEY_TO_SLUG[key]) : undefined;
-            const title = api?.name ?? t(`${key}.title`);
-            const description = api?.description ?? t(`${key}.description`);
-            const price = api
-              ? `${t('services.from')} ${Math.round((api.priceNet / api.durationMinutes) * 60)} €/${t('services.hour')}`
-              : t(`${key}.price`);
-
-            return (
-            <StaggerItem
-              key={key}
-              hover
-              className="group relative bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm dark:shadow-gray-950/30 hover:shadow-xl dark:hover:shadow-gray-950/50 p-6 flex flex-col"
-            >
-              <div className="h-36 -mx-6 -mt-6 mb-4 overflow-hidden rounded-t-2xl">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={baseUrl(`/images/${image}`)}
-                  alt={title}
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  loading="lazy"
-                />
-              </div>
-              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shrink-0`}>
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  {icon}
-                </svg>
-              </div>
-
-              <h3 className="mt-4 text-lg font-bold text-gray-900 dark:text-gray-100">
-                {title}
-              </h3>
-
-              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 leading-relaxed flex-1">
-                {description}
-              </p>
-
-              <p className="mt-4 text-sm font-bold text-brand-600 dark:text-brand-400">
-                {price}
-              </p>
-
-              <div className={`absolute -inset-0.5 rounded-2xl -z-10 opacity-0 group-hover:opacity-100 transition-opacity blur-sm ${bg}`} />
-            </StaggerItem>
-            );
-          })}
+          {apiServices.length > 0
+            ? apiServices.map((s, i) => {
+                const IconCmp = serviceIcon(s.icon);
+                const gradient = GRADIENTS[i % GRADIENTS.length];
+                const bg = BGS[i % BGS.length];
+                return (
+                  <StaggerItem
+                    key={s.id}
+                    hover
+                    className="group relative bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm dark:shadow-gray-950/30 hover:shadow-xl dark:hover:shadow-gray-950/50 p-6 flex flex-col"
+                  >
+                    <div className="h-36 -mx-6 -mt-6 mb-4 overflow-hidden rounded-t-2xl bg-gray-100 dark:bg-gray-700">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={s.imageUrl ? `${API_URL}${s.imageUrl}` : baseUrl('/images/service-home.webp')}
+                        alt={s.name}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        loading="lazy"
+                      />
+                    </div>
+                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shrink-0`}>
+                      <IconCmp className="w-6 h-6 text-white" />
+                    </div>
+                    <h3 className="mt-4 text-lg font-bold text-gray-900 dark:text-gray-100">{s.name}</h3>
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 leading-relaxed flex-1">{s.description}</p>
+                    {s.additionalInfo && (
+                      <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">{s.additionalInfo}</p>
+                    )}
+                    <p className="mt-4 text-sm font-bold text-brand-600 dark:text-brand-400">
+                      {t('services.from')} {Math.round((s.priceNet / s.durationMinutes) * 60)} €/{t('services.hour')}
+                    </p>
+                    <div className={`absolute -inset-0.5 rounded-2xl -z-10 opacity-0 group-hover:opacity-100 transition-opacity blur-sm ${bg}`} />
+                  </StaggerItem>
+                );
+              })
+            : SERVICE_CARDS.map(({ key, image, icon, gradient, bg }) => (
+                <StaggerItem
+                  key={key}
+                  hover
+                  className="group relative bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm dark:shadow-gray-950/30 hover:shadow-xl dark:hover:shadow-gray-950/50 p-6 flex flex-col"
+                >
+                  <div className="h-36 -mx-6 -mt-6 mb-4 overflow-hidden rounded-t-2xl">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={baseUrl(`/images/${image}`)}
+                      alt={t(`${key}.title`)}
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      loading="lazy"
+                    />
+                  </div>
+                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shrink-0`}>
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      {icon}
+                    </svg>
+                  </div>
+                  <h3 className="mt-4 text-lg font-bold text-gray-900 dark:text-gray-100">{t(`${key}.title`)}</h3>
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 leading-relaxed flex-1">{t(`${key}.description`)}</p>
+                  <p className="mt-4 text-sm font-bold text-brand-600 dark:text-brand-400">{t(`${key}.price`)}</p>
+                  <div className={`absolute -inset-0.5 rounded-2xl -z-10 opacity-0 group-hover:opacity-100 transition-opacity blur-sm ${bg}`} />
+                </StaggerItem>
+              ))}
         </StaggerGroup>
       </div>
     </section>

@@ -111,6 +111,16 @@ if (app.Environment.IsDevelopment())
 
 app.UseExceptionHandler();
 app.UseCors("SiteOrigins");
+
+// Service card images uploaded by admins, served from the uploads folder.
+var uploadsPath = app.Configuration["Uploads:Path"] ?? Path.Combine(app.Environment.ContentRootPath, "uploads");
+Directory.CreateDirectory(uploadsPath);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPath),
+    RequestPath = "/uploads",
+});
+
 app.UseMiddleware<CleaningSuite.Api.Middleware.PublicRateLimitMiddleware>();
 app.UseAuthentication();
 app.UseMiddleware<TenantResolutionMiddleware>();

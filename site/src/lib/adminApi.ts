@@ -107,13 +107,26 @@ export const adminBookings = {
 
 export const adminServices = {
   list: (includeInactive = false) =>
-    adminGet<{ id: string; slug: string; name: { values: Record<string, string> }; description: { values: Record<string, string> }; durationMinutes: number; priceNet: number; vatRatePercent: number; isActive: boolean; isFeatured: boolean; sortOrder: number }[]>(
+    adminGet<{ id: string; slug: string; category: string; name: { values: Record<string, string> }; description: { values: Record<string, string> }; additionalInfo: { values: Record<string, string> } | null; icon: string; imageUrl: string; durationMinutes: number; priceNet: number; vatRatePercent: number; isActive: boolean; isFeatured: boolean; sortOrder: number }[]>(
       `/api/v1/admin/services?includeInactive=${includeInactive}`
     ),
   create: (fields: unknown) => adminSend('/api/v1/admin/services', 'POST', { fields }),
   update: (id: string, fields: unknown, isActive: boolean) =>
     adminSend(`/api/v1/admin/services/${id}`, 'PUT', { fields, isActive }),
   remove: (id: string) => adminSend(`/api/v1/admin/services/${id}`, 'DELETE'),
+  uploadImage: async (id: string, file: File): Promise<string | null> => {
+    const t = token();
+    const body = new FormData();
+    body.append('file', file);
+    const response = await fetch(`${API_URL}/api/v1/admin/services/${id}/image`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${t}` },
+      body,
+    });
+    if (!response.ok) return null;
+    const data = (await response.json()) as { imageUrl: string };
+    return `${API_URL}${data.imageUrl}`;
+  },
 };
 
 export const adminInvoices = {

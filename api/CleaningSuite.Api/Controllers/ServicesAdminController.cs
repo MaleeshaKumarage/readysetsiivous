@@ -14,8 +14,13 @@ namespace CleaningSuite.Api.Controllers;
 public class ServicesAdminController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly IConfiguration _configuration;
 
-    public ServicesAdminController(IMediator mediator) => _mediator = mediator;
+    public ServicesAdminController(IMediator mediator, IConfiguration configuration)
+    {
+        _mediator = mediator;
+        _configuration = configuration;
+    }
 
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] bool includeInactive, CancellationToken ct)
@@ -43,5 +48,32 @@ public class ServicesAdminController : ControllerBase
     {
         await _mediator.Send(new SoftDeleteServiceCommand(id), ct);
         return NoContent();
+    }
+
+    /// <summary>Uploads a card image for the service, returns the public path.</summary>
+    [HttpPost("{id:guid}/image")]
+    [RequestSizeLimit(5 * 1024 * 1024)]
+    public async Task<IActionResult> UploadImage(Guid id, IFormFile file, CancellationToken ct)
+    {
+        if (file.Length == 0 || file.Length > 5 * 1024 * 1024)
+            return BadRequest(new { title = "Image must be under 5 MB" });
+
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (ext is not (".jpg" or ".jpeg" or ".png" or ".webp"))
+            return BadRequest(new { title = "Only jpg, png or webp allowed" });
+
+        var uploadsPath = _configuration["Uploads:Path"] ?? Path.Combine(Directory.GetCurrentDirectory(), "uploads");
+        Directory.CreateDirectory(uploadsPath);
+
+        var name = $"{Guid.NewGuid():N}{ext}";
+        var fullPath = Path.Combine(uploadsPath, name);
+        await using (var stream = System.IO.File.Create(fullPath))
+        {
+            await file.CopyToAsync(stream, ct);
+        }
+
+        var imageUrl = $"/uploads/{name}";
+        await _mediator.Send(new UpdateServiceImageCommand(id, imageUrl), ct);
+        return Ok(new { imageUrl });
     }
 }

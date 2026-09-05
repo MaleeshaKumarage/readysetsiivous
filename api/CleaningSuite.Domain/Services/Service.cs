@@ -16,4 +16,13 @@ public class Service : BaseDocument
     public bool IsActive { get; set; } = true;
     public bool IsFeatured { get; set; }
     public int SortOrder { get; set; }
+
+    /// <summary>Lucide icon name rendered on the website card.</summary>
+    public string Icon { get; set; } = "Sparkles";
+
+    /// <summary>Uploaded image path (e.g. /uploads/abc.jpg) served by the API.</summary>
+    public string ImageUrl { get; set; } = "";
+
+    /// <summary>Optional extra info shown under the description.</summary>
+    public LocalizedText AdditionalInfo { get; set; } = new();
 }

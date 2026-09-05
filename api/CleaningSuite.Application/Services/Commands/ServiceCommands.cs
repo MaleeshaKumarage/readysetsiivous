@@ -11,12 +11,15 @@ public record ServiceFields(
     string Category,
     Dictionary<string, string> Name,
     Dictionary<string, string> Description,
+    Dictionary<string, string>? AdditionalInfo,
     int DurationMinutes,
     decimal PriceNet,
     decimal VatRatePercent,
     string Currency,
     bool IsFeatured,
-    int SortOrder);
+    int SortOrder,
+    string? Icon,
+    string? ImageUrl);
 
 public record CreateServiceCommand(ServiceFields Fields) : IRequest<Guid>;
 
@@ -77,6 +80,9 @@ public class CreateServiceHandler : IRequestHandler<CreateServiceCommand, Guid>
         service.Currency = fields.Currency;
         service.IsFeatured = fields.IsFeatured;
         service.SortOrder = fields.SortOrder;
+        service.AdditionalInfo = new LocalizedText { Values = fields.AdditionalInfo ?? new Dictionary<string, string>() };
+        service.Icon = string.IsNullOrEmpty(fields.Icon) ? "Sparkles" : fields.Icon;
+        service.ImageUrl = fields.ImageUrl ?? "";
         service.UpdatedUtc = DateTime.UtcNow;
     }
 }
@@ -98,6 +104,26 @@ public class UpdateServiceHandler : IRequestHandler<UpdateServiceCommand, Unit>
         CreateServiceHandler.Apply(service, request.Fields);
         service.IsActive = request.IsActive;
 
+        await _services.SaveAsync(service, ct);
+        return Unit.Value;
+    }
+}
+
+public record UpdateServiceImageCommand(Guid Id, string ImageUrl) : IRequest<Unit>;
+
+public class UpdateServiceImageHandler : IRequestHandler<UpdateServiceImageCommand, Unit>
+{
+    private readonly IServiceRepository _services;
+
+    public UpdateServiceImageHandler(IServiceRepository services) => _services = services;
+
+    public async Task<Unit> Handle(UpdateServiceImageCommand request, CancellationToken ct)
+    {
+        var service = await _services.GetByIdAsync(request.Id, ct)
+            ?? throw new NotFoundException("Service", request.Id);
+
+        service.ImageUrl = request.ImageUrl;
+        service.UpdatedUtc = DateTime.UtcNow;
         await _services.SaveAsync(service, ct);
         return Unit.Value;
     }
