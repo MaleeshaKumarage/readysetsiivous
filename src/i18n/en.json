@@ -111,7 +111,9 @@
       "title": "Sauna & Balcony Cleaning",
       "description": "Sauna benches and walls, balcony floors and railings.",
       "price": "From €40"
-    }
+    },
+    "from": "From",
+    "hour": "h"
   },
   "kotitalousvahennys": {
     "title": "Our Prices",

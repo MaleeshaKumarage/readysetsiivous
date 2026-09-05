@@ -111,7 +111,9 @@
       "title": "Bastu- och balkongstädning",
       "description": "Bastulavar och väggar, balkonggolv och räcken.",
       "price": "Från 40 €"
-    }
+    },
+    "from": "Från",
+    "hour": "h"
   },
   "kotitalousvahennys": {
     "title": "Prislista",

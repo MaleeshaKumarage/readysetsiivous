@@ -111,7 +111,9 @@
       "title": "Saunan ja parvekkeen pesu",
       "description": "Saunan lauteet ja seinät, parvekkeen lattiat ja kaiteet.",
       "price": "Alk. 40 €"
-    }
+    },
+    "from": "Alk.",
+    "hour": "h"
   },
   "kotitalousvahennys": {
     "title": "Hinnasto",

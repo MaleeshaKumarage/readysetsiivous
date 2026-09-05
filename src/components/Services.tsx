@@ -1,8 +1,19 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { baseUrl } from '@/lib/whatsapp';
+import { fetchServices, type PublicService } from '@/lib/api';
 import { StaggerGroup, StaggerItem } from './motion';
+
+// i18n key → API slug mapping. Static export keeps the hardcoded cards as
+// fallback when the API is unreachable; API data wins when it answers.
+const KEY_TO_SLUG: Record<string, string> = {
+  'services.home': 'home-cleaning',
+  'services.office': 'office-cleaning',
+  'services.moveOut': 'move-out-cleaning',
+  'services.deep': '',
+};
 
 const SERVICE_CARDS = [
   {
@@ -44,7 +55,16 @@ const SERVICE_CARDS = [
 ];
 
 export default function Services() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const [apiServices, setApiServices] = useState<Map<string, PublicService>>(new Map());
+
+  useEffect(() => {
+    fetchServices(lang).then((services) => {
+      if (services && services.length > 0) {
+        setApiServices(new Map(services.map((s) => [s.slug, s])));
+      }
+    });
+  }, [lang]);
 
   return (
     <section id="services" className="bg-gray-50 dark:bg-gray-900 section-padding">
@@ -55,7 +75,15 @@ export default function Services() {
         </div>
 
         <StaggerGroup className="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {SERVICE_CARDS.map(({ key, image, icon, gradient, bg }) => (
+          {SERVICE_CARDS.map(({ key, image, icon, gradient, bg }) => {
+            const api = KEY_TO_SLUG[key] ? apiServices.get(KEY_TO_SLUG[key]) : undefined;
+            const title = api?.name ?? t(`${key}.title`);
+            const description = api?.description ?? t(`${key}.description`);
+            const price = api
+              ? `${t('services.from')} ${Math.round((api.priceNet / api.durationMinutes) * 60)} €/${t('services.hour')}`
+              : t(`${key}.price`);
+
+            return (
             <StaggerItem
               key={key}
               hover
@@ -65,7 +93,7 @@ export default function Services() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={baseUrl(`/images/${image}`)}
-                  alt={t(`${key}.title`)}
+                  alt={title}
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   loading="lazy"
                 />
@@ -77,20 +105,21 @@ export default function Services() {
               </div>
 
               <h3 className="mt-4 text-lg font-bold text-gray-900 dark:text-gray-100">
-                {t(`${key}.title`)}
+                {title}
               </h3>
 
               <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 leading-relaxed flex-1">
-                {t(`${key}.description`)}
+                {description}
               </p>
 
               <p className="mt-4 text-sm font-bold text-brand-600 dark:text-brand-400">
-                {t(`${key}.price`)}
+                {price}
               </p>
 
               <div className={`absolute -inset-0.5 rounded-2xl -z-10 opacity-0 group-hover:opacity-100 transition-opacity blur-sm ${bg}`} />
             </StaggerItem>
-          ))}
+            );
+          })}
         </StaggerGroup>
       </div>
     </section>
