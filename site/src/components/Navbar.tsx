@@ -76,15 +76,6 @@ export default function Navbar({ lang }: NavbarProps) {
             >
               📇 Card
             </a>
-            <a
-              href={baseUrl(`/${lang}/admin/`)}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-brand-600 dark:text-brand-400 border border-brand-300 dark:border-brand-700 rounded-full hover:bg-brand-50 dark:hover:bg-brand-500/10 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-              </svg>
-              {t('nav.admin')}
-            </a>
           </div>
 
           {/* Right side */}
@@ -169,13 +160,6 @@ export default function Navbar({ lang }: NavbarProps) {
                 className="px-4 py-2.5 text-sm font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-500/10 transition-colors"
               >
                 📇 {lang === 'fi' ? 'Käyntikortti' : lang === 'sv' ? 'Visitkort' : 'Business Card'}
-              </a>
-              <a
-                href={baseUrl(`/${lang}/admin/`)}
-                onClick={() => setMobileOpen(false)}
-                className="px-4 py-2.5 text-sm font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-500/10 transition-colors"
-              >
-                🔐 {t('nav.admin')}
               </a>
               <a
                 href="tel:+358468044231"
