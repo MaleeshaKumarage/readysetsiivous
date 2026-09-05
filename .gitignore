@@ -30,3 +30,15 @@ dev-server.log
 
 *storybook.log
 storybook-static/
+
+# --- API (.NET) ---
+bin/
+obj/
+.vs/
+*.user
+api/.env
+api/deploy/.env
+api/out/
+TestResults/
+*.coverage
+api/verify-phase*.sh
