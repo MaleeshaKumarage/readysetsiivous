@@ -50,6 +50,8 @@ function DialogContent({
   return (
     <DialogPortal>
       <DialogOverlay />
+      {/* Explicit backdrop: some environments never render the radix Backdrop. */}
+      <div className="fixed inset-0 z-40 bg-black/60" aria-hidden />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
