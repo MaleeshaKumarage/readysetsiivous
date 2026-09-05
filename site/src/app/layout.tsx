@@ -3,6 +3,8 @@ import { Inter } from 'next/font/google';
 import { MotionConfig } from 'framer-motion';
 import { ThemeProvider } from '@/context/ThemeContext';
 import type { Metadata, Viewport } from 'next';
+import { cn } from "@/lib/utils";
+
 
 const inter = Inter({
   subsets: ['latin'],

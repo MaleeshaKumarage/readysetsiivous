@@ -51,3 +51,22 @@ export function isAuthenticated(): boolean {
   const kc = getKeycloak();
   return Boolean(kc.authenticated && kc.token);
 }
+
+export function token(): string | undefined {
+  return getKeycloak().token ?? undefined;
+}
+
+export function isAdmin(): boolean {
+  return getKeycloak().hasRealmRole('admin');
+}
+
+export async function refreshToken(): Promise<string | undefined> {
+  const kc = getKeycloak();
+  try {
+    await kc.updateToken(30);
+    return kc.token ?? undefined;
+  } catch {
+    await login();
+    return undefined;
+  }
+}
