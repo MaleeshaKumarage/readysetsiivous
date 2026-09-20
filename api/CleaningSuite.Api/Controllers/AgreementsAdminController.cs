@@ -36,4 +36,25 @@ public class AgreementsAdminController : ControllerBase
         var dto = await _mediator.Send(new GetAgreementQuery(id), ct);
         return dto is null ? NotFound() : Ok(dto);
     }
+
+    [HttpPost("{id:guid}/signers")]
+    public async Task<IActionResult> AddSigner(Guid id, AddSignerCommand command, CancellationToken ct)
+    {
+        await _mediator.Send(command with { AgreementId = id }, ct);
+        return NoContent();
+    }
+
+    [HttpDelete("{id:guid}/signers/{signerId:guid}")]
+    public async Task<IActionResult> RemoveSigner(Guid id, Guid signerId, CancellationToken ct)
+    {
+        await _mediator.Send(new RemoveSignerCommand(id, signerId), ct);
+        return NoContent();
+    }
+
+    [HttpPost("{id:guid}/cancel")]
+    public async Task<IActionResult> Cancel(Guid id, CancellationToken ct)
+    {
+        await _mediator.Send(new CancelAgreementCommand(id), ct);
+        return NoContent();
+    }
 }
