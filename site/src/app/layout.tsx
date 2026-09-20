@@ -1,6 +1,7 @@
 import './globals.css';
 import { Inter } from 'next/font/google';
 import { MotionConfig } from 'framer-motion';
+import { Toaster } from 'sonner';
 import { ThemeProvider } from '@/context/ThemeContext';
 import type { Metadata, Viewport } from 'next';
 import { cn } from "@/lib/utils";
@@ -74,6 +75,7 @@ export default function RootLayout({
         <MotionConfig reducedMotion="user">
           <ThemeProvider>{children}</ThemeProvider>
         </MotionConfig>
+        <Toaster position="top-right" richColors />
         {/* No-JS / crawler fallback: motion entrance states are opacity:0 in the static HTML;
             without JavaScript the animated content would be permanently invisible. */}
         <noscript>

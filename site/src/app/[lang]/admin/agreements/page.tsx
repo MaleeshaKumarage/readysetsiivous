@@ -1,8 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
-import { adminAgreements, type AgreementListItem } from '@/lib/adminApi';
+import { useParams } from 'next/navigation';
+import { toast } from 'sonner';
+import { Plus, Copy, Trash2 } from 'lucide-react';
+import { adminAgreements, type AgreementListItem, type AgreementDetail } from '@/lib/adminApi';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -11,11 +13,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 export default function AgreementsPage() {
+  const { lang } = useParams<{ lang: string }>();
   const [items, setItems] = useState<AgreementListItem[] | null>(null);
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [pdf, setPdf] = useState<File | null>(null);
   const [signers, setSigners] = useState<{ name: string; email: string }[]>([{ name: '', email: '' }]);
+  const [detail, setDetail] = useState<AgreementDetail | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const load = useCallback(async () => { setItems(await adminAgreements.list()); }, []);
   useEffect(() => { load(); }, [load]);
@@ -25,6 +30,21 @@ export default function AgreementsPage() {
     await adminAgreements.create(title, pdf, signers.filter(s => s.name && s.email));
     setOpen(false); setTitle(''); setPdf(null); setSigners([{ name: '', email: '' }]);
     load();
+  }
+
+  async function openDetail(id: string) {
+    const d = await adminAgreements.get(id);
+    if (d) { setDetail(d); setDetailOpen(true); }
+  }
+
+  async function copyLink(token: string) {
+    const url = `${window.location.origin}/${lang}/sign?token=${token}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Link copied');
+    } catch {
+      toast.error('Copy failed');
+    }
   }
 
   return (
@@ -72,6 +92,29 @@ export default function AgreementsPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+          <DialogHeader><DialogTitle>{detail?.title ?? 'Agreement'}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            {detail?.signers.map((s) => (
+              <div key={s.id} className="flex items-center gap-3 rounded-lg border p-3">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-medium">{s.name}</div>
+                  <div className="truncate text-xs text-muted-foreground">{s.email}</div>
+                </div>
+                <Badge variant={s.status === 'Completed' ? 'default' : 'secondary'}>{s.status}</Badge>
+                <Button variant="outline" size="sm" onClick={() => copyLink(s.token)}>
+                  <Copy className="mr-1.5 h-3.5 w-3.5" />Copy link
+                </Button>
+              </div>
+            ))}
+            {detail && detail.signers.length === 0 && (
+              <p className="text-sm text-muted-foreground">No signers.</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="rounded-xl border bg-card">
         <Table>
           <TableHeader>
@@ -89,6 +132,7 @@ export default function AgreementsPage() {
                 </TableCell>
                 <TableCell>{a.signedCount}/{a.signerCount}</TableCell>
                 <TableCell className="text-right">
+                  <Button variant="ghost" size="sm" onClick={() => openDetail(a.id)}>View</Button>
                   {a.status === 'Completed' && (
                     <Button variant="ghost" size="sm" onClick={() => adminAgreements.downloadDocument(a.id)}>Download</Button>
                   )}
