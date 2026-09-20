@@ -73,6 +73,11 @@ builder.Services.AddScoped<CleaningSuite.Application.Bookings.IBookingRepository
 builder.Services.AddScoped<CleaningSuite.Application.Bookings.AvailabilityEngine>();
 builder.Services.AddScoped<CleaningSuite.Application.Employees.IEmployeeRepository, CleaningSuite.Infrastructure.Persistence.EmployeeRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.Invoicing.IInvoiceRepository, CleaningSuite.Infrastructure.Persistence.InvoiceRepository>();
+builder.Services.AddScoped<CleaningSuite.Application.Agreements.IAgreementRepository, CleaningSuite.Infrastructure.Persistence.AgreementRepository>();
+builder.Services.AddSingleton<CleaningSuite.Application.Agreements.IAgreementFileStore>(sp =>
+    new CleaningSuite.Infrastructure.Agreements.DiskAgreementFileStore(
+        builder.Configuration["Uploads:Path"] ?? Path.Combine(Directory.GetCurrentDirectory(), "uploads")));
+builder.Services.AddSingleton<CleaningSuite.Application.Agreements.IAgreementDocumentGenerator, CleaningSuite.Infrastructure.Agreements.AgreementPdfSigner>();
 
 builder.Services.AddMediatR(cfg =>
 {
@@ -172,6 +177,7 @@ public class DefaultExceptionHandler : IExceptionHandler
             CleaningSuite.Application.Common.SlugConflictException => (409, "Slug already exists"),
             CleaningSuite.Application.Common.NotFoundException => (404, "Not found"),
             CleaningSuite.Application.Bookings.SlotConflictException => (409, "Slot conflict"),
+            CleaningSuite.Application.Agreements.AgreementConflictException => (409, "Agreement conflict"),
             UnauthorizedAccessException => (403, "Forbidden"),
             _ => (500, "Internal server error"),
         };

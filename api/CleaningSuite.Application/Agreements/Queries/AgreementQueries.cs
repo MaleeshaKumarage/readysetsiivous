@@ -45,3 +45,41 @@ public class GetAgreementHandler : IRequestHandler<GetAgreementQuery, AgreementD
         return a is null ? null : AgreementDetailDto.From(a);
     }
 }
+
+public record PublicAgreementDto(string Title, string Status, int TotalSigners, int SignedCount, bool Completed);
+
+public record GetPublicAgreementQuery(string Token) : IRequest<PublicAgreementDto?>;
+
+public class GetPublicAgreementHandler : IRequestHandler<GetPublicAgreementQuery, PublicAgreementDto?>
+{
+    private readonly ITenantContext _context;
+    private readonly IAgreementRepository _repo;
+    public GetPublicAgreementHandler(ITenantContext context, IAgreementRepository repo) { _context = context; _repo = repo; }
+
+    public async Task<PublicAgreementDto?> Handle(GetPublicAgreementQuery request, CancellationToken ct)
+    {
+        var a = await _repo.FindBySignerTokenAsync(_context.TenantId, request.Token, ct);
+        if (a is null) return null;
+        return new PublicAgreementDto(a.Title, a.Status, a.Signers.Count,
+            a.Signers.Count(s => s.Status == Signer.StatusSigned),
+            a.Status == Agreement.StatusCompleted);
+    }
+}
+
+public record GetAgreementFileQuery(string Token) : IRequest<string?>;
+
+public class GetAgreementFileHandler : IRequestHandler<GetAgreementFileQuery, string?>
+{
+    private readonly ITenantContext _context;
+    private readonly IAgreementRepository _repo;
+    public GetAgreementFileHandler(ITenantContext context, IAgreementRepository repo) { _context = context; _repo = repo; }
+
+    public async Task<string?> Handle(GetAgreementFileQuery request, CancellationToken ct)
+    {
+        var a = await _repo.FindBySignerTokenAsync(_context.TenantId, request.Token, ct);
+        if (a is null) return null;
+        return a.Status == Agreement.StatusCompleted
+            ? a.SignedPdfPath
+            : a.OriginalPdfPath;
+    }
+}
