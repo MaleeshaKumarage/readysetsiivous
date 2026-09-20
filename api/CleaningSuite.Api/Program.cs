@@ -191,6 +191,7 @@ public class DefaultExceptionHandler : IExceptionHandler
         {
             Status = status,
             Title = title,
+            Detail = status == 500 ? null : exception.Message,
         }, ct);
         return true;
     }
