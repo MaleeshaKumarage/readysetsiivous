@@ -54,21 +54,45 @@ export default function AgreementsPage() {
 
   async function copyEmail(signerName: string, token: string) {
     const url = `${window.location.origin}/${lang}/sign?token=${token}`;
-    const text = [
-      'Subject: Agreement ready to sign',
-      '',
+    const title = detail?.title ?? 'agreement';
+
+    const plain = [
       `Hi ${signerName},`,
       '',
-      `Your ${detail?.title ?? 'agreement'} with ${companyName} is ready for electronic signature. Open the link, read the agreement, and sign by drawing on the screen.`,
+      `Your ${title} with ${companyName} is ready to sign. Open the link, read the agreement, and sign by drawing on the screen.`,
       '',
-      `Open & sign: ${url}`,
+      `Sign: ${url}`,
     ].join('\n');
+
+    const html = [
+      '<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#1a1a1a">',
+      `<p style="margin:0 0 16px">Hi ${escapeHtml(signerName)},</p>`,
+      `<p style="margin:0 0 20px">Your <strong>${escapeHtml(title)}</strong> with ${escapeHtml(companyName)} is ready to sign. Open the link, read the agreement, and sign by drawing on the screen.</p>`,
+      `<a href="${escapeHtml(url)}" style="display:inline-block;background:#D9B95C;color:#070B1A;padding:12px 28px;border-radius:8px;font-weight:bold;text-decoration:none;font-size:15px">Sign</a>`,
+      `<p style="margin:20px 0 0;font-size:12px;color:#888888">If the button doesn't work, copy this link: ${escapeHtml(url)}</p>`,
+      '</div>',
+    ].join('');
+
     try {
-      await navigator.clipboard.writeText(text);
-      toast.success('Email copied');
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/plain': new Blob([plain], { type: 'text/plain' }),
+          'text/html': new Blob([html], { type: 'text/html' }),
+        }),
+      ]);
+      toast.success('Email copied (HTML)');
     } catch {
-      toast.error('Copy failed');
+      try {
+        await navigator.clipboard.writeText(html);
+        toast.success('Email HTML copied');
+      } catch {
+        toast.error('Copy failed');
+      }
     }
+  }
+
+  function escapeHtml(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   return (
