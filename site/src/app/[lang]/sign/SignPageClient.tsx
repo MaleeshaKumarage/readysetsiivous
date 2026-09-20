@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import SignaturePad from '@/components/admin/SignaturePad';
 import { getPublicAgreement, signAgreement, agreementFileUrl, type PublicAgreementDto } from '@/lib/agreementApi';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 export default function SignPageClient() {
-  const { token } = useParams<{ token: string }>();
+  const token = useSearchParams().get('token') ?? '';
   const [agreement, setAgreement] = useState<PublicAgreementDto | null>(null);
   const [name, setName] = useState('');
   const [signature, setSignature] = useState<string>('');
