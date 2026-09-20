@@ -31,17 +31,19 @@ public class SignAgreementValidator : AbstractValidator<SignAgreementCommand>
             .Must(BeReasonableDimensions).WithMessage("Signature must be at most 1200x400 pixels");
     }
 
-    // Size cap guards against base64 blobs and decompression bombs.
-    private static bool BeReasonableSize(byte[] png) => png.Length <= MaxSignatureBytes;
+    // Size cap guards against base64 blobs and decompression bombs. Null-tolerant so a
+    // null payload defers to the `.NotEmpty()` rule (400) instead of NREing in a Must.
+    private static bool BeReasonableSize(byte[] png) => png is null || png.Length <= MaxSignatureBytes;
 
     // Verify the 8-byte PNG signature so a non-PNG cannot reach SKBitmap.Decode.
     private static bool BePng(byte[] png) =>
-        png.Length >= 8 && png.AsSpan(0, 8).SequenceEqual(PngMagic);
+        png is null || (png.Length >= 8 && png.AsSpan(0, 8).SequenceEqual(PngMagic));
 
     // Cheap dimension check straight from the PNG IHDR (bytes 16-23), no decode needed.
     // A valid header with an enormous width/height would otherwise decompress into a bomb.
     private static bool BeReasonableDimensions(byte[] png)
     {
+        if (png is null) return true;
         if (png.Length < 24) return false;
         var width = (uint)(png[16] << 24 | png[17] << 16 | png[18] << 8 | png[19]);
         var height = (uint)(png[20] << 24 | png[21] << 16 | png[22] << 8 | png[23]);

@@ -24,6 +24,15 @@ public class SignAgreementValidatorTests
     }
 
     [Fact]
+    public void Null_Signature_IsRejected_WithoutThrowing()
+    {
+        var cmd = new SignAgreementCommand("tok", "Alice", null!);
+        var result = _validator.Validate(cmd); // must not throw (Must predicates are null-tolerant)
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.PropertyName == nameof(SignAgreementCommand.SignaturePng));
+    }
+
+    [Fact]
     public void Oversized_Signature_IsRejected()
     {
         var png = MakePng(100, 50);
