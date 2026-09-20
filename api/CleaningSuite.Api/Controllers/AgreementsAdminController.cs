@@ -37,6 +37,14 @@ public class AgreementsAdminController : ControllerBase
         return dto is null ? NotFound() : Ok(dto);
     }
 
+    [HttpGet("{id:guid}/document")]
+    public async Task<IActionResult> Document(Guid id, CancellationToken ct)
+    {
+        var path = await _mediator.Send(new GetAgreementDocumentPathQuery(id), ct);
+        if (path is null) return NotFound();
+        return PhysicalFile(path, "application/pdf", $"agreement-{id:N}.pdf");
+    }
+
     [HttpPost("{id:guid}/signers")]
     public async Task<IActionResult> AddSigner(Guid id, AddSignerCommand command, CancellationToken ct)
     {

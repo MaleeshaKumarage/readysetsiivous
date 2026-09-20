@@ -83,3 +83,19 @@ public class GetAgreementFileHandler : IRequestHandler<GetAgreementFileQuery, st
             : a.OriginalPdfPath;
     }
 }
+
+public record GetAgreementDocumentPathQuery(Guid Id) : IRequest<string?>;
+
+public class GetAgreementDocumentPathHandler : IRequestHandler<GetAgreementDocumentPathQuery, string?>
+{
+    private readonly ITenantContext _context;
+    private readonly IAgreementRepository _repo;
+    public GetAgreementDocumentPathHandler(ITenantContext context, IAgreementRepository repo) { _context = context; _repo = repo; }
+
+    public async Task<string?> Handle(GetAgreementDocumentPathQuery request, CancellationToken ct)
+    {
+        var a = await _repo.GetAsync(_context.TenantId, request.Id, ct);
+        if (a is null) return null;
+        return a.Status == Agreement.StatusCompleted ? a.SignedPdfPath : a.OriginalPdfPath;
+    }
+}
