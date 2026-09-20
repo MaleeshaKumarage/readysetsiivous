@@ -26,6 +26,24 @@ export default function AdminLayout({ params, children }: { params: { lang: stri
     });
   }, []);
 
+  // Admin panel is always dark mode. Force the class on, beating the ThemeProvider's
+  // mount effect (children run before the parent provider), and restore the user's
+  // stored theme when leaving admin.
+  useEffect(() => {
+    const root = document.documentElement;
+    const restore = () => {
+      let stored: string | null = null;
+      try { stored = localStorage.getItem('theme'); } catch { /* ignore */ }
+      if (stored === 'dark') root.classList.add('dark');
+      else root.classList.remove('dark');
+    };
+
+    root.classList.add('dark');
+    const t = setTimeout(() => root.classList.add('dark'), 0);
+
+    return () => { clearTimeout(t); restore(); };
+  }, []);
+
   if (!ready) {
     return (
       <div className="flex min-h-screen items-center justify-center">
