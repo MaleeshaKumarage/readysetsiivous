@@ -18,13 +18,14 @@ export default function SignPageClient() {
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [fileKey, setFileKey] = useState(0);
 
   useEffect(() => {
     getPublicAgreement(token).then((a) => {
       if (!a) { setStatus('invalid'); return; }
       setAgreement(a);
       if (a.status === 'Cancelled') setStatus('cancelled');
-      else if (a.completed) setStatus('done');
+      else if (a.completed) { setStatus('done'); setFileKey(Date.now()); }
       else setStatus('ready');
     });
   }, [token]);
@@ -39,10 +40,15 @@ export default function SignPageClient() {
     setLoading(false);
     if (result.ok) {
       setStatus('done');
+      // Re-fetch to learn whether everyone has now signed; refresh the preview if so.
+      const a = await getPublicAgreement(token);
+      if (a) { setAgreement(a); if (a.completed) setFileKey(Date.now()); }
     } else {
       setError(result.message ?? 'Signing failed. Please try again.');
     }
   }
+
+  const fileUrl = fileKey ? `${agreementFileUrl(token)}?cb=${fileKey}` : agreementFileUrl(token);
 
   if (status === 'loading') {
     return <div className="mx-auto max-w-2xl p-6 text-center text-muted-foreground">Loading…</div>;
@@ -78,7 +84,7 @@ export default function SignPageClient() {
         </p>
       )}
 
-      <iframe src={agreementFileUrl(token)} className="h-[60vh] w-full rounded-md border" />
+      <iframe src={fileUrl} className="h-[60vh] w-full rounded-md border" />
 
       {status === 'done' ? (
         <div className="space-y-3 rounded-xl border p-4">
@@ -86,7 +92,7 @@ export default function SignPageClient() {
           {agreement?.completed ? (
             <>
               <p className="text-sm text-muted-foreground">Everyone has signed. Download the completed document below.</p>
-              <Button onClick={() => window.open(agreementFileUrl(token))} className="w-full">Download signed document</Button>
+              <Button onClick={() => window.open(fileUrl)} className="w-full">Download signed document</Button>
             </>
           ) : (
             <p className="text-sm text-muted-foreground">
