@@ -42,3 +42,6 @@ api/out/
 TestResults/
 *.coverage
 api/verify-phase*.sh
+
+# Superpowers scratch
+.superpowers/
