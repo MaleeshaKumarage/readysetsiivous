@@ -15,6 +15,7 @@ export default function SignPageClient() {
   const [name, setName] = useState('');
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     getPublicAgreement(token).then((a) => { setAgreement(a); if (a?.completed) setDone(true); });
@@ -24,9 +25,17 @@ export default function SignPageClient() {
     if (!name.trim()) { setError('Enter your name'); return; }
     const signature = padRef.current?.getPng() ?? '';
     if (!signature) { setError('Enter your signature (draw or type)'); return; }
-    const ok = await signAgreement(token, name, signature);
-    if (ok) { setDone(true); setError(null); }
-    else setError('Signing failed');
+    setLoading(true);
+    setError(null);
+    try {
+      const ok = await signAgreement(token, name, signature);
+      if (ok) { setDone(true); }
+      else setError('Signing failed — please try again');
+    } catch {
+      setError('Signing failed — please try again');
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -56,7 +65,9 @@ export default function SignPageClient() {
           </div>
           <SignaturePad ref={padRef} />
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button onClick={sign}>Sign</Button>
+          <Button onClick={sign} disabled={loading} className="w-full">
+            {loading ? 'Signing…' : 'Sign'}
+          </Button>
         </div>
       )}
     </div>
