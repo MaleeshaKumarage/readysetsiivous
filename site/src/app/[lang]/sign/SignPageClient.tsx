@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import SignaturePad from '@/components/admin/SignaturePad';
+import SignaturePad, { type SignaturePadHandle } from '@/components/admin/SignaturePad';
 import { getPublicAgreement, signAgreement, agreementFileUrl, type PublicAgreementDto } from '@/lib/agreementApi';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,9 +10,9 @@ import { Label } from '@/components/ui/label';
 
 export default function SignPageClient() {
   const token = useSearchParams().get('token') ?? '';
+  const padRef = useRef<SignaturePadHandle>(null);
   const [agreement, setAgreement] = useState<PublicAgreementDto | null>(null);
   const [name, setName] = useState('');
-  const [signature, setSignature] = useState<string>('');
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,7 +21,9 @@ export default function SignPageClient() {
   }, [token]);
 
   async function sign() {
-    if (!signature || !name) { setError('Enter your name and signature'); return; }
+    if (!name.trim()) { setError('Enter your name'); return; }
+    const signature = padRef.current?.getPng() ?? '';
+    if (!signature) { setError('Enter your signature (draw or type)'); return; }
     const ok = await signAgreement(token, name, signature);
     if (ok) { setDone(true); setError(null); }
     else setError('Signing failed');
@@ -52,7 +54,7 @@ export default function SignPageClient() {
             <Label>Full name</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
-          <SignaturePad onExport={setSignature} />
+          <SignaturePad ref={padRef} />
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button onClick={sign}>Sign</Button>
         </div>
