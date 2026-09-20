@@ -159,6 +159,10 @@ export interface AgreementDetail extends AgreementListItem {
   completedUtc: string | null;
 }
 
+export const adminTenant = {
+  get: () => adminGet<{ companyName: string }>('/api/v1/admin/tenant'),
+};
+
 export const adminAgreements = {
   list: () => adminGet<AgreementListItem[]>('/api/v1/admin/agreements'),
   get: (id: string) => adminGet<AgreementDetail>(`/api/v1/admin/agreements/${id}`),

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { Plus, Copy, Trash2 } from 'lucide-react';
-import { adminAgreements, type AgreementListItem, type AgreementDetail } from '@/lib/adminApi';
+import { adminAgreements, adminTenant, type AgreementListItem, type AgreementDetail } from '@/lib/adminApi';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -21,9 +21,14 @@ export default function AgreementsPage() {
   const [signers, setSigners] = useState<{ name: string; email: string }[]>([{ name: '', email: '' }]);
   const [detail, setDetail] = useState<AgreementDetail | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [companyName, setCompanyName] = useState('ReadySetSiivous');
 
   const load = useCallback(async () => { setItems(await adminAgreements.list()); }, []);
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    adminTenant.get().then((t) => { if (t?.companyName) setCompanyName(t.companyName); });
+  }, []);
 
   async function create() {
     if (!pdf) return;
@@ -42,6 +47,25 @@ export default function AgreementsPage() {
     try {
       await navigator.clipboard.writeText(url);
       toast.success('Link copied');
+    } catch {
+      toast.error('Copy failed');
+    }
+  }
+
+  async function copyEmail(signerName: string, token: string) {
+    const url = `${window.location.origin}/${lang}/sign?token=${token}`;
+    const text = [
+      'Subject: Agreement ready to sign',
+      '',
+      `Hi ${signerName},`,
+      '',
+      `Your ${detail?.title ?? 'agreement'} with ${companyName} is ready for electronic signature. Open the link, read the agreement, and sign by drawing on the screen.`,
+      '',
+      `Open & sign: ${url}`,
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('Email copied');
     } catch {
       toast.error('Copy failed');
     }
@@ -102,10 +126,15 @@ export default function AgreementsPage() {
                   <div className="truncate font-medium">{s.name}</div>
                   <div className="truncate text-xs text-muted-foreground">{s.email}</div>
                 </div>
-                <Badge variant={s.status === 'Completed' ? 'default' : 'secondary'}>{s.status}</Badge>
-                <Button variant="outline" size="sm" onClick={() => copyLink(s.token)}>
-                  <Copy className="mr-1.5 h-3.5 w-3.5" />Copy link
-                </Button>
+                <Badge variant={s.status === 'Signed' ? 'default' : 'secondary'}>{s.status}</Badge>
+                <div className="flex flex-col gap-1">
+                  <Button variant="outline" size="sm" onClick={() => copyLink(s.token)}>
+                    <Copy className="mr-1.5 h-3.5 w-3.5" />Copy link
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => copyEmail(s.name, s.token)}>
+                    <Copy className="mr-1.5 h-3.5 w-3.5" />Copy email
+                  </Button>
+                </div>
               </div>
             ))}
             {detail && detail.signers.length === 0 && (
