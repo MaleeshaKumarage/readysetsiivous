@@ -24,6 +24,9 @@ public class AgreementRepository : IAgreementRepository, IDisposable
     }
 
     public async Task<Agreement?> FindBySignerTokenAsync(string tenantId, string token, CancellationToken ct = default) =>
+        // Marten 8.37 translates `Signers.Any(predicate)` on a JSON child collection into a
+        // child-collection filter (CTE); this is the supported form for an element predicate.
+        // There is no `Child(...)` LINQ extension in Marten 8.37, so keep this form.
         await Session(tenantId).Query<Agreement>()
             .FirstOrDefaultAsync(a => a.Signers.Any(s => s.Token == token), ct);
 

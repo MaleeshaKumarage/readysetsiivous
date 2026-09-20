@@ -178,6 +178,7 @@ public class DefaultExceptionHandler : IExceptionHandler
             CleaningSuite.Application.Common.NotFoundException => (404, "Not found"),
             CleaningSuite.Application.Bookings.SlotConflictException => (409, "Slot conflict"),
             CleaningSuite.Application.Agreements.AgreementConflictException => (409, "Agreement conflict"),
+            JasperFx.ConcurrencyException => (409, "Conflict — concurrent update, please retry"),
             UnauthorizedAccessException => (403, "Forbidden"),
             _ => (500, "Internal server error"),
         };

@@ -76,6 +76,9 @@ public class AgreementPdfSigner : IAgreementDocumentGenerator
         if (signer.SignatureImagePath is { } path && File.Exists(path))
         {
             using var sig = SKBitmap.Decode(path);
+            // Defensive: a corrupt/non-image file decodes to null. Draw name/date only.
+            if (sig is null)
+                return;
             var scale = Math.Min(1f, 160f / sig.Width);
             var dest = new SKRect(left, top + 26, left + sig.Width * scale, top + 26 + sig.Height * scale);
             canvas.DrawBitmap(sig, dest, SKSamplingOptions.Default, paint);
