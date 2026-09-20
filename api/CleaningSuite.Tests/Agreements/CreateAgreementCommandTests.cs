@@ -24,6 +24,7 @@ public class CreateAgreementCommandTests
         Assert.Equal("Draft", dto.Status);
         Assert.Equal(2, dto.Signers.Count);
         Assert.All(dto.Signers, s => Assert.False(string.IsNullOrEmpty(s.Token)));
+        store.Verify(s => s.SaveOriginalAsync("readysetsiivous", It.IsAny<Guid>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()), Times.Once);
         repo.Verify(r => r.SaveAsync("readysetsiivous",
             It.Is<Agreement>(a => a.Signers.Count == 2 && a.Signers.All(s => s.Token.Length > 0)),
             It.IsAny<CancellationToken>()), Times.Once);
