@@ -148,6 +148,39 @@ export const adminEmployees = {
     ),
 };
 
+export interface AgreementSignerDto {
+  id: string; name: string; email: string; status: string; token: string;
+}
+export interface AgreementListItem {
+  id: string; title: string; status: string; signerCount: number; signedCount: number; createdUtc: string;
+}
+export interface AgreementDetail extends AgreementListItem {
+  signers: AgreementSignerDto[];
+  completedUtc: string | null;
+}
+
+export const adminAgreements = {
+  list: () => adminGet<AgreementListItem[]>('/api/v1/admin/agreements'),
+  get: (id: string) => adminGet<AgreementDetail>(`/api/v1/admin/agreements/${id}`),
+  create: async (title: string, pdf: File, signers: { name: string; email: string }[]) => {
+    const form = new FormData();
+    form.append('title', title);
+    form.append('pdf', pdf);
+    form.append('signersJson', JSON.stringify(signers));
+    const t = token();
+    const response = await fetch(`${API_URL}/api/v1/admin/agreements`, {
+      method: 'POST', headers: { Authorization: `Bearer ${t}` }, body: form,
+    });
+    return response.ok ? ((await response.json()) as AgreementDetail) : null;
+  },
+  addSigner: (id: string, name: string, email: string) =>
+    adminSend(`/api/v1/admin/agreements/${id}/signers`, 'POST', { name, email }),
+  removeSigner: (id: string, signerId: string) =>
+    adminSend(`/api/v1/admin/agreements/${id}/signers/${signerId}`, 'DELETE'),
+  cancel: (id: string) => adminSend(`/api/v1/admin/agreements/${id}/cancel`, 'POST'),
+  documentUrl: (id: string) => `${API_URL}/api/v1/admin/agreements/${id}/document`,
+};
+
 export async function downloadInvoicePdf(id: string): Promise<void> {
   const t = token();
   const response = await fetch(adminInvoices.pdfUrl(id), {
