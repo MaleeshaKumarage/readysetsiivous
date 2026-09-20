@@ -10,6 +10,25 @@ namespace CleaningSuite.Infrastructure.Agreements;
 
 public class AgreementPdfSigner : IAgreementDocumentGenerator
 {
+    // QuestPDF ships Lato in the output tree; the Linux container has no system fonts, so
+    // SKTypeface.Default renders nothing there. Load Lato explicitly with a default fallback.
+    private static readonly SKTypeface SignatureTypeface = LoadTypeface();
+
+    private static SKTypeface LoadTypeface()
+    {
+        var candidates = new[]
+        {
+            Path.Combine(AppContext.BaseDirectory, "LatoFont", "Lato-Regular.ttf"),
+            Path.Combine(AppContext.BaseDirectory, "LatoFont", "Lato-Bold.ttf"),
+        };
+        foreach (var path in candidates)
+        {
+            try { if (File.Exists(path)) return SKTypeface.FromFile(path); }
+            catch { /* try next */ }
+        }
+        return SKTypeface.Default;
+    }
+
     public async Task GenerateSignedPdfAsync(
         string originalPdfPath, IReadOnlyList<Signer> signers, string outputPath, CancellationToken ct = default)
     {
@@ -74,11 +93,9 @@ public class AgreementPdfSigner : IAgreementDocumentGenerator
 
     private static void DrawSignerSlot(SKCanvas canvas, float centerX, float top, Signer signer)
     {
-        // Explicit default typeface — an untyped SKFont can fail to render text.
-        using var typeface = SKTypeface.Default;
         using var textPaint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
-        using var nameFont = new SKFont(typeface, 14);
-        using var dateFont = new SKFont(typeface, 11);
+        using var nameFont = new SKFont(SignatureTypeface, 14);
+        using var dateFont = new SKFont(SignatureTypeface, 11);
         using var datePaint = new SKPaint { Color = SKColors.Gray, IsAntialias = true };
 
         float cursorY = top;
