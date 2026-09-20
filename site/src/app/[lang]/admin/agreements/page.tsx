@@ -90,7 +90,7 @@ export default function AgreementsPage() {
                 <TableCell>{a.signedCount}/{a.signerCount}</TableCell>
                 <TableCell className="text-right">
                   {a.status === 'Completed' && (
-                    <Button variant="ghost" size="sm" onClick={() => window.open(adminAgreements.documentUrl(a.id))}>Download</Button>
+                    <Button variant="ghost" size="sm" onClick={() => adminAgreements.downloadDocument(a.id)}>Download</Button>
                   )}
                 </TableCell>
               </TableRow>

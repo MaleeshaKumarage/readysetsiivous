@@ -179,6 +179,20 @@ export const adminAgreements = {
     adminSend(`/api/v1/admin/agreements/${id}/signers/${signerId}`, 'DELETE'),
   cancel: (id: string) => adminSend(`/api/v1/admin/agreements/${id}/cancel`, 'POST'),
   documentUrl: (id: string) => `${API_URL}/api/v1/admin/agreements/${id}/document`,
+  downloadDocument: async (id: string): Promise<void> => {
+    const t = token();
+    const response = await fetch(`${API_URL}/api/v1/admin/agreements/${id}/document`, {
+      headers: { Authorization: `Bearer ${t}` },
+    });
+    if (!response.ok) return;
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `agreement-${id}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
 };
 
 export async function downloadInvoicePdf(id: string): Promise<void> {
