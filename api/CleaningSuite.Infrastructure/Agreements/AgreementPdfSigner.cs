@@ -54,31 +54,38 @@ public class AgreementPdfSigner : IAgreementDocumentGenerator
     {
         using var bitmap = SKBitmap.Decode(pagePng);
         using var canvas = new SKCanvas(bitmap);
-        const float slotWidth = 220f;
-        var left = 40f;
-        var top = bitmap.Height - 160f; // reserved bottom band
-        foreach (var signer in signers)
+        const float margin = 60f;
+        var top = bitmap.Height - 180f; // reserved bottom band
+        var usable = bitmap.Width - 2 * margin;
+        var columns = Math.Max(1, signers.Count);
+
+        // Distribute signers symmetrically around the page center: each gets a column
+        // and is centered within it, so two signers sit on either side of the middle.
+        for (var i = 0; i < signers.Count; i++)
         {
-            DrawSignerSlot(canvas, left, top, signer);
-            left += slotWidth;
+            var centerX = margin + (usable / columns) * (i + 0.5f);
+            DrawSignerSlot(canvas, centerX, top, signers[i]);
         }
+
         using var image = SKImage.FromBitmap(bitmap);
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
         return data.ToArray();
     }
 
-    private static void DrawSignerSlot(SKCanvas canvas, float left, float top, Signer signer)
+    private static void DrawSignerSlot(SKCanvas canvas, float centerX, float top, Signer signer)
     {
+        // Explicit default typeface — an untyped SKFont can fail to render text.
+        using var typeface = SKTypeface.Default;
         using var textPaint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
-        using var nameFont = new SKFont { Size = 13 };
-        using var dateFont = new SKFont { Size = 11 };
+        using var nameFont = new SKFont(typeface, 14);
+        using var dateFont = new SKFont(typeface, 11);
         using var datePaint = new SKPaint { Color = SKColors.Gray, IsAntialias = true };
 
         float cursorY = top;
-        const float targetWidth = 190f;
-        const float maxHeight = 100f;
+        const float targetWidth = 180f;
+        const float maxHeight = 90f;
 
-        // Signature image on top, scaled up and trimmed of transparent padding.
+        // Signature image on top, centered, scaled up and trimmed of padding.
         if (signer.SignatureImagePath is { } path && File.Exists(path))
         {
             using var raw = SKBitmap.Decode(path);
@@ -92,17 +99,17 @@ public class AgreementPdfSigner : IAgreementDocumentGenerator
                     var w = sig.Width * scale;
                     var h = sig.Height * scale;
                     using var sigPaint = new SKPaint { IsAntialias = true };
-                    canvas.DrawBitmap(sig, new SKRect(left, cursorY, left + w, cursorY + h), SKSamplingOptions.Default, sigPaint);
-                    cursorY += h + 8f;
+                    canvas.DrawBitmap(sig, new SKRect(centerX - w / 2, cursorY, centerX + w / 2, cursorY + h), SKSamplingOptions.Default, sigPaint);
+                    cursorY += h + 10f;
                 }
             }
         }
 
-        // Name directly under the signature.
-        canvas.DrawText($"{signer.TypedName ?? signer.Name}", left, cursorY + 14, SKTextAlign.Left, nameFont, textPaint);
-        // Date under the name.
+        // Name directly under the signature, centered.
+        canvas.DrawText($"{signer.TypedName ?? signer.Name}", centerX, cursorY + 14, SKTextAlign.Center, nameFont, textPaint);
+        // Date under the name, centered.
         var date = signer.SignedAtUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "";
-        canvas.DrawText(date, left, cursorY + 30, SKTextAlign.Left, dateFont, datePaint);
+        canvas.DrawText(date, centerX, cursorY + 32, SKTextAlign.Center, dateFont, datePaint);
     }
 
     /// <summary>
