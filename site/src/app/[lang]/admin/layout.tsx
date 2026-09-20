@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Sparkles, CalendarDays, CalendarRange, FileText, Users, Settings, FileSignature, LogOut, LogIn } from 'lucide-react';
+import { LayoutDashboard, Sparkles, FileSignature, LogOut, LogIn } from 'lucide-react';
 import { initAuth, isAuthenticated, login, logout } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -11,12 +11,7 @@ import { cn } from '@/lib/utils';
 
 const NAV = [
   { href: 'services', label: 'Services', icon: Sparkles },
-  { href: 'bookings', label: 'Bookings', icon: CalendarDays },
-  { href: 'schedule', label: 'Schedule', icon: CalendarRange },
-  { href: 'invoices', label: 'Invoices', icon: FileText },
-  { href: 'employees', label: 'Employees', icon: Users },
   { href: 'agreements', label: 'Agreements', icon: FileSignature },
-  { href: 'settings', label: 'Settings', icon: Settings },
 ] as const;
 
 export default function AdminLayout({ params, children }: { params: { lang: string }; children: ReactNode }) {

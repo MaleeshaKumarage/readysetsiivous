@@ -1,17 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { Sparkles, CalendarDays, CalendarRange, FileText, Users, Settings, FileSignature } from 'lucide-react';
+import { Sparkles, FileSignature } from 'lucide-react';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const SECTIONS = [
   { href: 'services', title: 'Services', description: 'Manage cleaning services, prices and descriptions.', icon: Sparkles },
-  { href: 'bookings', title: 'Bookings', description: 'Confirm, complete and assign customer bookings.', icon: CalendarDays },
-  { href: 'schedule', title: 'Schedule', description: 'Day view per employee.', icon: CalendarRange },
-  { href: 'invoices', title: 'Invoices', description: 'Invoice completed bookings, download PDFs.', icon: FileText },
-  { href: 'employees', title: 'Employees', description: 'Staff, roles and Keycloak invites.', icon: Users },
   { href: 'agreements', title: 'Agreements', description: 'Upload agreements and collect e-signatures.', icon: FileSignature },
-  { href: 'settings', title: 'Settings', description: 'Company details and public page content.', icon: Settings },
 ] as const;
 
 export default function AdminDashboardPage({ params }: { params: { lang: string } }) {
