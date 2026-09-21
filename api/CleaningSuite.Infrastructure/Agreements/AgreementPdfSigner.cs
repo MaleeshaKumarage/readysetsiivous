@@ -94,8 +94,8 @@ public class AgreementPdfSigner : IAgreementDocumentGenerator
     private static void DrawSignerSlot(SKCanvas canvas, float centerX, float top, Signer signer)
     {
         using var textPaint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
-        using var nameFont = new SKFont(SignatureTypeface, 20);
-        using var dateFont = new SKFont(SignatureTypeface, 14);
+        using var nameFont = new SKFont(SignatureTypeface, 28);
+        using var dateFont = new SKFont(SignatureTypeface, 18);
         using var datePaint = new SKPaint { Color = SKColors.Gray, IsAntialias = true };
 
         float cursorY = top;
@@ -123,10 +123,10 @@ public class AgreementPdfSigner : IAgreementDocumentGenerator
         }
 
         // Name directly under the signature, centered.
-        canvas.DrawText($"{signer.TypedName ?? signer.Name}", centerX, cursorY + 22, SKTextAlign.Center, nameFont, textPaint);
+        canvas.DrawText($"{signer.TypedName ?? signer.Name}", centerX, cursorY + 30, SKTextAlign.Center, nameFont, textPaint);
         // Date under the name, centered.
         var date = signer.SignedAtUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "";
-        canvas.DrawText(date, centerX, cursorY + 44, SKTextAlign.Center, dateFont, datePaint);
+        canvas.DrawText(date, centerX, cursorY + 56, SKTextAlign.Center, dateFont, datePaint);
     }
 
     /// <summary>

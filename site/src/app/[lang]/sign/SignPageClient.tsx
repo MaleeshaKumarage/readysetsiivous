@@ -26,6 +26,7 @@ export default function SignPageClient() {
       setAgreement(a);
       if (a.status === 'Cancelled') setStatus('cancelled');
       else if (a.completed) { setStatus('done'); setFileKey(Date.now()); }
+      else if (a.signed) setStatus('done');
       else setStatus('ready');
     });
   }, [token]);
@@ -80,7 +81,7 @@ export default function SignPageClient() {
       {agreement && (
         <p className="text-sm text-muted-foreground">
           {agreement.signedCount}/{agreement.totalSigners} signed
-          {status === 'done' && ' — complete'}
+          {agreement.completed && ' — complete'}
         </p>
       )}
 

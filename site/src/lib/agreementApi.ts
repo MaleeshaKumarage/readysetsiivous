@@ -3,7 +3,7 @@ import { API_URL } from './api';
 const TENANT = process.env.NEXT_PUBLIC_TENANT_SLUG ?? 'readysetsiivous';
 
 export interface PublicAgreementDto {
-  title: string; status: string; totalSigners: number; signedCount: number; completed: boolean;
+  title: string; status: string; totalSigners: number; signedCount: number; completed: boolean; signed: boolean;
 }
 
 export async function getPublicAgreement(token: string): Promise<PublicAgreementDto | null> {

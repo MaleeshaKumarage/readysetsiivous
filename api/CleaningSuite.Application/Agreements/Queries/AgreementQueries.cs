@@ -46,7 +46,7 @@ public class GetAgreementHandler : IRequestHandler<GetAgreementQuery, AgreementD
     }
 }
 
-public record PublicAgreementDto(string Title, string Status, int TotalSigners, int SignedCount, bool Completed);
+public record PublicAgreementDto(string Title, string Status, int TotalSigners, int SignedCount, bool Completed, bool Signed);
 
 public record GetPublicAgreementQuery(string Token) : IRequest<PublicAgreementDto?>;
 
@@ -62,7 +62,8 @@ public class GetPublicAgreementHandler : IRequestHandler<GetPublicAgreementQuery
         if (a is null) return null;
         return new PublicAgreementDto(a.Title, a.Status, a.Signers.Count,
             a.Signers.Count(s => s.Status == Signer.StatusSigned),
-            a.Status == Agreement.StatusCompleted);
+            a.Status == Agreement.StatusCompleted,
+            a.Signers.FirstOrDefault(s => s.Token == request.Token)?.Status == Signer.StatusSigned);
     }
 }
 
