@@ -22,6 +22,7 @@ export default function AgreementsPage() {
   const [detail, setDetail] = useState<AgreementDetail | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [companyName, setCompanyName] = useState('ReadySetSiivous');
+  const [submitting, setSubmitting] = useState(false);
 
   const load = useCallback(async () => { setItems(await adminAgreements.list()); }, []);
   useEffect(() => { load(); }, [load]);
@@ -31,10 +32,15 @@ export default function AgreementsPage() {
   }, []);
 
   async function create() {
-    if (!pdf) return;
-    await adminAgreements.create(title, pdf, signers.filter(s => s.name && s.email));
-    setOpen(false); setTitle(''); setPdf(null); setSigners([{ name: '', email: '' }]);
-    load();
+    if (!pdf || submitting) return;
+    setSubmitting(true);
+    try {
+      await adminAgreements.create(title, pdf, signers.filter(s => s.name && s.email));
+      setOpen(false); setTitle(''); setPdf(null); setSigners([{ name: '', email: '' }]);
+      load();
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   async function openDetail(id: string) {
@@ -135,7 +141,9 @@ export default function AgreementsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={create} disabled={!pdf || !title}>Create</Button>
+            <Button onClick={create} disabled={!pdf || !title || submitting}>
+              {submitting ? 'Creating…' : 'Create'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
