@@ -45,6 +45,7 @@ public class CreateAgreementHandler : IRequestHandler<CreateAgreementCommand, Ag
             Id = Guid.NewGuid(),
             Slug = tenantId,
             Title = request.Title,
+            Code = AgreementTokens.NewCode(),
             Signers = request.Signers.Select(s => new Signer
             {
                 Name = s.Name, Email = s.Email, Token = AgreementTokens.New(),

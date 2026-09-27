@@ -11,6 +11,8 @@ public class Agreement : BaseDocument
 
     public string Slug { get; set; } = "";
     public string Title { get; set; } = "";
+    public string Code { get; set; } = "";
+    public bool IsActive { get; set; } = true;
     public string OriginalPdfPath { get; set; } = "";
     public string Status { get; set; } = StatusDraft;
     public List<Signer> Signers { get; set; } = new();

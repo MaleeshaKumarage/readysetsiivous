@@ -5,12 +5,12 @@ using MediatR;
 
 namespace CleaningSuite.Application.Agreements.Queries;
 
-public record AgreementListItemDto(Guid Id, string Title, string Status, int SignerCount, int SignedCount, DateTime CreatedUtc);
+public record AgreementListItemDto(Guid Id, string Title, string Code, string Status, bool IsActive, int SignerCount, int SignedCount, DateTime CreatedUtc);
 public record SignerDto(Guid Id, string Name, string Email, string Status, string Token);
-public record AgreementDetailDto(Guid Id, string Title, string Status, IReadOnlyList<SignerDto> Signers, DateTime CreatedUtc, DateTime? CompletedUtc)
+public record AgreementDetailDto(Guid Id, string Title, string Code, string Status, bool IsActive, IReadOnlyList<SignerDto> Signers, DateTime CreatedUtc, DateTime? CompletedUtc)
 {
     public static AgreementDetailDto From(Agreement a) => new(
-        a.Id, a.Title, a.Status,
+        a.Id, a.Title, a.Code, a.Status, a.IsActive,
         a.Signers.Select(s => new SignerDto(s.Id, s.Name, s.Email, s.Status, s.Token)).ToList(),
         a.CreatedUtc, a.CompletedUtc);
 }
@@ -26,7 +26,7 @@ public class ListAgreementsHandler : IRequestHandler<ListAgreementsQuery, IReadO
     public async Task<IReadOnlyList<AgreementListItemDto>> Handle(ListAgreementsQuery request, CancellationToken ct)
     {
         var list = await _repo.ListAsync(_context.TenantId, ct);
-        return list.Select(a => new AgreementListItemDto(a.Id, a.Title, a.Status,
+        return list.Select(a => new AgreementListItemDto(a.Id, a.Title, a.Code, a.Status, a.IsActive,
             a.Signers.Count, a.Signers.Count(s => s.Status == Signer.StatusSigned), a.CreatedUtc)).ToList();
     }
 }
@@ -46,7 +46,7 @@ public class GetAgreementHandler : IRequestHandler<GetAgreementQuery, AgreementD
     }
 }
 
-public record PublicAgreementDto(string Title, string Status, int TotalSigners, int SignedCount, bool Completed, bool Signed);
+public record PublicAgreementDto(string Title, string Status, bool Active, int TotalSigners, int SignedCount, bool Completed, bool Signed);
 
 public record GetPublicAgreementQuery(string Token) : IRequest<PublicAgreementDto?>;
 
@@ -60,7 +60,7 @@ public class GetPublicAgreementHandler : IRequestHandler<GetPublicAgreementQuery
     {
         var a = await _repo.FindBySignerTokenAsync(_context.TenantId, request.Token, ct);
         if (a is null) return null;
-        return new PublicAgreementDto(a.Title, a.Status, a.Signers.Count,
+        return new PublicAgreementDto(a.Title, a.Status, a.IsActive, a.Signers.Count,
             a.Signers.Count(s => s.Status == Signer.StatusSigned),
             a.Status == Agreement.StatusCompleted,
             a.Signers.FirstOrDefault(s => s.Token == request.Token)?.Status == Signer.StatusSigned);
@@ -79,6 +79,12 @@ public class GetAgreementFileHandler : IRequestHandler<GetAgreementFileQuery, st
     {
         var a = await _repo.FindBySignerTokenAsync(_context.TenantId, request.Token, ct);
         if (a is null) return null;
+
+        var signer = a.Signers.FirstOrDefault(s => s.Token == request.Token);
+        // A deactivated agreement blocks unsigned signers; those who already signed may
+        // still view the document.
+        if (!a.IsActive && signer?.Status != Signer.StatusSigned) return null;
+
         return a.Status == Agreement.StatusCompleted
             ? a.SignedPdfPath
             : a.OriginalPdfPath;

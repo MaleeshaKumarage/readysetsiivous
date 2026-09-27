@@ -77,6 +77,8 @@ public class SignAgreementHandler : IRequestHandler<SignAgreementCommand, SignRe
 
         if (agreement.Status == Agreement.StatusCancelled)
             throw new AgreementConflictException("Agreement cancelled");
+        if (!agreement.IsActive)
+            throw new AgreementConflictException("Agreement deactivated");
         if (signer.Status == Signer.StatusSigned)
             throw new AgreementConflictException("Already signed");
 
@@ -99,6 +101,8 @@ public class SignAgreementHandler : IRequestHandler<SignAgreementCommand, SignRe
 
                     if (agreement.Status == Agreement.StatusCancelled)
                         throw new AgreementConflictException("Agreement cancelled");
+                    if (!agreement.IsActive)
+                        throw new AgreementConflictException("Agreement deactivated");
                     if (signer.Status == Signer.StatusSigned)
                         throw new AgreementConflictException("Already signed");
                 }

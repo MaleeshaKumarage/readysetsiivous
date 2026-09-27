@@ -3,7 +3,7 @@ import { API_URL } from './api';
 const TENANT = process.env.NEXT_PUBLIC_TENANT_SLUG ?? 'readysetsiivous';
 
 export interface PublicAgreementDto {
-  title: string; status: string; totalSigners: number; signedCount: number; completed: boolean; signed: boolean;
+  title: string; status: string; active: boolean; totalSigners: number; signedCount: number; completed: boolean; signed: boolean;
 }
 
 export async function getPublicAgreement(token: string): Promise<PublicAgreementDto | null> {
@@ -53,6 +53,7 @@ async function friendlyError(r: Response): Promise<string> {
   if (r.status === 409) {
     if (/already signed/i.test(raw)) return 'You have already signed this agreement.';
     if (/cancelled|canceled/i.test(raw)) return 'This agreement has been cancelled.';
+    if (/deactivated/i.test(raw)) return 'This agreement has been deactivated.';
     return 'This agreement changed while you were signing. Please try again.';
   }
   if (r.status === 400) return raw;

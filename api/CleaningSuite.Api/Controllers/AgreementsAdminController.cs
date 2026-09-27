@@ -65,4 +65,18 @@ public class AgreementsAdminController : ControllerBase
         await _mediator.Send(new CancelAgreementCommand(id), ct);
         return NoContent();
     }
+
+    [HttpPost("{id:guid}/activate")]
+    public async Task<IActionResult> Activate(Guid id, CancellationToken ct)
+    {
+        await _mediator.Send(new SetAgreementActiveCommand(id, true), ct);
+        return NoContent();
+    }
+
+    [HttpPost("{id:guid}/deactivate")]
+    public async Task<IActionResult> Deactivate(Guid id, CancellationToken ct)
+    {
+        await _mediator.Send(new SetAgreementActiveCommand(id, false), ct);
+        return NoContent();
+    }
 }

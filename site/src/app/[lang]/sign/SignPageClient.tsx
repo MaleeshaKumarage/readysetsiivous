@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-type Status = 'loading' | 'ready' | 'invalid' | 'cancelled' | 'done';
+type Status = 'loading' | 'ready' | 'invalid' | 'cancelled' | 'deactivated' | 'done';
 
 export default function SignPageClient() {
   const token = useSearchParams().get('token') ?? '';
@@ -24,7 +24,8 @@ export default function SignPageClient() {
     getPublicAgreement(token).then((a) => {
       if (!a) { setStatus('invalid'); return; }
       setAgreement(a);
-      if (a.status === 'Cancelled') setStatus('cancelled');
+      if (!a.active) setStatus('deactivated');
+      else if (a.status === 'Cancelled') setStatus('cancelled');
       else if (a.completed) { setStatus('done'); setFileKey(Date.now()); }
       else if (a.signed) setStatus('done');
       else setStatus('ready');
@@ -71,6 +72,23 @@ export default function SignPageClient() {
       <div className="mx-auto max-w-2xl space-y-3 p-6">
         <h1 className="text-2xl font-semibold">{agreement?.title ?? 'Agreement'}</h1>
         <p className="text-sm text-muted-foreground">This agreement has been cancelled and is no longer open for signing.</p>
+      </div>
+    );
+  }
+
+  if (status === 'deactivated') {
+    return (
+      <div className="mx-auto max-w-2xl space-y-4 p-6">
+        <h1 className="text-2xl font-semibold">{agreement?.title ?? 'Agreement'}</h1>
+        <p className="text-sm text-muted-foreground">This agreement has been deactivated.</p>
+        {agreement?.signed && (
+          <>
+            <iframe src={fileUrl} className="h-[60vh] w-full rounded-md border" />
+            {agreement.completed && (
+              <Button onClick={() => window.open(fileUrl)} className="w-full">Download signed document</Button>
+            )}
+          </>
+        )}
       </div>
     );
   }

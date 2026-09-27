@@ -23,6 +23,7 @@ export default function AgreementsPage() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [companyName, setCompanyName] = useState('ReadySetSiivous');
   const [submitting, setSubmitting] = useState(false);
+  const [tab, setTab] = useState<'active' | 'deactivated'>('active');
 
   const load = useCallback(async () => { setItems(await adminAgreements.list()); }, []);
   useEffect(() => { load(); }, [load]);
@@ -101,6 +102,18 @@ export default function AgreementsPage() {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  function displayTitle(a: { title: string; code: string }): string {
+    return a.code ? `${a.title}-${a.code}` : a.title;
+  }
+
+  async function toggleActive(a: AgreementListItem) {
+    if (a.isActive) await adminAgreements.deactivate(a.id);
+    else await adminAgreements.activate(a.id);
+    load();
+  }
+
+  const filtered = items?.filter((a) => (tab === 'active' ? a.isActive : !a.isActive)) ?? [];
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -150,8 +163,13 @@ export default function AgreementsPage() {
 
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
-          <DialogHeader><DialogTitle>{detail?.title ?? 'Agreement'}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{detail ? displayTitle(detail) : 'Agreement'}</DialogTitle></DialogHeader>
           <div className="space-y-3">
+            {detail && (
+              <Button variant="outline" size="sm" onClick={() => { toggleActive(detail); setDetail({ ...detail, isActive: !detail.isActive }); }}>
+                {detail.isActive ? 'Deactivate' : 'Activate'}
+              </Button>
+            )}
             {detail?.signers.map((s) => (
               <div key={s.id} className="flex items-center gap-3 rounded-lg border p-3">
                 <div className="min-w-0 flex-1">
@@ -176,6 +194,19 @@ export default function AgreementsPage() {
         </DialogContent>
       </Dialog>
 
+      <div className="mb-4 flex gap-2">
+        <Button
+          size="sm"
+          onClick={() => setTab('active')}
+          className={tab === 'active' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}
+        >Active</Button>
+        <Button
+          size="sm"
+          onClick={() => setTab('deactivated')}
+          className={tab === 'deactivated' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}
+        >Deactivated</Button>
+      </div>
+
       <div className="rounded-xl border bg-card">
         <Table>
           <TableHeader>
@@ -185,9 +216,9 @@ export default function AgreementsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {items?.map((a) => (
+            {filtered.map((a) => (
               <TableRow key={a.id}>
-                <TableCell className="font-medium">{a.title}</TableCell>
+                <TableCell className="font-medium">{displayTitle(a)}</TableCell>
                 <TableCell>
                   <Badge variant={a.status === 'Completed' ? 'default' : 'secondary'}>{a.status}</Badge>
                 </TableCell>
@@ -197,6 +228,9 @@ export default function AgreementsPage() {
                   {a.status === 'Completed' && (
                     <Button variant="ghost" size="sm" onClick={() => adminAgreements.downloadDocument(a.id)}>Download</Button>
                   )}
+                  <Button variant="ghost" size="sm" onClick={() => toggleActive(a)}>
+                    {a.isActive ? 'Deactivate' : 'Activate'}
+                  </Button>
                 </TableCell>
               </TableRow>
             ))}

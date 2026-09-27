@@ -152,7 +152,7 @@ export interface AgreementSignerDto {
   id: string; name: string; email: string; status: string; token: string;
 }
 export interface AgreementListItem {
-  id: string; title: string; status: string; signerCount: number; signedCount: number; createdUtc: string;
+  id: string; title: string; code: string; status: string; isActive: boolean; signerCount: number; signedCount: number; createdUtc: string;
 }
 export interface AgreementDetail extends AgreementListItem {
   signers: AgreementSignerDto[];
@@ -182,6 +182,8 @@ export const adminAgreements = {
   removeSigner: (id: string, signerId: string) =>
     adminSend(`/api/v1/admin/agreements/${id}/signers/${signerId}`, 'DELETE'),
   cancel: (id: string) => adminSend(`/api/v1/admin/agreements/${id}/cancel`, 'POST'),
+  activate: (id: string) => adminSend(`/api/v1/admin/agreements/${id}/activate`, 'POST'),
+  deactivate: (id: string) => adminSend(`/api/v1/admin/agreements/${id}/deactivate`, 'POST'),
   documentUrl: (id: string) => `${API_URL}/api/v1/admin/agreements/${id}/document`,
   downloadDocument: async (id: string): Promise<void> => {
     const t = token();
