@@ -31,6 +31,11 @@ dev-server.log
 *storybook.log
 storybook-static/
 
+# Playwright
+test-results/
+playwright-report/
+.playwright/
+
 # --- API (.NET) ---
 bin/
 obj/
