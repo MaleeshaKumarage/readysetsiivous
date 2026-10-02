@@ -89,7 +89,7 @@ for attempt in range(MAX_ATTEMPTS):
 
 # Exhausted — fall back to DeepSeek rather than fail the pipeline.
 print("Gemini exhausted retries — falling back to DeepSeek", file=sys.stderr)
-if not os.environ.get("DEEPSEEK_API_KEY"):
+if not os.environ.get("DEEPSEEK_API_KEY", "").strip():
     print("No DEEPSEEK_API_KEY set for fallback", file=sys.stderr)
     sys.exit(1)
 
