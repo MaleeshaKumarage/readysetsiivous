@@ -124,7 +124,7 @@ export default function BookingFlow({ lang }: { lang: Language }) {
         </div>
       )}
 
-      {services && step === 'time' && service && (
+      {Array.isArray(services) && services.length > 0 && step === 'time' && service && (
         <div>
           <button onClick={() => setStep('service')} className="mb-4 text-sm underline">
             ← {t(lang, 'varaus.back')}
