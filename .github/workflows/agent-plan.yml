@@ -42,7 +42,7 @@ jobs:
             echo "---"
             echo "Brainstorm and write a step-by-step implementation plan."
           } | python3 scripts/deepseek.py \
-            "You are a senior software engineer. Brainstorm the issue against the repository files. Write a detailed, ordered implementation plan as markdown. Break the work into small sub-tasks. For each sub-task: the files to change, what to change, and how to test it. If the feature is large, split it into independent sub-issues that can be done incrementally. Do not write code, only the plan." \
+            "You are a senior software engineer. Brainstorm the issue against the repository files. Write a detailed, ordered implementation plan as markdown. Break the work into sub-tasks; for each: files to change, what to change, how to test. After the plan body, add a section exactly titled '## SUB_ISSUES'. Under it, list each major sub-task as a one-line GitHub issue title, each line prefixed with '- '. Keep titles short and self-contained. If the issue is small and needs no split, write '## SUB_ISSUES' followed by a single '- ' line with the issue title itself. Do not write code, only the plan." \
             > plan.md
           echo "===== DeepSeek plan ====="
           cat plan.md
@@ -53,3 +53,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh issue comment "${{ steps.issue.outputs.number }}" --body-file plan.md
+
+      - name: Create sub-issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          N=${{ steps.issue.outputs.number }}
+          # extract titles under "## SUB_ISSUES" that start with "- "
+          sed -n '/## SUB_ISSUES/,/^## /p' plan.md | grep '^- ' | sed 's/^- //' | while IFS= read -r title; do
+            [ -z "$title" ] && continue
+            gh issue create --title "$title" --body "Sub-task of #$N." >/dev/null
+            echo "created: $title"
+          done
