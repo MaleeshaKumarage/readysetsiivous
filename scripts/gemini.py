@@ -84,9 +84,11 @@ for attempt in range(MAX_ATTEMPTS):
             except ValueError:
                 # HTTP-date form is legal but not worth parsing; keep the backoff.
                 pass
-        print(f"Gemini {e.code} (rate limit), retry {attempt+1}/{MAX_ATTEMPTS} in {delay:.1f}s ...", file=sys.stderr)
         if attempt < MAX_ATTEMPTS - 1:
+            print(f"Gemini {e.code} (rate limit), retry {attempt+1}/{MAX_ATTEMPTS} in {delay:.1f}s ...", file=sys.stderr)
             time.sleep(delay)
+        else:
+            print(f"Gemini {e.code} (rate limit) on final attempt {attempt+1}/{MAX_ATTEMPTS}", file=sys.stderr)
     except urllib.error.URLError as e:
         delay = backoff(attempt)
         print(f"Gemini network error: {e.reason}; retry in {delay:.1f}s", file=sys.stderr)
