@@ -41,30 +41,47 @@ jobs:
           git config user.name "cleaning-agent"
           git config user.email "agent@readysetsiivous.fi"
 
-      - name: Review-fix loop (max 3)
+      - name: Review-fix loop (max 10)
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          for i in 1 2 3; do
+          for i in $(seq 1 10); do
             echo "===== iteration $i ====="
+            HEAD_SHA=$(git rev-parse HEAD)
             gh pr diff "$PR" > /tmp/diff.txt
             python3 scripts/deepseek.py \
-              "You are a senior code reviewer. Review the diff below. If there are NO issues at all, respond with exactly NO_ISSUES and nothing else. Otherwise list concrete bugs, risks, and suggestions as concise markdown." \
-              < /tmp/diff.txt > /tmp/review.md
-            cat /tmp/review.md
-            gh pr review "$PR" --comment --body-file /tmp/review.md
+              "You are a senior code reviewer. Review the diff. Output findings ONLY in this exact format, one block per issue, blank line between blocks:
 
-            if grep -q "NO_ISSUES" /tmp/review.md; then
+### FILE: <file path>
+### LINE: <line number in the file>
+### FIX: <one precise sentence: exactly what code to change on that line>
+
+Do not report files under .github/workflows/ or ci-build-test.yml. If there are NO issues, output exactly NO_ISSUES and nothing else." \
+              < /tmp/diff.txt > /tmp/review.txt
+            cat /tmp/review.txt
+
+            python3 scripts/post_review_comments.py "$PR" "$HEAD_SHA" < /tmp/review.txt
+
+            if grep -q "NO_ISSUES" /tmp/review.txt; then
               echo "no issues — done"
               break
             fi
 
-            echo "--- fixing ---"
-            ~/.local/bin/aider \
-              --model deepseek/deepseek-chat \
-              --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
-              --message "Fix every issue raised in this review. Do not leave any TODO or stub. Do NOT modify any file under .github/workflows/ or ci-build-test.yml — leave CI config unchanged. Review: $(cat /tmp/review.md)"
+            if [ ! -s /tmp/fixes.list ]; then
+              echo "no fixes to apply — done"
+              break
+            fi
+
+            echo "--- fixing one by one ---"
+            while IFS=$'\t' read -r file line fix; do
+              echo ">> fixing $file:$line"
+              ~/.local/bin/aider \
+                --model deepseek/deepseek-chat \
+                --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+                --message "Fix only this one issue. File: $file, near line $line. $fix"
+            done < /tmp/fixes.list
+
             git push origin "$BRANCH"
           done
 
