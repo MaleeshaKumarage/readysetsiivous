@@ -62,3 +62,9 @@ jobs:
             ## Dev preview
             UI: http://130.61.208.211/
             API: http://130.61.208.211:8090/"
+
+  skip-reason:
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "SKIP agent-pr: upstream agent-test concluded ${{ github.event.workflow_run.conclusion }}"

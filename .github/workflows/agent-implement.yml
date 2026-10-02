@@ -77,3 +77,9 @@ jobs:
         with:
           name: feature-branch
           path: /tmp/branch.txt
+
+  skip-reason:
+    if: github.event_name == 'issue_comment' && !(contains(github.event.comment.body, 'approve') && (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR'))
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "SKIP agent-implement: comment by ${{ github.event.comment.user.login }} lacks 'approve' or author unauthorized"

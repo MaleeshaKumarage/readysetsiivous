@@ -98,3 +98,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh pr ready "$PR"
+
+  skip-reason:
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "SKIP agent-review: upstream agent-pr concluded ${{ github.event.workflow_run.conclusion }}"
