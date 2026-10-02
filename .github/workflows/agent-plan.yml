@@ -1,0 +1,52 @@
+name: agent-plan
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  plan:
+    if: contains(github.event.comment.body, '@agent') && (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR')
+    runs-on: [self-hosted, agent]
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get issue
+        id: issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          N=${{ github.event.issue.number }}
+          gh issue view "$N" --json title -q .title > /tmp/issue-title.txt
+          gh issue view "$N" --json body -q .body > /tmp/issue-body.txt
+          echo "number=$N" >> "$GITHUB_OUTPUT"
+
+      - name: Generate plan (DeepSeek)
+        id: plan
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          {
+            echo "## Issue"
+            cat /tmp/issue-title.txt
+            echo
+            cat /tmp/issue-body.txt
+            echo
+            echo "---"
+            echo "Write a step-by-step implementation plan as markdown."
+          } | python3 scripts/deepseek.py \
+            "You are a senior software engineer. Given the issue below, write a concise, actionable implementation plan as markdown. Cover: files to change, approach, and testing notes. Do not write code, only the plan." \
+            > plan.md
+          echo "===== DeepSeek plan ====="
+          cat plan.md
+          echo "=========================="
+
+      - name: Post plan as issue comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment "${{ steps.issue.outputs.number }}" --body-file plan.md
