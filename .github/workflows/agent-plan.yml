@@ -62,6 +62,8 @@ jobs:
           # extract titles under "## SUB_ISSUES" that start with "- "
           sed -n '/## SUB_ISSUES/,/^## /p' plan.md | grep '^- ' | sed 's/^- //' | while IFS= read -r title; do
             [ -z "$title" ] && continue
-            gh issue create --title "$title" --body "Sub-task of #$N." >/dev/null
-            echo "created: $title"
+            url=$(gh issue create --title "$title" --body "Sub-issue of #$N.")
+            num=$(echo "$url" | grep -oE '[0-9]+$')
+            gh api "repos/MaleeshaKumarage/readysetsiivous/issues/$N/sub_issues" -f "sub_issue_id=$num" >/dev/null
+            echo "created + linked: $title (#$num)"
           done
