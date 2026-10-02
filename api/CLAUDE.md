@@ -30,5 +30,5 @@ Multi-tenant SaaS backend for cleaning companies. First tenant: ReadySetSiivous 
 ## Coverage
 - Branch coverage gate: 30%.
 - To reproduce coverage locally:
-  1. Run `dotnet test CleaningSuite.Backend.sln --no-build -c Release --verbosity minimal`.
-  2. Check the coverage report in the `coverage-report` directory.
+  1. Run `dotnet test CleaningSuite.Backend.sln --no-build -c Release --verbosity minimal --collect:"XPlat Code Coverage"`.
+  2. Coverage is written to `TestResults/<guid>/coverage.cobertura.xml` (one folder per test project run).
