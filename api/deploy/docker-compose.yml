@@ -72,6 +72,8 @@ services:
       Auth__Keycloak__AdminPassword: ${KEYCLOAK_ADMIN_PASSWORD}
       Cors__AllowedOrigins__0: https://readysetsiivous.fi
       Uploads__Path: /app/uploads
+      Resend__ApiKey: ${RESEND_API_KEY:-}
+      App__FrontendBaseUrl: https://readysetsiivous.fi
     volumes:
       - cleaning_uploads:/app/uploads
     ports:

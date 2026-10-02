@@ -5,6 +5,7 @@ using CleaningSuite.Application;
 using CleaningSuite.Application.Tenants;
 using CleaningSuite.Application.Validation;
 using CleaningSuite.Infrastructure.Auth;
+using CleaningSuite.Infrastructure.Email;
 using CleaningSuite.Infrastructure.Keycloak;
 using CleaningSuite.Infrastructure.Persistence;
 using FluentValidation;
@@ -62,6 +63,8 @@ builder.Services.AddSingleton(sp =>
         section["AdminPassword"]);
 });
 builder.Services.AddSingleton<IKeycloakProvisioner, KeycloakProvisioner>();
+
+builder.Services.AddHttpClient<CleaningSuite.Application.Common.IEmailSender, ResendEmailSender>();
 
 builder.Services.AddSingleton<ITenantStatusCache, CleaningSuite.Api.Tenancy.TenantStatusCache>();
 builder.Services.AddScoped<ITenantContext, HttpTenantContext>();

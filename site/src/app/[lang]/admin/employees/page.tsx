@@ -107,7 +107,7 @@ export default function EmployeesPage() {
 
   async function invite(e: Employee) {
     const r = await adminEmployees.invite(e.id);
-    if (r) toast.success(`Invited ${r.email} — temp password: ${r.temporaryPassword}`);
+    if (r) toast.success(`Invitation sent to ${r.email}`);
   }
 
   async function toggle(e: Employee) {

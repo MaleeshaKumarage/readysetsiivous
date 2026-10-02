@@ -4,6 +4,7 @@ using CleaningSuite.Domain.Common;
 using CleaningSuite.Domain.Employees;
 using FluentValidation;
 using MediatR;
+using Microsoft.Extensions.Configuration;
 
 namespace CleaningSuite.Application.Employees.Commands;
 
@@ -136,18 +137,22 @@ public class DeactivateEmployeeHandler : IRequestHandler<DeactivateEmployeeComma
 
 public class InviteEmployeeHandler : IRequestHandler<InviteEmployeeCommand, EmployeeInviteResult>
 {
+    private const string ClientId = "cleaning-suite-web";
     private readonly IEmployeeRepository _employees;
-    private readonly IKeycloakProvisioner _keycloak;
     private readonly ITenantContext _context;
+    private readonly IEmailSender _email;
+    private readonly IConfiguration _config;
 
     public InviteEmployeeHandler(
         IEmployeeRepository employees,
-        IKeycloakProvisioner keycloak,
-        ITenantContext context)
+        ITenantContext context,
+        IEmailSender email,
+        IConfiguration config)
     {
         _employees = employees;
-        _keycloak = keycloak;
         _context = context;
+        _email = email;
+        _config = config;
     }
 
     public async Task<EmployeeInviteResult> Handle(InviteEmployeeCommand request, CancellationToken ct)
@@ -155,18 +160,36 @@ public class InviteEmployeeHandler : IRequestHandler<InviteEmployeeCommand, Empl
         var employee = await _employees.GetByIdAsync(request.Id, ct)
             ?? throw new NotFoundException("Employee", request.Id);
 
-        var result = await _keycloak.InviteEmployeeAsync(
-            _context.TenantId,
-            employee.Email,
-            employee.FirstName,
-            employee.LastName,
-            employee.Role,
-            ct);
+        var serverUrl = (_config["Auth:Keycloak:ServerUrl"] ?? "").TrimEnd('/');
+        var realm = _context.TenantId;
+        var baseUrl = _config["App:FrontendBaseUrl"] ?? "https://readysetsiivous.fi";
+        var redirect = $"{baseUrl.TrimEnd('/')}/fi/admin/";
 
-        employee.KeycloakUserId = result.KeycloakUserId;
-        employee.UpdatedUtc = DateTime.UtcNow;
-        await _employees.SaveAsync(employee, ct);
+        var link = $"{serverUrl}/realms/{realm}/protocol/openid-connect/registrations" +
+                   $"?client_id={ClientId}&response_type=code&scope=openid%20email" +
+                   $"&redirect_uri={Uri.EscapeDataString(redirect)}";
 
-        return new EmployeeInviteResult(employee.Email, result.TemporaryPassword);
+        var html = BuildInviteEmail(employee.FirstName, employee.Role, link);
+        await _email.SendAsync(employee.Email, "Welcome to ReadySetSiivous — set up your account", html, ct);
+
+        return new EmployeeInviteResult(employee.Email, "");
     }
+
+    private static string BuildInviteEmail(string firstName, string role, string link)
+    {
+        var name = Escape(firstName);
+        var roleLabel = role == "admin" ? "administrator" : "employee";
+        var safeLink = Escape(link);
+        return string.Join("\n",
+            "<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#1a1a1a\">",
+            "  <h2 style=\"margin:0 0 16px\">Welcome to ReadySetSiivous</h2>",
+            $"  <p style=\"margin:0 0 16px\">Hi {name},</p>",
+            $"  <p style=\"margin:0 0 20px\">You have been invited to join ReadySetSiivous as an {roleLabel}. Create your account to get started:</p>",
+            $"  <a href=\"{safeLink}\" style=\"display:inline-block;background:#D9B95C;color:#070B1A;padding:12px 28px;border-radius:8px;font-weight:bold;text-decoration:none;font-size:15px\">Create my account</a>",
+            $"  <p style=\"margin:20px 0 0;font-size:12px;color:#888888\">If the button doesn't work, copy this link: {safeLink}</p>",
+            "</div>");
+    }
+
+    private static string Escape(string s) =>
+        s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");
 }
