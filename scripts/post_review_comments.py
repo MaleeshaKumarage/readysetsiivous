@@ -101,6 +101,7 @@ for it in issues:
         # Transient network failure (DNS, timeout, connection reset). Don't
         # crash the whole run — skip this issue and continue with the rest.
         print(f"inline network error for {it['path']}:{it['line']}: {e.reason} — skipping", file=sys.stderr)
+        fb = json.dumps({"body": f"**{it['path']}:{it['line']}** — {body}"}).encode()
         fbreq = urllib.request.Request(
             f"{api}/pulls/{pr}/reviews",
             data=fb,
