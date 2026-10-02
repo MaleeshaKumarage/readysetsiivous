@@ -1,6 +1,8 @@
 name: agent-test
 
 on:
+  push:
+    branches: [feature/*]
   workflow_dispatch:
     inputs:
       branch:
@@ -11,10 +13,18 @@ jobs:
   test:
     runs-on: [self-hosted, agent]
     steps:
+      - name: Resolve branch
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "BRANCH=${{ github.event.inputs.branch }}" >> "$GITHUB_ENV"
+          else
+            echo "BRANCH=${{ github.ref_name }}" >> "$GITHUB_ENV"
+          fi
+
       - name: Checkout branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.branch }}
+          ref: ${{ env.BRANCH }}
 
       - name: Build backend
         run: cd api && dotnet build CleaningSuite.Backend.sln -c Release --nologo

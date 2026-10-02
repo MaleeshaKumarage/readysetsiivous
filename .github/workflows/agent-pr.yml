@@ -1,6 +1,9 @@
 name: agent-pr
 
 on:
+  workflow_run:
+    workflows: [agent-test]
+    types: [completed]
   workflow_dispatch:
     inputs:
       branch:
@@ -9,11 +12,21 @@ on:
 
 jobs:
   pr:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: [self-hosted, agent]
     permissions:
       pull-requests: write
       contents: read
     steps:
+      - name: Resolve branch
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            BR="${{ github.event.inputs.branch }}"
+          else
+            BR="${{ github.event.workflow_run.head_branch }}"
+          fi
+          echo "BRANCH=$BR" >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -23,6 +36,6 @@ jobs:
         run: |
           gh pr create \
             --base main \
-            --head "${{ github.event.inputs.branch }}" \
-            --title "${{ github.event.inputs.branch }}" \
-            --body "Implements ${{ github.event.inputs.branch }}."
+            --head "$BRANCH" \
+            --title "$BRANCH" \
+            --body "Implements $BRANCH."
