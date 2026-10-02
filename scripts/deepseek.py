@@ -10,7 +10,7 @@ user = sys.stdin.read()
 key = os.environ.get("DEEPSEEK_API_KEY", "")
 
 payload = json.dumps({
-    "model": "deepseek-chat",
+    "model": "deepseek-v4-flash",
     "messages": [
         {"role": "system", "content": system},
         {"role": "user", "content": user},
