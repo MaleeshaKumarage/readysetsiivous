@@ -41,7 +41,7 @@ jobs:
           ~/.local/bin/aider \
             --model ollama_chat/qwen2.5-coder:7b \
             --yes --no-gitignore --no-show-model-warnings \
-            --message "Implement this issue following the approved plan below. Issue: $(cat /tmp/issue-title.txt). $(cat /tmp/issue-body.txt). Plan: $(cat /tmp/plan.txt)"
+            --message "Implement the feature COMPLETELY and THOROUGHLY, following the approved plan exactly. Modify every file the plan lists, handle edge cases, and add the required tests. Do not leave TODOs or stubs. Issue: $(cat /tmp/issue-title.txt). $(cat /tmp/issue-body.txt). Plan: $(cat /tmp/plan.txt)"
 
       - name: Build backend
         run: cd api && dotnet build CleaningSuite.Backend.sln -c Release --nologo
@@ -52,7 +52,16 @@ jobs:
           dotnet test CleaningSuite.Backend.sln -c Release --no-build \
             --collect:"XPlat Code Coverage" \
             --results-directory ./TestResults
-          # coverage gate enforced by the Playwright/dev step below
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET, glob, sys
+          f = glob.glob('TestResults/**/coverage.cobertura.xml', recursive=True)[0]
+          root = ET.parse(f).getroot()
+          line = float(root.get('line-rate', 0)); branch = float(root.get('branch-rate', 0))
+          print(f'coverage: line {line:.1%}, branch {branch:.1%}')
+          if branch < 0.6:
+              print(f'FAIL: branch coverage {branch:.1%} below 60%')
+              sys.exit(1)
+          PY
 
       - name: Frontend test (Playwright, new feature + regression)
         run: |
