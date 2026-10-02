@@ -1,6 +1,10 @@
-using Microsoft.AspNetCore.Http;
+using System.Net;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 public class KeycloakJwtTests : IClassFixture<WebApplicationFactory<CleaningSuite.Api.Startup>>
@@ -13,34 +17,38 @@ public class KeycloakJwtTests : IClassFixture<WebApplicationFactory<CleaningSuit
         {
             builder.ConfigureServices(services =>
             {
+                // Remove the real registration first so the mock is the only one resolved.
+                services.RemoveAll<IKeycloakProvisioner>();
                 services.AddSingleton<IKeycloakProvisioner, MockKeycloakProvisioner>();
             });
         });
     }
 
     [Fact]
-    public async Task Test_KeycloakJwtValidation()
+    public async Task HealthEndpoint_IsAnonymous()
     {
         var client = _factory.CreateClient();
         var response = await client.GetAsync("/healthz");
         response.EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task ProtectedEndpoint_WithoutToken_ReturnsUnauthorized()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.GetAsync("/api/me");
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 }
 
 public class MockKeycloakProvisioner : IKeycloakProvisioner
 {
     public Task<TenantRegistration> ProvisionTenantAsync(string tenantId, CancellationToken ct = default)
-    {
-        throw new NotImplementedException();
-    }
+        => Task.FromResult(new TenantRegistration());
 
     public Task<TenantRegistration> UpdateTenantAsync(string tenantId, TenantRegistration registration, CancellationToken ct = default)
-    {
-        throw new NotImplementedException();
-    }
+        => Task.FromResult(registration);
 
     public Task DeleteTenantAsync(string tenantId, CancellationToken ct = default)
-    {
-        throw new NotImplementedException();
-    }
+        => Task.CompletedTask;
 }

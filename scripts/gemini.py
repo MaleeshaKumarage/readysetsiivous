@@ -10,6 +10,9 @@ Usage:
 """
 import os, sys, time, json, random, subprocess, urllib.request, urllib.error
 
+# Never sleep longer than this between retries, even if the server asks for more.
+MAX_DELAY_SECONDS = 60.0
+
 system = sys.argv[1] if len(sys.argv) > 1 else ""
 user = sys.stdin.read()
 key = os.environ.get("GEMINI_API_KEY", "")
@@ -22,6 +25,27 @@ payload = json.dumps({
 
 MAX_ATTEMPTS = 4
 
+
+def backoff(attempt: int) -> float:
+    """Exponential backoff with jitter, capped at MAX_DELAY_SECONDS."""
+    return min((2 ** attempt) + random.uniform(0, 1), MAX_DELAY_SECONDS)
+
+
+def extract_text(resp: dict) -> str | None:
+    """Pull the first text part out of a Gemini response, or None if unusable."""
+    try:
+        candidates = resp.get("candidates") or []
+        if not candidates:
+            return None
+        parts = candidates[0].get("content", {}).get("parts") or []
+        if not parts:
+            return None
+        text = parts[0].get("text")
+        return text if text else None
+    except (AttributeError, TypeError, IndexError, KeyError):
+        return None
+
+
 for attempt in range(MAX_ATTEMPTS):
     req = urllib.request.Request(
         f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent",
@@ -30,7 +54,15 @@ for attempt in range(MAX_ATTEMPTS):
     )
     try:
         resp = json.load(urllib.request.urlopen(req, timeout=180))
-        print(resp["candidates"][0]["content"]["parts"][0]["text"])
+        text = extract_text(resp)
+        if text is None:
+            # SAFETY-blocked, empty, or otherwise unusable response — treat like a
+            # transient failure and retry rather than crashing with KeyError/IndexError.
+            print("Gemini returned no usable text; retrying", file=sys.stderr)
+            if attempt < MAX_ATTEMPTS - 1:
+                time.sleep(backoff(attempt))
+            continue
+        print(text)
         sys.exit(0)
     except urllib.error.HTTPError as e:
         body = e.read().decode()[:300]
@@ -39,19 +71,21 @@ for attempt in range(MAX_ATTEMPTS):
             sys.exit(1)
         # Honor Retry-After; otherwise exponential backoff + jitter.
         retry_after = e.headers.get("Retry-After") if e.headers else None
+        delay = backoff(attempt)
         if retry_after:
             try:
-                delay = float(retry_after)
+                delay = min(float(retry_after), MAX_DELAY_SECONDS)
             except ValueError:
-                delay = (2 ** attempt) + random.uniform(0, 1)
-        else:
-            delay = (2 ** attempt) + random.uniform(0, 1)
+                # HTTP-date form is legal but not worth parsing; keep the backoff.
+                pass
         print(f"Gemini {e.code} (rate limit), retry {attempt+1}/{MAX_ATTEMPTS} in {delay:.1f}s ...", file=sys.stderr)
-        time.sleep(delay)
+        if attempt < MAX_ATTEMPTS - 1:
+            time.sleep(delay)
     except urllib.error.URLError as e:
-        delay = (2 ** attempt) + random.uniform(0, 1)
+        delay = backoff(attempt)
         print(f"Gemini network error: {e.reason}; retry in {delay:.1f}s", file=sys.stderr)
-        time.sleep(delay)
+        if attempt < MAX_ATTEMPTS - 1:
+            time.sleep(delay)
 
 # Exhausted — fall back to DeepSeek rather than fail the pipeline.
 print("Gemini exhausted retries — falling back to DeepSeek", file=sys.stderr)

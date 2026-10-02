@@ -126,7 +126,6 @@ function SignaturePad(
       </div>
       <canvas
         ref={canvasRef} width={W} height={H}
-        style={{ touchAction: 'none' }}
         className={`block h-auto w-full touch-none select-none rounded-md border bg-white ${mode === 'draw' ? '' : 'hidden'}`}
         onPointerDown={start}
         onPointerMove={move}

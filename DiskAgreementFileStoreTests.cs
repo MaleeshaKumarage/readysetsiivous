@@ -1,15 +1,17 @@
 using CleaningSuite.Infrastructure.Agreements;
+using System;
 using System.IO;
 using System.Threading.Tasks;
 using Xunit;
 
-public class DiskAgreementFileStoreTests
+public class DiskAgreementFileStoreTests : IDisposable
 {
     private readonly string _uploadsPath;
 
     public DiskAgreementFileStoreTests()
     {
-        _uploadsPath = Path.Combine(Path.GetTempPath(), "DiskAgreementFileStoreTests");
+        // Unique per-instance directory so parallel test runs and reruns can't collide.
+        _uploadsPath = Path.Combine(Path.GetTempPath(), "DiskAgreementFileStoreTests", Path.GetRandomFileName());
         Directory.CreateDirectory(_uploadsPath);
     }
 
@@ -18,7 +20,6 @@ public class DiskAgreementFileStoreTests
     {
         var fileStore = new DiskAgreementFileStore(_uploadsPath);
         var content = "Test content";
-        var filePath = Path.Combine(_uploadsPath, "test.txt");
 
         await fileStore.SaveAsync("test.txt", content);
         var loadedContent = await fileStore.LoadAsync("test.txt");
@@ -30,13 +31,15 @@ public class DiskAgreementFileStoreTests
     public async Task Test_FileNotFound()
     {
         var fileStore = new DiskAgreementFileStore(_uploadsPath);
-        var filePath = Path.Combine(_uploadsPath, "nonexistent.txt");
 
         await Assert.ThrowsAsync<FileNotFoundException>(() => fileStore.LoadAsync("nonexistent.txt"));
     }
 
     public void Dispose()
     {
-        Directory.Delete(_uploadsPath, true);
+        if (Directory.Exists(_uploadsPath))
+        {
+            Directory.Delete(_uploadsPath, true);
+        }
     }
 }

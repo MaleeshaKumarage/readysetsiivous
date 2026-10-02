@@ -97,7 +97,11 @@ export default function BookingFlow({ lang }: { lang: Language }) {
         <p className="text-center text-gray-500 dark:text-gray-400">{t(lang, 'varaus.loading')}</p>
       )}
 
-      {services && step === 'service' && (
+      {services && services.length === 0 && (
+        <p className="text-center text-gray-500 dark:text-gray-400">{t(lang, 'varaus.noServices')}</p>
+      )}
+
+      {services && services.length > 0 && step === 'service' && (
         <div className="grid gap-4">
           {services.map((s) => (
             <button
@@ -202,7 +206,7 @@ export default function BookingFlow({ lang }: { lang: Language }) {
         </div>
       )}
 
-      {services && step === 'done' && result && (
+      {step === 'done' && result && (
         <div className="text-center">
           <h2 className="mb-2 text-2xl font-bold">{t(lang, 'varaus.doneTitle')}</h2>
           <p className="mb-4 text-gray-500 dark:text-gray-400">
