@@ -20,19 +20,11 @@ export async function loginAsAdmin(page: Page): Promise<void> {
   await page.locator('#username').fill(user);
   await page.locator('#password').fill(password);
 
-  const submit = page.locator('#kc-login');
-  if ((await submit.count()) > 0) {
-    await submit.click();
-  } else {
-    try {
-      await page
-        .getByRole('button', { name: /sign in|log in|login/i })
-        .first()
-        .click({ timeout: 5000 });
-    } catch {
-      await page.locator('button[type="submit"]').first().click();
-    }
-  }
+  // Keycloak's login form always renders a submit button. Prefer the stable
+  // `#kc-login` id when present, otherwise fall back to the form's submit
+  // button — a single deterministic selector that works across themes.
+  const submit = page.locator('#kc-login, form button[type="submit"]').first();
+  await submit.click();
 
   // Back on the admin route with a populated token.
   await expect(page).toHaveURL(/\/fi\/admin(\/|$|\?)/);
