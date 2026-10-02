@@ -73,6 +73,26 @@ jobs:
             --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
             --message "Implement the feature COMPLETELY and THOROUGHLY, following the approved plan exactly. Modify every file the plan lists, handle edge cases, and add the required tests. Do not leave TODOs or stubs. Issue: $(cat /tmp/issue-title.txt). $(cat /tmp/issue-body.txt). Plan: $(cat /tmp/plan.txt)"
 
+      - name: Build-fix loop (until compiles)
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          set +e
+          for i in $(seq 1 10); do
+            echo "===== build iteration $i ====="
+            (cd api && dotnet build CleaningSuite.Backend.sln -c Release --nologo > /tmp/build.log 2>&1)
+            if [ $? -eq 0 ]; then
+              echo "build passed"
+              break
+            fi
+            echo "--- build errors (iter $i) ---"
+            tail -30 /tmp/build.log
+            ~/.local/bin/aider \
+              --model deepseek/deepseek-v4-flash \
+              --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+              --message "Fix these build errors. Do not leave TODO or stub. Errors: $(tail -30 /tmp/build.log)"
+          done
+
       - name: Push branch
         run: git push -u --force origin "feature/issue-$N"
 
