@@ -49,6 +49,7 @@ jobs:
           for i in 1 2 3; do
             echo "===== iteration $i ====="
             gh pr diff "$PR" > /tmp/diff.txt
+            sleep 15
             python3 scripts/gemini.py \
               "You are a senior code reviewer. Review the diff below. If there are NO issues at all, respond with exactly NO_ISSUES and nothing else. Otherwise list concrete bugs, risks, and suggestions as concise markdown." \
               < /tmp/diff.txt > /tmp/review.md
