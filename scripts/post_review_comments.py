@@ -95,10 +95,10 @@ for it in issues:
             print(f"fallback also failed {e2.code}", file=sys.stderr)
 
     if posted:
-        fixes.append(f"{it['path']}\t{body}")
+        fixes.append(f"{it['path']}\t{body}\n")
 
 with open("/tmp/fixes.list", "w", encoding="utf-8") as f:
     for fx in fixes:
-        f.write(fx + "\n")
+        f.write(fx)
 
 print(f"posted {len(fixes)} comments", file=sys.stderr)
