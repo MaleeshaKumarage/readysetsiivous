@@ -32,7 +32,7 @@ for block in blocks:
     m_file = re.search(r"###\s*FILE:\s*(.+)", block)
     m_line = re.search(r"###\s*LINE:\s*(\d+)", block)
     m_fix = re.search(r"###\s*FIX:\s*(.+?)(?=\n###\s*FILE:|\Z)", block, re.S)
-    m_fix_text = None
+    m_fix_text = ""
     if m_fix:
         # Trim anything that leaked from a following block (defensive: the
         # lookahead above should already stop at the next FILE marker).
