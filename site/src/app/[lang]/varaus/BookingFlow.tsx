@@ -103,7 +103,7 @@ export default function BookingFlow({ lang }: { lang: Language }) {
 
       {step === 'service' && Array.isArray(services) && (
         <div className="grid gap-4">
-          {services.map((s) => (
+          {services?.map((s) => (
             <button
               key={s.id}
               onClick={() => {
