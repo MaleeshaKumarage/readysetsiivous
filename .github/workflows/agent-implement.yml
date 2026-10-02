@@ -74,4 +74,4 @@ jobs:
             --message "Implement the feature COMPLETELY and THOROUGHLY, following the approved plan exactly. Modify every file the plan lists, handle edge cases, and add the required tests. Do not leave TODOs or stubs. Issue: $(cat /tmp/issue-title.txt). $(cat /tmp/issue-body.txt). Plan: $(cat /tmp/plan.txt)"
 
       - name: Push branch
-        run: git push -u origin "feature/issue-$N"
+        run: git push -u --force origin "feature/issue-$N"
