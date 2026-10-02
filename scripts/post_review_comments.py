@@ -24,7 +24,8 @@ repo = os.environ.get("GITHUB_REPOSITORY", "MaleeshaKumarage/readysetsiivous")
 api = f"https://api.github.com/repos/{repo}"
 
 # Split into issue blocks: ### FILE: ... ### LINE: ... ### FIX: ...
-blocks = re.split(r"\n\s*\n", review.strip())
+# Anchor on the FILE marker so blank lines inside FIX bodies don't split an issue.
+blocks = re.split(r"(?m)^(?=###\s*FILE:)", review.strip())
 issues = []
 cur = {}
 for block in blocks:
