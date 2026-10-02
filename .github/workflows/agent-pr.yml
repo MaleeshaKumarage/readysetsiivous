@@ -44,6 +44,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh pr create \
+            --draft \
             --base main \
             --head "$BRANCH" \
             --title "$BRANCH" \
