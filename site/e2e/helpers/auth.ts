@@ -21,12 +21,11 @@ export async function loginAsAdmin(page: Page): Promise<void> {
   await page.locator('#password').fill(password);
 
   const submit = page.locator('#kc-login');
-  if (await submit.count()) {
+  if ((await submit.count()) > 0) {
     await submit.click();
   } else {
     await page
       .getByRole('button', { name: /sign in|log in|login/i })
-      .or(page.locator('input[type="submit"], button[type="submit"]'))
       .first()
       .click();
   }
