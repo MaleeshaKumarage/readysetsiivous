@@ -13,6 +13,7 @@ Usage:
   GEMINI_API_KEY=... DEEPSEEK_API_KEY=... python3 gemini.py "<system prompt>" < prompt.txt
 """
 import os, sys, time, json, random, subprocess, urllib.request, urllib.error
+from typing import Optional
 
 # Never sleep longer than this between retries, even if the server asks for more.
 MAX_DELAY_SECONDS = 60.0
@@ -35,7 +36,7 @@ def backoff(attempt: int) -> float:
     return min((2 ** attempt) + random.uniform(0, 1), MAX_DELAY_SECONDS)
 
 
-def extract_text(resp: dict) -> str | None:
+def extract_text(resp: dict) -> Optional[str]:
     """Pull the first text part out of a Gemini response, or None if unusable."""
     try:
         candidates = resp.get("candidates") or []
