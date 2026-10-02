@@ -44,8 +44,8 @@ jobs:
 
       - name: Set model (DeepSeek)
         run: |
-          echo "MODEL=deepseek/deepseek-chat" >> "$GITHUB_ENV"
-          echo "using model: deepseek/deepseek-chat"
+          echo "MODEL=deepseek/deepseek-v4-flash" >> "$GITHUB_ENV"
+          echo "using model: deepseek/deepseek-v4-flash"
 
       - name: Implement (aider)
         env:

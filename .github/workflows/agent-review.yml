@@ -71,7 +71,7 @@ jobs:
             while IFS=$'\t' read -r file line fix; do
               echo ">> fixing $file:$line"
               ~/.local/bin/aider \
-                --model deepseek/deepseek-chat \
+                --model deepseek/deepseek-v4-flash \
                 --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
                 --message "Fix only this one issue. File: $file, near line $line. $fix"
             done < /tmp/fixes.list
