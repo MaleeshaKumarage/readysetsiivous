@@ -63,7 +63,7 @@ jobs:
 
             echo "--- fixing ---"
             ~/.local/bin/aider \
-              --model gemini/gemini-flash-latest \
+              --model ollama_chat/qwen2.5-coder:7b \
               --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
               --message "Fix every issue raised in this review. Do not leave any TODO or stub. Review: $(cat /tmp/review.md)"
             git push origin "$BRANCH"

@@ -53,7 +53,7 @@ jobs:
 
       - name: Test-fix loop (max 3)
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
           set +e
           for i in 1 2 3; do
@@ -63,7 +63,7 @@ jobs:
             (cd api && dotnet build CleaningSuite.Backend.sln -c Release --nologo > /tmp/build.log 2>&1)
             if [ $? -ne 0 ]; then
               sleep 15
-              ~/.local/bin/aider --model gemini/gemini-flash-latest --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+              ~/.local/bin/aider --model deepseek/deepseek-chat --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
                 --message "Fix these build errors: $(tail -40 /tmp/build.log)"
               git push origin "$BRANCH"
               continue
@@ -74,7 +74,7 @@ jobs:
               --collect:"XPlat Code Coverage" --results-directory ./TestResults > /tmp/test.log 2>&1)
             if [ $? -ne 0 ]; then
               sleep 15
-              ~/.local/bin/aider --model gemini/gemini-flash-latest --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+              ~/.local/bin/aider --model deepseek/deepseek-chat --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
                 --message "Fix these failing tests: $(tail -40 /tmp/test.log)"
               git push origin "$BRANCH"
               continue
@@ -84,7 +84,7 @@ jobs:
             (cd api && python3 -c 'import xml.etree.ElementTree as ET,glob,sys; f=glob.glob("TestResults/**/coverage.cobertura.xml",recursive=True)[0]; b=float(ET.parse(f).getroot().get("branch-rate",0)); print("branch coverage %.1f%%" % (b*100)); sys.exit(1 if b<0.10 else 0)')
             if [ $? -ne 0 ]; then
               sleep 15
-              ~/.local/bin/aider --model gemini/gemini-flash-latest --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+              ~/.local/bin/aider --model deepseek/deepseek-chat --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
                 --message "Add tests to raise branch coverage to at least 10%."
               git push origin "$BRANCH"
               continue
@@ -99,7 +99,7 @@ jobs:
               echo "--- playwright failures ---"
               tail -40 /tmp/pw.log 2>/dev/null
               sleep 15
-              ~/.local/bin/aider --model gemini/gemini-flash-latest --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+              ~/.local/bin/aider --model deepseek/deepseek-chat --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
                 --message "Fix these failing Playwright tests: $(tail -40 /tmp/pw.log)"
               git push origin "$BRANCH"
               continue
