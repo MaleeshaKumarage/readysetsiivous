@@ -1,0 +1,28 @@
+name: agent-pr
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch (e.g. feature/issue-2)'
+        required: true
+
+jobs:
+  pr:
+    runs-on: [self-hosted, agent]
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr create \
+            --base main \
+            --head "${{ github.event.inputs.branch }}" \
+            --title "${{ github.event.inputs.branch }}" \
+            --body "Implements ${{ github.event.inputs.branch }}."
