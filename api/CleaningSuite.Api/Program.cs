@@ -114,6 +114,9 @@ var app = builder.Build();
 // Health check: liveness only, no DB dependency.
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok", utc = DateTime.UtcNow }));
 
+// Admin health probe is served by HealthAdminController at /api/v1/admin/health.
+// It is intentionally AllowAnonymous (see controller doc comment).
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
