@@ -32,11 +32,12 @@ for block in blocks:
     m_file = re.search(r"###\s*FILE:\s*(.+)", block)
     m_line = re.search(r"###\s*LINE:\s*(\d+)", block)
     m_fix = re.search(r"###\s*FIX:\s*(.+?)(?=\n###\s*FILE:|\Z)", block, re.S)
+    m_fix_text = None
     if m_fix:
         # Trim anything that leaked from a following block (defensive: the
         # lookahead above should already stop at the next FILE marker).
         m_fix_text = re.split(r"(?m)^###\s*FILE:", m_fix.group(1))[0].strip()
-    if m_file and m_line and m_fix:
+    if m_file and m_line and m_fix_text:
         issues.append({
             "path": m_file.group(1).strip(),
             "line": int(m_line.group(1)),
