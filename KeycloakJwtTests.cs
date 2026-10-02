@@ -43,7 +43,7 @@ public class KeycloakJwtTests : IClassFixture<WebApplicationFactory<CleaningSuit
     }
 }
 
-public class MockKeycloakProvisioner : IKeycloakProvisioner
+internal sealed class MockKeycloakProvisioner : IKeycloakProvisioner
 {
     public Task<TenantRegistration> ProvisionTenantAsync(string tenantId, CancellationToken ct = default)
         => Task.FromResult(new TenantRegistration());
