@@ -95,7 +95,7 @@ for it in issues:
             print(f"fallback also failed {e2.code}", file=sys.stderr)
 
     if posted:
-        fixes.append(f"{it['path']}\t{it['line']}\t{body}")
+        fixes.append(f"{it['path']}\t{body}")
 
 with open("/tmp/fixes.list", "w", encoding="utf-8") as f:
     for fx in fixes:
