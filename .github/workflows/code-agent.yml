@@ -1,0 +1,59 @@
+name: code-agent
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  implement:
+    if: contains(github.event.comment.body, '@agent')
+    runs-on: [self-hosted, agent]
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get issue text
+        id: issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title=$(gh issue view ${{ github.event.issue.number }} --json title -q .title)
+          body=$(gh issue view ${{ github.event.issue.number }} --json body -q .body)
+          echo "title=$title" >> "$GITHUB_OUTPUT"
+          echo "body=$body" >> "$GITHUB_OUTPUT"
+
+      - name: Configure git
+        run: |
+          git config user.name "cleaning-agent"
+          git config user.email "agent@readysetsiivous.fi"
+
+      - name: Create branch
+        run: git checkout -b "feature/issue-${{ github.event.issue.number }}"
+
+      - name: Run aider (Ollama Qwen Coder)
+        run: |
+          ~/.local/bin/aider \
+            --model ollama_chat/qwen2.5-coder:7b \
+            --yes \
+            --no-gitignore \
+            --message "Implement this issue. ${{ steps.issue.outputs.title }} — ${{ steps.issue.outputs.body }}"
+
+      - name: Push branch
+        run: git push -u origin "feature/issue-${{ github.event.issue.number }}"
+
+      - name: Create PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr create \
+            --title "${{ steps.issue.outputs.title }}" \
+            --body "Implements #${{ github.event.issue.number }}.
+
+            ## What
+            ${{ steps.issue.outputs.body }}
+
+            🤖 Generated with [Claude Code](https://claude.com/claude-code)"
