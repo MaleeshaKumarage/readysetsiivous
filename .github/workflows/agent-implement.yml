@@ -8,11 +8,6 @@ on:
       issue-number:
         description: 'Issue number'
         required: true
-      model:
-        description: 'Implementation model'
-        required: false
-        default: 'local'
-        options: ['local', 'remote', 'gemini']
 
 jobs:
   implement:
@@ -47,31 +42,14 @@ jobs:
       - name: Create branch
         run: git checkout -b "feature/issue-$N"
 
-      - name: Determine model (local/remote/gemini)
+      - name: Set model (DeepSeek)
         run: |
-          # comment says "approve remote" / "approve gemini" -> that model; else local Ollama/Qwen
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            CHOICE="${{ github.event.inputs.model }}"
-          elif [[ "${{ github.event.comment.body }}" == *"remote"* ]]; then
-            CHOICE="remote"
-          elif [[ "${{ github.event.comment.body }}" == *"gemini"* ]]; then
-            CHOICE="gemini"
-          else
-            CHOICE="local"
-          fi
-          if [ "$CHOICE" = "remote" ]; then
-            echo "MODEL=deepseek/deepseek-chat" >> "$GITHUB_ENV"
-          elif [ "$CHOICE" = "gemini" ]; then
-            echo "MODEL=gemini/gemini-flash-latest" >> "$GITHUB_ENV"
-          else
-            echo "MODEL=ollama_chat/qwen2.5-coder:7b" >> "$GITHUB_ENV"
-          fi
-          echo "using model: $CHOICE"
+          echo "MODEL=deepseek/deepseek-chat" >> "$GITHUB_ENV"
+          echo "using model: deepseek/deepseek-chat"
 
       - name: Implement (aider)
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           ~/.local/bin/aider \
             --model "$MODEL" \
