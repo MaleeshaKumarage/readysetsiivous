@@ -16,9 +16,9 @@ jobs:
     runs-on: [self-hosted, agent]
     permissions:
       pull-requests: write
-      contents: read
+      contents: write
     steps:
-      - name: Resolve PR
+      - name: Resolve PR + branch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -27,10 +27,19 @@ jobs:
           else
             PR=$(gh pr list --state open --json number -q '.[0].number')
           fi
+          BR=$(gh pr view "$PR" --json headRefName -q .headRefName)
           echo "PR=$PR" >> "$GITHUB_ENV"
+          echo "BRANCH=$BR" >> "$GITHUB_ENV"
 
-      - name: Checkout
+      - name: Checkout branch
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH }}
+
+      - name: Configure git
+        run: |
+          git config user.name "cleaning-agent"
+          git config user.email "agent@readysetsiivous.fi"
 
       - name: Review PR (DeepSeek)
         env:
@@ -45,3 +54,15 @@ jobs:
           cat /tmp/review.md
           echo "=========================="
           gh pr review "$PR" --comment --body-file /tmp/review.md
+
+      - name: Fix issues (aider + DeepSeek)
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          ~/.local/bin/aider \
+            --model deepseek/deepseek-chat \
+            --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+            --message "Fix every issue raised in this code review. Apply all suggestions, fix all bugs and risks. Review: $(cat /tmp/review.md)"
+
+      - name: Push fixes
+        run: git push origin "$BRANCH"

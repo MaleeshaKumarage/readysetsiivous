@@ -50,4 +50,5 @@ jobs:
             --body "Implements $BRANCH.
 
             ## Dev preview
-            http://130.61.208.211:8090/"
+            UI: http://130.61.208.211/
+            API: http://130.61.208.211:8090/"
