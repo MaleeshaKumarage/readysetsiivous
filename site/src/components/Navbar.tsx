@@ -35,8 +35,8 @@ export default function Navbar({ lang }: NavbarProps) {
   }
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/90 dark:bg-accent-950/90 backdrop-blur-md border-b border-gray-100 dark:border-accent-900 shadow-sm">
-      <div className="container-page">
+    <header className="sticky top-0 z-50 bg-white/90 dark:bg-accent-950/90 backdrop-blur-md border-b border-gray-100 dark:border-accent-900 shadow-sm">
+      <nav className="container-page">
         <div className="flex items-center justify-between h-16 lg:h-18">
           {/* Logo */}
           <a href={baseUrl(`/${lang}/`)} className="flex items-center gap-2 shrink-0">
@@ -184,7 +184,7 @@ export default function Navbar({ lang }: NavbarProps) {
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
-    </nav>
+      </nav>
+    </header>
   );
 }
