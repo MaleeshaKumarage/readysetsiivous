@@ -14,6 +14,8 @@ jobs:
   test:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: [self-hosted, agent]
+    permissions:
+      contents: write
     steps:
       - name: Download branch artifact
         if: github.event_name != 'workflow_dispatch'
@@ -37,31 +39,67 @@ jobs:
         with:
           ref: ${{ env.BRANCH }}
 
-      - name: Build backend
-        run: cd api && dotnet build CleaningSuite.Backend.sln -c Release --nologo
-
-      - name: Backend tests + coverage (60% branch)
+      - name: Configure git
         run: |
-          cd api
-          dotnet test CleaningSuite.Backend.sln -c Release --no-build \
-            --collect:"XPlat Code Coverage" \
-            --results-directory ./TestResults
-          python3 - <<'PY'
-          import xml.etree.ElementTree as ET, glob, sys
-          f = glob.glob('TestResults/**/coverage.cobertura.xml', recursive=True)[0]
-          root = ET.parse(f).getroot()
-          line = float(root.get('line-rate', 0)); branch = float(root.get('branch-rate', 0))
-          print(f'coverage: line {line:.1%}, branch {branch:.1%}')
-          if branch < 0.10:
-              print(f'FAIL: branch coverage {branch:.1%} below 10%')
-              sys.exit(1)
-          PY
+          git config user.name "cleaning-agent"
+          git config user.email "agent@readysetsiivous.fi"
 
-      - name: Frontend test (Playwright regression)
+      - name: Test-fix loop (max 3)
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
-          cd site
-          npm ci
-          npx playwright install chromium
-          npm run storybook &
-          for i in $(seq 1 60); do curl -sf http://localhost:6006 >/dev/null && break; sleep 2; done
-          npx playwright test
+          for i in 1 2 3; do
+            echo "===== test iteration $i ====="
+
+            # --- backend build ---
+            (cd api && dotnet build CleaningSuite.Backend.sln -c Release --nologo > /tmp/build.log 2>&1)
+            if [ $? -ne 0 ]; then
+              ~/.local/bin/aider --model deepseek/deepseek-chat --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+                --message "Fix these build errors: $(tail -40 /tmp/build.log)"
+              git push origin "$BRANCH"
+              continue
+            fi
+
+            # --- backend tests + coverage ---
+            (cd api && dotnet test CleaningSuite.Backend.sln -c Release --no-build \
+              --collect:"XPlat Code Coverage" --results-directory ./TestResults > /tmp/test.log 2>&1)
+            if [ $? -ne 0 ]; then
+              ~/.local/bin/aider --model deepseek/deepseek-chat --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+                --message "Fix these failing tests: $(tail -40 /tmp/test.log)"
+              git push origin "$BRANCH"
+              continue
+            fi
+
+            # --- coverage gate ---
+            (cd api && python3 - <<'PY'
+import xml.etree.ElementTree as ET, glob, sys
+f = glob.glob('TestResults/**/coverage.cobertura.xml', recursive=True)[0]
+root = ET.parse(f).getroot()
+line = float(root.get('line-rate', 0)); branch = float(root.get('branch-rate', 0))
+print(f'coverage: line {line:.1%}, branch {branch:.1%}')
+if branch < 0.10:
+    print(f'FAIL: branch coverage {branch:.1%} below 10%'); sys.exit(1)
+PY
+            )
+            if [ $? -ne 0 ]; then
+              ~/.local/bin/aider --model deepseek/deepseek-chat --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+                --message "Add tests to raise branch coverage to at least 10%."
+              git push origin "$BRANCH"
+              continue
+            fi
+
+            # --- frontend Playwright ---
+            (cd site && npm ci > /tmp/npm.log 2>&1 && npx playwright install chromium >/dev/null 2>&1 && \
+              (npm run storybook > /tmp/sb.log 2>&1 &) && \
+              for j in $(seq 1 60); do curl -sf http://localhost:6006 >/dev/null && break; sleep 2; done && \
+              npx playwright test > /tmp/pw.log 2>&1)
+            if [ $? -ne 0 ]; then
+              ~/.local/bin/aider --model deepseek/deepseek-chat --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+                --message "Fix these failing Playwright tests: $(tail -40 /tmp/pw.log)"
+              git push origin "$BRANCH"
+              continue
+            fi
+
+            echo "===== all tests pass ====="
+            break
+          done
