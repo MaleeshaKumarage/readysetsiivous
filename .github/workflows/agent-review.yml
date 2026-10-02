@@ -11,12 +11,9 @@ on:
         required: true
 
 jobs:
-  review:
+  gate:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
-    runs-on: [self-hosted, agent]
-    permissions:
-      pull-requests: write
-      contents: write
+    runs-on: ubuntu-latest
     steps:
       - name: Wait for DeepSeek off-peak (50% discount)
         run: |
@@ -30,6 +27,14 @@ jobs:
             esac
           done
 
+  review:
+    needs: gate
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: [self-hosted, agent]
+    permissions:
+      pull-requests: write
+      contents: write
+    steps:
       - name: Resolve PR + branch
         env:
           GH_TOKEN: ${{ github.token }}

@@ -11,11 +11,9 @@ on:
         required: true
 
 jobs:
-  test:
+  gate:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
-    runs-on: [self-hosted, agent]
-    permissions:
-      contents: write
+    runs-on: ubuntu-latest
     steps:
       - name: Wait for DeepSeek off-peak (50% discount)
         run: |
@@ -29,6 +27,13 @@ jobs:
             esac
           done
 
+  test:
+    needs: gate
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: [self-hosted, agent]
+    permissions:
+      contents: write
+    steps:
       - name: Download branch artifact
         if: github.event_name != 'workflow_dispatch'
         uses: dawidd6/action-download-artifact@v3

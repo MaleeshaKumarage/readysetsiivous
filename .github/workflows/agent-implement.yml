@@ -10,12 +10,9 @@ on:
         required: true
 
 jobs:
-  implement:
+  gate:
     if: github.event_name == 'workflow_dispatch' || (contains(github.event.comment.body, 'approve') && (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR'))
-    runs-on: [self-hosted, agent]
-    permissions:
-      contents: write
-      issues: read
+    runs-on: ubuntu-latest
     steps:
       - name: Wait for DeepSeek off-peak (50% discount)
         run: |
@@ -29,6 +26,14 @@ jobs:
             esac
           done
 
+  implement:
+    needs: gate
+    if: github.event_name == 'workflow_dispatch' || (contains(github.event.comment.body, 'approve') && (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR'))
+    runs-on: [self-hosted, agent]
+    permissions:
+      contents: write
+      issues: read
+    steps:
       - name: Checkout
         uses: actions/checkout@v4
 
