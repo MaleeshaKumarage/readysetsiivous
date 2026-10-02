@@ -26,3 +26,9 @@ Multi-tenant SaaS backend for cleaning companies. First tenant: ReadySetSiivous 
 - Push to main: ci-build-test → docker-build-push → docker-deploy-mac (workflow_run chain).
 - Secrets: `GHCR_PAT` in repo Actions; `/home/maleesha/cleaning-suite/.env` on host.
 - Cloudflare Tunnel `cleaning-suite`: api.readysetsiivous.fi → :8090, auth.readysetsiivous.fi → :8081.
+
+## Coverage
+- Branch coverage gate: 30%.
+- To reproduce coverage locally:
+  1. Run `dotnet test CleaningSuite.Backend.sln --no-build -c Release --verbosity minimal`.
+  2. Check the coverage report in the `coverage-report` directory.
