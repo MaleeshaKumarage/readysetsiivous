@@ -37,9 +37,12 @@ jobs:
             cat /tmp/issue-body.txt
             echo
             echo "---"
-            echo "Write a step-by-step implementation plan as markdown."
+            echo "## Repository files"
+            git ls-files | head -200
+            echo "---"
+            echo "Brainstorm and write a step-by-step implementation plan."
           } | python3 scripts/deepseek.py \
-            "You are a senior software engineer. Given the issue below, write a concise, actionable implementation plan as markdown. Cover: files to change, approach, and testing notes. Do not write code, only the plan." \
+            "You are a senior software engineer. Brainstorm the issue against the repository files. Write a detailed, ordered implementation plan as markdown. Break the work into small sub-tasks. For each sub-task: the files to change, what to change, and how to test it. If the feature is large, split it into independent sub-issues that can be done incrementally. Do not write code, only the plan." \
             > plan.md
           echo "===== DeepSeek plan ====="
           cat plan.md

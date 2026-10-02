@@ -53,5 +53,6 @@ jobs:
           cd site
           npm ci
           npx playwright install chromium
-          npm run dev &
+          npm run storybook &
+          for i in $(seq 1 60); do curl -sf http://localhost:6006 >/dev/null && break; sleep 2; done
           npx playwright test
