@@ -64,7 +64,7 @@ jobs:
             ~/.local/bin/aider \
               --model deepseek/deepseek-chat \
               --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
-              --message "Fix every issue raised in this review. Do not leave any TODO or stub. Review: $(cat /tmp/review.md)"
+              --message "Fix every issue raised in this review. Do not leave any TODO or stub. Do NOT modify any file under .github/workflows/ or ci-build-test.yml — leave CI config unchanged. Review: $(cat /tmp/review.md)"
             git push origin "$BRANCH"
           done
 
