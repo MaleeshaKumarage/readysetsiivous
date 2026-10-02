@@ -15,12 +15,21 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: [self-hosted, agent]
     steps:
+      - name: Download branch artifact
+        if: github.event_name != 'workflow_dispatch'
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: agent-implement.yml
+          name: feature-branch
+          path: /tmp
+          github_token: ${{ github.token }}
+
       - name: Resolve branch
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "BRANCH=${{ github.event.inputs.branch }}" >> "$GITHUB_ENV"
           else
-            echo "BRANCH=${{ github.event.workflow_run.head_branch }}" >> "$GITHUB_ENV"
+            echo "BRANCH=$(cat /tmp/branch.txt)" >> "$GITHUB_ENV"
           fi
 
       - name: Checkout branch

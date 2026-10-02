@@ -75,3 +75,10 @@ jobs:
 
       - name: Push branch
         run: git push -u --force origin "feature/issue-$N"
+
+      - name: Upload branch name
+        run: echo "feature/issue-$N" > /tmp/branch.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feature-branch
+          path: /tmp/branch.txt

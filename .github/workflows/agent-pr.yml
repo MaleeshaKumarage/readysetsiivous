@@ -18,12 +18,21 @@ jobs:
       pull-requests: write
       contents: read
     steps:
+      - name: Download branch artifact
+        if: github.event_name != 'workflow_dispatch'
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: agent-implement.yml
+          name: feature-branch
+          path: /tmp
+          github_token: ${{ github.token }}
+
       - name: Resolve branch
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             BR="${{ github.event.inputs.branch }}"
           else
-            BR="${{ github.event.workflow_run.head_branch }}"
+            BR="$(cat /tmp/branch.txt)"
           fi
           echo "BRANCH=$BR" >> "$GITHUB_ENV"
 
