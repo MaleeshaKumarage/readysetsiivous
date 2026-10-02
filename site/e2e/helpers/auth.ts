@@ -15,10 +15,21 @@ export async function loginAsAdmin(page: Page): Promise<void> {
   // The admin layout renders a "Sign in" button that triggers keycloak.login().
   await page.getByRole('button', { name: /sign in/i }).click();
 
-  // Keycloak's default login form.
+  // Keycloak's default login form. Theme variants may not use the default
+  // `#kc-login` id, so fall back to a submit button by role/type.
   await page.locator('#username').fill(user);
   await page.locator('#password').fill(password);
-  await page.locator('#kc-login').click();
+
+  const submit = page.locator('#kc-login');
+  if (await submit.count()) {
+    await submit.click();
+  } else {
+    await page
+      .getByRole('button', { name: /sign in|log in|login/i })
+      .or(page.locator('input[type="submit"], button[type="submit"]'))
+      .first()
+      .click();
+  }
 
   // Back on the admin route with a populated token.
   await expect(page).toHaveURL(/\/fi\/admin/);
