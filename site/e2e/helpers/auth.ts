@@ -24,10 +24,14 @@ export async function loginAsAdmin(page: Page): Promise<void> {
   if ((await submit.count()) > 0) {
     await submit.click();
   } else {
-    await page
-      .getByRole('button', { name: /sign in|log in|login/i })
-      .first()
-      .click();
+    try {
+      await page
+        .getByRole('button', { name: /sign in|log in|login/i })
+        .first()
+        .click({ timeout: 5000 });
+    } catch {
+      await page.locator('button[type="submit"]').first().click();
+    }
   }
 
   // Back on the admin route with a populated token.
