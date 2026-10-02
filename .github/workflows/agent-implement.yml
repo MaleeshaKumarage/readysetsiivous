@@ -8,6 +8,11 @@ on:
       issue-number:
         description: 'Issue number'
         required: true
+      model:
+        description: 'Implementation model'
+        required: false
+        default: 'local'
+        options: ['local', 'remote']
 
 jobs:
   implement:
@@ -42,10 +47,29 @@ jobs:
       - name: Create branch
         run: git checkout -b "feature/issue-$N"
 
-      - name: Implement (aider + Ollama Qwen)
+      - name: Determine model (local/remote)
+        run: |
+          # comment says "approve remote" -> DeepSeek; else local Ollama/Qwen
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            CHOICE="${{ github.event.inputs.model }}"
+          elif [[ "${{ github.event.comment.body }}" == *"remote"* ]]; then
+            CHOICE="remote"
+          else
+            CHOICE="local"
+          fi
+          if [ "$CHOICE" = "remote" ]; then
+            echo "MODEL=deepseek/deepseek-chat" >> "$GITHUB_ENV"
+          else
+            echo "MODEL=ollama_chat/qwen2.5-coder:7b" >> "$GITHUB_ENV"
+          fi
+          echo "using model: $CHOICE"
+
+      - name: Implement (aider)
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
           ~/.local/bin/aider \
-            --model ollama_chat/qwen2.5-coder:7b \
+            --model "$MODEL" \
             --yes --no-gitignore --no-show-model-warnings \
             --message "Implement the feature COMPLETELY and THOROUGHLY, following the approved plan exactly. Modify every file the plan lists, handle edge cases, and add the required tests. Do not leave TODOs or stubs. Issue: $(cat /tmp/issue-title.txt). $(cat /tmp/issue-body.txt). Plan: $(cat /tmp/plan.txt)"
 

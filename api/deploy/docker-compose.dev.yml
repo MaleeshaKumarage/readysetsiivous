@@ -1,0 +1,42 @@
+# Dev preview stack for the coding agent, on the agent VM (isolated from prod).
+# Reuses prod Keycloak for auth; own DB + API on separate ports.
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cleaning
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_DB: cleaning
+    ports:
+      - "127.0.0.1:5436:5432"
+    volumes:
+      - dev_pgdata:/var/lib/postgresql/data
+
+  api:
+    image: ghcr.io/maleeshakumarage/readysetsiivous-api:${DEV_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=cleaning;Username=cleaning;Password=devpassword
+      Marten__AutoCreateSchemaMode: CreateOrUpdate
+      Auth__Keycloak__ServerUrl: https://auth.readysetsiivous.fi
+      Auth__Keycloak__Audiences__0: cleaning-suite-web
+      Auth__Keycloak__Audiences__1: cleaning-provisioner
+      Auth__Keycloak__Audiences__2: account
+      Auth__Keycloak__ProvisionerRealm: master
+      Auth__Keycloak__ProvisionerClientId: cleaning-provisioner
+      Auth__Keycloak__ProvisionerClientSecret: ${PROVISIONER_CLIENT_SECRET:-}
+      Auth__Keycloak__AdminUser: ${KEYCLOAK_ADMIN_USER}
+      Auth__Keycloak__AdminPassword: ${KEYCLOAK_ADMIN_PASSWORD}
+      Cors__AllowedOrigins__0: "*"
+      Uploads__Path: /app/uploads
+    ports:
+      - "8090:8080"
+    depends_on:
+      postgres:
+        condition: service_started
+
+volumes:
+  dev_pgdata: {}
