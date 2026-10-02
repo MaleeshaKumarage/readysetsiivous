@@ -5,6 +5,10 @@ Retries on rate-limit/overload (429/503) with exponential backoff + jitter,
 honoring the Retry-After header. Falls back to DeepSeek when Gemini exhausts
 retries so a rate-limited free key never blocks the pipeline.
 
+Note: only 429/503 (rate-limit/overload) and network errors fall back to
+DeepSeek. Other HTTP errors (e.g. 400/401/403) abort immediately, since they
+indicate a bad request or invalid key that DeepSeek would not resolve.
+
 Usage:
   GEMINI_API_KEY=... DEEPSEEK_API_KEY=... python3 gemini.py "<system prompt>" < prompt.txt
 """
