@@ -32,5 +32,5 @@ export async function loginAsAdmin(page: Page): Promise<void> {
   }
 
   // Back on the admin route with a populated token.
-  await expect(page).toHaveURL(/\/fi\/admin/);
+  await expect(page).toHaveURL(/\/fi\/admin(\/|$|\?)/);
 }
