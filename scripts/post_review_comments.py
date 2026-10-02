@@ -118,10 +118,6 @@ for it in issues:
             print(f"fallback also failed {e2.code}", file=sys.stderr)
         except urllib.error.URLError as e2:
             print(f"fallback network error: {e2.reason}", file=sys.stderr)
-    except urllib.error.URLError as e:
-        # Transient network failure (DNS, timeout, connection reset). Don't
-        # crash the whole run — skip this issue and continue with the rest.
-        print(f"inline network error for {it['path']}:{it['line']}: {e.reason} — skipping", file=sys.stderr)
 
     if posted:
         fixes.append(f"{it['path']}\t{body}\n")
