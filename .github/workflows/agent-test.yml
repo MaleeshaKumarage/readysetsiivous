@@ -44,6 +44,13 @@ jobs:
           git config user.name "cleaning-agent"
           git config user.email "agent@readysetsiivous.fi"
 
+      - name: Upload branch (for pr)
+        run: echo "$BRANCH" > /tmp/branch.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feature-branch
+          path: /tmp/branch.txt
+
       - name: Test-fix loop (max 3)
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
