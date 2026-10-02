@@ -3,8 +3,9 @@
 
 Reads the review text on stdin. Posts an inline comment on the given line via
 the GitHub API, falling back to a general PR review comment when the line is not
-part of the diff. Also writes /tmp/fixes.list (one `file\tfix` per line) for the
-fix loop to feed aider one issue at a time.
+part of the diff. Also writes /tmp/fixes.list (one `file\tline\tcomment_id\tfix`
+per line) so the fix loop can feed aider one issue at a time and then resolve
+the comment.
 
 Usage:
   GH_TOKEN=... python3 post_review_comments.py <pr-number> < head-sha < review.txt
@@ -22,11 +23,14 @@ if "NO_ISSUES" in review:
 token = os.environ.get("GH_TOKEN", os.environ.get("GITHUB_TOKEN", ""))
 repo = os.environ.get("GITHUB_REPOSITORY", "MaleeshaKumarage/readysetsiivous")
 api = f"https://api.github.com/repos/{repo}"
+HDR = {
+    "Authorization": f"Bearer {token}",
+    "Content-Type": "application/json",
+    "Accept": "application/vnd.github+json",
+}
 
-# Split into issue blocks: ### FILE: ... ### LINE: ... ### FIX: ...
 blocks = re.split(r"\n\s*\n", review.strip())
 issues = []
-cur = {}
 for block in blocks:
     m_file = re.search(r"###\s*FILE:\s*(.+)", block)
     m_line = re.search(r"###\s*LINE:\s*(\d+)", block)
@@ -46,7 +50,7 @@ if not issues:
 fixes = []
 for it in issues:
     body = it["fix"]
-    # Try inline comment on the line (RIGHT side of diff).
+    cid = ""
     payload = json.dumps({
         "commit_id": head_sha,
         "path": it["path"],
@@ -54,35 +58,17 @@ for it in issues:
         "side": "RIGHT",
         "body": body,
     }).encode()
-    req = urllib.request.Request(
-        f"{api}/pulls/{pr}/comments",
-        data=payload,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "Accept": "application/vnd.github+json",
-        },
-        method="POST",
-    )
+    req = urllib.request.Request(f"{api}/pulls/{pr}/comments", data=payload, headers=HDR, method="POST")
     posted = False
     try:
-        urllib.request.urlopen(req, timeout=30)
+        resp = json.load(urllib.request.urlopen(req, timeout=30))
+        cid = resp.get("id", "")
         posted = True
-        print(f"inline comment: {it['path']}:{it['line']}", file=sys.stderr)
+        print(f"inline comment: {it['path']}:{it['line']} id={cid}", file=sys.stderr)
     except urllib.error.HTTPError as e:
-        # Line not in diff or other inline failure — fall back to general comment.
         print(f"inline failed {e.code} for {it['path']}:{it['line']} — fallback", file=sys.stderr)
         fb = json.dumps({"body": f"**{it['path']}:{it['line']}** — {body}"}).encode()
-        fbreq = urllib.request.Request(
-            f"{api}/pulls/{pr}/reviews",
-            data=fb,
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json",
-                "Accept": "application/vnd.github+json",
-            },
-            method="POST",
-        )
+        fbreq = urllib.request.Request(f"{api}/pulls/{pr}/reviews", data=fb, headers=HDR, method="POST")
         try:
             urllib.request.urlopen(fbreq, timeout=30)
             posted = True
@@ -90,10 +76,10 @@ for it in issues:
             print(f"fallback also failed {e2.code}", file=sys.stderr)
 
     if posted:
-        fixes.append(f"{it['path']}\t{it['line']}\t{body}")
+        fixes.append((it["path"], it["line"], str(cid), body))
 
 with open("/tmp/fixes.list", "w", encoding="utf-8") as f:
-    for fx in fixes:
-        f.write(fx + "\n")
+    for path, line, cid, body in fixes:
+        f.write(f"{path}\t{line}\t{cid}\t{body}\n")
 
 print(f"posted {len(fixes)} comments", file=sys.stderr)

@@ -80,12 +80,15 @@ jobs:
             fi
 
             echo "--- fixing one by one ---"
-            while IFS=$'\t' read -r file line fix; do
+            while IFS=$'\t' read -r file line cid fix; do
               echo ">> fixing $file:$line"
               ~/.local/bin/aider \
                 --model deepseek/deepseek-v4-flash \
                 --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
                 --message "Fix only this one issue. File: $file, near line $line. $fix"
+              if [ -n "$cid" ] && [ "$cid" != "0" ]; then
+                python3 scripts/resolve_comment.py "$PR" "$cid" || true
+              fi
             done < /tmp/fixes.list
 
             git push origin "$BRANCH"
