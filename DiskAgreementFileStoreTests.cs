@@ -24,7 +24,7 @@ public class DiskAgreementFileStoreTests : IDisposable
         await fileStore.SaveAsync("test.txt", content);
         var loadedContent = await fileStore.LoadAsync("test.txt");
 
-        Assert.Equal(content, loadedContent);
+        Assert.Equal(content, loadedContent!);
     }
 
     [Fact]
