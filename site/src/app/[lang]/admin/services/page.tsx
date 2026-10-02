@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, Pencil, Plus, Upload } from 'lucide-react';
 import { adminServices } from '@/lib/adminApi';
+import { isAdmin } from '@/lib/auth';
 import { SERVICE_ICONS, serviceIcon } from '@/lib/icons';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -190,10 +191,12 @@ export default function ServicesPage() {
             First four active services in order are shown on the website.
           </p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus className="h-4 w-4" />
-          Add service
-        </Button>
+        {isAdmin() && (
+          <Button onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            Add service
+          </Button>
+        )}
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
             <DialogHeader>
@@ -284,12 +287,16 @@ export default function ServicesPage() {
                 <TableRow key={s.id} className={!s.isActive ? 'opacity-60' : undefined}>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => move(s, -1)}>
-                        <ArrowUp className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => move(s, 1)}>
-                        <ArrowDown className="h-3.5 w-3.5" />
-                      </Button>
+                      {isAdmin() && (
+                        <>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => move(s, -1)}>
+                            <ArrowUp className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => move(s, 1)}>
+                            <ArrowDown className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      )}
                       <span className="ml-1 text-xs text-muted-foreground">{s.sortOrder + 1}</span>
                     </div>
                   </TableCell>
@@ -312,10 +319,14 @@ export default function ServicesPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-3">
-                      <Switch checked={s.isActive} onCheckedChange={() => toggleActive(s)} />
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(s)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
+                      {isAdmin() && (
+                        <>
+                          <Switch checked={s.isActive} onCheckedChange={() => toggleActive(s)} />
+                          <Button variant="ghost" size="icon" onClick={() => openEdit(s)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

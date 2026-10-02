@@ -11,9 +11,9 @@ public static class RealmRoleAuthorization
 {
     public const string PolicyPrefix = "RealmRole:";
 
-    public static AuthorizationPolicy Policy(string role) =>
+    public static AuthorizationPolicy Policy(params string[] roles) =>
         new AuthorizationPolicyBuilder()
-            .AddRequirements(new RealmRoleRequirement(role))
+            .AddRequirements(new RealmRoleRequirement(roles))
             .Build();
 
     public static void AddRealmRolePolicies(this AuthorizationOptions options, params string[] roles)
@@ -21,12 +21,16 @@ public static class RealmRoleAuthorization
         foreach (var role in roles)
             options.AddPolicy(PolicyPrefix + role, Policy(role));
     }
+
+    /// <summary>Policy satisfied by ANY of the given roles (e.g. admin or employee).</summary>
+    public static void AddRealmRoleAnyPolicy(this AuthorizationOptions options, string name, params string[] roles) =>
+        options.AddPolicy(PolicyPrefix + name, Policy(roles));
 }
 
 public class RealmRoleRequirement : IAuthorizationRequirement
 {
-    public RealmRoleRequirement(string role) => Role = role;
-    public string Role { get; }
+    public RealmRoleRequirement(params string[] roles) => Roles = roles;
+    public string[] Roles { get; }
 }
 
 public class RealmRoleHandler : AuthorizationHandler<RealmRoleRequirement>
@@ -41,7 +45,7 @@ public class RealmRoleHandler : AuthorizationHandler<RealmRoleRequirement>
             {
                 using var doc = JsonDocument.Parse(realmAccess);
                 if (doc.RootElement.TryGetProperty("roles", out var roles)
-                    && roles.EnumerateArray().Any(r => r.GetString() == requirement.Role))
+                    && roles.EnumerateArray().Any(r => requirement.Roles.Contains(r.GetString())))
                 {
                     context.Succeed(requirement);
                     return Task.CompletedTask;

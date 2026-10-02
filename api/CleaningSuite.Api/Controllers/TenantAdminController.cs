@@ -10,7 +10,7 @@ namespace CleaningSuite.Api.Controllers;
 /// <summary>Tenant profile + dynamic page content for the authenticated admin.</summary>
 [ApiController]
 [Route("api/v1/admin/tenant")]
-[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
+[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "staff")]
 public class TenantAdminController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -24,6 +24,7 @@ public class TenantAdminController : ControllerBase
         return profile is null ? NotFound() : Ok(profile);
     }
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPut]
     public async Task<IActionResult> Update(UpdateTenantProfileCommand command, CancellationToken ct)
     {
@@ -31,6 +32,7 @@ public class TenantAdminController : ControllerBase
         return NoContent();
     }
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPut("pages/{pageKey}")]
     public async Task<IActionResult> UpdatePage(
         string pageKey, Dictionary<string, string> values, CancellationToken ct)

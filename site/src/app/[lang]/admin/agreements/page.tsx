@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { Plus, Copy, Trash2 } from 'lucide-react';
 import { adminAgreements, adminTenant, type AgreementListItem, type AgreementDetail } from '@/lib/adminApi';
+import { isAdmin } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -118,7 +119,7 @@ export default function AgreementsPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Agreements</h1>
-        <Button onClick={() => setOpen(true)}><Plus className="mr-1.5 h-4 w-4" />New agreement</Button>
+        {isAdmin() && <Button onClick={() => setOpen(true)}><Plus className="mr-1.5 h-4 w-4" />New agreement</Button>}
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -165,7 +166,7 @@ export default function AgreementsPage() {
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader><DialogTitle>{detail ? displayTitle(detail) : 'Agreement'}</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            {detail && (
+            {detail && isAdmin() && (
               <Button variant="outline" size="sm" onClick={() => { toggleActive(detail); setDetail({ ...detail, isActive: !detail.isActive }); }}>
                 {detail.isActive ? 'Deactivate' : 'Activate'}
               </Button>
@@ -228,9 +229,11 @@ export default function AgreementsPage() {
                   {a.status === 'Completed' && (
                     <Button variant="ghost" size="sm" onClick={() => adminAgreements.downloadDocument(a.id)}>Download</Button>
                   )}
-                  <Button variant="ghost" size="sm" onClick={() => toggleActive(a)}>
-                    {a.isActive ? 'Deactivate' : 'Activate'}
-                  </Button>
+                  {isAdmin() && (
+                    <Button variant="ghost" size="sm" onClick={() => toggleActive(a)}>
+                      {a.isActive ? 'Deactivate' : 'Activate'}
+                    </Button>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

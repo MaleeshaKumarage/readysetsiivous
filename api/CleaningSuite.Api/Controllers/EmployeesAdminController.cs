@@ -10,7 +10,7 @@ namespace CleaningSuite.Api.Controllers;
 /// <summary>Employee management for the tenant admin.</summary>
 [ApiController]
 [Route("api/v1/admin/employees")]
-[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
+[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "staff")]
 public class EmployeesAdminController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -24,6 +24,7 @@ public class EmployeesAdminController : ControllerBase
         return Ok(employees);
     }
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost]
     public async Task<IActionResult> Create(CreateEmployeeCommand command, CancellationToken ct)
     {
@@ -31,6 +32,7 @@ public class EmployeesAdminController : ControllerBase
         return StatusCode(StatusCodes.Status201Created, new { id });
     }
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, UpdateEmployeeCommand command, CancellationToken ct)
     {
@@ -38,6 +40,7 @@ public class EmployeesAdminController : ControllerBase
         return NoContent();
     }
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost("{id:guid}/deactivate")]
     public async Task<IActionResult> Deactivate(Guid id, CancellationToken ct)
     {
@@ -46,6 +49,7 @@ public class EmployeesAdminController : ControllerBase
     }
 
     /// <summary>Creates the Keycloak user and returns the temporary password once.</summary>
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost("{id:guid}/invite")]
     public async Task<IActionResult> Invite(Guid id, CancellationToken ct)
     {

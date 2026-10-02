@@ -11,7 +11,7 @@ namespace CleaningSuite.Api.Controllers;
 /// <summary>Invoicing for the tenant admin.</summary>
 [ApiController]
 [Route("api/v1/admin/invoices")]
-[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
+[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "staff")]
 public class InvoicesAdminController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -26,6 +26,7 @@ public class InvoicesAdminController : ControllerBase
         return Ok(invoices);
     }
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateInvoiceBody body, CancellationToken ct)
     {
@@ -40,6 +41,7 @@ public class InvoicesAdminController : ControllerBase
         return invoice is null ? NotFound() : Ok(invoice);
     }
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost("{id:guid}/mark-paid")]
     public async Task<IActionResult> MarkPaid(
         Guid id, [FromBody] MarkPaidBody body, CancellationToken ct)
@@ -48,6 +50,7 @@ public class InvoicesAdminController : ControllerBase
         return NoContent();
     }
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost("{id:guid}/void")]
     public async Task<IActionResult> Void(Guid id, CancellationToken ct)
     {

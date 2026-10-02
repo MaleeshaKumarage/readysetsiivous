@@ -10,7 +10,7 @@ namespace CleaningSuite.Api.Controllers;
 /// <summary>Service catalog management for the tenant admin.</summary>
 [ApiController]
 [Route("api/v1/admin/services")]
-[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
+[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "staff")]
 public class ServicesAdminController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -29,6 +29,7 @@ public class ServicesAdminController : ControllerBase
         return Ok(services);
     }
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost]
     public async Task<IActionResult> Create(CreateServiceCommand command, CancellationToken ct)
     {
@@ -36,6 +37,7 @@ public class ServicesAdminController : ControllerBase
         return StatusCode(StatusCodes.Status201Created, new { id });
     }
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, UpdateServiceCommand command, CancellationToken ct)
     {
@@ -43,6 +45,7 @@ public class ServicesAdminController : ControllerBase
         return NoContent();
     }
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
@@ -51,6 +54,7 @@ public class ServicesAdminController : ControllerBase
     }
 
     /// <summary>Uploads a card image for the service, returns the public path.</summary>
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost("{id:guid}/image")]
     [RequestSizeLimit(5 * 1024 * 1024)]
     public async Task<IActionResult> UploadImage(Guid id, IFormFile file, CancellationToken ct)

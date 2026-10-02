@@ -90,7 +90,10 @@ builder.Services.AddMediatR(cfg =>
 builder.Services.AddValidatorsFromAssembly(typeof(AssemblyMarker).Assembly);
 
 builder.Services.AddAuthorization(options =>
-    options.AddRealmRolePolicies("admin", "employee"));
+{
+    options.AddRealmRolePolicies("admin", "employee");
+    options.AddRealmRoleAnyPolicy("staff", "admin", "employee");
+});
 builder.Services.AddSingleton<IAuthorizationHandler, RealmRoleHandler>();
 
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()

@@ -9,12 +9,13 @@ namespace CleaningSuite.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/admin/agreements")]
-[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
+[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "staff")]
 public class AgreementsAdminController : ControllerBase
 {
     private readonly IMediator _mediator;
     public AgreementsAdminController(IMediator mediator) => _mediator = mediator;
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost]
     public async Task<IActionResult> Create([FromForm] string title, [FromForm] IFormFile pdf,
         [FromForm] string signersJson, CancellationToken ct)
@@ -45,6 +46,7 @@ public class AgreementsAdminController : ControllerBase
         return PhysicalFile(path, "application/pdf", $"agreement-{id:N}.pdf");
     }
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost("{id:guid}/signers")]
     public async Task<IActionResult> AddSigner(Guid id, AddSignerCommand command, CancellationToken ct)
     {
@@ -52,6 +54,7 @@ public class AgreementsAdminController : ControllerBase
         return NoContent();
     }
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpDelete("{id:guid}/signers/{signerId:guid}")]
     public async Task<IActionResult> RemoveSigner(Guid id, Guid signerId, CancellationToken ct)
     {
@@ -59,6 +62,7 @@ public class AgreementsAdminController : ControllerBase
         return NoContent();
     }
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost("{id:guid}/cancel")]
     public async Task<IActionResult> Cancel(Guid id, CancellationToken ct)
     {
@@ -66,6 +70,7 @@ public class AgreementsAdminController : ControllerBase
         return NoContent();
     }
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost("{id:guid}/activate")]
     public async Task<IActionResult> Activate(Guid id, CancellationToken ct)
     {
@@ -73,6 +78,7 @@ public class AgreementsAdminController : ControllerBase
         return NoContent();
     }
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost("{id:guid}/deactivate")]
     public async Task<IActionResult> Deactivate(Guid id, CancellationToken ct)
     {

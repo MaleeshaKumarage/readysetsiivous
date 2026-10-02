@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Plus, Trash2, Pencil, Send } from 'lucide-react';
 import { adminEmployees, type Employee } from '@/lib/adminApi';
+import { isAdmin } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -127,7 +128,7 @@ export default function EmployeesPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Employees</h1>
-        <Button onClick={openNew}><Plus className="mr-1.5 h-4 w-4" />New employee</Button>
+        {isAdmin() && <Button onClick={openNew}><Plus className="mr-1.5 h-4 w-4" />New employee</Button>}
       </div>
 
       <div className="rounded-xl border bg-card">
@@ -155,9 +156,13 @@ export default function EmployeesPage() {
                     {cs === 'expiring' && <Badge className="bg-amber-500 text-black">Expiring</Badge>}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(e)}><Pencil className="mr-1 h-3.5 w-3.5" />Edit</Button>
-                    <Button variant="ghost" size="sm" onClick={() => invite(e)}><Send className="mr-1 h-3.5 w-3.5" />Invite</Button>
-                    <Button variant="ghost" size="sm" onClick={() => toggle(e)}>{e.isActive ? 'Deactivate' : 'Activate'}</Button>
+                    {isAdmin() && (
+                      <>
+                        <Button variant="ghost" size="sm" onClick={() => openEdit(e)}><Pencil className="mr-1 h-3.5 w-3.5" />Edit</Button>
+                        <Button variant="ghost" size="sm" onClick={() => invite(e)}><Send className="mr-1 h-3.5 w-3.5" />Invite</Button>
+                        <Button variant="ghost" size="sm" onClick={() => toggle(e)}>{e.isActive ? 'Deactivate' : 'Activate'}</Button>
+                      </>
+                    )}
                   </TableCell>
                 </TableRow>
               );

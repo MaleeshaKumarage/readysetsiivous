@@ -10,7 +10,7 @@ namespace CleaningSuite.Api.Controllers;
 /// <summary>Booking management for the tenant admin.</summary>
 [ApiController]
 [Route("api/v1/admin/bookings")]
-[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
+[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "staff")]
 public class BookingsAdminController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -36,6 +36,7 @@ public class BookingsAdminController : ControllerBase
         return booking is null ? NotFound() : Ok(booking);
     }
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost("{id:guid}/confirm")]
     public async Task<IActionResult> Confirm(Guid id, [FromBody] BookingNote? body, CancellationToken ct)
     {
@@ -43,6 +44,7 @@ public class BookingsAdminController : ControllerBase
         return NoContent();
     }
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost("{id:guid}/cancel")]
     public async Task<IActionResult> Cancel(Guid id, [FromBody] BookingNote? body, CancellationToken ct)
     {
@@ -50,6 +52,7 @@ public class BookingsAdminController : ControllerBase
         return NoContent();
     }
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost("{id:guid}/complete")]
     public async Task<IActionResult> Complete(Guid id, [FromBody] BookingNote? body, CancellationToken ct)
     {
@@ -57,6 +60,7 @@ public class BookingsAdminController : ControllerBase
         return NoContent();
     }
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost("{id:guid}/assign")]
     public async Task<IActionResult> Assign(
         Guid id,
@@ -68,6 +72,7 @@ public class BookingsAdminController : ControllerBase
         return NoContent();
     }
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost("{id:guid}/unassign")]
     public async Task<IActionResult> Unassign(Guid id, CancellationToken ct)
     {
