@@ -17,6 +17,18 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Wait for DeepSeek off-peak (50% discount)
+        run: |
+          echo "DeepSeek peak (UTC Mon-Fri): 01-04, 06-10. Wait if in peak..."
+          while true; do
+            H=$(date -u +%H); D=$(date -u +%u)
+            if [ "$D" -ge 6 ]; then echo "weekend off-peak, go"; break; fi
+            case "$H" in
+              01|02|03|06|07|08|09) echo "peak ${H}:00 UTC, wait 5m"; sleep 300 ;;
+              *) echo "off-peak ${H}:00 UTC, go"; break ;;
+            esac
+          done
+
       - name: Download branch artifact
         if: github.event_name != 'workflow_dispatch'
         uses: dawidd6/action-download-artifact@v3
