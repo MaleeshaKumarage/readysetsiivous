@@ -1,0 +1,33 @@
+name: docker-deploy-oracle
+
+on:
+  workflow_run:
+    workflows: ["docker-build-push"]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: oracle-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      packages: read
+    steps:
+      - name: Deploy to Oracle via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: 130.61.140.7
+          username: ubuntu
+          key: ${{ secrets.ORACLE_SSH_KEY }}
+          script: |
+            cd /home/ubuntu/cleaning-suite
+            sed -i -E "s|^(IMAGE_TAG=).*|\1sha-${{ github.event.workflow_run.head_sha }}|" .env
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            docker compose pull
+            docker compose up -d --remove-orphans
+            for i in $(seq 1 60); do curl -sf http://localhost:8090/healthz && break; sleep 2; done
+            curl -sf http://localhost:8090/healthz | grep -q '"ok"' || { docker logs cleaning-suite-api-1 --tail 50; exit 1; }
