@@ -37,9 +37,23 @@ public class DiskAgreementFileStoreTests : IDisposable
 
     public void Dispose()
     {
-        if (Directory.Exists(_uploadsPath))
+        if (!Directory.Exists(_uploadsPath))
+        {
+            return;
+        }
+
+        try
         {
             Directory.Delete(_uploadsPath, true);
+        }
+        catch (IOException)
+        {
+            // A file handle may still be held (e.g. by DiskAgreementFileStore).
+            // Cleanup failure must not fail otherwise-passing tests.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Same rationale as above: best-effort cleanup only.
         }
     }
 }
