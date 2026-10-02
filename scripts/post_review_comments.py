@@ -97,28 +97,6 @@ for it in issues:
             posted = True
         except urllib.error.HTTPError as e2:
             print(f"fallback also failed {e2.code}", file=sys.stderr)
-    except urllib.error.URLError as e:
-        # Transient network failure (DNS, timeout, connection reset). Don't
-        # crash the whole run — skip this issue and continue with the rest.
-        print(f"inline network error for {it['path']}:{it['line']}: {e.reason} — skipping", file=sys.stderr)
-        fb = json.dumps({"body": f"**{it['path']}:{it['line']}** — {body}"}).encode()
-        fbreq = urllib.request.Request(
-            f"{api}/pulls/{pr}/reviews",
-            data=fb,
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json",
-                "Accept": "application/vnd.github+json",
-            },
-            method="POST",
-        )
-        try:
-            urllib.request.urlopen(fbreq, timeout=30)
-            posted = True
-        except urllib.error.HTTPError as e2:
-            print(f"fallback also failed {e2.code}", file=sys.stderr)
-        except urllib.error.URLError as e2:
-            print(f"fallback network error: {e2.reason}", file=sys.stderr)
 
     if posted:
         fixes.append(f"{it['path']}\t{body}\n")
