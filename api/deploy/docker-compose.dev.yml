@@ -14,7 +14,7 @@ services:
       - dev_pgdata:/var/lib/postgresql/data
 
   api:
-    image: ghcr.io/maleeshakumarage/readysetsiivous-api:${DEV_IMAGE_TAG:-latest}
+    image: cleaning-dev-api:dev
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: Development

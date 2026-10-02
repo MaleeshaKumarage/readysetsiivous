@@ -27,8 +27,17 @@ jobs:
           fi
           echo "BRANCH=$BR" >> "$GITHUB_ENV"
 
-      - name: Checkout
+      - name: Checkout feature branch
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH }}
+
+      - name: Deploy feature branch to dev
+        run: |
+          cd api
+          docker build -f docker/Dockerfile -t cleaning-dev-api:dev .
+          cd /home/ubuntu/cleaning-dev
+          docker compose up -d
 
       - name: Create PR
         env:
