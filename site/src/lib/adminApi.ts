@@ -33,6 +33,13 @@ export interface Employee {
   phone: string;
   role: string;
   isActive: boolean;
+  colorHex?: string | null;
+  skills: string[];
+  serviceAreas: string[];
+  payRate?: number | null;
+  certifications: { name: string; expiresAtUtc?: string | null }[];
+  notes?: string | null;
+  defaultHours: Record<string, { start?: string | null; end?: string | null }>;
 }
 
 async function authorizedFetch(path: string, init: RequestInit = {}): Promise<Response> {
@@ -141,6 +148,9 @@ export const adminInvoices = {
 export const adminEmployees = {
   list: () => adminGet<Employee[]>('/api/v1/admin/employees'),
   create: (fields: unknown) => adminSend('/api/v1/admin/employees', 'POST', { fields }),
+  update: (id: string, fields: unknown, isActive: boolean) =>
+    adminSend(`/api/v1/admin/employees/${id}`, 'PUT', { fields, isActive }),
+  deactivate: (id: string) => adminSend(`/api/v1/admin/employees/${id}/deactivate`, 'POST'),
   invite: (id: string) =>
     adminSendJson<{ email: string; temporaryPassword: string }>(
       `/api/v1/admin/employees/${id}/invite`,

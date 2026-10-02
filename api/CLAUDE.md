@@ -7,7 +7,7 @@ Multi-tenant SaaS backend for cleaning companies. First tenant: ReadySetSiivous 
 - Marten document store on PostgreSQL (conjoined multi-tenancy, optimistic concurrency)
 - Keycloak for auth (realm per tenant, provisioned via Admin REST)
 - QuestPDF for invoice PDFs
-- Deployed to Mac mini (192.168.1.120) via GitHub Actions self-hosted runner, label `macmini`, compose at `/opt/cleaning-suite`
+- Deployed to Mac mini (192.168.1.120) via GitHub Actions self-hosted runner, label `macmini`, compose at `/home/maleesha/cleaning-suite`
 
 ## Conventions
 - Tenant id == Keycloak realm name == slug. Registry partition `registry` holds TenantRegistration docs.
@@ -24,5 +24,5 @@ Multi-tenant SaaS backend for cleaning companies. First tenant: ReadySetSiivous 
 
 ## Deploy
 - Push to main: ci-build-test → docker-build-push → docker-deploy-mac (workflow_run chain).
-- Secrets: `GHCR_PAT` in repo Actions; `/opt/cleaning-suite/.env` on host.
+- Secrets: `GHCR_PAT` in repo Actions; `/home/maleesha/cleaning-suite/.env` on host.
 - Cloudflare Tunnel `cleaning-suite`: api.readysetsiivous.fi → :8090, auth.readysetsiivous.fi → :8081.

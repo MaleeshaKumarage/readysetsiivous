@@ -7,6 +7,8 @@ using MediatR;
 
 namespace CleaningSuite.Application.Employees.Commands;
 
+public record CertificationInput(string Name, DateTime? ExpiresAtUtc);
+
 public record EmployeeFields(
     string Email,
     string FirstName,
@@ -14,7 +16,12 @@ public record EmployeeFields(
     string Phone,
     string Role,
     string? ColorHex,
-    Dictionary<string, WorkHours> DefaultHours);
+    Dictionary<string, WorkHours> DefaultHours,
+    List<string>? Skills,
+    List<string>? ServiceAreas,
+    decimal? PayRate,
+    List<CertificationInput>? Certifications,
+    string? Notes);
 
 public record CreateEmployeeCommand(EmployeeFields Fields) : IRequest<Guid>;
 
@@ -38,6 +45,11 @@ public class EmployeeFieldsValidator : AbstractValidator<EmployeeFields>
         RuleFor(x => x.FirstName).NotEmpty().MaximumLength(100);
         RuleFor(x => x.LastName).NotEmpty().MaximumLength(100);
         RuleFor(x => x.Role).Must(r => r is Employee.RoleAdmin or Employee.RoleEmployee);
+        RuleFor(x => x.PayRate).GreaterThanOrEqualTo(0).When(x => x.PayRate.HasValue);
+        RuleForEach(x => x.Certifications).ChildRules(c =>
+        {
+            c.RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
+        });
     }
 }
 
@@ -77,6 +89,11 @@ public class CreateEmployeeHandler : IRequestHandler<CreateEmployeeCommand, Guid
         employee.Role = fields.Role;
         employee.ColorHex = fields.ColorHex;
         employee.DefaultHours = fields.DefaultHours;
+        employee.Skills = fields.Skills ?? new List<string>();
+        employee.ServiceAreas = fields.ServiceAreas ?? new List<string>();
+        employee.PayRate = fields.PayRate;
+        employee.Certifications = fields.Certifications?.Select(c => new Certification { Name = c.Name, ExpiresAtUtc = c.ExpiresAtUtc }).ToList() ?? new List<Certification>();
+        employee.Notes = fields.Notes;
         employee.UpdatedUtc = DateTime.UtcNow;
     }
 }

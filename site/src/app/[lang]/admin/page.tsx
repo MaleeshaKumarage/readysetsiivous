@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { Sparkles, FileSignature } from 'lucide-react';
+import { Sparkles, FileSignature, Users } from 'lucide-react';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const SECTIONS = [
   { href: 'services', title: 'Services', description: 'Manage cleaning services, prices and descriptions.', icon: Sparkles },
   { href: 'agreements', title: 'Agreements', description: 'Upload agreements and collect e-signatures.', icon: FileSignature },
+  { href: 'employees', title: 'Employees', description: 'Manage staff profiles, availability, skills and certifications.', icon: Users },
 ] as const;
 
 export default function AdminDashboardPage({ params }: { params: { lang: string } }) {
