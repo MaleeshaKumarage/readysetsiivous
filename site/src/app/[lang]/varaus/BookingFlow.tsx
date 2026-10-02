@@ -97,11 +97,11 @@ export default function BookingFlow({ lang }: { lang: Language }) {
         <p className="text-center text-gray-500 dark:text-gray-400">{t(lang, 'varaus.loading')}</p>
       )}
 
-      {services && services.length === 0 && (
+      {Array.isArray(services) && services.length === 0 && (
         <p className="text-center text-gray-500 dark:text-gray-400">{t(lang, 'varaus.noServices')}</p>
       )}
 
-      {services && services.length > 0 && step === 'service' && (
+      {Array.isArray(services) && services.length > 0 && step === 'service' && (
         <div className="grid gap-4">
           {services.map((s) => (
             <button
