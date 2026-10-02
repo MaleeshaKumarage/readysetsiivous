@@ -25,7 +25,7 @@ public class KeycloakJwtTests : IClassFixture<WebApplicationFactory<CleaningSuit
             {
                 // Remove the real registration first so the mock is the only one resolved.
                 services.RemoveAll<IKeycloakProvisioner>();
-                services.AddSingleton<IKeycloakProvisioner, MockKeycloakProvisioner>();
+                services.AddSingleton<IKeycloakProvisioner, KeycloakJwtTestsMockProvisioner>();
             });
         });
     }
@@ -86,7 +86,7 @@ public class KeycloakJwtTests : IClassFixture<WebApplicationFactory<CleaningSuit
     }
 }
 
-internal sealed class MockKeycloakProvisioner : IKeycloakProvisioner
+internal sealed class KeycloakJwtTestsMockProvisioner : IKeycloakProvisioner
 {
     public Task<TenantRegistration> ProvisionTenantAsync(string tenantId, CancellationToken ct = default)
         => Task.FromResult(new TenantRegistration());
