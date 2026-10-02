@@ -71,7 +71,11 @@ for it in issues:
         posted = True
         print(f"inline comment: {it['path']}:{it['line']}", file=sys.stderr)
     except urllib.error.HTTPError as e:
-        # Line not in diff or other inline failure — fall back to general comment.
+        # GitHub returns 422 when the line is not part of the diff. Only then
+        # fall back to a general comment; re-raise auth/other errors so they
+        # aren't masked by a misleading fallback.
+        if e.code != 422:
+            raise
         print(f"inline failed {e.code} for {it['path']}:{it['line']} — fallback", file=sys.stderr)
         fb = json.dumps({"body": f"**{it['path']}:{it['line']}** — {body}"}).encode()
         fbreq = urllib.request.Request(
