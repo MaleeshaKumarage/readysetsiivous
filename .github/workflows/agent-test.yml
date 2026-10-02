@@ -1,8 +1,9 @@
 name: agent-test
 
 on:
-  push:
-    branches: [feature/*]
+  workflow_run:
+    workflows: [agent-implement]
+    types: [completed]
   workflow_dispatch:
     inputs:
       branch:
@@ -11,6 +12,7 @@ on:
 
 jobs:
   test:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: [self-hosted, agent]
     steps:
       - name: Resolve branch
@@ -18,7 +20,7 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "BRANCH=${{ github.event.inputs.branch }}" >> "$GITHUB_ENV"
           else
-            echo "BRANCH=${{ github.ref_name }}" >> "$GITHUB_ENV"
+            echo "BRANCH=${{ github.event.workflow_run.head_branch }}" >> "$GITHUB_ENV"
           fi
 
       - name: Checkout branch
