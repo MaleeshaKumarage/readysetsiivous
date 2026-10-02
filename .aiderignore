@@ -1,0 +1,3 @@
+# Never let aider edit CI / workflow config — GITHUB_TOKEN cannot push these.
+.github/workflows/
+ci-build-test.yml
