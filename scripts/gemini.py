@@ -106,6 +106,7 @@ else:
         input=user,
         capture_output=True,
         text=True,
+        env=os.environ,
     )
     if proc.returncode == 0:
         sys.stdout.write(proc.stdout)
