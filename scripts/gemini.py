@@ -101,8 +101,11 @@ else:
         sys.exit(1)
 
     deepseek = os.path.join(os.path.dirname(os.path.abspath(__file__)), "deepseek.py")
+    # deepseek.py expects the system prompt as argv[1] and the user prompt on
+    # stdin — matching how we invoke it here. Pass a non-empty default so an
+    # empty system prompt doesn't yield an empty system message.
     proc = subprocess.run(
-        [sys.executable, deepseek, system],
+        [sys.executable, deepseek, system or "You are a helpful assistant."],
         input=user,
         capture_output=True,
         text=True,
