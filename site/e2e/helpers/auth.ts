@@ -26,6 +26,10 @@ export async function loginAsAdmin(page: Page): Promise<void> {
   const submit = page.locator('#kc-login, form button[type="submit"]').first();
   await submit.click();
 
-  // Back on the admin route with a populated token.
+  // Back on the admin route with a populated token. Assert on an
+  // authenticated-only element rather than the URL, since the initial
+  // unauthenticated `/fi/admin` URL would also match a URL assertion and
+  // make this pass trivially even when login fails.
   await expect(page).toHaveURL(/\/fi\/admin(\/|$|\?)/);
+  await expect(page.getByRole('button', { name: /sign out/i })).toBeVisible();
 }
