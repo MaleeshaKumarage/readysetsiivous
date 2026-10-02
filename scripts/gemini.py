@@ -91,22 +91,24 @@ for attempt in range(MAX_ATTEMPTS):
         print(f"Gemini network error: {e.reason}; retry in {delay:.1f}s", file=sys.stderr)
         if attempt < MAX_ATTEMPTS - 1:
             time.sleep(delay)
+else:
+    # Loop completed all MAX_ATTEMPTS without success — fall back to DeepSeek
+    # rather than fail the pipeline. The `else` guarantees this only runs on
+    # genuine exhaustion, never on a `break` or `sys.exit(0)`.
+    print("Gemini exhausted retries — falling back to DeepSeek", file=sys.stderr)
+    if not os.environ.get("DEEPSEEK_API_KEY", "").strip():
+        print("No DEEPSEEK_API_KEY set for fallback", file=sys.stderr)
+        sys.exit(1)
 
-# Exhausted — fall back to DeepSeek rather than fail the pipeline.
-print("Gemini exhausted retries — falling back to DeepSeek", file=sys.stderr)
-if not os.environ.get("DEEPSEEK_API_KEY", "").strip():
-    print("No DEEPSEEK_API_KEY set for fallback", file=sys.stderr)
+    deepseek = os.path.join(os.path.dirname(os.path.abspath(__file__)), "deepseek.py")
+    proc = subprocess.run(
+        [sys.executable, deepseek, system],
+        input=user,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode == 0:
+        sys.stdout.write(proc.stdout)
+        sys.exit(0)
+    print(proc.stderr, file=sys.stderr)
     sys.exit(1)
-
-deepseek = os.path.join(os.path.dirname(os.path.abspath(__file__)), "deepseek.py")
-proc = subprocess.run(
-    [sys.executable, deepseek, system],
-    input=user,
-    capture_output=True,
-    text=True,
-)
-if proc.returncode == 0:
-    sys.stdout.write(proc.stdout)
-    sys.exit(0)
-print(proc.stderr, file=sys.stderr)
-sys.exit(1)
