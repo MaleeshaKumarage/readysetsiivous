@@ -31,7 +31,7 @@ cur = {}
 for block in blocks:
     m_file = re.search(r"###\s*FILE:\s*(.+)", block)
     m_line = re.search(r"###\s*LINE:\s*(\d+)", block)
-    m_fix = re.search(r"###\s*FIX:\s*(.+)", block, re.S)
+    m_fix = re.search(r"###\s*FIX:\s*(.+?)(?=\n###\s*FILE:|\Z)", block, re.S)
     if m_file and m_line and m_fix:
         issues.append({
             "path": m_file.group(1).strip(),
