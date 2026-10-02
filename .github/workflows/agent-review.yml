@@ -51,13 +51,7 @@ jobs:
             HEAD_SHA=$(git rev-parse HEAD)
             gh pr diff "$PR" > /tmp/diff.txt
             python3 scripts/deepseek.py \
-              "You are a senior code reviewer. Review the diff. Output findings ONLY in this exact format, one block per issue, blank line between blocks:
-
-### FILE: <file path>
-### LINE: <line number in the file>
-### FIX: <one precise sentence: exactly what code to change on that line>
-
-Do not report files under .github/workflows/ or ci-build-test.yml. If there are NO issues, output exactly NO_ISSUES and nothing else." \
+              "You are a senior code reviewer. Review the diff. Output each issue as a 3-line block: '### FILE: <file path>', '### LINE: <line number>', '### FIX: <one sentence exactly what code to change on that line>'. Separate blocks with a blank line. Do not report files under .github/workflows/ or ci-build-test.yml. If there are no issues, output exactly NO_ISSUES and nothing else." \
               < /tmp/diff.txt > /tmp/review.txt
             cat /tmp/review.txt
 
