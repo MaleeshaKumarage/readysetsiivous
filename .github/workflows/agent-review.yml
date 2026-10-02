@@ -25,8 +25,7 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             PR="${{ github.event.inputs.pr-number }}"
           else
-            BR="${{ github.event.workflow_run.head_branch }}"
-            PR=$(gh pr list --head "$BR" --json number -q '.[0].number')
+            PR=$(gh pr list --state open --json number -q '.[0].number')
           fi
           echo "PR=$PR" >> "$GITHUB_ENV"
 
