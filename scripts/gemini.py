@@ -61,7 +61,8 @@ for attempt in range(MAX_ATTEMPTS):
             print("Gemini returned no usable text; retrying", file=sys.stderr)
             if attempt < MAX_ATTEMPTS - 1:
                 time.sleep(backoff(attempt))
-            continue
+                continue
+            break
         print(text)
         sys.exit(0)
     except urllib.error.HTTPError as e:
