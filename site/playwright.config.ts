@@ -5,6 +5,8 @@ export default defineConfig({
   timeout: 30000,
   use: {
     baseURL: 'http://localhost:3000',
+    // Keycloak login redirects cross-origin; give the flow room to complete.
+    navigationTimeout: 30000,
   },
   webServer: {
     command: 'npm run dev',
