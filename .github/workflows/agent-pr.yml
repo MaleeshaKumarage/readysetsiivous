@@ -67,4 +67,4 @@ jobs:
     if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success'
     runs-on: ubuntu-latest
     steps:
-      - run: echo "SKIP agent-pr: upstream agent-test concluded ${{ github.event.workflow_run.conclusion }}"
+      - run: 'echo "SKIP agent-pr: upstream agent-test concluded ${{ github.event.workflow_run.conclusion }}"'
