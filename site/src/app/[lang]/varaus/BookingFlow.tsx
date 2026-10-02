@@ -101,7 +101,7 @@ export default function BookingFlow({ lang }: { lang: Language }) {
         <p className="text-center text-gray-500 dark:text-gray-400">{t(lang, 'varaus.noServices')}</p>
       )}
 
-      {Array.isArray(services) && services.length > 0 && step === 'service' && (
+      {step === 'service' && (
         <div className="grid gap-4">
           {services.map((s) => (
             <button
@@ -124,7 +124,7 @@ export default function BookingFlow({ lang }: { lang: Language }) {
         </div>
       )}
 
-      {Array.isArray(services) && services.length > 0 && step === 'time' && service && (
+      {step === 'time' && service && (
         <div>
           <button onClick={() => setStep('service')} className="mb-4 text-sm underline">
             ← {t(lang, 'varaus.back')}
@@ -165,7 +165,7 @@ export default function BookingFlow({ lang }: { lang: Language }) {
         </div>
       )}
 
-      {Array.isArray(services) && services.length > 0 && step === 'details' && service && (
+      {step === 'details' && service && (
         <div>
           <button onClick={() => setStep('time')} className="mb-4 text-sm underline">
             ← {t(lang, 'varaus.back')}
