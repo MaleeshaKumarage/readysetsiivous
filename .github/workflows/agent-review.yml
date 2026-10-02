@@ -43,13 +43,13 @@ jobs:
 
       - name: Review-fix loop (max 3)
         env:
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GH_TOKEN: ${{ github.token }}
         run: |
           for i in 1 2 3; do
             echo "===== iteration $i ====="
             gh pr diff "$PR" > /tmp/diff.txt
-            python3 scripts/deepseek.py \
+            python3 scripts/gemini.py \
               "You are a senior code reviewer. Review the diff below. If there are NO issues at all, respond with exactly NO_ISSUES and nothing else. Otherwise list concrete bugs, risks, and suggestions as concise markdown." \
               < /tmp/diff.txt > /tmp/review.md
             cat /tmp/review.md
@@ -62,7 +62,7 @@ jobs:
 
             echo "--- fixing ---"
             ~/.local/bin/aider \
-              --model deepseek/deepseek-chat \
+              --model gemini/gemini-flash-latest \
               --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
               --message "Fix every issue raised in this review. Do not leave any TODO or stub. Review: $(cat /tmp/review.md)"
             git push origin "$BRANCH"
