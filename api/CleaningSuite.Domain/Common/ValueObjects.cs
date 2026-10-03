@@ -37,7 +37,7 @@ public class Money
     private static readonly NumberFormatInfo CurrencyFormat = NumberFormatInfo.ReadOnly(new()
     {
         NumberDecimalSeparator = ",",
-        NumberGroupSeparator = " ",
+        NumberGroupSeparator = "\u00A0",
         NegativeSign = "-",
     });
 
@@ -47,8 +47,8 @@ public class Money
 
     /// <summary>
     /// Formatted gross total, e.g. "123,45 €". Always uses a comma decimal separator and a
-    /// space group separator, independent of the current culture. Presentation-only; excluded
-    /// from JSON serialization to keep it out of the API wire contract.
+    /// non-breaking space (U+00A0) group separator, independent of the current culture.
+    /// Presentation-only; excluded from JSON serialization to keep it out of the API wire contract.
     /// </summary>
     [JsonIgnore]
     public string Summary => SummaryFor(DefaultCurrencySymbol);
