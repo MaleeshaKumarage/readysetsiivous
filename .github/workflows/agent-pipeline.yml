@@ -281,11 +281,8 @@ jobs:
           BR="feature/issue-$N"
           PR=$(gh pr list --head "$BR" --state open --json number -q '.[0].number' 2>/dev/null || echo "")
           if [ -z "$PR" ]; then
-            PR=$(gh pr create --draft --base main --head "$BR" --title "$BR" --body "Implements $BR.
-
-## Dev preview
-UI: http://130.61.208.211/
-API: http://130.61.208.211:8090/" | grep -oE '[0-9]+$')
+            BODY=$(printf 'Implements %s.\n\n## Dev preview\nUI: http://130.61.208.211/\nAPI: http://130.61.208.211:8090/' "$BR")
+            PR=$(gh pr create --draft --base main --head "$BR" --title "$BR" --body "$BODY" | grep -oE '[0-9]+$')
           fi
           echo "PR=$PR"
           echo "pr=$PR" >> "$GITHUB_OUTPUT"
