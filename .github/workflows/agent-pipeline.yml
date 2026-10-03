@@ -1,0 +1,241 @@
+name: agent-pipeline
+
+on:
+  issue_comment:
+    types: [created]
+  schedule:
+    - cron: '7 * * * *'
+  workflow_dispatch:
+    inputs:
+      issue-number:
+        description: 'Issue number to run (implement/test/pr/review chain)'
+        required: false
+
+concurrency:
+  group: agent-pipeline
+  cancel-in-progress: false
+
+jobs:
+  # --- Stage 1: plan (real-time on @agent) ---
+  plan:
+    if: github.event_name == 'issue_comment' && contains(github.event.comment.body, '@agent') && (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR')
+    runs-on: [self-hosted, agent]
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get issue
+        id: issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          N=${{ github.event.issue.number }}
+          gh issue view "$N" --json title -q .title > /tmp/issue-title.txt
+          gh issue view "$N" --json body -q .body > /tmp/issue-body.txt
+          echo "number=$N" >> "$GITHUB_OUTPUT"
+
+      - name: Generate plan (DeepSeek)
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          {
+            echo "## Issue"
+            cat /tmp/issue-title.txt
+            echo
+            cat /tmp/issue-body.txt
+            echo
+            echo "---"
+            echo "## Repository files"
+            git ls-files | head -200
+            echo "---"
+            echo "Brainstorm and write a step-by-step implementation plan."
+          } | python3 scripts/deepseek.py \
+            "You are a senior software engineer. Brainstorm the issue against the repository files. Write a detailed, ordered implementation plan as markdown. Break the work into sub-tasks; for each: files to change, what to change, how to test. After the plan body, add a section exactly titled '## SUB_ISSUES'. Under it, list each major sub-task as a one-line GitHub issue title, each line prefixed with '- '. Keep titles short and self-contained. If the issue is small and needs no split, write '## SUB_ISSUES' followed by a single '- ' line with the issue title itself. Do not write code, only the plan." \
+            > plan.md
+
+      - name: Post plan + label planned
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          N=${{ steps.issue.outputs.number }}
+          gh issue comment "$N" --body-file plan.md
+          gh issue edit "$N" --add-label "planned"
+          sed -n '/## SUB_ISSUES/,/^## /p' plan.md | grep '^- ' | sed 's/^- //' | while IFS= read -r title; do
+            [ -z "$title" ] && continue
+            url=$(gh issue create --title "$title" --body "Sub-issue of #$N.")
+            num=$(echo "$url" | grep -oE '[0-9]+$')
+            gh api "repos/MaleeshaKumarage/readysetsiivous/issues/$N/sub_issues" -f "sub_issue_id=$num" >/dev/null
+          done
+
+  # --- Stage 1b: revise plan on disapprove/suggest ---
+  revise-plan:
+    if: github.event_name == 'issue_comment' && (contains(github.event.comment.body, 'disapprove') || contains(github.event.comment.body, 'suggest') || contains(github.event.comment.body, 'revise')) && (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR')
+    runs-on: [self-hosted, agent]
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Revise plan (DeepSeek)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          N=${{ github.event.issue.number }}
+          gh issue view "$N" --json title -q .title > /tmp/issue-title.txt
+          gh issue view "$N" --json body -q .body > /tmp/issue-body.txt
+          gh issue view "$N" --json comments -q '.comments[].body' | tail -30 > /tmp/prev-plan.txt
+          {
+            echo "## Issue"
+            cat /tmp/issue-title.txt
+            echo
+            cat /tmp/issue-body.txt
+            echo
+            echo "## Previous plan + feedback"
+            cat /tmp/prev-plan.txt
+            echo
+            echo "## Reviewer feedback (latest comment)"
+            echo "${{ github.event.comment.body }}"
+            echo
+            echo "Revise the plan to address the feedback."
+          } | python3 scripts/deepseek.py \
+            "You are a senior software engineer. Rewrite the implementation plan to incorporate the reviewer's feedback. Output only the revised plan as markdown, keeping the '## SUB_ISSUES' section format." \
+            > plan.md
+          gh issue comment "$N" --body-file plan.md
+
+  # --- Stage 2: approve (mark approved, no implementation yet) ---
+  approve:
+    if: github.event_name == 'issue_comment' && contains(github.event.comment.body, 'approve') && (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Mark approved
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          N=${{ github.event.issue.number }}
+          gh issue edit "$N" --add-label "approved" --remove-label "planned"
+
+  # --- Stage 3: off-peak run (cron) or manual (dispatch): full chain ---
+  run:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, agent]
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure git
+        run: |
+          git config user.name "cleaning-agent"
+          git config user.email "agent@readysetsiivous.fi"
+
+      - name: Resolve issues to process
+        id: issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "${{ github.event.inputs.issue-number }}" > /tmp/issues.txt
+          else
+            H=$(date -u +%H); D=$(date -u +%u)
+            if [ "$D" -lt 6 ]; then
+              case "$H" in
+                01|02|03|06|07|08|09) echo "peak ${H}:00 UTC, skip"; : > /tmp/issues.txt; exit 0 ;;
+              esac
+            fi
+            gh issue list --label approved --state open --json number -q '.[].number' > /tmp/issues.txt
+          fi
+          echo "issues: $(cat /tmp/issues.txt)"
+
+      - name: Run chain per issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          set +e
+
+          retry() {
+            local what="$1"; shift
+            local i
+            for i in 1 2 3; do
+              echo "===== $what (attempt $i) ====="
+              "$@" > /tmp/retry.log 2>&1
+              if [ $? -eq 0 ]; then echo "$what OK"; return 0; fi
+              echo "$what FAILED (attempt $i). DeepSeek fix..."
+              tail -30 /tmp/retry.log
+              ~/.local/bin/aider --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+                --message "Fix this failure: $(tail -40 /tmp/retry.log)"
+            done
+            echo "$what FAILED after 3 retries"
+            return 1
+          }
+
+          while IFS= read -r N; do
+            [ -z "$N" ] && continue
+            echo "================= ISSUE #$N ================="
+
+            # --- implement ---
+            gh issue view "$N" --json title -q .title > /tmp/issue-title.txt
+            gh issue view "$N" --json body -q .body > /tmp/issue-body.txt
+            gh issue view "$N" --json comments -q '.comments[].body' | tail -20 > /tmp/plan.txt
+
+            git checkout main 2>/dev/null; git checkout -B "feature/issue-$N"
+
+            ~/.local/bin/aider \
+              --model deepseek/deepseek-v4-flash \
+              --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+              --message "Implement the feature COMPLETELY following the plan. Issue: $(cat /tmp/issue-title.txt). $(cat /tmp/issue-body.txt). Plan: $(cat /tmp/plan.txt)"
+
+            # --- build gate (retryable, DeepSeek fixes) ---
+            retry "dotnet build" bash -c 'cd api && dotnet build CleaningSuite.Backend.sln -c Release --nologo' || continue
+            git push -u --force origin "feature/issue-$N"
+
+            # --- test ---
+            retry "dotnet test" bash -c 'cd api && dotnet test CleaningSuite.Backend.sln -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults' || continue
+            retry "coverage" bash -c 'cd api && python3 ../scripts/check_coverage.py' || continue
+            retry "site build" bash -c 'cd site && npm ci && npm run build' || continue
+
+            # --- pr ---
+            cd api && docker build -f docker/Dockerfile -t cleaning-dev-api:dev . && cd /home/ubuntu/cleaning-dev && docker compose up -d
+            cd "$GITHUB_WORKSPACE/site" && npm run build
+            pgrep -f "http.server 80" >/dev/null || sudo nohup python3 -m http.server 80 -d out >/tmp/site-http.log 2>&1 &
+
+            PR=$(gh pr create --draft --base main --head "feature/issue-$N" --title "feature/issue-$N" --body "Implements feature/issue-$N." 2>/dev/null | grep -oE '[0-9]+$')
+
+            # --- review + fix one-by-one + resolve ---
+            cd "$GITHUB_WORKSPACE"
+            if [ -n "$PR" ]; then
+              for i in $(seq 1 10); do
+                HEAD_SHA=$(git rev-parse HEAD)
+                gh pr diff "$PR" > /tmp/diff.txt
+                python3 scripts/deepseek.py \
+                  "You are a senior code reviewer. Review the diff. Output each issue as a 3-line block: '### FILE: <file path>', '### LINE: <line number>', '### FIX: <one sentence exactly what to change>'. Separate blocks with a blank line. Do not report files under .github/workflows/. If no issues, output exactly NO_ISSUES and nothing else." \
+                  < /tmp/diff.txt > /tmp/review.txt
+                python3 scripts/post_review_comments.py "$PR" "$HEAD_SHA" < /tmp/review.txt
+                grep -q "NO_ISSUES" /tmp/review.txt && break
+                [ -s /tmp/fixes.list ] || break
+                while IFS=$'\t' read -r file line cid fix; do
+                  ~/.local/bin/aider --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+                    --message "Fix only this one issue. File: $file, near line $line. $fix"
+                  [ -n "$cid" ] && [ "$cid" != "0" ] && python3 scripts/resolve_comment.py "$PR" "$cid" || true
+                done < /tmp/fixes.list
+                git push origin "feature/issue-$N"
+              done
+              gh pr ready "$PR"
+            fi
+
+            # clear approved, mark done
+            gh issue edit "$N" --remove-label "approved"
+
+          done < /tmp/issues.txt
