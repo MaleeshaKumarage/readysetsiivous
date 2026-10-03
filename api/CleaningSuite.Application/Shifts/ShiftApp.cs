@@ -352,7 +352,13 @@ public class ShiftHandlers
             var assignment = await _repository.GetAssignmentAsync(request.ShiftId, request.EmployeeId, ct);
             if (assignment is null)
                 return;
-            await _repository.DeleteAssignmentAsync(assignment.Id, ct);
+
+            // Soft-deactivate rather than hard-delete so removal is auditable and consistent with
+            // the IsActive pattern used elsewhere (and which ListAssignmentsByEmployeeAsync filters
+            // on). The row is retained; only its active flag is flipped.
+            assignment.IsActive = false;
+            assignment.UpdatedUtc = DateTime.UtcNow;
+            await _repository.SaveAssignmentAsync(assignment, ct);
         }
     }
 
