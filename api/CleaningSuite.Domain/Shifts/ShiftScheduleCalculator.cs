@@ -25,6 +25,12 @@ public static class ShiftScheduleCalculator
 
         for (var date = startDate; date <= endDate; date = date.AddDays(1))
         {
+            // Skip days outside the shift's validity window so we don't emit phantom occurrences.
+            if (shift.ValidFrom.HasValue && date < shift.ValidFrom.Value.Date)
+                continue;
+            if (shift.ValidUntil.HasValue && date > shift.ValidUntil.Value.Date)
+                continue;
+
             var weekday = date.DayOfWeek;
             switch (schedule.Type)
             {
