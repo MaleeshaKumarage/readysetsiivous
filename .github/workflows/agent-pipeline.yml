@@ -19,7 +19,7 @@ jobs:
   # --- Stage 1: plan (real-time on @agent) ---
   plan:
     if: github.event_name == 'issue_comment' && contains(github.event.comment.body, '@agent') && (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR')
-    runs-on: [self-hosted, agent]
+    runs-on: ubuntu-latest
     permissions:
       issues: write
       contents: read
@@ -73,7 +73,7 @@ jobs:
   # --- Stage 1b: revise plan on disapprove/suggest ---
   revise-plan:
     if: github.event_name == 'issue_comment' && (contains(github.event.comment.body, 'disapprove') || contains(github.event.comment.body, 'suggest') || contains(github.event.comment.body, 'revise')) && (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR')
-    runs-on: [self-hosted, agent]
+    runs-on: ubuntu-latest
     permissions:
       issues: write
       contents: read
