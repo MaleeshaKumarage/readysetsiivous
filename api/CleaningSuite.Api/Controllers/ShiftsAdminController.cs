@@ -45,8 +45,7 @@ public class ShiftsAdminController : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateShiftCommand command, CancellationToken ct)
     {
-        if (id != command.Id)
-            return BadRequest("Shift id mismatch.");
+        command.Id = id;
         var result = await _mediator.Send(command, ct);
         return Ok(result);
     }
