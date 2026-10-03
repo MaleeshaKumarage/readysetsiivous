@@ -200,6 +200,11 @@ jobs:
             retry "coverage" bash -c 'cd api && python3 ../scripts/check_coverage.py' || continue
             retry "site build" bash -c 'cd site && npm ci && npm run build' || continue
 
+            # --- playwright e2e (browser verify against served static site) ---
+            pgrep -f "http.server 80" >/dev/null || sudo nohup python3 -m http.server 80 -d site/out >/tmp/site-http.log 2>&1 &
+            sleep 2
+            retry "playwright e2e" bash -c 'cd site && npx playwright install chromium && npx playwright test --config=playwright.static.config.ts' || continue
+
             # --- pr ---
             cd api && docker build -f docker/Dockerfile -t cleaning-dev-api:dev . && cd /home/ubuntu/cleaning-dev && docker compose up -d
             cd "$GITHUB_WORKSPACE/site" && npm run build
