@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace CleaningSuite.Domain.Common;
 
 /// <summary>Localized text per language, fi/en/sv keys.</summary>
@@ -23,6 +25,13 @@ public class Money
 {
     public decimal Net { get; set; }
     public decimal Vat { get; set; }
+
+    /// <summary>
+    /// Derived gross amount (<see cref="Net"/> + <see cref="Vat"/>). Excluded from serialization
+    /// because it is computed from already-serialized members; emitting it would silently alter
+    /// API payloads and generated clients.
+    /// </summary>
+    [JsonIgnore]
     public decimal Gross => Net + Vat;
 
     /// <summary>
