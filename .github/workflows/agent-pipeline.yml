@@ -172,11 +172,22 @@ jobs:
           gh issue view "$N" --json body -q .body > /tmp/issue-body.txt
           gh issue view "$N" --json comments -q '.comments[].body' | tail -20 > /tmp/plan.txt
 
-      - name: Create branch
+      - name: Create or reuse branch
         run: |
-          git checkout main 2>/dev/null; git checkout -B "feature/issue-$N"
+          if git ls-remote --heads origin "feature/issue-$N" | grep -q .; then
+            echo "branch exists — reusing (skip re-implement)"
+            git fetch origin "feature/issue-$N"
+            git checkout "feature/issue-$N"
+            echo "REUSE=1" >> "$GITHUB_ENV"
+          else
+            echo "fresh branch — implement from scratch"
+            git checkout main
+            git checkout -B "feature/issue-$N"
+            echo "REUSE=0" >> "$GITHUB_ENV"
+          fi
 
       - name: Implement (aider)
+        if: env.REUSE != '1'
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
