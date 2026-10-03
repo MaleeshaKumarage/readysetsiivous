@@ -54,14 +54,17 @@ public class Money
     public string Summary => SummaryFor(DefaultCurrencySymbol);
 
     /// <summary>
-    /// Formatted gross total with the supplied currency symbol, e.g. "123,45 $".
+    /// Formatted gross total with the supplied currency symbol, e.g. "123,45 €".
+    /// The symbol is trimmed, and the amount and symbol are joined by a non-breaking space
+    /// (U+00A0) so they never wrap onto separate lines.
     /// A null/blank/whitespace symbol yields just the number, e.g. "123,45".
     /// </summary>
     public string SummaryFor(string? currencySymbol)
     {
         var gross = decimal.Round(Gross, 2, RoundingMode);
         var text = gross.ToString("N2", CurrencyFormat);
-        return string.IsNullOrWhiteSpace(currencySymbol) ? text : $"{text} {currencySymbol}";
+        var symbol = currencySymbol?.Trim();
+        return string.IsNullOrEmpty(symbol) ? text : $"{text}\u00A0{symbol}";
     }
 
     public static Money FromNet(decimal net, decimal vatRatePercent) =>
