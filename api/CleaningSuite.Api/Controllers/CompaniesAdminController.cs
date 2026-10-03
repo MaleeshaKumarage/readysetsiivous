@@ -40,7 +40,7 @@ public class CompaniesAdminController : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreateCompanyCommand command, CancellationToken ct)
     {
         var result = await _mediator.Send(command, ct);
-        return Ok(result);
+        return CreatedAtAction(nameof(Get), new { id = result.Id }, result);
     }
 
     [HttpPut("{id:guid}")]
