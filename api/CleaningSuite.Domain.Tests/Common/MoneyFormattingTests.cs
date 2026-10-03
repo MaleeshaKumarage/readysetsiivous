@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using CleaningSuite.Domain.Common;
 using Xunit;
 
@@ -11,6 +12,16 @@ namespace CleaningSuite.Domain.Tests.Common;
 /// </summary>
 public class MoneyFormattingTests
 {
+    [Fact]
+    public void Summary_IsNotSerialized_IntoWirePayload()
+    {
+        var money = Money.FromNet(10m, 24m);
+
+        var json = JsonSerializer.Serialize(money);
+
+        Assert.DoesNotContain("Summary", json, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void Summary_ZeroAmount_FormatsAsZeroWithTwoDecimals()
     {
