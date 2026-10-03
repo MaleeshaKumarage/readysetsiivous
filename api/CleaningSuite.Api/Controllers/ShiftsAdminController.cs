@@ -65,8 +65,15 @@ public class ShiftsAdminController : ControllerBase
         [FromQuery] DateTime to,
         CancellationToken ct)
     {
-        var result = await _mediator.Send(new GetShiftOccurrencesQuery(id, from, to), ct);
-        return Ok(result);
+        try
+        {
+            var result = await _mediator.Send(new GetShiftOccurrencesQuery(id, from, to), ct);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
     }
 
     [HttpGet("{id:guid}/assignments")]
