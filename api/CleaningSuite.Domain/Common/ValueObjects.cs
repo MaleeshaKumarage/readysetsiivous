@@ -34,12 +34,12 @@ public class Money
     /// </summary>
     private const MidpointRounding RoundingMode = MidpointRounding.ToEven;
 
-    private static readonly NumberFormatInfo CurrencyFormat = new()
+    private static readonly NumberFormatInfo CurrencyFormat = NumberFormatInfo.ReadOnly(new()
     {
         NumberDecimalSeparator = ",",
         NumberGroupSeparator = " ",
         NegativeSign = "-",
-    };
+    });
 
     public decimal Net { get; set; }
     public decimal Vat { get; set; }
