@@ -1,4 +1,5 @@
 using CleaningSuite.Application.Common;
+using CleaningSuite.Application.Employees;
 using CleaningSuite.Domain.Shifts;
 using FluentValidation;
 using MediatR;
@@ -214,10 +215,12 @@ public class ShiftHandlers
         private const int DefaultMaxConflictWindowDays = 180;
 
         private readonly IShiftRepository _repository;
+        private readonly IEmployeeRepository _employeeRepository;
         private readonly int _maxConflictWindowDays;
 
         public AssignEmployeeToShiftCommandHandler(
             IShiftRepository repository,
+            IEmployeeRepository employeeRepository,
             int maxConflictWindowDays = DefaultMaxConflictWindowDays)
         {
             if (maxConflictWindowDays <= 0)
@@ -226,6 +229,7 @@ public class ShiftHandlers
             }
 
             _repository = repository;
+            _employeeRepository = employeeRepository;
             _maxConflictWindowDays = maxConflictWindowDays;
         }
 
@@ -233,6 +237,11 @@ public class ShiftHandlers
         {
             var shift = await _repository.GetAsync(request.ShiftId, ct)
                 ?? throw new NotFoundException("Shift", request.ShiftId);
+
+            // Resolve the employee before doing anything else, so a typo or stale id fails fast
+            // instead of persisting a ShiftAssignment that points at a non-existent employee.
+            var employee = await _employeeRepository.GetAsync(request.EmployeeId, ct)
+                ?? throw new NotFoundException("Employee", request.EmployeeId);
 
             // Capture "now" inside Handle (not in a field initializer) so it stays correct
             // regardless of handler lifetime and is anchored to UTC rather than server-local time.
