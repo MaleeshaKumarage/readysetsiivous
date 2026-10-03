@@ -349,6 +349,7 @@ jobs:
 
             # 1. restore destructive edits vs main
             for f in $(git diff --name-only origin/main 2>/dev/null); do
+              [ -f "$f" ] || continue
               old=$(git show origin/main:"$f" 2>/dev/null | wc -l)
               new=$(wc -l < "$f" 2>/dev/null)
               if [ "$old" -gt 20 ] && [ "$new" -lt $((old / 2)) ]; then
