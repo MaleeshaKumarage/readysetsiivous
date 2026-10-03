@@ -5,5 +5,5 @@ import { test, expect } from '@playwright/test';
 test('booking flow loads services from the dev API', async ({ page }) => {
   await page.goto('/fi/varaus');
   // services fetch from the API -> service grid buttons render (not the "unavailable" fallback)
-  await expect(page.locator('main button').first()).toBeVisible({ timeout: 15000 });
+  await expect(page.locator('main .grid button').first()).toBeVisible({ timeout: 15000 });
 });
