@@ -17,7 +17,7 @@ public class MoneyFormattingTests
         var money = Money.FromNet(0m, 24m);
 
         Assert.Equal(0m, money.Gross);
-        Assert.Equal("0,00 €", money.Summary);
+        Assert.Equal("0,00\u00A0€", money.Summary);
     }
 
     [Fact]
@@ -26,7 +26,7 @@ public class MoneyFormattingTests
         var money = Money.FromNet(-10m, 24m);
 
         Assert.Equal(-12.40m, money.Gross);
-        Assert.Equal("-12,40 €", money.Summary);
+        Assert.Equal("-12,40\u00A0€", money.Summary);
     }
 
     [Fact]
@@ -68,7 +68,7 @@ public class MoneyFormattingTests
 
             var money = Money.FromNet(1000m, 24m);
 
-            Assert.Equal("1 240,00 €", money.Summary);
+            Assert.Equal("1\u0020240,00\u00A0€", money.Summary);
         }
         finally
         {
@@ -86,7 +86,7 @@ public class MoneyFormattingTests
 
             var money = Money.FromNet(1000m, 24m);
 
-            Assert.Equal("1 240,00", money.SummaryFor(null));
+            Assert.Equal("1\u0020240,00", money.SummaryFor(null));
         }
         finally
         {
