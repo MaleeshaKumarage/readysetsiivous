@@ -39,6 +39,7 @@ public interface IBranchRepository
 {
     Task<Branch?> GetAsync(Guid id, CancellationToken ct = default);
     Task<IReadOnlyList<Branch>> ListByCompanyAsync(Guid companyId, CancellationToken ct = default);
+    Task<IReadOnlyList<Branch>> ListByCompanyAsync(Guid companyId, bool includeInactive, CancellationToken ct = default);
     Task SaveAsync(Branch branch, CancellationToken ct = default);
 }
 
@@ -189,7 +190,7 @@ public class CompanyHandlers
         {
             var company = await _companyRepository.GetAsync(request.Id, ct)
                 ?? throw new NotFoundException("Company", request.Id);
-            var branches = await _branchRepository.ListByCompanyAsync(request.Id, ct);
+            var branches = await _branchRepository.ListByCompanyAsync(request.Id, includeInactive: true, ct);
             return new CompanyDetailDto(
                 MapCompany(company),
                 branches.Select(MapBranch).ToList());
