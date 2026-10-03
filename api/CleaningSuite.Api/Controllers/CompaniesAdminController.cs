@@ -46,9 +46,7 @@ public class CompaniesAdminController : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateCompanyCommand command, CancellationToken ct)
     {
-        if (id != command.Id)
-            return BadRequest("Company id mismatch.");
-        var result = await _mediator.Send(command, ct);
+        var result = await _mediator.Send(command with { Id = id }, ct);
         return Ok(result);
     }
 
