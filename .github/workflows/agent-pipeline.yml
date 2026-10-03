@@ -51,7 +51,7 @@ jobs:
             git ls-files | head -200
             echo "---"
             echo "Brainstorm and write a step-by-step implementation plan."
-          } | python3 scripts/deepseek.py \
+          } | bash scripts/deepseek_wrap.sh \
             "You are a senior software engineer. Brainstorm the issue against the repository files. Critical rules: do not write code, only the plan; consider edge cases and error paths; break the work into ordered, independently testable sub-tasks — for each list files to change, what to change, how to test. Write the plan as markdown, then a section exactly titled '## SUB_ISSUES' listing each sub-task as a one-line GitHub issue title prefixed '- '. If the issue is small, use a single '- ' line with the issue title itself. Do not write code, only the plan." \
             > plan.md
 
@@ -102,7 +102,7 @@ jobs:
             echo "${{ github.event.comment.body }}"
             echo
             echo "Revise the plan to address the feedback."
-          } | python3 scripts/deepseek.py \
+          } | bash scripts/deepseek_wrap.sh \
             "You are a senior software engineer. Rewrite the implementation plan to incorporate the reviewer's feedback. Output only the revised plan as markdown, keeping the '## SUB_ISSUES' section format." \
             > plan.md
           gh issue comment "$N" --body-file plan.md
@@ -162,6 +162,9 @@ jobs:
           git config user.name "cleaning-agent"
           git config user.email "agent@readysetsiivous.fi"
 
+      - name: Reset cost log
+        run: python3 scripts/cost.py reset
+
       - name: Get issue + plan
         env:
           GH_TOKEN: ${{ github.token }}
@@ -191,7 +194,7 @@ jobs:
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
-          ~/.local/bin/aider \
+          bash scripts/aider_wrap.sh \
             --model deepseek/deepseek-v4-pro \
             --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
             --message "You are a senior developer. Implement the feature COMPLETELY following the plan exactly. Critical rules: follow the plan, add tests for new behavior, leave no TODOs or stubs, handle edge cases and error paths, and ensure it compiles. Issue: $(cat /tmp/issue-title.txt). $(cat /tmp/issue-body.txt). Plan: $(cat /tmp/plan.txt)"
@@ -210,7 +213,7 @@ jobs:
               if [ $? -eq 0 ]; then echo "$what OK"; return 0; fi
               echo "$what FAILED (attempt $i). DeepSeek fix..."
               tail -30 /tmp/retry.log
-              ~/.local/bin/aider --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+              bash scripts/aider_wrap.sh --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
                 --message "Fix this build/test failure with the MINIMAL edit to the specific lines causing the error. Do NOT rewrite or regenerate whole files — preserve all existing classes and code. Error: $(tail -40 /tmp/retry.log)"
             done
             echo "$what FAILED after 3 retries"
@@ -247,7 +250,7 @@ jobs:
               if [ $? -eq 0 ]; then echo "$what OK"; return 0; fi
               echo "$what FAILED (attempt $i). DeepSeek fix..."
               tail -30 /tmp/retry.log
-              ~/.local/bin/aider --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+              bash scripts/aider_wrap.sh --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
                 --message "Fix this build/test failure with the MINIMAL edit to the specific lines causing the error. Do NOT rewrite or regenerate whole files — preserve all existing classes and code. Error: $(tail -40 /tmp/retry.log)"
             done
             echo "$what FAILED after 3 retries"
@@ -332,7 +335,7 @@ jobs:
               if [ $? -eq 0 ]; then echo "$what OK"; return 0; fi
               echo "$what FAILED. DeepSeek fix..."
               tail -30 /tmp/retry.log
-              ~/.local/bin/aider --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+              bash scripts/aider_wrap.sh --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
                 --message "Fix this build/test failure with the MINIMAL edit to the specific lines causing the error. Do NOT rewrite or regenerate whole files — preserve all existing classes and code. Error: $(tail -40 /tmp/retry.log)"
             done
             return 1
@@ -354,14 +357,14 @@ jobs:
             # 2. review + fix one-by-one
             HEAD_SHA=$(git rev-parse HEAD)
             gh pr diff "$PR" > /tmp/diff.txt
-            python3 scripts/deepseek.py \
+            bash scripts/deepseek_wrap.sh \
               "You are a senior code reviewer who improves quality AND teaches. Review the diff for correctness, security, maintainability, performance, and testing — not style nits. Be specific, explain why. Output each issue as a 3-line block, one per issue, blank line between: '### FILE: <file path>', '### LINE: <line number>', '### FIX: <priority> <what to change, and why it matters>'. Priority: 🔴 blocker, 🟡 suggestion, 💭 nit. Do not report files under .github/workflows/. If no issues, output exactly NO_ISSUES and nothing else." \
               < /tmp/diff.txt > /tmp/review.txt
             python3 scripts/post_review_comments.py "$PR" "$HEAD_SHA" < /tmp/review.txt
 
             if ! grep -q "NO_ISSUES" /tmp/review.txt && [ -s /tmp/fixes.list ]; then
               while IFS=$'\t' read -r file line cid fix; do
-                ~/.local/bin/aider --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+                bash scripts/aider_wrap.sh --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
                   --file "$file" \
                   --message "Fix ONLY this one issue in $file near line $line. Make the minimal edit to the specific lines. Do NOT rewrite or regenerate the entire file — preserve all existing classes, methods, and surrounding code unchanged. $fix"
                 if [ -n "$cid" ] && [ "$cid" != "0" ]; then
@@ -378,7 +381,7 @@ jobs:
 
             # 4. plan conformance
             gh issue view "$N" --json comments -q '.comments[].body' | tail -20 > /tmp/verify-plan.txt
-            { echo "## Plan"; cat /tmp/verify-plan.txt; echo "## Diff"; head -200 /tmp/diff.txt; } | python3 scripts/deepseek.py "Compare the diff to the plan. If key plan items are NOT implemented, output exactly MISSING. Otherwise output OK." > /tmp/conformance.txt
+            { echo "## Plan"; cat /tmp/verify-plan.txt; echo "## Diff"; head -200 /tmp/diff.txt; } | bash scripts/deepseek_wrap.sh "Compare the diff to the plan. If key plan items are NOT implemented, output exactly MISSING. Otherwise output OK." > /tmp/conformance.txt
             if grep -q "MISSING" /tmp/conformance.txt; then
               echo "plan conformance missing — next round"
               continue
@@ -387,7 +390,9 @@ jobs:
             # all pass
             git push origin "$BR"
             gh pr ready "$PR"
-            echo "SELF-HEAL COMPLETE — PR ready"
+            TOTAL=$(python3 scripts/cost.py total)
+            gh pr comment "$PR" --body "Total LLM cost for this implementation: \$$TOTAL"
+            echo "SELF-HEAL COMPLETE — PR ready (cost \$$TOTAL)"
             exit 0
           done
 

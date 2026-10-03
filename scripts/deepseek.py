@@ -29,3 +29,8 @@ except urllib.error.HTTPError as e:
     sys.exit(1)
 
 print(resp["choices"][0]["message"]["content"])
+
+usage = resp.get("usage", {})
+pt = usage.get("prompt_tokens", 0)
+ct = usage.get("completion_tokens", 0)
+print(f"COST={pt / 1e6 * 0.14 + ct / 1e6 * 0.28:.6f}", file=sys.stderr)
