@@ -16,7 +16,7 @@ public class CreateAgreementCommandTests
             .ReturnsAsync("/uploads/agreements/original.pdf");
 
         var handler = new CreateAgreementHandler(MockTenant(), repo.Object, store.Object);
-        var cmd = new CreateAgreementCommand("Service agreement", Stream.Null, "a.pdf",
+        var cmd = new CreateAgreementCommand("Service agreement", Guid.NewGuid(), Stream.Null, "a.pdf",
             new[] { new SignerInput("Alice", "alice@x.fi"), new SignerInput("Bob", "bob@x.fi") });
 
         var dto = await handler.Handle(cmd, CancellationToken.None);

@@ -176,9 +176,10 @@ export const adminTenant = {
 export const adminAgreements = {
   list: () => adminGet<AgreementListItem[]>('/api/v1/admin/agreements'),
   get: (id: string) => adminGet<AgreementDetail>(`/api/v1/admin/agreements/${id}`),
-  create: async (title: string, pdf: File, signers: { name: string; email: string }[]) => {
+  create: async (title: string, companyId: string, pdf: File, signers: { name: string; email: string }[]) => {
     const form = new FormData();
     form.append('title', title);
+    form.append('companyId', companyId);
     form.append('pdf', pdf);
     form.append('signersJson', JSON.stringify(signers));
     const t = token();

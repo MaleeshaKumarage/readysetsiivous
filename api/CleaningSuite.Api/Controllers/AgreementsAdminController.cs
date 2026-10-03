@@ -17,13 +17,13 @@ public class AgreementsAdminController : ControllerBase
 
     [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost]
-    public async Task<IActionResult> Create([FromForm] string title, [FromForm] IFormFile pdf,
+    public async Task<IActionResult> Create([FromForm] string title, [FromForm] Guid companyId, [FromForm] IFormFile pdf,
         [FromForm] string signersJson, CancellationToken ct)
     {
         var signers = System.Text.Json.JsonSerializer.Deserialize<List<SignerInput>>(signersJson,
             new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true })
             ?? throw new BadHttpRequestException("signersJson invalid");
-        var dto = await _mediator.Send(new CreateAgreementCommand(title, pdf.OpenReadStream(), pdf.FileName, signers), ct);
+        var dto = await _mediator.Send(new CreateAgreementCommand(title, companyId, pdf.OpenReadStream(), pdf.FileName, signers), ct);
         return Ok(dto);
     }
 

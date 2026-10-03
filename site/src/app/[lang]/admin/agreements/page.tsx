@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { Plus, Copy, Trash2 } from 'lucide-react';
-import { adminAgreements, adminTenant, type AgreementListItem, type AgreementDetail } from '@/lib/adminApi';
+import { adminAgreements, adminTenant, adminCompanies, type AgreementListItem, type AgreementDetail, type Company } from '@/lib/adminApi';
 import { isAdmin } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +18,8 @@ export default function AgreementsPage() {
   const [items, setItems] = useState<AgreementListItem[] | null>(null);
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
+  const [companyId, setCompanyId] = useState('');
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [pdf, setPdf] = useState<File | null>(null);
   const [signers, setSigners] = useState<{ name: string; email: string }[]>([{ name: '', email: '' }]);
   const [detail, setDetail] = useState<AgreementDetail | null>(null);
@@ -31,14 +33,15 @@ export default function AgreementsPage() {
 
   useEffect(() => {
     adminTenant.get().then((t) => { if (t?.companyName) setCompanyName(t.companyName); });
+    adminCompanies.list('', 0, 100).then((r) => { if (r) setCompanies(r.items); });
   }, []);
 
   async function create() {
-    if (!pdf || submitting) return;
+    if (!pdf || !companyId || submitting) return;
     setSubmitting(true);
     try {
-      await adminAgreements.create(title, pdf, signers.filter(s => s.name && s.email));
-      setOpen(false); setTitle(''); setPdf(null); setSigners([{ name: '', email: '' }]);
+      await adminAgreements.create(title, companyId, pdf, signers.filter(s => s.name && s.email));
+      setOpen(false); setTitle(''); setCompanyId(''); setPdf(null); setSigners([{ name: '', email: '' }]);
       load();
     } finally {
       setSubmitting(false);
@@ -127,6 +130,19 @@ export default function AgreementsPage() {
           <DialogHeader><DialogTitle>New agreement</DialogTitle></DialogHeader>
           <div className="grid gap-4">
             <div className="space-y-1.5">
+              <Label>Company</Label>
+              <select
+                value={companyId}
+                onChange={(e) => setCompanyId(e.target.value)}
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">Select company…</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
               <Label>Title</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} />
             </div>
             <div className="space-y-1.5">
@@ -155,7 +171,7 @@ export default function AgreementsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={create} disabled={!pdf || !title || submitting}>
+            <Button onClick={create} disabled={!pdf || !title || !companyId || submitting}>
               {submitting ? 'Creating…' : 'Create'}
             </Button>
           </DialogFooter>

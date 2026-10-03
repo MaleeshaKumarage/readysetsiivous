@@ -9,7 +9,7 @@ namespace CleaningSuite.Application.Agreements.Commands;
 
 public record SignerInput(string Name, string Email);
 
-public record CreateAgreementCommand(string Title, Stream Pdf, string FileName, IReadOnlyList<SignerInput> Signers)
+public record CreateAgreementCommand(string Title, Guid CompanyId, Stream Pdf, string FileName, IReadOnlyList<SignerInput> Signers)
     : IRequest<AgreementDetailDto>;
 
 public class CreateAgreementValidator : AbstractValidator<CreateAgreementCommand>
@@ -17,6 +17,7 @@ public class CreateAgreementValidator : AbstractValidator<CreateAgreementCommand
     public CreateAgreementValidator()
     {
         RuleFor(x => x.Title).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.CompanyId).NotEmpty();
         RuleFor(x => x.Signers).NotEmpty();
         RuleForEach(x => x.Signers).ChildRules(s =>
         {
@@ -45,6 +46,7 @@ public class CreateAgreementHandler : IRequestHandler<CreateAgreementCommand, Ag
             Id = Guid.NewGuid(),
             Slug = tenantId,
             Title = request.Title,
+            CompanyId = request.CompanyId,
             Code = AgreementTokens.NewCode(),
             Signers = request.Signers.Select(s => new Signer
             {
