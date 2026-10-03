@@ -3,6 +3,13 @@
   "enabled": true,
   "sslRequired": "none",
   "registrationAllowed": true,
+  "roles": {
+    "realm": [
+      { "name": "admin" },
+      { "name": "staff" }
+    ]
+  },
+  "defaultRoles": ["admin"],
   "clients": [
     {
       "clientId": "cleaning-suite-web",
