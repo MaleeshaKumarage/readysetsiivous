@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace CleaningSuite.Domain.Common;
 
 /// <summary>Localized text per language, fi/en/sv keys.</summary>
@@ -21,9 +23,35 @@ public class Address
 /// <summary>Money with per-line VAT math. All amounts are decimal.</summary>
 public class Money
 {
+    /// <summary>Currency symbol used by <see cref="Summary"/> by default.</summary>
+    public const string DefaultCurrencySymbol = "€";
+
+    private static readonly NumberFormatInfo CurrencyFormat = new()
+    {
+        NumberDecimalSeparator = ",",
+        NumberGroupSeparator = " ",
+        NegativeSign = "-",
+    };
+
     public decimal Net { get; set; }
     public decimal Vat { get; set; }
     public decimal Gross => Net + Vat;
+
+    /// <summary>
+    /// Formatted gross total, e.g. "123,45 €". Always uses a comma decimal separator and a
+    /// space group separator, independent of the current culture.
+    /// </summary>
+    public string Summary => SummaryFor(DefaultCurrencySymbol);
+
+    /// <summary>
+    /// Formatted gross total with the supplied currency symbol, e.g. "123,45 $".
+    /// A null/blank/whitespace symbol yields just the number, e.g. "123,45".
+    /// </summary>
+    public string SummaryFor(string? currencySymbol)
+    {
+        var text = Gross.ToString("N2", CurrencyFormat);
+        return string.IsNullOrWhiteSpace(currencySymbol) ? text : $"{text} {currencySymbol}";
+    }
 
     public static Money FromNet(decimal net, decimal vatRatePercent) =>
         new()
