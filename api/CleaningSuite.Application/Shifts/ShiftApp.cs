@@ -1,4 +1,5 @@
 using CleaningSuite.Application.Common;
+using CleaningSuite.Application.Companies;
 using CleaningSuite.Application.Employees;
 using CleaningSuite.Domain.Shifts;
 using FluentValidation;
@@ -81,14 +82,33 @@ public class ShiftHandlers
     public class CreateShiftCommandHandler : IRequestHandler<CreateShiftCommand, ShiftDto>
     {
         private readonly IShiftRepository _repository;
+        private readonly ICompanyRepository _companyRepository;
+        private readonly IBranchRepository _branchRepository;
 
-        public CreateShiftCommandHandler(IShiftRepository repository)
+        public CreateShiftCommandHandler(
+            IShiftRepository repository,
+            ICompanyRepository companyRepository,
+            IBranchRepository branchRepository)
         {
             _repository = repository;
+            _companyRepository = companyRepository;
+            _branchRepository = branchRepository;
         }
 
         public async Task<ShiftDto> Handle(CreateShiftCommand request, CancellationToken ct)
         {
+            // Ensure the referenced parent entities exist before persisting the shift, so the
+            // admin API cannot create a shift pointing at a non-existent company or branch.
+            _ = await _companyRepository.GetAsync(request.CompanyId, ct)
+                ?? throw new NotFoundException("Company", request.CompanyId);
+
+            var branch = await _branchRepository.GetAsync(request.BranchId, ct)
+                ?? throw new NotFoundException("Branch", request.BranchId);
+            if (branch.CompanyId != request.CompanyId)
+            {
+                throw new NotFoundException("Branch", request.BranchId);
+            }
+
             var shift = Shift.Create(
                 request.CompanyId,
                 request.BranchId,
