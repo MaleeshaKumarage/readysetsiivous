@@ -98,7 +98,7 @@ export default function BookingFlow({ lang }: { lang: Language }) {
       <h1 className="mb-8 text-3xl font-bold">{t(lang, 'varaus.title')}</h1>
 
       {step === 'service' && (
-        <div className="grid gap-4">
+        <div data-testid="service-grid" className="grid gap-4">
           {services.map((s) => (
             <button
               key={s.id}
