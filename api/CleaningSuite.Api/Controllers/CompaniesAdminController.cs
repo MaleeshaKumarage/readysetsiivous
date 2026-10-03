@@ -11,6 +11,8 @@ namespace CleaningSuite.Api.Controllers;
 [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
 public class CompaniesAdminController : ControllerBase
 {
+    private const int MaxTake = 200;
+
     private readonly IMediator _mediator;
 
     public CompaniesAdminController(IMediator mediator)
@@ -25,6 +27,8 @@ public class CompaniesAdminController : ControllerBase
         [FromQuery] int take = 50,
         CancellationToken ct = default)
     {
+        skip = Math.Max(0, skip);
+        take = Math.Clamp(take, 1, MaxTake);
         var result = await _mediator.Send(new ListCompaniesQuery(search, skip, take), ct);
         return Ok(result);
     }
