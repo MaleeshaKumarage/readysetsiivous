@@ -75,18 +75,6 @@ public class ShiftsAdminController : ControllerBase
         }
     }
 
-    [HttpGet("{id:guid}/assignments")]
-    public IActionResult Assignments(Guid id, CancellationToken ct)
-    {
-        // Not implemented: returning an empty array here would be indistinguishable
-        // from a shift that genuinely has no assignees, causing clients (e.g.
-        // adminShifts.assignments) to render a misleading "no employees assigned"
-        // state. Report 501 until a proper ListShiftAssignmentsQuery exists.
-        return StatusCode(
-            StatusCodes.Status501NotImplemented,
-            "Shift assignments listing is not implemented.");
-    }
-
     [HttpPost("{id:guid}/assignments")]
     public async Task<IActionResult> AssignEmployee(
         Guid id,
