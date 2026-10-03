@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Text.Json.Serialization;
 
@@ -16,6 +17,9 @@ public class Money
     /// <summary>Computed VAT amount.</summary>
     public decimal VatAmount { get; set; }
 
+    /// <summary>VAT amount charged.</summary>
+    public decimal Vat { get; set; }
+
     /// <summary>Gross (VAT-inclusive) amount.</summary>
     public decimal Gross { get; set; }
 
@@ -31,6 +35,7 @@ public class Money
             Net = net,
             VatRatePercent = vatRatePercent,
             VatAmount = vat,
+            Vat = vat,
             Gross = net + vat,
             Currency = currency,
         };
@@ -76,6 +81,7 @@ public class Address
     public string Street { get; set; } = "";
     public string PostalCode { get; set; } = "";
     public string City { get; set; } = "";
+    public string Country { get; set; } = "";
 }
 
 /// <summary>Text in each supported site language.</summary>
@@ -84,6 +90,40 @@ public class LocalizedText
     public string Fi { get; set; } = "";
     public string En { get; set; } = "";
     public string Sv { get; set; } = "";
+
+    /// <summary>
+    /// Language-keyed view of the localized values. Setting replaces all languages.
+    /// Not serialized; the individual language properties are persisted.
+    /// </summary>
+    [JsonIgnore]
+    public Dictionary<string, string> Values
+    {
+        get => new()
+        {
+            ["fi"] = Fi,
+            ["en"] = En,
+            ["sv"] = Sv,
+        };
+        set
+        {
+            Fi = value.TryGetValue("fi", out var fi) ? fi : "";
+            En = value.TryGetValue("en", out var en) ? en : "";
+            Sv = value.TryGetValue("sv", out var sv) ? sv : "";
+        }
+    }
+
+    /// <summary>Returns the value for the given language code, or null when absent or blank.</summary>
+    public string? For(string lang)
+    {
+        var value = lang switch
+        {
+            "fi" => Fi,
+            "en" => En,
+            "sv" => Sv,
+            _ => null,
+        };
+        return string.IsNullOrEmpty(value) ? null : value;
+    }
 }
 
 /// <summary>Start/end time pair for a weekday working window. Null end means closed.</summary>
