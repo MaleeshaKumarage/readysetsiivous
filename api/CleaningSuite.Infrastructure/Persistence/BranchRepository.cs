@@ -29,6 +29,20 @@ public class BranchRepository : IBranchRepository
             .ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyList<Branch>> ListByCompanyAsync(Guid companyId, bool includeInactive, CancellationToken ct = default)
+    {
+        var query = Session.Query<Branch>().Where(b => b.CompanyId == companyId);
+
+        if (!includeInactive)
+        {
+            query = query.Where(b => b.IsActive);
+        }
+
+        return await query
+            .OrderBy(b => b.Name)
+            .ToListAsync(ct);
+    }
+
     public async Task SaveAsync(Branch branch, CancellationToken ct = default)
     {
         Session.Store(branch);
