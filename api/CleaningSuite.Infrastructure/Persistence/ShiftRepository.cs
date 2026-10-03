@@ -34,6 +34,18 @@ public class ShiftRepository : IShiftRepository
         return await query.Where(s => s.IsActive).OrderBy(s => s.Name).ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyList<Shift>> ListByIdsAsync(
+        IReadOnlyCollection<Guid> ids,
+        CancellationToken ct = default)
+    {
+        if (ids is null || ids.Count == 0)
+            return Array.Empty<Shift>();
+        var idList = ids as IList<Guid> ?? ids.ToList();
+        return await Session.Query<Shift>()
+            .Where(s => idList.Contains(s.Id))
+            .ToListAsync(ct);
+    }
+
     public async Task SaveAsync(Shift shift, CancellationToken ct = default)
     {
         Session.Store(shift);
