@@ -93,9 +93,10 @@ public class ShiftsAdminController : ControllerBase
         [FromBody] AssignEmployeeToShiftCommand command,
         CancellationToken ct)
     {
-        if (id != command.ShiftId)
-            return BadRequest("Shift id mismatch.");
-        var result = await _mediator.Send(command, ct);
+        // The client posts only { employeeId, note }, so ShiftId is not present in
+        // the body (defaults to Guid.Empty). Take the shift id from the route instead
+        // of rejecting every request on a mismatch.
+        var result = await _mediator.Send(command with { ShiftId = id }, ct);
         return Ok(result);
     }
 
