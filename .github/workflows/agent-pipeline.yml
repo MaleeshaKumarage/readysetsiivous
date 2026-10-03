@@ -337,6 +337,7 @@ jobs:
             echo "e2e passed"
           else
             gh pr comment "$PR" --body "⚠️ Playwright E2E failed against the dev build."
+            exit 1
           fi
 
   # --- Stage 7: architecture diagram ---
@@ -473,4 +474,5 @@ jobs:
             gh pr ready "$PR"
           else
             gh pr comment "$PR" --body "Reality check FAILED: build or tests broken after review fixes. Leaving as draft."
+            exit 1
           fi
