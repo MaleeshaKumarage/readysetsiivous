@@ -1,5 +1,4 @@
-'use client';
-
+import { Suspense } from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import FloatingWhatsApp from '@/components/FloatingWhatsApp';
@@ -13,7 +12,9 @@ export default function VarausPage({ params }: { params: { lang: string } }) {
     <>
       <Navbar lang={lang} />
       <main className="min-h-screen bg-white dark:bg-accent-950 pt-24 pb-16">
-        <BookingFlow lang={lang} />
+        <Suspense fallback={null}>
+          <BookingFlow lang={lang} />
+        </Suspense>
       </main>
       <Footer />
       <FloatingWhatsApp />
