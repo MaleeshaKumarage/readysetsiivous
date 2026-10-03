@@ -280,7 +280,7 @@ jobs:
           cd api && docker build -f docker/Dockerfile -t cleaning-dev-api:dev . && cd /home/ubuntu/cleaning-dev && docker compose up -d
           for i in $(seq 1 30); do docker exec cleaning-dev-postgres-1 pg_isready -U cleaning >/dev/null 2>&1 && break; sleep 2; done
           docker exec -i cleaning-dev-postgres-1 psql -U cleaning -d cleaning < "$GITHUB_WORKSPACE/api/deploy/seed-dev.sql"
-          cd "$GITHUB_WORKSPACE/site" && NEXT_PUBLIC_API_URL=http://130.61.208.211:8090/ npm run build
+          cd "$GITHUB_WORKSPACE/site" && npm ci && NEXT_PUBLIC_API_URL=http://130.61.208.211:8090/ npm run build
           pgrep -f "http.server 80" >/dev/null || sudo nohup python3 -m http.server 80 -d out >/tmp/site-http.log 2>&1 &
 
       - name: Create PR (idempotent)
