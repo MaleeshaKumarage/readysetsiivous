@@ -35,13 +35,6 @@ public class Money
     public decimal Gross => Net + Vat;
 
     /// <summary>
-    /// Formats the gross amount (<see cref="Net"/> + <see cref="Vat"/>) as a currency string using the
-    /// supplied culture, e.g. "123,45 €" for fi-FI or "€123.45" for en-US. Currency formatting is a
-    /// presentation concern, so the caller in the presentation/reporting layer chooses the culture.
-    /// </summary>
-    public string Format(IFormatProvider? provider) => Gross.ToString("C", provider);
-
-    /// <summary>
     /// Builds a <see cref="Money"/> from a net amount and a VAT rate percentage. Both <see cref="Net"/>
     /// and <see cref="Vat"/> are rounded to 2 decimals (cents) using <see cref="MidpointRounding.AwayFromZero"/>.
     /// This is deliberate: the default <see cref="MidpointRounding.ToEven"/> (banker's) rounding would make a
