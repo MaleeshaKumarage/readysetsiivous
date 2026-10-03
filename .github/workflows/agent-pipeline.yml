@@ -192,7 +192,7 @@ jobs:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
           ~/.local/bin/aider \
-            --model deepseek/deepseek-v4-flash \
+            --model deepseek/deepseek-v4-pro \
             --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
             --message "You are a senior developer. Implement the feature COMPLETELY following the plan exactly. Critical rules: follow the plan, add tests for new behavior, leave no TODOs or stubs, handle edge cases and error paths, and ensure it compiles. Issue: $(cat /tmp/issue-title.txt). $(cat /tmp/issue-body.txt). Plan: $(cat /tmp/plan.txt)"
 
