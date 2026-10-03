@@ -63,4 +63,91 @@ public class ShiftScheduleCalculatorTests
 
         Assert.True(ShiftScheduleCalculator.Overlaps(a, b));
     }
+
+    [Fact]
+    public void Non_overlapping_occurrences_do_not_overlap()
+    {
+        var a = new ShiftOccurrence { StartUtc = new DateTime(2026, 3, 2, 8, 0, 0), EndUtc = new DateTime(2026, 3, 2, 10, 0, 0) };
+        var b = new ShiftOccurrence { StartUtc = new DateTime(2026, 3, 2, 11, 0, 0), EndUtc = new DateTime(2026, 3, 2, 13, 0, 0) };
+
+        Assert.False(ShiftScheduleCalculator.Overlaps(a, b));
+    }
+
+    [Fact]
+    public void Adjacent_occurrences_do_not_overlap()
+    {
+        var a = new ShiftOccurrence { StartUtc = new DateTime(2026, 3, 2, 8, 0, 0), EndUtc = new DateTime(2026, 3, 2, 10, 0, 0) };
+        var b = new ShiftOccurrence { StartUtc = new DateTime(2026, 3, 2, 10, 0, 0), EndUtc = new DateTime(2026, 3, 2, 12, 0, 0) };
+
+        Assert.False(ShiftScheduleCalculator.Overlaps(a, b));
+    }
+
+    [Fact]
+    public void BiWeekly_parity_one_includes_anchor_week()
+    {
+        var shift = BiWeeklyShift(parity: 1);
+
+        var occurrences = ShiftScheduleCalculator.GenerateOccurrences(
+            shift,
+            new DateTime(2024, 1, 1, 0, 0, 0), // anchor week (2024-01-01 is a Monday)
+            new DateTime(2024, 1, 8, 0, 0, 0));
+
+        Assert.Single(occurrences);
+        Assert.Equal(new DateTime(2024, 1, 1, 9, 0, 0), occurrences[0].StartUtc);
+    }
+
+    [Fact]
+    public void BiWeekly_parity_two_skips_anchor_week()
+    {
+        var shift = BiWeeklyShift(parity: 2);
+
+        var occurrences = ShiftScheduleCalculator.GenerateOccurrences(
+            shift,
+            new DateTime(2024, 1, 1, 0, 0, 0), // anchor week
+            new DateTime(2024, 1, 8, 0, 0, 0));
+
+        Assert.Empty(occurrences);
+    }
+
+    [Fact]
+    public void BiWeekly_parity_two_includes_week_before_anchor()
+    {
+        // Dates before the 2024-01-01 anchor exercise the negative-modulo math,
+        // which is the easy spot to get parity wrong.
+        var shift = BiWeeklyShift(parity: 2);
+
+        var occurrences = ShiftScheduleCalculator.GenerateOccurrences(
+            shift,
+            new DateTime(2023, 12, 25, 0, 0, 0), // one week before the anchor
+            new DateTime(2024, 1, 1, 0, 0, 0));
+
+        Assert.Single(occurrences);
+        Assert.Equal(new DateTime(2023, 12, 25, 9, 0, 0), occurrences[0].StartUtc);
+    }
+
+    [Fact]
+    public void BiWeekly_parity_one_excludes_week_before_anchor()
+    {
+        var shift = BiWeeklyShift(parity: 1);
+
+        var occurrences = ShiftScheduleCalculator.GenerateOccurrences(
+            shift,
+            new DateTime(2023, 12, 25, 0, 0, 0), // one week before the anchor
+            new DateTime(2024, 1, 1, 0, 0, 0));
+
+        Assert.Empty(occurrences);
+    }
+
+    private static Shift BiWeeklyShift(int parity) => new Shift
+    {
+        IsActive = true,
+        Schedule = new ShiftSchedule
+        {
+            Type = ShiftScheduleType.BiWeekly,
+            BiWeeklyWeekParity = parity,
+            BiWeeklyDay = DayOfWeek.Monday,
+            BiWeeklyStart = new TimeSpan(9, 0, 0),
+            BiWeeklyEnd = new TimeSpan(17, 0, 0)
+        }
+    };
 }
