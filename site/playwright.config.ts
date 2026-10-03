@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: './e2e',
   timeout: 30000,
   use: {
-    baseURL: 'http://localhost:6006',
+    baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:3000',
   },
   projects: [
     {
