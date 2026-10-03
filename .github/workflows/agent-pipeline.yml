@@ -300,49 +300,9 @@ jobs:
           echo "PR=$PR"
           echo "pr=$PR" >> "$GITHUB_OUTPUT"
 
-  # --- Stage 6: playwright E2E against deployed dev build ---
-  playwright:
-    needs: [pr, resolve]
-    runs-on: [self-hosted, agent]
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout branch
-        uses: actions/checkout@v4
-        with:
-          ref: feature/issue-${{ needs.resolve.outputs.issue }}
-
-      - name: Playwright E2E (dev build)
-        env:
-          GH_TOKEN: ${{ github.token }}
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-        run: |
-          PR=${{ needs.pr.outputs.pr }}
-          set +e
-          retry() {
-            local what="$1"; shift
-            local i
-            for i in 1 2 3; do
-              echo "===== $what (attempt $i) ====="
-              "$@" > /tmp/retry.log 2>&1
-              if [ $? -eq 0 ]; then echo "$what OK"; return 0; fi
-              echo "$what FAILED (attempt $i). DeepSeek fix..."
-              tail -30 /tmp/retry.log
-              ~/.local/bin/aider --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
-                --message "Fix these failing Playwright tests: $(tail -40 /tmp/retry.log)"
-            done
-            return 1
-          }
-          if retry "playwright e2e" bash -c 'cd site && npm ci && npx playwright install chromium && npx playwright test --config=playwright.static.config.ts'; then
-            echo "e2e passed"
-          else
-            gh pr comment "$PR" --body "⚠️ Playwright E2E failed against the dev build."
-            exit 1
-          fi
-
-  # --- Stage 7: architecture diagram ---
+  # --- Stage 6: architecture diagram ---
   diagram:
-    needs: [playwright, pr, resolve]
+    needs: [pr, resolve]
     runs-on: [self-hosted, agent]
     permissions:
       contents: write
@@ -395,8 +355,8 @@ jobs:
             exit 1
           fi
 
-  # --- Stage 7: review + fix one-by-one + resolve ---
-  review:
+  # --- Stage 7: review + self-heal + verify (loop until fully passing) ---
+  review-verify:
     needs: [pr, resolve]
     runs-on: [self-hosted, agent]
     permissions:
@@ -408,64 +368,16 @@ jobs:
         with:
           ref: feature/issue-${{ needs.resolve.outputs.issue }}
 
-      - name: Review-fix loop
+      - name: Review + self-heal + verify loop
         env:
           GH_TOKEN: ${{ github.token }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
           PR=${{ needs.pr.outputs.pr }}
-          BR="feature/issue-${{ needs.resolve.outputs.issue }}"
-          for i in $(seq 1 10); do
-            HEAD_SHA=$(git rev-parse HEAD)
-            gh pr diff "$PR" > /tmp/diff.txt
-            python3 scripts/deepseek.py \
-              "You are a senior code reviewer who improves quality AND teaches. Review the diff for correctness, security, maintainability, performance, and testing — not style nits. Be specific, explain why. Output each issue as a 3-line block, one per issue, blank line between: '### FILE: <file path>', '### LINE: <line number>', '### FIX: <priority> <what to change, and why it matters>'. Priority: 🔴 blocker, 🟡 suggestion, 💭 nit. Do not report files under .github/workflows/. If no issues, output exactly NO_ISSUES and nothing else." \
-              < /tmp/diff.txt > /tmp/review.txt
-            python3 scripts/post_review_comments.py "$PR" "$HEAD_SHA" < /tmp/review.txt
-            grep -q "NO_ISSUES" /tmp/review.txt && break
-            [ -s /tmp/fixes.list ] || break
-            while IFS=$'\t' read -r file line cid fix; do
-              ~/.local/bin/aider --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
-                --file "$file" \
-                --message "Fix ONLY this one issue in $file near line $line. Make the minimal edit to the specific lines. Do NOT rewrite or regenerate the entire file — preserve all existing classes, methods, and surrounding code unchanged. $fix"
-              if [ -n "$cid" ] && [ "$cid" != "0" ]; then
-                SHA=$(git rev-parse --short HEAD)
-                python3 scripts/resolve_comment.py "$PR" "$cid" "$SHA" || true
-              fi
-            done < /tmp/fixes.list
-            git push origin "$BR"
-          done
-
-  # --- Stage 7: reality-check + mark ready ---
-  verify:
-    needs: [review, pr, resolve]
-    runs-on: [self-hosted, agent]
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - name: Checkout branch
-        uses: actions/checkout@v4
-        with:
-          ref: feature/issue-${{ needs.resolve.outputs.issue }}
-
-      - name: Reality-check + ready
-        env:
-          GH_TOKEN: ${{ github.token }}
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-        run: |
-          PR=${{ needs.pr.outputs.pr }}
-          # safety net: restore files drastically reduced vs main (destructive edit)
+          N=${{ needs.resolve.outputs.issue }}
+          BR="feature/issue-$N"
           git fetch origin main --quiet 2>/dev/null || true
-          for f in $(git diff --name-only origin/main 2>/dev/null); do
-            old=$(git show origin/main:"$f" 2>/dev/null | wc -l)
-            new=$(wc -l < "$f" 2>/dev/null)
-            if [ "$old" -gt 20 ] && [ "$new" -lt $((old / 2)) ]; then
-              echo "restoring destructive edit: $f ($old -> $new lines)"
-              git checkout origin/main -- "$f"
-            fi
-          done
-          set +e
+
           retry() {
             local what="$1"; shift
             local i
@@ -473,28 +385,66 @@ jobs:
               echo "===== $what (attempt $i) ====="
               "$@" > /tmp/retry.log 2>&1
               if [ $? -eq 0 ]; then echo "$what OK"; return 0; fi
-              echo "$what FAILED (attempt $i). DeepSeek fix..."
+              echo "$what FAILED. DeepSeek fix..."
               tail -30 /tmp/retry.log
               ~/.local/bin/aider --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
                 --message "Fix this build/test failure with the MINIMAL edit to the specific lines causing the error. Do NOT rewrite or regenerate whole files — preserve all existing classes and code. Error: $(tail -40 /tmp/retry.log)"
             done
             return 1
           }
-          if retry "final build" bash -c 'cd api && dotnet build CleaningSuite.Backend.sln -c Release --nologo' && \
-             retry "final test" bash -c 'cd api && dotnet test CleaningSuite.Backend.sln -c Release --no-build'; then
-            N=${{ needs.resolve.outputs.issue }}
-            gh issue view "$N" --json comments -q '.comments[].body' | tail -20 > /tmp/verify-plan.txt
-            gh pr diff "$PR" > /tmp/verify-diff.txt
-            {
-              echo "## Plan"; cat /tmp/verify-plan.txt
-              echo "## Diff"; head -200 /tmp/verify-diff.txt
-            } | python3 scripts/deepseek.py "Compare the diff to the plan. If key plan items are NOT implemented, output exactly MISSING. Otherwise output OK." > /tmp/conformance.txt
-            if grep -q "MISSING" /tmp/conformance.txt; then
-              gh pr comment "$PR" --body "Plan conformance FAILED: implementation missing key items vs plan."
-              exit 1
+
+          for round in $(seq 1 10); do
+            echo "===== self-heal round $round ====="
+
+            # 1. restore destructive edits vs main
+            for f in $(git diff --name-only origin/main 2>/dev/null); do
+              old=$(git show origin/main:"$f" 2>/dev/null | wc -l)
+              new=$(wc -l < "$f" 2>/dev/null)
+              if [ "$old" -gt 20 ] && [ "$new" -lt $((old / 2)) ]; then
+                echo "restoring destructive edit: $f ($old -> $new lines)"
+                git checkout origin/main -- "$f"
+              fi
+            done
+
+            # 2. review + fix one-by-one
+            HEAD_SHA=$(git rev-parse HEAD)
+            gh pr diff "$PR" > /tmp/diff.txt
+            python3 scripts/deepseek.py \
+              "You are a senior code reviewer who improves quality AND teaches. Review the diff for correctness, security, maintainability, performance, and testing — not style nits. Be specific, explain why. Output each issue as a 3-line block, one per issue, blank line between: '### FILE: <file path>', '### LINE: <line number>', '### FIX: <priority> <what to change, and why it matters>'. Priority: 🔴 blocker, 🟡 suggestion, 💭 nit. Do not report files under .github/workflows/. If no issues, output exactly NO_ISSUES and nothing else." \
+              < /tmp/diff.txt > /tmp/review.txt
+            python3 scripts/post_review_comments.py "$PR" "$HEAD_SHA" < /tmp/review.txt
+
+            if ! grep -q "NO_ISSUES" /tmp/review.txt && [ -s /tmp/fixes.list ]; then
+              while IFS=$'\t' read -r file line cid fix; do
+                ~/.local/bin/aider --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+                  --file "$file" \
+                  --message "Fix ONLY this one issue in $file near line $line. Make the minimal edit to the specific lines. Do NOT rewrite or regenerate the entire file — preserve all existing classes, methods, and surrounding code unchanged. $fix"
+                if [ -n "$cid" ] && [ "$cid" != "0" ]; then
+                  SHA=$(git rev-parse --short HEAD)
+                  python3 scripts/resolve_comment.py "$PR" "$cid" "$SHA" || true
+                fi
+              done < /tmp/fixes.list
             fi
+
+            # 3. verify build + test + playwright
+            retry "build" bash -c 'cd api && dotnet build CleaningSuite.Backend.sln -c Release --nologo' || { git push origin "$BR" 2>/dev/null; continue; }
+            retry "test" bash -c 'cd api && dotnet test CleaningSuite.Backend.sln -c Release --no-build' || { git push origin "$BR" 2>/dev/null; continue; }
+            retry "playwright" bash -c 'cd site && npm ci && npx playwright install chromium && npx playwright test --config=playwright.static.config.ts' || { git push origin "$BR" 2>/dev/null; continue; }
+
+            # 4. plan conformance
+            gh issue view "$N" --json comments -q '.comments[].body' | tail -20 > /tmp/verify-plan.txt
+            { echo "## Plan"; cat /tmp/verify-plan.txt; echo "## Diff"; head -200 /tmp/diff.txt; } | python3 scripts/deepseek.py "Compare the diff to the plan. If key plan items are NOT implemented, output exactly MISSING. Otherwise output OK." > /tmp/conformance.txt
+            if grep -q "MISSING" /tmp/conformance.txt; then
+              echo "plan conformance missing — next round"
+              continue
+            fi
+
+            # all pass
+            git push origin "$BR"
             gh pr ready "$PR"
-          else
-            gh pr comment "$PR" --body "Reality check FAILED: build or tests broken after review fixes. Leaving as draft."
-            exit 1
-          fi
+            echo "SELF-HEAL COMPLETE — PR ready"
+            exit 0
+          done
+
+          gh pr comment "$PR" --body "Self-healing exhausted after 10 rounds — build/test/E2E/plan did not all pass."
+          exit 1
