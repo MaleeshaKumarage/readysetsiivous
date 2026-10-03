@@ -9,17 +9,23 @@ import { adminCompanies, Company } from '@/lib/adminApi';
 export default function CompaniesAdminPage({ params }: { params: { lang: string } }) {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(handle);
+  }, [search]);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
-    adminCompanies.list(search, 0, 100).then((result) => {
+    adminCompanies.list(debouncedSearch, 0, 100).then((result) => {
       if (active && result) setCompanies(result.items);
       if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, [search]);
+  }, [debouncedSearch]);
 
   return (
     <div>
