@@ -47,7 +47,7 @@ async function getJson<T>(path: string): Promise<T | null> {
   try {
     const response = await fetch(`${API_URL}${path}`, {
       headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(20000),
     });
     if (!response.ok) return null;
     return (await response.json()) as T;
