@@ -198,9 +198,12 @@ public class ShiftHandlers
 
     public class AssignEmployeeToShiftCommandHandler : IRequestHandler<AssignEmployeeToShiftCommand, ShiftAssignmentDto>
     {
+        // Upper bound on the window used when checking for overlapping assignments. Only the
+        // shift's own ValidFrom/ValidUntil define the window; when those are open-ended this
+        // cap prevents generating an unbounded set of occurrences.
+        private const int MaxConflictWindowDays = 180;
+
         private readonly IShiftRepository _repository;
-        private readonly DateTime _from = DateTime.Today;
-        private readonly DateTime _to = DateTime.Today.AddDays(60);
 
         public AssignEmployeeToShiftCommandHandler(IShiftRepository repository)
         {
@@ -212,7 +215,8 @@ public class ShiftHandlers
             var shift = await _repository.GetAsync(request.ShiftId, ct)
                 ?? throw new NotFoundException("Shift", request.ShiftId);
 
-            var candidateOccurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, _from, _to);
+            var (from, to) = ResolveConflictWindow(shift);
+            var candidateOccurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, from, to);
             var existingAssignments = await _repository.ListAssignmentsByEmployeeAsync(request.EmployeeId, ct);
 
             foreach (var assignment in existingAssignments)
@@ -220,7 +224,7 @@ public class ShiftHandlers
                 var existingShift = await _repository.GetAsync(assignment.ShiftId, ct);
                 if (existingShift is not null && existingShift.Id != request.ShiftId)
                 {
-                    var existingOccurrences = ShiftScheduleCalculator.GenerateOccurrences(existingShift, _from, _to);
+                    var existingOccurrences = ShiftScheduleCalculator.GenerateOccurrences(existingShift, from, to);
                     if (ShiftScheduleCalculator.HasOverlap(candidateOccurrences, existingOccurrences))
                     {
                         throw new ShiftConflictException($"Employee is already assigned to an overlapping shift.");
@@ -242,6 +246,35 @@ public class ShiftHandlers
             var newAssignment = ShiftAssignment.Create(request.ShiftId, request.EmployeeId, request.Note);
             await _repository.SaveAssignmentAsync(newAssignment, ct);
             return MapAssignment(newAssignment);
+        }
+
+        private static (DateTime From, DateTime To) ResolveConflictWindow(Shift shift)
+        {
+            // Anchor the window on the current UTC date, not server-local time, so the generated
+            // occurrences line up with the *Utc values used elsewhere and don't drift with the host
+            // timezone or DST. It is computed per request rather than captured in a field so it
+            // stays correct regardless of handler lifetime.
+            var today = DateTime.UtcNow.Date;
+            var from = shift.ValidFrom?.Date ?? today;
+            if (from < today)
+            {
+                from = today;
+            }
+
+            // Derive the end of the window from the shift's validity, capped so open-ended shifts
+            // (no ValidUntil) don't generate an unbounded number of occurrences.
+            var maxTo = from.AddDays(MaxConflictWindowDays);
+            var to = shift.ValidUntil?.Date ?? maxTo;
+            if (to > maxTo)
+            {
+                to = maxTo;
+            }
+            else if (to < from)
+            {
+                to = from;
+            }
+
+            return (from, to);
         }
     }
 
