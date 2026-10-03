@@ -388,5 +388,51 @@
     "bookingNumber": "Bokningsnummer",
     "reference": "Referens",
     "backHome": "Till startsidan"
+  },
+  "admin": {
+    "companies": {
+      "title": "Företag",
+      "businessId": "FO-nummer",
+      "name": "Företagsnamn",
+      "contactName": "Kontaktperson",
+      "contactEmail": "E-post",
+      "contactPhone": "Telefon",
+      "notes": "Anteckningar",
+      "isActive": "Aktiv",
+      "create": "Lägg till företag",
+      "edit": "Redigera företag",
+      "deactivate": "Avaktivera",
+      "branches": "Avdelningar",
+      "branchName": "Avdelningsnamn",
+      "street": "Gata",
+      "postalCode": "Postnummer",
+      "city": "Stad",
+      "branchDeactivate": "Avaktivera avdelning"
+    },
+    "shifts": {
+      "title": "Skift",
+      "company": "Företag",
+      "branch": "Avdelning",
+      "name": "Skiftnamn",
+      "scheduleType": "Schematyp",
+      "dailySameTime": "Dagligen samma tid",
+      "dailyDifferentTime": "Dagligen olika tid",
+      "weekly": "Veckovis",
+      "biWeekly": "Varannan vecka",
+      "onCallFlexible": "Vid behov / flexibel",
+      "startTime": "Börjar",
+      "endTime": "Slutar",
+      "dailyTimes": "Veckodagsvisa tider",
+      "weeklyDay": "Veckodag",
+      "biWeeklyWeekParity": "Veckoparitet (1 eller 2)",
+      "notes": "Anteckningar",
+      "validFrom": "Giltig från",
+      "validUntil": "Giltig till",
+      "assign": "Tilldela anställd",
+      "selectedEmployees": "Tilldelade anställda",
+      "occurrences": "Förekomster",
+      "create": "Skapa skift",
+      "deactivate": "Avaktivera"
+    }
   }
 }

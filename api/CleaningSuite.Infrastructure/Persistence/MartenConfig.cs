@@ -1,8 +1,10 @@
 using CleaningSuite.Domain.Bookings;
 using CleaningSuite.Domain.Common;
+using CleaningSuite.Domain.Companies;
 using CleaningSuite.Domain.Employees;
 using CleaningSuite.Domain.Invoicing;
 using CleaningSuite.Domain.Services;
+using CleaningSuite.Domain.Shifts;
 using CleaningSuite.Domain.Tenants;
 using JasperFx;
 using Marten;
@@ -39,6 +41,22 @@ public static class MartenConfig
         options.Schema.For<Service>().Index(x => x.Slug);
         options.Schema.For<Invoice>().Index(x => x.InvoiceNumber);
         options.Schema.For<Employee>().Index(x => x.KeycloakUserId);
+
+        options.Schema.For<Company>()
+            .Index(x => x.BusinessId)
+            .Index(x => x.Name);
+
+        options.Schema.For<Branch>()
+            .Index(x => x.CompanyId)
+            .Index(x => x.Name);
+
+        options.Schema.For<Shift>()
+            .Index(x => x.CompanyId)
+            .Index(x => x.BranchId);
+
+        options.Schema.For<ShiftAssignment>()
+            .Index(x => x.ShiftId)
+            .Index(x => x.EmployeeId);
 
         // Registry partition: unique slug across all tenants.
         options.Schema.For<TenantRegistration>().UniqueIndex(x => x.Slug);

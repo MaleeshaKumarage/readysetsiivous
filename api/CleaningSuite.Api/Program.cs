@@ -82,6 +82,11 @@ builder.Services.AddSingleton<CleaningSuite.Application.Agreements.IAgreementFil
         builder.Configuration["Uploads:Path"] ?? Path.Combine(Directory.GetCurrentDirectory(), "uploads")));
 builder.Services.AddSingleton<CleaningSuite.Application.Agreements.IAgreementDocumentGenerator, CleaningSuite.Infrastructure.Agreements.AgreementPdfSigner>();
 
+// New repositories for Companies and Shifts.
+builder.Services.AddScoped<CleaningSuite.Application.Companies.ICompanyRepository, CleaningSuite.Infrastructure.Persistence.CompanyRepository>();
+builder.Services.AddScoped<CleaningSuite.Application.Companies.IBranchRepository, CleaningSuite.Infrastructure.Persistence.BranchRepository>();
+builder.Services.AddScoped<CleaningSuite.Application.Shifts.IShiftRepository, CleaningSuite.Infrastructure.Persistence.ShiftRepository>();
+
 builder.Services.AddMediatR(cfg =>
 {
     cfg.RegisterServicesFromAssembly(typeof(AssemblyMarker).Assembly);
@@ -184,6 +189,7 @@ public class DefaultExceptionHandler : IExceptionHandler
             CleaningSuite.Application.Common.NotFoundException => (404, "Not found"),
             CleaningSuite.Application.Bookings.SlotConflictException => (409, "Slot conflict"),
             CleaningSuite.Application.Agreements.AgreementConflictException => (409, "Agreement conflict"),
+            CleaningSuite.Application.Shifts.ShiftConflictException => (409, "Shift conflict"),
             JasperFx.ConcurrencyException => (409, "Conflict — concurrent update, please retry"),
             UnauthorizedAccessException => (403, "Forbidden"),
             _ => (500, "Internal server error"),

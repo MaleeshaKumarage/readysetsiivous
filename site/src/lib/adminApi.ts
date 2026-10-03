@@ -225,3 +225,177 @@ export async function downloadInvoicePdf(id: string): Promise<void> {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+// ---------- Companies and Branches ----------
+export interface Company {
+  id: string;
+  businessId: string;
+  name: string;
+  contactName?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  notes?: string | null;
+  isActive: boolean;
+}
+
+export interface Branch {
+  id: string;
+  companyId: string;
+  name: string;
+  street?: string | null;
+  postalCode?: string | null;
+  city?: string | null;
+  country?: string | null;
+  contactPhone?: string | null;
+  isActive: boolean;
+}
+
+export interface CompanyDetail {
+  company: Company;
+  branches: Branch[];
+}
+
+// ---------- Shifts ----------
+export type TimeRange = {
+  start: string; // HH:mm
+  end: string;   // HH:mm
+};
+
+export type ShiftScheduleType = 'DailySameTime' | 'DailyDifferentTime' | 'Weekly' | 'BiWeekly' | 'OnCallFlexible';
+
+export interface ShiftSchedule {
+  type: ShiftScheduleType;
+  dailyStart?: string | null;
+  dailyEnd?: string | null;
+  dailyTimes?: Record<string, TimeRange> | null;
+  weeklyDay?: number | null;
+  weeklyStart?: string | null;
+  weeklyEnd?: string | null;
+  biWeeklyWeekParity?: number | null;
+  biWeeklyDay?: number | null;
+  biWeeklyStart?: string | null;
+  biWeeklyEnd?: string | null;
+}
+
+export interface Shift {
+  id: string;
+  companyId: string;
+  branchId: string;
+  name: string;
+  schedule: ShiftSchedule;
+  notes?: string | null;
+  isActive: boolean;
+  validFrom?: string | null;
+  validUntil?: string | null;
+}
+
+export interface ShiftAssignment {
+  id: string;
+  shiftId: string;
+  employeeId: string;
+  assignedAtUtc: string;
+  isActive: boolean;
+  note?: string | null;
+}
+
+export interface ShiftOccurrence {
+  startUtc: string;
+  endUtc: string;
+}
+
+export const adminCompanies = {
+  list: (search = '', skip = 0, take = 100) =>
+    adminGet<{ items: Company[]; total: number }>(
+      `/api/v1/admin/companies?search=${encodeURIComponent(search)}&skip=${skip}&take=${take}`
+    ),
+  get: (id: string) => adminGet<CompanyDetail>(`/api/v1/admin/companies/${id}`),
+  create: (body: {
+    businessId: string;
+    name: string;
+    contactName?: string;
+    contactEmail?: string;
+    contactPhone?: string;
+    notes?: string;
+  }) => adminSendJson<Company>('/api/v1/admin/companies', 'POST', body),
+  update: (
+    id: string,
+    body: {
+      businessId: string;
+      name: string;
+      contactName?: string;
+      contactEmail?: string;
+      contactPhone?: string;
+      notes?: string;
+      isActive: boolean;
+    }
+  ) => adminSendJson<Company>(`/api/v1/admin/companies/${id}`, 'PUT', body),
+  deactivate: (id: string) => adminSend(`/api/v1/admin/companies/${id}/deactivate`, 'POST'),
+};
+
+export const adminBranches = {
+  create: (
+    companyId: string,
+    body: {
+      name: string;
+      street?: string;
+      postalCode?: string;
+      city?: string;
+      country?: string;
+      contactPhone?: string;
+    }
+  ) => adminSendJson<Branch>(`/api/v1/admin/companies/${companyId}/branches`, 'POST', body),
+  update: (
+    id: string,
+    body: {
+      name: string;
+      street?: string;
+      postalCode?: string;
+      city?: string;
+      country?: string;
+      contactPhone?: string;
+      isActive: boolean;
+    }
+  ) => adminSendJson<Branch>(`/api/v1/admin/branches/${id}`, 'PUT', body),
+  deactivate: (id: string) => adminSend(`/api/v1/admin/branches/${id}/deactivate`, 'POST'),
+};
+
+export const adminShifts = {
+  list: (companyId?: string, branchId?: string) => {
+    const params = new URLSearchParams();
+    if (companyId) params.set('companyId', companyId);
+    if (branchId) params.set('branchId', branchId);
+    const qs = params.toString();
+    return adminGet<Shift[]>(`/api/v1/admin/shifts${qs ? `?${qs}` : ''}`);
+  },
+  get: (id: string) => adminGet<Shift>(`/api/v1/admin/shifts/${id}`),
+  create: (body: {
+    companyId: string;
+    branchId: string;
+    name: string;
+    schedule: ShiftSchedule;
+    notes?: string;
+    validFrom?: string;
+    validUntil?: string;
+  }) => adminSendJson<Shift>('/api/v1/admin/shifts', 'POST', body),
+  update: (
+    id: string,
+    body: {
+      companyId: string;
+      branchId: string;
+      name: string;
+      schedule: ShiftSchedule;
+      notes?: string;
+      isActive: boolean;
+      validFrom?: string;
+      validUntil?: string;
+    }
+  ) => adminSendJson<Shift>(`/api/v1/admin/shifts/${id}`, 'PUT', body),
+  deactivate: (id: string) => adminSend(`/api/v1/admin/shifts/${id}/deactivate`, 'POST'),
+  occurrences: (id: string, from: string, to: string) =>
+    adminGet<ShiftOccurrence[]>(`/api/v1/admin/shifts/${id}/occurrences?from=${from}&to=${to}`),
+  assignments: (id: string) => adminGet<ShiftAssignment[]>(`/api/v1/admin/shifts/${id}/assignments`),
+  assignEmployee: (id: string, employeeId: string, note?: string) =>
+    adminSendJson<ShiftAssignment>(`/api/v1/admin/shifts/${id}/assignments`, 'POST', { employeeId, note }),
+  removeEmployee: (id: string, employeeId: string) =>
+    adminSend(`/api/v1/admin/shifts/${id}/assignments/${employeeId}`, 'DELETE'),
+};

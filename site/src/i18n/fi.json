@@ -388,5 +388,51 @@
     "bookingNumber": "Varausnumero",
     "reference": "Viitenumero",
     "backHome": "Etusivulle"
+  },
+  "admin": {
+    "companies": {
+      "title": "Yritykset",
+      "businessId": "Y-tunnus",
+      "name": "Yrityksen nimi",
+      "contactName": "Yhteyshenkilö",
+      "contactEmail": "Sähköposti",
+      "contactPhone": "Puhelin",
+      "notes": "Muistiinpanot",
+      "isActive": "Aktiivinen",
+      "create": "Lisää yritys",
+      "edit": "Muokkaa yritystä",
+      "deactivate": "Poista käytöstä",
+      "branches": "Toimipisteet",
+      "branchName": "Toimipisteen nimi",
+      "street": "Katu",
+      "postalCode": "Postinumero",
+      "city": "Kaupunki",
+      "branchDeactivate": "Poista toimipiste käytöstä"
+    },
+    "shifts": {
+      "title": "Vuorot",
+      "company": "Yritys",
+      "branch": "Toimipiste",
+      "name": "Vuoron nimi",
+      "scheduleType": "Vuorotyyppi",
+      "dailySameTime": "Päivittäin samaan aikaan",
+      "dailyDifferentTime": "Päivittäin eri aikaan",
+      "weekly": "Viikoittain",
+      "biWeekly": "Joka toinen viikko",
+      "onCallFlexible": "Kutsu / joustava",
+      "startTime": "Alkaa",
+      "endTime": "Päättyy",
+      "dailyTimes": "Päiväkohtaiset kellonajat",
+      "weeklyDay": "Viikonpäivä",
+      "biWeeklyWeekParity": "Viikkopariteetti (1 tai 2)",
+      "notes": "Muistiinpanot",
+      "validFrom": "Voimassa alkaen",
+      "validUntil": "Voimassa asti",
+      "assign": "Määritä työntekijä",
+      "selectedEmployees": "Määrätyt työntekijät",
+      "occurrences": "Toteumakerrat",
+      "create": "Luo vuoro",
+      "deactivate": "Poista käytöstä"
+    }
   }
 }
