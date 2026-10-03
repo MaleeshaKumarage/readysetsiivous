@@ -41,11 +41,19 @@ public class Money
     /// </summary>
     public string Format(IFormatProvider? provider) => Gross.ToString("C", provider);
 
+    /// <summary>
+    /// Builds a <see cref="Money"/> from a net amount and a VAT rate percentage. Both <see cref="Net"/>
+    /// and <see cref="Vat"/> are rounded to 2 decimals (cents) using <see cref="MidpointRounding.AwayFromZero"/>.
+    /// This is deliberate: the default <see cref="MidpointRounding.ToEven"/> (banker's) rounding would make a
+    /// computed gross of e.g. 12.345 render as "12,34" instead of the expected "12,35". Rounding here (rather
+    /// than relying on the formatter) guarantees that <see cref="Gross"/> already lands on an exact cent value
+    /// and therefore renders identically regardless of the culture/ICU <c>CurrencyDecimalDigits</c> in effect.
+    /// </summary>
     public static Money FromNet(decimal net, decimal vatRatePercent) =>
         new()
         {
-            Net = decimal.Round(net, 2),
-            Vat = decimal.Round(net * vatRatePercent / 100m, 2),
+            Net = decimal.Round(net, 2, MidpointRounding.AwayFromZero),
+            Vat = decimal.Round(net * vatRatePercent / 100m, 2, MidpointRounding.AwayFromZero),
         };
 }
 
