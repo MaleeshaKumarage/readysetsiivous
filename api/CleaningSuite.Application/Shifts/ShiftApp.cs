@@ -190,10 +190,17 @@ public class ShiftHandlers
 
         public async Task<IReadOnlyList<ShiftOccurrenceDto>> Handle(GetShiftOccurrencesQuery request, CancellationToken ct)
         {
+            // Query-string DateTime binding yields DateTimeKind.Unspecified. Treat the caller's
+            // input as UTC explicitly so occurrence generation is anchored unambiguously.
+            var from = NormalizeUtc(request.From);
+            var to = NormalizeUtc(request.To);
+
             var shift = await _repository.GetAsync(request.ShiftId, ct)
                 ?? throw new NotFoundException("Shift", request.ShiftId);
-            var occurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, request.From, request.To);
-            return occurrences.Select(x => new ShiftOccurrenceDto(x.StartUtc, x.EndUtc)).ToList();
+            var occurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, from, to);
+            return occurrences
+                .Select(x => new ShiftOccurrenceDto(NormalizeUtc(x.StartUtc), NormalizeUtc(x.EndUtc)))
+                .ToList();
         }
     }
 
@@ -310,6 +317,15 @@ public class ShiftHandlers
 
     private static ShiftAssignmentDto MapAssignment(ShiftAssignment assignment) =>
         new(assignment.Id, assignment.ShiftId, assignment.EmployeeId, assignment.AssignedAtUtc, assignment.IsActive, assignment.Note);
+
+    // Occurrence DateTimes are composed as `date.Date + TimeSpan` from an Unspecified source,
+    // so re-tag the result as UTC. Local values are converted; already-UTC values pass through.
+    private static DateTime NormalizeUtc(DateTime value) => value.Kind switch
+    {
+        DateTimeKind.Utc => value,
+        DateTimeKind.Local => value.ToUniversalTime(),
+        _ => DateTime.SpecifyKind(value, DateTimeKind.Utc),
+    };
 }
 
 public class ShiftValidators
