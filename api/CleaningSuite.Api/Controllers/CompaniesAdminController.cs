@@ -67,9 +67,7 @@ public class CompaniesAdminController : ControllerBase
     [HttpPut("branches/{branchId:guid}")]
     public async Task<IActionResult> UpdateBranch(Guid branchId, [FromBody] UpdateBranchCommand command, CancellationToken ct)
     {
-        if (branchId != command.Id)
-            return BadRequest("Branch id mismatch.");
-        var result = await _mediator.Send(command, ct);
+        var result = await _mediator.Send(command with { Id = branchId }, ct);
         return Ok(result);
     }
 
