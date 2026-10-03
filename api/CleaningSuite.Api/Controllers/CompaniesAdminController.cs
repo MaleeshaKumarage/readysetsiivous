@@ -50,12 +50,6 @@ public class CompaniesAdminController : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateCompanyCommand command, CancellationToken ct)
     {
-        if (command.IsActive is null)
-        {
-            var current = await _mediator.Send(new GetCompanyQuery(id), ct);
-            command = command with { IsActive = current.IsActive };
-        }
-
         var result = await _mediator.Send(command with { Id = id }, ct);
         return Ok(result);
     }
