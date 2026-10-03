@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.Json.Serialization;
 
 namespace CleaningSuite.Domain.Common;
 
@@ -48,9 +47,8 @@ public class Money
     /// <summary>
     /// Formatted gross total, e.g. "123,45 €". Always uses a comma decimal separator and a
     /// non-breaking space (U+00A0) group separator, independent of the current culture.
-    /// Presentation-only; excluded from JSON serialization to keep it out of the API wire contract.
+    /// Presentation-only; keep it out of the API wire contract via serializer/DTO configuration.
     /// </summary>
-    [JsonIgnore]
     public string Summary => SummaryFor(DefaultCurrencySymbol);
 
     /// <summary>
