@@ -28,8 +28,12 @@ public class Money
 
     /// <summary>
     /// Single rounding policy for money: 2 decimals, midpoint-to-even (the default of
-    /// <see cref="decimal.Round(decimal, int)"/>). Used by <see cref="FromNet"/> and by the
-    /// formatting helpers below, so a displayed total can never disagree with the rounded lines.
+    /// <see cref="decimal.Round(decimal, int)"/>). Applied by <see cref="FromNet"/> when
+    /// constructing amounts and by the formatting helpers below when rendering them.
+    /// <see cref="Gross"/> is authoritative for stored and downstream math; <see cref="Summary"/>
+    /// is presentation-only and rounds for display, so values assigned directly to <see cref="Net"/>
+    /// or <see cref="Vat"/> with more than 2 decimals are not normalised here and may therefore
+    /// differ from the displayed amount.
     /// </summary>
     private const MidpointRounding RoundingMode = MidpointRounding.ToEven;
 
