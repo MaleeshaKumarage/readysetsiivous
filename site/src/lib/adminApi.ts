@@ -314,6 +314,31 @@ export interface ShiftOccurrence {
   endUtc: string;
 }
 
+export const adminShifts = {
+  list: (companyId?: string, branchId?: string) => {
+    const query = new URLSearchParams();
+    if (companyId) query.set('companyId', companyId);
+    if (branchId) query.set('branchId', branchId);
+    const suffix = query.toString();
+    return adminGet<Shift[]>(`/api/v1/admin/shifts${suffix ? `?${suffix}` : ''}`);
+  },
+  get: (id: string) => adminGet<Shift>(`/api/v1/admin/shifts/${id}`),
+  create: (fields: unknown) => adminSendJson<Shift>('/api/v1/admin/shifts', 'POST', fields),
+  update: (id: string, fields: unknown) =>
+    adminSendJson<Shift>(`/api/v1/admin/shifts/${id}`, 'PUT', fields),
+  deactivate: (id: string) => adminSend(`/api/v1/admin/shifts/${id}/deactivate`, 'POST'),
+  assignments: (id: string) =>
+    adminGet<ShiftAssignment[]>(`/api/v1/admin/shifts/${id}/assignments`),
+  assign: (id: string, employeeId: string) =>
+    adminSend(`/api/v1/admin/shifts/${id}/assignments`, 'POST', { employeeId }),
+  unassign: (id: string, assignmentId: string) =>
+    adminSend(`/api/v1/admin/shifts/${id}/assignments/${assignmentId}`, 'DELETE'),
+  occurrences: (id: string, fromUtc: string, toUtc: string) =>
+    adminGet<ShiftOccurrence[]>(
+      `/api/v1/admin/shifts/${id}/occurrences?fromUtc=${encodeURIComponent(fromUtc)}&toUtc=${encodeURIComponent(toUtc)}`
+    ),
+};
+
 export const adminCompanies = {
   list: (search = '', skip = 0, take = 100) =>
     adminGet<{ items: Company[]; total: number }>(
