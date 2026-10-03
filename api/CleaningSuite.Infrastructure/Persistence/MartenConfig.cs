@@ -43,7 +43,7 @@ public static class MartenConfig
         options.Schema.For<Employee>().Index(x => x.KeycloakUserId);
 
         options.Schema.For<Company>()
-            .Index(x => x.BusinessId)
+            .UniqueIndex(x => x.BusinessId)
             .Index(x => x.Name);
 
         options.Schema.For<Branch>()
@@ -56,7 +56,8 @@ public static class MartenConfig
 
         options.Schema.For<ShiftAssignment>()
             .Index(x => x.ShiftId)
-            .Index(x => x.EmployeeId);
+            .Index(x => x.EmployeeId)
+            .UniqueIndex(x => new { x.ShiftId, x.EmployeeId });
 
         // Registry partition: unique slug across all tenants.
         options.Schema.For<TenantRegistration>().UniqueIndex(x => x.Slug);
