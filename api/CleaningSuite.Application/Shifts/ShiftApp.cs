@@ -30,6 +30,7 @@ public interface IShiftRepository
 {
     Task<Shift?> GetAsync(Guid id, CancellationToken ct = default);
     Task<IReadOnlyList<Shift>> ListAsync(Guid? companyId, Guid? branchId, CancellationToken ct = default);
+    Task<IReadOnlyList<Shift>> ListByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct = default);
     Task SaveAsync(Shift shift, CancellationToken ct = default);
     Task<ShiftAssignment?> GetAssignmentAsync(Guid shiftId, Guid employeeId, CancellationToken ct = default);
     Task<IReadOnlyList<ShiftAssignment>> ListAssignmentsByEmployeeAsync(Guid employeeId, CancellationToken ct = default);
@@ -219,10 +220,18 @@ public class ShiftHandlers
             var candidateOccurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, from, to);
             var existingAssignments = await _repository.ListAssignmentsByEmployeeAsync(request.EmployeeId, ct);
 
-            foreach (var assignment in existingAssignments)
+            // Load every other shift the employee is assigned to in a single query instead of
+            // issuing a GetAsync per assignment, and generate each shift's occurrences just once.
+            var otherShiftIds = existingAssignments
+                .Select(a => a.ShiftId)
+                .Where(id => id != request.ShiftId)
+                .Distinct()
+                .ToList();
+
+            if (otherShiftIds.Count > 0)
             {
-                var existingShift = await _repository.GetAsync(assignment.ShiftId, ct);
-                if (existingShift is not null && existingShift.Id != request.ShiftId)
+                var otherShifts = await _repository.ListByIdsAsync(otherShiftIds, ct);
+                foreach (var existingShift in otherShifts)
                 {
                     var existingOccurrences = ShiftScheduleCalculator.GenerateOccurrences(existingShift, from, to);
                     if (ShiftScheduleCalculator.HasOverlap(candidateOccurrences, existingOccurrences))
