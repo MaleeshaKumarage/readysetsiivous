@@ -112,7 +112,7 @@ public class ShiftHandlers
         public async Task<ShiftDto> Handle(UpdateShiftCommand request, CancellationToken ct)
         {
             var shift = await _repository.GetAsync(request.Id, ct)
-                ?? throw new NotFoundException("Shift not found");
+                ?? throw new NotFoundException("Shift", request.Id);
             shift.Update(
                 request.CompanyId,
                 request.BranchId,
@@ -139,7 +139,7 @@ public class ShiftHandlers
         public async Task Handle(DeactivateShiftCommand request, CancellationToken ct)
         {
             var shift = await _repository.GetAsync(request.Id, ct)
-                ?? throw new NotFoundException("Shift not found");
+                ?? throw new NotFoundException("Shift", request.Id);
             shift.Deactivate();
             await _repository.SaveAsync(shift, ct);
         }
@@ -173,7 +173,7 @@ public class ShiftHandlers
         public async Task<ShiftDto> Handle(GetShiftQuery request, CancellationToken ct)
         {
             var shift = await _repository.GetAsync(request.Id, ct)
-                ?? throw new NotFoundException("Shift not found");
+                ?? throw new NotFoundException("Shift", request.Id);
             return MapShift(shift);
         }
     }
@@ -190,7 +190,7 @@ public class ShiftHandlers
         public async Task<IReadOnlyList<ShiftOccurrenceDto>> Handle(GetShiftOccurrencesQuery request, CancellationToken ct)
         {
             var shift = await _repository.GetAsync(request.ShiftId, ct)
-                ?? throw new NotFoundException("Shift not found");
+                ?? throw new NotFoundException("Shift", request.ShiftId);
             var occurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, request.From, request.To);
             return occurrences.Select(x => new ShiftOccurrenceDto(x.StartUtc, x.EndUtc)).ToList();
         }
@@ -210,7 +210,7 @@ public class ShiftHandlers
         public async Task<ShiftAssignmentDto> Handle(AssignEmployeeToShiftCommand request, CancellationToken ct)
         {
             var shift = await _repository.GetAsync(request.ShiftId, ct)
-                ?? throw new NotFoundException("Shift not found");
+                ?? throw new NotFoundException("Shift", request.ShiftId);
 
             var candidateOccurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, _from, _to);
             var existingAssignments = await _repository.ListAssignmentsByEmployeeAsync(request.EmployeeId, ct);

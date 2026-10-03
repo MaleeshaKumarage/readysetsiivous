@@ -125,7 +125,7 @@ public class CompanyHandlers
         public async Task<CompanyDto> Handle(UpdateCompanyCommand request, CancellationToken ct)
         {
             var company = await _repository.GetAsync(request.Id, ct)
-                ?? throw new NotFoundException("Company not found");
+                ?? throw new NotFoundException("Company", request.Id);
             company.Update(
                 request.BusinessId,
                 request.Name,
@@ -152,7 +152,7 @@ public class CompanyHandlers
         public async Task Handle(DeactivateCompanyCommand request, CancellationToken ct)
         {
             var company = await _repository.GetAsync(request.Id, ct)
-                ?? throw new NotFoundException("Company not found");
+                ?? throw new NotFoundException("Company", request.Id);
             company.Deactivate();
             await _repository.SaveAsync(company, ct);
         }
@@ -188,7 +188,7 @@ public class CompanyHandlers
         public async Task<CompanyDetailDto> Handle(GetCompanyQuery request, CancellationToken ct)
         {
             var company = await _companyRepository.GetAsync(request.Id, ct)
-                ?? throw new NotFoundException("Company not found");
+                ?? throw new NotFoundException("Company", request.Id);
             var branches = await _branchRepository.ListByCompanyAsync(request.Id, ct);
             return new CompanyDetailDto(
                 MapCompany(company),
@@ -234,7 +234,7 @@ public class CompanyHandlers
             public async Task<BranchDto> Handle(UpdateBranchCommand request, CancellationToken ct)
             {
                 var branch = await _repository.GetAsync(request.Id, ct)
-                    ?? throw new NotFoundException("Branch not found");
+                    ?? throw new NotFoundException("Branch", request.Id);
                 branch.Update(
                     request.Name,
                     request.Street,
@@ -260,7 +260,7 @@ public class CompanyHandlers
             public async Task Handle(DeactivateBranchCommand request, CancellationToken ct)
             {
                 var branch = await _repository.GetAsync(request.Id, ct)
-                    ?? throw new NotFoundException("Branch not found");
+                    ?? throw new NotFoundException("Branch", request.Id);
                 branch.Deactivate();
                 await _repository.SaveAsync(branch, ct);
             }
