@@ -27,21 +27,20 @@ public class CompanyRepository : ICompanyRepository
         int take,
         CancellationToken ct)
     {
-        var all = await Session.Query<Company>().ToListAsync(ct);
+        IQueryable<Company> query = Session.Query<Company>();
+
         if (!string.IsNullOrWhiteSpace(search))
         {
-            all = all
-                .Where(c => c.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
-                            || c.BusinessId.Contains(search, StringComparison.OrdinalIgnoreCase))
-                .ToList();
+            query = query.Where(c => c.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
+                                     || c.BusinessId.Contains(search, StringComparison.OrdinalIgnoreCase));
         }
 
-        var total = all.Count;
-        var items = all
+        var total = await query.CountAsync(ct);
+        var items = await query
             .OrderBy(c => c.Name)
             .Skip(skip)
             .Take(take)
-            .ToList();
+            .ToListAsync(ct);
         return (items, total);
     }
 
