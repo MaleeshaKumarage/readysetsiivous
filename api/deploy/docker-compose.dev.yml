@@ -1,5 +1,5 @@
 # Dev preview stack for the coding agent, on the agent VM (isolated from prod).
-# Reuses prod Keycloak for auth; own DB + API on separate ports.
+# Own DB + API + Keycloak on separate ports; no prod dependency.
 services:
   postgres:
     image: postgres:16-alpine
@@ -13,6 +13,18 @@ services:
     volumes:
       - dev_pgdata:/var/lib/postgresql/data
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    restart: unless-stopped
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USER}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+    ports:
+      - "8081:8080"
+    command: start-dev --import-realm
+    volumes:
+      - ./keycloak-realm.json:/opt/keycloak/data/import/realm.json
+
   api:
     image: cleaning-dev-api:dev
     restart: unless-stopped
@@ -21,7 +33,7 @@ services:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=cleaning;Username=cleaning;Password=devpassword
       Marten__AutoCreateSchemaMode: CreateOrUpdate
-      Auth__Keycloak__ServerUrl: https://auth.readysetsiivous.fi
+      Auth__Keycloak__ServerUrl: http://keycloak:8080
       Auth__Keycloak__Audiences__0: cleaning-suite-web
       Auth__Keycloak__Audiences__1: cleaning-provisioner
       Auth__Keycloak__Audiences__2: account

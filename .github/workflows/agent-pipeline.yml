@@ -283,7 +283,7 @@ jobs:
           cd api && docker build -f docker/Dockerfile -t cleaning-dev-api:dev . && cd /home/ubuntu/cleaning-dev && docker compose up -d
           for i in $(seq 1 30); do docker exec cleaning-dev-postgres-1 pg_isready -U cleaning >/dev/null 2>&1 && break; sleep 2; done
           docker exec -i cleaning-dev-postgres-1 psql -U cleaning -d cleaning < "$GITHUB_WORKSPACE/api/deploy/seed-dev.sql"
-          cd "$GITHUB_WORKSPACE/site" && npm ci && NEXT_PUBLIC_API_URL=http://130.61.208.211:8090/ npm run build
+          cd "$GITHUB_WORKSPACE/site" && npm ci && NEXT_PUBLIC_API_URL=http://130.61.208.211:8090/ NEXT_PUBLIC_KEYCLOAK_URL=http://130.61.208.211:8081/ npm run build
           sudo mkdir -p /home/ubuntu/cleaning-dev/site && sudo rm -rf /home/ubuntu/cleaning-dev/site/* && sudo cp -r out/. /home/ubuntu/cleaning-dev/site/
           sudo pkill -f "http.server 80" || true
           sudo nohup python3 -m http.server 80 -d /home/ubuntu/cleaning-dev/site >/tmp/site-http.log 2>&1 &
@@ -341,6 +341,9 @@ jobs:
             return 1
           }
 
+          # install site deps + playwright browser ONCE (outside the loop)
+          (cd site && npm ci && npx playwright install chromium) > /tmp/pw-install.log 2>&1 || true
+
           for round in $(seq 1 10); do
             echo "===== self-heal round $round ====="
 
@@ -377,7 +380,7 @@ jobs:
             # 3. verify build + test + playwright
             retry "build" bash -c 'cd api && dotnet build CleaningSuite.Backend.sln -c Release --nologo' || { git push origin "$BR" 2>/dev/null; continue; }
             retry "test" bash -c 'cd api && dotnet test CleaningSuite.Backend.sln -c Release --no-build' || { git push origin "$BR" 2>/dev/null; continue; }
-            retry "playwright" bash -c 'cd site && npm ci && npx playwright install chromium && npx playwright test --config=playwright.static.config.ts' || { git push origin "$BR" 2>/dev/null; continue; }
+            retry "playwright" bash -c 'cd site && npx playwright test --config=playwright.static.config.ts' || { git push origin "$BR" 2>/dev/null; continue; }
 
             # 4. plan conformance
             gh issue view "$N" --json comments -q '.comments[].body' | tail -20 > /tmp/verify-plan.txt

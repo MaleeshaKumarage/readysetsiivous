@@ -1,0 +1,16 @@
+{
+  "realm": "readysetsiivous",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": true,
+  "clients": [
+    {
+      "clientId": "cleaning-suite-web",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "redirectUris": ["http://130.61.208.211/*"],
+      "webOrigins": ["http://130.61.208.211"]
+    }
+  ]
+}
