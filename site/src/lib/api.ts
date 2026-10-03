@@ -43,11 +43,11 @@ export interface BookingResult {
   customerReference: string;
 }
 
-async function getJson<T>(path: string): Promise<T | null> {
+async function getJson<T>(path: string, timeoutMs = 8000): Promise<T | null> {
   try {
     const response = await fetch(`${API_URL}${path}`, {
       headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) return null;
     return (await response.json()) as T;
