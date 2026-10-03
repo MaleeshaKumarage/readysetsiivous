@@ -242,7 +242,7 @@ jobs:
             echo "$what FAILED after 3 retries"
             return 1
           }
-          retry "dotnet test" bash -c 'cd api && dotnet test CleaningSuite.Backend.sln -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults' || exit 1
+          retry "dotnet test" bash -c 'cd api && dotnet test CleaningSuite.Backend.sln -c Release --collect:"XPlat Code Coverage" --results-directory ./TestResults' || exit 1
           retry "coverage" bash -c 'cd api && python3 ../scripts/check_coverage.py' || exit 1
           retry "site build" bash -c 'cd site && npm ci && npm run build' || exit 1
           git push origin "feature/issue-${{ needs.resolve.outputs.issue }}"
