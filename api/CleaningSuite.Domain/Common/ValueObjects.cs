@@ -26,6 +26,13 @@ public class Money
     /// <summary>Currency symbol used by <see cref="Summary"/> by default.</summary>
     public const string DefaultCurrencySymbol = "€";
 
+    /// <summary>
+    /// Single rounding policy for money: 2 decimals, midpoint-to-even (the default of
+    /// <see cref="decimal.Round(decimal, int)"/>). Used by <see cref="FromNet"/> and by the
+    /// formatting helpers below, so a displayed total can never disagree with the rounded lines.
+    /// </summary>
+    private const MidpointRounding RoundingMode = MidpointRounding.ToEven;
+
     private static readonly NumberFormatInfo CurrencyFormat = new()
     {
         NumberDecimalSeparator = ",",
@@ -49,15 +56,16 @@ public class Money
     /// </summary>
     public string SummaryFor(string? currencySymbol)
     {
-        var text = Gross.ToString("N2", CurrencyFormat);
+        var gross = decimal.Round(Gross, 2, RoundingMode);
+        var text = gross.ToString("N2", CurrencyFormat);
         return string.IsNullOrWhiteSpace(currencySymbol) ? text : $"{text} {currencySymbol}";
     }
 
     public static Money FromNet(decimal net, decimal vatRatePercent) =>
         new()
         {
-            Net = decimal.Round(net, 2),
-            Vat = decimal.Round(net * vatRatePercent / 100m, 2),
+            Net = decimal.Round(net, 2, RoundingMode),
+            Vat = decimal.Round(net * vatRatePercent / 100m, 2, RoundingMode),
         };
 }
 
