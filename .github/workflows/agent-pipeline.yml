@@ -391,11 +391,12 @@ jobs:
             gh pr comment "$PR" --body "Architecture diagram: https://htmlpreview.github.io/?https://github.com/MaleeshaKumarage/readysetsiivous/blob/feature/issue-$N/$DIR/diagram.html"
           else
             gh pr comment "$PR" --body "Architecture diagram generation failed after 3 attempts."
+            exit 1
           fi
 
   # --- Stage 7: review + fix one-by-one + resolve ---
   review:
-    needs: [diagram, pr, resolve]
+    needs: [pr, resolve]
     runs-on: [self-hosted, agent]
     permissions:
       contents: write
