@@ -211,7 +211,7 @@ jobs:
               echo "$what FAILED (attempt $i). DeepSeek fix..."
               tail -30 /tmp/retry.log
               ~/.local/bin/aider --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
-                --message "Fix this failure: $(tail -40 /tmp/retry.log)"
+                --message "Fix this build/test failure with the MINIMAL edit to the specific lines causing the error. Do NOT rewrite or regenerate whole files — preserve all existing classes and code. Error: $(tail -40 /tmp/retry.log)"
             done
             echo "$what FAILED after 3 retries"
             return 1
@@ -248,7 +248,7 @@ jobs:
               echo "$what FAILED (attempt $i). DeepSeek fix..."
               tail -30 /tmp/retry.log
               ~/.local/bin/aider --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
-                --message "Fix this failure: $(tail -40 /tmp/retry.log)"
+                --message "Fix this build/test failure with the MINIMAL edit to the specific lines causing the error. Do NOT rewrite or regenerate whole files — preserve all existing classes and code. Error: $(tail -40 /tmp/retry.log)"
             done
             echo "$what FAILED after 3 retries"
             return 1
@@ -426,7 +426,8 @@ jobs:
             [ -s /tmp/fixes.list ] || break
             while IFS=$'\t' read -r file line cid fix; do
               ~/.local/bin/aider --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
-                --message "Fix only this one issue. File: $file, near line $line. $fix"
+                --file "$file" \
+                --message "Fix ONLY this one issue in $file near line $line. Make the minimal edit to the specific lines. Do NOT rewrite or regenerate the entire file — preserve all existing classes, methods, and surrounding code unchanged. $fix"
               if [ -n "$cid" ] && [ "$cid" != "0" ]; then
                 SHA=$(git rev-parse --short HEAD)
                 python3 scripts/resolve_comment.py "$PR" "$cid" "$SHA" || true
@@ -454,6 +455,16 @@ jobs:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
           PR=${{ needs.pr.outputs.pr }}
+          # safety net: restore files drastically reduced vs main (destructive edit)
+          git fetch origin main --quiet 2>/dev/null || true
+          for f in $(git diff --name-only origin/main 2>/dev/null); do
+            old=$(git show origin/main:"$f" 2>/dev/null | wc -l)
+            new=$(wc -l < "$f" 2>/dev/null)
+            if [ "$old" -gt 20 ] && [ "$new" -lt $((old / 2)) ]; then
+              echo "restoring destructive edit: $f ($old -> $new lines)"
+              git checkout origin/main -- "$f"
+            fi
+          done
           set +e
           retry() {
             local what="$1"; shift
@@ -465,12 +476,23 @@ jobs:
               echo "$what FAILED (attempt $i). DeepSeek fix..."
               tail -30 /tmp/retry.log
               ~/.local/bin/aider --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
-                --message "Fix this failure: $(tail -40 /tmp/retry.log)"
+                --message "Fix this build/test failure with the MINIMAL edit to the specific lines causing the error. Do NOT rewrite or regenerate whole files — preserve all existing classes and code. Error: $(tail -40 /tmp/retry.log)"
             done
             return 1
           }
           if retry "final build" bash -c 'cd api && dotnet build CleaningSuite.Backend.sln -c Release --nologo' && \
              retry "final test" bash -c 'cd api && dotnet test CleaningSuite.Backend.sln -c Release --no-build'; then
+            N=${{ needs.resolve.outputs.issue }}
+            gh issue view "$N" --json comments -q '.comments[].body' | tail -20 > /tmp/verify-plan.txt
+            gh pr diff "$PR" > /tmp/verify-diff.txt
+            {
+              echo "## Plan"; cat /tmp/verify-plan.txt
+              echo "## Diff"; head -200 /tmp/verify-diff.txt
+            } | python3 scripts/deepseek.py "Compare the diff to the plan. If key plan items are NOT implemented, output exactly MISSING. Otherwise output OK." > /tmp/conformance.txt
+            if grep -q "MISSING" /tmp/conformance.txt; then
+              gh pr comment "$PR" --body "Plan conformance FAILED: implementation missing key items vs plan."
+              exit 1
+            fi
             gh pr ready "$PR"
           else
             gh pr comment "$PR" --body "Reality check FAILED: build or tests broken after review fixes. Leaving as draft."
