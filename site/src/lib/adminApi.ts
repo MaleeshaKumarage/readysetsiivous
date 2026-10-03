@@ -328,7 +328,7 @@ export const adminCompanies = {
       notes?: string;
       isActive: boolean;
     }
-  ) => adminSendJson<Company>(`/api/v1/admin/companies/${id}`, 'PUT', body),
+  ) => adminSendJson<Company>(`/api/v1/admin/companies/${id}`, 'PUT', { id, ...body }),
   deactivate: (id: string) => adminSend(`/api/v1/admin/companies/${id}/deactivate`, 'POST'),
 };
 
@@ -389,7 +389,7 @@ export const adminShifts = {
       validFrom?: string;
       validUntil?: string;
     }
-  ) => adminSendJson<Shift>(`/api/v1/admin/shifts/${id}`, 'PUT', body),
+  ) => adminSendJson<Shift>(`/api/v1/admin/shifts/${id}`, 'PUT', { id, ...body }),
   deactivate: (id: string) => adminSend(`/api/v1/admin/shifts/${id}/deactivate`, 'POST'),
   occurrences: (id: string, from: string, to: string) =>
     adminGet<ShiftOccurrence[]>(`/api/v1/admin/shifts/${id}/occurrences?from=${from}&to=${to}`),
