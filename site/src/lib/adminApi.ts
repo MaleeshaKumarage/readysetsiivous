@@ -355,8 +355,8 @@ export const adminBranches = {
       contactPhone?: string;
       isActive: boolean;
     }
-  ) => adminSendJson<Branch>(`/api/v1/admin/branches/${id}`, 'PUT', body),
-  deactivate: (id: string) => adminSend(`/api/v1/admin/branches/${id}/deactivate`, 'POST'),
+  ) => adminSendJson<Branch>(`/api/v1/admin/companies/branches/${id}`, 'PUT', body),
+  deactivate: (id: string) => adminSend(`/api/v1/admin/companies/branches/${id}/deactivate`, 'POST'),
 };
 
 export const adminShifts = {
