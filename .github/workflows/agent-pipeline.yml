@@ -281,7 +281,9 @@ jobs:
           for i in $(seq 1 30); do docker exec cleaning-dev-postgres-1 pg_isready -U cleaning >/dev/null 2>&1 && break; sleep 2; done
           docker exec -i cleaning-dev-postgres-1 psql -U cleaning -d cleaning < "$GITHUB_WORKSPACE/api/deploy/seed-dev.sql"
           cd "$GITHUB_WORKSPACE/site" && npm ci && NEXT_PUBLIC_API_URL=http://130.61.208.211:8090/ npm run build
-          pgrep -f "http.server 80" >/dev/null || sudo nohup python3 -m http.server 80 -d out >/tmp/site-http.log 2>&1 &
+          sudo mkdir -p /home/ubuntu/cleaning-dev/site && sudo rm -rf /home/ubuntu/cleaning-dev/site/* && sudo cp -r out/. /home/ubuntu/cleaning-dev/site/
+          sudo pkill -f "http.server 80" || true
+          sudo nohup python3 -m http.server 80 -d /home/ubuntu/cleaning-dev/site >/tmp/site-http.log 2>&1 &
 
       - name: Create PR (idempotent)
         id: pr
@@ -298,9 +300,48 @@ jobs:
           echo "PR=$PR"
           echo "pr=$PR" >> "$GITHUB_OUTPUT"
 
-  # --- Stage 6: architecture diagram ---
-  diagram:
+  # --- Stage 6: playwright E2E against deployed dev build ---
+  playwright:
     needs: [pr, resolve]
+    runs-on: [self-hosted, agent]
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/issue-${{ needs.resolve.outputs.issue }}
+
+      - name: Playwright E2E (dev build)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          PR=${{ needs.pr.outputs.pr }}
+          set +e
+          retry() {
+            local what="$1"; shift
+            local i
+            for i in 1 2 3; do
+              echo "===== $what (attempt $i) ====="
+              "$@" > /tmp/retry.log 2>&1
+              if [ $? -eq 0 ]; then echo "$what OK"; return 0; fi
+              echo "$what FAILED (attempt $i). DeepSeek fix..."
+              tail -30 /tmp/retry.log
+              ~/.local/bin/aider --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+                --message "Fix these failing Playwright tests: $(tail -40 /tmp/retry.log)"
+            done
+            return 1
+          }
+          if retry "playwright e2e" bash -c 'cd site && npm ci && npx playwright install chromium && npx playwright test --config=playwright.static.config.ts'; then
+            echo "e2e passed"
+          else
+            gh pr comment "$PR" --body "⚠️ Playwright E2E failed against the dev build."
+          fi
+
+  # --- Stage 7: architecture diagram ---
+  diagram:
+    needs: [playwright, pr, resolve]
     runs-on: [self-hosted, agent]
     permissions:
       contents: write
