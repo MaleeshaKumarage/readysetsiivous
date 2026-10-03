@@ -53,7 +53,7 @@ jobs:
             echo "---"
             echo "Brainstorm and write a step-by-step implementation plan."
           } | python3 scripts/deepseek.py \
-            "You are a senior software engineer. Brainstorm the issue against the repository files. Write a detailed, ordered implementation plan as markdown. Break the work into sub-tasks; for each: files to change, what to change, how to test. After the plan body, add a section exactly titled '## SUB_ISSUES'. Under it, list each major sub-task as a one-line GitHub issue title, each line prefixed with '- '. Keep titles short and self-contained. If the issue is small and needs no split, write '## SUB_ISSUES' followed by a single '- ' line with the issue title itself. Do not write code, only the plan." \
+            "You are a senior software engineer. Brainstorm the issue against the repository files. Critical rules: do not write code, only the plan; consider edge cases and error paths; break the work into ordered, independently testable sub-tasks — for each list files to change, what to change, how to test. Write the plan as markdown, then a section exactly titled '## SUB_ISSUES' listing each sub-task as a one-line GitHub issue title prefixed '- '. If the issue is small, use a single '- ' line with the issue title itself. Do not write code, only the plan." \
             > plan.md
 
       - name: Post plan + label planned
@@ -195,7 +195,7 @@ jobs:
             ~/.local/bin/aider \
               --model deepseek/deepseek-v4-flash \
               --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
-              --message "Implement the feature COMPLETELY following the plan. Issue: $(cat /tmp/issue-title.txt). $(cat /tmp/issue-body.txt). Plan: $(cat /tmp/plan.txt)"
+              --message "You are a senior developer. Implement the feature COMPLETELY following the plan exactly. Critical rules: follow the plan, add tests for new behavior, leave no TODOs or stubs, handle edge cases and error paths, and ensure it compiles. Issue: $(cat /tmp/issue-title.txt). $(cat /tmp/issue-body.txt). Plan: $(cat /tmp/plan.txt)"
 
             # --- build gate (retryable, DeepSeek fixes) ---
             retry "dotnet build" bash -c 'cd api && dotnet build CleaningSuite.Backend.sln -c Release --nologo' || continue
@@ -220,7 +220,7 @@ jobs:
                 HEAD_SHA=$(git rev-parse HEAD)
                 gh pr diff "$PR" > /tmp/diff.txt
                 python3 scripts/deepseek.py \
-                  "You are a senior code reviewer. Review the diff. Output each issue as a 3-line block: '### FILE: <file path>', '### LINE: <line number>', '### FIX: <one sentence exactly what to change>'. Separate blocks with a blank line. Do not report files under .github/workflows/. If no issues, output exactly NO_ISSUES and nothing else." \
+                  "You are a senior code reviewer who improves quality AND teaches. Review the diff for correctness, security, maintainability, performance, and testing — not style nits. Be specific, explain why. Output each issue as a 3-line block, one per issue, blank line between: '### FILE: <file path>', '### LINE: <line number>', '### FIX: <priority> <what to change, and why it matters>'. Priority: 🔴 blocker, 🟡 suggestion, 💭 nit. Do not report files under .github/workflows/. If no issues, output exactly NO_ISSUES and nothing else." \
                   < /tmp/diff.txt > /tmp/review.txt
                 python3 scripts/post_review_comments.py "$PR" "$HEAD_SHA" < /tmp/review.txt
                 grep -q "NO_ISSUES" /tmp/review.txt && break
