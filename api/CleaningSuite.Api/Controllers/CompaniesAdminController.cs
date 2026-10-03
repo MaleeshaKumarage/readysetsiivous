@@ -60,9 +60,7 @@ public class CompaniesAdminController : ControllerBase
     [HttpPost("{companyId:guid}/branches")]
     public async Task<IActionResult> CreateBranch(Guid companyId, [FromBody] CreateBranchCommand command, CancellationToken ct)
     {
-        if (companyId != command.CompanyId)
-            return BadRequest("Company id mismatch.");
-        var result = await _mediator.Send(command, ct);
+        var result = await _mediator.Send(command with { CompanyId = companyId }, ct);
         return Ok(result);
     }
 
