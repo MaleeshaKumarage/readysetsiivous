@@ -30,6 +30,9 @@ public class Shift : BaseDocument
             throw new ArgumentException("Name is mandatory.", nameof(name));
         if (schedule is null)
             throw new ArgumentNullException(nameof(schedule));
+        schedule.Validate();
+        if (validFrom.HasValue && validUntil.HasValue && validUntil.Value < validFrom.Value)
+            throw new ArgumentException("ValidUntil must be on or after ValidFrom.", nameof(validUntil));
 
         return new Shift
         {
@@ -65,6 +68,9 @@ public class Shift : BaseDocument
             throw new ArgumentException("Name is mandatory.", nameof(name));
         if (schedule is null)
             throw new ArgumentNullException(nameof(schedule));
+        schedule.Validate();
+        if (validFrom.HasValue && validUntil.HasValue && validUntil.Value < validFrom.Value)
+            throw new ArgumentException("ValidUntil must be on or after ValidFrom.", nameof(validUntil));
 
         CompanyId = companyId;
         BranchId = branchId;
