@@ -232,7 +232,15 @@ jobs:
                 done < /tmp/fixes.list
                 git push origin "feature/issue-$N"
               done
-              gh pr ready "$PR"
+
+              # Reality-checker gate: no fantasy approvals. Verify build + tests
+              # still pass AFTER review fixes before marking ready.
+              if retry "final build" bash -c 'cd api && dotnet build CleaningSuite.Backend.sln -c Release --nologo' && \
+                 retry "final test" bash -c 'cd api && dotnet test CleaningSuite.Backend.sln -c Release --no-build'; then
+                gh pr ready "$PR"
+              else
+                gh pr comment "$PR" --body "Reality check FAILED: build or tests broken after review fixes. Leaving as draft."
+              fi
             fi
 
             # clear approved, mark done
