@@ -260,7 +260,7 @@ public class ShiftHandlers
 
             // Resolve the employee before doing anything else, so a typo or stale id fails fast
             // instead of persisting a ShiftAssignment that points at a non-existent employee.
-            var employee = await _employeeRepository.GetAsync(request.EmployeeId, ct)
+            var employee = await _employeeRepository.GetByIdAsync(request.EmployeeId, ct)
                 ?? throw new NotFoundException("Employee", request.EmployeeId);
 
             // Capture "now" inside Handle (not in a field initializer) so it stays correct

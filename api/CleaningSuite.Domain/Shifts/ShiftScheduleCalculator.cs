@@ -35,6 +35,53 @@ public static class ShiftScheduleCalculator
         return result;
     }
 
+    /// <summary>
+    /// Expands the schedule of a <see cref="Shift"/> into concrete occurrences
+    /// between <paramref name="from"/> and <paramref name="to"/> (inclusive).
+    /// </summary>
+    public static IReadOnlyList<ShiftOccurrence> GenerateOccurrences(
+        Shift shift,
+        DateTime from,
+        DateTime to)
+    {
+        if (shift is null) throw new ArgumentNullException(nameof(shift));
+        return GenerateOccurrences(shift.Schedule, from, to);
+    }
+
+    /// <summary>
+    /// Expands a <see cref="ShiftSchedule"/> into concrete occurrences
+    /// between <paramref name="from"/> and <paramref name="to"/> (inclusive).
+    /// </summary>
+    public static IReadOnlyList<ShiftOccurrence> GenerateOccurrences(
+        ShiftSchedule schedule,
+        DateTime from,
+        DateTime to)
+        => Calculate(schedule, from, to);
+
+    /// <summary>
+    /// Returns true when any occurrence in <paramref name="first"/> overlaps any occurrence in
+    /// <paramref name="second"/>. Touching boundaries (one occurrence ending exactly when the
+    /// next starts) are not treated as overlaps.
+    /// </summary>
+    public static bool HasOverlap(
+        IReadOnlyList<ShiftOccurrence> first,
+        IReadOnlyList<ShiftOccurrence> second)
+    {
+        if (first is null) throw new ArgumentNullException(nameof(first));
+        if (second is null) throw new ArgumentNullException(nameof(second));
+
+        foreach (var a in first)
+        {
+            foreach (var b in second)
+            {
+                if (a.StartUtc < b.EndUtc && b.StartUtc < a.EndUtc)
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
     private static void AddOccurrence(
         List<ShiftOccurrence> result,
         DateTime date,
