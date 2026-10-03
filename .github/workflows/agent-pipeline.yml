@@ -339,6 +339,7 @@ jobs:
               echo "$DIAG"
             } | python3 scripts/deepseek.py "$PROMPT" > /tmp/diag-raw.txt 2>/dev/null
             python3 -c "t=open('/tmp/diag-raw.txt').read(); i=t.find('{'); j=t.rfind('}'); open('$DIR/candidate.json','w').write(t[i:j+1] if i>=0 and j>i else '{}')"
+            python3 scripts/truncate_diagram.py "$DIR/candidate.json"
             node /home/ubuntu/archify/archify/bin/archify.mjs finalize workflow "$DIR/candidate.json" "$DIR/diagram.html" --quality standard --json > /tmp/diag-finalize.json 2>/tmp/diag-finalize.err
             if grep -q '"ok":true' /tmp/diag-finalize.json; then OK=1; break; fi
             DIAG=$(node -e "try{console.log(JSON.stringify(JSON.parse(require('fs').readFileSync('/tmp/diag-finalize.json','utf8')).diagnostics||[]).slice(0,1200))}catch(e){console.log('')}")
