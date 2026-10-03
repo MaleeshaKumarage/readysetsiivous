@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace CleaningSuite.Domain.Common;
 
 /// <summary>Localized text per language, fi/en/sv keys.</summary>
@@ -21,9 +23,18 @@ public class Address
 /// <summary>Money with per-line VAT math. All amounts are decimal.</summary>
 public class Money
 {
+    // Fixed so the formatted output is deterministic regardless of the host's current culture.
+    private static readonly CultureInfo CurrencyCulture = CultureInfo.GetCultureInfo("fi-FI");
+
     public decimal Net { get; set; }
     public decimal Vat { get; set; }
     public decimal Gross => Net + Vat;
+
+    /// <summary>
+    /// The gross amount (<see cref="Net"/> + <see cref="Vat"/>) formatted as a currency string,
+    /// e.g. "123,45 €". Uses the Finnish (fi-FI) format.
+    /// </summary>
+    public string Summary => Gross.ToString("C", CurrencyCulture);
 
     public static Money FromNet(decimal net, decimal vatRatePercent) =>
         new()
