@@ -206,16 +206,27 @@ public class ShiftHandlers
 
     public class AssignEmployeeToShiftCommandHandler : IRequestHandler<AssignEmployeeToShiftCommand, ShiftAssignmentDto>
     {
-        // Upper bound on the window used when checking for overlapping assignments. Only the
-        // shift's own ValidFrom/ValidUntil define the window; when those are open-ended this
-        // cap prevents generating an unbounded set of occurrences.
-        private const int MaxConflictWindowDays = 180;
+        // Default upper bound (in days) on the window used when checking for overlapping
+        // assignments. Only the shift's own ValidFrom/ValidUntil define the window; when those
+        // are open-ended this cap prevents generating an unbounded set of occurrences. It is a
+        // constructor parameter so callers/tests can supply an explicit policy instead of relying
+        // on a hidden constant.
+        private const int DefaultMaxConflictWindowDays = 180;
 
         private readonly IShiftRepository _repository;
+        private readonly int _maxConflictWindowDays;
 
-        public AssignEmployeeToShiftCommandHandler(IShiftRepository repository)
+        public AssignEmployeeToShiftCommandHandler(
+            IShiftRepository repository,
+            int maxConflictWindowDays = DefaultMaxConflictWindowDays)
         {
+            if (maxConflictWindowDays <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(maxConflictWindowDays), maxConflictWindowDays, "Conflict window must be a positive number of days.");
+            }
+
             _repository = repository;
+            _maxConflictWindowDays = maxConflictWindowDays;
         }
 
         public async Task<ShiftAssignmentDto> Handle(AssignEmployeeToShiftCommand request, CancellationToken ct)
@@ -223,7 +234,11 @@ public class ShiftHandlers
             var shift = await _repository.GetAsync(request.ShiftId, ct)
                 ?? throw new NotFoundException("Shift", request.ShiftId);
 
-            var (from, to) = ResolveConflictWindow(shift);
+            // Capture "now" inside Handle (not in a field initializer) so it stays correct
+            // regardless of handler lifetime and is anchored to UTC rather than server-local time.
+            var utcNow = DateTime.UtcNow;
+
+            var (from, to) = ResolveConflictWindow(shift, utcNow);
             var candidateOccurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, from, to);
             var existingAssignments = await _repository.ListAssignmentsByEmployeeAsync(request.EmployeeId, ct);
 
@@ -253,8 +268,8 @@ public class ShiftHandlers
             {
                 existingAssignment.IsActive = true;
                 existingAssignment.Note = request.Note;
-                existingAssignment.AssignedAtUtc = DateTime.UtcNow;
-                existingAssignment.UpdatedUtc = DateTime.UtcNow;
+                existingAssignment.AssignedAtUtc = utcNow;
+                existingAssignment.UpdatedUtc = utcNow;
                 await _repository.SaveAssignmentAsync(existingAssignment, ct);
                 return MapAssignment(existingAssignment);
             }
@@ -264,22 +279,22 @@ public class ShiftHandlers
             return MapAssignment(newAssignment);
         }
 
-        private static (DateTime From, DateTime To) ResolveConflictWindow(Shift shift)
+        private (DateTime From, DateTime To) ResolveConflictWindow(Shift shift, DateTime utcNow)
         {
-            // Anchor the window on the current UTC date, not server-local time, so the generated
-            // occurrences line up with the *Utc values used elsewhere and don't drift with the host
-            // timezone or DST. It is computed per request rather than captured in a field so it
-            // stays correct regardless of handler lifetime.
-            var today = DateTime.UtcNow.Date;
+            // Anchor the window on the UTC date supplied by the caller, not server-local time, so
+            // the generated occurrences line up with the *Utc values used elsewhere and don't
+            // drift with the host timezone or DST.
+            var today = utcNow.Date;
             var from = shift.ValidFrom?.Date ?? today;
             if (from < today)
             {
                 from = today;
             }
 
-            // Derive the end of the window from the shift's validity, capped so open-ended shifts
-            // (no ValidUntil) don't generate an unbounded number of occurrences.
-            var maxTo = from.AddDays(MaxConflictWindowDays);
+            // Derive the end of the window from the shift's validity, capped by the explicit
+            // policy so open-ended shifts (no ValidUntil) don't generate an unbounded number of
+            // occurrences.
+            var maxTo = from.AddDays(_maxConflictWindowDays);
             var to = shift.ValidUntil?.Date ?? maxTo;
             if (to > maxTo)
             {
