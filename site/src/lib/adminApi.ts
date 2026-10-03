@@ -343,7 +343,7 @@ export const adminBranches = {
       country?: string;
       contactPhone?: string;
     }
-  ) => adminSendJson<Branch>(`/api/v1/admin/companies/${companyId}/branches`, 'POST', body),
+  ) => adminSendJson<Branch>(`/api/v1/admin/companies/${companyId}/branches`, 'POST', { companyId, ...body }),
   update: (
     id: string,
     body: {
@@ -395,7 +395,7 @@ export const adminShifts = {
     adminGet<ShiftOccurrence[]>(`/api/v1/admin/shifts/${id}/occurrences?from=${from}&to=${to}`),
   assignments: (id: string) => adminGet<ShiftAssignment[]>(`/api/v1/admin/shifts/${id}/assignments`),
   assignEmployee: (id: string, employeeId: string, note?: string) =>
-    adminSendJson<ShiftAssignment>(`/api/v1/admin/shifts/${id}/assignments`, 'POST', { employeeId, note }),
+    adminSendJson<ShiftAssignment>(`/api/v1/admin/shifts/${id}/assignments`, 'POST', { shiftId: id, employeeId, note }),
   removeEmployee: (id: string, employeeId: string) =>
     adminSend(`/api/v1/admin/shifts/${id}/assignments/${employeeId}`, 'DELETE'),
 };
