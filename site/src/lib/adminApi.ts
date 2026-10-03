@@ -261,7 +261,18 @@ export type TimeRange = {
   end: string;   // HH:mm
 };
 
-export type ShiftScheduleType = 'DailySameTime' | 'DailyDifferentTime' | 'Weekly' | 'BiWeekly' | 'OnCallFlexible';
+// System.Text.Json serializes enums as numbers by default (no JsonStringEnumConverter),
+// so the wire values are 0..4 matching the server enum's declaration order.
+export const ShiftScheduleType = {
+  DailySameTime: 0,
+  DailyDifferentTime: 1,
+  Weekly: 2,
+  BiWeekly: 3,
+  OnCallFlexible: 4,
+} as const;
+
+export type ShiftScheduleType =
+  (typeof ShiftScheduleType)[keyof typeof ShiftScheduleType];
 
 export interface ShiftSchedule {
   type: ShiftScheduleType;
