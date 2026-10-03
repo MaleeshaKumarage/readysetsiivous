@@ -298,9 +298,62 @@ jobs:
           echo "PR=$PR"
           echo "pr=$PR" >> "$GITHUB_OUTPUT"
 
-  # --- Stage 6: review + fix one-by-one + resolve ---
-  review:
+  # --- Stage 6: architecture diagram ---
+  diagram:
     needs: [pr, resolve]
+    runs-on: [self-hosted, agent]
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/issue-${{ needs.resolve.outputs.issue }}
+
+      - name: Author + render architecture diagram
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          PR=${{ needs.pr.outputs.pr }}
+          N=${{ needs.resolve.outputs.issue }}
+          DIR="diagrams/issue-$N"
+          mkdir -p "$DIR"
+          gh issue view "$N" --json title -q .title > /tmp/diag-title.txt
+          gh pr diff "$PR" | head -150 > /tmp/diag-diff.txt
+
+          PROMPT='You are a software architect. Author an Archify architecture diagram as valid JSON only (no prose, no markdown fences). Shape: {"schema_version":1,"diagram_type":"architecture","meta":{"title":"feature","output":"diagram.html","quality_profile":"standard"},"components":[{"id":"c1","type":"backend","label":"Name","sublabel":"detail","pos":[x,y],"size":[140,60]}],"connections":[{"id":"e1","from":"c1","to":"c2","label":"action","variant":"emphasis"}],"cards":[{"dot":"cyan","title":"Note","items":["text"]}]}. Component types: frontend, backend, database, cloud, security, messagebus, external. Variants: default, emphasis, security, dashed. Use 3-7 components laid left-to-right (increasing x, no overlap). Label the key relationships. Output only the JSON.'
+
+          set +e
+          OK=0
+          DIAG=""
+          for i in 1 2 3; do
+            {
+              echo "## Feature: $(cat /tmp/diag-title.txt)"
+              echo "## Diff"
+              cat /tmp/diag-diff.txt
+              echo "## Validation errors to fix (if any)"
+              echo "$DIAG"
+            } | python3 scripts/deepseek.py "$PROMPT" > "$DIR/candidate.json" 2>/dev/null
+            node /home/ubuntu/archify/archify/bin/archify.mjs finalize architecture "$DIR/candidate.json" "$DIR/diagram.html" --quality standard --json > /tmp/diag-finalize.json 2>&1
+            if grep -q '"ok":true' /tmp/diag-finalize.json; then OK=1; break; fi
+            DIAG=$(node -e "try{console.log(JSON.stringify(JSON.parse(require('fs').readFileSync('/tmp/diag-finalize.json','utf8')).diagnostics||[]).slice(0,1500))}catch(e){console.log('')}")
+            echo "attempt $i failed"
+          done
+
+          if [ "$OK" = "1" ]; then
+            git add "$DIR"
+            git commit -m "docs: architecture diagram for issue #$N" || true
+            git push origin "feature/issue-$N"
+            gh pr comment "$PR" --body "Architecture diagram: https://htmlpreview.github.io/?https://github.com/MaleeshaKumarage/readysetsiivous/blob/feature/issue-$N/$DIR/diagram.html"
+          else
+            gh pr comment "$PR" --body "Architecture diagram generation failed after 3 attempts."
+          fi
+
+  # --- Stage 7: review + fix one-by-one + resolve ---
+  review:
+    needs: [diagram, pr, resolve]
     runs-on: [self-hosted, agent]
     permissions:
       contents: write
