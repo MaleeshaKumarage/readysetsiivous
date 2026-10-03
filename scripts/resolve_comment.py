@@ -5,14 +5,16 @@ Finds the review thread whose comment carries the given databaseId and marks it
 resolved via the GraphQL API.
 
 Usage:
-  GH_TOKEN=... python3 resolve_comment.py <pr-number> <comment-id>
+  GH_TOKEN=... python3 resolve_comment.py <pr-number> <comment-id> [<commit-sha>]
 """
 import os, sys, json, urllib.request, urllib.error
 
 pr = sys.argv[1]
 cid = sys.argv[2]
+sha = sys.argv[3] if len(sys.argv) > 3 else ""
 token = os.environ.get("GH_TOKEN", os.environ.get("GITHUB_TOKEN", ""))
 repo = os.environ.get("GITHUB_REPOSITORY", "MaleeshaKumarage/readysetsiivous")
+api = f"https://api.github.com/repos/{repo}"
 
 
 def gql(query, variables):
@@ -52,6 +54,20 @@ for t in threads:
 if not target:
     print(f"no thread found for comment {cid}", file=sys.stderr)
     sys.exit(1)
+
+# reply "Fixed in <sha>" so the thread records how it was fixed
+if sha:
+    reply = json.dumps({"body": f"Fixed in {sha}"}).encode()
+    req = urllib.request.Request(
+        f"{api}/pulls/{pr}/comments/{cid}/replies",
+        data=reply,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json", "Accept": "application/vnd.github+json"},
+        method="POST",
+    )
+    try:
+        urllib.request.urlopen(req, timeout=30)
+    except urllib.error.HTTPError as e:
+        print(f"reply failed {e.code}", file=sys.stderr)
 
 m = "mutation($id:ID!){ resolveReviewThread(input:{threadId:$id}){ thread{ isResolved } } }"
 gql(m, {"id": target})
