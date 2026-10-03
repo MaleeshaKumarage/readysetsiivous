@@ -47,7 +47,6 @@ jobs:
             echo
             cat /tmp/issue-body.txt
             echo
-            echo "---"
             echo "## Repository files"
             git ls-files | head -200
             echo "---"
@@ -108,15 +107,52 @@ jobs:
             > plan.md
           gh issue comment "$N" --body-file plan.md
 
-  # --- Stage 3: run on cron (off-peak), manual dispatch, or approve comment ---
-  run:
+  # --- Stage 2: resolve which issue to run (off-peak gate) ---
+  resolve:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'issue_comment' && contains(github.event.comment.body, 'approve') && (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR'))
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    outputs:
+      issue: ${{ steps.res.outputs.issue }}
+    steps:
+      - id: res
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          is_peak() {
+            H=$(date -u +%H); D=$(date -u +%u)
+            [ "$D" -lt 6 ] || return 1
+            case "$H" in 01|02|03|06|07|08|09) return 0 ;; *) return 1 ;; esac
+          }
+          ISSUE=""
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ISSUE="${{ github.event.inputs.issue-number }}"
+          elif [ "${{ github.event_name }}" = "issue_comment" ]; then
+            if is_peak; then
+              echo "peak — defer to cron"
+              gh issue edit "${{ github.event.issue.number }}" --add-label "approved" --remove-label "planned"
+            else
+              ISSUE="${{ github.event.issue.number }}"
+            fi
+          else
+            if is_peak; then
+              echo "peak — skip"
+            else
+              ISSUE=$(gh issue list --label approved --state open --json number -q '.[0].number' 2>/dev/null || echo "")
+            fi
+          fi
+          echo "resolved issue: $ISSUE"
+          echo "issue=$ISSUE" >> "$GITHUB_OUTPUT"
+
+  # --- Stage 3: implement (aider) + build gate ---
+  implement:
+    needs: resolve
+    if: needs.resolve.outputs.issue != ''
     runs-on: [self-hosted, agent]
     permissions:
       contents: write
-      issues: write
-      pull-requests: write
-      packages: read
+      issues: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -126,39 +162,34 @@ jobs:
           git config user.name "cleaning-agent"
           git config user.email "agent@readysetsiivous.fi"
 
-      - name: Resolve issues to process
-        id: issues
+      - name: Get issue + plan
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "${{ github.event.inputs.issue-number }}" > /tmp/issues.txt
-          elif [ "${{ github.event_name }}" = "issue_comment" ]; then
-            H=$(date -u +%H); D=$(date -u +%u)
-            if [ "$D" -lt 6 ]; then
-              case "$H" in
-                01|02|03|06|07|08|09) echo "peak ${H}:00 UTC, defer to cron"; gh issue edit "${{ github.event.issue.number }}" --add-label "approved" --remove-label "planned"; : > /tmp/issues.txt; exit 0 ;;
-              esac
-            fi
-            echo "${{ github.event.issue.number }}" > /tmp/issues.txt
-          else
-            H=$(date -u +%H); D=$(date -u +%u)
-            if [ "$D" -lt 6 ]; then
-              case "$H" in
-                01|02|03|06|07|08|09) echo "peak ${H}:00 UTC, skip"; : > /tmp/issues.txt; exit 0 ;;
-              esac
-            fi
-            gh issue list --label approved --state open --json number -q '.[].number' > /tmp/issues.txt
-          fi
-          echo "issues: $(cat /tmp/issues.txt)"
+          N=${{ needs.resolve.outputs.issue }}
+          echo "N=$N" >> "$GITHUB_ENV"
+          gh issue view "$N" --json title -q .title > /tmp/issue-title.txt
+          gh issue view "$N" --json body -q .body > /tmp/issue-body.txt
+          gh issue view "$N" --json comments -q '.comments[].body' | tail -20 > /tmp/plan.txt
 
-      - name: Run chain per issue
+      - name: Create branch
+        run: |
+          git checkout main 2>/dev/null; git checkout -B "feature/issue-$N"
+
+      - name: Implement (aider)
         env:
-          GH_TOKEN: ${{ github.token }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          ~/.local/bin/aider \
+            --model deepseek/deepseek-v4-flash \
+            --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+            --message "You are a senior developer. Implement the feature COMPLETELY following the plan exactly. Critical rules: follow the plan, add tests for new behavior, leave no TODOs or stubs, handle edge cases and error paths, and ensure it compiles. Issue: $(cat /tmp/issue-title.txt). $(cat /tmp/issue-body.txt). Plan: $(cat /tmp/plan.txt)"
+
+      - name: Build gate (retryable)
+        env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
           set +e
-
           retry() {
             local what="$1"; shift
             local i
@@ -174,84 +205,165 @@ jobs:
             echo "$what FAILED after 3 retries"
             return 1
           }
+          retry "dotnet build" bash -c 'cd api && dotnet build CleaningSuite.Backend.sln -c Release --nologo' || { echo "build gate failed"; exit 1; }
 
-          while IFS= read -r N; do
-            [ -z "$N" ] && continue
-            echo "================= ISSUE #$N ================="
+      - name: Push branch
+        run: git push -u --force origin "feature/issue-$N"
 
-            # --- implement ---
-            gh issue view "$N" --json title -q .title > /tmp/issue-title.txt
-            gh issue view "$N" --json body -q .body > /tmp/issue-body.txt
-            gh issue view "$N" --json comments -q '.comments[].body' | tail -20 > /tmp/plan.txt
+  # --- Stage 4: test + coverage + site build ---
+  test:
+    needs: [implement, resolve]
+    runs-on: [self-hosted, agent]
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/issue-${{ needs.resolve.outputs.issue }}
 
-            git checkout main 2>/dev/null; git checkout -B "feature/issue-$N"
+      - name: Test + coverage + site (retryable)
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          set +e
+          retry() {
+            local what="$1"; shift
+            local i
+            for i in 1 2 3; do
+              echo "===== $what (attempt $i) ====="
+              "$@" > /tmp/retry.log 2>&1
+              if [ $? -eq 0 ]; then echo "$what OK"; return 0; fi
+              echo "$what FAILED (attempt $i). DeepSeek fix..."
+              tail -30 /tmp/retry.log
+              ~/.local/bin/aider --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+                --message "Fix this failure: $(tail -40 /tmp/retry.log)"
+            done
+            echo "$what FAILED after 3 retries"
+            return 1
+          }
+          retry "dotnet test" bash -c 'cd api && dotnet test CleaningSuite.Backend.sln -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults' || exit 1
+          retry "coverage" bash -c 'cd api && python3 ../scripts/check_coverage.py' || exit 1
+          retry "site build" bash -c 'cd site && npm ci && npm run build' || exit 1
+          git push origin "feature/issue-${{ needs.resolve.outputs.issue }}"
 
-            ~/.local/bin/aider \
-              --model deepseek/deepseek-v4-flash \
-              --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
-              --message "You are a senior developer. Implement the feature COMPLETELY following the plan exactly. Critical rules: follow the plan, add tests for new behavior, leave no TODOs or stubs, handle edge cases and error paths, and ensure it compiles. Issue: $(cat /tmp/issue-title.txt). $(cat /tmp/issue-body.txt). Plan: $(cat /tmp/plan.txt)"
+  # --- Stage 5: deploy + seed + create PR ---
+  pr:
+    needs: [test, resolve]
+    runs-on: [self-hosted, agent]
+    permissions:
+      contents: write
+      pull-requests: write
+      packages: read
+    outputs:
+      pr: ${{ steps.pr.outputs.pr }}
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/issue-${{ needs.resolve.outputs.issue }}
 
-            # --- build gate (retryable, DeepSeek fixes) ---
-            retry "dotnet build" bash -c 'cd api && dotnet build CleaningSuite.Backend.sln -c Release --nologo' || continue
-            git push -u --force origin "feature/issue-$N"
+      - name: Deploy + seed dev
+        run: |
+          N=${{ needs.resolve.outputs.issue }}
+          cd api && docker build -f docker/Dockerfile -t cleaning-dev-api:dev . && cd /home/ubuntu/cleaning-dev && docker compose up -d
+          for i in $(seq 1 30); do docker exec cleaning-dev-postgres-1 pg_isready -U cleaning >/dev/null 2>&1 && break; sleep 2; done
+          docker exec -i cleaning-dev-postgres-1 psql -U cleaning -d cleaning < "$GITHUB_WORKSPACE/api/deploy/seed-dev.sql"
+          cd "$GITHUB_WORKSPACE/site" && NEXT_PUBLIC_API_URL=http://130.61.208.211:8090/ npm run build
+          pgrep -f "http.server 80" >/dev/null || sudo nohup python3 -m http.server 80 -d out >/tmp/site-http.log 2>&1 &
 
-            # --- test ---
-            retry "dotnet test" bash -c 'cd api && dotnet test CleaningSuite.Backend.sln -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults' || continue
-            retry "coverage" bash -c 'cd api && python3 ../scripts/check_coverage.py' || continue
-            retry "site build" bash -c 'cd site && npm ci && npm run build' || continue
+      - name: Create PR (idempotent)
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          N=${{ needs.resolve.outputs.issue }}
+          BR="feature/issue-$N"
+          PR=$(gh pr list --head "$BR" --state open --json number -q '.[0].number' 2>/dev/null || echo "")
+          if [ -z "$PR" ]; then
+            PR=$(gh pr create --draft --base main --head "$BR" --title "$BR" --body "Implements $BR.
 
-            # --- pr ---
-            cd api && docker build -f docker/Dockerfile -t cleaning-dev-api:dev . && cd /home/ubuntu/cleaning-dev && docker compose up -d
+## Dev preview
+UI: http://130.61.208.211/
+API: http://130.61.208.211:8090/" | grep -oE '[0-9]+$')
+          fi
+          echo "PR=$PR"
+          echo "pr=$PR" >> "$GITHUB_OUTPUT"
 
-            # seed dev tenant + services (idempotent, updated per features)
-            for i in $(seq 1 30); do docker exec cleaning-dev-postgres-1 pg_isready -U cleaning >/dev/null 2>&1 && break; sleep 2; done
-            docker exec -i cleaning-dev-postgres-1 psql -U cleaning -d cleaning < "$GITHUB_WORKSPACE/api/deploy/seed-dev.sql"
+  # --- Stage 6: review + fix one-by-one + resolve ---
+  review:
+    needs: [pr, resolve]
+    runs-on: [self-hosted, agent]
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/issue-${{ needs.resolve.outputs.issue }}
 
-            cd "$GITHUB_WORKSPACE/site" && NEXT_PUBLIC_API_URL=http://130.61.208.211:8090/ npm run build
-            pgrep -f "http.server 80" >/dev/null || sudo nohup python3 -m http.server 80 -d out >/tmp/site-http.log 2>&1 &
+      - name: Review-fix loop
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          PR=${{ needs.pr.outputs.pr }}
+          BR="feature/issue-${{ needs.resolve.outputs.issue }}"
+          for i in $(seq 1 10); do
+            HEAD_SHA=$(git rev-parse HEAD)
+            gh pr diff "$PR" > /tmp/diff.txt
+            python3 scripts/deepseek.py \
+              "You are a senior code reviewer who improves quality AND teaches. Review the diff for correctness, security, maintainability, performance, and testing — not style nits. Be specific, explain why. Output each issue as a 3-line block, one per issue, blank line between: '### FILE: <file path>', '### LINE: <line number>', '### FIX: <priority> <what to change, and why it matters>'. Priority: 🔴 blocker, 🟡 suggestion, 💭 nit. Do not report files under .github/workflows/. If no issues, output exactly NO_ISSUES and nothing else." \
+              < /tmp/diff.txt > /tmp/review.txt
+            python3 scripts/post_review_comments.py "$PR" "$HEAD_SHA" < /tmp/review.txt
+            grep -q "NO_ISSUES" /tmp/review.txt && break
+            [ -s /tmp/fixes.list ] || break
+            while IFS=$'\t' read -r file line cid fix; do
+              ~/.local/bin/aider --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+                --message "Fix only this one issue. File: $file, near line $line. $fix"
+              [ -n "$cid" ] && [ "$cid" != "0" ] && python3 scripts/resolve_comment.py "$PR" "$cid" || true
+            done < /tmp/fixes.list
+            git push origin "$BR"
+          done
 
-            PR=$(gh pr create --draft --base main --head "feature/issue-$N" --title "feature/issue-$N" --body "Implements feature/issue-$N." 2>/dev/null | grep -oE '[0-9]+$')
+  # --- Stage 7: reality-check + mark ready ---
+  verify:
+    needs: [review, pr, resolve]
+    runs-on: [self-hosted, agent]
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/issue-${{ needs.resolve.outputs.issue }}
 
-            # --- playwright e2e against deployed dev build (UI + API) ---
-            cd "$GITHUB_WORKSPACE"
-            sleep 5
-            if retry "playwright e2e" bash -c 'cd site && npx playwright install chromium && npx playwright test --config=playwright.static.config.ts'; then
-              echo "e2e passed"
-            else
-              [ -n "$PR" ] && gh pr comment "$PR" --body "⚠️ Playwright E2E failed against dev build ($NEXT_PUBLIC_API_URL)."
-            fi
-
-            # --- review + fix one-by-one + resolve ---
-            cd "$GITHUB_WORKSPACE"
-            if [ -n "$PR" ]; then
-              for i in $(seq 1 10); do
-                HEAD_SHA=$(git rev-parse HEAD)
-                gh pr diff "$PR" > /tmp/diff.txt
-                python3 scripts/deepseek.py \
-                  "You are a senior code reviewer who improves quality AND teaches. Review the diff for correctness, security, maintainability, performance, and testing — not style nits. Be specific, explain why. Output each issue as a 3-line block, one per issue, blank line between: '### FILE: <file path>', '### LINE: <line number>', '### FIX: <priority> <what to change, and why it matters>'. Priority: 🔴 blocker, 🟡 suggestion, 💭 nit. Do not report files under .github/workflows/. If no issues, output exactly NO_ISSUES and nothing else." \
-                  < /tmp/diff.txt > /tmp/review.txt
-                python3 scripts/post_review_comments.py "$PR" "$HEAD_SHA" < /tmp/review.txt
-                grep -q "NO_ISSUES" /tmp/review.txt && break
-                [ -s /tmp/fixes.list ] || break
-                while IFS=$'\t' read -r file line cid fix; do
-                  ~/.local/bin/aider --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
-                    --message "Fix only this one issue. File: $file, near line $line. $fix"
-                  [ -n "$cid" ] && [ "$cid" != "0" ] && python3 scripts/resolve_comment.py "$PR" "$cid" || true
-                done < /tmp/fixes.list
-                git push origin "feature/issue-$N"
-              done
-
-              # Reality-checker gate: no fantasy approvals. Verify build + tests
-              # still pass AFTER review fixes before marking ready.
-              if retry "final build" bash -c 'cd api && dotnet build CleaningSuite.Backend.sln -c Release --nologo' && \
-                 retry "final test" bash -c 'cd api && dotnet test CleaningSuite.Backend.sln -c Release --no-build'; then
-                gh pr ready "$PR"
-              else
-                gh pr comment "$PR" --body "Reality check FAILED: build or tests broken after review fixes. Leaving as draft."
-              fi
-            fi
-
-            # clear approved, mark done
-            gh issue edit "$N" --remove-label "approved"
-
-          done < /tmp/issues.txt
+      - name: Reality-check + ready
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          PR=${{ needs.pr.outputs.pr }}
+          set +e
+          retry() {
+            local what="$1"; shift
+            local i
+            for i in 1 2 3; do
+              echo "===== $what (attempt $i) ====="
+              "$@" > /tmp/retry.log 2>&1
+              if [ $? -eq 0 ]; then echo "$what OK"; return 0; fi
+              echo "$what FAILED (attempt $i). DeepSeek fix..."
+              tail -30 /tmp/retry.log
+              ~/.local/bin/aider --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+                --message "Fix this failure: $(tail -40 /tmp/retry.log)"
+            done
+            return 1
+          }
+          if retry "final build" bash -c 'cd api && dotnet build CleaningSuite.Backend.sln -c Release --nologo' && \
+             retry "final test" bash -c 'cd api && dotnet test CleaningSuite.Backend.sln -c Release --no-build'; then
+            gh pr ready "$PR"
+          else
+            gh pr comment "$PR" --body "Reality check FAILED: build or tests broken after review fixes. Leaving as draft."
+          fi
