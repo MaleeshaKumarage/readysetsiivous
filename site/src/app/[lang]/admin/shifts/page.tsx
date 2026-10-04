@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
-  Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge, MultiSelect, ActionIcon,
+  Title, Button, Table, Modal, TextInput, Select, MultiSelect, Group, Stack, Text, Loader, Badge, ActionIcon, NumberInput,
 } from '@mantine/core';
 import { Plus, Trash2 } from 'lucide-react';
 import {
@@ -12,9 +12,10 @@ import {
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const SCHEDULE_TYPES = [
-  { value: '0', label: 'Daily (same time)' },
-  { value: '2', label: 'Weekly (specific day)' },
+  { value: '0', label: 'Daily' },
+  { value: '2', label: 'Specific days' },
   { value: '3', label: 'Bi-weekly' },
+  { value: '5', label: 'Monthly' },
   { value: '4', label: 'On-call / flexible' },
 ];
 
@@ -32,8 +33,9 @@ export default function ShiftsAdminPage() {
   const [scheduleType, setScheduleType] = useState('0');
   const [start, setStart] = useState('08:00');
   const [end, setEnd] = useState('17:00');
-  const [weekDay, setWeekDay] = useState('1');
+  const [weekDays, setWeekDays] = useState<string[]>([]);
   const [weekParity, setWeekParity] = useState('0');
+  const [monthlyDay, setMonthlyDay] = useState<string | number>(1);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -58,18 +60,20 @@ export default function ShiftsAdminPage() {
   const buildSchedule = () => {
     const t = Number(scheduleType);
     if (t === 0) return { type: 0, dailyStart: start, dailyEnd: end };
-    if (t === 2) return { type: 2, weeklyDay: Number(weekDay), weeklyStart: start, weeklyEnd: end };
-    if (t === 3) return { type: 3, biWeeklyWeekParity: Number(weekParity), biWeeklyDay: Number(weekDay), biWeeklyStart: start, biWeeklyEnd: end };
+    if (t === 2) return { type: 2, weeklyDays: weekDays.map(Number), weeklyStart: start, weeklyEnd: end };
+    if (t === 3) return { type: 3, biWeeklyWeekParity: Number(weekParity), biWeeklyDay: weekDays.length ? Number(weekDays[0]) : 1, biWeeklyStart: start, biWeeklyEnd: end };
+    if (t === 5) return { type: 5, monthlyDay: Number(monthlyDay), monthlyStart: start, monthlyEnd: end };
     return { type: 4 };
   };
 
   const submit = async () => {
     if (!companyId || !branchId || !name.trim()) { setError('Company, branch and name are required.'); return; }
+    if (scheduleType === '2' && weekDays.length === 0) { setError('Select at least one day.'); return; }
     setSaving(true); setError('');
     const created = await adminShifts.create({ companyId, branchId, name: name.trim(), schedule: buildSchedule(), notes: notes.trim() || undefined });
     setSaving(false);
     if (!created) { setError('Failed to create shift.'); return; }
-    setName(''); setNotes(''); setModalOpen(false); await load();
+    setName(''); setNotes(''); setWeekDays([]); setModalOpen(false); await load();
   };
 
   const deactivate = async (id: string) => { await adminShifts.deactivate(id); await load(); };
@@ -120,8 +124,11 @@ export default function ShiftsAdminPage() {
                   <Table.Td fw={500}>{s.name}</Table.Td>
                   <Table.Td>
                     {s.schedule.type === 0 && `Daily ${s.schedule.dailyStart}–${s.schedule.dailyEnd}`}
-                    {s.schedule.type === 2 && `${DAYS[s.schedule.weeklyDay ?? 0]} ${s.schedule.weeklyStart}–${s.schedule.weeklyEnd}`}
+                    {s.schedule.type === 2 && (s.schedule.weeklyDays?.length
+                      ? `${s.schedule.weeklyDays.map((d) => DAYS[d]).join(', ')} ${s.schedule.weeklyStart}–${s.schedule.weeklyEnd}`
+                      : `${DAYS[s.schedule.weeklyDay ?? 0]} ${s.schedule.weeklyStart}–${s.schedule.weeklyEnd}`)}
                     {s.schedule.type === 3 && `Bi-weekly ${DAYS[s.schedule.biWeeklyDay ?? 0]}`}
+                    {s.schedule.type === 5 && `Monthly day ${s.schedule.monthlyDay}`}
                     {s.schedule.type === 4 && 'On-call'}
                   </Table.Td>
                   <Table.Td>{assignments[s.id]?.length ?? 0}</Table.Td>
@@ -174,16 +181,26 @@ export default function ShiftsAdminPage() {
           <Select label="Branch" data={branches.map((b) => ({ value: b.id, label: b.name }))} value={branchId} onChange={setBranchId} searchable disabled={!companyId} />
           <TextInput label="Name" required value={name} onChange={(e) => setName(e.target.value)} />
           <Select label="Schedule" data={SCHEDULE_TYPES} value={scheduleType} onChange={(v) => setScheduleType(v ?? '0')} />
+
+          {scheduleType === '2' && (
+            <MultiSelect
+              label="Days"
+              data={DAYS.map((d, i) => ({ value: String(i), label: d }))}
+              value={weekDays}
+              onChange={setWeekDays}
+            />
+          )}
+          {scheduleType === '3' && (
+            <Group grow>
+              <Select label="Week parity" data={[{ value: '0', label: 'Week 1' }, { value: '1', label: 'Week 2' }]} value={weekParity} onChange={(v) => setWeekParity(v ?? '0')} />
+              <Select label="Day" data={DAYS.map((d, i) => ({ value: String(i), label: d }))} value={weekDays[0] ?? ''} onChange={(v) => setWeekDays(v ? [v] : [])} />
+            </Group>
+          )}
+          {scheduleType === '5' && (
+            <NumberInput label="Day of month (1-31)" min={1} max={31} value={monthlyDay} onChange={setMonthlyDay} />
+          )}
           {scheduleType !== '4' && (
             <Group grow>
-              {scheduleType === '2' || scheduleType === '3' ? (
-                <>
-                  {scheduleType === '3' && (
-                    <Select label="Week parity" data={[{ value: '0', label: 'Week 1' }, { value: '1', label: 'Week 2' }]} value={weekParity} onChange={(v) => setWeekParity(v ?? '0')} />
-                  )}
-                  <Select label="Day" data={DAYS.map((d, i) => ({ value: String(i), label: d }))} value={weekDay} onChange={(v) => setWeekDay(v ?? '1')} />
-                </>
-              ) : null}
               <TextInput label="Start" type="time" value={start} onChange={(e) => setStart(e.target.value)} />
               <TextInput label="End" type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
             </Group>

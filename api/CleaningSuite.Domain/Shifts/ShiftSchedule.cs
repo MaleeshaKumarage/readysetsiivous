@@ -6,7 +6,8 @@ public enum ShiftScheduleType
     DailyDifferentTime = 1,
     Weekly = 2,
     BiWeekly = 3,
-    OnCallFlexible = 4
+    OnCallFlexible = 4,
+    Monthly = 5
 }
 
 public class TimeRange
@@ -23,12 +24,16 @@ public class ShiftSchedule
     public TimeSpan? DailyEnd { get; set; }
     public Dictionary<DayOfWeek, TimeRange> DailyTimes { get; set; } = new();
     public DayOfWeek? WeeklyDay { get; set; }
+    public List<DayOfWeek> WeeklyDays { get; set; } = new();
     public TimeSpan? WeeklyStart { get; set; }
     public TimeSpan? WeeklyEnd { get; set; }
     public int? BiWeeklyWeekParity { get; set; }
     public DayOfWeek? BiWeeklyDay { get; set; }
     public TimeSpan? BiWeeklyStart { get; set; }
     public TimeSpan? BiWeeklyEnd { get; set; }
+    public int? MonthlyDay { get; set; }
+    public TimeSpan? MonthlyStart { get; set; }
+    public TimeSpan? MonthlyEnd { get; set; }
     public bool OnCall => Type == ShiftScheduleType.OnCallFlexible;
 
     /// <summary>
@@ -67,9 +72,10 @@ public class ShiftSchedule
                 break;
 
             case ShiftScheduleType.Weekly:
-                if (WeeklyDay is null || WeeklyStart is null || WeeklyEnd is null)
+                if ((WeeklyDay is null && (WeeklyDays is null || WeeklyDays.Count == 0))
+                    || WeeklyStart is null || WeeklyEnd is null)
                     throw new ArgumentException(
-                        "Weekly schedules require WeeklyDay, WeeklyStart and WeeklyEnd.",
+                        "Weekly schedules require WeeklyDay or WeeklyDays, WeeklyStart and WeeklyEnd.",
                         nameof(WeeklyDay));
                 if (WeeklyEnd <= WeeklyStart)
                     throw new ArgumentException(
@@ -89,6 +95,19 @@ public class ShiftSchedule
 
             case ShiftScheduleType.OnCallFlexible:
                 // No fixed times; nothing to validate.
+                break;
+
+            case ShiftScheduleType.Monthly:
+                if (MonthlyDay is null || MonthlyStart is null || MonthlyEnd is null)
+                    throw new ArgumentException(
+                        "Monthly schedules require MonthlyDay, MonthlyStart and MonthlyEnd.",
+                        nameof(MonthlyDay));
+                if (MonthlyDay < 1 || MonthlyDay > 31)
+                    throw new ArgumentException(
+                        "MonthlyDay must be between 1 and 31.", nameof(MonthlyDay));
+                if (MonthlyEnd <= MonthlyStart)
+                    throw new ArgumentException(
+                        "MonthlyEnd must be after MonthlyStart.", nameof(MonthlyEnd));
                 break;
 
             default:

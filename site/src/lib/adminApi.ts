@@ -270,6 +270,7 @@ export const ShiftScheduleType = {
   Weekly: 2,
   BiWeekly: 3,
   OnCallFlexible: 4,
+  Monthly: 5,
 } as const;
 
 export type ShiftScheduleType =
@@ -281,12 +282,16 @@ export interface ShiftSchedule {
   dailyEnd?: string | null;
   dailyTimes?: Record<string, TimeRange> | null;
   weeklyDay?: number | null;
+  weeklyDays?: number[] | null;
   weeklyStart?: string | null;
   weeklyEnd?: string | null;
   biWeeklyWeekParity?: number | null;
   biWeeklyDay?: number | null;
   biWeeklyStart?: string | null;
   biWeeklyEnd?: string | null;
+  monthlyDay?: number | null;
+  monthlyStart?: string | null;
+  monthlyEnd?: string | null;
 }
 
 export interface Shift {

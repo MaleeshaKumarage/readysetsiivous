@@ -6,7 +6,7 @@ namespace CleaningSuite.Domain.Shifts;
 public static class ShiftScheduleCalculator
 {
     /// <summary>
-    /// Expands a bi-weekly <see cref="ShiftSchedule"/> into concrete occurrences
+    /// Expands a <see cref="ShiftSchedule"/> into concrete occurrences
     /// between <paramref name="from"/> and <paramref name="to"/> (inclusive).
     /// </summary>
     public static IReadOnlyList<ShiftOccurrence> Calculate(
@@ -15,21 +15,58 @@ public static class ShiftScheduleCalculator
         DateTime to)
     {
         if (schedule is null) throw new ArgumentNullException(nameof(schedule));
-        if (schedule.BiWeeklyStart is null || schedule.BiWeeklyEnd is null)
-            return Array.Empty<ShiftOccurrence>();
 
         var result = new List<ShiftOccurrence>();
 
-        for (var date = from.Date; date <= to.Date; date = date.AddDays(1))
+        switch (schedule.Type)
         {
-            // Fixed, documented anchor: the Monday of ISO week 1, 2024. Week parity is
-            // measured relative to this date so results are stable and reproducible.
-            var biWeeklyAnchor = new DateTime(2024, 1, 1);
-            var weekIndex = (int)Math.Floor((date - biWeeklyAnchor).TotalDays / 7.0);
-            // Modulo-safe: yields 1 or 2 for both positive and negative weekIndex values.
-            var parity = ((weekIndex % 2) + 2) % 2 + 1;
-            if (parity == schedule.BiWeeklyWeekParity)
-                AddOccurrence(result, date, schedule.BiWeeklyStart.Value, schedule.BiWeeklyEnd.Value);
+            case ShiftScheduleType.DailySameTime:
+                if (schedule.DailyStart is null || schedule.DailyEnd is null) break;
+                for (var date = from.Date; date <= to.Date; date = date.AddDays(1))
+                    AddOccurrence(result, date, schedule.DailyStart.Value, schedule.DailyEnd.Value);
+                break;
+
+            case ShiftScheduleType.DailyDifferentTime:
+                for (var date = from.Date; date <= to.Date; date = date.AddDays(1))
+                    if (schedule.DailyTimes.TryGetValue(date.DayOfWeek, out var range))
+                        AddOccurrence(result, date, range.Start, range.End);
+                break;
+
+            case ShiftScheduleType.Weekly:
+                if (schedule.WeeklyStart is null || schedule.WeeklyEnd is null) break;
+                for (var date = from.Date; date <= to.Date; date = date.AddDays(1))
+                {
+                    var isDay = schedule.WeeklyDays.Count > 0
+                        ? schedule.WeeklyDays.Contains(date.DayOfWeek)
+                        : date.DayOfWeek == schedule.WeeklyDay;
+                    if (isDay)
+                        AddOccurrence(result, date, schedule.WeeklyStart.Value, schedule.WeeklyEnd.Value);
+                }
+                break;
+
+            case ShiftScheduleType.BiWeekly:
+                {
+                    if (schedule.BiWeeklyStart is null || schedule.BiWeeklyEnd is null) break;
+                    var biWeeklyAnchor = new DateTime(2024, 1, 1);
+                    for (var date = from.Date; date <= to.Date; date = date.AddDays(1))
+                    {
+                        var weekIndex = (int)Math.Floor((date - biWeeklyAnchor).TotalDays / 7.0);
+                        var parity = ((weekIndex % 2) + 2) % 2 + 1;
+                        if (parity == schedule.BiWeeklyWeekParity && date.DayOfWeek == schedule.BiWeeklyDay)
+                            AddOccurrence(result, date, schedule.BiWeeklyStart.Value, schedule.BiWeeklyEnd.Value);
+                    }
+                }
+                break;
+
+            case ShiftScheduleType.Monthly:
+                if (schedule.MonthlyStart is null || schedule.MonthlyEnd is null) break;
+                for (var date = from.Date; date <= to.Date; date = date.AddDays(1))
+                    if (date.Day == schedule.MonthlyDay)
+                        AddOccurrence(result, date, schedule.MonthlyStart.Value, schedule.MonthlyEnd.Value);
+                break;
+
+            case ShiftScheduleType.OnCallFlexible:
+                break;
         }
 
         return result;
