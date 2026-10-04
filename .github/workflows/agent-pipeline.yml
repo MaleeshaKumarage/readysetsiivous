@@ -280,7 +280,10 @@ jobs:
       - name: Deploy + seed dev
         run: |
           N=${{ needs.resolve.outputs.issue }}
-          cd api && docker build -f docker/Dockerfile -t cleaning-dev-api:dev . && cd /home/ubuntu/cleaning-dev && docker compose up -d
+          cd api && docker build -f docker/Dockerfile -t cleaning-dev-api:dev .
+          cp "$GITHUB_WORKSPACE/api/deploy/docker-compose.dev.yml" /home/ubuntu/cleaning-dev/docker-compose.yml
+          cp "$GITHUB_WORKSPACE/api/deploy/keycloak-realm.json" /home/ubuntu/cleaning-dev/keycloak-realm.json
+          cd /home/ubuntu/cleaning-dev && docker compose up -d
           for i in $(seq 1 30); do docker exec cleaning-dev-postgres-1 pg_isready -U cleaning >/dev/null 2>&1 && break; sleep 2; done
           docker exec -i cleaning-dev-postgres-1 psql -U cleaning -d cleaning < "$GITHUB_WORKSPACE/api/deploy/seed-dev.sql"
           cd "$GITHUB_WORKSPACE/site" && npm ci && NEXT_PUBLIC_API_URL=http://130.61.208.211:8090/ NEXT_PUBLIC_KEYCLOAK_URL=http://130.61.208.211:8081/ npm run build
