@@ -1,31 +1,53 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge } from '@mantine/core';
-import { Plus } from 'lucide-react';
-import { adminShifts, adminCompanies, adminBranches, type Shift, type Company, type Branch } from '@/lib/adminApi';
+import {
+  Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge, MultiSelect, ActionIcon,
+} from '@mantine/core';
+import { Plus, Trash2 } from 'lucide-react';
+import {
+  adminShifts, adminCompanies, adminBranches, adminEmployees,
+  type Shift, type Company, type Branch, type Employee, type ShiftAssignment,
+} from '@/lib/adminApi';
+
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const SCHEDULE_TYPES = [
+  { value: '0', label: 'Daily (same time)' },
+  { value: '2', label: 'Weekly (specific day)' },
+  { value: '3', label: 'Bi-weekly' },
+  { value: '4', label: 'On-call / flexible' },
+];
 
 export default function ShiftsAdminPage() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
 
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [branchId, setBranchId] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const [dailyStart, setDailyStart] = useState('08:00');
-  const [dailyEnd, setDailyEnd] = useState('17:00');
+  const [scheduleType, setScheduleType] = useState('0');
+  const [start, setStart] = useState('08:00');
+  const [end, setEnd] = useState('17:00');
+  const [weekDay, setWeekDay] = useState('1');
+  const [weekParity, setWeekParity] = useState('0');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  const [assignOpen, setAssignOpen] = useState<string | null>(null);
+  const [assignments, setAssignments] = useState<Record<string, ShiftAssignment[]>>({});
+  const [assignSel, setAssignSel] = useState<string[]>([]);
 
   const load = () => adminShifts.list().then((r) => { if (r) setShifts(r); setLoading(false); });
 
   useEffect(() => {
     load();
     adminCompanies.list('', 0, 100).then((r) => { if (r) setCompanies(r.items); });
+    adminEmployees.list().then((e) => { if (e) setEmployees(e); });
   }, []);
 
   useEffect(() => {
@@ -33,20 +55,49 @@ export default function ShiftsAdminPage() {
     adminCompanies.get(companyId).then((d) => { if (d) setBranches(d.branches); });
   }, [companyId]);
 
+  const buildSchedule = () => {
+    const t = Number(scheduleType);
+    if (t === 0) return { type: 0, dailyStart: start, dailyEnd: end };
+    if (t === 2) return { type: 2, weeklyDay: Number(weekDay), weeklyStart: start, weeklyEnd: end };
+    if (t === 3) return { type: 3, biWeeklyWeekParity: Number(weekParity), biWeeklyDay: Number(weekDay), biWeeklyStart: start, biWeeklyEnd: end };
+    return { type: 4 };
+  };
+
   const submit = async () => {
     if (!companyId || !branchId || !name.trim()) { setError('Company, branch and name are required.'); return; }
     setSaving(true); setError('');
-    const created = await adminShifts.create({
-      companyId, branchId, name: name.trim(),
-      schedule: { type: 0, dailyStart, dailyEnd },
-      notes: notes.trim() || undefined,
-    });
+    const created = await adminShifts.create({ companyId, branchId, name: name.trim(), schedule: buildSchedule(), notes: notes.trim() || undefined });
     setSaving(false);
     if (!created) { setError('Failed to create shift.'); return; }
     setName(''); setNotes(''); setModalOpen(false); await load();
   };
 
   const deactivate = async (id: string) => { await adminShifts.deactivate(id); await load(); };
+
+  const openAssign = async (id: string) => {
+    if (assignOpen === id) { setAssignOpen(null); return; }
+    setAssignOpen(id); setAssignSel([]);
+    const a = await adminShifts.assignments(id);
+    if (a) setAssignments((m) => ({ ...m, [id]: a }));
+  };
+
+  const doAssign = async (shiftId: string) => {
+    for (const empId of assignSel) await adminShifts.assign(shiftId, empId);
+    setAssignSel([]);
+    const a = await adminShifts.assignments(shiftId);
+    if (a) setAssignments((m) => ({ ...m, [shiftId]: a }));
+  };
+
+  const doUnassign = async (shiftId: string, assignmentId: string) => {
+    await adminShifts.unassign(shiftId, assignmentId);
+    const a = await adminShifts.assignments(shiftId);
+    if (a) setAssignments((m) => ({ ...m, [shiftId]: a }));
+  };
+
+  const employeeName = (id: string) => {
+    const e = employees.find((x) => x.id === id);
+    return e ? `${e.firstName} ${e.lastName}` : id.slice(0, 8);
+  };
 
   return (
     <>
@@ -60,33 +111,83 @@ export default function ShiftsAdminPage() {
       ) : (
         <Table striped highlightOnHover withTableBorder>
           <Table.Thead>
-            <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Schedule</Table.Th><Table.Th w={120}>Status</Table.Th></Table.Tr>
+            <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Schedule</Table.Th><Table.Th>Employees</Table.Th><Table.Th w={180}></Table.Th></Table.Tr>
           </Table.Thead>
           <Table.Tbody>
             {shifts.map((s) => (
-              <Table.Tr key={s.id}>
-                <Table.Td fw={500}>{s.name}</Table.Td>
-                <Table.Td>{s.schedule.type === 0 ? `${s.schedule.dailyStart ?? ''} – ${s.schedule.dailyEnd ?? ''}` : `type ${s.schedule.type}`}</Table.Td>
-                <Table.Td>
-                  {s.isActive
-                    ? <Button size="xs" variant="subtle" color="red" onClick={() => deactivate(s.id)}>Deactivate</Button>
-                    : <Badge color="gray" size="sm">Inactive</Badge>}
-                </Table.Td>
-              </Table.Tr>
+              <>
+                <Table.Tr key={s.id}>
+                  <Table.Td fw={500}>{s.name}</Table.Td>
+                  <Table.Td>
+                    {s.schedule.type === 0 && `Daily ${s.schedule.dailyStart}–${s.schedule.dailyEnd}`}
+                    {s.schedule.type === 2 && `${DAYS[s.schedule.weeklyDay ?? 0]} ${s.schedule.weeklyStart}–${s.schedule.weeklyEnd}`}
+                    {s.schedule.type === 3 && `Bi-weekly ${DAYS[s.schedule.biWeeklyDay ?? 0]}`}
+                    {s.schedule.type === 4 && 'On-call'}
+                  </Table.Td>
+                  <Table.Td>{assignments[s.id]?.length ?? 0}</Table.Td>
+                  <Table.Td>
+                    <Group gap={6}>
+                      <Button size="xs" variant="light" onClick={() => openAssign(s.id)}>Employees</Button>
+                      {s.isActive && <Button size="xs" variant="subtle" color="red" onClick={() => deactivate(s.id)}>Deactivate</Button>}
+                    </Group>
+                  </Table.Td>
+                </Table.Tr>
+                {assignOpen === s.id && (
+                  <Table.Tr key={s.id + '-assign'}>
+                    <Table.Td colSpan={4} p="sm">
+                      <Group align="flex-end" mb="xs">
+                        <MultiSelect
+                          label="Assign employees"
+                          placeholder="Select employees"
+                          data={employees.map((e) => ({ value: e.id, label: `${e.firstName} ${e.lastName}` }))}
+                          value={assignSel}
+                          onChange={setAssignSel}
+                          style={{ flex: 1 }}
+                          searchable
+                        />
+                        <Button size="xs" onClick={() => doAssign(s.id)}>Assign</Button>
+                      </Group>
+                      {(assignments[s.id] ?? []).length === 0 ? (
+                        <Text size="sm" c="dimmed">No employees assigned.</Text>
+                      ) : (
+                        <Stack gap={4}>
+                          {(assignments[s.id] ?? []).map((a) => (
+                            <Group key={a.id} justify="space-between">
+                              <Text size="sm">{employeeName(a.employeeId)}</Text>
+                              <ActionIcon variant="subtle" color="red" size="sm" onClick={() => doUnassign(s.id, a.id)}><Trash2 size={14} /></ActionIcon>
+                            </Group>
+                          ))}
+                        </Stack>
+                      )}
+                    </Table.Td>
+                  </Table.Tr>
+                )}
+              </>
             ))}
           </Table.Tbody>
         </Table>
       )}
 
-      <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title="Add shift">
+      <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title="Add shift" size="lg">
         <Stack>
           <Select label="Company" data={companies.map((c) => ({ value: c.id, label: c.name }))} value={companyId} onChange={(v) => { setCompanyId(v); setBranchId(null); }} searchable />
           <Select label="Branch" data={branches.map((b) => ({ value: b.id, label: b.name }))} value={branchId} onChange={setBranchId} searchable disabled={!companyId} />
           <TextInput label="Name" required value={name} onChange={(e) => setName(e.target.value)} />
-          <Group grow>
-            <TextInput label="Start" type="time" value={dailyStart} onChange={(e) => setDailyStart(e.target.value)} />
-            <TextInput label="End" type="time" value={dailyEnd} onChange={(e) => setDailyEnd(e.target.value)} />
-          </Group>
+          <Select label="Schedule" data={SCHEDULE_TYPES} value={scheduleType} onChange={(v) => setScheduleType(v ?? '0')} />
+          {scheduleType !== '4' && (
+            <Group grow>
+              {scheduleType === '2' || scheduleType === '3' ? (
+                <>
+                  {scheduleType === '3' && (
+                    <Select label="Week parity" data={[{ value: '0', label: 'Week 1' }, { value: '1', label: 'Week 2' }]} value={weekParity} onChange={(v) => setWeekParity(v ?? '0')} />
+                  )}
+                  <Select label="Day" data={DAYS.map((d, i) => ({ value: String(i), label: d }))} value={weekDay} onChange={(v) => setWeekDay(v ?? '1')} />
+                </>
+              ) : null}
+              <TextInput label="Start" type="time" value={start} onChange={(e) => setStart(e.target.value)} />
+              <TextInput label="End" type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
+            </Group>
+          )}
           <TextInput label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
           {error && <Text size="sm" c="red">{error}</Text>}
           <Group justify="flex-end">
