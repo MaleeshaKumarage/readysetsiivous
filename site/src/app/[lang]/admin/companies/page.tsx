@@ -1,228 +1,169 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Title, Button, Table, Modal, TextInput, Textarea, Group, Stack, Text, Loader, Badge,
+} from '@mantine/core';
+import { Plus, ChevronDown } from 'lucide-react';
 import { adminCompanies, adminBranches, type Company, type Branch } from '@/lib/adminApi';
 
-const emptyForm = {
-  businessId: '',
-  name: '',
-  contactName: '',
-  contactEmail: '',
-  contactPhone: '',
-  notes: '',
-};
+const emptyForm = { businessId: '', name: '', contactName: '', contactEmail: '', contactPhone: '', notes: '' };
 
-const emptyBranch = { name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '' };
-
-export default function CompaniesAdminPage({ params }: { params: { lang: string } }) {
+export default function CompaniesAdminPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const [expanded, setExpanded] = useState<string | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [branchForm, setBranchForm] = useState(emptyBranch);
+  const [branchModal, setBranchModal] = useState(false);
+  const [branchForm, setBranchForm] = useState({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '' });
   const [branchSaving, setBranchSaving] = useState(false);
-  const [branchError, setBranchError] = useState('');
 
-  const refresh = () =>
-    adminCompanies.list(debouncedSearch, 0, 100).then((result) => {
-      if (result) setCompanies(result.items);
+  const load = () =>
+    adminCompanies.list('', 0, 100).then((r) => {
+      if (r) setCompanies(r.items);
       setLoading(false);
     });
 
-  useEffect(() => {
-    const handle = setTimeout(() => setDebouncedSearch(search), 300);
-    return () => clearTimeout(handle);
-  }, [search]);
+  useEffect(() => { load(); }, []);
 
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    adminCompanies.list(debouncedSearch, 0, 100).then((result) => {
-      if (active && result) setCompanies(result.items);
-      if (active) setLoading(false);
-    });
-    return () => { active = false; };
-  }, [debouncedSearch]);
-
-  const update = (key: keyof typeof emptyForm) => (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => setForm((f) => ({ ...f, [key]: e.target.value }));
-
-  const updateBranch = (key: keyof typeof emptyBranch) => (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => setBranchForm((f) => ({ ...f, [key]: e.target.value }));
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm((f) => ({ ...f, [k]: e.target.value }));
+  const setB = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setBranchForm((f) => ({ ...f, [k]: e.target.value }));
 
   const submit = async () => {
-    if (!form.businessId.trim() || !form.name.trim()) {
-      setError('Business ID and name are required.');
-      return;
-    }
-    setSaving(true);
-    setError('');
+    if (!form.businessId.trim() || !form.name.trim()) { setError('Business ID and name are required.'); return; }
+    setSaving(true); setError('');
     const created = await adminCompanies.create({
-      businessId: form.businessId.trim(),
-      name: form.name.trim(),
-      contactName: form.contactName.trim() || undefined,
-      contactEmail: form.contactEmail.trim() || undefined,
-      contactPhone: form.contactPhone.trim() || undefined,
-      notes: form.notes.trim() || undefined,
+      businessId: form.businessId.trim(), name: form.name.trim(),
+      contactName: form.contactName.trim() || undefined, contactEmail: form.contactEmail.trim() || undefined,
+      contactPhone: form.contactPhone.trim() || undefined, notes: form.notes.trim() || undefined,
     });
     setSaving(false);
-    if (!created) {
-      setError('Failed to create company.');
-      return;
-    }
-    setForm(emptyForm);
-    setShowForm(false);
-    await refresh();
+    if (!created) { setError('Failed to create company.'); return; }
+    setForm(emptyForm); setModalOpen(false); await load();
   };
 
   const toggleBranches = async (id: string) => {
     if (expanded === id) { setExpanded(null); return; }
     setExpanded(id);
-    const detail = await adminCompanies.get(id);
-    if (detail) setBranches(detail.branches);
+    const d = await adminCompanies.get(id);
+    if (d) setBranches(d.branches);
   };
 
   const submitBranch = async () => {
-    if (!expanded || !branchForm.name.trim()) {
-      setBranchError('Branch name is required.');
-      return;
-    }
+    if (!expanded || !branchForm.name.trim()) return;
     setBranchSaving(true);
-    setBranchError('');
     const created = await adminBranches.create(expanded, {
-      name: branchForm.name.trim(),
-      street: branchForm.street.trim() || undefined,
-      postalCode: branchForm.postalCode.trim() || undefined,
-      city: branchForm.city.trim() || undefined,
-      country: branchForm.country.trim() || undefined,
-      contactPhone: branchForm.contactPhone.trim() || undefined,
+      name: branchForm.name.trim(), street: branchForm.street.trim() || undefined,
+      postalCode: branchForm.postalCode.trim() || undefined, city: branchForm.city.trim() || undefined,
+      country: branchForm.country.trim() || undefined, contactPhone: branchForm.contactPhone.trim() || undefined,
     });
     setBranchSaving(false);
-    if (!created) {
-      setBranchError('Failed to create branch.');
-      return;
-    }
-    setBranchForm(emptyBranch);
-    const detail = await adminCompanies.get(expanded);
-    if (detail) setBranches(detail.branches);
+    if (!created) return;
+    setBranchForm({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '' });
+    setBranchModal(false);
+    const d = await adminCompanies.get(expanded);
+    if (d) setBranches(d.branches);
   };
 
   return (
-    <div>
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Companies</h1>
-        <Button onClick={() => setShowForm((v) => !v)}>
-          {showForm ? 'Cancel' : 'Add company'}
-        </Button>
-      </div>
+    <>
+      <Group justify="space-between" mb="md">
+        <Title order={2}>Companies</Title>
+        <Button leftSection={<Plus size={16} />} onClick={() => setModalOpen(true)}>Add company</Button>
+      </Group>
 
-      {showForm && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>New company</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2">
-            <div className="grid gap-1">
-              <Label htmlFor="businessId">Business ID</Label>
-              <Input id="businessId" value={form.businessId} onChange={update('businessId')} />
-            </div>
-            <div className="grid gap-1">
-              <Label htmlFor="name">Name</Label>
-              <Input id="name" value={form.name} onChange={update('name')} />
-            </div>
-            <div className="grid gap-1">
-              <Label htmlFor="contactName">Contact name</Label>
-              <Input id="contactName" value={form.contactName} onChange={update('contactName')} />
-            </div>
-            <div className="grid gap-1">
-              <Label htmlFor="contactEmail">Contact email</Label>
-              <Input id="contactEmail" value={form.contactEmail} onChange={update('contactEmail')} />
-            </div>
-            <div className="grid gap-1">
-              <Label htmlFor="contactPhone">Contact phone</Label>
-              <Input id="contactPhone" value={form.contactPhone} onChange={update('contactPhone')} />
-            </div>
-            <div className="grid gap-1">
-              <Label htmlFor="notes">Notes</Label>
-              <Input id="notes" value={form.notes} onChange={update('notes')} />
-            </div>
-            <div className="sm:col-span-2">
-              {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
-              <Button onClick={submit} disabled={saving}>
-                {saving ? 'Saving…' : 'Create company'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <Input
-        placeholder="Search business ID or name"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="mb-4 max-w-sm"
-      />
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <Loader />
+      ) : companies.length === 0 ? (
+        <Text c="dimmed">No companies yet. Add one to get started.</Text>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {companies.map((company) => (
-            <Card key={company.id}>
-              <CardHeader>
-                <CardTitle>{company.name}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">{company.businessId}</p>
-                <Button variant="outline" size="sm" className="mt-2" onClick={() => toggleBranches(company.id)}>
-                  {expanded === company.id ? 'Hide branches' : `Branches (${branches.length && expanded === company.id ? branches.length : ''})`}
-                </Button>
-                {expanded === company.id && (
-                  <div className="mt-3 space-y-3">
-                    {branches.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No branches yet.</p>
-                    ) : (
-                      branches.map((b) => (
-                        <div key={b.id} className="rounded border p-2 text-sm">
-                          <span className="font-medium">{b.name}</span>
-                          {b.city && <span className="text-muted-foreground"> · {b.city}</span>}
-                        </div>
-                      ))
-                    )}
-                    <div className="grid gap-2 rounded border p-3">
-                      <p className="text-sm font-medium">Add branch</p>
-                      <Input placeholder="Name" value={branchForm.name} onChange={updateBranch('name')} />
-                      <Input placeholder="Street" value={branchForm.street} onChange={updateBranch('street')} />
-                      <div className="flex gap-2">
-                        <Input placeholder="Postal code" value={branchForm.postalCode} onChange={updateBranch('postalCode')} />
-                        <Input placeholder="City" value={branchForm.city} onChange={updateBranch('city')} />
-                      </div>
-                      <Input placeholder="Country" value={branchForm.country} onChange={updateBranch('country')} />
-                      <Input placeholder="Phone" value={branchForm.contactPhone} onChange={updateBranch('contactPhone')} />
-                      {branchError && <p className="text-sm text-destructive">{branchError}</p>}
-                      <Button size="sm" onClick={submitBranch} disabled={branchSaving}>
-                        {branchSaving ? 'Saving…' : 'Add branch'}
-                      </Button>
-                    </div>
-                  </div>
+        <Table striped highlightOnHover withTableBorder>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Name</Table.Th>
+              <Table.Th>Business ID</Table.Th>
+              <Table.Th>Contact</Table.Th>
+              <Table.Th w={120}>Branches</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {companies.map((c) => (
+              <>
+                <Table.Tr key={c.id}>
+                  <Table.Td fw={500}>{c.name}</Table.Td>
+                  <Table.Td>{c.businessId}</Table.Td>
+                  <Table.Td>{c.contactName || '—'}</Table.Td>
+                  <Table.Td>
+                    <Button variant="subtle" size="xs" onClick={() => toggleBranches(c.id)}>
+                      {branches.length} <ChevronDown size={14} />
+                    </Button>
+                  </Table.Td>
+                </Table.Tr>
+                {expanded === c.id && (
+                  <Table.Tr key={c.id + '-branches'}>
+                    <Table.Td colSpan={4} p="sm">
+                      <Group justify="space-between" mb="xs">
+                        <Text size="sm" fw={600}>Branches</Text>
+                        <Button size="xs" variant="light" leftSection={<Plus size={14} />} onClick={() => setBranchModal(true)}>Add branch</Button>
+                      </Group>
+                      {branches.length === 0 ? (
+                        <Text size="sm" c="dimmed">No branches yet.</Text>
+                      ) : (
+                        <Stack gap={4}>
+                          {branches.map((b) => (
+                            <Group key={b.id} justify="space-between">
+                              <Text size="sm">{b.name}{b.city ? ` · ${b.city}` : ''}</Text>
+                              {!b.isActive && <Badge color="gray" size="xs">Inactive</Badge>}
+                            </Group>
+                          ))}
+                        </Stack>
+                      )}
+                    </Table.Td>
+                  </Table.Tr>
                 )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+              </>
+            ))}
+          </Table.Tbody>
+        </Table>
       )}
-    </div>
+
+      <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title="Add company">
+        <Stack>
+          <TextInput label="Business ID" required value={form.businessId} onChange={set('businessId')} />
+          <TextInput label="Name" required value={form.name} onChange={set('name')} />
+          <TextInput label="Contact name" value={form.contactName} onChange={set('contactName')} />
+          <TextInput label="Contact email" value={form.contactEmail} onChange={set('contactEmail')} />
+          <TextInput label="Contact phone" value={form.contactPhone} onChange={set('contactPhone')} />
+          <Textarea label="Notes" value={form.notes} onChange={set('notes')} />
+          {error && <Text size="sm" c="red">{error}</Text>}
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setModalOpen(false)}>Cancel</Button>
+            <Button loading={saving} onClick={submit}>Create company</Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal opened={branchModal} onClose={() => setBranchModal(false)} title="Add branch">
+        <Stack>
+          <TextInput label="Name" required value={branchForm.name} onChange={setB('name')} />
+          <TextInput label="Street" value={branchForm.street} onChange={setB('street')} />
+          <TextInput label="Postal code" value={branchForm.postalCode} onChange={setB('postalCode')} />
+          <TextInput label="City" value={branchForm.city} onChange={setB('city')} />
+          <TextInput label="Country" value={branchForm.country} onChange={setB('country')} />
+          <TextInput label="Phone" value={branchForm.contactPhone} onChange={setB('contactPhone')} />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setBranchModal(false)}>Cancel</Button>
+            <Button loading={branchSaving} onClick={submitBranch}>Add branch</Button>
+          </Group>
+        </Stack>
+      </Modal>
+    </>
   );
 }

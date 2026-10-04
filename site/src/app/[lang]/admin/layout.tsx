@@ -4,19 +4,12 @@ import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard,
-  Sparkles,
-  FileSignature,
-  Users,
-  Building2,
-  CalendarClock,
-  LogOut,
-  LogIn,
+  MantineProvider, AppShell, NavLink, Group, Text, Button, Stack, Paper, createTheme,
+} from '@mantine/core';
+import {
+  LayoutDashboard, Sparkles, FileSignature, Users, Building2, CalendarClock, LogOut, LogIn,
 } from 'lucide-react';
 import { initAuth, isAuthenticated, login, logout } from '@/lib/auth';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
-import { cn } from '@/lib/utils';
 
 const NAV = [
   { href: 'services', label: 'Services', icon: Sparkles },
@@ -25,6 +18,12 @@ const NAV = [
   { href: 'companies', label: 'Companies', icon: Building2 },
   { href: 'shifts', label: 'Shifts', icon: CalendarClock },
 ] as const;
+
+const adminTheme = createTheme({
+  primaryColor: 'indigo',
+  defaultRadius: 'md',
+  fontFamily: 'Inter, system-ui, sans-serif',
+});
 
 export default function AdminLayout({ params, children }: { params: { lang: string }; children: ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -38,93 +37,75 @@ export default function AdminLayout({ params, children }: { params: { lang: stri
     });
   }, []);
 
-  // Admin panel is always dark mode. Force the class on, beating the ThemeProvider's
-  // mount effect (children run before the parent provider), and restore the user's
-  // stored theme when leaving admin.
-  useEffect(() => {
-    const root = document.documentElement;
-    const restore = () => {
-      let stored: string | null = null;
-      try { stored = localStorage.getItem('theme'); } catch { /* ignore */ }
-      if (stored === 'dark') root.classList.add('dark');
-      else root.classList.remove('dark');
-    };
-
-    root.classList.add('dark');
-    root.classList.add('admin');
-    const t = setTimeout(() => root.classList.add('dark'), 0);
-
-    return () => { clearTimeout(t); root.classList.remove('admin'); restore(); };
-  }, []);
+  const base = `/${params.lang}/admin/`;
 
   if (!ready) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted-foreground">Checking login…</p>
-      </div>
-    );
+    return <MantineProvider theme={adminTheme} defaultColorScheme="dark"><Text>Checking login…</Text></MantineProvider>;
   }
 
   if (!authed) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-muted/40">
-        <div className="w-full max-w-sm rounded-xl border bg-card p-8 text-center shadow-sm">
-          <LayoutDashboard className="mx-auto mb-4 h-10 w-10 text-primary" />
-          <h1 className="mb-2 text-xl font-semibold">Admin</h1>
-          <p className="mb-6 text-sm text-muted-foreground">
-            Sign in with your ReadySetSiivous admin account.
-          </p>
-          <Button className="w-full" onClick={() => login()}>
-            <LogIn className="mr-2 h-4 w-4" />
-            Sign in
-          </Button>
-        </div>
-      </div>
+      <MantineProvider theme={adminTheme} defaultColorScheme="dark">
+        <Group justify="center" h="100vh">
+          <Paper p="xl" radius="md" w={380} withBorder>
+            <Stack align="center">
+              <LayoutDashboard size={40} />
+              <Text fw={600} size="lg">Admin</Text>
+              <Text c="dimmed" size="sm" ta="center">
+                Sign in with your ReadySetSiivous admin account.
+              </Text>
+              <Button fullWidth leftSection={<LogIn size={16} />} onClick={() => login()}>
+                Sign in
+              </Button>
+            </Stack>
+          </Paper>
+        </Group>
+      </MantineProvider>
     );
   }
 
-  const base = `/${params.lang}/admin/`;
-
   return (
-    <div className="flex min-h-screen">
-      <aside className="fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r bg-background">
-        <div className="flex h-14 items-center gap-2 border-b px-4">
-          <Link href={base} className="flex items-center gap-2 font-semibold">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
-              <LayoutDashboard className="h-4 w-4" />
-            </span>
-            ReadySet<span className="text-primary">Siivous</span>
-          </Link>
-        </div>
-        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-          {NAV.map((item) => {
-            const active = pathname.startsWith(base + item.href);
-            return (
-              <Link
-                key={item.href}
-                href={base + item.href + '/'}
-                className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                  active
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                )}
-              >
-                <item.icon className="h-4 w-4" />
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-        <Separator />
-        <div className="p-3">
-          <Button variant="ghost" className="w-full justify-start text-muted-foreground" onClick={() => logout()}>
-            <LogOut className="mr-3 h-4 w-4" />
-            Sign out
-          </Button>
-        </div>
-      </aside>
-      <main className="ml-60 flex-1 p-8">{children}</main>
-    </div>
+    <MantineProvider theme={adminTheme} defaultColorScheme="dark">
+      <AppShell
+        navbar={{ width: 260, breakpoint: 'sm' }}
+        padding="md"
+      >
+        <AppShell.Navbar p="md">
+          <Group mb="lg" gap="xs">
+            <LayoutDashboard size={20} />
+            <Text fw={700}>ReadySet<span>Siivous</span></Text>
+          </Group>
+          <Stack gap={4}>
+            {NAV.map((item) => {
+              const active = pathname.startsWith(base + item.href);
+              return (
+                <NavLink
+                  key={item.href}
+                  component={Link}
+                  href={base + item.href + '/'}
+                  label={item.label}
+                  leftSection={<item.icon size={18} />}
+                  active={active}
+                />
+              );
+            })}
+          </Stack>
+          <AppShell.Section mt="auto">
+            <Button
+              variant="subtle"
+              color="gray"
+              fullWidth
+              justify="start"
+              leftSection={<LogOut size={16} />}
+              onClick={() => logout()}
+            >
+              Sign out
+            </Button>
+          </AppShell.Section>
+        </AppShell.Navbar>
+
+        <AppShell.Main>{children}</AppShell.Main>
+      </AppShell>
+    </MantineProvider>
   );
 }
