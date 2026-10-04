@@ -51,9 +51,10 @@ export default function AdminLayout({ params, children }: { params: { lang: stri
     };
 
     root.classList.add('dark');
+    root.classList.add('admin');
     const t = setTimeout(() => root.classList.add('dark'), 0);
 
-    return () => { clearTimeout(t); restore(); };
+    return () => { clearTimeout(t); root.classList.remove('admin'); restore(); };
   }, []);
 
   if (!ready) {
