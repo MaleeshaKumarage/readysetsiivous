@@ -71,10 +71,23 @@ async function authorizedFetch(path: string, init: RequestInit = {}): Promise<Re
   return response;
 }
 
+// In-memory GET cache so navigating between admin pages does not re-fetch
+// unchanged lists. Mutations clear it.
+const _cache = new Map<string, { data: unknown; ts: number }>();
+const _CACHE_TTL = 30_000;
+
+function _invalidate() {
+  _cache.clear();
+}
+
 export async function adminGet<T>(path: string): Promise<T | null> {
+  const hit = _cache.get(path);
+  if (hit && Date.now() - hit.ts < _CACHE_TTL) return hit.data as T;
   const response = await authorizedFetch(path);
   if (!response.ok) return null;
-  return (await response.json()) as T;
+  const data = (await response.json()) as T;
+  _cache.set(path, { data, ts: Date.now() });
+  return data;
 }
 
 export async function adminSend(
@@ -86,7 +99,9 @@ export async function adminSend(
     method,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  return response.ok || response.status === 204;
+  const ok = response.ok || response.status === 204;
+  if (ok) _invalidate();
+  return ok;
 }
 
 export async function adminSendJson<T>(
@@ -99,7 +114,9 @@ export async function adminSendJson<T>(
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) return null;
-  return (await response.json()) as T;
+  const data = (await response.json()) as T;
+  _invalidate();
+  return data;
 }
 
 export const adminBookings = {
