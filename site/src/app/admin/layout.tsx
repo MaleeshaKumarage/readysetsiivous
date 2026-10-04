@@ -26,7 +26,7 @@ const adminTheme = createTheme({
   fontFamily: 'Inter, system-ui, sans-serif',
 });
 
-export default function AdminLayout({ params, children }: { params: { lang: string }; children: ReactNode }) {
+export default function AdminLayout({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [authed, setAuthed] = useState(false);
   const pathname = usePathname() ?? '';
@@ -45,7 +45,7 @@ export default function AdminLayout({ params, children }: { params: { lang: stri
     return () => root.classList.remove('dark');
   }, []);
 
-  const base = `/${params.lang}/admin/`;
+  const base = `/admin/`;
 
   if (!ready) {
     return <MantineProvider theme={adminTheme} defaultColorScheme="dark"><Text>Checking login…</Text></MantineProvider>;
