@@ -9,7 +9,6 @@
       { "name": "staff" }
     ]
   },
-  "defaultRoles": ["admin"],
   "clients": [
     {
       "clientId": "cleaning-suite-web",
