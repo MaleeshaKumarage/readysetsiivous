@@ -37,6 +37,13 @@ export default function AdminLayout({ params, children }: { params: { lang: stri
     });
   }, []);
 
+  // Keep the site's dark class for any pages still using shadcn components.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.add('dark');
+    return () => root.classList.remove('dark');
+  }, []);
+
   const base = `/${params.lang}/admin/`;
 
   if (!ready) {

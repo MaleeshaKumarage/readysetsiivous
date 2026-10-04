@@ -1,261 +1,88 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
-import { toast } from 'sonner';
-import { Plus, Copy, Trash2 } from 'lucide-react';
-import { adminAgreements, adminTenant, adminCompanies, type AgreementListItem, type AgreementDetail, type Company } from '@/lib/adminApi';
-import { isAdmin } from '@/lib/auth';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge, ActionIcon } from '@mantine/core';
+import { Plus, Trash2, Copy } from 'lucide-react';
+import { adminAgreements, adminCompanies, type AgreementListItem, type Company } from '@/lib/adminApi';
 
 export default function AgreementsPage() {
-  const { lang } = useParams<{ lang: string }>();
   const [items, setItems] = useState<AgreementListItem[] | null>(null);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
-  const [companyId, setCompanyId] = useState('');
-  const [companies, setCompanies] = useState<Company[]>([]);
+  const [companyId, setCompanyId] = useState<string | null>(null);
   const [pdf, setPdf] = useState<File | null>(null);
   const [signers, setSigners] = useState<{ name: string; email: string }[]>([{ name: '', email: '' }]);
-  const [detail, setDetail] = useState<AgreementDetail | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [companyName, setCompanyName] = useState('ReadySetSiivous');
   const [submitting, setSubmitting] = useState(false);
-  const [tab, setTab] = useState<'active' | 'deactivated'>('active');
+  const [error, setError] = useState('');
 
   const load = useCallback(async () => { setItems(await adminAgreements.list()); }, []);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { adminCompanies.list('', 0, 100).then((r) => { if (r) setCompanies(r.items); }); }, []);
 
-  useEffect(() => {
-    adminTenant.get().then((t) => { if (t?.companyName) setCompanyName(t.companyName); });
-    adminCompanies.list('', 0, 100).then((r) => { if (r) setCompanies(r.items); });
-  }, []);
-
-  async function create() {
-    if (!pdf || !companyId || submitting) return;
-    setSubmitting(true);
-    try {
-      await adminAgreements.create(title, companyId, pdf, signers.filter(s => s.name && s.email));
-      setOpen(false); setTitle(''); setCompanyId(''); setPdf(null); setSigners([{ name: '', email: '' }]);
-      load();
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function openDetail(id: string) {
-    const d = await adminAgreements.get(id);
-    if (d) { setDetail(d); setDetailOpen(true); }
-  }
-
-  async function copyLink(token: string) {
-    const url = `${window.location.origin}/${lang}/sign?token=${token}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success('Link copied');
-    } catch {
-      toast.error('Copy failed');
-    }
-  }
-
-  async function copyEmail(signerName: string, token: string) {
-    const url = `${window.location.origin}/${lang}/sign?token=${token}`;
-    const title = detail?.title ?? 'agreement';
-
-    const plain = [
-      `Hi ${signerName},`,
-      '',
-      `Your ${title} with ${companyName} is ready to sign. Open the link, read the agreement, and sign by drawing on the screen.`,
-      '',
-      `Sign: ${url}`,
-    ].join('\n');
-
-    const html = [
-      '<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#1a1a1a">',
-      `<p style="margin:0 0 16px">Hi ${escapeHtml(signerName)},</p>`,
-      `<p style="margin:0 0 20px">Your <strong>${escapeHtml(title)}</strong> with ${escapeHtml(companyName)} is ready to sign. Open the link, read the agreement, and sign by drawing on the screen.</p>`,
-      `<a href="${escapeHtml(url)}" style="display:inline-block;background:#D9B95C;color:#070B1A;padding:12px 28px;border-radius:8px;font-weight:bold;text-decoration:none;font-size:15px">Sign</a>`,
-      `<p style="margin:20px 0 0;font-size:12px;color:#888888">If the button doesn't work, copy this link: ${escapeHtml(url)}</p>`,
-      '</div>',
-    ].join('');
-
-    try {
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          'text/plain': new Blob([plain], { type: 'text/plain' }),
-          'text/html': new Blob([html], { type: 'text/html' }),
-        }),
-      ]);
-      toast.success('Email copied (HTML)');
-    } catch {
-      try {
-        await navigator.clipboard.writeText(html);
-        toast.success('Email HTML copied');
-      } catch {
-        toast.error('Copy failed');
-      }
-    }
-  }
-
-  function escapeHtml(s: string): string {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
-
-  function displayTitle(a: { title: string; code: string }): string {
-    return a.code ? `${a.title}-${a.code}` : a.title;
-  }
-
-  async function toggleActive(a: AgreementListItem) {
-    if (a.isActive) await adminAgreements.deactivate(a.id);
-    else await adminAgreements.activate(a.id);
+  const create = async () => {
+    if (!pdf || !companyId || !title.trim()) { setError('Company, title and PDF are required.'); return; }
+    setSubmitting(true); setError('');
+    const ok = await adminAgreements.create(title.trim(), companyId, pdf, signers.filter((s) => s.name && s.email));
+    setSubmitting(false);
+    if (!ok) { setError('Failed to create agreement.'); return; }
+    setOpen(false); setTitle(''); setCompanyId(null); setPdf(null); setSigners([{ name: '', email: '' }]);
     load();
-  }
-
-  const filtered = items?.filter((a) => (tab === 'active' ? a.isActive : !a.isActive)) ?? [];
+  };
 
   return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Agreements</h1>
-        {isAdmin() && <Button onClick={() => setOpen(true)}><Plus className="mr-1.5 h-4 w-4" />New agreement</Button>}
-      </div>
+    <>
+      <Group justify="space-between" mb="md">
+        <Title order={2}>Agreements</Title>
+        <Button leftSection={<Plus size={16} />} onClick={() => setOpen(true)}>New agreement</Button>
+      </Group>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
-          <DialogHeader><DialogTitle>New agreement</DialogTitle></DialogHeader>
-          <div className="grid gap-4">
-            <div className="space-y-1.5">
-              <Label>Company</Label>
-              <select
-                value={companyId}
-                onChange={(e) => setCompanyId(e.target.value)}
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="">Select company…</option>
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Title</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>PDF</Label>
-              <input type="file" accept=".pdf" onChange={(e) => setPdf(e.target.files?.[0] ?? null)} className="text-xs" />
-            </div>
-            <div className="space-y-2">
-              <Label>Signers</Label>
-              {signers.map((s, i) => (
-                <div key={i} className="flex gap-2">
-                  <Input placeholder="Name" value={s.name} onChange={(e) => {
-                    const n = [...signers]; n[i].name = e.target.value; setSigners(n);
-                  }} />
-                  <Input placeholder="Email" value={s.email} onChange={(e) => {
-                    const n = [...signers]; n[i].email = e.target.value; setSigners(n);
-                  }} />
-                  <Button variant="ghost" size="icon" onClick={() => setSigners(signers.filter((_, j) => j !== i))}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-              <Button variant="outline" size="sm" onClick={() => setSigners([...signers, { name: '', email: '' }])}>
-                <Plus className="mr-1.5 h-3.5 w-3.5" />Add signer
-              </Button>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={create} disabled={!pdf || !title || !companyId || submitting}>
-              {submitting ? 'Creating…' : 'Create'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
-          <DialogHeader><DialogTitle>{detail ? displayTitle(detail) : 'Agreement'}</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            {detail && isAdmin() && (
-              <Button variant="outline" size="sm" onClick={() => { toggleActive(detail); setDetail({ ...detail, isActive: !detail.isActive }); }}>
-                {detail.isActive ? 'Deactivate' : 'Activate'}
-              </Button>
-            )}
-            {detail?.signers.map((s) => (
-              <div key={s.id} className="flex items-center gap-3 rounded-lg border p-3">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{s.name}</div>
-                  <div className="truncate text-xs text-muted-foreground">{s.email}</div>
-                </div>
-                <Badge variant={s.status === 'Signed' ? 'default' : 'secondary'}>{s.status}</Badge>
-                <div className="flex flex-col gap-1">
-                  <Button variant="outline" size="sm" onClick={() => copyLink(s.token)}>
-                    <Copy className="mr-1.5 h-3.5 w-3.5" />Copy link
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => copyEmail(s.name, s.token)}>
-                    <Copy className="mr-1.5 h-3.5 w-3.5" />Copy email
-                  </Button>
-                </div>
-              </div>
+      {items === null ? <Loader /> : items.length === 0 ? (
+        <Text c="dimmed">No agreements yet.</Text>
+      ) : (
+        <Table striped highlightOnHover withTableBorder>
+          <Table.Thead>
+            <Table.Tr><Table.Th>Title</Table.Th><Table.Th>Code</Table.Th><Table.Th>Signers</Table.Th><Table.Th>Status</Table.Th></Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {items.map((a) => (
+              <Table.Tr key={a.id}>
+                <Table.Td fw={500}>{a.title}</Table.Td>
+                <Table.Td>{a.code}</Table.Td>
+                <Table.Td>{a.signerCount}</Table.Td>
+                <Table.Td><Badge color={a.isActive ? 'green' : 'gray'}>{a.status}</Badge></Table.Td>
+              </Table.Tr>
             ))}
-            {detail && detail.signers.length === 0 && (
-              <p className="text-sm text-muted-foreground">No signers.</p>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <div className="mb-4 flex gap-2">
-        <Button
-          size="sm"
-          onClick={() => setTab('active')}
-          className={tab === 'active' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}
-        >Active</Button>
-        <Button
-          size="sm"
-          onClick={() => setTab('deactivated')}
-          className={tab === 'deactivated' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}
-        >Deactivated</Button>
-      </div>
-
-      <div className="rounded-xl border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Title</TableHead><TableHead>Status</TableHead>
-              <TableHead>Signed</TableHead><TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.map((a) => (
-              <TableRow key={a.id}>
-                <TableCell className="font-medium">{displayTitle(a)}</TableCell>
-                <TableCell>
-                  <Badge variant={a.status === 'Completed' ? 'default' : 'secondary'}>{a.status}</Badge>
-                </TableCell>
-                <TableCell>{a.signedCount}/{a.signerCount}</TableCell>
-                <TableCell className="text-right">
-                  <Button variant="ghost" size="sm" onClick={() => openDetail(a.id)}>View</Button>
-                  {a.status === 'Completed' && (
-                    <Button variant="ghost" size="sm" onClick={() => adminAgreements.downloadDocument(a.id)}>Download</Button>
-                  )}
-                  {isAdmin() && (
-                    <Button variant="ghost" size="sm" onClick={() => toggleActive(a)}>
-                      {a.isActive ? 'Deactivate' : 'Activate'}
-                    </Button>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
+          </Table.Tbody>
         </Table>
-      </div>
-    </div>
+      )}
+
+      <Modal opened={open} onClose={() => setOpen(false)} title="New agreement" size="lg">
+        <Stack>
+          <Select label="Company" required data={companies.map((c) => ({ value: c.id, label: c.name }))} value={companyId} onChange={setCompanyId} searchable />
+          <TextInput label="Title" required value={title} onChange={(e) => setTitle(e.target.value)} />
+          <div>
+            <Text size="sm" fw={500} mb={4}>PDF</Text>
+            <input type="file" accept=".pdf" onChange={(e) => setPdf(e.target.files?.[0] ?? null)} />
+          </div>
+          <Stack gap={8}>
+            <Text size="sm" fw={500}>Signers</Text>
+            {signers.map((s, i) => (
+              <Group key={i} gap={8}>
+                <TextInput placeholder="Name" value={s.name} onChange={(e) => { const n = [...signers]; n[i].name = e.target.value; setSigners(n); }} style={{ flex: 1 }} />
+                <TextInput placeholder="Email" value={s.email} onChange={(e) => { const n = [...signers]; n[i].email = e.target.value; setSigners(n); }} style={{ flex: 1 }} />
+                <ActionIcon variant="subtle" color="red" onClick={() => setSigners(signers.filter((_, j) => j !== i))}><Trash2 size={16} /></ActionIcon>
+              </Group>
+            ))}
+            <Button size="xs" variant="light" leftSection={<Plus size={14} />} onClick={() => setSigners([...signers, { name: '', email: '' }])}>Add signer</Button>
+          </Stack>
+          {error && <Text size="sm" c="red">{error}</Text>}
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button loading={submitting} onClick={create}>Create</Button>
+          </Group>
+        </Stack>
+      </Modal>
+    </>
   );
 }
