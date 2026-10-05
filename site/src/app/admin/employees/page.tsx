@@ -5,7 +5,7 @@ import { Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loa
 import { Plus } from 'lucide-react';
 import { adminEmployees, type Employee } from '@/lib/adminApi';
 
-const ROLES = ['admin', 'employee', 'manager'];
+const ROLES = ['admin', 'employee'];
 
 export default function EmployeesAdminPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -26,7 +26,7 @@ export default function EmployeesAdminPage() {
     setSaving(true); setError('');
     const created = await adminEmployees.create({
       email: form.email.trim(), firstName: form.firstName.trim(), lastName: form.lastName.trim(),
-      phone: form.phone.trim() || undefined, role: form.role,
+      phone: form.phone.trim(), role: form.role,
       skills: [], serviceAreas: [], colorHex: '', payRate: undefined, notes: '', certifications: [], defaultHours: {},
     });
     setSaving(false);

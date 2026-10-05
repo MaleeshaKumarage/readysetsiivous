@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import {
   Title, Button, Table, Modal, TextInput, Textarea, Group, Stack, Text, Loader, Badge,
 } from '@mantine/core';
@@ -18,7 +18,7 @@ export default function CompaniesAdminPage() {
   const [error, setError] = useState('');
 
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [branches, setBranches] = useState<Branch[]>([]);
+  const [companyBranchesMap, setCompanyBranchesMap] = useState<Record<string, Branch[]>>({});
   const [branchModal, setBranchModal] = useState(false);
   const [branchForm, setBranchForm] = useState({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '' });
   const [branchSaving, setBranchSaving] = useState(false);
@@ -53,7 +53,7 @@ export default function CompaniesAdminPage() {
     if (expanded === id) { setExpanded(null); return; }
     setExpanded(id);
     const d = await adminCompanies.get(id);
-    if (d) setBranches(d.branches);
+    if (d) setCompanyBranchesMap((m) => ({ ...m, [id]: d.branches }));
   };
 
   const submitBranch = async () => {
@@ -69,7 +69,7 @@ export default function CompaniesAdminPage() {
     setBranchForm({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '' });
     setBranchModal(false);
     const d = await adminCompanies.get(expanded);
-    if (d) setBranches(d.branches);
+    if (d) setCompanyBranchesMap((m) => ({ ...m, [expanded]: d.branches }));
   };
 
   return (
@@ -94,42 +94,46 @@ export default function CompaniesAdminPage() {
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {companies.map((c) => (
-              <>
-                <Table.Tr key={c.id}>
-                  <Table.Td fw={500}>{c.name}</Table.Td>
-                  <Table.Td>{c.businessId}</Table.Td>
-                  <Table.Td>{c.contactName || '—'}</Table.Td>
-                  <Table.Td>
-                    <Button variant="subtle" size="xs" onClick={() => toggleBranches(c.id)}>
-                      {branches.length} <ChevronDown size={14} />
-                    </Button>
-                  </Table.Td>
-                </Table.Tr>
-                {expanded === c.id && (
-                  <Table.Tr key={c.id + '-branches'}>
-                    <Table.Td colSpan={4} p="sm">
-                      <Group justify="space-between" mb="xs">
-                        <Text size="sm" fw={600}>Branches</Text>
-                        <Button size="xs" variant="light" leftSection={<Plus size={14} />} onClick={() => setBranchModal(true)}>Add branch</Button>
-                      </Group>
-                      {branches.length === 0 ? (
-                        <Text size="sm" c="dimmed">No branches yet.</Text>
-                      ) : (
-                        <Stack gap={4}>
-                          {branches.map((b) => (
-                            <Group key={b.id} justify="space-between">
-                              <Text size="sm">{b.name}{b.city ? ` · ${b.city}` : ''}</Text>
-                              {!b.isActive && <Badge color="gray" size="xs">Inactive</Badge>}
-                            </Group>
-                          ))}
-                        </Stack>
-                      )}
+            {companies.map((c) => {
+              const currentBranches = companyBranchesMap[c.id] ?? [];
+              const isExpanded = expanded === c.id;
+              return (
+                <Fragment key={c.id}>
+                  <Table.Tr>
+                    <Table.Td fw={500}>{c.name}</Table.Td>
+                    <Table.Td>{c.businessId}</Table.Td>
+                    <Table.Td>{c.contactName || '—'}</Table.Td>
+                    <Table.Td>
+                      <Button variant="subtle" size="xs" onClick={() => toggleBranches(c.id)}>
+                        {isExpanded ? currentBranches.length : 'Branches'} <ChevronDown size={14} />
+                      </Button>
                     </Table.Td>
                   </Table.Tr>
-                )}
-              </>
-            ))}
+                  {isExpanded && (
+                    <Table.Tr>
+                      <Table.Td colSpan={4} p="sm">
+                        <Group justify="space-between" mb="xs">
+                          <Text size="sm" fw={600}>Branches</Text>
+                          <Button size="xs" variant="light" leftSection={<Plus size={14} />} onClick={() => setBranchModal(true)}>Add branch</Button>
+                        </Group>
+                        {currentBranches.length === 0 ? (
+                          <Text size="sm" c="dimmed">No branches yet.</Text>
+                        ) : (
+                          <Stack gap={4}>
+                            {currentBranches.map((b) => (
+                              <Group key={b.id} justify="space-between">
+                                <Text size="sm">{b.name}{b.city ? ` · ${b.city}` : ''}</Text>
+                                {!b.isActive && <Badge color="gray" size="xs">Inactive</Badge>}
+                              </Group>
+                            ))}
+                          </Stack>
+                        )}
+                      </Table.Td>
+                    </Table.Tr>
+                  )}
+                </Fragment>
+              );
+            })}
           </Table.Tbody>
         </Table>
       )}

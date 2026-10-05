@@ -21,13 +21,19 @@ export default function AgreementsPage() {
   useEffect(() => { adminCompanies.list('', 0, 100).then((r) => { if (r) setCompanies(r.items); }); }, []);
 
   const create = async () => {
+    const validSigners = signers.filter((s) => s.name.trim() && s.email.trim());
     if (!pdf || !companyId || !title.trim()) { setError('Company, title and PDF are required.'); return; }
+    if (validSigners.length === 0) { setError('At least one signer with name and email is required.'); return; }
     setSubmitting(true); setError('');
-    const ok = await adminAgreements.create(title.trim(), companyId, pdf, signers.filter((s) => s.name && s.email));
+    const ok = await adminAgreements.create(title.trim(), companyId, pdf, validSigners);
     setSubmitting(false);
     if (!ok) { setError('Failed to create agreement.'); return; }
     setOpen(false); setTitle(''); setCompanyId(null); setPdf(null); setSigners([{ name: '', email: '' }]);
     load();
+  };
+
+  const handleDownload = (id: string) => {
+    adminAgreements.downloadDocument(id);
   };
 
   return (
@@ -42,15 +48,18 @@ export default function AgreementsPage() {
       ) : (
         <Table striped highlightOnHover withTableBorder>
           <Table.Thead>
-            <Table.Tr><Table.Th>Title</Table.Th><Table.Th>Code</Table.Th><Table.Th>Signers</Table.Th><Table.Th>Status</Table.Th></Table.Tr>
+            <Table.Tr><Table.Th>Title</Table.Th><Table.Th>Code</Table.Th><Table.Th>Signers</Table.Th><Table.Th>Status</Table.Th><Table.Th w={140}>Actions</Table.Th></Table.Tr>
           </Table.Thead>
           <Table.Tbody>
             {items.map((a) => (
               <Table.Tr key={a.id}>
                 <Table.Td fw={500}>{a.title}</Table.Td>
                 <Table.Td>{a.code}</Table.Td>
-                <Table.Td>{a.signerCount}</Table.Td>
+                <Table.Td>{a.signedCount} / {a.signerCount}</Table.Td>
                 <Table.Td><Badge color={a.isActive ? 'green' : 'gray'}>{a.status}</Badge></Table.Td>
+                <Table.Td>
+                  <Button size="xs" variant="light" onClick={() => handleDownload(a.id)}>PDF</Button>
+                </Table.Td>
               </Table.Tr>
             ))}
           </Table.Tbody>

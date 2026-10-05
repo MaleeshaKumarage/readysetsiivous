@@ -37,8 +37,9 @@ test('no connector line between strokes', async ({ page }) => {
   await page.mouse.move(x2, yBot, { steps: 10 });
   await page.mouse.up();
 
-  const rows = await canvas.evaluate((c) => {
-    const ctx = (c as HTMLCanvasElement).getContext('2d')!;
+  const rows = await canvas.evaluate((el) => {
+    const c = el as HTMLCanvasElement;
+    const ctx = c.getContext('2d')!;
     const w = c.width, h = c.height;
     const gapY = 60; // CSS px; canvas already DPR-scaled so sample near middle
     const dpr = window.devicePixelRatio || 1;
@@ -84,8 +85,9 @@ test('touch draw produces ink without page scroll', async ({ page }) => {
   });
 
   // Ink must exist (drawing worked) and scrollY must be unchanged (touch not stolen).
-  const result = await canvas.evaluate((c) => {
-    const ctx = (c as HTMLCanvasElement).getContext('2d')!;
+  const result = await canvas.evaluate((el) => {
+    const c = el as HTMLCanvasElement;
+    const ctx = c.getContext('2d')!;
     const d = ctx.getImageData(0, 0, c.width, c.height).data;
     let ink = 0;
     for (let i = 3; i < d.length; i += 4) if (d[i] > 0) ink++;
