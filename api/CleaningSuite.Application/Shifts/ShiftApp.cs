@@ -37,6 +37,7 @@ public interface IShiftRepository
     Task SaveAsync(Shift shift, CancellationToken ct = default);
     Task<ShiftAssignment?> GetAssignmentAsync(Guid shiftId, Guid employeeId, CancellationToken ct = default);
     Task<IReadOnlyList<ShiftAssignment>> ListAssignmentsByEmployeeAsync(Guid employeeId, CancellationToken ct = default);
+    Task<IReadOnlyList<ShiftAssignment>> ListAssignmentsByShiftAsync(Guid shiftId, CancellationToken ct = default);
     Task SaveAssignmentAsync(ShiftAssignment assignment, CancellationToken ct = default);
     Task DeleteAssignmentAsync(Guid assignmentId, CancellationToken ct = default);
 }

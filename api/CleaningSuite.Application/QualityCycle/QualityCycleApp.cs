@@ -194,10 +194,7 @@ public class QualityCycleHandlers
                 if (occurrences.Count == 0) continue;
 
                 // Find assigned employees for this shift
-                var assignments = await _shiftRepository.ListAssignmentsByEmployeeAsync(Guid.Empty, ct); // Get all or filter
-                // Or better, list assignments for shift
-                var allAssignments = await _shiftRepository.ListAssignmentsByEmployeeAsync(Guid.Empty, ct);
-                var shiftAssignments = allAssignments.Where(a => a.ShiftId == shiftDto.Id && a.IsActive).ToList();
+                var shiftAssignments = await _shiftRepository.ListAssignmentsByShiftAsync(shiftDto.Id, ct);
 
                 var employees = new List<CleaningSuite.Domain.Employees.Employee>();
                 foreach (var assignment in shiftAssignments)

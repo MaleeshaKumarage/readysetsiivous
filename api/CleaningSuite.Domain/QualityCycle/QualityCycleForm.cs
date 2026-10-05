@@ -69,9 +69,24 @@ public class QualityCycleForm : BaseDocument
         if (IsSubmitted)
             throw new InvalidOperationException("Quality Cycle Form has already been submitted.");
 
-        if (items != null)
+        if (items != null && items.Count > 0)
         {
-            Items = items;
+            // Preserve original template item texts and structure; only update IsChecked property
+            for (int i = 0; i < Items.Count; i++)
+            {
+                var submittedMatch = items.FirstOrDefault(submitted =>
+                    string.Equals(submitted.ItemText?.Trim(), Items[i].ItemText?.Trim(), StringComparison.OrdinalIgnoreCase));
+
+                if (submittedMatch != null)
+                {
+                    Items[i].IsChecked = submittedMatch.IsChecked;
+                }
+                else if (i < items.Count)
+                {
+                    // Fallback to index-based matching if item text modified on client
+                    Items[i].IsChecked = items[i].IsChecked;
+                }
+            }
         }
 
         PhotoUrls = photoUrls?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? new List<string>();
