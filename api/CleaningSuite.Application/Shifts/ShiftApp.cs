@@ -16,7 +16,8 @@ public record ShiftDto(
     string? Notes,
     bool IsActive,
     DateTime? ValidFrom,
-    DateTime? ValidUntil);
+    DateTime? ValidUntil,
+    Guid? QualityCycleTemplateId = null);
 
 public record ShiftAssignmentDto(
     Guid Id,
@@ -36,6 +37,7 @@ public interface IShiftRepository
     Task SaveAsync(Shift shift, CancellationToken ct = default);
     Task<ShiftAssignment?> GetAssignmentAsync(Guid shiftId, Guid employeeId, CancellationToken ct = default);
     Task<IReadOnlyList<ShiftAssignment>> ListAssignmentsByEmployeeAsync(Guid employeeId, CancellationToken ct = default);
+    Task<IReadOnlyList<ShiftAssignment>> ListAssignmentsByShiftAsync(Guid shiftId, CancellationToken ct = default);
     Task SaveAssignmentAsync(ShiftAssignment assignment, CancellationToken ct = default);
     Task DeleteAssignmentAsync(Guid assignmentId, CancellationToken ct = default);
 }
@@ -52,7 +54,8 @@ public record CreateShiftCommand(
     ShiftSchedule Schedule,
     string? Notes = null,
     DateTime? ValidFrom = null,
-    DateTime? ValidUntil = null) : IRequest<ShiftDto>;
+    DateTime? ValidUntil = null,
+    Guid? QualityCycleTemplateId = null) : IRequest<ShiftDto>;
 
 public record UpdateShiftCommand(
     Guid Id,
@@ -63,7 +66,8 @@ public record UpdateShiftCommand(
     string? Notes = null,
     bool IsActive = true,
     DateTime? ValidFrom = null,
-    DateTime? ValidUntil = null) : IRequest<ShiftDto>;
+    DateTime? ValidUntil = null,
+    Guid? QualityCycleTemplateId = null) : IRequest<ShiftDto>;
 
 public record DeactivateShiftCommand(Guid Id) : IRequest;
 
@@ -116,7 +120,8 @@ public class ShiftHandlers
                 request.Schedule,
                 request.Notes,
                 request.ValidFrom,
-                request.ValidUntil);
+                request.ValidUntil,
+                request.QualityCycleTemplateId);
             await _repository.SaveAsync(shift, ct);
             return MapShift(shift);
         }
@@ -143,7 +148,8 @@ public class ShiftHandlers
                 request.Notes,
                 request.IsActive,
                 request.ValidFrom,
-                request.ValidUntil);
+                request.ValidUntil,
+                request.QualityCycleTemplateId);
             await _repository.SaveAsync(shift, ct);
             return MapShift(shift);
         }
@@ -363,7 +369,7 @@ public class ShiftHandlers
     }
 
     private static ShiftDto MapShift(Shift shift) =>
-        new(shift.Id, shift.CompanyId, shift.BranchId, shift.Name, shift.Schedule, shift.Notes, shift.IsActive, shift.ValidFrom, shift.ValidUntil);
+        new(shift.Id, shift.CompanyId, shift.BranchId, shift.Name, shift.Schedule, shift.Notes, shift.IsActive, shift.ValidFrom, shift.ValidUntil, shift.QualityCycleTemplateId);
 
     private static ShiftAssignmentDto MapAssignment(ShiftAssignment assignment) =>
         new(assignment.Id, assignment.ShiftId, assignment.EmployeeId, assignment.AssignedAtUtc, assignment.IsActive, assignment.Note);

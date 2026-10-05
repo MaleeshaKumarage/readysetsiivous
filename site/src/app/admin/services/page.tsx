@@ -27,14 +27,15 @@ export default function ServicesAdminPage() {
     const created = await adminServices.create({
       slug: form.slug.trim(),
       category: form.category,
-      name: { values: { fi: form.name.trim() } },
-      description: { values: { fi: form.description.trim() } },
-      durationMinutes: Number(form.durationMinutes) || 0,
-      priceNet: Number(form.priceNet) || 0,
-      vatRatePercent: Number(form.vatRatePercent) || 0,
+      name: { fi: form.name.trim() },
+      description: { fi: form.description.trim() },
+      additionalInfo: null,
+      durationMinutes: Math.max(15, Number(form.durationMinutes) || 60),
+      priceNet: Math.max(0, Number(form.priceNet) || 0),
+      vatRatePercent: Math.max(0, Number(form.vatRatePercent) || 25.5),
+      currency: 'EUR',
       icon: 'Sparkles',
       sortOrder: 0,
-      isActive: true,
       isFeatured: false,
     });
     setSaving(false);
@@ -43,9 +44,23 @@ export default function ServicesAdminPage() {
     setModalOpen(false); await load();
   };
 
-  const deactivate = async (id: string) => {
-    const s = services.find((x) => x.id === id);
-    if (s) { await adminServices.update(id, { isActive: false }, false); await load(); }
+  const toggleStatus = async (s: ServiceRowLocal) => {
+    const fields = {
+      slug: s.slug,
+      category: s.category,
+      name: s.name.values,
+      description: s.description.values,
+      additionalInfo: null,
+      durationMinutes: s.durationMinutes,
+      priceNet: s.priceNet,
+      vatRatePercent: s.vatRatePercent,
+      currency: 'EUR',
+      icon: s.icon,
+      sortOrder: s.sortOrder,
+      isFeatured: s.isFeatured,
+    };
+    await adminServices.update(s.id, fields, !s.isActive);
+    await load();
   };
 
   return (
@@ -60,18 +75,28 @@ export default function ServicesAdminPage() {
       ) : (
         <Table striped highlightOnHover withTableBorder>
           <Table.Thead>
-            <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Price</Table.Th><Table.Th>Duration</Table.Th><Table.Th>Status</Table.Th></Table.Tr>
+            <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Price</Table.Th><Table.Th>Duration</Table.Th><Table.Th>Status</Table.Th><Table.Th w={120}></Table.Th></Table.Tr>
           </Table.Thead>
           <Table.Tbody>
             {services.map((s) => (
               <Table.Tr key={s.id}>
-                <Table.Td fw={500}>{s.name.values.fi ?? s.name.values.en ?? ''}</Table.Td>
-                <Table.Td>{s.priceNet.toFixed(2)} €</Table.Td>
+                <Table.Td fw={500}>{s.name?.values?.fi ?? s.name?.values?.en ?? ''}</Table.Td>
+                <Table.Td>{s.priceNet?.toFixed(2)} €</Table.Td>
                 <Table.Td>{s.durationMinutes} min</Table.Td>
                 <Table.Td>
                   {s.isActive
                     ? <Badge color="green">Active</Badge>
                     : <Badge color="gray">Inactive</Badge>}
+                </Table.Td>
+                <Table.Td>
+                  <Button
+                    size="xs"
+                    variant="subtle"
+                    color={s.isActive ? 'red' : 'green'}
+                    onClick={() => toggleStatus(s)}
+                  >
+                    {s.isActive ? 'Deactivate' : 'Activate'}
+                  </Button>
                 </Table.Td>
               </Table.Tr>
             ))}

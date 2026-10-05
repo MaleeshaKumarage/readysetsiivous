@@ -70,6 +70,15 @@ public class ShiftRepository : IShiftRepository
             .ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyList<ShiftAssignment>> ListAssignmentsByShiftAsync(
+        Guid shiftId,
+        CancellationToken ct = default)
+    {
+        return await Session.Query<ShiftAssignment>()
+            .Where(x => x.ShiftId == shiftId && x.IsActive)
+            .ToListAsync(ct);
+    }
+
     public async Task SaveAssignmentAsync(ShiftAssignment assignment, CancellationToken ct = default)
     {
         Session.Store(assignment);

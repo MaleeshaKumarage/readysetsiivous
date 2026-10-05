@@ -5,7 +5,7 @@ import { Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loa
 import { Plus } from 'lucide-react';
 import { adminEmployees, type Employee } from '@/lib/adminApi';
 
-const ROLES = ['admin', 'employee', 'manager'];
+const ROLES = ['admin', 'employee'];
 
 export default function EmployeesAdminPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -25,9 +25,18 @@ export default function EmployeesAdminPage() {
     if (!form.email.trim() || !form.firstName.trim() || !form.lastName.trim()) { setError('Email, first and last name are required.'); return; }
     setSaving(true); setError('');
     const created = await adminEmployees.create({
-      email: form.email.trim(), firstName: form.firstName.trim(), lastName: form.lastName.trim(),
-      phone: form.phone.trim() || undefined, role: form.role,
-      skills: [], serviceAreas: [], colorHex: '', payRate: undefined, notes: '', certifications: [], defaultHours: {},
+      email: form.email.trim(),
+      firstName: form.firstName.trim(),
+      lastName: form.lastName.trim(),
+      phone: form.phone.trim(),
+      role: form.role,
+      skills: [],
+      serviceAreas: [],
+      colorHex: null,
+      payRate: null,
+      notes: null,
+      certifications: [],
+      defaultHours: {},
     });
     setSaving(false);
     if (!created) { setError('Failed to create employee.'); return; }

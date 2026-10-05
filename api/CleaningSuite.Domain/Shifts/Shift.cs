@@ -9,6 +9,7 @@ public class Shift : BaseDocument
     public string Name { get; set; } = string.Empty;
     public ShiftSchedule Schedule { get; set; } = new();
     public string? Notes { get; set; }
+    public Guid? QualityCycleTemplateId { get; set; }
     public bool IsActive { get; set; }
     public DateTime? ValidFrom { get; set; }
     public DateTime? ValidUntil { get; set; }
@@ -20,7 +21,8 @@ public class Shift : BaseDocument
         ShiftSchedule schedule,
         string? notes,
         DateTime? validFrom,
-        DateTime? validUntil)
+        DateTime? validUntil,
+        Guid? qualityCycleTemplateId = null)
     {
         if (companyId == Guid.Empty)
             throw new ArgumentException("Company is mandatory.", nameof(companyId));
@@ -44,6 +46,7 @@ public class Shift : BaseDocument
             Name = name.Trim(),
             Schedule = schedule,
             Notes = notes?.Trim(),
+            QualityCycleTemplateId = qualityCycleTemplateId,
             IsActive = true,
             ValidFrom = validFrom,
             ValidUntil = validUntil
@@ -58,7 +61,8 @@ public class Shift : BaseDocument
         string? notes,
         bool isActive,
         DateTime? validFrom,
-        DateTime? validUntil)
+        DateTime? validUntil,
+        Guid? qualityCycleTemplateId = null)
     {
         if (companyId == Guid.Empty)
             throw new ArgumentException("Company is mandatory.", nameof(companyId));
@@ -77,6 +81,7 @@ public class Shift : BaseDocument
         Name = name.Trim();
         Schedule = schedule;
         Notes = notes?.Trim();
+        QualityCycleTemplateId = qualityCycleTemplateId;
         IsActive = isActive;
         ValidFrom = validFrom;
         ValidUntil = validUntil;

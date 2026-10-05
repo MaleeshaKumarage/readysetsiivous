@@ -1,0 +1,43 @@
+name: pr-review
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, ready_for_review, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Skip draft PRs: review fires when the PR is opened as ready, reopened, or
+    # a draft is marked ready_for_review.
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Review diff (DeepSeek Flash V4)
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR=${{ github.event.pull_request.number }}
+          HEAD_SHA=${{ github.event.pull_request.head.sha }}
+          gh pr diff "$PR" > /tmp/diff.txt
+          if [ ! -s /tmp/diff.txt ]; then
+            echo "no diff to review"
+            exit 0
+          fi
+          python3 scripts/deepseek.py \
+            "You are a senior code reviewer. Review the diff for correctness, security, maintainability, performance, and testing — not style nits. Be specific and explain why. Output each issue as a 3-line block, one per issue, with a blank line between blocks: '### FILE: <path>', '### LINE: <n>', '### FIX: <priority> <what to change and why it matters>'. Priority is exactly one of: 🔴 blocker, 🟡 suggestion, 💭 nit. LINE must be the exact 1-based line number in the NEW version of the file (the '+' side of the hunk); derive it from the hunk header's second number plus the line's offset within the hunk. Do not report files under .github/workflows/. If there are no issues, output exactly NO_ISSUES and nothing else." \
+            < /tmp/diff.txt > /tmp/review.txt
+          python3 scripts/post_review_comments.py "$PR" "$HEAD_SHA" < /tmp/review.txt
+          # Check earlier comments: resolve the ones whose issues are now fixed.
+          python3 scripts/resolve_fixed_comments.py "$PR" "$HEAD_SHA" < /tmp/diff.txt

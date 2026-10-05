@@ -89,8 +89,8 @@ test.describe('Admin Panel - Services Page', () => {
           id: 'srv-1',
           slug: fields.slug,
           category: fields.category,
-          name: fields.name,
-          description: fields.description,
+          name: { values: fields.name || { fi: fields.name } },
+          description: { values: fields.description || { fi: fields.description } },
           durationMinutes: fields.durationMinutes,
           priceNet: fields.priceNet,
           vatRatePercent: fields.vatRatePercent,
@@ -187,6 +187,7 @@ test.describe('Admin Panel - Agreements Page', () => {
           signerCount: 1,
           signedCount: 0,
           createdUtc: new Date().toISOString(),
+          signers: [{ id: 's-1', name: 'Matti Meikäläinen', email: 'matti@acme.fi', status: 'Pending', token: 'tok-1' }]
         };
         agreements.push(newAgreement);
         return route.fulfill({ status: 200, json: newAgreement, headers: CORS_HEADERS });
@@ -226,7 +227,7 @@ test.describe('Admin Panel - Agreements Page', () => {
     await expect(modal).not.toBeVisible();
     await expect(page.getByRole('cell', { name: 'Siivoussopimus 2025' })).toBeVisible();
     await expect(page.getByRole('cell', { name: 'AGR-2025-001' })).toBeVisible();
-    await expect(page.getByText('Pending')).toBeVisible();
+    await expect(page.getByText('Pending').first()).toBeVisible();
   });
 
   test('worst path: form validation and add/remove signer inputs', async ({ page }) => {
