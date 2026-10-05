@@ -8,7 +8,7 @@ import {
   MantineProvider, AppShell, NavLink, Group, Text, Button, Stack, Paper, createTheme,
 } from '@mantine/core';
 import {
-  LayoutDashboard, Sparkles, FileSignature, Users, Building2, CalendarClock, LogOut, LogIn,
+  LayoutDashboard, Sparkles, FileSignature, Users, Building2, CalendarClock, CheckSquare, LogOut, LogIn,
 } from 'lucide-react';
 import { initAuth, isAuthenticated, login, logout } from '@/lib/auth';
 
@@ -18,6 +18,7 @@ const NAV = [
   { href: 'employees', label: 'Employees', icon: Users },
   { href: 'companies', label: 'Companies', icon: Building2 },
   { href: 'shifts', label: 'Shifts', icon: CalendarClock },
+  { href: 'quality-cycle', label: 'Quality Cycle', icon: CheckSquare },
 ] as const;
 
 const adminTheme = createTheme({

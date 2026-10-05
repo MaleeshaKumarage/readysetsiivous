@@ -321,6 +321,7 @@ export interface Shift {
   isActive: boolean;
   validFrom?: string | null;
   validUntil?: string | null;
+  qualityCycleTemplateId?: string | null;
 }
 
 export interface ShiftAssignment {
