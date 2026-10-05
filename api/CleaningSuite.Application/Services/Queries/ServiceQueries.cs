@@ -82,7 +82,7 @@ public class GetPublicServicesHandler : IRequestHandler<GetPublicServicesQuery, 
 
     public async Task<IReadOnlyList<PublicServiceDto>> Handle(GetPublicServicesQuery request, CancellationToken ct)
     {
-        var lang = SanitizeLang(request.Lang);
+        var lang = LanguageUtils.SanitizeLang(request.Lang);
         var fetch = async (CancellationToken cToken) =>
         {
             var services = await _services.ListAsync(includeInactive: false, cToken);
@@ -105,12 +105,5 @@ public class GetPublicServicesHandler : IRequestHandler<GetPublicServicesQuery, 
 
         if (_cacheService is null) return await fetch(ct);
         return (await _cacheService.GetOrAddAsync("services", $"public_{lang}", fetch, ct: ct))!;
-    }
-
-    private static string SanitizeLang(string? lang)
-    {
-        if (string.IsNullOrWhiteSpace(lang)) return "fi";
-        var clean = new string(lang.Where(char.IsLetterOrDigit).Take(5).ToArray()).ToLowerInvariant();
-        return string.IsNullOrEmpty(clean) ? "fi" : clean;
     }
 }
