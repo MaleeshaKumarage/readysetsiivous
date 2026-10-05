@@ -1,12 +1,30 @@
 using CleaningSuite.Application.Common;
+using CleaningSuite.Domain.Common;
 using CleaningSuite.Domain.Tenants;
 using MediatR;
 
 namespace CleaningSuite.Application.Tenants.Queries;
 
-public record GetTenantProfileQuery : IRequest<TenantProfile?>;
+public record TenantProfileDto(
+    string Slug,
+    string CompanyName,
+    string BusinessId,
+    Address CompanyAddress,
+    string Email,
+    string Phone,
+    string BankAccountIBAN,
+    string BankBic,
+    string TimeZoneId,
+    string DefaultLocale,
+    decimal DefaultVatRatePercent,
+    int PaymentTermsDays,
+    bool AllowUnstaffedBookings,
+    int MinHoursBeforeBooking,
+    IReadOnlyDictionary<string, LocalizedText> Pages);
 
-public class GetTenantProfileHandler : IRequestHandler<GetTenantProfileQuery, TenantProfile?>
+public record GetTenantProfileQuery : IRequest<TenantProfileDto?>;
+
+public class GetTenantProfileHandler : IRequestHandler<GetTenantProfileQuery, TenantProfileDto?>
 {
     private readonly ITenantContext _context;
     private readonly ITenantProfileRepository _profiles;
@@ -19,10 +37,21 @@ public class GetTenantProfileHandler : IRequestHandler<GetTenantProfileQuery, Te
         _cacheService = cacheService;
     }
 
-    public async Task<TenantProfile?> Handle(GetTenantProfileQuery request, CancellationToken ct)
+    public async Task<TenantProfileDto?> Handle(GetTenantProfileQuery request, CancellationToken ct)
     {
-        var fetch = (CancellationToken cToken) => _profiles.GetAsync(_context.TenantId, cToken);
+        var fetch = async (CancellationToken cToken) =>
+        {
+            var p = await _profiles.GetAsync(_context.TenantId, cToken);
+            return p is null ? null : MapDto(p);
+        };
+
         if (_cacheService is null) return await fetch(ct);
         return await _cacheService.GetOrAddAsync("tenant", "profile", fetch, ct: ct);
     }
+
+    private static TenantProfileDto MapDto(TenantProfile p) => new(
+        p.Slug, p.CompanyName, p.BusinessId, p.CompanyAddress, p.Email, p.Phone,
+        p.BankAccountIBAN, p.BankBic, p.TimeZoneId, p.DefaultLocale,
+        p.DefaultVatRatePercent, p.PaymentTermsDays, p.AllowUnstaffedBookings,
+        p.MinHoursBeforeBooking, p.Pages);
 }

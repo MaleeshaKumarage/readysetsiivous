@@ -27,6 +27,7 @@ public class GetPublicContentHandler : IRequestHandler<GetPublicContentQuery, Pu
 
     public async Task<PublicContentDto?> Handle(GetPublicContentQuery request, CancellationToken ct)
     {
+        var lang = SanitizeLang(request.Lang);
         var fetch = async (CancellationToken cToken) =>
         {
             var profile = await _profiles.GetAsync(_context.TenantId, cToken);
@@ -34,13 +35,20 @@ public class GetPublicContentHandler : IRequestHandler<GetPublicContentQuery, Pu
 
             var pages = profile.Pages.ToDictionary(
                 p => p.Key,
-                p => p.Value.For(request.Lang) ?? p.Value.For(profile.DefaultLocale) ?? "");
+                p => p.Value.For(lang) ?? p.Value.For(profile.DefaultLocale) ?? "");
 
             return new PublicContentDto(profile.Slug, profile.CompanyName, profile.DefaultLocale, pages);
         };
 
         if (_cacheService is null) return await fetch(ct);
 
-        return await _cacheService.GetOrAddAsync("tenant", $"content_{request.Lang}", fetch, ct: ct);
+        return await _cacheService.GetOrAddAsync("tenant", $"content_{lang}", fetch, ct: ct);
+    }
+
+    private static string SanitizeLang(string? lang)
+    {
+        if (string.IsNullOrWhiteSpace(lang)) return "fi";
+        var clean = new string(lang.Where(char.IsLetterOrDigit).Take(5).ToArray()).ToLowerInvariant();
+        return string.IsNullOrEmpty(clean) ? "fi" : clean;
     }
 }
