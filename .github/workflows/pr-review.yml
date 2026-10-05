@@ -39,3 +39,5 @@ jobs:
             "You are a senior code reviewer. Review the diff for correctness, security, maintainability, performance, and testing — not style nits. Be specific and explain why. Output each issue as a 3-line block, one per issue, with a blank line between blocks: '### FILE: <path>', '### LINE: <n>', '### FIX: <priority> <what to change and why it matters>'. Priority is exactly one of: 🔴 blocker, 🟡 suggestion, 💭 nit. LINE must be the exact 1-based line number in the NEW version of the file (the '+' side of the hunk); derive it from the hunk header's second number plus the line's offset within the hunk. Do not report files under .github/workflows/. If there are no issues, output exactly NO_ISSUES and nothing else." \
             < /tmp/diff.txt > /tmp/review.txt
           python3 scripts/post_review_comments.py "$PR" "$HEAD_SHA" < /tmp/review.txt
+          # Check earlier comments: resolve the ones whose issues are now fixed.
+          python3 scripts/resolve_fixed_comments.py "$PR" "$HEAD_SHA" < /tmp/diff.txt
