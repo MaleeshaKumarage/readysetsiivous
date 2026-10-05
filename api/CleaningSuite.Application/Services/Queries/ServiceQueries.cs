@@ -1,3 +1,4 @@
+using CleaningSuite.Application.Common;
 using CleaningSuite.Domain.Services;
 using MediatR;
 
@@ -8,11 +9,20 @@ public record ListServicesQuery(bool IncludeInactive) : IRequest<IReadOnlyList<S
 public class ListServicesHandler : IRequestHandler<ListServicesQuery, IReadOnlyList<Service>>
 {
     private readonly IServiceRepository _services;
+    private readonly ITenantCacheService? _cacheService;
 
-    public ListServicesHandler(IServiceRepository services) => _services = services;
+    public ListServicesHandler(IServiceRepository services, ITenantCacheService? cacheService = null)
+    {
+        _services = services;
+        _cacheService = cacheService;
+    }
 
-    public Task<IReadOnlyList<Service>> Handle(ListServicesQuery request, CancellationToken ct) =>
-        _services.ListAsync(request.IncludeInactive, ct);
+    public async Task<IReadOnlyList<Service>> Handle(ListServicesQuery request, CancellationToken ct)
+    {
+        var fetch = (CancellationToken cToken) => _services.ListAsync(request.IncludeInactive, cToken);
+        if (_cacheService is null) return await fetch(ct);
+        return (await _cacheService.GetOrAddAsync("services", $"list_{request.IncludeInactive}", fetch, ct: ct))!;
+    }
 }
 
 public record GetPublicServicesQuery(string Lang) : IRequest<IReadOnlyList<PublicServiceDto>>;
@@ -34,26 +44,37 @@ public record PublicServiceDto(
 public class GetPublicServicesHandler : IRequestHandler<GetPublicServicesQuery, IReadOnlyList<PublicServiceDto>>
 {
     private readonly IServiceRepository _services;
+    private readonly ITenantCacheService? _cacheService;
 
-    public GetPublicServicesHandler(IServiceRepository services) => _services = services;
+    public GetPublicServicesHandler(IServiceRepository services, ITenantCacheService? cacheService = null)
+    {
+        _services = services;
+        _cacheService = cacheService;
+    }
 
     public async Task<IReadOnlyList<PublicServiceDto>> Handle(GetPublicServicesQuery request, CancellationToken ct)
     {
-        var services = await _services.ListAsync(includeInactive: false, ct);
-        return services
-            .Select(s => new PublicServiceDto(
-                s.Id,
-                s.Slug,
-                s.Category,
-                s.Name.For(request.Lang) ?? s.Name.For("fi") ?? "",
-                s.Description.For(request.Lang) ?? s.Description.For("fi") ?? "",
-                s.AdditionalInfo?.For(request.Lang) ?? s.AdditionalInfo?.For("fi"),
-                s.Icon,
-                s.ImageUrl,
-                s.SortOrder,
-                s.PriceNet,
-                s.VatRatePercent,
-                s.Currency))
-            .ToList();
+        var fetch = async (CancellationToken cToken) =>
+        {
+            var services = await _services.ListAsync(includeInactive: false, cToken);
+            return (IReadOnlyList<PublicServiceDto>)services
+                .Select(s => new PublicServiceDto(
+                    s.Id,
+                    s.Slug,
+                    s.Category,
+                    s.Name.For(request.Lang) ?? s.Name.For("fi") ?? "",
+                    s.Description.For(request.Lang) ?? s.Description.For("fi") ?? "",
+                    s.AdditionalInfo?.For(request.Lang) ?? s.AdditionalInfo?.For("fi"),
+                    s.Icon,
+                    s.ImageUrl,
+                    s.SortOrder,
+                    s.PriceNet,
+                    s.VatRatePercent,
+                    s.Currency))
+                .ToList();
+        };
+
+        if (_cacheService is null) return await fetch(ct);
+        return (await _cacheService.GetOrAddAsync("services", $"public_{request.Lang}", fetch, ct: ct))!;
     }
 }

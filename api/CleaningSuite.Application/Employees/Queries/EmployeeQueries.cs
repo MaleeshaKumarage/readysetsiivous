@@ -1,4 +1,5 @@
 using CleaningSuite.Application.Bookings;
+using CleaningSuite.Application.Common;
 using CleaningSuite.Domain.Bookings;
 using CleaningSuite.Domain.Employees;
 using MediatR;
@@ -10,11 +11,20 @@ public record ListEmployeesQuery(bool IncludeInactive) : IRequest<IReadOnlyList<
 public class ListEmployeesHandler : IRequestHandler<ListEmployeesQuery, IReadOnlyList<Employee>>
 {
     private readonly IEmployeeRepository _employees;
+    private readonly ITenantCacheService? _cacheService;
 
-    public ListEmployeesHandler(IEmployeeRepository employees) => _employees = employees;
+    public ListEmployeesHandler(IEmployeeRepository employees, ITenantCacheService? cacheService = null)
+    {
+        _employees = employees;
+        _cacheService = cacheService;
+    }
 
-    public Task<IReadOnlyList<Employee>> Handle(ListEmployeesQuery request, CancellationToken ct) =>
-        _employees.ListAsync(request.IncludeInactive, ct);
+    public async Task<IReadOnlyList<Employee>> Handle(ListEmployeesQuery request, CancellationToken ct)
+    {
+        var fetch = (CancellationToken cToken) => _employees.ListAsync(request.IncludeInactive, cToken);
+        if (_cacheService is null) return await fetch(ct);
+        return (await _cacheService.GetOrAddAsync("employees", $"list_{request.IncludeInactive}", fetch, ct: ct))!;
+    }
 }
 
 public record GetScheduleQuery(string LocalDate, Guid EmployeeId) : IRequest<IReadOnlyList<Booking>>;
