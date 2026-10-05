@@ -221,10 +221,28 @@ export const adminTenant = {
   get: () => adminGet<{ companyName: string }>('/api/v1/admin/tenant'),
 };
 
+// Parse RFC 7807 problem details into a single human-readable message, so the
+// create form can show *why* creation failed instead of a generic "Failed".
+async function agreementCreateError(response: Response): Promise<string> {
+  try {
+    const body = (await response.json()) as { title?: string; detail?: string; errors?: Record<string, string[]> };
+    if (body.errors) {
+      const first = Object.values(body.errors).flat()[0];
+      if (first) return first;
+    }
+    if (body.title) return body.title;
+    if (body.detail) return body.detail;
+  } catch {
+    // fall through
+  }
+  return `Request failed (${response.status})`;
+}
+
 export const adminAgreements = {
   list: () => adminGet<AgreementListItem[]>('/api/v1/admin/agreements'),
   get: (id: string) => adminGet<AgreementDetail>(`/api/v1/admin/agreements/${id}`),
-  create: async (title: string, companyId: string, pdf: File, signers: { name: string; email: string }[]) => {
+  create: async (title: string, companyId: string, pdf: File, signers: { name: string; email: string }[]):
+    Promise<{ ok: true; data: AgreementDetail } | { ok: false; error: string }> => {
     const form = new FormData();
     form.append('title', title);
     form.append('companyId', companyId);
@@ -234,7 +252,8 @@ export const adminAgreements = {
     const response = await fetch(`${API_URL}/api/v1/admin/agreements`, {
       method: 'POST', headers: { Authorization: `Bearer ${t}` }, body: form,
     });
-    return response.ok ? ((await response.json()) as AgreementDetail) : null;
+    if (response.ok) return { ok: true, data: (await response.json()) as AgreementDetail };
+    return { ok: false, error: await agreementCreateError(response) };
   },
   addSigner: (id: string, name: string, email: string) =>
     adminSend(`/api/v1/admin/agreements/${id}/signers`, 'POST', { name, email }),

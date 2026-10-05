@@ -10,7 +10,7 @@ import {
   type Shift, type Company, type Branch, type Employee, type ShiftAssignment,
 } from '@/lib/adminApi';
 
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const SCHEDULE_TYPES = [
   { value: '0', label: 'Daily' },
   { value: '2', label: 'Specific days' },

@@ -31,11 +31,11 @@ export default function AgreementsPage() {
     if (!pdf || !companyId || !title.trim()) { setError('Company, title and PDF are required.'); return; }
     if (validSigners.length === 0) { setError('At least one signer with name and email is required.'); return; }
     setSubmitting(true); setError('');
-    const created = await adminAgreements.create(title.trim(), companyId, pdf, validSigners);
+    const res = await adminAgreements.create(title.trim(), companyId, pdf, validSigners);
     setSubmitting(false);
-    if (!created) { setError('Failed to create agreement.'); return; }
+    if (!res.ok) { setError(res.error); return; }
     setOpen(false); setTitle(''); setCompanyId(null); setPdf(null); setSigners([{ name: '', email: '' }]);
-    setCreatedAgreement(created);
+    setCreatedAgreement(res.data);
     load();
   };
 
