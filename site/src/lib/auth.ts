@@ -23,7 +23,17 @@ export function getKeycloak(): Keycloak {
   return keycloak;
 }
 
+function isMockAllowed(): boolean {
+  return process.env.NODE_ENV !== 'production';
+}
+
 export function initAuth(): Promise<boolean> {
+  if (isMockAllowed() && typeof window !== 'undefined' && sessionStorage.getItem('__MOCK_LOGGED_OUT__') === 'true') {
+    return Promise.resolve(false);
+  }
+  if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__ !== undefined) {
+    return Promise.resolve(Boolean((window as any).__MOCK_AUTHED__));
+  }
   if (!initPromise) {
     initPromise = getKeycloak()
       .init({
@@ -40,27 +50,62 @@ export function initAuth(): Promise<boolean> {
 }
 
 export async function login(): Promise<void> {
+  if (isMockAllowed() && typeof window !== 'undefined') {
+    sessionStorage.removeItem('__MOCK_LOGGED_OUT__');
+  }
+  if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__ !== undefined) {
+    (window as any).__MOCK_AUTHED__ = true;
+    window.location.reload();
+    return;
+  }
   await getKeycloak().login({ redirectUri: window.location.href });
 }
 
 export async function logout(): Promise<void> {
+  if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__ !== undefined) {
+    (window as any).__MOCK_AUTHED__ = false;
+    sessionStorage.setItem('__MOCK_LOGGED_OUT__', 'true');
+    window.location.reload();
+    return;
+  }
   await getKeycloak().logout();
 }
 
 export function isAuthenticated(): boolean {
+  if (isMockAllowed() && typeof window !== 'undefined' && sessionStorage.getItem('__MOCK_LOGGED_OUT__') === 'true') {
+    return false;
+  }
+  if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__ !== undefined) {
+    return Boolean((window as any).__MOCK_AUTHED__);
+  }
   const kc = getKeycloak();
   return Boolean(kc.authenticated && kc.token);
 }
 
 export function token(): string | undefined {
+  if (isMockAllowed() && typeof window !== 'undefined' && sessionStorage.getItem('__MOCK_LOGGED_OUT__') === 'true') {
+    return undefined;
+  }
+  if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__) {
+    return 'mock-jwt-token';
+  }
   return getKeycloak().token ?? undefined;
 }
 
 export function isAdmin(): boolean {
+  if (isMockAllowed() && typeof window !== 'undefined' && sessionStorage.getItem('__MOCK_LOGGED_OUT__') === 'true') {
+    return false;
+  }
+  if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__ !== undefined) {
+    return Boolean((window as any).__MOCK_AUTHED__);
+  }
   return getKeycloak().hasRealmRole('admin');
 }
 
 export async function refreshToken(): Promise<string | undefined> {
+  if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__) {
+    return 'mock-jwt-token';
+  }
   const kc = getKeycloak();
   try {
     await kc.updateToken(30);

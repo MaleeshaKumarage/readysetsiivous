@@ -203,7 +203,11 @@ export const adminAgreements = {
     const response = await fetch(`${API_URL}/api/v1/admin/agreements`, {
       method: 'POST', headers: { Authorization: `Bearer ${t}` }, body: form,
     });
-    return response.ok ? ((await response.json()) as AgreementDetail) : null;
+    if (response.ok) {
+      _invalidate();
+      return (await response.json()) as AgreementDetail;
+    }
+    return null;
   },
   addSigner: (id: string, name: string, email: string) =>
     adminSend(`/api/v1/admin/agreements/${id}/signers`, 'POST', { name, email }),

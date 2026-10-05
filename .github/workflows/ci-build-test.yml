@@ -4,15 +4,17 @@ on:
   pull_request:
     paths:
       - 'api/**'
+      - 'site/**'
       - '.github/workflows/ci-build-test.yml'
   push:
     branches: [main]
     paths:
       - 'api/**'
+      - 'site/**'
       - '.github/workflows/ci-build-test.yml'
 
 jobs:
-  build-test:
+  backend-build-test:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -25,3 +27,20 @@ jobs:
       - run: dotnet restore CleaningSuite.Backend.sln
       - run: dotnet build CleaningSuite.Backend.sln --no-restore -c Release
       - run: dotnet test CleaningSuite.Backend.sln --no-build -c Release --verbosity minimal
+
+  frontend-e2e-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: site/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: npm run test:e2e
