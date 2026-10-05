@@ -60,8 +60,8 @@ export default function ShiftsAdminPage() {
   const buildSchedule = () => {
     const t = Number(scheduleType);
     if (t === 0) return { type: 0, dailyStart: start, dailyEnd: end };
-    if (t === 2) return { type: 2, weeklyDays: weekDays.map(Number), weeklyStart: start, weeklyEnd: end };
-    if (t === 3) return { type: 3, biWeeklyWeekParity: Number(weekParity), biWeeklyDay: weekDays.length ? Number(weekDays[0]) : 1, biWeeklyStart: start, biWeeklyEnd: end };
+    if (t === 2) return { type: 2, weeklyDays: weekDays.map((d) => Number(d)), weeklyStart: start, weeklyEnd: end };
+    if (t === 3) return { type: 3, biWeeklyWeekParity: Number(weekParity), biWeeklyDay: weekDays.length ? Number(weekDays[0]) : 0, biWeeklyStart: start, biWeeklyEnd: end };
     if (t === 5) return { type: 5, monthlyDay: Number(monthlyDay), monthlyStart: start, monthlyEnd: end };
     return { type: 4 };
   };

@@ -129,13 +129,29 @@ export const adminBookings = {
   unassign: (id: string) => adminSend(`/api/v1/admin/bookings/${id}/unassign`, 'POST'),
 };
 
+export interface ServiceFields {
+  slug: string;
+  category: string;
+  name: Record<string, string>;
+  description: Record<string, string>;
+  additionalInfo?: Record<string, string> | null;
+  durationMinutes: number;
+  priceNet: number;
+  vatRatePercent: number;
+  currency: string;
+  isFeatured: boolean;
+  sortOrder: number;
+  icon?: string | null;
+  imageUrl?: string | null;
+}
+
 export const adminServices = {
   list: (includeInactive = false) =>
     adminGet<{ id: string; slug: string; category: string; name: { values: Record<string, string> }; description: { values: Record<string, string> }; additionalInfo: { values: Record<string, string> } | null; icon: string; imageUrl: string; durationMinutes: number; priceNet: number; vatRatePercent: number; isActive: boolean; isFeatured: boolean; sortOrder: number }[]>(
       `/api/v1/admin/services?includeInactive=${includeInactive}`
     ),
-  create: (fields: unknown) => adminSend('/api/v1/admin/services', 'POST', { fields }),
-  update: (id: string, fields: unknown, isActive: boolean) =>
+  create: (fields: ServiceFields) => adminSend('/api/v1/admin/services', 'POST', { fields }),
+  update: (id: string, fields: ServiceFields, isActive: boolean) =>
     adminSend(`/api/v1/admin/services/${id}`, 'PUT', { fields, isActive }),
   remove: (id: string) => adminSend(`/api/v1/admin/services/${id}`, 'DELETE'),
   uploadImage: async (id: string, file: File): Promise<string | null> => {
@@ -162,10 +178,25 @@ export const adminInvoices = {
   pdfUrl: (id: string) => `${API_URL}/api/v1/admin/invoices/${id}/pdf`,
 };
 
+export interface EmployeeFields {
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  role: string;
+  colorHex?: string | null;
+  defaultHours: Record<string, { start?: string | null; end?: string | null }>;
+  skills?: string[];
+  serviceAreas?: string[];
+  payRate?: number | null;
+  certifications?: { name: string; expiresAtUtc?: string | null }[];
+  notes?: string | null;
+}
+
 export const adminEmployees = {
   list: () => adminGet<Employee[]>('/api/v1/admin/employees'),
-  create: (fields: unknown) => adminSend('/api/v1/admin/employees', 'POST', { fields }),
-  update: (id: string, fields: unknown, isActive: boolean) =>
+  create: (fields: EmployeeFields) => adminSend('/api/v1/admin/employees', 'POST', { fields }),
+  update: (id: string, fields: EmployeeFields, isActive: boolean) =>
     adminSend(`/api/v1/admin/employees/${id}`, 'PUT', { fields, isActive }),
   deactivate: (id: string) => adminSend(`/api/v1/admin/employees/${id}/deactivate`, 'POST'),
   invite: (id: string) =>
