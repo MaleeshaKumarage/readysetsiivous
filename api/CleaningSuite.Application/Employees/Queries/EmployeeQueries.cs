@@ -9,6 +9,8 @@ namespace CleaningSuite.Application.Employees.Queries;
 
 public record EmployeeDto(
     Guid Id,
+    DateTime CreatedUtc,
+    DateTime UpdatedUtc,
     string Email,
     string FirstName,
     string LastName,
@@ -49,7 +51,7 @@ public class ListEmployeesHandler : IRequestHandler<ListEmployeesQuery, IReadOnl
     }
 
     private static EmployeeDto MapDto(Employee e) => new(
-        e.Id, e.Email, e.FirstName, e.LastName, e.Phone, e.Role, e.IsActive, e.ColorHex,
+        e.Id, e.CreatedUtc, e.UpdatedUtc, e.Email, e.FirstName, e.LastName, e.Phone, e.Role, e.IsActive, e.ColorHex,
         e.Skills, e.ServiceAreas, e.PayRate, e.Certifications, e.Notes, e.DefaultHours);
 }
 

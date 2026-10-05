@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using CleaningSuite.Application.Common;
 using CleaningSuite.Application.Tenants;
 using Microsoft.Extensions.Caching.Memory;
@@ -10,19 +11,16 @@ public class TenantCacheService : ITenantCacheService
     private readonly IMemoryCache _cache;
     private readonly ITenantContext _tenantContext;
     private readonly ITenantCacheTokenRegistry _tokenRegistry;
-
-    private static readonly SemaphoreSlim[] _locks = Enumerable.Range(0, 64)
-        .Select(_ => new SemaphoreSlim(1, 1))
-        .ToArray();
+    private static readonly ConcurrentDictionary<string, object> _inflightTasks = new();
 
     public TenantCacheService(
         IMemoryCache cache,
         ITenantContext tenantContext,
-        ITenantCacheTokenRegistry? tokenRegistry = null)
+        ITenantCacheTokenRegistry tokenRegistry)
     {
-        _cache = cache;
-        _tenantContext = tenantContext;
-        _tokenRegistry = tokenRegistry ?? new TenantCacheTokenRegistry();
+        _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+        _tenantContext = tenantContext ?? throw new ArgumentNullException(nameof(tenantContext));
+        _tokenRegistry = tokenRegistry ?? throw new ArgumentNullException(nameof(tokenRegistry));
     }
 
     public async Task<T?> GetOrAddAsync<T>(
@@ -40,37 +38,31 @@ public class TenantCacheService : ITenantCacheService
             return cachedValue;
         }
 
-        var lockIndex = Math.Abs(fullKey.GetHashCode()) % _locks.Length;
-        var keyLock = _locks[lockIndex];
+        var tokenKey = $"tenant:{tenantId}:{prefix}";
+        var token = _tokenRegistry.GetToken(tokenKey);
 
-        await keyLock.WaitAsync(ct);
+        var lazyTask = (Lazy<Task<T>>)_inflightTasks.GetOrAdd(
+            fullKey,
+            _ => new Lazy<Task<T>>(() => factory(CancellationToken.None), LazyThreadSafetyMode.ExecutionAndPublication));
+
         try
         {
-            if (_cache.TryGetValue(fullKey, out cachedValue))
+            var result = await lazyTask.Value;
+
+            if (!token.IsCancellationRequested && result is not null)
             {
-                return cachedValue;
+                var options = new MemoryCacheEntryOptions()
+                    .SetAbsoluteExpiration(expiration ?? TimeSpan.FromMinutes(10))
+                    .AddExpirationToken(new CancellationChangeToken(token));
+
+                _cache.Set(fullKey, result, options);
             }
 
-            var tokenKey = $"tenant:{tenantId}:{prefix}";
-            var token = _tokenRegistry.GetToken(tokenKey);
-
-            var result = await factory(ct);
-
-            if (token.IsCancellationRequested || result is null)
-            {
-                return result;
-            }
-
-            var options = new MemoryCacheEntryOptions()
-                .SetAbsoluteExpiration(expiration ?? TimeSpan.FromMinutes(10))
-                .AddExpirationToken(new CancellationChangeToken(token));
-
-            _cache.Set(fullKey, result, options);
             return result;
         }
         finally
         {
-            keyLock.Release();
+            _inflightTasks.TryRemove(fullKey, out _);
         }
     }
 

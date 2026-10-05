@@ -12,10 +12,11 @@ public class TenantCacheServiceTests
     public async Task GetOrAddAsync_CachesAndReturnsValue_AndRemovesByPrefix()
     {
         var memoryCache = new MemoryCache(new MemoryCacheOptions());
+        var tokenRegistry = new TenantCacheTokenRegistry();
         var tenantContextMock = new Mock<ITenantContext>();
         tenantContextMock.Setup(x => x.TenantId).Returns("tenant-1");
 
-        var cacheService = new TenantCacheService(memoryCache, tenantContextMock.Object);
+        var cacheService = new TenantCacheService(memoryCache, tenantContextMock.Object, tokenRegistry);
 
         int factoryCallCount = 0;
         Task<string> Factory(CancellationToken ct)
@@ -47,11 +48,12 @@ public class TenantCacheServiceTests
     public async Task TenantIsolation_InvalidateTenant1_DoesNotInvalidateTenant2()
     {
         var memoryCache = new MemoryCache(new MemoryCacheOptions());
+        var tokenRegistry = new TenantCacheTokenRegistry();
         var tenantContextMock = new Mock<ITenantContext>();
         string currentTenant = "tenant-1";
         tenantContextMock.Setup(x => x.TenantId).Returns(() => currentTenant);
 
-        var cacheService = new TenantCacheService(memoryCache, tenantContextMock.Object);
+        var cacheService = new TenantCacheService(memoryCache, tenantContextMock.Object, tokenRegistry);
 
         int factory1Calls = 0;
         int factory2Calls = 0;

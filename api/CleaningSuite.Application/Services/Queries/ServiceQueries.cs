@@ -7,6 +7,8 @@ namespace CleaningSuite.Application.Services.Queries;
 
 public record ServiceDto(
     Guid Id,
+    DateTime CreatedUtc,
+    DateTime UpdatedUtc,
     string Slug,
     string Category,
     LocalizedText Name,
@@ -48,7 +50,7 @@ public class ListServicesHandler : IRequestHandler<ListServicesQuery, IReadOnlyL
     }
 
     private static ServiceDto MapDto(Service s) => new(
-        s.Id, s.Slug, s.Category, s.Name, s.Description, s.AdditionalInfo,
+        s.Id, s.CreatedUtc, s.UpdatedUtc, s.Slug, s.Category, s.Name, s.Description, s.AdditionalInfo,
         s.DurationMinutes, s.PriceNet, s.VatRatePercent, s.Currency,
         s.IsActive, s.IsFeatured, s.SortOrder, s.Icon, s.ImageUrl);
 }

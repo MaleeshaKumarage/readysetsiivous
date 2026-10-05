@@ -7,6 +7,8 @@ namespace CleaningSuite.Application.Tenants.Queries;
 
 public record TenantProfileDto(
     string Slug,
+    DateTime CreatedUtc,
+    DateTime UpdatedUtc,
     string CompanyName,
     string BusinessId,
     Address CompanyAddress,
@@ -50,7 +52,7 @@ public class GetTenantProfileHandler : IRequestHandler<GetTenantProfileQuery, Te
     }
 
     private static TenantProfileDto MapDto(TenantProfile p) => new(
-        p.Slug, p.CompanyName, p.BusinessId, p.CompanyAddress, p.Email, p.Phone,
+        p.Slug, p.CreatedUtc, p.UpdatedUtc, p.CompanyName, p.BusinessId, p.CompanyAddress, p.Email, p.Phone,
         p.BankAccountIBAN, p.BankBic, p.TimeZoneId, p.DefaultLocale,
         p.DefaultVatRatePercent, p.PaymentTermsDays, p.AllowUnstaffedBookings,
         p.MinHoursBeforeBooking, p.Pages);
