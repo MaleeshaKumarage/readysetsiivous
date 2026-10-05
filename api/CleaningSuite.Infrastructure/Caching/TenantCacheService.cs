@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using CleaningSuite.Application.Common;
 using CleaningSuite.Application.Tenants;
 using Microsoft.Extensions.Caching.Memory;
@@ -11,7 +10,10 @@ public class TenantCacheService : ITenantCacheService
     private readonly IMemoryCache _cache;
     private readonly ITenantContext _tenantContext;
     private readonly ITenantCacheTokenRegistry _tokenRegistry;
-    private static readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
+
+    private static readonly SemaphoreSlim[] _locks = Enumerable.Range(0, 64)
+        .Select(_ => new SemaphoreSlim(1, 1))
+        .ToArray();
 
     public TenantCacheService(
         IMemoryCache cache,
@@ -38,7 +40,9 @@ public class TenantCacheService : ITenantCacheService
             return cachedValue;
         }
 
-        var keyLock = _locks.GetOrAdd(fullKey, _ => new SemaphoreSlim(1, 1));
+        var lockIndex = Math.Abs(fullKey.GetHashCode()) % _locks.Length;
+        var keyLock = _locks[lockIndex];
+
         await keyLock.WaitAsync(ct);
         try
         {
@@ -47,10 +51,15 @@ public class TenantCacheService : ITenantCacheService
                 return cachedValue;
             }
 
-            var result = await factory(ct);
-
             var tokenKey = $"tenant:{tenantId}:{prefix}";
             var token = _tokenRegistry.GetToken(tokenKey);
+
+            var result = await factory(ct);
+
+            if (token.IsCancellationRequested || result is null)
+            {
+                return result;
+            }
 
             var options = new MemoryCacheEntryOptions()
                 .SetAbsoluteExpiration(expiration ?? TimeSpan.FromMinutes(10))
