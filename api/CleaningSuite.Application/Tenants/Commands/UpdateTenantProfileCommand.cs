@@ -1,3 +1,4 @@
+using CleaningSuite.Application.Common;
 using CleaningSuite.Domain.Common;
 using CleaningSuite.Domain.Tenants;
 using FluentValidation;
@@ -39,11 +40,13 @@ public class UpdateTenantProfileHandler : IRequestHandler<UpdateTenantProfileCom
 {
     private readonly ITenantContext _context;
     private readonly ITenantProfileRepository _profiles;
+    private readonly ITenantCacheService? _cacheService;
 
-    public UpdateTenantProfileHandler(ITenantContext context, ITenantProfileRepository profiles)
+    public UpdateTenantProfileHandler(ITenantContext context, ITenantProfileRepository profiles, ITenantCacheService? cacheService = null)
     {
         _context = context;
         _profiles = profiles;
+        _cacheService = cacheService;
     }
 
     public async Task<Unit> Handle(UpdateTenantProfileCommand request, CancellationToken ct)
@@ -74,6 +77,7 @@ public class UpdateTenantProfileHandler : IRequestHandler<UpdateTenantProfileCom
         profile.UpdatedUtc = DateTime.UtcNow;
 
         await _profiles.SaveAsync(tenantId, profile, ct);
+        _cacheService?.RemoveByPrefix("tenant");
         return Unit.Value;
     }
 }
