@@ -52,8 +52,8 @@ export default function CompaniesAdminPage() {
   const toggleBranches = async (id: string) => {
     if (expanded === id) { setExpanded(null); return; }
     setExpanded(id);
-    const branches = await adminBranches.list(id);
-    if (branches) setCompanyBranchesMap((m) => ({ ...m, [id]: branches }));
+    const d = await adminCompanies.get(id);
+    if (d) setCompanyBranchesMap((m) => ({ ...m, [id]: d.branches }));
   };
 
   const submitBranch = async () => {
@@ -68,8 +68,8 @@ export default function CompaniesAdminPage() {
     if (!created) return;
     setBranchForm({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '' });
     setBranchModal(false);
-    const branches = await adminBranches.list(expanded);
-    if (branches) setCompanyBranchesMap((m) => ({ ...m, [expanded]: branches }));
+    const d = await adminCompanies.get(expanded);
+    if (d) setCompanyBranchesMap((m) => ({ ...m, [expanded]: d.branches }));
   };
 
   return (

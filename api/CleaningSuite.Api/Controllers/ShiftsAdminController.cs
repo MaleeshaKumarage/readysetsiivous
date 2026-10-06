@@ -57,6 +57,13 @@ public class ShiftsAdminController : ControllerBase
         return NoContent();
     }
 
+    [HttpGet("{id:guid}/assignments")]
+    public async Task<IActionResult> GetAssignments(Guid id, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new ListShiftAssignmentsQuery(id), ct);
+        return Ok(result);
+    }
+
     [HttpGet("{id:guid}/occurrences")]
     public async Task<IActionResult> Occurrences(
         Guid id,
@@ -65,13 +72,6 @@ public class ShiftsAdminController : ControllerBase
         CancellationToken ct)
     {
         var result = await _mediator.Send(new GetShiftOccurrencesQuery(id, from, to), ct);
-        return Ok(result);
-    }
-
-    [HttpGet("{id:guid}/assignments")]
-    public async Task<IActionResult> GetAssignments(Guid id, CancellationToken ct)
-    {
-        var result = await _mediator.Send(new ListShiftAssignmentsQuery(id), ct);
         return Ok(result);
     }
 

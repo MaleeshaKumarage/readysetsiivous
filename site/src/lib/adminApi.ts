@@ -252,7 +252,10 @@ export const adminAgreements = {
     const response = await fetch(`${API_URL}/api/v1/admin/agreements`, {
       method: 'POST', headers: { Authorization: `Bearer ${t}` }, body: form,
     });
-    if (response.ok) return { ok: true, data: (await response.json()) as AgreementDetail };
+    if (response.ok) {
+      _invalidate();
+      return { ok: true, data: (await response.json()) as AgreementDetail };
+    }
     return { ok: false, error: await agreementCreateError(response) };
   },
   addSigner: (id: string, name: string, email: string) =>
@@ -443,7 +446,6 @@ export const adminCompanies = {
 };
 
 export const adminBranches = {
-  list: (companyId: string) => adminGet<Branch[]>(`/api/v1/admin/companies/${companyId}/branches`),
   create: (
     companyId: string,
     body: {

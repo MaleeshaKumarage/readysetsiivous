@@ -61,13 +61,6 @@ public class CompaniesAdminController : ControllerBase
         return NoContent();
     }
 
-    [HttpGet("{companyId:guid}/branches")]
-    public async Task<IActionResult> ListBranches(Guid companyId, CancellationToken ct)
-    {
-        var result = await _mediator.Send(new ListBranchesQuery(companyId), ct);
-        return Ok(result);
-    }
-
     [HttpPost("{companyId:guid}/branches")]
     public async Task<IActionResult> CreateBranch(Guid companyId, [FromBody] CreateBranchCommand command, CancellationToken ct)
     {

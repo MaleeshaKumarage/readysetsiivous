@@ -19,16 +19,13 @@ import {
   SegmentedControl,
   Grid,
   Card,
-  Tooltip,
 } from '@mantine/core';
 import {
   Plus,
   Trash2,
-  FileText,
   Send,
   Download,
   Edit3,
-  X,
   CheckCircle2,
   Clock,
   ImageIcon,

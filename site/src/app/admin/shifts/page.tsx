@@ -6,8 +6,8 @@ import {
 } from '@mantine/core';
 import { Plus, Trash2 } from 'lucide-react';
 import {
-  adminShifts, adminCompanies, adminBranches, adminEmployees,
-  type Shift, type Company, type Branch, type Employee, type ShiftAssignment,
+  adminShifts, adminCompanies, adminEmployees,
+  type Shift, type Company, type Branch, type ShiftAssignment, type Employee,
 } from '@/lib/adminApi';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -54,7 +54,7 @@ export default function ShiftsAdminPage() {
 
   useEffect(() => {
     if (!companyId) { setBranches([]); return; }
-    adminBranches.list(companyId).then((b) => { if (b) setBranches(b); });
+    adminCompanies.get(companyId).then((d) => { if (d) setBranches(d.branches); });
   }, [companyId]);
 
   const buildSchedule = () => {
