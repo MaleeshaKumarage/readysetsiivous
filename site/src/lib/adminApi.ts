@@ -408,8 +408,8 @@ export const adminShifts = {
     adminGet<ShiftAssignment[]>(`/api/v1/admin/shifts/${id}/assignments`),
   assign: (id: string, employeeId: string) =>
     adminSend(`/api/v1/admin/shifts/${id}/assignments`, 'POST', { employeeId }),
-  unassign: (id: string, employeeId: string) =>
-    adminSend(`/api/v1/admin/shifts/${id}/assignments/${employeeId}`, 'DELETE'),
+  unassign: (id: string, assignmentId: string) =>
+    adminSend(`/api/v1/admin/shifts/${id}/assignments/${assignmentId}`, 'DELETE'),
   occurrences: (id: string, fromUtc: string, toUtc: string) =>
     adminGet<ShiftOccurrence[]>(
       `/api/v1/admin/shifts/${id}/occurrences?fromUtc=${encodeURIComponent(fromUtc)}&toUtc=${encodeURIComponent(toUtc)}`
@@ -446,7 +446,6 @@ export const adminCompanies = {
 };
 
 export const adminBranches = {
-  list: (companyId: string) => adminGet<Branch[]>(`/api/v1/admin/companies/${companyId}/branches`),
   create: (
     companyId: string,
     body: {

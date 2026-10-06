@@ -472,7 +472,7 @@ test.describe('Admin Panel - Shifts Page', () => {
     await page.route('**/api/v1/admin/companies**', async (route) => {
       const url = route.request().url();
       if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
-      if (url.includes('/c-1')) {
+      if (url.endsWith('/c-1') || url.includes('/c-1?')) {
         return route.fulfill({ status: 200, json: { company: mockCompanies[0], branches: mockBranches }, headers: CORS_HEADERS });
       }
       return route.fulfill({ status: 200, json: { items: mockCompanies, total: 1 }, headers: CORS_HEADERS });
@@ -607,7 +607,7 @@ test.describe('Admin Panel - Shifts Page', () => {
     await page.route('**/api/v1/admin/companies**', async (route) => {
       const url = route.request().url();
       if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
-      if (url.includes('/c-1')) {
+      if (url.endsWith('/c-1') || url.includes('/c-1?')) {
         return route.fulfill({ status: 200, json: { company: { id: 'c-1', name: 'CleanTech Oy' }, branches: [{ id: 'b-1', companyId: 'c-1', name: 'Main Branch' }] }, headers: CORS_HEADERS });
       }
       return route.fulfill({ status: 200, json: { items: [{ id: 'c-1', name: 'CleanTech Oy' }], total: 1 }, headers: CORS_HEADERS });
