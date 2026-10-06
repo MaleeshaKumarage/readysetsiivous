@@ -48,6 +48,7 @@ var autoCreate = builder.Configuration.GetValue<AutoCreate?>("Marten:AutoCreateS
     ?? AutoCreate.CreateOrUpdate;
 
 builder.Services.AddCleaningMarten(connectionString, autoCreate);
+builder.Services.AddHostedService<MartenSchemaInitializer>();
 
 builder.Services.AddKeycloakAuth(builder.Configuration);
 
@@ -150,6 +151,18 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+/// <summary>Builds the Marten schema at startup so newly-added document types (e.g. ShiftAssignment) get their tables created.</summary>
+public class MartenSchemaInitializer : Microsoft.Extensions.Hosting.IHostedService
+{
+    private readonly Marten.IDocumentStore _store;
+    public MartenSchemaInitializer(Marten.IDocumentStore store) => _store = store;
+
+    public async Task StartAsync(CancellationToken ct)
+        => await _store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
+
+    public Task StopAsync(CancellationToken ct) => Task.CompletedTask;
+}
 
 public partial class Program;
 
