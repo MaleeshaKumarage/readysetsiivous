@@ -6,6 +6,8 @@ export async function setupAdminMocks(page: Page, options: { authenticated?: boo
   await page.addInitScript(({ authed }) => {
     if (sessionStorage.getItem('__MOCK_LOGGED_OUT__') === 'true') {
       (window as any).__MOCK_AUTHED__ = false;
+    } else if (sessionStorage.getItem('__MOCK_AUTHED__') === 'true') {
+      (window as any).__MOCK_AUTHED__ = true;
     } else {
       (window as any).__MOCK_AUTHED__ = authed;
     }

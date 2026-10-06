@@ -103,8 +103,15 @@ for c in unresolved:
         print(f"reply failed {e.code} for {c['path']}:{c['line']}", file=sys.stderr)
 
     m = "mutation($id:ID!){ resolveReviewThread(input:{threadId:$id}){ thread{ isResolved } } }"
-    gql(m, {"id": c["threadId"]})
-    resolved += 1
-    print(f"resolved {c['path']}:{c['line']}", file=sys.stderr)
+    try:
+        res = gql(m, {"id": c["threadId"]})
+        ok = res.get("data", {}).get("resolveReviewThread", {}).get("thread", {}).get("isResolved", False)
+        if ok:
+            resolved += 1
+            print(f"resolved {c['path']}:{c['line']}", file=sys.stderr)
+        else:
+            print(f"thread {c['threadId']} not marked resolved", file=sys.stderr)
+    except Exception as e:
+        print(f"resolve failed for {c['path']}:{c['line']}: {e}", file=sys.stderr)
 
 print(f"resolved {resolved} of {len(unresolved)}", file=sys.stderr)

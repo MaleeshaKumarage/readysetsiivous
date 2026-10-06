@@ -39,15 +39,16 @@ public class GetPublicServicesHandler : IRequestHandler<GetPublicServicesQuery, 
 
     public async Task<IReadOnlyList<PublicServiceDto>> Handle(GetPublicServicesQuery request, CancellationToken ct)
     {
+        var lang = string.IsNullOrWhiteSpace(request.Lang) ? "fi" : request.Lang.Trim().ToLowerInvariant();
         var services = await _services.ListAsync(includeInactive: false, ct);
         return services
             .Select(s => new PublicServiceDto(
                 s.Id,
                 s.Slug,
                 s.Category,
-                s.Name.For(request.Lang) ?? s.Name.For("fi") ?? "",
-                s.Description.For(request.Lang) ?? s.Description.For("fi") ?? "",
-                s.AdditionalInfo?.For(request.Lang) ?? s.AdditionalInfo?.For("fi"),
+                s.Name.For(lang) ?? s.Name.For("fi") ?? "",
+                s.Description.For(lang) ?? s.Description.For("fi") ?? "",
+                s.AdditionalInfo?.For(lang) ?? s.AdditionalInfo?.For("fi"),
                 s.Icon,
                 s.ImageUrl,
                 s.SortOrder,

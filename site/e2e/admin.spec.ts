@@ -16,11 +16,18 @@ function getBody(route: any) {
 }
 
 test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
-  test('unauthenticated user sees login prompt', async ({ page }) => {
+  test('unauthenticated user sees login prompt and can click sign in', async ({ page }) => {
     await setupAdminMocks(page, { authenticated: false });
     await page.goto('/admin/');
     await expect(page.getByText('Sign in with your ReadySetSiivous admin account.')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+
+    const signInBtn = page.getByRole('button', { name: 'Sign in' });
+    await expect(signInBtn).toBeVisible();
+
+    // Clicking sign in should clear logged out flag and make dashboard visible
+    await page.evaluate(() => { (window as any).__MOCK_AUTHED__ = true; });
+    await signInBtn.click();
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
   });
 
   test('authenticated user sees dashboard and can navigate to all sections', async ({ page }) => {
@@ -50,6 +57,9 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
 
     await page.goto('/admin/shifts/');
     await expect(page.getByRole('heading', { name: 'Shifts' })).toBeVisible();
+
+    await page.goto('/admin/quality-cycle/');
+    await expect(page.getByRole('heading', { name: 'Quality Cycle Management' })).toBeVisible();
   });
 
   test('sign out button returns user to unauthenticated login view', async ({ page, isMobile }) => {
@@ -202,11 +212,11 @@ test.describe('Admin Panel - Agreements Page', () => {
     const modal = page.getByRole('dialog', { name: 'New agreement' });
     await expect(modal).toBeVisible();
 
-    await page.waitForTimeout(300);
-
     // Select company from Mantine Select input
     await modal.getByLabel('Company').click();
-    await page.getByRole('option', { name: 'Acme Oy' }).click();
+    const companyOption = page.getByRole('option', { name: 'Acme Oy' });
+    await expect(companyOption).toBeVisible();
+    await companyOption.click();
 
     await page.getByLabel('Title').fill('Siivoussopimus 2025');
 
@@ -552,12 +562,14 @@ test.describe('Admin Panel - Shifts Page', () => {
     const modal = page.getByRole('dialog', { name: 'Add shift' });
 
     await modal.getByLabel('Company').click();
-    await page.getByRole('option', { name: 'CleanTech Oy' }).click();
-
-    await page.waitForTimeout(500);
+    const companyOption = page.getByRole('option', { name: 'CleanTech Oy' });
+    await expect(companyOption).toBeVisible();
+    await companyOption.click();
 
     await modal.getByLabel('Branch').click();
-    await page.getByRole('option', { name: 'HQ Branch' }).click();
+    const branchOption = page.getByRole('option', { name: 'HQ Branch' });
+    await expect(branchOption).toBeVisible();
+    await branchOption.click();
 
     await modal.getByLabel('Name').fill('Aamuvuoro');
 
@@ -630,12 +642,14 @@ test.describe('Admin Panel - Shifts Page', () => {
     const modal = page.getByRole('dialog', { name: 'Add shift' });
 
     await modal.getByLabel('Company').click();
-    await page.getByRole('option', { name: 'CleanTech Oy' }).click();
-
-    await page.waitForTimeout(500);
+    const companyOption = page.getByRole('option', { name: 'CleanTech Oy' });
+    await expect(companyOption).toBeVisible();
+    await companyOption.click();
 
     await modal.getByLabel('Branch').click();
-    await page.getByRole('option', { name: 'Main Branch' }).click();
+    const branchOption = page.getByRole('option', { name: 'Main Branch' });
+    await expect(branchOption).toBeVisible();
+    await branchOption.click();
 
     await modal.getByLabel('Name').fill('Iltavuoro');
     await modal.getByLabel('Schedule').click();

@@ -24,7 +24,7 @@ export function getKeycloak(): Keycloak {
 }
 
 function isMockAllowed(): boolean {
-  return process.env.NODE_ENV !== 'production';
+  return process.env.NEXT_PUBLIC_E2E_MOCK_AUTH === 'true';
 }
 
 export function initAuth(): Promise<boolean> {
@@ -52,6 +52,7 @@ export function initAuth(): Promise<boolean> {
 export async function login(): Promise<void> {
   if (isMockAllowed() && typeof window !== 'undefined') {
     sessionStorage.removeItem('__MOCK_LOGGED_OUT__');
+    sessionStorage.setItem('__MOCK_AUTHED__', 'true');
   }
   if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__ !== undefined) {
     (window as any).__MOCK_AUTHED__ = true;
@@ -62,9 +63,12 @@ export async function login(): Promise<void> {
 }
 
 export async function logout(): Promise<void> {
+  if (isMockAllowed() && typeof window !== 'undefined') {
+    sessionStorage.removeItem('__MOCK_AUTHED__');
+    sessionStorage.setItem('__MOCK_LOGGED_OUT__', 'true');
+  }
   if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__ !== undefined) {
     (window as any).__MOCK_AUTHED__ = false;
-    sessionStorage.setItem('__MOCK_LOGGED_OUT__', 'true');
     window.location.reload();
     return;
   }

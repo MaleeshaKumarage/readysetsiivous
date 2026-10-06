@@ -75,6 +75,8 @@ public record ListShiftsQuery(Guid? CompanyId, Guid? BranchId) : IRequest<IReadO
 
 public record GetShiftQuery(Guid Id) : IRequest<ShiftDto>;
 
+public record ListShiftAssignmentsQuery(Guid ShiftId) : IRequest<IReadOnlyList<ShiftAssignmentDto>>;
+
 public record GetShiftOccurrencesQuery(Guid ShiftId, DateTime From, DateTime To) : IRequest<IReadOnlyList<ShiftOccurrenceDto>>;
 
 public record AssignEmployeeToShiftCommand(Guid ShiftId, Guid EmployeeId, string? Note = null) : IRequest<ShiftAssignmentDto>;
@@ -124,6 +126,22 @@ public class ShiftHandlers
                 request.QualityCycleTemplateId);
             await _repository.SaveAsync(shift, ct);
             return MapShift(shift);
+        }
+    }
+
+    public class ListShiftAssignmentsQueryHandler : IRequestHandler<ListShiftAssignmentsQuery, IReadOnlyList<ShiftAssignmentDto>>
+    {
+        private readonly IShiftRepository _repository;
+
+        public ListShiftAssignmentsQueryHandler(IShiftRepository repository)
+        {
+            _repository = repository;
+        }
+
+        public async Task<IReadOnlyList<ShiftAssignmentDto>> Handle(ListShiftAssignmentsQuery request, CancellationToken ct)
+        {
+            var assignments = await _repository.ListAssignmentsByShiftAsync(request.ShiftId, ct);
+            return assignments.Select(MapAssignment).ToList();
         }
     }
 

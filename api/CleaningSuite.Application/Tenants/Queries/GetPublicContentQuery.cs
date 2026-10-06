@@ -28,9 +28,11 @@ public class GetPublicContentHandler : IRequestHandler<GetPublicContentQuery, Pu
         if (profile is null)
             return null;
 
+        var lang = string.IsNullOrWhiteSpace(request.Lang) ? profile.DefaultLocale : request.Lang.Trim().ToLowerInvariant();
+
         var pages = profile.Pages.ToDictionary(
             p => p.Key,
-            p => p.Value.For(request.Lang) ?? p.Value.For(profile.DefaultLocale) ?? "");
+            p => p.Value.For(lang) ?? p.Value.For(profile.DefaultLocale) ?? "");
 
         return new PublicContentDto(profile.Slug, profile.CompanyName, profile.DefaultLocale, pages);
     }
