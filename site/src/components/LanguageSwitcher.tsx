@@ -48,13 +48,18 @@ export default function LanguageSwitcher() {
     [setLang, router]
   );
 
+  const ariaLabel =
+    lang === 'fi' ? 'Vaihda kieltä' : lang === 'sv' ? 'Byt språk' : 'Switch language';
+  const menuLabel =
+    lang === 'fi' ? 'Kielet' : lang === 'sv' ? 'Språk' : 'Languages';
+
   return (
     <div className="relative" ref={ref}>
       <button
         ref={buttonRef}
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-200 hover:border-brand-400 dark:hover:border-brand-500 hover:text-brand-700 dark:hover:text-brand-400 transition-colors"
-        aria-label="Switch language"
+        className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-200 hover:border-brand-400 dark:hover:border-brand-500 hover:text-brand-700 dark:hover:text-brand-400 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus:outline-none transition-colors"
+        aria-label={ariaLabel}
         aria-haspopup="true"
         aria-expanded={open}
       >
@@ -71,12 +76,18 @@ export default function LanguageSwitcher() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-lg dark:shadow-gray-950/50 overflow-hidden z-50 animate-fade-in-up">
+        <div
+          role="menu"
+          aria-label={menuLabel}
+          className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-lg dark:shadow-gray-950/50 overflow-hidden z-50 animate-fade-in-up"
+        >
           {languages.map((l) => (
             <button
               key={l.code}
+              role="menuitem"
+              aria-current={l.code === lang ? 'true' : undefined}
               onClick={() => switchTo(l.code)}
-              className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left transition-colors hover:bg-brand-50 dark:hover:bg-brand-500/10 ${
+              className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left transition-colors hover:bg-brand-50 dark:hover:bg-brand-500/10 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset focus:outline-none ${
                 l.code === lang
                   ? 'bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-400 font-semibold'
                   : 'text-gray-700 dark:text-gray-200'
