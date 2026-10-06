@@ -21,7 +21,7 @@ test.describe('Admin Panel - Quality Cycle Page', () => {
 
     let templates: any[] = [];
 
-    await page.route('**/api/v1/admin/quality-cycle/templates**', async (route) => {
+    await page.route(/\/api\/v1\/admin\/quality-cycle\/templates(\/.*)?$/, async (route) => {
       const method = route.request().method();
       const url = route.request().url();
 
@@ -79,7 +79,9 @@ test.describe('Admin Panel - Quality Cycle Page', () => {
       return route.continue();
     });
 
+    let deleteConfirmed = false;
     page.on('dialog', async dialog => {
+      deleteConfirmed = true;
       await dialog.accept();
     });
 
@@ -112,7 +114,7 @@ test.describe('Admin Panel - Quality Cycle Page', () => {
     await expect(page.getByText('Sanitize door handles')).toBeVisible();
 
     // Edit template
-    await page.getByRole('button', { name: 'Edit' }).click();
+    await page.getByRole('button', { name: 'Edit' }).click({ force: true });
     await expect(page.getByRole('heading', { name: 'Edit Template' })).toBeVisible();
     await page.getByPlaceholder('e.g. Daily Office Cleaning Checklist').fill('Updated Office Checklist');
     await page.getByRole('button', { name: 'Update Template' }).click();
@@ -120,7 +122,8 @@ test.describe('Admin Panel - Quality Cycle Page', () => {
     await expect(page.getByRole('heading', { name: 'Updated Office Checklist' })).toBeVisible();
 
     // Delete template
-    await page.getByRole('button', { name: 'Delete' }).click();
+    await page.getByRole('button', { name: 'Delete' }).click({ force: true });
+    await expect.poll(() => deleteConfirmed).toBe(true);
 
     await expect(page.getByText('No quality cycle templates created yet.')).toBeVisible();
   });
@@ -155,29 +158,35 @@ test.describe('Admin Panel - Quality Cycle Page', () => {
       },
     ];
 
-    await page.route('**/api/v1/admin/shifts**', async (route) => {
+    let lastDialogMessage = '';
+    page.on('dialog', async dialog => {
+      lastDialogMessage = dialog.message();
+      await dialog.accept();
+    });
+
+    await page.route(/\/api\/v1\/admin\/shifts(\/.*)?$/, async (route) => {
       if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
       return route.fulfill({ status: 200, json: mockShifts, headers: CORS_HEADERS });
     });
 
-    await page.route('**/api/v1/admin/quality-cycle/templates**', async (route) => {
+    await page.route(/\/api\/v1\/admin\/quality-cycle\/templates(\/.*)?$/, async (route) => {
       if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
       return route.fulfill({ status: 200, json: [], headers: CORS_HEADERS });
     });
 
-    await page.route('**/api/v1/admin/quality-cycle/forms**', async (route) => {
+    await page.route(/\/api\/v1\/admin\/quality-cycle\/forms(\/.*)?$/, async (route) => {
       if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
       return route.fulfill({ status: 200, json: mockForms, headers: CORS_HEADERS });
     });
 
     let dispatchCalled = false;
-    await page.route('**/api/v1/admin/quality-cycle/dispatch**', async (route) => {
+    await page.route(/\/api\/v1\/admin\/quality-cycle\/dispatch(\/.*)?$/, async (route) => {
       if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
       dispatchCalled = true;
       return route.fulfill({ status: 200, json: { dispatchedCount: 2 }, headers: CORS_HEADERS });
     });
 
-    await page.route('**/api/v1/admin/quality-cycle/summary-pdf**', async (route) => {
+    await page.route(/\/api\/v1\/admin\/quality-cycle\/summary-pdf(\/.*)?$/, async (route) => {
       if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
       return route.fulfill({
         status: 200,
@@ -199,14 +208,10 @@ test.describe('Admin Panel - Quality Cycle Page', () => {
     await expect(page.getByText('2 / 2')).toBeVisible();
     await expect(page.getByText('Note: Completed on time')).toBeVisible();
 
-    // Set up dialog listener before clicking button
-    const dialogPromise = page.waitForEvent('dialog');
+    // Trigger Dispatch Forms Now
     await page.getByRole('button', { name: 'Dispatch Forms Now' }).click();
-    const dialog = await dialogPromise;
-    expect(dialog.message()).toContain('Dispatched 2 Quality Cycle forms.');
-    await dialog.accept();
-
-    expect(dispatchCalled).toBe(true);
+    await expect.poll(() => dispatchCalled).toBe(true);
+    await expect.poll(() => lastDialogMessage).toContain('Dispatched 2 Quality Cycle forms.');
 
     // Select shift for PDF summary download
     await page.locator('select').first().selectOption('shift-1');
@@ -237,14 +242,14 @@ test.describe('Public Quality Cycle Page', () => {
       createdUtc: new Date().toISOString(),
     };
 
-    await page.route('**/api/v1/public/*/quality-cycle/valid-test-token', async (route) => {
+    await page.route(/\/api\/v1\/public\/[^\/]+\/quality-cycle\/valid-test-token$/, async (route) => {
       const method = route.request().method();
       if (method === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
       if (method === 'GET') return route.fulfill({ status: 200, json: mockForm, headers: CORS_HEADERS });
       return route.continue();
     });
 
-    await page.route('**/api/v1/public/*/quality-cycle/valid-test-token/submit', async (route) => {
+    await page.route(/\/api\/v1\/public\/[^\/]+\/quality-cycle\/valid-test-token\/submit$/, async (route) => {
       const method = route.request().method();
       if (method === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
       if (method === 'POST') {
@@ -292,7 +297,7 @@ test.describe('Public Quality Cycle Page', () => {
     await expect(page.getByText('Missing Quality Cycle Form token.')).toBeVisible();
 
     // Invalid token mock API 404
-    await page.route('**/api/v1/public/*/quality-cycle/invalid-token', async (route) => {
+    await page.route(/\/api\/v1\/public\/[^\/]+\/quality-cycle\/invalid-token$/, async (route) => {
       if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
       return route.fulfill({ status: 404, json: null, headers: CORS_HEADERS });
     });
