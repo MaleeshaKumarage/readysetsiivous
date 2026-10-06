@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Resolve PR review threads whose issues are now fixed.
+"""Resolve earlier PR review comments whose issues are now fixed.
 
-Lists unresolved review threads, asks DeepSeek whether each reported issue is
-fixed in the current diff, and resolves ONLY the FIXED ones — a short
-"Fixed in <sha>" reply plus the GraphQL resolveReviewThread mutation (same as
-pressing the resolve button). Unfixed threads stay open.
+Lists unresolved review threads on a PR, asks DeepSeek whether each reported
+issue is fixed in the current diff, and for the FIXED ones posts a short
+"Fixed in <sha>" reply and resolves the thread. Only fixed threads are
+resolved — the rest stay open.
 
 Usage:
   GH_TOKEN=... DEEPSEEK_API_KEY=... python3 resolve_fixed_comments.py <pr-number> <head-sha> < diff.txt
@@ -19,11 +19,7 @@ token = os.environ.get("GH_TOKEN", os.environ.get("GITHUB_TOKEN", ""))
 repo = os.environ.get("GITHUB_REPOSITORY", "MaleeshaKumarage/readysetsiivous")
 owner, _, name = repo.partition("/")
 api = f"https://api.github.com/repos/{repo}"
-HDR = {
-    "Authorization": f"Bearer {token}",
-    "Content-Type": "application/json",
-    "Accept": "application/vnd.github+json",
-}
+HDR = {"Authorization": f"Bearer {token}", "Content-Type": "application/json", "Accept": "application/vnd.github+json"}
 
 
 def gql(query, variables):
@@ -54,6 +50,7 @@ def deepseek_fixed(path, line, body):
     return resp["choices"][0]["message"]["content"].strip().upper().startswith("FIXED")
 
 
+# List unresolved review threads.
 q = """
 query($owner:String!,$name:String!,$pr:Int!) {
   repository(owner:$owner,name:$name){
@@ -84,7 +81,7 @@ for t in threads:
         })
 
 if not unresolved:
-    print("no unresolved threads", file=sys.stderr)
+    print("no unresolved comments", file=sys.stderr)
     sys.exit(0)
 
 resolved = 0
@@ -96,28 +93,18 @@ for c in unresolved:
         print(f"deepseek check failed for {c['path']}:{c['line']}: {e}", file=sys.stderr)
         continue
 
-    # reply "Fixed in <sha>" so the thread records how it was addressed
+    # reply "Fixed in <sha>" so the thread records how it was fixed
     try:
         reply = json.dumps({"body": f"Fixed in {sha[:7]}"}).encode()
-        req = urllib.request.Request(
-            f"{api}/pulls/{pr}/comments/{c['databaseId']}/replies",
-            data=reply, headers=HDR, method="POST",
-        )
+        req = urllib.request.Request(f"{api}/pulls/{pr}/comments/{c['databaseId']}/replies",
+                                     data=reply, headers=HDR, method="POST")
         urllib.request.urlopen(req, timeout=30)
     except urllib.error.HTTPError as e:
         print(f"reply failed {e.code} for {c['path']}:{c['line']}", file=sys.stderr)
 
-    # mark the thread resolved on GitHub (same as pressing the resolve button)
     m = "mutation($id:ID!){ resolveReviewThread(input:{threadId:$id}){ thread{ isResolved } } }"
-    try:
-        res = gql(m, {"id": c["threadId"]})
-        ok = res["data"]["resolveReviewThread"]["thread"]["isResolved"]
-        if ok:
-            resolved += 1
-            print(f"resolved {c['path']}:{c['line']}", file=sys.stderr)
-        else:
-            print(f"thread {c['threadId']} not marked resolved", file=sys.stderr)
-    except Exception as e:
-        print(f"resolve failed for {c['path']}:{c['line']}: {e}", file=sys.stderr)
+    gql(m, {"id": c["threadId"]})
+    resolved += 1
+    print(f"resolved {c['path']}:{c['line']}", file=sys.stderr)
 
-print(f"resolved {resolved} of {len(unresolved)} threads", file=sys.stderr)
+print(f"resolved {resolved} of {len(unresolved)}", file=sys.stderr)
