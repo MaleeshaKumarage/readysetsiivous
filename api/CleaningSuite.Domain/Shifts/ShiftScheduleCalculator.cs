@@ -99,6 +99,8 @@ public static class ShiftScheduleCalculator
     /// Returns true when any occurrence in <paramref name="first"/> overlaps any occurrence in
     /// <paramref name="second"/>. Touching boundaries (one occurrence ending exactly when the
     /// next starts) are not treated as overlaps.
+    /// Uses an optimized 2-pointer scan after ensuring chronological order, reducing complexity
+    /// from O(N*M) to O(N + M) for pre-sorted inputs.
     /// </summary>
     public static bool HasOverlap(
         IReadOnlyList<ShiftOccurrence> first,
@@ -107,16 +109,48 @@ public static class ShiftScheduleCalculator
         if (first is null) throw new ArgumentNullException(nameof(first));
         if (second is null) throw new ArgumentNullException(nameof(second));
 
-        foreach (var a in first)
+        if (first.Count == 0 || second.Count == 0)
+            return false;
+
+        var listA = EnsureSortedByStart(first);
+        var listB = EnsureSortedByStart(second);
+
+        int i = 0, j = 0;
+        while (i < listA.Count && j < listB.Count)
         {
-            foreach (var b in second)
-            {
-                if (a.StartUtc < b.EndUtc && b.StartUtc < a.EndUtc)
-                    return true;
-            }
+            var a = listA[i];
+            var b = listB[j];
+
+            // Overlap check for open intervals (StartUtc, EndUtc)
+            if (a.StartUtc < b.EndUtc && b.StartUtc < a.EndUtc)
+                return true;
+
+            // Advance pointer for the interval ending earlier
+            if (a.EndUtc <= b.EndUtc)
+                i++;
+            else
+                j++;
         }
 
         return false;
+    }
+
+    private static IReadOnlyList<ShiftOccurrence> EnsureSortedByStart(IReadOnlyList<ShiftOccurrence> occurrences)
+    {
+        if (occurrences.Count <= 1)
+            return occurrences;
+
+        for (int k = 1; k < occurrences.Count; k++)
+        {
+            if (occurrences[k].StartUtc < occurrences[k - 1].StartUtc)
+            {
+                var copy = new List<ShiftOccurrence>(occurrences);
+                copy.Sort((x, y) => x.StartUtc.CompareTo(y.StartUtc));
+                return copy;
+            }
+        }
+
+        return occurrences;
     }
 
     private static void AddOccurrence(
