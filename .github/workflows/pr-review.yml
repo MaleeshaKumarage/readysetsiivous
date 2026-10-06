@@ -41,7 +41,7 @@ jobs:
 
           # 2. Review for critical / breaking issues only.
           python3 scripts/deepseek.py \
-            "You are a senior code reviewer. Find ONLY critical / breaking issues: correctness bugs, security vulnerabilities, crashes, data loss, and breaking API or DB changes. Ignore style, formatting, naming, minor suggestions, and nitpicks. Output each issue as a 3-line block, blank line between blocks: '### FILE: <path>', '### LINE: <n>', '### FIX: <what to change and why>'. LINE is the exact 1-based line number in the NEW file (the '+' side of the hunk). Do not report files under .github/workflows/. If there are no critical issues, output exactly NO_CRITICAL and nothing else." \
+            "You are a senior code reviewer. Do two checks. (1) Find critical / breaking issues: correctness bugs, security vulnerabilities, crashes, data loss, breaking API or DB changes. (2) Find missing Playwright E2E coverage: for every new or changed UI feature (page, button, form, interaction), verify site/e2e/ has a test exercising it — a page with N buttons needs all N tested. Ignore style, formatting, naming, minor suggestions, and nitpicks. Output each issue (critical bug OR missing coverage) as a 3-line block, blank line between blocks: '### FILE: <path>', '### LINE: <n>', '### FIX: <what to change and why>'. LINE is the exact 1-based line number in the NEW file (the '+' side of the hunk). Do not report files under .github/workflows/. If there are no issues, output exactly NO_CRITICAL and nothing else." \
             < /tmp/diff.txt > /tmp/review.txt
 
           # 3. No critical issues -> ready to merge, stop.
