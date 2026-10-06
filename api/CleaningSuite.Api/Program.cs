@@ -29,7 +29,11 @@ foreach (var envPath in new[] { ".env", Path.Combine("..", ".env") })
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddJsonOptions(o =>
+{
+    o.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+    o.JsonSerializerOptions.Converters.Add(new FlexibleTimeSpanConverter());
+});
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -148,6 +152,23 @@ app.MapControllers();
 app.Run();
 
 public partial class Program;
+
+/// <summary>Accepts "HH:mm" (and "HH:mm:ss") for TimeSpan, e.g. shift times from &lt;input type="time"&gt;.</summary>
+public class FlexibleTimeSpanConverter : System.Text.Json.Serialization.JsonConverter<TimeSpan>
+{
+    public override TimeSpan Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        var s = reader.GetString() ?? throw new JsonException("TimeSpan value missing.");
+        if (TimeSpan.TryParseExact(s, @"hh\:mm", System.Globalization.CultureInfo.InvariantCulture, out var ts))
+            return ts;
+        if (TimeSpan.TryParse(s, System.Globalization.CultureInfo.InvariantCulture, out ts))
+            return ts;
+        throw new JsonException($"Invalid TimeSpan value: {s}");
+    }
+
+    public override void Write(Utf8JsonWriter writer, TimeSpan value, JsonSerializerOptions options)
+        => writer.WriteStringValue(value.ToString());
+}
 
 /// <summary>Maps FluentValidation failures to RFC 7807 problem details.</summary>
 public class ValidationExceptionHandler : IExceptionHandler
