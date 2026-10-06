@@ -67,6 +67,8 @@ public record ListCompaniesQuery(string? Search, int Skip, int Take) : IRequest<
 
 public record GetCompanyQuery(Guid Id) : IRequest<CompanyDetailDto>;
 
+public record ListBranchesQuery(Guid CompanyId) : IRequest<IReadOnlyList<BranchDto>>;
+
 public record CreateBranchCommand(
     Guid CompanyId,
     string Name,
@@ -93,10 +95,12 @@ public class CompanyHandlers
     public class CreateCompanyCommandHandler : IRequestHandler<CreateCompanyCommand, CompanyDto>
     {
         private readonly ICompanyRepository _repository;
+        private readonly ITenantCacheService? _cacheService;
 
-        public CreateCompanyCommandHandler(ICompanyRepository repository)
+        public CreateCompanyCommandHandler(ICompanyRepository repository, ITenantCacheService? cacheService = null)
         {
             _repository = repository;
+            _cacheService = cacheService;
         }
 
         public async Task<CompanyDto> Handle(CreateCompanyCommand request, CancellationToken ct)
@@ -110,6 +114,7 @@ public class CompanyHandlers
                 request.Notes);
 
             await _repository.SaveAsync(company, ct);
+            _cacheService?.RemoveByPrefix("companies");
             return MapCompany(company);
         }
     }
@@ -117,10 +122,12 @@ public class CompanyHandlers
     public class UpdateCompanyCommandHandler : IRequestHandler<UpdateCompanyCommand, CompanyDto>
     {
         private readonly ICompanyRepository _repository;
+        private readonly ITenantCacheService? _cacheService;
 
-        public UpdateCompanyCommandHandler(ICompanyRepository repository)
+        public UpdateCompanyCommandHandler(ICompanyRepository repository, ITenantCacheService? cacheService = null)
         {
             _repository = repository;
+            _cacheService = cacheService;
         }
 
         public async Task<CompanyDto> Handle(UpdateCompanyCommand request, CancellationToken ct)
@@ -137,6 +144,7 @@ public class CompanyHandlers
                 request.IsActive);
 
             await _repository.SaveAsync(company, ct);
+            _cacheService?.RemoveByPrefix("companies");
             return MapCompany(company);
         }
     }
@@ -144,10 +152,12 @@ public class CompanyHandlers
     public class DeactivateCompanyCommandHandler : IRequestHandler<DeactivateCompanyCommand>
     {
         private readonly ICompanyRepository _repository;
+        private readonly ITenantCacheService? _cacheService;
 
-        public DeactivateCompanyCommandHandler(ICompanyRepository repository)
+        public DeactivateCompanyCommandHandler(ICompanyRepository repository, ITenantCacheService? cacheService = null)
         {
             _repository = repository;
+            _cacheService = cacheService;
         }
 
         public async Task Handle(DeactivateCompanyCommand request, CancellationToken ct)
@@ -156,22 +166,32 @@ public class CompanyHandlers
                 ?? throw new NotFoundException("Company", request.Id);
             company.Deactivate();
             await _repository.SaveAsync(company, ct);
+            _cacheService?.RemoveByPrefix("companies");
         }
     }
 
     public class ListCompaniesQueryHandler : IRequestHandler<ListCompaniesQuery, Paged<CompanyDto>>
     {
         private readonly ICompanyRepository _repository;
+        private readonly ITenantCacheService? _cacheService;
 
-        public ListCompaniesQueryHandler(ICompanyRepository repository)
+        public ListCompaniesQueryHandler(ICompanyRepository repository, ITenantCacheService? cacheService = null)
         {
             _repository = repository;
+            _cacheService = cacheService;
         }
 
         public async Task<Paged<CompanyDto>> Handle(ListCompaniesQuery request, CancellationToken ct)
         {
-            var (items, total) = await _repository.ListAsync(request.Search, request.Skip, request.Take, ct);
-            return new Paged<CompanyDto>(items.Select(MapCompany).ToList(), total);
+            var fetch = async (CancellationToken cToken) =>
+            {
+                var (items, total) = await _repository.ListAsync(request.Search, request.Skip, request.Take, cToken);
+                return new Paged<CompanyDto>(items.Select(MapCompany).ToList(), total);
+            };
+
+            if (_cacheService is null) return await fetch(ct);
+
+            return (await _cacheService.GetOrAddAsync("companies", $"list_{request.Search}_{request.Skip}_{request.Take}", fetch, ct: ct))!;
         }
     }
 
@@ -179,21 +199,55 @@ public class CompanyHandlers
     {
         private readonly ICompanyRepository _companyRepository;
         private readonly IBranchRepository _branchRepository;
+        private readonly ITenantCacheService? _cacheService;
 
-        public GetCompanyQueryHandler(ICompanyRepository companyRepository, IBranchRepository branchRepository)
+        public GetCompanyQueryHandler(ICompanyRepository companyRepository, IBranchRepository branchRepository, ITenantCacheService? cacheService = null)
         {
             _companyRepository = companyRepository;
             _branchRepository = branchRepository;
+            _cacheService = cacheService;
         }
 
         public async Task<CompanyDetailDto> Handle(GetCompanyQuery request, CancellationToken ct)
         {
-            var company = await _companyRepository.GetAsync(request.Id, ct)
-                ?? throw new NotFoundException("Company", request.Id);
-            var branches = await _branchRepository.ListByCompanyAsync(request.Id, includeInactive: true, ct);
-            return new CompanyDetailDto(
-                MapCompany(company),
-                branches.Select(MapBranch).ToList());
+            var fetch = async (CancellationToken cToken) =>
+            {
+                var company = await _companyRepository.GetAsync(request.Id, cToken)
+                    ?? throw new NotFoundException("Company", request.Id);
+                var branches = await _branchRepository.ListByCompanyAsync(request.Id, includeInactive: true, cToken);
+                return new CompanyDetailDto(
+                    MapCompany(company),
+                    branches.Select(MapBranch).ToList());
+            };
+
+            if (_cacheService is null) return await fetch(ct);
+
+            return (await _cacheService.GetOrAddAsync("companies", $"detail_{request.Id}", fetch, ct: ct))!;
+        }
+    }
+
+    public class ListBranchesQueryHandler : IRequestHandler<ListBranchesQuery, IReadOnlyList<BranchDto>>
+    {
+        private readonly IBranchRepository _branchRepository;
+        private readonly ITenantCacheService? _cacheService;
+
+        public ListBranchesQueryHandler(IBranchRepository branchRepository, ITenantCacheService? cacheService = null)
+        {
+            _branchRepository = branchRepository;
+            _cacheService = cacheService;
+        }
+
+        public async Task<IReadOnlyList<BranchDto>> Handle(ListBranchesQuery request, CancellationToken ct)
+        {
+            var fetch = async (CancellationToken cToken) =>
+            {
+                var branches = await _branchRepository.ListByCompanyAsync(request.CompanyId, includeInactive: true, cToken);
+                return (IReadOnlyList<BranchDto>)branches.Select(MapBranch).ToList();
+            };
+
+            if (_cacheService is null) return await fetch(ct);
+
+            return (await _cacheService.GetOrAddAsync("companies", $"branches_{request.CompanyId}", fetch, ct: ct))!;
         }
     }
 
@@ -202,10 +256,12 @@ public class CompanyHandlers
         public class CreateBranchCommandHandler : IRequestHandler<CreateBranchCommand, BranchDto>
         {
             private readonly IBranchRepository _repository;
+            private readonly ITenantCacheService? _cacheService;
 
-            public CreateBranchCommandHandler(IBranchRepository repository)
+            public CreateBranchCommandHandler(IBranchRepository repository, ITenantCacheService? cacheService = null)
             {
                 _repository = repository;
+                _cacheService = cacheService;
             }
 
             public async Task<BranchDto> Handle(CreateBranchCommand request, CancellationToken ct)
@@ -219,6 +275,7 @@ public class CompanyHandlers
                     request.Country,
                     request.ContactPhone);
                 await _repository.SaveAsync(branch, ct);
+                _cacheService?.RemoveByPrefix("companies");
                 return MapBranch(branch);
             }
         }
@@ -226,10 +283,12 @@ public class CompanyHandlers
         public class UpdateBranchCommandHandler : IRequestHandler<UpdateBranchCommand, BranchDto>
         {
             private readonly IBranchRepository _repository;
+            private readonly ITenantCacheService? _cacheService;
 
-            public UpdateBranchCommandHandler(IBranchRepository repository)
+            public UpdateBranchCommandHandler(IBranchRepository repository, ITenantCacheService? cacheService = null)
             {
                 _repository = repository;
+                _cacheService = cacheService;
             }
 
             public async Task<BranchDto> Handle(UpdateBranchCommand request, CancellationToken ct)
@@ -245,6 +304,7 @@ public class CompanyHandlers
                     request.ContactPhone,
                     request.IsActive);
                 await _repository.SaveAsync(branch, ct);
+                _cacheService?.RemoveByPrefix("companies");
                 return MapBranch(branch);
             }
         }
@@ -252,10 +312,12 @@ public class CompanyHandlers
         public class DeactivateBranchCommandHandler : IRequestHandler<DeactivateBranchCommand>
         {
             private readonly IBranchRepository _repository;
+            private readonly ITenantCacheService? _cacheService;
 
-            public DeactivateBranchCommandHandler(IBranchRepository repository)
+            public DeactivateBranchCommandHandler(IBranchRepository repository, ITenantCacheService? cacheService = null)
             {
                 _repository = repository;
+                _cacheService = cacheService;
             }
 
             public async Task Handle(DeactivateBranchCommand request, CancellationToken ct)
@@ -264,6 +326,7 @@ public class CompanyHandlers
                     ?? throw new NotFoundException("Branch", request.Id);
                 branch.Deactivate();
                 await _repository.SaveAsync(branch, ct);
+                _cacheService?.RemoveByPrefix("companies");
             }
         }
     }

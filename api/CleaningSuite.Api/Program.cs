@@ -31,6 +31,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<CleaningSuite.Application.Common.ITenantCacheTokenRegistry, CleaningSuite.Infrastructure.Caching.TenantCacheTokenRegistry>();
+builder.Services.AddScoped<CleaningSuite.Application.Common.ITenantCacheService, CleaningSuite.Infrastructure.Caching.TenantCacheService>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {

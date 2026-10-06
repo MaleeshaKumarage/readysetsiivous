@@ -53,8 +53,13 @@ public class UpdateServiceValidator : AbstractValidator<UpdateServiceCommand>
 public class CreateServiceHandler : IRequestHandler<CreateServiceCommand, Guid>
 {
     private readonly IServiceRepository _services;
+    private readonly ITenantCacheService? _cacheService;
 
-    public CreateServiceHandler(IServiceRepository services) => _services = services;
+    public CreateServiceHandler(IServiceRepository services, ITenantCacheService? cacheService = null)
+    {
+        _services = services;
+        _cacheService = cacheService;
+    }
 
     public async Task<Guid> Handle(CreateServiceCommand request, CancellationToken ct)
     {
@@ -65,6 +70,7 @@ public class CreateServiceHandler : IRequestHandler<CreateServiceCommand, Guid>
         Apply(service, request.Fields);
 
         await _services.SaveAsync(service, ct);
+        _cacheService?.RemoveByPrefix("services");
         return service.Id;
     }
 
@@ -90,8 +96,13 @@ public class CreateServiceHandler : IRequestHandler<CreateServiceCommand, Guid>
 public class UpdateServiceHandler : IRequestHandler<UpdateServiceCommand, Unit>
 {
     private readonly IServiceRepository _services;
+    private readonly ITenantCacheService? _cacheService;
 
-    public UpdateServiceHandler(IServiceRepository services) => _services = services;
+    public UpdateServiceHandler(IServiceRepository services, ITenantCacheService? cacheService = null)
+    {
+        _services = services;
+        _cacheService = cacheService;
+    }
 
     public async Task<Unit> Handle(UpdateServiceCommand request, CancellationToken ct)
     {
@@ -105,6 +116,7 @@ public class UpdateServiceHandler : IRequestHandler<UpdateServiceCommand, Unit>
         service.IsActive = request.IsActive;
 
         await _services.SaveAsync(service, ct);
+        _cacheService?.RemoveByPrefix("services");
         return Unit.Value;
     }
 }
@@ -114,8 +126,13 @@ public record UpdateServiceImageCommand(Guid Id, string ImageUrl) : IRequest<Uni
 public class UpdateServiceImageHandler : IRequestHandler<UpdateServiceImageCommand, Unit>
 {
     private readonly IServiceRepository _services;
+    private readonly ITenantCacheService? _cacheService;
 
-    public UpdateServiceImageHandler(IServiceRepository services) => _services = services;
+    public UpdateServiceImageHandler(IServiceRepository services, ITenantCacheService? cacheService = null)
+    {
+        _services = services;
+        _cacheService = cacheService;
+    }
 
     public async Task<Unit> Handle(UpdateServiceImageCommand request, CancellationToken ct)
     {
@@ -125,6 +142,7 @@ public class UpdateServiceImageHandler : IRequestHandler<UpdateServiceImageComma
         service.ImageUrl = request.ImageUrl;
         service.UpdatedUtc = DateTime.UtcNow;
         await _services.SaveAsync(service, ct);
+        _cacheService?.RemoveByPrefix("services");
         return Unit.Value;
     }
 }
@@ -132,8 +150,13 @@ public class UpdateServiceImageHandler : IRequestHandler<UpdateServiceImageComma
 public class SoftDeleteServiceHandler : IRequestHandler<SoftDeleteServiceCommand, Unit>
 {
     private readonly IServiceRepository _services;
+    private readonly ITenantCacheService? _cacheService;
 
-    public SoftDeleteServiceHandler(IServiceRepository services) => _services = services;
+    public SoftDeleteServiceHandler(IServiceRepository services, ITenantCacheService? cacheService = null)
+    {
+        _services = services;
+        _cacheService = cacheService;
+    }
 
     public async Task<Unit> Handle(SoftDeleteServiceCommand request, CancellationToken ct)
     {
@@ -143,6 +166,7 @@ public class SoftDeleteServiceHandler : IRequestHandler<SoftDeleteServiceCommand
         service.IsActive = false;
         service.UpdatedUtc = DateTime.UtcNow;
         await _services.SaveAsync(service, ct);
+        _cacheService?.RemoveByPrefix("services");
         return Unit.Value;
     }
 }

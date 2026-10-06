@@ -48,17 +48,27 @@ public static class MartenConfig
             .Index(x => x.Name);
 
         options.Schema.For<Branch>()
-            .Index(x => x.CompanyId)
+            .Duplicate(x => x.CompanyId)
             .Index(x => x.Name);
 
         options.Schema.For<Shift>()
+            .Duplicate(x => x.CompanyId)
+            .Duplicate(x => x.BranchId);
+
+        options.Schema.For<ShiftAssignment>()
+            .Duplicate(x => x.ShiftId)
+            .Duplicate(x => x.EmployeeId)
+            .UniqueIndex(x => new { x.ShiftId, x.EmployeeId });
+
+        options.Schema.For<QualityCycleTemplate>()
             .Index(x => x.CompanyId)
             .Index(x => x.BranchId);
 
-        options.Schema.For<ShiftAssignment>()
+        options.Schema.For<QualityCycleForm>()
+            .UniqueIndex(x => x.Token)
             .Index(x => x.ShiftId)
             .Index(x => x.EmployeeId)
-            .UniqueIndex(x => new { x.ShiftId, x.EmployeeId });
+            .Index(x => x.ShiftOccurrenceUtc);
 
         options.Schema.For<QualityCycleTemplate>()
             .Index(x => x.CompanyId)

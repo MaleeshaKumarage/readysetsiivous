@@ -75,6 +75,8 @@ public record ListShiftsQuery(Guid? CompanyId, Guid? BranchId) : IRequest<IReadO
 
 public record GetShiftQuery(Guid Id) : IRequest<ShiftDto>;
 
+public record ListShiftAssignmentsQuery(Guid ShiftId) : IRequest<IReadOnlyList<ShiftAssignmentDto>>;
+
 public record GetShiftOccurrencesQuery(Guid ShiftId, DateTime From, DateTime To) : IRequest<IReadOnlyList<ShiftOccurrenceDto>>;
 
 public record AssignEmployeeToShiftCommand(Guid ShiftId, Guid EmployeeId, string? Note = null) : IRequest<ShiftAssignmentDto>;
@@ -88,21 +90,22 @@ public class ShiftHandlers
         private readonly IShiftRepository _repository;
         private readonly ICompanyRepository _companyRepository;
         private readonly IBranchRepository _branchRepository;
+        private readonly ITenantCacheService? _cacheService;
 
         public CreateShiftCommandHandler(
             IShiftRepository repository,
             ICompanyRepository companyRepository,
-            IBranchRepository branchRepository)
+            IBranchRepository branchRepository,
+            ITenantCacheService? cacheService = null)
         {
             _repository = repository;
             _companyRepository = companyRepository;
             _branchRepository = branchRepository;
+            _cacheService = cacheService;
         }
 
         public async Task<ShiftDto> Handle(CreateShiftCommand request, CancellationToken ct)
         {
-            // Ensure the referenced parent entities exist before persisting the shift, so the
-            // admin API cannot create a shift pointing at a non-existent company or branch.
             _ = await _companyRepository.GetAsync(request.CompanyId, ct)
                 ?? throw new NotFoundException("Company", request.CompanyId);
 
@@ -123,6 +126,7 @@ public class ShiftHandlers
                 request.ValidUntil,
                 request.QualityCycleTemplateId);
             await _repository.SaveAsync(shift, ct);
+            _cacheService?.RemoveByPrefix("shifts");
             return MapShift(shift);
         }
     }
@@ -130,10 +134,12 @@ public class ShiftHandlers
     public class UpdateShiftCommandHandler : IRequestHandler<UpdateShiftCommand, ShiftDto>
     {
         private readonly IShiftRepository _repository;
+        private readonly ITenantCacheService? _cacheService;
 
-        public UpdateShiftCommandHandler(IShiftRepository repository)
+        public UpdateShiftCommandHandler(IShiftRepository repository, ITenantCacheService? cacheService = null)
         {
             _repository = repository;
+            _cacheService = cacheService;
         }
 
         public async Task<ShiftDto> Handle(UpdateShiftCommand request, CancellationToken ct)
@@ -151,6 +157,7 @@ public class ShiftHandlers
                 request.ValidUntil,
                 request.QualityCycleTemplateId);
             await _repository.SaveAsync(shift, ct);
+            _cacheService?.RemoveByPrefix("shifts");
             return MapShift(shift);
         }
     }
@@ -158,10 +165,12 @@ public class ShiftHandlers
     public class DeactivateShiftCommandHandler : IRequestHandler<DeactivateShiftCommand>
     {
         private readonly IShiftRepository _repository;
+        private readonly ITenantCacheService? _cacheService;
 
-        public DeactivateShiftCommandHandler(IShiftRepository repository)
+        public DeactivateShiftCommandHandler(IShiftRepository repository, ITenantCacheService? cacheService = null)
         {
             _repository = repository;
+            _cacheService = cacheService;
         }
 
         public async Task Handle(DeactivateShiftCommand request, CancellationToken ct)
@@ -170,83 +179,131 @@ public class ShiftHandlers
                 ?? throw new NotFoundException("Shift", request.Id);
             shift.Deactivate();
             await _repository.SaveAsync(shift, ct);
+            _cacheService?.RemoveByPrefix("shifts");
         }
     }
 
     public class ListShiftsQueryHandler : IRequestHandler<ListShiftsQuery, IReadOnlyList<ShiftDto>>
     {
         private readonly IShiftRepository _repository;
+        private readonly ITenantCacheService? _cacheService;
 
-        public ListShiftsQueryHandler(IShiftRepository repository)
+        public ListShiftsQueryHandler(IShiftRepository repository, ITenantCacheService? cacheService = null)
         {
             _repository = repository;
+            _cacheService = cacheService;
         }
 
         public async Task<IReadOnlyList<ShiftDto>> Handle(ListShiftsQuery request, CancellationToken ct)
         {
-            var shifts = await _repository.ListAsync(request.CompanyId, request.BranchId, ct);
-            return shifts.Select(MapShift).ToList();
+            var fetch = async (CancellationToken cToken) =>
+            {
+                var shifts = await _repository.ListAsync(request.CompanyId, request.BranchId, cToken);
+                return (IReadOnlyList<ShiftDto>)shifts.Select(MapShift).ToList();
+            };
+
+            if (_cacheService is null) return await fetch(ct);
+
+            return (await _cacheService.GetOrAddAsync("shifts", $"list_{request.CompanyId}_{request.BranchId}", fetch, ct: ct))!;
         }
     }
 
     public class GetShiftQueryHandler : IRequestHandler<GetShiftQuery, ShiftDto>
     {
         private readonly IShiftRepository _repository;
+        private readonly ITenantCacheService? _cacheService;
 
-        public GetShiftQueryHandler(IShiftRepository repository)
+        public GetShiftQueryHandler(IShiftRepository repository, ITenantCacheService? cacheService = null)
         {
             _repository = repository;
+            _cacheService = cacheService;
         }
 
         public async Task<ShiftDto> Handle(GetShiftQuery request, CancellationToken ct)
         {
-            var shift = await _repository.GetAsync(request.Id, ct)
-                ?? throw new NotFoundException("Shift", request.Id);
-            return MapShift(shift);
+            var fetch = async (CancellationToken cToken) =>
+            {
+                var shift = await _repository.GetAsync(request.Id, cToken)
+                    ?? throw new NotFoundException("Shift", request.Id);
+                return MapShift(shift);
+            };
+
+            if (_cacheService is null) return await fetch(ct);
+
+            return (await _cacheService.GetOrAddAsync("shifts", $"get_{request.Id}", fetch, ct: ct))!;
+        }
+    }
+
+    public class ListShiftAssignmentsQueryHandler : IRequestHandler<ListShiftAssignmentsQuery, IReadOnlyList<ShiftAssignmentDto>>
+    {
+        private readonly IShiftRepository _repository;
+        private readonly ITenantCacheService? _cacheService;
+
+        public ListShiftAssignmentsQueryHandler(IShiftRepository repository, ITenantCacheService? cacheService = null)
+        {
+            _repository = repository;
+            _cacheService = cacheService;
+        }
+
+        public async Task<IReadOnlyList<ShiftAssignmentDto>> Handle(ListShiftAssignmentsQuery request, CancellationToken ct)
+        {
+            var fetch = async (CancellationToken cToken) =>
+            {
+                var assignments = await _repository.ListAssignmentsByShiftAsync(request.ShiftId, cToken);
+                return (IReadOnlyList<ShiftAssignmentDto>)assignments.Select(MapAssignment).ToList();
+            };
+
+            if (_cacheService is null) return await fetch(ct);
+
+            return (await _cacheService.GetOrAddAsync("shifts", $"assignments_{request.ShiftId}", fetch, ct: ct))!;
         }
     }
 
     public class GetShiftOccurrencesQueryHandler : IRequestHandler<GetShiftOccurrencesQuery, IReadOnlyList<ShiftOccurrenceDto>>
     {
         private readonly IShiftRepository _repository;
+        private readonly ITenantCacheService? _cacheService;
 
-        public GetShiftOccurrencesQueryHandler(IShiftRepository repository)
+        public GetShiftOccurrencesQueryHandler(IShiftRepository repository, ITenantCacheService? cacheService = null)
         {
             _repository = repository;
+            _cacheService = cacheService;
         }
 
         public async Task<IReadOnlyList<ShiftOccurrenceDto>> Handle(GetShiftOccurrencesQuery request, CancellationToken ct)
         {
-            // Query-string DateTime binding yields DateTimeKind.Unspecified. Treat the caller's
-            // input as UTC explicitly so occurrence generation is anchored unambiguously.
             var from = NormalizeUtc(request.From);
             var to = NormalizeUtc(request.To);
 
-            var shift = await _repository.GetAsync(request.ShiftId, ct)
-                ?? throw new NotFoundException("Shift", request.ShiftId);
-            var occurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, from, to);
-            return occurrences
-                .Select(x => new ShiftOccurrenceDto(NormalizeUtc(x.StartUtc), NormalizeUtc(x.EndUtc)))
-                .ToList();
+            var fetch = async (CancellationToken cToken) =>
+            {
+                var shift = await _repository.GetAsync(request.ShiftId, cToken)
+                    ?? throw new NotFoundException("Shift", request.ShiftId);
+                var occurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, from, to);
+                return (IReadOnlyList<ShiftOccurrenceDto>)occurrences
+                    .Select(x => new ShiftOccurrenceDto(NormalizeUtc(x.StartUtc), NormalizeUtc(x.EndUtc)))
+                    .ToList();
+            };
+
+            if (_cacheService is null) return await fetch(ct);
+
+            return (await _cacheService.GetOrAddAsync("shifts", $"occurrences_{request.ShiftId}_{from:O}_{to:O}", fetch, ct: ct))!;
         }
     }
 
     public class AssignEmployeeToShiftCommandHandler : IRequestHandler<AssignEmployeeToShiftCommand, ShiftAssignmentDto>
     {
-        // Default upper bound (in days) on the window used when checking for overlapping
-        // assignments. Only the shift's own ValidFrom/ValidUntil define the window; when those
-        // are open-ended this cap prevents generating an unbounded set of occurrences. It is a
-        // constructor parameter so callers/tests can supply an explicit policy instead of relying
-        // on a hidden constant.
         private const int DefaultMaxConflictWindowDays = 180;
 
         private readonly IShiftRepository _repository;
         private readonly IEmployeeRepository _employeeRepository;
+        private readonly ITenantCacheService? _cacheService;
         private readonly int _maxConflictWindowDays;
 
         public AssignEmployeeToShiftCommandHandler(
             IShiftRepository repository,
             IEmployeeRepository employeeRepository,
+            ITenantCacheService? cacheService = null,
             int maxConflictWindowDays = DefaultMaxConflictWindowDays)
         {
             if (maxConflictWindowDays <= 0)
@@ -256,7 +313,16 @@ public class ShiftHandlers
 
             _repository = repository;
             _employeeRepository = employeeRepository;
+            _cacheService = cacheService;
             _maxConflictWindowDays = maxConflictWindowDays;
+        }
+
+        public AssignEmployeeToShiftCommandHandler(
+            IShiftRepository repository,
+            IEmployeeRepository employeeRepository,
+            int maxConflictWindowDays)
+            : this(repository, employeeRepository, null, maxConflictWindowDays)
+        {
         }
 
         public async Task<ShiftAssignmentDto> Handle(AssignEmployeeToShiftCommand request, CancellationToken ct)
@@ -264,21 +330,15 @@ public class ShiftHandlers
             var shift = await _repository.GetAsync(request.ShiftId, ct)
                 ?? throw new NotFoundException("Shift", request.ShiftId);
 
-            // Resolve the employee before doing anything else, so a typo or stale id fails fast
-            // instead of persisting a ShiftAssignment that points at a non-existent employee.
             var employee = await _employeeRepository.GetByIdAsync(request.EmployeeId, ct)
                 ?? throw new NotFoundException("Employee", request.EmployeeId);
 
-            // Capture "now" inside Handle (not in a field initializer) so it stays correct
-            // regardless of handler lifetime and is anchored to UTC rather than server-local time.
             var utcNow = DateTime.UtcNow;
 
             var (from, to) = ResolveConflictWindow(shift, utcNow);
             var candidateOccurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, from, to);
             var existingAssignments = await _repository.ListAssignmentsByEmployeeAsync(request.EmployeeId, ct);
 
-            // Load every other shift the employee is assigned to in a single query instead of
-            // issuing a GetAsync per assignment, and generate each shift's occurrences just once.
             var otherShiftIds = existingAssignments
                 .Select(a => a.ShiftId)
                 .Where(id => id != request.ShiftId)
@@ -306,19 +366,18 @@ public class ShiftHandlers
                 existingAssignment.AssignedAtUtc = utcNow;
                 existingAssignment.UpdatedUtc = utcNow;
                 await _repository.SaveAssignmentAsync(existingAssignment, ct);
+                _cacheService?.RemoveByPrefix("shifts");
                 return MapAssignment(existingAssignment);
             }
 
             var newAssignment = ShiftAssignment.Create(request.ShiftId, request.EmployeeId, request.Note);
             await _repository.SaveAssignmentAsync(newAssignment, ct);
+            _cacheService?.RemoveByPrefix("shifts");
             return MapAssignment(newAssignment);
         }
 
         private (DateTime From, DateTime To) ResolveConflictWindow(Shift shift, DateTime utcNow)
         {
-            // Anchor the window on the UTC date supplied by the caller, not server-local time, so
-            // the generated occurrences line up with the *Utc values used elsewhere and don't
-            // drift with the host timezone or DST.
             var today = utcNow.Date;
             var from = shift.ValidFrom?.Date ?? today;
             if (from < today)
@@ -326,9 +385,6 @@ public class ShiftHandlers
                 from = today;
             }
 
-            // Derive the end of the window from the shift's validity, capped by the explicit
-            // policy so open-ended shifts (no ValidUntil) don't generate an unbounded number of
-            // occurrences.
             var maxTo = from.AddDays(_maxConflictWindowDays);
             var to = shift.ValidUntil?.Date ?? maxTo;
             if (to > maxTo)
@@ -347,10 +403,12 @@ public class ShiftHandlers
     public class RemoveEmployeeFromShiftCommandHandler : IRequestHandler<RemoveEmployeeFromShiftCommand>
     {
         private readonly IShiftRepository _repository;
+        private readonly ITenantCacheService? _cacheService;
 
-        public RemoveEmployeeFromShiftCommandHandler(IShiftRepository repository)
+        public RemoveEmployeeFromShiftCommandHandler(IShiftRepository repository, ITenantCacheService? cacheService = null)
         {
             _repository = repository;
+            _cacheService = cacheService;
         }
 
         public async Task Handle(RemoveEmployeeFromShiftCommand request, CancellationToken ct)
@@ -359,12 +417,10 @@ public class ShiftHandlers
             if (assignment is null)
                 return;
 
-            // Soft-deactivate rather than hard-delete so removal is auditable and consistent with
-            // the IsActive pattern used elsewhere (and which ListAssignmentsByEmployeeAsync filters
-            // on). The row is retained; only its active flag is flipped.
             assignment.IsActive = false;
             assignment.UpdatedUtc = DateTime.UtcNow;
             await _repository.SaveAssignmentAsync(assignment, ct);
+            _cacheService?.RemoveByPrefix("shifts");
         }
     }
 

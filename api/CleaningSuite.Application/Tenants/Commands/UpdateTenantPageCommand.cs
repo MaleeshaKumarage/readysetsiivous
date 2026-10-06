@@ -1,3 +1,4 @@
+using CleaningSuite.Application.Common;
 using CleaningSuite.Domain.Common;
 using FluentValidation;
 using MediatR;
@@ -19,23 +20,26 @@ public class UpdateTenantPageHandler : IRequestHandler<UpdateTenantPageCommand, 
 {
     private readonly ITenantContext _context;
     private readonly ITenantProfileRepository _profiles;
+    private readonly ITenantCacheService? _cacheService;
 
-    public UpdateTenantPageHandler(ITenantContext context, ITenantProfileRepository profiles)
+    public UpdateTenantPageHandler(ITenantContext context, ITenantProfileRepository profiles, ITenantCacheService? cacheService = null)
     {
         _context = context;
         _profiles = profiles;
+        _cacheService = cacheService;
     }
 
     public async Task<Unit> Handle(UpdateTenantPageCommand request, CancellationToken ct)
     {
         var tenantId = _context.TenantId;
         var profile = await _profiles.GetAsync(tenantId, ct)
-            ?? throw new CleaningSuite.Application.Common.NotFoundException("TenantProfile", Guid.Empty);
+            ?? throw new NotFoundException("TenantProfile", Guid.Empty);
 
         profile.Pages[request.PageKey] = new LocalizedText { Values = request.Values };
         profile.UpdatedUtc = DateTime.UtcNow;
 
         await _profiles.SaveAsync(tenantId, profile, ct);
+        _cacheService?.RemoveByPrefix("tenant");
         return Unit.Value;
     }
 }
