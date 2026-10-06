@@ -644,4 +644,99 @@ test.describe('Admin Panel - Shifts Page', () => {
     await modal.getByRole('button', { name: 'Create shift' }).click();
     await expect(page.getByText('Select at least one day.')).toBeVisible();
   });
+
+  test('create shift with bi-weekly and monthly schedule types and verify payload', async ({ page }) => {
+    await setupAdminMocks(page, { authenticated: true });
+
+    let createdShifts: any[] = [];
+
+    await page.route('**/api/v1/admin/employees**', async (route) => {
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      return route.fulfill({ status: 200, json: [], headers: CORS_HEADERS });
+    });
+
+    await page.route('**/api/v1/admin/companies**', async (route) => {
+      const url = route.request().url();
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      if (url.includes('/c-1')) {
+        return route.fulfill({ status: 200, json: { company: { id: 'c-1', name: 'CleanTech Oy' }, branches: [{ id: 'b-1', companyId: 'c-1', name: 'Main Branch' }] }, headers: CORS_HEADERS });
+      }
+      return route.fulfill({ status: 200, json: { items: [{ id: 'c-1', name: 'CleanTech Oy' }], total: 1 }, headers: CORS_HEADERS });
+    });
+
+    await page.route('**/api/v1/admin/shifts**', async (route) => {
+      const method = route.request().method();
+      if (method === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      if (method === 'GET') return route.fulfill({ status: 200, json: createdShifts, headers: CORS_HEADERS });
+      if (method === 'POST') {
+        const body = getBody(route);
+        const newShift = {
+          id: `s-${createdShifts.length + 1}`,
+          companyId: body.companyId,
+          branchId: body.branchId,
+          name: body.name,
+          schedule: body.schedule,
+          notes: body.notes,
+          isActive: true,
+        };
+        createdShifts.push(newShift);
+        return route.fulfill({ status: 200, json: newShift, headers: CORS_HEADERS });
+      }
+      return route.continue();
+    });
+
+    await page.goto('/admin/shifts/');
+    await expect(page.getByText('No shifts yet.')).toBeVisible();
+
+    // Create Bi-weekly shift
+    await page.getByRole('button', { name: 'Add shift' }).click();
+    const modal = page.getByRole('dialog', { name: 'Add shift' });
+
+    await modal.getByLabel('Company').click();
+    await page.getByRole('option', { name: 'CleanTech Oy' }).click();
+    await page.waitForTimeout(300);
+
+    await modal.getByLabel('Branch').click();
+    await page.getByRole('option', { name: 'Main Branch' }).click();
+
+    await modal.getByLabel('Name').fill('BiWeekly Shift');
+    await modal.getByLabel('Schedule').click();
+    await page.getByRole('option', { name: 'Bi-weekly' }).click();
+
+    // Submit bi-weekly without selecting day -> validation error
+    await modal.getByRole('button', { name: 'Create shift' }).click();
+    await expect(page.getByText('Select a day.')).toBeVisible();
+
+    // Select day (e.g., Monday = 1)
+    await modal.getByLabel('Day').click();
+    await page.getByRole('option', { name: 'Monday' }).click();
+
+    await modal.getByRole('button', { name: 'Create shift' }).click();
+    await expect(modal).not.toBeVisible();
+
+    // Verify created bi-weekly shift
+    expect(createdShifts.length).toBe(1);
+    expect(createdShifts[0].schedule.type).toBe(3);
+    expect(createdShifts[0].schedule.biWeeklyWeekParity).toBe(1);
+
+    // Create Monthly shift
+    await page.getByRole('button', { name: 'Add shift' }).click();
+    await modal.getByLabel('Company').click();
+    await page.getByRole('option', { name: 'CleanTech Oy' }).click();
+    await page.waitForTimeout(300);
+
+    await modal.getByLabel('Branch').click();
+    await page.getByRole('option', { name: 'Main Branch' }).click();
+
+    await modal.getByLabel('Name').fill('Monthly Shift');
+    await modal.getByLabel('Schedule').click();
+    await page.getByRole('option', { name: 'Monthly' }).click();
+
+    await modal.getByRole('button', { name: 'Create shift' }).click();
+    await expect(modal).not.toBeVisible();
+
+    expect(createdShifts.length).toBe(2);
+    expect(createdShifts[1].schedule.type).toBe(5);
+    expect(createdShifts[1].schedule.monthlyDay).toBe(1);
+  });
 });
