@@ -88,6 +88,10 @@ public class ShiftSchedule
                     throw new ArgumentException(
                         "BiWeekly schedules require BiWeeklyWeekParity, BiWeeklyDay, BiWeeklyStart and BiWeeklyEnd.",
                         nameof(BiWeeklyWeekParity));
+                if (BiWeeklyWeekParity != 1 && BiWeeklyWeekParity != 2)
+                    throw new ArgumentException(
+                        "BiWeeklyWeekParity must be 1 or 2.",
+                        nameof(BiWeeklyWeekParity));
                 if (BiWeeklyEnd <= BiWeeklyStart)
                     throw new ArgumentException(
                         "BiWeeklyEnd must be after BiWeeklyStart.", nameof(BiWeeklyEnd));
