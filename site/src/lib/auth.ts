@@ -24,6 +24,9 @@ export function getKeycloak(): Keycloak {
 }
 
 export function initAuth(): Promise<boolean> {
+  if (typeof window !== 'undefined' && localStorage.getItem('rss_mock_authed') === 'true') {
+    return Promise.resolve(true);
+  }
   if (!initPromise) {
     initPromise = getKeycloak()
       .init({
@@ -44,10 +47,16 @@ export async function login(): Promise<void> {
 }
 
 export async function logout(): Promise<void> {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('rss_mock_authed');
+  }
   await getKeycloak().logout();
 }
 
 export function isAuthenticated(): boolean {
+  if (typeof window !== 'undefined' && localStorage.getItem('rss_mock_authed') === 'true') {
+    return true;
+  }
   const kc = getKeycloak();
   return Boolean(kc.authenticated && kc.token);
 }

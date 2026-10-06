@@ -33,12 +33,23 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: SITE_TITLE,
   description: SITE_DESCRIPTION,
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'ReadySetSiivous Admin',
+  },
+  icons: {
+    icon: '/icon-192.png',
+    apple: '/apple-touch-icon.png',
+  },
   robots: {
     index: true,
     follow: true,
   },
   other: {
     google: 'notranslate',
+    'mobile-web-app-capable': 'yes',
   },
   openGraph: {
     type: 'website',

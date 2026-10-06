@@ -68,7 +68,7 @@ export default function AgreementsPage() {
     const mailto = `mailto:${signerEmail}?subject=${subject}&body=${encodeURIComponent(body)}`;
 
     return (
-      <Group gap={6}>
+      <Group gap={6} wrap="wrap">
         <CopyButton value={link} timeout={2000}>
           {({ copied, copy }) => (
             <Tooltip label={copied ? 'Copied link!' : 'Copy signing link'} withArrow>
@@ -100,7 +100,7 @@ export default function AgreementsPage() {
 
   return (
     <>
-      <Group justify="space-between" mb="md">
+      <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
         <Title order={2}>Agreements</Title>
         <Button leftSection={<Plus size={16} />} onClick={() => setOpen(true)}>New agreement</Button>
       </Group>
@@ -108,42 +108,44 @@ export default function AgreementsPage() {
       {items === null ? <Loader /> : items.length === 0 ? (
         <Text c="dimmed">No agreements yet.</Text>
       ) : (
-        <Table striped highlightOnHover withTableBorder>
-          <Table.Thead>
-            <Table.Tr><Table.Th>Title</Table.Th><Table.Th>Code</Table.Th><Table.Th>Signers</Table.Th><Table.Th>Status</Table.Th><Table.Th w={200}>Actions</Table.Th></Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {items.map((a) => (
-              <Table.Tr key={a.id}>
-                <Table.Td fw={500}>{a.title}</Table.Td>
-                <Table.Td>{a.code}</Table.Td>
-                <Table.Td>{a.signedCount} / {a.signerCount}</Table.Td>
-                <Table.Td><Badge color={a.isActive ? 'green' : 'gray'}>{a.status}</Badge></Table.Td>
-                <Table.Td>
-                  <Group gap={6}>
-                    <Button size="xs" variant="light" leftSection={<Eye size={14} />} onClick={() => openDetail(a.id)}>Signers</Button>
-                    <Button size="xs" variant="outline" onClick={() => handleDownload(a.id)}>PDF</Button>
-                  </Group>
-                </Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
+        <Table.ScrollContainer minWidth={600}>
+          <Table striped highlightOnHover withTableBorder>
+            <Table.Thead>
+              <Table.Tr><Table.Th>Title</Table.Th><Table.Th>Code</Table.Th><Table.Th>Signers</Table.Th><Table.Th>Status</Table.Th><Table.Th w={180}>Actions</Table.Th></Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {items.map((a) => (
+                <Table.Tr key={a.id}>
+                  <Table.Td fw={500}>{a.title}</Table.Td>
+                  <Table.Td>{a.code}</Table.Td>
+                  <Table.Td>{a.signedCount} / {a.signerCount}</Table.Td>
+                  <Table.Td><Badge color={a.isActive ? 'green' : 'gray'}>{a.status}</Badge></Table.Td>
+                  <Table.Td>
+                    <Group gap={6} wrap="nowrap">
+                      <Button size="xs" variant="light" leftSection={<Eye size={14} />} onClick={() => openDetail(a.id)}>Signers</Button>
+                      <Button size="xs" variant="outline" onClick={() => handleDownload(a.id)}>PDF</Button>
+                    </Group>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
       )}
 
       {/* New Agreement Modal */}
-      <Modal opened={open} onClose={() => setOpen(false)} title="New agreement" size="lg">
-        <Stack>
+      <Modal opened={open} onClose={() => setOpen(false)} title="New agreement" size="lg" radius="md">
+        <Stack gap="sm">
           <Select label="Company" required data={companies.map((c) => ({ value: c.id, label: c.name }))} value={companyId} onChange={setCompanyId} searchable />
           <TextInput label="Title" required value={title} onChange={(e) => setTitle(e.target.value)} />
           <div>
-            <Text size="sm" fw={500} mb={4}>PDF</Text>
-            <input type="file" accept=".pdf" onChange={(e) => setPdf(e.target.files?.[0] ?? null)} />
+            <Text size="sm" fw={500} mb={4}>PDF Document</Text>
+            <input type="file" accept=".pdf" onChange={(e) => setPdf(e.target.files?.[0] ?? null)} style={{ width: '100%' }} />
           </div>
           <Stack gap={8}>
             <Text size="sm" fw={500}>Signers</Text>
             {signers.map((s, i) => (
-              <Group key={i} gap={8}>
+              <Group key={i} gap={8} wrap="nowrap" align="center">
                 <TextInput placeholder="Name" value={s.name} onChange={(e) => { const n = [...signers]; n[i].name = e.target.value; setSigners(n); }} style={{ flex: 1 }} />
                 <TextInput placeholder="Email" value={s.email} onChange={(e) => { const n = [...signers]; n[i].email = e.target.value; setSigners(n); }} style={{ flex: 1 }} />
                 <ActionIcon variant="subtle" color="red" onClick={() => setSigners(signers.filter((_, j) => j !== i))}><Trash2 size={16} /></ActionIcon>
@@ -152,7 +154,7 @@ export default function AgreementsPage() {
             <Button size="xs" variant="light" leftSection={<Plus size={14} />} onClick={() => setSigners([...signers, { name: '', email: '' }])}>Add signer</Button>
           </Stack>
           {error && <Text size="sm" c="red">{error}</Text>}
-          <Group justify="flex-end">
+          <Group justify="flex-end" mt="xs">
             <Button variant="default" onClick={() => setOpen(false)}>Cancel</Button>
             <Button loading={submitting} onClick={create}>Create</Button>
           </Group>
@@ -160,12 +162,12 @@ export default function AgreementsPage() {
       </Modal>
 
       {/* Agreement Detail / Signers Modal */}
-      <Modal opened={detailModalOpen} onClose={() => { setDetailModalOpen(false); setSelectedAgreement(null); }} title={selectedAgreement?.title ?? 'Agreement Signers'} size="lg">
+      <Modal opened={detailModalOpen} onClose={() => { setDetailModalOpen(false); setSelectedAgreement(null); }} title={selectedAgreement?.title ?? 'Agreement Signers'} size="lg" radius="md">
         {loadingDetail || !selectedAgreement ? (
           <Loader />
         ) : (
           <Stack gap="md">
-            <Group justify="space-between">
+            <Group justify="space-between" wrap="wrap">
               <Text size="sm">Code: <b>{selectedAgreement.code}</b></Text>
               <Badge color={selectedAgreement.isActive ? 'green' : 'gray'}>{selectedAgreement.status}</Badge>
             </Group>
@@ -173,7 +175,7 @@ export default function AgreementsPage() {
             <Stack gap="xs">
               {selectedAgreement.signers.map((s) => (
                 <Stack key={s.id} p="xs" style={{ border: '1px solid var(--mantine-color-gray-3)', borderRadius: 8 }}>
-                  <Group justify="space-between">
+                  <Group justify="space-between" wrap="wrap" gap="xs">
                     <div>
                       <Text size="sm" fw={500}>{s.name}</Text>
                       <Text size="xs" c="dimmed">{s.email}</Text>
@@ -189,7 +191,7 @@ export default function AgreementsPage() {
       </Modal>
 
       {/* Post-Creation Signer Links Modal */}
-      <Modal opened={createdAgreement !== null} onClose={() => setCreatedAgreement(null)} title="Agreement Created Successfully" size="lg">
+      <Modal opened={createdAgreement !== null} onClose={() => setCreatedAgreement(null)} title="Agreement Created Successfully" size="lg" radius="md">
         {createdAgreement && (
           <Stack gap="md">
             <Text size="sm">Agreement <b>{createdAgreement.title}</b> has been created. Use the buttons below to copy signing links or email messages for each signer:</Text>
