@@ -67,13 +67,8 @@ public class UpdateEmployeeValidator : AbstractValidator<UpdateEmployeeCommand>
 public class CreateEmployeeHandler : IRequestHandler<CreateEmployeeCommand, Guid>
 {
     private readonly IEmployeeRepository _employees;
-    private readonly ITenantCacheService? _cacheService;
 
-    public CreateEmployeeHandler(IEmployeeRepository employees, ITenantCacheService? cacheService = null)
-    {
-        _employees = employees;
-        _cacheService = cacheService;
-    }
+    public CreateEmployeeHandler(IEmployeeRepository employees) => _employees = employees;
 
     public async Task<Guid> Handle(CreateEmployeeCommand request, CancellationToken ct)
     {
@@ -83,7 +78,6 @@ public class CreateEmployeeHandler : IRequestHandler<CreateEmployeeCommand, Guid
         var employee = new Employee();
         Apply(employee, request.Fields);
         await _employees.SaveAsync(employee, ct);
-        _cacheService?.RemoveByPrefix("employees");
         return employee.Id;
     }
 
@@ -108,13 +102,8 @@ public class CreateEmployeeHandler : IRequestHandler<CreateEmployeeCommand, Guid
 public class UpdateEmployeeHandler : IRequestHandler<UpdateEmployeeCommand, Unit>
 {
     private readonly IEmployeeRepository _employees;
-    private readonly ITenantCacheService? _cacheService;
 
-    public UpdateEmployeeHandler(IEmployeeRepository employees, ITenantCacheService? cacheService = null)
-    {
-        _employees = employees;
-        _cacheService = cacheService;
-    }
+    public UpdateEmployeeHandler(IEmployeeRepository employees) => _employees = employees;
 
     public async Task<Unit> Handle(UpdateEmployeeCommand request, CancellationToken ct)
     {
@@ -124,7 +113,6 @@ public class UpdateEmployeeHandler : IRequestHandler<UpdateEmployeeCommand, Unit
         CreateEmployeeHandler.Apply(employee, request.Fields);
         employee.IsActive = request.IsActive;
         await _employees.SaveAsync(employee, ct);
-        _cacheService?.RemoveByPrefix("employees");
         return Unit.Value;
     }
 }
@@ -132,13 +120,8 @@ public class UpdateEmployeeHandler : IRequestHandler<UpdateEmployeeCommand, Unit
 public class DeactivateEmployeeHandler : IRequestHandler<DeactivateEmployeeCommand, Unit>
 {
     private readonly IEmployeeRepository _employees;
-    private readonly ITenantCacheService? _cacheService;
 
-    public DeactivateEmployeeHandler(IEmployeeRepository employees, ITenantCacheService? cacheService = null)
-    {
-        _employees = employees;
-        _cacheService = cacheService;
-    }
+    public DeactivateEmployeeHandler(IEmployeeRepository employees) => _employees = employees;
 
     public async Task<Unit> Handle(DeactivateEmployeeCommand request, CancellationToken ct)
     {
@@ -148,7 +131,6 @@ public class DeactivateEmployeeHandler : IRequestHandler<DeactivateEmployeeComma
         employee.IsActive = false;
         employee.UpdatedUtc = DateTime.UtcNow;
         await _employees.SaveAsync(employee, ct);
-        _cacheService?.RemoveByPrefix("employees");
         return Unit.Value;
     }
 }

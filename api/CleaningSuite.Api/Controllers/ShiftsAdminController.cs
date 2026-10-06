@@ -68,13 +68,6 @@ public class ShiftsAdminController : ControllerBase
         return Ok(result);
     }
 
-    [HttpGet("{id:guid}/assignments")]
-    public async Task<IActionResult> GetAssignments(Guid id, CancellationToken ct)
-    {
-        var result = await _mediator.Send(new ListShiftAssignmentsQuery(id), ct);
-        return Ok(result);
-    }
-
     [HttpPost("{id:guid}/assignments")]
     public async Task<IActionResult> AssignEmployee(
         Guid id,

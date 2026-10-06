@@ -54,7 +54,7 @@ export default function ShiftsAdminPage() {
 
   useEffect(() => {
     if (!companyId) { setBranches([]); return; }
-    adminBranches.list(companyId).then((b) => { if (b) setBranches(b); });
+    adminCompanies.get(companyId).then((d) => { if (d) setBranches(d.branches); });
   }, [companyId]);
 
   const buildSchedule = () => {
@@ -104,8 +104,8 @@ export default function ShiftsAdminPage() {
     if (a) setAssignments((m) => ({ ...m, [shiftId]: a }));
   };
 
-  const doUnassign = async (shiftId: string, employeeId: string) => {
-    await adminShifts.unassign(shiftId, employeeId);
+  const doUnassign = async (shiftId: string, assignmentId: string) => {
+    await adminShifts.unassign(shiftId, assignmentId);
     const a = await adminShifts.assignments(shiftId);
     if (a) setAssignments((m) => ({ ...m, [shiftId]: a }));
   };
@@ -173,7 +173,7 @@ export default function ShiftsAdminPage() {
                           {(assignments[s.id] ?? []).map((a) => (
                             <Group key={a.id} justify="space-between">
                               <Text size="sm">{employeeName(a.employeeId)}</Text>
-                              <ActionIcon variant="subtle" color="red" size="sm" onClick={() => doUnassign(s.id, a.employeeId)}><Trash2 size={14} /></ActionIcon>
+                              <ActionIcon variant="subtle" color="red" size="sm" onClick={() => doUnassign(s.id, a.id)}><Trash2 size={14} /></ActionIcon>
                             </Group>
                           ))}
                         </Stack>
