@@ -173,7 +173,7 @@ export default function ShiftsAdminPage() {
                           {(assignments[s.id] ?? []).map((a) => (
                             <Group key={a.id} justify="space-between">
                               <Text size="sm">{employeeName(a.employeeId)}</Text>
-                              <ActionIcon variant="subtle" color="red" size="sm" onClick={() => doUnassign(s.id, a.id)}><Trash2 size={14} /></ActionIcon>
+                              <ActionIcon variant="subtle" color="red" size="sm" onClick={() => doUnassign(s.id, a.employeeId)}><Trash2 size={14} /></ActionIcon>
                             </Group>
                           ))}
                         </Stack>
