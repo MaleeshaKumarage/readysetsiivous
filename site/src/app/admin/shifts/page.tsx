@@ -7,7 +7,7 @@ import {
 import { Plus, Trash2 } from 'lucide-react';
 import {
   adminShifts, adminCompanies, adminEmployees,
-  type Shift, type Company, type Branch, type ShiftAssignment, type Employee,
+  type Shift, type Company, type Branch, type Employee, type ShiftAssignment,
 } from '@/lib/adminApi';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -34,7 +34,7 @@ export default function ShiftsAdminPage() {
   const [start, setStart] = useState('08:00');
   const [end, setEnd] = useState('17:00');
   const [weekDays, setWeekDays] = useState<string[]>([]);
-  const [weekParity, setWeekParity] = useState('0');
+  const [weekParity, setWeekParity] = useState('1');
   const [monthlyDay, setMonthlyDay] = useState<string | number>(1);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
@@ -78,14 +78,19 @@ export default function ShiftsAdminPage() {
     return { type: 4 };
   };
 
+  const closeModal = () => {
+    setName(''); setNotes(''); setWeekDays([]); setCompanyId(null); setBranchId(null); setError(''); setModalOpen(false);
+  };
+
   const submit = async () => {
     if (!companyId || !branchId || !name.trim()) { setError('Company, branch and name are required.'); return; }
     if (scheduleType === '2' && weekDays.length === 0) { setError('Select at least one day.'); return; }
+    if (scheduleType === '3' && weekDays.length === 0) { setError('Select a day.'); return; }
     setSaving(true); setError('');
     const created = await adminShifts.create({ companyId, branchId, name: name.trim(), schedule: buildSchedule(), notes: notes.trim() || undefined });
     setSaving(false);
     if (!created) { setError('Failed to create shift.'); return; }
-    setName(''); setNotes(''); setWeekDays([]); setModalOpen(false); await load();
+    closeModal(); await load();
   };
 
   const deactivate = async (id: string) => { await adminShifts.deactivate(id); await load(); };
@@ -189,7 +194,7 @@ export default function ShiftsAdminPage() {
         </Table.ScrollContainer>
       )}
 
-      <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title="Add shift" size="lg" radius="md">
+      <Modal opened={modalOpen} onClose={closeModal} title="Add shift" size="lg" radius="md">
         <Stack gap="sm">
           <Select label="Company" data={companies.map((c) => ({ value: c.id, label: c.name }))} value={companyId} onChange={(v) => { setCompanyId(v); setBranchId(null); }} searchable />
           <Select label="Branch" data={branches.map((b) => ({ value: b.id, label: b.name }))} value={branchId} onChange={setBranchId} searchable disabled={!companyId} />
@@ -206,7 +211,7 @@ export default function ShiftsAdminPage() {
           )}
           {scheduleType === '3' && (
             <Group wrap="wrap" grow gap="xs">
-              <Select label="Week parity" data={[{ value: '0', label: 'Week 1' }, { value: '1', label: 'Week 2' }]} value={weekParity} onChange={(v) => setWeekParity(v ?? '0')} />
+              <Select label="Week parity" data={[{ value: '1', label: 'Week 1' }, { value: '2', label: 'Week 2' }]} value={weekParity} onChange={(v) => setWeekParity(v ?? '1')} />
               <Select label="Day" data={DAYS.map((d, i) => ({ value: String(i), label: d }))} value={weekDays[0] ?? ''} onChange={(v) => setWeekDays(v ? [v] : [])} />
             </Group>
           )}
@@ -222,7 +227,7 @@ export default function ShiftsAdminPage() {
           <TextInput label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
           {error && <Text size="sm" c="red">{error}</Text>}
           <Group justify="flex-end" mt="xs">
-            <Button variant="default" onClick={() => setModalOpen(false)}>Cancel</Button>
+            <Button variant="default" onClick={closeModal}>Cancel</Button>
             <Button loading={saving} onClick={submit}>Create shift</Button>
           </Group>
         </Stack>
