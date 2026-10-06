@@ -36,8 +36,8 @@ jobs:
             exit 0
           fi
 
-          # 1. Resolve prior review threads whose issues are now fixed (not all).
-          python3 scripts/resolve_fixed_comments.py "$PR" "$HEAD_SHA" < /tmp/diff.txt
+          # 1. Resolve prior review threads whose file changed in this commit.
+          python3 scripts/resolve_fixed_comments.py "$PR" "$HEAD_SHA"
 
           # 2. Review for critical / breaking issues only.
           python3 scripts/deepseek.py \
