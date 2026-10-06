@@ -2,9 +2,11 @@
 
 import { useContext, useEffect, useState } from 'react';
 import { ThemeContext } from '@/context/ThemeContext';
+import { useLanguage } from '@/hooks/useLanguage';
 
 export default function ThemeToggle() {
   const { theme, toggle } = useContext(ThemeContext);
+  const { lang } = useLanguage();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
@@ -14,11 +16,24 @@ export default function ThemeToggle() {
     return <div className="w-9 h-9" />;
   }
 
+  const ariaLabel =
+    lang === 'fi'
+      ? theme === 'dark'
+        ? 'Vaihda vaaleaan teemaan'
+        : 'Vaihda tummaan teemaan'
+      : lang === 'sv'
+      ? theme === 'dark'
+        ? 'Byt till ljust läge'
+        : 'Byt till mörkt läge'
+      : theme === 'dark'
+      ? 'Switch to light mode'
+      : 'Switch to dark mode';
+
   return (
     <button
       onClick={toggle}
-      className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:border-brand-400 dark:hover:border-brand-500 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
-      aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+      className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:border-brand-400 dark:hover:border-brand-500 hover:text-brand-600 dark:hover:text-brand-400 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus:outline-none transition-colors"
+      aria-label={ariaLabel}
     >
       {theme === 'dark' ? (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
