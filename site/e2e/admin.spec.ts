@@ -500,8 +500,8 @@ test.describe('Admin Panel - Shifts Page', () => {
         const match = url.match(/\/shifts\/([^\/]+)\/assignments\/([^\/]+)/);
         if (match) {
           const shiftId = match[1];
-          const assignId = match[2];
-          assignments[shiftId] = (assignments[shiftId] || []).filter(a => a.id !== assignId);
+          const empOrAssignId = match[2];
+          assignments[shiftId] = (assignments[shiftId] || []).filter(a => a.id !== empOrAssignId && a.employeeId !== empOrAssignId);
         }
         return route.fulfill({ status: 200, json: true, headers: CORS_HEADERS });
       }
