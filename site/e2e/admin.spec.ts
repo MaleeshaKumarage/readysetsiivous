@@ -594,7 +594,7 @@ test.describe('Admin Panel - Shifts Page', () => {
     await expect(page.locator('p', { hasText: 'Sami Siivooja' })).toBeVisible();
 
     // Unassign employee
-    await page.locator('.mantine-ActionIcon-root').first().click({ force: true });
+    await page.getByRole('button', { name: 'Unassign' }).first().click({ force: true });
     await expect(page.getByText('No employees assigned.')).toBeVisible();
 
     // Deactivate shift
