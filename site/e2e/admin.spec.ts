@@ -501,7 +501,7 @@ test.describe('Admin Panel - Shifts Page', () => {
         if (match) {
           const shiftId = match[1];
           const assignId = match[2];
-          assignments[shiftId] = (assignments[shiftId] || []).filter(a => a.id !== assignId);
+          assignments[shiftId] = (assignments[shiftId] || []).filter(a => a.id !== assignId && a.employeeId !== assignId);
         }
         return route.fulfill({ status: 200, json: true, headers: CORS_HEADERS });
       }
