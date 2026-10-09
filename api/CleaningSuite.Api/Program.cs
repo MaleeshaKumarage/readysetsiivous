@@ -170,9 +170,14 @@ public class MartenSchemaInitializer : Microsoft.Extensions.Hosting.IHostedServi
         {
             await _store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
         }
+        catch (Npgsql.NpgsqlException ex)
+        {
+            _logger.LogWarning(ex, "Database unreachable during Marten schema build; will retry on next startup.");
+        }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Could not apply Marten schema changes at startup (database may be unreachable).");
+            _logger.LogError(ex, "Failed to apply Marten schema changes at startup.");
+            throw;
         }
     }
 
