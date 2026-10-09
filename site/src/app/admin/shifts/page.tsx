@@ -155,6 +155,18 @@ export default function ShiftsAdminPage() {
                         <Button size="xs" variant="light" onClick={() => openAssign(s.id)}>Employees</Button>
                         {s.isActive && <Button size="xs" variant="subtle" color="red" onClick={() => deactivate(s.id)}>Deactivate</Button>}
                       </Group>
+                      {(assignments[s.id] ?? []).length === 0 ? (
+                        <Text size="sm" c="dimmed">No employees assigned.</Text>
+                      ) : (
+                        <Stack gap={4}>
+                          {(assignments[s.id] ?? []).map((a) => (
+                            <Group key={a.id} justify="space-between">
+                              <Text size="sm">{employeeName(a.employeeId)}</Text>
+                              <Button size="xs" variant="subtle" color="red" aria-label="Unassign" onClick={() => doUnassign(s.id, a.employeeId)}>Unassign</Button>
+                            </Group>
+                          ))}
+                        </Stack>
+                      )}
                     </Table.Td>
                   </Table.Tr>
                   {assignOpen === s.id && (
