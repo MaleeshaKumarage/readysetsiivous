@@ -108,20 +108,8 @@ export default function Navbar({ lang }: NavbarProps) {
             <button
               ref={toggleRef}
               onClick={toggleMenu}
-              className="lg:hidden p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-              aria-label={
-                lang === 'fi'
-                  ? mobileOpen
-                    ? 'Sulje valikko'
-                    : 'Avaa valikko'
-                  : lang === 'sv'
-                  ? mobileOpen
-                    ? 'Stäng meny'
-                    : 'Öppna meny'
-                  : mobileOpen
-                  ? 'Close menu'
-                  : 'Open menu'
-              }
+              className="lg:hidden p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus:outline-none transition-colors"
+              aria-label={t('nav.toggleMenu')}
               aria-expanded={mobileOpen}
               aria-controls="mobile-menu"
             >
