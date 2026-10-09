@@ -156,10 +156,25 @@ app.Run();
 public class MartenSchemaInitializer : Microsoft.Extensions.Hosting.IHostedService
 {
     private readonly Marten.IDocumentStore _store;
-    public MartenSchemaInitializer(Marten.IDocumentStore store) => _store = store;
+    private readonly ILogger<MartenSchemaInitializer> _logger;
+
+    public MartenSchemaInitializer(Marten.IDocumentStore store, ILogger<MartenSchemaInitializer> logger)
+    {
+        _store = store;
+        _logger = logger;
+    }
 
     public async Task StartAsync(CancellationToken ct)
-        => await _store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
+    {
+        try
+        {
+            await _store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to apply Marten schema changes at startup.");
+        }
+    }
 
     public Task StopAsync(CancellationToken ct) => Task.CompletedTask;
 }
