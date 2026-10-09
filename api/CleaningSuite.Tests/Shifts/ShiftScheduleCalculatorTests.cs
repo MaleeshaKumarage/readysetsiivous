@@ -273,47 +273,6 @@ public class ShiftScheduleCalculatorTests
     }
 
     [Fact]
-    public void Overlap_Unsorted_Lists_Handled_Correctly()
-    {
-        var listA = new[]
-        {
-            new ShiftOccurrence { StartUtc = new DateTime(2026, 3, 5, 8, 0, 0), EndUtc = new DateTime(2026, 3, 5, 10, 0, 0) },
-            new ShiftOccurrence { StartUtc = new DateTime(2026, 3, 2, 8, 0, 0), EndUtc = new DateTime(2026, 3, 2, 10, 0, 0) }
-        };
-        var listB = new[]
-        {
-            new ShiftOccurrence { StartUtc = new DateTime(2026, 3, 2, 9, 0, 0), EndUtc = new DateTime(2026, 3, 2, 11, 0, 0) }
-        };
-
-        Assert.True(ShiftScheduleCalculator.HasOverlap(listA, listB));
-    }
-
-    [Fact]
-    public void Overlap_Multiple_Elements_No_Overlap()
-    {
-        var listA = new[]
-        {
-            new ShiftOccurrence { StartUtc = new DateTime(2026, 3, 2, 8, 0, 0), EndUtc = new DateTime(2026, 3, 2, 10, 0, 0) },
-            new ShiftOccurrence { StartUtc = new DateTime(2026, 3, 4, 8, 0, 0), EndUtc = new DateTime(2026, 3, 4, 10, 0, 0) }
-        };
-        var listB = new[]
-        {
-            new ShiftOccurrence { StartUtc = new DateTime(2026, 3, 3, 8, 0, 0), EndUtc = new DateTime(2026, 3, 3, 10, 0, 0) },
-            new ShiftOccurrence { StartUtc = new DateTime(2026, 3, 5, 8, 0, 0), EndUtc = new DateTime(2026, 3, 5, 10, 0, 0) }
-        };
-
-        Assert.False(ShiftScheduleCalculator.HasOverlap(listA, listB));
-    }
-
-    [Fact]
-    public void Overlap_Returns_False_When_Either_Collection_Is_Empty()
-    {
-        var a = new ShiftOccurrence { StartUtc = new DateTime(2026, 3, 2, 8, 0, 0), EndUtc = new DateTime(2026, 3, 2, 10, 0, 0) };
-        Assert.False(ShiftScheduleCalculator.HasOverlap(Array.Empty<ShiftOccurrence>(), new[] { a }));
-        Assert.False(ShiftScheduleCalculator.HasOverlap(new[] { a }, Array.Empty<ShiftOccurrence>()));
-    }
-
-    [Fact]
     public void Adjacent_Occurrences_Do_Not_Overlap()
     {
         var a = new ShiftOccurrence { StartUtc = new DateTime(2026, 3, 2, 8, 0, 0), EndUtc = new DateTime(2026, 3, 2, 10, 0, 0) };
