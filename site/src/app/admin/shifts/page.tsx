@@ -112,7 +112,7 @@ export default function ShiftsAdminPage() {
   const doUnassign = async (shiftId: string, assignmentId: string) => {
     await adminShifts.unassign(shiftId, assignmentId);
     const a = await adminShifts.assignments(shiftId);
-    if (a) setAssignments((m) => ({ ...m, [shiftId]: a }));
+    setAssignments((m) => ({ ...m, [shiftId]: a ?? [] }));
   };
 
   const employeeName = (id: string) => {
