@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using CleaningSuite.Application.Common;
 using CleaningSuite.Application.Services;
 using CleaningSuite.Application.Tenants;
@@ -21,6 +22,9 @@ public class AvailabilityEngine
     private static readonly TimeSpan WindowEnd = TimeSpan.FromHours(20);
     private const int SlotMinutes = 30;
 
+    // Cache resolved TimeZoneInfo instances to avoid expensive TZConvert lookups on every request
+    private static readonly ConcurrentDictionary<string, TimeZoneInfo> TimeZoneCache = new();
+
     private readonly IServiceRepository _services;
     private readonly IBookingRepository _bookings;
     private readonly ITenantProfileRepository _profiles;
@@ -35,8 +39,11 @@ public class AvailabilityEngine
         _profiles = profiles;
     }
 
-    private static TimeZoneInfo TimeZoneFor(string timeZoneId) =>
-        TZConvert.GetTimeZoneInfo(string.IsNullOrEmpty(timeZoneId) ? "Europe/Helsinki" : timeZoneId);
+    private static TimeZoneInfo TimeZoneFor(string timeZoneId)
+    {
+        var key = string.IsNullOrEmpty(timeZoneId) ? "Europe/Helsinki" : timeZoneId;
+        return TimeZoneCache.GetOrAdd(key, id => TZConvert.GetTimeZoneInfo(id));
+    }
 
     public async Task<IReadOnlyList<AvailabilitySlot>> GetSlotsAsync(
         string tenantId, string localDate, Guid serviceId, CancellationToken ct)
@@ -50,8 +57,10 @@ public class AvailabilityEngine
         var occupied = await _bookings.ListForLocalDateAsync(localDate, ct);
 
         var slots = new List<AvailabilitySlot>();
-        for (var cursor = WindowStart; cursor + TimeSpan.FromMinutes(service.DurationMinutes) <= WindowEnd;
-             cursor += TimeSpan.FromMinutes(SlotMinutes))
+        var serviceDuration = TimeSpan.FromMinutes(service.DurationMinutes);
+        var slotInterval = TimeSpan.FromMinutes(SlotMinutes);
+
+        for (var cursor = WindowStart; cursor + serviceDuration <= WindowEnd; cursor += slotInterval)
         {
             var slotStartLocal = date.ToDateTime(TimeOnly.FromTimeSpan(cursor));
             var slotEndLocal = slotStartLocal.AddMinutes(service.DurationMinutes);
@@ -60,9 +69,12 @@ public class AvailabilityEngine
 
             var conflicts = occupied.Any(b => b.StartUtc < slotEndUtc && b.EndUtc > slotStartUtc);
             if (!conflicts)
+            {
+                var endCursor = cursor + serviceDuration;
                 slots.Add(new AvailabilitySlot(
                     cursor.ToString(@"hh\:mm"),
-                    (cursor + TimeSpan.FromMinutes(service.DurationMinutes)).ToString(@"hh\:mm")));
+                    endCursor.ToString(@"hh\:mm")));
+            }
         }
 
         return slots;
