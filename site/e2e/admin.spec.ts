@@ -59,7 +59,7 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
     if (!isMobile) {
       await page.evaluate(() => { (window as any).__MOCK_AUTHED__ = false; });
-      await page.getByText('Sign out').click();
+      await page.getByRole('button', { name: 'Sign out' }).first().click();
     } else {
       await page.evaluate(() => {
         (window as any).__MOCK_AUTHED__ = false;
