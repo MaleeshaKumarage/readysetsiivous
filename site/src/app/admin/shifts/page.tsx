@@ -112,7 +112,7 @@ export default function ShiftsAdminPage() {
   const doUnassign = async (shiftId: string, assignmentId: string) => {
     await adminShifts.unassign(shiftId, assignmentId);
     const a = await adminShifts.assignments(shiftId);
-    if (a) setAssignments((m) => ({ ...m, [shiftId]: a }));
+    setAssignments((m) => ({ ...m, [shiftId]: a ?? [] }));
   };
 
   const employeeName = (id: string) => {
@@ -178,7 +178,7 @@ export default function ShiftsAdminPage() {
                           {(assignments[s.id] ?? []).map((a) => (
                             <Group key={a.id} justify="space-between">
                               <Text size="sm">{employeeName(a.employeeId)}</Text>
-                              <ActionIcon variant="subtle" color="red" size="sm" onClick={() => doUnassign(s.id, a.employeeId)}><Trash2 size={14} /></ActionIcon>
+                              <Button size="xs" variant="subtle" color="red" aria-label="Unassign" onClick={() => doUnassign(s.id, a.employeeId)}>Unassign</Button>
                             </Group>
                           ))}
                         </Stack>
