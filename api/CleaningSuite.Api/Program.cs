@@ -172,7 +172,7 @@ public class MartenSchemaInitializer : Microsoft.Extensions.Hosting.IHostedServi
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to apply Marten schema changes at startup.");
+            _logger.LogWarning(ex, "Failed to initialize Marten schema on startup.");
         }
     }
 
