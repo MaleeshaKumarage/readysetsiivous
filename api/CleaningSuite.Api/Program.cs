@@ -156,25 +156,10 @@ app.Run();
 public class MartenSchemaInitializer : Microsoft.Extensions.Hosting.IHostedService
 {
     private readonly Marten.IDocumentStore _store;
-    private readonly ILogger<MartenSchemaInitializer> _logger;
-
-    public MartenSchemaInitializer(Marten.IDocumentStore store, ILogger<MartenSchemaInitializer> logger)
-    {
-        _store = store;
-        _logger = logger;
-    }
+    public MartenSchemaInitializer(Marten.IDocumentStore store) => _store = store;
 
     public async Task StartAsync(CancellationToken ct)
-    {
-        try
-        {
-            await _store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to initialize Marten schema on startup.");
-        }
-    }
+        => await _store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
 
     public Task StopAsync(CancellationToken ct) => Task.CompletedTask;
 }

@@ -4,10 +4,12 @@ export async function setupAdminMocks(page: Page, options: { authenticated?: boo
   const authed = options.authenticated ?? true;
 
   await page.addInitScript(({ authed }) => {
-    if (sessionStorage.getItem('__MOCK_LOGGED_OUT__') === 'true') {
-      (window as any).__MOCK_AUTHED__ = false;
+    if (authed) {
+      sessionStorage.removeItem('__MOCK_LOGGED_OUT__');
+      (window as any).__MOCK_AUTHED__ = true;
     } else {
-      (window as any).__MOCK_AUTHED__ = authed;
+      sessionStorage.setItem('__MOCK_LOGGED_OUT__', 'true');
+      (window as any).__MOCK_AUTHED__ = false;
     }
 
     const injectStyle = () => {

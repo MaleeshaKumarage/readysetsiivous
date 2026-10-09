@@ -4,7 +4,6 @@ import { MotionConfig } from 'framer-motion';
 import { Toaster } from 'sonner';
 import { ThemeProvider } from '@/context/ThemeContext';
 import type { Metadata, Viewport } from 'next';
-import Script from 'next/script';
 import { cn } from "@/lib/utils";
 
 
@@ -83,23 +82,6 @@ export default function RootLayout({
   return (
     <html lang="fi" suppressHydrationWarning translate="no" className={`notranslate ${inter.variable}`}>
       <body className="min-h-screen flex flex-col bg-white dark:bg-accent-950 text-gray-900 dark:text-gray-100 transition-colors">
-        <Script
-          strategy="afterInteractive"
-          src="https://www.googletagmanager.com/gtag/js?id=G-08R5WR93E1"
-        />
-        <Script
-          id="google-analytics"
-          strategy="afterInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              gtag('js', new Date());
-
-              gtag('config', 'G-08R5WR93E1');
-            `,
-          }}
-        />
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <MotionConfig reducedMotion="user">
           <ThemeProvider>{children}</ThemeProvider>

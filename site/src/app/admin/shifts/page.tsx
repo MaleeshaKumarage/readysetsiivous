@@ -109,8 +109,8 @@ export default function ShiftsAdminPage() {
     if (a) setAssignments((m) => ({ ...m, [shiftId]: a }));
   };
 
-  const doUnassign = async (shiftId: string, assignmentId: string) => {
-    await adminShifts.unassign(shiftId, assignmentId);
+  const doUnassign = async (shiftId: string, employeeId: string) => {
+    await adminShifts.unassign(shiftId, employeeId);
     const a = await adminShifts.assignments(shiftId);
     if (a) setAssignments((m) => ({ ...m, [shiftId]: a }));
   };
@@ -155,18 +155,6 @@ export default function ShiftsAdminPage() {
                         <Button size="xs" variant="light" onClick={() => openAssign(s.id)}>Employees</Button>
                         {s.isActive && <Button size="xs" variant="subtle" color="red" onClick={() => deactivate(s.id)}>Deactivate</Button>}
                       </Group>
-                      {(assignments[s.id] ?? []).length === 0 ? (
-                        <Text size="sm" c="dimmed">No employees assigned.</Text>
-                      ) : (
-                        <Stack gap={4}>
-                          {(assignments[s.id] ?? []).map((a) => (
-                            <Group key={a.id} justify="space-between">
-                              <Text size="sm">{employeeName(a.employeeId)}</Text>
-                              <Button size="xs" variant="subtle" color="red" aria-label="Unassign" onClick={() => doUnassign(s.id, a.employeeId)}>Unassign</Button>
-                            </Group>
-                          ))}
-                        </Stack>
-                      )}
                     </Table.Td>
                   </Table.Tr>
                   {assignOpen === s.id && (

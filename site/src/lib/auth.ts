@@ -24,13 +24,7 @@ export function getKeycloak(): Keycloak {
 }
 
 function isMockAllowed(): boolean {
-  return (
-    process.env.NODE_ENV !== 'production' ||
-    (typeof window !== 'undefined' &&
-      ((window as any).__MOCK_AUTHED__ !== undefined ||
-        localStorage.getItem('rss_mock_authed') === 'true' ||
-        sessionStorage.getItem('__MOCK_LOGGED_OUT__') === 'true'))
-  );
+  return process.env.NODE_ENV !== 'production';
 }
 
 export function initAuth(): Promise<boolean> {
@@ -39,9 +33,6 @@ export function initAuth(): Promise<boolean> {
   }
   if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__ !== undefined) {
     return Promise.resolve(Boolean((window as any).__MOCK_AUTHED__));
-  }
-  if (isMockAllowed() && typeof window !== 'undefined' && localStorage.getItem('rss_mock_authed') === 'true') {
-    return Promise.resolve(true);
   }
   if (!initPromise) {
     initPromise = getKeycloak()
@@ -61,7 +52,6 @@ export function initAuth(): Promise<boolean> {
 export async function login(): Promise<void> {
   if (isMockAllowed() && typeof window !== 'undefined') {
     sessionStorage.removeItem('__MOCK_LOGGED_OUT__');
-    localStorage.setItem('rss_mock_authed', 'true');
   }
   if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__ !== undefined) {
     (window as any).__MOCK_AUTHED__ = true;
@@ -72,9 +62,6 @@ export async function login(): Promise<void> {
 }
 
 export async function logout(): Promise<void> {
-  if (isMockAllowed() && typeof window !== 'undefined') {
-    localStorage.removeItem('rss_mock_authed');
-  }
   if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__ !== undefined) {
     (window as any).__MOCK_AUTHED__ = false;
     sessionStorage.setItem('__MOCK_LOGGED_OUT__', 'true');
@@ -91,9 +78,6 @@ export function isAuthenticated(): boolean {
   if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__ !== undefined) {
     return Boolean((window as any).__MOCK_AUTHED__);
   }
-  if (isMockAllowed() && typeof window !== 'undefined' && localStorage.getItem('rss_mock_authed') === 'true') {
-    return true;
-  }
   const kc = getKeycloak();
   return Boolean(kc.authenticated && kc.token);
 }
@@ -102,10 +86,7 @@ export function token(): string | undefined {
   if (isMockAllowed() && typeof window !== 'undefined' && sessionStorage.getItem('__MOCK_LOGGED_OUT__') === 'true') {
     return undefined;
   }
-  if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__ !== undefined) {
-    return (window as any).__MOCK_AUTHED__ ? 'mock-jwt-token' : undefined;
-  }
-  if (isMockAllowed() && typeof window !== 'undefined' && localStorage.getItem('rss_mock_authed') === 'true') {
+  if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__) {
     return 'mock-jwt-token';
   }
   return getKeycloak().token ?? undefined;
@@ -118,17 +99,11 @@ export function isAdmin(): boolean {
   if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__ !== undefined) {
     return Boolean((window as any).__MOCK_AUTHED__);
   }
-  if (isMockAllowed() && typeof window !== 'undefined' && localStorage.getItem('rss_mock_authed') === 'true') {
-    return true;
-  }
   return getKeycloak().hasRealmRole('admin');
 }
 
 export async function refreshToken(): Promise<string | undefined> {
-  if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__ !== undefined) {
-    return (window as any).__MOCK_AUTHED__ ? 'mock-jwt-token' : undefined;
-  }
-  if (isMockAllowed() && typeof window !== 'undefined' && localStorage.getItem('rss_mock_authed') === 'true') {
+  if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__) {
     return 'mock-jwt-token';
   }
   const kc = getKeycloak();
