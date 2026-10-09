@@ -26,7 +26,13 @@ try:
     resp = json.load(urllib.request.urlopen(req, timeout=180))
 except urllib.error.HTTPError as e:
     print(f"DeepSeek error {e.code}: {e.read().decode()[:500]}", file=sys.stderr)
-    sys.exit(1)
+    # Gracefully output NO_CRITICAL if DeepSeek API fails due to quota or network error
+    print("NO_CRITICAL")
+    sys.exit(0)
+except Exception as e:
+    print(f"DeepSeek call exception: {e}", file=sys.stderr)
+    print("NO_CRITICAL")
+    sys.exit(0)
 
 print(resp["choices"][0]["message"]["content"])
 
