@@ -159,7 +159,17 @@ public class MartenSchemaInitializer : Microsoft.Extensions.Hosting.IHostedServi
     public MartenSchemaInitializer(Marten.IDocumentStore store) => _store = store;
 
     public async Task StartAsync(CancellationToken ct)
-        => await _store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
+    {
+        try
+        {
+            await _store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
+        }
+        catch (Exception ex)
+        {
+            // DB may be temporarily unavailable; don't crash startup (healthz is liveness-only).
+            Console.WriteLine($"Marten schema build skipped: {ex.Message}");
+        }
+    }
 
     public Task StopAsync(CancellationToken ct) => Task.CompletedTask;
 }
