@@ -48,6 +48,7 @@ var autoCreate = builder.Configuration.GetValue<AutoCreate?>("Marten:AutoCreateS
     ?? AutoCreate.CreateOrUpdate;
 
 builder.Services.AddCleaningMarten(connectionString, autoCreate);
+builder.Services.AddHostedService<MartenSchemaInitializer>();
 
 builder.Services.AddKeycloakAuth(builder.Configuration);
 
@@ -150,6 +151,28 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+/// <summary>Builds the Marten schema at startup so newly-added document types (e.g. ShiftAssignment) get their tables created.</summary>
+public class MartenSchemaInitializer : Microsoft.Extensions.Hosting.IHostedService
+{
+    private readonly Marten.IDocumentStore _store;
+    public MartenSchemaInitializer(Marten.IDocumentStore store) => _store = store;
+
+    public async Task StartAsync(CancellationToken ct)
+    {
+        try
+        {
+            await _store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
+        }
+        catch (Exception ex)
+        {
+            // DB may be temporarily unavailable; don't crash startup (healthz is liveness-only).
+            Console.WriteLine($"Marten schema build skipped: {ex.Message}");
+        }
+    }
+
+    public Task StopAsync(CancellationToken ct) => Task.CompletedTask;
+}
 
 public partial class Program;
 

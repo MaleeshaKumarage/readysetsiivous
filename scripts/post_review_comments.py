@@ -97,7 +97,7 @@ for it in issues:
     if (it["path"], it["line"]) in existing:
         print(f"skip duplicate: {it['path']}:{it['line']}", file=sys.stderr)
         continue
-    body = it["fix"]
+    body = f"@jules {it['fix']}"
     cid = ""
     payload = json.dumps({
         "commit_id": head_sha,

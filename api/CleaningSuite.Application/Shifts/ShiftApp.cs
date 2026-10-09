@@ -393,7 +393,18 @@ public class ShiftValidators
             RuleFor(x => x.CompanyId).NotEqual(Guid.Empty);
             RuleFor(x => x.BranchId).NotEqual(Guid.Empty);
             RuleFor(x => x.Name).NotEmpty().WithMessage("Shift name is mandatory.");
-            RuleFor(x => x.Schedule).NotNull();
+            RuleFor(x => x.Schedule).NotNull().Custom((schedule, context) =>
+            {
+                if (schedule is null) return;
+                try
+                {
+                    schedule.Validate();
+                }
+                catch (Exception ex)
+                {
+                    context.AddFailure("Schedule", ex.Message);
+                }
+            });
         }
     }
 
@@ -405,7 +416,18 @@ public class ShiftValidators
             RuleFor(x => x.CompanyId).NotEqual(Guid.Empty);
             RuleFor(x => x.BranchId).NotEqual(Guid.Empty);
             RuleFor(x => x.Name).NotEmpty().WithMessage("Shift name is mandatory.");
-            RuleFor(x => x.Schedule).NotNull();
+            RuleFor(x => x.Schedule).NotNull().Custom((schedule, context) =>
+            {
+                if (schedule is null) return;
+                try
+                {
+                    schedule.Validate();
+                }
+                catch (Exception ex)
+                {
+                    context.AddFailure("Schedule", ex.Message);
+                }
+            });
         }
     }
 
