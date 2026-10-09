@@ -156,7 +156,13 @@ app.Run();
 public class MartenSchemaInitializer : Microsoft.Extensions.Hosting.IHostedService
 {
     private readonly Marten.IDocumentStore _store;
-    public MartenSchemaInitializer(Marten.IDocumentStore store) => _store = store;
+    private readonly ILogger<MartenSchemaInitializer> _logger;
+
+    public MartenSchemaInitializer(Marten.IDocumentStore store, ILogger<MartenSchemaInitializer> logger)
+    {
+        _store = store;
+        _logger = logger;
+    }
 
     public async Task StartAsync(CancellationToken ct)
     {
@@ -164,10 +170,14 @@ public class MartenSchemaInitializer : Microsoft.Extensions.Hosting.IHostedServi
         {
             await _store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
         }
+        catch (Npgsql.NpgsqlException ex)
+        {
+            _logger.LogWarning(ex, "Database unreachable during Marten schema build; will retry on next startup.");
+        }
         catch (Exception ex)
         {
-            // DB may be temporarily unavailable; don't crash startup (healthz is liveness-only).
-            Console.WriteLine($"Marten schema build skipped: {ex.Message}");
+            _logger.LogError(ex, "Failed to initialize Marten schema on startup.");
+            throw;
         }
     }
 
