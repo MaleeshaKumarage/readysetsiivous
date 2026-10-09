@@ -41,14 +41,12 @@ def gql(query, variables):
     return json.load(urllib.request.urlopen(req, timeout=30))
 
 
-# Files changed by the head commit. If it is a merge commit (empty file list),
-# fall back to comparing against its first parent.
-commit = http_json(f"{api}/commits/{sha}")
-changed = set(f.get("filename", "") for f in commit.get("files", []) if f.get("filename"))
-if not changed and commit.get("parents"):
-    parent = commit["parents"][0]["sha"]
-    cmp = http_json(f"{api}/compare/{parent}...{sha}")
-    changed = set(f.get("filename", "") for f in cmp.get("files", []) if f.get("filename"))
+# Files changed in the PR (base -> head). Resolves threads whose file was
+# touched anywhere in the PR, since the developer addressed the comment there.
+pr_data = http_json(f"{api}/pulls/{pr}")
+base = pr_data["base"]["sha"]
+cmp = http_json(f"{api}/compare/{base}...{sha}")
+changed = set(f.get("filename", "") for f in cmp.get("files", []) if f.get("filename"))
 
 q = """
 query($owner:String!,$name:String!,$pr:Int!) {
