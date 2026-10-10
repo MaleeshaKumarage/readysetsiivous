@@ -195,6 +195,42 @@ public class QualityCycleTests
         Assert.Equal("Task A", form.Items[0].ItemText); // Original text preserved
     }
 
+    [Fact]
+    public void Start_RecordsStartedAtUtc()
+    {
+        var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Cleaner", Guid.NewGuid(), "Template", DateTime.UtcNow, new List<string> { "Task A" });
+
+        form.Start();
+
+        Assert.NotNull(form.StartedAtUtc);
+        Assert.False(form.IsSubmitted);
+    }
+
+    [Fact]
+    public void Start_WhenAlreadyStarted_DoesNotOverwrite()
+    {
+        var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Cleaner", Guid.NewGuid(), "Template", DateTime.UtcNow, new List<string> { "Task A" });
+        form.Start();
+        var first = form.StartedAtUtc;
+
+        form.Start();
+
+        Assert.Equal(first, form.StartedAtUtc);
+    }
+
+    [Fact]
+    public void Submit_RecordsEndedAtUtc()
+    {
+        var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Cleaner", Guid.NewGuid(), "Template", DateTime.UtcNow, new List<string> { "Task A" });
+        form.Start();
+
+        form.Submit(new List<QualityCycleFormItem> { new QualityCycleFormItem { ItemText = "Task A", IsChecked = true } }, null, null);
+
+        Assert.True(form.IsSubmitted);
+        Assert.NotNull(form.EndedAtUtc);
+        Assert.True(form.EndedAtUtc >= form.StartedAtUtc);
+    }
+
     // --- APPLICATION HANDLERS TESTS ---
 
     [Fact]
