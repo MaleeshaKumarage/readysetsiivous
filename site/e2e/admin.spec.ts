@@ -169,6 +169,107 @@ test.describe('Admin Panel - Services Page', () => {
     await page.getByRole('button', { name: 'Create service' }).click();
     await expect(page.getByText('Failed to create service.')).toBeVisible();
   });
+
+  test('edit service prefills and saves all three languages', async ({ page }) => {
+    await setupAdminMocks(page, { authenticated: true });
+
+    const existing = {
+      id: 'srv-edit', slug: 'deep-cleaning', category: 'cleaning',
+      name: { values: { fi: 'Syväsiivous', en: 'Deep cleaning', sv: 'Djupstädning' } },
+      description: { values: { fi: 'Perusteellinen', en: 'Thorough', sv: 'Grundlig' } },
+      icon: 'Sparkles', imageUrl: '', durationMinutes: 180, priceNet: 120,
+      vatRatePercent: 25.5, isActive: true, isFeatured: false, sortOrder: 0,
+    };
+
+    let updateBody: any = null;
+    await page.route('**/api/v1/admin/services**', async (route) => {
+      const method = route.request().method();
+      if (method === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      if (method === 'GET') return route.fulfill({ status: 200, json: [existing], headers: CORS_HEADERS });
+      if (method === 'PUT') {
+        updateBody = getBody(route);
+        return route.fulfill({ status: 200, json: true, headers: CORS_HEADERS });
+      }
+      return route.continue();
+    });
+
+    await page.goto('/admin/services/');
+    await page.getByRole('button', { name: 'Edit' }).click();
+
+    // Prefilled from each language
+    await expect(page.getByLabel('Name (Finnish)')).toHaveValue('Syväsiivous');
+    await expect(page.getByLabel('Name (English)')).toHaveValue('Deep cleaning');
+    await expect(page.getByLabel('Name (Swedish)')).toHaveValue('Djupstädning');
+    await expect(page.getByLabel('Description (English)')).toHaveValue('Thorough');
+
+    // Change non-Finnish values, save
+    await page.getByLabel('Name (English)').fill('Deep clean X');
+    await page.getByLabel('Description (Swedish)').fill('Grundlig X');
+    await page.getByRole('button', { name: 'Save changes' }).click();
+
+    await expect.poll(() => updateBody?.fields?.name?.fi).toBe('Syväsiivous');
+    await expect.poll(() => updateBody?.fields?.name?.en).toBe('Deep clean X');
+    await expect.poll(() => updateBody?.fields?.description?.sv).toBe('Grundlig X');
+  });
+
+  test('create with only Finnish omits empty translations', async ({ page }) => {
+    await setupAdminMocks(page, { authenticated: true });
+
+    let createBody: any = null;
+    await page.route('**/api/v1/admin/services**', async (route) => {
+      const method = route.request().method();
+      if (method === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      if (method === 'GET') return route.fulfill({ status: 200, json: [], headers: CORS_HEADERS });
+      if (method === 'POST') {
+        createBody = getBody(route);
+        return route.fulfill({ status: 200, json: true, headers: CORS_HEADERS });
+      }
+      return route.continue();
+    });
+
+    await page.goto('/admin/services/');
+    await page.getByRole('button', { name: 'Add service' }).click();
+    await page.getByLabel('Slug').fill('basic-cleaning');
+    await page.getByLabel('Name (Finnish)').fill('Perussiivous');
+    await page.getByRole('button', { name: 'Create service' }).click();
+
+    await expect.poll(() => createBody?.fields?.name?.fi).toBe('Perussiivous');
+    await expect.poll(() => createBody?.fields?.name?.en).toBe(undefined);
+    await expect.poll(() => createBody?.fields?.name?.sv).toBe(undefined);
+  });
+
+  test('clearing an English translation omits that key on save', async ({ page }) => {
+    await setupAdminMocks(page, { authenticated: true });
+
+    const existing = {
+      id: 'srv-edit', slug: 'deep-cleaning', category: 'cleaning',
+      name: { values: { fi: 'Syväsiivous', en: 'Deep cleaning' } },
+      description: { values: { fi: 'Perusteellinen', en: 'Thorough' } },
+      icon: 'Sparkles', imageUrl: '', durationMinutes: 180, priceNet: 120,
+      vatRatePercent: 25.5, isActive: true, isFeatured: false, sortOrder: 0,
+    };
+
+    let updateBody: any = null;
+    await page.route('**/api/v1/admin/services**', async (route) => {
+      const method = route.request().method();
+      if (method === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      if (method === 'GET') return route.fulfill({ status: 200, json: [existing], headers: CORS_HEADERS });
+      if (method === 'PUT') {
+        updateBody = getBody(route);
+        return route.fulfill({ status: 200, json: true, headers: CORS_HEADERS });
+      }
+      return route.continue();
+    });
+
+    await page.goto('/admin/services/');
+    await page.getByRole('button', { name: 'Edit' }).click();
+
+    await page.getByLabel('Name (English)').fill('');
+    await page.getByRole('button', { name: 'Save changes' }).click();
+
+    await expect.poll(() => updateBody?.fields?.name?.en).toBe(undefined);
+    await expect.poll(() => updateBody?.fields?.name?.fi).toBe('Syväsiivous');
+  });
 });
 
 test.describe('Admin Panel - Agreements Page', () => {
