@@ -6,13 +6,16 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { getWhatsAppChatUrl } from '@/lib/whatsapp';
 
 export default function FloatingWhatsApp() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [showTooltip, setShowTooltip] = useState(true);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowTooltip(false), 5000);
     return () => clearTimeout(timer);
   }, []);
+
+  const dismissAriaLabel =
+    lang === 'fi' ? 'Sulje vihje' : lang === 'sv' ? 'Stäng tips' : 'Dismiss tooltip';
 
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2">
@@ -23,10 +26,23 @@ export default function FloatingWhatsApp() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 8 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
-            className="relative bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 text-sm font-medium px-4 py-2 rounded-xl shadow-lg dark:shadow-gray-950/50 border border-gray-100 dark:border-gray-700 cursor-pointer"
+            className="relative bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 text-sm font-medium pl-4 pr-2 py-2 rounded-xl shadow-lg dark:shadow-gray-950/50 border border-gray-100 dark:border-gray-700 flex items-center gap-2 cursor-pointer"
             onClick={() => setShowTooltip(false)}
           >
-            {t('floatingWhatsApp.tooltip')}
+            <span>{t('floatingWhatsApp.tooltip')}</span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowTooltip(false);
+              }}
+              className="p-1 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 transition-colors"
+              aria-label={dismissAriaLabel}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
             <div className="absolute bottom-[-6px] right-5 w-3 h-3 bg-white dark:bg-gray-800 border-r border-b border-gray-100 dark:border-gray-700 rotate-45" />
           </motion.div>
         )}
