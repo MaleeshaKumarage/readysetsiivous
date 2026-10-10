@@ -28,12 +28,15 @@ export interface QualityCycleForm {
   templateId: string;
   templateTitle: string;
   shiftOccurrenceUtc: string;
+  shiftOccurrenceEndUtc: string;
   token: string;
   items: QualityCycleFormItem[];
   photoUrls: string[];
   cleanerNotes?: string | null;
   isSubmitted: boolean;
   submittedUtc?: string | null;
+  startedAtUtc?: string | null;
+  endedAtUtc?: string | null;
   createdUtc: string;
 }
 

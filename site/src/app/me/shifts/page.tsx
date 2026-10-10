@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronUp,
+  Upload,
 } from 'lucide-react';
 import { initAuth, isAuthenticated, login, logout } from '@/lib/auth';
 import { meApi, MyShiftOccurrence, QualityCycleFormItem } from '@/lib/meApi';
@@ -54,6 +55,7 @@ export default function MyShiftsPage() {
   // Inline form state
   const [items, setItems] = useState<QualityCycleFormItem[]>([]);
   const [notes, setNotes] = useState('');
+  const [photos, setPhotos] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -100,6 +102,7 @@ export default function MyShiftsPage() {
     if (o.form) {
       setItems(o.form.items.map((i) => ({ ...i })));
       setNotes(o.form.cleanerNotes ?? '');
+      setPhotos(o.form.photoUrls ?? []);
     }
   }
 
@@ -107,12 +110,28 @@ export default function MyShiftsPage() {
     setItems((prev) => prev.map((it, i) => (i === index ? { ...it, isChecked: !it.isChecked } : it)));
   }
 
+  function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (reader.result) setPhotos((prev) => [...prev, reader.result as string]);
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function handleRemovePhoto(index: number) {
+    setPhotos((prev) => prev.filter((_, i) => i !== index));
+  }
+
   async function handleEnd(o: MyShiftOccurrence) {
     if (!o.form) return;
     setSubmitting(true);
     setError(null);
     try {
-      const result = await meApi.endForm(o.form.id, items, undefined, notes);
+      const result = await meApi.endForm(o.form.id, items, photos, notes);
       if (result) {
         setOccurrences((prev) => prev.map((x) => (x.shiftId === o.shiftId && x.startUtc === o.startUtc ? { ...x, form: result } : x)));
         setOpenId(null);
@@ -248,6 +267,30 @@ export default function MyShiftsPage() {
                           rows={2}
                           className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-400"
                         />
+                        <div className="space-y-2">
+                          {photos.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {photos.map((p, i) => (
+                                <div key={i} className="relative">
+                                  <img src={p} alt={`photo-${i}`} className="w-16 h-16 object-cover rounded-lg border border-gray-200 dark:border-gray-700" />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemovePhoto(i)}
+                                    className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-white text-xs leading-none"
+                                    aria-label="Remove photo"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <label className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-700 dark:text-brand-400 cursor-pointer">
+                            <Upload className="w-4 h-4" />
+                            Add photo
+                            <input type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} />
+                          </label>
+                        </div>
                         <Button size="sm" onClick={() => handleEnd(o)} disabled={submitting} fullWidth className="gap-1.5">
                           {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                           End shift & submit

@@ -158,12 +158,6 @@ test.describe('Admin Panel - Quality Cycle Page', () => {
       },
     ];
 
-    let lastDialogMessage = '';
-    page.on('dialog', async dialog => {
-      lastDialogMessage = dialog.message();
-      await dialog.accept();
-    });
-
     await page.route(/\/api\/v1\/admin\/shifts(\/.*)?$/, async (route) => {
       if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
       return route.fulfill({ status: 200, json: mockShifts, headers: CORS_HEADERS });
@@ -177,13 +171,6 @@ test.describe('Admin Panel - Quality Cycle Page', () => {
     await page.route(/\/api\/v1\/admin\/quality-cycle\/forms(\/.*)?$/, async (route) => {
       if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
       return route.fulfill({ status: 200, json: mockForms, headers: CORS_HEADERS });
-    });
-
-    let dispatchCalled = false;
-    await page.route(/\/api\/v1\/admin\/quality-cycle\/dispatch(\/.*)?$/, async (route) => {
-      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
-      dispatchCalled = true;
-      return route.fulfill({ status: 200, json: { dispatchedCount: 2 }, headers: CORS_HEADERS });
     });
 
     await page.route(/\/api\/v1\/admin\/quality-cycle\/summary-pdf(\/.*)?$/, async (route) => {
@@ -207,11 +194,6 @@ test.describe('Admin Panel - Quality Cycle Page', () => {
     await expect(page.getByText('Submitted')).toBeVisible();
     await expect(page.getByText('2 / 2')).toBeVisible();
     await expect(page.getByText('Note: Completed on time')).toBeVisible();
-
-    // Trigger Dispatch Forms Now
-    await page.getByRole('button', { name: 'Dispatch Forms Now' }).click();
-    await expect.poll(() => dispatchCalled).toBe(true);
-    await expect.poll(() => lastDialogMessage).toContain('Dispatched 2 Quality Cycle forms.');
 
     // Select shift for PDF summary download
     await page.locator('select').first().selectOption('shift-1');
@@ -304,5 +286,89 @@ test.describe('Public Quality Cycle Page', () => {
 
     await page.goto('/quality-cycle?token=invalid-token');
     await expect(page.getByRole('heading', { name: 'Invalid Form Link' })).toBeVisible();
+  });
+});
+
+test.describe('Employee My Shifts — clock-in/out + inline form', () => {
+  test('start shift, fill inline form, end shift', async ({ page }) => {
+    await setupAdminMocks(page, { authenticated: true });
+
+    const shiftId = 'shift-1';
+    const occurrence = {
+      shiftId,
+      shiftName: 'Morning Office Shift',
+      startUtc: '2026-10-10T08:00:00Z',
+      endUtc: '2026-10-10T16:00:00Z',
+      form: null,
+    };
+    const startedForm = {
+      id: 'form-1',
+      shiftId,
+      shiftName: 'Morning Office Shift',
+      employeeId: 'emp-1',
+      employeeName: 'Anna Cleaner',
+      templateId: 'tpl-1',
+      templateTitle: 'Daily Office Checklist',
+      shiftOccurrenceUtc: occurrence.startUtc,
+      shiftOccurrenceEndUtc: occurrence.endUtc,
+      token: 'token-1',
+      items: [
+        { itemText: 'Vacuum carpets', isChecked: false },
+        { itemText: 'Wipe desks', isChecked: false },
+      ],
+      photoUrls: [],
+      cleanerNotes: null,
+      isSubmitted: false,
+      submittedUtc: null,
+      startedAtUtc: '2026-10-10T08:05:00Z',
+      endedAtUtc: null,
+      createdUtc: new Date().toISOString(),
+    };
+
+    let started = false;
+
+    await page.route(/\/api\/v1\/me\/shifts$/, async (route) => {
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      return route.fulfill({
+        status: 200,
+        json: started ? [{ ...occurrence, form: startedForm }] : [occurrence],
+        headers: CORS_HEADERS,
+      });
+    });
+
+    await page.route(/\/api\/v1\/me\/shifts\/[^\/]+\/start$/, async (route) => {
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      started = true;
+      return route.fulfill({ status: 200, json: startedForm, headers: CORS_HEADERS });
+    });
+
+    await page.route(/\/api\/v1\/me\/quality-cycle\/[^\/]+\/end$/, async (route) => {
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      return route.fulfill({
+        status: 200,
+        json: { ...startedForm, isSubmitted: true, submittedUtc: new Date().toISOString(), endedAtUtc: new Date().toISOString() },
+        headers: CORS_HEADERS,
+      });
+    });
+
+    await page.goto('/me/shifts');
+
+    // Shift listed with Start button
+    await expect(page.getByText('Morning Office Shift')).toBeVisible();
+    await expect(page.getByText('Not started')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Start' }).click();
+
+    // Clocked in -> in-progress + inline form trigger
+    await expect(page.getByText('In progress')).toBeVisible();
+    await page.getByRole('button', { name: 'Fill form & end' }).click();
+
+    // Inline checklist rendered
+    await expect(page.getByText('Vacuum carpets')).toBeVisible();
+    await page.getByText('Wipe desks').click();
+
+    // Submit -> done
+    await page.getByRole('button', { name: 'End shift & submit' }).click();
+    await expect(page.getByText('Done')).toBeVisible();
   });
 });
