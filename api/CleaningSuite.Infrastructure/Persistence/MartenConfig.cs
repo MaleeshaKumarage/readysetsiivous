@@ -57,8 +57,7 @@ public static class MartenConfig
 
         options.Schema.For<ShiftAssignment>()
             .Index(x => x.ShiftId)
-            .Index(x => x.EmployeeId)
-            .UniqueIndex(x => new { x.ShiftId, x.EmployeeId });
+            .Index(x => x.EmployeeId);
 
         options.Schema.For<QualityCycleTemplate>()
             .Index(x => x.CompanyId)

@@ -176,8 +176,9 @@ public class MartenSchemaInitializer : Microsoft.Extensions.Hosting.IHostedServi
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to initialize Marten schema on startup.");
-            throw;
+            // A schema build failure (e.g. a bad index) must not take down the
+            // whole API — log it loudly so it is fixed, but keep serving.
+            _logger.LogError(ex, "Failed to initialize Marten schema on startup; API will start with the existing schema.");
         }
     }
 
