@@ -5,8 +5,14 @@ export async function setupAdminMocks(page: Page, options: { authenticated?: boo
 
   await page.addInitScript(({ authed }) => {
     if (authed) {
-      sessionStorage.removeItem('__MOCK_LOGGED_OUT__');
-      (window as any).__MOCK_AUTHED__ = true;
+      // Respect an explicit sign-out across the reload that logout() triggers,
+      // otherwise the init script re-authenticates on every navigation.
+      if (sessionStorage.getItem('__MOCK_LOGGED_OUT__') === 'true') {
+        (window as any).__MOCK_AUTHED__ = false;
+      } else {
+        sessionStorage.removeItem('__MOCK_LOGGED_OUT__');
+        (window as any).__MOCK_AUTHED__ = true;
+      }
     } else {
       sessionStorage.setItem('__MOCK_LOGGED_OUT__', 'true');
       (window as any).__MOCK_AUTHED__ = false;

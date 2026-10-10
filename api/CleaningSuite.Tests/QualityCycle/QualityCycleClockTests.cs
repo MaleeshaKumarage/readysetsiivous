@@ -38,6 +38,8 @@ public class QualityCycleClockTests
 
         shiftRepo.Setup(r => r.GetAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
         empRepo.Setup(r => r.GetByIdAsync(emp.Id, It.IsAny<CancellationToken>())).ReturnsAsync(emp);
+        shiftRepo.Setup(r => r.GetAssignmentAsync(shift.Id, emp.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ShiftAssignment.Create(shift.Id, emp.Id, null));
         qcRepo.Setup(r => r.GetTemplateAsync(template.Id, It.IsAny<CancellationToken>())).ReturnsAsync(template);
         qcRepo.Setup(r => r.GetFormByShiftOccurrenceAsync(shift.Id, emp.Id, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((QualityCycleForm?)null);
@@ -65,6 +67,8 @@ public class QualityCycleClockTests
 
         shiftRepo.Setup(r => r.GetAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
         empRepo.Setup(r => r.GetByIdAsync(emp.Id, It.IsAny<CancellationToken>())).ReturnsAsync(emp);
+        shiftRepo.Setup(r => r.GetAssignmentAsync(shift.Id, emp.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ShiftAssignment.Create(shift.Id, emp.Id, null));
         qcRepo.Setup(r => r.GetTemplateAsync(template.Id, It.IsAny<CancellationToken>())).ReturnsAsync(template);
         qcRepo.Setup(r => r.GetFormByShiftOccurrenceAsync(shift.Id, emp.Id, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(existing);
@@ -73,6 +77,28 @@ public class QualityCycleClockTests
         var result = await handler.Handle(new StartQualityCycleFormCommand(shift.Id, emp.Id, FromUtc, FromUtc.AddHours(8)), CancellationToken.None);
 
         Assert.Equal(existing.StartedAtUtc, result.StartedAtUtc);
+    }
+
+    [Fact]
+    public async Task Start_WhenNotAssigned_ThrowsUnauthorized()
+    {
+        var template = NewTemplate();
+        var shift = NewShift(template.Id);
+        var emp = NewEmployee();
+
+        var shiftRepo = new Mock<IShiftRepository>();
+        var empRepo = new Mock<IEmployeeRepository>();
+        var qcRepo = new Mock<IQualityCycleRepository>();
+
+        shiftRepo.Setup(r => r.GetAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+        empRepo.Setup(r => r.GetByIdAsync(emp.Id, It.IsAny<CancellationToken>())).ReturnsAsync(emp);
+        qcRepo.Setup(r => r.GetTemplateAsync(template.Id, It.IsAny<CancellationToken>())).ReturnsAsync(template);
+        shiftRepo.Setup(r => r.GetAssignmentAsync(shift.Id, emp.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((ShiftAssignment?)null);
+
+        var handler = new QualityCycleHandlers.StartQualityCycleFormCommandHandler(shiftRepo.Object, empRepo.Object, qcRepo.Object);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            handler.Handle(new StartQualityCycleFormCommand(shift.Id, emp.Id, FromUtc, FromUtc.AddHours(8)), CancellationToken.None));
     }
 
     [Fact]

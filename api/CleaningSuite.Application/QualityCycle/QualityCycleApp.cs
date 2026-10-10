@@ -266,6 +266,10 @@ public class QualityCycleHandlers
             var employee = await _employeeRepository.GetByIdAsync(request.EmployeeId, ct)
                 ?? throw new NotFoundException("Employee", request.EmployeeId);
 
+            var assignment = await _shiftRepository.GetAssignmentAsync(shift.Id, employee.Id, ct);
+            if (assignment == null || !assignment.IsActive)
+                throw new UnauthorizedAccessException();
+
             var form = await _repository.GetFormByShiftOccurrenceAsync(shift.Id, employee.Id, request.OccurrenceStartUtc, ct);
             if (form == null)
             {
