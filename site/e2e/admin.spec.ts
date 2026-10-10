@@ -76,6 +76,7 @@ test.describe('Admin Panel - Services Page', () => {
     await setupAdminMocks(page, { authenticated: true });
 
     let services: any[] = [];
+    let capturedFields: any = null;
     await page.route('**/api/v1/admin/services**', async (route) => {
       const method = route.request().method();
       if (method === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
@@ -85,6 +86,7 @@ test.describe('Admin Panel - Services Page', () => {
       if (method === 'POST') {
         const body = getBody(route);
         const fields = body.fields || body || {};
+        capturedFields = fields;
         const newService = {
           id: 'srv-1',
           slug: fields.slug,
@@ -116,14 +118,24 @@ test.describe('Admin Panel - Services Page', () => {
 
     // Fill form
     await page.getByLabel('Slug').fill('deep-cleaning');
-    await page.getByLabel('Name (fi)').fill('Syväsiivous');
-    await page.getByLabel('Description (fi)').fill('Perusteellinen siivous kotiin');
+    await page.getByLabel('Name (Finnish)').fill('Syväsiivous');
+    await page.getByLabel('Name (English)').fill('Deep cleaning');
+    await page.getByLabel('Name (Swedish)').fill('Djupstädning');
+    await page.getByLabel('Description (Finnish)').fill('Perusteellinen siivous kotiin');
+    await page.getByLabel('Description (English)').fill('Thorough home cleaning');
+    await page.getByLabel('Description (Swedish)').fill('Grundlig hemstädning');
     await page.getByLabel('Price (€)').fill('120');
     await page.getByLabel('VAT %').fill('25.5');
     await page.getByLabel('Duration (min)').fill('180');
 
     // Submit form
     await page.getByRole('button', { name: 'Create service' }).click();
+
+    // Verify payload carries all three languages
+    await expect.poll(() => capturedFields?.name?.en).toBe('Deep cleaning');
+    await expect.poll(() => capturedFields?.name?.sv).toBe('Djupstädning');
+    await expect.poll(() => capturedFields?.description?.en).toBe('Thorough home cleaning');
+    await expect.poll(() => capturedFields?.description?.sv).toBe('Grundlig hemstädning');
 
     // Verify modal closes and service appears in table
     await expect(page.getByRole('dialog', { name: 'Add service' })).not.toBeVisible();
@@ -149,11 +161,11 @@ test.describe('Admin Panel - Services Page', () => {
 
     // Submit empty required fields -> client validation error
     await page.getByRole('button', { name: 'Create service' }).click();
-    await expect(page.getByText('Slug and name are required.')).toBeVisible();
+    await expect(page.getByText('Slug and Finnish name are required.')).toBeVisible();
 
     // Fill required fields but simulate API failure
     await page.getByLabel('Slug').fill('test-slug');
-    await page.getByLabel('Name (fi)').fill('Test Name');
+    await page.getByLabel('Name (Finnish)').fill('Test Name');
     await page.getByRole('button', { name: 'Create service' }).click();
     await expect(page.getByText('Failed to create service.')).toBeVisible();
   });
