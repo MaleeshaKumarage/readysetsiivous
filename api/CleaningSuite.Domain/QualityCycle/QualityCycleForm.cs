@@ -17,12 +17,15 @@ public class QualityCycleForm : BaseDocument
     public Guid TemplateId { get; set; }
     public string TemplateTitle { get; set; } = string.Empty;
     public DateTime ShiftOccurrenceUtc { get; set; }
+    public DateTime ShiftOccurrenceEndUtc { get; set; }
     public string Token { get; set; } = string.Empty;
     public List<QualityCycleFormItem> Items { get; set; } = new();
     public List<string> PhotoUrls { get; set; } = new();
     public string? CleanerNotes { get; set; }
     public bool IsSubmitted { get; set; }
     public DateTime? SubmittedUtc { get; set; }
+    public DateTime? StartedAtUtc { get; set; }
+    public DateTime? EndedAtUtc { get; set; }
 
     public static QualityCycleForm Create(
         Guid shiftId,
@@ -32,7 +35,8 @@ public class QualityCycleForm : BaseDocument
         Guid templateId,
         string templateTitle,
         DateTime shiftOccurrenceUtc,
-        List<string> templateItems)
+        List<string> templateItems,
+        DateTime shiftOccurrenceEndUtc = default)
     {
         if (shiftId == Guid.Empty)
             throw new ArgumentException("ShiftId is mandatory.", nameof(shiftId));
@@ -56,12 +60,20 @@ public class QualityCycleForm : BaseDocument
             TemplateId = templateId,
             TemplateTitle = templateTitle?.Trim() ?? string.Empty,
             ShiftOccurrenceUtc = shiftOccurrenceUtc,
+            ShiftOccurrenceEndUtc = shiftOccurrenceEndUtc == default ? shiftOccurrenceUtc : shiftOccurrenceEndUtc,
             Token = Guid.NewGuid().ToString("N"),
             Items = formItems,
             PhotoUrls = new List<string>(),
             IsSubmitted = false,
             SubmittedUtc = null
         };
+    }
+
+    public void Start()
+    {
+        if (StartedAtUtc.HasValue) return;
+        StartedAtUtc = DateTime.UtcNow;
+        UpdatedUtc = DateTime.UtcNow;
     }
 
     public void Submit(List<QualityCycleFormItem> items, List<string>? photoUrls, string? cleanerNotes)
@@ -93,6 +105,7 @@ public class QualityCycleForm : BaseDocument
         CleanerNotes = cleanerNotes?.Trim();
         IsSubmitted = true;
         SubmittedUtc = DateTime.UtcNow;
+        EndedAtUtc = DateTime.UtcNow;
         UpdatedUtc = DateTime.UtcNow;
     }
 }

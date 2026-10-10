@@ -57,13 +57,6 @@ public class QualityCycleAdminController : ControllerBase
         return NoContent();
     }
 
-    [HttpPost("dispatch")]
-    public async Task<IActionResult> DispatchForms([FromBody] DispatchQualityCycleFormsCommand command, CancellationToken ct)
-    {
-        var dispatchedCount = await _mediator.Send(command, ct);
-        return Ok(new { dispatchedCount });
-    }
-
     [HttpGet("forms")]
     public async Task<IActionResult> ListForms(
         [FromQuery] Guid? shiftId,

@@ -28,12 +28,15 @@ export interface QualityCycleForm {
   templateId: string;
   templateTitle: string;
   shiftOccurrenceUtc: string;
+  shiftOccurrenceEndUtc: string;
   token: string;
   items: QualityCycleFormItem[];
   photoUrls: string[];
   cleanerNotes?: string | null;
   isSubmitted: boolean;
   submittedUtc?: string | null;
+  startedAtUtc?: string | null;
+  endedAtUtc?: string | null;
   createdUtc: string;
 }
 
@@ -51,9 +54,6 @@ export const adminQualityCycle = {
   updateTemplate: (id: string, fields: { title: string; items: string[]; description?: string; isActive?: boolean; companyId?: string; branchId?: string }) =>
     adminSendJson<QualityCycleTemplate>(`/api/v1/admin/quality-cycle/templates/${id}`, 'PUT', fields),
   deleteTemplate: (id: string) => adminSend(`/api/v1/admin/quality-cycle/templates/${id}`, 'DELETE'),
-
-  dispatchForms: (shiftId?: string, targetDateUtc?: string) =>
-    adminSendJson<{ dispatchedCount: number }>('/api/v1/admin/quality-cycle/dispatch', 'POST', { shiftId, targetDateUtc }),
 
   listForms: (shiftId?: string, from?: string, to?: string) => {
     const query = new URLSearchParams();

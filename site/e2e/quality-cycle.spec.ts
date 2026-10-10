@@ -101,25 +101,25 @@ test.describe('Admin Panel - Quality Cycle Page', () => {
     await itemInputs.nth(2).fill('Empty trash bins');
 
     // Add another item
-    await page.getByRole('button', { name: '+ Add Item' }).click();
+    await page.getByRole('button', { name: 'Add Item' }).click();
     await itemInputs.nth(3).fill('Sanitize door handles');
 
     // Submit form
     await page.getByRole('button', { name: 'Create Template' }).click();
 
     // Verify created template is rendered
-    await expect(page.getByRole('heading', { name: 'Daily Office Checklist' })).toBeVisible();
+    await expect(page.getByText('Daily Office Checklist')).toBeVisible();
     await expect(page.getByText('Standard office cleaning routines')).toBeVisible();
     await expect(page.getByText('Vacuum carpets')).toBeVisible();
     await expect(page.getByText('Sanitize door handles')).toBeVisible();
 
     // Edit template
     await page.getByRole('button', { name: 'Edit' }).click({ force: true });
-    await expect(page.getByRole('heading', { name: 'Edit Template' })).toBeVisible();
+    await expect(page.getByText('Edit Template')).toBeVisible();
     await page.getByPlaceholder('e.g. Daily Office Cleaning Checklist').fill('Updated Office Checklist');
     await page.getByRole('button', { name: 'Update Template' }).click();
 
-    await expect(page.getByRole('heading', { name: 'Updated Office Checklist' })).toBeVisible();
+    await expect(page.getByText('Updated Office Checklist')).toBeVisible();
 
     // Delete template
     await page.getByRole('button', { name: 'Delete' }).click({ force: true });
@@ -158,12 +158,6 @@ test.describe('Admin Panel - Quality Cycle Page', () => {
       },
     ];
 
-    let lastDialogMessage = '';
-    page.on('dialog', async dialog => {
-      lastDialogMessage = dialog.message();
-      await dialog.accept();
-    });
-
     await page.route(/\/api\/v1\/admin\/shifts(\/.*)?$/, async (route) => {
       if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
       return route.fulfill({ status: 200, json: mockShifts, headers: CORS_HEADERS });
@@ -179,13 +173,6 @@ test.describe('Admin Panel - Quality Cycle Page', () => {
       return route.fulfill({ status: 200, json: mockForms, headers: CORS_HEADERS });
     });
 
-    let dispatchCalled = false;
-    await page.route(/\/api\/v1\/admin\/quality-cycle\/dispatch(\/.*)?$/, async (route) => {
-      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
-      dispatchCalled = true;
-      return route.fulfill({ status: 200, json: { dispatchedCount: 2 }, headers: CORS_HEADERS });
-    });
-
     await page.route(/\/api\/v1\/admin\/quality-cycle\/summary-pdf(\/.*)?$/, async (route) => {
       if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
       return route.fulfill({
@@ -199,22 +186,18 @@ test.describe('Admin Panel - Quality Cycle Page', () => {
     await page.goto('/admin/quality-cycle/');
 
     // Switch to Submissions & PDF Reports tab
-    await page.getByRole('button', { name: 'Submissions & PDF Reports' }).click();
+    await page.getByText('Submissions & PDF Reports').click();
 
-    await expect(page.getByRole('heading', { name: 'Quality Cycle Submissions Log' })).toBeVisible();
+    await expect(page.getByText('Quality Cycle Submissions Log')).toBeVisible();
     await expect(page.getByRole('cell', { name: 'Morning Office Shift' })).toBeVisible();
     await expect(page.getByRole('cell', { name: 'Anna Cleaner' })).toBeVisible();
     await expect(page.getByText('Submitted')).toBeVisible();
     await expect(page.getByText('2 / 2')).toBeVisible();
     await expect(page.getByText('Note: Completed on time')).toBeVisible();
 
-    // Trigger Dispatch Forms Now
-    await page.getByRole('button', { name: 'Dispatch Forms Now' }).click();
-    await expect.poll(() => dispatchCalled).toBe(true);
-    await expect.poll(() => lastDialogMessage).toContain('Dispatched 2 Quality Cycle forms.');
-
     // Select shift for PDF summary download
-    await page.locator('select').first().selectOption('shift-1');
+    await page.getByRole('textbox', { name: 'Filter by Shift' }).click();
+    await page.getByRole('option', { name: 'Morning Office Shift' }).click();
     await page.getByRole('button', { name: 'Export PDF Summary' }).click();
   });
 });
@@ -271,9 +254,9 @@ test.describe('Public Quality Cycle Page', () => {
     await page.goto('/quality-cycle?token=valid-test-token');
 
     // Header and shift info check
-    await expect(page.getByText('ReadySetSiivous Quality Cycle')).toBeVisible();
+    await expect(page.getByText('Quality Assurance')).toBeVisible();
     await expect(page.getByText('Evening Office Cleaning')).toBeVisible();
-    await expect(page.getByText('Cleaner: Matti Meikäläinen')).toBeVisible();
+    await expect(page.getByText('Matti Meikäläinen')).toBeVisible();
 
     // Toggle items
     await page.getByText('Empty trash cans').click();
@@ -304,5 +287,255 @@ test.describe('Public Quality Cycle Page', () => {
 
     await page.goto('/quality-cycle?token=invalid-token');
     await expect(page.getByRole('heading', { name: 'Invalid Form Link' })).toBeVisible();
+  });
+});
+
+test.describe('Employee My Shifts — clock-in/out + inline form', () => {
+  test('start shift, fill inline form, end shift', async ({ page }) => {
+    await setupAdminMocks(page, { authenticated: true });
+
+    const shiftId = 'shift-1';
+    const occurrence = {
+      shiftId,
+      shiftName: 'Morning Office Shift',
+      startUtc: '2026-10-10T08:00:00Z',
+      endUtc: '2026-10-10T16:00:00Z',
+      form: null,
+    };
+    const startedForm = {
+      id: 'form-1',
+      shiftId,
+      shiftName: 'Morning Office Shift',
+      employeeId: 'emp-1',
+      employeeName: 'Anna Cleaner',
+      templateId: 'tpl-1',
+      templateTitle: 'Daily Office Checklist',
+      shiftOccurrenceUtc: occurrence.startUtc,
+      shiftOccurrenceEndUtc: occurrence.endUtc,
+      token: 'token-1',
+      items: [
+        { itemText: 'Vacuum carpets', isChecked: false },
+        { itemText: 'Wipe desks', isChecked: false },
+      ],
+      photoUrls: [],
+      cleanerNotes: null,
+      isSubmitted: false,
+      submittedUtc: null,
+      startedAtUtc: '2026-10-10T08:05:00Z',
+      endedAtUtc: null,
+      createdUtc: new Date().toISOString(),
+    };
+
+    let started = false;
+
+    await page.route(/\/api\/v1\/me\/shifts$/, async (route) => {
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      return route.fulfill({
+        status: 200,
+        json: started ? [{ ...occurrence, form: startedForm }] : [occurrence],
+        headers: CORS_HEADERS,
+      });
+    });
+
+    await page.route(/\/api\/v1\/me\/shifts\/[^\/]+\/start$/, async (route) => {
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      started = true;
+      return route.fulfill({ status: 200, json: startedForm, headers: CORS_HEADERS });
+    });
+
+    await page.route(/\/api\/v1\/me\/quality-cycle\/[^\/]+\/end$/, async (route) => {
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      return route.fulfill({
+        status: 200,
+        json: { ...startedForm, isSubmitted: true, submittedUtc: new Date().toISOString(), endedAtUtc: new Date().toISOString() },
+        headers: CORS_HEADERS,
+      });
+    });
+
+    await page.goto('/me/shifts');
+
+    // Shift listed with Start button
+    await expect(page.getByText('Morning Office Shift')).toBeVisible();
+    await expect(page.getByText('Not started')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Start' }).click();
+
+    // Clocked in -> in-progress + inline form trigger
+    await expect(page.getByText('In progress')).toBeVisible();
+    await page.getByRole('button', { name: 'Fill form & end' }).click();
+
+    // Inline checklist rendered
+    await expect(page.getByText('Vacuum carpets')).toBeVisible();
+    await page.getByText('Wipe desks').click();
+
+    // Submit -> done
+    await page.getByRole('button', { name: 'End shift & submit' }).click();
+    await expect(page.getByText('Done')).toBeVisible();
+  });
+
+  test('already-submitted shift shows Done without action buttons', async ({ page }) => {
+    await setupAdminMocks(page, { authenticated: true });
+
+    const submitted = {
+      shiftId: 'shift-2',
+      shiftName: 'Evening Office Cleaning',
+      startUtc: '2026-10-10T18:00:00Z',
+      endUtc: '2026-10-10T20:00:00Z',
+      form: {
+        id: 'form-2',
+        shiftId: 'shift-2',
+        shiftName: 'Evening Office Cleaning',
+        employeeId: 'emp-1',
+        employeeName: 'Anna Cleaner',
+        templateId: 'tpl-1',
+        templateTitle: 'Daily Office Checklist',
+        shiftOccurrenceUtc: '2026-10-10T18:00:00Z',
+        shiftOccurrenceEndUtc: '2026-10-10T20:00:00Z',
+        token: 'token-2',
+        items: [{ itemText: 'Vacuum carpets', isChecked: true }],
+        photoUrls: [],
+        cleanerNotes: null,
+        isSubmitted: true,
+        submittedUtc: new Date().toISOString(),
+        startedAtUtc: '2026-10-10T18:05:00Z',
+        endedAtUtc: '2026-10-10T19:50:00Z',
+        createdUtc: new Date().toISOString(),
+      },
+    };
+
+    await page.route(/\/api\/v1\/me\/shifts$/, async (route) => {
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      return route.fulfill({ status: 200, json: [submitted], headers: CORS_HEADERS });
+    });
+
+    await page.goto('/me/shifts');
+
+    await expect(page.getByText('Evening Office Cleaning')).toBeVisible();
+    await expect(page.getByText('Done')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Start' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Fill form & end' })).toHaveCount(0);
+  });
+
+  test('no shifts scheduled shows empty state', async ({ page }) => {
+    await setupAdminMocks(page, { authenticated: true });
+
+    await page.route(/\/api\/v1\/me\/shifts$/, async (route) => {
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      return route.fulfill({ status: 200, json: [], headers: CORS_HEADERS });
+    });
+
+    await page.goto('/me/shifts');
+    await expect(page.getByText('No shifts scheduled.')).toBeVisible();
+  });
+
+  test('unauthenticated user sees sign-in prompt', async ({ page }) => {
+    await setupAdminMocks(page, { authenticated: false });
+
+    await page.goto('/me/shifts');
+    await expect(page.getByText('Sign in to view your shifts.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+  });
+
+  test('sign out returns to sign-in prompt', async ({ page }) => {
+    await setupAdminMocks(page, { authenticated: true });
+
+    await page.route(/\/api\/v1\/me\/shifts$/, async (route) => {
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      return route.fulfill({ status: 200, json: [], headers: CORS_HEADERS });
+    });
+
+    await page.goto('/me/shifts');
+    await expect(page.getByText('My Shifts')).toBeVisible();
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    await expect(page.getByText('Sign in to view your shifts.')).toBeVisible();
+  });
+
+  test('notes textarea sends cleanerNotes on submit', async ({ page }) => {
+    await setupAdminMocks(page, { authenticated: true });
+
+    const form = {
+      id: 'form-notes', shiftId: 'shift-notes', shiftName: 'Morning Shift',
+      employeeId: 'emp-1', employeeName: 'Anna', templateId: 'tpl-1', templateTitle: 'Checklist',
+      shiftOccurrenceUtc: '2026-10-10T08:00:00Z', shiftOccurrenceEndUtc: '2026-10-10T16:00:00Z',
+      token: 't', items: [{ itemText: 'Dust', isChecked: false }],
+      photoUrls: [], cleanerNotes: null, isSubmitted: false, submittedUtc: null,
+      startedAtUtc: '2026-10-10T08:05:00Z', endedAtUtc: null, createdUtc: new Date().toISOString(),
+    };
+    const occurrence = { shiftId: 'shift-notes', shiftName: 'Morning Shift', startUtc: '2026-10-10T08:00:00Z', endUtc: '2026-10-10T16:00:00Z', form };
+
+    let endPayload: any = null;
+    await page.route(/\/api\/v1\/me\/shifts$/, async (route) => {
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      return route.fulfill({ status: 200, json: [occurrence], headers: CORS_HEADERS });
+    });
+    await page.route(/\/api\/v1\/me\/quality-cycle\/[^\/]+\/end$/, async (route) => {
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      endPayload = getBody(route);
+      return route.fulfill({ status: 200, json: { ...form, isSubmitted: true }, headers: CORS_HEADERS });
+    });
+
+    await page.goto('/me/shifts');
+    await page.getByRole('button', { name: 'Fill form & end' }).click();
+    await page.getByPlaceholder('Notes (optional)').fill('Floor was extra dirty');
+    await page.getByRole('button', { name: 'End shift & submit' }).click();
+    await expect.poll(() => endPayload?.cleanerNotes).toBe('Floor was extra dirty');
+  });
+
+  test('photo upload renders thumbnail and is included in payload', async ({ page }) => {
+    await setupAdminMocks(page, { authenticated: true });
+
+    const form = {
+      id: 'form-photo', shiftId: 'shift-photo', shiftName: 'Morning Shift',
+      employeeId: 'emp-1', employeeName: 'Anna', templateId: 'tpl-1', templateTitle: 'Checklist',
+      shiftOccurrenceUtc: '2026-10-10T08:00:00Z', shiftOccurrenceEndUtc: '2026-10-10T16:00:00Z',
+      token: 't', items: [{ itemText: 'Dust', isChecked: false }],
+      photoUrls: [], cleanerNotes: null, isSubmitted: false, submittedUtc: null,
+      startedAtUtc: '2026-10-10T08:05:00Z', endedAtUtc: null, createdUtc: new Date().toISOString(),
+    };
+    const occurrence = { shiftId: 'shift-photo', shiftName: 'Morning Shift', startUtc: '2026-10-10T08:00:00Z', endUtc: '2026-10-10T16:00:00Z', form };
+
+    let endPayload: any = null;
+    await page.route(/\/api\/v1\/me\/shifts$/, async (route) => {
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      return route.fulfill({ status: 200, json: [occurrence], headers: CORS_HEADERS });
+    });
+    await page.route(/\/api\/v1\/me\/quality-cycle\/[^\/]+\/end$/, async (route) => {
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      endPayload = getBody(route);
+      return route.fulfill({ status: 200, json: { ...form, isSubmitted: true }, headers: CORS_HEADERS });
+    });
+
+    await page.goto('/me/shifts');
+    await page.getByRole('button', { name: 'Fill form & end' }).click();
+    await page.locator('input[type="file"]').setInputFiles({ name: 'photo.png', mimeType: 'image/png', buffer: Buffer.from('89504e470d0a1a0a', 'hex') });
+    await expect(page.locator('img[alt^="photo-"]')).toBeVisible();
+    await page.getByRole('button', { name: 'End shift & submit' }).click();
+    await expect.poll(() => (endPayload?.photoUrls ?? []).length).toBe(1);
+  });
+
+  test('remove photo clears its thumbnail', async ({ page }) => {
+    await setupAdminMocks(page, { authenticated: true });
+
+    const form = {
+      id: 'form-rmphoto', shiftId: 'shift-rmphoto', shiftName: 'Morning Shift',
+      employeeId: 'emp-1', employeeName: 'Anna', templateId: 'tpl-1', templateTitle: 'Checklist',
+      shiftOccurrenceUtc: '2026-10-10T08:00:00Z', shiftOccurrenceEndUtc: '2026-10-10T16:00:00Z',
+      token: 't', items: [{ itemText: 'Dust', isChecked: false }],
+      photoUrls: [], cleanerNotes: null, isSubmitted: false, submittedUtc: null,
+      startedAtUtc: '2026-10-10T08:05:00Z', endedAtUtc: null, createdUtc: new Date().toISOString(),
+    };
+    const occurrence = { shiftId: 'shift-rmphoto', shiftName: 'Morning Shift', startUtc: '2026-10-10T08:00:00Z', endUtc: '2026-10-10T16:00:00Z', form };
+
+    await page.route(/\/api\/v1\/me\/shifts$/, async (route) => {
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      return route.fulfill({ status: 200, json: [occurrence], headers: CORS_HEADERS });
+    });
+
+    await page.goto('/me/shifts');
+    await page.getByRole('button', { name: 'Fill form & end' }).click();
+    await page.locator('input[type="file"]').setInputFiles({ name: 'photo.png', mimeType: 'image/png', buffer: Buffer.from('89504e470d0a1a0a', 'hex') });
+    await expect(page.locator('img[alt^="photo-"]')).toBeVisible();
+    await page.getByRole('button', { name: 'Remove photo' }).click();
+    await expect(page.locator('img[alt^="photo-"]')).toHaveCount(0);
   });
 });

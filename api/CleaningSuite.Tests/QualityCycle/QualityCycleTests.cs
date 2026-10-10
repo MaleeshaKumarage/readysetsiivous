@@ -118,6 +118,25 @@ public class QualityCycleTests
     }
 
     [Fact]
+    public void CreateQualityCycleForm_DefaultsOccurrenceEndToStart()
+    {
+        var occurrence = new DateTime(2026, 10, 1, 8, 0, 0, DateTimeKind.Utc);
+        var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Emp", Guid.NewGuid(), "Tpl", occurrence, new List<string>());
+        Assert.Equal(occurrence, form.ShiftOccurrenceUtc);
+        Assert.Equal(occurrence, form.ShiftOccurrenceEndUtc);
+    }
+
+    [Fact]
+    public void CreateQualityCycleForm_StoresOccurrenceEndUtc()
+    {
+        var start = new DateTime(2026, 10, 1, 8, 0, 0, DateTimeKind.Utc);
+        var end = new DateTime(2026, 10, 1, 10, 0, 0, DateTimeKind.Utc);
+        var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Emp", Guid.NewGuid(), "Tpl", start, new List<string>(), end);
+        Assert.Equal(start, form.ShiftOccurrenceUtc);
+        Assert.Equal(end, form.ShiftOccurrenceEndUtc);
+    }
+
+    [Fact]
     public void CreateQualityCycleForm_WithEmptyShiftOrEmployeeId_ThrowsArgumentException()
     {
         Assert.Throws<ArgumentException>(() => QualityCycleForm.Create(Guid.Empty, "Shift", Guid.NewGuid(), "Emp", Guid.NewGuid(), "Tpl", DateTime.UtcNow, new List<string>()));
@@ -174,6 +193,42 @@ public class QualityCycleTests
         Assert.True(form.Items[0].IsChecked);
         Assert.False(form.Items[1].IsChecked);
         Assert.Equal("Task A", form.Items[0].ItemText); // Original text preserved
+    }
+
+    [Fact]
+    public void Start_RecordsStartedAtUtc()
+    {
+        var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Cleaner", Guid.NewGuid(), "Template", DateTime.UtcNow, new List<string> { "Task A" });
+
+        form.Start();
+
+        Assert.NotNull(form.StartedAtUtc);
+        Assert.False(form.IsSubmitted);
+    }
+
+    [Fact]
+    public void Start_WhenAlreadyStarted_DoesNotOverwrite()
+    {
+        var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Cleaner", Guid.NewGuid(), "Template", DateTime.UtcNow, new List<string> { "Task A" });
+        form.Start();
+        var first = form.StartedAtUtc;
+
+        form.Start();
+
+        Assert.Equal(first, form.StartedAtUtc);
+    }
+
+    [Fact]
+    public void Submit_RecordsEndedAtUtc()
+    {
+        var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Cleaner", Guid.NewGuid(), "Template", DateTime.UtcNow, new List<string> { "Task A" });
+        form.Start();
+
+        form.Submit(new List<QualityCycleFormItem> { new QualityCycleFormItem { ItemText = "Task A", IsChecked = true } }, null, null);
+
+        Assert.True(form.IsSubmitted);
+        Assert.NotNull(form.EndedAtUtc);
+        Assert.True(form.EndedAtUtc >= form.StartedAtUtc);
     }
 
     // --- APPLICATION HANDLERS TESTS ---
@@ -349,61 +404,6 @@ public class QualityCycleTests
     }
 
     [Fact]
-    public async Task DispatchQualityCycleFormsCommandHandler_DispatchesFormsAndSendsEmails()
-    {
-        var shiftRepoMock = new Mock<IShiftRepository>();
-        var qcRepoMock = new Mock<IQualityCycleRepository>();
-        var empRepoMock = new Mock<IEmployeeRepository>();
-        var emailSenderMock = new Mock<IEmailSender>();
-
-        var template = QualityCycleTemplate.Create("Template 1", new List<string> { "Task 1" });
-        var schedule = new ShiftSchedule
-        {
-            Type = ShiftScheduleType.DailySameTime,
-            DailyStart = new TimeSpan(8, 0, 0),
-            DailyEnd = new TimeSpan(16, 0, 0)
-        };
-        var shift = Shift.Create(Guid.NewGuid(), Guid.NewGuid(), "Daily Shift", schedule, null, null, null, template.Id);
-
-        var employee = new Employee { Id = Guid.NewGuid(), Email = "test@example.com", FirstName = "John", LastName = "Doe" };
-        var assignment = ShiftAssignment.Create(shift.Id, employee.Id, null);
-
-        shiftRepoMock.Setup(s => s.ListAsync(null, null, It.IsAny<CancellationToken>())).ReturnsAsync(new List<Shift> { shift });
-        shiftRepoMock.Setup(s => s.GetAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
-        qcRepoMock.Setup(q => q.GetTemplateAsync(template.Id, It.IsAny<CancellationToken>())).ReturnsAsync(template);
-        shiftRepoMock.Setup(s => s.ListAssignmentsByShiftAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(new List<ShiftAssignment> { assignment });
-        empRepoMock.Setup(e => e.GetByIdAsync(employee.Id, It.IsAny<CancellationToken>())).ReturnsAsync(employee);
-        qcRepoMock.Setup(q => q.GetFormByShiftOccurrenceAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync((QualityCycleForm?)null);
-
-        var handler = new QualityCycleHandlers.DispatchQualityCycleFormsCommandHandler(
-            shiftRepoMock.Object, qcRepoMock.Object, empRepoMock.Object, emailSenderMock.Object);
-
-        var count = await handler.Handle(new DispatchQualityCycleFormsCommand(null, DateTime.UtcNow), CancellationToken.None);
-
-        Assert.Equal(1, count);
-        qcRepoMock.Verify(q => q.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Once);
-        emailSenderMock.Verify(e => e.SendAsync(employee.Email, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Fact]
-    public async Task DispatchQualityCycleFormsCommandHandler_WhenSpecificShiftNotSetOrInactive_HandlesCorrectly()
-    {
-        var shiftRepoMock = new Mock<IShiftRepository>();
-        var qcRepoMock = new Mock<IQualityCycleRepository>();
-        var empRepoMock = new Mock<IEmployeeRepository>();
-        var emailSenderMock = new Mock<IEmailSender>();
-
-        // Scenario 1: Specific shift requested but not found -> returns 0
-        shiftRepoMock.Setup(s => s.GetAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync((Shift?)null);
-
-        var handler = new QualityCycleHandlers.DispatchQualityCycleFormsCommandHandler(
-            shiftRepoMock.Object, qcRepoMock.Object, empRepoMock.Object, emailSenderMock.Object);
-
-        var count = await handler.Handle(new DispatchQualityCycleFormsCommand(Guid.NewGuid()), CancellationToken.None);
-        Assert.Equal(0, count);
-    }
-
-    [Fact]
     public async Task GetQualityCycleSummaryPdfQueryHandler_GeneratesPdf()
     {
         var qcRepoMock = new Mock<IQualityCycleRepository>();
@@ -470,11 +470,14 @@ public class QualityCycleTests
             Guid.NewGuid(),
             "Office Checklist",
             DateTime.UtcNow,
+            DateTime.UtcNow.AddHours(2),
             "token123",
             new List<QualityCycleFormItemDto> { new QualityCycleFormItemDto("Wipe desks", true), new QualityCycleFormItemDto("Sweep floor", false) },
             new List<string> { "https://example.com/p.jpg" },
             "Cleaned thoroughly",
             true,
+            DateTime.UtcNow,
+            DateTime.UtcNow,
             DateTime.UtcNow,
             DateTime.UtcNow);
 
