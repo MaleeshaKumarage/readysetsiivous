@@ -16,9 +16,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # --- Stage 1: plan (real-time on @agent) ---
+  # --- Stage 1: plan (real-time on @malku) ---
   plan:
-    if: github.event_name == 'issue_comment' && contains(github.event.comment.body, '@agent') && (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR')
+    if: github.event_name == 'issue_comment' && contains(github.event.comment.body, '@malku') && (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR')
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -35,9 +35,10 @@ jobs:
           N=${{ github.event.issue.number }}
           gh issue view "$N" --json title -q .title > /tmp/issue-title.txt
           gh issue view "$N" --json body -q .body > /tmp/issue-body.txt
+          gh issue view "$N" --json comments -q '.comments[].body' > /tmp/issue-comments.txt
           echo "number=$N" >> "$GITHUB_OUTPUT"
 
-      - name: Generate plan (DeepSeek)
+      - name: Clarify + plan (DeepSeek)
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
@@ -47,21 +48,28 @@ jobs:
             echo
             cat /tmp/issue-body.txt
             echo
+            echo "## Recent comments (clarifying Q&A, if any)"
+            cat /tmp/issue-comments.txt
+            echo
             echo "## Repository files"
             git ls-files | head -200
             echo "---"
-            echo "Brainstorm and write a step-by-step implementation plan."
           } | bash scripts/deepseek_wrap.sh \
-            "You are a senior software engineer. Brainstorm the issue against the repository files. Critical rules: do not write code, only the plan; consider edge cases and error paths; break the work into ordered, independently testable sub-tasks — for each list files to change, what to change, how to test. Write the plan as markdown, then a section exactly titled '## SUB_ISSUES' listing each sub-task as a one-line GitHub issue title prefixed '- '. If the issue is small, use a single '- ' line with the issue title itself. Do not write code, only the plan." \
+            "You are a senior software engineer. First decide whether the issue is clear enough to plan. If it is ambiguous, missing requirements, or has unanswered clarifying questions, do NOT write a plan — instead output the single line 'QUESTIONS' followed by a numbered list of concise clarifying questions for the user. If it is clear, write the implementation plan as markdown with a section exactly titled '## SUB_ISSUES' listing each sub-task as a one-line title prefixed '- '. Never write code, only the plan or questions." \
             > plan.md
 
-      - name: Post plan + label planned
+      - name: Post plan (or clarifying questions) + label
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           N=${{ steps.issue.outputs.number }}
+          if head -1 plan.md | grep -qi '^QUESTIONS'; then
+            gh issue comment "$N" --body-file plan.md
+            gh issue edit "$N" --add-label "needs-clarification" --remove-label "planned"
+            exit 0
+          fi
           gh issue comment "$N" --body-file plan.md
-          gh issue edit "$N" --add-label "planned"
+          gh issue edit "$N" --add-label "planned" --remove-label "needs-clarification"
           sed -n '/## SUB_ISSUES/,/^## /p' plan.md | grep '^- ' | sed 's/^- //' | while IFS= read -r title; do
             [ -z "$title" ] && continue
             url=$(gh issue create --title "$title" --body "Sub-issue of #$N.")
@@ -152,7 +160,7 @@ jobs:
     runs-on: [self-hosted, agent]
     permissions:
       contents: write
-      issues: read
+      issues: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -219,7 +227,13 @@ jobs:
             echo "$what FAILED after 3 retries"
             return 1
           }
-          retry "dotnet build" bash -c 'cd api && dotnet build CleaningSuite.Backend.sln -c Release --nologo' || { echo "build gate failed"; exit 1; }
+          retry "dotnet build" bash -c 'cd api && dotnet build CleaningSuite.Backend.sln -c Release --nologo' || {
+            echo "build gate failed — pausing for guidance"
+            { echo "⚠️ Build failed after retries. I'm blocked."; echo; echo "Last error:"; tail -30 /tmp/retry.log; echo; echo "Reply with guidance and mention @malku to resume."; } > /tmp/blocker.md
+            gh issue comment "$N" --body-file /tmp/blocker.md
+            gh issue edit "$N" --add-label "blocked"
+            exit 1
+          }
 
       - name: Push branch
         run: git push -u --force origin "feature/issue-$N"
