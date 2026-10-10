@@ -59,7 +59,7 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
     if (!isMobile) {
       await page.evaluate(() => { (window as any).__MOCK_AUTHED__ = false; });
-      await page.getByText('Sign out').click();
+      await page.getByRole('button', { name: 'Sign out' }).first().click();
     } else {
       await page.evaluate(() => {
         (window as any).__MOCK_AUTHED__ = false;
@@ -501,7 +501,7 @@ test.describe('Admin Panel - Shifts Page', () => {
         if (match) {
           const shiftId = match[1];
           const assignId = match[2];
-          assignments[shiftId] = (assignments[shiftId] || []).filter(a => a.id !== assignId);
+          assignments[shiftId] = (assignments[shiftId] || []).filter(a => a.employeeId !== assignId);
         }
         return route.fulfill({ status: 200, json: true, headers: CORS_HEADERS });
       }
@@ -594,7 +594,7 @@ test.describe('Admin Panel - Shifts Page', () => {
     await expect(page.locator('p', { hasText: 'Sami Siivooja' })).toBeVisible();
 
     // Unassign employee
-    await page.locator('.mantine-ActionIcon-root').first().click({ force: true });
+    await page.getByRole('button', { name: 'Unassign' }).first().click({ force: true });
     await expect(page.getByText('No employees assigned.')).toBeVisible();
 
     // Deactivate shift
