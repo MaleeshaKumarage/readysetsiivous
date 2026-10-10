@@ -118,6 +118,25 @@ public class QualityCycleTests
     }
 
     [Fact]
+    public void CreateQualityCycleForm_DefaultsOccurrenceEndToStart()
+    {
+        var occurrence = new DateTime(2026, 10, 1, 8, 0, 0, DateTimeKind.Utc);
+        var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Emp", Guid.NewGuid(), "Tpl", occurrence, new List<string>());
+        Assert.Equal(occurrence, form.ShiftOccurrenceUtc);
+        Assert.Equal(occurrence, form.ShiftOccurrenceEndUtc);
+    }
+
+    [Fact]
+    public void CreateQualityCycleForm_StoresOccurrenceEndUtc()
+    {
+        var start = new DateTime(2026, 10, 1, 8, 0, 0, DateTimeKind.Utc);
+        var end = new DateTime(2026, 10, 1, 10, 0, 0, DateTimeKind.Utc);
+        var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Emp", Guid.NewGuid(), "Tpl", start, new List<string>(), end);
+        Assert.Equal(start, form.ShiftOccurrenceUtc);
+        Assert.Equal(end, form.ShiftOccurrenceEndUtc);
+    }
+
+    [Fact]
     public void CreateQualityCycleForm_WithEmptyShiftOrEmployeeId_ThrowsArgumentException()
     {
         Assert.Throws<ArgumentException>(() => QualityCycleForm.Create(Guid.Empty, "Shift", Guid.NewGuid(), "Emp", Guid.NewGuid(), "Tpl", DateTime.UtcNow, new List<string>()));
@@ -470,6 +489,7 @@ public class QualityCycleTests
             Guid.NewGuid(),
             "Office Checklist",
             DateTime.UtcNow,
+            DateTime.UtcNow.AddHours(2),
             "token123",
             new List<QualityCycleFormItemDto> { new QualityCycleFormItemDto("Wipe desks", true), new QualityCycleFormItemDto("Sweep floor", false) },
             new List<string> { "https://example.com/p.jpg" },

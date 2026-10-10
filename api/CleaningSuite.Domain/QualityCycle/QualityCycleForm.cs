@@ -17,6 +17,7 @@ public class QualityCycleForm : BaseDocument
     public Guid TemplateId { get; set; }
     public string TemplateTitle { get; set; } = string.Empty;
     public DateTime ShiftOccurrenceUtc { get; set; }
+    public DateTime ShiftOccurrenceEndUtc { get; set; }
     public string Token { get; set; } = string.Empty;
     public List<QualityCycleFormItem> Items { get; set; } = new();
     public List<string> PhotoUrls { get; set; } = new();
@@ -32,7 +33,8 @@ public class QualityCycleForm : BaseDocument
         Guid templateId,
         string templateTitle,
         DateTime shiftOccurrenceUtc,
-        List<string> templateItems)
+        List<string> templateItems,
+        DateTime shiftOccurrenceEndUtc = default)
     {
         if (shiftId == Guid.Empty)
             throw new ArgumentException("ShiftId is mandatory.", nameof(shiftId));
@@ -56,6 +58,7 @@ public class QualityCycleForm : BaseDocument
             TemplateId = templateId,
             TemplateTitle = templateTitle?.Trim() ?? string.Empty,
             ShiftOccurrenceUtc = shiftOccurrenceUtc,
+            ShiftOccurrenceEndUtc = shiftOccurrenceEndUtc == default ? shiftOccurrenceUtc : shiftOccurrenceEndUtc,
             Token = Guid.NewGuid().ToString("N"),
             Items = formItems,
             PhotoUrls = new List<string>(),

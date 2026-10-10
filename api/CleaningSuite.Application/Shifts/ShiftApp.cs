@@ -371,7 +371,8 @@ public class ShiftHandlers
                 template.Id,
                 template.Title,
                 occurrence.StartUtc,
-                template.Items);
+                template.Items,
+                occurrence.EndUtc);
             await _qcRepository.SaveFormAsync(form, ct);
 
             if (!string.IsNullOrWhiteSpace(employee.Email))

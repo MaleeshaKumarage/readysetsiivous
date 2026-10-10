@@ -30,6 +30,7 @@ public record QualityCycleFormDto(
     Guid TemplateId,
     string TemplateTitle,
     DateTime ShiftOccurrenceUtc,
+    DateTime ShiftOccurrenceEndUtc,
     string Token,
     List<QualityCycleFormItemDto> Items,
     List<string> PhotoUrls,
@@ -222,7 +223,8 @@ public class QualityCycleHandlers
                             template.Id,
                             template.Title,
                             occurrence.StartUtc,
-                            template.Items);
+                            template.Items,
+                            occurrence.EndUtc);
 
                         await _qcRepository.SaveFormAsync(form, ct);
                         dispatchedCount++;
@@ -364,6 +366,7 @@ ReadySetSiivous Team";
             f.TemplateId,
             f.TemplateTitle,
             f.ShiftOccurrenceUtc,
+            f.ShiftOccurrenceEndUtc,
             f.Token,
             f.Items.Select(i => new QualityCycleFormItemDto(i.ItemText, i.IsChecked)).ToList(),
             f.PhotoUrls,
