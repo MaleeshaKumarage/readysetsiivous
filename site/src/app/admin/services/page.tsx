@@ -11,6 +11,8 @@ export default function ServicesAdminPage() {
   const [services, setServices] = useState<ServiceRowLocal[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingIsActive, setEditingIsActive] = useState(true);
   const [form, setForm] = useState({ slug: '', name: '', description: '', priceNet: '', vatRatePercent: '', durationMinutes: '', category: 'cleaning' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -21,10 +23,34 @@ export default function ServicesAdminPage() {
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
+  const openAdd = () => {
+    setEditingId(null);
+    setEditingIsActive(true);
+    setForm({ slug: '', name: '', description: '', priceNet: '', vatRatePercent: '', durationMinutes: '', category: 'cleaning' });
+    setError('');
+    setModalOpen(true);
+  };
+
+  const openEdit = (s: ServiceRowLocal) => {
+    setEditingId(s.id);
+    setEditingIsActive(s.isActive);
+    setForm({
+      slug: s.slug,
+      name: s.name?.values?.fi ?? s.name?.values?.en ?? '',
+      description: s.description?.values?.fi ?? s.description?.values?.en ?? '',
+      priceNet: String(s.priceNet ?? ''),
+      vatRatePercent: String(s.vatRatePercent ?? ''),
+      durationMinutes: String(s.durationMinutes ?? ''),
+      category: s.category ?? 'cleaning',
+    });
+    setError('');
+    setModalOpen(true);
+  };
+
   const submit = async () => {
     if (!form.slug.trim() || !form.name.trim()) { setError('Slug and name are required.'); return; }
     setSaving(true); setError('');
-    const created = await adminServices.create({
+    const fields = {
       slug: form.slug.trim(),
       category: form.category,
       name: { fi: form.name.trim() },
@@ -37,10 +63,14 @@ export default function ServicesAdminPage() {
       icon: 'Sparkles',
       sortOrder: 0,
       isFeatured: false,
-    });
+    };
+    const ok = editingId
+      ? await adminServices.update(editingId, fields, editingIsActive)
+      : await adminServices.create(fields);
     setSaving(false);
-    if (!created) { setError('Failed to create service.'); return; }
+    if (!ok) { setError(editingId ? 'Failed to update service.' : 'Failed to create service.'); return; }
     setForm({ slug: '', name: '', description: '', priceNet: '', vatRatePercent: '', durationMinutes: '', category: 'cleaning' });
+    setEditingId(null);
     setModalOpen(false); await load();
   };
 
@@ -67,7 +97,7 @@ export default function ServicesAdminPage() {
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
         <Title order={2}>Services</Title>
-        <Button leftSection={<Plus size={16} />} onClick={() => setModalOpen(true)}>Add service</Button>
+        <Button leftSection={<Plus size={16} />} onClick={openAdd}>Add service</Button>
       </Group>
 
       {loading ? <Loader /> : services.length === 0 ? (
@@ -90,14 +120,17 @@ export default function ServicesAdminPage() {
                       : <Badge color="gray">Inactive</Badge>}
                   </Table.Td>
                   <Table.Td>
-                    <Button
-                      size="xs"
-                      variant="subtle"
-                      color={s.isActive ? 'red' : 'green'}
-                      onClick={() => toggleStatus(s)}
-                    >
-                      {s.isActive ? 'Deactivate' : 'Activate'}
-                    </Button>
+                    <Group gap={6} wrap="nowrap">
+                      <Button size="xs" variant="light" onClick={() => openEdit(s)}>Edit</Button>
+                      <Button
+                        size="xs"
+                        variant="subtle"
+                        color={s.isActive ? 'red' : 'green'}
+                        onClick={() => toggleStatus(s)}
+                      >
+                        {s.isActive ? 'Deactivate' : 'Activate'}
+                      </Button>
+                    </Group>
                   </Table.Td>
                 </Table.Tr>
               ))}
@@ -106,7 +139,7 @@ export default function ServicesAdminPage() {
         </Table.ScrollContainer>
       )}
 
-      <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title="Add service" fullScreen={false} radius="md">
+      <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title={editingId ? 'Edit service' : 'Add service'} fullScreen={false} radius="md">
         <Stack gap="sm">
           <TextInput label="Slug" required value={form.slug} onChange={set('slug')} />
           <TextInput label="Name (fi)" required value={form.name} onChange={set('name')} />
@@ -119,7 +152,7 @@ export default function ServicesAdminPage() {
           {error && <Text size="sm" c="red">{error}</Text>}
           <Group justify="flex-end" mt="xs">
             <Button variant="default" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button loading={saving} onClick={submit}>Create service</Button>
+            <Button loading={saving} onClick={submit}>{editingId ? 'Save changes' : 'Create service'}</Button>
           </Group>
         </Stack>
       </Modal>
