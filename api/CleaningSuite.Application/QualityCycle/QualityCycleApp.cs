@@ -37,6 +37,8 @@ public record QualityCycleFormDto(
     string? CleanerNotes,
     bool IsSubmitted,
     DateTime? SubmittedUtc,
+    DateTime? StartedAtUtc,
+    DateTime? EndedAtUtc,
     DateTime CreatedUtc);
 
 // Template Commands & Queries
@@ -71,6 +73,12 @@ public record SubmitQualityCycleFormCommand(
 
 public record ListQualityCycleFormsQuery(Guid? ShiftId = null, DateTime? FromUtc = null, DateTime? ToUtc = null) : IRequest<IReadOnlyList<QualityCycleFormDto>>;
 public record GetQualityCycleSummaryPdfQuery(Guid ShiftId, int Year, int Month) : IRequest<byte[]>;
+
+// Employee clock/flow commands & queries
+public record StartQualityCycleFormCommand(Guid ShiftId, Guid EmployeeId, DateTime OccurrenceStartUtc, DateTime OccurrenceEndUtc) : IRequest<QualityCycleFormDto>;
+public record EndQualityCycleFormCommand(Guid FormId, Guid EmployeeId, List<QualityCycleFormItemDto> Items, List<string>? PhotoUrls = null, string? CleanerNotes = null) : IRequest<QualityCycleFormDto>;
+public record MyShiftOccurrenceDto(Guid ShiftId, string ShiftName, DateTime StartUtc, DateTime EndUtc, QualityCycleFormDto? Form);
+public record GetMyShiftsQuery(Guid EmployeeId, DateTime FromUtc, DateTime ToUtc) : IRequest<IReadOnlyList<MyShiftOccurrenceDto>>;
 
 // Handlers
 public class QualityCycleHandlers
@@ -353,6 +361,105 @@ ReadySetSiivous Team";
         }
     }
 
+    public class StartQualityCycleFormCommandHandler : IRequestHandler<StartQualityCycleFormCommand, QualityCycleFormDto>
+    {
+        private readonly IShiftRepository _shiftRepository;
+        private readonly IEmployeeRepository _employeeRepository;
+        private readonly IQualityCycleRepository _repository;
+
+        public StartQualityCycleFormCommandHandler(IShiftRepository shiftRepository, IEmployeeRepository employeeRepository, IQualityCycleRepository repository)
+        {
+            _shiftRepository = shiftRepository;
+            _employeeRepository = employeeRepository;
+            _repository = repository;
+        }
+
+        public async Task<QualityCycleFormDto> Handle(StartQualityCycleFormCommand request, CancellationToken ct)
+        {
+            var shift = await _shiftRepository.GetAsync(request.ShiftId, ct)
+                ?? throw new NotFoundException("Shift", request.ShiftId);
+            if (!shift.QualityCycleTemplateId.HasValue)
+                throw new NotFoundException("QualityCycleTemplate", Guid.Empty);
+
+            var template = await _repository.GetTemplateAsync(shift.QualityCycleTemplateId.Value, ct)
+                ?? throw new NotFoundException("QualityCycleTemplate", shift.QualityCycleTemplateId.Value);
+
+            var employee = await _employeeRepository.GetByIdAsync(request.EmployeeId, ct)
+                ?? throw new NotFoundException("Employee", request.EmployeeId);
+
+            var form = await _repository.GetFormByShiftOccurrenceAsync(shift.Id, employee.Id, request.OccurrenceStartUtc, ct);
+            if (form == null)
+            {
+                form = QualityCycleForm.Create(
+                    shift.Id, shift.Name, employee.Id,
+                    $"{employee.FirstName} {employee.LastName}",
+                    template.Id, template.Title,
+                    request.OccurrenceStartUtc, template.Items, request.OccurrenceEndUtc);
+            }
+
+            form.Start();
+            await _repository.SaveFormAsync(form, ct);
+            return MapForm(form);
+        }
+    }
+
+    public class EndQualityCycleFormCommandHandler : IRequestHandler<EndQualityCycleFormCommand, QualityCycleFormDto>
+    {
+        private readonly IQualityCycleRepository _repository;
+
+        public EndQualityCycleFormCommandHandler(IQualityCycleRepository repository) => _repository = repository;
+
+        public async Task<QualityCycleFormDto> Handle(EndQualityCycleFormCommand request, CancellationToken ct)
+        {
+            var form = await _repository.GetFormAsync(request.FormId, ct)
+                ?? throw new NotFoundException("QualityCycleForm", request.FormId);
+
+            if (form.EmployeeId != request.EmployeeId)
+                throw new UnauthorizedAccessException();
+
+            var domainItems = request.Items?.Select(i => new QualityCycleFormItem { ItemText = i.ItemText, IsChecked = i.IsChecked }).ToList()
+                ?? new List<QualityCycleFormItem>();
+
+            form.Submit(domainItems, request.PhotoUrls, request.CleanerNotes);
+            await _repository.SaveFormAsync(form, ct);
+            return MapForm(form);
+        }
+    }
+
+    public class GetMyShiftsQueryHandler : IRequestHandler<GetMyShiftsQuery, IReadOnlyList<MyShiftOccurrenceDto>>
+    {
+        private readonly IShiftRepository _shiftRepository;
+        private readonly IQualityCycleRepository _repository;
+
+        public GetMyShiftsQueryHandler(IShiftRepository shiftRepository, IQualityCycleRepository repository)
+        {
+            _shiftRepository = shiftRepository;
+            _repository = repository;
+        }
+
+        public async Task<IReadOnlyList<MyShiftOccurrenceDto>> Handle(GetMyShiftsQuery request, CancellationToken ct)
+        {
+            var assignments = await _shiftRepository.ListAssignmentsByEmployeeAsync(request.EmployeeId, ct);
+            var result = new List<MyShiftOccurrenceDto>();
+
+            foreach (var assignment in assignments)
+            {
+                if (!assignment.IsActive) continue;
+                var shift = await _shiftRepository.GetAsync(assignment.ShiftId, ct);
+                if (shift == null || !shift.IsActive) continue;
+
+                var occurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, request.FromUtc, request.ToUtc);
+                foreach (var occurrence in occurrences)
+                {
+                    var form = await _repository.GetFormByShiftOccurrenceAsync(shift.Id, request.EmployeeId, occurrence.StartUtc, ct);
+                    result.Add(new MyShiftOccurrenceDto(shift.Id, shift.Name, occurrence.StartUtc, occurrence.EndUtc, form == null ? null : MapForm(form)));
+                }
+            }
+
+            return result.OrderBy(r => r.StartUtc).ToList();
+        }
+    }
+
     private static QualityCycleTemplateDto MapTemplate(QualityCycleTemplate t) =>
         new(t.Id, t.CompanyId, t.BranchId, t.Title, t.Description, t.Items, t.IsActive, t.CreatedUtc, t.UpdatedUtc);
 
@@ -373,6 +480,8 @@ ReadySetSiivous Team";
             f.CleanerNotes,
             f.IsSubmitted,
             f.SubmittedUtc,
+            f.StartedAtUtc,
+            f.EndedAtUtc,
             f.CreatedUtc);
 }
 

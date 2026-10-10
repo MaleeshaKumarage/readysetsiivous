@@ -532,6 +532,8 @@ public class QualityCycleTests
             "Cleaned thoroughly",
             true,
             DateTime.UtcNow,
+            DateTime.UtcNow,
+            DateTime.UtcNow,
             DateTime.UtcNow);
 
         var pdfBytes = pdfGen.GenerateMonthlySummaryPdf(
