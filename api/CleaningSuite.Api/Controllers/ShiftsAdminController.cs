@@ -3,6 +3,7 @@ using CleaningSuite.Application.Shifts;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
 
 namespace CleaningSuite.Api.Controllers;
 
@@ -19,6 +20,7 @@ public class ShiftsAdminController : ControllerBase
     }
 
     [HttpGet]
+    [OutputCache(Duration = 30)]
     public async Task<IActionResult> List(
         [FromQuery] Guid? companyId,
         [FromQuery] Guid? branchId,

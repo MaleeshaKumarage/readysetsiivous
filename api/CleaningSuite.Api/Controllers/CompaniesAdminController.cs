@@ -3,6 +3,7 @@ using CleaningSuite.Application.Companies;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
 
 namespace CleaningSuite.Api.Controllers;
 
@@ -21,6 +22,7 @@ public class CompaniesAdminController : ControllerBase
     }
 
     [HttpGet]
+    [OutputCache(Duration = 30)]
     public async Task<IActionResult> List(
         [FromQuery] string? search,
         [FromQuery] int skip = 0,

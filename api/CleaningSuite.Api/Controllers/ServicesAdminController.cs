@@ -4,6 +4,7 @@ using CleaningSuite.Application.Services.Queries;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
 
 namespace CleaningSuite.Api.Controllers;
 
@@ -23,6 +24,7 @@ public class ServicesAdminController : ControllerBase
     }
 
     [HttpGet]
+    [OutputCache(Duration = 30)]
     public async Task<IActionResult> List([FromQuery] bool includeInactive, CancellationToken ct)
     {
         var services = await _mediator.Send(new ListServicesQuery(includeInactive), ct);

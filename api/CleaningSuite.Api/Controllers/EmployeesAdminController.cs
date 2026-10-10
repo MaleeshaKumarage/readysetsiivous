@@ -4,6 +4,7 @@ using CleaningSuite.Application.Employees.Queries;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
 
 namespace CleaningSuite.Api.Controllers;
 
@@ -18,6 +19,7 @@ public class EmployeesAdminController : ControllerBase
     public EmployeesAdminController(IMediator mediator) => _mediator = mediator;
 
     [HttpGet]
+    [OutputCache(Duration = 30)]
     public async Task<IActionResult> List([FromQuery] bool includeInactive, CancellationToken ct)
     {
         var employees = await _mediator.Send(new ListEmployeesQuery(includeInactive), ct);

@@ -35,6 +35,7 @@ builder.Services.AddControllers().AddJsonOptions(o =>
     o.JsonSerializerOptions.Converters.Add(new FlexibleTimeSpanConverter());
 });
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddOutputCache();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -134,6 +135,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseExceptionHandler();
 app.UseCors("SiteOrigins");
+app.UseOutputCache();
 
 // Service card images uploaded by admins, served from the uploads folder.
 var uploadsPath = app.Configuration["Uploads:Path"] ?? Path.Combine(app.Environment.ContentRootPath, "uploads");
