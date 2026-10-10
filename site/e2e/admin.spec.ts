@@ -436,6 +436,51 @@ test.describe('Admin Panel - Employees Page', () => {
     await expect(page.getByText('Inactive')).toBeVisible();
   });
 
+  test('invite, resend, and registration status', async ({ page }) => {
+    await setupAdminMocks(page, { authenticated: true });
+
+    const employees: any[] = [
+      { id: 'emp-1', email: 'x@y.fi', firstName: 'A', lastName: 'B', role: 'employee', isActive: true, skills: [], serviceAreas: [], certifications: [], defaultHours: {}, keycloakUserId: '' },
+    ];
+
+    await page.route('**/api/v1/admin/employees**', async (route) => {
+      const method = route.request().method();
+      const url = route.request().url();
+      if (method === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      if (url.includes('/invite') && method === 'POST') {
+        const m = url.match(/employees\/([^\/]+)\/invite/);
+        const id = m ? m[1] : '';
+        const emp = employees.find((e) => e.id === id);
+        if (emp) { emp.keycloakUserId = 'kc-1'; emp.invitedAtUtc = new Date().toISOString(); }
+        return route.fulfill({ status: 200, json: { email: emp?.email }, headers: CORS_HEADERS });
+      }
+      if (method === 'GET') return route.fulfill({ status: 200, json: employees, headers: CORS_HEADERS });
+      return route.continue();
+    });
+
+    await page.goto('/admin/employees/');
+
+    // Not invited -> Invite button
+    await expect(page.getByText('Not invited', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Invite' })).toBeVisible();
+
+    // Invite -> Invited + Resend invite
+    await page.getByRole('button', { name: 'Invite' }).click();
+    await expect(page.getByText('Invited', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Resend invite' })).toBeVisible();
+
+    // Resend still works while unregistered
+    await page.getByRole('button', { name: 'Resend invite' }).click();
+    await expect(page.getByText('Invited', { exact: true })).toBeVisible();
+
+    // Registered -> Registered badge, no invite/resend actions
+    employees[0].registeredAtUtc = new Date().toISOString();
+    await page.reload();
+    await expect(page.getByText('Registered', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Invite' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Resend invite' })).toHaveCount(0);
+  });
+
   test('worst path: required field validation and server error', async ({ page }) => {
     await setupAdminMocks(page, { authenticated: true });
 

@@ -43,10 +43,38 @@ public class EmployeeInviteTests
         var result = await handler.Handle(new InviteEmployeeCommand(emp.Id), CancellationToken.None);
 
         Assert.Equal("e@x.fi", result.Email);
-        Assert.Equal("TempPwd123", result.TemporaryPassword);
         Assert.Equal("kc-user-1", emp.KeycloakUserId);
         Assert.NotNull(emp.InvitedAtUtc);
         empRepo.Verify(r => r.SaveAsync(emp, It.IsAny<CancellationToken>()), Times.Once);
         email.Verify(e => e.SendAsync("e@x.fi", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Invite_WhenAlreadyRegistered_ThrowsConflict()
+    {
+        var emp = new Employee
+        {
+            Id = Guid.NewGuid(),
+            Email = "e@x.fi",
+            FirstName = "A",
+            LastName = "B",
+            Role = Employee.RoleEmployee,
+            RegisteredAtUtc = DateTime.UtcNow,
+        };
+
+        var empRepo = new Mock<IEmployeeRepository>();
+        empRepo.Setup(r => r.GetByIdAsync(emp.Id, It.IsAny<CancellationToken>())).ReturnsAsync(emp);
+
+        var ctx = new Mock<ITenantContext>();
+        var provisioner = new Mock<IKeycloakProvisioner>();
+        var email = new Mock<IEmailSender>();
+        var config = new Mock<IConfiguration>();
+
+        var handler = new InviteEmployeeHandler(empRepo.Object, ctx.Object, provisioner.Object, email.Object, config.Object);
+
+        await Assert.ThrowsAsync<ConflictException>(() =>
+            handler.Handle(new InviteEmployeeCommand(emp.Id), CancellationToken.None));
+
+        provisioner.Verify(p => p.InviteEmployeeAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

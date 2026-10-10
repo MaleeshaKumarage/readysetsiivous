@@ -47,10 +47,7 @@ export default function EmployeesAdminPage() {
   const deactivate = async (id: string) => { await adminEmployees.deactivate(id); await load(); };
 
   const invite = async (id: string) => {
-    const result = await adminEmployees.invite(id);
-    if (result?.temporaryPassword) {
-      alert(`Invite sent. Temporary password: ${result.temporaryPassword}`);
-    }
+    await adminEmployees.invite(id);
     await load();
   };
 
@@ -86,9 +83,11 @@ export default function EmployeesAdminPage() {
                   <Table.Td>
                     {e.isActive && (
                       <Group gap={6} wrap="nowrap">
-                        <Button size="xs" variant="light" onClick={() => invite(e.id)}>
-                          {e.keycloakUserId ? 'Resend invite' : 'Invite'}
-                        </Button>
+                        {!e.registeredAtUtc && (
+                          <Button size="xs" variant="light" onClick={() => invite(e.id)}>
+                            {e.keycloakUserId ? 'Resend invite' : 'Invite'}
+                          </Button>
+                        )}
                         <Button size="xs" variant="subtle" color="red" onClick={() => deactivate(e.id)}>Deactivate</Button>
                       </Group>
                     )}

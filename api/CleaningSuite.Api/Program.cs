@@ -245,6 +245,7 @@ public class DefaultExceptionHandler : IExceptionHandler
         var (status, title) = exception switch
         {
             CleaningSuite.Application.Common.SlugConflictException => (409, "Slug already exists"),
+            CleaningSuite.Application.Common.ConflictException => (409, "Conflict"),
             CleaningSuite.Application.Common.NotFoundException => (404, "Not found"),
             CleaningSuite.Application.Bookings.SlotConflictException => (409, "Slot conflict"),
             CleaningSuite.Application.Agreements.AgreementConflictException => (409, "Agreement conflict"),

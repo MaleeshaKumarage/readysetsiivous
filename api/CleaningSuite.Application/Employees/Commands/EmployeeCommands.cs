@@ -32,7 +32,7 @@ public record DeactivateEmployeeCommand(Guid Id) : IRequest<Unit>;
 
 public record InviteEmployeeCommand(Guid Id) : IRequest<EmployeeInviteResult>;
 
-public record EmployeeInviteResult(string Email, string TemporaryPassword);
+public record EmployeeInviteResult(string Email);
 
 public record AssignBookingCommand(Guid BookingId, Guid EmployeeId) : IRequest<Unit>;
 
@@ -162,6 +162,9 @@ public class InviteEmployeeHandler : IRequestHandler<InviteEmployeeCommand, Empl
         var employee = await _employees.GetByIdAsync(request.Id, ct)
             ?? throw new NotFoundException("Employee", request.Id);
 
+        if (employee.RegisteredAtUtc != null)
+            throw new ConflictException("Employee has already completed registration.");
+
         // Pre-create (or re-arm) the Keycloak user so the email is locked to the
         // invited address — the employee cannot change it during sign-in.
         var invited = await _provisioner.InviteEmployeeAsync(
@@ -183,7 +186,7 @@ public class InviteEmployeeHandler : IRequestHandler<InviteEmployeeCommand, Empl
         var html = BuildInviteEmail(employee.FirstName, employee.Email, invited.TemporaryPassword, loginUrl);
         await _email.SendAsync(employee.Email, "Welcome to ReadySetSiivous — set up your account", html, ct);
 
-        return new EmployeeInviteResult(employee.Email, invited.TemporaryPassword);
+        return new EmployeeInviteResult(employee.Email);
     }
 
     private static string BuildInviteEmail(string firstName, string email, string temporaryPassword, string loginUrl)

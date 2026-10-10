@@ -203,7 +203,7 @@ export const adminEmployees = {
     adminSend(`/api/v1/admin/employees/${id}`, 'PUT', { fields, isActive }),
   deactivate: (id: string) => adminSend(`/api/v1/admin/employees/${id}/deactivate`, 'POST'),
   invite: (id: string) =>
-    adminSendJson<{ email: string; temporaryPassword: string }>(
+    adminSendJson<{ email: string }>(
       `/api/v1/admin/employees/${id}/invite`,
       'POST'
     ),
