@@ -32,7 +32,7 @@ public record DeactivateEmployeeCommand(Guid Id) : IRequest<Unit>;
 
 public record InviteEmployeeCommand(Guid Id) : IRequest<EmployeeInviteResult>;
 
-public record EmployeeInviteResult(string Email, string TemporaryPassword);
+public record EmployeeInviteResult(string Email);
 
 public record AssignBookingCommand(Guid BookingId, Guid EmployeeId) : IRequest<Unit>;
 
@@ -137,20 +137,22 @@ public class DeactivateEmployeeHandler : IRequestHandler<DeactivateEmployeeComma
 
 public class InviteEmployeeHandler : IRequestHandler<InviteEmployeeCommand, EmployeeInviteResult>
 {
-    private const string ClientId = "cleaning-suite-web";
     private readonly IEmployeeRepository _employees;
     private readonly ITenantContext _context;
+    private readonly IKeycloakProvisioner _provisioner;
     private readonly IEmailSender _email;
     private readonly IConfiguration _config;
 
     public InviteEmployeeHandler(
         IEmployeeRepository employees,
         ITenantContext context,
+        IKeycloakProvisioner provisioner,
         IEmailSender email,
         IConfiguration config)
     {
         _employees = employees;
         _context = context;
+        _provisioner = provisioner;
         _email = email;
         _config = config;
     }
@@ -160,33 +162,44 @@ public class InviteEmployeeHandler : IRequestHandler<InviteEmployeeCommand, Empl
         var employee = await _employees.GetByIdAsync(request.Id, ct)
             ?? throw new NotFoundException("Employee", request.Id);
 
-        var serverUrl = (_config["Auth:Keycloak:ServerUrl"] ?? "").TrimEnd('/');
-        var realm = _context.TenantId;
+        // Pre-create (or re-arm) the Keycloak user so the email is locked to the
+        // invited address — the employee cannot change it during sign-in.
+        var invited = await _provisioner.InviteEmployeeAsync(
+            _context.TenantId,
+            employee.Email,
+            employee.FirstName,
+            employee.LastName,
+            employee.Role,
+            ct);
+
+        employee.KeycloakUserId = invited.KeycloakUserId;
+        employee.InvitedAtUtc = DateTime.UtcNow;
+        employee.UpdatedUtc = DateTime.UtcNow;
+        await _employees.SaveAsync(employee, ct);
+
         var baseUrl = _config["App:FrontendBaseUrl"] ?? "https://readysetsiivous.fi";
-        var redirect = $"{baseUrl.TrimEnd('/')}/fi/admin/";
+        var loginUrl = $"{baseUrl.TrimEnd('/')}/fi/admin/";
 
-        var link = $"{serverUrl}/realms/{realm}/protocol/openid-connect/registrations" +
-                   $"?client_id={ClientId}&response_type=code&scope=openid%20email" +
-                   $"&redirect_uri={Uri.EscapeDataString(redirect)}";
-
-        var html = BuildInviteEmail(employee.FirstName, employee.Role, link);
+        var html = BuildInviteEmail(employee.FirstName, employee.Email, invited.TemporaryPassword, loginUrl);
         await _email.SendAsync(employee.Email, "Welcome to ReadySetSiivous — set up your account", html, ct);
 
-        return new EmployeeInviteResult(employee.Email, "");
+        return new EmployeeInviteResult(employee.Email);
     }
 
-    private static string BuildInviteEmail(string firstName, string role, string link)
+    private static string BuildInviteEmail(string firstName, string email, string temporaryPassword, string loginUrl)
     {
         var name = Escape(firstName);
-        var roleLabel = role == "admin" ? "administrator" : "employee";
-        var safeLink = Escape(link);
+        var safeEmail = Escape(email);
+        var safePwd = Escape(temporaryPassword);
+        var safeLink = Escape(loginUrl);
         return string.Join("\n",
             "<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#1a1a1a\">",
             "  <h2 style=\"margin:0 0 16px\">Welcome to ReadySetSiivous</h2>",
             $"  <p style=\"margin:0 0 16px\">Hi {name},</p>",
-            $"  <p style=\"margin:0 0 20px\">You have been invited to join ReadySetSiivous as an {roleLabel}. Create your account to get started:</p>",
-            $"  <a href=\"{safeLink}\" style=\"display:inline-block;background:#D9B95C;color:#070B1A;padding:12px 28px;border-radius:8px;font-weight:bold;text-decoration:none;font-size:15px\">Create my account</a>",
-            $"  <p style=\"margin:20px 0 0;font-size:12px;color:#888888\">If the button doesn't work, copy this link: {safeLink}</p>",
+            $"  <p style=\"margin:0 0 16px\">You have been invited to ReadySetSiivous. Sign in with <strong>{safeEmail}</strong> and the temporary password below. You will be asked to choose a new password on first sign-in.</p>",
+            $"  <p style=\"margin:0 0 8px;font-size:14px\">Temporary password: <strong>{safePwd}</strong></p>",
+            $"  <a href=\"{safeLink}\" style=\"display:inline-block;background:#D9B95C;color:#070B1A;padding:12px 28px;border-radius:8px;font-weight:bold;text-decoration:none;font-size:15px\">Sign in</a>",
+            $"  <p style=\"margin:20px 0 0;font-size:12px;color:#888888\">If the button doesn't work, go to: {safeLink}</p>",
             "</div>");
     }
 

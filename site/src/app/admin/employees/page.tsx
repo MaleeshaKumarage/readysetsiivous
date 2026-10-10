@@ -46,6 +46,16 @@ export default function EmployeesAdminPage() {
 
   const deactivate = async (id: string) => { await adminEmployees.deactivate(id); await load(); };
 
+  const invite = async (id: string) => {
+    await adminEmployees.invite(id);
+    await load();
+  };
+
+  const registrationBadge = (e: Employee) => {
+    if (e.keycloakUserId) return <Badge color="green">Invited</Badge>;
+    return <Badge color="gray">Not invited</Badge>;
+  };
+
   return (
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
@@ -59,7 +69,7 @@ export default function EmployeesAdminPage() {
         <Table.ScrollContainer minWidth={550}>
           <Table striped highlightOnHover withTableBorder>
             <Table.Thead>
-              <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Email</Table.Th><Table.Th>Role</Table.Th><Table.Th>Status</Table.Th><Table.Th w={120}></Table.Th></Table.Tr>
+              <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Email</Table.Th><Table.Th>Role</Table.Th><Table.Th>Status</Table.Th><Table.Th>Registration</Table.Th><Table.Th w={200}></Table.Th></Table.Tr>
             </Table.Thead>
             <Table.Tbody>
               {employees.map((e) => (
@@ -68,7 +78,17 @@ export default function EmployeesAdminPage() {
                   <Table.Td>{e.email}</Table.Td>
                   <Table.Td>{e.role}</Table.Td>
                   <Table.Td>{e.isActive ? <Badge color="green">Active</Badge> : <Badge color="gray">Inactive</Badge>}</Table.Td>
-                  <Table.Td>{e.isActive && <Button size="xs" variant="subtle" color="red" onClick={() => deactivate(e.id)}>Deactivate</Button>}</Table.Td>
+                  <Table.Td>{registrationBadge(e)}</Table.Td>
+                  <Table.Td>
+                    {e.isActive && (
+                      <Group gap={6} wrap="nowrap">
+                        <Button size="xs" variant="light" onClick={() => invite(e.id)}>
+                          {e.keycloakUserId ? 'Resend invite' : 'Invite'}
+                        </Button>
+                        <Button size="xs" variant="subtle" color="red" onClick={() => deactivate(e.id)}>Deactivate</Button>
+                      </Group>
+                    )}
+                  </Table.Td>
                 </Table.Tr>
               ))}
             </Table.Tbody>

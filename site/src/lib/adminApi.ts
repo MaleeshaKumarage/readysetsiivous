@@ -40,6 +40,8 @@ export interface Employee {
   certifications: { name: string; expiresAtUtc?: string | null }[];
   notes?: string | null;
   defaultHours: Record<string, { start?: string | null; end?: string | null }>;
+  keycloakUserId?: string;
+  invitedAtUtc?: string | null;
 }
 
 async function authorizedFetch(path: string, init: RequestInit = {}): Promise<Response> {
@@ -200,7 +202,7 @@ export const adminEmployees = {
     adminSend(`/api/v1/admin/employees/${id}`, 'PUT', { fields, isActive }),
   deactivate: (id: string) => adminSend(`/api/v1/admin/employees/${id}/deactivate`, 'POST'),
   invite: (id: string) =>
-    adminSendJson<{ email: string; temporaryPassword: string }>(
+    adminSendJson<{ email: string }>(
       `/api/v1/admin/employees/${id}/invite`,
       'POST'
     ),

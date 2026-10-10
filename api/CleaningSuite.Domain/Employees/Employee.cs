@@ -9,6 +9,7 @@ public class Employee : BaseDocument
     public const string RoleEmployee = "employee";
 
     public string KeycloakUserId { get; set; } = "";
+    public DateTime? InvitedAtUtc { get; set; }
     public string Email { get; set; } = "";
     public string FirstName { get; set; } = "";
     public string LastName { get; set; } = "";
