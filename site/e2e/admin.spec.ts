@@ -59,7 +59,7 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
     if (!isMobile) {
       await page.evaluate(() => { (window as any).__MOCK_AUTHED__ = false; });
-      await page.getByText('Sign out').click();
+      await page.getByRole('button', { name: 'Sign out' }).first().click();
     } else {
       await page.evaluate(() => {
         (window as any).__MOCK_AUTHED__ = false;
@@ -500,8 +500,8 @@ test.describe('Admin Panel - Shifts Page', () => {
         const match = url.match(/\/shifts\/([^\/]+)\/assignments\/([^\/]+)/);
         if (match) {
           const shiftId = match[1];
-          const empOrAssignId = match[2];
-          assignments[shiftId] = (assignments[shiftId] || []).filter(a => a.id !== empOrAssignId && a.employeeId !== empOrAssignId);
+          const assignId = match[2];
+          assignments[shiftId] = (assignments[shiftId] || []).filter(a => a.employeeId !== assignId);
         }
         return route.fulfill({ status: 200, json: true, headers: CORS_HEADERS });
       }

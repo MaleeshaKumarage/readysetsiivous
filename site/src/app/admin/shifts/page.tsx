@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import {
-  Title, Button, Table, Modal, TextInput, Select, MultiSelect, Group, Stack, Text, Loader, Badge, ActionIcon, NumberInput,
+  Title, Button, Table, Modal, TextInput, Select, MultiSelect, Group, Stack, Text, Loader, ActionIcon, NumberInput,
 } from '@mantine/core';
 import { Plus, Trash2 } from 'lucide-react';
 import {
-  adminShifts, adminCompanies, adminBranches, adminEmployees,
+  adminShifts, adminCompanies, adminEmployees,
   type Shift, type Company, type Branch, type Employee, type ShiftAssignment,
 } from '@/lib/adminApi';
 
@@ -109,8 +109,8 @@ export default function ShiftsAdminPage() {
     if (a) setAssignments((m) => ({ ...m, [shiftId]: a }));
   };
 
-  const doUnassign = async (shiftId: string, assignmentId: string) => {
-    await adminShifts.unassign(shiftId, assignmentId);
+  const doUnassign = async (shiftId: string, employeeId: string) => {
+    await adminShifts.unassign(shiftId, employeeId);
     const a = await adminShifts.assignments(shiftId);
     setAssignments((m) => ({ ...m, [shiftId]: a ?? [] }));
   };
@@ -122,7 +122,7 @@ export default function ShiftsAdminPage() {
 
   return (
     <>
-      <Group justify="space-between" mb="md">
+      <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
         <Title order={2}>Shifts</Title>
         <Button leftSection={<Plus size={16} />} onClick={() => setModalOpen(true)}>Add shift</Button>
       </Group>
@@ -130,70 +130,72 @@ export default function ShiftsAdminPage() {
       {loading ? <Loader /> : shifts.length === 0 ? (
         <Text c="dimmed">No shifts yet.</Text>
       ) : (
-        <Table striped highlightOnHover withTableBorder>
-          <Table.Thead>
-            <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Schedule</Table.Th><Table.Th>Employees</Table.Th><Table.Th w={180}></Table.Th></Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {shifts.map((s) => (
-              <>
-                <Table.Tr key={s.id}>
-                  <Table.Td fw={500}>{s.name}</Table.Td>
-                  <Table.Td>
-                    {s.schedule.type === 0 && `Daily ${s.schedule.dailyStart}–${s.schedule.dailyEnd}`}
-                    {s.schedule.type === 2 && (s.schedule.weeklyDays?.length
-                      ? `${s.schedule.weeklyDays.map((d) => DAYS[d]).join(', ')} ${s.schedule.weeklyStart}–${s.schedule.weeklyEnd}`
-                      : `${DAYS[s.schedule.weeklyDay ?? 0]} ${s.schedule.weeklyStart}–${s.schedule.weeklyEnd}`)}
-                    {s.schedule.type === 3 && `Bi-weekly ${DAYS[s.schedule.biWeeklyDay ?? 0]}`}
-                    {s.schedule.type === 5 && `Monthly day ${s.schedule.monthlyDay}`}
-                    {s.schedule.type === 4 && 'On-call'}
-                  </Table.Td>
-                  <Table.Td>{assignments[s.id]?.length ?? 0}</Table.Td>
-                  <Table.Td>
-                    <Group gap={6}>
-                      <Button size="xs" variant="light" onClick={() => openAssign(s.id)}>Employees</Button>
-                      {s.isActive && <Button size="xs" variant="subtle" color="red" onClick={() => deactivate(s.id)}>Deactivate</Button>}
-                    </Group>
-                  </Table.Td>
-                </Table.Tr>
-                {assignOpen === s.id && (
-                  <Table.Tr key={s.id + '-assign'}>
-                    <Table.Td colSpan={4} p="sm">
-                      <Group align="flex-end" mb="xs">
-                        <MultiSelect
-                          label="Assign employees"
-                          placeholder="Select employees"
-                          data={employees.map((e) => ({ value: e.id, label: `${e.firstName} ${e.lastName}` }))}
-                          value={assignSel}
-                          onChange={setAssignSel}
-                          style={{ flex: 1 }}
-                          searchable
-                        />
-                        <Button size="xs" onClick={() => doAssign(s.id)}>Assign</Button>
+        <Table.ScrollContainer minWidth={600}>
+          <Table striped highlightOnHover withTableBorder>
+            <Table.Thead>
+              <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Schedule</Table.Th><Table.Th>Employees</Table.Th><Table.Th w={180}></Table.Th></Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {shifts.map((s) => (
+                <Fragment key={s.id}>
+                  <Table.Tr>
+                    <Table.Td fw={500}>{s.name}</Table.Td>
+                    <Table.Td>
+                      {s.schedule.type === 0 && `Daily ${s.schedule.dailyStart}–${s.schedule.dailyEnd}`}
+                      {s.schedule.type === 2 && (s.schedule.weeklyDays?.length
+                        ? `${s.schedule.weeklyDays.map((d) => DAYS[d]).join(', ')} ${s.schedule.weeklyStart}–${s.schedule.weeklyEnd}`
+                        : `${DAYS[s.schedule.weeklyDay ?? 0]} ${s.schedule.weeklyStart}–${s.schedule.weeklyEnd}`)}
+                      {s.schedule.type === 3 && `Bi-weekly ${DAYS[s.schedule.biWeeklyDay ?? 0]}`}
+                      {s.schedule.type === 5 && `Monthly day ${s.schedule.monthlyDay}`}
+                      {s.schedule.type === 4 && 'On-call'}
+                    </Table.Td>
+                    <Table.Td>{assignments[s.id]?.length ?? 0}</Table.Td>
+                    <Table.Td>
+                      <Group gap={6} wrap="nowrap">
+                        <Button size="xs" variant="light" onClick={() => openAssign(s.id)}>Employees</Button>
+                        {s.isActive && <Button size="xs" variant="subtle" color="red" onClick={() => deactivate(s.id)}>Deactivate</Button>}
                       </Group>
-                      {(assignments[s.id] ?? []).length === 0 ? (
-                        <Text size="sm" c="dimmed">No employees assigned.</Text>
-                      ) : (
-                        <Stack gap={4}>
-                          {(assignments[s.id] ?? []).map((a) => (
-                            <Group key={a.id} justify="space-between">
-                              <Text size="sm">{employeeName(a.employeeId)}</Text>
-                              <Button size="xs" variant="subtle" color="red" aria-label="Unassign" onClick={() => doUnassign(s.id, a.employeeId)}>Unassign</Button>
-                            </Group>
-                          ))}
-                        </Stack>
-                      )}
                     </Table.Td>
                   </Table.Tr>
-                )}
-              </>
-            ))}
-          </Table.Tbody>
-        </Table>
+                  {assignOpen === s.id && (
+                    <Table.Tr key={s.id + '-assign'}>
+                      <Table.Td colSpan={4} p="sm">
+                        <Group align="flex-end" mb="xs" wrap="wrap" gap="xs">
+                          <MultiSelect
+                            label="Assign employees"
+                            placeholder="Select employees"
+                            data={employees.map((e) => ({ value: e.id, label: `${e.firstName} ${e.lastName}` }))}
+                            value={assignSel}
+                            onChange={setAssignSel}
+                            style={{ flex: 1, minWidth: 200 }}
+                            searchable
+                          />
+                          <Button size="xs" onClick={() => doAssign(s.id)}>Assign</Button>
+                        </Group>
+                        {(assignments[s.id] ?? []).length === 0 ? (
+                          <Text size="sm" c="dimmed">No employees assigned.</Text>
+                        ) : (
+                          <Stack gap={4}>
+                            {(assignments[s.id] ?? []).map((a) => (
+                              <Group key={a.id} justify="space-between" wrap="wrap" gap="xs">
+                                <Text size="sm">{employeeName(a.employeeId)}</Text>
+                                <ActionIcon variant="subtle" color="red" size="sm" aria-label="Unassign" onClick={() => doUnassign(s.id, a.employeeId)}><Trash2 size={14} /></ActionIcon>
+                              </Group>
+                            ))}
+                          </Stack>
+                        )}
+                      </Table.Td>
+                    </Table.Tr>
+                  )}
+                </Fragment>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
       )}
 
-      <Modal opened={modalOpen} onClose={closeModal} title="Add shift" size="lg">
-        <Stack>
+      <Modal opened={modalOpen} onClose={closeModal} title="Add shift" size="lg" radius="md">
+        <Stack gap="sm">
           <Select label="Company" data={companies.map((c) => ({ value: c.id, label: c.name }))} value={companyId} onChange={(v) => { setCompanyId(v); setBranchId(null); }} searchable />
           <Select label="Branch" data={branches.map((b) => ({ value: b.id, label: b.name }))} value={branchId} onChange={setBranchId} searchable disabled={!companyId} />
           <TextInput label="Name" required value={name} onChange={(e) => setName(e.target.value)} />
@@ -208,7 +210,7 @@ export default function ShiftsAdminPage() {
             />
           )}
           {scheduleType === '3' && (
-            <Group grow>
+            <Group wrap="wrap" grow gap="xs">
               <Select label="Week parity" data={[{ value: '1', label: 'Week 1' }, { value: '2', label: 'Week 2' }]} value={weekParity} onChange={(v) => setWeekParity(v ?? '1')} />
               <Select label="Day" data={DAYS.map((d, i) => ({ value: String(i), label: d }))} value={weekDays[0] ?? ''} onChange={(v) => setWeekDays(v ? [v] : [])} />
             </Group>
@@ -217,14 +219,14 @@ export default function ShiftsAdminPage() {
             <NumberInput label="Day of month (1-31)" min={1} max={31} value={monthlyDay} onChange={setMonthlyDay} />
           )}
           {scheduleType !== '4' && (
-            <Group grow>
+            <Group wrap="wrap" grow gap="xs">
               <TextInput label="Start" type="time" value={start} onChange={(e) => setStart(e.target.value)} />
               <TextInput label="End" type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
             </Group>
           )}
           <TextInput label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
           {error && <Text size="sm" c="red">{error}</Text>}
-          <Group justify="flex-end">
+          <Group justify="flex-end" mt="xs">
             <Button variant="default" onClick={closeModal}>Cancel</Button>
             <Button loading={saving} onClick={submit}>Create shift</Button>
           </Group>

@@ -21,7 +21,7 @@ export default function AdminDashboardPage() {
           <Paper key={s.href} component={Link} href={`/admin/${s.href}/`} p="lg" withBorder radius="md">
             <Group mb="xs">
               <ThemeIcon size="lg" variant="light"><s.icon size={18} /></ThemeIcon>
-              <Text fw={600}>{s.title}</Text>
+              <Text fw={600} c="white">{s.title}</Text>
             </Group>
             <Text size="sm" c="dimmed">{s.description}</Text>
           </Paper>

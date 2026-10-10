@@ -455,63 +455,65 @@ export default function AdminQualityCyclePage() {
                   No quality cycle forms logged for the selected filter.
                 </Text>
               ) : (
-                <Table striped highlightOnHover withTableBorder>
-                  <Table.Thead>
-                    <Table.Tr>
-                      <Table.Th>Occurrence Date</Table.Th>
-                      <Table.Th>Shift</Table.Th>
-                      <Table.Th>Cleaner</Table.Th>
-                      <Table.Th>Status</Table.Th>
-                      <Table.Th>Completed Items</Table.Th>
-                      <Table.Th>Notes / Photos</Table.Th>
-                    </Table.Tr>
-                  </Table.Thead>
-                  <Table.Tbody>
-                    {forms.map((f) => {
-                      const completedCount = f.items.filter((i) => i.isChecked).length;
-                      return (
-                        <Table.Tr key={f.id}>
-                          <Table.Td fw={500}>
-                            {new Date(f.shiftOccurrenceUtc).toLocaleString()}
-                          </Table.Td>
-                          <Table.Td>{f.shiftName}</Table.Td>
-                          <Table.Td>{f.employeeName}</Table.Td>
-                          <Table.Td>
-                            {f.isSubmitted ? (
-                              <Badge color="green" leftSection={<CheckCircle2 size={12} />}>
-                                Submitted
-                              </Badge>
-                            ) : (
-                              <Badge color="yellow" leftSection={<Clock size={12} />}>
-                                Pending
-                              </Badge>
-                            )}
-                          </Table.Td>
-                          <Table.Td>
-                            {f.isSubmitted ? `${completedCount} / ${f.items.length}` : '—'}
-                          </Table.Td>
-                          <Table.Td>
-                            <Stack gap={2}>
-                              {f.cleanerNotes && (
-                                <Text size="xs" c="dimmed">
-                                  Note: {f.cleanerNotes}
-                                </Text>
+                <Table.ScrollContainer minWidth={600}>
+                  <Table striped highlightOnHover withTableBorder>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>Occurrence Date</Table.Th>
+                        <Table.Th>Shift</Table.Th>
+                        <Table.Th>Cleaner</Table.Th>
+                        <Table.Th>Status</Table.Th>
+                        <Table.Th>Completed Items</Table.Th>
+                        <Table.Th>Notes / Photos</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {forms.map((f) => {
+                        const completedCount = f.items.filter((i) => i.isChecked).length;
+                        return (
+                          <Table.Tr key={f.id}>
+                            <Table.Td fw={500}>
+                              {new Date(f.shiftOccurrenceUtc).toLocaleString()}
+                            </Table.Td>
+                            <Table.Td>{f.shiftName}</Table.Td>
+                            <Table.Td>{f.employeeName}</Table.Td>
+                            <Table.Td>
+                              {f.isSubmitted ? (
+                                <Badge color="green" leftSection={<CheckCircle2 size={12} />}>
+                                  Submitted
+                                </Badge>
+                              ) : (
+                                <Badge color="yellow" leftSection={<Clock size={12} />}>
+                                  Pending
+                                </Badge>
                               )}
-                              {f.photoUrls && f.photoUrls.length > 0 && (
-                                <Group gap={4}>
-                                  <ImageIcon size={12} className="text-indigo-400" />
-                                  <Text size="xs" c="indigo">
-                                    {f.photoUrls.length} photo(s) attached
+                            </Table.Td>
+                            <Table.Td>
+                              {f.isSubmitted ? `${completedCount} / ${f.items.length}` : '—'}
+                            </Table.Td>
+                            <Table.Td>
+                              <Stack gap={2}>
+                                {f.cleanerNotes && (
+                                  <Text size="xs" c="dimmed">
+                                    Note: {f.cleanerNotes}
                                   </Text>
-                                </Group>
-                              )}
-                            </Stack>
-                          </Table.Td>
-                        </Table.Tr>
-                      );
-                    })}
-                  </Table.Tbody>
-                </Table>
+                                )}
+                                {f.photoUrls && f.photoUrls.length > 0 && (
+                                  <Group gap={4}>
+                                    <ImageIcon size={12} className="text-indigo-400" />
+                                    <Text size="xs" c="indigo">
+                                      {f.photoUrls.length} photo(s) attached
+                                    </Text>
+                                  </Group>
+                                )}
+                              </Stack>
+                            </Table.Td>
+                          </Table.Tr>
+                        );
+                      })}
+                    </Table.Tbody>
+                  </Table>
+                </Table.ScrollContainer>
               )}
             </Stack>
           </Paper>

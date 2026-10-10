@@ -74,7 +74,7 @@ export default function CompaniesAdminPage() {
 
   return (
     <>
-      <Group justify="space-between" mb="md">
+      <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
         <Title order={2}>Companies</Title>
         <Button leftSection={<Plus size={16} />} onClick={() => setModalOpen(true)}>Add company</Button>
       </Group>
@@ -84,62 +84,64 @@ export default function CompaniesAdminPage() {
       ) : companies.length === 0 ? (
         <Text c="dimmed">No companies yet. Add one to get started.</Text>
       ) : (
-        <Table striped highlightOnHover withTableBorder>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Name</Table.Th>
-              <Table.Th>Business ID</Table.Th>
-              <Table.Th>Contact</Table.Th>
-              <Table.Th w={120}>Branches</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {companies.map((c) => {
-              const currentBranches = companyBranchesMap[c.id] ?? [];
-              const isExpanded = expanded === c.id;
-              return (
-                <Fragment key={c.id}>
-                  <Table.Tr>
-                    <Table.Td fw={500}>{c.name}</Table.Td>
-                    <Table.Td>{c.businessId}</Table.Td>
-                    <Table.Td>{c.contactName || '—'}</Table.Td>
-                    <Table.Td>
-                      <Button variant="subtle" size="xs" onClick={() => toggleBranches(c.id)}>
-                        {isExpanded ? currentBranches.length : 'Branches'} <ChevronDown size={14} />
-                      </Button>
-                    </Table.Td>
-                  </Table.Tr>
-                  {isExpanded && (
+        <Table.ScrollContainer minWidth={550}>
+          <Table striped highlightOnHover withTableBorder>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Name</Table.Th>
+                <Table.Th>Business ID</Table.Th>
+                <Table.Th>Contact</Table.Th>
+                <Table.Th w={120}>Branches</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {companies.map((c) => {
+                const currentBranches = companyBranchesMap[c.id] ?? [];
+                const isExpanded = expanded === c.id;
+                return (
+                  <Fragment key={c.id}>
                     <Table.Tr>
-                      <Table.Td colSpan={4} p="sm">
-                        <Group justify="space-between" mb="xs">
-                          <Text size="sm" fw={600}>Branches</Text>
-                          <Button size="xs" variant="light" leftSection={<Plus size={14} />} onClick={() => setBranchModal(true)}>Add branch</Button>
-                        </Group>
-                        {currentBranches.length === 0 ? (
-                          <Text size="sm" c="dimmed">No branches yet.</Text>
-                        ) : (
-                          <Stack gap={4}>
-                            {currentBranches.map((b) => (
-                              <Group key={b.id} justify="space-between">
-                                <Text size="sm">{b.name}{b.city ? ` · ${b.city}` : ''}</Text>
-                                {!b.isActive && <Badge color="gray" size="xs">Inactive</Badge>}
-                              </Group>
-                            ))}
-                          </Stack>
-                        )}
+                      <Table.Td fw={500}>{c.name}</Table.Td>
+                      <Table.Td>{c.businessId}</Table.Td>
+                      <Table.Td>{c.contactName || '—'}</Table.Td>
+                      <Table.Td>
+                        <Button variant="subtle" size="xs" onClick={() => toggleBranches(c.id)}>
+                          {isExpanded ? currentBranches.length : 'Branches'} <ChevronDown size={14} />
+                        </Button>
                       </Table.Td>
                     </Table.Tr>
-                  )}
-                </Fragment>
-              );
-            })}
-          </Table.Tbody>
-        </Table>
+                    {isExpanded && (
+                      <Table.Tr>
+                        <Table.Td colSpan={4} p="sm">
+                          <Group justify="space-between" align="center" mb="xs" wrap="wrap" gap="xs">
+                            <Text size="sm" fw={600}>Branches</Text>
+                            <Button size="xs" variant="light" leftSection={<Plus size={14} />} onClick={() => setBranchModal(true)}>Add branch</Button>
+                          </Group>
+                          {currentBranches.length === 0 ? (
+                            <Text size="sm" c="dimmed">No branches yet.</Text>
+                          ) : (
+                            <Stack gap={4}>
+                              {currentBranches.map((b) => (
+                                <Group key={b.id} justify="space-between" wrap="wrap" gap="xs">
+                                  <Text size="sm">{b.name}{b.city ? ` · ${b.city}` : ''}</Text>
+                                  {!b.isActive && <Badge color="gray" size="xs">Inactive</Badge>}
+                                </Group>
+                              ))}
+                            </Stack>
+                          )}
+                        </Table.Td>
+                      </Table.Tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
       )}
 
-      <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title="Add company">
-        <Stack>
+      <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title="Add company" radius="md">
+        <Stack gap="sm">
           <TextInput label="Business ID" required value={form.businessId} onChange={set('businessId')} />
           <TextInput label="Name" required value={form.name} onChange={set('name')} />
           <TextInput label="Contact name" value={form.contactName} onChange={set('contactName')} />
@@ -147,22 +149,22 @@ export default function CompaniesAdminPage() {
           <TextInput label="Contact phone" value={form.contactPhone} onChange={set('contactPhone')} />
           <Textarea label="Notes" value={form.notes} onChange={set('notes')} />
           {error && <Text size="sm" c="red">{error}</Text>}
-          <Group justify="flex-end">
+          <Group justify="flex-end" mt="xs">
             <Button variant="default" onClick={() => setModalOpen(false)}>Cancel</Button>
             <Button loading={saving} onClick={submit}>Create company</Button>
           </Group>
         </Stack>
       </Modal>
 
-      <Modal opened={branchModal} onClose={() => setBranchModal(false)} title="Add branch">
-        <Stack>
+      <Modal opened={branchModal} onClose={() => setBranchModal(false)} title="Add branch" radius="md">
+        <Stack gap="sm">
           <TextInput label="Name" required value={branchForm.name} onChange={setB('name')} />
           <TextInput label="Street" value={branchForm.street} onChange={setB('street')} />
           <TextInput label="Postal code" value={branchForm.postalCode} onChange={setB('postalCode')} />
           <TextInput label="City" value={branchForm.city} onChange={setB('city')} />
           <TextInput label="Country" value={branchForm.country} onChange={setB('country')} />
           <TextInput label="Phone" value={branchForm.contactPhone} onChange={setB('contactPhone')} />
-          <Group justify="flex-end">
+          <Group justify="flex-end" mt="xs">
             <Button variant="default" onClick={() => setBranchModal(false)}>Cancel</Button>
             <Button loading={branchSaving} onClick={submitBranch}>Add branch</Button>
           </Group>
