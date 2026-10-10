@@ -371,4 +371,67 @@ test.describe('Employee My Shifts — clock-in/out + inline form', () => {
     await page.getByRole('button', { name: 'End shift & submit' }).click();
     await expect(page.getByText('Done')).toBeVisible();
   });
+
+  test('already-submitted shift shows Done without action buttons', async ({ page }) => {
+    await setupAdminMocks(page, { authenticated: true });
+
+    const submitted = {
+      shiftId: 'shift-2',
+      shiftName: 'Evening Office Cleaning',
+      startUtc: '2026-10-10T18:00:00Z',
+      endUtc: '2026-10-10T20:00:00Z',
+      form: {
+        id: 'form-2',
+        shiftId: 'shift-2',
+        shiftName: 'Evening Office Cleaning',
+        employeeId: 'emp-1',
+        employeeName: 'Anna Cleaner',
+        templateId: 'tpl-1',
+        templateTitle: 'Daily Office Checklist',
+        shiftOccurrenceUtc: '2026-10-10T18:00:00Z',
+        shiftOccurrenceEndUtc: '2026-10-10T20:00:00Z',
+        token: 'token-2',
+        items: [{ itemText: 'Vacuum carpets', isChecked: true }],
+        photoUrls: [],
+        cleanerNotes: null,
+        isSubmitted: true,
+        submittedUtc: new Date().toISOString(),
+        startedAtUtc: '2026-10-10T18:05:00Z',
+        endedAtUtc: '2026-10-10T19:50:00Z',
+        createdUtc: new Date().toISOString(),
+      },
+    };
+
+    await page.route(/\/api\/v1\/me\/shifts$/, async (route) => {
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      return route.fulfill({ status: 200, json: [submitted], headers: CORS_HEADERS });
+    });
+
+    await page.goto('/me/shifts');
+
+    await expect(page.getByText('Evening Office Cleaning')).toBeVisible();
+    await expect(page.getByText('Done')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Start' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Fill form & end' })).toHaveCount(0);
+  });
+
+  test('no shifts scheduled shows empty state', async ({ page }) => {
+    await setupAdminMocks(page, { authenticated: true });
+
+    await page.route(/\/api\/v1\/me\/shifts$/, async (route) => {
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      return route.fulfill({ status: 200, json: [], headers: CORS_HEADERS });
+    });
+
+    await page.goto('/me/shifts');
+    await expect(page.getByText('No shifts scheduled.')).toBeVisible();
+  });
+
+  test('unauthenticated user sees sign-in prompt', async ({ page }) => {
+    await setupAdminMocks(page, { authenticated: false });
+
+    await page.goto('/me/shifts');
+    await expect(page.getByText('Sign in to view your shifts.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+  });
 });
