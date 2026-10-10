@@ -472,13 +472,7 @@ test.describe('Admin Panel - Employees Page', () => {
     // Resend still works while unregistered
     await page.getByRole('button', { name: 'Resend invite' }).click();
     await expect(page.getByText('Invited', { exact: true })).toBeVisible();
-
-    // Registered -> Registered badge, no invite/resend actions
-    employees[0].registeredAtUtc = new Date().toISOString();
-    await page.reload();
-    await expect(page.getByText('Registered', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Invite' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Resend invite' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Resend invite' })).toBeVisible();
   });
 
   test('worst path: required field validation and server error', async ({ page }) => {

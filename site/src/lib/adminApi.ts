@@ -42,7 +42,6 @@ export interface Employee {
   defaultHours: Record<string, { start?: string | null; end?: string | null }>;
   keycloakUserId?: string;
   invitedAtUtc?: string | null;
-  registeredAtUtc?: string | null;
 }
 
 async function authorizedFetch(path: string, init: RequestInit = {}): Promise<Response> {

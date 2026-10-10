@@ -162,9 +162,6 @@ public class InviteEmployeeHandler : IRequestHandler<InviteEmployeeCommand, Empl
         var employee = await _employees.GetByIdAsync(request.Id, ct)
             ?? throw new NotFoundException("Employee", request.Id);
 
-        if (employee.RegisteredAtUtc != null)
-            throw new ConflictException("Employee has already completed registration.");
-
         // Pre-create (or re-arm) the Keycloak user so the email is locked to the
         // invited address — the employee cannot change it during sign-in.
         var invited = await _provisioner.InviteEmployeeAsync(

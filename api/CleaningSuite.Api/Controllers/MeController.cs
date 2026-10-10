@@ -75,13 +75,6 @@ public class MeController : ControllerBase
         if (employee == null)
             throw new UnauthorizedAccessException();
 
-        if (employee.RegisteredAtUtc == null)
-        {
-            employee.RegisteredAtUtc = DateTime.UtcNow;
-            employee.UpdatedUtc = DateTime.UtcNow;
-            await _employeeRepository.SaveAsync(employee, ct);
-        }
-
         return employee.Id;
     }
 }

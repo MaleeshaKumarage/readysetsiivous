@@ -52,8 +52,7 @@ export default function EmployeesAdminPage() {
   };
 
   const registrationBadge = (e: Employee) => {
-    if (e.registeredAtUtc) return <Badge color="green">Registered</Badge>;
-    if (e.keycloakUserId) return <Badge color="yellow">Invited</Badge>;
+    if (e.keycloakUserId) return <Badge color="green">Invited</Badge>;
     return <Badge color="gray">Not invited</Badge>;
   };
 
@@ -83,11 +82,9 @@ export default function EmployeesAdminPage() {
                   <Table.Td>
                     {e.isActive && (
                       <Group gap={6} wrap="nowrap">
-                        {!e.registeredAtUtc && (
-                          <Button size="xs" variant="light" onClick={() => invite(e.id)}>
-                            {e.keycloakUserId ? 'Resend invite' : 'Invite'}
-                          </Button>
-                        )}
+                        <Button size="xs" variant="light" onClick={() => invite(e.id)}>
+                          {e.keycloakUserId ? 'Resend invite' : 'Invite'}
+                        </Button>
                         <Button size="xs" variant="subtle" color="red" onClick={() => deactivate(e.id)}>Deactivate</Button>
                       </Group>
                     )}
