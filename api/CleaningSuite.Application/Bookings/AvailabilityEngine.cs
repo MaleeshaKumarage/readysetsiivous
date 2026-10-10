@@ -49,23 +49,44 @@ public class AvailabilityEngine
         var date = DateOnly.ParseExact(localDate, "yyyy-MM-dd");
         var occupied = await _bookings.ListForLocalDateAsync(localDate, ct);
 
+        // Precompute duration and step time spans once outside the slot evaluation loop.
+        var serviceDuration = TimeSpan.FromMinutes(service.DurationMinutes);
+        var slotStep = TimeSpan.FromMinutes(SlotMinutes);
+
         var slots = new List<AvailabilitySlot>();
-        for (var cursor = WindowStart; cursor + TimeSpan.FromMinutes(service.DurationMinutes) <= WindowEnd;
-             cursor += TimeSpan.FromMinutes(SlotMinutes))
+        for (var cursor = WindowStart; cursor + serviceDuration <= WindowEnd; cursor += slotStep)
         {
             var slotStartLocal = date.ToDateTime(TimeOnly.FromTimeSpan(cursor));
-            var slotEndLocal = slotStartLocal.AddMinutes(service.DurationMinutes);
+            var slotEndLocal = slotStartLocal + serviceDuration;
             var slotStartUtc = TimeZoneInfo.ConvertTimeToUtc(slotStartLocal, tz);
             var slotEndUtc = TimeZoneInfo.ConvertTimeToUtc(slotEndLocal, tz);
 
-            var conflicts = occupied.Any(b => b.StartUtc < slotEndUtc && b.EndUtc > slotStartUtc);
-            if (!conflicts)
+            // Use zero-allocation HasConflict check instead of LINQ occupied.Any(...) to avoid closure allocations per slot
+            if (!HasConflict(occupied, slotStartUtc, slotEndUtc))
+            {
+                var slotEndCursor = cursor + serviceDuration;
                 slots.Add(new AvailabilitySlot(
                     cursor.ToString(@"hh\:mm"),
-                    (cursor + TimeSpan.FromMinutes(service.DurationMinutes)).ToString(@"hh\:mm")));
+                    slotEndCursor.ToString(@"hh\:mm")));
+            }
         }
 
         return slots;
+    }
+
+    /// <summary>
+    /// Non-allocating conflict check against occupied bookings list.
+    /// Avoids LINQ closure allocations (b => ...) for each slot iteration on the hot path.
+    /// </summary>
+    private static bool HasConflict(IReadOnlyList<Booking> occupied, DateTime slotStartUtc, DateTime slotEndUtc)
+    {
+        for (var i = 0; i < occupied.Count; i++)
+        {
+            var b = occupied[i];
+            if (b.StartUtc < slotEndUtc && b.EndUtc > slotStartUtc)
+                return true;
+        }
+        return false;
     }
 
     /// <summary>Validates a requested slot and returns UTC start/end. Throws SlotConflictException on any violation.</summary>
