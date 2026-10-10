@@ -94,6 +94,7 @@ builder.Services.AddScoped<CleaningSuite.Application.Companies.IBranchRepository
 builder.Services.AddScoped<CleaningSuite.Application.Shifts.IShiftRepository, CleaningSuite.Infrastructure.Persistence.ShiftRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCycleRepository, CleaningSuite.Infrastructure.Persistence.QualityCycleRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCyclePdfGenerator, CleaningSuite.Infrastructure.QualityCycle.QualityCyclePdfGenerator>();
+builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCycleDispatcher, CleaningSuite.Application.QualityCycle.QualityCycleDispatcher>();
 
 builder.Services.AddMediatR(cfg =>
 {
