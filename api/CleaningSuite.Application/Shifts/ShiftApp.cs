@@ -1,6 +1,9 @@
 using CleaningSuite.Application.Common;
 using CleaningSuite.Application.Companies;
 using CleaningSuite.Application.Employees;
+using CleaningSuite.Application.QualityCycle;
+using CleaningSuite.Domain.Employees;
+using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Shifts;
 using FluentValidation;
 using MediatR;
@@ -260,11 +263,15 @@ public class ShiftHandlers
 
         private readonly IShiftRepository _repository;
         private readonly IEmployeeRepository _employeeRepository;
+        private readonly IQualityCycleRepository _qcRepository;
+        private readonly IEmailSender _emailSender;
         private readonly int _maxConflictWindowDays;
 
         public AssignEmployeeToShiftCommandHandler(
             IShiftRepository repository,
             IEmployeeRepository employeeRepository,
+            IQualityCycleRepository qcRepository,
+            IEmailSender emailSender,
             int maxConflictWindowDays = DefaultMaxConflictWindowDays)
         {
             if (maxConflictWindowDays <= 0)
@@ -274,6 +281,8 @@ public class ShiftHandlers
 
             _repository = repository;
             _employeeRepository = employeeRepository;
+            _qcRepository = qcRepository;
+            _emailSender = emailSender;
             _maxConflictWindowDays = maxConflictWindowDays;
         }
 
@@ -324,12 +333,69 @@ public class ShiftHandlers
                 existingAssignment.AssignedAtUtc = utcNow;
                 existingAssignment.UpdatedUtc = utcNow;
                 await _repository.SaveAssignmentAsync(existingAssignment, ct);
+                await DispatchQualityCycleFormAsync(shift, employee, utcNow, ct);
                 return MapAssignment(existingAssignment);
             }
 
             var newAssignment = ShiftAssignment.Create(request.ShiftId, request.EmployeeId, request.Note);
             await _repository.SaveAssignmentAsync(newAssignment, ct);
+            await DispatchQualityCycleFormAsync(shift, employee, utcNow, ct);
             return MapAssignment(newAssignment);
+        }
+
+        /// <summary>
+        /// If the shift has a quality-cycle template, create (or reuse) the form for the
+        /// employee's next shift occurrence and email them the fill-in link.
+        /// </summary>
+        private async Task DispatchQualityCycleFormAsync(Shift shift, Employee employee, DateTime utcNow, CancellationToken ct)
+        {
+            if (!shift.QualityCycleTemplateId.HasValue) return;
+
+            var template = await _qcRepository.GetTemplateAsync(shift.QualityCycleTemplateId.Value, ct);
+            if (template == null || !template.IsActive) return;
+
+            var from = utcNow;
+            var to = utcNow.AddDays(30);
+            var occurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, from, to);
+            if (occurrences.Count == 0) return;
+            var occurrence = occurrences[0];
+
+            var existingForm = await _qcRepository.GetFormByShiftOccurrenceAsync(shift.Id, employee.Id, occurrence.StartUtc, ct);
+            if (existingForm != null) return;
+
+            var form = QualityCycleForm.Create(
+                shift.Id,
+                shift.Name,
+                employee.Id,
+                $"{employee.FirstName} {employee.LastName}",
+                template.Id,
+                template.Title,
+                occurrence.StartUtc,
+                template.Items);
+            await _qcRepository.SaveFormAsync(form, ct);
+
+            if (!string.IsNullOrWhiteSpace(employee.Email))
+            {
+                var formUrl = $"https://readysetsiivous.fi/quality-cycle?token={form.Token}";
+                var subject = $"Quality Cycle Checklist: {shift.Name} ({occurrence.StartUtc:yyyy-MM-dd})";
+                var body = $@"Hello {employee.FirstName},
+
+Please complete the Quality Cycle form for your shift '{shift.Name}' on {occurrence.StartUtc:yyyy-MM-dd HH:mm UTC}.
+
+Form Link: {formUrl}
+
+Thank you,
+ReadySetSiivous Team";
+
+                try
+                {
+                    await _emailSender.SendAsync(employee.Email, subject, body, ct);
+                }
+                catch
+                {
+                    // Email failures must not roll back the assignment.
+                }
+            }
         }
 
         private (DateTime From, DateTime To) ResolveConflictWindow(Shift shift, DateTime utcNow)

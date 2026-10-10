@@ -9,6 +9,7 @@ import {
   adminShifts, adminCompanies, adminEmployees,
   type Shift, type Company, type Branch, type Employee, type ShiftAssignment,
 } from '@/lib/adminApi';
+import { adminQualityCycle, type QualityCycleTemplate } from '@/lib/qualityCycleApi';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const SCHEDULE_TYPES = [
@@ -37,6 +38,8 @@ export default function ShiftsAdminPage() {
   const [weekParity, setWeekParity] = useState('1');
   const [monthlyDay, setMonthlyDay] = useState<string | number>(1);
   const [notes, setNotes] = useState('');
+  const [qualityCycleTemplateId, setQualityCycleTemplateId] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<QualityCycleTemplate[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -50,6 +53,7 @@ export default function ShiftsAdminPage() {
     load();
     adminCompanies.list('', 0, 100).then((r) => { if (r) setCompanies(r.items); });
     adminEmployees.list().then((e) => { if (e) setEmployees(e); });
+    adminQualityCycle.listTemplates().then((t) => { if (t) setTemplates(t.filter((x) => x.isActive)); });
   }, []);
 
   useEffect(() => {
@@ -79,7 +83,7 @@ export default function ShiftsAdminPage() {
   };
 
   const closeModal = () => {
-    setName(''); setNotes(''); setWeekDays([]); setCompanyId(null); setBranchId(null); setError(''); setModalOpen(false);
+    setName(''); setNotes(''); setWeekDays([]); setCompanyId(null); setBranchId(null); setQualityCycleTemplateId(null); setError(''); setModalOpen(false);
   };
 
   const submit = async () => {
@@ -87,7 +91,7 @@ export default function ShiftsAdminPage() {
     if (scheduleType === '2' && weekDays.length === 0) { setError('Select at least one day.'); return; }
     if (scheduleType === '3' && weekDays.length === 0) { setError('Select a day.'); return; }
     setSaving(true); setError('');
-    const created = await adminShifts.create({ companyId, branchId, name: name.trim(), schedule: buildSchedule(), notes: notes.trim() || undefined });
+    const created = await adminShifts.create({ companyId, branchId, name: name.trim(), schedule: buildSchedule(), notes: notes.trim() || undefined, qualityCycleTemplateId: qualityCycleTemplateId || undefined });
     setSaving(false);
     if (!created) { setError('Failed to create shift.'); return; }
     closeModal(); await load();
@@ -225,6 +229,15 @@ export default function ShiftsAdminPage() {
             </Group>
           )}
           <TextInput label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
+          <Select
+            label="Quality cycle template"
+            placeholder="None"
+            clearable
+            data={templates.map((t) => ({ value: t.id, label: t.title }))}
+            value={qualityCycleTemplateId}
+            onChange={setQualityCycleTemplateId}
+            searchable
+          />
           {error && <Text size="sm" c="red">{error}</Text>}
           <Group justify="flex-end" mt="xs">
             <Button variant="default" onClick={closeModal}>Cancel</Button>

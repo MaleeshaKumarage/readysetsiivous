@@ -25,7 +25,6 @@ import {
   Plus,
   Trash2,
   FileText,
-  Send,
   Download,
   Edit3,
   X,
@@ -53,7 +52,6 @@ export default function AdminQualityCyclePage() {
   const [selectedShiftId, setSelectedShiftId] = useState<string>('');
   const [forms, setForms] = useState<QualityCycleForm[]>([]);
   const [loadingForms, setLoadingForms] = useState(false);
-  const [dispatching, setDispatching] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
 
   // Report state
@@ -152,19 +150,6 @@ export default function AdminQualityCyclePage() {
     if (confirm('Are you sure you want to delete this quality cycle template?')) {
       await adminQualityCycle.deleteTemplate(id);
       loadTemplates();
-    }
-  }
-
-  async function handleDispatchNow() {
-    setDispatching(true);
-    try {
-      const res = await adminQualityCycle.dispatchForms(selectedShiftId || undefined);
-      if (res) {
-        alert(`Dispatched ${res.dispatchedCount} Quality Cycle forms.`);
-        loadForms();
-      }
-    } finally {
-      setDispatching(false);
     }
   }
 
@@ -399,16 +384,6 @@ export default function AdminQualityCyclePage() {
                   clearable
                   searchable
                 />
-
-                <Button
-                  leftSection={<Send size={16} />}
-                  variant="filled"
-                  color="indigo"
-                  loading={dispatching}
-                  onClick={handleDispatchNow}
-                >
-                  Dispatch Forms Now
-                </Button>
               </Group>
 
               <Group gap="xs" align="flex-end" wrap="wrap">
