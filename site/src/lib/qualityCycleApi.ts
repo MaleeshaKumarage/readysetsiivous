@@ -52,9 +52,6 @@ export const adminQualityCycle = {
     adminSendJson<QualityCycleTemplate>(`/api/v1/admin/quality-cycle/templates/${id}`, 'PUT', fields),
   deleteTemplate: (id: string) => adminSend(`/api/v1/admin/quality-cycle/templates/${id}`, 'DELETE'),
 
-  dispatchForms: (shiftId?: string, targetDateUtc?: string) =>
-    adminSendJson<{ dispatchedCount: number }>('/api/v1/admin/quality-cycle/dispatch', 'POST', { shiftId, targetDateUtc }),
-
   listForms: (shiftId?: string, from?: string, to?: string) => {
     const query = new URLSearchParams();
     if (shiftId) query.set('shiftId', shiftId);

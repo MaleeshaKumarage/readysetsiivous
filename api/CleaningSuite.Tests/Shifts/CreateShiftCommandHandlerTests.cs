@@ -22,8 +22,6 @@ public class CreateShiftCommandHandlerTests
     private readonly Mock<ICompanyRepository> _companyRepoMock = new();
     private readonly Mock<IBranchRepository> _branchRepoMock = new();
     private readonly Mock<IEmployeeRepository> _employeeRepoMock = new();
-    private readonly Mock<IQualityCycleRepository> _qcRepoMock = new();
-    private readonly Mock<IEmailSender> _emailSenderMock = new();
 
     private readonly ShiftSchedule _validSchedule = new()
     {
@@ -221,7 +219,7 @@ public class CreateShiftCommandHandlerTests
     public void AssignEmployeeToShiftCommandHandler_Throws_OnInvalidMaxConflictWindowDays()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => new ShiftHandlers.AssignEmployeeToShiftCommandHandler(
-            _shiftRepoMock.Object, _employeeRepoMock.Object, _qcRepoMock.Object, _emailSenderMock.Object, maxConflictWindowDays: 0));
+            _shiftRepoMock.Object, _employeeRepoMock.Object, maxConflictWindowDays: 0));
     }
 
     [Fact]
@@ -238,7 +236,7 @@ public class CreateShiftCommandHandlerTests
         _shiftRepoMock.Setup(r => r.GetAssignmentAsync(shift.Id, empId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((ShiftAssignment?)null);
 
-        var handler = new ShiftHandlers.AssignEmployeeToShiftCommandHandler(_shiftRepoMock.Object, _employeeRepoMock.Object, _qcRepoMock.Object, _emailSenderMock.Object);
+        var handler = new ShiftHandlers.AssignEmployeeToShiftCommandHandler(_shiftRepoMock.Object, _employeeRepoMock.Object);
         var result = await handler.Handle(new AssignEmployeeToShiftCommand(shift.Id, empId, "Primary"), CancellationToken.None);
 
         Assert.NotNull(result);
@@ -262,7 +260,7 @@ public class CreateShiftCommandHandlerTests
         _shiftRepoMock.Setup(r => r.GetAssignmentAsync(shift.Id, empId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(existingAssignment);
 
-        var handler = new ShiftHandlers.AssignEmployeeToShiftCommandHandler(_shiftRepoMock.Object, _employeeRepoMock.Object, _qcRepoMock.Object, _emailSenderMock.Object);
+        var handler = new ShiftHandlers.AssignEmployeeToShiftCommandHandler(_shiftRepoMock.Object, _employeeRepoMock.Object);
         var result = await handler.Handle(new AssignEmployeeToShiftCommand(shift.Id, empId, "Updated Note"), CancellationToken.None);
 
         Assert.True(result.IsActive);
@@ -285,7 +283,7 @@ public class CreateShiftCommandHandlerTests
         _shiftRepoMock.Setup(r => r.ListByIdsAsync(It.Is<IReadOnlyCollection<Guid>>(ids => ids.Contains(shift1.Id)), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<Shift> { shift1 });
 
-        var handler = new ShiftHandlers.AssignEmployeeToShiftCommandHandler(_shiftRepoMock.Object, _employeeRepoMock.Object, _qcRepoMock.Object, _emailSenderMock.Object);
+        var handler = new ShiftHandlers.AssignEmployeeToShiftCommandHandler(_shiftRepoMock.Object, _employeeRepoMock.Object);
 
         await Assert.ThrowsAsync<ShiftConflictException>(() =>
             handler.Handle(new AssignEmployeeToShiftCommand(shift2.Id, empId), CancellationToken.None));
@@ -295,7 +293,7 @@ public class CreateShiftCommandHandlerTests
     public async Task AssignEmployeeToShift_ThrowsNotFoundException_WhenShiftOrEmployeeNotFound()
     {
         _shiftRepoMock.Setup(r => r.GetAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync((Shift?)null);
-        var handler = new ShiftHandlers.AssignEmployeeToShiftCommandHandler(_shiftRepoMock.Object, _employeeRepoMock.Object, _qcRepoMock.Object, _emailSenderMock.Object);
+        var handler = new ShiftHandlers.AssignEmployeeToShiftCommandHandler(_shiftRepoMock.Object, _employeeRepoMock.Object);
 
         await Assert.ThrowsAsync<NotFoundException>(() => handler.Handle(new AssignEmployeeToShiftCommand(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None));
 
