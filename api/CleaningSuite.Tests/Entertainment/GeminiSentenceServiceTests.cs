@@ -43,6 +43,30 @@ public class GeminiSentenceServiceTests
     }
 
     [Fact]
+    public void Parse_ObjectBaseForms_ExtractsFinnish()
+    {
+        var json = """
+            {
+              "candidates": [
+                {
+                  "content": {
+                    "parts": [
+                      { "text": "{\"sentenceEn\":\"We missed our train.\",\"sentenceFi\":\"Myöhästyimme junasta.\",\"baseForms\":[{\"en\":\"miss\",\"fi\":\"myöhästyä\"},{\"en\":\"train\",\"fi\":\"juna\"}]}" }
+                    ]
+                  }
+                }
+              ]
+            }
+            """;
+
+        var result = GeminiSentenceService.Parse(json);
+
+        Assert.Equal("We missed our train.", result.SentenceEn);
+        Assert.Equal("Myöhästyimme junasta.", result.SentenceFi);
+        Assert.Equal(new[] { "myöhästyä", "juna" }, result.BaseForms);
+    }
+
+    [Fact]
     public void Parse_MissingCandidates_Throws()
     {
         Assert.ThrowsAny<System.Exception>(() => GeminiSentenceService.Parse("{}"));

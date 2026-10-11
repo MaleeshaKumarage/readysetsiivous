@@ -78,8 +78,9 @@ public class GeminiSentenceService : IGeminiSentenceService
             Return ONLY a JSON object with exactly these keys and no surrounding text:
             - "sentenceEn": the English sentence.
             - "sentenceFi": the Finnish translation of that sentence.
-            - "baseForms": an array of the base/dictionary form of each content word
-              in the FINNISH translation, in the order the words appear.
+            - "baseForms": an array of STRINGS, each one the Finnish base/dictionary
+              form of a content word in the Finnish translation, in word order.
+              Do NOT include the English forms.
             """;
     }
 
@@ -94,14 +95,28 @@ public class GeminiSentenceService : IGeminiSentenceService
             .GetString()
             ?? throw new InvalidOperationException("Gemini returned no text.");
 
-        var sentence = JsonSerializer.Deserialize<GeminiSentence>(
-            text,
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
-            ?? throw new InvalidOperationException("Gemini returned an invalid sentence payload.");
+        using var inner = JsonDocument.Parse(text);
+        var root = inner.RootElement;
 
-        if (string.IsNullOrWhiteSpace(sentence.SentenceEn))
-            throw new InvalidOperationException("Gemini returned an empty English sentence.");
+        var sentenceEn = root.GetProperty("sentenceEn").GetString()
+            ?? throw new InvalidOperationException("Gemini returned an empty English sentence.");
+        var sentenceFi = root.TryGetProperty("sentenceFi", out var fi) ? (fi.GetString() ?? "") : "";
 
-        return sentence;
+        var baseForms = new List<string>();
+        if (root.TryGetProperty("baseForms", out var forms))
+        {
+            foreach (var item in forms.EnumerateArray())
+            {
+                // The model may return plain strings or { "en", "fi" } objects.
+                // We want the Finnish base form either way.
+                if (item.ValueKind == System.Text.Json.JsonValueKind.String)
+                    baseForms.Add(item.GetString() ?? "");
+                else if (item.ValueKind == System.Text.Json.JsonValueKind.Object
+                    && item.TryGetProperty("fi", out var fiForm))
+                    baseForms.Add(fiForm.GetString() ?? "");
+            }
+        }
+
+        return new GeminiSentence(sentenceEn, sentenceFi, baseForms);
     }
 }
