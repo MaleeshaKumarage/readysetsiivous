@@ -24,6 +24,7 @@ public class GeminiSentenceService : IGeminiSentenceService
         string description,
         CefrLevel level,
         string apiKey,
+        IReadOnlyList<string> previousSentences,
         CancellationToken ct = default)
     {
         var url = $"{_baseUrl}/v1beta/models/{_model}:generateContent";
@@ -31,7 +32,7 @@ public class GeminiSentenceService : IGeminiSentenceService
         {
             contents = new[]
             {
-                new { parts = new[] { new { text = BuildPrompt(description, level) } } },
+                new { parts = new[] { new { text = BuildPrompt(description, level, previousSentences) } } },
             },
             generationConfig = new
             {
@@ -72,11 +73,21 @@ public class GeminiSentenceService : IGeminiSentenceService
     private static bool IsTransient(int status)
         => status is 429 or 500 or 502 or 503 or 504;
 
-    public static string BuildPrompt(string description, CefrLevel level)
+    public static string BuildPrompt(string description, CefrLevel level, IReadOnlyList<string>? previousSentences = null)
     {
+        var previous = previousSentences is null || previousSentences.Count == 0
+            ? string.Empty
+            : "\nPrevious sentences already used (do NOT reuse these or any near-duplicate):\n"
+                + string.Join("\n", previousSentences.Select(s => $"- \"{s}\""));
+
         return $"""
             Generate one short English sentence for a Finnish learner at CEFR level {level}.
             Topic or context: {description}
+
+            Vary the sentence every time: use different grammar (statements, questions,
+            negatives), different tenses, different sub-topics within the topic, and
+            different lengths. Never repeat a previous sentence or a close variant.
+            {previous}
 
             Return ONLY a JSON object with exactly these keys and no surrounding text:
             - "sentenceEn": the English sentence.

@@ -15,5 +15,6 @@ public interface IGeminiSentenceService
         string description,
         CefrLevel level,
         string apiKey,
+        IReadOnlyList<string> previousSentences,
         CancellationToken ct = default);
 }

@@ -19,6 +19,18 @@ public class GeminiSentenceServiceTests
     }
 
     [Fact]
+    public void BuildPrompt_ListsPreviousSentencesToAvoid()
+    {
+        var prompt = GeminiSentenceService.BuildPrompt(
+            "travel", CefrLevel.B1, new[] { "We went to Sweden and Norway.", "The train was late." });
+
+        Assert.Contains("Previous sentences", prompt);
+        Assert.Contains("We went to Sweden and Norway.", prompt);
+        Assert.Contains("The train was late.", prompt);
+        Assert.Contains("Vary the sentence", prompt);
+    }
+
+    [Fact]
     public void Parse_ValidResponse_ExtractsSentence()
     {
         var json = """
