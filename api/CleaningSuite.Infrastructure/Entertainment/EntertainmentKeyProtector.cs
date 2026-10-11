@@ -6,21 +6,20 @@ using Microsoft.Extensions.Configuration;
 namespace CleaningSuite.Infrastructure.Entertainment;
 
 /// <summary>AES-GCM encryption for the per-group Gemini API key.</summary>
+/// <remarks>
+/// The 32-byte encryption key is resolved in order:
+/// 1. <c>Entertainment:KeyEncryptionKey</c> (explicit override).
+/// 2. A persisted key file at <c>Entertainment:KeyFilePath</c> (default "entertainment.key").
+/// 3. Generated on first use and written to that file, so it stays stable across
+///    restarts without any manual provisioning step.
+/// </remarks>
 public class EntertainmentKeyProtector : IEntertainmentKeyProtector
 {
     private readonly byte[] _key;
 
     public EntertainmentKeyProtector(IConfiguration configuration)
     {
-        var keyBase64 = configuration["Entertainment:KeyEncryptionKey"];
-        if (string.IsNullOrWhiteSpace(keyBase64))
-            throw new InvalidOperationException(
-                "Entertainment:KeyEncryptionKey is not configured. Set a 32-byte base64 key.");
-
-        _key = Convert.FromBase64String(keyBase64);
-        if (_key.Length != 32)
-            throw new InvalidOperationException(
-                "Entertainment:KeyEncryptionKey must be a 32-byte base64 key.");
+        _key = LoadOrCreateKey(configuration);
     }
 
     public string Protect(string plaintext)
@@ -52,5 +51,31 @@ public class EntertainmentKeyProtector : IEntertainmentKeyProtector
         using var aes = new AesGcm(_key);
         aes.Decrypt(nonce, cipherBytes, tag, plainBytes);
         return Encoding.UTF8.GetString(plainBytes);
+    }
+
+    private static byte[] LoadOrCreateKey(IConfiguration configuration)
+    {
+        var explicitKey = configuration["Entertainment:KeyEncryptionKey"];
+        if (!string.IsNullOrWhiteSpace(explicitKey))
+            return Validate(Convert.FromBase64String(explicitKey));
+
+        var path = configuration["Entertainment:KeyFilePath"] ?? "entertainment.key";
+        if (File.Exists(path))
+            return Validate(Convert.FromBase64String(File.ReadAllText(path).Trim()));
+
+        var key = RandomNumberGenerator.GetBytes(32);
+        var fullPath = Path.GetFullPath(path);
+        var directory = Path.GetDirectoryName(fullPath);
+        if (!string.IsNullOrEmpty(directory))
+            Directory.CreateDirectory(directory);
+        File.WriteAllText(fullPath, Convert.ToBase64String(key));
+        return key;
+    }
+
+    private static byte[] Validate(byte[] key)
+    {
+        if (key.Length != 32)
+            throw new InvalidOperationException("Entertainment encryption key must be 32 bytes.");
+        return key;
     }
 }
