@@ -11,6 +11,9 @@ import os, sys
 LOG = os.path.expanduser("~/.cache/pipeline-cost.log")
 cmd = sys.argv[1] if len(sys.argv) > 1 else "total"
 
+if cmd in ("reset", "add"):
+    os.makedirs(os.path.dirname(LOG), exist_ok=True)
+
 if cmd == "reset":
     open(LOG, "w").close()
 elif cmd == "add":
