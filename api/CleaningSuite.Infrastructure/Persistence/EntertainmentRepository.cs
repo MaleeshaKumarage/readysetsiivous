@@ -33,6 +33,20 @@ public class EntertainmentRepository : IEntertainmentRepository
         await session.SaveChangesAsync(ct);
     }
 
+    public async Task SaveGroupAsync(EntertainmentGroup group, CancellationToken ct = default)
+    {
+        await using var session = _store.LightweightSession(TenantIds.Entertainment);
+        session.Store(group);
+        await session.SaveChangesAsync(ct);
+    }
+
+    public async Task SaveRoundAsync(EntertainmentRound round, CancellationToken ct = default)
+    {
+        await using var session = _store.LightweightSession(TenantIds.Entertainment);
+        session.Store(round);
+        await session.SaveChangesAsync(ct);
+    }
+
     public async Task<bool> JoinKeyExistsAsync(string joinKey, CancellationToken ct = default)
     {
         await using var session = _store.QuerySession(TenantIds.Entertainment);

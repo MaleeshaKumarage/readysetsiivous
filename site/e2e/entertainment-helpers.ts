@@ -28,8 +28,9 @@ export function getBody(route: any) {
  */
 export function mockEntertainmentSignalR(page: Page) {
   const queue: string[] = [];
-  let pollCount = 0;
   const RECORD_SEP = String.fromCharCode(0x1e);
+  let connCounter = 0;
+  const getCounts = new Map<string, number>();
 
   const push = (target: string, ...args: unknown[]) => {
     queue.push(JSON.stringify({ type: 1, target, arguments: args }) + RECORD_SEP);
@@ -44,21 +45,27 @@ export function mockEntertainmentSignalR(page: Page) {
     }
 
     if (url.includes('/negotiate')) {
+      connCounter += 1;
+      const connId = `conn-${connCounter}`;
       return route.fulfill({
         status: 200,
         headers: CORS_HEADERS,
         json: {
           negotiateVersion: 1,
-          connectionId: 'test-conn',
+          connectionId: connId,
+          connectionToken: connId,
           availableTransports: [{ transport: 'LongPolling', transferFormats: ['Text'] }],
         },
       });
     }
 
+    const connId = new URL(url).searchParams.get('id') || 'default';
+
     if (method === 'GET') {
-      pollCount += 1;
+      const count = (getCounts.get(connId) || 0) + 1;
+      getCounts.set(connId, count);
       // First poll connects; second returns the handshake response.
-      if (pollCount === 2) {
+      if (count === 2) {
         return route.fulfill({ status: 200, headers: CORS_HEADERS, body: '{}' + RECORD_SEP });
       }
       if (queue.length > 0) {

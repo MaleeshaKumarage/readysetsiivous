@@ -80,6 +80,14 @@ export async function getEntertainmentLobby(groupId: string): Promise<Lobby> {
   return (await response.json()) as Lobby;
 }
 
+export interface RoundStarted {
+  roundNumber: number;
+  translatorPlayerId: string;
+  sentenceEn: string;
+  sentenceFi: string | null;
+  baseForms: string[];
+}
+
 // sessionStorage keys for reconnect across a refresh.
 export const ENT_SESSION_KEYS = {
   groupId: 'entGroupId',

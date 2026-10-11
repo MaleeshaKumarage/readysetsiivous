@@ -159,6 +159,78 @@ public class GetEntertainmentLobbyQueryHandler : IRequestHandler<GetEntertainmen
     }
 }
 
+public record StartEntertainmentGameCommand(
+    Guid GroupId,
+    Guid PlayerId) : IRequest<StartEntertainmentGameResult>;
+
+public record EntertainmentRoundDto(
+    int RoundNumber,
+    Guid TranslatorPlayerId,
+    string SentenceEn,
+    string? SentenceFi,
+    IReadOnlyList<string> BaseForms);
+
+public record StartEntertainmentGameResult(
+    Guid GroupId,
+    EntertainmentRoundDto Round,
+    IReadOnlyList<Guid> TurnOrder);
+
+public class StartEntertainmentGameCommandHandler
+    : IRequestHandler<StartEntertainmentGameCommand, StartEntertainmentGameResult>
+{
+    private readonly IEntertainmentRepository _repository;
+    private readonly IEntertainmentKeyProtector _keyProtector;
+    private readonly IGeminiSentenceService _gemini;
+
+    public StartEntertainmentGameCommandHandler(
+        IEntertainmentRepository repository,
+        IEntertainmentKeyProtector keyProtector,
+        IGeminiSentenceService gemini)
+    {
+        _repository = repository;
+        _keyProtector = keyProtector;
+        _gemini = gemini;
+    }
+
+    public async Task<StartEntertainmentGameResult> Handle(
+        StartEntertainmentGameCommand request,
+        CancellationToken ct)
+    {
+        var group = await _repository.GetGroupAsync(request.GroupId, ct)
+            ?? throw new EntertainmentGroupNotFoundException(request.GroupId.ToString());
+
+        if (group.Status != EntertainmentStatus.Lobby)
+            throw new EntertainmentGameAlreadyStartedException(group.Id);
+
+        var creator = await _repository.GetPlayerAsync(request.PlayerId, ct);
+        if (creator is null || !creator.IsCreator || creator.GroupId != group.Id)
+            throw new UnauthorizedAccessException("Only the group creator can start the game.");
+
+        var players = await _repository.ListPlayersAsync(group.Id, ct);
+        var turnOrder = players.Select(p => p.Id).ToList();
+        if (turnOrder.Count == 0)
+            throw new InvalidOperationException("No players in group.");
+
+        var translator = players[0];
+        var apiKey = _keyProtector.Unprotect(group.GeminiApiKeyEncrypted);
+        var sentence = await _gemini.GenerateAsync(group.Description, translator.Level, apiKey, ct);
+
+        var round = EntertainmentRound.Create(
+            group.Id, 1, translator.Id, sentence.SentenceEn, sentence.SentenceFi, sentence.BaseForms);
+
+        group.Status = EntertainmentStatus.InGame;
+        group.UpdatedUtc = DateTime.UtcNow;
+
+        await _repository.SaveGroupAsync(group, ct);
+        await _repository.SaveRoundAsync(round, ct);
+
+        return new StartEntertainmentGameResult(
+            group.Id,
+            new EntertainmentRoundDto(round.RoundNumber, round.TranslatorPlayerId, round.SentenceEn, round.SentenceFi, round.BaseForms),
+            turnOrder);
+    }
+}
+
 public class EntertainmentValidators
 {
     public class CreateEntertainmentGroupCommandValidator : AbstractValidator<CreateEntertainmentGroupCommand>

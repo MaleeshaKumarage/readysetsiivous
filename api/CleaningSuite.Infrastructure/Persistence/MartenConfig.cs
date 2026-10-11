@@ -76,6 +76,9 @@ public static class MartenConfig
         options.Schema.For<EntertainmentPlayer>()
             .Index(x => x.GroupId);
 
+        options.Schema.For<EntertainmentRound>()
+            .Index(x => x.GroupId);
+
         // Registry partition: unique slug across all tenants.
         options.Schema.For<TenantRegistration>().UniqueIndex(x => x.Slug);
 

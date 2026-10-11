@@ -9,6 +9,10 @@ public interface IEntertainmentRepository
 
     Task SavePlayerAsync(EntertainmentPlayer player, CancellationToken ct = default);
 
+    Task SaveGroupAsync(EntertainmentGroup group, CancellationToken ct = default);
+
+    Task SaveRoundAsync(EntertainmentRound round, CancellationToken ct = default);
+
     Task<bool> JoinKeyExistsAsync(string joinKey, CancellationToken ct = default);
 
     Task<EntertainmentGroup?> GetGroupByJoinKeyAsync(string joinKey, CancellationToken ct = default);

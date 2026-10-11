@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Card } from '@/ds/Card';
 import { Button } from '@/ds/Button';
 import { Input, Textarea, Field } from '@/ds/Input';
@@ -12,10 +12,12 @@ import {
   joinEntertainmentGroup,
   Lobby,
   LobbyPlayer,
+  RoundStarted,
 } from '@/lib/entertainmentApi';
 import { createEntertainmentHub } from '@/lib/entertainmentHub';
+import type { HubConnection } from '@microsoft/signalr';
 
-type View = 'landing' | 'create' | 'join' | 'lobby';
+type View = 'landing' | 'create' | 'join' | 'lobby' | 'game';
 
 interface Session {
   groupId: string;
@@ -27,6 +29,44 @@ interface Session {
 export default function EntertainmentClient() {
   const [view, setView] = useState<View>('landing');
   const [session, setSession] = useState<Session | null>(null);
+  const [lobby, setLobby] = useState<Lobby | null>(null);
+  const [round, setRound] = useState<RoundStarted | null>(null);
+  const connectionRef = useRef<HubConnection | null>(null);
+
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+
+    getEntertainmentLobby(session.groupId)
+      .then((l) => { if (!cancelled) setLobby(l); })
+      .catch(() => {});
+
+    const connection = createEntertainmentHub();
+    connectionRef.current = connection;
+
+    connection.on('lobbyUpdated', (l: Lobby) => setLobby(l));
+    connection.on('roundStarted', (r: RoundStarted) => {
+      setRound(r);
+      setView('game');
+    });
+
+    connection
+      .start()
+      .then(() => connection.invoke('JoinLobby', session.groupId, session.playerId))
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      connectionRef.current = null;
+      connection.stop().catch(() => {});
+    };
+  }, [session]);
+
+  function startGame() {
+    const connection = connectionRef.current;
+    if (!connection || !session) return;
+    connection.invoke('StartGame', session.groupId, session.playerId).catch(() => {});
+  }
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
@@ -88,7 +128,19 @@ export default function EntertainmentClient() {
       )}
 
       {view === 'lobby' && session && (
-        <Lobby session={session} onLeave={() => setView('landing')} />
+        <Lobby
+          session={session}
+          lobby={lobby}
+          onStart={startGame}
+          onLeave={() => setView('landing')}
+        />
+      )}
+
+      {view === 'game' && session && round && (
+        <GameView
+          round={round}
+          isTranslator={round.translatorPlayerId === session.playerId}
+        />
       )}
     </main>
   );
@@ -269,45 +321,23 @@ function JoinForm({
   );
 }
 
-function Lobby({ session, onLeave }: { session: Session; onLeave: () => void }) {
-  const [groupName, setGroupName] = useState('');
-  const [status, setStatus] = useState('Lobby');
-  const [players, setPlayers] = useState<LobbyPlayer[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    let connection: ReturnType<typeof createEntertainmentHub> | null = null;
-
-    getEntertainmentLobby(session.groupId)
-      .then((lobby) => {
-        if (cancelled) return;
-        setGroupName(lobby.groupName);
-        setStatus(lobby.status);
-        setPlayers(lobby.players);
-      })
-      .catch(() => {});
-
-    connection = createEntertainmentHub();
-    connection.on('lobbyUpdated', (lobby: Lobby) => {
-      setGroupName(lobby.groupName);
-      setStatus(lobby.status);
-      setPlayers(lobby.players);
-    });
-    connection
-      .start()
-      .then(() => connection!.invoke('JoinLobby', session.groupId, session.playerId))
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-      connection?.stop().catch(() => {});
-    };
-  }, [session.groupId, session.playerId]);
+function Lobby({
+  session,
+  lobby,
+  onStart,
+  onLeave,
+}: {
+  session: Session;
+  lobby: Lobby | null;
+  onStart: () => void;
+  onLeave: () => void;
+}) {
+  const players = lobby?.players ?? [];
 
   return (
     <Card variant="elevated" padding="lg" className="space-y-5">
       <div className="text-center">
-        <h2 className="text-xl font-semibold">{groupName || 'Lobby'}</h2>
+        <h2 className="text-xl font-semibold">{lobby?.groupName || 'Lobby'}</h2>
         {session.joinKey && (
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             Share this key so others can join:
@@ -343,13 +373,70 @@ function Lobby({ session, onLeave }: { session: Session; onLeave: () => void }) 
       </div>
 
       {session.isCreator && (
-        <Button fullWidth disabled>
+        <Button onClick={onStart} fullWidth>
           Start game
         </Button>
       )}
       <Button variant="ghost" onClick={onLeave} fullWidth>
         Leave
       </Button>
+    </Card>
+  );
+}
+
+function CoveredChip({ text }: { text: string }) {
+  return (
+    <span
+      data-testid="covered-word"
+      className="inline-flex items-center justify-center rounded-lg border border-dashed border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 text-sm text-transparent select-none"
+    >
+      {text}
+    </span>
+  );
+}
+
+function GameView({ round, isTranslator }: { round: RoundStarted; isTranslator: boolean }) {
+  return (
+    <Card variant="elevated" padding="lg" className="space-y-6">
+      <div className="text-center">
+        <h2 className="text-xl font-semibold">Round {round.roundNumber}</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          {isTranslator ? 'Translate this into Finnish' : 'Someone is translating — you have the answer'}
+        </p>
+      </div>
+
+      <div data-testid="sentence-en" className="text-2xl font-medium text-center leading-relaxed">
+        {round.sentenceEn}
+      </div>
+
+      {!isTranslator && round.sentenceFi && (
+        <div className="text-center">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Finnish (covered)</p>
+          <div data-testid="sentence-fi" className="text-xl text-transparent select-none bg-gray-100 dark:bg-gray-800 rounded-lg px-4 py-3">
+            {round.sentenceFi}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Hint words (covered)</p>
+        <div className="flex flex-wrap gap-2">
+          {round.baseForms.map((word, i) => (
+            <CoveredChip key={`${word}-${i}`} text={word} />
+          ))}
+        </div>
+      </div>
+
+      {isTranslator && (
+        <div className="flex gap-3">
+          <Button variant="outline" fullWidth>
+            Skip
+          </Button>
+          <Button fullWidth>
+            Done
+          </Button>
+        </div>
+      )}
     </Card>
   );
 }

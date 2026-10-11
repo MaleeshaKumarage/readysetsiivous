@@ -97,6 +97,8 @@ builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCycleR
 builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCyclePdfGenerator, CleaningSuite.Infrastructure.QualityCycle.QualityCyclePdfGenerator>();
 builder.Services.AddScoped<CleaningSuite.Application.Entertainment.IEntertainmentRepository, CleaningSuite.Infrastructure.Persistence.EntertainmentRepository>();
 builder.Services.AddSingleton<CleaningSuite.Application.Entertainment.IEntertainmentKeyProtector, CleaningSuite.Infrastructure.Entertainment.EntertainmentKeyProtector>();
+builder.Services.AddHttpClient<CleaningSuite.Application.Entertainment.IGeminiSentenceService, CleaningSuite.Infrastructure.Entertainment.GeminiSentenceService>();
+builder.Services.AddSingleton<CleaningSuite.Api.Hubs.GameSessionManager>();
 
 builder.Services.AddMediatR(cfg =>
 {
@@ -255,6 +257,7 @@ public class DefaultExceptionHandler : IExceptionHandler
             CleaningSuite.Application.Shifts.ShiftConflictException => (409, "Shift conflict"),
             CleaningSuite.Application.Entertainment.EntertainmentGroupNotFoundException => (404, "Group not found"),
             CleaningSuite.Application.Entertainment.EntertainmentJoinClosedException => (409, "Group has already started"),
+            CleaningSuite.Application.Entertainment.EntertainmentGameAlreadyStartedException => (409, "Game has already started"),
             JasperFx.ConcurrencyException => (409, "Conflict — concurrent update, please retry"),
             UnauthorizedAccessException => (403, "Forbidden"),
             _ => (500, "Internal server error"),
