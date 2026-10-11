@@ -105,3 +105,37 @@ export const ENT_SESSION_KEYS = {
   groupId: 'entGroupId',
   playerId: 'entPlayerId',
 } as const;
+
+export interface EntertainmentSession {
+  groupId: string;
+  playerId: string;
+  joinKey?: string;
+  isCreator?: boolean;
+}
+
+const SESSION_STORAGE_KEY = 'entSession';
+
+export function saveEntertainmentSession(session: EntertainmentSession): void {
+  try {
+    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+  } catch {
+    // sessionStorage unavailable (private mode) — reconnect just won't persist.
+  }
+}
+
+export function loadEntertainmentSession(): EntertainmentSession | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as EntertainmentSession) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearEntertainmentSession(): void {
+  try {
+    sessionStorage.removeItem(SESSION_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}

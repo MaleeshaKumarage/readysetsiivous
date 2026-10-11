@@ -40,6 +40,7 @@ public class EntertainmentHub : Hub
 
     public async Task StartGame(Guid groupId, Guid playerId)
     {
+        EnsureCaller(groupId, playerId);
         var result = await _mediator.Send(new StartEntertainmentGameCommand(groupId, playerId));
         _sessions.StartGame(groupId, result.TurnOrder);
         _sessions.StartRound(groupId, result.Round.RoundId, result.Round.RoundNumber, result.Round.TranslatorPlayerId);
@@ -48,6 +49,7 @@ public class EntertainmentHub : Hub
 
     public async Task RevealHint(Guid groupId, Guid playerId)
     {
+        EnsureCaller(groupId, playerId);
         var round = _sessions.GetRound(groupId);
         if (round is null || round.TranslatorId != playerId)
             return;
@@ -60,6 +62,7 @@ public class EntertainmentHub : Hub
 
     public async Task RevealAnswer(Guid groupId, Guid playerId)
     {
+        EnsureCaller(groupId, playerId);
         var round = _sessions.GetRound(groupId);
         if (round is null || round.TranslatorId == playerId || round.AnswerRevealed)
             return;
@@ -73,6 +76,7 @@ public class EntertainmentHub : Hub
 
     public async Task Done(Guid groupId, Guid playerId)
     {
+        EnsureCaller(groupId, playerId);
         var round = _sessions.GetRound(groupId);
         if (round is null || round.TranslatorId != playerId)
             return;
@@ -85,6 +89,7 @@ public class EntertainmentHub : Hub
 
     public async Task Skip(Guid groupId, Guid playerId)
     {
+        EnsureCaller(groupId, playerId);
         var round = _sessions.GetRound(groupId);
         if (round is null || round.TranslatorId != playerId)
             return;
@@ -97,6 +102,7 @@ public class EntertainmentHub : Hub
 
     public async Task EndGame(Guid groupId, Guid playerId)
     {
+        EnsureCaller(groupId, playerId);
         var scores = _sessions.GetScores(groupId);
         var standings = await _mediator.Send(new EndEntertainmentGameCommand(groupId, playerId, scores));
         await Clients.Group(groupId.ToString()).SendAsync("gameEnded", standings);
@@ -110,6 +116,8 @@ public class EntertainmentHub : Hub
 
     private async Task FinalizeAndAdvance(Guid groupId, GameSessionManager.RoundState round)
     {
+        await BroadcastScores(groupId);
+
         var scores = _sessions.GetScores(groupId);
         await _mediator.Send(new FinalizeEntertainmentRoundCommand(groupId, round.RoundId, scores));
 
@@ -139,6 +147,12 @@ public class EntertainmentHub : Hub
             : new[] { translatorConnectionId };
         await Clients.GroupExcept(groupId.ToString(), exclude)
             .SendAsync("roundStarted", round);
+    }
+
+    private void EnsureCaller(Guid groupId, Guid playerId)
+    {
+        if (_sessions.GetConnectionId(groupId, playerId) != Context.ConnectionId)
+            throw new HubException("Not authorized to act as this player.");
     }
 
     private async Task BroadcastScores(Guid groupId)

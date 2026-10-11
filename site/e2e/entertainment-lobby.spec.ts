@@ -123,4 +123,32 @@ test.describe('Entertainment — Join + Lobby', () => {
 
     await expect(page.getByText('Bob')).toBeVisible();
   });
+
+  test('Leave from lobby returns to landing', async ({ page }) => {
+    await page.route(/\/api\/v1\/entertainment\/groups$/, async (route) => {
+      if (route.request().method() === 'OPTIONS') {
+        return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      }
+      return route.fulfill({
+        status: 200,
+        json: { groupId: 'group-1', joinKey: 'ABC234', creatorPlayerId: 'player-1' },
+        headers: CORS_HEADERS,
+      });
+    });
+    await mockLobby(page);
+
+    await page.goto('/entertainment/');
+    await page.getByRole('button', { name: 'Create group' }).click();
+    await page.getByPlaceholder('e.g. Travel English').fill('Travel English');
+    await page.getByPlaceholder('Your Gemini API key').fill('sk-test');
+    await page.getByPlaceholder('Describe the topic or theme').fill('x'.repeat(200));
+    await page.getByPlaceholder('Your name').fill('Alice');
+    await page.getByRole('button', { name: 'B1' }).click();
+    await page.getByRole('button', { name: 'Create group' }).click();
+    await expect(page.getByText('Alice')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Leave' }).click();
+    await expect(page.getByRole('heading', { name: 'Language Game' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create group' })).toBeVisible();
+  });
 });

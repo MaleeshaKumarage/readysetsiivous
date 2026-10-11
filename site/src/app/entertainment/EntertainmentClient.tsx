@@ -15,6 +15,9 @@ import {
   RoundStarted,
   ScoreEntry,
   Standing,
+  saveEntertainmentSession,
+  loadEntertainmentSession,
+  clearEntertainmentSession,
 } from '@/lib/entertainmentApi';
 import { createEntertainmentHub } from '@/lib/entertainmentHub';
 import type { HubConnection } from '@microsoft/signalr';
@@ -29,12 +32,13 @@ interface Session {
 }
 
 export default function EntertainmentClient() {
-  const [view, setView] = useState<View>('landing');
-  const [session, setSession] = useState<Session | null>(null);
+  const [view, setView] = useState<View>(() => (loadEntertainmentSession() ? 'lobby' : 'landing'));
+  const [session, setSession] = useState<Session | null>(() => loadEntertainmentSession());
   const [lobby, setLobby] = useState<Lobby | null>(null);
   const [round, setRound] = useState<RoundStarted | null>(null);
   const [scores, setScores] = useState<Record<string, number>>({});
   const [standings, setStandings] = useState<Standing[] | null>(null);
+  const [answerRevealed, setAnswerRevealed] = useState(false);
   const connectionRef = useRef<HubConnection | null>(null);
 
   useEffect(() => {
@@ -51,8 +55,10 @@ export default function EntertainmentClient() {
     connection.on('lobbyUpdated', (l: Lobby) => setLobby(l));
     connection.on('roundStarted', (r: RoundStarted) => {
       setRound(r);
+      setAnswerRevealed(false);
       setView('game');
     });
+    connection.on('answerRevealed', () => setAnswerRevealed(true));
     connection.on('scoreUpdated', (entries: ScoreEntry[]) => {
       const map: Record<string, number> = {};
       entries.forEach((e) => { map[e.playerId] = e.score; });
@@ -82,6 +88,16 @@ export default function EntertainmentClient() {
   function startGame() {
     if (!session) return;
     send('StartGame', session.groupId, session.playerId);
+  }
+
+  function leave() {
+    clearEntertainmentSession();
+    setSession(null);
+    setLobby(null);
+    setRound(null);
+    setStandings(null);
+    setScores({});
+    setView('landing');
   }
 
   return (
@@ -118,12 +134,14 @@ export default function EntertainmentClient() {
         <CreateForm
           onBack={() => setView('landing')}
           onCreated={(result) => {
-            setSession({
+            const s: Session = {
               groupId: result.groupId,
               playerId: result.creatorPlayerId,
               joinKey: result.joinKey,
               isCreator: true,
-            });
+            };
+            saveEntertainmentSession(s);
+            setSession(s);
             setView('lobby');
           }}
         />
@@ -133,11 +151,9 @@ export default function EntertainmentClient() {
         <JoinForm
           onBack={() => setView('landing')}
           onJoined={(result) => {
-            setSession({
-              groupId: result.groupId,
-              playerId: result.playerId,
-              isCreator: false,
-            });
+            const s: Session = { groupId: result.groupId, playerId: result.playerId, isCreator: false };
+            saveEntertainmentSession(s);
+            setSession(s);
             setView('lobby');
           }}
         />
@@ -148,7 +164,7 @@ export default function EntertainmentClient() {
           session={session}
           lobby={lobby}
           onStart={startGame}
-          onLeave={() => setView('landing')}
+          onLeave={leave}
         />
       )}
 
@@ -160,12 +176,13 @@ export default function EntertainmentClient() {
           isTranslator={round.translatorPlayerId === session.playerId}
           players={lobby?.players ?? []}
           scores={scores}
+          answerRevealed={answerRevealed}
           send={send}
         />
       )}
 
       {view === 'results' && standings && (
-        <ResultsView standings={standings} onLeave={() => setView('landing')} />
+        <ResultsView standings={standings} onLeave={leave} />
       )}
     </main>
   );
@@ -454,6 +471,7 @@ function GameView({
   isTranslator,
   players,
   scores,
+  answerRevealed,
   send,
 }: {
   session: Session;
@@ -461,10 +479,10 @@ function GameView({
   isTranslator: boolean;
   players: LobbyPlayer[];
   scores: Record<string, number>;
+  answerRevealed: boolean;
   send: (method: string, ...args: unknown[]) => void;
 }) {
   const [revealedHints, setRevealedHints] = useState<Set<number>>(new Set());
-  const [answerRevealed, setAnswerRevealed] = useState(false);
 
   function revealHint(index: number) {
     setRevealedHints((prev) => new Set(prev).add(index));
@@ -474,7 +492,6 @@ function GameView({
   }
 
   function revealAnswer() {
-    setAnswerRevealed(true);
     send('RevealAnswer', session.groupId, session.playerId);
   }
 

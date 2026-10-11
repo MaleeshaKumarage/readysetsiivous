@@ -56,4 +56,22 @@ test.describe('Entertainment — Create group', () => {
 
     await expect(page.getByText('At least 200 characters required.')).toBeVisible();
   });
+
+  test('create form Back returns to landing', async ({ page }) => {
+    await page.goto('/entertainment/');
+    await page.getByRole('button', { name: 'Create group' }).click();
+    await expect(page.getByRole('heading', { name: 'Create group' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Back' }).click();
+    await expect(page.getByRole('button', { name: 'Join group' })).toBeVisible();
+  });
+
+  test('join form Back returns to landing', async ({ page }) => {
+    await page.goto('/entertainment/');
+    await page.getByRole('button', { name: 'Join group' }).click();
+    await expect(page.getByRole('heading', { name: 'Join group' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Back' }).click();
+    await expect(page.getByRole('button', { name: 'Create group' })).toBeVisible();
+  });
 });

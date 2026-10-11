@@ -120,10 +120,13 @@ test.describe('Entertainment — Reveal / Score / Results', () => {
     await expect(page.getByText('Round 1')).toBeVisible();
 
     await page.getByTestId('sentence-fi').click();
-    await expect(page.getByTestId('sentence-fi-revealed')).toBeVisible();
     await expect
       .poll(() => hub.invocations.some((i: any) => i.target === 'RevealAnswer'))
       .toBe(true);
+
+    // The reveal is server-driven; the hub broadcasts answerRevealed back.
+    hub.push('answerRevealed');
+    await expect(page.getByTestId('sentence-fi-revealed')).toBeVisible();
   });
 
   test('game end shows results with a winner', async ({ page }) => {
@@ -189,5 +192,58 @@ test.describe('Entertainment — Reveal / Score / Results', () => {
 
     await expect(page.getByText('Results')).toBeVisible();
     await expect(page.getByText('Winner')).toBeVisible();
+  });
+
+  test('Skip sends Skip and advances the round', async ({ page }) => {
+    await mockCreate(page);
+    await mockLobby(page);
+    const hub = mockEntertainmentSignalR(page);
+
+    await createAndStart(page, hub);
+
+    await page.getByRole('button', { name: 'Skip' }).click();
+    await expect
+      .poll(() => hub.invocations.some((i: any) => i.target === 'Skip'))
+      .toBe(true);
+
+    hub.push('roundStarted', {
+      roundNumber: 2,
+      translatorPlayerId: 'player-2',
+      sentenceEn: 'The dog runs fast.',
+      sentenceFi: 'Koira juoksee nopeasti.',
+      baseForms: ['dog', 'run', 'fast'],
+    });
+    await expect(page.getByText('Round 2')).toBeVisible();
+  });
+
+  test('Done with zero reveals is a clean solve (no hint revealed first)', async ({ page }) => {
+    await mockCreate(page);
+    await mockLobby(page);
+    const hub = mockEntertainmentSignalR(page);
+
+    await createAndStart(page, hub);
+
+    await page.getByRole('button', { name: 'Done' }).click();
+    await expect
+      .poll(() => hub.invocations.some((i: any) => i.target === 'Done'))
+      .toBe(true);
+    await expect(hub.invocations.some((i: any) => i.target === 'RevealHint')).toBe(false);
+  });
+
+  test('Leave from results returns to landing', async ({ page }) => {
+    await mockCreate(page);
+    await mockLobby(page);
+    const hub = mockEntertainmentSignalR(page);
+
+    await createAndStart(page, hub);
+    hub.push('gameEnded', [
+      { playerId: 'player-1', name: 'Alice', score: 5, isCreator: true },
+      { playerId: 'player-2', name: 'Bob', score: 1, isCreator: false },
+    ]);
+    await expect(page.getByText('Results')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Leave' }).click();
+    await expect(page.getByRole('heading', { name: 'Language Game' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create group' })).toBeVisible();
   });
 });
