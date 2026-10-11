@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using CleaningSuite.Application.Entertainment;
 
 namespace CleaningSuite.Api.Hubs;
 
@@ -26,6 +27,9 @@ public class GameSessionManager
         public Guid RoundId { get; init; }
         public int RoundNumber { get; init; }
         public Guid TranslatorId { get; init; }
+        public string SentenceEn { get; init; } = "";
+        public string SentenceFi { get; init; } = "";
+        public List<string> BaseForms { get; init; } = new();
         public int TranslatorHintReveals { get; set; }
         public bool AnswerRevealed { get; set; }
     }
@@ -70,16 +74,19 @@ public class GameSessionManager
         }
     }
 
-    public void StartRound(Guid groupId, Guid roundId, int roundNumber, Guid translatorId)
+    public void StartRound(Guid groupId, EntertainmentRoundDto round)
     {
         var session = _sessions.GetOrAdd(groupId, _ => new GameSession());
         lock (session)
         {
             session.CurrentRound = new RoundState
             {
-                RoundId = roundId,
-                RoundNumber = roundNumber,
-                TranslatorId = translatorId,
+                RoundId = round.RoundId,
+                RoundNumber = round.RoundNumber,
+                TranslatorId = round.TranslatorPlayerId,
+                SentenceEn = round.SentenceEn,
+                SentenceFi = round.SentenceFi ?? "",
+                BaseForms = round.BaseForms.ToList(),
             };
         }
     }

@@ -36,6 +36,22 @@ public class EntertainmentHub : Hub
 
         var lobby = await _mediator.Send(new GetEntertainmentLobbyQuery(groupId));
         await Clients.Group(groupId.ToString()).SendAsync("lobbyUpdated", lobby);
+
+        // Catch-up: if a round is already live (late join / reconnect), push the
+        // current round to this connection so it doesn't stay stuck on the lobby.
+        var round = lobby.Status == "InGame" ? _sessions.GetRound(groupId) : null;
+        if (round is not null)
+        {
+            var isTranslator = round.TranslatorId == playerId;
+            var dto = new EntertainmentRoundDto(
+                round.RoundId,
+                round.RoundNumber,
+                round.TranslatorId,
+                round.SentenceEn,
+                isTranslator ? null : round.SentenceFi,
+                round.BaseForms);
+            await Clients.Client(Context.ConnectionId).SendAsync("roundStarted", dto);
+        }
     }
 
     public async Task StartGame(Guid groupId, Guid playerId)
@@ -43,7 +59,7 @@ public class EntertainmentHub : Hub
         EnsureCaller(groupId, playerId);
         var result = await _mediator.Send(new StartEntertainmentGameCommand(groupId, playerId));
         _sessions.StartGame(groupId, result.TurnOrder);
-        _sessions.StartRound(groupId, result.Round.RoundId, result.Round.RoundNumber, result.Round.TranslatorPlayerId);
+        _sessions.StartRound(groupId, result.Round);
         await BroadcastRound(groupId, result.Round);
     }
 
@@ -127,7 +143,7 @@ public class EntertainmentHub : Hub
 
         var nextRound = await _mediator.Send(
             new StartNextEntertainmentRoundCommand(groupId, nextTranslator.Value, round.RoundNumber + 1));
-        _sessions.StartRound(groupId, nextRound.RoundId, nextRound.RoundNumber, nextRound.TranslatorPlayerId);
+        _sessions.StartRound(groupId, nextRound);
 
         await BroadcastRound(groupId, nextRound);
     }

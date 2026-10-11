@@ -483,6 +483,7 @@ function GameView({
   send: (method: string, ...args: unknown[]) => void;
 }) {
   const [revealedHints, setRevealedHints] = useState<Set<number>>(new Set());
+  const [localAnswerRevealed, setLocalAnswerRevealed] = useState(false);
 
   function revealHint(index: number) {
     setRevealedHints((prev) => new Set(prev).add(index));
@@ -492,6 +493,10 @@ function GameView({
   }
 
   function revealAnswer() {
+    // Optimistic: reveal locally immediately, and let the server broadcast to
+    // the other observers. This keeps the tap responsive even if the hub event
+    // is delayed.
+    setLocalAnswerRevealed(true);
     send('RevealAnswer', session.groupId, session.playerId);
   }
 
@@ -515,7 +520,7 @@ function GameView({
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">
             Finnish (tap to reveal)
           </p>
-          {answerRevealed ? (
+          {answerRevealed || localAnswerRevealed ? (
             <div data-testid="sentence-fi-revealed" className="text-xl rounded-lg px-4 py-3 bg-brand-500/10">
               {round.sentenceFi}
             </div>
