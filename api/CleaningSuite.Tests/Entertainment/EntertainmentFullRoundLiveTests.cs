@@ -152,6 +152,10 @@ public class EntertainmentFullRoundLiveTests
         public Task<bool> SentenceExistsAsync(Guid groupId, string sentenceEn, CancellationToken ct = default)
             => Task.FromResult(_rounds.Values.Any(r => r.GroupId == groupId && r.SentenceEn == sentenceEn));
 
+        public Task<IReadOnlyList<string>> ListRecentSentencesAsync(Guid groupId, int count, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<string>>(
+                _rounds.Values.Where(r => r.GroupId == groupId).OrderByDescending(r => r.StartedUtc).Take(count).Select(r => r.SentenceEn).ToList());
+
         public Task<IReadOnlyList<EntertainmentGroup>> ListInactiveGroupsAsync(DateTime cutoffUtc, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<EntertainmentGroup>>(
                 _groups.Values.Where(g => g.UpdatedUtc < cutoffUtc).ToList());

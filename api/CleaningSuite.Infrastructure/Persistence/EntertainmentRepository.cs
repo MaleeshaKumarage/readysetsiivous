@@ -99,6 +99,17 @@ public class EntertainmentRepository : IEntertainmentRepository
             .AnyAsync(ct);
     }
 
+    public async Task<IReadOnlyList<string>> ListRecentSentencesAsync(Guid groupId, int count, CancellationToken ct = default)
+    {
+        await using var session = _store.QuerySession(TenantIds.Entertainment);
+        var rounds = await session.Query<EntertainmentRound>()
+            .Where(x => x.GroupId == groupId)
+            .OrderByDescending(x => x.StartedUtc)
+            .Take(count)
+            .ToListAsync(ct);
+        return rounds.Select(r => r.SentenceEn).ToList();
+    }
+
     public async Task<IReadOnlyList<EntertainmentGroup>> ListInactiveGroupsAsync(DateTime cutoffUtc, CancellationToken ct = default)
     {
         await using var session = _store.QuerySession(TenantIds.Entertainment);

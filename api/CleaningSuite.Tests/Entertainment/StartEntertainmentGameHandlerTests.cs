@@ -25,6 +25,8 @@ public class StartEntertainmentGameHandlerTests
         var repo = new Mock<IEntertainmentRepository>();
         repo.Setup(r => r.SentenceExistsAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
+        repo.Setup(r => r.ListRecentSentencesAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<string>());
         var protector = new Mock<IEntertainmentKeyProtector>();
         var gemini = new Mock<IGeminiSentenceService>();
         var handler = new StartEntertainmentGameCommandHandler(repo.Object, protector.Object, gemini.Object);
@@ -44,7 +46,7 @@ public class StartEntertainmentGameHandlerTests
         repo.Setup(r => r.ListPlayersAsync(group.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<EntertainmentPlayer> { creator, joiner });
         protector.Setup(p => p.Unprotect("enc")).Returns("sk-real");
-        gemini.Setup(g => g.GenerateAsync(group.Description, CefrLevel.B1, "sk-real", It.IsAny<CancellationToken>()))
+        gemini.Setup(g => g.GenerateAsync(group.Description, CefrLevel.B1, "sk-real", It.IsAny<IReadOnlyList<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GeminiSentence("The cat sits.", "Kissa istuu.", new[] { "cat", "sit" }));
 
         var result = await handler.Handle(new StartEntertainmentGameCommand(group.Id, creator.Id), CancellationToken.None);

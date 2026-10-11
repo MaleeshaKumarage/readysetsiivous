@@ -27,6 +27,8 @@ public interface IEntertainmentRepository
 
     Task<bool> SentenceExistsAsync(Guid groupId, string sentenceEn, CancellationToken ct = default);
 
+    Task<IReadOnlyList<string>> ListRecentSentencesAsync(Guid groupId, int count, CancellationToken ct = default);
+
     Task<IReadOnlyList<EntertainmentGroup>> ListInactiveGroupsAsync(DateTime cutoffUtc, CancellationToken ct = default);
 
     Task DeleteGroupAsync(Guid groupId, CancellationToken ct = default);
