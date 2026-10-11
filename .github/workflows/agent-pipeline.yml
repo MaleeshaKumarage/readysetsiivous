@@ -115,14 +115,15 @@ jobs:
             > plan.md
           gh issue comment "$N" --body-file plan.md
 
-  # --- Stage 2: resolve which issue to run (off-peak gate) ---
+  # --- Stage 2: resolve which issue to run (off-peak gate + blocked resume) ---
   resolve:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'issue_comment' && contains(github.event.comment.body, 'approve') && (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR'))
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'issue_comment' && (contains(github.event.comment.body, 'approve') || contains(github.event.issue.labels.*.name, 'blocked')) && (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR'))
     runs-on: ubuntu-latest
     permissions:
       issues: write
     outputs:
       issue: ${{ steps.res.outputs.issue }}
+      resume: ${{ steps.res.outputs.resume }}
     steps:
       - id: res
         env:
@@ -134,10 +135,15 @@ jobs:
             case "$H" in 01|02|03|06|07|08|09) return 0 ;; *) return 1 ;; esac
           }
           ISSUE=""
+          RESUME="0"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             ISSUE="${{ github.event.inputs.issue-number }}"
           elif [ "${{ github.event_name }}" = "issue_comment" ]; then
-            if is_peak; then
+            if echo '${{ toJson(github.event.issue.labels.*.name) }}' | grep -q '"blocked"'; then
+              echo "blocked issue — resume immediately"
+              ISSUE="${{ github.event.issue.number }}"
+              RESUME="1"
+            elif is_peak; then
               echo "peak — defer to cron"
               gh issue edit "${{ github.event.issue.number }}" --add-label "approved" --remove-label "planned"
             else
@@ -150,8 +156,9 @@ jobs:
               ISSUE=$(gh issue list --label approved --state open --json number -q '.[0].number' 2>/dev/null || echo "")
             fi
           fi
-          echo "resolved issue: $ISSUE"
+          echo "resolved issue: $ISSUE (resume=$RESUME)"
           echo "issue=$ISSUE" >> "$GITHUB_OUTPUT"
+          echo "resume=$RESUME" >> "$GITHUB_OUTPUT"
 
   # --- Stage 3: implement (aider) + build gate ---
   implement:
@@ -196,6 +203,17 @@ jobs:
             git checkout -B "feature/issue-$N"
             echo "REUSE=0" >> "$GITHUB_ENV"
           fi
+
+      - name: Resume (aider) on blocked
+        if: needs.resolve.outputs.resume == '1'
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          bash scripts/aider_wrap.sh \
+            --model deepseek/deepseek-v4-pro \
+            --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
+            --message "Resume the blocked implementation. The build/test failed and the user replied with guidance. Fix the failure following the user's guidance and ensure it compiles. Latest comments/plan (guidance is the last one): $(cat /tmp/plan.txt)"
+          gh issue edit "$N" --remove-label "blocked"
 
       - name: Implement (aider)
         if: env.REUSE != '1'
