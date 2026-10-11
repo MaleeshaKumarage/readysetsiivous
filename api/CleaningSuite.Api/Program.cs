@@ -94,6 +94,8 @@ builder.Services.AddScoped<CleaningSuite.Application.Companies.IBranchRepository
 builder.Services.AddScoped<CleaningSuite.Application.Shifts.IShiftRepository, CleaningSuite.Infrastructure.Persistence.ShiftRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCycleRepository, CleaningSuite.Infrastructure.Persistence.QualityCycleRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCyclePdfGenerator, CleaningSuite.Infrastructure.QualityCycle.QualityCyclePdfGenerator>();
+builder.Services.AddScoped<CleaningSuite.Application.Entertainment.IEntertainmentRepository, CleaningSuite.Infrastructure.Persistence.EntertainmentRepository>();
+builder.Services.AddSingleton<CleaningSuite.Application.Entertainment.IEntertainmentKeyProtector, CleaningSuite.Infrastructure.Entertainment.EntertainmentKeyProtector>();
 
 builder.Services.AddMediatR(cfg =>
 {
