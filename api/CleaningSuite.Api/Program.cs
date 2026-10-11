@@ -51,6 +51,7 @@ var autoCreate = builder.Configuration.GetValue<AutoCreate?>("Marten:AutoCreateS
 
 builder.Services.AddCleaningMarten(connectionString, autoCreate);
 builder.Services.AddHostedService<MartenSchemaInitializer>();
+builder.Services.AddHostedService<CleaningSuite.Api.Services.EntertainmentGroupCleanupService>();
 
 builder.Services.AddKeycloakAuth(builder.Configuration);
 
