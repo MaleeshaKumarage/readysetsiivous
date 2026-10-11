@@ -51,10 +51,13 @@ public class GeminiSentenceService : IGeminiSentenceService
             };
             request.Headers.Add("X-goog-api-key", apiKey);
 
-            using var response = await _http.SendAsync(request, ct);
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(30));
+
+            using var response = await _http.SendAsync(request, timeoutCts.Token);
             if (response.IsSuccessStatusCode)
             {
-                var json = await response.Content.ReadAsStringAsync(ct);
+                var json = await response.Content.ReadAsStringAsync(timeoutCts.Token);
                 return Parse(json);
             }
 

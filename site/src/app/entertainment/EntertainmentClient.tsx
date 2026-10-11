@@ -76,6 +76,10 @@ export default function EntertainmentClient() {
       setView('results');
       toast('Game over — check the results!');
     });
+    connection.on('gameError', (message: string) => {
+      setRoundLoading(false);
+      toast.error(message || 'Something went wrong. Please try again.');
+    });
 
     connection
       .start()
