@@ -33,7 +33,13 @@ public class GeminiSentenceService : IGeminiSentenceService
             {
                 new { parts = new[] { new { text = BuildPrompt(description, level) } } },
             },
-            generationConfig = new { responseMimeType = "application/json" },
+            generationConfig = new
+            {
+                responseMimeType = "application/json",
+                // Non-thinking: a plain flash response is much faster than the
+                // default "thinking" mode, which adds seconds of latency.
+                thinkingConfig = new { thinkingBudget = 0 },
+            },
         };
 
         const int maxAttempts = 3;

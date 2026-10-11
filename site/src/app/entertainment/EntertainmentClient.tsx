@@ -176,35 +176,54 @@ export default function EntertainmentClient() {
         />
       )}
 
-      {view === 'lobby' && session && (
-        <LobbyView
-          session={session}
-          lobby={lobby}
-          onStart={startGame}
-          starting={roundLoading}
-          onLeave={leave}
-        />
-      )}
+      {roundLoading ? (
+        <LoadingView />
+      ) : (
+        <>
+          {view === 'lobby' && session && (
+            <LobbyView
+              session={session}
+              lobby={lobby}
+              onStart={startGame}
+              onLeave={leave}
+            />
+          )}
 
-      {view === 'game' && session && round && (
-        <GameView
-          key={round.roundNumber}
-          session={session}
-          round={round}
-          isTranslator={round.translatorPlayerId === session.playerId}
-          players={lobby?.players ?? []}
-          scores={scores}
-          answerRevealed={answerRevealed}
-          loading={roundLoading}
-          send={send}
-          sendRoundAction={sendRoundAction}
-        />
-      )}
+          {view === 'game' && session && round && (
+            <GameView
+              key={round.roundNumber}
+              session={session}
+              round={round}
+              isTranslator={round.translatorPlayerId === session.playerId}
+              players={lobby?.players ?? []}
+              scores={scores}
+              answerRevealed={answerRevealed}
+              send={send}
+              sendRoundAction={sendRoundAction}
+            />
+          )}
 
-      {view === 'results' && standings && (
-        <ResultsView standings={standings} onLeave={leave} />
+          {view === 'results' && standings && (
+            <ResultsView standings={standings} onLeave={leave} />
+          )}
+        </>
       )}
     </main>
+  );
+}
+
+function LoadingView() {
+  return (
+    <Card variant="elevated" padding="lg" className="text-center space-y-6">
+      <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-brand-500" />
+      <h2 className="text-xl font-semibold">Generating question…</h2>
+      <p className="text-sm text-gray-500 dark:text-gray-400">
+        Asking the AI to prepare the next sentence…
+      </p>
+      <div className="w-full h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+        <div className="h-full w-full bg-brand-500 rounded-full animate-pulse" />
+      </div>
+    </Card>
   );
 }
 
@@ -387,13 +406,11 @@ function LobbyView({
   session,
   lobby,
   onStart,
-  starting,
   onLeave,
 }: {
   session: Session;
   lobby: Lobby | null;
   onStart: () => void;
-  starting: boolean;
   onLeave: () => void;
 }) {
   const players = lobby?.players ?? [];
@@ -437,8 +454,8 @@ function LobbyView({
       </div>
 
       {session.isCreator && (
-        <Button onClick={onStart} disabled={starting} fullWidth>
-          {starting ? 'Starting…' : 'Start game'}
+        <Button onClick={onStart} fullWidth>
+          Start game
         </Button>
       )}
       <Button variant="ghost" onClick={onLeave} fullWidth>
@@ -494,7 +511,6 @@ function GameView({
   players,
   scores,
   answerRevealed,
-  loading,
   send,
   sendRoundAction,
 }: {
@@ -504,7 +520,6 @@ function GameView({
   players: LobbyPlayer[];
   scores: Record<string, number>;
   answerRevealed: boolean;
-  loading: boolean;
   send: (method: string, ...args: unknown[]) => void;
   sendRoundAction: (method: string) => void;
 }) {
@@ -579,11 +594,11 @@ function GameView({
 
       {isTranslator && (
         <div className="flex gap-3">
-          <Button variant="outline" onClick={() => sendRoundAction('Skip')} disabled={loading} fullWidth>
+          <Button variant="outline" onClick={() => sendRoundAction('Skip')} fullWidth>
             Skip
           </Button>
-          <Button onClick={() => sendRoundAction('Done')} disabled={loading} fullWidth>
-            {loading ? 'Loading…' : 'Done'}
+          <Button onClick={() => sendRoundAction('Done')} fullWidth>
+            Done
           </Button>
         </div>
       )}
