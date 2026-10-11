@@ -24,4 +24,10 @@ public interface IEntertainmentRepository
     Task<EntertainmentPlayer?> GetPlayerAsync(Guid playerId, CancellationToken ct = default);
 
     Task<IReadOnlyList<EntertainmentPlayer>> ListPlayersAsync(Guid groupId, CancellationToken ct = default);
+
+    Task<bool> SentenceExistsAsync(Guid groupId, string sentenceEn, CancellationToken ct = default);
+
+    Task<IReadOnlyList<EntertainmentGroup>> ListInactiveGroupsAsync(DateTime cutoffUtc, CancellationToken ct = default);
+
+    Task DeleteGroupAsync(Guid groupId, CancellationToken ct = default);
 }

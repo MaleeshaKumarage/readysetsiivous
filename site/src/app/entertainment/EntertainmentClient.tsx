@@ -21,6 +21,7 @@ import {
 } from '@/lib/entertainmentApi';
 import { createEntertainmentHub } from '@/lib/entertainmentHub';
 import type { HubConnection } from '@microsoft/signalr';
+import { toast } from 'sonner';
 
 type View = 'landing' | 'create' | 'join' | 'lobby' | 'game' | 'results';
 
@@ -39,6 +40,7 @@ export default function EntertainmentClient() {
   const [scores, setScores] = useState<Record<string, number>>({});
   const [standings, setStandings] = useState<Standing[] | null>(null);
   const [answerRevealed, setAnswerRevealed] = useState(false);
+  const [roundLoading, setRoundLoading] = useState(false);
   const connectionRef = useRef<HubConnection | null>(null);
 
   useEffect(() => {
@@ -56,7 +58,11 @@ export default function EntertainmentClient() {
     connection.on('roundStarted', (r: RoundStarted) => {
       setRound(r);
       setAnswerRevealed(false);
+      setRoundLoading(false);
       setView('game');
+      toast(r.translatorPlayerId === session.playerId
+        ? `Round ${r.roundNumber} — your turn!`
+        : `Round ${r.roundNumber} started`);
     });
     connection.on('answerRevealed', () => setAnswerRevealed(true));
     connection.on('scoreUpdated', (entries: ScoreEntry[]) => {
@@ -65,8 +71,10 @@ export default function EntertainmentClient() {
       setScores(map);
     });
     connection.on('gameEnded', (st: Standing[]) => {
+      setRoundLoading(false);
       setStandings(st);
       setView('results');
+      toast('Game over — check the results!');
     });
 
     connection
@@ -87,6 +95,8 @@ export default function EntertainmentClient() {
 
   function startGame() {
     if (!session) return;
+    setRoundLoading(true);
+    toast('Starting game…');
     send('StartGame', session.groupId, session.playerId);
   }
 
@@ -98,6 +108,13 @@ export default function EntertainmentClient() {
     setStandings(null);
     setScores({});
     setView('landing');
+  }
+
+  function sendRoundAction(method: string) {
+    if (!session) return;
+    setRoundLoading(true);
+    toast(method === 'Done' ? 'Submitting…' : 'Next round…');
+    send(method, session.groupId, session.playerId);
   }
 
   return (
@@ -164,6 +181,7 @@ export default function EntertainmentClient() {
           session={session}
           lobby={lobby}
           onStart={startGame}
+          starting={roundLoading}
           onLeave={leave}
         />
       )}
@@ -177,7 +195,9 @@ export default function EntertainmentClient() {
           players={lobby?.players ?? []}
           scores={scores}
           answerRevealed={answerRevealed}
+          loading={roundLoading}
           send={send}
+          sendRoundAction={sendRoundAction}
         />
       )}
 
@@ -367,11 +387,13 @@ function LobbyView({
   session,
   lobby,
   onStart,
+  starting,
   onLeave,
 }: {
   session: Session;
   lobby: Lobby | null;
   onStart: () => void;
+  starting: boolean;
   onLeave: () => void;
 }) {
   const players = lobby?.players ?? [];
@@ -415,8 +437,8 @@ function LobbyView({
       </div>
 
       {session.isCreator && (
-        <Button onClick={onStart} fullWidth>
-          Start game
+        <Button onClick={onStart} disabled={starting} fullWidth>
+          {starting ? 'Starting…' : 'Start game'}
         </Button>
       )}
       <Button variant="ghost" onClick={onLeave} fullWidth>
@@ -472,7 +494,9 @@ function GameView({
   players,
   scores,
   answerRevealed,
+  loading,
   send,
+  sendRoundAction,
 }: {
   session: Session;
   round: RoundStarted;
@@ -480,7 +504,9 @@ function GameView({
   players: LobbyPlayer[];
   scores: Record<string, number>;
   answerRevealed: boolean;
+  loading: boolean;
   send: (method: string, ...args: unknown[]) => void;
+  sendRoundAction: (method: string) => void;
 }) {
   const [revealedHints, setRevealedHints] = useState<Set<number>>(new Set());
   const [localAnswerRevealed, setLocalAnswerRevealed] = useState(false);
@@ -553,11 +579,11 @@ function GameView({
 
       {isTranslator && (
         <div className="flex gap-3">
-          <Button variant="outline" onClick={() => send('Skip', session.groupId, session.playerId)} fullWidth>
+          <Button variant="outline" onClick={() => sendRoundAction('Skip')} disabled={loading} fullWidth>
             Skip
           </Button>
-          <Button onClick={() => send('Done', session.groupId, session.playerId)} fullWidth>
-            Done
+          <Button onClick={() => sendRoundAction('Done')} disabled={loading} fullWidth>
+            {loading ? 'Loading…' : 'Done'}
           </Button>
         </div>
       )}

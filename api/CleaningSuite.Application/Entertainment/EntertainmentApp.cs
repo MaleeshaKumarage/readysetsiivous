@@ -214,7 +214,13 @@ public class StartEntertainmentGameCommandHandler
 
         var translator = players[0];
         var apiKey = _keyProtector.Unprotect(group.GeminiApiKeyEncrypted);
-        var sentence = await _gemini.GenerateAsync(group.Description, translator.Level, apiKey, ct);
+        GeminiSentence sentence;
+        var attempts = 0;
+        do
+        {
+            sentence = await _gemini.GenerateAsync(group.Description, translator.Level, apiKey, ct);
+            attempts++;
+        } while (attempts < 3 && await _repository.SentenceExistsAsync(group.Id, sentence.SentenceEn, ct));
 
         var round = EntertainmentRound.Create(
             group.Id, 1, translator.Id, sentence.SentenceEn, sentence.SentenceFi, sentence.BaseForms);
@@ -281,7 +287,13 @@ public class StartNextEntertainmentRoundCommandHandler
             ?? throw new EntertainmentGroupNotFoundException(request.TranslatorPlayerId.ToString());
 
         var apiKey = _keyProtector.Unprotect(group.GeminiApiKeyEncrypted);
-        var sentence = await _gemini.GenerateAsync(group.Description, translator.Level, apiKey, ct);
+        GeminiSentence sentence;
+        var attempts = 0;
+        do
+        {
+            sentence = await _gemini.GenerateAsync(group.Description, translator.Level, apiKey, ct);
+            attempts++;
+        } while (attempts < 3 && await _repository.SentenceExistsAsync(group.Id, sentence.SentenceEn, ct));
 
         var round = EntertainmentRound.Create(
             group.Id, request.RoundNumber, translator.Id, sentence.SentenceEn, sentence.SentenceFi, sentence.BaseForms);

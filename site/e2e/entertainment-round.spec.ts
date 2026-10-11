@@ -62,7 +62,7 @@ test.describe('Entertainment — Start game + round views', () => {
       baseForms: ['cat', 'sit', 'mat'],
     });
 
-    await expect(page.getByText('Round 1')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Round 1' })).toBeVisible();
     await expect(page.getByTestId('sentence-en')).toHaveText(/cat sits/);
     await expect(page.getByTestId('covered-word')).toHaveCount(3);
     await expect(page.getByTestId('sentence-fi')).toHaveCount(0);
@@ -101,7 +101,7 @@ test.describe('Entertainment — Start game + round views', () => {
       baseForms: ['cat', 'sit', 'mat'],
     });
 
-    await expect(page.getByText('Round 1')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Round 1' })).toBeVisible();
     await expect(page.getByTestId('sentence-en')).toHaveText(/cat sits/);
     await expect(page.getByTestId('sentence-fi')).toBeVisible();
     await expect(page.getByTestId('covered-word')).toHaveCount(3);

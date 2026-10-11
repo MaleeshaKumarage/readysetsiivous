@@ -57,7 +57,7 @@ async function createAndStart(page: any, hub: any) {
 
   await page.getByRole('button', { name: 'Start game' }).click();
   hub.push('roundStarted', TRANSLATOR_ROUND);
-  await expect(page.getByText('Round 1')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Round 1' })).toBeVisible();
 }
 
 test.describe('Entertainment — Reveal / Score / Results', () => {
@@ -117,7 +117,7 @@ test.describe('Entertainment — Reveal / Score / Results', () => {
       ...TRANSLATOR_ROUND,
       sentenceFi: 'Kissa istuu matolla.',
     });
-    await expect(page.getByText('Round 1')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Round 1' })).toBeVisible();
 
     await page.getByTestId('sentence-fi').click();
     await expect
@@ -141,7 +141,7 @@ test.describe('Entertainment — Reveal / Score / Results', () => {
       { playerId: 'player-1', name: 'Alice', score: 3, isCreator: true },
     ]);
 
-    await expect(page.getByText('Results')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Results' })).toBeVisible();
     await expect(page.getByText('Winner')).toBeVisible();
     await expect(page.getByText('Bob')).toBeVisible();
     await expect(page.getByText('Alice')).toBeVisible();
@@ -155,7 +155,7 @@ test.describe('Entertainment — Reveal / Score / Results', () => {
     await createAndStart(page, hub);
 
     // Round 1: Alice is the translator.
-    await expect(page.getByText('Round 1')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Round 1' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Done' })).toBeVisible();
 
     await page.getByTestId('covered-word').first().click();
@@ -175,7 +175,7 @@ test.describe('Entertainment — Reveal / Score / Results', () => {
       baseForms: ['dog', 'run', 'fast'],
     });
 
-    await expect(page.getByText('Round 2')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Round 2' })).toBeVisible();
     await expect(page.getByTestId('sentence-fi')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Done' })).toHaveCount(0);
 
@@ -190,7 +190,7 @@ test.describe('Entertainment — Reveal / Score / Results', () => {
       { playerId: 'player-2', name: 'Bob', score: 1, isCreator: false },
     ]);
 
-    await expect(page.getByText('Results')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Results' })).toBeVisible();
     await expect(page.getByText('Winner')).toBeVisible();
   });
 
@@ -213,7 +213,7 @@ test.describe('Entertainment — Reveal / Score / Results', () => {
       sentenceFi: 'Koira juoksee nopeasti.',
       baseForms: ['dog', 'run', 'fast'],
     });
-    await expect(page.getByText('Round 2')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Round 2' })).toBeVisible();
   });
 
   test('Done with zero reveals is a clean solve (no hint revealed first)', async ({ page }) => {
@@ -240,7 +240,7 @@ test.describe('Entertainment — Reveal / Score / Results', () => {
       { playerId: 'player-1', name: 'Alice', score: 5, isCreator: true },
       { playerId: 'player-2', name: 'Bob', score: 1, isCreator: false },
     ]);
-    await expect(page.getByText('Results')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Results' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Leave' }).click();
     await expect(page.getByRole('heading', { name: 'Language Game' })).toBeVisible();

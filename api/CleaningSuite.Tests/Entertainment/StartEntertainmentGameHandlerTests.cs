@@ -23,6 +23,8 @@ public class StartEntertainmentGameHandlerTests
     private static (Mock<IEntertainmentRepository>, Mock<IEntertainmentKeyProtector>, Mock<IGeminiSentenceService>, StartEntertainmentGameCommandHandler) Setup()
     {
         var repo = new Mock<IEntertainmentRepository>();
+        repo.Setup(r => r.SentenceExistsAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
         var protector = new Mock<IEntertainmentKeyProtector>();
         var gemini = new Mock<IGeminiSentenceService>();
         var handler = new StartEntertainmentGameCommandHandler(repo.Object, protector.Object, gemini.Object);

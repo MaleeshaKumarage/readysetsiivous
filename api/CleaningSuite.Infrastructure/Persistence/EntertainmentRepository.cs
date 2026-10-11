@@ -90,4 +90,29 @@ public class EntertainmentRepository : IEntertainmentRepository
             .OrderBy(x => x.JoinedUtc)
             .ToListAsync(ct);
     }
+
+    public async Task<bool> SentenceExistsAsync(Guid groupId, string sentenceEn, CancellationToken ct = default)
+    {
+        await using var session = _store.QuerySession(TenantIds.Entertainment);
+        return await session.Query<EntertainmentRound>()
+            .Where(x => x.GroupId == groupId && x.SentenceEn == sentenceEn)
+            .AnyAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<EntertainmentGroup>> ListInactiveGroupsAsync(DateTime cutoffUtc, CancellationToken ct = default)
+    {
+        await using var session = _store.QuerySession(TenantIds.Entertainment);
+        return await session.Query<EntertainmentGroup>()
+            .Where(x => x.UpdatedUtc < cutoffUtc)
+            .ToListAsync(ct);
+    }
+
+    public async Task DeleteGroupAsync(Guid groupId, CancellationToken ct = default)
+    {
+        await using var session = _store.LightweightSession(TenantIds.Entertainment);
+        session.Delete<EntertainmentGroup>(groupId);
+        session.DeleteWhere<EntertainmentPlayer>(x => x.GroupId == groupId);
+        session.DeleteWhere<EntertainmentRound>(x => x.GroupId == groupId);
+        await session.SaveChangesAsync(ct);
+    }
 }

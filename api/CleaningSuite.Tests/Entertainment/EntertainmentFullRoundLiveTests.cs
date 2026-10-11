@@ -132,5 +132,22 @@ public class EntertainmentFullRoundLiveTests
         public Task<IReadOnlyList<EntertainmentPlayer>> ListPlayersAsync(Guid groupId, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<EntertainmentPlayer>>(
                 _players.Values.Where(p => p.GroupId == groupId).OrderBy(p => p.JoinedUtc).ToList());
+
+        public Task<bool> SentenceExistsAsync(Guid groupId, string sentenceEn, CancellationToken ct = default)
+            => Task.FromResult(_rounds.Values.Any(r => r.GroupId == groupId && r.SentenceEn == sentenceEn));
+
+        public Task<IReadOnlyList<EntertainmentGroup>> ListInactiveGroupsAsync(DateTime cutoffUtc, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<EntertainmentGroup>>(
+                _groups.Values.Where(g => g.UpdatedUtc < cutoffUtc).ToList());
+
+        public Task DeleteGroupAsync(Guid groupId, CancellationToken ct = default)
+        {
+            _groups.Remove(groupId);
+            foreach (var p in _players.Values.Where(p => p.GroupId == groupId).ToList())
+                _players.Remove(p.Id);
+            foreach (var r in _rounds.Values.Where(r => r.GroupId == groupId).ToList())
+                _rounds.Remove(r.Id);
+            return Task.CompletedTask;
+        }
     }
 }
