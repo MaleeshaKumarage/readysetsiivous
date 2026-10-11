@@ -74,7 +74,7 @@ jobs:
             [ -z "$title" ] && continue
             url=$(gh issue create --title "$title" --body "Sub-issue of #$N.")
             num=$(echo "$url" | grep -oE '[0-9]+$')
-            gh api "repos/MaleeshaKumarage/readysetsiivous/issues/$N/sub_issues" -f "sub_issue_id=$num" >/dev/null
+            gh api "repos/MaleeshaKumarage/readysetsiivous/issues/$N/sub_issues" -F "sub_issue_id=$num" >/dev/null
           done
 
   # --- Stage 1b: revise plan on disapprove/suggest ---
