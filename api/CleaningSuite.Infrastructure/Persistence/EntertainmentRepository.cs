@@ -47,6 +47,12 @@ public class EntertainmentRepository : IEntertainmentRepository
         await session.SaveChangesAsync(ct);
     }
 
+    public async Task<EntertainmentRound?> GetRoundAsync(Guid roundId, CancellationToken ct = default)
+    {
+        await using var session = _store.QuerySession(TenantIds.Entertainment);
+        return await session.LoadAsync<EntertainmentRound>(roundId, ct);
+    }
+
     public async Task<bool> JoinKeyExistsAsync(string joinKey, CancellationToken ct = default)
     {
         await using var session = _store.QuerySession(TenantIds.Entertainment);

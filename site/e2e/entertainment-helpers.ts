@@ -14,6 +14,11 @@ export function getBody(route: any) {
   }
 }
 
+/** True once the mocked hub has seen the client connect (JoinLobby invoked). */
+export function hubConnected(hub: { invocations: { target: string }[] }): boolean {
+  return hub.invocations.some((i) => i.target === 'JoinLobby');
+}
+
 /**
  * Mocks the SignalR hub over the LongPolling transport so e2e can exercise the
  * realtime wiring without a live server. Returns a handle to push hub messages
@@ -28,6 +33,7 @@ export function getBody(route: any) {
  */
 export function mockEntertainmentSignalR(page: Page) {
   const queue: string[] = [];
+  const invocations: { target: string; arguments: unknown[] }[] = [];
   const RECORD_SEP = String.fromCharCode(0x1e);
   let connCounter = 0;
   const getCounts = new Map<string, number>();
@@ -80,8 +86,19 @@ export function mockEntertainmentSignalR(page: Page) {
     }
 
     // POST: handshake or an invocation send.
+    if (method === 'POST') {
+      const body = route.request().postData() || '';
+      try {
+        const parsed = JSON.parse(body.replace(RECORD_SEP, ''));
+        if (parsed && parsed.type === 1 && parsed.target) {
+          invocations.push({ target: parsed.target, arguments: parsed.arguments });
+        }
+      } catch {
+        // handshake or malformed body — ignore
+      }
+    }
     return route.fulfill({ status: 200, headers: CORS_HEADERS, body: '' });
   });
 
-  return { push };
+  return { push, invocations };
 }

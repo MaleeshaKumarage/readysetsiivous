@@ -5,10 +5,9 @@ using Microsoft.AspNetCore.SignalR;
 namespace CleaningSuite.Api.Hubs;
 
 /// <summary>
-/// Realtime channel for the entertainment game. Clients join a SignalR group per
-/// game group; the lobby list is loaded from the database and broadcast on every
-/// join so everyone stays in sync. When the creator starts the game, the first
-/// round is generated and pushed per-role (translator vs. observers).
+/// Realtime channel for the entertainment game. Handles the lobby, the start of
+/// the game, per-round reveal/done/skip events, scoring, and rotation. Round
+/// payloads are pushed per-role (translator vs. observers).
 /// </summary>
 public class EntertainmentHub : Hub
 {
@@ -43,13 +42,93 @@ public class EntertainmentHub : Hub
     {
         var result = await _mediator.Send(new StartEntertainmentGameCommand(groupId, playerId));
         _sessions.StartGame(groupId, result.TurnOrder);
+        _sessions.StartRound(groupId, result.Round.RoundId, result.Round.RoundNumber, result.Round.TranslatorPlayerId);
+        await BroadcastRound(groupId, result.Round);
+    }
 
-        var translatorConnectionId = _sessions.GetConnectionId(groupId, result.Round.TranslatorPlayerId);
+    public async Task RevealHint(Guid groupId, Guid playerId)
+    {
+        var round = _sessions.GetRound(groupId);
+        if (round is null || round.TranslatorId != playerId)
+            return;
 
-        // Translator sees English + base forms (no Finnish); observers also see Finnish.
-        var translatorRound = result.Round with { SentenceFi = null };
-        var observerRound = result.Round;
+        _sessions.RecordTranslatorHintReveal(groupId);
+        var turnOrder = _sessions.GetTurnOrder(groupId);
+        _sessions.ApplyDeltas(groupId, EntertainmentScoring.TranslatorRevealedHint(turnOrder, playerId));
+        await BroadcastScores(groupId);
+    }
 
+    public async Task RevealAnswer(Guid groupId, Guid playerId)
+    {
+        var round = _sessions.GetRound(groupId);
+        if (round is null || round.TranslatorId == playerId || round.AnswerRevealed)
+            return;
+
+        _sessions.RecordAnswerRevealed(groupId);
+        var turnOrder = _sessions.GetTurnOrder(groupId);
+        _sessions.ApplyDeltas(groupId, EntertainmentScoring.AnswerRevealed(turnOrder, playerId));
+        await Clients.Group(groupId.ToString()).SendAsync("answerRevealed");
+        await BroadcastScores(groupId);
+    }
+
+    public async Task Done(Guid groupId, Guid playerId)
+    {
+        var round = _sessions.GetRound(groupId);
+        if (round is null || round.TranslatorId != playerId)
+            return;
+
+        if (_sessions.WasCleanSolve(groupId))
+            _sessions.ApplyDeltas(groupId, EntertainmentScoring.CleanSolve(playerId));
+
+        await FinalizeAndAdvance(groupId, round);
+    }
+
+    public async Task Skip(Guid groupId, Guid playerId)
+    {
+        var round = _sessions.GetRound(groupId);
+        if (round is null || round.TranslatorId != playerId)
+            return;
+
+        var turnOrder = _sessions.GetTurnOrder(groupId);
+        _sessions.ApplyDeltas(groupId, EntertainmentScoring.Skipped(turnOrder, playerId));
+
+        await FinalizeAndAdvance(groupId, round);
+    }
+
+    public async Task EndGame(Guid groupId, Guid playerId)
+    {
+        var scores = _sessions.GetScores(groupId);
+        var standings = await _mediator.Send(new EndEntertainmentGameCommand(groupId, playerId, scores));
+        await Clients.Group(groupId.ToString()).SendAsync("gameEnded", standings);
+    }
+
+    public override async Task OnDisconnectedAsync(Exception? exception)
+    {
+        _sessions.RemoveConnection(Context.ConnectionId);
+        await base.OnDisconnectedAsync(exception);
+    }
+
+    private async Task FinalizeAndAdvance(Guid groupId, GameSessionManager.RoundState round)
+    {
+        var scores = _sessions.GetScores(groupId);
+        await _mediator.Send(new FinalizeEntertainmentRoundCommand(groupId, round.RoundId, scores));
+
+        var nextTranslator = _sessions.AdvanceTranslator(groupId);
+        if (nextTranslator is null)
+            return;
+
+        var nextRound = await _mediator.Send(
+            new StartNextEntertainmentRoundCommand(groupId, nextTranslator.Value, round.RoundNumber + 1));
+        _sessions.StartRound(groupId, nextRound.RoundId, nextRound.RoundNumber, nextRound.TranslatorPlayerId);
+
+        await BroadcastRound(groupId, nextRound);
+    }
+
+    private async Task BroadcastRound(Guid groupId, EntertainmentRoundDto round)
+    {
+        var translatorConnectionId = _sessions.GetConnectionId(groupId, round.TranslatorPlayerId);
+
+        var translatorRound = round with { SentenceFi = null };
         if (translatorConnectionId is not null)
         {
             await Clients.Client(translatorConnectionId).SendAsync("roundStarted", translatorRound);
@@ -59,12 +138,14 @@ public class EntertainmentHub : Hub
             ? Array.Empty<string>()
             : new[] { translatorConnectionId };
         await Clients.GroupExcept(groupId.ToString(), exclude)
-            .SendAsync("roundStarted", observerRound);
+            .SendAsync("roundStarted", round);
     }
 
-    public override async Task OnDisconnectedAsync(Exception? exception)
+    private async Task BroadcastScores(Guid groupId)
     {
-        _sessions.RemoveConnection(Context.ConnectionId);
-        await base.OnDisconnectedAsync(exception);
+        var scores = _sessions.GetScores(groupId)
+            .Select(kv => new { playerId = kv.Key, score = kv.Value })
+            .ToList();
+        await Clients.Group(groupId.ToString()).SendAsync("scoreUpdated", scores);
     }
 }

@@ -13,6 +13,8 @@ public interface IEntertainmentRepository
 
     Task SaveRoundAsync(EntertainmentRound round, CancellationToken ct = default);
 
+    Task<EntertainmentRound?> GetRoundAsync(Guid roundId, CancellationToken ct = default);
+
     Task<bool> JoinKeyExistsAsync(string joinKey, CancellationToken ct = default);
 
     Task<EntertainmentGroup?> GetGroupByJoinKeyAsync(string joinKey, CancellationToken ct = default);

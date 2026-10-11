@@ -88,6 +88,18 @@ export interface RoundStarted {
   baseForms: string[];
 }
 
+export interface ScoreEntry {
+  playerId: string;
+  score: number;
+}
+
+export interface Standing {
+  playerId: string;
+  name: string;
+  score: number;
+  isCreator: boolean;
+}
+
 // sessionStorage keys for reconnect across a refresh.
 export const ENT_SESSION_KEYS = {
   groupId: 'entGroupId',

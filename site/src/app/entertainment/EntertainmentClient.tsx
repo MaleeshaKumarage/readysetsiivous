@@ -13,11 +13,13 @@ import {
   Lobby,
   LobbyPlayer,
   RoundStarted,
+  ScoreEntry,
+  Standing,
 } from '@/lib/entertainmentApi';
 import { createEntertainmentHub } from '@/lib/entertainmentHub';
 import type { HubConnection } from '@microsoft/signalr';
 
-type View = 'landing' | 'create' | 'join' | 'lobby' | 'game';
+type View = 'landing' | 'create' | 'join' | 'lobby' | 'game' | 'results';
 
 interface Session {
   groupId: string;
@@ -31,6 +33,8 @@ export default function EntertainmentClient() {
   const [session, setSession] = useState<Session | null>(null);
   const [lobby, setLobby] = useState<Lobby | null>(null);
   const [round, setRound] = useState<RoundStarted | null>(null);
+  const [scores, setScores] = useState<Record<string, number>>({});
+  const [standings, setStandings] = useState<Standing[] | null>(null);
   const connectionRef = useRef<HubConnection | null>(null);
 
   useEffect(() => {
@@ -49,6 +53,15 @@ export default function EntertainmentClient() {
       setRound(r);
       setView('game');
     });
+    connection.on('scoreUpdated', (entries: ScoreEntry[]) => {
+      const map: Record<string, number> = {};
+      entries.forEach((e) => { map[e.playerId] = e.score; });
+      setScores(map);
+    });
+    connection.on('gameEnded', (st: Standing[]) => {
+      setStandings(st);
+      setView('results');
+    });
 
     connection
       .start()
@@ -62,10 +75,13 @@ export default function EntertainmentClient() {
     };
   }, [session]);
 
+  function send(method: string, ...args: unknown[]) {
+    connectionRef.current?.invoke(method, ...args).catch(() => {});
+  }
+
   function startGame() {
-    const connection = connectionRef.current;
-    if (!connection || !session) return;
-    connection.invoke('StartGame', session.groupId, session.playerId).catch(() => {});
+    if (!session) return;
+    send('StartGame', session.groupId, session.playerId);
   }
 
   return (
@@ -138,9 +154,17 @@ export default function EntertainmentClient() {
 
       {view === 'game' && session && round && (
         <GameView
+          session={session}
           round={round}
           isTranslator={round.translatorPlayerId === session.playerId}
+          players={lobby?.players ?? []}
+          scores={scores}
+          send={send}
         />
+      )}
+
+      {view === 'results' && standings && (
+        <ResultsView standings={standings} onLeave={() => setView('landing')} />
       )}
     </main>
   );
@@ -384,18 +408,75 @@ function Lobby({
   );
 }
 
-function CoveredChip({ text }: { text: string }) {
+function ScoreBoard({ players, scores }: { players: LobbyPlayer[]; scores: Record<string, number> }) {
   return (
-    <span
-      data-testid="covered-word"
-      className="inline-flex items-center justify-center rounded-lg border border-dashed border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 text-sm text-transparent select-none"
-    >
-      {text}
-    </span>
+    <div className="flex flex-wrap gap-2 justify-center">
+      {players.map((p) => (
+        <span
+          key={p.playerId}
+          className="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-gray-800 px-3 py-1 text-sm"
+        >
+          <span className="font-medium">{p.name}</span>
+          <span className="font-bold text-accent-900 dark:text-white">{scores[p.playerId] ?? 0}</span>
+        </span>
+      ))}
+    </div>
   );
 }
 
-function GameView({ round, isTranslator }: { round: RoundStarted; isTranslator: boolean }) {
+function HintChip({ text, revealed, onReveal }: { text: string; revealed: boolean; onReveal: () => void }) {
+  if (revealed) {
+    return (
+      <span
+        data-testid="revealed-word"
+        className="inline-flex items-center rounded-lg bg-brand-500/15 border border-brand-500/40 px-3 py-1.5 text-sm font-medium"
+      >
+        {text}
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      data-testid="covered-word"
+      onClick={onReveal}
+      className="inline-flex items-center justify-center rounded-lg border border-dashed border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 text-sm text-transparent select-none hover:border-brand-500"
+    >
+      {text}
+    </button>
+  );
+}
+
+function GameView({
+  session,
+  round,
+  isTranslator,
+  players,
+  scores,
+  send,
+}: {
+  session: Session;
+  round: RoundStarted;
+  isTranslator: boolean;
+  players: LobbyPlayer[];
+  scores: Record<string, number>;
+  send: (method: string, ...args: unknown[]) => void;
+}) {
+  const [revealedHints, setRevealedHints] = useState<Set<number>>(new Set());
+  const [answerRevealed, setAnswerRevealed] = useState(false);
+
+  function revealHint(index: number) {
+    setRevealedHints((prev) => new Set(prev).add(index));
+    if (isTranslator) {
+      send('RevealHint', session.groupId, session.playerId);
+    }
+  }
+
+  function revealAnswer() {
+    setAnswerRevealed(true);
+    send('RevealAnswer', session.groupId, session.playerId);
+  }
+
   return (
     <Card variant="elevated" padding="lg" className="space-y-6">
       <div className="text-center">
@@ -405,38 +486,86 @@ function GameView({ round, isTranslator }: { round: RoundStarted; isTranslator: 
         </p>
       </div>
 
+      <ScoreBoard players={players} scores={scores} />
+
       <div data-testid="sentence-en" className="text-2xl font-medium text-center leading-relaxed">
         {round.sentenceEn}
       </div>
 
       {!isTranslator && round.sentenceFi && (
         <div className="text-center">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Finnish (covered)</p>
-          <div data-testid="sentence-fi" className="text-xl text-transparent select-none bg-gray-100 dark:bg-gray-800 rounded-lg px-4 py-3">
-            {round.sentenceFi}
-          </div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">
+            Finnish (tap to reveal)
+          </p>
+          {answerRevealed ? (
+            <div data-testid="sentence-fi-revealed" className="text-xl rounded-lg px-4 py-3 bg-brand-500/10">
+              {round.sentenceFi}
+            </div>
+          ) : (
+            <button
+              type="button"
+              data-testid="sentence-fi"
+              onClick={revealAnswer}
+              className="w-full text-xl text-transparent select-none bg-gray-100 dark:bg-gray-800 rounded-lg px-4 py-3 hover:bg-gray-200 dark:hover:bg-gray-700"
+            >
+              {round.sentenceFi}
+            </button>
+          )}
         </div>
       )}
 
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Hint words (covered)</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Hint words</p>
         <div className="flex flex-wrap gap-2">
           {round.baseForms.map((word, i) => (
-            <CoveredChip key={`${word}-${i}`} text={word} />
+            <HintChip
+              key={`${word}-${i}`}
+              text={word}
+              revealed={revealedHints.has(i)}
+              onReveal={() => revealHint(i)}
+            />
           ))}
         </div>
       </div>
 
       {isTranslator && (
         <div className="flex gap-3">
-          <Button variant="outline" fullWidth>
+          <Button variant="outline" onClick={() => send('Skip', session.groupId, session.playerId)} fullWidth>
             Skip
           </Button>
-          <Button fullWidth>
+          <Button onClick={() => send('Done', session.groupId, session.playerId)} fullWidth>
             Done
           </Button>
         </div>
       )}
+    </Card>
+  );
+}
+
+function ResultsView({ standings, onLeave }: { standings: Standing[]; onLeave: () => void }) {
+  return (
+    <Card variant="elevated" padding="lg" className="space-y-5">
+      <h2 className="text-xl font-semibold text-center">Results</h2>
+      <ol className="space-y-2">
+        {standings.map((s, i) => (
+          <li
+            key={s.playerId}
+            className={
+              'flex items-center justify-between rounded-xl border px-4 py-3 ' +
+              (i === 0 ? 'border-brand-500 bg-brand-500/10' : 'border-gray-100 dark:border-gray-700')
+            }
+          >
+            <span className="font-medium">
+              {i + 1}. {s.name}
+              {i === 0 && <span className="ml-2 text-xs text-brand-600">Winner</span>}
+            </span>
+            <span className="font-bold text-accent-900 dark:text-white">{s.score}</span>
+          </li>
+        ))}
+      </ol>
+      <Button variant="ghost" onClick={onLeave} fullWidth>
+        Leave
+      </Button>
     </Card>
   );
 }

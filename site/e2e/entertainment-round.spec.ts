@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { CORS_HEADERS, mockEntertainmentSignalR } from './entertainment-helpers';
+import { CORS_HEADERS, mockEntertainmentSignalR, hubConnected } from './entertainment-helpers';
 
 function mockCreate(page: any) {
   return page.route(/\/api\/v1\/entertainment\/groups$/, async (route) => {
@@ -51,6 +51,7 @@ test.describe('Entertainment — Start game + round views', () => {
     const hub = mockEntertainmentSignalR(page);
 
     await createGroup(page);
+    await expect.poll(() => hubConnected(hub)).toBe(true);
     await page.getByRole('button', { name: 'Start game' }).click();
 
     hub.push('roundStarted', {
@@ -90,6 +91,7 @@ test.describe('Entertainment — Start game + round views', () => {
     await page.getByRole('button', { name: 'A2' }).click();
     await page.getByRole('button', { name: 'Join group' }).click();
     await expect(page.getByText('Travel English')).toBeVisible();
+    await expect.poll(() => hubConnected(hub)).toBe(true);
 
     hub.push('roundStarted', {
       roundNumber: 1,

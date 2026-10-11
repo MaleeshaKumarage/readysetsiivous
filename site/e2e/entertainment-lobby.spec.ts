@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { CORS_HEADERS, mockEntertainmentSignalR } from './entertainment-helpers';
+import { CORS_HEADERS, mockEntertainmentSignalR, hubConnected } from './entertainment-helpers';
 
 const LOBBY = {
   groupId: 'group-1',
@@ -108,6 +108,7 @@ test.describe('Entertainment — Join + Lobby', () => {
 
     await expect(page.getByText('Alice')).toBeVisible();
     await expect(page.getByText('Bob')).toHaveCount(0);
+    await expect.poll(() => hubConnected(hub)).toBe(true);
 
     // Push a live lobbyUpdated with a second player.
     hub.push('lobbyUpdated', {

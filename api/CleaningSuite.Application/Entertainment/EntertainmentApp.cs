@@ -164,6 +164,7 @@ public record StartEntertainmentGameCommand(
     Guid PlayerId) : IRequest<StartEntertainmentGameResult>;
 
 public record EntertainmentRoundDto(
+    Guid RoundId,
     int RoundNumber,
     Guid TranslatorPlayerId,
     string SentenceEn,
@@ -226,8 +227,127 @@ public class StartEntertainmentGameCommandHandler
 
         return new StartEntertainmentGameResult(
             group.Id,
-            new EntertainmentRoundDto(round.RoundNumber, round.TranslatorPlayerId, round.SentenceEn, round.SentenceFi, round.BaseForms),
+            new EntertainmentRoundDto(round.Id, round.RoundNumber, round.TranslatorPlayerId, round.SentenceEn, round.SentenceFi, round.BaseForms),
             turnOrder);
+    }
+}
+
+public record StartNextEntertainmentRoundCommand(
+    Guid GroupId,
+    Guid TranslatorPlayerId,
+    int RoundNumber) : IRequest<EntertainmentRoundDto>;
+
+public record FinalizeEntertainmentRoundCommand(
+    Guid GroupId,
+    Guid RoundId,
+    IReadOnlyDictionary<Guid, int> Scores) : IRequest;
+
+public record EntertainmentStandingDto(
+    Guid PlayerId,
+    string Name,
+    int Score,
+    bool IsCreator);
+
+public record EndEntertainmentGameCommand(
+    Guid GroupId,
+    Guid PlayerId,
+    IReadOnlyDictionary<Guid, int> Scores) : IRequest<IReadOnlyList<EntertainmentStandingDto>>;
+
+public class StartNextEntertainmentRoundCommandHandler
+    : IRequestHandler<StartNextEntertainmentRoundCommand, EntertainmentRoundDto>
+{
+    private readonly IEntertainmentRepository _repository;
+    private readonly IEntertainmentKeyProtector _keyProtector;
+    private readonly IGeminiSentenceService _gemini;
+
+    public StartNextEntertainmentRoundCommandHandler(
+        IEntertainmentRepository repository,
+        IEntertainmentKeyProtector keyProtector,
+        IGeminiSentenceService gemini)
+    {
+        _repository = repository;
+        _keyProtector = keyProtector;
+        _gemini = gemini;
+    }
+
+    public async Task<EntertainmentRoundDto> Handle(
+        StartNextEntertainmentRoundCommand request,
+        CancellationToken ct)
+    {
+        var group = await _repository.GetGroupAsync(request.GroupId, ct)
+            ?? throw new EntertainmentGroupNotFoundException(request.GroupId.ToString());
+
+        var translator = await _repository.GetPlayerAsync(request.TranslatorPlayerId, ct)
+            ?? throw new EntertainmentGroupNotFoundException(request.TranslatorPlayerId.ToString());
+
+        var apiKey = _keyProtector.Unprotect(group.GeminiApiKeyEncrypted);
+        var sentence = await _gemini.GenerateAsync(group.Description, translator.Level, apiKey, ct);
+
+        var round = EntertainmentRound.Create(
+            group.Id, request.RoundNumber, translator.Id, sentence.SentenceEn, sentence.SentenceFi, sentence.BaseForms);
+
+        await _repository.SaveRoundAsync(round, ct);
+
+        return new EntertainmentRoundDto(round.Id, round.RoundNumber, round.TranslatorPlayerId, round.SentenceEn, round.SentenceFi, round.BaseForms);
+    }
+}
+
+public class FinalizeEntertainmentRoundCommandHandler : IRequestHandler<FinalizeEntertainmentRoundCommand>
+{
+    private readonly IEntertainmentRepository _repository;
+
+    public FinalizeEntertainmentRoundCommandHandler(IEntertainmentRepository repository) => _repository = repository;
+
+    public async Task Handle(FinalizeEntertainmentRoundCommand request, CancellationToken ct)
+    {
+        var round = await _repository.GetRoundAsync(request.RoundId, ct);
+        if (round is null)
+            return;
+
+        round.EndedUtc = DateTime.UtcNow;
+        round.FinalScores = new Dictionary<Guid, int>(request.Scores);
+        round.UpdatedUtc = DateTime.UtcNow;
+
+        await _repository.SaveRoundAsync(round, ct);
+    }
+}
+
+public class EndEntertainmentGameCommandHandler
+    : IRequestHandler<EndEntertainmentGameCommand, IReadOnlyList<EntertainmentStandingDto>>
+{
+    private readonly IEntertainmentRepository _repository;
+
+    public EndEntertainmentGameCommandHandler(IEntertainmentRepository repository) => _repository = repository;
+
+    public async Task<IReadOnlyList<EntertainmentStandingDto>> Handle(
+        EndEntertainmentGameCommand request,
+        CancellationToken ct)
+    {
+        var group = await _repository.GetGroupAsync(request.GroupId, ct)
+            ?? throw new EntertainmentGroupNotFoundException(request.GroupId.ToString());
+
+        var creator = await _repository.GetPlayerAsync(request.PlayerId, ct);
+        if (creator is null || !creator.IsCreator || creator.GroupId != group.Id)
+            throw new UnauthorizedAccessException("Only the group creator can end the game.");
+
+        var players = await _repository.ListPlayersAsync(group.Id, ct);
+
+        foreach (var player in players)
+        {
+            player.Score = request.Scores.GetValueOrDefault(player.Id);
+            player.UpdatedUtc = DateTime.UtcNow;
+            await _repository.SavePlayerAsync(player, ct);
+        }
+
+        group.Status = EntertainmentStatus.Finished;
+        group.UpdatedUtc = DateTime.UtcNow;
+        await _repository.SaveGroupAsync(group, ct);
+
+        return players
+            .OrderByDescending(p => p.Score)
+            .ThenBy(p => p.JoinedUtc)
+            .Select(p => new EntertainmentStandingDto(p.Id, p.Name, p.Score, p.IsCreator))
+            .ToList();
     }
 }
 

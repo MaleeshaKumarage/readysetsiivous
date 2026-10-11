@@ -16,6 +16,8 @@ public class EntertainmentRound : BaseDocument
     public List<string> BaseForms { get; set; } = new();
     public DateTime StartedUtc { get; set; }
     public DateTime? EndedUtc { get; set; }
+    /// <summary>Snapshot of every player's score when the round ended (null while live).</summary>
+    public Dictionary<Guid, int>? FinalScores { get; set; }
 
     public static EntertainmentRound Create(
         Guid groupId,

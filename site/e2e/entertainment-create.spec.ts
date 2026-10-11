@@ -44,8 +44,8 @@ test.describe('Entertainment — Create group', () => {
 
     await page.getByRole('button', { name: 'Create group' }).click();
 
-    await expect(page.getByText('Group created')).toBeVisible();
     await expect(page.getByText('ABC234')).toBeVisible();
+    await expect(page.getByText('Waiting for players to join...')).toBeVisible();
   });
 
   test('short description is blocked client-side', async ({ page }) => {
