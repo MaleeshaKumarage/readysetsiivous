@@ -6,7 +6,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { getWhatsAppChatUrl } from '@/lib/whatsapp';
 
 export default function FloatingWhatsApp() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [showTooltip, setShowTooltip] = useState(true);
 
   useEffect(() => {
@@ -14,21 +14,30 @@ export default function FloatingWhatsApp() {
     return () => clearTimeout(timer);
   }, []);
 
+  const dismissTooltipLabel =
+    lang === 'fi'
+      ? 'Sulje vihje'
+      : lang === 'sv'
+      ? 'Stäng tips'
+      : 'Dismiss tip';
+
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2">
       <AnimatePresence>
         {showTooltip && (
-          <motion.div
+          <motion.button
+            type="button"
             initial={{ opacity: 0, scale: 0.9, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 8 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
-            className="relative bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 text-sm font-medium px-4 py-2 rounded-xl shadow-lg dark:shadow-gray-950/50 border border-gray-100 dark:border-gray-700 cursor-pointer"
+            className="relative bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 text-sm font-medium px-4 py-2 rounded-xl shadow-lg dark:shadow-gray-950/50 border border-gray-100 dark:border-gray-700 cursor-pointer text-left focus-visible:ring-2 focus-visible:ring-brand-500 focus:outline-none"
             onClick={() => setShowTooltip(false)}
+            aria-label={dismissTooltipLabel}
           >
             {t('floatingWhatsApp.tooltip')}
             <div className="absolute bottom-[-6px] right-5 w-3 h-3 bg-white dark:bg-gray-800 border-r border-b border-gray-100 dark:border-gray-700 rotate-45" />
-          </motion.div>
+          </motion.button>
         )}
       </AnimatePresence>
 
@@ -42,7 +51,7 @@ export default function FloatingWhatsApp() {
         transition={{ type: 'spring', stiffness: 260, damping: 18, delay: 0.2 }}
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
-        className="whatsapp-pulse relative w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-whatsapp text-white flex items-center justify-center shadow-lg shadow-green-300 dark:shadow-green-900/30 hover:shadow-xl hover:shadow-green-400 dark:hover:shadow-green-900/50"
+        className="whatsapp-pulse relative w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-whatsapp text-white flex items-center justify-center shadow-lg shadow-green-300 dark:shadow-green-900/30 hover:shadow-xl hover:shadow-green-400 dark:hover:shadow-green-900/50 focus-visible:ring-4 focus-visible:ring-whatsapp/50 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 focus:outline-none"
         aria-label={t('nav.whatsappButton')}
       >
         <svg className="w-7 h-7 sm:w-8 sm:h-8" fill="currentColor" viewBox="0 0 24 24">
