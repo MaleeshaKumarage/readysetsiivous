@@ -14,15 +14,18 @@ public class EntertainmentHub : Hub
     private readonly IMediator _mediator;
     private readonly IEntertainmentRepository _repository;
     private readonly GameSessionManager _sessions;
+    private readonly ILogger<EntertainmentHub> _logger;
 
     public EntertainmentHub(
         IMediator mediator,
         IEntertainmentRepository repository,
-        GameSessionManager sessions)
+        GameSessionManager sessions,
+        ILogger<EntertainmentHub> logger)
     {
         _mediator = mediator;
         _repository = repository;
         _sessions = sessions;
+        _logger = logger;
     }
 
     public async Task JoinLobby(Guid groupId, Guid playerId)
@@ -57,10 +60,18 @@ public class EntertainmentHub : Hub
     public async Task StartGame(Guid groupId, Guid playerId)
     {
         EnsureCaller(groupId, playerId);
-        var result = await _mediator.Send(new StartEntertainmentGameCommand(groupId, playerId));
-        _sessions.StartGame(groupId, result.TurnOrder);
-        _sessions.StartRound(groupId, result.Round);
-        await BroadcastRound(groupId, result.Round);
+        try
+        {
+            var result = await _mediator.Send(new StartEntertainmentGameCommand(groupId, playerId));
+            _sessions.StartGame(groupId, result.TurnOrder);
+            _sessions.StartRound(groupId, result.Round);
+            await BroadcastRound(groupId, result.Round);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to start entertainment game {GroupId}", groupId);
+            await BroadcastError(groupId, "Could not generate the first question. Please try again.");
+        }
     }
 
     public async Task RevealHint(Guid groupId, Guid playerId)
@@ -141,11 +152,23 @@ public class EntertainmentHub : Hub
         if (nextTranslator is null)
             return;
 
-        var nextRound = await _mediator.Send(
-            new StartNextEntertainmentRoundCommand(groupId, nextTranslator.Value, round.RoundNumber + 1));
-        _sessions.StartRound(groupId, nextRound);
+        try
+        {
+            var nextRound = await _mediator.Send(
+                new StartNextEntertainmentRoundCommand(groupId, nextTranslator.Value, round.RoundNumber + 1));
+            _sessions.StartRound(groupId, nextRound);
+            await BroadcastRound(groupId, nextRound);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to advance entertainment round {GroupId}", groupId);
+            await BroadcastError(groupId, "Could not generate the next question. Please try again.");
+        }
+    }
 
-        await BroadcastRound(groupId, nextRound);
+    private async Task BroadcastError(Guid groupId, string message)
+    {
+        await Clients.Group(groupId.ToString()).SendAsync("gameError", message);
     }
 
     private async Task BroadcastRound(Guid groupId, EntertainmentRoundDto round)
