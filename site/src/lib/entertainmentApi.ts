@@ -117,15 +117,15 @@ const SESSION_STORAGE_KEY = 'entSession';
 
 export function saveEntertainmentSession(session: EntertainmentSession): void {
   try {
-    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
   } catch {
-    // sessionStorage unavailable (private mode) — reconnect just won't persist.
+    // storage unavailable (private mode) — reconnect just won't persist.
   }
 }
 
 export function loadEntertainmentSession(): EntertainmentSession | null {
   try {
-    const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
+    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
     return raw ? (JSON.parse(raw) as EntertainmentSession) : null;
   } catch {
     return null;
@@ -134,7 +134,7 @@ export function loadEntertainmentSession(): EntertainmentSession | null {
 
 export function clearEntertainmentSession(): void {
   try {
-    sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    localStorage.removeItem(SESSION_STORAGE_KEY);
   } catch {
     // ignore
   }

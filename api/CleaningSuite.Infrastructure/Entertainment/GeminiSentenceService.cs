@@ -73,7 +73,7 @@ public class GeminiSentenceService : IGeminiSentenceService
             - "sentenceEn": the English sentence.
             - "sentenceFi": the Finnish translation of that sentence.
             - "baseForms": an array of the base/dictionary form of each content word
-              in the English sentence, in the order the words appear.
+              in the FINNISH translation, in the order the words appear.
             """;
     }
 
