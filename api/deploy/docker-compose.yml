@@ -72,10 +72,12 @@ services:
       Auth__Keycloak__AdminPassword: ${KEYCLOAK_ADMIN_PASSWORD}
       Cors__AllowedOrigins__0: https://readysetsiivous.fi
       Uploads__Path: /app/uploads
+      Entertainment__KeyFilePath: /app/keys/entertainment.key
       Resend__ApiKey: ${RESEND_API_KEY:-}
       App__FrontendBaseUrl: https://readysetsiivous.fi
     volumes:
       - cleaning_uploads:/app/uploads
+      - cleaning_keys:/app/keys
     ports:
       - "127.0.0.1:8090:8080"
     depends_on:
@@ -91,3 +93,4 @@ services:
 volumes:
   cleaning_pgdata: {}
   cleaning_uploads: {}
+  cleaning_keys: {}

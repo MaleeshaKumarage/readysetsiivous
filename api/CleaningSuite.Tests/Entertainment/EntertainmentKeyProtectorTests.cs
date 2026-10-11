@@ -42,9 +42,47 @@ public class EntertainmentKeyProtectorTests
     }
 
     [Fact]
-    public void Constructor_MissingKey_Throws()
+    public void MissingKey_AutoGeneratesAndPersists()
     {
-        var config = new ConfigurationBuilder().Build();
+        var dir = Path.Combine(Path.GetTempPath(), "ent-key-test-" + Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(dir, "entertainment.key");
+        try
+        {
+            var config = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Entertainment:KeyFilePath"] = path,
+                })
+                .Build();
+
+            var protector = new EntertainmentKeyProtector(config);
+            Assert.True(File.Exists(path));
+
+            const string secret = "sk-secret";
+            var ciphertext = protector.Protect(secret);
+            Assert.Equal(secret, protector.Unprotect(ciphertext));
+
+            // A new instance reloads the persisted key, so decryption still works.
+            var reloaded = new EntertainmentKeyProtector(config);
+            Assert.Equal(secret, reloaded.Unprotect(ciphertext));
+        }
+        finally
+        {
+            if (Directory.Exists(dir))
+                Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void WrongLengthExplicitKey_Throws()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Entertainment:KeyEncryptionKey"] = Convert.ToBase64String(new byte[16]),
+            })
+            .Build();
+
         Assert.Throws<InvalidOperationException>(() => new EntertainmentKeyProtector(config));
     }
 }
