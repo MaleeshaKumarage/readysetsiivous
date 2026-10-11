@@ -12,4 +12,10 @@ public interface IEntertainmentRepository
     Task<bool> JoinKeyExistsAsync(string joinKey, CancellationToken ct = default);
 
     Task<EntertainmentGroup?> GetGroupByJoinKeyAsync(string joinKey, CancellationToken ct = default);
+
+    Task<EntertainmentGroup?> GetGroupAsync(Guid groupId, CancellationToken ct = default);
+
+    Task<EntertainmentPlayer?> GetPlayerAsync(Guid playerId, CancellationToken ct = default);
+
+    Task<IReadOnlyList<EntertainmentPlayer>> ListPlayersAsync(Guid groupId, CancellationToken ct = default);
 }

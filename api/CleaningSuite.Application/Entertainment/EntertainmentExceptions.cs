@@ -1,0 +1,9 @@
+namespace CleaningSuite.Application.Entertainment;
+
+/// <summary>No group exists with the given join key.</summary>
+public class EntertainmentGroupNotFoundException(string joinKey)
+    : Exception($"No group with join key '{joinKey}'.");
+
+/// <summary>The group has already started; joining is closed.</summary>
+public class EntertainmentJoinClosedException(string joinKey)
+    : Exception($"Group '{joinKey}' has already started; joining is closed.");

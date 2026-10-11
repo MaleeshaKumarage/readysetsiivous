@@ -49,4 +49,25 @@ public class EntertainmentRepository : IEntertainmentRepository
             .ToListAsync(ct);
         return results.FirstOrDefault();
     }
+
+    public async Task<EntertainmentGroup?> GetGroupAsync(Guid groupId, CancellationToken ct = default)
+    {
+        await using var session = _store.QuerySession(TenantIds.Entertainment);
+        return await session.LoadAsync<EntertainmentGroup>(groupId, ct);
+    }
+
+    public async Task<EntertainmentPlayer?> GetPlayerAsync(Guid playerId, CancellationToken ct = default)
+    {
+        await using var session = _store.QuerySession(TenantIds.Entertainment);
+        return await session.LoadAsync<EntertainmentPlayer>(playerId, ct);
+    }
+
+    public async Task<IReadOnlyList<EntertainmentPlayer>> ListPlayersAsync(Guid groupId, CancellationToken ct = default)
+    {
+        await using var session = _store.QuerySession(TenantIds.Entertainment);
+        return await session.Query<EntertainmentPlayer>()
+            .Where(x => x.GroupId == groupId)
+            .OrderBy(x => x.JoinedUtc)
+            .ToListAsync(ct);
+    }
 }

@@ -34,6 +34,7 @@ builder.Services.AddControllers().AddJsonOptions(o =>
     o.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
     o.JsonSerializerOptions.Converters.Add(new FlexibleTimeSpanConverter());
 });
+builder.Services.AddSignalR();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddOutputCache();
 builder.Services.AddEndpointsApiExplorer();
@@ -153,6 +154,7 @@ app.UseAuthentication();
 app.UseMiddleware<TenantResolutionMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<CleaningSuite.Api.Hubs.EntertainmentHub>("/hubs/entertainment");
 
 app.Run();
 
@@ -251,6 +253,8 @@ public class DefaultExceptionHandler : IExceptionHandler
             CleaningSuite.Application.Bookings.SlotConflictException => (409, "Slot conflict"),
             CleaningSuite.Application.Agreements.AgreementConflictException => (409, "Agreement conflict"),
             CleaningSuite.Application.Shifts.ShiftConflictException => (409, "Shift conflict"),
+            CleaningSuite.Application.Entertainment.EntertainmentGroupNotFoundException => (404, "Group not found"),
+            CleaningSuite.Application.Entertainment.EntertainmentJoinClosedException => (409, "Group has already started"),
             JasperFx.ConcurrencyException => (409, "Conflict — concurrent update, please retry"),
             UnauthorizedAccessException => (403, "Forbidden"),
             _ => (500, "Internal server error"),

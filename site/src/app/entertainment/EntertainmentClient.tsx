@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card } from '@/ds/Card';
 import { Button } from '@/ds/Button';
 import { Input, Textarea, Field } from '@/ds/Input';
@@ -8,22 +8,25 @@ import {
   CEFR_LEVELS,
   CefrLevel,
   createEntertainmentGroup,
-  CreateGroupResult,
-  ENT_SESSION_KEYS,
+  getEntertainmentLobby,
+  joinEntertainmentGroup,
+  Lobby,
+  LobbyPlayer,
 } from '@/lib/entertainmentApi';
+import { createEntertainmentHub } from '@/lib/entertainmentHub';
 
 type View = 'landing' | 'create' | 'join' | 'lobby';
 
+interface Session {
+  groupId: string;
+  playerId: string;
+  joinKey?: string;
+  isCreator?: boolean;
+}
+
 export default function EntertainmentClient() {
   const [view, setView] = useState<View>('landing');
-  const [group, setGroup] = useState<CreateGroupResult | null>(null);
-
-  function handleCreated(result: CreateGroupResult) {
-    sessionStorage.setItem(ENT_SESSION_KEYS.groupId, result.groupId);
-    sessionStorage.setItem(ENT_SESSION_KEYS.playerId, result.creatorPlayerId);
-    setGroup(result);
-    setView('lobby');
-  }
+  const [session, setSession] = useState<Session | null>(null);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
@@ -56,12 +59,37 @@ export default function EntertainmentClient() {
       )}
 
       {view === 'create' && (
-        <CreateForm onBack={() => setView('landing')} onCreated={handleCreated} />
+        <CreateForm
+          onBack={() => setView('landing')}
+          onCreated={(result) => {
+            setSession({
+              groupId: result.groupId,
+              playerId: result.creatorPlayerId,
+              joinKey: result.joinKey,
+              isCreator: true,
+            });
+            setView('lobby');
+          }}
+        />
       )}
 
-      {view === 'join' && <JoinForm onBack={() => setView('landing')} />}
+      {view === 'join' && (
+        <JoinForm
+          onBack={() => setView('landing')}
+          onJoined={(result) => {
+            setSession({
+              groupId: result.groupId,
+              playerId: result.playerId,
+              isCreator: false,
+            });
+            setView('lobby');
+          }}
+        />
+      )}
 
-      {view === 'lobby' && group && <Lobby group={group} />}
+      {view === 'lobby' && session && (
+        <Lobby session={session} onLeave={() => setView('landing')} />
+      )}
     </main>
   );
 }
@@ -93,7 +121,7 @@ function CreateForm({
   onCreated,
 }: {
   onBack: () => void;
-  onCreated: (result: CreateGroupResult) => void;
+  onCreated: (result: { groupId: string; joinKey: string; creatorPlayerId: string }) => void;
 }) {
   const [name, setName] = useState('');
   const [geminiApiKey, setGeminiApiKey] = useState('');
@@ -180,48 +208,148 @@ function CreateForm({
   );
 }
 
-function JoinForm({ onBack }: { onBack: () => void }) {
+function JoinForm({
+  onBack,
+  onJoined,
+}: {
+  onBack: () => void;
+  onJoined: (result: { groupId: string; playerId: string }) => void;
+}) {
+  const [joinKey, setJoinKey] = useState('');
+  const [playerName, setPlayerName] = useState('');
+  const [level, setLevel] = useState<CefrLevel | ''>('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit() {
+    if (!level) {
+      setError('Choose your level.');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await joinEntertainmentGroup(joinKey.trim(), playerName, level);
+      onJoined(result);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Join group failed.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <Card variant="elevated" padding="lg" className="space-y-5">
       <h2 className="text-xl font-semibold">Join group</h2>
+
       <Field label="Join key">
-        <Input placeholder="6-character key" />
+        <Input value={joinKey} onChange={(e) => setJoinKey(e.target.value)} placeholder="6-character key" />
       </Field>
+
       <Field label="Your name">
-        <Input placeholder="Your name" />
+        <Input value={playerName} onChange={(e) => setPlayerName(e.target.value)} placeholder="Your name" />
       </Field>
+
       <div>
         <span className="block mb-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200">Your level</span>
-        <LevelSelect value="" onChange={() => {}} />
+        <LevelSelect value={level} onChange={setLevel} />
       </div>
-      <p className="text-sm text-gray-500 dark:text-gray-400">
-        Joining goes live in the next step.
-      </p>
+
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+
       <div className="flex gap-3">
         <Button variant="outline" onClick={onBack}>
           Back
         </Button>
-        <Button disabled fullWidth>
-          Join group
+        <Button onClick={submit} disabled={submitting} fullWidth>
+          {submitting ? 'Joining...' : 'Join group'}
         </Button>
       </div>
     </Card>
   );
 }
 
-function Lobby({ group }: { group: CreateGroupResult }) {
+function Lobby({ session, onLeave }: { session: Session; onLeave: () => void }) {
+  const [groupName, setGroupName] = useState('');
+  const [status, setStatus] = useState('Lobby');
+  const [players, setPlayers] = useState<LobbyPlayer[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let connection: ReturnType<typeof createEntertainmentHub> | null = null;
+
+    getEntertainmentLobby(session.groupId)
+      .then((lobby) => {
+        if (cancelled) return;
+        setGroupName(lobby.groupName);
+        setStatus(lobby.status);
+        setPlayers(lobby.players);
+      })
+      .catch(() => {});
+
+    connection = createEntertainmentHub();
+    connection.on('lobbyUpdated', (lobby: Lobby) => {
+      setGroupName(lobby.groupName);
+      setStatus(lobby.status);
+      setPlayers(lobby.players);
+    });
+    connection
+      .start()
+      .then(() => connection!.invoke('JoinLobby', session.groupId, session.playerId))
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      connection?.stop().catch(() => {});
+    };
+  }, [session.groupId, session.playerId]);
+
   return (
-    <Card variant="elevated" padding="lg" className="space-y-5 text-center">
-      <h2 className="text-xl font-semibold">Group created</h2>
-      <p className="text-gray-600 dark:text-gray-300">
-        Share this key so others can join:
-      </p>
-      <div className="text-4xl font-mono tracking-[0.5em] text-accent-900 dark:text-white">
-        {group.joinKey}
+    <Card variant="elevated" padding="lg" className="space-y-5">
+      <div className="text-center">
+        <h2 className="text-xl font-semibold">{groupName || 'Lobby'}</h2>
+        {session.joinKey && (
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            Share this key so others can join:
+          </p>
+        )}
+        {session.joinKey && (
+          <div className="mt-1 text-3xl font-mono tracking-[0.5em] text-accent-900 dark:text-white">
+            {session.joinKey}
+          </div>
+        )}
       </div>
-      <p className="text-sm text-gray-500 dark:text-gray-400">
-        Waiting for players to join...
-      </p>
+
+      <div>
+        <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">Players</h3>
+        {players.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">Waiting for players to join...</p>
+        ) : (
+          <ul className="space-y-2">
+            {players.map((p) => (
+              <li
+                key={p.playerId}
+                className="flex items-center justify-between rounded-xl border border-gray-100 dark:border-gray-700 px-4 py-2"
+              >
+                <span className="font-medium">
+                  {p.name}
+                  {p.isCreator && <span className="ml-2 text-xs text-brand-600">Host</span>}
+                </span>
+                <span className="text-sm text-gray-500 dark:text-gray-400">{p.level}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {session.isCreator && (
+        <Button fullWidth disabled>
+          Start game
+        </Button>
+      )}
+      <Button variant="ghost" onClick={onLeave} fullWidth>
+        Leave
+      </Button>
     </Card>
   );
 }
