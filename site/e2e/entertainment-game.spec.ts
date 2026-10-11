@@ -143,4 +143,51 @@ test.describe('Entertainment — Reveal / Score / Results', () => {
     await expect(page.getByText('Bob')).toBeVisible();
     await expect(page.getByText('Alice')).toBeVisible();
   });
+
+  test('happy path: create → start → round 1 reveal+done → rotate → end', async ({ page }) => {
+    await mockCreate(page);
+    await mockLobby(page);
+    const hub = mockEntertainmentSignalR(page);
+
+    await createAndStart(page, hub);
+
+    // Round 1: Alice is the translator.
+    await expect(page.getByText('Round 1')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Done' })).toBeVisible();
+
+    await page.getByTestId('covered-word').first().click();
+    await expect(page.getByTestId('revealed-word')).toHaveCount(1);
+
+    await page.getByRole('button', { name: 'Done' }).click();
+    await expect
+      .poll(() => hub.invocations.some((i: any) => i.target === 'Done'))
+      .toBe(true);
+
+    // Hub pushes round 2 with Bob as translator → Alice becomes an observer.
+    hub.push('roundStarted', {
+      roundNumber: 2,
+      translatorPlayerId: 'player-2',
+      sentenceEn: 'The dog runs fast.',
+      sentenceFi: 'Koira juoksee nopeasti.',
+      baseForms: ['dog', 'run', 'fast'],
+    });
+
+    await expect(page.getByText('Round 2')).toBeVisible();
+    await expect(page.getByTestId('sentence-fi')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Done' })).toHaveCount(0);
+
+    // Creator ends the game.
+    await page.getByRole('button', { name: 'End game' }).click();
+    await expect
+      .poll(() => hub.invocations.some((i: any) => i.target === 'EndGame'))
+      .toBe(true);
+
+    hub.push('gameEnded', [
+      { playerId: 'player-1', name: 'Alice', score: 5, isCreator: true },
+      { playerId: 'player-2', name: 'Bob', score: 1, isCreator: false },
+    ]);
+
+    await expect(page.getByText('Results')).toBeVisible();
+    await expect(page.getByText('Winner')).toBeVisible();
+  });
 });

@@ -154,6 +154,7 @@ export default function EntertainmentClient() {
 
       {view === 'game' && session && round && (
         <GameView
+          key={round.roundNumber}
           session={session}
           round={round}
           isTranslator={round.translatorPlayerId === session.playerId}
@@ -537,6 +538,16 @@ function GameView({
             Done
           </Button>
         </div>
+      )}
+
+      {session.isCreator && (
+        <Button
+          variant="outline"
+          onClick={() => send('EndGame', session.groupId, session.playerId)}
+          fullWidth
+        >
+          End game
+        </Button>
       )}
     </Card>
   );
