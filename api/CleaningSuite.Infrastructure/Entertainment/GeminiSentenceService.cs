@@ -15,7 +15,7 @@ public class GeminiSentenceService : IGeminiSentenceService
     public GeminiSentenceService(HttpClient http, IConfiguration configuration)
     {
         _http = http;
-        _model = configuration["Entertainment:Gemini:Model"] ?? "gemini-2.0-flash";
+        _model = configuration["Entertainment:Gemini:Model"] ?? "gemini-flash-latest";
         _baseUrl = configuration["Entertainment:Gemini:BaseUrl"]
             ?? "https://generativelanguage.googleapis.com";
     }
@@ -26,7 +26,7 @@ public class GeminiSentenceService : IGeminiSentenceService
         string apiKey,
         CancellationToken ct = default)
     {
-        var url = $"{_baseUrl}/v1beta/models/{_model}:generateContent?key={Uri.EscapeDataString(apiKey)}";
+        var url = $"{_baseUrl}/v1beta/models/{_model}:generateContent";
         var requestBody = new
         {
             contents = new[]
@@ -36,17 +36,32 @@ public class GeminiSentenceService : IGeminiSentenceService
             generationConfig = new { responseMimeType = "application/json" },
         };
 
-        using var response = await _http.PostAsync(
-            url,
-            new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"),
-            ct);
+        const int maxAttempts = 3;
+        for (var attempt = 1; ; attempt++)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, url)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"),
+            };
+            request.Headers.Add("X-goog-api-key", apiKey);
 
-        if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException($"Gemini request failed with {(int)response.StatusCode}.");
+            using var response = await _http.SendAsync(request, ct);
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync(ct);
+                return Parse(json);
+            }
 
-        var json = await response.Content.ReadAsStringAsync(ct);
-        return Parse(json);
+            var status = (int)response.StatusCode;
+            if (attempt >= maxAttempts || !IsTransient(status))
+                throw new InvalidOperationException($"Gemini request failed with {status}.");
+
+            await Task.Delay(TimeSpan.FromSeconds(attempt * 2), ct);
+        }
     }
+
+    private static bool IsTransient(int status)
+        => status is 429 or 500 or 502 or 503 or 504;
 
     public static string BuildPrompt(string description, CefrLevel level)
     {

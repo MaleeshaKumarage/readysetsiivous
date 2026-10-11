@@ -50,12 +50,18 @@ public class EntertainmentFullRoundLiveTests
         Assert.False(string.IsNullOrWhiteSpace(round1.Round.SentenceFi));
         Assert.NotEmpty(round1.Round.BaseForms);
 
+        // Real games space rounds by player time; add a delay to avoid bursting
+        // the API and tripping the model's demand throttle.
+        await Task.Delay(TimeSpan.FromSeconds(3));
+
         // Rotate: round 2, translator = Bob (A2) — live Gemini call.
         var nextHandler = new StartNextEntertainmentRoundCommandHandler(repo, protector, gemini);
         var round2 = await nextHandler.Handle(
             new StartNextEntertainmentRoundCommand(created.GroupId, bob.PlayerId, 2), CancellationToken.None);
         Assert.False(string.IsNullOrWhiteSpace(round2.SentenceEn));
         Assert.NotEqual(round1.Round.SentenceEn, round2.SentenceEn);
+
+        await Task.Delay(TimeSpan.FromSeconds(3));
 
         // Rotate: round 3, translator = Carol (C1) — live Gemini call.
         var round3 = await nextHandler.Handle(
