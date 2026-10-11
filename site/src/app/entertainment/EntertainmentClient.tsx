@@ -144,7 +144,7 @@ export default function EntertainmentClient() {
       )}
 
       {view === 'lobby' && session && (
-        <Lobby
+        <LobbyView
           session={session}
           lobby={lobby}
           onStart={startGame}
@@ -345,7 +345,7 @@ function JoinForm({
   );
 }
 
-function Lobby({
+function LobbyView({
   session,
   lobby,
   onStart,
