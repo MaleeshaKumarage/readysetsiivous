@@ -26,15 +26,19 @@ public class EntertainmentFullRoundLiveTests
         {
             await RunFullGameAsync(apiKey);
         }
-        catch (InvalidOperationException ex) when (IsTransientGeminiError(ex))
+        catch (Exception ex) when (IsTransientGeminiError(ex))
         {
-            // Rate limit / model overload — environmental, not a code failure.
+            // Rate limit / model overload / network timeout — environmental, not a code failure.
             return;
         }
     }
 
     private static bool IsTransientGeminiError(Exception ex)
-        => ex.Message.Contains("429") || ex.Message.Contains("503");
+        => ex is OperationCanceledException
+            || ex is HttpRequestException
+            || ex.Message.Contains("429")
+            || ex.Message.Contains("503")
+            || ex.Message.Contains("canceled", StringComparison.OrdinalIgnoreCase);
 
     private static async Task RunFullGameAsync(string apiKey)
     {
