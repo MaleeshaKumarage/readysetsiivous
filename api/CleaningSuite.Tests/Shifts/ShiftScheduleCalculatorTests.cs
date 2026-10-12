@@ -273,6 +273,60 @@ public class ShiftScheduleCalculatorTests
     }
 
     [Fact]
+    public void HasOverlap_ReturnsFalse_WhenEitherListIsEmpty()
+    {
+        var occurrence = new ShiftOccurrence { StartUtc = new DateTime(2026, 3, 2, 8, 0, 0), EndUtc = new DateTime(2026, 3, 2, 10, 0, 0) };
+        Assert.False(ShiftScheduleCalculator.HasOverlap(Array.Empty<ShiftOccurrence>(), new[] { occurrence }));
+        Assert.False(ShiftScheduleCalculator.HasOverlap(new[] { occurrence }, Array.Empty<ShiftOccurrence>()));
+    }
+
+    [Fact]
+    public void HasOverlap_TwoPointer_Handles_Large_Sorted_NonOverlapping_Lists()
+    {
+        var list1 = new List<ShiftOccurrence>();
+        var list2 = new List<ShiftOccurrence>();
+        var baseDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        for (int i = 0; i < 180; i++)
+        {
+            list1.Add(new ShiftOccurrence { StartUtc = baseDate.AddDays(i).AddHours(8), EndUtc = baseDate.AddDays(i).AddHours(12) });
+            list2.Add(new ShiftOccurrence { StartUtc = baseDate.AddDays(i).AddHours(13), EndUtc = baseDate.AddDays(i).AddHours(17) });
+        }
+
+        Assert.False(ShiftScheduleCalculator.HasOverlap(list1, list2));
+    }
+
+    [Fact]
+    public void HasOverlap_TwoPointer_Detects_Overlap_In_Large_Sorted_Lists()
+    {
+        var list1 = new List<ShiftOccurrence>();
+        var list2 = new List<ShiftOccurrence>();
+        var baseDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        for (int i = 0; i < 180; i++)
+        {
+            list1.Add(new ShiftOccurrence { StartUtc = baseDate.AddDays(i).AddHours(8), EndUtc = baseDate.AddDays(i).AddHours(12) });
+            // Day 100 has an overlap
+            var endHour = i == 100 ? 10 : 17;
+            var startHour = i == 100 ? 9 : 13;
+            list2.Add(new ShiftOccurrence { StartUtc = baseDate.AddDays(i).AddHours(startHour), EndUtc = baseDate.AddDays(i).AddHours(endHour) });
+        }
+
+        Assert.True(ShiftScheduleCalculator.HasOverlap(list1, list2));
+    }
+
+    [Fact]
+    public void HasOverlap_Fallback_Handles_Unsorted_Lists()
+    {
+        var a1 = new ShiftOccurrence { StartUtc = new DateTime(2026, 3, 5, 8, 0, 0), EndUtc = new DateTime(2026, 3, 5, 10, 0, 0) };
+        var a2 = new ShiftOccurrence { StartUtc = new DateTime(2026, 3, 2, 8, 0, 0), EndUtc = new DateTime(2026, 3, 2, 10, 0, 0) }; // unsorted
+
+        var b1 = new ShiftOccurrence { StartUtc = new DateTime(2026, 3, 2, 9, 0, 0), EndUtc = new DateTime(2026, 3, 2, 11, 0, 0) }; // overlaps a2
+
+        Assert.True(ShiftScheduleCalculator.HasOverlap(new[] { a1, a2 }, new[] { b1 }));
+    }
+
+    [Fact]
     public void Adjacent_Occurrences_Do_Not_Overlap()
     {
         var a = new ShiftOccurrence { StartUtc = new DateTime(2026, 3, 2, 8, 0, 0), EndUtc = new DateTime(2026, 3, 2, 10, 0, 0) };

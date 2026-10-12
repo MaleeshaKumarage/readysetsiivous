@@ -1,0 +1,3 @@
+## 2026-03-31 - Two-Pointer Interval Overlap for Shift Schedule Occurrences
+**Learning:** Shift occurrence generation (`ShiftScheduleCalculator.Calculate`) outputs occurrence lists in strict chronological order. Shift conflict checks across multi-month windows (e.g. 180 days) generated up to N=180 occurrences per shift; checking N x M pairs in a nested loop resulted in up to 32,400 comparisons per shift assignment check.
+**Action:** When checking interval overlaps on chronologically generated domain occurrences, leverage a two-pointer sweep algorithm in O(N + M) time with a fallback for unsorted inputs.
