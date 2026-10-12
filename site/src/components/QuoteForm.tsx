@@ -7,11 +7,12 @@ import { buildWhatsAppMessage, openWhatsApp } from '@/lib/whatsapp';
 import { Reveal } from './motion';
 
 /** Animated inline form error — slides open/closed, announced to assistive tech. */
-function ErrorText({ msg }: { msg?: string }) {
+function ErrorText({ id, msg }: { id?: string; msg?: string }) {
   return (
     <AnimatePresence initial={false}>
       {msg && (
         <motion.p
+          id={id}
           role="alert"
           initial={{ opacity: 0, y: -4, height: 0 }}
           animate={{ opacity: 1, y: 0, height: 'auto' }}
@@ -165,6 +166,9 @@ export default function QuoteForm() {
                 value={service}
                 onChange={(e) => { setService(e.target.value); setErrors((p) => ({ ...p, service: undefined })); }}
                 className={inputClass}
+                aria-required="true"
+                aria-invalid={!!errors.service}
+                aria-describedby={errors.service ? 'service-error' : undefined}
               >
                 <option value="">{t('quoteForm.selectService')}</option>
                 {serviceKeys.map((k) => (
@@ -173,7 +177,7 @@ export default function QuoteForm() {
                   </option>
                 ))}
               </select>
-              <ErrorText msg={errors.service} />
+              <ErrorText id="service-error" msg={errors.service} />
             </div>
 
             {/* Property Size */}
@@ -186,6 +190,9 @@ export default function QuoteForm() {
                 value={size}
                 onChange={(e) => { setSize(e.target.value); setErrors((p) => ({ ...p, size: undefined })); }}
                 className={inputClass}
+                aria-required="true"
+                aria-invalid={!!errors.size}
+                aria-describedby={errors.size ? 'size-error' : undefined}
               >
                 <option value="">{t('quoteForm.selectSize')}</option>
                 {sizeKeys.map((k) => (
@@ -194,7 +201,7 @@ export default function QuoteForm() {
                   </option>
                 ))}
               </select>
-              <ErrorText msg={errors.size} />
+              <ErrorText id="size-error" msg={errors.size} />
             </div>
 
             {/* City */}
@@ -209,8 +216,11 @@ export default function QuoteForm() {
                 onChange={(e) => { setCity(e.target.value); setErrors((p) => ({ ...p, city: undefined })); }}
                 placeholder={t('quoteForm.cityPlaceholder')}
                 className={inputClass}
+                aria-required="true"
+                aria-invalid={!!errors.city}
+                aria-describedby={errors.city ? 'city-error' : undefined}
               />
-              <ErrorText msg={errors.city} />
+              <ErrorText id="city-error" msg={errors.city} />
             </div>
 
             {/* Date */}
@@ -225,14 +235,18 @@ export default function QuoteForm() {
                 min={minDate}
                 onChange={(e) => { setDate(e.target.value); setErrors((p) => ({ ...p, date: undefined })); }}
                 className={inputClass}
+                aria-required="true"
+                aria-invalid={!!errors.date}
+                aria-describedby={errors.date ? 'date-error' : undefined}
               />
-              <ErrorText msg={errors.date} />
+              <ErrorText id="date-error" msg={errors.date} />
             </div>
 
             {/* Submit */}
             <button
               type="submit"
               disabled={submitting}
+              aria-busy={submitting}
               className="w-full flex items-center justify-center gap-2.5 px-6 py-3.5 bg-whatsapp text-white text-base font-semibold rounded-full hover:bg-whatsapp-dark transition-all shadow-lg shadow-green-200 dark:shadow-green-900/30 hover:shadow-xl hover:shadow-green-300 dark:hover:shadow-green-900/40 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-whatsapp focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
             >
               {submitting ? (
