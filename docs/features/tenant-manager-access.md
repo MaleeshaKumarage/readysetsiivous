@@ -94,5 +94,11 @@ this role. Cleaner My Work UI remains issue70, advanced employee fields71 and
 general authenticated transport/cache work78. Manager cannot relocate a templated
 shift or manage templates/reports; a tenant admin handles those actions.
 
-Verification and release evidence will be recorded after the final owned-service,
-browser/build/PR and production checks. This document does not claim them complete.
+Local verification on 2026-10-14: all368 backend tests passed with owned disposable
+PostgreSQL/Keycloak/mail capture and zero skips; all168 desktop/mobile tests passed.
+The genuine browser test passed cleaner self-work privacy, optional activities,
+admin report/PDF, native invitation/password preservation, tenant manager login
+across two branches, foreign-tenant denials, shift creation/assignment/restoration,
+template preservation and stale-token denial after role/lifecycle changes.
+TypeScript and the production build passed. Merge/deployment verification remains
+pending; this document does not claim manager permissions are already live.
