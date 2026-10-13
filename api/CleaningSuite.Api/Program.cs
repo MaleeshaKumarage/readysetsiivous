@@ -34,6 +34,7 @@ builder.Services.AddControllers().AddJsonOptions(o =>
     o.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
     o.JsonSerializerOptions.Converters.Add(new FlexibleTimeSpanConverter());
 });
+builder.Services.AddSignalR();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddOutputCache();
 builder.Services.AddEndpointsApiExplorer();
@@ -50,6 +51,7 @@ var autoCreate = builder.Configuration.GetValue<AutoCreate?>("Marten:AutoCreateS
 
 builder.Services.AddCleaningMarten(connectionString, autoCreate);
 builder.Services.AddHostedService<MartenSchemaInitializer>();
+builder.Services.AddHostedService<CleaningSuite.Api.Services.EntertainmentGroupCleanupService>();
 
 builder.Services.AddKeycloakAuth(builder.Configuration);
 
@@ -102,6 +104,10 @@ builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCycleP
 builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCycleDispatcher, CleaningSuite.Application.QualityCycle.QualityCycleDispatcher>();
 builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.QualityCycleMonthlyReportService>();
 builder.Services.AddHostedService<CleaningSuite.Api.QualityCycleWorker>();
+builder.Services.AddScoped<CleaningSuite.Application.Entertainment.IEntertainmentRepository, CleaningSuite.Infrastructure.Persistence.EntertainmentRepository>();
+builder.Services.AddSingleton<CleaningSuite.Application.Entertainment.IEntertainmentKeyProtector, CleaningSuite.Infrastructure.Entertainment.EntertainmentKeyProtector>();
+builder.Services.AddHttpClient<CleaningSuite.Application.Entertainment.IGeminiSentenceService, CleaningSuite.Infrastructure.Entertainment.GeminiSentenceService>();
+builder.Services.AddSingleton<CleaningSuite.Api.Hubs.GameSessionManager>();
 
 builder.Services.AddMediatR(cfg =>
 {
@@ -162,6 +168,7 @@ app.UseAuthentication();
 app.UseMiddleware<TenantResolutionMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<CleaningSuite.Api.Hubs.EntertainmentHub>("/hubs/entertainment");
 
 app.Run();
 
@@ -264,6 +271,9 @@ public class DefaultExceptionHandler : IExceptionHandler
             CleaningSuite.Application.Employees.EmployeeIdentityConflictException => (409, "Employee identity conflict"),
             CleaningSuite.Application.Employees.EmployeeInviteConfigurationException => (503, "Employee invitation configuration incomplete"),
             CleaningSuite.Application.Employees.EmployeeIdentityProviderException => (502, "Employee login provider unavailable"),
+            CleaningSuite.Application.Entertainment.EntertainmentGroupNotFoundException => (404, "Group not found"),
+            CleaningSuite.Application.Entertainment.EntertainmentJoinClosedException => (409, "Group has already started"),
+            CleaningSuite.Application.Entertainment.EntertainmentGameAlreadyStartedException => (409, "Game has already started"),
             JasperFx.ConcurrencyException => (409, "Conflict — concurrent update, please retry"),
             UnauthorizedAccessException => (403, "Forbidden"),
             _ => (500, "Internal server error"),

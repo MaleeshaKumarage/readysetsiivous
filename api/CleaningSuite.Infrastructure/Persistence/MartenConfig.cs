@@ -2,6 +2,7 @@ using CleaningSuite.Domain.Bookings;
 using CleaningSuite.Domain.Common;
 using CleaningSuite.Domain.Companies;
 using CleaningSuite.Domain.Employees;
+using CleaningSuite.Domain.Entertainment;
 using CleaningSuite.Domain.Invoicing;
 using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Services;
@@ -70,6 +71,14 @@ public static class MartenConfig
             .Index(x => x.ShiftOccurrenceUtc);
 
         options.Schema.For<QualityCycleReportShare>().UniqueIndex(x => x.Token);
+        options.Schema.For<EntertainmentGroup>()
+            .UniqueIndex(x => x.JoinKey);
+
+        options.Schema.For<EntertainmentPlayer>()
+            .Index(x => x.GroupId);
+
+        options.Schema.For<EntertainmentRound>()
+            .Index(x => x.GroupId);
 
         // Registry partition: unique slug across all tenants.
         options.Schema.For<TenantRegistration>().UniqueIndex(x => x.Slug);

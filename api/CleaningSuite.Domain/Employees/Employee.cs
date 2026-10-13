@@ -14,6 +14,7 @@ public class Employee : BaseDocument
     public DateTime? InviteLastSentUtc { get; set; }
     public string? InviteError { get; set; }
     public bool IdentitySyncPending { get; set; }
+    public DateTime? InvitedAtUtc { get; set; }
     public string Email { get; set; } = "";
     public string FirstName { get; set; } = "";
     public string LastName { get; set; } = "";

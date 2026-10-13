@@ -31,6 +31,8 @@ public class QualityCycleForm : BaseDocument
     public string? EmailError { get; set; }
     public string TaskStatus => !IsSubmitted ? "Pending"
         : "Recorded";
+    public DateTime? StartedAtUtc { get; set; }
+    public DateTime? EndedAtUtc { get; set; }
 
     public static QualityCycleForm Create(
         Guid shiftId,
@@ -74,6 +76,13 @@ public class QualityCycleForm : BaseDocument
         };
     }
 
+    public void Start()
+    {
+        if (StartedAtUtc.HasValue) return;
+        StartedAtUtc = DateTime.UtcNow;
+        UpdatedUtc = DateTime.UtcNow;
+    }
+
     public void Submit(List<QualityCycleFormItem> items, List<string>? photoUrls, string? cleanerNotes)
     {
         if (IsSubmitted)
@@ -96,6 +105,7 @@ public class QualityCycleForm : BaseDocument
         CleanerNotes = cleanerNotes?.Trim();
         IsSubmitted = true;
         SubmittedUtc = DateTime.UtcNow;
+        EndedAtUtc = DateTime.UtcNow;
         UpdatedUtc = DateTime.UtcNow;
     }
 }

@@ -78,7 +78,7 @@ export default function EmployeesAdminPage() {
         <Table.ScrollContainer minWidth={550}>
           <Table striped highlightOnHover withTableBorder>
             <Table.Thead>
-              <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Email</Table.Th><Table.Th>Role</Table.Th><Table.Th>Status</Table.Th><Table.Th w={120}></Table.Th></Table.Tr>
+              <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Email</Table.Th><Table.Th>Role</Table.Th><Table.Th>Status</Table.Th><Table.Th>Registration</Table.Th><Table.Th w={120}></Table.Th></Table.Tr>
             </Table.Thead>
             <Table.Tbody>
               {employees.map((e) => (
@@ -87,6 +87,7 @@ export default function EmployeesAdminPage() {
                   <Table.Td>{e.email}</Table.Td>
                   <Table.Td>{e.role}</Table.Td>
                   <Table.Td>{e.isActive ? <Badge color="green">Active</Badge> : <Badge color="gray">Inactive</Badge>}</Table.Td>
+                  <Table.Td>{e.keycloakUserId ? <Badge color="green">Invited</Badge> : <Badge color="gray">Not invited</Badge>}</Table.Td>
                   <Table.Td><Group gap="xs">
                     {isAdmin() && e.isActive && <Button size="xs" variant="light" loading={inviteBusy === e.id} disabled={Boolean(inviteBusy && inviteBusy !== e.id)} onClick={() => invite(e)}>{e.keycloakUserId ? 'Resend setup email' : 'Invite'}</Button>}
                     {isAdmin() && e.isActive && <Button size="xs" variant="subtle" color="red" onClick={() => deactivate(e.id)}>Deactivate</Button>}

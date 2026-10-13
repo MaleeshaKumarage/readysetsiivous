@@ -7,13 +7,22 @@ import { adminServices } from '@/lib/adminApi';
 
 type ServiceRowLocal = { id: string; slug: string; category: string; name: { values: Record<string, string> }; description: { values: Record<string, string> }; icon: string; durationMinutes: number; priceNet: number; vatRatePercent: number; isActive: boolean; isFeatured: boolean; sortOrder: number };
 
+function localized(fi: string, en: string, sv: string): Record<string, string> {
+  const d: Record<string, string> = { fi: fi.trim() };
+  if (en.trim()) d.en = en.trim();
+  if (sv.trim()) d.sv = sv.trim();
+  return d;
+}
+
+const EMPTY = { slug: '', nameFi: '', nameEn: '', nameSv: '', descFi: '', descEn: '', descSv: '', priceNet: '', vatRatePercent: '', durationMinutes: '', category: 'cleaning' };
+
 export default function ServicesAdminPage() {
   const [services, setServices] = useState<ServiceRowLocal[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingIsActive, setEditingIsActive] = useState(true);
-  const [form, setForm] = useState({ slug: '', name: '', description: '', priceNet: '', vatRatePercent: '', durationMinutes: '', category: 'cleaning' });
+  const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -26,7 +35,7 @@ export default function ServicesAdminPage() {
   const openAdd = () => {
     setEditingId(null);
     setEditingIsActive(true);
-    setForm({ slug: '', name: '', description: '', priceNet: '', vatRatePercent: '', durationMinutes: '', category: 'cleaning' });
+    setForm(EMPTY);
     setError('');
     setModalOpen(true);
   };
@@ -36,8 +45,12 @@ export default function ServicesAdminPage() {
     setEditingIsActive(s.isActive);
     setForm({
       slug: s.slug,
-      name: s.name?.values?.fi ?? s.name?.values?.en ?? '',
-      description: s.description?.values?.fi ?? s.description?.values?.en ?? '',
+      nameFi: s.name?.values?.fi ?? '',
+      nameEn: s.name?.values?.en ?? '',
+      nameSv: s.name?.values?.sv ?? '',
+      descFi: s.description?.values?.fi ?? '',
+      descEn: s.description?.values?.en ?? '',
+      descSv: s.description?.values?.sv ?? '',
       priceNet: String(s.priceNet ?? ''),
       vatRatePercent: String(s.vatRatePercent ?? ''),
       durationMinutes: String(s.durationMinutes ?? ''),
@@ -48,13 +61,13 @@ export default function ServicesAdminPage() {
   };
 
   const submit = async () => {
-    if (!form.slug.trim() || !form.name.trim()) { setError('Slug and name are required.'); return; }
+    if (!form.slug.trim() || !form.nameFi.trim()) { setError('Slug and Finnish name are required.'); return; }
     setSaving(true); setError('');
     const fields = {
       slug: form.slug.trim(),
       category: form.category,
-      name: { fi: form.name.trim() },
-      description: { fi: form.description.trim() },
+      name: localized(form.nameFi, form.nameEn, form.nameSv),
+      description: localized(form.descFi, form.descEn, form.descSv),
       additionalInfo: null,
       durationMinutes: Math.max(15, Number(form.durationMinutes) || 60),
       priceNet: Math.max(0, Number(form.priceNet) || 0),
@@ -69,7 +82,7 @@ export default function ServicesAdminPage() {
       : await adminServices.create(fields);
     setSaving(false);
     if (!ok) { setError(editingId ? 'Failed to update service.' : 'Failed to create service.'); return; }
-    setForm({ slug: '', name: '', description: '', priceNet: '', vatRatePercent: '', durationMinutes: '', category: 'cleaning' });
+    setForm(EMPTY);
     setEditingId(null);
     setModalOpen(false); await load();
   };
@@ -142,8 +155,17 @@ export default function ServicesAdminPage() {
       <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title={editingId ? 'Edit service' : 'Add service'} fullScreen={false} radius="md">
         <Stack gap="sm">
           <TextInput label="Slug" required value={form.slug} onChange={set('slug')} />
-          <TextInput label="Name (fi)" required value={form.name} onChange={set('name')} />
-          <Textarea label="Description (fi)" value={form.description} onChange={set('description')} />
+
+          <Group grow gap="xs">
+            <TextInput label="Name (Finnish)" required value={form.nameFi} onChange={set('nameFi')} />
+            <TextInput label="Name (English)" value={form.nameEn} onChange={set('nameEn')} />
+            <TextInput label="Name (Swedish)" value={form.nameSv} onChange={set('nameSv')} />
+          </Group>
+
+          <Textarea label="Description (Finnish)" value={form.descFi} onChange={set('descFi')} />
+          <Textarea label="Description (English)" value={form.descEn} onChange={set('descEn')} />
+          <Textarea label="Description (Swedish)" value={form.descSv} onChange={set('descSv')} />
+
           <Group wrap="wrap" grow gap="xs">
             <NumberInput label="Price (€)" value={form.priceNet} onChange={(v) => setForm((f) => ({ ...f, priceNet: String(v ?? '') }))} />
             <NumberInput label="VAT %" value={form.vatRatePercent} onChange={(v) => setForm((f) => ({ ...f, vatRatePercent: String(v ?? '') }))} />

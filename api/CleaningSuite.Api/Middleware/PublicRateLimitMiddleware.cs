@@ -20,7 +20,8 @@ public class PublicRateLimitMiddleware
     public async Task InvokeAsync(HttpContext context)
     {
         var path = context.Request.Path.Value ?? "";
-        if (!path.Contains("/api/v1/public/", StringComparison.OrdinalIgnoreCase))
+        if (!path.Contains("/api/v1/public/", StringComparison.OrdinalIgnoreCase)
+            && !path.Contains("/api/v1/entertainment/groups/", StringComparison.OrdinalIgnoreCase))
         {
             await _next(context);
             return;

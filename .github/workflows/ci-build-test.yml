@@ -28,6 +28,8 @@ jobs:
       - run: dotnet restore CleaningSuite.Backend.sln
       - run: dotnet build CleaningSuite.Backend.sln --no-restore -c Release
       - run: dotnet test CleaningSuite.Backend.sln --no-build -c Release --verbosity minimal
+        env:
+          GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
 
   frontend-e2e-test:
     runs-on: ubuntu-latest
