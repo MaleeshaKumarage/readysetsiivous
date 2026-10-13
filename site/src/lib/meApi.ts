@@ -1,4 +1,4 @@
-import { adminGet, adminSendJson } from './adminApi';
+import { authorizedFetch, adminSendJson } from './adminApi';
 
 export interface QualityCycleFormItem {
   itemText: string;
@@ -35,12 +35,14 @@ export interface MyShiftOccurrence {
 }
 
 export const meApi = {
-  myShifts: (from?: string, to?: string): Promise<MyShiftOccurrence[] | null> => {
+  myShifts: async (from?: string, to?: string): Promise<MyShiftOccurrence[]> => {
     const q = new URLSearchParams();
     if (from) q.set('from', from);
     if (to) q.set('to', to);
     const suffix = q.toString();
-    return adminGet<MyShiftOccurrence[]>(`/api/v1/me/shifts${suffix ? `?${suffix}` : ''}`);
+    const response = await authorizedFetch(`/api/v1/me/shifts${suffix ? `?${suffix}` : ''}`, { cache: 'no-store' });
+    if (!response.ok) throw new Error('Could not load your assigned shifts.');
+    return await response.json() as MyShiftOccurrence[];
   },
 
   startShift: (shiftId: string, occurrenceStartUtc: string, occurrenceEndUtc: string) =>

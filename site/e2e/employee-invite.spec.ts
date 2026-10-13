@@ -29,7 +29,8 @@ test('employee account landing confirms binding without admin link', async ({ pa
   await page.route(/\/api\/v1\/me$/, route => route.fulfill({ status: 200, headers, json: { realm: 'tenant-a', employee: { id: 'employee-a', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true } } }));
   await page.goto('/account/?tenant=tenant-a');
   await expect(page.getByRole('heading', { name: 'Account ready' })).toBeVisible();
-  await expect(page.getByText('You can record your shift activities using the checklist links sent to your email.')).toBeVisible();
+  await expect(page.getByText('Open My shifts to start your shift, record the activities you did, and end it.')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveAttribute('href', '/me/shifts/');
   await expect(page.getByRole('link', { name: 'Continue to administration' })).toHaveCount(0);
   expect(await page.evaluate(() => sessionStorage.getItem('__AUTH_TENANT__'))).toBe('tenant-a');
 });

@@ -369,7 +369,7 @@ public class QualityCycleTests
     }
 
     [Fact]
-    public async Task DispatchQualityCycleFormsCommandHandler_DispatchesFormsAndSendsEmails()
+    public async Task DispatchQualityCycleFormsCommandHandler_GeneratesTasksWithoutDeliveryAttempts()
     {
         var shiftRepoMock = new Mock<IShiftRepository>();
         var qcRepoMock = new Mock<IQualityCycleRepository>();
@@ -399,13 +399,13 @@ public class QualityCycleTests
 
         qcRepoMock.Setup(q => q.TryCreateFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
         var handler = new QualityCycleHandlers.DispatchQualityCycleFormsCommandHandler(
-            shiftRepoMock.Object, new QualityCycleDispatcher(shiftRepoMock.Object, qcRepoMock.Object, empRepoMock.Object, emailSenderMock.Object));
+            shiftRepoMock.Object, new QualityCycleDispatcher(shiftRepoMock.Object, qcRepoMock.Object, empRepoMock.Object));
 
         var count = await handler.Handle(new DispatchQualityCycleFormsCommand(null, DateTime.UtcNow), CancellationToken.None);
 
         Assert.Equal(1, count);
         qcRepoMock.Verify(q => q.TryCreateFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Once);
-        emailSenderMock.Verify(e => e.SendAsync(employee.Email, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        qcRepoMock.Verify(q => q.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -421,7 +421,7 @@ public class QualityCycleTests
 
         qcRepoMock.Setup(q => q.TryCreateFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
         var handler = new QualityCycleHandlers.DispatchQualityCycleFormsCommandHandler(
-            shiftRepoMock.Object, new QualityCycleDispatcher(shiftRepoMock.Object, qcRepoMock.Object, empRepoMock.Object, emailSenderMock.Object));
+            shiftRepoMock.Object, new QualityCycleDispatcher(shiftRepoMock.Object, qcRepoMock.Object, empRepoMock.Object));
 
         var count = await handler.Handle(new DispatchQualityCycleFormsCommand(Guid.NewGuid()), CancellationToken.None);
         Assert.Equal(0, count);

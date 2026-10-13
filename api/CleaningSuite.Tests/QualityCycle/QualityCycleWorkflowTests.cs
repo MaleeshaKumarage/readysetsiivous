@@ -141,7 +141,7 @@ public class QualityCycleWorkflowTests
         var employee = new CleaningSuite.Domain.Employees.Employee { Id = Guid.NewGuid(), FirstName = "Cleaner", Email = "test@example.com", IsActive = true };
         var assignment = ShiftAssignment.Create(shift.Id, employee.Id, null); assignment.AssignedAtUtc = shift.CreatedUtc;
         var shifts = new Mock<IShiftRepository>(); var forms = new Mock<IQualityCycleRepository>();
-        var employees = new Mock<CleaningSuite.Application.Employees.IEmployeeRepository>(); var email = new Mock<CleaningSuite.Application.Common.IEmailSender>();
+        var employees = new Mock<CleaningSuite.Application.Employees.IEmployeeRepository>();
         shifts.Setup(x => x.GetAsync(shift.Id, default)).ReturnsAsync(shift);
         shifts.Setup(x => x.ListAssignmentsByShiftAsync(shift.Id, default)).ReturnsAsync(new[] { assignment });
         employees.Setup(x => x.GetByIdAsync(employee.Id, default)).ReturnsAsync(employee);
@@ -149,18 +149,24 @@ public class QualityCycleWorkflowTests
         var records = new Dictionary<DateTime, QualityCycleForm>();
         forms.Setup(x => x.GetFormByShiftOccurrenceAsync(shift.Id, employee.Id, It.IsAny<DateTime>(), default)).ReturnsAsync((Guid _, Guid _, DateTime time, CancellationToken _) => records.GetValueOrDefault(time));
         forms.Setup(x => x.TryCreateFormAsync(It.IsAny<QualityCycleForm>(), default)).ReturnsAsync((QualityCycleForm form, CancellationToken _) => records.TryAdd(form.ShiftOccurrenceUtc, form));
-        var dispatcher = new QualityCycleDispatcher(shifts.Object, forms.Object, employees.Object, email.Object, clock: clock);
+        var dispatcher = new QualityCycleDispatcher(shifts.Object, forms.Object, employees.Object, clock: clock);
         Assert.Equal(32, await dispatcher.EnsureUpcomingAsync(shift.Id));
         Assert.Equal(0, await dispatcher.EnsureUpcomingAsync(shift.Id));
-        email.Verify(x => x.SendAsync(employee.Email, It.IsAny<string>(), It.IsAny<string>(), default), Times.Once);
+        Assert.All(records.Values, form => { Assert.Null(form.EmailSentUtc); Assert.Null(form.EmailLastAttemptUtc); });
+        var today = records[clock.Value.Date.AddHours(8)];
+        today.EmailLastAttemptUtc = clock.Value.AddHours(-1); today.EmailError = "Historical delivery failure";
+        Assert.Equal(0, await dispatcher.DispatchAsync(shift, new[] { new ShiftOccurrence { StartUtc = today.ShiftOccurrenceUtc, EndUtc = today.ShiftOccurrenceEndUtc } }));
+        Assert.Equal("Historical delivery failure", today.EmailError); Assert.Equal(clock.Value.AddHours(-1), today.EmailLastAttemptUtc); Assert.Null(today.EmailSentUtc);
+        var previouslyStarted = records[clock.Value.Date.AddDays(2).AddHours(8)]; previouslyStarted.Start();
         template.Items = new() { "Gym" };
         await dispatcher.EnsureUpcomingAsync(shift.Id);
         Assert.Equal("Corridor", records[clock.Value.Date.AddHours(8)].Items[0].ItemText);
         Assert.Equal("Gym", records[clock.Value.Date.AddDays(1).AddHours(8)].Items[0].ItemText);
+        Assert.Equal("Corridor", previouslyStarted.Items[0].ItemText);
         clock.Value = clock.Value.AddDays(1);
         await dispatcher.EnsureUpcomingAsync(shift.Id);
         Assert.Equal(33, records.Count);
-        email.Verify(x => x.SendAsync(employee.Email, It.IsAny<string>(), It.IsAny<string>(), default), Times.Exactly(2));
+        Assert.All(records.Values, form => Assert.Null(form.EmailSentUtc));
     }
     private sealed class MutableClock : TimeProvider { public DateTime Value { get; set; } public override DateTimeOffset GetUtcNow() => Value; }
     private static ShiftSchedule Daily() => new() { Type = ShiftScheduleType.DailySameTime, DailyStart = TimeSpan.FromHours(8), DailyEnd = TimeSpan.FromHours(10) };

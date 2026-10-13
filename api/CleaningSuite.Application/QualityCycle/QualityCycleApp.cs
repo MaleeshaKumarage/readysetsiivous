@@ -246,18 +246,12 @@ public class QualityCycleHandlers
         {
             var shift = await _shiftRepository.GetAsync(request.ShiftId, ct)
                 ?? throw new NotFoundException("Shift", request.ShiftId);
-            if (!shift.QualityCycleTemplateId.HasValue)
-                throw new NotFoundException("QualityCycleTemplate", Guid.Empty);
-
-            var template = await _repository.GetTemplateAsync(shift.QualityCycleTemplateId.Value, ct)
-                ?? throw new NotFoundException("QualityCycleTemplate", shift.QualityCycleTemplateId.Value);
-
             var employee = await _employeeRepository.GetByIdAsync(request.EmployeeId, ct)
                 ?? throw new NotFoundException("Employee", request.EmployeeId);
 
             var start = request.OccurrenceStartUtc.Kind == DateTimeKind.Local ? request.OccurrenceStartUtc.ToUniversalTime() : DateTime.SpecifyKind(request.OccurrenceStartUtc, DateTimeKind.Utc);
             var end = request.OccurrenceEndUtc.Kind == DateTimeKind.Local ? request.OccurrenceEndUtc.ToUniversalTime() : DateTime.SpecifyKind(request.OccurrenceEndUtc, DateTimeKind.Utc);
-            if (!shift.IsActive || !employee.IsActive || !template.IsActive)
+            if (!shift.IsActive || !employee.IsActive)
                 throw new UnauthorizedAccessException();
             if (start > _clock.GetUtcNow().UtcDateTime) throw new QualityCycleConflictException("This shift has not started yet.");
             if (end <= start || end - start > TimeSpan.FromDays(2)
@@ -270,11 +264,17 @@ public class QualityCycleHandlers
             var form = await _repository.GetFormByShiftOccurrenceAsync(shift.Id, employee.Id, start, ct);
             if (form == null)
             {
+                var template = shift.QualityCycleTemplateId.HasValue
+                    ? await _repository.GetTemplateAsync(shift.QualityCycleTemplateId.Value, ct) : null;
+                if (template?.IsActive != true) template = null;
+                if (template is not null && ((template.CompanyId.HasValue && template.CompanyId != shift.CompanyId)
+                    || (template.BranchId.HasValue && template.BranchId != shift.BranchId)))
+                    throw new ShiftConflictException("The checklist does not belong to this shift.");
                 form = QualityCycleForm.Create(
                     shift.Id, shift.Name, employee.Id,
                     $"{employee.FirstName} {employee.LastName}",
-                    template.Id, template.Title,
-                    start, template.Items, end);
+                    template?.Id ?? Guid.Empty, template?.Title ?? "Shift activities",
+                    start, template?.Items ?? new List<string>(), end);
                 form.Id = QualityCycleDispatcher.TaskId(shift.Id, employee.Id, start);
                 form.CompanyId = shift.CompanyId; form.BranchId = shift.BranchId;
                 form.Start();
@@ -306,6 +306,9 @@ public class QualityCycleHandlers
 
             if (form.EmployeeId != request.EmployeeId)
                 throw new UnauthorizedAccessException();
+
+            if (!form.StartedAtUtc.HasValue)
+                throw new QualityCycleConflictException("Start your shift before ending it.");
 
             RecordActivity(form, request.Items, request.PhotoUrls, request.CleanerNotes, _clock);
             await _repository.SaveFormAsync(form, ct);

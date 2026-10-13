@@ -21,8 +21,9 @@ returned by the invitation API or emailed as temporary credentials.
    granted before the binding save succeeds.
 5. Keycloak sends a24-hour setup link. New users verify email and set a password.
    They return to /account/?tenant=<realm> and sign in using the SPA's normal PKCE
-   flow. Admins can continue to /admin/; employees see account confirmation and
-   use their assigned checklist email links. My Work remains separate scope.
+   flow. Admins can continue to /admin/; employees open **My shifts** from their
+   account to start shifts, select completed activities and end shifts. QC forms
+   do not generate emails. The broader My Work view remains separate scope.
 
 ## Reinvite, ownership and failures
 

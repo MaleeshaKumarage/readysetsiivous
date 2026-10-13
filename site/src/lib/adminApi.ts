@@ -45,7 +45,7 @@ export interface Employee {
   defaultHours: Record<string, { start?: string | null; end?: string | null }>;
 }
 
-async function authorizedFetch(path: string, init: RequestInit = {}): Promise<Response> {
+export async function authorizedFetch(path: string, init: RequestInit = {}): Promise<Response> {
   let t = token();
   if (!t) t = await refreshToken();
   if (!t) await login();
