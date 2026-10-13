@@ -4,15 +4,10 @@ export async function setupAdminMocks(page: Page, options: { authenticated?: boo
   const authed = options.authenticated ?? true;
 
   await page.addInitScript(({ authed }) => {
-    if (authed) {
-      // Respect an explicit sign-out across the reload that logout() triggers,
-      // otherwise the init script re-authenticates on every navigation.
-      if (sessionStorage.getItem('__MOCK_LOGGED_OUT__') === 'true') {
-        (window as any).__MOCK_AUTHED__ = false;
-      } else {
-        sessionStorage.removeItem('__MOCK_LOGGED_OUT__');
-        (window as any).__MOCK_AUTHED__ = true;
-      }
+    // A reload after logout must retain the logged-out state rather than
+    // re-authenticating the mock user on every document load.
+    if (authed && sessionStorage.getItem('__MOCK_LOGGED_OUT__') !== 'true') {
+      (window as any).__MOCK_AUTHED__ = true;
     } else {
       sessionStorage.setItem('__MOCK_LOGGED_OUT__', 'true');
       (window as any).__MOCK_AUTHED__ = false;

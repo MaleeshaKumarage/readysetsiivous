@@ -4,6 +4,10 @@ Multi-language (EN / FI / SV), mobile-responsive, static landing page with Whats
 
 ## Quick Start
 
+For dev/prod URLs, frontend environment variables, and live testing instructions,
+see [the environment guide](../docs/environments.md). The frontend defaults to
+production APIs even when running locally; select dev explicitly for integration tests.
+
 ```bash
 # Install dependencies
 npm install

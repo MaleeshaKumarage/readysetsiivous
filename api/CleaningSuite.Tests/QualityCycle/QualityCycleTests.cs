@@ -2,6 +2,7 @@ using CleaningSuite.Application.Common;
 using CleaningSuite.Application.Employees;
 using CleaningSuite.Application.QualityCycle;
 using CleaningSuite.Application.Shifts;
+using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Companies;
 using CleaningSuite.Domain.Employees;
 using CleaningSuite.Domain.QualityCycle;
@@ -171,13 +172,13 @@ public class QualityCycleTests
     {
         var form = QualityCycleForm.Create(
             Guid.NewGuid(), "Shift", Guid.NewGuid(), "Cleaner", Guid.NewGuid(), "Template", DateTime.UtcNow, new List<string> { "Task 1" });
-        form.Submit(new List<QualityCycleFormItem>(), null, null);
+        form.Submit(new List<QualityCycleFormItem> { new() { ItemText = "Task 1", IsChecked = true } }, null, null);
 
         Assert.Throws<InvalidOperationException>(() => form.Submit(new List<QualityCycleFormItem>(), null, null));
     }
 
     [Fact]
-    public void SubmitQualityCycleForm_FallbackToIndexMatching_WhenItemTextModified()
+    public void SubmitQualityCycleForm_RejectsModifiedChecklistWithoutMutation()
     {
         var form = QualityCycleForm.Create(
             Guid.NewGuid(), "Shift", Guid.NewGuid(), "Cleaner", Guid.NewGuid(), "Template", DateTime.UtcNow, new List<string> { "Task A", "Task B" });
@@ -188,47 +189,11 @@ public class QualityCycleTests
             new QualityCycleFormItem { ItemText = "Modified Text B", IsChecked = false }
         };
 
-        form.Submit(submittedItems, null, null);
+        Assert.Throws<ArgumentException>(() => form.Submit(submittedItems, null, null));
 
-        Assert.True(form.Items[0].IsChecked);
+        Assert.False(form.Items[0].IsChecked);
         Assert.False(form.Items[1].IsChecked);
         Assert.Equal("Task A", form.Items[0].ItemText); // Original text preserved
-    }
-
-    [Fact]
-    public void Start_RecordsStartedAtUtc()
-    {
-        var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Cleaner", Guid.NewGuid(), "Template", DateTime.UtcNow, new List<string> { "Task A" });
-
-        form.Start();
-
-        Assert.NotNull(form.StartedAtUtc);
-        Assert.False(form.IsSubmitted);
-    }
-
-    [Fact]
-    public void Start_WhenAlreadyStarted_DoesNotOverwrite()
-    {
-        var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Cleaner", Guid.NewGuid(), "Template", DateTime.UtcNow, new List<string> { "Task A" });
-        form.Start();
-        var first = form.StartedAtUtc;
-
-        form.Start();
-
-        Assert.Equal(first, form.StartedAtUtc);
-    }
-
-    [Fact]
-    public void Submit_RecordsEndedAtUtc()
-    {
-        var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Cleaner", Guid.NewGuid(), "Template", DateTime.UtcNow, new List<string> { "Task A" });
-        form.Start();
-
-        form.Submit(new List<QualityCycleFormItem> { new QualityCycleFormItem { ItemText = "Task A", IsChecked = true } }, null, null);
-
-        Assert.True(form.IsSubmitted);
-        Assert.NotNull(form.EndedAtUtc);
-        Assert.True(form.EndedAtUtc >= form.StartedAtUtc);
     }
 
     // --- APPLICATION HANDLERS TESTS ---
@@ -404,6 +369,65 @@ public class QualityCycleTests
     }
 
     [Fact]
+    public async Task DispatchQualityCycleFormsCommandHandler_DispatchesFormsAndSendsEmails()
+    {
+        var shiftRepoMock = new Mock<IShiftRepository>();
+        var qcRepoMock = new Mock<IQualityCycleRepository>();
+        var empRepoMock = new Mock<IEmployeeRepository>();
+        var emailSenderMock = new Mock<IEmailSender>();
+
+        var template = QualityCycleTemplate.Create("Template 1", new List<string> { "Task 1" });
+        var schedule = new ShiftSchedule
+        {
+            Type = ShiftScheduleType.DailySameTime,
+            DailyStart = new TimeSpan(8, 0, 0),
+            DailyEnd = new TimeSpan(16, 0, 0)
+        };
+        var shift = Shift.Create(Guid.NewGuid(), Guid.NewGuid(), "Daily Shift", schedule, null, null, null, template.Id);
+
+        var employee = new Employee { Id = Guid.NewGuid(), Email = "test@example.com", FirstName = "John", LastName = "Doe" };
+        var assignment = ShiftAssignment.Create(shift.Id, employee.Id, null);
+        assignment.AssignedAtUtc = DateTime.UtcNow.Date.AddDays(-1);
+        shift.CreatedUtc = assignment.AssignedAtUtc;
+
+        shiftRepoMock.Setup(s => s.ListAsync(null, null, It.IsAny<CancellationToken>())).ReturnsAsync(new List<Shift> { shift });
+        shiftRepoMock.Setup(s => s.GetAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+        qcRepoMock.Setup(q => q.GetTemplateAsync(template.Id, It.IsAny<CancellationToken>())).ReturnsAsync(template);
+        shiftRepoMock.Setup(s => s.ListAssignmentsByShiftAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(new List<ShiftAssignment> { assignment });
+        empRepoMock.Setup(e => e.GetByIdAsync(employee.Id, It.IsAny<CancellationToken>())).ReturnsAsync(employee);
+        qcRepoMock.Setup(q => q.GetFormByShiftOccurrenceAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync((QualityCycleForm?)null);
+
+        qcRepoMock.Setup(q => q.TryCreateFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        var handler = new QualityCycleHandlers.DispatchQualityCycleFormsCommandHandler(
+            shiftRepoMock.Object, new QualityCycleDispatcher(shiftRepoMock.Object, qcRepoMock.Object, empRepoMock.Object, emailSenderMock.Object));
+
+        var count = await handler.Handle(new DispatchQualityCycleFormsCommand(null, DateTime.UtcNow), CancellationToken.None);
+
+        Assert.Equal(1, count);
+        qcRepoMock.Verify(q => q.TryCreateFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Once);
+        emailSenderMock.Verify(e => e.SendAsync(employee.Email, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DispatchQualityCycleFormsCommandHandler_WhenSpecificShiftNotSetOrInactive_HandlesCorrectly()
+    {
+        var shiftRepoMock = new Mock<IShiftRepository>();
+        var qcRepoMock = new Mock<IQualityCycleRepository>();
+        var empRepoMock = new Mock<IEmployeeRepository>();
+        var emailSenderMock = new Mock<IEmailSender>();
+
+        // Scenario 1: Specific shift requested but not found -> returns 0
+        shiftRepoMock.Setup(s => s.GetAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync((Shift?)null);
+
+        qcRepoMock.Setup(q => q.TryCreateFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        var handler = new QualityCycleHandlers.DispatchQualityCycleFormsCommandHandler(
+            shiftRepoMock.Object, new QualityCycleDispatcher(shiftRepoMock.Object, qcRepoMock.Object, empRepoMock.Object, emailSenderMock.Object));
+
+        var count = await handler.Handle(new DispatchQualityCycleFormsCommand(Guid.NewGuid()), CancellationToken.None);
+        Assert.Equal(0, count);
+    }
+
+    [Fact]
     public async Task GetQualityCycleSummaryPdfQueryHandler_GeneratesPdf()
     {
         var qcRepoMock = new Mock<IQualityCycleRepository>();
@@ -427,11 +451,13 @@ public class QualityCycleTests
         branchRepoMock.Setup(b => b.GetAsync(shift.BranchId, It.IsAny<CancellationToken>())).ReturnsAsync(branch);
         qcRepoMock.Setup(q => q.ListFormsAsync(shift.Id, It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<QualityCycleForm>());
-        pdfGenMock.Setup(p => p.GenerateMonthlySummaryPdf(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<IReadOnlyList<QualityCycleFormDto>>()))
+        shiftRepoMock.Setup(s => s.ListAssignmentHistoryAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<ShiftAssignment>());
+        pdfGenMock.Setup(p => p.GenerateMonthlyReportPdf(It.IsAny<QualityCycleMonthlyReport>()))
             .Returns(new byte[] { 1, 2, 3 });
 
         var handler = new QualityCycleHandlers.GetQualityCycleSummaryPdfQueryHandler(
-            qcRepoMock.Object, shiftRepoMock.Object, companyRepoMock.Object, branchRepoMock.Object, pdfGenMock.Object);
+            new QualityCycleMonthlyReportService(shiftRepoMock.Object, qcRepoMock.Object, companyRepoMock.Object, branchRepoMock.Object,
+                new Mock<ITenantProfileRepository>().Object, new Mock<ITenantContext>().Object, TimeProvider.System), pdfGenMock.Object);
 
         var pdf = await handler.Handle(new GetQualityCycleSummaryPdfQuery(shift.Id, 2025, 5), CancellationToken.None);
 
@@ -446,11 +472,9 @@ public class QualityCycleTests
         shiftRepoMock.Setup(s => s.GetAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync((Shift?)null);
 
         var handler = new QualityCycleHandlers.GetQualityCycleSummaryPdfQueryHandler(
-            new Mock<IQualityCycleRepository>().Object,
-            shiftRepoMock.Object,
-            new Mock<CleaningSuite.Application.Companies.ICompanyRepository>().Object,
-            new Mock<CleaningSuite.Application.Companies.IBranchRepository>().Object,
-            new Mock<IQualityCyclePdfGenerator>().Object);
+            new QualityCycleMonthlyReportService(shiftRepoMock.Object, new Mock<IQualityCycleRepository>().Object,
+                new Mock<CleaningSuite.Application.Companies.ICompanyRepository>().Object, new Mock<CleaningSuite.Application.Companies.IBranchRepository>().Object,
+                new Mock<ITenantProfileRepository>().Object, new Mock<ITenantContext>().Object, TimeProvider.System), new Mock<IQualityCyclePdfGenerator>().Object);
 
         await Assert.ThrowsAsync<NotFoundException>(() => handler.Handle(new GetQualityCycleSummaryPdfQuery(Guid.NewGuid(), 2025, 5), CancellationToken.None));
     }
@@ -476,8 +500,6 @@ public class QualityCycleTests
             new List<string> { "https://example.com/p.jpg" },
             "Cleaned thoroughly",
             true,
-            DateTime.UtcNow,
-            DateTime.UtcNow,
             DateTime.UtcNow,
             DateTime.UtcNow);
 

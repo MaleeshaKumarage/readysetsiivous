@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using CleaningSuite.Application.Tenants;
+using CleaningSuite.Infrastructure.Auth;
 using Microsoft.Extensions.Logging;
 
 namespace CleaningSuite.Infrastructure.Keycloak;
@@ -9,11 +10,13 @@ public class KeycloakProvisioner : IKeycloakProvisioner
     private const string ClientId = "cleaning-suite-web";
     private readonly KeycloakAdminClient _admin;
     private readonly ILogger<KeycloakProvisioner> _logger;
+    private readonly KeycloakResourceOptions _resources;
 
-    public KeycloakProvisioner(KeycloakAdminClient admin, ILogger<KeycloakProvisioner> logger)
+    public KeycloakProvisioner(KeycloakAdminClient admin, ILogger<KeycloakProvisioner> logger, KeycloakResourceOptions resources)
     {
         _admin = admin;
         _logger = logger;
+        _resources = resources;
     }
 
     public async Task<ProvisionedTenant> ProvisionAsync(
@@ -43,6 +46,7 @@ public class KeycloakProvisioner : IKeycloakProvisioner
             directAccessGrantsEnabled = true,
             redirectUris,
             webOrigins = new[] { "+" },
+            protocolMappers = new[] { AudienceMapper(_resources.TenantAudience) },
         }, ct);
 
         var userId = await _admin.CreateUserAsync(slug, new
@@ -73,55 +77,16 @@ public class KeycloakProvisioner : IKeycloakProvisioner
     public Task SetRealmEnabledAsync(string realm, bool enabled, CancellationToken ct = default) =>
         _admin.SetRealmEnabledAsync(realm, enabled, ct);
 
-    public async Task<InvitedEmployee> InviteEmployeeAsync(
-        string realm,
-        string email,
-        string firstName,
-        string lastName,
-        string role,
-        CancellationToken ct = default)
+    public static object AudienceMapper(string audience) => new
     {
-        var temporaryPassword = GenerateTemporaryPassword();
-
-        var userId = await _admin.GetUserIdByUsernameAsync(realm, email, ct);
-        if (userId is null)
+        name = "cleaning-suite-api-audience", protocol = "openid-connect",
+        protocolMapper = "oidc-audience-mapper", consentRequired = false,
+        config = new Dictionary<string, string>
         {
-            userId = await _admin.CreateUserAsync(realm, new
-            {
-                username = email,
-                email,
-                firstName,
-                lastName,
-                enabled = true,
-                credentials = new[]
-                {
-                    new { type = "password", value = temporaryPassword, temporary = true },
-                },
-                requiredActions = new[] { "UPDATE_PASSWORD" },
-            }, ct);
-        }
-        else
-        {
-            // Re-invite: reset to a fresh temporary password and re-arm the required action.
-            await _admin.UpdateUserAsync(realm, userId, new
-            {
-                firstName,
-                lastName,
-                enabled = true,
-                credentials = new[]
-                {
-                    new { type = "password", value = temporaryPassword, temporary = true },
-                },
-                requiredActions = new[] { "UPDATE_PASSWORD" },
-            }, ct);
-        }
-
-        var roleRep = await _admin.GetRoleAsync(realm, role, ct);
-        await _admin.AssignRealmRoleAsync(realm, userId, new object[] { roleRep }, ct);
-
-        _logger.LogInformation("Invited employee {Email} in realm {Realm} as {Role}", email, realm, role);
-        return new InvitedEmployee(userId, temporaryPassword);
-    }
+            ["included.custom.audience"] = audience,
+            ["access.token.claim"] = "true", ["id.token.claim"] = "false",
+        },
+    };
 
     private async Task WaitForRealmAsync(string realm, CancellationToken ct)
     {

@@ -1,8 +1,8 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Route } from '@playwright/test';
 import { CORS_HEADERS, mockEntertainmentSignalR, hubConnected } from './entertainment-helpers';
 
 function mockCreate(page: any) {
-  return page.route(/\/api\/v1\/entertainment\/groups$/, async (route) => {
+  return page.route(/\/api\/v1\/entertainment\/groups$/, async (route: Route) => {
     if (route.request().method() === 'OPTIONS') {
       return route.fulfill({ status: 200, headers: CORS_HEADERS });
     }
@@ -15,7 +15,7 @@ function mockCreate(page: any) {
 }
 
 function mockLobby(page: any) {
-  return page.route(/\/api\/v1\/entertainment\/groups\/group-1\/lobby$/, async (route) => {
+  return page.route(/\/api\/v1\/entertainment\/groups\/group-1\/lobby$/, async (route: Route) => {
     if (route.request().method() === 'OPTIONS') {
       return route.fulfill({ status: 200, headers: CORS_HEADERS });
     }
@@ -71,7 +71,7 @@ test.describe('Entertainment — Start game + round views', () => {
   });
 
   test('observer sees English + covered Finnish + hint words', async ({ page }) => {
-    await page.route(/\/api\/v1\/entertainment\/groups\/ABC234\/join$/, async (route) => {
+    await page.route(/\/api\/v1\/entertainment\/groups\/ABC234\/join$/, async (route: Route) => {
       if (route.request().method() === 'OPTIONS') {
         return route.fulfill({ status: 200, headers: CORS_HEADERS });
       }

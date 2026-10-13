@@ -90,4 +90,10 @@ public class ShiftRepository : IShiftRepository
         Session.Delete<ShiftAssignment>(assignmentId);
         await Session.SaveChangesAsync(ct);
     }
+
+    public async Task<IReadOnlyList<Shift>> ListForReportingAsync(CancellationToken ct = default) =>
+        await Session.Query<Shift>().OrderBy(s => s.Name).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<ShiftAssignment>> ListAssignmentHistoryAsync(Guid shiftId, CancellationToken ct = default) =>
+        await Session.Query<ShiftAssignment>().Where(a => a.ShiftId == shiftId).ToListAsync(ct);
 }

@@ -62,9 +62,8 @@ services:
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=cleaning;Username=cleaning;Password=${POSTGRES_PASSWORD}
       Marten__AutoCreateSchemaMode: CreateOrUpdate
       Auth__Keycloak__ServerUrl: https://auth.readysetsiivous.fi
-      Auth__Keycloak__Audiences__0: cleaning-suite-web
-      Auth__Keycloak__Audiences__1: cleaning-provisioner
-      Auth__Keycloak__Audiences__2: account
+      Auth__Keycloak__Audience: cleaning-suite-api
+      Auth__Keycloak__PlatformAudience: cleaning-suite-platform-api
       Auth__Keycloak__ProvisionerRealm: master
       Auth__Keycloak__ProvisionerClientId: cleaning-provisioner
       Auth__Keycloak__ProvisionerClientSecret: ${PROVISIONER_CLIENT_SECRET:-}
@@ -74,6 +73,16 @@ services:
       Uploads__Path: /app/uploads
       Entertainment__KeyFilePath: /app/keys/entertainment.key
       Resend__ApiKey: ${RESEND_API_KEY:-}
+      EmployeeInvites__LifespanSeconds: 86400
+      EmployeeInvites__Smtp__Host: ${INVITE_SMTP_HOST:-}
+      EmployeeInvites__Smtp__Port: ${INVITE_SMTP_PORT:-587}
+      EmployeeInvites__Smtp__From: ${INVITE_SMTP_FROM:-}
+      EmployeeInvites__Smtp__Auth: ${INVITE_SMTP_AUTH:-true}
+      EmployeeInvites__Smtp__User: ${INVITE_SMTP_USER:-}
+      EmployeeInvites__Smtp__Password: ${INVITE_SMTP_PASSWORD:-}
+      EmployeeInvites__Smtp__UseResendApiKey: ${INVITE_SMTP_USE_RESEND_API_KEY:-false}
+      EmployeeInvites__Smtp__StartTls: ${INVITE_SMTP_STARTTLS:-true}
+      EmployeeInvites__Smtp__Ssl: ${INVITE_SMTP_SSL:-false}
       App__FrontendBaseUrl: https://readysetsiivous.fi
     volumes:
       - cleaning_uploads:/app/uploads

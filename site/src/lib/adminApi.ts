@@ -28,6 +28,9 @@ export interface Invoice {
 export interface Employee {
   id: string;
   email: string;
+  keycloakUserId?: string;
+  inviteLastSentUtc?: string | null;
+  inviteError?: string | null;
   firstName: string;
   lastName: string;
   phone: string;
@@ -40,8 +43,6 @@ export interface Employee {
   certifications: { name: string; expiresAtUtc?: string | null }[];
   notes?: string | null;
   defaultHours: Record<string, { start?: string | null; end?: string | null }>;
-  keycloakUserId?: string;
-  invitedAtUtc?: string | null;
 }
 
 async function authorizedFetch(path: string, init: RequestInit = {}): Promise<Response> {
@@ -201,11 +202,14 @@ export const adminEmployees = {
   update: (id: string, fields: EmployeeFields, isActive: boolean) =>
     adminSend(`/api/v1/admin/employees/${id}`, 'PUT', { fields, isActive }),
   deactivate: (id: string) => adminSend(`/api/v1/admin/employees/${id}/deactivate`, 'POST'),
-  invite: (id: string) =>
-    adminSendJson<{ email: string }>(
-      `/api/v1/admin/employees/${id}/invite`,
-      'POST'
-    ),
+  invite: async (id: string): Promise<{ email: string; keycloakUserId: string; status: 'Sent' | 'AlreadySent'; sentUtc: string }> => {
+    const response = await authorizedFetch(`/api/v1/admin/employees/${id}/invite`, { method: 'POST' });
+    if (!response.ok) {
+      const problem = await response.json().catch(() => ({})) as { detail?: string; title?: string };
+      throw new Error(problem.detail || problem.title || `Invitation failed (${response.status}).`);
+    }
+    _invalidate(); return response.json();
+  },
 };
 
 export interface AgreementSignerDto {
@@ -405,6 +409,7 @@ export const adminShifts = {
   create: (fields: unknown) => adminSendJson<Shift>('/api/v1/admin/shifts', 'POST', fields),
   update: (id: string, fields: unknown) =>
     adminSendJson<Shift>(`/api/v1/admin/shifts/${id}`, 'PUT', fields),
+  setQualityCycleTemplate: (id: string, templateId: string | null) => adminSendJson<Shift>(`/api/v1/admin/shifts/${id}/quality-cycle-template`, "PUT", { templateId }),
   deactivate: (id: string) => adminSend(`/api/v1/admin/shifts/${id}/deactivate`, 'POST'),
   assignments: (id: string) =>
     adminGet<ShiftAssignment[]>(`/api/v1/admin/shifts/${id}/assignments`),
@@ -414,7 +419,7 @@ export const adminShifts = {
     adminSend(`/api/v1/admin/shifts/${id}/assignments/${employeeId}`, 'DELETE'),
   occurrences: (id: string, fromUtc: string, toUtc: string) =>
     adminGet<ShiftOccurrence[]>(
-      `/api/v1/admin/shifts/${id}/occurrences?fromUtc=${encodeURIComponent(fromUtc)}&toUtc=${encodeURIComponent(toUtc)}`
+      `/api/v1/admin/shifts/${id}/occurrences?from=${encodeURIComponent(fromUtc)}&to=${encodeURIComponent(toUtc)}`
     ),
 };
 

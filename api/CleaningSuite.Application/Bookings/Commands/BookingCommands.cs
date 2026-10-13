@@ -8,6 +8,7 @@ using CleaningSuite.Domain.Services;
 using FluentValidation;
 using JasperFx;
 using MediatR;
+using Npgsql;
 
 namespace CleaningSuite.Application.Bookings.Commands;
 
@@ -65,18 +66,17 @@ public class CreatePublicBookingHandler : IRequestHandler<CreatePublicBookingCom
 
     public async Task<PublicBookingResult> Handle(CreatePublicBookingCommand request, CancellationToken ct)
     {
-        var service = await _services.GetByIdAsync(request.ServiceId, ct)
-            ?? throw new NotFoundException("Service", request.ServiceId);
-
-        var (startUtc, endUtc) = await _availability.ReserveAsync(
-            _context.TenantId, request.LocalDate, request.StartTime, service, ct: ct);
-
-        // Counter increment shares the request session with the insert; retry the
-        // whole transaction on optimistic conflict (counter is the hot row).
+        // All reads and writes share a serializable transaction. A retry must
+        // discard tracked documents and recheck availability against committed bookings.
         for (var attempt = 0; attempt < 3; attempt++)
         {
             try
             {
+                await _bookings.BeginReservationAsync(ct);
+                var service = await _services.GetByIdAsync(request.ServiceId, ct)
+                    ?? throw new NotFoundException("Service", request.ServiceId);
+                var (startUtc, endUtc) = await _availability.ReserveAsync(
+                    _context.TenantId, request.LocalDate, request.StartTime, service, ct: ct);
                 var number = await _bookings.NextCounterAsync($"booking-{startUtc.Year}", ct);
 
                 var booking = new Booking
@@ -119,14 +119,20 @@ public class CreatePublicBookingHandler : IRequestHandler<CreatePublicBookingCom
                 await _bookings.SaveAsync(booking, ct);
                 return new PublicBookingResult(booking.Id, booking.BookingNumber, booking.CustomerReference!);
             }
-            catch (ConcurrencyException) when (attempt < 2)
+            catch (Exception ex) when (IsReservationConflict(ex))
             {
-                // counter raced; retry with fresh session state
+                if (attempt == 2)
+                    throw new SlotConflictException("Booking changed concurrently, please try again");
             }
         }
 
         throw new SlotConflictException("Could not allocate booking number, try again");
     }
+
+    private static bool IsReservationConflict(Exception exception) =>
+        exception is ConcurrencyException
+        || exception is PostgresException { SqlState: PostgresErrorCodes.SerializationFailure }
+        || (exception.InnerException is { } inner && IsReservationConflict(inner));
 
     private static string GenerateReference()
     {

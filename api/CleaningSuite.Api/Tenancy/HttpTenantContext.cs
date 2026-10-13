@@ -6,9 +6,17 @@ namespace CleaningSuite.Api.Tenancy;
 public class HttpTenantContext : ITenantContext
 {
     private readonly IHttpContextAccessor _accessor;
+    private string _backgroundTenantId = "";
 
     public HttpTenantContext(IHttpContextAccessor accessor) => _accessor = accessor;
 
     public string TenantId =>
-        _accessor.HttpContext?.Items["TenantId"] as string ?? "";
+        _accessor.HttpContext?.Items["TenantId"] as string ?? _backgroundTenantId;
+
+    public void SetBackgroundTenant(string tenantId)
+    {
+        if (_accessor.HttpContext is not null) throw new InvalidOperationException("Cannot override an HTTP request tenant.");
+        if (string.IsNullOrWhiteSpace(tenantId)) throw new ArgumentException("Tenant is required.");
+        _backgroundTenantId = tenantId;
+    }
 }

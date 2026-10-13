@@ -24,15 +24,18 @@ public class AvailabilityEngine
     private readonly IServiceRepository _services;
     private readonly IBookingRepository _bookings;
     private readonly ITenantProfileRepository _profiles;
+    private readonly TimeProvider _timeProvider;
 
     public AvailabilityEngine(
         IServiceRepository services,
         IBookingRepository bookings,
-        ITenantProfileRepository profiles)
+        ITenantProfileRepository profiles,
+        TimeProvider? timeProvider = null)
     {
         _services = services;
         _bookings = bookings;
         _profiles = profiles;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     private static TimeZoneInfo TimeZoneFor(string timeZoneId) =>
@@ -44,10 +47,14 @@ public class AvailabilityEngine
         var service = await _services.GetByIdAsync(serviceId, ct)
             ?? throw new NotFoundException("Service", serviceId);
 
+        if (!service.IsActive)
+            return Array.Empty<AvailabilitySlot>();
+
         var profile = await _profiles.GetAsync(tenantId, ct);
         var tz = TimeZoneFor(profile?.TimeZoneId ?? "");
         var date = DateOnly.ParseExact(localDate, "yyyy-MM-dd");
         var occupied = await _bookings.ListForLocalDateAsync(localDate, ct);
+        var earliestStartUtc = EarliestStartUtc(profile?.MinHoursBeforeBooking ?? 2);
 
         var slots = new List<AvailabilitySlot>();
         for (var cursor = WindowStart; cursor + TimeSpan.FromMinutes(service.DurationMinutes) <= WindowEnd;
@@ -59,7 +66,7 @@ public class AvailabilityEngine
             var slotEndUtc = TimeZoneInfo.ConvertTimeToUtc(slotEndLocal, tz);
 
             var conflicts = occupied.Any(b => b.StartUtc < slotEndUtc && b.EndUtc > slotStartUtc);
-            if (!conflicts)
+            if (!conflicts && slotStartUtc >= earliestStartUtc)
                 slots.Add(new AvailabilitySlot(
                     cursor.ToString(@"hh\:mm"),
                     (cursor + TimeSpan.FromMinutes(service.DurationMinutes)).ToString(@"hh\:mm")));
@@ -88,7 +95,7 @@ public class AvailabilityEngine
         var endUtc = TimeZoneInfo.ConvertTimeToUtc(endLocal, tz);
 
         var minHours = profile?.MinHoursBeforeBooking ?? 2;
-        if (startUtc < DateTime.UtcNow.AddHours(minHours))
+        if (startUtc < EarliestStartUtc(minHours))
             throw new SlotConflictException($"Booking must be at least {minHours} hours in the future");
 
         if (time.ToTimeSpan() < WindowStart || endLocal.TimeOfDay > WindowEnd)
@@ -103,6 +110,9 @@ public class AvailabilityEngine
 
         return (startUtc, endUtc);
     }
+
+    private DateTime EarliestStartUtc(int minHours) =>
+        _timeProvider.GetUtcNow().UtcDateTime.AddHours(minHours);
 }
 
 public class SlotConflictException(string message) : Exception(message);

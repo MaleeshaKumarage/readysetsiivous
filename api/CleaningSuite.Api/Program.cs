@@ -63,7 +63,7 @@ builder.Services.AddSingleton(sp =>
     var http = sp.GetRequiredService<IHttpClientFactory>().CreateClient("KeycloakAdmin");
     return new KeycloakAdminClient(
         http,
-        section["ServerUrl"] ?? throw new InvalidOperationException("Auth:Keycloak:ServerUrl missing"),
+        section["AdminServerUrl"] ?? section["ServerUrl"] ?? throw new InvalidOperationException("Auth:Keycloak:ServerUrl missing"),
         section["ProvisionerRealm"] ?? "master",
         section["ProvisionerClientId"] ?? "cleaning-provisioner",
         section["ProvisionerClientSecret"] ?? "",
@@ -71,11 +71,16 @@ builder.Services.AddSingleton(sp =>
         section["AdminPassword"]);
 });
 builder.Services.AddSingleton<IKeycloakProvisioner, KeycloakProvisioner>();
+builder.Services.AddSingleton<CleaningSuite.Application.Employees.IEmployeeIdentityProvider, KeycloakEmployeeIdentityProvider>();
+builder.Services.AddSingleton<CleaningSuite.Application.Employees.IEmployeeIdentityLock, EmployeeIdentityLock>();
+builder.Services.AddScoped<CleaningSuite.Api.Auth.EmployeeAccessGuard>();
 
 builder.Services.AddHttpClient<CleaningSuite.Application.Common.IEmailSender, ResendEmailSender>();
 
 builder.Services.AddSingleton<ITenantStatusCache, CleaningSuite.Api.Tenancy.TenantStatusCache>();
-builder.Services.AddScoped<ITenantContext, HttpTenantContext>();
+builder.Services.AddScoped<HttpTenantContext>();
+builder.Services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<HttpTenantContext>());
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<ITenantSession, TenantSessionFactory>();
 builder.Services.AddScoped<ITenantRegistry, TenantRegistry>();
 builder.Services.AddScoped<ITenantProfileRepository, TenantProfileRepository>();
@@ -96,6 +101,9 @@ builder.Services.AddScoped<CleaningSuite.Application.Companies.IBranchRepository
 builder.Services.AddScoped<CleaningSuite.Application.Shifts.IShiftRepository, CleaningSuite.Infrastructure.Persistence.ShiftRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCycleRepository, CleaningSuite.Infrastructure.Persistence.QualityCycleRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCyclePdfGenerator, CleaningSuite.Infrastructure.QualityCycle.QualityCyclePdfGenerator>();
+builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCycleDispatcher, CleaningSuite.Application.QualityCycle.QualityCycleDispatcher>();
+builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.QualityCycleMonthlyReportService>();
+builder.Services.AddHostedService<CleaningSuite.Api.QualityCycleWorker>();
 builder.Services.AddScoped<CleaningSuite.Application.Entertainment.IEntertainmentRepository, CleaningSuite.Infrastructure.Persistence.EntertainmentRepository>();
 builder.Services.AddSingleton<CleaningSuite.Application.Entertainment.IEntertainmentKeyProtector, CleaningSuite.Infrastructure.Entertainment.EntertainmentKeyProtector>();
 builder.Services.AddHttpClient<CleaningSuite.Application.Entertainment.IGeminiSentenceService, CleaningSuite.Infrastructure.Entertainment.GeminiSentenceService>();
@@ -112,6 +120,7 @@ builder.Services.AddAuthorization(options =>
 {
     options.AddRealmRolePolicies("admin", "employee");
     options.AddRealmRoleAnyPolicy("staff", "admin", "employee");
+    options.AddPlatformPolicy(builder.Configuration);
 });
 builder.Services.AddSingleton<IAuthorizationHandler, RealmRoleHandler>();
 
@@ -139,6 +148,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// Wrap exception translation too so the audit records the final HTTP outcome.
+app.UseMiddleware<PlatformAuditMiddleware>();
 app.UseExceptionHandler();
 app.UseCors("SiteOrigins");
 app.UseOutputCache();
@@ -148,7 +159,7 @@ var uploadsPath = app.Configuration["Uploads:Path"] ?? Path.Combine(app.Environm
 Directory.CreateDirectory(uploadsPath);
 app.UseStaticFiles(new StaticFileOptions
 {
-    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPath),
+    FileProvider = new CleaningSuite.Api.PublicUploadsFileProvider(uploadsPath),
     RequestPath = "/uploads",
 });
 
@@ -256,6 +267,10 @@ public class DefaultExceptionHandler : IExceptionHandler
             CleaningSuite.Application.Bookings.SlotConflictException => (409, "Slot conflict"),
             CleaningSuite.Application.Agreements.AgreementConflictException => (409, "Agreement conflict"),
             CleaningSuite.Application.Shifts.ShiftConflictException => (409, "Shift conflict"),
+            CleaningSuite.Application.QualityCycle.QualityCycleConflictException => (409, "Shift task conflict"),
+            CleaningSuite.Application.Employees.EmployeeIdentityConflictException => (409, "Employee identity conflict"),
+            CleaningSuite.Application.Employees.EmployeeInviteConfigurationException => (503, "Employee invitation configuration incomplete"),
+            CleaningSuite.Application.Employees.EmployeeIdentityProviderException => (502, "Employee login provider unavailable"),
             CleaningSuite.Application.Entertainment.EntertainmentGroupNotFoundException => (404, "Group not found"),
             CleaningSuite.Application.Entertainment.EntertainmentJoinClosedException => (409, "Group has already started"),
             CleaningSuite.Application.Entertainment.EntertainmentGameAlreadyStartedException => (409, "Game has already started"),

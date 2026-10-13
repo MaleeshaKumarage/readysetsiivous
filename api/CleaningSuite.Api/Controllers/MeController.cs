@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using CleaningSuite.Domain.Employees;
 using CleaningSuite.Application.Employees;
 using CleaningSuite.Application.QualityCycle;
 using MediatR;
@@ -30,7 +31,8 @@ public class MeController : ControllerBase
             .Select(c => c.Value)
             .ToList();
 
-        return Ok(new { realm, roles, sub = User.FindFirstValue("sub") });
+        var employee = HttpContext.Items["Employee"] as Employee;
+        return Ok(new { realm, roles, sub = User.FindFirstValue("sub"), employee = employee is null ? null : new { employee.Id, employee.FirstName, employee.LastName, employee.Role, employee.IsActive } });
     }
 
     [HttpGet("shifts")]

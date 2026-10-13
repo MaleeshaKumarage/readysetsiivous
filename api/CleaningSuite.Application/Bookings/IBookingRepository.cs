@@ -4,6 +4,9 @@ namespace CleaningSuite.Application.Bookings;
 
 public interface IBookingRepository
 {
+    /// <summary>Starts a fresh serializable transaction for the complete reservation attempt.</summary>
+    Task BeginReservationAsync(CancellationToken ct = default);
+
     Task<IReadOnlyList<Booking>> FindOverlappingAsync(
         DateTime startUtc, DateTime endUtc, Guid? exceptId = null, CancellationToken ct = default);
 

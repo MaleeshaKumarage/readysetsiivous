@@ -1,6 +1,6 @@
 import { API_URL } from './api';
 import { adminGet, adminSend, adminSendJson } from './adminApi';
-import { token } from './auth';
+import { refreshToken } from './auth';
 
 export interface QualityCycleTemplate {
   id: string;
@@ -33,6 +33,7 @@ export interface QualityCycleForm {
   items: QualityCycleFormItem[];
   photoUrls: string[];
   cleanerNotes?: string | null;
+  taskStatus?: "Pending" | "Recorded";
   isSubmitted: boolean;
   submittedUtc?: string | null;
   startedAtUtc?: string | null;
@@ -40,7 +41,15 @@ export interface QualityCycleForm {
   createdUtc: string;
 }
 
+export interface ReportShare { id: string; token: string; tenantId: string; expiresUtc: string; isRevoked: boolean; year: number; month: number; }
+export function reportShareUrl(share: ReportShare): string {
+  return `${API_URL}/api/v1/public/${encodeURIComponent(share.tenantId)}/quality-cycle/reports/${encodeURIComponent(share.token)}/pdf`;
+}
 export const adminQualityCycle = {
+  createReportShare: (year: number, month: number, shiftId?: string, branchId?: string) =>
+    adminSendJson<ReportShare>('/api/v1/admin/quality-cycle/report-shares', 'POST', { year, month, shiftId, branchId }),
+  listReportShares: () => adminGet<ReportShare[]>('/api/v1/admin/quality-cycle/report-shares'),
+  revokeReportShare: (id: string) => adminSend(`/api/v1/admin/quality-cycle/report-shares/${id}`, 'DELETE'),
   listTemplates: (companyId?: string, branchId?: string) => {
     const query = new URLSearchParams();
     if (companyId) query.set('companyId', companyId);
@@ -64,21 +73,15 @@ export const adminQualityCycle = {
     return adminGet<QualityCycleForm[]>(`/api/v1/admin/quality-cycle/forms${suffix ? `?${suffix}` : ''}`);
   },
 
-  downloadSummaryPdf: async (shiftId: string, year: number, month: number): Promise<void> => {
-    const t = token();
-    const url = `${API_URL}/api/v1/admin/quality-cycle/summary-pdf?shiftId=${shiftId}&year=${year}&month=${month}`;
-    const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${t}` },
-    });
-    if (!response.ok) return;
-    const blob = await response.blob();
-    const blobUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = blobUrl;
-    a.download = `QualityCycle_Summary_${shiftId}_${year}_${month.toString().padStart(2, '0')}.pdf`;
-    a.click();
-    URL.revokeObjectURL(blobUrl);
+  monthlyReport: (year: number, month: number, companyId?: string, branchId?: string, shiftId?: string) => {
+    const query = new URLSearchParams({ year: String(year), month: String(month) });
+    if (companyId) query.set('companyId', companyId);
+    if (branchId) query.set('branchId', branchId);
+    if (shiftId) query.set('shiftId', shiftId);
+    return adminGet<MonthlyReport>(`/api/v1/admin/quality-cycle/monthly-summary?${query}`);
   },
+  downloadSummaryPdf: (shiftId: string, year: number, month: number) => downloadReport('summary-pdf', 'shiftId', shiftId, year, month),
+  downloadBranchPdf: (branchId: string, year: number, month: number) => downloadReport('branch-summary-pdf', 'branchId', branchId, year, month),
 };
 
 export const publicQualityCycle = {
@@ -103,3 +106,20 @@ export const publicQualityCycle = {
     return (await response.json()) as QualityCycleForm;
   },
 };
+
+export interface ShiftReport {
+  shiftId: string; shiftName: string; companyId: string; companyName: string; branchId: string; branchName: string;
+  scheduledOccurrences: number; scheduledHours: number; completedOccurrences: number; missingOccurrences: number;
+  pendingOccurrences: number; totalTasks: number; submittedTasks: number; missingTasks: number; pendingTasks: number; items: { itemText: string; daysPerformed: number; recordedOccurrences: number; recordedDates: string[] }[];
+}
+export interface MonthlyReport { year: number; month: number; timeZoneId: string; generatedUtc: string; shifts: ShiftReport[]; }
+async function downloadReport(route: string, key: string, id: string, year: number, month: number): Promise<void> {
+  const jwt = await refreshToken();
+  if (!jwt) throw new Error('Please sign in again.');
+  const query = new URLSearchParams({ [key]: id, year: String(year), month: String(month) });
+  const response = await fetch(`${API_URL}/api/v1/admin/quality-cycle/${route}?${query}`, { headers: { Authorization: `Bearer ${jwt}` } });
+  if (!response.ok) throw new Error(`Report download failed (${response.status}).`);
+  const url = URL.createObjectURL(await response.blob());
+  const a = document.createElement('a'); a.href = url; a.download = `QualityCycle_${key === 'shiftId' ? 'Summary' : 'Branch'}_${id}_${year}_${String(month).padStart(2, '0')}.pdf`; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

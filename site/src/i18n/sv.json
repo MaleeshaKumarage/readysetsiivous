@@ -372,6 +372,8 @@
     "date": "Välj datum",
     "loadingSlots": "Laddar lediga tider…",
     "noSlots": "Inga lediga tider den här dagen.",
+    "slotsError": "Det gick inte att ladda lediga tider. Försök igen.",
+    "retrySlots": "Försök igen",
     "at": "kl.",
     "detailsTitle": "Dina uppgifter",
     "name": "Namn",

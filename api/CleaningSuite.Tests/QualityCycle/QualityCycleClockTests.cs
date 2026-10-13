@@ -19,14 +19,19 @@ public class QualityCycleClockTests
             new ShiftSchedule { Type = ShiftScheduleType.DailySameTime, DailyStart = new TimeSpan(8, 0, 0), DailyEnd = new TimeSpan(16, 0, 0) },
             null, null, null, templateId);
 
+    private static ShiftAssignment ExistingAssignment(Guid shift, Guid employee) { var assignment = ShiftAssignment.Create(shift, employee, null); assignment.AssignedAtUtc = FromUtc.AddDays(-1); return assignment; }
+
     private static Employee NewEmployee() =>
         new Employee { Id = Guid.NewGuid(), Email = "e@x.fi", FirstName = "A", LastName = "B", IsActive = true };
 
     private static QualityCycleTemplate NewTemplate() =>
         QualityCycleTemplate.Create("T", new List<string> { "Item1" }, null, null, null);
 
-    [Fact]
-    public async Task Start_CreatesFormAndSetsStartedAt()
+    [Theory]
+    [InlineData(DateTimeKind.Utc)]
+    [InlineData(DateTimeKind.Local)]
+    [InlineData(DateTimeKind.Unspecified)]
+    public async Task Start_CreatesFormAndSetsStartedAt(DateTimeKind kind)
     {
         var template = NewTemplate();
         var shift = NewShift(template.Id);
@@ -39,17 +44,23 @@ public class QualityCycleClockTests
         shiftRepo.Setup(r => r.GetAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
         empRepo.Setup(r => r.GetByIdAsync(emp.Id, It.IsAny<CancellationToken>())).ReturnsAsync(emp);
         shiftRepo.Setup(r => r.GetAssignmentAsync(shift.Id, emp.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ShiftAssignment.Create(shift.Id, emp.Id, null));
+            .ReturnsAsync(ExistingAssignment(shift.Id, emp.Id));
         qcRepo.Setup(r => r.GetTemplateAsync(template.Id, It.IsAny<CancellationToken>())).ReturnsAsync(template);
         qcRepo.Setup(r => r.GetFormByShiftOccurrenceAsync(shift.Id, emp.Id, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((QualityCycleForm?)null);
 
         var handler = new QualityCycleHandlers.StartQualityCycleFormCommandHandler(shiftRepo.Object, empRepo.Object, qcRepo.Object);
-        var result = await handler.Handle(new StartQualityCycleFormCommand(shift.Id, emp.Id, FromUtc, FromUtc.AddHours(8)), CancellationToken.None);
+        qcRepo.Setup(r => r.TryCreateFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        var start = kind == DateTimeKind.Local ? FromUtc.AddHours(8).ToLocalTime() : DateTime.SpecifyKind(FromUtc.AddHours(8), kind);
+        var end = kind == DateTimeKind.Local ? FromUtc.AddHours(16).ToLocalTime() : DateTime.SpecifyKind(FromUtc.AddHours(16), kind);
+        var result = await handler.Handle(new StartQualityCycleFormCommand(shift.Id, emp.Id, start, end), CancellationToken.None);
 
         Assert.NotNull(result.StartedAtUtc);
         Assert.False(result.IsSubmitted);
-        qcRepo.Verify(r => r.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Once);
+        qcRepo.Verify(r => r.TryCreateFormAsync(It.Is<QualityCycleForm>(f => f.Id == QualityCycleDispatcher.TaskId(shift.Id, emp.Id, FromUtc.AddHours(8))), It.IsAny<CancellationToken>()), Times.Once);
+        qcRepo.Verify(r => r.GetFormByShiftOccurrenceAsync(shift.Id, emp.Id, It.Is<DateTime>(t => t.Kind == DateTimeKind.Utc && t == FromUtc.AddHours(8)), It.IsAny<CancellationToken>()), Times.Once);
+        qcRepo.Verify(r => r.TryCreateFormAsync(It.Is<QualityCycleForm>(f => f.ShiftOccurrenceUtc.Kind == DateTimeKind.Utc && f.ShiftOccurrenceUtc == FromUtc.AddHours(8)), It.IsAny<CancellationToken>()), Times.Once);
+        qcRepo.Verify(r => r.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -58,7 +69,7 @@ public class QualityCycleClockTests
         var template = NewTemplate();
         var shift = NewShift(template.Id);
         var emp = NewEmployee();
-        var existing = QualityCycleForm.Create(shift.Id, shift.Name, emp.Id, "A B", template.Id, template.Title, FromUtc, template.Items, FromUtc.AddHours(8));
+        var existing = QualityCycleForm.Create(shift.Id, shift.Name, emp.Id, "A B", template.Id, template.Title, FromUtc.AddHours(8), template.Items, FromUtc.AddHours(16));
         existing.Start();
 
         var shiftRepo = new Mock<IShiftRepository>();
@@ -68,13 +79,13 @@ public class QualityCycleClockTests
         shiftRepo.Setup(r => r.GetAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
         empRepo.Setup(r => r.GetByIdAsync(emp.Id, It.IsAny<CancellationToken>())).ReturnsAsync(emp);
         shiftRepo.Setup(r => r.GetAssignmentAsync(shift.Id, emp.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ShiftAssignment.Create(shift.Id, emp.Id, null));
+            .ReturnsAsync(ExistingAssignment(shift.Id, emp.Id));
         qcRepo.Setup(r => r.GetTemplateAsync(template.Id, It.IsAny<CancellationToken>())).ReturnsAsync(template);
         qcRepo.Setup(r => r.GetFormByShiftOccurrenceAsync(shift.Id, emp.Id, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(existing);
 
         var handler = new QualityCycleHandlers.StartQualityCycleFormCommandHandler(shiftRepo.Object, empRepo.Object, qcRepo.Object);
-        var result = await handler.Handle(new StartQualityCycleFormCommand(shift.Id, emp.Id, FromUtc, FromUtc.AddHours(8)), CancellationToken.None);
+        var result = await handler.Handle(new StartQualityCycleFormCommand(shift.Id, emp.Id, FromUtc.AddHours(8), FromUtc.AddHours(16)), CancellationToken.None);
 
         Assert.Equal(existing.StartedAtUtc, result.StartedAtUtc);
     }
@@ -98,7 +109,7 @@ public class QualityCycleClockTests
 
         var handler = new QualityCycleHandlers.StartQualityCycleFormCommandHandler(shiftRepo.Object, empRepo.Object, qcRepo.Object);
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
-            handler.Handle(new StartQualityCycleFormCommand(shift.Id, emp.Id, FromUtc, FromUtc.AddHours(8)), CancellationToken.None));
+            handler.Handle(new StartQualityCycleFormCommand(shift.Id, emp.Id, FromUtc.AddHours(8), FromUtc.AddHours(16)), CancellationToken.None));
     }
 
     [Fact]
@@ -107,7 +118,7 @@ public class QualityCycleClockTests
         var template = NewTemplate();
         var shift = NewShift(template.Id);
         var emp = NewEmployee();
-        var form = QualityCycleForm.Create(shift.Id, shift.Name, emp.Id, "A B", template.Id, template.Title, FromUtc, template.Items, FromUtc.AddHours(8));
+        var form = QualityCycleForm.Create(shift.Id, shift.Name, emp.Id, "A B", template.Id, template.Title, FromUtc.AddHours(8), template.Items, FromUtc.AddHours(16));
 
         var qcRepo = new Mock<IQualityCycleRepository>();
         qcRepo.Setup(r => r.GetFormAsync(form.Id, It.IsAny<CancellationToken>())).ReturnsAsync(form);
@@ -127,7 +138,7 @@ public class QualityCycleClockTests
         var shift = NewShift(template.Id);
         var emp = NewEmployee();
         var other = Guid.NewGuid();
-        var form = QualityCycleForm.Create(shift.Id, shift.Name, emp.Id, "A B", template.Id, template.Title, FromUtc, template.Items, FromUtc.AddHours(8));
+        var form = QualityCycleForm.Create(shift.Id, shift.Name, emp.Id, "A B", template.Id, template.Title, FromUtc.AddHours(8), template.Items, FromUtc.AddHours(16));
 
         var qcRepo = new Mock<IQualityCycleRepository>();
         qcRepo.Setup(r => r.GetFormAsync(form.Id, It.IsAny<CancellationToken>())).ReturnsAsync(form);
@@ -143,8 +154,8 @@ public class QualityCycleClockTests
         var template = NewTemplate();
         var shift = NewShift(template.Id);
         var emp = NewEmployee();
-        var assignment = ShiftAssignment.Create(shift.Id, emp.Id, null);
-        var form = QualityCycleForm.Create(shift.Id, shift.Name, emp.Id, "A B", template.Id, template.Title, FromUtc, template.Items, FromUtc.AddHours(8));
+        var assignment = ShiftAssignment.Create(shift.Id, emp.Id, null); assignment.AssignedAtUtc = FromUtc.AddDays(-1);
+        var form = QualityCycleForm.Create(shift.Id, shift.Name, emp.Id, "A B", template.Id, template.Title, FromUtc.AddHours(8), template.Items, FromUtc.AddHours(16));
 
         var shiftRepo = new Mock<IShiftRepository>();
         var qcRepo = new Mock<IQualityCycleRepository>();

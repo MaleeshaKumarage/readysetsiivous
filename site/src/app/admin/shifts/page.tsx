@@ -9,6 +9,7 @@ import {
   adminShifts, adminCompanies, adminEmployees,
   type Shift, type Company, type Branch, type Employee, type ShiftAssignment,
 } from '@/lib/adminApi';
+import { isAdmin } from '@/lib/auth';
 import { adminQualityCycle, type QualityCycleTemplate } from '@/lib/qualityCycleApi';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -42,6 +43,11 @@ export default function ShiftsAdminPage() {
   const [templates, setTemplates] = useState<QualityCycleTemplate[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  const [templateShift, setTemplateShift] = useState<Shift | null>(null);
+  const [assignedTemplate, setAssignedTemplate] = useState<string | null>(null);
+  const [templateError, setTemplateError] = useState('');
+  const [templateSaving, setTemplateSaving] = useState(false);
 
   const [assignOpen, setAssignOpen] = useState<string | null>(null);
   const [assignments, setAssignments] = useState<Record<string, ShiftAssignment[]>>({});
@@ -157,6 +163,7 @@ export default function ShiftsAdminPage() {
                     <Table.Td>
                       <Group gap={6} wrap="nowrap">
                         <Button size="xs" variant="light" onClick={() => openAssign(s.id)}>Employees</Button>
+                        {isAdmin() && s.isActive && <Button size="xs" variant="light" onClick={() => { setTemplateShift(s); setAssignedTemplate(s.qualityCycleTemplateId ?? null); setTemplateError(''); }}>Checklist template</Button>}
                         {s.isActive && <Button size="xs" variant="subtle" color="red" onClick={() => deactivate(s.id)}>Deactivate</Button>}
                       </Group>
                     </Table.Td>
@@ -198,10 +205,28 @@ export default function ShiftsAdminPage() {
         </Table.ScrollContainer>
       )}
 
+      <Modal opened={Boolean(templateShift)} onClose={() => setTemplateShift(null)} title="Assign checklist template">
+        <Stack>
+          <Text>{templateShift?.name}</Text>
+          <Select label="Checklist template" placeholder="None" clearable value={assignedTemplate} onChange={setAssignedTemplate}
+            data={templates.filter(t => (!t.companyId || t.companyId === templateShift?.companyId) && (!t.branchId || t.branchId === templateShift?.branchId)).map(t => ({ value: t.id, label: t.title }))} />
+          <Text size="sm">Applies to upcoming occurrences and the current occurrence if it has no checklist yet. Started and submitted checklists keep their original items.</Text>
+          {templateError && <Text c="red" role="alert">{templateError}</Text>}
+          <Button loading={templateSaving} onClick={async () => {
+            if (!templateShift) return;
+            setTemplateSaving(true); setTemplateError('');
+            try { const result = await adminShifts.setQualityCycleTemplate(templateShift.id, assignedTemplate);
+              if (!result) { setTemplateError('Could not save the template assignment. Please retry.'); return; }
+              setTemplateShift(null); await load();
+            } catch { setTemplateError('Could not save the template assignment. Please retry.'); }
+            finally { setTemplateSaving(false); }
+          }}>Save template assignment</Button>
+        </Stack>
+      </Modal>
       <Modal opened={modalOpen} onClose={closeModal} title="Add shift" size="lg" radius="md">
         <Stack gap="sm">
-          <Select label="Company" data={companies.map((c) => ({ value: c.id, label: c.name }))} value={companyId} onChange={(v) => { setCompanyId(v); setBranchId(null); }} searchable />
-          <Select label="Branch" data={branches.map((b) => ({ value: b.id, label: b.name }))} value={branchId} onChange={setBranchId} searchable disabled={!companyId} />
+          <Select label="Company" data={companies.map((c) => ({ value: c.id, label: c.name }))} value={companyId} onChange={(v) => { setCompanyId(v); setBranchId(null); setQualityCycleTemplateId(null); }} searchable />
+          <Select label="Branch" data={branches.map((b) => ({ value: b.id, label: b.name }))} value={branchId} onChange={v => { setBranchId(v); setQualityCycleTemplateId(null); }} searchable disabled={!companyId} />
           <TextInput label="Name" required value={name} onChange={(e) => setName(e.target.value)} />
           <Select label="Schedule" data={SCHEDULE_TYPES} value={scheduleType} onChange={(v) => setScheduleType(v ?? '0')} />
 
@@ -233,7 +258,7 @@ export default function ShiftsAdminPage() {
             label="Quality cycle template"
             placeholder="None"
             clearable
-            data={templates.map((t) => ({ value: t.id, label: t.title }))}
+            data={templates.filter(t => (!t.companyId || t.companyId === companyId) && (!t.branchId || t.branchId === branchId)).map((t) => ({ value: t.id, label: t.title }))}
             value={qualityCycleTemplateId}
             onChange={setQualityCycleTemplateId}
             searchable

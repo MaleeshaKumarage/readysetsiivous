@@ -50,7 +50,7 @@ public class EmployeesAdminController : ControllerBase
         return NoContent();
     }
 
-    /// <summary>Creates the Keycloak user and returns the temporary password once.</summary>
+    /// <summary>Links the employee login and sends a secure Keycloak account-setup email; never returns passwords.</summary>
     [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost("{id:guid}/invite")]
     public async Task<IActionResult> Invite(Guid id, CancellationToken ct)

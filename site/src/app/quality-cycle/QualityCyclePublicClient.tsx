@@ -21,7 +21,7 @@ import { Button } from '@/ds/Button';
 export default function QualityCyclePublicClient() {
   const searchParams = useSearchParams();
   const token = searchParams.get('token') || '';
-  const tenantSlug = process.env.NEXT_PUBLIC_TENANT_SLUG || 'readysetsiivous';
+  const tenantSlug = searchParams.get('tenant') || process.env.NEXT_PUBLIC_TENANT_SLUG || 'readysetsiivous';
 
   const [form, setForm] = useState<QualityCycleForm | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,7 +40,7 @@ export default function QualityCyclePublicClient() {
       setLoading(false);
       setError('Missing Quality Cycle Form token.');
     }
-  }, [token]);
+  }, [token, tenantSlug]);
 
   async function loadForm() {
     setLoading(true);
@@ -65,9 +65,7 @@ export default function QualityCyclePublicClient() {
   }
 
   function handleToggleItem(index: number) {
-    const updated = [...items];
-    updated[index].isChecked = !updated[index].isChecked;
-    setItems(updated);
+    setItems(current => current.map((item, i) => i === index ? { ...item, isChecked: !item.isChecked } : item));
   }
 
   function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -91,6 +89,9 @@ export default function QualityCyclePublicClient() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (form && new Date(form.shiftOccurrenceUtc).getTime() > Date.now()) {
+      setError('This task can be completed after the shift starts.'); return;
+    }
     setSubmitting(true);
     setError(null);
 
@@ -104,6 +105,7 @@ export default function QualityCyclePublicClient() {
       );
 
       if (result) {
+        setForm(result);
         setSubmitted(true);
       } else {
         setError('Failed to submit form. Please try again.');
@@ -205,15 +207,14 @@ export default function QualityCyclePublicClient() {
                   Checklist Items
                 </h2>
                 <span className="text-xs font-medium text-brand-700 dark:text-brand-400 bg-brand-50 dark:bg-brand-950 px-2.5 py-1 rounded-full">
-                  {checkedCount} / {items.length} Completed
+                  {checkedCount} / {items.length} Selected
                 </span>
               </div>
 
               <div className="space-y-2.5">
                 {items.map((item, index) => (
-                  <div
+                  <label
                     key={index}
-                    onClick={() => handleToggleItem(index)}
                     className={`flex items-center p-3.5 rounded-xl border transition-all cursor-pointer select-none ${
                       item.isChecked
                         ? 'bg-brand-50/60 dark:bg-brand-950/30 border-brand-300 dark:border-brand-800 text-brand-950 dark:text-brand-200'
@@ -223,7 +224,8 @@ export default function QualityCyclePublicClient() {
                     <input
                       type="checkbox"
                       checked={item.isChecked}
-                      onChange={() => {}}
+                      aria-label={item.itemText}
+                      onChange={() => handleToggleItem(index)}
                       className="h-5 w-5 rounded border-gray-300 text-accent-900 focus:ring-brand-500 cursor-pointer"
                     />
                     <span
@@ -233,7 +235,7 @@ export default function QualityCyclePublicClient() {
                     >
                       {item.itemText}
                     </span>
-                  </div>
+                  </label>
                 ))}
               </div>
             </div>
@@ -283,6 +285,7 @@ export default function QualityCyclePublicClient() {
                 Notes / Comments (Optional)
               </label>
               <textarea
+                aria-label="Notes / Comments"
                 value={cleanerNotes}
                 onChange={(e) => setCleanerNotes(e.target.value)}
                 placeholder="Any additional notes or observations..."
@@ -291,13 +294,14 @@ export default function QualityCyclePublicClient() {
               />
             </div>
 
+            {form && new Date(form.shiftOccurrenceUtc).getTime() > Date.now() && <p role="status">This task becomes available when the shift starts.</p>}
             {/* Submit Button */}
             <Button
               type="submit"
               variant="primary"
               size="lg"
               fullWidth
-              disabled={submitting}
+              disabled={submitting || Boolean(form && new Date(form.shiftOccurrenceUtc).getTime() > Date.now())}
               className="mt-4"
             >
               {submitting ? (

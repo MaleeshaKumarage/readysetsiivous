@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Route } from '@playwright/test';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -7,7 +7,7 @@ const CORS_HEADERS = {
 };
 
 function mockCreateGroup(page: any, result: any) {
-  return page.route(/\/api\/v1\/entertainment\/groups$/, async (route) => {
+  return page.route(/\/api\/v1\/entertainment\/groups$/, async (route: Route) => {
     if (route.request().method() === 'OPTIONS') {
       return route.fulfill({ status: 200, headers: CORS_HEADERS });
     }

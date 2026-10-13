@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge } from '@mantine/core';
+import { isAdmin } from '@/lib/auth';
 import { Plus } from 'lucide-react';
 import { adminEmployees, type Employee } from '@/lib/adminApi';
 
@@ -14,6 +15,9 @@ export default function EmployeesAdminPage() {
   const [form, setForm] = useState({ email: '', firstName: '', lastName: '', phone: '', role: 'employee' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [inviteBusy, setInviteBusy] = useState<string | null>(null);
+  const [inviteMessage, setInviteMessage] = useState('');
+  const [inviteFailure, setInviteFailure] = useState('');
 
   const load = () => adminEmployees.list().then((r) => { if (r) setEmployees(r); setLoading(false); });
   useEffect(() => { load(); }, []);
@@ -44,32 +48,37 @@ export default function EmployeesAdminPage() {
     setModalOpen(false); await load();
   };
 
-  const deactivate = async (id: string) => { await adminEmployees.deactivate(id); await load(); };
-
-  const invite = async (id: string) => {
-    await adminEmployees.invite(id);
-    await load();
+  const deactivate = async (id: string) => {
+    setInviteFailure('');
+    try { if (!await adminEmployees.deactivate(id)) setInviteFailure('Employee access update could not be confirmed. Reload and retry or contact an administrator.'); await load(); }
+    catch { setInviteFailure('Employee access update could not be confirmed. Please retry.'); }
   };
 
-  const registrationBadge = (e: Employee) => {
-    if (e.keycloakUserId) return <Badge color="green">Invited</Badge>;
-    return <Badge color="gray">Not invited</Badge>;
+  const invite = async (employee: Employee) => {
+    setInviteBusy(employee.id); setInviteMessage(''); setInviteFailure('');
+    try {
+      const result = await adminEmployees.invite(employee.id);
+      setInviteMessage(result.status === 'AlreadySent' ? `A setup email was sent recently to ${result.email}. Please check the inbox.` : `Account setup email sent to ${result.email}.`);
+      await load();
+    } catch (error) { setInviteFailure(error instanceof Error ? error.message : 'Could not send the setup email. Please retry.'); }
+    finally { setInviteBusy(null); }
   };
-
   return (
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
         <Title order={2}>Employees</Title>
-        <Button leftSection={<Plus size={16} />} onClick={() => setModalOpen(true)}>Add employee</Button>
+        {isAdmin() && <Button leftSection={<Plus size={16} />} onClick={() => setModalOpen(true)}>Add employee</Button>}
       </Group>
 
+      {inviteMessage && <Text role="status" c="green" mb="sm">{inviteMessage}</Text>}
+      {inviteFailure && <Text role="alert" c="red" mb="sm">{inviteFailure}</Text>}
       {loading ? <Loader /> : employees.length === 0 ? (
         <Text c="dimmed">No employees yet.</Text>
       ) : (
         <Table.ScrollContainer minWidth={550}>
           <Table striped highlightOnHover withTableBorder>
             <Table.Thead>
-              <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Email</Table.Th><Table.Th>Role</Table.Th><Table.Th>Status</Table.Th><Table.Th>Registration</Table.Th><Table.Th w={200}></Table.Th></Table.Tr>
+              <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Email</Table.Th><Table.Th>Role</Table.Th><Table.Th>Status</Table.Th><Table.Th>Registration</Table.Th><Table.Th w={120}></Table.Th></Table.Tr>
             </Table.Thead>
             <Table.Tbody>
               {employees.map((e) => (
@@ -78,17 +87,11 @@ export default function EmployeesAdminPage() {
                   <Table.Td>{e.email}</Table.Td>
                   <Table.Td>{e.role}</Table.Td>
                   <Table.Td>{e.isActive ? <Badge color="green">Active</Badge> : <Badge color="gray">Inactive</Badge>}</Table.Td>
-                  <Table.Td>{registrationBadge(e)}</Table.Td>
-                  <Table.Td>
-                    {e.isActive && (
-                      <Group gap={6} wrap="nowrap">
-                        <Button size="xs" variant="light" onClick={() => invite(e.id)}>
-                          {e.keycloakUserId ? 'Resend invite' : 'Invite'}
-                        </Button>
-                        <Button size="xs" variant="subtle" color="red" onClick={() => deactivate(e.id)}>Deactivate</Button>
-                      </Group>
-                    )}
-                  </Table.Td>
+                  <Table.Td>{e.keycloakUserId ? <Badge color="green">Invited</Badge> : <Badge color="gray">Not invited</Badge>}</Table.Td>
+                  <Table.Td><Group gap="xs">
+                    {isAdmin() && e.isActive && <Button size="xs" variant="light" loading={inviteBusy === e.id} disabled={Boolean(inviteBusy && inviteBusy !== e.id)} onClick={() => invite(e)}>{e.keycloakUserId ? 'Resend setup email' : 'Invite'}</Button>}
+                    {isAdmin() && e.isActive && <Button size="xs" variant="subtle" color="red" onClick={() => deactivate(e.id)}>Deactivate</Button>}
+                  </Group></Table.Td>
                 </Table.Tr>
               ))}
             </Table.Tbody>

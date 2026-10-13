@@ -372,6 +372,8 @@
     "date": "Pick a date",
     "loadingSlots": "Loading available times…",
     "noSlots": "No available times for this date.",
+    "slotsError": "We couldn't load available times. Please try again.",
+    "retrySlots": "Try again",
     "at": "at",
     "detailsTitle": "Your details",
     "name": "Name",

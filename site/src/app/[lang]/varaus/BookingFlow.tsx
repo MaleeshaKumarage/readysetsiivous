@@ -20,6 +20,8 @@ export default function BookingFlow({ lang }: { lang: Language }) {
   const [service, setService] = useState<PublicService | null>(null);
   const [date, setDate] = useState('');
   const [slots, setSlots] = useState<AvailabilitySlot[] | null>(null);
+  const [slotsError, setSlotsError] = useState(false);
+  const [slotsRetry, setSlotsRetry] = useState(0);
   const [slot, setSlot] = useState('');
   const [form, setForm] = useState({
     customerName: '',
@@ -42,11 +44,18 @@ export default function BookingFlow({ lang }: { lang: Language }) {
   }, [lang]);
 
   useEffect(() => {
+    let cancelled = false;
     if (step === 'time' && service && date) {
       setSlots(null);
-      fetchAvailability(date, service.id).then(setSlots);
+      setSlotsError(false);
+      fetchAvailability(date, service.id).then((data) => {
+        if (cancelled) return;
+        setSlots(data);
+        setSlotsError(data === null);
+      });
     }
-  }, [step, service, date]);
+    return () => { cancelled = true; };
+  }, [step, service, date, slotsRetry]);
 
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
@@ -138,7 +147,18 @@ export default function BookingFlow({ lang }: { lang: Language }) {
           </label>
           {date && (
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {slots === null ? (
+              {slotsError ? (
+                <div className="col-span-full">
+                  <p role="alert" className="mb-3 text-red-600 dark:text-red-400">{t(lang, 'varaus.slotsError')}</p>
+                  <button
+                    type="button"
+                    onClick={() => { setSlotsError(false); setSlots(null); setSlotsRetry((value) => value + 1); }}
+                    className="rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-2 text-sm"
+                  >
+                    {t(lang, 'varaus.retrySlots')}
+                  </button>
+                </div>
+              ) : slots === null ? (
                 <p className="col-span-full text-gray-500 dark:text-gray-400">{t(lang, 'varaus.loadingSlots')}</p>
               ) : slots.length === 0 ? (
                 <p className="col-span-full text-gray-500 dark:text-gray-400">{t(lang, 'varaus.noSlots')}</p>

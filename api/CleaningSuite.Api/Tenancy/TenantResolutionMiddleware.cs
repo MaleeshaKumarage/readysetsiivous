@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using CleaningSuite.Api.Auth;
 using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Tenants;
 using CleaningSuite.Infrastructure.Auth;
@@ -14,6 +15,7 @@ public class TenantResolutionMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly string _serverUrl;
+    private readonly string _provisionerRealm;
     private readonly ITenantStatusCache _statusCache;
     private readonly ILogger<TenantResolutionMiddleware> _logger;
 
@@ -25,11 +27,12 @@ public class TenantResolutionMiddleware
     {
         _next = next;
         _serverUrl = configuration["Auth:Keycloak:ServerUrl"]!.TrimEnd('/');
+        _provisionerRealm = configuration["Auth:Keycloak:ProvisionerRealm"] ?? "master";
         _statusCache = statusCache;
         _logger = logger;
     }
 
-    public async Task InvokeAsync(HttpContext context, ITenantRegistry registry)
+    public async Task InvokeAsync(HttpContext context, ITenantRegistry registry, EmployeeAccessGuard employeeAccess)
     {
         var path = context.Request.Path.Value ?? "";
         var tenantId = "";
@@ -47,6 +50,12 @@ public class TenantResolutionMiddleware
             }
             else
             {
+                if (realm == _provisionerRealm && (path.Contains("/admin/", StringComparison.OrdinalIgnoreCase)
+                    || path.StartsWith("/api/v1/me", StringComparison.OrdinalIgnoreCase)))
+                {
+                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    return;
+                }
                 tenantId = realm;
                 if (RequiresActiveTenant(path)
                     && !await IsActiveAsync(registry, realm, context.RequestAborted))
@@ -68,13 +77,15 @@ public class TenantResolutionMiddleware
         }
 
         context.Items["TenantId"] = tenantId;
+        if (!await employeeAccess.AllowAsync(context)) return;
         await _next(context);
     }
 
     /// <summary>Admin and public endpoints must resolve to a registered Active tenant.</summary>
     private static bool RequiresActiveTenant(string path) =>
         path.Contains("/admin/", StringComparison.OrdinalIgnoreCase)
-        || path.Contains("/public/", StringComparison.OrdinalIgnoreCase);
+        || path.Contains("/public/", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWith("/api/v1/me", StringComparison.OrdinalIgnoreCase);
 
     private static bool TryGetPublicSlug(string path, out string slug)
     {

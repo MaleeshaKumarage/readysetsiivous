@@ -7,6 +7,64 @@ namespace CleaningSuite.Infrastructure.QualityCycle;
 
 public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
 {
+    public byte[] GenerateMonthlyReportPdf(QualityCycleMonthlyReport report)
+    {
+        var zone = TimeZoneConverter.TZConvert.GetTimeZoneInfo(report.TimeZoneId);
+        var document = Document.Create(container =>
+        {
+            if (report.Shifts.Count == 0)
+            {
+                container.Page(page => { page.Margin(36); page.Content().Text("No scheduled checklist shifts in this month."); });
+            }
+            foreach (var shift in report.Shifts)
+            {
+                container.Page(page =>
+                {
+                    page.Size(PageSizes.A4); page.Margin(36);
+                    page.DefaultTextStyle(x => x.FontSize(10).FontFamily(Fonts.Arial));
+                    page.Header().Column(col =>
+                    {
+                        col.Item().Text("Quality Cycle Monthly Report").FontSize(18).Bold();
+                        col.Item().Text($"{report.Year}-{report.Month:D2} | {report.TimeZoneId}");
+                        col.Item().Text($"{shift.CompanyName} / {shift.BranchName} / {shift.ShiftName}").SemiBold();
+                    });
+                    page.Content().PaddingVertical(15).Column(col =>
+                    {
+                        col.Item().Text($"Scheduled occurrences: {shift.ScheduledOccurrences} | Scheduled hours: {shift.ScheduledHours:0.##}");
+                        col.Item().Text($"Recorded occurrences: {shift.CompletedOccurrences} | Missing: {shift.MissingOccurrences} | Pending: {shift.PendingOccurrences}");
+                        col.Item().Text($"Cleaner tasks: {shift.SubmittedTasks}/{shift.TotalTasks} submitted");
+                        col.Item().Text("Scheduled hours are not recorded worked hours. Missing includes scheduled work without a checklist submission.").FontSize(8);
+                        col.Item().PaddingTop(12).Table(table =>
+                        {
+                            table.ColumnsDefinition(c => { c.RelativeColumn(2); c.RelativeColumn(); c.RelativeColumn(); c.RelativeColumn(2); });
+                            table.Header(h => { h.Cell().Text("Date / start").Bold(); h.Cell().Text("Hours").Bold(); h.Cell().Text("Tasks").Bold(); h.Cell().Text("Status").Bold(); });
+                            foreach (var occurrence in shift.Occurrences)
+                            {
+                                var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(occurrence.StartUtc, DateTimeKind.Utc), zone);
+                                table.Cell().PaddingVertical(3).Text(local.ToString("yyyy-MM-dd HH:mm"));
+                                table.Cell().Text(((occurrence.EndUtc - occurrence.StartUtc).TotalHours).ToString("0.##"));
+                                table.Cell().Text($"{occurrence.SubmittedTasks}/{occurrence.ExpectedTasks}");
+                                table.Cell().Text(occurrence.Status);
+                            }
+                        });
+                        col.Item().PaddingTop(12).Text("Activities performed during the month").SemiBold();
+                        col.Item().Table(table => {
+                            table.ColumnsDefinition(c => { c.RelativeColumn(3); c.RelativeColumn(); c.RelativeColumn(); });
+                            table.Header(h => { h.Cell().Text("Activity").SemiBold(); h.Cell().Text("Days").SemiBold(); h.Cell().Text("Occurrences").SemiBold(); });
+                            foreach (var item in shift.Items) {
+                                table.Cell().PaddingVertical(4).Text(item.ItemText);
+                                table.Cell().Text(item.DaysPerformed.ToString());
+                                table.Cell().Text(item.RecordedOccurrences.ToString());
+                            }
+                        });
+                    });
+                    page.Footer().AlignCenter().Text(x => { x.Span($"Generated {report.GeneratedUtc:yyyy-MM-dd HH:mm} UTC | Page "); x.CurrentPageNumber(); });
+                });
+            }
+        });
+        return document.GeneratePdf();
+    }
+
     static QualityCyclePdfGenerator()
     {
         QuestPDF.Settings.License = LicenseType.Community;

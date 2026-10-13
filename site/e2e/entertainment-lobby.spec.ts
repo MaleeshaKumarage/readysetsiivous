@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Route } from '@playwright/test';
 import { CORS_HEADERS, mockEntertainmentSignalR, hubConnected } from './entertainment-helpers';
 
 const LOBBY = {
@@ -11,7 +11,7 @@ const LOBBY = {
 };
 
 function mockLobby(page: any, lobby: any = LOBBY) {
-  return page.route(/\/api\/v1\/entertainment\/groups\/group-1\/lobby$/, async (route) => {
+  return page.route(/\/api\/v1\/entertainment\/groups\/group-1\/lobby$/, async (route: Route) => {
     if (route.request().method() === 'OPTIONS') {
       return route.fulfill({ status: 200, headers: CORS_HEADERS });
     }
@@ -21,7 +21,7 @@ function mockLobby(page: any, lobby: any = LOBBY) {
 
 test.describe('Entertainment — Join + Lobby', () => {
   test('joiner joins with key and sees the lobby player list', async ({ page }) => {
-    await page.route(/\/api\/v1\/entertainment\/groups\/ABC234\/join$/, async (route) => {
+    await page.route(/\/api\/v1\/entertainment\/groups\/ABC234\/join$/, async (route: Route) => {
       if (route.request().method() === 'OPTIONS') {
         return route.fulfill({ status: 200, headers: CORS_HEADERS });
       }
@@ -55,7 +55,7 @@ test.describe('Entertainment — Join + Lobby', () => {
   });
 
   test('creator lobby shows Host tag and Start button', async ({ page }) => {
-    await page.route(/\/api\/v1\/entertainment\/groups$/, async (route) => {
+    await page.route(/\/api\/v1\/entertainment\/groups$/, async (route: Route) => {
       if (route.request().method() === 'OPTIONS') {
         return route.fulfill({ status: 200, headers: CORS_HEADERS });
       }
@@ -85,7 +85,7 @@ test.describe('Entertainment — Join + Lobby', () => {
   test('realtime: hub lobbyUpdated event updates the player list', async ({ page }) => {
     const hub = mockEntertainmentSignalR(page);
 
-    await page.route(/\/api\/v1\/entertainment\/groups$/, async (route) => {
+    await page.route(/\/api\/v1\/entertainment\/groups$/, async (route: Route) => {
       if (route.request().method() === 'OPTIONS') {
         return route.fulfill({ status: 200, headers: CORS_HEADERS });
       }
@@ -125,7 +125,7 @@ test.describe('Entertainment — Join + Lobby', () => {
   });
 
   test('Leave from lobby returns to landing', async ({ page }) => {
-    await page.route(/\/api\/v1\/entertainment\/groups$/, async (route) => {
+    await page.route(/\/api\/v1\/entertainment\/groups$/, async (route: Route) => {
       if (route.request().method() === 'OPTIONS') {
         return route.fulfill({ status: 200, headers: CORS_HEADERS });
       }

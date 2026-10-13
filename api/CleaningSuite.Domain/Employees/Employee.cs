@@ -9,6 +9,11 @@ public class Employee : BaseDocument
     public const string RoleEmployee = "employee";
 
     public string KeycloakUserId { get; set; } = "";
+    public string? KeycloakIdentityKey => string.IsNullOrWhiteSpace(KeycloakUserId) ? null : KeycloakUserId;
+    public DateTime? InviteLastAttemptUtc { get; set; }
+    public DateTime? InviteLastSentUtc { get; set; }
+    public string? InviteError { get; set; }
+    public bool IdentitySyncPending { get; set; }
     public DateTime? InvitedAtUtc { get; set; }
     public string Email { get; set; } = "";
     public string FirstName { get; set; } = "";

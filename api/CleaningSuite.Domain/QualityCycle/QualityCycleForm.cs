@@ -24,6 +24,13 @@ public class QualityCycleForm : BaseDocument
     public string? CleanerNotes { get; set; }
     public bool IsSubmitted { get; set; }
     public DateTime? SubmittedUtc { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid BranchId { get; set; }
+    public DateTime? EmailSentUtc { get; set; }
+    public DateTime? EmailLastAttemptUtc { get; set; }
+    public string? EmailError { get; set; }
+    public string TaskStatus => !IsSubmitted ? "Pending"
+        : "Recorded";
     public DateTime? StartedAtUtc { get; set; }
     public DateTime? EndedAtUtc { get; set; }
 
@@ -81,23 +88,16 @@ public class QualityCycleForm : BaseDocument
         if (IsSubmitted)
             throw new InvalidOperationException("Quality Cycle Form has already been submitted.");
 
-        if (items != null && items.Count > 0)
+        if (items is null || items.Count != Items.Count
+            || items.Where((item, i) => item.ItemText != Items[i].ItemText).Any())
+            throw new ArgumentException("Submit the complete checklist in its original order.", nameof(items));
+
+        if (items.Count > 0)
         {
             // Preserve original template item texts and structure; only update IsChecked property
             for (int i = 0; i < Items.Count; i++)
             {
-                var submittedMatch = items.FirstOrDefault(submitted =>
-                    string.Equals(submitted.ItemText?.Trim(), Items[i].ItemText?.Trim(), StringComparison.OrdinalIgnoreCase));
-
-                if (submittedMatch != null)
-                {
-                    Items[i].IsChecked = submittedMatch.IsChecked;
-                }
-                else if (i < items.Count)
-                {
-                    // Fallback to index-based matching if item text modified on client
-                    Items[i].IsChecked = items[i].IsChecked;
-                }
+                Items[i].IsChecked = items[i].IsChecked;
             }
         }
 

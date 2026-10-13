@@ -17,6 +17,9 @@ public class BookingRepository : IBookingRepository
 
     public BookingRepository(ITenantSession tenantSession) => _tenantSession = tenantSession;
 
+    public Task BeginReservationAsync(CancellationToken ct = default) =>
+        _tenantSession.BeginReservationAsync(ct);
+
     public async Task<IReadOnlyList<Booking>> FindOverlappingAsync(
         DateTime startUtc, DateTime endUtc, Guid? exceptId = null, CancellationToken ct = default)
     {

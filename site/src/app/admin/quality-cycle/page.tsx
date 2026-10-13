@@ -32,7 +32,8 @@ import {
   Clock,
   ImageIcon,
 } from 'lucide-react';
-import { adminQualityCycle, QualityCycleTemplate, QualityCycleForm } from '@/lib/qualityCycleApi';
+import { adminQualityCycle, QualityCycleTemplate, QualityCycleForm, MonthlyReport, ReportShare, reportShareUrl } from '@/lib/qualityCycleApi';
+import { isAdmin } from '@/lib/auth';
 import { adminShifts, Shift } from '@/lib/adminApi';
 
 export default function AdminQualityCyclePage() {
@@ -54,11 +55,17 @@ export default function AdminQualityCyclePage() {
   const [loadingForms, setLoadingForms] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
 
+  const [shares, setShares] = useState<ReportShare[]>([]);
+  const allowed = isAdmin();
+  const [report, setReport] = useState<MonthlyReport | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState('');
   // Report state
   const [reportYear, setReportYear] = useState<number>(new Date().getFullYear());
   const [reportMonth, setReportMonth] = useState<number>(new Date().getMonth() + 1);
 
   useEffect(() => {
+    if (!allowed) return;
     loadTemplates();
     loadShifts();
   }, []);
@@ -83,7 +90,7 @@ export default function AdminQualityCyclePage() {
   }
 
   useEffect(() => {
-    if (activeTab === 'submissions') {
+    if (allowed && activeTab === 'submissions') {
       loadForms();
     }
   }, [activeTab, selectedShiftId]);
@@ -114,21 +121,25 @@ export default function AdminQualityCyclePage() {
 
     setSavingTemplate(true);
     try {
+      let saved;
       if (editingTemplate?.id) {
-        await adminQualityCycle.updateTemplate(editingTemplate.id, {
+        saved = await adminQualityCycle.updateTemplate(editingTemplate.id, {
           title: templateTitle,
           description: templateDesc,
           items: validItems,
           isActive: editingTemplate.isActive ?? true,
+          companyId: editingTemplate.companyId || undefined,
+          branchId: editingTemplate.branchId || undefined,
         });
       } else {
-        await adminQualityCycle.createTemplate({
+        saved = await adminQualityCycle.createTemplate({
           title: templateTitle,
           description: templateDesc,
           items: validItems,
         });
       }
 
+      if (!saved) { alert('Template could not be saved. Please retry.'); return; }
       setEditingTemplate(null);
       setTemplateTitle('');
       setTemplateDesc('');
@@ -161,11 +172,27 @@ export default function AdminQualityCyclePage() {
     setExportingPdf(true);
     try {
       await adminQualityCycle.downloadSummaryPdf(selectedShiftId, reportYear, reportMonth);
+    } catch { setReportError('Report download failed.');
     } finally {
       setExportingPdf(false);
     }
   }
 
+  async function shareReport(shiftId?: string, branchId?: string) {
+    if (!report) return;
+    setReportError('');
+    try { const created = await adminQualityCycle.createReportShare(report.year, report.month, shiftId, branchId);
+      if (created) setShares(current => [created, ...current]); else setReportError('Could not create the report link.');
+    } catch { setReportError('Could not create the report link.'); }
+  }
+  async function loadReport() {
+    setReportLoading(true); setReportError(''); setReport(null);
+    try { const result = await adminQualityCycle.monthlyReport(reportYear, reportMonth, undefined, undefined, selectedShiftId || undefined);
+      if (result) setReport(result); else setReportError('Could not load the monthly report.');
+    } catch { setReportError('Could not load the monthly report.'); }
+    finally { setReportLoading(false); }
+  }
+  if (!allowed) return <Text role="alert">Only admins can manage checklist templates and view reports.</Text>;
   const monthOptions = Array.from({ length: 12 }, (_, i) => ({
     value: String(i + 1),
     label: new Date(2025, i, 1).toLocaleString('default', { month: 'short' }),
@@ -330,7 +357,7 @@ export default function AdminQualityCyclePage() {
                               size="sm"
                               variant="light"
                               color="red"
-                              aria-label="Delete"
+                              aria-label="Delete template"
                               onClick={() => handleDeleteTemplate(t.id)}
                             >
                               <Trash2 size={14} />
@@ -369,6 +396,38 @@ export default function AdminQualityCyclePage() {
 
       {activeTab === 'submissions' && (
         <Stack gap="md">
+          <Paper p="md" withBorder><Stack>
+            <Title order={3}>Monthly branch and shift reports</Title>
+            <Button onClick={loadReport} loading={reportLoading}>Load monthly report</Button>
+            {reportError && <Text c="red" role="alert">{reportError}</Text>}
+            {report && <>
+              <Text size="sm">{report.year}-{String(report.month).padStart(2, '0')} · {report.timeZoneId}. Hours count each scheduled occurrence once, regardless of cleaner count.</Text>
+              <Table.ScrollContainer minWidth={800}><Table withTableBorder>
+                <Table.Thead><Table.Tr>{['Company / branch', 'Shift', 'Occurrences / hours', 'Recorded / missing / pending', 'Tasks submitted / expected', 'Activities performed', 'Export'].map(h => <Table.Th key={h}>{h}</Table.Th>)}</Table.Tr></Table.Thead>
+                <Table.Tbody>{report.shifts.map(row => <Table.Tr key={`${row.shiftId}-${row.branchId}`}>
+                  <Table.Td>{row.companyName} / {row.branchName}</Table.Td><Table.Td>{row.shiftName}</Table.Td>
+                  <Table.Td>{row.scheduledOccurrences} / {row.scheduledHours}</Table.Td>
+                  <Table.Td>{row.completedOccurrences} / {row.missingOccurrences} / {row.pendingOccurrences}</Table.Td>
+                  <Table.Td>{row.submittedTasks} / {row.totalTasks}</Table.Td><Table.Td>{row.items?.map(item => <Text key={item.itemText} size="sm">{item.itemText}: {item.daysPerformed} days ({item.recordedOccurrences} occurrences)</Text>)}</Table.Td>
+                  <Table.Td><Button size="xs" onClick={async () => { try { await adminQualityCycle.downloadSummaryPdf(row.shiftId, report.year, report.month); } catch { setReportError('Shift report download failed.'); } }}>Shift PDF</Button>
+                  <Button size="xs" variant="light" onClick={async () => { try { await adminQualityCycle.downloadBranchPdf(row.branchId, report.year, report.month); } catch { setReportError('Branch report download failed.'); } }}>Branch PDF</Button>
+                  <Button size="xs" variant="subtle" onClick={() => shareReport(row.shiftId)}>Share shift report</Button>
+                  <Button size="xs" variant="subtle" onClick={() => shareReport(undefined, row.branchId)}>Share branch report</Button></Table.Td>
+                </Table.Tr>)}</Table.Tbody>
+              </Table></Table.ScrollContainer>
+              {report.shifts.length === 0 && <Text>No scheduled quality cycle tasks for this month and filter.</Text>}
+            </>}
+            <Button variant="light" onClick={async () => { const result = await adminQualityCycle.listReportShares(); if (result) setShares(result); else setReportError('Could not load shared reports.'); }}>Manage shared report links</Button>
+            {shares.map(share => <Group key={share.id}>
+              <Text size="sm">{share.year}-{String(share.month).padStart(2, '0')} · expires {new Date(share.expiresUtc).toLocaleDateString()}</Text>
+              {share.isRevoked || new Date(share.expiresUtc).getTime() <= Date.now() ? <Text size="sm">Inactive link</Text> : <>
+                <Text component="a" href={reportShareUrl(share)} target="_blank" rel="noreferrer">Open report</Text>
+                <TextInput aria-label="Shareable report link" readOnly value={reportShareUrl(share)} style={{ flex: 1, minWidth: 220 }} />
+                <Button size="xs" onClick={async () => { try { await navigator.clipboard.writeText(reportShareUrl(share)); } catch { setReportError('Select and copy the report link.'); } }}>Copy link</Button>
+                <Button size="xs" color="red" onClick={async () => { if (await adminQualityCycle.revokeReportShare(share.id)) setShares(current => current.map(item => item.id === share.id ? { ...item, isRevoked: true } : item)); else setReportError('Could not revoke the link.'); }}>Revoke link</Button>
+              </>}
+            </Group>)}
+          </Stack></Paper>
           <Paper p="md" radius="md" withBorder>
             <Group justify="space-between" align="flex-end" wrap="wrap" gap="md">
               <Group gap="md" align="flex-end" wrap="wrap">
@@ -439,7 +498,7 @@ export default function AdminQualityCyclePage() {
                         <Table.Th>Shift</Table.Th>
                         <Table.Th>Cleaner</Table.Th>
                         <Table.Th>Status</Table.Th>
-                        <Table.Th>Completed Items</Table.Th>
+                        <Table.Th>Selected Activities</Table.Th>
                         <Table.Th>Notes / Photos</Table.Th>
                       </Table.Tr>
                     </Table.Thead>

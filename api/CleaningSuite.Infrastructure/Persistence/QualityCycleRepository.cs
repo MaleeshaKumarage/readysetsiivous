@@ -6,11 +6,14 @@ namespace CleaningSuite.Infrastructure.Persistence;
 
 public class QualityCycleRepository : IQualityCycleRepository
 {
-    private readonly IDocumentSession _session;
+    private readonly ITenantSession _tenant;
+    private readonly IDocumentStore _store;
+    private IDocumentSession _session => _tenant.Session;
 
-    public QualityCycleRepository(IDocumentSession session)
+    public QualityCycleRepository(ITenantSession tenant, IDocumentStore store)
     {
-        _session = session;
+        _tenant = tenant;
+        _store = store;
     }
 
     public async Task<QualityCycleTemplate?> GetTemplateAsync(Guid id, CancellationToken ct = default)
@@ -60,8 +63,9 @@ public class QualityCycleRepository : IQualityCycleRepository
 
     public async Task<QualityCycleForm?> GetFormByShiftOccurrenceAsync(Guid shiftId, Guid employeeId, DateTime shiftOccurrenceUtc, CancellationToken ct = default)
     {
+        var start = DateTime.SpecifyKind(shiftOccurrenceUtc, DateTimeKind.Unspecified);
         return await _session.Query<QualityCycleForm>()
-            .FirstOrDefaultAsync(x => x.ShiftId == shiftId && x.EmployeeId == employeeId && x.ShiftOccurrenceUtc == shiftOccurrenceUtc, ct);
+            .FirstOrDefaultAsync(x => x.ShiftId == shiftId && x.EmployeeId == employeeId && x.ShiftOccurrenceUtc == start, ct);
     }
 
     public async Task<IReadOnlyList<QualityCycleForm>> ListFormsAsync(Guid? shiftId, DateTime? fromUtc, DateTime? toUtc, CancellationToken ct = default)
@@ -75,12 +79,14 @@ public class QualityCycleRepository : IQualityCycleRepository
 
         if (fromUtc.HasValue)
         {
-            query = query.Where(x => x.ShiftOccurrenceUtc >= fromUtc.Value);
+            var from = DateTime.SpecifyKind(fromUtc.Value, DateTimeKind.Unspecified);
+            query = query.Where(x => x.ShiftOccurrenceUtc >= from);
         }
 
         if (toUtc.HasValue)
         {
-            query = query.Where(x => x.ShiftOccurrenceUtc <= toUtc.Value);
+            var to = DateTime.SpecifyKind(toUtc.Value, DateTimeKind.Unspecified);
+            query = query.Where(x => x.ShiftOccurrenceUtc < to);
         }
 
         return await query.OrderByDescending(x => x.ShiftOccurrenceUtc).ToListAsync(ct);
@@ -91,4 +97,31 @@ public class QualityCycleRepository : IQualityCycleRepository
         _session.Store(form);
         await _session.SaveChangesAsync(ct);
     }
+
+    public async Task<bool> TryCreateFormAsync(QualityCycleForm form, CancellationToken ct = default)
+    {
+        // A separate insert transaction prevents a competing generator from overwriting
+        // a cleaner's existing task or poisoning the request's tracked session.
+        await using var session = _store.LightweightSession(_tenant.TenantId);
+        try
+        {
+            session.Insert(form);
+            await session.SaveChangesAsync(ct);
+            return true;
+        }
+        catch (Exception ex) when (IsDuplicate(ex)) { return false; }
+    }
+
+    public async Task SaveReportShareAsync(QualityCycleReportShare share, CancellationToken ct = default) {
+        _session.Store(share); await _session.SaveChangesAsync(ct);
+    }
+    public Task<QualityCycleReportShare?> GetReportShareAsync(Guid id, CancellationToken ct = default) => _session.LoadAsync<QualityCycleReportShare>(id, ct);
+    public Task<QualityCycleReportShare?> GetReportShareByTokenAsync(string token, CancellationToken ct = default) =>
+        _session.Query<QualityCycleReportShare>().FirstOrDefaultAsync(s => s.Token == token, ct);
+    public async Task<IReadOnlyList<QualityCycleReportShare>> ListReportSharesAsync(CancellationToken ct = default) =>
+        await _session.Query<QualityCycleReportShare>().OrderByDescending(s => s.CreatedUtc).ToListAsync(ct);
+
+    private static bool IsDuplicate(Exception ex) =>
+        ex is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.UniqueViolation }
+        || (ex.InnerException is { } inner && IsDuplicate(inner));
 }
