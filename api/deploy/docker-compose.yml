@@ -62,9 +62,8 @@ services:
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=cleaning;Username=cleaning;Password=${POSTGRES_PASSWORD}
       Marten__AutoCreateSchemaMode: CreateOrUpdate
       Auth__Keycloak__ServerUrl: https://auth.readysetsiivous.fi
-      Auth__Keycloak__Audiences__0: cleaning-suite-web
-      Auth__Keycloak__Audiences__1: cleaning-provisioner
-      Auth__Keycloak__Audiences__2: account
+      Auth__Keycloak__Audience: cleaning-suite-api
+      Auth__Keycloak__PlatformAudience: cleaning-suite-platform-api
       Auth__Keycloak__ProvisionerRealm: master
       Auth__Keycloak__ProvisionerClientId: cleaning-provisioner
       Auth__Keycloak__ProvisionerClientSecret: ${PROVISIONER_CLIENT_SECRET:-}

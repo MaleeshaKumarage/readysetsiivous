@@ -87,10 +87,10 @@ before deploying over pre-existing default-partition QC data.
 | GET | `/api/v1/admin/shifts/{id:guid}/occurrences` | admin | [Occurrences](../../api/CleaningSuite.Api/Controllers/ShiftsAdminController.cs#L69) |
 | POST | `/api/v1/admin/shifts/{id:guid}/assignments` | admin | [AssignEmployee](../../api/CleaningSuite.Api/Controllers/ShiftsAdminController.cs#L80) |
 | DELETE | `/api/v1/admin/shifts/{id:guid}/assignments/{employeeId:guid}` | admin | [RemoveEmployee](../../api/CleaningSuite.Api/Controllers/ShiftsAdminController.cs#L93) |
-| POST | `/api/v1/system/tenants` | authenticated + configured provisioner realm | [Provision](../../api/CleaningSuite.Api/Controllers/SystemController.cs#L23) |
-| GET | `/api/v1/system/tenants` | authenticated + configured provisioner realm | [List](../../api/CleaningSuite.Api/Controllers/SystemController.cs#L35) |
-| POST | `/api/v1/system/tenants/{slug}/suspend` | authenticated + configured provisioner realm | [Suspend](../../api/CleaningSuite.Api/Controllers/SystemController.cs#L45) |
-| POST | `/api/v1/system/tenants/{slug}/activate` | authenticated + configured provisioner realm | [Activate](../../api/CleaningSuite.Api/Controllers/SystemController.cs#L55) |
+| POST | `/api/v1/system/tenants` | platform realm + platform audience + `platform.tenants.manage` | [Provision](../../api/CleaningSuite.Api/Controllers/SystemController.cs) |
+| GET | `/api/v1/system/tenants` | platform realm + platform audience + `platform.tenants.manage` | [List](../../api/CleaningSuite.Api/Controllers/SystemController.cs) |
+| POST | `/api/v1/system/tenants/{slug}/suspend` | platform realm + platform audience + `platform.tenants.manage` | [Suspend](../../api/CleaningSuite.Api/Controllers/SystemController.cs) |
+| POST | `/api/v1/system/tenants/{slug}/activate` | platform realm + platform audience + `platform.tenants.manage` | [Activate](../../api/CleaningSuite.Api/Controllers/SystemController.cs) |
 | GET | `/api/v1/admin/tenant` | admin OR employee | [Get](../../api/CleaningSuite.Api/Controllers/TenantAdminController.cs#L20) |
 | PUT | `/api/v1/admin/tenant` | admin | [Update](../../api/CleaningSuite.Api/Controllers/TenantAdminController.cs#L27) |
 | PUT | `/api/v1/admin/tenant/pages/{pageKey}` | admin | [UpdatePage](../../api/CleaningSuite.Api/Controllers/TenantAdminController.cs#L35) |

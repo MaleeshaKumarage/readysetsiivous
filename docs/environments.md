@@ -4,6 +4,13 @@ Use the shared development environment for integration testing, test bookings,
 agreement signing, and other operations that create or change data. Production
 serves real customers. Automated local tests normally mock API requests.
 
+The API now requires distinct tenant and platform resource audiences. Existing
+Keycloak clients must be migrated before deploying that change; import JSON alone
+does not update them. See [API authentication and platform rollout](features/api-authentication.md)
+for configuration, scoped check/apply migration, permission negatives and isolated
+real Keycloak/Playwright verification. Production and shared dev clients have not
+been migrated automatically by these source changes.
+
 ## Environment map
 
 | Component | Shared development | Production |
