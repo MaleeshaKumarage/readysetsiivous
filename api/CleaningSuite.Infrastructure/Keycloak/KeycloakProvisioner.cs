@@ -73,56 +73,6 @@ public class KeycloakProvisioner : IKeycloakProvisioner
     public Task SetRealmEnabledAsync(string realm, bool enabled, CancellationToken ct = default) =>
         _admin.SetRealmEnabledAsync(realm, enabled, ct);
 
-    public async Task<InvitedEmployee> InviteEmployeeAsync(
-        string realm,
-        string email,
-        string firstName,
-        string lastName,
-        string role,
-        CancellationToken ct = default)
-    {
-        var temporaryPassword = GenerateTemporaryPassword();
-
-        var userId = await _admin.GetUserIdByUsernameAsync(realm, email, ct);
-        if (userId is null)
-        {
-            userId = await _admin.CreateUserAsync(realm, new
-            {
-                username = email,
-                email,
-                firstName,
-                lastName,
-                enabled = true,
-                credentials = new[]
-                {
-                    new { type = "password", value = temporaryPassword, temporary = true },
-                },
-                requiredActions = new[] { "UPDATE_PASSWORD" },
-            }, ct);
-        }
-        else
-        {
-            // Re-invite: reset to a fresh temporary password and re-arm the required action.
-            await _admin.UpdateUserAsync(realm, userId, new
-            {
-                firstName,
-                lastName,
-                enabled = true,
-                credentials = new[]
-                {
-                    new { type = "password", value = temporaryPassword, temporary = true },
-                },
-                requiredActions = new[] { "UPDATE_PASSWORD" },
-            }, ct);
-        }
-
-        var roleRep = await _admin.GetRoleAsync(realm, role, ct);
-        await _admin.AssignRealmRoleAsync(realm, userId, new object[] { roleRep }, ct);
-
-        _logger.LogInformation("Invited employee {Email} in realm {Realm} as {Role}", email, realm, role);
-        return new InvitedEmployee(userId, temporaryPassword);
-    }
-
     private async Task WaitForRealmAsync(string realm, CancellationToken ct)
     {
         // Realm creation is eventually consistent; poll until the realm answers.

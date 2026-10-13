@@ -25,16 +25,5 @@ public interface IKeycloakProvisioner
 
     Task<bool> RealmExistsAsync(string realm, CancellationToken ct = default);
 
-    /// <summary>Creates a realm user with a temporary password and assigns the given realm role.</summary>
-    Task<InvitedEmployee> InviteEmployeeAsync(
-        string realm,
-        string email,
-        string firstName,
-        string lastName,
-        string role,
-        CancellationToken ct = default);
-
     Task SetRealmEnabledAsync(string realm, bool enabled, CancellationToken ct = default);
 }
-
-public record InvitedEmployee(string KeycloakUserId, string TemporaryPassword);

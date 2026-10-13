@@ -28,6 +28,9 @@ export interface Invoice {
 export interface Employee {
   id: string;
   email: string;
+  keycloakUserId?: string;
+  inviteLastSentUtc?: string | null;
+  inviteError?: string | null;
   firstName: string;
   lastName: string;
   phone: string;
@@ -199,11 +202,14 @@ export const adminEmployees = {
   update: (id: string, fields: EmployeeFields, isActive: boolean) =>
     adminSend(`/api/v1/admin/employees/${id}`, 'PUT', { fields, isActive }),
   deactivate: (id: string) => adminSend(`/api/v1/admin/employees/${id}/deactivate`, 'POST'),
-  invite: (id: string) =>
-    adminSendJson<{ email: string; temporaryPassword: string }>(
-      `/api/v1/admin/employees/${id}/invite`,
-      'POST'
-    ),
+  invite: async (id: string): Promise<{ email: string; keycloakUserId: string; status: 'Sent' | 'AlreadySent'; sentUtc: string }> => {
+    const response = await authorizedFetch(`/api/v1/admin/employees/${id}/invite`, { method: 'POST' });
+    if (!response.ok) {
+      const problem = await response.json().catch(() => ({})) as { detail?: string; title?: string };
+      throw new Error(problem.detail || problem.title || `Invitation failed (${response.status}).`);
+    }
+    _invalidate(); return response.json();
+  },
 };
 
 export interface AgreementSignerDto {

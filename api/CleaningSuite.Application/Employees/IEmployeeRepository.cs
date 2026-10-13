@@ -8,5 +8,6 @@ public interface IEmployeeRepository
     Task<Employee?> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task<Employee?> GetByEmailAsync(string email, CancellationToken ct = default);
     Task<Employee?> GetByKeycloakUserIdAsync(string keycloakUserId, CancellationToken ct = default);
+    Task<Employee?> ReloadAsync(Guid id, CancellationToken ct = default);
     Task SaveAsync(Employee employee, CancellationToken ct = default);
 }

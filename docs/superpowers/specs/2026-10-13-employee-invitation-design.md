@@ -27,7 +27,14 @@ configuration is an explicit503, not a falsely successful invitation.
 2. An employee identity provider creates/reuses the exact realm user and tags it
    with the Employee document ID. New users have no password and require
    VERIFY_EMAIL/UPDATE_PASSWORD. Never return credentials to the API caller.
-3. Persist KeycloakUserId before sending. Existing bindings must match user email
+3. Serialize the entire invitation for normalized tenant+email with a PostgreSQL
+   advisory lock on a separate owned connection. Re-load the employee after
+   acquiring the lock. All application ownership claims use this boundary. Add
+   a nullable computed identity key unique within the tenant; legacy duplicate
+   bindings must be reconciled before its schema migration. Lookup fails closed
+   on duplicate bindings. An ownership tag saved in Keycloak before a database
+   failure permits retry by the same employee ID, not a different document.
+   Persist KeycloakUserId before sending. Existing bindings must match user email
    and employee ownership. Existing unbound identities are reused only if email
    is verified and managed roles do not conflict; ambiguous/unverified/conflicting
    identities fail409 for administrator reconciliation. Passwords are never reset
@@ -36,7 +43,12 @@ configuration is an explicit503, not a falsely successful invitation.
    roles must match the employee role exactly.
 4. Send a native action email with24-hour configured lifespan and redirect to
    /account/?tenant=<realm>. After initial setup, reinvite does not force another
-   password change; it sends verification/continuation actions. Persist attempt,
+   password change. Detect setup completion using Keycloak emailVerified and
+   requiredActions. New/pending users receive VERIFY_EMAIL plus UPDATE_PASSWORD
+   only while it remains required. Completed users receive an empty action list
+   through execute-actions-email: its native expiring confirmation/continuation
+   token returns to the same /account/ destination without changing credentials.
+   This behavior must be exercised against Keycloak24. Persist attempt,
    sent time and a sanitized failure status. A failed send is retryable with the
    already bound identity. Successful sends within60seconds return the prior
    result to avoid accidental double clicks; no external exactly-once claim.
@@ -83,3 +95,22 @@ employee binding and repeat/retry behavior. Recipients are test-only .invalid
 addresses captured by the inbox. No real employee email, production account
 mutation or production deployment is performed. Record runtime limitations
 explicitly and remove temporary infrastructure after verification.
+
+## Runtime findings incorporated during implementation
+
+Keycloak24 discards undeclared user attributes. Preflight declares the ownership
+field as a managed attribute with admin-only view/edit, preserves unrelated profile
+configuration and verifies persisted ownership. Existing user updates merge the
+current profile: omitted fields can otherwise clear email. Credentials and required
+actions are left untouched unless explicitly supplied by the operation. SMTP masks
+are never written back. Marten identity uniqueness explicitly uses PerTenant scope.
+
+Role/active synchronization records IdentitySyncPending before the external call,
+denies access while pending and clears it only after successful synchronization.
+A same-values retry must recover pending synchronization; unrelated profile edits
+must not log out the account. This closes the partial-failure retry case.
+
+Role grants occur after the employee binding has been saved, not during identity
+ownership preparation. This prevents a failed binding save from leaving an existing
+account as an unbound admin under the tenant-owner compatibility policy. Both
+ordering and database-failure regressions assert no pre-binding access grant.

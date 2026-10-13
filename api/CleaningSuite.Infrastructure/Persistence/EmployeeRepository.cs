@@ -25,8 +25,10 @@ public class EmployeeRepository : IEmployeeRepository
 
     public async Task<Employee?> GetByEmailAsync(string email, CancellationToken ct = default)
     {
+        var normalized = email.Trim().ToLowerInvariant();
         var results = await _tenantSession.Session.Query<Employee>()
-            .Where(e => e.Email == email).ToListAsync(ct);
+            .Where(e => e.Email.ToLower() == normalized).ToListAsync(ct);
+        if (results.Count > 1) throw new EmployeeIdentityConflictException("Multiple employee records use this email. Administrator reconciliation is required.");
         return results.FirstOrDefault();
     }
 
@@ -34,7 +36,12 @@ public class EmployeeRepository : IEmployeeRepository
     {
         var results = await _tenantSession.Session.Query<Employee>()
             .Where(e => e.KeycloakUserId == keycloakUserId).ToListAsync(ct);
+        if (results.Count > 1) throw new EmployeeIdentityConflictException("Multiple employee records share this login. Administrator reconciliation is required.");
         return results.FirstOrDefault();
+    }
+
+    public async Task<Employee?> ReloadAsync(Guid id, CancellationToken ct = default) {
+        _tenantSession.Reset(); return await GetByIdAsync(id, ct);
     }
 
     public async Task SaveAsync(Employee employee, CancellationToken ct = default)

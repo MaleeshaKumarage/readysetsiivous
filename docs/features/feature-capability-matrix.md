@@ -101,3 +101,15 @@ This update supersedes the earlier QC gap rows. Full contract and remaining gaps
 | PDF report | Shift and branch summary PDF | Download controls with token refresh/error feedback | No actual-hours accounting or holiday rules |
 | Public summary sharing | Frozen sanitized snapshot;30-day expiry; revoke; tenant isolation | Create/open/copy/manage/revoke links | No automatic external sending (not requested) |
 | Template/report permissions | Tenant-admin-only; HTTP negatives for employee/manager/anonymous | Role guard; mock roles can distinguish employee | Real Keycloak browser login coverage remains |
+
+## Issue49 onboarding implementation update
+
+| Operation | BE | FE | Remaining |
+| --- | --- | --- | --- |
+| Invite/reinvite | Native secure action email; persisted binding; explicit config, retry/cooldown | Admin Invite/Resend setup email with failure/retry feedback | Existing realm SMTP/role/redirect migration and deliverability checks |
+| Setup landing | /me reports safe bound identity; active/role/email guard | /account/?tenant=...; PKCE login; admin continuation or employee confirmation | Full authenticated My Work |
+| Role/active lifecycle | Managed role sync, enable/disable, session logout, old-token denial | Existing deactivate; no full employee editor | Linked-email-change and reactivation/edit UI |
+
+See [employee invitation contract](employee-invitations.md). Generic self-registration
+and password-reset-on-reinvite behavior are superseded; no temporary password is
+returned by employee invitation APIs.

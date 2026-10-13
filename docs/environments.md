@@ -173,3 +173,18 @@ On 2026-10-13, read-only requests returned HTTP 200 for the dev website, dev API
 health endpoint, dev service catalog, dev Keycloak discovery endpoint, and
 production API health endpoint. This confirms reachability at that time, not
 that a particular feature commit has been deployed or that every user flow passes.
+
+## Employee invitations and public auth URLs
+
+Issue49's native setup emails require explicit public frontend/auth URLs and
+Keycloak realm SMTP. Configure `App:FrontendBaseUrl` with the site origin and
+`Auth:Keycloak:ServerUrl` with the public auth host. Dev compose now separates
+`AdminServerUrl=http://keycloak:8080` as internal REST/JWKS transport from public
+`ServerUrl=http://130.61.208.211:8081`. A private container hostname must never
+appear in browser/email URLs or be used as the expected public token issuer.
+
+SMTP may use the current Resend provider through the deployment INVITE_SMTP_*
+settings; setting Resend API delivery alone is insufficient. Existing configured
+SMTP is preserved. Defaults do not deliver real email without configured sender
+credentials. See [employee invitations](features/employee-invitations.md) for
+24-hour token policy, redirect/role/user-profile setup and legacy migration.

@@ -31,6 +31,7 @@ public class QualityCycleAuthorizationTests
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?> { ["Auth:Keycloak:ServerUrl"] = "https://auth.test" }));
             builder.ConfigureTestServices(services => {
                 foreach (var descriptor in services.Where(x => x.ImplementationType == typeof(MartenSchemaInitializer) || x.ImplementationType == typeof(QualityCycleWorker)).ToList()) services.Remove(descriptor);
+                services.RemoveAll<CleaningSuite.Application.Employees.IEmployeeRepository>(); services.AddSingleton(new Mock<CleaningSuite.Application.Employees.IEmployeeRepository>().Object);
                 services.RemoveAll<IQualityCycleRepository>(); services.AddSingleton(repository.Object);
                 services.RemoveAll<ITenantRegistry>(); services.AddSingleton(registry.Object);
                 services.AddAuthentication(options => { options.DefaultAuthenticateScheme = "qc-test"; options.DefaultChallengeScheme = "qc-test"; options.DefaultForbidScheme = "qc-test"; })
@@ -52,7 +53,7 @@ public class QualityCycleAuthorizationTests
         protected override Task<AuthenticateResult> HandleAuthenticateAsync() {
             var role = Request.Headers["X-Test-Role"].ToString();
             if (role.Length == 0) return Task.FromResult(AuthenticateResult.NoResult());
-            var identity = new ClaimsIdentity(new[] { new Claim("iss", "https://auth.test/realms/tenant-a"), new Claim("realm_access", System.Text.Json.JsonSerializer.Serialize(new { roles = new[] { role } })) }, "qc-test");
+            var identity = new ClaimsIdentity(new[] { new Claim("sub", "test-sub"), new Claim("iss", "https://auth.test/realms/tenant-a"), new Claim("realm_access", System.Text.Json.JsonSerializer.Serialize(new { roles = new[] { role } })) }, "qc-test");
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), "qc-test")));
         }
     }

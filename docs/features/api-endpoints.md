@@ -145,3 +145,14 @@ Existing `summary-pdf` now uses the activity report builder. Existing submission
 requires exact checklist structure, permits any checked subset and empty notes,
 and returns Recorded task status. Repeat/pre-start attempts are409; invalid
 checklist structure400. Month filtering is exclusive at the next month's start.
+
+## Issue49 invitation contract update
+
+No additional API routes. POST `/api/v1/admin/employees/{id:guid}/invite` requires
+an active tenant admin and returns `{email,keycloakUserId,status,sentUtc}`; status
+is Sent or AlreadySent. Native24-hour setup email replaces generic registration.
+Configuration503, identity/inactive conflict409, provider502 and missing employee404
+are explicit. No credentials are returned. GET `/api/v1/me` now includes a safe
+employee identity summary when linked and checks active/verified/current-role
+state. Employee updates/deactivation synchronize Keycloak access. See
+[onboarding](employee-invitations.md) for migration and role-negative expectations.

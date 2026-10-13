@@ -102,10 +102,12 @@ public class KeycloakSigningKeysResolver
     private static readonly HttpClient Http = new();
     private readonly MemoryCache _cache = new(new MemoryCacheOptions());
     private readonly string _serverUrl;
+    private readonly string _transportUrl;
 
     public KeycloakSigningKeysResolver(IConfiguration configuration)
     {
         _serverUrl = configuration["Auth:Keycloak:ServerUrl"]!.TrimEnd('/');
+        _transportUrl = (configuration["Auth:Keycloak:AdminServerUrl"] ?? _serverUrl).TrimEnd('/');
     }
 
     public IEnumerable<SecurityKey> Resolve(string token, string kid)
@@ -121,7 +123,7 @@ public class KeycloakSigningKeysResolver
         try
         {
             var response = Http.GetAsync(
-                $"{issuer}/protocol/openid-connect/certs").GetAwaiter().GetResult();
+                $"{_transportUrl}/realms/{Uri.EscapeDataString(realm)}/protocol/openid-connect/certs").GetAwaiter().GetResult();
             response.EnsureSuccessStatusCode();
             var json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
             var keys = new JsonWebKeySet(json);

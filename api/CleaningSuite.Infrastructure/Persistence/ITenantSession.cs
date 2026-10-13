@@ -18,6 +18,7 @@ public interface ITenantSession
     string TenantId { get; }
 
     /// <summary>Discards tracked state and starts a serializable transaction before reservation reads.</summary>
+    void Reset();
     Task BeginReservationAsync(CancellationToken ct = default);
 }
 
@@ -45,6 +46,8 @@ public class TenantSessionFactory : ITenantSession, IDisposable
         _session = null;
         _session = await _store.DirtyTrackedSerializableSessionAsync(_context.TenantId, ct);
     }
+
+    public void Reset() { _session?.Dispose(); _session = null; }
 
     public void Dispose() => _session?.Dispose();
 }

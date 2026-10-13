@@ -178,3 +178,18 @@ paths, while PostgreSQL regressions exercise actual isolation/concurrent writes
 and HTTP tests exercise authorization policies with controlled identities.
 Genuine Keycloak login, notification-provider failure/crash cases and DST/overnight
 calendar fixtures remain separate live/integration work.
+
+## Issue49 invitation regression coverage
+
+`employee-invite.spec.ts` covers invite/reinvite errors and cooldown, employee
+mutation restrictions, account role-specific landing, invalid/mismatched tenant
+links and synchronization failure feedback. `employee-invite-live.spec.ts` uses
+real temporary Keycloak/SMTP/API/database services, with no auth/request mocks.
+Its separate `playwright.invite-live.config.ts` reads an .NET-generated fixture
+through INVITE_TEST_CONTEXT_PATH. Verify actual setup password, linked sub/role,
+no elevated permissions, completed-account reinvite preserving the password,
+promotion/demotion and stale JWT rejection after deactivation. Never point the
+fixture/test connection at production or use real employee recipients.
+
+See [invitation contract](../features/employee-invitations.md) for explicit SMTP,
+public/internal auth URLs, user profile ownership and legacy identity migration.

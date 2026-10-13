@@ -306,3 +306,17 @@ Duplicate cleaners on one occurrence never multiply activity frequency. Missing
 records and unchecked activities must remain distinct. Summary shares expire
 in30days, are revocable, freeze totals, and remove all cleaner evidence/tokens.
 See the current [workflow/test contract](../features/quality-cycle-workflow.md).
+
+## Issue49 onboarding cases added
+
+Native setup email must target the bound tenant account and /account/ landing,
+with expiring actions and no temporary credentials. Check missing/invalid frontend
+auth URLs, unregistered redirects, absent employee role/SMTP, password masks,
+admin-only ownership attributes, orphan/unverified/conflicting existing users,
+concurrent claims, failed persistence before send, failed SMTP delivery and retry,
+60-second duplicate clicks, completed-user empty-action reinvite, optional owner
+compatibility, unlinked employee denial, pending synchronization denial, identical
+update retry recovery, verified/current-role checks and old JWTs after demotion or
+deactivation. Unrelated profile edits must preserve credentials and sessions.
+The original generic registration assumptions are superseded by the
+[employee invitation contract](../features/employee-invitations.md).

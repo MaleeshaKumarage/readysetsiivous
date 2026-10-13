@@ -289,7 +289,7 @@ P0 security/data isolation; P1 correctness/data integrity; P2 feature coverage/U
 | G06 | P1 BE | Inactive guards fixed; assignment transactional uniqueness/overlap protection remains (`ShiftApp`, Marten indexes) | Parallel requests/inactive employees; no unsafe duplicate/conflicting assignments. |
 | G07 | Fixed in source; delivery recovery coverage remaining | Configured frontend/tenant links and persisted notification retry state | Verify configured provider and failure/crash scenarios in dev; no real cleaner emails sent during tests. |
 | G08 | P1 BE | QC repeat submission now409; some agreement lifecycle conflicts still map to500 (`Program`, handlers) | Defined conflict should return 409 and a usable FE message. |
-| G09 | P1 BE | Employee invitation does not link user/roles; deactivation does not revoke identity (`EmployeeCommands`) | Register invitee; prove intended realm roles and disabled-employee access policy. |
+| G09 | Fixed in source; deployment preflight required | Native Keycloak setup binds employee/role, preserves reinvite passwords and guards old tokens after lifecycle changes | See employee-invitations.md; SMTP/public URL, role and legacy-binding migration must be applied. |
 | G10 | P1 BE | Shift update/template assignment parent checks fixed; branch creation, template scope creation and agreement parents remain | Reject foreign/nonexistent IDs without writing orphan/cross-company entities. |
 | G11 | P1 BE | PDF/PNG/photo semantic validation and size policies are incomplete | Corrupt files, fake MIME/extensions, malformed base64 and huge photos need predictable 400/413. |
 | G12 | P1 FE/BE | Booking has no idempotency key; FE collapses failure statuses and timeouts (`api.ts`, BookingFlow) | Lost success response must not mislead customer or create duplicate retry records. |
@@ -340,3 +340,11 @@ transitions; whether cancelled agreements revoke viewing and whether signed sign
 may be removed; token expiry; QC photo limits/storage and maximum counts/sizes (all checks are optional);
 role/identity binding for invitations and provisioning; genuine offline requirements.
 The case catalogue flags these as policy cases, not existing requirements.
+
+## Employee onboarding update (issue49)
+
+The [employee invitation contract](employee-invitations.md) supersedes the earlier
+unbound registration findings. Admin Invite/Resend controls and /account/ landing
+now exist;24-hour native setup emails bind realm+subject to the intended employee.
+Role/deactivation synchronization and database guards reject stale elevated tokens.
+Advanced employee editing, linked-email-change UI and My Work remain separate.

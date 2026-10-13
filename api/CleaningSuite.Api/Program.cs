@@ -61,7 +61,7 @@ builder.Services.AddSingleton(sp =>
     var http = sp.GetRequiredService<IHttpClientFactory>().CreateClient("KeycloakAdmin");
     return new KeycloakAdminClient(
         http,
-        section["ServerUrl"] ?? throw new InvalidOperationException("Auth:Keycloak:ServerUrl missing"),
+        section["AdminServerUrl"] ?? section["ServerUrl"] ?? throw new InvalidOperationException("Auth:Keycloak:ServerUrl missing"),
         section["ProvisionerRealm"] ?? "master",
         section["ProvisionerClientId"] ?? "cleaning-provisioner",
         section["ProvisionerClientSecret"] ?? "",
@@ -69,6 +69,9 @@ builder.Services.AddSingleton(sp =>
         section["AdminPassword"]);
 });
 builder.Services.AddSingleton<IKeycloakProvisioner, KeycloakProvisioner>();
+builder.Services.AddSingleton<CleaningSuite.Application.Employees.IEmployeeIdentityProvider, KeycloakEmployeeIdentityProvider>();
+builder.Services.AddSingleton<CleaningSuite.Application.Employees.IEmployeeIdentityLock, EmployeeIdentityLock>();
+builder.Services.AddScoped<CleaningSuite.Api.Auth.EmployeeAccessGuard>();
 
 builder.Services.AddHttpClient<CleaningSuite.Application.Common.IEmailSender, ResendEmailSender>();
 
@@ -255,6 +258,9 @@ public class DefaultExceptionHandler : IExceptionHandler
             CleaningSuite.Application.Agreements.AgreementConflictException => (409, "Agreement conflict"),
             CleaningSuite.Application.Shifts.ShiftConflictException => (409, "Shift conflict"),
             CleaningSuite.Application.QualityCycle.QualityCycleConflictException => (409, "Shift task conflict"),
+            CleaningSuite.Application.Employees.EmployeeIdentityConflictException => (409, "Employee identity conflict"),
+            CleaningSuite.Application.Employees.EmployeeInviteConfigurationException => (503, "Employee invitation configuration incomplete"),
+            CleaningSuite.Application.Employees.EmployeeIdentityProviderException => (502, "Employee login provider unavailable"),
             JasperFx.ConcurrencyException => (409, "Conflict — concurrent update, please retry"),
             UnauthorizedAccessException => (403, "Forbidden"),
             _ => (500, "Internal server error"),
