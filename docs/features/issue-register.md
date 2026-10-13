@@ -99,3 +99,16 @@ See [authentication contract and rollout](api-authentication.md). Existing realm
 mapper/service-account migration and deployment remain pending; issues stay open
 until review/merge and rollout acceptance. Manager roles and branch scope remain
 the separate issue82 product decision.
+
+## Issue65 investigation and proposed scope
+
+At `612264c`, employee access to tenant-wide employee/booking/invoice/agreement
+reads is still present through the `staff` controller policies. Administrative
+service/settings reads and the authentication-only admin shell also need the
+same explicit boundary. The proposed fix adds admin-only management, safe typed
+self/operational/admin contracts and verified-subject assigned-work reads.
+It defines manager access as denied pending the branch-permission decision in82;
+the user has been asked to approve that scope or include branch managers now.
+The independently reviewed [issue65 design](../superpowers/specs/2026-10-13-employee-read-scope-design.md)
+lists exact fields, assignment/time boundaries, UI verification and genuine-token
+test requirements. This is a proposal, not evidence that the leak is fixed.
