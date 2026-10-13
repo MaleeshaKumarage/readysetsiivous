@@ -5,7 +5,15 @@ Monorepo for readysetsiivous.fi.
 | Directory | What | Deploy |
 |---|---|---|
 | `site/` | Next.js 14 static site (fi/en/sv), booking flow + admin UI | GitHub Pages via `.github/workflows/deploy.yml` |
-| `api/` | Cleaning Suite backend: .NET 8 + Marten + Keycloak, multi-tenant SaaS | GHCR image via `docker-build-push.yml`, deployed to Mac mini by `docker-deploy-mac.yml` |
+| `api/` | Cleaning Suite backend: .NET 8 + Marten + Keycloak, multi-tenant SaaS | GHCR image via `docker-build-push.yml`, deployed to Oracle by `docker-deploy-oracle.yml` |
+
+## Environments and testing
+
+Use the shared dev environment at http://130.61.208.211/ for live integration
+testing. Production is https://readysetsiivous.fi/. See [the environment guide](docs/environments.md)
+for API/auth URLs, local setup, dev preview deployment, test commands, and the
+production release sequence. Frontend API/auth defaults point to production;
+set dev variables explicitly before testing against a live backend.
 
 ## Site
 
@@ -29,7 +37,7 @@ See `api/CLAUDE.md` for architecture, dev env and deploy details.
 ## CI
 
 - `deploy.yml` — Pages deploy, runs on `site/**` changes only
-- `ci-build-test.yml` — API build+test, runs on `api/**`
+- `ci-build-test.yml` — backend build/tests and frontend build/browser tests on `api/**` or `site/**`; also reusable by the image-publishing workflow
 - `docker-build-push.yml` — runs the reusable backend and frontend CI checks for the same commit before publishing the API image to GHCR (`readysetsiivous-api`)
 - `docker-deploy-oracle.yml` — deploys the tested image to Oracle after successful image build
 
