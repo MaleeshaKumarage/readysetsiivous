@@ -99,3 +99,20 @@ docs must include manager consistently. No blanket platform/tenant role rename.
 Issue65 includes this manager work plus its existing safe self/admin contracts.
 Issue82's tenant-manager decision is implemented here; wider optional delegated
 capabilities are not granted implicitly. Existing broader My Work UI remains70.
+
+## User-requested shift reactivation extension
+
+The user deactivated a shift after a generic start failure and reported no way to
+reactivate it. Add an explicit include-deactivated filter and Reactivate action
+for tenant admins/managers, preserving schedule, parents, notes, template reference,
+assignments and historical QC evidence. A dedicated versioned Reactivate command
+is preferred to sending a reconstructed full update, which could clear a template
+or overwrite concurrent changes. Default lists remain active-only. Reactivation
+requires active existing parents, records a new active plan at the current UTC
+instant and resumes upcoming task generation without emails; it does not extend
+expired validity dates or rewrite the inactive gap/history. Cleaners remain denied.
+Show the backend ProblemDetails reason for failed clock starts and prevent early
+start actions until the actual scheduled UTC instant, with a live timer. Existing
+valid assignment and scheduled-occurrence checks remain authoritative on the API.
+Verify restore/deny/preservation/concurrency and desktop/mobile filter/action/error
+cases; keep optional checklist semantics and no-email behavior unchanged.
