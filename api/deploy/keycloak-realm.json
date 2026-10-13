@@ -2,11 +2,18 @@
   "realm": "readysetsiivous",
   "enabled": true,
   "sslRequired": "none",
-  "registrationAllowed": true,
+  "registrationAllowed": false,
   "roles": {
     "realm": [
-      { "name": "admin" },
-      { "name": "staff" }
+      {
+        "name": "admin"
+      },
+      {
+        "name": "staff"
+      },
+      {
+        "name": "employee"
+      }
     ]
   },
   "clients": [
@@ -15,8 +22,13 @@
       "enabled": true,
       "publicClient": true,
       "standardFlowEnabled": true,
-      "redirectUris": ["http://130.61.208.211/*"],
-      "webOrigins": ["http://130.61.208.211"]
+      "redirectUris": [
+        "http://130.61.208.211/*"
+      ],
+      "webOrigins": [
+        "http://130.61.208.211"
+      ]
     }
-  ]
+  ],
+  "loginWithEmailAllowed": true
 }

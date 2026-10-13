@@ -73,6 +73,16 @@ services:
       Cors__AllowedOrigins__0: https://readysetsiivous.fi
       Uploads__Path: /app/uploads
       Resend__ApiKey: ${RESEND_API_KEY:-}
+      EmployeeInvites__LifespanSeconds: 86400
+      EmployeeInvites__Smtp__Host: ${INVITE_SMTP_HOST:-}
+      EmployeeInvites__Smtp__Port: ${INVITE_SMTP_PORT:-587}
+      EmployeeInvites__Smtp__From: ${INVITE_SMTP_FROM:-}
+      EmployeeInvites__Smtp__Auth: ${INVITE_SMTP_AUTH:-true}
+      EmployeeInvites__Smtp__User: ${INVITE_SMTP_USER:-}
+      EmployeeInvites__Smtp__Password: ${INVITE_SMTP_PASSWORD:-}
+      EmployeeInvites__Smtp__UseResendApiKey: ${INVITE_SMTP_USE_RESEND_API_KEY:-false}
+      EmployeeInvites__Smtp__StartTls: ${INVITE_SMTP_STARTTLS:-true}
+      EmployeeInvites__Smtp__Ssl: ${INVITE_SMTP_SSL:-false}
       App__FrontendBaseUrl: https://readysetsiivous.fi
     volumes:
       - cleaning_uploads:/app/uploads

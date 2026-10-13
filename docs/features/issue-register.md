@@ -75,3 +75,14 @@ recording semantics; photo storage/limits and editable correction audit remain.
 #75, #82 and #83 retain their wider assignment/identity/workspace scope. Issues
 remain open until reviewed/merged and remaining acceptance work is reconciled.
 See [QC workflow](quality-cycle-workflow.md) and [rollout](../quality-cycle-rollout.md).
+
+## Issue49 implementation progress
+
+Native account setup, safe employee ownership, exact admin/employee role binding,
+explicit mail/public URL validation, password-preserving reinvites and access
+synchronization are implemented. Pending synchronization is fail-closed and a
+same-values retry recovers it. Existing employee UI now exposes invite/reinvite
+and account landing; My Work/linked-email-change screens remain separate.
+See [invitation contract](employee-invitations.md) and its legacy migration steps.
+Validation covers real PostgreSQL, captured SMTP and Keycloak24/26.1 in isolated
+test services. Production users, SMTP and database were not changed by this work.

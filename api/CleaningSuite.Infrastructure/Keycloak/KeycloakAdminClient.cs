@@ -96,6 +96,8 @@ public class KeycloakAdminClient
         {
             realm,
             enabled = true,
+            registrationAllowed = false,
+            loginWithEmailAllowed = true,
         });
 
     public Task CreateRoleAsync(string realm, string roleName, CancellationToken ct = default) =>
@@ -122,8 +124,17 @@ public class KeycloakAdminClient
             : null;
     }
 
-    public Task UpdateUserAsync(string realm, string userId, object user, CancellationToken ct = default) =>
-        SendAsync(HttpMethod.Put, $"admin/realms/{realm}/users/{userId}", ct, user);
+    public async Task UpdateUserAsync(string realm, string userId, object changes, CancellationToken ct = default)
+    {
+        // Keycloak user-profile updates can clear omitted fields (including email).
+        // Merge changes onto the current representation while leaving credentials and
+        // requiredActions untouched unless this operation explicitly supplies them.
+        var current = await GetUserAsync(realm, userId, ct) ?? throw new KeycloakException("Login account no longer exists", System.Net.HttpStatusCode.NotFound);
+        var merged = current.EnumerateObject().Where(p => p.Name is not ("credentials" or "requiredActions"))
+            .ToDictionary(p => p.Name, p => (object)p.Value.Clone());
+        foreach (var field in JsonSerializer.SerializeToElement(changes).EnumerateObject()) merged[field.Name] = field.Value.Clone();
+        await SendWithoutResultAsync(HttpMethod.Put, $"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}", ct, merged);
+    }
 
     public Task SetRealmEnabledAsync(string realm, bool enabled, CancellationToken ct = default) =>
         SendAsync(HttpMethod.Put, $"admin/realms/{realm}", ct, new { enabled });
@@ -137,6 +148,29 @@ public class KeycloakAdminClient
 
     public Task AssignRealmRoleAsync(string realm, string userId, object[] roles, CancellationToken ct = default) =>
         SendAsync(HttpMethod.Post, $"admin/realms/{realm}/users/{userId}/role-mappings/realm", ct, roles);
+
+    public Task<JsonElement> GetUserProfileAsync(string realm, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/users/profile", ct);
+    public Task UpdateUserProfileAsync(string realm, object profile, CancellationToken ct = default) => SendWithoutResultAsync(HttpMethod.Put, $"admin/realms/{Uri.EscapeDataString(realm)}/users/profile", ct, profile);
+    public Task<JsonElement> GetRealmAsync(string realm, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}", ct);
+    public Task UpdateRealmAsync(string realm, object changes, CancellationToken ct = default) => SendWithoutResultAsync(HttpMethod.Put, $"admin/realms/{Uri.EscapeDataString(realm)}", ct, changes);
+    public Task<JsonElement> GetClientsAsync(string realm, string clientId, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/clients?clientId={Uri.EscapeDataString(clientId)}", ct);
+    public async Task<JsonElement?> GetUserAsync(string realm, string userId, CancellationToken ct = default) {
+        using var response = await SendAsync(HttpMethod.Get, $"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}", ct, expectedNotFoundOk: true);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+        return await response.Content.ReadFromJsonAsync<JsonElement>(ct);
+    }
+    public Task<JsonElement> FindUsersByEmailAsync(string realm, string email, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/users?email={Uri.EscapeDataString(email)}&exact=true", ct);
+    public Task<JsonElement> GetUserRealmRolesAsync(string realm, string userId, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/role-mappings/realm", ct);
+    public Task RemoveRealmRolesAsync(string realm, string userId, object[] roles, CancellationToken ct = default) => SendWithoutResultAsync(HttpMethod.Delete, $"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/role-mappings/realm", ct, roles);
+    public Task LogoutUserAsync(string realm, string userId, CancellationToken ct = default) => SendWithoutResultAsync(HttpMethod.Post, $"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/logout", ct);
+    public Task SendExecuteActionsEmailAsync(string realm, string userId, string clientId, string redirectUri, int lifespanSeconds, string[] actions, CancellationToken ct = default) =>
+        SendWithoutResultAsync(HttpMethod.Put, $"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/execute-actions-email?client_id={Uri.EscapeDataString(clientId)}&redirect_uri={Uri.EscapeDataString(redirectUri)}&lifespan={lifespanSeconds}", ct, actions);
+    private async Task<JsonElement> GetJsonAsync(string path, CancellationToken ct) {
+        using var response = await SendAsync(HttpMethod.Get, path, ct); return await response.Content.ReadFromJsonAsync<JsonElement>(ct);
+    }
+    private async Task SendWithoutResultAsync(HttpMethod method, string path, CancellationToken ct, object? body = null) {
+        using var response = await SendAsync(method, path, ct, body);
+    }
 
     private async Task<HttpResponseMessage> SendAsync(
         HttpMethod method,
@@ -155,7 +189,7 @@ public class KeycloakAdminClient
         if (response.IsSuccessStatusCode || (expectedNotFoundOk && response.StatusCode == System.Net.HttpStatusCode.NotFound))
             return response;
 
-        throw new KeycloakException($"Keycloak {method} {path} failed: {(int)response.StatusCode}");
+        throw new KeycloakException($"Keycloak {method} request failed: {(int)response.StatusCode}", response.StatusCode);
     }
 
     private async Task<string> SendForLocationAsync(
@@ -171,7 +205,7 @@ public class KeycloakAdminClient
 
         var response = await _http.SendAsync(request, ct);
         if (!response.IsSuccessStatusCode)
-            throw new KeycloakException($"Keycloak {method} {path} failed: {(int)response.StatusCode}");
+            throw new KeycloakException($"Keycloak {method} request failed: {(int)response.StatusCode}", response.StatusCode);
 
         var location = response.Headers.Location?.ToString()
             ?? throw new KeycloakException("Location header missing");
@@ -181,5 +215,6 @@ public class KeycloakAdminClient
 
 public class KeycloakException : Exception
 {
-    public KeycloakException(string message) : base(message) { }
+    public System.Net.HttpStatusCode? StatusCode { get; }
+    public KeycloakException(string message, System.Net.HttpStatusCode? statusCode = null) : base(message) { StatusCode = statusCode; }
 }

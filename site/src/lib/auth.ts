@@ -12,11 +12,24 @@ export const KEYCLOAK_CLIENT_ID =
 let keycloak: Keycloak | null = null;
 let initPromise: Promise<boolean> | null = null;
 
+export function selectAuthTenant(realm: string): void {
+  if (!/^[a-z0-9][a-z0-9-]{2,62}$/.test(realm)) throw new Error('Invalid tenant in account link.');
+  if (typeof window === 'undefined') return;
+  sessionStorage.setItem('__AUTH_TENANT__', realm);
+  if (keycloak && keycloak.realm !== realm) { keycloak = null; initPromise = null; }
+}
+function selectedRealm(): string {
+  if (typeof window !== 'undefined') {
+    const stored = sessionStorage.getItem('__AUTH_TENANT__');
+    if (stored && /^[a-z0-9][a-z0-9-]{2,62}$/.test(stored)) return stored;
+  }
+  return KEYCLOAK_REALM;
+}
 export function getKeycloak(): Keycloak {
   if (!keycloak) {
     keycloak = new Keycloak({
       url: KEYCLOAK_URL,
-      realm: KEYCLOAK_REALM,
+      realm: selectedRealm(),
       clientId: KEYCLOAK_CLIENT_ID,
     });
   }
