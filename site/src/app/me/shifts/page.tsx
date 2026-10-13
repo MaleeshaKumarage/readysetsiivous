@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Calendar,
   Clock,
@@ -51,6 +51,7 @@ export default function MyShiftsPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const loadVersion = useRef(0);
 
   // Inline form state
   const [items, setItems] = useState<QualityCycleFormItem[]>([]);
@@ -59,24 +60,28 @@ export default function MyShiftsPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    let active = true;
     initAuth().then((ok) => {
+      if (!active) return;
       setReady(true);
       setAuthed(ok);
       if (!ok) return;
       loadShifts();
     });
+    return () => { active = false; loadVersion.current++; };
   }, []);
 
   async function loadShifts() {
+    const version = ++loadVersion.current;
     setLoading(true);
     setError(null);
     try {
       const data = await meApi.myShifts();
-      setOccurrences(data ?? []);
+      if (version === loadVersion.current) setOccurrences(data);
     } catch {
-      setError('Failed to load your shifts.');
+      if (version === loadVersion.current) setError('Failed to load your shifts.');
     } finally {
-      setLoading(false);
+      if (version === loadVersion.current) setLoading(false);
     }
   }
 
@@ -88,13 +93,24 @@ export default function MyShiftsPage() {
       if (form) {
         setOccurrences((prev) => prev.map((x) => (x.shiftId === o.shiftId && x.startUtc === o.startUtc ? { ...x, form } : x)));
       } else {
-        setError('Could not start shift.');
+        if (!(await recoverSavedOccurrence(o, 'start'))) setError('Could not start shift. Please retry.');
       }
     } catch {
-      setError('Could not start shift.');
+      if (!(await recoverSavedOccurrence(o, 'start'))) setError('Could not start shift. Please retry.');
     } finally {
       setBusy(false);
     }
+  }
+
+  async function recoverSavedOccurrence(o: MyShiftOccurrence, operation: 'start' | 'end'): Promise<boolean> {
+    try {
+      const latest = await meApi.myShifts();
+      const saved = latest.find(x => x.shiftId === o.shiftId && Date.parse(x.startUtc) === Date.parse(o.startUtc));
+      if (!saved?.form || (operation === 'end' ? !saved.form.isSubmitted : !saved.form.startedAtUtc && !saved.form.isSubmitted)) return false;
+      setOccurrences(current => current.map(x => x.shiftId === o.shiftId && Date.parse(x.startUtc) === Date.parse(o.startUtc) ? { ...x, form: saved.form } : x));
+      if (operation === 'end' || saved.form.isSubmitted) setOpenId(null);
+      return true;
+    } catch { return false; }
   }
 
   function openForm(o: MyShiftOccurrence) {
@@ -136,10 +152,10 @@ export default function MyShiftsPage() {
         setOccurrences((prev) => prev.map((x) => (x.shiftId === o.shiftId && x.startUtc === o.startUtc ? { ...x, form: result } : x)));
         setOpenId(null);
       } else {
-        setError('Could not submit form.');
+        if (!(await recoverSavedOccurrence(o, 'end'))) setError('Could not end shift. Your selections are kept; please retry.');
       }
     } catch {
-      setError('Could not submit form.');
+      if (!(await recoverSavedOccurrence(o, 'end'))) setError('Could not end shift. Your selections are kept; please retry.');
     } finally {
       setSubmitting(false);
     }
@@ -185,6 +201,8 @@ export default function MyShiftsPage() {
           <div className="flex items-center justify-center py-16 text-gray-500">
             <Loader2 className="w-6 h-6 animate-spin" />
           </div>
+        ) : error && occurrences.length === 0 ? (
+          <Button onClick={() => loadShifts()}>Retry loading shifts</Button>
         ) : occurrences.length === 0 ? (
           <Card variant="elevated" padding="lg" className="text-center text-gray-500 dark:text-gray-400">
             No shifts scheduled.
@@ -196,7 +214,7 @@ export default function MyShiftsPage() {
               const status = statusOf(o);
               const isOpen = openId === key;
               return (
-                <Card key={key} variant="elevated" padding="none" className="overflow-hidden">
+                <Card key={key} role="group" aria-label={`${o.shiftName} ${o.startUtc}`} variant="elevated" padding="none" className="overflow-hidden">
                   <div className="p-5 space-y-3">
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -228,7 +246,7 @@ export default function MyShiftsPage() {
                     {status === 'in-progress' && (
                       <Button variant="outline" size="sm" onClick={() => openForm(o)} className="gap-1.5">
                         {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                        Fill form & end
+                        Record activities & end
                       </Button>
                     )}
 
@@ -246,22 +264,23 @@ export default function MyShiftsPage() {
                         </h3>
                         <div className="space-y-2">
                           {items.map((item, index) => (
-                            <div
+                            <label
                               key={index}
-                              onClick={() => toggleItem(index)}
                               className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${
                                 item.isChecked
                                   ? 'bg-brand-50/60 border-brand-300 dark:bg-brand-950/30 dark:border-brand-800'
                                   : 'bg-white border-gray-200 hover:border-brand-200 dark:bg-gray-800 dark:border-gray-700'
                               }`}
                             >
-                              <input type="checkbox" checked={item.isChecked} onChange={() => toggleItem(index)} className="accent-brand-500" />
+                              <input type="checkbox" checked={item.isChecked} disabled={submitting} onChange={() => toggleItem(index)} className="accent-brand-500" />
                               <span className="text-sm text-gray-800 dark:text-gray-200">{item.itemText}</span>
-                            </div>
+                            </label>
                           ))}
                         </div>
+                        {items.length === 0 && <p className="text-sm text-gray-600 dark:text-gray-300">No checklist assigned. You can end this shift without recording activities.</p>}
                         <textarea
                           value={notes}
+                          disabled={submitting}
                           onChange={(e) => setNotes(e.target.value)}
                           placeholder="Notes (optional)"
                           rows={2}
@@ -275,6 +294,7 @@ export default function MyShiftsPage() {
                                   <img src={p} alt={`photo-${i}`} className="w-16 h-16 object-cover rounded-lg border border-gray-200 dark:border-gray-700" />
                                   <button
                                     type="button"
+                                    disabled={submitting}
                                     onClick={() => handleRemovePhoto(i)}
                                     className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-white text-xs leading-none"
                                     aria-label="Remove photo"
@@ -288,12 +308,12 @@ export default function MyShiftsPage() {
                           <label className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-700 dark:text-brand-400 cursor-pointer">
                             <Upload className="w-4 h-4" />
                             Add photo
-                            <input type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} />
+                            <input type="file" accept="image/*" multiple disabled={submitting} className="hidden" onChange={handlePhotoUpload} />
                           </label>
                         </div>
                         <Button size="sm" onClick={() => handleEnd(o)} disabled={submitting} fullWidth className="gap-1.5">
                           {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                          End shift & submit
+                          End shift
                         </Button>
                       </div>
                     )}

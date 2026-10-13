@@ -34,11 +34,15 @@ Repeated attachment/generation is idempotent. No remove/reassign is required.
 
 The shared dispatcher creates records for a rolling 32-day window. A worker scans
 active tenants every five minutes after a 15-second startup delay. Assignment,
-template changes and manual dispatch use the same generator. Current-day links
-are emailed when Resend is configured; ten-minute delivery retry leases and
-stored delivery state distinguish generated records from sent notifications.
-Email can be delivered more than once if the provider succeeds before a process
-crash; exactly-once external delivery is not promised.
+template changes and manual dispatch use the same generator. Generation creates
+tasks only: **no QC/checklist emails are sent**, regardless of Resend configuration
+or historical failed delivery state. Account-setup invitation emails are separate.
+
+Employees sign in, open **My shifts** from the account landing, choose **Start**,
+then **Record activities & end** on that same shift. They select only the activities
+performed and choose **End shift**. None, some or all activities are valid; notes
+are optional. A shift without an active checklist can still start/end with no
+activity items. Authenticated end requires a prior start.
 
 New records contain company/branch/schedule timing and checklist snapshots.
 Future pending records follow template changes; started and submitted records
@@ -46,9 +50,10 @@ keep their original activities. Submission before the occurrence starts is 409;
 a second submission is 409. Missing/modified/reordered checklist structures are
 400. Duplicate item labels still have separate checkbox positions.
 
-Cleaner links include tenant and an opaque record token. This is the existing
-resource-token access model: possession of a link grants access to that one
-record, without administrator capabilities. It is not authenticated My Work.
+Historical checklist links retain their existing resource-token access contract
+for compatibility. They are not emailed, issued as the employee workflow, or
+advertised on the account landing. The current workflow is authenticated My
+Shifts. Public monthly-report sharing remains separate and admin-controlled.
 
 ## Reports and sharing
 
@@ -112,11 +117,11 @@ Production partition contents were not inspected or migrated in this change.
 | DST/overnight/month transition | Tenant-local date counts and exclusive boundary; broaden calendar fixtures |
 | Template rename / duplicate labels | Preserve snapshot labels; position-based checks; add detailed report grouping fixtures |
 
-Still missing: authenticated own-work screen and token revocation/expiry policy;
+Still missing: broader own-work screen and checklist token revocation/expiry policy;
 editable submissions/correction audit; scoped template creation controls in FE
 (global creation and scope-preserving edits exist); durable private photo upload
-and enforced payload limits; holiday calendars; genuine Keycloak browser login
-coverage and notification-provider failure/crash recovery tests. These are not
+and enforced payload limits; holiday calendars; broader lifecycle/calendar
+coverage. These are not
 silently covered by request mocks. Existing issues #49, #62, #75–77, #82–83 track
 remaining identity, lifecycle, evidence and workspace work.
 
@@ -128,3 +133,20 @@ remaining identity, lifecycle, evidence and workspace work.
   accessibility and existing-shift-action edits, all18QC desktop/mobile runs passed.
 - TypeScript checks and the Next.js production build passed.
 - No real cleaner emails sent. Production was not deployed or migrated.
+
+## Issue93 verification on 2026-10-14
+
+- All 294 backend tests passed with owned disposable PostgreSQL, Keycloak and
+  captured SMTP services; zero skipped tests. Task generation has no email sender
+  dependency and preserves historical delivery metadata.
+- The final desktop/mobile suite passed all 126 cases. All 16 shift cases cover
+  none/subset/all selections, no-template
+  clocking, retained input on retry, saved-response recovery and authentication.
+- A genuine Keycloak browser test completed account setup, opened My shifts,
+  started a task, selected Corridor only and ended it. Real API readback confirmed
+  both clock timestamps and the selection. Admin monthly report counted Corridor
+  once and Gym zero times; PDF returned a valid PDF header; cleaner report access
+  was403. The captured inbox contained only the native setup email before reinvite.
+- Merge/deployment verification remains pending; this section does not claim the
+  issue93 correction is already live.
+- TypeScript checks and the final production frontend build passed.

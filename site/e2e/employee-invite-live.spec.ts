@@ -35,8 +35,33 @@ test('real Keycloak email completes setup, preserves password on reinvite, and o
   const me = await request.get(`${api}/api/v1/me`, { headers: { Authorization: `Bearer ${employeeJwt}` } });
   expect(me.status()).toBe(200); expect((await me.json()).employee.id).toBe(fixture.employeeId);
   expect((await request.get(`${api}/api/v1/admin/quality-cycle/templates`, { headers: { Authorization: `Bearer ${employeeJwt}` } })).status()).toBe(403);
+  await page.getByRole('link', { name: 'My shifts', exact: true }).click();
+  const shiftCard = page.getByRole('group', { name: /^Live employee shift / }).first();
+  await expect(shiftCard).toBeVisible();
+  await shiftCard.getByRole('button', { name: 'Start', exact: true }).click();
+  await shiftCard.getByRole('button', { name: 'Record activities & end', exact: true }).click();
+  await shiftCard.getByRole('checkbox', { name: 'Corridor', exact: true }).check();
+  await shiftCard.getByRole('button', { name: 'End shift', exact: true }).click();
+  await expect(shiftCard.getByText('Done', { exact: true })).toBeVisible();
+  const ownShifts = await request.get(`${api}/api/v1/me/shifts`, { headers: { Authorization: `Bearer ${employeeJwt}` } });
+  expect(ownShifts.status()).toBe(200);
+  const saved = (await ownShifts.json()).find((o: any) => o.shiftId === fixture.shiftId && o.form?.isSubmitted);
+  expect(saved.form.startedAtUtc).toBeTruthy(); expect(saved.form.endedAtUtc).toBeTruthy();
+  expect(saved.form.items).toEqual([{ itemText: 'Corridor', isChecked: true }, { itemText: 'Gym', isChecked: false }]);
+  const afterShiftMails = (await (await request.get(`${fixture.mailboxUrl}/api/v1/messages`)).json()).messages.filter((m: any) => m.To.some((to: any) => to.Address === fixture.email));
+  expect(afterShiftMails).toHaveLength(1); // Native account setup only; no QC emails.
   const ownerTokenResponse = await request.post(`${fixture.keycloakUrl}/realms/${fixture.realm}/protocol/openid-connect/token`, { form: { grant_type: 'password', client_id: 'cleaning-suite-web', username: fixture.ownerEmail, password: 'InviteOwnerTestOnly2026', scope: 'openid email' } });
   expect(ownerTokenResponse.status()).toBe(200); const ownerJwt = (await ownerTokenResponse.json()).access_token;
+  const recordedDate = new Date(saved.startUtc);
+  const monthQuery = `year=${recordedDate.getUTCFullYear()}&month=${recordedDate.getUTCMonth() + 1}&shiftId=${fixture.shiftId}`;
+  const report = await request.get(`${api}/api/v1/admin/quality-cycle/monthly-summary?${monthQuery}`, { headers: { Authorization: `Bearer ${ownerJwt}` } });
+  expect(report.status()).toBe(200);
+  const shiftReport = (await report.json()).shifts.find((s: any) => s.shiftId === fixture.shiftId);
+  expect(shiftReport.items.find((i: any) => i.itemText === 'Corridor').daysPerformed).toBe(1);
+  expect(shiftReport.items.find((i: any) => i.itemText === 'Gym').daysPerformed).toBe(0);
+  const pdf = await request.get(`${api}/api/v1/admin/quality-cycle/summary-pdf?${monthQuery}`, { headers: { Authorization: `Bearer ${ownerJwt}` } });
+  expect(pdf.status()).toBe(200); expect((await pdf.body()).subarray(0, 4).toString()).toBe('%PDF');
+  expect((await request.get(`${api}/api/v1/admin/quality-cycle/monthly-summary?${monthQuery}`, { headers: { Authorization: `Bearer ${employeeJwt}` } })).status()).toBe(403);
   const reinvite = await request.post(`${api}/api/v1/admin/employees/${fixture.employeeId}/invite`, { headers: { Authorization: `Bearer ${ownerJwt}` } });
   expect(reinvite.status()).toBe(200); expect((await reinvite.json()).status).toBe('Sent');
   // Read only the captured test inbox. Decode native action metadata to verify no password reset.
