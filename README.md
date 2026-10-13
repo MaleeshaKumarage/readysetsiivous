@@ -15,6 +15,17 @@ for API/auth URLs, local setup, dev preview deployment, test commands, and the
 production release sequence. Frontend API/auth defaults point to production;
 set dev variables explicitly before testing against a live backend.
 
+## Feature inventory and test planning
+
+See [all features and FE/BE gaps](docs/features/feature-inventory.md),
+[operation-by-operation FE/BE coverage](docs/features/feature-capability-matrix.md),
+[auth, roles and workspace recommendations](docs/features/technical-lead-review.md),
+[HTTP endpoints](docs/features/api-endpoints.md),
+[edge-case catalogue](docs/testing/edge-case-catalog.md), and
+[the Playwright improvement plan](docs/testing/playwright-test-plan.md).
+The catalogue separates implemented contracts, known-gap regressions, missing UI,
+and business-policy decisions so test improvements do not hide incomplete behavior.
+
 ## Site
 
 ```bash
