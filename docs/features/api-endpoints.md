@@ -1,11 +1,13 @@
 # HTTP endpoint inventory
 
-Source baseline: `ceff5bd`, reviewed 2026-10-13. Generated from every controller's
+Initial source baseline: `ceff5bd`, reviewed 2026-10-13; role/self/manager entries
+updated on 2026-10-14 after main `82d2cb7`. Generated from every controller's
 route and HTTP attributes, then cross-checked against the feature catalogue.
-`staff` policy means **admin OR employee**, not the literal Keycloak role `staff`.
+Current `staff` policy means **admin OR manager OR employee**, not the literal Keycloak role `staff`. Administrative routes now require admin; manager operations use their dedicated workspace/API.
 Additional method-level admin policies narrow inherited staff access. Tenant
 resolution/active-status checks also apply; the listed role is not the entire
-security boundary. System controller checks the configured provisioner realm.
+security boundary. System controller requires the platform audience and dedicated
+platform permission, independently of tenant admin roles.
 
 `{slug}` is the public tenant slug. `{id:guid}` indicates a GUID route constraint;
 a malformed segment can fail routing with 404 before validation. Request bodies
@@ -18,9 +20,9 @@ before deploying over pre-existing default-partition QC data.
 | Method | Route | Authorization | Action / evidence |
 | --- | --- | --- | --- |
 | POST | `/api/v1/admin/agreements` | admin | [Create](../../api/CleaningSuite.Api/Controllers/AgreementsAdminController.cs#L19) |
-| GET | `/api/v1/admin/agreements` | admin OR employee | [List](../../api/CleaningSuite.Api/Controllers/AgreementsAdminController.cs#L31) |
-| GET | `/api/v1/admin/agreements/{id:guid}` | admin OR employee | [Get](../../api/CleaningSuite.Api/Controllers/AgreementsAdminController.cs#L36) |
-| GET | `/api/v1/admin/agreements/{id:guid}/document` | admin OR employee | [Document](../../api/CleaningSuite.Api/Controllers/AgreementsAdminController.cs#L43) |
+| GET | `/api/v1/admin/agreements` | admin | [List](../../api/CleaningSuite.Api/Controllers/AgreementsAdminController.cs#L31) |
+| GET | `/api/v1/admin/agreements/{id:guid}` | admin | [Get](../../api/CleaningSuite.Api/Controllers/AgreementsAdminController.cs#L36) |
+| GET | `/api/v1/admin/agreements/{id:guid}/document` | admin | [Document](../../api/CleaningSuite.Api/Controllers/AgreementsAdminController.cs#L43) |
 | POST | `/api/v1/admin/agreements/{id:guid}/signers` | admin | [AddSigner](../../api/CleaningSuite.Api/Controllers/AgreementsAdminController.cs#L51) |
 | DELETE | `/api/v1/admin/agreements/{id:guid}/signers/{signerId:guid}` | admin | [RemoveSigner](../../api/CleaningSuite.Api/Controllers/AgreementsAdminController.cs#L59) |
 | POST | `/api/v1/admin/agreements/{id:guid}/cancel` | admin | [Cancel](../../api/CleaningSuite.Api/Controllers/AgreementsAdminController.cs#L67) |
@@ -29,8 +31,8 @@ before deploying over pre-existing default-partition QC data.
 | GET | `/api/v1/public/{slug}/agreements/{token}` | anonymous | [Get](../../api/CleaningSuite.Api/Controllers/AgreementsPublicController.cs#L17) |
 | POST | `/api/v1/public/{slug}/agreements/{token}/sign` | anonymous | [Sign](../../api/CleaningSuite.Api/Controllers/AgreementsPublicController.cs#L24) |
 | GET | `/api/v1/public/{slug}/agreements/{token}/file` | anonymous | [File](../../api/CleaningSuite.Api/Controllers/AgreementsPublicController.cs#L32) |
-| GET | `/api/v1/admin/bookings` | admin OR employee | [List](../../api/CleaningSuite.Api/Controllers/BookingsAdminController.cs#L20) |
-| GET | `/api/v1/admin/bookings/{id:guid}` | admin OR employee | [Detail](../../api/CleaningSuite.Api/Controllers/BookingsAdminController.cs#L32) |
+| GET | `/api/v1/admin/bookings` | admin | [List](../../api/CleaningSuite.Api/Controllers/BookingsAdminController.cs#L20) |
+| GET | `/api/v1/admin/bookings/{id:guid}` | admin | [Detail](../../api/CleaningSuite.Api/Controllers/BookingsAdminController.cs#L32) |
 | POST | `/api/v1/admin/bookings/{id:guid}/confirm` | admin | [Confirm](../../api/CleaningSuite.Api/Controllers/BookingsAdminController.cs#L39) |
 | POST | `/api/v1/admin/bookings/{id:guid}/cancel` | admin | [Cancel](../../api/CleaningSuite.Api/Controllers/BookingsAdminController.cs#L47) |
 | POST | `/api/v1/admin/bookings/{id:guid}/complete` | admin | [Complete](../../api/CleaningSuite.Api/Controllers/BookingsAdminController.cs#L55) |
@@ -44,17 +46,17 @@ before deploying over pre-existing default-partition QC data.
 | POST | `/api/v1/admin/companies/{companyId:guid}/branches` | admin | [CreateBranch](../../api/CleaningSuite.Api/Controllers/CompaniesAdminController.cs#L66) |
 | PUT | `/api/v1/admin/companies/branches/{branchId:guid}` | admin | [UpdateBranch](../../api/CleaningSuite.Api/Controllers/CompaniesAdminController.cs#L73) |
 | POST | `/api/v1/admin/companies/branches/{branchId:guid}/deactivate` | admin | [DeactivateBranch](../../api/CleaningSuite.Api/Controllers/CompaniesAdminController.cs#L80) |
-| GET | `/api/v1/admin/employees` | admin OR employee | [List](../../api/CleaningSuite.Api/Controllers/EmployeesAdminController.cs#L21) |
+| GET | `/api/v1/admin/employees` | admin | [List](../../api/CleaningSuite.Api/Controllers/EmployeesAdminController.cs#L21) |
 | POST | `/api/v1/admin/employees` | admin | [Create](../../api/CleaningSuite.Api/Controllers/EmployeesAdminController.cs#L29) |
 | PUT | `/api/v1/admin/employees/{id:guid}` | admin | [Update](../../api/CleaningSuite.Api/Controllers/EmployeesAdminController.cs#L37) |
 | POST | `/api/v1/admin/employees/{id:guid}/deactivate` | admin | [Deactivate](../../api/CleaningSuite.Api/Controllers/EmployeesAdminController.cs#L45) |
 | POST | `/api/v1/admin/employees/{id:guid}/invite` | admin | [Invite](../../api/CleaningSuite.Api/Controllers/EmployeesAdminController.cs#L54) |
-| GET | `/api/v1/admin/invoices` | admin OR employee | [List](../../api/CleaningSuite.Api/Controllers/InvoicesAdminController.cs#L21) |
+| GET | `/api/v1/admin/invoices` | admin | [List](../../api/CleaningSuite.Api/Controllers/InvoicesAdminController.cs#L21) |
 | POST | `/api/v1/admin/invoices` | admin | [Create](../../api/CleaningSuite.Api/Controllers/InvoicesAdminController.cs#L29) |
-| GET | `/api/v1/admin/invoices/{id:guid}` | admin OR employee | [Detail](../../api/CleaningSuite.Api/Controllers/InvoicesAdminController.cs#L37) |
+| GET | `/api/v1/admin/invoices/{id:guid}` | admin | [Detail](../../api/CleaningSuite.Api/Controllers/InvoicesAdminController.cs#L37) |
 | POST | `/api/v1/admin/invoices/{id:guid}/mark-paid` | admin | [MarkPaid](../../api/CleaningSuite.Api/Controllers/InvoicesAdminController.cs#L44) |
 | POST | `/api/v1/admin/invoices/{id:guid}/void` | admin | [Void](../../api/CleaningSuite.Api/Controllers/InvoicesAdminController.cs#L53) |
-| GET | `/api/v1/admin/invoices/{id:guid}/pdf` | admin OR employee | [Pdf](../../api/CleaningSuite.Api/Controllers/InvoicesAdminController.cs#L62) |
+| GET | `/api/v1/admin/invoices/{id:guid}/pdf` | admin | [Pdf](../../api/CleaningSuite.Api/Controllers/InvoicesAdminController.cs#L62) |
 | GET | `/api/v1/me` | authenticated | [Get](../../api/CleaningSuite.Api/Controllers/MeController.cs#L13) |
 | GET | `/api/v1/public/{slug}/availability` | anonymous | [Availability](../../api/CleaningSuite.Api/Controllers/PublicBookingsController.cs#L19) |
 | POST | `/api/v1/public/{slug}/bookings` | anonymous | [Book](../../api/CleaningSuite.Api/Controllers/PublicBookingsController.cs#L27) |
@@ -73,7 +75,7 @@ before deploying over pre-existing default-partition QC data.
 | GET | `/api/v1/public/{slug}/quality-cycle/{token}` | anonymous | [GetByToken](../../api/CleaningSuite.Api/Controllers/QualityCyclePublicController.cs#L20) |
 | POST | `/api/v1/public/{slug}/quality-cycle/{token}/submit` | anonymous | [Submit](../../api/CleaningSuite.Api/Controllers/QualityCyclePublicController.cs#L27) |
 | GET | `/api/v1/admin/schedule` | admin | [Get](../../api/CleaningSuite.Api/Controllers/ScheduleController.cs#L19) |
-| GET | `/api/v1/admin/services` | admin OR employee | [List](../../api/CleaningSuite.Api/Controllers/ServicesAdminController.cs#L26) |
+| GET | `/api/v1/admin/services` | admin | [List](../../api/CleaningSuite.Api/Controllers/ServicesAdminController.cs#L26) |
 | POST | `/api/v1/admin/services` | admin | [Create](../../api/CleaningSuite.Api/Controllers/ServicesAdminController.cs#L34) |
 | PUT | `/api/v1/admin/services/{id:guid}` | admin | [Update](../../api/CleaningSuite.Api/Controllers/ServicesAdminController.cs#L42) |
 | DELETE | `/api/v1/admin/services/{id:guid}` | admin | [Delete](../../api/CleaningSuite.Api/Controllers/ServicesAdminController.cs#L50) |
@@ -91,7 +93,7 @@ before deploying over pre-existing default-partition QC data.
 | GET | `/api/v1/system/tenants` | platform realm + platform audience + `platform.tenants.manage` | [List](../../api/CleaningSuite.Api/Controllers/SystemController.cs) |
 | POST | `/api/v1/system/tenants/{slug}/suspend` | platform realm + platform audience + `platform.tenants.manage` | [Suspend](../../api/CleaningSuite.Api/Controllers/SystemController.cs) |
 | POST | `/api/v1/system/tenants/{slug}/activate` | platform realm + platform audience + `platform.tenants.manage` | [Activate](../../api/CleaningSuite.Api/Controllers/SystemController.cs) |
-| GET | `/api/v1/admin/tenant` | admin OR employee | [Get](../../api/CleaningSuite.Api/Controllers/TenantAdminController.cs#L20) |
+| GET | `/api/v1/admin/tenant` | admin | [Get](../../api/CleaningSuite.Api/Controllers/TenantAdminController.cs#L20) |
 | PUT | `/api/v1/admin/tenant` | admin | [Update](../../api/CleaningSuite.Api/Controllers/TenantAdminController.cs#L27) |
 | PUT | `/api/v1/admin/tenant/pages/{pageKey}` | admin | [UpdatePage](../../api/CleaningSuite.Api/Controllers/TenantAdminController.cs#L35) |
 

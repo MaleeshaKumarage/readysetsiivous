@@ -9,6 +9,7 @@ using CleaningSuite.Domain.Tenants;
 using CleaningSuite.Domain.Companies;
 using CleaningSuite.Domain.Shifts;
 using CleaningSuite.Domain.QualityCycle;
+using CleaningSuite.Domain.Bookings;
 using CleaningSuite.Infrastructure.Keycloak;
 using CleaningSuite.Infrastructure.Persistence;
 using Marten;
@@ -111,18 +112,41 @@ public class EmployeeIdentityIntegrationTests
         using (var session = store.LightweightSession(realm)) { var saved = (await session.LoadAsync<Employee>(employee.Id))!; saved.InviteLastSentUtc = DateTime.UtcNow.AddMinutes(-2); session.Store(saved); await session.SaveChangesAsync(); }
         var artifactPath = Environment.GetEnvironmentVariable("INVITE_TEST_CONTEXT_PATH");
         if (!string.IsNullOrWhiteSpace(artifactPath)) {
-            var company = Company.Create("QC-LIVE", "Live shift company");
+            var company = Company.Create("QC-LIVE-" + realm, "Live shift company");
             var branch = Branch.Create(company.Id, "Live shift branch");
             var template = QualityCycleTemplate.Create("Daily activities", ["Corridor", "Gym"], companyId: company.Id, branchId: branch.Id);
             var shift = Shift.Create(company.Id, branch.Id, "Live employee shift",
                 new ShiftSchedule { Type = ShiftScheduleType.DailySameTime, DailyStart = TimeSpan.Zero, DailyEnd = TimeSpan.FromHours(1) }, null, null, null, template.Id);
             var assignment = ShiftAssignment.Create(shift.Id, employee.Id, null);
             assignment.AssignedAtUtc = DateTime.UtcNow.Date.AddDays(-8);
+            var secondBranch = Branch.Create(company.Id, "Second tenant branch");
+            var secondShift = Shift.Create(company.Id, secondBranch.Id, "Second branch shift",
+                new ShiftSchedule { Type = ShiftScheduleType.DailySameTime, DailyStart = TimeSpan.FromHours(1), DailyEnd = TimeSpan.FromHours(2) }, null, null, null);
+            var booking = new Booking { EmployeeId = employee.Id.ToString(), BookingNumber = "SELF-LIVE-" + realm, StartUtc = DateTime.UtcNow.Date.AddHours(8), EndUtc = DateTime.UtcNow.Date.AddHours(9),
+                StartLocalDate = DateTime.UtcNow.Date.ToString("yyyy-MM-dd"), StartLocalTime = "11:00", Customer = new() { Name = "Own customer", Phone = "123", Email = "private-customer-email" },
+                CustomerReference = "private-reference", Notes = "private-booking-note", Service = new() { NameFi = "Own service", PriceNet = 98765m } };
+            var otherBooking = new Booking { EmployeeId = Guid.NewGuid().ToString(), BookingNumber = "OTHER-LIVE-" + realm, StartUtc = booking.StartUtc, EndUtc = booking.EndUtc };
             using (var session = store.LightweightSession(realm)) {
                 session.Store(company); session.Store(branch); session.Store(template); session.Store(shift); session.Store(assignment);
+                session.Store(secondBranch); session.Store(secondShift);
+                session.Store(booking); session.Store(otherBooking);
                 await session.SaveChangesAsync();
             }
-            await File.WriteAllTextAsync(artifactPath, JsonSerializer.Serialize(new { realm, employeeId = employee.Id, userId = boundId, email = employee.Email, setupUrl, frontend, keycloakUrl = url, mailboxUrl, ownerEmail = "owner@" + realm + ".invalid", shiftId = shift.Id, branchId = branch.Id }));
+            var otherRealm = realm + "-other";
+            await provisioner.ProvisionAsync(otherRealm, "Other isolated tenant", "owner@" + otherRealm + ".invalid", "Other", "Owner", new[] { frontend + "/*" });
+            var otherEmployee = new Employee { Role = Employee.RoleManager, Email = "manager@" + otherRealm + ".invalid", FirstName = "Other", LastName = "Manager" };
+            var otherUser = await admin.CreateUserAsync(otherRealm, new { username = otherEmployee.Email, email = otherEmployee.Email,
+                enabled = true, emailVerified = true, credentials = new[] { new { type = "password", value = "InviteOtherManagerTestOnly2026", temporary = false } },
+                attributes = new Dictionary<string, string[]> { ["cleaning_employee_id"] = new[] { otherEmployee.Id.ToString() } } });
+            await admin.AssignRealmRoleAsync(otherRealm, otherUser, new object[] { await admin.GetRoleAsync(otherRealm, "manager") });
+            otherEmployee.KeycloakUserId = otherUser;
+            var otherCompany = Company.Create("OTHER-LIVE-" + realm, "Other private company"); var otherBranch = Branch.Create(otherCompany.Id, "Other private branch");
+            var otherShift = Shift.Create(otherCompany.Id, otherBranch.Id, "Other private shift", secondShift.Schedule, null, null, null);
+            using (var registry = store.LightweightSession("registry")) { registry.Store(new TenantRegistration { Slug = otherRealm, Status = TenantRegistration.StatusActive }); await registry.SaveChangesAsync(); }
+            using (var session = store.LightweightSession(otherRealm)) { session.Store(otherEmployee); session.Store(otherCompany); session.Store(otherBranch); session.Store(otherShift); await session.SaveChangesAsync(); }
+            await File.WriteAllTextAsync(artifactPath, JsonSerializer.Serialize(new { realm, employeeId = employee.Id, userId = boundId, email = employee.Email, setupUrl, frontend, keycloakUrl = url, mailboxUrl, ownerEmail = "owner@" + realm + ".invalid", shiftId = shift.Id, branchId = branch.Id, companyId = company.Id, secondBranchId = secondBranch.Id,
+                otherRealm, otherManagerEmail = otherEmployee.Email, otherShiftId = otherShift.Id,
+                bookingId = booking.Id, otherBookingId = otherBooking.Id, workDate = booking.StartLocalDate }));
         }
     }
     private static async Task<EmployeeInviteResult> Invite(string realm, Guid id, IDocumentStore store, IConfiguration config, IEmployeeIdentityProvider identity) {

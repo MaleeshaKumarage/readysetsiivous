@@ -21,7 +21,7 @@ public class InviteEmployeeHandler(IEmployeeRepository employees, ITenantContext
             throw new EmployeeIdentityConflictException("Employee email changed while inviting. Retry with the current record.");
         if (employee.IdentitySyncPending) throw new EmployeeIdentityConflictException("Finish the pending login synchronization before sending another invitation.");
         if (!employee.IsActive) throw new EmployeeIdentityConflictException("Inactive employees cannot be invited.");
-        if (employee.Role is not (Employee.RoleAdmin or Employee.RoleEmployee)) throw new EmployeeIdentityConflictException("Unsupported employee role.");
+        if (employee.Role is not (Employee.RoleAdmin or Employee.RoleEmployee or Employee.RoleManager)) throw new EmployeeIdentityConflictException("Unsupported employee role.");
         if (!MailAddress.TryCreate(employee.Email, out var address) || address.Address != employee.Email.Trim())
             throw new EmployeeIdentityConflictException("The employee's email address is invalid.");
         var emailOwner = await employees.GetByEmailAsync(employee.Email, ct);

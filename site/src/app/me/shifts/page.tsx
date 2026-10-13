@@ -52,6 +52,8 @@ export default function MyShiftsPage() {
   const [busy, setBusy] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const loadVersion = useRef(0);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
 
   // Inline form state
   const [items, setItems] = useState<QualityCycleFormItem[]>([]);
@@ -95,8 +97,8 @@ export default function MyShiftsPage() {
       } else {
         if (!(await recoverSavedOccurrence(o, 'start'))) setError('Could not start shift. Please retry.');
       }
-    } catch {
-      if (!(await recoverSavedOccurrence(o, 'start'))) setError('Could not start shift. Please retry.');
+    } catch (error) {
+      if (!(await recoverSavedOccurrence(o, 'start'))) setError(error instanceof Error && error.message !== 'Please retry.' ? `Could not start shift. ${error.message}` : 'Could not start shift. Please retry.');
     } finally {
       setBusy(false);
     }
@@ -238,10 +240,11 @@ export default function MyShiftsPage() {
                     </div>
 
                     {status === 'not-started' && (
-                      <Button size="sm" onClick={() => handleStart(o)} disabled={busy} className="gap-1.5">
+                      <Button size="sm" onClick={() => handleStart(o)} disabled={busy || Date.parse(o.startUtc) > now} className="gap-1.5">
                         <Play className="w-4 h-4" /> Start
                       </Button>
                     )}
+                    {status === 'not-started' && Date.parse(o.startUtc) > now && <p className="text-sm text-gray-500">Available at the scheduled start time.</p>}
 
                     {status === 'in-progress' && (
                       <Button variant="outline" size="sm" onClick={() => openForm(o)} className="gap-1.5">

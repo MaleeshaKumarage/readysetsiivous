@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { initAuth, isAuthenticated, isAdmin, login, logout, refreshToken, selectAuthTenant } from '@/lib/auth';
+import { initAuth, isAuthenticated, isAdmin, isManager, login, logout, refreshToken, selectAuthTenant } from '@/lib/auth';
 import { API_URL, TENANT_SLUG } from '@/lib/api';
 
 interface Account { realm: string; employee?: { id: string; firstName: string; lastName: string; role: string; isActive: boolean } | null; }
@@ -52,6 +52,7 @@ export default function AccountClient() {
           <h2 className="text-xl font-medium">Account ready</h2>
           <p>{account.employee ? `${account.employee.firstName} ${account.employee.lastName}` : 'Tenant administrator'} · {account.realm}</p>
           {account.employee?.isActive && <Link className="block rounded bg-gray-900 text-white px-4 py-2 text-center" href="/me/shifts/">My shifts</Link>}
+          {account.employee?.role === 'manager' && isManager() && <Link className="block underline" href="/manager/">Manage tenant operations</Link>}
           {isAdmin() ? <Link className="underline" href="/admin/">Continue to administration</Link>
             : <p>Open My shifts to start your shift, record the activities you did, and end it.</p>}
         </>}

@@ -195,3 +195,11 @@ settings; setting Resend API delivery alone is insufficient. Existing configured
 SMTP is preserved. Defaults do not deliver real email without configured sender
 credentials. See [employee invitations](features/employee-invitations.md) for
 24-hour token policy, redirect/role/user-profile setup and legacy migration.
+
+The reviewed realm import and new-tenant provisioner include `admin`, `manager`
+and `employee`. Manager is tenant-wide and has dedicated operational APIs; it has
+no platform, payroll, billing, template or report privileges. Existing realms gain
+the empty manager role idempotently when an admin selects/invites that role.
+No existing identity automatically gains manager access. Native account setup
+emails continue; QC activity forms are filled through authenticated My shifts and
+do not send emails. See [tenant manager access](features/tenant-manager-access.md).

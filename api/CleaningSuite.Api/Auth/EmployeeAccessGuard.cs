@@ -11,6 +11,7 @@ public sealed class EmployeeAccessGuard(IEmployeeRepository employees)
     {
         var path = context.Request.Path.Value ?? "";
         if (!path.StartsWith("/api/v1/admin/", StringComparison.OrdinalIgnoreCase)
+            && !path.StartsWith("/api/v1/manager", StringComparison.OrdinalIgnoreCase)
             && !path.StartsWith("/api/v1/me", StringComparison.OrdinalIgnoreCase)) return true;
         if (context.User.Identity?.IsAuthenticated != true) return true;
         var sub = context.User.FindFirstValue("sub");
@@ -19,7 +20,7 @@ public sealed class EmployeeAccessGuard(IEmployeeRepository employees)
         var roles = RealmRoles(context.User);
         if (employee is null) {
             // Provisioned tenant owners predate employee documents. Employee logins must be linked.
-            return roles.Contains(Employee.RoleEmployee) && !roles.Contains(Employee.RoleAdmin)
+            return (roles.Contains(Employee.RoleEmployee) || roles.Contains(Employee.RoleManager)) && !roles.Contains(Employee.RoleAdmin)
                 ? await DenyAsync(context, "This login is not linked to an employee. Contact your tenant administrator.") : true;
         }
         if (employee.IdentitySyncPending) return await DenyAsync(context, "Employee login synchronization is pending. Contact your tenant administrator.");
@@ -27,7 +28,8 @@ public sealed class EmployeeAccessGuard(IEmployeeRepository employees)
         if (!string.Equals(context.User.FindFirstValue("email_verified"), "true", StringComparison.OrdinalIgnoreCase))
             return await DenyAsync(context, "Complete email verification before using this account.");
         var matches = employee.Role == Employee.RoleAdmin ? roles.Contains(Employee.RoleAdmin)
-            : employee.Role == Employee.RoleEmployee && roles.Contains(Employee.RoleEmployee) && !roles.Contains(Employee.RoleAdmin);
+            : employee.Role == Employee.RoleManager ? roles.Contains(Employee.RoleManager) && !roles.Contains(Employee.RoleAdmin) && !roles.Contains(Employee.RoleEmployee)
+            : employee.Role == Employee.RoleEmployee && roles.Contains(Employee.RoleEmployee) && !roles.Contains(Employee.RoleAdmin) && !roles.Contains(Employee.RoleManager);
         if (!matches) return await DenyAsync(context, "Account permissions changed. Sign in again or contact your tenant administrator.");
         context.Items["Employee"] = employee;
         return true;

@@ -7,6 +7,7 @@ public class Employee : BaseDocument
 {
     public const string RoleAdmin = "admin";
     public const string RoleEmployee = "employee";
+    public const string RoleManager = "manager";
 
     public string KeycloakUserId { get; set; } = "";
     public string? KeycloakIdentityKey => string.IsNullOrWhiteSpace(KeycloakUserId) ? null : KeycloakUserId;

@@ -1,7 +1,7 @@
 # Employee access and response contracts — issue65
 
 Implementation branch: `fix/employee-read-scope-65-main`, created from latest main
-`68dedb7`. This work is not yet merged or deployed. The preceding invitation and
+`68dedb7`, now updated through main `82d2cb7`. This work is not yet merged or deployed. The preceding invitation and
 audience release is already in production; this issue adds narrower read scopes.
 
 | Identity | Administration | Self profile / assigned work |
@@ -11,11 +11,12 @@ audience release is already in production; this issue adds narrower read scopes.
 | Legacy unbound tenant owner/admin | Own tenant | 404; no invented employee |
 | Employee without binding | Denied | 403 |
 | Inactive, pending synchronization, unverified or role-drift binding | Denied | 403 |
-| Manager, literal staff or no-role identity | Denied | Denied |
+| Active verified bound tenant manager | Denied; dedicated tenant operational APIs only | Own only |
+| Literal staff or no-role identity | Denied | Denied |
 | Platform service identity | Denied | Denied |
 
-Branch-manager permissions remain ungranted until issue82 defines assignments
-and delegated capabilities. A role name alone never establishes branch ownership.
+Managers operate across their tenant, without branch assignments. The dedicated
+manager contracts/workspace are documented in [tenant-manager access](tenant-manager-access.md).
 
 Every administrative controller requires tenant admin before its handler runs,
 including employee/booking/invoice/agreement lists, details, PDF/document paths,
@@ -63,7 +64,8 @@ data requests. Transient verification failures show a retry action. Active bound
 accounts can reach the existing My Shifts page from the account landing.
 
 The wider My Work booking UI remains issue70. Advanced employee editors remain
-issue71, branch managers issue82, and wider authenticated cache recovery issue78.
+issue71 and wider authenticated cache recovery issue78. Tenant manager permissions
+from issue82 are included in this fix.
 These features are not claimed complete by the self APIs.
 
 Verification is in progress: serialization/marker-secret allowlists, independent
@@ -77,6 +79,12 @@ skipped external-service tests (329 total); complete mocked desktop/mobile suite
 128 passed; after adding the account-to-shifts link, all 14 focused invitation
 and account checks passed again. TypeScript passed. These counts do not claim
 that the remaining real-service or cleaner-clock browser cases are complete.
+
+Updated local evidence on 2026-10-14: all367 backend tests passed with owned
+PostgreSQL/Keycloak/mail capture, zero skips; all168 desktop/mobile cases passed,
+including tenant manager operations, deactivated-shift restore, precise clock
+errors and future-start eligibility. Real two-tenant browser and final type/build
+verification are in progress. No issue65 production deployment is claimed yet.
 
 Traceability: AUTH-003/004/008, EMP-004 and OPS-005. The implementation plan and
 spec are in `docs/superpowers/plans/2026-10-13-employee-read-scope.md` and

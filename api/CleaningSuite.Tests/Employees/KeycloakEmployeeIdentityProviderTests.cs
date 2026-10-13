@@ -109,6 +109,18 @@ public class KeycloakEmployeeIdentityProviderTests
         Assert.DoesNotContain(transport.Requests, r => r.Method == "POST" && r.Path.EndsWith("role-mappings/realm"));
     }
     private static Employee Employee() => new() { Email = "cleaner@example.invalid", FirstName = "Test", LastName = "Cleaner" };
+    [Theory]
+    [InlineData("admin", "manager")] [InlineData("manager", "employee")] [InlineData("manager", "admin")]
+    public async Task ManagerRoleTransitionsRemoveOtherManagedRolesAndPreserveUnrelatedAccess(string from, string to)
+    {
+        var transport = new FakeKeycloak { Role = from };
+        await Provider(transport).SynchronizeAccessAsync("tenant-a", "user-a", to, true);
+        Assert.Contains(transport.Requests, r => r.Method == "DELETE" && r.Path.EndsWith("role-mappings/realm") && r.Body.Contains(from));
+        Assert.Contains(transport.Requests, r => r.Method == "POST" && r.Path.EndsWith("role-mappings/realm") && r.Body.Contains(to));
+        Assert.DoesNotContain(transport.Requests, r => r.Method == "DELETE" && r.Body.Contains("unrelated"));
+        Assert.DoesNotContain(transport.Requests, r => r.Body.Contains("credentials"));
+        if (to == "manager") Assert.Contains(transport.Requests, r => r.Method == "POST" && r.Path.EndsWith("/roles") && r.Body.Contains("manager"));
+    }
     private static KeycloakEmployeeIdentityProvider Provider(FakeKeycloak transport) {
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Auth:Keycloak:ServerUrl"] = "https://auth.invalid" }).Build();
         return new(new KeycloakAdminClient(new HttpClient(transport), "https://auth.invalid", "master", "provisioner", "", "admin", "test"), config);

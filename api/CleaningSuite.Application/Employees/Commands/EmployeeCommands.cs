@@ -45,7 +45,7 @@ public class EmployeeFieldsValidator : AbstractValidator<EmployeeFields>
         RuleFor(x => x.Email).EmailAddress();
         RuleFor(x => x.FirstName).NotEmpty().MaximumLength(100);
         RuleFor(x => x.LastName).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.Role).Must(r => r is Employee.RoleAdmin or Employee.RoleEmployee);
+        RuleFor(x => x.Role).Must(r => r is Employee.RoleAdmin or Employee.RoleEmployee or Employee.RoleManager);
         RuleFor(x => x.PayRate).GreaterThanOrEqualTo(0).When(x => x.PayRate.HasValue);
         RuleForEach(x => x.Certifications).ChildRules(c =>
         {

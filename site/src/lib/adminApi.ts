@@ -398,10 +398,11 @@ export interface ShiftOccurrence {
 }
 
 export const adminShifts = {
-  list: (companyId?: string, branchId?: string) => {
+  list: (companyId?: string, branchId?: string, includeInactive = false) => {
     const query = new URLSearchParams();
     if (companyId) query.set('companyId', companyId);
     if (branchId) query.set('branchId', branchId);
+    if (includeInactive) query.set('includeInactive', 'true');
     const suffix = query.toString();
     return adminGet<Shift[]>(`/api/v1/admin/shifts${suffix ? `?${suffix}` : ''}`);
   },
@@ -411,6 +412,7 @@ export const adminShifts = {
     adminSendJson<Shift>(`/api/v1/admin/shifts/${id}`, 'PUT', fields),
   setQualityCycleTemplate: (id: string, templateId: string | null) => adminSendJson<Shift>(`/api/v1/admin/shifts/${id}/quality-cycle-template`, "PUT", { templateId }),
   deactivate: (id: string) => adminSend(`/api/v1/admin/shifts/${id}/deactivate`, 'POST'),
+  reactivate: (id: string) => adminSendJson<Shift>(`/api/v1/admin/shifts/${id}/reactivate`, 'POST'),
   assignments: (id: string) =>
     adminGet<ShiftAssignment[]>(`/api/v1/admin/shifts/${id}/assignments`),
   assign: (id: string, employeeId: string) =>

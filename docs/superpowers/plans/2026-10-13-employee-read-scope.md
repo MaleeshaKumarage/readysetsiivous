@@ -31,4 +31,8 @@ authorized implementation without additional approval gates.
 
 Reviewer advisories: freeze existing form JSON fields; test malicious foreign
 form results even for an owned occurrence; test malformed GUID and documented
-timezone fallback. No unapproved manager privilege or unrelated feature UI.
+timezone fallback. Tenant-wide manager operations are now authorized and defined
+in the 2026-10-14 supplemental spec. Add manager role/provisioning/current-role
+checks, safe operational APIs and workspace, reactivation preserving admin fields
+and history, precise clock errors/future eligibility, and real two-tenant manager
+and concurrency tests. Track user follow-ups96/97 in the same release.

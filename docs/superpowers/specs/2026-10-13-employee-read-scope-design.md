@@ -1,8 +1,8 @@
 # Employee read scope and explicit response contracts — issue65
 
 Status: implementation authorized by the user's instruction to fix the audit
-issues without further approval gates. Manager permission design remains issue82;
-this change grants no manager access. No behavior changes are included yet.
+issues without further approval gates. The tenant manager extension is defined in
+2026-10-14-tenant-manager-access-design.md and supersedes earlier manager deferral.
 Baseline inspected: latest main `68dedb7`, after the verified production release.
 Independent spec review: approved for completeness/security/verification readiness
 on 2026-10-13; refresh review covers the current shift-clock integration below.
@@ -30,9 +30,8 @@ operations; do not accept a caller-selected employee/tenant ID as authorization.
    This preserves legitimate cleaner work while closing the current data leaks.
 2. Only deny employee administrative reads. Smaller change, but leaves no safe
    authenticated work API and does not satisfy the operational/self DTO contract.
-3. Add branch-scoped managers and delegated operational permissions simultaneously.
-   Requires a product decision about branch assignment, customer/HR/billing fields,
-   role grants and management actions; that decision belongs to issue82.
+3. Branch-scoped managers were considered. The user instead requested tenant-wide
+   managers within this fix; the approved supplemental spec defines that scope.
 
 ## Scope matrix
 
@@ -41,15 +40,15 @@ operations; do not accept a caller-selected employee/tenant ID as authorization.
 | Active bound employee, verified, current role | Own only | Denied | Denied |
 | Active bound tenant admin | Own employee profile/work plus administration | Own tenant | Denied |
 | Legacy unbound tenant owner/admin | No fabricated employee identity | Own tenant | Denied |
-| No role, literal legacy staff or unapproved manager | Denied | Denied | Denied |
+| Active bound tenant manager | Own only; dedicated tenant-wide operations | Denied | Denied |
+| No role or literal legacy staff | Denied | Denied | Denied |
 | Inactive/unverified/pending-sync/role-drift bound identity | Denied | Denied | No tenant-role grant |
 | Platform service identity | Denied | Denied | Existing dedicated policy |
 
 Own scope means the active verified binding in the current tenant plus current
 resource assignment. Tenant-wide scope remains the current tenant admin role.
-Assigned-branch manager scope is explicitly **not granted** until its permission
-matrix and persisted branch membership are approved in issue82. A role name alone
-is insufficient proof of branch ownership. A user with both employee and admin
+Managers are tenant-wide under the revised user decision; use the supplemental
+manager permission matrix and current persisted role checks. A user with both employee and admin
 claims must still satisfy the persisted role/lifecycle check from issue49.
 
 Protect every `/api/v1/admin/...` controller consistently, including settings,
@@ -118,7 +117,7 @@ Operational shift fields: id/name, company/branch id and display name, cleaning
 address and actual occurrence start/end UTC. Exclude agreement/billing/HR fields,
 internal assignment notes, complete rosters, other employee IDs and report/share
 tokens. This change does not issue new checklist capabilities: the existing
-cleaner's email links remain the submission mechanism, and templates/reports
+authenticated shift start/end remains the activity mechanism, and templates/reports
 remain tenant-admin-only under the user's approved requirement. Main now also
 contains the authenticated `/me/shifts` page and clock start/end endpoints. Keep
 that working path: its bound employee can see and record their own task snapshot,
@@ -206,7 +205,7 @@ perform no payroll, booking, invoice, signer or settings data reads.
   exact counts and limitations. Clean up only owned disposable fixtures.
 
 Traceability: AUTH-003/004/008, EMP-004, OPS-005. Issue70 owns the remaining My Work
-UI; issue82 owns branch-manager approval; issue78 retains wider transport/cache
+UI; issue82's tenant-manager decision is included here; issue78 retains wider transport/cache
 recovery outside the admin entry boundary. Issue65 is not closed merely because
 some controllers have a stricter attribute: DTO, self-scope, UI and genuine
 negative evidence must all be present.

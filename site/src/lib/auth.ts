@@ -118,6 +118,12 @@ export function isAdmin(): boolean {
   return getKeycloak().hasRealmRole('admin');
 }
 
+export function isManager(): boolean {
+  if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__ !== undefined)
+    return isAuthenticated() && Boolean((window as any).__MOCK_ROLES__?.includes('manager'));
+  return getKeycloak().hasRealmRole('manager');
+}
+
 export async function refreshToken(): Promise<string | undefined> {
   if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__) {
     return 'mock-jwt-token';

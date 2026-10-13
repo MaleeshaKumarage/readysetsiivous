@@ -37,10 +37,13 @@ public class EmployeeReadScopeTests
             ("GET", "services"), ("GET", "tenant"), ("GET", "companies"), ("GET", "shifts"),
             ("GET", $"shifts/{id}/assignments"), ("GET", "schedule?date=2026-10-13&employeeId="+id),
             ("GET", "quality-cycle/templates"),
+            ("GET", "quality-cycle/monthly-summary?year=2026&month=10"), ("GET", $"quality-cycle/summary-pdf?shiftId={id}&year=2026&month=10"),
+            ("GET", "quality-cycle/report-shares"), ("POST", "quality-cycle/report-shares"), ("DELETE", $"quality-cycle/report-shares/{id}"),
             ("POST", "employees"), ("PUT", $"employees/{id}"), ("POST", $"employees/{id}/invite"),
             ("POST", $"bookings/{id}/confirm"), ("POST", $"invoices/{id}/mark-paid"),
             ("POST", $"agreements/{id}/cancel"), ("DELETE", $"agreements/{id}/signers/{id}"),
             ("PUT", "tenant"), ("POST", "services"), ("POST", "companies"), ("POST", "shifts")
+            , ("POST", $"shifts/{id}/reactivate")
         };
         foreach (var (method, path) in operations)
         {
@@ -50,6 +53,49 @@ public class EmployeeReadScopeTests
         // Lifecycle/binding lookup is allowed; no payroll, financial, signer,
         // settings or operational handler is allowed to run on a denied request.
         Assert.Empty(host.Mediator.Invocations);
+    }
+
+    [Theory]
+    [InlineData("employee")] [InlineData("staff")] [InlineData("")] [InlineData(null)]
+    public async Task SignedNonOperationsIdentityCannotUseManagerEndpoints(string? role)
+    {
+        using var host = new Host(); var id = Guid.NewGuid();
+        foreach (var (method, path) in new[] { ("GET", "employees"), ("GET", "companies"),
+            ("GET", $"companies/{id}/branches"), ("GET", "shifts"), ("GET", $"shifts/{id}"),
+            ("POST", "shifts"), ("PUT", $"shifts/{id}"), ("POST", $"shifts/{id}/deactivate"),
+            ("POST", $"shifts/{id}/reactivate"),
+            ("GET", $"shifts/{id}/assignments"), ("POST", $"shifts/{id}/assignments"), ("DELETE", $"shifts/{id}/assignments/{id}") }) {
+            using var response = await host.Send(method, "/api/v1/manager/" + path, role);
+            Assert.Equal(role is null ? HttpStatusCode.Unauthorized : HttpStatusCode.Forbidden, response.StatusCode);
+        }
+        Assert.Empty(host.Mediator.Invocations);
+        host.Employees.Verify(e => e.ListAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SignedManagerGetsOnlyOperationalRosterFields()
+    {
+        using var host = new Host(); host.Employee.Role = "manager";
+        host.Employee.Email = "secret-email"; host.Employee.Notes = "secret-hr"; host.Employee.PayRate = 98765m;
+        host.Employees.Setup(e => e.ListAsync(false, It.IsAny<CancellationToken>())).ReturnsAsync(new[] { host.Employee });
+        using var response = await host.Send("GET", "/api/v1/manager/employees", "manager");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains(host.Employee.Id.ToString(), body); Assert.DoesNotContain("secret", body);
+        Assert.DoesNotContain("98765", body); Assert.DoesNotContain("scope-sub", body);
+        using var json = JsonDocument.Parse(body);
+        Assert.Equal(new[] { "id", "firstName", "lastName", "phone", "isActive", "colorHex", "skills", "serviceAreas", "defaultHours" }.Order(),
+            json.RootElement[0].EnumerateObject().Select(p => p.Name).Order());
+    }
+
+    [Theory]
+    [InlineData("qualityCycleTemplateId")] [InlineData("notes")] [InlineData("companyId")] [InlineData("role")]
+    public async Task ManagerCannotSmuggleAdministrativeFieldsIntoShiftEdit(string field)
+    {
+        using var host = new Host(); host.Employee.Role = "manager";
+        var body = JsonSerializer.Serialize(new Dictionary<string, object> { ["name"] = "Shift", ["schedule"] = new { type = 0, dailyStart = "08:00:00", dailyEnd = "10:00:00" }, [field] = Guid.NewGuid() });
+        using var response = await host.Send("PUT", "/api/v1/manager/shifts/" + Guid.NewGuid(), "manager", body);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode); Assert.Empty(host.Mediator.Invocations);
     }
 
     [Fact]
@@ -105,12 +151,12 @@ public class EmployeeReadScopeTests
             });
             client = factory.CreateClient();
         }
-        public Task<HttpResponseMessage> Send(string method, string path, string? role)
+        public Task<HttpResponseMessage> Send(string method, string path, string? role, string body = "{}")
         {
             var request = new HttpRequestMessage(new HttpMethod(method), path);
-            if (method != "GET") request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+            if (method != "GET") request.Content = new StringContent(body, Encoding.UTF8, "application/json");
             if (role is not null) {
-                var bound = role is "employee" or "admin";
+                var bound = role is "employee" or "admin" or "manager";
                 var jwt = new JwtSecurityToken("https://auth.test/realms/tenant-a", "cleaning-suite-api", new[] {
                     new Claim("sub", bound ? "scope-sub" : "unbound-sub"), new Claim("email_verified","true"),
                     new Claim("realm_access",JsonSerializer.Serialize(new { roles = role=="" ? Array.Empty<string>() : new[] { role } }))

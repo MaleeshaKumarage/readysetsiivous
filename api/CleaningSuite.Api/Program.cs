@@ -103,6 +103,7 @@ builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCycleR
 builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCyclePdfGenerator, CleaningSuite.Infrastructure.QualityCycle.QualityCyclePdfGenerator>();
 builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCycleDispatcher, CleaningSuite.Application.QualityCycle.QualityCycleDispatcher>();
 builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.QualityCycleMonthlyReportService>();
+builder.Services.AddScoped<CleaningSuite.Application.Access.ManagerOperations>();
 builder.Services.AddHostedService<CleaningSuite.Api.QualityCycleWorker>();
 builder.Services.AddScoped<CleaningSuite.Application.Entertainment.IEntertainmentRepository, CleaningSuite.Infrastructure.Persistence.EntertainmentRepository>();
 builder.Services.AddSingleton<CleaningSuite.Application.Entertainment.IEntertainmentKeyProtector, CleaningSuite.Infrastructure.Entertainment.EntertainmentKeyProtector>();
@@ -118,8 +119,9 @@ builder.Services.AddValidatorsFromAssembly(typeof(AssemblyMarker).Assembly);
 
 builder.Services.AddAuthorization(options =>
 {
-    options.AddRealmRolePolicies("admin", "employee");
-    options.AddRealmRoleAnyPolicy("staff", "admin", "employee");
+    options.AddRealmRolePolicies("admin", "employee", "manager");
+    options.AddRealmRoleAnyPolicy("staff", "admin", "employee", "manager");
+    options.AddRealmRoleAnyPolicy("operations", "admin", "manager");
     options.AddPlatformPolicy(builder.Configuration);
 });
 builder.Services.AddSingleton<IAuthorizationHandler, RealmRoleHandler>();
