@@ -392,7 +392,7 @@ public class ShiftHandlers
             if (!shift.QualityCycleTemplateId.HasValue) return;
             var occurrences = QualityCycleOccurrences.InWindow(shift, utcNow.Date, utcNow.Date.AddDays(32))
                 .Where(x => x.Occurrence.EndUtc > utcNow).Select(x => x.Occurrence).ToList();
-            var dispatcher = _dispatcher ?? new QualityCycleDispatcher(_repository, _qcRepository, _employeeRepository, _emailSender);
+            var dispatcher = _dispatcher ?? new QualityCycleDispatcher(_repository, _qcRepository, _employeeRepository);
             await dispatcher.DispatchAsync(shift, occurrences, ct);
         }
 

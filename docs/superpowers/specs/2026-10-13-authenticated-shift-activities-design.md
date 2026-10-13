@@ -19,6 +19,18 @@ idempotent task IDs, occurrence timing, scope validation and preservation of
 started/completed snapshots. Historical delivery fields are retained as evidence,
 not consulted to send further messages. Booking/account mail remains unchanged.
 
+Clocking does not require an assigned checklist. Without an active template,
+create an owned task with no activity items; employees can still start/end. If a
+template is assigned later, future unstarted snapshots use it, while a started
+task keeps its original snapshot. Already-generated tasks remain usable when a
+template is later deactivated. Ending through the authenticated clock requires a
+successful start first. Submitted/no-item evidence remains available to reports.
+
+Own shift reads bypass administrative caching and show load/authorization errors
+instead of pretending that denied requests mean no scheduled work. On an ambiguous
+start/end failure, reload the owned occurrence; a saved start/completion is shown
+as such, otherwise keep the error and current checkbox selection for retry.
+
 The shift activity controls use native labeled checkboxes so clicking a checkbox
 or its row changes the selection once. All unchecked and partially checked
 submissions remain valid without mandatory notes. Start/end use the authenticated

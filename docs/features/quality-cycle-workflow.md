@@ -34,11 +34,15 @@ Repeated attachment/generation is idempotent. No remove/reassign is required.
 
 The shared dispatcher creates records for a rolling 32-day window. A worker scans
 active tenants every five minutes after a 15-second startup delay. Assignment,
-template changes and manual dispatch use the same generator. Current-day links
-are emailed when Resend is configured; ten-minute delivery retry leases and
-stored delivery state distinguish generated records from sent notifications.
-Email can be delivered more than once if the provider succeeds before a process
-crash; exactly-once external delivery is not promised.
+template changes and manual dispatch use the same generator. Generation creates
+tasks only: **no QC/checklist emails are sent**, regardless of Resend configuration
+or historical failed delivery state. Account-setup invitation emails are separate.
+
+Employees sign in, open **My shifts** from the account landing, choose **Start**,
+then **Record activities & end** on that same shift. They select only the activities
+performed and choose **End shift**. None, some or all activities are valid; notes
+are optional. A shift without an active checklist can still start/end with no
+activity items. Authenticated end requires a prior start.
 
 New records contain company/branch/schedule timing and checklist snapshots.
 Future pending records follow template changes; started and submitted records
@@ -46,9 +50,10 @@ keep their original activities. Submission before the occurrence starts is 409;
 a second submission is 409. Missing/modified/reordered checklist structures are
 400. Duplicate item labels still have separate checkbox positions.
 
-Cleaner links include tenant and an opaque record token. This is the existing
-resource-token access model: possession of a link grants access to that one
-record, without administrator capabilities. It is not authenticated My Work.
+Historical checklist links retain their existing resource-token access contract
+for compatibility. They are not emailed, issued as the employee workflow, or
+advertised on the account landing. The current workflow is authenticated My
+Shifts. Public monthly-report sharing remains separate and admin-controlled.
 
 ## Reports and sharing
 

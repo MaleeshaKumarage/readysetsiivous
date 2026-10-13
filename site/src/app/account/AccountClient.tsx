@@ -51,8 +51,9 @@ export default function AccountClient() {
         {account && <>
           <h2 className="text-xl font-medium">Account ready</h2>
           <p>{account.employee ? `${account.employee.firstName} ${account.employee.lastName}` : 'Tenant administrator'} · {account.realm}</p>
+          {account.employee?.isActive && <Link className="block rounded bg-gray-900 text-white px-4 py-2 text-center" href="/me/shifts/">My shifts</Link>}
           {isAdmin() ? <Link className="underline" href="/admin/">Continue to administration</Link>
-            : <p>You can record your shift activities using the checklist links sent to your email.</p>}
+            : <p>Open My shifts to start your shift, record the activities you did, and end it.</p>}
         </>}
         {authed && <button className="underline" onClick={() => logout().catch(() => setError('Sign-out failed. Please retry.'))}>Sign out</button>}
       </>}

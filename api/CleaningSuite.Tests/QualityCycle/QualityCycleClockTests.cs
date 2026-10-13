@@ -112,23 +112,59 @@ public class QualityCycleClockTests
             handler.Handle(new StartQualityCycleFormCommand(shift.Id, emp.Id, FromUtc.AddHours(8), FromUtc.AddHours(16)), CancellationToken.None));
     }
 
-    [Fact]
-    public async Task End_SubmitsFormAndSetsEndedAt()
+    [Theory]
+    [InlineData(false, false)] [InlineData(true, false)] [InlineData(true, true)]
+    public async Task End_SubmitsSelectedActivitiesAndSetsEndedAt(bool first, bool second)
     {
         var template = NewTemplate();
+        template.Items.Add("Item2");
         var shift = NewShift(template.Id);
         var emp = NewEmployee();
         var form = QualityCycleForm.Create(shift.Id, shift.Name, emp.Id, "A B", template.Id, template.Title, FromUtc.AddHours(8), template.Items, FromUtc.AddHours(16));
+        form.Start();
 
         var qcRepo = new Mock<IQualityCycleRepository>();
         qcRepo.Setup(r => r.GetFormAsync(form.Id, It.IsAny<CancellationToken>())).ReturnsAsync(form);
 
         var handler = new QualityCycleHandlers.EndQualityCycleFormCommandHandler(qcRepo.Object);
-        var result = await handler.Handle(new EndQualityCycleFormCommand(form.Id, emp.Id, new List<QualityCycleFormItemDto> { new("Item1", true) }), CancellationToken.None);
+        var result = await handler.Handle(new EndQualityCycleFormCommand(form.Id, emp.Id, new List<QualityCycleFormItemDto> { new("Item1", first), new("Item2", second) }), CancellationToken.None);
 
         Assert.True(result.IsSubmitted);
         Assert.NotNull(result.EndedAtUtc);
+        Assert.Equal(first, result.Items[0].IsChecked); Assert.Equal(second, result.Items[1].IsChecked);
         qcRepo.Verify(r => r.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task End_BeforeStartRejectsWithoutWriting()
+    {
+        var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Cleaner", Guid.Empty, "Shift activities", FromUtc, new());
+        var repository = new Mock<IQualityCycleRepository>(); repository.Setup(r => r.GetFormAsync(form.Id, It.IsAny<CancellationToken>())).ReturnsAsync(form);
+        await Assert.ThrowsAsync<QualityCycleConflictException>(() => new QualityCycleHandlers.EndQualityCycleFormCommandHandler(repository.Object)
+            .Handle(new(form.Id, form.EmployeeId, new()), default));
+        repository.Verify(r => r.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task StartWithoutActiveChecklistStillCreatesOwnedTaskThatCanEnd(bool inactiveTemplate)
+    {
+        var employee = NewEmployee(); var template = NewTemplate(); template.IsActive = false;
+        var shift = NewShift(inactiveTemplate ? template.Id : null);
+        var shifts = new Mock<IShiftRepository>(); var employees = new Mock<IEmployeeRepository>(); var forms = new Mock<IQualityCycleRepository>();
+        shifts.Setup(r => r.GetAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+        shifts.Setup(r => r.GetAssignmentAsync(shift.Id, employee.Id, It.IsAny<CancellationToken>())).ReturnsAsync(ExistingAssignment(shift.Id, employee.Id));
+        employees.Setup(r => r.GetByIdAsync(employee.Id, It.IsAny<CancellationToken>())).ReturnsAsync(employee);
+        forms.Setup(r => r.GetTemplateAsync(template.Id, It.IsAny<CancellationToken>())).ReturnsAsync(template);
+        QualityCycleForm? created = null;
+        forms.Setup(r => r.TryCreateFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>())).Callback<QualityCycleForm,CancellationToken>((f,_) => created=f).ReturnsAsync(true);
+        var dto = await new QualityCycleHandlers.StartQualityCycleFormCommandHandler(shifts.Object, employees.Object, forms.Object)
+            .Handle(new(shift.Id, employee.Id, FromUtc.AddHours(8), FromUtc.AddHours(16)), default);
+        Assert.Empty(dto.Items); Assert.NotNull(dto.StartedAtUtc); Assert.Equal(Guid.Empty, dto.TemplateId);
+        Assert.Equal(employee.Id, created!.EmployeeId); Assert.Equal(shift.CompanyId, created.CompanyId); Assert.Equal(shift.BranchId, created.BranchId);
+        forms.Setup(r => r.GetFormAsync(created.Id, It.IsAny<CancellationToken>())).ReturnsAsync(created);
+        var ended = await new QualityCycleHandlers.EndQualityCycleFormCommandHandler(forms.Object).Handle(new(created.Id, employee.Id, new()), default);
+        Assert.True(ended.IsSubmitted); Assert.Empty(ended.Items);
     }
 
     [Fact]

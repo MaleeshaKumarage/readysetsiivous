@@ -1,14 +1,9 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Net;
-using CleaningSuite.Application.Common;
 using CleaningSuite.Application.Employees;
 using CleaningSuite.Application.Shifts;
-using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Shifts;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 
 namespace CleaningSuite.Application.QualityCycle;
 
@@ -18,18 +13,13 @@ public class QualityCycleDispatcher : IQualityCycleDispatcher
     private readonly IShiftRepository _shifts;
     private readonly IQualityCycleRepository _forms;
     private readonly IEmployeeRepository _employees;
-    private readonly IEmailSender _email;
-    private readonly IConfiguration? _config;
-    private readonly ITenantContext? _tenant;
     private readonly TimeProvider _clock;
-    private readonly ILogger<QualityCycleDispatcher>? _logger;
 
     public QualityCycleDispatcher(IShiftRepository shifts, IQualityCycleRepository forms,
-        IEmployeeRepository employees, IEmailSender email, IConfiguration? config = null,
-        ITenantContext? tenant = null, TimeProvider? clock = null, ILogger<QualityCycleDispatcher>? logger = null)
+        IEmployeeRepository employees, TimeProvider? clock = null)
     {
-        _shifts = shifts; _forms = forms; _employees = employees; _email = email;
-        _config = config; _tenant = tenant; _clock = clock ?? TimeProvider.System; _logger = logger;
+        _shifts = shifts; _forms = forms; _employees = employees;
+        _clock = clock ?? TimeProvider.System;
     }
 
     public async Task<int> EnsureUpcomingAsync(Guid? shiftId = null, CancellationToken ct = default)
@@ -77,7 +67,7 @@ public class QualityCycleDispatcher : IQualityCycleDispatcher
                     if (!await _forms.TryCreateFormAsync(form, ct)) continue;
                     count++;
                 }
-                else if (!form.IsSubmitted && form.ShiftOccurrenceUtc > now
+                else if (!form.IsSubmitted && !form.StartedAtUtc.HasValue && form.ShiftOccurrenceUtc > now
                     && (form.TemplateId != template.Id || !form.Items.Select(i => i.ItemText).SequenceEqual(template.Items)
                         || form.ShiftOccurrenceEndUtc != occurrence.EndUtc || form.ShiftName != shift.Name
                         || form.CompanyId != shift.CompanyId || form.BranchId != shift.BranchId))
@@ -87,34 +77,6 @@ public class QualityCycleDispatcher : IQualityCycleDispatcher
                     form.Items = template.Items.Select(i => new QualityCycleFormItem { ItemText = i }).ToList();
                     form.CompanyId = shift.CompanyId; form.BranchId = shift.BranchId;
                     form.ShiftName = shift.Name; form.ShiftOccurrenceEndUtc = occurrence.EndUtc;
-                    await _forms.SaveFormAsync(form, ct);
-                }
-                if (form.IsSubmitted || form.EmailSentUtc.HasValue || occurrence.StartUtc.Date > now.Date) continue;
-                if (form.EmailLastAttemptUtc > now.AddMinutes(-10)) continue;
-                if (string.IsNullOrWhiteSpace(employee.Email)) continue;
-                if (_config is not null && string.IsNullOrWhiteSpace(_config["Resend:ApiKey"])) continue;
-                try
-                {
-                    // Optimistic save acquires a notification lease before sending.
-                    form.EmailLastAttemptUtc = now;
-                    await _forms.SaveFormAsync(form, ct);
-                    var frontend = (_config?["App:FrontendBaseUrl"] ?? "https://readysetsiivous.fi").TrimEnd('/');
-                    var tenant = Uri.EscapeDataString(_tenant?.TenantId ?? "readysetsiivous");
-                    var url = $"{frontend}/quality-cycle/?tenant={tenant}&token={form.Token}";
-                    var html = $"<p>Hello {WebUtility.HtmlEncode(employee.FirstName)},</p>"
-                        + $"<p>Complete the checklist for {WebUtility.HtmlEncode(shift.Name)} "
-                        + $"({occurrence.StartUtc:yyyy-MM-dd HH:mm} UTC) to finish your shift task.</p>"
-                        + $"<p><a href='{WebUtility.HtmlEncode(url)}'>Open checklist</a></p>";
-                    await _email.SendAsync(employee.Email, $"Shift checklist: {shift.Name}", html, ct);
-                    form.EmailSentUtc = now; form.EmailError = null;
-                    await _forms.SaveFormAsync(form, ct);
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-                catch (JasperFx.ConcurrencyException) { /* another worker acquired the lease */ }
-                catch (Exception ex)
-                {
-                    _logger?.LogWarning(ex, "Checklist notification failed for form {FormId}", form.Id);
-                    form.EmailError = "Delivery failed; retry pending";
                     await _forms.SaveFormAsync(form, ct);
                 }
             }
