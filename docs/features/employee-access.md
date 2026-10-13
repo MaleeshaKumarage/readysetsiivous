@@ -68,11 +68,12 @@ issue71 and wider authenticated cache recovery issue78. Tenant manager permissio
 from issue82 are included in this fix.
 These features are not claimed complete by the self APIs.
 
-Verification is in progress: serialization/marker-secret allowlists, independent
-DST/day-boundary tables, assignment/parent/ownership tests, genuine signed-JWT
-administrative rejection matrices and desktop/mobile admin-entry tests have run.
-Final real PostgreSQL/Keycloak and cleaner-browser coverage, full regression,
-review, merge and deployment remain required before closing #65.
+Local verification covers serialization/marker-secret allowlists, independent
+DST/day-boundary tables, assignment/parent/ownership, signed-JWT administrative
+negatives and desktop/mobile entry controls. Genuine PostgreSQL/Keycloak browser
+checks also cover cleaner self work, tenant-wide manager operations, two-tenant
+denials, clock/report/PDF, shift restoration and stale-role lifecycle. Merge and
+production deployment remain required before closing #65.
 
 Current local evidence on 2026-10-13: full backend 325 passed / four explicitly
 skipped external-service tests (329 total); complete mocked desktop/mobile suite
@@ -80,11 +81,13 @@ skipped external-service tests (329 total); complete mocked desktop/mobile suite
 and account checks passed again. TypeScript passed. These counts do not claim
 that the remaining real-service or cleaner-clock browser cases are complete.
 
-Updated local evidence on 2026-10-14: all367 backend tests passed with owned
+Updated local evidence on 2026-10-14: all368 backend tests passed with owned
 PostgreSQL/Keycloak/mail capture, zero skips; all168 desktop/mobile cases passed,
 including tenant manager operations, deactivated-shift restore, precise clock
-errors and future-start eligibility. Real two-tenant browser and final type/build
-verification are in progress. No issue65 production deployment is claimed yet.
+errors and future-start eligibility. The genuine two-tenant browser test passed,
+as did TypeScript and the final production build. A discovered Keycloak existing-
+role409 was corrected with idempotent manager-role setup and regression coverage.
+No issue65 production deployment is claimed yet.
 
 Traceability: AUTH-003/004/008, EMP-004 and OPS-005. The implementation plan and
 spec are in `docs/superpowers/plans/2026-10-13-employee-read-scope.md` and

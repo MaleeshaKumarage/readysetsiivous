@@ -101,8 +101,14 @@ test('verification and operational failures are visible and retry preserves ente
 });
 test('manager account links to operations and sign out removes operational access', async ({ page }) => {
   await setup(page); await page.goto('/account/?tenant=readysetsiivous'); await page.getByRole('link', { name: 'Manage tenant operations' }).click();
-  await expect(page.getByRole('button', { name: 'Add shift' })).toBeVisible(); await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Add shift' })).toBeVisible();
+  await page.getByRole('link', { name: 'Account', exact: true }).click(); await expect(page).toHaveURL(/account\/\?tenant=readysetsiivous/);
+  await page.getByRole('link', { name: 'Manage tenant operations' }).click();
+  await page.route(/\/api\/v1\/me\/shifts$/, route => route.fulfill({ status: 200, headers, json: [] }));
+  await page.getByRole('link', { name: 'My shifts', exact: true }).click(); await expect(page.getByText('No shifts scheduled.')).toBeVisible();
+  await page.goto('/manager/'); await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: 'Add shift' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expect(page.getByRole('button', { name: 'Add shift' })).toBeVisible();
 });
 test('manager creates each schedule type with explicit fields', async ({ page }) => {
   const state = await setup(page); await page.goto('/manager/');
