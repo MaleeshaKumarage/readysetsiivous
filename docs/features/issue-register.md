@@ -86,3 +86,16 @@ and account landing; My Work/linked-email-change screens remain separate.
 See [invitation contract](employee-invitations.md) and its legacy migration steps.
 Validation covers real PostgreSQL, captured SMTP and Keycloak24/26.1 in isolated
 test services. Production users, SMTP and database were not changed by this work.
+
+## Issues63/64 implementation progress
+
+Separate tenant/platform resource audiences and explicit platform tenant-management
+permission were approved on 2026-10-13 and implemented on
+`fix/api-audience-platform-63-64`. Strict audience validation, realm/permission
+policy, explicit platform-to-tenant denial, structured auditing, client issuance
+and a check-first scoped existing-client migration are included. Tests cover
+genuine signed JWT HTTP requests and real Keycloak24/26.1 browser/API flows.
+See [authentication contract and rollout](api-authentication.md). Existing realm
+mapper/service-account migration and deployment remain pending; issues stay open
+until review/merge and rollout acceptance. Manager roles and branch scope remain
+the separate issue82 product decision.

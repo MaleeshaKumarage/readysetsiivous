@@ -1,10 +1,9 @@
 # API audiences and platform tenant management — issues 63 and 64
 
-Status: proposed; awaiting the user's decision. No authentication behavior or realm
-configuration has been changed by this investigation.
+Status: approved by the user on 2026-10-13 (separate audiences and platform permission).
 
 Spec review: approved by the independent spec reviewer on 2026-10-13. Product
-approval remains pending. The implementation plan must include explicit platform
+approval is recorded above. The implementation plan must include explicit platform
 issuer negatives even if the registry contains that realm, a genuine JWT/JWKS
 HTTP harness, idempotent mapper migration, and pre-controller rejection auditing.
 

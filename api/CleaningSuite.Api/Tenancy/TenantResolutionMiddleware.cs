@@ -15,6 +15,7 @@ public class TenantResolutionMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly string _serverUrl;
+    private readonly string _provisionerRealm;
     private readonly ITenantStatusCache _statusCache;
     private readonly ILogger<TenantResolutionMiddleware> _logger;
 
@@ -26,6 +27,7 @@ public class TenantResolutionMiddleware
     {
         _next = next;
         _serverUrl = configuration["Auth:Keycloak:ServerUrl"]!.TrimEnd('/');
+        _provisionerRealm = configuration["Auth:Keycloak:ProvisionerRealm"] ?? "master";
         _statusCache = statusCache;
         _logger = logger;
     }
@@ -48,6 +50,12 @@ public class TenantResolutionMiddleware
             }
             else
             {
+                if (realm == _provisionerRealm && (path.Contains("/admin/", StringComparison.OrdinalIgnoreCase)
+                    || path.StartsWith("/api/v1/me", StringComparison.OrdinalIgnoreCase)))
+                {
+                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    return;
+                }
                 tenantId = realm;
                 if (RequiresActiveTenant(path)
                     && !await IsActiveAsync(registry, realm, context.RequestAborted))

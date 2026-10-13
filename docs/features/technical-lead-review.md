@@ -157,3 +157,14 @@ Concrete defects and missing operations are GitHub implementation issues.
 Role scope, workspace moves and business lifecycle policies are discussion issues
 until these decisions are approved. The issue register links both kinds to the
 feature gaps and Playwright case IDs. See the [GitHub issue register](issue-register.md).
+
+## Subsequent implemented boundaries
+
+The preceding table describes the review baseline, not the current feature-branch
+implementation. Issues63/64 now have strict issuer-specific resource audiences,
+dedicated `platform.tenants.manage` authorization, platform-to-tenant denial and
+structured lifecycle audit events. Tenant `admin` remains unchanged; broader
+manager and branch permissions are still a product discussion. See the
+[current contract, tests and rollout](api-authentication.md). Audience/permission
+tests do not establish completion of employee-sensitive read scoping (issue65),
+authenticated public tenant selection (issue67), or cache/session behavior (issue78).

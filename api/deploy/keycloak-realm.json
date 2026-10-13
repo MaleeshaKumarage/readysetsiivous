@@ -22,6 +22,19 @@
       "enabled": true,
       "publicClient": true,
       "standardFlowEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "cleaning-suite-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "cleaning-suite-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ],
       "redirectUris": [
         "http://130.61.208.211/*"
       ],

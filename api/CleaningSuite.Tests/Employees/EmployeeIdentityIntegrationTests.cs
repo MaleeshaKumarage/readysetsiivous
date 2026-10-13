@@ -64,7 +64,7 @@ public class EmployeeIdentityIntegrationTests
             Environment.GetEnvironmentVariable("INVITE_TEST_ADMIN_USER") ?? "invite-test-admin", Environment.GetEnvironmentVariable("INVITE_TEST_ADMIN_PASSWORD") ?? "invite_test_only_2026");
         var realm = "invite-test-" + Guid.NewGuid().ToString("N")[..8];
         var frontend = config["App:FrontendBaseUrl"]!;
-        var provisioner = new KeycloakProvisioner(admin, NullLogger<KeycloakProvisioner>.Instance);
+        var provisioner = new KeycloakProvisioner(admin, NullLogger<KeycloakProvisioner>.Instance, new CleaningSuite.Infrastructure.Auth.KeycloakResourceOptions(config));
         await provisioner.ProvisionAsync(realm, "Invitation review", "owner@" + realm + ".invalid", "Test", "Owner", new[] { frontend + "/*" });
         var ownerId = (await admin.GetUserIdByUsernameAsync(realm, "owner@" + realm + ".invalid"))!;
         await admin.UpdateUserAsync(realm, ownerId, new { emailVerified = true, requiredActions = Array.Empty<string>(), credentials = new[] { new { type = "password", value = "InviteOwnerTestOnly2026", temporary = false } } });
@@ -119,6 +119,7 @@ public class EmployeeIdentityIntegrationTests
     private static IConfiguration Configuration() => new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
         ["ConnectionStrings:DefaultConnection"] = Environment.GetEnvironmentVariable("INVITE_TEST_DATABASE"),
         ["Auth:Keycloak:ServerUrl"] = Environment.GetEnvironmentVariable("INVITE_TEST_KEYCLOAK_URL") ?? "http://127.0.0.1:12581",
+        ["Auth:Keycloak:Audience"] = "cleaning-suite-api", ["Auth:Keycloak:PlatformAudience"] = "cleaning-suite-platform-api",
         ["App:FrontendBaseUrl"] = Environment.GetEnvironmentVariable("INVITE_TEST_FRONTEND_URL") ?? "http://127.0.0.1:5757",
         ["EmployeeInvites:Smtp:Host"] = "invite-review-mail", ["EmployeeInvites:Smtp:Port"] = "1025",
         ["EmployeeInvites:Smtp:From"] = "no-reply@example.invalid", ["EmployeeInvites:Smtp:Auth"] = "false", ["EmployeeInvites:Smtp:StartTls"] = "false"
