@@ -146,17 +146,17 @@ and [native action email implementation](https://github.com/keycloak/keycloak/bl
 
 ## Verification on 2026-10-13
 
--194backend tests passed with isolated PostgreSQL, captured SMTP and Keycloak26.1,
+- 194 backend tests passed with isolated PostgreSQL, captured SMTP and Keycloak26.1,
  including binding-before-role/save-failure, normalized email ownership,
  synchronization retries and stale-token guards. The native provider flow also
  passed against Keycloak24 earlier in the investigation.
--Full mocked desktop/mobile suite:62runs passed. After the final employee UI
+- Full mocked desktop/mobile suite:62runs passed. After the final employee UI
  changes, all14focused onboarding desktop/mobile checks passed.
--Real captured-email browser flows passed on Keycloak24 and26.1. Final26.1 flow
+- Real captured-email browser flows passed on Keycloak24 and26.1. Final26.1 flow
  verified password setup, linked realm/sub, intended role, completed-account
  reinvite preserving the password, promotion/demotion and old-token denial after
  deactivation, with no auth/request mocks.
--TypeScript, .NET build and Next.js production build passed.
--Legacy key backfill SQL was executed as a rollback-only dry run on the isolated
+- TypeScript, .NET build and Next.js production build passed.
+- Legacy key backfill SQL was executed as a rollback-only dry run on the isolated
  database. No production data/account/configuration was changed and no real
  employee received email.
