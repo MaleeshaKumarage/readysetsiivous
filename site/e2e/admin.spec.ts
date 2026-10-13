@@ -452,7 +452,7 @@ test.describe('Admin Panel - Employees Page', () => {
         const id = m ? m[1] : '';
         const emp = employees.find((e) => e.id === id);
         if (emp) { emp.keycloakUserId = 'kc-1'; emp.invitedAtUtc = new Date().toISOString(); }
-        return route.fulfill({ status: 200, json: { email: emp?.email }, headers: CORS_HEADERS });
+        return route.fulfill({ status: 200, json: { email: emp?.email, keycloakUserId: 'kc-1', status: 'Sent', sentUtc: emp?.invitedAtUtc }, headers: CORS_HEADERS });
       }
       if (method === 'GET') return route.fulfill({ status: 200, json: employees, headers: CORS_HEADERS });
       return route.continue();
@@ -467,12 +467,12 @@ test.describe('Admin Panel - Employees Page', () => {
     // Invite -> Invited + Resend invite
     await page.getByRole('button', { name: 'Invite' }).click();
     await expect(page.getByText('Invited', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Resend invite' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Resend setup email' })).toBeVisible();
 
     // Resend still works while unregistered
-    await page.getByRole('button', { name: 'Resend invite' }).click();
+    await page.getByRole('button', { name: 'Resend setup email' }).click();
     await expect(page.getByText('Invited', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Resend invite' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Resend setup email' })).toBeVisible();
   });
 
   test('worst path: required field validation and server error', async ({ page }) => {

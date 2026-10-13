@@ -27,8 +27,11 @@ public class QualityCycleClockTests
     private static QualityCycleTemplate NewTemplate() =>
         QualityCycleTemplate.Create("T", new List<string> { "Item1" }, null, null, null);
 
-    [Fact]
-    public async Task Start_CreatesFormAndSetsStartedAt()
+    [Theory]
+    [InlineData(DateTimeKind.Utc)]
+    [InlineData(DateTimeKind.Local)]
+    [InlineData(DateTimeKind.Unspecified)]
+    public async Task Start_CreatesFormAndSetsStartedAt(DateTimeKind kind)
     {
         var template = NewTemplate();
         var shift = NewShift(template.Id);
@@ -48,11 +51,15 @@ public class QualityCycleClockTests
 
         var handler = new QualityCycleHandlers.StartQualityCycleFormCommandHandler(shiftRepo.Object, empRepo.Object, qcRepo.Object);
         qcRepo.Setup(r => r.TryCreateFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
-        var result = await handler.Handle(new StartQualityCycleFormCommand(shift.Id, emp.Id, FromUtc.AddHours(8), FromUtc.AddHours(16)), CancellationToken.None);
+        var start = kind == DateTimeKind.Local ? FromUtc.AddHours(8).ToLocalTime() : DateTime.SpecifyKind(FromUtc.AddHours(8), kind);
+        var end = kind == DateTimeKind.Local ? FromUtc.AddHours(16).ToLocalTime() : DateTime.SpecifyKind(FromUtc.AddHours(16), kind);
+        var result = await handler.Handle(new StartQualityCycleFormCommand(shift.Id, emp.Id, start, end), CancellationToken.None);
 
         Assert.NotNull(result.StartedAtUtc);
         Assert.False(result.IsSubmitted);
         qcRepo.Verify(r => r.TryCreateFormAsync(It.Is<QualityCycleForm>(f => f.Id == QualityCycleDispatcher.TaskId(shift.Id, emp.Id, FromUtc.AddHours(8))), It.IsAny<CancellationToken>()), Times.Once);
+        qcRepo.Verify(r => r.GetFormByShiftOccurrenceAsync(shift.Id, emp.Id, It.Is<DateTime>(t => t.Kind == DateTimeKind.Utc && t == FromUtc.AddHours(8)), It.IsAny<CancellationToken>()), Times.Once);
+        qcRepo.Verify(r => r.TryCreateFormAsync(It.Is<QualityCycleForm>(f => f.ShiftOccurrenceUtc.Kind == DateTimeKind.Utc && f.ShiftOccurrenceUtc == FromUtc.AddHours(8)), It.IsAny<CancellationToken>()), Times.Once);
         qcRepo.Verify(r => r.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 

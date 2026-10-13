@@ -259,22 +259,22 @@ public class QualityCycleHandlers
             var end = request.OccurrenceEndUtc.Kind == DateTimeKind.Local ? request.OccurrenceEndUtc.ToUniversalTime() : DateTime.SpecifyKind(request.OccurrenceEndUtc, DateTimeKind.Utc);
             if (!shift.IsActive || !employee.IsActive || !template.IsActive)
                 throw new UnauthorizedAccessException();
+            if (start > _clock.GetUtcNow().UtcDateTime) throw new QualityCycleConflictException("This shift has not started yet.");
             if (end <= start || end - start > TimeSpan.FromDays(2)
                 || !ShiftScheduleCalculator.GenerateOccurrences(shift, start.Date, end.Date.AddDays(1)).Any(o => o.StartUtc == start && o.EndUtc == end))
                 throw new QualityCycleConflictException("Choose an actual scheduled shift occurrence.");
-            if (start > _clock.GetUtcNow().UtcDateTime) throw new QualityCycleConflictException("This shift has not started yet.");
             var assignment = await _shiftRepository.GetAssignmentAsync(shift.Id, employee.Id, ct);
             if (assignment == null || !assignment.IsActive || !assignment.Overlaps(start, end))
                 throw new UnauthorizedAccessException();
 
-            var form = await _repository.GetFormByShiftOccurrenceAsync(shift.Id, employee.Id, request.OccurrenceStartUtc, ct);
+            var form = await _repository.GetFormByShiftOccurrenceAsync(shift.Id, employee.Id, start, ct);
             if (form == null)
             {
                 form = QualityCycleForm.Create(
                     shift.Id, shift.Name, employee.Id,
                     $"{employee.FirstName} {employee.LastName}",
                     template.Id, template.Title,
-                    request.OccurrenceStartUtc, template.Items, request.OccurrenceEndUtc);
+                    start, template.Items, end);
                 form.Id = QualityCycleDispatcher.TaskId(shift.Id, employee.Id, start);
                 form.CompanyId = shift.CompanyId; form.BranchId = shift.BranchId;
                 form.Start();
