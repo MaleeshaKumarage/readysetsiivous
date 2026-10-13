@@ -58,7 +58,7 @@ and [JavaScript adapter](https://www.keycloak.org/securing-apps/javascript-adapt
 | --- | --- | --- | --- |
 | Platform administrator (`platform_admin`) | Operator of the SaaS, separate platform/provisioner identity domain | Provision/list/suspend/activate tenants; platform diagnostics | Automatic access to all tenant payroll/customer documents; tenant impersonation without explicit audited grant |
 | Tenant administrator (`tenant_admin`) | Owner/admin of one tenant | Tenant settings, user roles, service catalogue, all tenant operations, billing and document workflows | Cross-tenant/platform lifecycle access |
-| Operations manager (`manager`) | Delegated operational control | Bookings/shifts/assignments/customer locations/QC within assigned branches | Role grants, platform/tenant security configuration, private pay/bank/invoice details unless separately granted |
+| Operations manager (`manager`) | Delegated operational control | Bookings/shifts/assignments/customer locations within assigned branches | Role grants, platform/tenant security configuration, QC template management/monthly reports, private pay/bank/invoice details unless separately granted |
 | Employee (`employee`) | Cleaner/worker | Own assigned work, permitted own profile fields and own QC submissions | Tenant-wide employee/customer/booking/invoice/signer-token lists and role changes |
 | Billing capability or later `billing_user` | Optional delegation, only if a distinct person needs it | Invoice read/create/paid/void/PDF and minimum linked customer/booking fields | Operational assignment, staff roles, unrestricted HR notes |
 
@@ -81,7 +81,9 @@ Suggested capabilities, not currently implemented policy names:
 
 - `tenant.manage`, `users.manage`, `catalog.manage` (tenant admin).
 - `customers.read/manage`, `bookings.read/manage`, `shifts.read/manage`,
-  `assignments.manage`, `quality.read/manage` (tenant admin or scoped manager).
+  `assignments.manage` (tenant admin or scoped manager).
+- `quality.templates.manage` and `quality.reports.read/export` (tenant admin only,
+  following the later user clarification; managers do not inherit these).
 - `work.read.own`, `quality.submit.own`, `profile.read.own` (employee).
 - `employees.read.operational` distinct from `employees.read.sensitive`;
   `invoices.read/manage` and `agreements.read/manage` are explicit grants.
@@ -141,7 +143,8 @@ current partition/identity boundaries first.
 ## Discussion decisions
 
 - Managers assigned branches only, tenant-wide, or configurable? What can they see
-  about employee pay and customer invoices?
+  about employee pay and customer invoices? QC template management and monthly
+  reporting remain admin-only under the [clarified QC requirement](quality-cycle-workflow.md).
 - Is billing a delegated job today, or can tenant_admin own it until demand exists?
 - Should service catalogue stay top-level, move under Settings, or have both entry
   points through one editor?

@@ -73,7 +73,9 @@ builder.Services.AddSingleton<IKeycloakProvisioner, KeycloakProvisioner>();
 builder.Services.AddHttpClient<CleaningSuite.Application.Common.IEmailSender, ResendEmailSender>();
 
 builder.Services.AddSingleton<ITenantStatusCache, CleaningSuite.Api.Tenancy.TenantStatusCache>();
-builder.Services.AddScoped<ITenantContext, HttpTenantContext>();
+builder.Services.AddScoped<HttpTenantContext>();
+builder.Services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<HttpTenantContext>());
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<ITenantSession, TenantSessionFactory>();
 builder.Services.AddScoped<ITenantRegistry, TenantRegistry>();
 builder.Services.AddScoped<ITenantProfileRepository, TenantProfileRepository>();
@@ -94,6 +96,9 @@ builder.Services.AddScoped<CleaningSuite.Application.Companies.IBranchRepository
 builder.Services.AddScoped<CleaningSuite.Application.Shifts.IShiftRepository, CleaningSuite.Infrastructure.Persistence.ShiftRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCycleRepository, CleaningSuite.Infrastructure.Persistence.QualityCycleRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCyclePdfGenerator, CleaningSuite.Infrastructure.QualityCycle.QualityCyclePdfGenerator>();
+builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCycleDispatcher, CleaningSuite.Application.QualityCycle.QualityCycleDispatcher>();
+builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.QualityCycleMonthlyReportService>();
+builder.Services.AddHostedService<CleaningSuite.Api.QualityCycleWorker>();
 
 builder.Services.AddMediatR(cfg =>
 {
@@ -249,6 +254,7 @@ public class DefaultExceptionHandler : IExceptionHandler
             CleaningSuite.Application.Bookings.SlotConflictException => (409, "Slot conflict"),
             CleaningSuite.Application.Agreements.AgreementConflictException => (409, "Agreement conflict"),
             CleaningSuite.Application.Shifts.ShiftConflictException => (409, "Shift conflict"),
+            CleaningSuite.Application.QualityCycle.QualityCycleConflictException => (409, "Shift task conflict"),
             JasperFx.ConcurrencyException => (409, "Conflict — concurrent update, please retry"),
             UnauthorizedAccessException => (403, "Forbidden"),
             _ => (500, "Internal server error"),

@@ -12,7 +12,8 @@ a malformed segment can fail routing with 404 before validation. Request bodies
 and query contracts are defined by linked controller signatures and application
 commands; do not infer them from the frontend helper alone. All IDs are scoped
 to the request tenant unless the handler explicitly acts on the registry. QC
-persistence is a documented exception requiring isolation verification.
+persistence now uses the tenant session; legacy partition migration is required
+before deploying over pre-existing default-partition QC data.
 
 | Method | Route | Authorization | Action / evidence |
 | --- | --- | --- | --- |
@@ -124,3 +125,23 @@ Total: **77 controller endpoints**. Non-controller public entries:
   currently has no JSON body. Some unmapped domain exceptions return500.
 - Native browser download/opening an admin PDF URL does not add Authorization.
   The FE currently fetches blobs with a bearer token for supported downloads.
+
+## QC workflow additions (2026-10-13)
+
+The baseline inventory above has 77 routes; these seven additions bring it to 84.
+All admin routes require the current tenant's `admin` realm role.
+
+| Method | Route | Role | Contract |
+| --- | --- | --- | --- |
+| PUT | `/api/v1/admin/shifts/{id:guid}/quality-cycle-template` | tenant admin | `{templateId: GUID or null}`; attaches/changes/removes, ensures upcoming records |
+| GET | `/api/v1/admin/quality-cycle/monthly-summary` | tenant admin | year/month; optional companyId/branchId/shiftId; per-shift activity day/occurrence totals |
+| GET | `/api/v1/admin/quality-cycle/branch-summary-pdf` | tenant admin | branchId/year/month; separate shift sections |
+| POST | `/api/v1/admin/quality-cycle/report-shares` | tenant admin | year/month plus companyId/branchId/shiftId scope; frozen summary token with 30-day expiry |
+| GET | `/api/v1/admin/quality-cycle/report-shares` | tenant admin | own-tenant shared link metadata |
+| DELETE | `/api/v1/admin/quality-cycle/report-shares/{id:guid}` | tenant admin | revoke own-tenant link |
+| GET | `/api/v1/public/{slug}/quality-cycle/reports/{token}/pdf` | anonymous token holder | summary-only PDF; expired/revoked/unknown404; no-store/noindex |
+
+Existing `summary-pdf` now uses the activity report builder. Existing submission
+requires exact checklist structure, permits any checked subset and empty notes,
+and returns Recorded task status. Repeat/pre-start attempts are409; invalid
+checklist structure400. Month filtering is exclusive at the next month's start.

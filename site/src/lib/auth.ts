@@ -97,7 +97,7 @@ export function isAdmin(): boolean {
     return false;
   }
   if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__ !== undefined) {
-    return Boolean((window as any).__MOCK_AUTHED__);
+    return Boolean((window as any).__MOCK_AUTHED__) && (!(window as any).__MOCK_ROLES__ || (window as any).__MOCK_ROLES__.includes('admin'));
   }
   return getKeycloak().hasRealmRole('admin');
 }

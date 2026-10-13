@@ -13,6 +13,25 @@ public class Shift : BaseDocument
     public bool IsActive { get; set; }
     public DateTime? ValidFrom { get; set; }
     public DateTime? ValidUntil { get; set; }
+    public List<CleaningSuite.Domain.QualityCycle.QualityCyclePlan> QualityCyclePlans { get; set; } = new();
+
+    public void RecordQualityCyclePlan(DateTime effectiveUtc)
+    {
+        QualityCyclePlans.Add(new()
+        {
+            EffectiveFromUtc = effectiveUtc, CompanyId = CompanyId, BranchId = BranchId,
+            ShiftName = Name, TemplateId = QualityCycleTemplateId, IsActive = IsActive,
+            ValidFrom = ValidFrom, ValidUntil = ValidUntil,
+            Schedule = System.Text.Json.JsonSerializer.Deserialize<ShiftSchedule>(
+                System.Text.Json.JsonSerializer.Serialize(Schedule))!
+        });
+    }
+
+    public void EnsureQualityCycleHistory()
+    {
+        if (QualityCyclePlans.Count == 0 && QualityCycleTemplateId.HasValue)
+            RecordQualityCyclePlan(CreatedUtc);
+    }
 
     public static Shift Create(
         Guid companyId,

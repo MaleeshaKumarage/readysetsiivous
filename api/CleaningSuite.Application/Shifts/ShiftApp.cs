@@ -43,6 +43,8 @@ public interface IShiftRepository
     Task<IReadOnlyList<ShiftAssignment>> ListAssignmentsByShiftAsync(Guid shiftId, CancellationToken ct = default);
     Task SaveAssignmentAsync(ShiftAssignment assignment, CancellationToken ct = default);
     Task DeleteAssignmentAsync(Guid assignmentId, CancellationToken ct = default);
+    Task<IReadOnlyList<Shift>> ListForReportingAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<ShiftAssignment>> ListAssignmentHistoryAsync(Guid shiftId, CancellationToken ct = default);
 }
 
 public class ShiftConflictException : Exception
@@ -88,20 +90,29 @@ public record RemoveEmployeeFromShiftCommand(Guid ShiftId, Guid EmployeeId) : IR
 
 public class ShiftHandlers
 {
+    private static async Task ValidateTemplateAsync(IQualityCycleRepository? repository, Guid? templateId, Guid companyId, Guid branchId, CancellationToken ct)
+    {
+        if (repository is null || !templateId.HasValue) return;
+        var template = await repository.GetTemplateAsync(templateId.Value, ct) ?? throw new NotFoundException("QualityCycleTemplate", templateId.Value);
+        if (!template.IsActive || (template.CompanyId.HasValue && template.CompanyId != companyId) || (template.BranchId.HasValue && template.BranchId != branchId))
+            throw new ShiftConflictException("Choose an active template belonging to this company/branch.");
+    }
     public class CreateShiftCommandHandler : IRequestHandler<CreateShiftCommand, ShiftDto>
     {
         private readonly IShiftRepository _repository;
         private readonly ICompanyRepository _companyRepository;
         private readonly IBranchRepository _branchRepository;
+        private readonly IQualityCycleRepository? _qualityCycles;
 
         public CreateShiftCommandHandler(
             IShiftRepository repository,
             ICompanyRepository companyRepository,
-            IBranchRepository branchRepository)
+            IBranchRepository branchRepository, IQualityCycleRepository? qualityCycles = null)
         {
             _repository = repository;
             _companyRepository = companyRepository;
             _branchRepository = branchRepository;
+            _qualityCycles = qualityCycles;
         }
 
         public async Task<ShiftDto> Handle(CreateShiftCommand request, CancellationToken ct)
@@ -118,6 +129,7 @@ public class ShiftHandlers
                 throw new NotFoundException("Branch", request.BranchId);
             }
 
+            await ValidateTemplateAsync(_qualityCycles, request.QualityCycleTemplateId, request.CompanyId, request.BranchId, ct);
             var shift = Shift.Create(
                 request.CompanyId,
                 request.BranchId,
@@ -127,6 +139,7 @@ public class ShiftHandlers
                 request.ValidFrom,
                 request.ValidUntil,
                 request.QualityCycleTemplateId);
+            shift.EnsureQualityCycleHistory();
             await _repository.SaveAsync(shift, ct);
             return MapShift(shift);
         }
@@ -136,15 +149,27 @@ public class ShiftHandlers
     {
         private readonly IShiftRepository _repository;
 
-        public UpdateShiftCommandHandler(IShiftRepository repository)
+        private readonly ICompanyRepository? _companies;
+        private readonly IBranchRepository? _branches;
+        private readonly IQualityCycleRepository? _qualityCycles;
+        private readonly IQualityCycleDispatcher? _dispatcher;
+        public UpdateShiftCommandHandler(IShiftRepository repository, ICompanyRepository? companies = null,
+            IBranchRepository? branches = null, IQualityCycleRepository? qualityCycles = null, IQualityCycleDispatcher? dispatcher = null)
         {
-            _repository = repository;
+            _repository = repository; _companies = companies; _branches = branches; _qualityCycles = qualityCycles; _dispatcher = dispatcher;
         }
 
         public async Task<ShiftDto> Handle(UpdateShiftCommand request, CancellationToken ct)
         {
             var shift = await _repository.GetAsync(request.Id, ct)
                 ?? throw new NotFoundException("Shift", request.Id);
+            if (_companies is not null) _ = await _companies.GetAsync(request.CompanyId, ct) ?? throw new NotFoundException("Company", request.CompanyId);
+            if (_branches is not null) {
+                var branch = await _branches.GetAsync(request.BranchId, ct) ?? throw new NotFoundException("Branch", request.BranchId);
+                if (branch.CompanyId != request.CompanyId) throw new NotFoundException("Branch", request.BranchId);
+            }
+            await ValidateTemplateAsync(_qualityCycles, request.QualityCycleTemplateId, request.CompanyId, request.BranchId, ct);
+            shift.EnsureQualityCycleHistory();
             shift.Update(
                 request.CompanyId,
                 request.BranchId,
@@ -155,7 +180,10 @@ public class ShiftHandlers
                 request.ValidFrom,
                 request.ValidUntil,
                 request.QualityCycleTemplateId);
+            if (shift.QualityCyclePlans.Count > 0 || shift.QualityCycleTemplateId.HasValue)
+                shift.RecordQualityCyclePlan(DateTime.UtcNow);
             await _repository.SaveAsync(shift, ct);
+            if (_dispatcher is not null && shift.IsActive) await _dispatcher.EnsureUpcomingAsync(shift.Id, ct);
             return MapShift(shift);
         }
     }
@@ -173,7 +201,9 @@ public class ShiftHandlers
         {
             var shift = await _repository.GetAsync(request.Id, ct)
                 ?? throw new NotFoundException("Shift", request.Id);
+            shift.EnsureQualityCycleHistory();
             shift.Deactivate();
+            shift.RecordQualityCyclePlan(DateTime.UtcNow);
             await _repository.SaveAsync(shift, ct);
         }
     }
@@ -266,13 +296,15 @@ public class ShiftHandlers
         private readonly IQualityCycleRepository _qcRepository;
         private readonly IEmailSender _emailSender;
         private readonly int _maxConflictWindowDays;
+        private readonly IQualityCycleDispatcher? _dispatcher;
 
         public AssignEmployeeToShiftCommandHandler(
             IShiftRepository repository,
             IEmployeeRepository employeeRepository,
             IQualityCycleRepository qcRepository,
             IEmailSender emailSender,
-            int maxConflictWindowDays = DefaultMaxConflictWindowDays)
+            int maxConflictWindowDays = DefaultMaxConflictWindowDays,
+            IQualityCycleDispatcher? dispatcher = null)
         {
             if (maxConflictWindowDays <= 0)
             {
@@ -284,6 +316,7 @@ public class ShiftHandlers
             _qcRepository = qcRepository;
             _emailSender = emailSender;
             _maxConflictWindowDays = maxConflictWindowDays;
+            _dispatcher = dispatcher;
         }
 
         public async Task<ShiftAssignmentDto> Handle(AssignEmployeeToShiftCommand request, CancellationToken ct)
@@ -296,6 +329,8 @@ public class ShiftHandlers
             var employee = await _employeeRepository.GetByIdAsync(request.EmployeeId, ct)
                 ?? throw new NotFoundException("Employee", request.EmployeeId);
 
+            if (!shift.IsActive || !employee.IsActive)
+                throw new ShiftConflictException("Only active shifts and employees can be assigned.");
             // Capture "now" inside Handle (not in a field initializer) so it stays correct
             // regardless of handler lifetime and is anchored to UTC rather than server-local time.
             var utcNow = DateTime.UtcNow;
@@ -328,9 +363,14 @@ public class ShiftHandlers
             var existingAssignment = await _repository.GetAssignmentAsync(request.ShiftId, request.EmployeeId, ct);
             if (existingAssignment is not null)
             {
+                existingAssignment.EnsureHistory();
+                if (!existingAssignment.IsActive) {
+                    existingAssignment.AssignedAtUtc = utcNow;
+                    existingAssignment.Periods.Add(new() { FromUtc = utcNow });
+                }
                 existingAssignment.IsActive = true;
                 existingAssignment.Note = request.Note;
-                existingAssignment.AssignedAtUtc = utcNow;
+                existingAssignment.UnassignedAtUtc = null;
                 existingAssignment.UpdatedUtc = utcNow;
                 await _repository.SaveAssignmentAsync(existingAssignment, ct);
                 await DispatchQualityCycleFormAsync(shift, employee, utcNow, ct);
@@ -350,53 +390,10 @@ public class ShiftHandlers
         private async Task DispatchQualityCycleFormAsync(Shift shift, Employee employee, DateTime utcNow, CancellationToken ct)
         {
             if (!shift.QualityCycleTemplateId.HasValue) return;
-
-            var template = await _qcRepository.GetTemplateAsync(shift.QualityCycleTemplateId.Value, ct);
-            if (template == null || !template.IsActive) return;
-
-            var from = utcNow;
-            var to = utcNow.AddDays(30);
-            var occurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, from, to);
-            if (occurrences.Count == 0) return;
-            var occurrence = occurrences[0];
-
-            var existingForm = await _qcRepository.GetFormByShiftOccurrenceAsync(shift.Id, employee.Id, occurrence.StartUtc, ct);
-            if (existingForm != null) return;
-
-            var form = QualityCycleForm.Create(
-                shift.Id,
-                shift.Name,
-                employee.Id,
-                $"{employee.FirstName} {employee.LastName}",
-                template.Id,
-                template.Title,
-                occurrence.StartUtc,
-                template.Items,
-                occurrence.EndUtc);
-            await _qcRepository.SaveFormAsync(form, ct);
-
-            if (!string.IsNullOrWhiteSpace(employee.Email))
-            {
-                var formUrl = $"https://readysetsiivous.fi/quality-cycle?token={form.Token}";
-                var subject = $"Quality Cycle Checklist: {shift.Name} ({occurrence.StartUtc:yyyy-MM-dd})";
-                var body = $@"Hello {employee.FirstName},
-
-Please complete the Quality Cycle form for your shift '{shift.Name}' on {occurrence.StartUtc:yyyy-MM-dd HH:mm UTC}.
-
-Form Link: {formUrl}
-
-Thank you,
-ReadySetSiivous Team";
-
-                try
-                {
-                    await _emailSender.SendAsync(employee.Email, subject, body, ct);
-                }
-                catch
-                {
-                    // Email failures must not roll back the assignment.
-                }
-            }
+            var occurrences = QualityCycleOccurrences.InWindow(shift, utcNow.Date, utcNow.Date.AddDays(32))
+                .Where(x => x.Occurrence.EndUtc > utcNow).Select(x => x.Occurrence).ToList();
+            var dispatcher = _dispatcher ?? new QualityCycleDispatcher(_repository, _qcRepository, _employeeRepository, _emailSender);
+            await dispatcher.DispatchAsync(shift, occurrences, ct);
         }
 
         private (DateTime From, DateTime To) ResolveConflictWindow(Shift shift, DateTime utcNow)
@@ -447,7 +444,10 @@ ReadySetSiivous Team";
             // Soft-deactivate rather than hard-delete so removal is auditable and consistent with
             // the IsActive pattern used elsewhere (and which ListAssignmentsByEmployeeAsync filters
             // on). The row is retained; only its active flag is flipped.
+            assignment.EnsureHistory();
+            assignment.Periods.Last().ToUtc = DateTime.UtcNow;
             assignment.IsActive = false;
+            assignment.UnassignedAtUtc = DateTime.UtcNow;
             assignment.UpdatedUtc = DateTime.UtcNow;
             await _repository.SaveAssignmentAsync(assignment, ct);
         }

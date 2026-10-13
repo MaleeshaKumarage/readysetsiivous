@@ -10,10 +10,16 @@ public interface IQualityCycleRepository
     Task SaveTemplateAsync(QualityCycleTemplate template, CancellationToken ct = default);
     Task DeleteTemplateAsync(Guid id, CancellationToken ct = default);
 
+    Task SaveReportShareAsync(QualityCycleReportShare share, CancellationToken ct = default);
+    Task<QualityCycleReportShare?> GetReportShareAsync(Guid id, CancellationToken ct = default);
+    Task<QualityCycleReportShare?> GetReportShareByTokenAsync(string token, CancellationToken ct = default);
+    Task<IReadOnlyList<QualityCycleReportShare>> ListReportSharesAsync(CancellationToken ct = default);
+
     // Forms
     Task<QualityCycleForm?> GetFormAsync(Guid id, CancellationToken ct = default);
     Task<QualityCycleForm?> GetFormByTokenAsync(string token, CancellationToken ct = default);
     Task<QualityCycleForm?> GetFormByShiftOccurrenceAsync(Guid shiftId, Guid employeeId, DateTime shiftOccurrenceUtc, CancellationToken ct = default);
     Task<IReadOnlyList<QualityCycleForm>> ListFormsAsync(Guid? shiftId, DateTime? fromUtc, DateTime? toUtc, CancellationToken ct = default);
     Task SaveFormAsync(QualityCycleForm form, CancellationToken ct = default);
+    Task<bool> TryCreateFormAsync(QualityCycleForm form, CancellationToken ct = default);
 }

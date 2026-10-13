@@ -13,6 +13,7 @@ public static class RealmRoleAuthorization
 
     public static AuthorizationPolicy Policy(params string[] roles) =>
         new AuthorizationPolicyBuilder()
+            .RequireAuthenticatedUser()
             .AddRequirements(new RealmRoleRequirement(roles))
             .Build();
 
@@ -44,8 +45,9 @@ public class RealmRoleHandler : AuthorizationHandler<RealmRoleRequirement>
             try
             {
                 using var doc = JsonDocument.Parse(realmAccess);
-                if (doc.RootElement.TryGetProperty("roles", out var roles)
-                    && roles.EnumerateArray().Any(r => requirement.Roles.Contains(r.GetString())))
+                if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("roles", out var roles)
+                    && roles.ValueKind == JsonValueKind.Array
+                    && roles.EnumerateArray().Any(r => r.ValueKind == JsonValueKind.String && requirement.Roles.Contains(r.GetString())))
                 {
                     context.Succeed(requirement);
                     return Task.CompletedTask;

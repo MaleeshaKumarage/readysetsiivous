@@ -1,5 +1,6 @@
 using CleaningSuite.Api.Auth;
 using CleaningSuite.Application.Shifts;
+using CleaningSuite.Application.QualityCycle;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -52,6 +53,10 @@ public class ShiftsAdminController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPut("{id:guid}/quality-cycle-template")]
+    public async Task<IActionResult> SetTemplate(Guid id, [FromBody] SetTemplateBody body, CancellationToken ct) =>
+        Ok(await _mediator.Send(new SetShiftQualityCycleTemplateCommand(id, body.TemplateId), ct));
+
     [HttpPost("{id:guid}/deactivate")]
     public async Task<IActionResult> Deactivate(Guid id, CancellationToken ct)
     {
@@ -100,3 +105,5 @@ public class ShiftsAdminController : ControllerBase
         return NoContent();
     }
 }
+
+public record SetTemplateBody(Guid? TemplateId);

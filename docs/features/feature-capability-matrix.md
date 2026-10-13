@@ -86,3 +86,18 @@ The most useful implementation order is auth/tenant integrity and field-preservi
 edits first; then complete Operations and customer/employee details; then Quality
 automation/review and Billing. Cosmetic reorganization should not precede reliable
 permissions and write semantics.
+
+## QC implementation update (2026-10-13)
+
+This update supersedes the earlier QC gap rows. Full contract and remaining gaps:
+[QC workflow](quality-cycle-workflow.md).
+
+| Feature | BE | FE | Remaining |
+| --- | --- | --- | --- |
+| Attach/change template after shift creation | Scope/active/tenant validation; shared dispatch | Existing-shift template modal | General shift schedule editor remains absent |
+| Recurring records | Five-minute worker, rolling32-day window, insert idempotency, delivery retry state | Cleaner token link | Authenticated My Work and provider recovery coverage |
+| Activity recording | Exact positions; any checked subset; notes optional; repeat/future409 | Selected activities and optional notes | Editable correction audit and bounded private photos |
+| Monthly activity counts | Distinct days and occurrences per shift/item in tenant timezone | Separate company/branch/shift rows | Stable activity IDs for rename/merge; more calendar fixtures |
+| PDF report | Shift and branch summary PDF | Download controls with token refresh/error feedback | No actual-hours accounting or holiday rules |
+| Public summary sharing | Frozen sanitized snapshot;30-day expiry; revoke; tenant isolation | Create/open/copy/manage/revoke links | No automatic external sending (not requested) |
+| Template/report permissions | Tenant-admin-only; HTTP negatives for employee/manager/anonymous | Role guard; mock roles can distinguish employee | Real Keycloak browser login coverage remains |

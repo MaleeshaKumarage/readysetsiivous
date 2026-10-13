@@ -295,3 +295,14 @@ reload/readback. A success toast, mock call, or HTTP 200 alone is not sufficient
   explicitly block only the browser interaction until its UI feature is delivered.
 - After fixing a gap, change its cases to supported contracts and add the exact
   regression to the relevant CI suite. Keep IDs unchanged for traceability.
+
+## QC contract correction after user clarification
+
+All checklist activities are optional. Submitting any subset, including none,
+records the day/occurrence; notes are optional. Do not classify unchecked activities
+as exceptions or failed work. Monthly counts use submitted selected items only,
+with distinct tenant-local days and distinct occurrence starts per shift/item.
+Duplicate cleaners on one occurrence never multiply activity frequency. Missing
+records and unchecked activities must remain distinct. Summary shares expire
+in30days, are revocable, freeze totals, and remove all cleaner evidence/tokens.
+See the current [workflow/test contract](../features/quality-cycle-workflow.md).

@@ -31,4 +31,11 @@ public class QualityCyclePublicController : ControllerBase
         var result = await _mediator.Send(command, ct);
         return Ok(result);
     }
+    [HttpGet("reports/{token}/pdf")]
+    public async Task<IActionResult> SharedReportPdf(string token, CancellationToken ct) {
+        Response.Headers.CacheControl = "no-store";
+        Response.Headers["X-Robots-Tag"] = "noindex, nofollow";
+        Response.Headers["Referrer-Policy"] = "no-referrer";
+        return File(await _mediator.Send(new GetSharedQualityCycleReportPdfQuery(token), ct), "application/pdf", "Monthly_Activity_Report.pdf");
+    }
 }

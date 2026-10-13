@@ -37,7 +37,8 @@ public record QualityCycleFormDto(
     string? CleanerNotes,
     bool IsSubmitted,
     DateTime? SubmittedUtc,
-    DateTime CreatedUtc);
+    DateTime CreatedUtc,
+    string TaskStatus = "Pending");
 
 // Template Commands & Queries
 public record CreateQualityCycleTemplateCommand(
@@ -142,121 +143,24 @@ public class QualityCycleHandlers
 
     public class DispatchQualityCycleFormsCommandHandler : IRequestHandler<DispatchQualityCycleFormsCommand, int>
     {
-        private readonly IShiftRepository _shiftRepository;
-        private readonly IQualityCycleRepository _qcRepository;
-        private readonly IEmployeeRepository _employeeRepository;
-        private readonly IEmailSender _emailSender;
-
-        public DispatchQualityCycleFormsCommandHandler(
-            IShiftRepository shiftRepository,
-            IQualityCycleRepository qcRepository,
-            IEmployeeRepository employeeRepository,
-            IEmailSender emailSender)
-        {
-            _shiftRepository = shiftRepository;
-            _qcRepository = qcRepository;
-            _employeeRepository = employeeRepository;
-            _emailSender = emailSender;
-        }
+        private readonly IShiftRepository _shifts;
+        private readonly IQualityCycleDispatcher _dispatcher;
+        public DispatchQualityCycleFormsCommandHandler(IShiftRepository shifts, IQualityCycleDispatcher dispatcher)
+        { _shifts = shifts; _dispatcher = dispatcher; }
 
         public async Task<int> Handle(DispatchQualityCycleFormsCommand request, CancellationToken ct)
         {
-            var targetDate = (request.TargetDateUtc ?? DateTime.UtcNow).Date;
-            var from = targetDate;
-            var to = targetDate.AddDays(1).AddSeconds(-1);
-
-            IReadOnlyList<ShiftDto> shifts;
-            if (request.ShiftId.HasValue && request.ShiftId.Value != Guid.Empty)
-            {
-                var shift = await _shiftRepository.GetAsync(request.ShiftId.Value, ct);
-                if (shift == null) return 0;
-                shifts = new List<ShiftDto> { new ShiftDto(shift.Id, shift.CompanyId, shift.BranchId, shift.Name, shift.Schedule, shift.Notes, shift.IsActive, shift.ValidFrom, shift.ValidUntil, shift.QualityCycleTemplateId) };
-            }
-            else
-            {
-                var allShifts = await _shiftRepository.ListAsync(null, null, ct);
-                shifts = allShifts.Select(s => new ShiftDto(s.Id, s.CompanyId, s.BranchId, s.Name, s.Schedule, s.Notes, s.IsActive, s.ValidFrom, s.ValidUntil, s.QualityCycleTemplateId)).Where(s => s.IsActive && s.QualityCycleTemplateId.HasValue).ToList();
-            }
-
-            int dispatchedCount = 0;
-
-            foreach (var shiftDto in shifts)
-            {
-                if (!shiftDto.QualityCycleTemplateId.HasValue) continue;
-
-                var template = await _qcRepository.GetTemplateAsync(shiftDto.QualityCycleTemplateId.Value, ct);
-                if (template == null || !template.IsActive) continue;
-
-                // Load occurrences for the target date
-                var shiftDomain = await _shiftRepository.GetAsync(shiftDto.Id, ct);
-                if (shiftDomain == null) continue;
-
-                var occurrences = ShiftScheduleCalculator.GenerateOccurrences(shiftDomain, from, to);
-                if (occurrences.Count == 0) continue;
-
-                // Find assigned employees for this shift
-                var shiftAssignments = await _shiftRepository.ListAssignmentsByShiftAsync(shiftDto.Id, ct);
-
-                var employees = new List<CleaningSuite.Domain.Employees.Employee>();
-                foreach (var assignment in shiftAssignments)
-                {
-                    var emp = await _employeeRepository.GetByIdAsync(assignment.EmployeeId, ct);
-                    if (emp != null && emp.IsActive)
-                    {
-                        employees.Add(emp);
-                    }
-                }
-
-                foreach (var occurrence in occurrences)
-                {
-                    foreach (var employee in employees)
-                    {
-                        // Check if form already exists for this occurrence
-                        var existingForm = await _qcRepository.GetFormByShiftOccurrenceAsync(shiftDto.Id, employee.Id, occurrence.StartUtc, ct);
-                        if (existingForm != null) continue;
-
-                        var form = QualityCycleForm.Create(
-                            shiftDto.Id,
-                            shiftDto.Name,
-                            employee.Id,
-                            $"{employee.FirstName} {employee.LastName}",
-                            template.Id,
-                            template.Title,
-                            occurrence.StartUtc,
-                            template.Items,
-                            occurrence.EndUtc);
-
-                        await _qcRepository.SaveFormAsync(form, ct);
-                        dispatchedCount++;
-
-                        // Send email if employee has email address
-                        if (!string.IsNullOrWhiteSpace(employee.Email))
-                        {
-                            var formUrl = $"https://readysetsiivous.fi/quality-cycle?token={form.Token}";
-                            var subject = $"Quality Cycle Checklist: {shiftDto.Name} ({occurrence.StartUtc:yyyy-MM-dd})";
-                            var body = $@"Hello {employee.FirstName},
-
-Please complete the Quality Cycle form for your shift '{shiftDto.Name}' on {occurrence.StartUtc:yyyy-MM-dd HH:mm UTC}.
-
-Form Link: {formUrl}
-
-Thank you,
-ReadySetSiivous Team";
-
-                            try
-                            {
-                                await _emailSender.SendAsync(employee.Email, subject, body, ct);
-                            }
-                            catch
-                            {
-                                // Email sending failures shouldn't throw out the entire batch
-                            }
-                        }
-                    }
-                }
-            }
-
-            return dispatchedCount;
+            if (!request.TargetDateUtc.HasValue)
+                return await _dispatcher.EnsureUpcomingAsync(request.ShiftId, ct);
+            var date = request.TargetDateUtc.Value.Date;
+            IReadOnlyList<Shift> shifts = request.ShiftId.HasValue
+                ? (await _shifts.GetAsync(request.ShiftId.Value, ct) is { } selectedShift ? new[] { selectedShift } : Array.Empty<Shift>())
+                : await _shifts.ListAsync(null, null, ct);
+            var count = 0;
+            foreach (var shift in shifts)
+                count += await _dispatcher.DispatchAsync(shift,
+                    QualityCycleOccurrences.InWindow(shift, date, date.AddDays(1)).Select(x => x.Occurrence).ToList(), ct);
+            return count;
         }
     }
 
@@ -276,20 +180,29 @@ ReadySetSiivous Team";
     public class SubmitQualityCycleFormCommandHandler : IRequestHandler<SubmitQualityCycleFormCommand, QualityCycleFormDto>
     {
         private readonly IQualityCycleRepository _repository;
-        public SubmitQualityCycleFormCommandHandler(IQualityCycleRepository repository) => _repository = repository;
+        private readonly TimeProvider _clock;
+        public SubmitQualityCycleFormCommandHandler(IQualityCycleRepository repository, TimeProvider? clock = null)
+        { _repository = repository; _clock = clock ?? TimeProvider.System; }
 
         public async Task<QualityCycleFormDto> Handle(SubmitQualityCycleFormCommand request, CancellationToken ct)
         {
             var form = await _repository.GetFormByTokenAsync(request.Token, ct)
                 ?? throw new NotFoundException("QualityCycleForm", Guid.Empty);
 
+            if (form.IsSubmitted) throw new QualityCycleConflictException("This shift task has already been completed.");
+            if (form.ShiftOccurrenceUtc > _clock.GetUtcNow().UtcDateTime)
+                throw new QualityCycleConflictException("This shift task has not started yet.");
             var domainItems = request.Items?.Select(i => new QualityCycleFormItem
             {
                 ItemText = i.ItemText,
                 IsChecked = i.IsChecked
             }).ToList() ?? new List<QualityCycleFormItem>();
 
-            form.Submit(domainItems, request.PhotoUrls, request.CleanerNotes);
+            try { form.Submit(domainItems, request.PhotoUrls, request.CleanerNotes); }
+            catch (ArgumentException ex)
+            {
+                throw new ValidationException(new[] { new FluentValidation.Results.ValidationFailure("Checklist", ex.Message) });
+            }
             await _repository.SaveFormAsync(form, ct);
             return MapForm(form);
         }
@@ -309,54 +222,18 @@ ReadySetSiivous Team";
 
     public class GetQualityCycleSummaryPdfQueryHandler : IRequestHandler<GetQualityCycleSummaryPdfQuery, byte[]>
     {
-        private readonly IQualityCycleRepository _repository;
-        private readonly IShiftRepository _shiftRepository;
-        private readonly Companies.ICompanyRepository _companyRepository;
-        private readonly Companies.IBranchRepository _branchRepository;
-        private readonly IQualityCyclePdfGenerator _pdfGenerator;
-
-        public GetQualityCycleSummaryPdfQueryHandler(
-            IQualityCycleRepository repository,
-            IShiftRepository shiftRepository,
-            Companies.ICompanyRepository companyRepository,
-            Companies.IBranchRepository branchRepository,
-            IQualityCyclePdfGenerator pdfGenerator)
-        {
-            _repository = repository;
-            _shiftRepository = shiftRepository;
-            _companyRepository = companyRepository;
-            _branchRepository = branchRepository;
-            _pdfGenerator = pdfGenerator;
-        }
-
-        public async Task<byte[]> Handle(GetQualityCycleSummaryPdfQuery request, CancellationToken ct)
-        {
-            var shift = await _shiftRepository.GetAsync(request.ShiftId, ct)
-                ?? throw new NotFoundException("Shift", request.ShiftId);
-
-            var company = await _companyRepository.GetAsync(shift.CompanyId, ct);
-            var branch = await _branchRepository.GetAsync(shift.BranchId, ct);
-
-            var fromUtc = new DateTime(request.Year, request.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-            var toUtc = fromUtc.AddMonths(1).AddSeconds(-1);
-
-            var forms = await _repository.ListFormsAsync(request.ShiftId, fromUtc, toUtc, ct);
-            var formDtos = forms.Select(MapForm).ToList();
-
-            return _pdfGenerator.GenerateMonthlySummaryPdf(
-                shift.Name,
-                company?.Name ?? "N/A",
-                branch?.Name ?? "N/A",
-                request.Year,
-                request.Month,
-                formDtos);
-        }
+        private readonly QualityCycleMonthlyReportService _reports;
+        private readonly IQualityCyclePdfGenerator _pdf;
+        public GetQualityCycleSummaryPdfQueryHandler(QualityCycleMonthlyReportService reports, IQualityCyclePdfGenerator pdf)
+        { _reports = reports; _pdf = pdf; }
+        public async Task<byte[]> Handle(GetQualityCycleSummaryPdfQuery request, CancellationToken ct) =>
+            _pdf.GenerateMonthlyReportPdf(await _reports.BuildAsync(new(request.Year, request.Month, ShiftId: request.ShiftId), ct));
     }
 
     private static QualityCycleTemplateDto MapTemplate(QualityCycleTemplate t) =>
         new(t.Id, t.CompanyId, t.BranchId, t.Title, t.Description, t.Items, t.IsActive, t.CreatedUtc, t.UpdatedUtc);
 
-    private static QualityCycleFormDto MapForm(QualityCycleForm f) =>
+    public static QualityCycleFormDto MapForm(QualityCycleForm f) =>
         new(
             f.Id,
             f.ShiftId,
@@ -373,7 +250,8 @@ ReadySetSiivous Team";
             f.CleanerNotes,
             f.IsSubmitted,
             f.SubmittedUtc,
-            f.CreatedUtc);
+            f.CreatedUtc,
+            f.TaskStatus);
 }
 
 public class QualityCycleValidators

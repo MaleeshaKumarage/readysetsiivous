@@ -9,6 +9,15 @@ public class ShiftAssignment : BaseDocument
     public DateTime AssignedAtUtc { get; set; }
     public bool IsActive { get; set; }
     public string? Note { get; set; }
+    public DateTime? UnassignedAtUtc { get; set; }
+    public List<ShiftAssignmentPeriod> Periods { get; set; } = new();
+    public void EnsureHistory()
+    {
+        if (Periods.Count == 0) Periods.Add(new() { FromUtc = AssignedAtUtc, ToUtc = IsActive ? null : UnassignedAtUtc ?? UpdatedUtc });
+    }
+    public bool Overlaps(DateTime start, DateTime end) => Periods.Count > 0
+        ? Periods.Any(p => p.FromUtc < end && (!p.ToUtc.HasValue || p.ToUtc > start))
+        : AssignedAtUtc < end && (IsActive || (UnassignedAtUtc ?? UpdatedUtc) > start);
 
     public static ShiftAssignment Create(
         Guid shiftId,
@@ -33,3 +42,5 @@ public class ShiftAssignment : BaseDocument
         };
     }
 }
+
+public class ShiftAssignmentPeriod { public DateTime FromUtc { get; set; } public DateTime? ToUtc { get; set; } }

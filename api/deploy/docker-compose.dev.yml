@@ -43,6 +43,7 @@ services:
       Auth__Keycloak__AdminUser: ${KEYCLOAK_ADMIN_USER}
       Auth__Keycloak__AdminPassword: ${KEYCLOAK_ADMIN_PASSWORD}
       Cors__AllowedOrigins__0: "*"
+      App__FrontendBaseUrl: http://130.61.208.211
       Uploads__Path: /app/uploads
     ports:
       - "8090:8080"

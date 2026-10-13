@@ -86,4 +86,24 @@ public class QualityCycleAdminController : ControllerBase
         var fileName = $"QualityCycle_Summary_{shiftId}_{year}_{month:D2}.pdf";
         return File(pdfBytes, "application/pdf", fileName);
     }
+
+    [HttpGet("monthly-summary")]
+    public async Task<IActionResult> MonthlySummary([FromQuery] int year, [FromQuery] int month,
+        [FromQuery] Guid? companyId, [FromQuery] Guid? branchId, [FromQuery] Guid? shiftId, CancellationToken ct) =>
+        Ok(await _mediator.Send(new GetQualityCycleMonthlyReportQuery(year, month, companyId, branchId, shiftId), ct));
+
+    [HttpGet("branch-summary-pdf")]
+    public async Task<IActionResult> BranchSummaryPdf([FromQuery] Guid branchId, [FromQuery] int year,
+        [FromQuery] int month, CancellationToken ct) =>
+        File(await _mediator.Send(new GetQualityCycleBranchPdfQuery(year, month, branchId), ct),
+            "application/pdf", $"QualityCycle_Branch_{branchId}_{year}_{month:D2}.pdf");
+    [HttpPost("report-shares")]
+    public async Task<IActionResult> ShareReport([FromBody] CreateQualityCycleReportShareCommand command, CancellationToken ct) =>
+        Ok(await _mediator.Send(command, ct));
+    [HttpGet("report-shares")]
+    public async Task<IActionResult> ListReportShares(CancellationToken ct) => Ok(await _mediator.Send(new ListQualityCycleReportSharesQuery(), ct));
+    [HttpDelete("report-shares/{id:guid}")]
+    public async Task<IActionResult> RevokeReportShare(Guid id, CancellationToken ct) {
+        await _mediator.Send(new RevokeQualityCycleReportShareCommand(id), ct); return NoContent();
+    }
 }

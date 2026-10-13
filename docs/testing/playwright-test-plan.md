@@ -165,3 +165,16 @@ catch-all error suppression, or fabricate selectors for nonexistent routes.
 - CI remains deterministic and never silently targets production. Shared-dev,
   time-driven, email and provisioning cases are explicitly scoped/opt-in.
 - Fixtures, selectors and docs stay aligned after fixes; stable IDs preserve history.
+
+## Confirmed QC activity workflow update
+
+Use [quality-cycle-workflow.md](../features/quality-cycle-workflow.md) as the current
+QC business oracle; older mandatory-completion/exception proposals are superseded.
+Test selected activities rather than requiring all checks. Notes are optional.
+Assert corridor12days/gym4days, duplicate-cleaner/day de-duplication, separate
+weekday/biweekly shifts, tenant-admin-only controls, snapshot sharing,30-day
+expiry and revoke404. Existing mocked browser coverage now includes these UI
+paths, while PostgreSQL regressions exercise actual isolation/concurrent writes
+and HTTP tests exercise authorization policies with controlled identities.
+Genuine Keycloak login, notification-provider failure/crash cases and DST/overnight
+calendar fixtures remain separate live/integration work.

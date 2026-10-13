@@ -59,3 +59,19 @@ from BE missing rules/APIs.
 The 25 issue IDs are 62 through 86. No issues were closed or unrelated issue bodies
 rewritten. Existing duplicate health-route research issues 45/47 were left alone
 because they are outside this feature/auth review.
+
+## QC implementation progress (2026-10-13)
+
+The activity workflow now supports optional selected activities, existing-shift
+template assignment, recurring generation, distinct per-item day/occurrence counts,
+separate shift/branch PDFs and tenant-admin-only30-day revocable summary links.
+QC tenant isolation and concurrent generation/submission have real PostgreSQL
+regressions. Admin role negatives are checked by HTTP authorization tests.
+
+#62 is addressed in source, with a legacy-partition release preflight still required.
+#76 has the shared dispatcher/worker and configured notification links/retry state;
+provider recovery scenarios remain. #77 now has exact item structure and one-time
+recording semantics; photo storage/limits and editable correction audit remain.
+#75, #82 and #83 retain their wider assignment/identity/workspace scope. Issues
+remain open until reviewed/merged and remaining acceptance work is reconciled.
+See [QC workflow](quality-cycle-workflow.md) and [rollout](../quality-cycle-rollout.md).

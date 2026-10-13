@@ -69,6 +69,8 @@ public static class MartenConfig
             .Index(x => x.EmployeeId)
             .Index(x => x.ShiftOccurrenceUtc);
 
+        options.Schema.For<QualityCycleReportShare>().UniqueIndex(x => x.Token);
+
         // Registry partition: unique slug across all tenants.
         options.Schema.For<TenantRegistration>().UniqueIndex(x => x.Slug);
 

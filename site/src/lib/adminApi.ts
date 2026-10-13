@@ -403,6 +403,7 @@ export const adminShifts = {
   create: (fields: unknown) => adminSendJson<Shift>('/api/v1/admin/shifts', 'POST', fields),
   update: (id: string, fields: unknown) =>
     adminSendJson<Shift>(`/api/v1/admin/shifts/${id}`, 'PUT', fields),
+  setQualityCycleTemplate: (id: string, templateId: string | null) => adminSendJson<Shift>(`/api/v1/admin/shifts/${id}/quality-cycle-template`, "PUT", { templateId }),
   deactivate: (id: string) => adminSend(`/api/v1/admin/shifts/${id}/deactivate`, 'POST'),
   assignments: (id: string) =>
     adminGet<ShiftAssignment[]>(`/api/v1/admin/shifts/${id}/assignments`),
@@ -412,7 +413,7 @@ export const adminShifts = {
     adminSend(`/api/v1/admin/shifts/${id}/assignments/${employeeId}`, 'DELETE'),
   occurrences: (id: string, fromUtc: string, toUtc: string) =>
     adminGet<ShiftOccurrence[]>(
-      `/api/v1/admin/shifts/${id}/occurrences?fromUtc=${encodeURIComponent(fromUtc)}&toUtc=${encodeURIComponent(toUtc)}`
+      `/api/v1/admin/shifts/${id}/occurrences?from=${encodeURIComponent(fromUtc)}&to=${encodeURIComponent(toUtc)}`
     ),
 };
 

@@ -2,8 +2,8 @@
 
 Reviewed on 2026-10-13 against commit `ceff5bd`, branch
 `feat/quality-cycle-auto-dispatch`. This is a source-based inventory, not a claim
-that this commit is deployed in dev or production. Two untracked Quality Cycle
-dispatcher files exist locally; they are work in progress, not released features.
+that this commit is deployed in dev or production. The QC section was updated
+after implementation of the confirmed activity-recording/report-sharing workflow.
 
 Use this document with the [edge-case catalogue](../testing/edge-case-catalog.md),
 [Playwright plan](../testing/playwright-test-plan.md),
@@ -15,8 +15,12 @@ permission boundaries and workspace grouping, see the
 [technical lead review](technical-lead-review.md).
 The [GitHub issue register](issue-register.md) maps every documented gap to an
 implementation or discussion issue.
+The [QC workflow clarification](quality-cycle-workflow.md) records the later
+requirements for template assignment after shift creation, per-occurrence cleaner
+activity recording, per-item day totals, separate branch/shift monthly reports
+and tenant-admin-only management/sharing.
 
-Scope: **24 feature groups, 77 controller endpoints, 32 FE/BE gaps, and 203
+Scope: **24 feature groups, 84 controller endpoints, 32 FE/BE gaps, and 203
 edge-case families**. Families with parameter sets expand into multiple tests.
 
 ## Reading the inventory
@@ -158,41 +162,36 @@ immediately clear an already-selected branch; response races need coverage.
 
 Employee assignment checks other assigned shifts within a maximum 180-day window,
 creates or reactivates one assignment, and soft-deactivates on removal. Touching
-time boundaries are not overlaps. Inactive employee/shift guards are absent in
-the handler. Two simultaneous assignments can both pass a read-before-write
+time boundaries are not overlaps. Inactive employee/shift assignments are now
+rejected. Two simultaneous assignments can both pass a read-before-write
 overlap check; verify against a real database. UI batch assignment is sequential
 and can partially succeed without a clear per-employee result.
 
-Assignment with a QC template creates a form for the first generated occurrence
-in the next 30 days and attempts email delivery. Because calculation expands
-from.Date, that first occurrence may already have started or ended today.
-The batch dispatch endpoint generates a selected day's forms and skips existing
-occurrence+employee forms; concurrent dispatch has no matching compound unique
-index. No wired hosted worker exists for recurring dispatch at shift end.
-`IQualityCycleDispatcher.cs` and `QualityCycleDispatcher.cs` are untracked and not
-registered/called by Program; do not document them as active automation.
+Quality Cycle now uses one tenant-bound dispatcher on assignment, template changes,
+manual recovery and a five-minute worker. It creates a rolling 32-day record window
+idempotently and stores notification delivery/retry state. Email links use the
+configured frontend URL and explicit tenant slug. Existing shifts have an admin
+FE action to attach/change templates without reassigning cleaners. Started and
+submitted checklist snapshots survive changes; future pending records update.
 
-QC templates accept title, description, items, optional company/branch IDs and
-active status. FE caps adding fields at 10; BE does not cap item count or validate
-company/branch relationships. BE filters blank item texts and errors if none
-remain. Updates/deletes do not automatically rewrite historical forms. Filtering
-includes templates with null scope as global matches.
+Cleaners select the activities performed that day. Unchecked items and empty notes
+are permitted; submission records an occurrence once and is not a requirement to
+do every listed activity. Original checklist text/order/count must match; repeat
+and future submission return 409. Photo data URLs remain unbounded legacy evidence
+storage and need the private upload/size-policy work documented in G11/G23.
 
-Public form stores immutable template text/order, checked flags, photo URL strings,
-notes, token, occurrence start/end and submitted time. Submit matches by case-
-insensitive trimmed text, then by index. Missing/mismatched items and all-unchecked
-submission are accepted; requiring all items is a policy decision. Repeated
-submission throws InvalidOperationException, currently mapped to 500. FE photos
-are FileReader data URLs stored inside the form, not uploads to an image endpoint.
-No item/photo/notes application size limits exist. File-picker preview exists;
-drag-and-drop text is shown but no drop handler exists. Photo count is displayed
-in admin; no image viewer is exposed there. Public submitted time is not refreshed
-from the submit result, so the thank-you screen can show client time.
+Monthly company/branch/shift reports show individual activity days and occurrence
+counts, recording/missing/pending totals and scheduled hours counted once per
+occurrence. Separate shift and branch PDFs are available. Tenant admins can create
+30-day public summary links and revoke them. Shared reports are immutable snapshots
+with no cleaner forms, identity, notes, photos or checklist tokens. Tenant isolation
+and concurrent generation/submission were tested against isolated PostgreSQL.
 
-QC repository injects bare `IDocumentSession`, unlike tenant-bound repositories;
-Program does not bind this session to HttpTenantContext. Source inspection indicates
-default-partition storage. A two-tenant dev test must establish actual runtime
-isolation before relying on QC list/token tests. This was not live-exploit tested.
+See [QC workflow](quality-cycle-workflow.md) for the full business contract, test
+coverage and remaining gaps, and [rollout](../quality-cycle-rollout.md) for legacy
+partition migration prerequisites. The My Work screen, authenticated cleaner
+identity binding, private photo uploads and old-history reconstruction are not
+implemented by this change.
 
 ### Agreements and signatures
 
@@ -282,21 +281,21 @@ P0 security/data isolation; P1 correctness/data integrity; P2 feature coverage/U
 
 | Gap | Priority / layer | Finding and evidence | Impact / next verification |
 | --- | --- | --- | --- |
-| G01 | P0 BE, runtime check | QC repo uses bare IDocumentSession rather than ITenantSession (`QualityCycleRepository`, `Program`) | Create QC data in tenant A; tenant B must neither list it nor access A token. |
+| G01 | Fixed in source; rollout required | QC repository now uses ITenantSession for templates/forms/report shares | Isolated PostgreSQL two-tenant negative tests pass; reconcile legacy partitions before deployment. |
 | G02 | P1 FE, source-confirmed | Service edit/status payload omits image/additional info; edit overwrites translations/icon/order/featured (`services/page.tsx`) | Edit one field of fully populated service; reload raw DTO and ensure unrelated values survive. |
 | G03 | P1 FE/BE contract | Agreement detail lacks counts expected by FE (`AgreementQueries`, `AgreementDetail` type) | Render actual detail JSON, never a list-shaped mock; counters must be correct. |
-| G04 | P1 BE | No recurring QC hosted dispatcher is registered; two dispatcher files are untracked | Time-driven dispatch cannot be asserted as working; worker and idempotency remain missing. |
+| G04 | Fixed in source | Shared recurring dispatcher and five-minute worker registered | Idempotency/next-day and PostgreSQL parallel insert regressions pass. |
 | G05 | P1 BE | Shift calculation ignores validity/active status, uses whole UTC days (`ShiftScheduleCalculator`) | Verify invalid/inactive shifts and time bounds; define Helsinki-vs-UTC schedule policy. |
-| G06 | P1 BE | Shift assignment lacks inactive guards and transactional uniqueness/overlap protection (`ShiftApp`, Marten indexes) | Parallel requests/inactive employees; no unsafe duplicate/conflicting assignments. |
-| G07 | P1 BE | QC dispatch links hardcode production; email failures skipped, no delivery retry state (`ShiftApp`, `QualityCycleApp`) | Dev emails must link to dev; distinguish created forms from delivered messages. |
-| G08 | P1 BE | Generic exception mapping turns repeated QC submission/some agreement lifecycle conflicts into 500 (`Program`, handlers) | Defined conflict should return 409 and a usable FE message. |
+| G06 | P1 BE | Inactive guards fixed; assignment transactional uniqueness/overlap protection remains (`ShiftApp`, Marten indexes) | Parallel requests/inactive employees; no unsafe duplicate/conflicting assignments. |
+| G07 | Fixed in source; delivery recovery coverage remaining | Configured frontend/tenant links and persisted notification retry state | Verify configured provider and failure/crash scenarios in dev; no real cleaner emails sent during tests. |
+| G08 | P1 BE | QC repeat submission now409; some agreement lifecycle conflicts still map to500 (`Program`, handlers) | Defined conflict should return 409 and a usable FE message. |
 | G09 | P1 BE | Employee invitation does not link user/roles; deactivation does not revoke identity (`EmployeeCommands`) | Register invitee; prove intended realm roles and disabled-employee access policy. |
-| G10 | P1 BE | Missing parent checks in branch creation, shift update, QC scope and agreement creation | Reject foreign/nonexistent IDs without writing orphan/cross-company entities. |
+| G10 | P1 BE | Shift update/template assignment parent checks fixed; branch creation, template scope creation and agreement parents remain | Reject foreign/nonexistent IDs without writing orphan/cross-company entities. |
 | G11 | P1 BE | PDF/PNG/photo semantic validation and size policies are incomplete | Corrupt files, fake MIME/extensions, malformed base64 and huge photos need predictable 400/413. |
 | G12 | P1 FE/BE | Booking has no idempotency key; FE collapses failure statuses and timeouts (`api.ts`, BookingFlow) | Lost success response must not mislead customer or create duplicate retry records. |
 | G13 | P1 BE | Booking/invoice transition guards are incomplete (`BookingCommands`, `InvoiceCommands`) | Define terminal-state policy before asserting desired transitions. |
 | G14 | P1 BE, runtime check | System tenant actions check master realm only; JWT audience validation disabled (`SystemController`, KeycloakJwt) | Role/audience-negative tests with genuine tokens, not injected mock booleans. |
-| G15 | P1 FE/BE | QC submission item fallback and duplicate-text matching are ambiguous; concurrent forms lack compound uniqueness | Preserve template text/order and independent check states; reject or define mismatch handling. |
+| G15 | Fixed for new generation/submission | Exact original checklist positions and deterministic per-tenant occurrence IDs | Parallel generation and optimistic completion tests pass; reconcile any old duplicate records during migration. |
 | G16 | P1 BE | Same-token signature races write same PNG/PDF paths before optimistic commit (`SignAgreementCommand`) | Losing request must not replace winner's artifact; inspect downloaded PDF signatures. |
 | G17 | P2 FE | No customer lookup/cancel or admin bookings/invoices/schedule screens | Use APIRequestContext now; UI tests blocked until screen exists. |
 | G18 | P2 FE | No tenant settings/content/provisioning UI; public content API unused | Document as BE-only; test API separately, no fabricated settings selectors. |
@@ -304,7 +303,7 @@ P0 security/data isolation; P1 correctness/data integrity; P2 feature coverage/U
 | G20 | P2 FE | Company/branch editing/deactivation/search/paging absent; lists capped at 100 | Records beyond first page inaccessible; selectors must not silently select wrong company. |
 | G21 | P2 FE | Shift editing/validity/type-1/occurrences absent; batch assignment lacks partial-failure UX | BE-only cases and failed batch reconciliation needed. |
 | G22 | P2 FE | Agreement post-create signer/lifecycle controls absent; signing UI English on all language routes | Keep before-create rows distinct from persisted signer operations; localization incomplete. |
-| G23 | P2 FE/BE | QC FE limit 10 vs BE unlimited; no scope/active/date-filter controls; photo viewer/drop handler missing | Preserve unsupported scope on edit; enforce agreed limits server-side. |
+| G23 | P2 FE/BE | QC FE limit 10 vs BE unlimited; scope-preserving edits added but scope/active/date-filter controls remain; photo viewer/drop handler missing | Preserve unsupported scope on edit; enforce agreed limits server-side. |
 | G24 | P2 FE | Admin network throws can leave spinners; failed lists look empty; raw uploads/downloads bypass token refresh | Abort/retry/session expiry matrix must exercise real adapters. |
 | G25 | P2 FE | Uncancelled service/language/company/detail requests can overwrite current state | Deliberately reorder responses, verify selected route/entity owns displayed data. |
 | G26 | P2 FE | VAT=0 defaults to 25.5; booking labels net service price as hourly and assumes EUR | Test exact submitted values and clarify price/time/currency presentation. |
@@ -338,6 +337,6 @@ controller; use source at the reviewed commit if line numbers drift.
 Decide: multi-team booking capacity and staff eligibility; price basis and currency;
 Helsinki-local vs UTC shift recurrence and DST behavior; allowed terminal status
 transitions; whether cancelled agreements revoke viewing and whether signed signers
-may be removed; token expiry; required QC checks/photos and maximum counts/sizes;
+may be removed; token expiry; QC photo limits/storage and maximum counts/sizes (all checks are optional);
 role/identity binding for invitations and provisioning; genuine offline requirements.
 The case catalogue flags these as policy cases, not existing requirements.
