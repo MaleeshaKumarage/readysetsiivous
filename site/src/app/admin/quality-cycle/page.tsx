@@ -330,6 +330,7 @@ export default function AdminQualityCyclePage() {
                               size="sm"
                               variant="light"
                               color="red"
+                              aria-label="Delete template"
                               onClick={() => handleDeleteTemplate(t.id)}
                             >
                               <Trash2 size={14} />

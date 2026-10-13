@@ -372,6 +372,8 @@
     "date": "Valitse päivämäärä",
     "loadingSlots": "Ladataan vapaita aikoja…",
     "noSlots": "Ei vapaita aikoja tälle päivälle.",
+    "slotsError": "Vapaita aikoja ei voitu ladata. Yritä uudelleen.",
+    "retrySlots": "Yritä uudelleen",
     "at": "klo",
     "detailsTitle": "Yhteystiedot",
     "name": "Nimi",

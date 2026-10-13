@@ -142,7 +142,7 @@ var uploadsPath = app.Configuration["Uploads:Path"] ?? Path.Combine(app.Environm
 Directory.CreateDirectory(uploadsPath);
 app.UseStaticFiles(new StaticFileOptions
 {
-    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPath),
+    FileProvider = new CleaningSuite.Api.PublicUploadsFileProvider(uploadsPath),
     RequestPath = "/uploads",
 });
 

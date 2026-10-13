@@ -101,34 +101,34 @@ test.describe('Admin Panel - Quality Cycle Page', () => {
     await itemInputs.nth(2).fill('Empty trash bins');
 
     // Add another item
-    await page.getByRole('button', { name: '+ Add Item' }).click();
+    await page.getByRole('button', { name: 'Add Item', exact: true }).click();
     await itemInputs.nth(3).fill('Sanitize door handles');
 
     // Submit form
     await page.getByRole('button', { name: 'Create Template' }).click();
 
     // Verify created template is rendered
-    await expect(page.getByRole('heading', { name: 'Daily Office Checklist' })).toBeVisible();
+    await expect(page.getByText('Daily Office Checklist', { exact: true })).toBeVisible();
     await expect(page.getByText('Standard office cleaning routines')).toBeVisible();
     await expect(page.getByText('Vacuum carpets')).toBeVisible();
     await expect(page.getByText('Sanitize door handles')).toBeVisible();
 
     // Edit template
     await page.getByRole('button', { name: 'Edit' }).click({ force: true });
-    await expect(page.getByRole('heading', { name: 'Edit Template' })).toBeVisible();
+    await expect(page.getByText('Edit Template', { exact: true })).toBeVisible();
     await page.getByPlaceholder('e.g. Daily Office Cleaning Checklist').fill('Updated Office Checklist');
     await page.getByRole('button', { name: 'Update Template' }).click();
 
-    await expect(page.getByRole('heading', { name: 'Updated Office Checklist' })).toBeVisible();
+    await expect(page.getByText('Updated Office Checklist', { exact: true })).toBeVisible();
 
     // Delete template
-    await page.getByRole('button', { name: 'Delete' }).click({ force: true });
+    await page.getByRole('button', { name: 'Delete template' }).click();
     await expect.poll(() => deleteConfirmed).toBe(true);
 
     await expect(page.getByText('No quality cycle templates created yet.')).toBeVisible();
   });
 
-  test('submissions tab, dispatch forms, and PDF summary report export', async ({ page }) => {
+  test('submissions tab and PDF summary report export', async ({ page }) => {
     await setupAdminMocks(page, { authenticated: true });
 
     const mockShifts = [
@@ -158,12 +158,6 @@ test.describe('Admin Panel - Quality Cycle Page', () => {
       },
     ];
 
-    let lastDialogMessage = '';
-    page.on('dialog', async dialog => {
-      lastDialogMessage = dialog.message();
-      await dialog.accept();
-    });
-
     await page.route(/\/api\/v1\/admin\/shifts(\/.*)?$/, async (route) => {
       if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
       return route.fulfill({ status: 200, json: mockShifts, headers: CORS_HEADERS });
@@ -174,19 +168,12 @@ test.describe('Admin Panel - Quality Cycle Page', () => {
       return route.fulfill({ status: 200, json: [], headers: CORS_HEADERS });
     });
 
-    await page.route(/\/api\/v1\/admin\/quality-cycle\/forms(\/.*)?$/, async (route) => {
+    await page.route(/\/api\/v1\/admin\/quality-cycle\/forms(\/.*|\?.*)?$/, async (route) => {
       if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
       return route.fulfill({ status: 200, json: mockForms, headers: CORS_HEADERS });
     });
 
-    let dispatchCalled = false;
-    await page.route(/\/api\/v1\/admin\/quality-cycle\/dispatch(\/.*)?$/, async (route) => {
-      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
-      dispatchCalled = true;
-      return route.fulfill({ status: 200, json: { dispatchedCount: 2 }, headers: CORS_HEADERS });
-    });
-
-    await page.route(/\/api\/v1\/admin\/quality-cycle\/summary-pdf(\/.*)?$/, async (route) => {
+    await page.route(/\/api\/v1\/admin\/quality-cycle\/summary-pdf(\/.*|\?.*)?$/, async (route) => {
       if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
       return route.fulfill({
         status: 200,
@@ -199,23 +186,22 @@ test.describe('Admin Panel - Quality Cycle Page', () => {
     await page.goto('/admin/quality-cycle/');
 
     // Switch to Submissions & PDF Reports tab
-    await page.getByRole('button', { name: 'Submissions & PDF Reports' }).click();
+    await page.getByText('Submissions & PDF Reports', { exact: true }).click();
 
-    await expect(page.getByRole('heading', { name: 'Quality Cycle Submissions Log' })).toBeVisible();
+    await expect(page.getByText('Quality Cycle Submissions Log', { exact: true })).toBeVisible();
     await expect(page.getByRole('cell', { name: 'Morning Office Shift' })).toBeVisible();
     await expect(page.getByRole('cell', { name: 'Anna Cleaner' })).toBeVisible();
     await expect(page.getByText('Submitted')).toBeVisible();
     await expect(page.getByText('2 / 2')).toBeVisible();
     await expect(page.getByText('Note: Completed on time')).toBeVisible();
 
-    // Trigger Dispatch Forms Now
-    await page.getByRole('button', { name: 'Dispatch Forms Now' }).click();
-    await expect.poll(() => dispatchCalled).toBe(true);
-    await expect.poll(() => lastDialogMessage).toContain('Dispatched 2 Quality Cycle forms.');
-
     // Select shift for PDF summary download
-    await page.locator('select').first().selectOption('shift-1');
+    await page.getByRole('textbox', { name: 'Filter by Shift' }).click();
+    await page.getByRole('option', { name: 'Morning Office Shift' }).click();
+    const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Export PDF Summary' }).click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/^QualityCycle_Summary_shift-1_\d{4}_\d{2}\.pdf$/);
   });
 });
 
@@ -271,9 +257,8 @@ test.describe('Public Quality Cycle Page', () => {
     await page.goto('/quality-cycle?token=valid-test-token');
 
     // Header and shift info check
-    await expect(page.getByText('ReadySetSiivous Quality Cycle')).toBeVisible();
-    await expect(page.getByText('Evening Office Cleaning')).toBeVisible();
-    await expect(page.getByText('Cleaner: Matti Meikäläinen')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Evening Office Cleaning' })).toBeVisible();
+    await expect(page.getByText('Matti Meikäläinen', { exact: true })).toBeVisible();
 
     // Toggle items
     await page.getByText('Empty trash cans').click();

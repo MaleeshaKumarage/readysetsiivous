@@ -1,6 +1,7 @@
 name: ci-build-test
 
 on:
+  workflow_call:
   pull_request:
     paths:
       - 'api/**'

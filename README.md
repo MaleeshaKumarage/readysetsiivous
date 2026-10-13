@@ -30,5 +30,7 @@ See `api/CLAUDE.md` for architecture, dev env and deploy details.
 
 - `deploy.yml` — Pages deploy, runs on `site/**` changes only
 - `ci-build-test.yml` — API build+test, runs on `api/**`
-- `docker-build-push.yml` — API image to GHCR (`readysetsiivous-api`), runs on `api/**`
-- `docker-deploy-mac.yml` — deploys image to Mac mini (self-hosted runner, label `macmini`), triggered after successful image build
+- `docker-build-push.yml` — runs the reusable backend and frontend CI checks for the same commit before publishing the API image to GHCR (`readysetsiivous-api`)
+- `docker-deploy-oracle.yml` — deploys the tested image to Oracle after successful image build
+
+Agreement PDFs and signatures remain on the persistent uploads volume, but `/uploads` serves only the generated service card images at the volume root. Agreement files are available through the agreement controllers, which enforce admin authorization or signer-token checks. Existing stored file paths require no migration.
