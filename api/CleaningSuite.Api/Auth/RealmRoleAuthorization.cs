@@ -9,6 +9,20 @@ namespace CleaningSuite.Api.Auth;
 /// </summary>
 public static class RealmRoleAuthorization
 {
+    public static bool HasRole(System.Security.Claims.ClaimsPrincipal user, params string[] expected)
+    {
+        var claim = user.FindFirst("realm_access")?.Value;
+        if (claim is null) return false;
+        try
+        {
+            using var doc = JsonDocument.Parse(claim);
+            return doc.RootElement.ValueKind == JsonValueKind.Object
+                && doc.RootElement.TryGetProperty("roles", out var roles)
+                && roles.ValueKind == JsonValueKind.Array
+                && roles.EnumerateArray().Any(r => r.ValueKind == JsonValueKind.String && expected.Contains(r.GetString()));
+        }
+        catch (JsonException) { return false; }
+    }
     public const string PolicyPrefix = "RealmRole:";
 
     public static AuthorizationPolicy Policy(params string[] roles) =>
@@ -39,24 +53,10 @@ public class RealmRoleHandler : AuthorizationHandler<RealmRoleRequirement>
     protected override Task HandleRequirementAsync(
         AuthorizationHandlerContext context, RealmRoleRequirement requirement)
     {
-        var realmAccess = context.User.FindFirst("realm_access")?.Value;
-        if (realmAccess is not null)
+        if (RealmRoleAuthorization.HasRole(context.User, requirement.Roles))
         {
-            try
-            {
-                using var doc = JsonDocument.Parse(realmAccess);
-                if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("roles", out var roles)
-                    && roles.ValueKind == JsonValueKind.Array
-                    && roles.EnumerateArray().Any(r => r.ValueKind == JsonValueKind.String && requirement.Roles.Contains(r.GetString())))
-                {
-                    context.Succeed(requirement);
-                    return Task.CompletedTask;
-                }
-            }
-            catch (JsonException)
-            {
-                // malformed claim: treat as no roles
-            }
+            context.Succeed(requirement);
+            return Task.CompletedTask;
         }
 
         context.Fail();

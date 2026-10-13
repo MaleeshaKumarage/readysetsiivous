@@ -21,31 +21,35 @@ public static class KeycloakJwt
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var serverUrl = configuration["Auth:Keycloak:ServerUrl"]?.TrimEnd('/')
+        _ = configuration["Auth:Keycloak:ServerUrl"]
             ?? throw new InvalidOperationException("Auth:Keycloak:ServerUrl missing");
-        var audiences = configuration.GetSection("Auth:Keycloak:Audiences").Get<string[]>()
-            ?? (configuration["Auth:Keycloak:Audience"] is { } single
-                ? [single]
-                : throw new InvalidOperationException("Auth:Keycloak:Audience missing"));
+        _ = new KeycloakResourceOptions(configuration);
 
+        services.AddSingleton(sp => new KeycloakResourceOptions(sp.GetRequiredService<IConfiguration>()));
+        services.AddHttpClient("KeycloakSigningKeys");
         services.AddSingleton<KeycloakSigningKeysResolver>();
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer();
 
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
-            .Configure<KeycloakSigningKeysResolver>((options, resolver) =>
+            .Configure<KeycloakSigningKeysResolver, IConfiguration>((options, resolver, effectiveConfiguration) =>
             {
+                var serverUrl = effectiveConfiguration["Auth:Keycloak:ServerUrl"]!.TrimEnd('/');
+                var resources = new KeycloakResourceOptions(effectiveConfiguration);
                 // Keep raw claim names ("iss", "realm_access") for issuer/realm parsing.
                 options.MapInboundClaims = false;
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuer = true,
-                    // Master admin-cli tokens carry no aud claim. Issuer + signature
-                    // + registry check already gate access; add an aud whitelist here
-                    // once all real clients (provisioner, SPA) consistently send aud.
-                    ValidateAudience = false,
-                    ValidAudiences = audiences,
+                    ValidateAudience = true,
+                    AudienceValidator = (audiences, token, _) =>
+                    {
+                        var realm = RealmFromIssuer(token.Issuer, serverUrl);
+                        var expected = realm == resources.ProvisionerRealm
+                            ? resources.PlatformAudience : resources.TenantAudience;
+                        return audiences?.Any(a => string.Equals(a, expected, StringComparison.Ordinal)) == true;
+                    },
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
                     IssuerValidator = (issuer, securityToken, validationParameters) =>
@@ -99,13 +103,14 @@ public static class KeycloakJwt
 /// <summary>Fetches and caches per-realm signing keys from Keycloak JWKS endpoints.</summary>
 public class KeycloakSigningKeysResolver
 {
-    private static readonly HttpClient Http = new();
+    private readonly HttpClient _http;
     private readonly MemoryCache _cache = new(new MemoryCacheOptions());
     private readonly string _serverUrl;
     private readonly string _transportUrl;
 
-    public KeycloakSigningKeysResolver(IConfiguration configuration)
+    public KeycloakSigningKeysResolver(IConfiguration configuration, IHttpClientFactory clients)
     {
+        _http = clients.CreateClient("KeycloakSigningKeys");
         _serverUrl = configuration["Auth:Keycloak:ServerUrl"]!.TrimEnd('/');
         _transportUrl = (configuration["Auth:Keycloak:AdminServerUrl"] ?? _serverUrl).TrimEnd('/');
     }
@@ -122,7 +127,7 @@ public class KeycloakSigningKeysResolver
 
         try
         {
-            var response = Http.GetAsync(
+            using var response = _http.GetAsync(
                 $"{_transportUrl}/realms/{Uri.EscapeDataString(realm)}/protocol/openid-connect/certs").GetAwaiter().GetResult();
             response.EnsureSuccessStatusCode();
             var json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();

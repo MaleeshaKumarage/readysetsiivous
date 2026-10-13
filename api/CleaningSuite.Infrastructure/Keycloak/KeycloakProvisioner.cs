@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using CleaningSuite.Application.Tenants;
+using CleaningSuite.Infrastructure.Auth;
 using Microsoft.Extensions.Logging;
 
 namespace CleaningSuite.Infrastructure.Keycloak;
@@ -9,11 +10,13 @@ public class KeycloakProvisioner : IKeycloakProvisioner
     private const string ClientId = "cleaning-suite-web";
     private readonly KeycloakAdminClient _admin;
     private readonly ILogger<KeycloakProvisioner> _logger;
+    private readonly KeycloakResourceOptions _resources;
 
-    public KeycloakProvisioner(KeycloakAdminClient admin, ILogger<KeycloakProvisioner> logger)
+    public KeycloakProvisioner(KeycloakAdminClient admin, ILogger<KeycloakProvisioner> logger, KeycloakResourceOptions resources)
     {
         _admin = admin;
         _logger = logger;
+        _resources = resources;
     }
 
     public async Task<ProvisionedTenant> ProvisionAsync(
@@ -43,6 +46,7 @@ public class KeycloakProvisioner : IKeycloakProvisioner
             directAccessGrantsEnabled = true,
             redirectUris,
             webOrigins = new[] { "+" },
+            protocolMappers = new[] { AudienceMapper(_resources.TenantAudience) },
         }, ct);
 
         var userId = await _admin.CreateUserAsync(slug, new
@@ -72,6 +76,17 @@ public class KeycloakProvisioner : IKeycloakProvisioner
 
     public Task SetRealmEnabledAsync(string realm, bool enabled, CancellationToken ct = default) =>
         _admin.SetRealmEnabledAsync(realm, enabled, ct);
+
+    public static object AudienceMapper(string audience) => new
+    {
+        name = "cleaning-suite-api-audience", protocol = "openid-connect",
+        protocolMapper = "oidc-audience-mapper", consentRequired = false,
+        config = new Dictionary<string, string>
+        {
+            ["included.custom.audience"] = audience,
+            ["access.token.claim"] = "true", ["id.token.claim"] = "false",
+        },
+    };
 
     private async Task WaitForRealmAsync(string realm, CancellationToken ct)
     {

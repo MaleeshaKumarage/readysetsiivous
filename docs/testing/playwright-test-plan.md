@@ -3,6 +3,14 @@
 Source baseline: `ceff5bd`, reviewed 2026-10-13. This is a plan for the next test
 improvement step, not implementation or evidence of execution of the proposed cases.
 
+Later implementation adds a separate `playwright.auth-live.config.ts` for owned
+real Keycloak/PostgreSQL fixtures. It verifies PKCE/API audience, refresh and
+browser-session logout plus the four platform tenant lifecycle routes with actual
+tenant/employee/platform tokens. It does not enable the production-targeting smoke
+specs. The default mocked suite now has66 desktop/mobile runs. See the exact
+[authentication evidence and setup](../features/api-authentication.md); the
+baseline inventory below remains historical, not a current coverage claim.
+
 Read [features and FE/BE gaps](../features/feature-inventory.md),
 [stable-ID edge cases](edge-case-catalog.md), [API endpoints](../features/api-endpoints.md),
 and [environment setup](../environments.md) together.

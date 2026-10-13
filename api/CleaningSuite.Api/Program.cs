@@ -114,6 +114,7 @@ builder.Services.AddAuthorization(options =>
 {
     options.AddRealmRolePolicies("admin", "employee");
     options.AddRealmRoleAnyPolicy("staff", "admin", "employee");
+    options.AddPlatformPolicy(builder.Configuration);
 });
 builder.Services.AddSingleton<IAuthorizationHandler, RealmRoleHandler>();
 
@@ -141,6 +142,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// Wrap exception translation too so the audit records the final HTTP outcome.
+app.UseMiddleware<PlatformAuditMiddleware>();
 app.UseExceptionHandler();
 app.UseCors("SiteOrigins");
 app.UseOutputCache();
