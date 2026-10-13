@@ -233,7 +233,7 @@ export default function QuoteForm() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full flex items-center justify-center gap-2.5 px-6 py-3.5 bg-whatsapp text-white text-base font-semibold rounded-full hover:bg-whatsapp-dark transition-all shadow-lg shadow-green-200 dark:shadow-green-900/30 hover:shadow-xl hover:shadow-green-300 dark:hover:shadow-green-900/40 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+              className="w-full flex items-center justify-center gap-2.5 px-6 py-3.5 bg-whatsapp text-white text-base font-semibold rounded-full hover:bg-whatsapp-dark transition-all shadow-lg shadow-green-200 dark:shadow-green-900/30 hover:shadow-xl hover:shadow-green-300 dark:hover:shadow-green-900/40 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-whatsapp focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
             >
               {submitting ? (
                 <>

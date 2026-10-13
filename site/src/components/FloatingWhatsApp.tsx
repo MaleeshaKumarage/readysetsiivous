@@ -42,7 +42,7 @@ export default function FloatingWhatsApp() {
         transition={{ type: 'spring', stiffness: 260, damping: 18, delay: 0.2 }}
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
-        className="whatsapp-pulse relative w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-whatsapp text-white flex items-center justify-center shadow-lg shadow-green-300 dark:shadow-green-900/30 hover:shadow-xl hover:shadow-green-400 dark:hover:shadow-green-900/50"
+        className="whatsapp-pulse relative w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-whatsapp text-white flex items-center justify-center shadow-lg shadow-green-300 dark:shadow-green-900/30 hover:shadow-xl hover:shadow-green-400 dark:hover:shadow-green-900/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-whatsapp focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
         aria-label={t('nav.whatsappButton')}
       >
         <svg className="w-7 h-7 sm:w-8 sm:h-8" fill="currentColor" viewBox="0 0 24 24">
