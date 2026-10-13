@@ -139,8 +139,8 @@ remaining identity, lifecycle, evidence and workspace work.
 - All 294 backend tests passed with owned disposable PostgreSQL, Keycloak and
   captured SMTP services; zero skipped tests. Task generation has no email sender
   dependency and preserves historical delivery metadata.
-- The desktop/mobile suite passed 125 cases; the one page-load timeout passed on
-  focused rerun. All 16 shift cases cover none/subset/all selections, no-template
+- The final desktop/mobile suite passed all 126 cases. All 16 shift cases cover
+  none/subset/all selections, no-template
   clocking, retained input on retry, saved-response recovery and authentication.
 - A genuine Keycloak browser test completed account setup, opened My shifts,
   started a task, selected Corridor only and ended it. Real API readback confirmed
@@ -149,3 +149,4 @@ remaining identity, lifecycle, evidence and workspace work.
   was403. The captured inbox contained only the native setup email before reinvite.
 - Merge/deployment verification remains pending; this section does not claim the
   issue93 correction is already live.
+- TypeScript checks and the final production frontend build passed.
