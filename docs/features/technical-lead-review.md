@@ -153,4 +153,4 @@ current partition/identity boundaries first.
 Concrete defects and missing operations are GitHub implementation issues.
 Role scope, workspace moves and business lifecycle policies are discussion issues
 until these decisions are approved. The issue register links both kinds to the
-feature gaps and Playwright case IDs.
+feature gaps and Playwright case IDs. See the [GitHub issue register](issue-register.md).

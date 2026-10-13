@@ -13,6 +13,8 @@ For per-operation FE-vs-BE coverage, see the
 [feature capability matrix](feature-capability-matrix.md). For proposed roles,
 permission boundaries and workspace grouping, see the
 [technical lead review](technical-lead-review.md).
+The [GitHub issue register](issue-register.md) maps every documented gap to an
+implementation or discussion issue.
 
 Scope: **24 feature groups, 77 controller endpoints, 32 FE/BE gaps, and 203
 edge-case families**. Families with parameter sets expand into multiple tests.

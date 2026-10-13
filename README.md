@@ -20,6 +20,7 @@ set dev variables explicitly before testing against a live backend.
 See [all features and FE/BE gaps](docs/features/feature-inventory.md),
 [operation-by-operation FE/BE coverage](docs/features/feature-capability-matrix.md),
 [auth, roles and workspace recommendations](docs/features/technical-lead-review.md),
+[tracked GitHub issues](docs/features/issue-register.md),
 [HTTP endpoints](docs/features/api-endpoints.md),
 [edge-case catalogue](docs/testing/edge-case-catalog.md), and
 [the Playwright improvement plan](docs/testing/playwright-test-plan.md).
