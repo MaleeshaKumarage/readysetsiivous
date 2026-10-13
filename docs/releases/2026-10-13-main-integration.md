@@ -97,12 +97,36 @@ Issues #49, #62, #63 and #64 closed through that main merge. The GitHub Pages
 deployment succeeded; a public fetch confirmed that the published employee UI
 bundle contains the released setup-email flow.
 
-## Remaining release verification
+## Production deployment verified
 
-Verify the API image against the actual merge SHA, health and genuine platform
-versus tenant authorization boundaries after its build/deployment pipeline
-completes. Broader employee read scope (#65) and other audit findings stay open
-and start from latest main after this release.
+Image build [38440959197](https://github.com/MaleeshaKumarage/readysetsiivous/actions/runs/38440959197)
+and production deployment [38442770531](https://github.com/MaleeshaKumarage/readysetsiivous/actions/runs/38442770531)
+succeeded. Docker inspection confirmed the API is running
+`sha-8ae2d9cda388bea0cd1df6c305b096e43e7dcbc6`; `/healthz` returned `status: ok`.
+The documentation-only merge after #89 does not change the application image.
+
+A genuine platform token obtained from the public HTTPS issuer returned 200 on
+tenant listing, and 403 on `/me` and employee administration. A master admin-cli
+token with the wrong resource audience returned 401, as did anonymous employee
+administration. Internal HTTP transport produces a different master issuer;
+the API correctly rejects it. Platform callers must use the public issuer.
+
+Native realm SMTP, the HTTPS auth frontend URL, required employee/admin roles
+and the SPA account redirect were verified against the live configuration.
+The public `/account/?tenant=readysetsiivous` landing returned 200. The encryption
+key volume is mounted. No production test invitation was sent and no employee's
+credentials were changed by these checks; real native setup was exercised in
+the isolated integration/browser tests described in the feature documentation.
+
+During the rollout the user received a legacy temporary-password invitation
+while the old API image was still running. Issue #49 was reopened to track that
+deployment gap. Deployment does not rewrite existing email contents: admins
+must use **Resend setup email** to replace legacy invitations with the new native
+setup link. Historical `/fi/admin/` links are not the new invitation contract.
+Do not copy the credentials from those historical messages into issue reports.
+
+Broader employee read scope (#65) and other audit findings stay open and start
+from latest main after this release.
 
 Rollback requires restoring the old application and pre-migration database
 together: the old QC repository cannot read the moved tenant partitions. Preserve
