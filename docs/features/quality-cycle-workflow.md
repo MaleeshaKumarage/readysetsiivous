@@ -117,11 +117,11 @@ Production partition contents were not inspected or migrated in this change.
 | DST/overnight/month transition | Tenant-local date counts and exclusive boundary; broaden calendar fixtures |
 | Template rename / duplicate labels | Preserve snapshot labels; position-based checks; add detailed report grouping fixtures |
 
-Still missing: authenticated own-work screen and token revocation/expiry policy;
+Still missing: broader own-work screen and checklist token revocation/expiry policy;
 editable submissions/correction audit; scoped template creation controls in FE
 (global creation and scope-preserving edits exist); durable private photo upload
-and enforced payload limits; holiday calendars; genuine Keycloak browser login
-coverage and notification-provider failure/crash recovery tests. These are not
+and enforced payload limits; holiday calendars; broader lifecycle/calendar
+coverage. These are not
 silently covered by request mocks. Existing issues #49, #62, #75–77, #82–83 track
 remaining identity, lifecycle, evidence and workspace work.
 
@@ -133,3 +133,19 @@ remaining identity, lifecycle, evidence and workspace work.
   accessibility and existing-shift-action edits, all18QC desktop/mobile runs passed.
 - TypeScript checks and the Next.js production build passed.
 - No real cleaner emails sent. Production was not deployed or migrated.
+
+## Issue93 verification on 2026-10-14
+
+- All 294 backend tests passed with owned disposable PostgreSQL, Keycloak and
+  captured SMTP services; zero skipped tests. Task generation has no email sender
+  dependency and preserves historical delivery metadata.
+- The desktop/mobile suite passed 125 cases; the one page-load timeout passed on
+  focused rerun. All 16 shift cases cover none/subset/all selections, no-template
+  clocking, retained input on retry, saved-response recovery and authentication.
+- A genuine Keycloak browser test completed account setup, opened My shifts,
+  started a task, selected Corridor only and ended it. Real API readback confirmed
+  both clock timestamps and the selection. Admin monthly report counted Corridor
+  once and Gym zero times; PDF returned a valid PDF header; cleaner report access
+  was403. The captured inbox contained only the native setup email before reinvite.
+- Merge/deployment verification remains pending; this section does not claim the
+  issue93 correction is already live.

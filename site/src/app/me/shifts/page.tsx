@@ -214,7 +214,7 @@ export default function MyShiftsPage() {
               const status = statusOf(o);
               const isOpen = openId === key;
               return (
-                <Card key={key} variant="elevated" padding="none" className="overflow-hidden">
+                <Card key={key} role="group" aria-label={`${o.shiftName} ${o.startUtc}`} variant="elevated" padding="none" className="overflow-hidden">
                   <div className="p-5 space-y-3">
                     <div className="flex items-start justify-between gap-3">
                       <div>

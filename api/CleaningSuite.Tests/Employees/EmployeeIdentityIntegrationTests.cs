@@ -6,6 +6,9 @@ using CleaningSuite.Application.Employees.Commands;
 using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Employees;
 using CleaningSuite.Domain.Tenants;
+using CleaningSuite.Domain.Companies;
+using CleaningSuite.Domain.Shifts;
+using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Infrastructure.Keycloak;
 using CleaningSuite.Infrastructure.Persistence;
 using Marten;
@@ -107,7 +110,20 @@ public class EmployeeIdentityIntegrationTests
         // Allow a later completed-account reinvite in the live browser fixture without sleeping60seconds.
         using (var session = store.LightweightSession(realm)) { var saved = (await session.LoadAsync<Employee>(employee.Id))!; saved.InviteLastSentUtc = DateTime.UtcNow.AddMinutes(-2); session.Store(saved); await session.SaveChangesAsync(); }
         var artifactPath = Environment.GetEnvironmentVariable("INVITE_TEST_CONTEXT_PATH");
-        if (!string.IsNullOrWhiteSpace(artifactPath)) await File.WriteAllTextAsync(artifactPath, JsonSerializer.Serialize(new { realm, employeeId = employee.Id, userId = boundId, email = employee.Email, setupUrl, frontend, keycloakUrl = url, mailboxUrl, ownerEmail = "owner@" + realm + ".invalid" }));
+        if (!string.IsNullOrWhiteSpace(artifactPath)) {
+            var company = Company.Create("QC-LIVE", "Live shift company");
+            var branch = Branch.Create(company.Id, "Live shift branch");
+            var template = QualityCycleTemplate.Create("Daily activities", ["Corridor", "Gym"], companyId: company.Id, branchId: branch.Id);
+            var shift = Shift.Create(company.Id, branch.Id, "Live employee shift",
+                new ShiftSchedule { Type = ShiftScheduleType.DailySameTime, DailyStart = TimeSpan.Zero, DailyEnd = TimeSpan.FromHours(1) }, null, null, null, template.Id);
+            var assignment = ShiftAssignment.Create(shift.Id, employee.Id, null);
+            assignment.AssignedAtUtc = DateTime.UtcNow.Date.AddDays(-8);
+            using (var session = store.LightweightSession(realm)) {
+                session.Store(company); session.Store(branch); session.Store(template); session.Store(shift); session.Store(assignment);
+                await session.SaveChangesAsync();
+            }
+            await File.WriteAllTextAsync(artifactPath, JsonSerializer.Serialize(new { realm, employeeId = employee.Id, userId = boundId, email = employee.Email, setupUrl, frontend, keycloakUrl = url, mailboxUrl, ownerEmail = "owner@" + realm + ".invalid", shiftId = shift.Id, branchId = branch.Id }));
+        }
     }
     private static async Task<EmployeeInviteResult> Invite(string realm, Guid id, IDocumentStore store, IConfiguration config, IEmployeeIdentityProvider identity) {
         var context = new Mock<ITenantContext>(); context.SetupGet(x => x.TenantId).Returns(realm);
