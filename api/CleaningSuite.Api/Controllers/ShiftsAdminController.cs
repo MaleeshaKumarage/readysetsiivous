@@ -25,9 +25,9 @@ public class ShiftsAdminController : ControllerBase
     public async Task<IActionResult> List(
         [FromQuery] Guid? companyId,
         [FromQuery] Guid? branchId,
-        CancellationToken ct)
+        CancellationToken ct, [FromQuery] bool includeInactive = false)
     {
-        var result = await _mediator.Send(new ListShiftsQuery(companyId, branchId), ct);
+        var result = await _mediator.Send(new ListShiftsQuery(companyId, branchId, includeInactive), ct);
         return Ok(result);
     }
 
@@ -63,6 +63,9 @@ public class ShiftsAdminController : ControllerBase
         await _mediator.Send(new DeactivateShiftCommand(id), ct);
         return NoContent();
     }
+
+    [HttpPost("{id:guid}/reactivate")]
+    public async Task<IActionResult> Reactivate(Guid id, CancellationToken ct) => Ok(await _mediator.Send(new ReactivateShiftCommand(id), ct));
 
     [HttpGet("{id:guid}/assignments")]
     public async Task<IActionResult> GetAssignments(Guid id, CancellationToken ct)

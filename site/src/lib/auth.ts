@@ -25,6 +25,9 @@ function selectedRealm(): string {
   }
   return KEYCLOAK_REALM;
 }
+export function authTenant(): string {
+  return keycloak?.realm ?? selectedRealm();
+}
 export function getKeycloak(): Keycloak {
   if (!keycloak) {
     keycloak = new Keycloak({
@@ -113,6 +116,12 @@ export function isAdmin(): boolean {
     return Boolean((window as any).__MOCK_AUTHED__) && (!(window as any).__MOCK_ROLES__ || (window as any).__MOCK_ROLES__.includes('admin'));
   }
   return getKeycloak().hasRealmRole('admin');
+}
+
+export function isManager(): boolean {
+  if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__ !== undefined)
+    return isAuthenticated() && Boolean((window as any).__MOCK_ROLES__?.includes('manager'));
+  return getKeycloak().hasRealmRole('manager');
 }
 
 export async function refreshToken(): Promise<string | undefined> {

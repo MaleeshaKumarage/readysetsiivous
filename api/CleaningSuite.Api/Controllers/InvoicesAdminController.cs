@@ -1,4 +1,5 @@
 using CleaningSuite.Api.Auth;
+using CleaningSuite.Application.Access;
 using CleaningSuite.Application.Invoicing.Commands;
 using CleaningSuite.Application.Invoicing.Queries;
 using CleaningSuite.Infrastructure.Invoicing;
@@ -11,7 +12,7 @@ namespace CleaningSuite.Api.Controllers;
 /// <summary>Invoicing for the tenant admin.</summary>
 [ApiController]
 [Route("api/v1/admin/invoices")]
-[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "staff")]
+[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
 public class InvoicesAdminController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -23,7 +24,7 @@ public class InvoicesAdminController : ControllerBase
         [FromQuery] string? status, [FromQuery] DateTime? fromUtc, CancellationToken ct)
     {
         var invoices = await _mediator.Send(new ListInvoicesQuery(status, fromUtc), ct);
-        return Ok(invoices);
+        return Ok(invoices.Select(AdminResponses.Invoice).ToArray());
     }
 
     [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
@@ -38,7 +39,7 @@ public class InvoicesAdminController : ControllerBase
     public async Task<IActionResult> Detail(Guid id, CancellationToken ct)
     {
         var invoice = await _mediator.Send(new GetInvoiceQuery(id), ct);
-        return invoice is null ? NotFound() : Ok(invoice);
+        return invoice is null ? NotFound() : Ok(AdminResponses.Invoice(invoice));
     }
 
     [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]

@@ -6,7 +6,7 @@ import { isAdmin } from '@/lib/auth';
 import { Plus } from 'lucide-react';
 import { adminEmployees, type Employee } from '@/lib/adminApi';
 
-const ROLES = ['admin', 'employee'];
+const ROLES = ['admin', 'manager', 'employee'];
 
 export default function EmployeesAdminPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);

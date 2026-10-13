@@ -14,6 +14,7 @@ public sealed class KeycloakEmployeeIdentityProvider(KeycloakAdminClient admin, 
         try {
             var realm = await admin.GetRealmAsync(tenantId, ct);
             if (!Boolean(realm, "enabled")) throw new EmployeeInviteConfigurationException("The tenant's login realm is disabled.");
+            if (role == Employee.RoleManager) await EnsureManagerRoleAsync(tenantId, ct);
             foreach (var requiredRole in new[] { Employee.RoleAdmin, Employee.RoleEmployee }) await admin.GetRoleAsync(tenantId, requiredRole, ct);
             var clients = await admin.GetClientsAsync(tenantId, ClientId, ct);
             var client = clients.EnumerateArray().FirstOrDefault(c => String(c, "clientId") == ClientId);
@@ -40,7 +41,7 @@ public sealed class KeycloakEmployeeIdentityProvider(KeycloakAdminClient admin, 
     }
     public async Task<EmployeeIdentity> EnsureAsync(string tenantId, Employee employee, CancellationToken ct = default)
     {
-        if (employee.Role is not (Employee.RoleAdmin or Employee.RoleEmployee)) throw new EmployeeIdentityConflictException("Unsupported employee role.");
+        if (employee.Role is not (Employee.RoleAdmin or Employee.RoleEmployee or Employee.RoleManager)) throw new EmployeeIdentityConflictException("Unsupported employee role.");
         try {
             JsonElement? user;
             if (!string.IsNullOrWhiteSpace(employee.KeycloakUserId)) {
@@ -76,7 +77,7 @@ public sealed class KeycloakEmployeeIdentityProvider(KeycloakAdminClient admin, 
             var roles = await admin.GetUserRealmRolesAsync(tenantId, idValue, ct);
             if (string.IsNullOrWhiteSpace(owner) && string.IsNullOrWhiteSpace(employee.KeycloakUserId)) {
                 if (!Boolean(account, "emailVerified")) throw new EmployeeIdentityConflictException("An existing unverified account uses this email. Administrator reconciliation is required.");
-                if (roles.EnumerateArray().Any(r => (String(r, "name") is Employee.RoleAdmin or Employee.RoleEmployee) && String(r, "name") != employee.Role))
+                if (roles.EnumerateArray().Any(r => (String(r, "name") is Employee.RoleAdmin or Employee.RoleEmployee or Employee.RoleManager) && String(r, "name") != employee.Role))
                     throw new EmployeeIdentityConflictException("An existing account has a conflicting role. Administrator reconciliation is required.");
             }
             attributes[OwnerAttribute] = new[] { employee.Id.ToString() };
@@ -143,13 +144,21 @@ public sealed class KeycloakEmployeeIdentityProvider(KeycloakAdminClient admin, 
         return matches.Count == 0 ? null : matches[0];
     }
     private async Task SetRoleAsync(string tenantId, string userId, string role, CancellationToken ct) {
-        if (role is not (Employee.RoleAdmin or Employee.RoleEmployee)) throw new EmployeeIdentityConflictException("Unsupported employee role.");
+        if (role is not (Employee.RoleAdmin or Employee.RoleEmployee or Employee.RoleManager)) throw new EmployeeIdentityConflictException("Unsupported employee role.");
+        if (role == Employee.RoleManager) await EnsureManagerRoleAsync(tenantId, ct);
         var wanted = await admin.GetRoleAsync(tenantId, role, ct);
         var existing = await admin.GetUserRealmRolesAsync(tenantId, userId, ct);
-        var unwanted = existing.EnumerateArray().Where(r => (String(r, "name") is Employee.RoleAdmin or Employee.RoleEmployee) && String(r, "name") != role).Select(r => (object)r).ToArray();
+        var unwanted = existing.EnumerateArray().Where(r => (String(r, "name") is Employee.RoleAdmin or Employee.RoleEmployee or Employee.RoleManager) && String(r, "name") != role).Select(r => (object)r).ToArray();
         // Remove elevated stale role before assigning the intended role; failures cannot leave both.
         if (unwanted.Length > 0) await admin.RemoveRealmRolesAsync(tenantId, userId, unwanted, ct);
         if (!existing.EnumerateArray().Any(r => String(r, "name") == role)) await admin.AssignRealmRoleAsync(tenantId, userId, new object[] { wanted }, ct);
+    }
+    private async Task EnsureManagerRoleAsync(string tenantId, CancellationToken ct) {
+        try { await admin.CreateRoleAsync(tenantId, Employee.RoleManager, ct); }
+        catch (KeycloakException e) when (e.StatusCode == System.Net.HttpStatusCode.Conflict) {
+            // Realm imports, provisioning or another admin request may already have created it.
+            _ = await admin.GetRoleAsync(tenantId, Employee.RoleManager, ct);
+        }
     }
     private Dictionary<string, string> ConfiguredSmtp() {
         var section = configuration.GetSection("EmployeeInvites:Smtp");

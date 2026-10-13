@@ -1,4 +1,5 @@
 using CleaningSuite.Api.Auth;
+using CleaningSuite.Application.Access;
 using CleaningSuite.Application.Employees.Queries;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -21,6 +22,6 @@ public class ScheduleController : ControllerBase
         [FromQuery] string date, [FromQuery] Guid employeeId, CancellationToken ct)
     {
         var bookings = await _mediator.Send(new GetScheduleQuery(date, employeeId), ct);
-        return Ok(bookings);
+        return Ok(bookings.Select(AdminResponses.Booking).ToArray());
     }
 }

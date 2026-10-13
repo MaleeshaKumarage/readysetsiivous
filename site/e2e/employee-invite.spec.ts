@@ -62,7 +62,7 @@ test('employee cannot use invite or employee mutation controls', async ({ page }
   await page.addInitScript(() => { (window as any).__MOCK_ROLES__ = ['employee']; });
   await page.route(/\/api\/v1\/admin\/employees$/, route => route.fulfill({ status: 200, headers, json: [{ id: 'employee-a', email: 'cleaner@example.invalid', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true }] }));
   await page.goto('/admin/employees/');
-  await expect(page.getByRole('cell', { name: 'Test Cleaner' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Admin access required' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Invite', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Deactivate', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Add employee', exact: true })).toHaveCount(0);

@@ -1,4 +1,5 @@
 using CleaningSuite.Api.Auth;
+using CleaningSuite.Application.Access;
 using CleaningSuite.Application.Employees.Commands;
 using CleaningSuite.Application.Employees.Queries;
 using MediatR;
@@ -11,7 +12,7 @@ namespace CleaningSuite.Api.Controllers;
 /// <summary>Employee management for the tenant admin.</summary>
 [ApiController]
 [Route("api/v1/admin/employees")]
-[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "staff")]
+[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
 public class EmployeesAdminController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -23,7 +24,7 @@ public class EmployeesAdminController : ControllerBase
     public async Task<IActionResult> List([FromQuery] bool includeInactive, CancellationToken ct)
     {
         var employees = await _mediator.Send(new ListEmployeesQuery(includeInactive), ct);
-        return Ok(employees);
+        return Ok(employees.Select(AdminResponses.Employee).ToArray());
     }
 
     [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]

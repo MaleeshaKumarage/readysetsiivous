@@ -1,4 +1,13 @@
-import { authorizedFetch, adminSendJson } from './adminApi';
+import { authorizedFetch } from './adminApi';
+
+async function clockRequest(path: string, body: unknown): Promise<QualityCycleForm> {
+  const response = await authorizedFetch(path, { method: 'POST', body: JSON.stringify(body) });
+  if (!response.ok) {
+    const problem = await response.json().catch(() => ({}));
+    throw new Error(problem.detail || (response.status === 403 ? 'Your access or shift assignment changed. Refresh your shifts or contact your tenant administrator.' : problem.title) || 'Please retry.');
+  }
+  return await response.json() as QualityCycleForm;
+}
 
 export interface QualityCycleFormItem {
   itemText: string;
@@ -46,13 +55,13 @@ export const meApi = {
   },
 
   startShift: (shiftId: string, occurrenceStartUtc: string, occurrenceEndUtc: string) =>
-    adminSendJson<QualityCycleForm>(`/api/v1/me/shifts/${shiftId}/start`, 'POST', {
+    clockRequest(`/api/v1/me/shifts/${shiftId}/start`, {
       occurrenceStartUtc,
       occurrenceEndUtc,
     }),
 
   endForm: (formId: string, items: QualityCycleFormItem[], photoUrls?: string[], cleanerNotes?: string) =>
-    adminSendJson<QualityCycleForm>(`/api/v1/me/quality-cycle/${formId}/end`, 'POST', {
+    clockRequest(`/api/v1/me/quality-cycle/${formId}/end`, {
       items,
       photoUrls,
       cleanerNotes,

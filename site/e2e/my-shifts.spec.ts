@@ -9,7 +9,7 @@ async function setupWork(page: Page, options: { empty?: boolean; failStart?: boo
   await page.addInitScript(() => { (window as any).__MOCK_ROLES__ = ['employee']; });
   const start = new Date(Date.now() - 3600000).toISOString();
   const occurrence: any = { shiftId, shiftName: 'AAA1 weekday shift', startUtc: options.future ? new Date(Date.now()+86400000).toISOString() : start,
-    endUtc: new Date(Date.now()+3600000).toISOString(), form: null };
+    endUtc: new Date(Date.now()+(options.future ? 90000000 : 3600000)).toISOString(), form: null };
   let startCalls = 0; let endCalls = 0; let loadCalls = 0; let submitted: any = null;
   await page.route(/\/api\/v1\/me\/shifts$/, route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
@@ -99,4 +99,22 @@ test('anonymous employee must sign in before loading shifts', async ({ page }) =
   await setupAdminMocks(page, { authenticated: false }); let requests = 0;
   page.on('request', request => { if (request.url().includes('/api/v1/me/shifts')) requests++; });
   await page.goto('/me/shifts/'); await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible(); expect(requests).toBe(0);
+});
+
+test('a future shift becomes startable at its actual scheduled instant', async ({ page }) => {
+  const now = Date.now(); await page.clock.install({ time: new Date(now) });
+  const work = await setupWork(page, { future: true }); await page.goto('/me/shifts/');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeDisabled();
+  await expect(page.getByText('Available at the scheduled start time.')).toBeVisible(); expect(work.startCalls).toBe(0);
+  await page.clock.fastForward(86405000);
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Record activities & end' })).toBeVisible(); expect(work.startCalls).toBe(1);
+});
+
+test('clock start displays the actual API rejection reason', async ({ page }) => {
+  await setupWork(page);
+  await page.route(new RegExp(`/api/v1/me/shifts/${shiftId}/start$`), route => route.fulfill({ status: 409, headers, json: { detail: 'Choose an actual scheduled shift occurrence.' } }));
+  await page.goto('/me/shifts/'); await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(page.getByText('Could not start shift. Choose an actual scheduled shift occurrence.')).toBeVisible();
 });

@@ -320,3 +320,22 @@ update retry recovery, verified/current-role checks and old JWTs after demotion 
 deactivation. Unrelated profile edits must preserve credentials and sessions.
 The original generic registration assumptions are superseded by the
 [employee invitation contract](../features/employee-invitations.md).
+
+## Issue65 manager and lifecycle test additions
+
+| ID | Layer | Setup/action | Observable result |
+| --- | --- | --- | --- |
+| AUTH-MGR-001 | API/DEV/UI | Verified manager with two tenant branches and a second tenant | Both own branches visible, foreign shift GET/PUT404, no foreign mutations |
+| AUTH-MGR-002 | API/UI | Employee/staff/no-role direct manager/admin access | 403/401; no operational/sensitive handler calls or child reads |
+| AUTH-MGR-003 | API/DEV | Manager roster and self work with marker payroll/email/subject/token data | Exact nested allowlists; administrative markers absent |
+| AUTH-MGR-004 | API/DEV | Promote/demote manager; stale token; inactive/unverified/pending/unbound | Managed roles reconciled, password/unrelated roles preserved, stale access403 |
+| AUTH-MGR-005 | UI | Manager create/edit/cancel each schedule, assign/remove, load/save retry | Safe payloads only, preserved input after failure, no admin/QC/billing controls |
+| SHIFT-RESTORE-001 | API/UI | Deactivate, include inactive, reactivate, repeat | Preserved schedule/parents/template/notes/assignment periods/history; one new active plan |
+| SHIFT-RESTORE-002 | DB | Concurrent admin template update and manager edit/reactivate | Losing request409; winning admin data and active state preserved |
+| SHIFT-RESTORE-003 | BE/API | Missing/inactive/foreign parent or expired validity | Invalid parent rejects without write; expiry unchanged, no out-of-range work |
+| CLOCK-REASON-001 | UI/API | Server409/403 vs network failure | Actual safe reason shown; saved-response recovery remains; selections preserved |
+| CLOCK-FUTURE-001 | UI/BE | Upcoming UTC occurrence, advance to scheduled instant | Start initially disabled, enabled by timer; API remains authoritative |
+
+These cases are implemented alongside65/82/96/97; production evidence is tracked
+separately from mocked UI assertions. Dependency advisory95 and company-index
+scope98 are open findings, not completed by this authorization release.

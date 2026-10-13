@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useState } from 'react';
 import {
-  Title, Button, Table, Modal, TextInput, Select, MultiSelect, Group, Stack, Text, Loader, ActionIcon, NumberInput,
+  Title, Button, Table, Modal, TextInput, Select, MultiSelect, Group, Stack, Text, Loader, ActionIcon, NumberInput, Checkbox,
 } from '@mantine/core';
 import { Plus, Trash2 } from 'lucide-react';
 import {
@@ -24,6 +24,9 @@ const SCHEDULE_TYPES = [
 export default function ShiftsAdminPage() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
+  const [includeInactive, setIncludeInactive] = useState(false);
+  const [listError, setListError] = useState('');
+  const [restoring, setRestoring] = useState<string | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -53,10 +56,10 @@ export default function ShiftsAdminPage() {
   const [assignments, setAssignments] = useState<Record<string, ShiftAssignment[]>>({});
   const [assignSel, setAssignSel] = useState<string[]>([]);
 
-  const load = () => adminShifts.list().then((r) => { if (r) setShifts(r); setLoading(false); });
+  const load = () => adminShifts.list(undefined, undefined, includeInactive).then((r) => { if (r) setShifts(r); setLoading(false); });
+  useEffect(() => { setLoading(true); load(); }, [includeInactive]);
 
   useEffect(() => {
-    load();
     adminCompanies.list('', 0, 100).then((r) => { if (r) setCompanies(r.items); });
     adminEmployees.list().then((e) => { if (e) setEmployees(e); });
     adminQualityCycle.listTemplates().then((t) => { if (t) setTemplates(t.filter((x) => x.isActive)); });
@@ -104,6 +107,14 @@ export default function ShiftsAdminPage() {
   };
 
   const deactivate = async (id: string) => { await adminShifts.deactivate(id); await load(); };
+  const reactivate = async (id: string) => {
+    setRestoring(id); setListError('');
+    try {
+      if (!await adminShifts.reactivate(id)) { setListError('Could not reactivate shift. Check that its company and branch are active, then retry.'); return; }
+      await load();
+    } catch { setListError('Could not reactivate shift. Please retry.'); }
+    finally { setRestoring(null); }
+  };
 
   const openAssign = async (id: string) => {
     if (assignOpen === id) { setAssignOpen(null); return; }
@@ -137,6 +148,9 @@ export default function ShiftsAdminPage() {
         <Button leftSection={<Plus size={16} />} onClick={() => setModalOpen(true)}>Add shift</Button>
       </Group>
 
+      <Checkbox label="Show deactivated shifts" checked={includeInactive} onChange={e => setIncludeInactive(e.currentTarget.checked)} mb="md" />
+      {listError && <Text role="alert" c="red" mb="md">{listError}</Text>}
+
       {loading ? <Loader /> : shifts.length === 0 ? (
         <Text c="dimmed">No shifts yet.</Text>
       ) : (
@@ -162,9 +176,10 @@ export default function ShiftsAdminPage() {
                     <Table.Td>{assignments[s.id]?.length ?? 0}</Table.Td>
                     <Table.Td>
                       <Group gap={6} wrap="nowrap">
-                        <Button size="xs" variant="light" onClick={() => openAssign(s.id)}>Employees</Button>
+                        {s.isActive && <Button size="xs" variant="light" onClick={() => openAssign(s.id)}>Employees</Button>}
                         {isAdmin() && s.isActive && <Button size="xs" variant="light" onClick={() => { setTemplateShift(s); setAssignedTemplate(s.qualityCycleTemplateId ?? null); setTemplateError(''); }}>Checklist template</Button>}
                         {s.isActive && <Button size="xs" variant="subtle" color="red" onClick={() => deactivate(s.id)}>Deactivate</Button>}
+                        {!s.isActive && <Button size="xs" loading={restoring === s.id} disabled={!!restoring} onClick={() => reactivate(s.id)}>Reactivate</Button>}
                       </Group>
                     </Table.Td>
                   </Table.Tr>

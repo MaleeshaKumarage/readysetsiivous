@@ -1,7 +1,7 @@
 'use client';
 
 import '@mantine/core/styles.css';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -11,7 +11,8 @@ import { useDisclosure } from '@mantine/hooks';
 import {
   LayoutDashboard, Sparkles, FileSignature, Users, Building2, CalendarClock, CheckSquare, LogOut, LogIn,
 } from 'lucide-react';
-import { initAuth, isAuthenticated, login, logout } from '@/lib/auth';
+import { initAuth, isAuthenticated, isAdmin, authTenant, refreshToken, login, logout } from '@/lib/auth';
+import { API_URL } from '@/lib/api';
 import { PwaInstallButton } from '@/components/PwaInstallButton';
 
 const NAV = [
@@ -33,15 +34,46 @@ const adminTheme = createTheme({
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [authed, setAuthed] = useState(false);
+  const [access, setAccess] = useState<'pending' | 'allowed' | 'denied' | 'error'>('pending');
+  const verification = useRef(0);
   const [opened, { toggle, close }] = useDisclosure(false);
   const pathname = usePathname() ?? '';
 
-  useEffect(() => {
-    initAuth().then(() => {
-      setAuthed(isAuthenticated());
-      setReady(true);
-    });
+  const verifyAccess = useCallback(async () => {
+    const attempt = ++verification.current;
+    setAccess('pending');
+    try {
+      await initAuth();
+      if (attempt !== verification.current) return;
+      const signedIn = isAuthenticated();
+      setAuthed(signedIn); setReady(true);
+      if (!signedIn || !isAdmin()) { setAccess('denied'); return; }
+      const bearer = await refreshToken();
+      if (attempt !== verification.current) return;
+      if (!bearer) { setAccess('denied'); return; }
+      // Identity verification is deliberately uncached: stale roles and inactive
+      // bindings must not mount administrative children or trigger their reads.
+      const response = await fetch(`${API_URL}/api/v1/me`, { headers: { Authorization: `Bearer ${bearer}` }, cache: 'no-store' });
+      if (attempt !== verification.current) return;
+      if (response.status === 401 || response.status === 403) { setAccess('denied'); return; }
+      if (!response.ok) throw new Error('Identity verification unavailable');
+      const identity = await response.json();
+      const hasAdmin = Array.isArray(identity.roles) && identity.roles.some((value: unknown) => {
+        if (typeof value !== 'string') return false;
+        try { const roles = JSON.parse(value)?.roles; return Array.isArray(roles) && roles.includes('admin'); } catch { return false; }
+      });
+      const allowed = identity.realm === authTenant() && hasAdmin
+        && (!identity.employee || (identity.employee.role === 'admin' && identity.employee.isActive === true));
+      if (attempt === verification.current) setAccess(allowed ? 'allowed' : 'denied');
+    } catch {
+      if (attempt === verification.current) { setReady(true); setAccess('error'); }
+    }
   }, []);
+
+  useEffect(() => {
+    void verifyAccess();
+    return () => { verification.current++; };
+  }, [verifyAccess]);
 
   // Keep the site's dark class for any pages still using shadcn components.
   useEffect(() => {
@@ -56,11 +88,29 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   const base = `/admin/`;
 
-  if (!ready) {
+  if (!ready || (authed && access === 'pending')) {
     return (
       <MantineProvider theme={adminTheme} forceColorScheme="dark">
         <Group justify="center" h="100vh">
           <Text c="dimmed">Checking login…</Text>
+        </Group>
+      </MantineProvider>
+    );
+  }
+
+  if (authed && access !== 'allowed') {
+    return (
+      <MantineProvider theme={adminTheme} forceColorScheme="dark">
+        <Group justify="center" h="100vh" p="md">
+          <Paper p="xl" radius="md" w="100%" maw={420} withBorder>
+            <Stack>
+              <Text component="h1" fw={600}>{access === 'error' ? 'Could not verify access' : 'Admin access required'}</Text>
+              <Text role="alert">{access === 'error' ? 'Account verification is temporarily unavailable. Please retry.' : 'This account cannot access tenant administration.'}</Text>
+              {access === 'error' && <Button onClick={() => void verifyAccess()}>Retry verification</Button>}
+              <Button component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="light">My account</Button>
+              <Button onClick={() => logout()} variant="subtle">Sign out</Button>
+            </Stack>
+          </Paper>
         </Group>
       </MantineProvider>
     );

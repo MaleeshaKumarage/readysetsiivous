@@ -75,8 +75,9 @@ public record UpdateShiftCommand(
     Guid? QualityCycleTemplateId = null) : IRequest<ShiftDto>;
 
 public record DeactivateShiftCommand(Guid Id) : IRequest;
+public record ReactivateShiftCommand(Guid Id) : IRequest<ShiftDto>;
 
-public record ListShiftsQuery(Guid? CompanyId, Guid? BranchId) : IRequest<IReadOnlyList<ShiftDto>>;
+public record ListShiftsQuery(Guid? CompanyId, Guid? BranchId, bool IncludeInactive = false) : IRequest<IReadOnlyList<ShiftDto>>;
 
 public record GetShiftQuery(Guid Id) : IRequest<ShiftDto>;
 
@@ -219,8 +220,32 @@ public class ShiftHandlers
 
         public async Task<IReadOnlyList<ShiftDto>> Handle(ListShiftsQuery request, CancellationToken ct)
         {
-            var shifts = await _repository.ListAsync(request.CompanyId, request.BranchId, ct);
+            var shifts = request.IncludeInactive
+                ? (await _repository.ListForReportingAsync(ct)).Where(s => (!request.CompanyId.HasValue || s.CompanyId == request.CompanyId)
+                    && (!request.BranchId.HasValue || s.BranchId == request.BranchId)).ToList()
+                : await _repository.ListAsync(request.CompanyId, request.BranchId, ct);
             return shifts.Select(MapShift).ToList();
+        }
+    }
+
+    public sealed class ReactivateShiftCommandHandler(IShiftRepository repository, ICompanyRepository companies,
+        IBranchRepository branches, IQualityCycleDispatcher dispatcher) : IRequestHandler<ReactivateShiftCommand, ShiftDto>
+    {
+        public async Task<ShiftDto> Handle(ReactivateShiftCommand request, CancellationToken ct)
+        {
+            var shift = await repository.GetAsync(request.Id, ct) ?? throw new NotFoundException("Shift", request.Id);
+            var company = await companies.GetAsync(shift.CompanyId, ct) ?? throw new NotFoundException("Company", shift.CompanyId);
+            var branch = await branches.GetAsync(shift.BranchId, ct) ?? throw new NotFoundException("Branch", shift.BranchId);
+            if (branch.CompanyId != company.Id) throw new NotFoundException("Branch", shift.BranchId);
+            if (!company.IsActive || !branch.IsActive) throw new ShiftConflictException("The company and branch must be active before reactivating this shift.");
+            if (shift.IsActive) return MapShift(shift);
+            shift.EnsureQualityCycleHistory();
+            shift.Update(shift.CompanyId, shift.BranchId, shift.Name, shift.Schedule, shift.Notes, true,
+                shift.ValidFrom, shift.ValidUntil, shift.QualityCycleTemplateId);
+            shift.RecordQualityCyclePlan(DateTime.UtcNow);
+            await repository.SaveAsync(shift, ct);
+            await dispatcher.EnsureUpcomingAsync(shift.Id, ct);
+            return MapShift(shift);
         }
     }
 
