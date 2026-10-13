@@ -6,11 +6,13 @@ import { API_URL } from '@/lib/api';
 
 export default function ManagerLayout({ children }: { children: ReactNode }) {
   const [access, setAccess] = useState<'pending' | 'anonymous' | 'allowed' | 'denied' | 'error'>('pending');
+  const [tenant, setTenant] = useState('');
   const version = useRef(0);
   const verify = useCallback(async () => {
     const attempt = ++version.current; setAccess('pending');
     try {
       await initAuth(); if (attempt !== version.current) return;
+      setTenant(authTenant());
       if (!isAuthenticated()) { setAccess('anonymous'); return; }
       if (!isAdmin() && !isManager()) { setAccess('denied'); return; }
       const bearer = await refreshToken(); if (attempt !== version.current) return;
@@ -31,7 +33,7 @@ export default function ManagerLayout({ children }: { children: ReactNode }) {
   useEffect(() => { void verify(); return () => { version.current++; }; }, [verify]);
   return <main className="min-h-screen bg-gray-50 text-gray-900 p-4 sm:p-8">
     <div className="max-w-5xl mx-auto space-y-6">
-      <header className="flex flex-wrap justify-between gap-4 items-center"><h1 className="text-2xl font-bold">Tenant operations</h1><nav className="flex gap-4"><Link className="underline" href="/account/">Account</Link><Link className="underline" href="/me/shifts/">My shifts</Link>{access !== 'anonymous' && <button className="underline" onClick={() => logout()}>Sign out</button>}</nav></header>
+      <header className="flex flex-wrap justify-between gap-4 items-center"><h1 className="text-2xl font-bold">Tenant operations</h1><nav className="flex gap-4"><Link className="underline" href={tenant ? `/account/?tenant=${encodeURIComponent(tenant)}` : '/account/'}>Account</Link><Link className="underline" href="/me/shifts/">My shifts</Link>{access !== 'anonymous' && <button className="underline" onClick={() => logout().catch(() => setAccess('error'))}>Sign out</button>}</nav></header>
       {access === 'pending' && <p role="status">Checking access…</p>}
       {access === 'anonymous' && <button className="rounded bg-gray-900 text-white px-4 py-2" onClick={() => login()}>Sign in</button>}
       {access === 'denied' && <p role="alert">Access denied. Tenant manager or administrator access is required.</p>}

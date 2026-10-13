@@ -158,3 +158,22 @@ are explicit. No credentials are returned. GET `/api/v1/me` now includes a safe
 employee identity summary when linked and checks active/verified/current-role
 state. Employee updates/deactivation synchronize Keycloak access. See
 [onboarding](employee-invitations.md) for migration and role-negative expectations.
+
+## Current self and manager route additions
+
+`GET /api/v1/me/profile`, `/me/work?date=YYYY-MM-DD` and
+`/me/work/bookings/{id}` return only the verified employee's explicit safe
+contracts. Existing `/me/shifts` and start/end paths retain optional activities;
+clock rejection reasons are displayed and premature starts are disabled.
+
+All `/api/v1/manager` routes require tenant manager/admin operations plus current
+identity checks: GET employees, paged companies, company branches, shifts/detail,
+shift assignments; POST shift create/deactivate/reactivate and assignment; PUT
+shift edit; DELETE assignment. See [manager field/endpoint matrix](tenant-manager-access.md).
+They provide no administrative financial/HR/QC-report access.
+
+`GET /api/v1/admin/shifts?includeInactive=true` includes deactivated shifts, and
+`POST /api/v1/admin/shifts/{id}/reactivate` restores a versioned shift without
+rewriting its schedule, template, notes, assignments or inactive history. The
+manager shift list and reactivation route expose the equivalent operational
+capability in its own tenant. Active-only listing remains the default.

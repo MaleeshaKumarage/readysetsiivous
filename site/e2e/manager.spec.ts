@@ -54,6 +54,7 @@ test('tenant manager sees both branches and creates, edits, assigns, removes and
   const state = await setup(page); await page.goto('/manager/');
   await expect(page.getByRole('article', { name: 'AAA1 weekdays' })).toBeVisible();
   await expect(page.getByRole('article', { name: 'AAA2 biweekly' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Account', exact: true })).toHaveAttribute('href', '/account/?tenant=readysetsiivous');
   await expect(page.getByText(/Payroll|Invoice|Checklist template|Monthly report/)).toHaveCount(0);
   await page.getByRole('button', { name: 'Add shift' }).click(); await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('button', { name: 'Add shift' }).click();
@@ -119,4 +120,3 @@ test('manager creates each schedule type with explicit fields', async ({ page })
   expect(state.writes[0].schedule.dailyTimes.Monday.start).toBe('09:00'); expect(state.writes[1].schedule.weeklyDays).toContain(2);
   expect(state.writes[2].schedule.biWeeklyWeekParity).toBe(2); expect(state.writes[4].schedule.monthlyDay).toBe(15);
 });
-

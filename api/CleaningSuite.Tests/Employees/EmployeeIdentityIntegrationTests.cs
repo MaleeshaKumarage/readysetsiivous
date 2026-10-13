@@ -136,6 +136,7 @@ public class EmployeeIdentityIntegrationTests
             await provisioner.ProvisionAsync(otherRealm, "Other isolated tenant", "owner@" + otherRealm + ".invalid", "Other", "Owner", new[] { frontend + "/*" });
             var otherEmployee = new Employee { Role = Employee.RoleManager, Email = "manager@" + otherRealm + ".invalid", FirstName = "Other", LastName = "Manager" };
             var otherUser = await admin.CreateUserAsync(otherRealm, new { username = otherEmployee.Email, email = otherEmployee.Email,
+                firstName = otherEmployee.FirstName, lastName = otherEmployee.LastName, requiredActions = Array.Empty<string>(),
                 enabled = true, emailVerified = true, credentials = new[] { new { type = "password", value = "InviteOtherManagerTestOnly2026", temporary = false } },
                 attributes = new Dictionary<string, string[]> { ["cleaning_employee_id"] = new[] { otherEmployee.Id.ToString() } } });
             await admin.AssignRealmRoleAsync(otherRealm, otherUser, new object[] { await admin.GetRoleAsync(otherRealm, "manager") });

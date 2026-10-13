@@ -121,6 +121,14 @@ public class KeycloakEmployeeIdentityProviderTests
         Assert.DoesNotContain(transport.Requests, r => r.Body.Contains("credentials"));
         if (to == "manager") Assert.Contains(transport.Requests, r => r.Method == "POST" && r.Path.EndsWith("/roles") && r.Body.Contains("manager"));
     }
+    [Fact]
+    public async Task ExistingManagerRealmRoleConflictIsVerifiedAndDoesNotBreakPromotion()
+    {
+        var transport = new FakeKeycloak { Role = "employee", RoleCreationFailure = HttpStatusCode.Conflict };
+        await Provider(transport).SynchronizeAccessAsync("tenant-a", "user-a", "manager", true);
+        Assert.Contains(transport.Requests, r => r.Method == "GET" && r.Path.EndsWith("/roles/manager"));
+        Assert.Contains(transport.Requests, r => r.Method == "POST" && r.Path.EndsWith("role-mappings/realm") && r.Body.Contains("manager"));
+    }
     private static KeycloakEmployeeIdentityProvider Provider(FakeKeycloak transport) {
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Auth:Keycloak:ServerUrl"] = "https://auth.invalid" }).Build();
         return new(new KeycloakAdminClient(new HttpClient(transport), "https://auth.invalid", "master", "provisioner", "", "admin", "test"), config);
@@ -136,10 +144,12 @@ public class KeycloakEmployeeIdentityProviderTests
         public bool HasSmtp { get; set; } = true;
         public bool FrontendConfigured { get; set; } = true;
         public bool OwnershipUserEditable { get; set; }
+        public HttpStatusCode? RoleCreationFailure { get; set; }
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) {
             var path = request.RequestUri!.PathAndQuery; var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(ct);
             Requests.Add(new(request.Method.Method, path, body));
             if (path.EndsWith("openid-connect/token")) return Json(new { access_token = "test-admin-token", expires_in = 3600 });
+            if (request.Method == HttpMethod.Post && path.EndsWith("/roles") && RoleCreationFailure.HasValue) return new(RoleCreationFailure.Value);
             if (request.Method == HttpMethod.Put && path.EndsWith("/users/user-a")) {
                 using var update = JsonDocument.Parse(body);
                 if (update.RootElement.TryGetProperty("attributes", out var attrs) && attrs.TryGetProperty("cleaning_employee_id", out var owner)) Owner = owner[0].GetString();
