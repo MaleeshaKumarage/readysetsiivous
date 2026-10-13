@@ -1,8 +1,9 @@
 # Employee access and response contracts — issue65
 
-Implementation branch: `fix/employee-read-scope-65-main`, created from latest main
-`68dedb7`, now updated through main `82d2cb7`. This work is not yet merged or deployed. The preceding invitation and
-audience release is already in production; this issue adds narrower read scopes.
+Implementation merged through PR99 as `b5bbae3`, built on main `82d2cb7`.
+Website deployment succeeded; API production verification is pending. The
+preceding invitation and audience release is already in production; this issue
+adds narrower read scopes and tenant-wide manager operations.
 
 | Identity | Administration | Self profile / assigned work |
 | --- | --- | --- |

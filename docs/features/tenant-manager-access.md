@@ -1,8 +1,8 @@
 # Tenant manager access — issues65/82
 
-Implementation in progress on `fix/employee-read-scope-65-main`. The user explicitly
+Implementation merged through PR99 as `b5bbae3`. The user explicitly
 specified managers for the whole tenant, not individual branches. No manager
-permissions are claimed deployed until production verification is recorded.
+permissions are claimed deployed until API production verification is recorded.
 
 | Capability | Tenant admin | Tenant manager | Cleaner |
 | --- | --- | --- | --- |
