@@ -10,7 +10,7 @@ namespace CleaningSuite.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/admin/agreements")]
-[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "staff")]
+[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
 public class AgreementsAdminController : ControllerBase
 {
     private readonly IMediator _mediator;

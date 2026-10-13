@@ -299,7 +299,7 @@ test('employee cannot open admin template or report controls', async ({ page }) 
   let qcRequests = 0;
   await page.route(/\/api\/v1\/admin\/quality-cycle\//, route => { qcRequests++; return route.fulfill({ status: 403, headers: CORS_HEADERS }); });
   await page.goto('/admin/quality-cycle/');
-  await expect(page.getByText('Only admins can manage checklist templates and view reports.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Admin access required' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Create Template' })).toHaveCount(0);
   expect(qcRequests).toBe(0);
 });

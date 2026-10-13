@@ -3,6 +3,12 @@ import { test as baseTest, expect, Page } from '@playwright/test';
 export async function setupAdminMocks(page: Page, options: { authenticated?: boolean } = {}) {
   const authed = options.authenticated ?? true;
 
+  await page.route(/\/api\/v1\/me$/, route => route.fulfill({
+    status: 200,
+    headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' },
+    json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: ['admin'] })], employee: null },
+  }));
+
   await page.addInitScript(({ authed }) => {
     // A reload after logout must retain the logged-out state rather than
     // re-authenticating the mock user on every document load.

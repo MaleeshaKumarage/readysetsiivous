@@ -149,7 +149,7 @@ public class QualityCycleClockTests
     }
 
     [Fact]
-    public async Task MyShifts_ReturnsOccurrencesWithForms()
+    public async Task MyShifts_DoesNotRelabelAnExistingFormAsAnotherOccurrence()
     {
         var template = NewTemplate();
         var shift = NewShift(template.Id);
@@ -169,7 +169,32 @@ public class QualityCycleClockTests
         var handler = new QualityCycleHandlers.GetMyShiftsQueryHandler(shiftRepo.Object, qcRepo.Object);
         var result = await handler.Handle(new GetMyShiftsQuery(emp.Id, FromUtc, ToUtc), CancellationToken.None);
 
-        Assert.NotEmpty(result);
-        Assert.All(result, r => Assert.NotNull(r.Form));
+        Assert.Equal(2, result.Count);
+        Assert.Equal(form.Id, result[0].Form!.Id);
+        Assert.Null(result[1].Form);
+    }
+
+    [Fact]
+    public async Task MyShifts_ForeignEmployeeFormCannotEscapeThroughOwnedOccurrence()
+    {
+        var template = NewTemplate(); var shift = NewShift(template.Id); var employee = NewEmployee();
+        var shifts = new Mock<IShiftRepository>(); var forms = new Mock<IQualityCycleRepository>();
+        shifts.Setup(r => r.ListAssignmentsByEmployeeAsync(employee.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { ExistingAssignment(shift.Id, employee.Id) });
+        shifts.Setup(r => r.GetAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+        var foreign = QualityCycleForm.Create(shift.Id, shift.Name, Guid.NewGuid(), "Other cleaner", template.Id, template.Title, FromUtc.AddHours(8), template.Items);
+        forms.Setup(r => r.GetFormByShiftOccurrenceAsync(shift.Id, employee.Id, It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync(foreign);
+        var result = await new QualityCycleHandlers.GetMyShiftsQueryHandler(shifts.Object, forms.Object).Handle(new(employee.Id, FromUtc, ToUtc), default);
+        Assert.NotEmpty(result); Assert.All(result, r => Assert.Null(r.Form));
+    }
+
+    [Theory]
+    [InlineData(0)] [InlineData(-1)] [InlineData(33)]
+    public async Task MyShifts_InvalidWindowIsRejectedBeforeAssignmentsAreRead(int days)
+    {
+        var shifts = new Mock<IShiftRepository>();
+        var handler = new QualityCycleHandlers.GetMyShiftsQueryHandler(shifts.Object, Mock.Of<IQualityCycleRepository>());
+        await Assert.ThrowsAsync<FluentValidation.ValidationException>(() => handler.Handle(new(Guid.NewGuid(), FromUtc, FromUtc.AddDays(days)), default));
+        Assert.Empty(shifts.Invocations);
     }
 }

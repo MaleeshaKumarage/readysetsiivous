@@ -11,7 +11,7 @@ namespace CleaningSuite.Api.Controllers;
 /// <summary>Service catalog management for the tenant admin.</summary>
 [ApiController]
 [Route("api/v1/admin/services")]
-[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "staff")]
+[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
 public class ServicesAdminController : ControllerBase
 {
     private readonly IMediator _mediator;

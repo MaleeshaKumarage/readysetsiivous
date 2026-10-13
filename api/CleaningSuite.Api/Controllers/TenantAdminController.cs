@@ -10,7 +10,7 @@ namespace CleaningSuite.Api.Controllers;
 /// <summary>Tenant profile + dynamic page content for the authenticated admin.</summary>
 [ApiController]
 [Route("api/v1/admin/tenant")]
-[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "staff")]
+[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
 public class TenantAdminController : ControllerBase
 {
     private readonly IMediator _mediator;

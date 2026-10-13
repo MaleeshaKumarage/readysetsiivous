@@ -51,6 +51,7 @@ export default function AccountClient() {
         {account && <>
           <h2 className="text-xl font-medium">Account ready</h2>
           <p>{account.employee ? `${account.employee.firstName} ${account.employee.lastName}` : 'Tenant administrator'} · {account.realm}</p>
+          {account.employee?.isActive && <Link className="block underline" href="/me/shifts/">My shifts</Link>}
           {isAdmin() ? <Link className="underline" href="/admin/">Continue to administration</Link>
             : <p>You can record your shift activities using the checklist links sent to your email.</p>}
         </>}

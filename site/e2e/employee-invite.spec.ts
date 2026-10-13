@@ -29,6 +29,7 @@ test('employee account landing confirms binding without admin link', async ({ pa
   await page.route(/\/api\/v1\/me$/, route => route.fulfill({ status: 200, headers, json: { realm: 'tenant-a', employee: { id: 'employee-a', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true } } }));
   await page.goto('/account/?tenant=tenant-a');
   await expect(page.getByRole('heading', { name: 'Account ready' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveAttribute('href', '/me/shifts/');
   await expect(page.getByText('You can record your shift activities using the checklist links sent to your email.')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Continue to administration' })).toHaveCount(0);
   expect(await page.evaluate(() => sessionStorage.getItem('__AUTH_TENANT__'))).toBe('tenant-a');
@@ -61,7 +62,8 @@ test('employee cannot use invite or employee mutation controls', async ({ page }
   await page.addInitScript(() => { (window as any).__MOCK_ROLES__ = ['employee']; });
   await page.route(/\/api\/v1\/admin\/employees$/, route => route.fulfill({ status: 200, headers, json: [{ id: 'employee-a', email: 'cleaner@example.invalid', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true }] }));
   await page.goto('/admin/employees/');
-  await expect(page.getByRole('cell', { name: 'Test Cleaner' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Admin access required' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Test Cleaner' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Invite', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Deactivate', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Add employee', exact: true })).toHaveCount(0);

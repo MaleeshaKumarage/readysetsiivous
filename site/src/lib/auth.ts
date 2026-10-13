@@ -25,6 +25,9 @@ function selectedRealm(): string {
   }
   return KEYCLOAK_REALM;
 }
+export function authTenant(): string {
+  return keycloak?.realm ?? selectedRealm();
+}
 export function getKeycloak(): Keycloak {
   if (!keycloak) {
     keycloak = new Keycloak({

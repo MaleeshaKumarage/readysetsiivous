@@ -1,4 +1,5 @@
 using CleaningSuite.Api.Auth;
+using CleaningSuite.Application.Access;
 using CleaningSuite.Application.Bookings.Commands;
 using CleaningSuite.Application.Bookings.Queries;
 using MediatR;
@@ -10,7 +11,7 @@ namespace CleaningSuite.Api.Controllers;
 /// <summary>Booking management for the tenant admin.</summary>
 [ApiController]
 [Route("api/v1/admin/bookings")]
-[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "staff")]
+[Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
 public class BookingsAdminController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -26,14 +27,14 @@ public class BookingsAdminController : ControllerBase
         CancellationToken ct)
     {
         var bookings = await _mediator.Send(new ListBookingsQuery(fromUtc, toUtc, status, employeeId), ct);
-        return Ok(bookings);
+        return Ok(bookings.Select(AdminResponses.Booking).ToArray());
     }
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Detail(Guid id, CancellationToken ct)
     {
         var booking = await _mediator.Send(new GetBookingDetailQuery(id), ct);
-        return booking is null ? NotFound() : Ok(booking);
+        return booking is null ? NotFound() : Ok(AdminResponses.Booking(booking));
     }
 
     [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]

@@ -172,8 +172,10 @@ identity/lifecycle verification before mounting administrative children. A
 nonadmin/denied identity sees a clear access-denied state and account/sign-out
 actions, with no administrative data calls or financial/HR navigation. A transient
 identity verification failure needs visible retry rather than mounting children.
-Existing account landing and `/me/shifts` remain available to cleaners. The broader My Work
-screen is tracked by issue70 and must consume these self APIs rather than admin
+Existing account landing and `/me/shifts` remain available to cleaners.
+The verified account landing links active bound employees to the existing shift
+page; unbound legacy admins receive no invented self-work navigation.
+The broader My Work screen is tracked by issue70 and must consume these self APIs rather than admin
 schedule/list APIs; no missing screen is claimed complete by this backend change.
 Use existing authenticated `GET /api/v1/me` for shell verification. Its necessary
 identity lookup is permitted in negative tests; denied handler calls must still

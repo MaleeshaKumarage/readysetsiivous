@@ -284,6 +284,8 @@ public class QualityCycleHandlers
                     ?? throw new QualityCycleConflictException("The task changed. Reload your shifts and retry.");
             }
 
+            if (form.EmployeeId != employee.Id || form.ShiftId != shift.Id || form.ShiftOccurrenceUtc != start)
+                throw new UnauthorizedAccessException();
             if (form.IsSubmitted) throw new QualityCycleConflictException("This shift task has already been completed.");
             if (form.StartedAtUtc.HasValue) return MapForm(form);
             form.Start();
@@ -326,6 +328,10 @@ public class QualityCycleHandlers
 
         public async Task<IReadOnlyList<MyShiftOccurrenceDto>> Handle(GetMyShiftsQuery request, CancellationToken ct)
         {
+            var from = request.FromUtc.Kind == DateTimeKind.Local ? request.FromUtc.ToUniversalTime() : DateTime.SpecifyKind(request.FromUtc, DateTimeKind.Utc);
+            var to = request.ToUtc.Kind == DateTimeKind.Local ? request.ToUtc.ToUniversalTime() : DateTime.SpecifyKind(request.ToUtc, DateTimeKind.Utc);
+            if (to <= from || to - from > TimeSpan.FromDays(32) || to.Date >= DateTime.MaxValue.Date)
+                throw new ValidationException(new[] { new FluentValidation.Results.ValidationFailure("range", "Choose an increasing UTC interval of at most 32 days within supported calendar bounds.") });
             var assignments = await _shiftRepository.ListAssignmentsByEmployeeAsync(request.EmployeeId, ct);
             var result = new List<MyShiftOccurrenceDto>();
 
@@ -333,12 +339,14 @@ public class QualityCycleHandlers
             {
                 if (!assignment.IsActive || assignment.EmployeeId != request.EmployeeId) continue;
                 var shift = await _shiftRepository.GetAsync(assignment.ShiftId, ct);
-                if (shift == null || !shift.IsActive) continue;
+                if (shift == null || shift.Id != assignment.ShiftId || !shift.IsActive) continue;
 
-                var occurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, request.FromUtc, request.ToUtc);
-                foreach (var occurrence in occurrences.Where(o => o.StartUtc >= request.FromUtc && o.StartUtc < request.ToUtc && assignment.Overlaps(o.StartUtc, o.EndUtc)))
+                var occurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, from, to);
+                foreach (var occurrence in occurrences.Where(o => o.StartUtc >= from && o.StartUtc < to && assignment.Overlaps(o.StartUtc, o.EndUtc)))
                 {
                     var form = await _repository.GetFormByShiftOccurrenceAsync(shift.Id, request.EmployeeId, occurrence.StartUtc, ct);
+                    if (form is not null && (form.EmployeeId != request.EmployeeId || form.ShiftId != shift.Id || form.ShiftOccurrenceUtc != occurrence.StartUtc))
+                        form = null;
                     result.Add(new MyShiftOccurrenceDto(shift.Id, shift.Name, occurrence.StartUtc, occurrence.EndUtc, form == null ? null : MapForm(form)));
                 }
             }
