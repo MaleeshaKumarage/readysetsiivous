@@ -118,8 +118,9 @@ Total: **77 controller endpoints**. Non-controller public entries:
   not assignment ID, in the route. Shift schedules use numeric enums and HH:mm
   TimeSpan inputs; outputs can use HH:mm:ss.
 - Public QC submit route token overrides body's Token. The body carries items,
-  photoUrls and cleanerNotes. Photo URLs currently include FileReader data URLs.
-  Any nonblank photo entry requires a nonblank cleanerNotes value; notes alone
+  photos (`[{url, note}]`) and optional cleanerNotes. URLs include FileReader data URLs.
+  Every photo requires its own nonblank note; URL-only/mixed uploads are rejected400.
+  General cleanerNotes may accompany photos or be submitted alone. Notes alone
   remain valid. The same rule applies to authenticated end-shift submission.
   See [photo/report contract](shift-photo-reporting.md).
 - Agreement sign accepts typedName and signaturePng (base64/data URI), not a raw

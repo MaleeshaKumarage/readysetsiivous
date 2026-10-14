@@ -27,6 +27,7 @@ export interface QualityCycleForm {
   token: string;
   items: QualityCycleFormItem[];
   photoUrls: string[];
+  photos?: import('./shiftPhotos').ShiftPhoto[];
   cleanerNotes?: string | null;
   isSubmitted: boolean;
   submittedUtc?: string | null;
@@ -60,10 +61,10 @@ export const meApi = {
       occurrenceEndUtc,
     }),
 
-  endForm: (formId: string, items: QualityCycleFormItem[], photoUrls?: string[], cleanerNotes?: string) =>
+  endForm: (formId: string, items: QualityCycleFormItem[], photos?: import('./shiftPhotos').ShiftPhoto[], cleanerNotes?: string) =>
     clockRequest(`/api/v1/me/quality-cycle/${formId}/end`, {
       items,
-      photoUrls,
+      photos,
       cleanerNotes,
     }),
 };

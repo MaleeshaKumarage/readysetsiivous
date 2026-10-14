@@ -1,5 +1,6 @@
 const supportedTypes = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/bmp']);
-export const photoNoteMessage = 'Add a note describing the attached photos.';
+export interface ShiftPhoto { url: string; note: string }
+export const photoNoteMessage = 'Add a separate note for each photo.';
 
 export async function readShiftPhotos(files: File[]): Promise<string[]> {
   for (const file of files) {

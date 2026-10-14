@@ -17,7 +17,7 @@ import { meApi, MyShiftOccurrence, QualityCycleFormItem } from '@/lib/meApi';
 import { Logo } from '@/ds/Logo';
 import { Button } from '@/ds/Button';
 import { Card } from '@/ds/Card';
-import { photoNoteMessage, readShiftPhotos } from '@/lib/shiftPhotos';
+import { photoNoteMessage, readShiftPhotos, type ShiftPhoto } from '@/lib/shiftPhotos';
 
 type Status = 'not-started' | 'in-progress' | 'submitted';
 
@@ -59,11 +59,11 @@ export default function MyShiftsPage() {
   // Inline form state
   const [items, setItems] = useState<QualityCycleFormItem[]>([]);
   const [notes, setNotes] = useState('');
-  const [photos, setPhotos] = useState<string[]>([]);
+  const [photos, setPhotos] = useState<ShiftPhoto[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [photoReading, setPhotoReading] = useState(false);
   const [noteError, setNoteError] = useState(false);
-  const noteRef = useRef<HTMLTextAreaElement>(null);
+  const noteRef = useRef<(HTMLTextAreaElement | null)[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -126,7 +126,7 @@ export default function MyShiftsPage() {
     if (o.form) {
       setItems(o.form.items.map((i) => ({ ...i })));
       setNotes(o.form.cleanerNotes ?? '');
-      setPhotos(o.form.photoUrls ?? []);
+      setPhotos(o.form.photos?.length ? o.form.photos : (o.form.photoUrls ?? []).map(url => ({ url, note: '' })));
     }
   }
 
@@ -140,7 +140,7 @@ export default function MyShiftsPage() {
     if (files.length === 0) return;
     setPhotoReading(true);
     setError(null);
-    try { const uploaded = await readShiftPhotos(files); setPhotos(prev => [...prev, ...uploaded]); }
+    try { const uploaded = await readShiftPhotos(files); setPhotos(prev => [...prev, ...uploaded.map(url => ({ url, note: '' }))]); }
     catch (error) { setError(error instanceof Error ? error.message : 'Could not read the photo. Please select it again.'); }
     finally { setPhotoReading(false); }
   }
@@ -151,8 +151,9 @@ export default function MyShiftsPage() {
 
   async function handleEnd(o: MyShiftOccurrence) {
     if (!o.form || photoReading) return;
-    if (photos.length > 0 && !notes.trim()) {
-      setNoteError(true); setError(photoNoteMessage); noteRef.current?.focus(); return;
+    const missing = photos.findIndex(p => !p.note.trim());
+    if (missing >= 0) {
+      setNoteError(true); setError(photoNoteMessage); noteRef.current[missing]?.focus(); return;
     }
     setNoteError(false);
     setSubmitting(true);
@@ -291,25 +292,29 @@ export default function MyShiftsPage() {
                         </div>
                         {items.length === 0 && <p className="text-sm text-gray-600 dark:text-gray-300">No checklist assigned. You can end this shift without recording activities.</p>}
                         <textarea
-                          ref={noteRef}
                           aria-label="Shift note"
-                          aria-required={photos.length > 0}
-                          aria-invalid={noteError && photos.length > 0 && !notes.trim()}
+                          aria-required="false"
                           aria-describedby="shift-photo-note-help"
                           value={notes}
                           disabled={submitting}
                           onChange={(e) => setNotes(e.target.value)}
-                          placeholder={photos.length > 0 ? 'Notes (required with photos)' : 'Notes (optional)'}
+                          placeholder="Notes (optional)"
                           rows={2}
                           className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-400"
                         />
-                        <p id="shift-photo-note-help" className="text-xs text-gray-600 dark:text-gray-300">A note is required when photos are attached. You can add a note without a photo.</p>
+                        <p id="shift-photo-note-help" className="text-xs text-gray-600 dark:text-gray-300">Each photo needs its own note. General shift notes are optional, with or without photos.</p>
                         <div className="space-y-2">
                           {photos.length > 0 && (
                             <div className="flex flex-wrap gap-2">
                               {photos.map((p, i) => (
                                 <div key={i} className="relative">
-                                  <img src={p} alt={`photo-${i}`} className="w-16 h-16 object-cover rounded-lg border border-gray-200 dark:border-gray-700" />
+                                  <img src={p.url} alt={`photo-${i}`} className="w-16 h-16 object-cover rounded-lg border border-gray-200 dark:border-gray-700" />
+                                  <label className="block text-sm">Photo {i + 1} note (required)
+                                    <textarea ref={el => { noteRef.current[i] = el; }} aria-label={`Photo ${i + 1} note`} aria-required="true"
+                                      aria-invalid={noteError && !p.note.trim()} value={p.note} disabled={submitting || photoReading}
+                                      onChange={e => setPhotos(current => current.map((photo, index) => index === i ? { ...photo, note: e.target.value } : photo))}
+                                      className="block w-full rounded border p-2 text-sm text-gray-900 bg-white" rows={2} />
+                                  </label>
                                   <button
                                     type="button"
                                     disabled={submitting}

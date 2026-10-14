@@ -367,6 +367,9 @@ Contract: [game sample fallback](../features/game-sample-fallback.md).
 | QC-EVID-003 | UI | Delayed/error photo read; failed submission and retry | No completion request while reading; visible error; existing photos/notes/selections retained |
 | QC-EVID-004 | Report/PDF | Submitted vs draft records; two cleaners; branch/shift filtering; UTC date rollover | Only submitted evidence in correct group; scheduled date uses tenant timezone; original counts unchanged |
 | QC-EVID-005 | PDF | Multiple portrait/landscape/phone photos; long note; note-only record | Real image resources and visible rendered photos; date/note per photo; long text paginates; no clipped content |
-| QC-EVID-006 | PDF/API | Corrupt/base64/unsupported/remote/oversized legacy photo; older report; public share | Visible fallback, date/note retained, no remote reads or report failure; old snapshots work; shared PDF omits private evidence |
+| QC-EVID-006 | PDF/API | Corrupt/base64/unsupported/remote/oversized legacy photo; older report | Visible fallback, date/note retained, no remote reads or report failure; historical URL-only evidence remains readable |
+| QC-EVID-007 | API/UI | Multiple photos with distinct notes; one blank; general shift note filled; remove first | Each photo note required atomically; focus first missing note; removing one preserves remaining image/note pairs |
+| QC-EVID-008 | Share/PDF | Create new public link then change source evidence | New link includes submitted appendix without identity/form tokens; frozen captions/content; expires at30 days/revocable |
+| QC-EVID-009 | API/PDF | URL-only or mixed old/new upload; old summary-only saved share | New upload400; no save; old saved share remains summary-only and reads no live forms |
 
 Implementation/test contract: [shift photo reporting](../features/shift-photo-reporting.md).
