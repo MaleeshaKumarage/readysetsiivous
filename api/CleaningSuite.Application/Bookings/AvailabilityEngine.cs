@@ -56,23 +56,32 @@ public class AvailabilityEngine
         var occupied = await _bookings.ListForLocalDateAsync(localDate, ct);
         var earliestStartUtc = EarliestStartUtc(profile?.MinHoursBeforeBooking ?? 2);
 
+        var serviceDuration = TimeSpan.FromMinutes(service.DurationMinutes);
+        var slotStep = TimeSpan.FromMinutes(SlotMinutes);
         var slots = new List<AvailabilitySlot>();
-        for (var cursor = WindowStart; cursor + TimeSpan.FromMinutes(service.DurationMinutes) <= WindowEnd;
-             cursor += TimeSpan.FromMinutes(SlotMinutes))
+        for (var cursor = WindowStart; cursor + serviceDuration <= WindowEnd; cursor += slotStep)
         {
             var slotStartLocal = date.ToDateTime(TimeOnly.FromTimeSpan(cursor));
-            var slotEndLocal = slotStartLocal.AddMinutes(service.DurationMinutes);
+            var slotEndLocal = slotStartLocal + serviceDuration;
             var slotStartUtc = TimeZoneInfo.ConvertTimeToUtc(slotStartLocal, tz);
             var slotEndUtc = TimeZoneInfo.ConvertTimeToUtc(slotEndLocal, tz);
 
-            var conflicts = occupied.Any(b => b.StartUtc < slotEndUtc && b.EndUtc > slotStartUtc);
+            var conflicts = HasConflict(occupied, slotStartUtc, slotEndUtc);
             if (!conflicts && slotStartUtc >= earliestStartUtc)
                 slots.Add(new AvailabilitySlot(
                     cursor.ToString(@"hh\:mm"),
-                    (cursor + TimeSpan.FromMinutes(service.DurationMinutes)).ToString(@"hh\:mm")));
+                    (cursor + serviceDuration).ToString(@"hh\:mm")));
         }
 
         return slots;
+    }
+
+    private static bool HasConflict(IReadOnlyList<Booking> occupied, DateTime startUtc, DateTime endUtc)
+    {
+        for (var i = 0; i < occupied.Count; i++)
+            if (occupied[i].StartUtc < endUtc && occupied[i].EndUtc > startUtc)
+                return true;
+        return false;
     }
 
     /// <summary>Validates a requested slot and returns UTC start/end. Throws SlotConflictException on any violation.</summary>
