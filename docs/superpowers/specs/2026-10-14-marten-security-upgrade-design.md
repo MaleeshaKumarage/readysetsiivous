@@ -43,14 +43,14 @@ A destructive or rollback-incompatible delta must be resolved or presented as a
 concrete deployment decision before touching production.
 
 Before production rollout retain a private recoverable database backup and the
-previous image/config reference. Never publish credentials or customer data. Merge
+previous image/config reference. Never publish credentials or customer data.
 The private production backup must be complete and usable: validate its archive
 and restore it to a separate private database using the rehearsed procedure, compare
 table/document counts, and verify the previous image can start without exposing
 that database or enabling workers. Do not run injection/destructive tests on real
 customer copies; those remain synthetic shared-dev tests. Remove only the private
 verification database after proof, retaining the recoverable backup for rollout.
-only after compile/full tests, real tenant-isolation/concurrency, upgrade rehearsal,
+Merge only after compile/full tests, real tenant-isolation/concurrency, upgrade rehearsal,
 package vulnerability audit and the container smoke checks pass. Deploy API only
 with the hardened exact-image verification. Verify runtime/package versions in the
 actual deployed image plus health and authorized/unauthorized tenant API behavior.
