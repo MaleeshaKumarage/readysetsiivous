@@ -18,9 +18,16 @@ do not pretend to match arbitrary group descriptions.
 Try Gemini once with a bounded request timeout (default8 seconds, configurable
 from1 to30). Successful valid output retains existing response fields. On HTTP
 failure, network error, internal timeout, malformed/empty provider JSON or missing
-translation/hints, return a level-matched sample. Caller cancellation remains
+translation/hints, whitespace-only English/Finnish, empty/blank hints or wrong
+field types, return a level-matched sample. Retain existing Finnish `{ "fi": ... }`
+hint-object compatibility. Parsing exception handling is confined to parsing
+provider JSON; unexpected programming exceptions propagate. Caller cancellation remains
 cancellation and must never become a fallback or trigger a persistence write.
-Unknown levels and programming/key-decryption/repository errors remain errors.
+Check cancellation before returning any response/fallback and before handlers
+mutate game state or begin saves. Pre-canceled requests and cancellation during
+generation must result in no group/round writes. Existing persistence semantics
+after a save has begun remain unchanged. Unknown levels and
+programming/key-decryption/repository errors remain errors.
 
 Mark fallback sentences internally, without changing public round DTOs or DB
 entities. Game handlers skip their provider duplicate-generation retries for a
@@ -41,6 +48,8 @@ Catalogue tests cover every level, valid translations/base forms, recent-history
 avoidance, exhaustion behavior and invalid levels. Drive a complete game through
 real handlers with a failing HTTP provider, checking start, translator rotation,
 distinct samples and final standings without external credentials or sleeps.
+Real-handler tests for pre-canceled input and cancellation during generation
+assert propagation and absence of group/round mutation or persistence writes.
 The optional live full-game probe still asserts completion through the same
 service; remove its old exception-swallowing path since availability is now a
 runtime behavior under test. Update feature docs and CI evidence, merge this PR
