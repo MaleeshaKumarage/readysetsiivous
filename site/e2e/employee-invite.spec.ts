@@ -5,7 +5,7 @@ const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Meth
 test('admin invite sends setup email and exposes failure then retry', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   const employee: any = { id: 'employee-a', email: 'cleaner@example.invalid', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true };
-  await page.route(/\/api\/v1\/admin\/employees$/, route => route.fulfill({ status: 200, headers, json: [employee] }));
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, route => route.fulfill({ status: 200, headers, json: [employee] }));
   let failed = true;
   await page.route(/\/api\/v1\/admin\/employees\/employee-a\/invite$/, route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
@@ -62,7 +62,7 @@ test('invalid tenant link does not begin login', async ({ page }) => {
 test('employee cannot use invite or employee mutation controls', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   await page.addInitScript(() => { (window as any).__MOCK_ROLES__ = ['employee']; });
-  await page.route(/\/api\/v1\/admin\/employees$/, route => route.fulfill({ status: 200, headers, json: [{ id: 'employee-a', email: 'cleaner@example.invalid', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true }] }));
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, route => route.fulfill({ status: 200, headers, json: [{ id: 'employee-a', email: 'cleaner@example.invalid', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true }] }));
   await page.goto('/admin/employees/');
   await expect(page.getByRole('heading', { name: 'Admin access required' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Invite', exact: true })).toHaveCount(0);
@@ -72,7 +72,7 @@ test('employee cannot use invite or employee mutation controls', async ({ page }
 
 test('deactivation failure is visible instead of silently disappearing', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
-  await page.route(/\/api\/v1\/admin\/employees$/, route => route.fulfill({ status: 200, headers, json: [{ id: 'employee-a', email: 'cleaner@example.invalid', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true }] }));
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, route => route.fulfill({ status: 200, headers, json: [{ id: 'employee-a', email: 'cleaner@example.invalid', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true }] }));
   await page.route(/\/api\/v1\/admin\/employees\/employee-a\/deactivate$/, route => route.fulfill({ status: 502, headers, json: { title: 'Login synchronization failed' } }));
   await page.goto('/admin/employees/'); await page.getByRole('button', { name: 'Deactivate', exact: true }).click();
   await expect(page.locator('p[role="alert"]')).toContainText('could not be confirmed');

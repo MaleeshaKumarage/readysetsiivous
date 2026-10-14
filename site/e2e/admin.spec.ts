@@ -24,6 +24,8 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
   });
 
   test('authenticated user sees dashboard and can navigate to all sections', async ({ page }) => {
+    // This smoke visits six routes that Next's development server compiles on demand.
+    test.setTimeout(90_000);
     await setupAdminMocks(page, { authenticated: true });
     await page.goto('/admin/');
 
@@ -142,7 +144,7 @@ test.describe('Admin Panel - Services Page', () => {
     await expect(page.getByRole('cell', { name: 'Syväsiivous' })).toBeVisible();
     await expect(page.getByRole('cell', { name: '120.00 €' })).toBeVisible();
     await expect(page.getByRole('cell', { name: '180 min' })).toBeVisible();
-    await expect(page.getByText('Active')).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'Active', exact: true })).toBeVisible();
   });
 
   test('worst path: form validation errors and creation failure', async ({ page }) => {
@@ -428,12 +430,13 @@ test.describe('Admin Panel - Employees Page', () => {
     await expect(page.getByRole('dialog', { name: 'Add employee' })).not.toBeVisible();
     await expect(page.getByRole('cell', { name: 'Lauri Siivooja' })).toBeVisible();
     await expect(page.getByRole('cell', { name: 'lauri@siivous.fi' })).toBeVisible();
-    await expect(page.getByText('Active')).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'Active', exact: true })).toBeVisible();
 
     // Deactivate employee
     const deactivateBtn = page.getByRole('button', { name: 'Deactivate' });
     await deactivateBtn.click({ force: true });
-    await expect(page.getByText('Inactive')).toBeVisible();
+    await page.getByRole('tab', { name: /^Inactive/ }).click();
+    await expect(page.getByRole('cell', { name: 'Inactive', exact: true })).toBeVisible();
   });
 
   test('invite, resend, and registration status', async ({ page }) => {

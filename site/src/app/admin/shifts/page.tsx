@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState } from 'react';
 import {
-  Title, Button, Table, Modal, TextInput, Select, MultiSelect, Group, Stack, Text, Loader, ActionIcon, NumberInput, Checkbox,
+  Title, Button, Table, Modal, TextInput, Select, MultiSelect, Group, Stack, Text, Loader, ActionIcon, NumberInput,
 } from '@mantine/core';
 import { Plus, Trash2 } from 'lucide-react';
 import {
@@ -11,6 +11,7 @@ import {
 } from '@/lib/adminApi';
 import { isAdmin } from '@/lib/auth';
 import { adminQualityCycle, type QualityCycleTemplate } from '@/lib/qualityCycleApi';
+import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const SCHEDULE_TYPES = [
@@ -24,7 +25,7 @@ const SCHEDULE_TYPES = [
 export default function ShiftsAdminPage() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
-  const [includeInactive, setIncludeInactive] = useState(false);
+  const [lifecycle, setLifecycle] = useState<LifecycleStatus>('active');
   const [listError, setListError] = useState('');
   const [restoring, setRestoring] = useState<string | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -63,8 +64,19 @@ export default function ShiftsAdminPage() {
   const assignmentPending = useRef(false);
   useEffect(() => () => { assignmentGeneration.current++; }, []);
 
-  const load = () => adminShifts.list(undefined, undefined, includeInactive).then((r) => { if (r) setShifts(r); setLoading(false); });
-  useEffect(() => { setLoading(true); load(); }, [includeInactive]);
+  const load = () => adminShifts.list(undefined, undefined, true).then((r) => { if (r) setShifts(r); setLoading(false); });
+  useEffect(() => { load(); }, []);
+
+  const closeAssignments = () => {
+    assignmentGeneration.current++;
+    setAssignOpen(null); setAssignSel([]); setAssignLoading(false);
+    setAssignError(''); setAssignStatus('');
+  };
+  const changeLifecycle = (status: LifecycleStatus) => {
+    if (status === lifecycle) return;
+    closeAssignments(); setTemplateShift(null); setLifecycle(status);
+  };
+  const visibleShifts = shifts.filter(s => inLifecycle(s, lifecycle));
 
   useEffect(() => {
     adminCompanies.list('', 0, 100).then((r) => { if (r) setCompanies(r.items); });
@@ -110,10 +122,10 @@ export default function ShiftsAdminPage() {
     const created = await adminShifts.create({ companyId, branchId, name: name.trim(), schedule: buildSchedule(), notes: notes.trim() || undefined, qualityCycleTemplateId: qualityCycleTemplateId || undefined });
     setSaving(false);
     if (!created) { setError('Failed to create shift.'); return; }
-    closeModal(); await load();
+    closeModal(); changeLifecycle('active'); await load();
   };
 
-  const deactivate = async (id: string) => { await adminShifts.deactivate(id); await load(); };
+  const deactivate = async (id: string) => { await adminShifts.deactivate(id); if (assignOpen === id) closeAssignments(); await load(); };
   const reactivate = async (id: string) => {
     setRestoring(id); setListError('');
     try {
@@ -204,11 +216,12 @@ export default function ShiftsAdminPage() {
         <Button leftSection={<Plus size={16} />} onClick={() => setModalOpen(true)}>Add shift</Button>
       </Group>
 
-      <Checkbox label="Show deactivated shifts" checked={includeInactive} onChange={e => setIncludeInactive(e.currentTarget.checked)} mb="md" />
       {listError && <Text role="alert" c="red" mb="md">{listError}</Text>}
 
-      {loading ? <Loader /> : shifts.length === 0 ? (
-        <Text c="dimmed">No shifts yet.</Text>
+      <LifecycleTabs value={lifecycle} onChange={changeLifecycle} label="Shift activity" disabled={assignBusy || templateSaving}
+        activeCount={loading ? undefined : shifts.filter(s => s.isActive).length} inactiveCount={loading ? undefined : shifts.filter(s => !s.isActive).length}>
+      {loading ? <Loader /> : visibleShifts.length === 0 ? (
+        <Text c="dimmed">{shifts.length === 0 ? 'No shifts yet.' : `No ${lifecycle} shifts. Check the ${lifecycle === 'active' ? 'Inactive' : 'Active'} tab.`}</Text>
       ) : (
         <Table.ScrollContainer minWidth={600}>
           <Table striped highlightOnHover withTableBorder>
@@ -216,7 +229,7 @@ export default function ShiftsAdminPage() {
               <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Schedule</Table.Th><Table.Th>Employees</Table.Th><Table.Th w={180}></Table.Th></Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {shifts.map((s) => (
+              {visibleShifts.map((s) => (
                 <Fragment key={s.id}>
                   <Table.Tr>
                     <Table.Td fw={500}>{s.name}</Table.Td>
@@ -288,6 +301,7 @@ export default function ShiftsAdminPage() {
           </Table>
         </Table.ScrollContainer>
       )}
+      </LifecycleTabs>
 
       <Modal opened={Boolean(templateShift)} onClose={() => setTemplateShift(null)} title="Assign checklist template">
         <Stack>

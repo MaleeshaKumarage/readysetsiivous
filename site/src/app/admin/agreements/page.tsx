@@ -4,9 +4,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge, ActionIcon, Tooltip, CopyButton } from '@mantine/core';
 import { Plus, Trash2, Copy, Mail, Check, Eye } from 'lucide-react';
 import { adminAgreements, adminCompanies, type AgreementListItem, type AgreementDetail, type Company } from '@/lib/adminApi';
+import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
 
 export default function AgreementsPage() {
   const [items, setItems] = useState<AgreementListItem[] | null>(null);
+  const [lifecycle, setLifecycle] = useState<LifecycleStatus>('active');
+  const visibleItems = items?.filter(item => inLifecycle(item, lifecycle)) ?? [];
   const [companies, setCompanies] = useState<Company[]>([]);
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
@@ -34,6 +37,7 @@ export default function AgreementsPage() {
     const res = await adminAgreements.create(title.trim(), companyId, pdf, validSigners);
     setSubmitting(false);
     if (!res.ok) { setError(res.error); return; }
+    setLifecycle('active');
     setOpen(false); setTitle(''); setCompanyId(null); setPdf(null); setSigners([{ name: '', email: '' }]);
     setCreatedAgreement(res.data);
     load();
@@ -105,8 +109,12 @@ export default function AgreementsPage() {
         <Button leftSection={<Plus size={16} />} onClick={() => setOpen(true)}>New agreement</Button>
       </Group>
 
+      <LifecycleTabs value={lifecycle} onChange={setLifecycle} label="Agreement activity"
+        activeCount={items?.filter(item => item.isActive).length} inactiveCount={items?.filter(item => !item.isActive).length}>
       {items === null ? <Loader /> : items.length === 0 ? (
         <Text c="dimmed">No agreements yet.</Text>
+      ) : visibleItems.length === 0 ? (
+        <Text c="dimmed">No {lifecycle} agreements. Check the {lifecycle === 'active' ? 'Inactive' : 'Active'} tab.</Text>
       ) : (
         <Table.ScrollContainer minWidth={600}>
           <Table striped highlightOnHover withTableBorder>
@@ -114,7 +122,7 @@ export default function AgreementsPage() {
               <Table.Tr><Table.Th>Title</Table.Th><Table.Th>Code</Table.Th><Table.Th>Signers</Table.Th><Table.Th>Status</Table.Th><Table.Th w={180}>Actions</Table.Th></Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {items.map((a) => (
+              {visibleItems.map((a) => (
                 <Table.Tr key={a.id}>
                   <Table.Td fw={500}>{a.title}</Table.Td>
                   <Table.Td>{a.code}</Table.Td>
@@ -132,6 +140,7 @@ export default function AgreementsPage() {
           </Table>
         </Table.ScrollContainer>
       )}
+      </LifecycleTabs>
 
       {/* New Agreement Modal */}
       <Modal opened={open} onClose={() => setOpen(false)} title="New agreement" size="lg" radius="md">

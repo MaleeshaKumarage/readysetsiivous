@@ -5,11 +5,14 @@ import { Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loa
 import { isAdmin } from '@/lib/auth';
 import { Plus } from 'lucide-react';
 import { adminEmployees, type Employee } from '@/lib/adminApi';
+import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
 
 const ROLES = ['admin', 'manager', 'employee'];
 
 export default function EmployeesAdminPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [lifecycle, setLifecycle] = useState<LifecycleStatus>('active');
+  const visibleEmployees = employees.filter(employee => inLifecycle(employee, lifecycle));
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState({ email: '', firstName: '', lastName: '', phone: '', role: 'employee' });
@@ -19,7 +22,7 @@ export default function EmployeesAdminPage() {
   const [inviteMessage, setInviteMessage] = useState('');
   const [inviteFailure, setInviteFailure] = useState('');
 
-  const load = () => adminEmployees.list().then((r) => { if (r) setEmployees(r); setLoading(false); });
+  const load = () => adminEmployees.list(true).then((r) => { if (r) setEmployees(r); setLoading(false); });
   useEffect(() => { load(); }, []);
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -44,6 +47,7 @@ export default function EmployeesAdminPage() {
     });
     setSaving(false);
     if (!created) { setError('Failed to create employee.'); return; }
+    setLifecycle('active');
     setForm({ email: '', firstName: '', lastName: '', phone: '', role: 'employee' });
     setModalOpen(false); await load();
   };
@@ -72,8 +76,13 @@ export default function EmployeesAdminPage() {
 
       {inviteMessage && <Text role="status" c="green" mb="sm">{inviteMessage}</Text>}
       {inviteFailure && <Text role="alert" c="red" mb="sm">{inviteFailure}</Text>}
+      <LifecycleTabs value={lifecycle} onChange={setLifecycle} label="Employee activity"
+        activeCount={loading ? undefined : employees.filter(employee => employee.isActive).length}
+        inactiveCount={loading ? undefined : employees.filter(employee => !employee.isActive).length}>
       {loading ? <Loader /> : employees.length === 0 ? (
         <Text c="dimmed">No employees yet.</Text>
+      ) : visibleEmployees.length === 0 ? (
+        <Text c="dimmed">No {lifecycle} employees. Check the {lifecycle === 'active' ? 'Inactive' : 'Active'} tab.</Text>
       ) : (
         <Table.ScrollContainer minWidth={550}>
           <Table striped highlightOnHover withTableBorder>
@@ -81,7 +90,7 @@ export default function EmployeesAdminPage() {
               <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Email</Table.Th><Table.Th>Role</Table.Th><Table.Th>Status</Table.Th><Table.Th>Registration</Table.Th><Table.Th w={120}></Table.Th></Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {employees.map((e) => (
+              {visibleEmployees.map((e) => (
                 <Table.Tr key={e.id}>
                   <Table.Td fw={500}>{e.firstName} {e.lastName}</Table.Td>
                   <Table.Td>{e.email}</Table.Td>
@@ -98,6 +107,7 @@ export default function EmployeesAdminPage() {
           </Table>
         </Table.ScrollContainer>
       )}
+      </LifecycleTabs>
 
       <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title="Add employee" radius="md">
         <Stack gap="sm">

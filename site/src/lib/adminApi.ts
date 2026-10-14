@@ -197,7 +197,7 @@ export interface EmployeeFields {
 }
 
 export const adminEmployees = {
-  list: () => adminGet<Employee[]>('/api/v1/admin/employees'),
+  list: (includeInactive = false) => adminGet<Employee[]>(`/api/v1/admin/employees${includeInactive ? '?includeInactive=true' : ''}`),
   create: (fields: EmployeeFields) => adminSend('/api/v1/admin/employees', 'POST', { fields }),
   update: (id: string, fields: EmployeeFields, isActive: boolean) =>
     adminSend(`/api/v1/admin/employees/${id}`, 'PUT', { fields, isActive }),
@@ -469,6 +469,29 @@ export const adminCompanies = {
     adminGet<{ items: Company[]; total: number }>(
       `/api/v1/admin/companies?search=${encodeURIComponent(search)}&skip=${skip}&take=${take}`
     ),
+  listAll: async (): Promise<Company[] | null> => {
+    const records: Company[] = [];
+    const ids = new Set<string>();
+    let expectedTotal: number | undefined;
+    for (let skip = 0; ; ) {
+      let page: { items: Company[]; total: number };
+      try {
+        const response = await authorizedFetch(`/api/v1/admin/companies?search=&skip=${skip}&take=100`, { cache: 'no-store' });
+        if (!response.ok) return null;
+        page = await response.json();
+      } catch { return null; }
+      if (!page || !Array.isArray(page.items) || !Number.isInteger(page.total) || page.total < 0) return null;
+      expectedTotal ??= page.total;
+      if (page.total !== expectedTotal) return null;
+      for (const item of page.items) {
+        if (!item || typeof item.id !== 'string' || typeof item.isActive !== 'boolean' || ids.has(item.id)) return null;
+        ids.add(item.id); records.push(item);
+      }
+      skip += page.items.length;
+      if (skip >= expectedTotal) return skip === expectedTotal ? records : null;
+      if (page.items.length === 0) return null;
+    }
+  },
   get: (id: string) => adminGet<CompanyDetail>(`/api/v1/admin/companies/${id}`),
   create: (body: {
     businessId: string;

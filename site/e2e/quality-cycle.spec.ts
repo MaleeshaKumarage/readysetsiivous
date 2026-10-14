@@ -430,7 +430,7 @@ test('admin can attach a checklist to an existing shift', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   const shift = { id: 'existing-shift', companyId: 'company-a', branchId: 'branch-a', name: 'Existing shift', schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' }, isActive: true, qualityCycleTemplateId: null };
   let saved: any;
-  await page.route(/\/api\/v1\/admin\/shifts$/, route => route.fulfill({ status: 200, headers: CORS_HEADERS, json: [shift] }));
+  await page.route(/\/api\/v1\/admin\/shifts(?:\?.*)?$/, route => route.fulfill({ status: 200, headers: CORS_HEADERS, json: [shift] }));
   await page.route(/\/api\/v1\/admin\/quality-cycle\/templates$/, route => route.fulfill({ status: 200, headers: CORS_HEADERS, json: [{ id: 'template-a', title: 'Activities checklist', companyId: 'company-a', branchId: 'branch-a', isActive: true, items: ['Corridor', 'Gym'] }] }));
   await page.route(/\/api\/v1\/admin\/shifts\/existing-shift\/quality-cycle-template$/, route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });

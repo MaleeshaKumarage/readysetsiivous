@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Title, Button, Table, Modal, TextInput, Textarea, Group, Stack, Text, Loader, Badge, NumberInput } from '@mantine/core';
 import { Plus } from 'lucide-react';
 import { adminServices } from '@/lib/adminApi';
+import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
 
 type ServiceRowLocal = { id: string; slug: string; category: string; name: { values: Record<string, string> }; description: { values: Record<string, string> }; icon: string; durationMinutes: number; priceNet: number; vatRatePercent: number; isActive: boolean; isFeatured: boolean; sortOrder: number };
 
@@ -18,6 +19,8 @@ const EMPTY = { slug: '', nameFi: '', nameEn: '', nameSv: '', descFi: '', descEn
 
 export default function ServicesAdminPage() {
   const [services, setServices] = useState<ServiceRowLocal[]>([]);
+  const [status, setStatus] = useState<LifecycleStatus>('active');
+  const visibleServices = services.filter(service => inLifecycle(service, status));
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -82,6 +85,7 @@ export default function ServicesAdminPage() {
       : await adminServices.create(fields);
     setSaving(false);
     if (!ok) { setError(editingId ? 'Failed to update service.' : 'Failed to create service.'); return; }
+    if (!editingId) setStatus('active');
     setForm(EMPTY);
     setEditingId(null);
     setModalOpen(false); await load();
@@ -113,8 +117,11 @@ export default function ServicesAdminPage() {
         <Button leftSection={<Plus size={16} />} onClick={openAdd}>Add service</Button>
       </Group>
 
-      {loading ? <Loader /> : services.length === 0 ? (
-        <Text c="dimmed">No services yet.</Text>
+      <LifecycleTabs value={status} onChange={setStatus} label="Service activity"
+        activeCount={loading ? undefined : services.filter(s => s.isActive).length}
+        inactiveCount={loading ? undefined : services.filter(s => !s.isActive).length}>
+      {loading ? <Loader /> : visibleServices.length === 0 ? (
+        <Text c="dimmed">{services.length === 0 ? 'No services yet.' : `No ${status} services.`}</Text>
       ) : (
         <Table.ScrollContainer minWidth={550}>
           <Table striped highlightOnHover withTableBorder>
@@ -122,7 +129,7 @@ export default function ServicesAdminPage() {
               <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Price</Table.Th><Table.Th>Duration</Table.Th><Table.Th>Status</Table.Th><Table.Th w={120}></Table.Th></Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {services.map((s) => (
+              {visibleServices.map((s) => (
                 <Table.Tr key={s.id}>
                   <Table.Td fw={500}>{s.name?.values?.fi ?? s.name?.values?.en ?? ''}</Table.Td>
                   <Table.Td>{s.priceNet?.toFixed(2)} €</Table.Td>
@@ -151,6 +158,7 @@ export default function ServicesAdminPage() {
           </Table>
         </Table.ScrollContainer>
       )}
+      </LifecycleTabs>
 
       <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title={editingId ? 'Edit service' : 'Add service'} fullScreen={false} radius="md">
         <Stack gap="sm">
