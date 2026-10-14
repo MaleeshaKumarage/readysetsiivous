@@ -33,7 +33,9 @@ if grep -q '^IMAGE_TAG=' .env; then
 else
   printf '\nIMAGE_TAG=sha-%s\n' "$RELEASE_SHA" >> .env
 fi
-resolved=$(docker compose config --images api)
+config=$(docker compose config --format json)
+resolved=$(printf '%s' "$config" | python3 -c 'import json,sys; print(json.load(sys.stdin)["services"]["api"]["image"])')
+unset config
 [ "$resolved" = "$expected" ] || { echo 'Resolved API image differs from release' >&2; exit 1; }
 printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USER" --password-stdin
 docker compose pull api

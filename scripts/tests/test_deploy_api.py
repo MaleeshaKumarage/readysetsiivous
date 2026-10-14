@@ -27,8 +27,11 @@ if name=='curl':
     sys.exit(0)
 if a[:3]==['compose','ps','-q']:
     print('changed' if mode=='changed' and (p/'attempts').exists() else 'container')
-elif a[:3]==['compose','config','--images']:
-    print('wrong' if mode=='config' else os.environ['EXPECTED'])
+elif a[:2]==['compose','config']:
+    assert a==['compose','config','--format','json']
+    print(json.dumps({'services': {'api': {'image': 'wrong' if mode=='config' else os.environ['EXPECTED']},
+                                  'postgres': {'image':'postgres:16-alpine'},
+                                  'keycloak': {'image':'quay.io/keycloak/keycloak:26.1'}}}))
 elif a[0]=='login':
     assert sys.stdin.read()=='test-secret'
     if mode=='login': sys.exit(3)
