@@ -297,7 +297,7 @@ P0 security/data isolation; P1 correctness/data integrity; P2 feature coverage/U
 | G07 | Fixed in source; delivery recovery coverage remaining | Configured frontend/tenant links and persisted notification retry state | Verify configured provider and failure/crash scenarios in dev; no real cleaner emails sent during tests. |
 | G08 | P1 BE | QC repeat submission now409; some agreement lifecycle conflicts still map to500 (`Program`, handlers) | Defined conflict should return 409 and a usable FE message. |
 | G09 | Fixed in source; deployment preflight required | Native Keycloak setup binds employee/role, preserves reinvite passwords and guards old tokens after lifecycle changes | See employee-invitations.md; SMTP/public URL, role and legacy-binding migration must be applied. |
-| G10 | P1 BE | Shift update/template assignment parent checks fixed; branch creation, template scope creation and agreement parents remain | Reject foreign/nonexistent IDs without writing orphan/cross-company entities. |
+| G10 | P1 BE | Shift update/template assignment, template scope and branch/agreement company-parent checks fixed; lifecycle policy remains open | Reject foreign/nonexistent IDs without writing orphan/cross-company entities. |
 | G11 | P1 BE | PDF/PNG/photo semantic validation and size policies are incomplete | Corrupt files, fake MIME/extensions, malformed base64 and huge photos need predictable 400/413. |
 | G12 | P1 FE/BE | Booking has no idempotency key; FE collapses failure statuses and timeouts (`api.ts`, BookingFlow) | Lost success response must not mislead customer or create duplicate retry records. |
 | G13 | P1 BE | Booking/invoice transition guards are incomplete (`BookingCommands`, `InvoiceCommands`) | Define terminal-state policy before asserting desired transitions. |
@@ -317,7 +317,7 @@ P0 security/data isolation; P1 correctness/data integrity; P2 feature coverage/U
 | G27 | P2 FE | Admin allows all authenticated users to see actions; normal mock makes every authenticated user admin | Role-aware actions/forbidden feedback are untested and not implemented consistently. |
 | G28 | P2 FE | PWA install no-op and offline cache absent | Dedicated secure-origin service-worker/browser installation tests; decide offline scope. |
 | G29 | P2 FE | Footer links to hidden #checklist; QR hardcodes production and depends on external image provider | Broken-anchor and environment-aware navigation cases. |
-| G30 | P1 BE/FE, runtime check | Public JWT tenant resolution prefers issuer realm over URL slug (`TenantResolutionMiddleware`) | Token A + public slug B must follow an explicit policy; reject mismatch or consistently use URL tenant. |
+| G30 | P1 BE/FE, runtime check | Public routes select URL tenant; mismatched authenticated realm returns403 before dispatch | Policy fixed in company tenant integrity: anonymous/matching calls use URL tenant; foreign realm rejects403. |
 | G31 | P2 BE, runtime check | Rate limit may see proxy IP; no forwarded-header wiring/Retry-After (`Program`, limiter) | Independent clients behind tunnel; 31st request then recovery without affecting prod. |
 | G32 | P1 BE | Removing pending/signed signers can leave inconsistent partial status/artifacts (`RemoveSignerCommand`) | Define mutation rules and recompute or reject; audit original signer evidence. |
 

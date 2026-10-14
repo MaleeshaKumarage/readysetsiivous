@@ -1,4 +1,5 @@
 using CleaningSuite.Application.Common;
+using CleaningSuite.Application.Companies;
 using CleaningSuite.Application.Employees;
 using CleaningSuite.Application.Shifts;
 using CleaningSuite.Domain.QualityCycle;
@@ -87,13 +88,32 @@ public record GetMyShiftsQuery(Guid EmployeeId, DateTime FromUtc, DateTime ToUtc
 // Handlers
 public class QualityCycleHandlers
 {
+    private static async Task ValidateTemplateScopeAsync(ICompanyRepository companies, IBranchRepository branches,
+        Guid? companyId, Guid? branchId, CancellationToken ct)
+    {
+        if (companyId.HasValue)
+            _ = await companies.GetAsync(companyId.Value, ct) ?? throw new NotFoundException("Company", companyId.Value);
+        if (branchId.HasValue)
+        {
+            var branch = await branches.GetAsync(branchId.Value, ct) ?? throw new NotFoundException("Branch", branchId.Value);
+            if (companyId.HasValue && branch.CompanyId != companyId.Value)
+                throw new NotFoundException("Branch", branchId.Value);
+            if (!companyId.HasValue)
+                _ = await companies.GetAsync(branch.CompanyId, ct) ?? throw new NotFoundException("Company", branch.CompanyId);
+        }
+    }
+
     public class CreateQualityCycleTemplateCommandHandler : IRequestHandler<CreateQualityCycleTemplateCommand, QualityCycleTemplateDto>
     {
         private readonly IQualityCycleRepository _repository;
-        public CreateQualityCycleTemplateCommandHandler(IQualityCycleRepository repository) => _repository = repository;
+        private readonly ICompanyRepository _companies;
+        private readonly IBranchRepository _branches;
+        public CreateQualityCycleTemplateCommandHandler(IQualityCycleRepository repository, ICompanyRepository companies, IBranchRepository branches)
+        { _repository = repository; _companies = companies; _branches = branches; }
 
         public async Task<QualityCycleTemplateDto> Handle(CreateQualityCycleTemplateCommand request, CancellationToken ct)
         {
+            await ValidateTemplateScopeAsync(_companies, _branches, request.CompanyId, request.BranchId, ct);
             var template = QualityCycleTemplate.Create(request.Title, request.Items, request.Description, request.CompanyId, request.BranchId);
             await _repository.SaveTemplateAsync(template, ct);
             return MapTemplate(template);
@@ -103,13 +123,17 @@ public class QualityCycleHandlers
     public class UpdateQualityCycleTemplateCommandHandler : IRequestHandler<UpdateQualityCycleTemplateCommand, QualityCycleTemplateDto>
     {
         private readonly IQualityCycleRepository _repository;
-        public UpdateQualityCycleTemplateCommandHandler(IQualityCycleRepository repository) => _repository = repository;
+        private readonly ICompanyRepository _companies;
+        private readonly IBranchRepository _branches;
+        public UpdateQualityCycleTemplateCommandHandler(IQualityCycleRepository repository, ICompanyRepository companies, IBranchRepository branches)
+        { _repository = repository; _companies = companies; _branches = branches; }
 
         public async Task<QualityCycleTemplateDto> Handle(UpdateQualityCycleTemplateCommand request, CancellationToken ct)
         {
             var template = await _repository.GetTemplateAsync(request.Id, ct)
                 ?? throw new NotFoundException("QualityCycleTemplate", request.Id);
 
+            await ValidateTemplateScopeAsync(_companies, _branches, request.CompanyId, request.BranchId, ct);
             template.Update(request.Title, request.Items, request.Description, request.IsActive, request.CompanyId, request.BranchId);
             await _repository.SaveTemplateAsync(template, ct);
             return MapTemplate(template);
@@ -408,6 +432,8 @@ public class QualityCycleValidators
     {
         public CreateQualityCycleTemplateCommandValidator()
         {
+            RuleFor(x => x.CompanyId).NotEqual(Guid.Empty).When(x => x.CompanyId.HasValue);
+            RuleFor(x => x.BranchId).NotEqual(Guid.Empty).When(x => x.BranchId.HasValue);
             RuleFor(x => x.Title).NotEmpty().WithMessage("Template title is required.");
             RuleFor(x => x.Items).NotEmpty().WithMessage("At least one checklist item is required.");
         }
@@ -417,6 +443,8 @@ public class QualityCycleValidators
     {
         public UpdateQualityCycleTemplateCommandValidator()
         {
+            RuleFor(x => x.CompanyId).NotEqual(Guid.Empty).When(x => x.CompanyId.HasValue);
+            RuleFor(x => x.BranchId).NotEqual(Guid.Empty).When(x => x.BranchId.HasValue);
             RuleFor(x => x.Id).NotEqual(Guid.Empty);
             RuleFor(x => x.Title).NotEmpty().WithMessage("Template title is required.");
             RuleFor(x => x.Items).NotEmpty().WithMessage("At least one checklist item is required.");

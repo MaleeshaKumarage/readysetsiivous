@@ -202,14 +202,18 @@ public class CompanyHandlers
         public class CreateBranchCommandHandler : IRequestHandler<CreateBranchCommand, BranchDto>
         {
             private readonly IBranchRepository _repository;
+            private readonly ICompanyRepository _companies;
 
-            public CreateBranchCommandHandler(IBranchRepository repository)
+            public CreateBranchCommandHandler(IBranchRepository repository, ICompanyRepository companies)
             {
                 _repository = repository;
+                _companies = companies;
             }
 
             public async Task<BranchDto> Handle(CreateBranchCommand request, CancellationToken ct)
             {
+                _ = await _companies.GetAsync(request.CompanyId, ct)
+                    ?? throw new NotFoundException("Company", request.CompanyId);
                 var branch = Branch.Create(
                     request.CompanyId,
                     request.Name,

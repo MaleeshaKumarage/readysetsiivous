@@ -203,7 +203,7 @@ public class QualityCycleTests
     public async Task CreateQualityCycleTemplateCommandHandler_SavesAndReturnsDto()
     {
         var repoMock = new Mock<IQualityCycleRepository>();
-        var handler = new QualityCycleHandlers.CreateQualityCycleTemplateCommandHandler(repoMock.Object);
+        var handler = new QualityCycleHandlers.CreateQualityCycleTemplateCommandHandler(repoMock.Object, new Mock<CleaningSuite.Application.Companies.ICompanyRepository>().Object, new Mock<CleaningSuite.Application.Companies.IBranchRepository>().Object);
 
         var command = new CreateQualityCycleTemplateCommand("Test Template", new List<string> { "Item 1", "Item 2" }, "Description");
         var result = await handler.Handle(command, CancellationToken.None);
@@ -221,7 +221,7 @@ public class QualityCycleTests
         var template = QualityCycleTemplate.Create("Old Title", new List<string> { "Item 1" });
         repoMock.Setup(r => r.GetTemplateAsync(template.Id, It.IsAny<CancellationToken>())).ReturnsAsync(template);
 
-        var handler = new QualityCycleHandlers.UpdateQualityCycleTemplateCommandHandler(repoMock.Object);
+        var handler = new QualityCycleHandlers.UpdateQualityCycleTemplateCommandHandler(repoMock.Object, new Mock<CleaningSuite.Application.Companies.ICompanyRepository>().Object, new Mock<CleaningSuite.Application.Companies.IBranchRepository>().Object);
         var command = new UpdateQualityCycleTemplateCommand(template.Id, "New Title", new List<string> { "Item 1", "Item 2" }, "New Desc", true);
 
         var result = await handler.Handle(command, CancellationToken.None);
@@ -237,7 +237,7 @@ public class QualityCycleTests
         var repoMock = new Mock<IQualityCycleRepository>();
         repoMock.Setup(r => r.GetTemplateAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync((QualityCycleTemplate?)null);
 
-        var handler = new QualityCycleHandlers.UpdateQualityCycleTemplateCommandHandler(repoMock.Object);
+        var handler = new QualityCycleHandlers.UpdateQualityCycleTemplateCommandHandler(repoMock.Object, new Mock<CleaningSuite.Application.Companies.ICompanyRepository>().Object, new Mock<CleaningSuite.Application.Companies.IBranchRepository>().Object);
         var command = new UpdateQualityCycleTemplateCommand(Guid.NewGuid(), "Title", new List<string> { "Item 1" });
 
         await Assert.ThrowsAsync<NotFoundException>(() => handler.Handle(command, CancellationToken.None));

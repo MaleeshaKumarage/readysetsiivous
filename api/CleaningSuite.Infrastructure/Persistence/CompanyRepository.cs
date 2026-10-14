@@ -47,6 +47,21 @@ public class CompanyRepository : ICompanyRepository
     public async Task SaveAsync(Company company, CancellationToken ct = default)
     {
         Session.Store(company);
-        await Session.SaveChangesAsync(ct);
+        try
+        {
+            await Session.SaveChangesAsync(ct);
+        }
+        catch (Exception error) when (IsBusinessIdConflict(error))
+        {
+            throw new CompanyConflictException();
+        }
     }
+
+    private static bool IsBusinessIdConflict(Exception error) =>
+        error is Npgsql.PostgresException
+        {
+            SqlState: Npgsql.PostgresErrorCodes.UniqueViolation,
+            ConstraintName: MartenConfig.CompanyBusinessIdIndexName
+        }
+        || error.InnerException is not null && IsBusinessIdConflict(error.InnerException);
 }

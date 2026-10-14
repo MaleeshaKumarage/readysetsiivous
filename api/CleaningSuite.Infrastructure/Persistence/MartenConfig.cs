@@ -18,6 +18,7 @@ namespace CleaningSuite.Infrastructure.Persistence;
 
 public static class MartenConfig
 {
+    public const string CompanyBusinessIdIndexName = "mt_doc_company_uidx_business_id";
     /// <summary>
     /// Registers Marten with conjoined multi-tenancy. Every document lives in a
     /// tenant partition; the "registry" partition holds TenantRegistration docs.
@@ -53,7 +54,8 @@ public static class MartenConfig
         options.Schema.For<Employee>().Index(x => x.KeycloakUserId).UniqueIndex(Marten.Schema.UniqueIndexType.Computed, "mt_doc_employee_uidx_keycloak_identity_key", Marten.Schema.Indexing.Unique.TenancyScope.PerTenant, x => x.KeycloakIdentityKey!);
 
         options.Schema.For<Company>()
-            .UniqueIndex(x => x.BusinessId)
+            .UniqueIndex(Marten.Schema.UniqueIndexType.Computed, CompanyBusinessIdIndexName,
+                Marten.Schema.Indexing.Unique.TenancyScope.PerTenant, x => x.BusinessId)
             .Index(x => x.Name);
 
         options.Schema.For<Branch>()

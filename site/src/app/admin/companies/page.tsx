@@ -22,6 +22,7 @@ export default function CompaniesAdminPage() {
   const [branchModal, setBranchModal] = useState(false);
   const [branchForm, setBranchForm] = useState({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '' });
   const [branchSaving, setBranchSaving] = useState(false);
+  const [branchError, setBranchError] = useState('');
 
   const load = () =>
     adminCompanies.list('', 0, 100).then((r) => {
@@ -39,14 +40,16 @@ export default function CompaniesAdminPage() {
   const submit = async () => {
     if (!form.businessId.trim() || !form.name.trim()) { setError('Business ID and name are required.'); return; }
     setSaving(true); setError('');
-    const created = await adminCompanies.create({
-      businessId: form.businessId.trim(), name: form.name.trim(),
-      contactName: form.contactName.trim() || undefined, contactEmail: form.contactEmail.trim() || undefined,
-      contactPhone: form.contactPhone.trim() || undefined, notes: form.notes.trim() || undefined,
-    });
-    setSaving(false);
-    if (!created) { setError('Failed to create company.'); return; }
-    setForm(emptyForm); setModalOpen(false); await load();
+    try {
+      await adminCompanies.create({
+        businessId: form.businessId.trim(), name: form.name.trim(),
+        contactName: form.contactName.trim() || undefined, contactEmail: form.contactEmail.trim() || undefined,
+        contactPhone: form.contactPhone.trim() || undefined, notes: form.notes.trim() || undefined,
+      });
+      setForm(emptyForm); setModalOpen(false); await load();
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not create company. Please retry.');
+    } finally { setSaving(false); }
   };
 
   const toggleBranches = async (id: string) => {
@@ -58,18 +61,20 @@ export default function CompaniesAdminPage() {
 
   const submitBranch = async () => {
     if (!expanded || !branchForm.name.trim()) return;
-    setBranchSaving(true);
-    const created = await adminBranches.create(expanded, {
-      name: branchForm.name.trim(), street: branchForm.street.trim() || undefined,
-      postalCode: branchForm.postalCode.trim() || undefined, city: branchForm.city.trim() || undefined,
-      country: branchForm.country.trim() || undefined, contactPhone: branchForm.contactPhone.trim() || undefined,
-    });
-    setBranchSaving(false);
-    if (!created) return;
-    setBranchForm({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '' });
-    setBranchModal(false);
-    const d = await adminCompanies.get(expanded);
-    if (d) setCompanyBranchesMap((m) => ({ ...m, [expanded]: d.branches }));
+    setBranchSaving(true); setBranchError('');
+    try {
+      await adminBranches.create(expanded, {
+        name: branchForm.name.trim(), street: branchForm.street.trim() || undefined,
+        postalCode: branchForm.postalCode.trim() || undefined, city: branchForm.city.trim() || undefined,
+        country: branchForm.country.trim() || undefined, contactPhone: branchForm.contactPhone.trim() || undefined,
+      });
+      setBranchForm({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '' });
+      setBranchModal(false);
+      const d = await adminCompanies.get(expanded);
+      if (d) setCompanyBranchesMap((m) => ({ ...m, [expanded]: d.branches }));
+    } catch (failure) {
+      setBranchError(failure instanceof Error ? failure.message : 'Could not create branch. Please retry.');
+    } finally { setBranchSaving(false); }
   };
 
   return (
@@ -115,7 +120,7 @@ export default function CompaniesAdminPage() {
                         <Table.Td colSpan={4} p="sm">
                           <Group justify="space-between" align="center" mb="xs" wrap="wrap" gap="xs">
                             <Text size="sm" fw={600}>Branches</Text>
-                            <Button size="xs" variant="light" leftSection={<Plus size={14} />} onClick={() => setBranchModal(true)}>Add branch</Button>
+                            <Button size="xs" variant="light" leftSection={<Plus size={14} />} onClick={() => { setBranchError(''); setBranchModal(true); }}>Add branch</Button>
                           </Group>
                           {currentBranches.length === 0 ? (
                             <Text size="sm" c="dimmed">No branches yet.</Text>
@@ -148,7 +153,7 @@ export default function CompaniesAdminPage() {
           <TextInput label="Contact email" value={form.contactEmail} onChange={set('contactEmail')} />
           <TextInput label="Contact phone" value={form.contactPhone} onChange={set('contactPhone')} />
           <Textarea label="Notes" value={form.notes} onChange={set('notes')} />
-          {error && <Text size="sm" c="red">{error}</Text>}
+          {error && <Text size="sm" c="red" role="alert">{error}</Text>}
           <Group justify="flex-end" mt="xs">
             <Button variant="default" onClick={() => setModalOpen(false)}>Cancel</Button>
             <Button loading={saving} onClick={submit}>Create company</Button>
@@ -159,6 +164,7 @@ export default function CompaniesAdminPage() {
       <Modal opened={branchModal} onClose={() => setBranchModal(false)} title="Add branch" radius="md">
         <Stack gap="sm">
           <TextInput label="Name" required value={branchForm.name} onChange={setB('name')} />
+          {branchError && <Text c="red" role="alert">{branchError}</Text>}
           <TextInput label="Street" value={branchForm.street} onChange={setB('street')} />
           <TextInput label="Postal code" value={branchForm.postalCode} onChange={setB('postalCode')} />
           <TextInput label="City" value={branchForm.city} onChange={setB('city')} />
