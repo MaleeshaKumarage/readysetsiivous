@@ -50,6 +50,20 @@ public class QualityCycleAdminController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPost("templates/{id:guid}/reactivate")]
+    public async Task<IActionResult> ReactivateTemplate(Guid id, CancellationToken ct)
+    {
+        await _mediator.Send(new SetQualityCycleTemplateActiveCommand(id, true), ct);
+        return NoContent();
+    }
+
+    [HttpPost("templates/{id:guid}/deactivate")]
+    public async Task<IActionResult> DeactivateTemplate(Guid id, CancellationToken ct)
+    {
+        await _mediator.Send(new SetQualityCycleTemplateActiveCommand(id, false), ct);
+        return NoContent();
+    }
+
     [HttpDelete("templates/{id:guid}")]
     public async Task<IActionResult> DeleteTemplate(Guid id, CancellationToken ct)
     {

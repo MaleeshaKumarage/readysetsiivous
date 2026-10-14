@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Title, Button, Table, Modal, TextInput, Textarea, Group, Stack, Text, Loader, Badge, NumberInput } from '@mantine/core';
 import { Plus } from 'lucide-react';
 import { adminServices } from '@/lib/adminApi';
+import { setServiceActivity } from '@/lib/serviceLifecycleApi';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
 
 type ServiceRowLocal = { id: string; slug: string; category: string; name: { values: Record<string, string> }; description: { values: Record<string, string> }; icon: string; durationMinutes: number; priceNet: number; vatRatePercent: number; isActive: boolean; isFeatured: boolean; sortOrder: number };
@@ -28,6 +29,8 @@ export default function ServicesAdminPage() {
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [activityError, setActivityError] = useState('');
+  const [activityBusy, setActivityBusy] = useState<string | null>(null);
 
   const load = () => adminServices.list(true).then((r) => { if (r) setServices(r as ServiceRowLocal[]); setLoading(false); });
   useEffect(() => { load(); }, []);
@@ -92,22 +95,15 @@ export default function ServicesAdminPage() {
   };
 
   const toggleStatus = async (s: ServiceRowLocal) => {
-    const fields = {
-      slug: s.slug,
-      category: s.category,
-      name: s.name.values,
-      description: s.description.values,
-      additionalInfo: null,
-      durationMinutes: s.durationMinutes,
-      priceNet: s.priceNet,
-      vatRatePercent: s.vatRatePercent,
-      currency: 'EUR',
-      icon: s.icon,
-      sortOrder: s.sortOrder,
-      isFeatured: s.isFeatured,
-    };
-    await adminServices.update(s.id, fields, !s.isActive);
-    await load();
+    setActivityBusy(s.id); setActivityError('');
+    try {
+      await setServiceActivity(s.id, !s.isActive);
+      await load();
+    } catch (err) {
+      setActivityError(err instanceof Error ? err.message : 'Could not change service activity. Please retry.');
+    } finally {
+      setActivityBusy(null);
+    }
   };
 
   return (
@@ -116,6 +112,8 @@ export default function ServicesAdminPage() {
         <Title order={2}>Services</Title>
         <Button leftSection={<Plus size={16} />} onClick={openAdd}>Add service</Button>
       </Group>
+
+      {activityError && <Text role="alert" c="red" mb="sm">{activityError}</Text>}
 
       <LifecycleTabs value={status} onChange={setStatus} label="Service activity"
         activeCount={loading ? undefined : services.filter(s => s.isActive).length}
@@ -146,9 +144,11 @@ export default function ServicesAdminPage() {
                         size="xs"
                         variant="subtle"
                         color={s.isActive ? 'red' : 'green'}
+                        loading={activityBusy === s.id}
+                        disabled={activityBusy !== null && activityBusy !== s.id}
                         onClick={() => toggleStatus(s)}
                       >
-                        {s.isActive ? 'Deactivate' : 'Activate'}
+                        {s.isActive ? 'Deactivate' : 'Reactivate'}
                       </Button>
                     </Group>
                   </Table.Td>

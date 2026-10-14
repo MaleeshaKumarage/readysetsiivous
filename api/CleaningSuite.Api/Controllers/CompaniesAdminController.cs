@@ -63,6 +63,20 @@ public class CompaniesAdminController : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("{id:guid}/reactivate")]
+    public async Task<IActionResult> Reactivate(Guid id, CancellationToken ct)
+    {
+        await _mediator.Send(new ReactivateCompanyCommand(id), ct);
+        return NoContent();
+    }
+
+    [HttpPost("branches/{branchId:guid}/reactivate")]
+    public async Task<IActionResult> ReactivateBranch(Guid branchId, CancellationToken ct)
+    {
+        await _mediator.Send(new ReactivateBranchCommand(branchId), ct);
+        return NoContent();
+    }
+
     [HttpPost("{companyId:guid}/branches")]
     public async Task<IActionResult> CreateBranch(Guid companyId, [FromBody] CreateBranchCommand command, CancellationToken ct)
     {

@@ -53,7 +53,7 @@ test('agreement lifecycle preserves completed and partial documents independentl
   expect(listRequests).toBe(initialListRequests);
 });
 
-test('employees request all lifecycle records and inactive employees have no access actions', async ({ page }) => {
+test('employees request all lifecycle records and inactive employees offer reactivation without invite actions', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   let includeInactive = '';
   let listRequests = 0;
@@ -74,7 +74,8 @@ test('employees request all lifecycle records and inactive employees have no acc
   await page.getByRole('tab', { name: 'Inactive (1)', exact: true }).click();
   const retired = page.getByRole('row').filter({ hasText: 'Retired Cleaner' });
   await expect(retired).toBeVisible();
-  await expect(retired.getByRole('button')).toHaveCount(0);
+  await expect(retired.getByRole('button', { name: 'Reactivate' })).toBeVisible();
+  await expect(retired.getByRole('button', { name: 'Invite', exact: true })).toHaveCount(0);
   await page.getByRole('tab', { name: 'Active (1)', exact: true }).click();
   await expect(page.getByRole('row').filter({ hasText: 'Active Cleaner' }).getByRole('button', { name: 'Invite', exact: true })).toBeVisible();
   expect(listRequests).toBe(initialListRequests);

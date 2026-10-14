@@ -62,6 +62,7 @@ public record UpdateCompanyCommand(
     bool IsActive = true) : IRequest<CompanyDto>;
 
 public record DeactivateCompanyCommand(Guid Id) : IRequest;
+public record ReactivateCompanyCommand(Guid Id) : IRequest;
 
 public record ListCompaniesQuery(string? Search, int Skip, int Take) : IRequest<Paged<CompanyDto>>;
 
@@ -87,6 +88,7 @@ public record UpdateBranchCommand(
     bool IsActive = true) : IRequest<BranchDto>;
 
 public record DeactivateBranchCommand(Guid Id) : IRequest;
+public record ReactivateBranchCommand(Guid Id) : IRequest;
 
 public class CompanyHandlers
 {
@@ -156,6 +158,17 @@ public class CompanyHandlers
                 ?? throw new NotFoundException("Company", request.Id);
             company.Deactivate();
             await _repository.SaveAsync(company, ct);
+        }
+    }
+
+    public class ReactivateCompanyCommandHandler(ICompanyRepository repository) : IRequestHandler<ReactivateCompanyCommand>
+    {
+        public async Task Handle(ReactivateCompanyCommand request, CancellationToken ct)
+        {
+            var company = await repository.GetAsync(request.Id, ct) ?? throw new NotFoundException("Company", request.Id);
+            company.IsActive = true;
+            company.UpdatedUtc = DateTime.UtcNow;
+            await repository.SaveAsync(company, ct);
         }
     }
 
@@ -250,6 +263,18 @@ public class CompanyHandlers
                     request.IsActive);
                 await _repository.SaveAsync(branch, ct);
                 return MapBranch(branch);
+            }
+        }
+
+        public class ReactivateBranchCommandHandler(IBranchRepository repository, ICompanyRepository companies) : IRequestHandler<ReactivateBranchCommand>
+        {
+            public async Task Handle(ReactivateBranchCommand request, CancellationToken ct)
+            {
+                var branch = await repository.GetAsync(request.Id, ct) ?? throw new NotFoundException("Branch", request.Id);
+                _ = await companies.GetAsync(branch.CompanyId, ct) ?? throw new NotFoundException("Company", branch.CompanyId);
+                branch.IsActive = true;
+                branch.UpdatedUtc = DateTime.UtcNow;
+                await repository.SaveAsync(branch, ct);
             }
         }
 

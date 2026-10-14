@@ -51,6 +51,14 @@ public class EmployeesAdminController : ControllerBase
         return NoContent();
     }
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
+    [HttpPost("{id:guid}/reactivate")]
+    public async Task<IActionResult> Reactivate(Guid id, CancellationToken ct)
+    {
+        await _mediator.Send(new ReactivateEmployeeCommand(id), ct);
+        return NoContent();
+    }
+
     /// <summary>Links the employee login and sends a secure Keycloak account-setup email; never returns passwords.</summary>
     [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost("{id:guid}/invite")]

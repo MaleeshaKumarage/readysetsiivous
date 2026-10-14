@@ -16,7 +16,7 @@ function getBody(route: any) {
 }
 
 test.describe('Admin Panel - Quality Cycle Page', () => {
-  test('navigation, tab switching, template creation, edit and deletion', async ({ page }) => {
+  test('navigation, tab switching, template creation, edit and preserving deactivation', async ({ page }) => {
     await setupAdminMocks(page, { authenticated: true });
 
     let templates: any[] = [];
@@ -36,6 +36,10 @@ test.describe('Admin Panel - Quality Cycle Page', () => {
         return route.fulfill({ status: 200, json: templates, headers: CORS_HEADERS });
       }
 
+      if (method === 'POST' && /\/(deactivate|reactivate)$/.test(url)) {
+        templates[0].isActive = url.endsWith('/reactivate');
+        return route.fulfill({ status: 204, headers: CORS_HEADERS });
+      }
       if (method === 'POST') {
         const body = getBody(route);
         const newTpl = {
@@ -121,11 +125,13 @@ test.describe('Admin Panel - Quality Cycle Page', () => {
 
     await expect(page.getByText('Updated Office Checklist', { exact: true })).toBeVisible();
 
-    // Delete template
-    await page.getByRole('button', { name: 'Delete template' }).click();
-    await expect.poll(() => deleteConfirmed).toBe(true);
-
-    await expect(page.getByText('No quality cycle templates created yet.')).toBeVisible();
+    // Deactivate while retaining the original template and its edited metadata.
+    await page.getByRole('button', { name: 'Deactivate', exact: true }).click();
+    await expect(page.getByText('Updated Office Checklist', { exact: true })).not.toBeVisible();
+    await page.getByRole('tab', { name: /^Inactive/ }).click();
+    await expect(page.getByText('Updated Office Checklist', { exact: true })).toBeVisible();
+    expect(templates).toHaveLength(1);
+    expect(deleteConfirmed).toBe(false);
   });
 
   test('submissions tab and PDF summary report export', async ({ page }) => {

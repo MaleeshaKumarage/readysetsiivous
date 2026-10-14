@@ -55,6 +55,22 @@ public class ServicesAdminController : ControllerBase
         return NoContent();
     }
 
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
+    [HttpPost("{id:guid}/reactivate")]
+    public async Task<IActionResult> Reactivate(Guid id, CancellationToken ct)
+    {
+        await _mediator.Send(new SetServiceActivityCommand(id, true), ct);
+        return NoContent();
+    }
+
+    [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
+    [HttpPost("{id:guid}/deactivate")]
+    public async Task<IActionResult> Deactivate(Guid id, CancellationToken ct)
+    {
+        await _mediator.Send(new SetServiceActivityCommand(id, false), ct);
+        return NoContent();
+    }
+
     /// <summary>Uploads a card image for the service, returns the public path.</summary>
     [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost("{id:guid}/image")]

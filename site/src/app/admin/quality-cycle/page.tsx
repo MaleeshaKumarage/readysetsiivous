@@ -50,6 +50,8 @@ export default function AdminQualityCyclePage() {
   const [templateDesc, setTemplateDesc] = useState('');
   const [templateItems, setTemplateItems] = useState<string[]>(['', '', '']);
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const [activityBusy, setActivityBusy] = useState<string | null>(null);
+  const [activityError, setActivityError] = useState('');
 
   // Submissions state
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -161,11 +163,16 @@ export default function AdminQualityCyclePage() {
     setTemplateItems(t.items.length > 0 ? t.items : ['', '', '']);
   }
 
-  async function handleDeleteTemplate(id: string) {
-    if (confirm('Are you sure you want to delete this quality cycle template?')) {
-      await adminQualityCycle.deleteTemplate(id);
-      loadTemplates();
-    }
+  async function handleTemplateActivity(t: QualityCycleTemplate) {
+    setActivityBusy(t.id); setActivityError('');
+    try {
+      await (t.isActive ? adminQualityCycle.deactivateTemplate(t.id) : adminQualityCycle.reactivateTemplate(t.id));
+      // Keep an open editor consistent with the newly saved lifecycle state.
+      setEditingTemplate(current => current?.id === t.id ? { ...current, isActive: !t.isActive } : current);
+      await loadTemplates();
+    } catch (failure) {
+      setActivityError(failure instanceof Error ? failure.message : 'Could not change template activity. Please retry.');
+    } finally { setActivityBusy(null); }
   }
 
   async function handleDownloadPdf() {
@@ -322,6 +329,7 @@ export default function AdminQualityCyclePage() {
                 <Text fw={600} size="lg">
                   Existing Templates
                 </Text>
+                {activityError && <Text c="red" role="alert">{activityError}</Text>}
                 <LifecycleTabs value={templateStatus} onChange={setTemplateStatus} label="Checklist template activity"
                   activeCount={loadingTemplates ? undefined : templates.filter(template => template.isActive).length}
                   inactiveCount={loadingTemplates ? undefined : templates.filter(template => !template.isActive).length}>
@@ -364,15 +372,11 @@ export default function AdminQualityCyclePage() {
                             >
                               Edit
                             </Button>
-                            <ActionIcon
-                              size="sm"
-                              variant="light"
-                              color="red"
-                              aria-label="Delete template"
-                              onClick={() => handleDeleteTemplate(t.id)}
-                            >
-                              <Trash2 size={14} />
-                            </ActionIcon>
+                            <Button size="xs" variant="light" color={t.isActive ? 'red' : undefined}
+                              loading={activityBusy === t.id} disabled={activityBusy !== null && activityBusy !== t.id}
+                              onClick={() => void handleTemplateActivity(t)}>
+                              {t.isActive ? 'Deactivate' : 'Reactivate'}
+                            </Button>
                           </Group>
                         </Group>
 

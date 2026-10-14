@@ -68,9 +68,9 @@ test('service activation and deactivation move records between lifecycle tabs', 
   const services = [true, false].map((isActive, i) => ({ id: `service-${i}`, slug: `service-${i}`, name: { values: { fi: `Service ${i}` } }, description: { values: { fi: 'Description' } }, isActive, priceNet: 10, durationMinutes: 60, vatRatePercent: 25.5, category: 'cleaning', icon: 'Sparkles', sortOrder: i, isFeatured: false }));
   await page.route('**/api/v1/admin/services**', async route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
-    if (route.request().method() === 'PUT') {
-      const item = services.find(s => route.request().url().endsWith(`/${s.id}`))!;
-      item.isActive = route.request().postDataJSON().isActive;
+    if (route.request().method() === 'POST') {
+      const item = services.find(s => route.request().url().includes(`/${s.id}/`))!;
+      item.isActive = route.request().url().endsWith('/reactivate');
       return route.fulfill({ headers, json: {} });
     }
     return route.fulfill({ headers, json: services });
@@ -82,7 +82,7 @@ test('service activation and deactivation move records between lifecycle tabs', 
   await expect(page.getByText('No active services.', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: /^Inactive/ }).click();
   const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Service 0', exact: true }) });
-  await row.getByRole('button', { name: 'Activate', exact: true }).click();
+  await row.getByRole('button', { name: 'Reactivate', exact: true }).click();
   await expect(page.getByRole('cell', { name: 'Service 0', exact: true })).not.toBeVisible();
   await page.getByRole('tab', { name: /^Active/ }).click();
   await expect(page.getByRole('cell', { name: 'Service 0', exact: true })).toBeVisible();

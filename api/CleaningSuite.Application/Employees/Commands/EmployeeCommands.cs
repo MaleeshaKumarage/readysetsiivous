@@ -30,6 +30,8 @@ public record UpdateEmployeeCommand(Guid Id, EmployeeFields Fields, bool IsActiv
 
 public record DeactivateEmployeeCommand(Guid Id) : IRequest<Unit>;
 
+public record ReactivateEmployeeCommand(Guid Id) : IRequest<Unit>;
+
 public record InviteEmployeeCommand(Guid Id) : IRequest<EmployeeInviteResult>;
 
 public record EmployeeInviteResult(string Email, string KeycloakUserId, string Status, DateTime? SentUtc);
@@ -72,14 +74,18 @@ public class CreateEmployeeHandler : IRequestHandler<CreateEmployeeCommand, Guid
 
     public async Task<Guid> Handle(CreateEmployeeCommand request, CancellationToken ct)
     {
-        if (await _employees.GetByEmailAsync(request.Fields.Email, ct) is not null)
-            throw new SlugConflictException($"Employee {request.Fields.Email} already exists");
+        if (await _employees.GetByEmailAsync(request.Fields.Email.Trim(), ct) is { } existing)
+            throw DuplicateEmail(existing);
 
         var employee = new Employee();
         Apply(employee, request.Fields);
         await _employees.SaveAsync(employee, ct);
         return employee.Id;
     }
+
+    internal static EmployeeIdentityConflictException DuplicateEmail(Employee existing) => new(existing.IsActive
+        ? "An active employee already uses this email. Use the existing employee profile instead of creating another account."
+        : "An inactive employee already uses this email. Open the Inactive tab and choose Reactivate to restore the existing profile instead of creating another account.");
 
     internal static void Apply(Employee employee, EmployeeFields fields)
     {
@@ -118,6 +124,8 @@ public class UpdateEmployeeHandler : IRequestHandler<UpdateEmployeeCommand, Unit
         employee = await _employees.ReloadAsync(request.Id, ct) ?? throw new NotFoundException("Employee", request.Id);
         if (!string.IsNullOrWhiteSpace(employee.KeycloakUserId) && !employee.Email.Equals(request.Fields.Email.Trim(), StringComparison.OrdinalIgnoreCase))
             throw new EmployeeIdentityConflictException("Changing a linked login email requires an identity reconciliation flow.");
+        if (await _employees.GetByEmailAsync(request.Fields.Email.Trim(), ct) is { } existing && existing.Id != employee.Id)
+            throw CreateEmployeeHandler.DuplicateEmail(existing);
         var accessChanged = employee.Role != request.Fields.Role || employee.IsActive != request.IsActive;
         CreateEmployeeHandler.Apply(employee, request.Fields);
         employee.IsActive = request.IsActive;
@@ -126,6 +134,37 @@ public class UpdateEmployeeHandler : IRequestHandler<UpdateEmployeeCommand, Unit
         if (employee.IdentitySyncPending) {
             await _identities.SynchronizeAccessAsync(_tenant.TenantId, employee.KeycloakUserId, employee.Role, employee.IsActive, ct);
             employee.IdentitySyncPending = false; await _employees.SaveAsync(employee, ct);
+        }
+        return Unit.Value;
+    }
+}
+
+public class ReactivateEmployeeHandler : IRequestHandler<ReactivateEmployeeCommand, Unit>
+{
+    private readonly IEmployeeRepository _employees;
+    private readonly IEmployeeIdentityProvider _identities;
+    private readonly ITenantContext _tenant;
+    private readonly IEmployeeIdentityLock _locks;
+
+    public ReactivateEmployeeHandler(IEmployeeRepository employees, IEmployeeIdentityProvider identities, ITenantContext tenant, IEmployeeIdentityLock locks)
+    { _employees = employees; _identities = identities; _tenant = tenant; _locks = locks; }
+
+    public async Task<Unit> Handle(ReactivateEmployeeCommand request, CancellationToken ct)
+    {
+        var employee = await _employees.GetByIdAsync(request.Id, ct)
+            ?? throw new NotFoundException("Employee", request.Id);
+        await using var lease = await _locks.AcquireAsync(_tenant.TenantId, employee.Email, ct);
+        employee = await _employees.ReloadAsync(request.Id, ct) ?? throw new NotFoundException("Employee", request.Id);
+        var accessChanged = !employee.IsActive;
+        employee.IsActive = true;
+        employee.IdentitySyncPending = !string.IsNullOrWhiteSpace(employee.KeycloakUserId) && (accessChanged || employee.IdentitySyncPending);
+        employee.UpdatedUtc = DateTime.UtcNow;
+        await _employees.SaveAsync(employee, ct);
+        if (employee.IdentitySyncPending)
+        {
+            await _identities.SynchronizeAccessAsync(_tenant.TenantId, employee.KeycloakUserId, employee.Role, true, ct);
+            employee.IdentitySyncPending = false;
+            await _employees.SaveAsync(employee, ct);
         }
         return Unit.Value;
     }
