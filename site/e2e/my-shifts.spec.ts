@@ -238,6 +238,10 @@ for (const role of ['admin', 'manager'] as const) {
     await expect(page.getByRole('heading', { name: 'Account ready' })).toBeVisible();
     await page.getByRole('link', { name: role === 'admin' ? 'Continue to administration' : 'Manage tenant operations' }).click();
     await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toBeVisible();
+    if (role === 'admin') {
+      await page.getByRole('link', { name: 'My account', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Account ready' })).toBeVisible();
+    }
   });
 
   test(`${role} own-shift navigation remains available with no assignments`, async ({ page }) => {

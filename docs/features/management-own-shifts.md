@@ -6,6 +6,7 @@ profile, including admin/manager profiles, through the normal shift roster.
 Keep that person's Administrator or Manager role; adding an Employee realm role
 is unnecessary and can conflict with identity checks.
 
+The administrator header also provides My account for accessing profile prerequisites.
 The administrator header and manager workspace expose My shifts after verifying
 a current active linked profile. Account landing offers the same entry point.
 The clock screen has My account navigation, from which management staff can return

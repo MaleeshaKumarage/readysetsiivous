@@ -168,6 +168,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             </Group>
 
             <Group gap="xs" wrap="nowrap">
+              <Button component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="subtle" size="xs">My account</Button>
               {hasOwnWorkIdentity && <Button component={Link} href="/me/shifts/" variant="light" size="xs">My shifts</Button>}
               <PwaInstallButton variant="light" size="xs" compact />
               <Tooltip label="Sign out" withArrow>

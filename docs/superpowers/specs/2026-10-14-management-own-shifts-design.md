@@ -20,7 +20,7 @@ an employee realm role with management roles conflicts with lifecycle checks.
 
 ## Change
 
-After the admin layout successfully verifies identity, expose a My shifts link in
+The verified admin header exposes My account for reaching work-profile prerequisites. After the admin layout successfully verifies identity, expose a My shifts link in
 the header for an active linked admin profile, visible on desktop and mobile. Reset
 this eligibility when verification begins or fails, so stale identities cannot
 leave the link visible. An unbound tenant owner retains administration and does
