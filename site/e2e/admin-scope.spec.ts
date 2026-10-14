@@ -49,5 +49,14 @@ for (const failure of ['stale-role', 'foreign-realm', 'persisted-employee-role',
     await page.goto('/admin/employees/');
     await expect(page.getByRole('heading', { name: 'Admin access required' })).toBeVisible();
     expect(adminReads).toBe(0);
+    await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveCount(0);
   });
 }
+
+test('unbound tenant owner keeps administration without a personal shift shortcut', async ({ page }) => {
+  await setupAdminMocks(page);
+  await page.route(/\/api\/v1\/admin\/employees$/, route => route.fulfill({ status: 200, headers, json: [] }));
+  await page.goto('/admin/employees/');
+  await expect(page.getByRole('button', { name: 'Add employee' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveCount(0);
+});

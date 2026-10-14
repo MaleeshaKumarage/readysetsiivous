@@ -21,21 +21,21 @@ public class QualityCycleClockTests
 
     private static ShiftAssignment ExistingAssignment(Guid shift, Guid employee) { var assignment = ShiftAssignment.Create(shift, employee, null); assignment.AssignedAtUtc = FromUtc.AddDays(-1); return assignment; }
 
-    private static Employee NewEmployee() =>
-        new Employee { Id = Guid.NewGuid(), Email = "e@x.fi", FirstName = "A", LastName = "B", IsActive = true };
+    private static Employee NewEmployee(string role = "employee") =>
+        new Employee { Id = Guid.NewGuid(), Email = "e@x.fi", FirstName = "A", LastName = "B", IsActive = true, Role = role };
 
     private static QualityCycleTemplate NewTemplate() =>
         QualityCycleTemplate.Create("T", new List<string> { "Item1" }, null, null, null);
 
     [Theory]
-    [InlineData(DateTimeKind.Utc)]
-    [InlineData(DateTimeKind.Local)]
-    [InlineData(DateTimeKind.Unspecified)]
-    public async Task Start_CreatesFormAndSetsStartedAt(DateTimeKind kind)
+    [InlineData(DateTimeKind.Utc, "employee")] [InlineData(DateTimeKind.Utc, "admin")] [InlineData(DateTimeKind.Utc, "manager")]
+    [InlineData(DateTimeKind.Local, "employee")] [InlineData(DateTimeKind.Local, "admin")] [InlineData(DateTimeKind.Local, "manager")]
+    [InlineData(DateTimeKind.Unspecified, "employee")] [InlineData(DateTimeKind.Unspecified, "admin")] [InlineData(DateTimeKind.Unspecified, "manager")]
+    public async Task Start_CreatesFormAndSetsStartedAt(DateTimeKind kind, string role)
     {
         var template = NewTemplate();
         var shift = NewShift(template.Id);
-        var emp = NewEmployee();
+        var emp = NewEmployee(role);
 
         var shiftRepo = new Mock<IShiftRepository>();
         var empRepo = new Mock<IEmployeeRepository>();

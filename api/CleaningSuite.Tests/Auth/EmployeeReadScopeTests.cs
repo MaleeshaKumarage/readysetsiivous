@@ -7,6 +7,8 @@ using System.Text.Json;
 using CleaningSuite.Api;
 using CleaningSuite.Application.Employees;
 using CleaningSuite.Application.Employees.Queries;
+using CleaningSuite.Application.QualityCycle;
+using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Employees;
 using CleaningSuite.Domain.Tenants;
@@ -124,6 +126,75 @@ public class EmployeeReadScopeTests
         Assert.Empty(host.Mediator.Invocations);
     }
 
+    [Theory]
+    [InlineData("admin")] [InlineData("manager")] [InlineData("employee")]
+    public async Task EveryStaffRoleUsesItsVerifiedIdentityForOwnShiftClock(string role)
+    {
+        using var host = new Host(); host.Employee.Role = role;
+        var otherEmployee = Guid.NewGuid(); var shift = Guid.NewGuid(); var form = Guid.NewGuid();
+        var start = DateTime.UtcNow.Date.AddHours(8); var end = start.AddHours(2);
+        var started = new QualityCycleFormDto(form, shift, "Assigned shift", host.Employee.Id, "Staff",
+            Guid.NewGuid(), "Activities", start, end, "token", [new("Corridor", false), new("Gym", false)],
+            [], null, false, null, start) { StartedAtUtc = start };
+        host.Mediator.Setup(m => m.Send(It.IsAny<GetMyShiftsQuery>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { new MyShiftOccurrenceDto(shift, "Assigned shift", start, end, null) });
+        host.Mediator.Setup(m => m.Send(It.IsAny<StartQualityCycleFormCommand>(), It.IsAny<CancellationToken>())).ReturnsAsync(started);
+        host.Mediator.Setup(m => m.Send(It.IsAny<EndQualityCycleFormCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(started with { IsSubmitted = true, EndedAtUtc = end });
+        using var list = await host.Send("GET", "/api/v1/me/shifts?employeeId=" + otherEmployee, role);
+        using var began = await host.Send("POST", $"/api/v1/me/shifts/{shift}/start", role,
+            JsonSerializer.Serialize(new { occurrenceStartUtc = start, occurrenceEndUtc = end, employeeId = otherEmployee }));
+        using var ended = await host.Send("POST", $"/api/v1/me/quality-cycle/{form}/end", role,
+            JsonSerializer.Serialize(new { employeeId = otherEmployee, items = new[] { new { itemText = "Corridor", isChecked = true }, new { itemText = "Gym", isChecked = false } } }));
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode); Assert.Equal(HttpStatusCode.OK, began.StatusCode); Assert.Equal(HttpStatusCode.OK, ended.StatusCode);
+        host.Mediator.Verify(m => m.Send(It.Is<GetMyShiftsQuery>(q => q.EmployeeId == host.Employee.Id), It.IsAny<CancellationToken>()), Times.Once);
+        host.Mediator.Verify(m => m.Send(It.Is<StartQualityCycleFormCommand>(q => q.EmployeeId == host.Employee.Id && q.ShiftId == shift), It.IsAny<CancellationToken>()), Times.Once);
+        host.Mediator.Verify(m => m.Send(It.Is<EndQualityCycleFormCommand>(q => q.EmployeeId == host.Employee.Id && q.FormId == form && q.Items[0].IsChecked && !q.Items[1].IsChecked), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData("admin")] [InlineData("manager")] [InlineData("employee")]
+    public async Task ManagementRoleCannotEndAnotherPersonsTask(string role)
+    {
+        using var host = new Host(); host.Employee.Role = role;
+        var otherForm = QualityCycleForm.Create(Guid.NewGuid(), "Other shift", Guid.NewGuid(), "Other staff",
+            Guid.NewGuid(), "Activities", DateTime.UtcNow, ["Corridor"], DateTime.UtcNow.AddHours(2));
+        otherForm.Start(); var repository = new Mock<IQualityCycleRepository>();
+        repository.Setup(r => r.GetFormAsync(otherForm.Id, It.IsAny<CancellationToken>())).ReturnsAsync(otherForm);
+        var handler = new QualityCycleHandlers.EndQualityCycleFormCommandHandler(repository.Object);
+        host.Mediator.Setup(m => m.Send(It.IsAny<EndQualityCycleFormCommand>(), It.IsAny<CancellationToken>()))
+            .Returns((EndQualityCycleFormCommand command, CancellationToken ct) => handler.Handle(command, ct));
+        using var response = await host.Send("POST", $"/api/v1/me/quality-cycle/{otherForm.Id}/end", role,
+            JsonSerializer.Serialize(new { employeeId = otherForm.EmployeeId, items = new[] { new { itemText = "Corridor", isChecked = true } } }));
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.False(otherForm.IsSubmitted);
+        repository.Verify(r => r.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("admin", "inactive")] [InlineData("manager", "inactive")] [InlineData("employee", "inactive")]
+    [InlineData("admin", "pending")] [InlineData("manager", "pending")] [InlineData("employee", "pending")]
+    [InlineData("admin", "unverified")] [InlineData("manager", "unverified")] [InlineData("employee", "unverified")]
+    [InlineData("admin", "stale-role")] [InlineData("manager", "stale-role")] [InlineData("employee", "stale-role")]
+    [InlineData("admin", "unbound")] [InlineData("manager", "unbound")] [InlineData("employee", "unbound")]
+    public async Task OwnClockRequiresCurrentActiveLinkedStaffIdentity(string role, string state)
+    {
+        using var host = new Host(); host.Employee.Role = role;
+        host.Employee.IsActive = state != "inactive"; host.Employee.IdentitySyncPending = state == "pending";
+        if (state == "stale-role") host.Employee.Role = role == "employee" ? "manager" : "employee";
+        if (state == "unbound") host.Employees.Setup(r => r.GetByKeycloakUserIdAsync("scope-sub", It.IsAny<CancellationToken>())).ReturnsAsync((Employee?)null);
+        var id = Guid.NewGuid();
+        foreach (var (method, path, body) in new[] {
+            ("GET", "/api/v1/me/shifts", "{}"),
+            ("POST", $"/api/v1/me/shifts/{id}/start", JsonSerializer.Serialize(new { occurrenceStartUtc = DateTime.UtcNow, occurrenceEndUtc = DateTime.UtcNow.AddHours(2) })),
+            ("POST", $"/api/v1/me/quality-cycle/{id}/end", "{\"items\":[]}") })
+        {
+            using var response = await host.Send(method, path, role, body, state != "unverified");
+            Assert.Equal(state == "unbound" && role == "admin" ? HttpStatusCode.NotFound : HttpStatusCode.Forbidden, response.StatusCode);
+        }
+        Assert.Empty(host.Mediator.Invocations);
+    }
+
     private sealed class Host : IDisposable
     {
         private readonly RSA rsa = RSA.Create(2048);
@@ -151,14 +222,14 @@ public class EmployeeReadScopeTests
             });
             client = factory.CreateClient();
         }
-        public Task<HttpResponseMessage> Send(string method, string path, string? role, string body = "{}")
+        public Task<HttpResponseMessage> Send(string method, string path, string? role, string body = "{}", bool verified = true)
         {
             var request = new HttpRequestMessage(new HttpMethod(method), path);
             if (method != "GET") request.Content = new StringContent(body, Encoding.UTF8, "application/json");
             if (role is not null) {
                 var bound = role is "employee" or "admin" or "manager";
                 var jwt = new JwtSecurityToken("https://auth.test/realms/tenant-a", "cleaning-suite-api", new[] {
-                    new Claim("sub", bound ? "scope-sub" : "unbound-sub"), new Claim("email_verified","true"),
+                    new Claim("sub", bound ? "scope-sub" : "unbound-sub"), new Claim("email_verified",verified ? "true" : "false"),
                     new Claim("realm_access",JsonSerializer.Serialize(new { roles = role=="" ? Array.Empty<string>() : new[] { role } }))
                 }, DateTime.UtcNow.AddMinutes(-1), DateTime.UtcNow.AddMinutes(5), new SigningCredentials(key, SecurityAlgorithms.RsaSha256));
                 request.Headers.Authorization = new("Bearer",new JwtSecurityTokenHandler().WriteToken(jwt));

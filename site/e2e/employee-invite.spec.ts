@@ -40,6 +40,8 @@ test('admin account landing offers valid administration route', async ({ page })
   await page.route(/\/api\/v1\/me$/, route => route.fulfill({ status: 200, headers, json: { realm: 'tenant-a', employee: null } }));
   await page.goto('/account/?tenant=tenant-a');
   await expect(page.getByRole('link', { name: 'Continue to administration' })).toHaveAttribute('href', '/admin/');
+  await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveCount(0);
+  await expect(page.getByText('To receive shifts, add an Administrator profile', { exact: false })).toBeVisible();
 });
 
 test('mismatched account realm is not shown as ready', async ({ page }) => {

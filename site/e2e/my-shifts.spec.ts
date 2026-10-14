@@ -5,9 +5,13 @@ const shiftId = '11111111-1111-4111-8111-111111111111';
 const formId = '22222222-2222-4222-8222-222222222222';
 const evidencePhoto = { name: 'corridor.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64') };
 
-async function setupWork(page: Page, options: { empty?: boolean; failStart?: boolean; failEnd?: boolean; lostStart?: boolean; lostEnd?: boolean; loadFailure?: boolean; future?: boolean } = {}) {
+async function setupWork(page: Page, options: { empty?: boolean; failStart?: boolean; failEnd?: boolean; lostStart?: boolean; lostEnd?: boolean; loadFailure?: boolean; future?: boolean; role?: 'employee' | 'admin' | 'manager' } = {}) {
   await setupAdminMocks(page);
-  await page.addInitScript(() => { (window as any).__MOCK_ROLES__ = ['employee']; });
+  const role = options.role ?? 'employee';
+  await page.addInitScript(role => { (window as any).__MOCK_ROLES__ = [role]; }, role);
+  await page.route(/\/api\/v1\/me$/, route => route.fulfill({ status: 200, headers,
+    json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: [role] })],
+      employee: { id: 'employee-a', firstName: 'Test', lastName: 'Staff', role, isActive: true } } }));
   const start = new Date(Date.now() - 3600000).toISOString();
   const occurrence: any = { shiftId, shiftName: 'AAA1 weekday shift', startUtc: options.future ? new Date(Date.now()+86400000).toISOString() : start,
     endUtc: new Date(Date.now()+(options.future ? 90000000 : 3600000)).toISOString(), form: null };
@@ -211,3 +215,36 @@ test('clock start displays the actual API rejection reason', async ({ page }) =>
   await page.goto('/me/shifts/'); await page.getByRole('button', { name: 'Start', exact: true }).click();
   await expect(page.getByText('Could not start shift. Choose an actual scheduled shift occurrence.')).toBeVisible();
 });
+
+for (const role of ['admin', 'manager'] as const) {
+  test(`${role} reaches own shifts from management, records work and returns to management`, async ({ page }) => {
+    const work = await setupWork(page, { role });
+    await page.route(/\/api\/v1\/(admin|manager)\//, route => route.fulfill({ status: 200, headers,
+      json: route.request().url().endsWith('/companies') ? { items: [], total: 0 } : [] }));
+    await page.goto(role === 'admin' ? '/admin/employees/' : '/manager/');
+    await page.getByRole('link', { name: 'My shifts', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'My Shifts', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'AAA1 weekday shift' })).toBeVisible();
+    await page.getByRole('button', { name: 'Start', exact: true }).click();
+    await page.getByRole('button', { name: 'Record activities & end', exact: true }).click();
+    await page.getByRole('checkbox', { name: 'Corridor', exact: true }).check();
+    await page.getByRole('button', { name: 'End shift', exact: true }).click();
+    await expect(page.getByText('Done', { exact: true })).toBeVisible();
+    expect(work.startCalls).toBe(1); expect(work.endCalls).toBe(1);
+    expect(work.submitted.items).toEqual([{ itemText: 'Corridor', isChecked: true }, { itemText: 'Gym', isChecked: false }]);
+    expect(work.submitted.employeeId).toBeUndefined();
+    await page.getByRole('link', { name: 'My account', exact: true }).click();
+    await expect(page).toHaveURL(/account\/\?tenant=readysetsiivous/);
+    await expect(page.getByRole('heading', { name: 'Account ready' })).toBeVisible();
+    await page.getByRole('link', { name: role === 'admin' ? 'Continue to administration' : 'Manage tenant operations' }).click();
+    await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toBeVisible();
+  });
+
+  test(`${role} own-shift navigation remains available with no assignments`, async ({ page }) => {
+    await setupWork(page, { role });
+    await page.route(/\/api\/v1\/me\/shifts$/, route => route.fulfill({ status: 200, headers, json: [] }));
+    await page.goto('/account/?tenant=readysetsiivous');
+    await page.getByRole('link', { name: 'My shifts', exact: true }).click();
+    await expect(page.getByText('No shifts scheduled.')).toBeVisible();
+  });
+}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
   Calendar,
   Clock,
@@ -12,7 +13,7 @@ import {
   ChevronUp,
   Upload,
 } from 'lucide-react';
-import { initAuth, isAuthenticated, login, logout } from '@/lib/auth';
+import { initAuth, isAuthenticated, authTenant, login, logout } from '@/lib/auth';
 import { meApi, MyShiftOccurrence, QualityCycleFormItem } from '@/lib/meApi';
 import { Logo } from '@/ds/Logo';
 import { Button } from '@/ds/Button';
@@ -194,12 +195,15 @@ export default function MyShiftsPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-accent-50 via-white to-brand-50 dark:from-gray-950 dark:via-gray-950 dark:to-gray-900 py-8 px-4 sm:px-6">
       <div className="max-w-2xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Logo size="md" />
             <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">My Shifts</h1>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => logout()}>Sign out</Button>
+          <nav className="flex items-center gap-3">
+            <Link className="text-sm underline text-gray-900 dark:text-gray-100" href={`/account/?tenant=${encodeURIComponent(authTenant())}`}>My account</Link>
+            <Button variant="ghost" size="sm" onClick={() => logout()}>Sign out</Button>
+          </nav>
         </div>
 
         {error && (

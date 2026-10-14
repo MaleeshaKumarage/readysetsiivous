@@ -113,3 +113,13 @@ This update supersedes the earlier QC gap rows. Full contract and remaining gaps
 See [employee invitation contract](employee-invitations.md). Generic self-registration
 and password-reset-on-reinvite behavior are superseded; no temporary password is
 returned by employee invitation APIs.
+
+## Personal shifts for management staff
+
+| Capability | API | Frontend | Boundaries/tests |
+| --- | --- | --- | --- |
+| Admin/manager own assigned shifts and start/end | Existing staff policy; verified own employee ID | Shared My shifts; admin/manager shortcuts and account return | Current profile/role/lifecycle; no cross-user clock grant; SELF-SHIFT-001–008 |
+| Unbound tenant owner work profile | Existing verified-email/role-safe invitation binding | Account prerequisite guidance; no synthetic profile or own-clock shortcut | Owner retains administration; profile reconciliation explicit |
+
+See [personal shifts](management-own-shifts.md). Monthly templates/report management
+remain tenant-admin-only; tenant managers keep tenant-wide operational permissions.

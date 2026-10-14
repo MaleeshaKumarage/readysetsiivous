@@ -52,6 +52,7 @@ export default function AccountClient() {
           <h2 className="text-xl font-medium">Account ready</h2>
           <p>{account.employee ? `${account.employee.firstName} ${account.employee.lastName}` : 'Tenant administrator'} · {account.realm}</p>
           {account.employee?.isActive && <Link className="block rounded bg-gray-900 text-white px-4 py-2 text-center" href="/me/shifts/">My shifts</Link>}
+          {!account.employee && isAdmin() && <p>To receive shifts, add an Administrator profile in Employees using your verified login email, then use Invite to link that profile to your existing account.</p>}
           {account.employee?.role === 'manager' && isManager() && <Link className="block underline" href="/manager/">Manage tenant operations</Link>}
           {isAdmin() ? <Link className="underline" href="/admin/">Continue to administration</Link>
             : <p>Open My shifts to start your shift, record the activities you did, and end it.</p>}

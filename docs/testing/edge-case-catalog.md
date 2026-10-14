@@ -373,3 +373,18 @@ Contract: [game sample fallback](../features/game-sample-fallback.md).
 | QC-EVID-009 | API/PDF | URL-only or mixed old/new upload; old summary-only saved share | New upload400; no save; old saved share remains summary-only and reads no live forms |
 
 Implementation/test contract: [shift photo reporting](../features/shift-photo-reporting.md).
+
+## Personal shifts for management staff — issue117
+
+| ID | Layer | Setup/action | Observable result |
+| --- | --- | --- | --- |
+| SELF-SHIFT-001 | API/UI | Linked active admin, manager or employee with own assignment | Same self-service shift/start/end flow; own employee ID; role retained |
+| SELF-SHIFT-002 | UI | Admin/manager management workspace on desktop/mobile; finish shift; return through account | My shifts visible; partial activities accepted; Done state; management navigation reachable |
+| SELF-SHIFT-003 | API | Forge employee ID in query/start/end payload or end another person's form | Verified subject used; foreign form403; no saved changes or completion timestamps |
+| SELF-SHIFT-004 | API/UI | Unbound tenant owner; unbound manager/employee | Admin operations remain; own clock404 for owner,403 for other unbound staff; setup guidance; no fabricated identity or shortcut |
+| SELF-SHIFT-005 | API/UI | Deactivated/pending/unverified/role-changed profile; failed identity verification | Read/start/end denied before handlers; management shortcut absent; retry re-verifies identity |
+| SELF-SHIFT-006 | UI | Bound admin or manager with no assigned work | My shifts reachable; normal empty schedule; no other person's work |
+| SELF-SHIFT-007 | API | Manager uses own clock then requests templates/report PDF/shares | Own clock allowed; admin-only template/report controls remain denied |
+| SELF-SHIFT-008 | Handler/report | Admin/manager scheduled work; optional activities and photo annotations | Same occurrence/assignment restrictions; all submitted staff contribute to normal branch/shift report counts |
+
+Contract: [personal shifts for all staff roles](../features/management-own-shifts.md).

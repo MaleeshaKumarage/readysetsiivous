@@ -29,7 +29,7 @@ linked administrator employee profile is needed to receive shifts; point to
 Employees and the existing invitation/linking flow. Matching verified existing
 accounts can be linked through that flow without changing their management role.
 
-Managers retain their existing My shifts entry point. The shared screen records
+Managers retain their existing My shifts entry point, shown only after verifying an active linked work identity; pending, denied or failed verification clears it. The shared screen records
 only their own assigned occurrences, actual start/end times, selected activities,
 optional general notes and individually annotated photos. Existing checklist,
 reporting, timing, assignment and tenant restrictions continue to apply.

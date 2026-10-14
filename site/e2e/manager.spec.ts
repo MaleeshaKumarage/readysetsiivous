@@ -81,12 +81,16 @@ test('tenant manager sees both branches and creates, edits, assigns, removes and
 for (const role of ['employee', 'staff', '']) test(`${role || 'no-role'} cannot mount manager operations`, async ({ page }) => {
   const state = await setup(page, { role }); await page.goto('/manager/');
   await expect(page.getByRole('main').getByRole('alert')).toContainText('Access denied'); expect(state.requests).toBe(0);
+  await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveCount(0);
 });
 for (const options of [{ documentRole: 'employee' }, { unbound: true }]) test(`manager ${options.unbound ? 'without binding' : 'with stale document role'} denied`, async ({ page }) => {
   const state = await setup(page, options); await page.goto('/manager/'); await expect(page.getByRole('main').getByRole('alert')).toContainText('Access denied'); expect(state.requests).toBe(0);
+  await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveCount(0);
 });
 test('verification and operational failures are visible and retry preserves entered shift data', async ({ page }) => {
   const state = await setup(page, { failIdentity: true, failures: ['load', 'save', 'assign', 'deactivate'] }); await page.goto('/manager/');
+  await expect(page.getByRole('button', { name: 'Retry access check' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Retry access check' }).click(); await expect(page.getByRole('main').getByRole('alert')).toContainText('load failed');
   state.recoverLoad(); await page.getByRole('button', { name: 'Refresh operations' }).click();
   const card = page.getByRole('article', { name: 'AAA1 weekdays' }); await card.getByRole('button', { name: 'Edit shift' }).click();
