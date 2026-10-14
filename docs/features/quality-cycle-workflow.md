@@ -63,13 +63,15 @@ scheduled occurrences/hours, recorded/missing/pending records and activity count
 **Shift PDF** exports one shift; **Branch PDF** contains separate shift sections.
 PDFs contain activity counts and occurrence/recording totals.
 
-**Share shift report** or **Share branch report** creates a frozen summary link
+**Share shift report** or **Share branch report** creates a frozen report link
 that anyone possessing it can download as PDF. The confirmed expiry is 30 days.
 **Manage shared report links** lists existing links; **Copy link** and **Revoke
 link** are admin-only. Revoked/expired/unknown links return 404. Public responses
 use no-store/noindex headers. Sharing does not send email or messages automatically.
 
-Shared snapshots remove all cleaner forms, names, tokens, notes and photos.
+New shared snapshots include submitted photos, individual photo notes and optional
+shift notes in the appendix, while removing full cleaner forms, names and tokens.
+Previously created summary-only snapshots remain summary-only.
 New submissions affect fresh reports, but never rewrite an existing shared
 snapshot. Generate another link to share updated totals. Suspension of the tenant
 also denies its public report links through tenant resolution.
@@ -110,7 +112,7 @@ Production partition contents were not inspected or migrated in this change.
 | Tenant B uses A template/form/share IDs or token | No document access; PostgreSQL isolation regression |
 | Employee/manager/anonymous template/report/share access | 403/401; real authorization middleware tests with controlled identities |
 | Concurrent submission | Losing save fails optimistic concurrency; PostgreSQL regression |
-| Share snapshot | No cleaner identity, notes, photos or record tokens; backend regression |
+| Share snapshot | Submitted evidence included, no cleaner identity or record tokens; frozen old/new snapshot regression |
 | Link expires exactly now / revoked | 404, no PDF generated; backend regression |
 | Generate/copy/revoke link | Admin controls; desktop/mobile regression |
 | Remove/reassign cleaner with a gap | New assignment periods exclude the gap; add dedicated lifecycle test |

@@ -118,8 +118,9 @@ Total: **77 controller endpoints**. Non-controller public entries:
   not assignment ID, in the route. Shift schedules use numeric enums and HH:mm
   TimeSpan inputs; outputs can use HH:mm:ss.
 - Public QC submit route token overrides body's Token. The body carries items,
-  photoUrls and cleanerNotes. Photo URLs currently include FileReader data URLs.
-  Any nonblank photo entry requires a nonblank cleanerNotes value; notes alone
+  photos (`[{url, note}]`) and optional cleanerNotes. URLs include FileReader data URLs.
+  Every photo requires its own nonblank note; URL-only/mixed uploads are rejected400.
+  General cleanerNotes may accompany photos or be submitted alone. Notes alone
   remain valid. The same rule applies to authenticated end-shift submission.
   See [photo/report contract](shift-photo-reporting.md).
 - Agreement sign accepts typedName and signaturePng (base64/data URI), not a raw
@@ -144,7 +145,7 @@ All admin routes require the current tenant's `admin` realm role.
 | POST | `/api/v1/admin/quality-cycle/report-shares` | tenant admin | year/month plus companyId/branchId/shiftId scope; frozen summary token with 30-day expiry |
 | GET | `/api/v1/admin/quality-cycle/report-shares` | tenant admin | own-tenant shared link metadata |
 | DELETE | `/api/v1/admin/quality-cycle/report-shares/{id:guid}` | tenant admin | revoke own-tenant link |
-| GET | `/api/v1/public/{slug}/quality-cycle/reports/{token}/pdf` | anonymous token holder | summary-only PDF; expired/revoked/unknown404; no-store/noindex |
+| GET | `/api/v1/public/{slug}/quality-cycle/reports/{token}/pdf` | anonymous token holder | frozen report PDF; new links include submitted photo/note appendix; old snapshots unchanged; expired/revoked/unknown404; no-store/noindex |
 
 Existing `summary-pdf` now uses the activity report builder. Existing submission
 requires exact checklist structure, permits any checked subset and empty notes,

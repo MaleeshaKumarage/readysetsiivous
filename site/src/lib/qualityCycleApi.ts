@@ -1,6 +1,7 @@
 import { API_URL } from './api';
 import { adminGet, adminSend, adminSendJson } from './adminApi';
 import { refreshToken } from './auth';
+import type { ShiftPhoto } from './shiftPhotos';
 
 export interface QualityCycleTemplate {
   id: string;
@@ -32,6 +33,7 @@ export interface QualityCycleForm {
   token: string;
   items: QualityCycleFormItem[];
   photoUrls: string[];
+  photos?: ShiftPhoto[];
   cleanerNotes?: string | null;
   taskStatus?: "Pending" | "Recorded";
   isSubmitted: boolean;
@@ -94,13 +96,13 @@ export const publicQualityCycle = {
     tenantSlug: string,
     formToken: string,
     items: QualityCycleFormItem[],
-    photoUrls?: string[],
+    photos?: ShiftPhoto[],
     cleanerNotes?: string
   ): Promise<QualityCycleForm | null> => {
     const response = await fetch(`${API_URL}/api/v1/public/${tenantSlug}/quality-cycle/${formToken}/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: formToken, items, photoUrls, cleanerNotes }),
+      body: JSON.stringify({ token: formToken, items, photos, cleanerNotes }),
     });
     if (!response.ok) return null;
     return (await response.json()) as QualityCycleForm;

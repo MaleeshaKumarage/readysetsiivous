@@ -338,10 +338,11 @@ test('legacy photo submission requires a note and retains evidence after server 
   await page.goto('/quality-cycle/?token=photo-token');
   await page.getByLabel('Add shift photos').setInputFiles({ name: 'corridor.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64') });
   await expect(page.getByRole('button', { name: 'Remove photo' })).toHaveCount(1);
-  const note = page.getByRole('textbox', { name: 'Notes / Comments' });
+  await page.getByRole('textbox', { name: 'Notes / Comments' }).fill('General shift note');
+  const note = page.getByRole('textbox', { name: 'Photo 1 note' });
   await expect(note).toHaveAttribute('aria-required', 'true');
   await note.fill('  '); await page.getByRole('button', { name: 'Submit Quality Cycle Form' }).click();
-  await expect(page.getByRole('alert', { name: 'Form error' })).toHaveText('Add a note describing the attached photos.');
+  await expect(page.getByRole('alert', { name: 'Form error' })).toHaveText('Add a separate note for each photo.');
   await expect(note).toBeFocused(); expect(requests).toBe(0);
   await note.fill('Corridor entrance cleaned.'); await page.getByRole('button', { name: 'Submit Quality Cycle Form' }).click();
   await expect(page.getByRole('alert', { name: 'Form error' })).toHaveText('Failed to submit form. Please try again.');
@@ -349,7 +350,27 @@ test('legacy photo submission requires a note and retains evidence after server 
   await expect(page.getByRole('button', { name: 'Remove photo' })).toHaveCount(1);
   await page.getByRole('button', { name: 'Submit Quality Cycle Form' }).click();
   await expect(page.getByRole('heading', { name: 'Thank You!' })).toBeVisible();
-  expect(submitted.photoUrls).toHaveLength(1); expect(submitted.cleanerNotes).toBe('Corridor entrance cleaned.');
+  expect(submitted.photos).toHaveLength(1); expect(submitted.photos[0].note).toBe('Corridor entrance cleaned.'); expect(submitted.cleanerNotes).toBe('General shift note');
+});
+
+test('token form preserves distinct notes for multiple photos', async ({ page }) => {
+  const form = { id: 'multi-form', shiftOccurrenceUtc: '2026-01-01T08:00:00Z', items: [], photoUrls: [], isSubmitted: false };
+  let submitted: any; let requests = 0;
+  await page.route(/\/quality-cycle\/multi-token$/, route => route.fulfill({ json: form, headers: CORS_HEADERS }));
+  await page.route(/\/quality-cycle\/multi-token\/submit$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+    requests++; submitted = route.request().postDataJSON(); return route.fulfill({ json: { ...form, ...submitted, isSubmitted: true }, headers: CORS_HEADERS });
+  });
+  await page.goto('/quality-cycle/?token=multi-token');
+  const photo = { name: 'corridor.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64') };
+  await page.getByLabel('Add shift photos').setInputFiles([photo, { ...photo, name: 'gym.png' }]);
+  await page.getByRole('textbox', { name: 'Photo 1 note' }).fill('Corridor cleaned');
+  await page.getByRole('button', { name: 'Submit Quality Cycle Form' }).click();
+  await expect(page.getByRole('textbox', { name: 'Photo 2 note' })).toBeFocused(); expect(requests).toBe(0);
+  await page.getByRole('textbox', { name: 'Photo 2 note' }).fill('Gym cleaned');
+  await page.getByRole('button', { name: 'Submit Quality Cycle Form' }).click();
+  await expect(page.getByRole('heading', { name: 'Thank You!' })).toBeVisible();
+  expect(submitted.photos.map((p: any) => p.note)).toEqual(['Corridor cleaned', 'Gym cleaned']); expect(submitted.cleanerNotes).toBe('');
 });
 
 test('legacy form permits notes without images and removing the final image makes notes optional', async ({ page }) => {
@@ -368,7 +389,7 @@ test('legacy form permits notes without images and removing the final image make
   await page.getByRole('textbox', { name: 'Notes / Comments' }).fill('Gym unavailable today.');
   await page.getByRole('button', { name: 'Submit Quality Cycle Form' }).click();
   await expect(page.getByRole('heading', { name: 'Thank You!' })).toBeVisible();
-  expect(submitted.photoUrls).toEqual([]); expect(submitted.cleanerNotes).toBe('Gym unavailable today.');
+  expect(submitted.photos).toEqual([]); expect(submitted.cleanerNotes).toBe('Gym unavailable today.');
 });
 
 test('cleaner records selected activities without completing every item or adding notes', async ({ page }) => {

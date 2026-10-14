@@ -417,6 +417,7 @@ export default function AdminQualityCyclePage() {
               </Table></Table.ScrollContainer>
               {report.shifts.length === 0 && <Text>No scheduled quality cycle tasks for this month and filter.</Text>}
             </>}
+            <Text size="sm">New report links include shift photos and notes. Anyone with the link can view them for 30 days, unless you revoke it.</Text>
             <Button variant="light" onClick={async () => { const result = await adminQualityCycle.listReportShares(); if (result) setShares(result); else setReportError('Could not load shared reports.'); }}>Manage shared report links</Button>
             {shares.map(share => <Group key={share.id}>
               <Text size="sm">{share.year}-{String(share.month).padStart(2, '0')} · expires {new Date(share.expiresUtc).toLocaleDateString()}</Text>

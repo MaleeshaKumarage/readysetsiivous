@@ -53,7 +53,7 @@ test families, not proof that those tests are currently implemented.
 | QC dispatch | Recurring at shift end | None wired; local untracked draft files | None | Implement shared dispatcher and worker before reporting this as an active feature | QC-010 |
 | QC submissions | Read/filter by shift | Yes | Yes | Tenant-session isolation is a release-blocking verification task | QC-006/013 |
 | QC submissions | Filter date/status/employee; inspect full detail/photos | Date/shift list filters; no dedicated complete reviewer flow | Partial: table/photo count | Define useful review filters/detail view; photo URL-size/schema safeguards | QC-013/017, QCP-006 |
-| QC reporting | Monthly PDF | Yes, including submitted photo/note appendix | Admin download | Images/dates/notes and real rendered pages verified in issue102; public links retain summary-only privacy | QC-014/015, QC-EVID-001–006 |
+| QC reporting | Monthly PDF | Yes, including submitted photo/note appendix | Admin download and new public links | Each new photo has its own required note; old snapshot content preserved; identities/form tokens stripped | QC-014/015, QC-EVID-001–009 |
 | Public QC | Token lookup/items/notes/one-time submit | Yes | Yes | Repeat-submit409, precise item matching and identity/token policies need work | QCP-001–004/008/009 |
 | Public QC | Photos | String/dataURL persistence; nonblank note required with images | File picker/preview/remove; note validation; read/error state | Private upload storage/server limits and full admin reviewer remain issue77 | QCP-005–007, QC-EVID-001–003 |
 | Agreements | Create/read/list/detail | Yes | Yes | FE/BE count mismatch and company/PDF validation; partially filled signer rows need explicit errors | AGR-001–006 |

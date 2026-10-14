@@ -17,7 +17,7 @@ import { publicQualityCycle, QualityCycleForm, QualityCycleFormItem } from '@/li
 import { Logo } from '@/ds/Logo';
 import { Card } from '@/ds/Card';
 import { Button } from '@/ds/Button';
-import { photoNoteMessage, readShiftPhotos } from '@/lib/shiftPhotos';
+import { photoNoteMessage, readShiftPhotos, type ShiftPhoto } from '@/lib/shiftPhotos';
 
 export default function QualityCyclePublicClient() {
   const searchParams = useSearchParams();
@@ -32,10 +32,10 @@ export default function QualityCyclePublicClient() {
 
   const [items, setItems] = useState<QualityCycleFormItem[]>([]);
   const [cleanerNotes, setCleanerNotes] = useState('');
-  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+  const [photoUrls, setPhotoUrls] = useState<ShiftPhoto[]>([]);
   const [photoReading, setPhotoReading] = useState(false);
   const [noteError, setNoteError] = useState(false);
-  const noteRef = useRef<HTMLTextAreaElement>(null);
+  const noteRef = useRef<(HTMLTextAreaElement | null)[]>([]);
 
   useEffect(() => {
     if (token) {
@@ -54,7 +54,7 @@ export default function QualityCyclePublicClient() {
         setForm(data);
         setItems(data.items || []);
         setCleanerNotes(data.cleanerNotes || '');
-        setPhotoUrls(data.photoUrls || []);
+        setPhotoUrls(data.photos?.length ? data.photos : (data.photoUrls ?? []).map(url => ({ url, note: '' })));
         if (data.isSubmitted) {
           setSubmitted(true);
         }
@@ -77,20 +77,21 @@ export default function QualityCyclePublicClient() {
     e.target.value = '';
     if (files.length === 0) return;
     setPhotoReading(true); setError(null);
-    try { const uploaded = await readShiftPhotos(files); setPhotoUrls(prev => [...prev, ...uploaded]); }
+    try { const uploaded = await readShiftPhotos(files); setPhotoUrls(prev => [...prev, ...uploaded.map(url => ({ url, note: '' }))]); }
     catch (error) { setError(error instanceof Error ? error.message : 'Could not read the photo. Please select it again.'); }
     finally { setPhotoReading(false); }
   }
 
   function handleRemovePhoto(index: number) {
-    setPhotoUrls(photoUrls.filter((_, i) => i !== index));
+    setPhotoUrls(current => current.filter((_, i) => i !== index));
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (photoReading) return;
-    if (photoUrls.length > 0 && !cleanerNotes.trim()) {
-      setNoteError(true); setError(photoNoteMessage); noteRef.current?.focus(); return;
+    const missing = photoUrls.findIndex(p => !p.note.trim());
+    if (missing >= 0) {
+      setNoteError(true); setError(photoNoteMessage); noteRef.current[missing]?.focus(); return;
     }
     setNoteError(false);
     if (form && new Date(form.shiftOccurrenceUtc).getTime() > Date.now()) {
@@ -269,10 +270,16 @@ export default function QualityCyclePublicClient() {
 
               {photoReading && <p role="status">Reading photos...</p>}
               {photoUrls.length > 0 && (
-                <div className="grid grid-cols-3 gap-3 pt-1">
+                <div className="grid sm:grid-cols-2 gap-3 pt-1">
                   {photoUrls.map((url, idx) => (
                     <div key={idx} className="relative group rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm">
-                      <img src={url} alt={`Upload ${idx + 1}`} className="h-24 w-full object-cover" />
+                      <img src={url.url} alt={`Upload ${idx + 1}`} className="h-24 w-full object-cover" />
+                      <label className="block p-2 text-sm">Photo {idx + 1} note (required)
+                        <textarea ref={el => { noteRef.current[idx] = el; }} aria-label={`Photo ${idx + 1} note`} aria-required="true"
+                          aria-invalid={noteError && !url.note.trim()} value={url.note} disabled={submitting || photoReading}
+                          onChange={e => setPhotoUrls(current => current.map((photo, index) => index === idx ? { ...photo, note: e.target.value } : photo))}
+                          className="block w-full rounded border p-2 text-sm text-gray-900 bg-white" rows={2} />
+                      </label>
                       <button
                         type="button"
                         aria-label="Remove photo"
@@ -291,22 +298,20 @@ export default function QualityCyclePublicClient() {
             {/* Cleaner Notes */}
             <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
               <label className="block text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
-                Notes / Comments ({photoUrls.length > 0 ? 'Required with photos' : 'Optional'})
+                Notes / Comments (Optional)
               </label>
               <textarea
-                ref={noteRef}
-                aria-required={photoUrls.length > 0}
-                aria-invalid={noteError && photoUrls.length > 0 && !cleanerNotes.trim()}
                 aria-describedby="photo-note-help"
                 disabled={submitting}
                 aria-label="Notes / Comments"
+                aria-required="false"
                 value={cleanerNotes}
                 onChange={(e) => setCleanerNotes(e.target.value)}
                 placeholder="Any additional notes or observations..."
                 rows={3}
                 className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all text-gray-800 dark:text-gray-200 placeholder-gray-400"
               />
-              <p id="photo-note-help" className="text-xs text-gray-600 dark:text-gray-300">A note is required when photos are attached. You can add a note without a photo.</p>
+              <p id="photo-note-help" className="text-xs text-gray-600 dark:text-gray-300">Each photo needs its own note. General shift notes are optional, with or without photos.</p>
             </div>
 
             {form && new Date(form.shiftOccurrenceUtc).getTime() > Date.now() && <p role="status">This task becomes available when the shift starts.</p>}
