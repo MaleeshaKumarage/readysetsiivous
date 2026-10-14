@@ -1,4 +1,5 @@
 using CleaningSuite.Application.QualityCycle;
+using CleaningSuite.Domain.QualityCycle;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -82,7 +83,7 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
         forms.Where(f => f.IsSubmitted && (!string.IsNullOrWhiteSpace(f.CleanerNotes) || f.PhotoUrls is { Count: > 0 }))
             .OrderBy(f => f.ShiftOccurrenceUtc).ThenBy(f => f.Id)
             .Select(f => new QualityCycleEvidenceReport(f.ShiftOccurrenceUtc, f.ShiftOccurrenceEndUtc,
-                f.CleanerNotes, f.PhotoUrls ?? new List<string>())).ToList();
+                f.CleanerNotes, f.PhotoUrls ?? new List<string>()) { Photos = f.Photos }).ToList();
 
     private static void AppendEvidence(IDocumentContainer container, string companyName, string branchName,
         string shiftName, IReadOnlyList<QualityCycleEvidenceReport> evidence, TimeZoneInfo zone, string zoneName)
@@ -91,13 +92,15 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
         {
             var localStart = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(entry.StartUtc, DateTimeKind.Utc), zone);
             var localEnd = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(entry.EndUtc, DateTimeKind.Utc), zone);
-            var hasPhotos = entry.PhotoUrls is { Count: > 0 };
-            var photos = !hasPhotos ? new string?[] { null } : entry.PhotoUrls.Cast<string?>();
+            var paired = entry.Photos is { Count: > 0 } ? entry.Photos
+                : entry.PhotoUrls.Select(url => new QualityCyclePhoto(url, entry.Note ?? "")).ToList();
+            var hasPhotos = paired.Count > 0;
+            var photos = !hasPhotos ? new QualityCyclePhoto?[] { null } : paired.Cast<QualityCyclePhoto?>();
             var index = 0;
             foreach (var photo in photos)
             {
                 index++;
-                var image = photo is null ? null : DecodePhoto(photo);
+                var image = photo is null ? null : DecodePhoto(photo.Url);
                 var photoNumber = index;
                 container.Page(page =>
                 {
@@ -108,13 +111,17 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
                         header.Item().Text("Appendix - shift photos and notes").FontSize(17).Bold();
                         header.Item().Text($"{companyName} / {branchName} / {shiftName}").SemiBold();
                         header.Item().Text($"Shift date: {localStart:yyyy-MM-dd} | {localStart:HH:mm} - {localEnd:yyyy-MM-dd HH:mm} ({zoneName})");
-                        if (hasPhotos) header.Item().Text($"Photo {photoNumber} of {entry.PhotoUrls.Count}").FontSize(9);
+                        if (hasPhotos) header.Item().Text($"Photo {photoNumber} of {paired.Count}").FontSize(9);
                     });
                     page.Content().PaddingVertical(15).Column(content =>
                     {
                         content.Spacing(10);
-                        content.Item().Text("Note").SemiBold();
-                        content.Item().Text(string.IsNullOrWhiteSpace(entry.Note) ? "No note recorded for this historical entry." : entry.Note);
+                        var note = photo?.Note ?? entry.Note;
+                        content.Item().Text(hasPhotos ? "Photo note" : "Shift note").SemiBold();
+                        content.Item().Text(string.IsNullOrWhiteSpace(note) ? "No note recorded for this historical entry." : note);
+                        if (entry.Photos is { Count: > 0 } && !string.IsNullOrWhiteSpace(entry.Note)) {
+                            content.Item().Text("Shift note").SemiBold(); content.Item().Text(entry.Note);
+                        }
                         if (!hasPhotos) return;
                         if (image is null)
                             content.Item().Text("Photo unavailable: the saved image is unsupported, invalid or exceeds the report image limit.")

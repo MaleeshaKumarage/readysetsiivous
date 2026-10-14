@@ -78,7 +78,7 @@ public class MeController : ControllerBase
     {
         var employeeId = VerifiedEmployee().Id;
         var result = await _mediator.Send(
-            new EndQualityCycleFormCommand(formId, employeeId, request.Items, request.PhotoUrls, request.CleanerNotes), ct);
+            new EndQualityCycleFormCommand(formId, employeeId, request.Items, request.PhotoUrls, request.CleanerNotes, request.Photos), ct);
         return Ok(result);
     }
 
@@ -96,4 +96,5 @@ public record StartShiftRequest(DateTime OccurrenceStartUtc, DateTime Occurrence
 public record EndFormRequest(
     List<QualityCycleFormItemDto> Items,
     List<string>? PhotoUrls = null,
-    string? CleanerNotes = null);
+    string? CleanerNotes = null,
+    List<CleaningSuite.Domain.QualityCycle.QualityCyclePhoto>? Photos = null);
