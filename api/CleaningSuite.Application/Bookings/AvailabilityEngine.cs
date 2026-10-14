@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using CleaningSuite.Application.Common;
 using CleaningSuite.Application.Services;
 using CleaningSuite.Application.Tenants;
@@ -20,6 +21,7 @@ public class AvailabilityEngine
     private static readonly TimeSpan WindowStart = TimeSpan.FromHours(8);
     private static readonly TimeSpan WindowEnd = TimeSpan.FromHours(20);
     private const int SlotMinutes = 30;
+    private static readonly ConcurrentDictionary<string, TimeZoneInfo> TimeZoneCache = new();
 
     private readonly IServiceRepository _services;
     private readonly IBookingRepository _bookings;
@@ -38,8 +40,11 @@ public class AvailabilityEngine
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
-    private static TimeZoneInfo TimeZoneFor(string timeZoneId) =>
-        TZConvert.GetTimeZoneInfo(string.IsNullOrEmpty(timeZoneId) ? "Europe/Helsinki" : timeZoneId);
+    private static TimeZoneInfo TimeZoneFor(string timeZoneId)
+    {
+        var key = string.IsNullOrEmpty(timeZoneId) ? "Europe/Helsinki" : timeZoneId;
+        return TimeZoneCache.GetOrAdd(key, static id => TZConvert.GetTimeZoneInfo(id));
+    }
 
     public async Task<IReadOnlyList<AvailabilitySlot>> GetSlotsAsync(
         string tenantId, string localDate, Guid serviceId, CancellationToken ct)

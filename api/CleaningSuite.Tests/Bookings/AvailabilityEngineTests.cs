@@ -73,6 +73,48 @@ public class AvailabilityEngineTests
         _service.IsActive = false;
         Assert.Empty(await engine.GetSlotsAsync("tenant", "2026-10-14", _service.Id, default));
     }
+
+    [Theory]
+    [InlineData("Europe/Helsinki", "2027-03-28", 3)]
+    [InlineData("Europe/Helsinki", "2027-10-31", 2)]
+    [InlineData("UTC", "2027-03-28", 0)]
+    [InlineData("", "2027-03-28", 3)]
+    public async Task Repeated_queries_preserve_timezone_and_touching_booking_boundaries(string timezone, string date, int offset)
+    {
+        var engine = Engine();
+        _profiles.Setup(x => x.GetAsync("tenant", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TenantProfile { TimeZoneId = timezone, MinHoursBeforeBooking = 2 });
+        var day = DateTime.SpecifyKind(DateOnly.ParseExact(date, "yyyy-MM-dd").ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc);
+        // Deliberately unsorted bookings; 09:00-10:00 is unavailable, with both touching slots available.
+        _bookings.Setup(x => x.ListForLocalDateAsync(date, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] {
+                new Booking { StartUtc = day.AddHours(18-offset), EndUtc = day.AddHours(19-offset) },
+                new Booking { StartUtc = day.AddHours(9-offset), EndUtc = day.AddHours(10-offset) }
+            });
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var slots = await engine.GetSlotsAsync("tenant", date, _service.Id, default);
+            Assert.Equal(17, slots.Count);
+            Assert.Contains(slots, x => x.StartTime == "08:00" && x.EndTime == "09:00");
+            Assert.Contains(slots, x => x.StartTime == "10:00");
+            Assert.Contains(slots, x => x.StartTime == "19:00" && x.EndTime == "20:00");
+            Assert.DoesNotContain(slots, x => x.StartTime is "08:30" or "09:00" or "09:30" or "17:30" or "18:00" or "18:30");
+        }
+    }
+
+    [Theory]
+    [InlineData(30, 24)]
+    [InlineData(60, 23)]
+    [InlineData(720, 1)]
+    [InlineData(750, 0)]
+    public async Task Duration_respects_business_window(int duration, int count)
+    {
+        var engine = Engine();
+        _service.DurationMinutes = duration;
+        var slots = await engine.GetSlotsAsync("tenant", "2027-01-15", _service.Id, default);
+        Assert.Equal(count, slots.Count);
+        Assert.All(slots, slot => Assert.True(TimeOnly.Parse(slot.EndTime) <= new TimeOnly(20, 0)));
+    }
 }
 
 internal sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
