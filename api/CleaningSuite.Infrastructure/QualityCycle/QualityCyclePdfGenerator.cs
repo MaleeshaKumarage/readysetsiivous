@@ -2,6 +2,8 @@ using CleaningSuite.Application.QualityCycle;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
+using QuestPDF.Drawing.Exceptions;
+using SkiaSharp;
 
 namespace CleaningSuite.Infrastructure.QualityCycle;
 
@@ -61,6 +63,9 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
                     page.Footer().AlignCenter().Text(x => { x.Span($"Generated {report.GeneratedUtc:yyyy-MM-dd HH:mm} UTC | Page "); x.CurrentPageNumber(); });
                 });
             }
+            foreach (var shift in report.Shifts)
+                AppendEvidence(container, shift.CompanyName, shift.BranchName, shift.ShiftName,
+                    EvidenceFor(shift), zone, report.TimeZoneId);
         });
         return document.GeneratePdf();
     }
@@ -68,6 +73,87 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
     static QualityCyclePdfGenerator()
     {
         QuestPDF.Settings.License = LicenseType.Community;
+    }
+
+    private static IReadOnlyList<QualityCycleEvidenceReport> EvidenceFor(QualityCycleShiftReport shift) =>
+        shift.Evidence is { Count: > 0 } ? shift.Evidence : ProjectEvidence(shift.Forms);
+
+    private static IReadOnlyList<QualityCycleEvidenceReport> ProjectEvidence(IReadOnlyList<QualityCycleFormDto> forms) =>
+        forms.Where(f => f.IsSubmitted && (!string.IsNullOrWhiteSpace(f.CleanerNotes) || f.PhotoUrls is { Count: > 0 }))
+            .OrderBy(f => f.ShiftOccurrenceUtc).ThenBy(f => f.Id)
+            .Select(f => new QualityCycleEvidenceReport(f.ShiftOccurrenceUtc, f.ShiftOccurrenceEndUtc,
+                f.CleanerNotes, f.PhotoUrls ?? new List<string>())).ToList();
+
+    private static void AppendEvidence(IDocumentContainer container, string companyName, string branchName,
+        string shiftName, IReadOnlyList<QualityCycleEvidenceReport> evidence, TimeZoneInfo zone, string zoneName)
+    {
+        foreach (var entry in evidence.OrderBy(e => e.StartUtc))
+        {
+            var localStart = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(entry.StartUtc, DateTimeKind.Utc), zone);
+            var localEnd = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(entry.EndUtc, DateTimeKind.Utc), zone);
+            var hasPhotos = entry.PhotoUrls is { Count: > 0 };
+            var photos = !hasPhotos ? new string?[] { null } : entry.PhotoUrls.Cast<string?>();
+            var index = 0;
+            foreach (var photo in photos)
+            {
+                index++;
+                var image = photo is null ? null : DecodePhoto(photo);
+                var photoNumber = index;
+                container.Page(page =>
+                {
+                    page.Size(PageSizes.A4); page.Margin(36);
+                    page.DefaultTextStyle(x => x.FontSize(10).FontFamily(Fonts.Arial));
+                    page.Header().Column(header =>
+                    {
+                        header.Item().Text("Appendix - shift photos and notes").FontSize(17).Bold();
+                        header.Item().Text($"{companyName} / {branchName} / {shiftName}").SemiBold();
+                        header.Item().Text($"Shift date: {localStart:yyyy-MM-dd} | {localStart:HH:mm} - {localEnd:yyyy-MM-dd HH:mm} ({zoneName})");
+                        if (hasPhotos) header.Item().Text($"Photo {photoNumber} of {entry.PhotoUrls.Count}").FontSize(9);
+                    });
+                    page.Content().PaddingVertical(15).Column(content =>
+                    {
+                        content.Spacing(10);
+                        content.Item().Text("Note").SemiBold();
+                        content.Item().Text(string.IsNullOrWhiteSpace(entry.Note) ? "No note recorded for this historical entry." : entry.Note);
+                        if (!hasPhotos) return;
+                        if (image is null)
+                            content.Item().Text("Photo unavailable: the saved image is unsupported, invalid or exceeds the report image limit.")
+                                .FontColor(Colors.Grey.Darken1).Italic();
+                        else
+                            content.Item().EnsureSpace(360).Height(360).Image(image).FitArea();
+                    });
+                    page.Footer().AlignCenter().Text(text => { text.Span("Appendix | Page "); text.CurrentPageNumber(); });
+                });
+            }
+        }
+    }
+
+    private static QuestPDF.Infrastructure.Image? DecodePhoto(string value)
+    {
+        const int maximumBytes = 10 * 1024 * 1024;
+        if (value.Length > (maximumBytes + 2) / 3 * 4 + 64 || !value.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase))
+            return null;
+        var comma = value.IndexOf(',');
+        if (comma < 0) return null;
+        var header = value[..comma].ToLowerInvariant();
+        if (header is not ("data:image/png;base64" or "data:image/jpeg;base64" or "data:image/jpg;base64" or
+            "data:image/webp;base64" or "data:image/bmp;base64")) return null;
+        try
+        {
+            var bytes = Convert.FromBase64String(value[(comma + 1)..]);
+            if (bytes.Length == 0 || bytes.Length > maximumBytes) return null;
+            using var data = SKData.CreateCopy(bytes);
+            using var codec = SKCodec.Create(data);
+            if (codec is null || codec.Info.Width <= 0 || codec.Info.Height <= 0 ||
+                codec.Info.Width > 16_384 || codec.Info.Height > 16_384 ||
+                (long)codec.Info.Width * codec.Info.Height > 40_000_000) return null;
+            using var bitmap = SKBitmap.Decode(codec);
+            if (bitmap is null) return null;
+            return QuestPDF.Infrastructure.Image.FromBinaryData(bytes);
+        }
+        catch (FormatException) { return null; }
+        catch (DocumentComposeException) { return null; }
+        catch (ArgumentException) { return null; }
     }
 
     public byte[] GenerateMonthlySummaryPdf(
@@ -180,6 +266,7 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
                     x.TotalPages();
                 });
             });
+            AppendEvidence(container, companyName, branchName, shiftName, ProjectEvidence(forms), TimeZoneInfo.Utc, "UTC");
         });
 
         return doc.GeneratePdf();

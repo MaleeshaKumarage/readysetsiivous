@@ -372,7 +372,8 @@ public class QualityCycleHandlers
             try { form.Submit(domainItems, photoUrls, cleanerNotes); }
             catch (ArgumentException ex)
             {
-                throw new ValidationException(new[] { new FluentValidation.Results.ValidationFailure("Checklist", ex.Message) });
+                throw new ValidationException(new[] { new FluentValidation.Results.ValidationFailure(
+                    ex.ParamName == "cleanerNotes" ? "CleanerNotes" : "Checklist", ex.Message) });
             }
     }
 

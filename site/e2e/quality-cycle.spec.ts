@@ -325,6 +325,52 @@ test('monthly report keeps weekday and biweekly shifts separate under one branch
 });
 
 
+test('legacy photo submission requires a note and retains evidence after server failure', async ({ page }) => {
+  const form = { id: 'photo-form', shiftName: 'Daily work', employeeName: 'Cleaner', shiftOccurrenceUtc: '2026-01-01T08:00:00Z',
+    token: 'photo-token', items: [{ itemText: 'Corridor', isChecked: false }], photoUrls: [], cleanerNotes: '', isSubmitted: false };
+  let requests = 0; let submitted: any;
+  await page.route(/\/api\/v1\/public\/[^/]+\/quality-cycle\/photo-token$/, route => route.fulfill({ json: form, headers: CORS_HEADERS }));
+  await page.route(/\/api\/v1\/public\/[^/]+\/quality-cycle\/photo-token\/submit$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+    requests++; submitted = route.request().postDataJSON();
+    return route.fulfill(requests === 1 ? { status: 503, json: {}, headers: CORS_HEADERS } : { json: { ...form, ...submitted, isSubmitted: true }, headers: CORS_HEADERS });
+  });
+  await page.goto('/quality-cycle/?token=photo-token');
+  await page.getByLabel('Add shift photos').setInputFiles({ name: 'corridor.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64') });
+  await expect(page.getByRole('button', { name: 'Remove photo' })).toHaveCount(1);
+  const note = page.getByRole('textbox', { name: 'Notes / Comments' });
+  await expect(note).toHaveAttribute('aria-required', 'true');
+  await note.fill('  '); await page.getByRole('button', { name: 'Submit Quality Cycle Form' }).click();
+  await expect(page.getByRole('alert', { name: 'Form error' })).toHaveText('Add a note describing the attached photos.');
+  await expect(note).toBeFocused(); expect(requests).toBe(0);
+  await note.fill('Corridor entrance cleaned.'); await page.getByRole('button', { name: 'Submit Quality Cycle Form' }).click();
+  await expect(page.getByRole('alert', { name: 'Form error' })).toHaveText('Failed to submit form. Please try again.');
+  await expect(note).toHaveValue('Corridor entrance cleaned.');
+  await expect(page.getByRole('button', { name: 'Remove photo' })).toHaveCount(1);
+  await page.getByRole('button', { name: 'Submit Quality Cycle Form' }).click();
+  await expect(page.getByRole('heading', { name: 'Thank You!' })).toBeVisible();
+  expect(submitted.photoUrls).toHaveLength(1); expect(submitted.cleanerNotes).toBe('Corridor entrance cleaned.');
+});
+
+test('legacy form permits notes without images and removing the final image makes notes optional', async ({ page }) => {
+  const form = { id: 'notes-form', shiftName: 'Daily work', employeeName: 'Cleaner', shiftOccurrenceUtc: '2026-01-01T08:00:00Z',
+    token: 'notes-token', items: [], photoUrls: [], cleanerNotes: '', isSubmitted: false };
+  let submitted: any;
+  await page.route(/\/api\/v1\/public\/[^/]+\/quality-cycle\/notes-token$/, route => route.fulfill({ json: form, headers: CORS_HEADERS }));
+  await page.route(/\/api\/v1\/public\/[^/]+\/quality-cycle\/notes-token\/submit$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+    submitted = route.request().postDataJSON(); return route.fulfill({ json: { ...form, ...submitted, isSubmitted: true }, headers: CORS_HEADERS });
+  });
+  await page.goto('/quality-cycle/?token=notes-token');
+  await page.getByLabel('Add shift photos').setInputFiles({ name: 'corridor.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64') });
+  await page.getByRole('button', { name: 'Remove photo' }).click();
+  await expect(page.getByRole('textbox', { name: 'Notes / Comments' })).toHaveAttribute('aria-required', 'false');
+  await page.getByRole('textbox', { name: 'Notes / Comments' }).fill('Gym unavailable today.');
+  await page.getByRole('button', { name: 'Submit Quality Cycle Form' }).click();
+  await expect(page.getByRole('heading', { name: 'Thank You!' })).toBeVisible();
+  expect(submitted.photoUrls).toEqual([]); expect(submitted.cleanerNotes).toBe('Gym unavailable today.');
+});
+
 test('cleaner records selected activities without completing every item or adding notes', async ({ page }) => {
   let submitted: any;
   const form = { id: 'record', shiftName: 'Daily work', employeeName: 'Cleaner', shiftOccurrenceUtc: '2026-01-01T08:00:00Z', token: 'activity-token', items: [{ itemText: 'Corridor', isChecked: false }, { itemText: 'Gym', isChecked: false }], photoUrls: [], isSubmitted: false };

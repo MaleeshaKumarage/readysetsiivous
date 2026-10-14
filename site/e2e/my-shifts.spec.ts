@@ -3,6 +3,7 @@ import { setupAdminMocks } from './admin-helpers';
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization' };
 const shiftId = '11111111-1111-4111-8111-111111111111';
 const formId = '22222222-2222-4222-8222-222222222222';
+const evidencePhoto = { name: 'corridor.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64') };
 
 async function setupWork(page: Page, options: { empty?: boolean; failStart?: boolean; failEnd?: boolean; lostStart?: boolean; lostEnd?: boolean; loadFailure?: boolean; future?: boolean } = {}) {
   await setupAdminMocks(page);
@@ -59,6 +60,79 @@ test('employee can start and end a shift without an assigned checklist', async (
   await expect(page.getByText('No checklist assigned. You can end this shift without recording activities.')).toBeVisible();
   await page.getByRole('button', { name: 'End shift', exact: true }).click();
   await expect(page.getByText('Done', { exact: true })).toBeVisible(); expect(work.submitted.items).toEqual([]);
+});
+
+test('photos require a nonblank note and retry keeps the photo, note and activities', async ({ page }) => {
+  const work = await setupWork(page, { failEnd: true });
+  await page.goto('/me/shifts/'); await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByRole('checkbox', { name: 'Corridor', exact: true }).check();
+  await page.getByLabel('Add shift photos').setInputFiles(evidencePhoto);
+  await expect(page.getByRole('button', { name: 'Remove photo' })).toHaveCount(1);
+  const note = page.getByRole('textbox', { name: 'Shift note' });
+  await expect(note).toHaveAttribute('aria-required', 'true');
+  await note.fill('  \n  ');
+  await page.getByRole('button', { name: 'End shift', exact: true }).click();
+  await expect(page.getByRole('alert', { name: 'Shift error' })).toContainText('Add a note describing the attached photos.');
+  await expect(note).toBeFocused(); expect(work.endCalls).toBe(0);
+  await note.fill('Corridor cleaned; entrance stain removed.');
+  await page.getByRole('button', { name: 'End shift', exact: true }).click();
+  await expect(page.getByRole('alert', { name: 'Shift error' })).toContainText('Could not end shift.');
+  await expect(note).toHaveValue('Corridor cleaned; entrance stain removed.');
+  await expect(page.getByRole('checkbox', { name: 'Corridor', exact: true })).toBeChecked();
+  await expect(page.getByRole('button', { name: 'Remove photo' })).toHaveCount(1);
+  await page.getByRole('button', { name: 'End shift', exact: true }).click();
+  await expect(page.getByText('Done', { exact: true })).toBeVisible();
+  expect(work.submitted.photoUrls).toHaveLength(1); expect(work.submitted.photoUrls[0]).toMatch(/^data:image\/png;base64,/);
+  expect(work.submitted.cleanerNotes).toBe('Corridor cleaned; entrance stain removed.');
+});
+
+test('removing the last photo removes the note requirement and notes alone remain valid', async ({ page }) => {
+  const work = await setupWork(page);
+  await page.goto('/me/shifts/'); await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByLabel('Add shift photos').setInputFiles(evidencePhoto);
+  await page.getByRole('button', { name: 'Remove photo' }).click();
+  const note = page.getByRole('textbox', { name: 'Shift note' });
+  await expect(note).toHaveAttribute('aria-required', 'false');
+  await note.fill('Gym was closed today.');
+  await page.getByRole('button', { name: 'End shift', exact: true }).click();
+  await expect(page.getByText('Done', { exact: true })).toBeVisible();
+  expect(work.submitted.photoUrls).toEqual([]); expect(work.submitted.cleanerNotes).toBe('Gym was closed today.');
+});
+
+test('shift cannot end while a selected photo is still being read', async ({ page }) => {
+  await page.addInitScript(() => {
+    const Reader = window.FileReader;
+    window.FileReader = class extends Reader { readAsDataURL(blob: Blob) { setTimeout(() => super.readAsDataURL(blob), 1200); } };
+  });
+  const work = await setupWork(page);
+  await page.goto('/me/shifts/'); await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByRole('textbox', { name: 'Shift note' }).fill('Photo evidence of corridor cleaning.');
+  await page.getByLabel('Add shift photos').setInputFiles(evidencePhoto);
+  await expect(page.getByRole('status')).toHaveText('Reading photos...');
+  await expect(page.getByRole('button', { name: 'End shift', exact: true })).toBeDisabled(); expect(work.endCalls).toBe(0);
+  await expect(page.getByRole('button', { name: 'Remove photo' })).toHaveCount(1);
+  await page.getByRole('button', { name: 'End shift', exact: true }).click();
+  await expect(page.getByText('Done', { exact: true })).toBeVisible(); expect(work.submitted.photoUrls).toHaveLength(1);
+});
+
+test('failed photo reads and unsupported files are visible and do not stop note-only completion', async ({ page }) => {
+  await page.addInitScript(() => {
+    const Reader = window.FileReader;
+    window.FileReader = class extends Reader { readAsDataURL() { queueMicrotask(() => this.dispatchEvent(new Event('error'))); } };
+  });
+  const work = await setupWork(page);
+  await page.goto('/me/shifts/'); await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByLabel('Add shift photos').setInputFiles(evidencePhoto);
+  await expect(page.getByRole('alert', { name: 'Shift error' })).toHaveText('Could not read the photo. Please select it again.');
+  await page.getByLabel('Add shift photos').setInputFiles({ name: 'document.txt', mimeType: 'text/plain', buffer: Buffer.from('not a photo') });
+  await expect(page.getByRole('alert', { name: 'Shift error' })).toHaveText('Choose a PNG, JPEG, WebP or BMP photo.');
+  await page.getByRole('textbox', { name: 'Shift note' }).fill('No usable photo today.');
+  await page.getByRole('button', { name: 'End shift', exact: true }).click();
+  await expect(page.getByText('Done', { exact: true })).toBeVisible(); expect(work.submitted.photoUrls).toEqual([]);
 });
 
 test('failed start and end retries retain selected activities and notes', async ({ page }) => {

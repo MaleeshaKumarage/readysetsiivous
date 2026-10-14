@@ -17,6 +17,7 @@ import { meApi, MyShiftOccurrence, QualityCycleFormItem } from '@/lib/meApi';
 import { Logo } from '@/ds/Logo';
 import { Button } from '@/ds/Button';
 import { Card } from '@/ds/Card';
+import { photoNoteMessage, readShiftPhotos } from '@/lib/shiftPhotos';
 
 type Status = 'not-started' | 'in-progress' | 'submitted';
 
@@ -60,6 +61,9 @@ export default function MyShiftsPage() {
   const [notes, setNotes] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [photoReading, setPhotoReading] = useState(false);
+  const [noteError, setNoteError] = useState(false);
+  const noteRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -116,6 +120,8 @@ export default function MyShiftsPage() {
   }
 
   function openForm(o: MyShiftOccurrence) {
+    if (photoReading || submitting) return;
+    setNoteError(false);
     setOpenId(openId === `${o.shiftId}-${o.startUtc}` ? null : `${o.shiftId}-${o.startUtc}`);
     if (o.form) {
       setItems(o.form.items.map((i) => ({ ...i })));
@@ -128,16 +134,15 @@ export default function MyShiftsPage() {
     setItems((prev) => prev.map((it, i) => (i === index ? { ...it, isChecked: !it.isChecked } : it)));
   }
 
-  function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files;
-    if (!files) return;
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (reader.result) setPhotos((prev) => [...prev, reader.result as string]);
-      };
-      reader.readAsDataURL(file);
-    });
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (files.length === 0) return;
+    setPhotoReading(true);
+    setError(null);
+    try { const uploaded = await readShiftPhotos(files); setPhotos(prev => [...prev, ...uploaded]); }
+    catch (error) { setError(error instanceof Error ? error.message : 'Could not read the photo. Please select it again.'); }
+    finally { setPhotoReading(false); }
   }
 
   function handleRemovePhoto(index: number) {
@@ -145,7 +150,11 @@ export default function MyShiftsPage() {
   }
 
   async function handleEnd(o: MyShiftOccurrence) {
-    if (!o.form) return;
+    if (!o.form || photoReading) return;
+    if (photos.length > 0 && !notes.trim()) {
+      setNoteError(true); setError(photoNoteMessage); noteRef.current?.focus(); return;
+    }
+    setNoteError(false);
     setSubmitting(true);
     setError(null);
     try {
@@ -193,7 +202,7 @@ export default function MyShiftsPage() {
         </div>
 
         {error && (
-          <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+          <div role="alert" aria-label="Shift error" className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -247,7 +256,7 @@ export default function MyShiftsPage() {
                     {status === 'not-started' && Date.parse(o.startUtc) > now && <p className="text-sm text-gray-500">Available at the scheduled start time.</p>}
 
                     {status === 'in-progress' && (
-                      <Button variant="outline" size="sm" onClick={() => openForm(o)} className="gap-1.5">
+                      <Button variant="outline" size="sm" disabled={photoReading || submitting} onClick={() => openForm(o)} className="gap-1.5">
                         {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         Record activities & end
                       </Button>
@@ -282,13 +291,19 @@ export default function MyShiftsPage() {
                         </div>
                         {items.length === 0 && <p className="text-sm text-gray-600 dark:text-gray-300">No checklist assigned. You can end this shift without recording activities.</p>}
                         <textarea
+                          ref={noteRef}
+                          aria-label="Shift note"
+                          aria-required={photos.length > 0}
+                          aria-invalid={noteError && photos.length > 0 && !notes.trim()}
+                          aria-describedby="shift-photo-note-help"
                           value={notes}
                           disabled={submitting}
                           onChange={(e) => setNotes(e.target.value)}
-                          placeholder="Notes (optional)"
+                          placeholder={photos.length > 0 ? 'Notes (required with photos)' : 'Notes (optional)'}
                           rows={2}
                           className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-400"
                         />
+                        <p id="shift-photo-note-help" className="text-xs text-gray-600 dark:text-gray-300">A note is required when photos are attached. You can add a note without a photo.</p>
                         <div className="space-y-2">
                           {photos.length > 0 && (
                             <div className="flex flex-wrap gap-2">
@@ -311,10 +326,11 @@ export default function MyShiftsPage() {
                           <label className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-700 dark:text-brand-400 cursor-pointer">
                             <Upload className="w-4 h-4" />
                             Add photo
-                            <input type="file" accept="image/*" multiple disabled={submitting} className="hidden" onChange={handlePhotoUpload} />
+                            <input aria-label="Add shift photos" type="file" accept="image/png,image/jpeg,image/webp,image/bmp" multiple disabled={submitting || photoReading} className="hidden" onChange={handlePhotoUpload} />
                           </label>
                         </div>
-                        <Button size="sm" onClick={() => handleEnd(o)} disabled={submitting} fullWidth className="gap-1.5">
+                        {photoReading && <p role="status">Reading photos...</p>}
+                        <Button size="sm" onClick={() => handleEnd(o)} disabled={submitting || photoReading} fullWidth className="gap-1.5">
                           {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                           End shift
                         </Button>

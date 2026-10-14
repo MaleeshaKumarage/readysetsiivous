@@ -12,12 +12,16 @@ namespace CleaningSuite.Application.QualityCycle;
 
 public record QualityCycleOccurrenceReport(DateTime StartUtc, DateTime EndUtc, int ExpectedTasks,
     int SubmittedTasks, string Status);
+public record QualityCycleEvidenceReport(DateTime StartUtc, DateTime EndUtc, string? Note, IReadOnlyList<string> PhotoUrls);
 public record QualityCycleShiftReport(Guid ShiftId, string ShiftName, Guid CompanyId, string CompanyName,
     Guid BranchId, string BranchName, int ScheduledOccurrences, decimal ScheduledHours,
     int CompletedOccurrences, int MissingOccurrences, int PendingOccurrences, int TotalTasks,
     int SubmittedTasks, int MissingTasks, int PendingTasks,
     IReadOnlyList<QualityCycleOccurrenceReport> Occurrences, IReadOnlyList<QualityCycleFormDto> Forms,
-    IReadOnlyList<QualityCycleItemReport> Items);
+    IReadOnlyList<QualityCycleItemReport> Items)
+{
+    public IReadOnlyList<QualityCycleEvidenceReport> Evidence { get; init; } = Array.Empty<QualityCycleEvidenceReport>();
+}
 public record QualityCycleItemReport(string ItemText, int RecordedOccurrences, int DaysPerformed, IReadOnlyList<string> RecordedDates);
 public record QualityCycleMonthlyReport(int Year, int Month, string TimeZoneId, DateTime GeneratedUtc,
     IReadOnlyList<QualityCycleShiftReport> Shifts);
@@ -139,7 +143,14 @@ public class QualityCycleMonthlyReportService(IShiftRepository shifts, IQualityC
                     rows.Count, rows.Sum(r => (decimal)(r.EndUtc - r.StartUtc).TotalHours),
                     rows.Count(r => r.Status == "Recorded"), rows.Count(r => r.Status == "Missing"),
                     rows.Count(r => r.Status == "Pending"), rows.Sum(r => r.ExpectedTasks),
-                    rows.Sum(r => r.SubmittedTasks), missingTasks, pendingTasks, rows, displayedForms, itemReports));
+                    rows.Sum(r => r.SubmittedTasks), missingTasks, pendingTasks, rows, displayedForms, itemReports)
+                {
+                    Evidence = displayedForms.Where(f => f.IsSubmitted &&
+                        (!string.IsNullOrWhiteSpace(f.CleanerNotes) || f.PhotoUrls.Count > 0))
+                        .OrderBy(f => f.ShiftOccurrenceUtc).ThenBy(f => f.Id)
+                        .Select(f => new QualityCycleEvidenceReport(f.ShiftOccurrenceUtc, f.ShiftOccurrenceEndUtc,
+                            f.CleanerNotes, f.PhotoUrls.ToArray())).ToList()
+                });
             }
         }
         return new(request.Year, request.Month, zoneId, now,
