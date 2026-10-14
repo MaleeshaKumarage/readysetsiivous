@@ -28,7 +28,7 @@ export function LifecycleTabs({ value, onChange, label = 'Record activity', acti
     else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') next = value === 'active' ? 'inactive' : 'active';
     else return;
     event.preventDefault();
-    onChange(next);
+    if (next !== value) onChange(next);
     (next === 'active' ? active : inactive).current?.focus();
   };
   return <div>
@@ -38,7 +38,7 @@ export function LifecycleTabs({ value, onChange, label = 'Record activity', acti
         return <button key={status} ref={status === 'active' ? active : inactive}
           type="button" role="tab" id={`${id}-${status}-tab`} aria-controls={`${id}-${status}-panel`}
           aria-selected={value === status} tabIndex={value === status ? 0 : -1} disabled={disabled}
-          onKeyDown={keyboard} onClick={() => onChange(status)}
+          onKeyDown={keyboard} onClick={() => { if (status !== value) onChange(status); }}
           className={`min-h-10 px-4 py-2 border-b-2 font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600 disabled:opacity-50 ${value === status ? 'border-blue-600 text-blue-700 dark:text-blue-300' : 'border-transparent text-gray-600 dark:text-gray-300'}`}>
           {status === 'active' ? 'Active' : 'Inactive'}{count === undefined ? '' : ` (${count})`}
         </button>;

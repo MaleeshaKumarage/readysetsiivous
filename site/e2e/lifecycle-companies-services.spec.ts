@@ -27,6 +27,10 @@ test('company tabs include records after page100 and branch tabs stay scoped', a
   await page.getByRole('button', { name: 'Branches', exact: true }).click();
   const branchTabs = page.getByRole('tablist', { name: 'Branch activity' });
   await expect(page.getByText('Active branch', { exact: true })).toBeVisible();
+  await tabs.getByRole('tab', { name: /^Inactive/ }).press('End');
+  await expect(branchTabs).toBeVisible();
+  await tabs.getByRole('tab', { name: /^Inactive/ }).click();
+  await expect(branchTabs).toBeVisible();
   await expect(page.getByText('Inactive branch', { exact: true })).not.toBeVisible();
   await branchTabs.getByRole('tab', { name: /^Inactive/ }).click();
   await expect(page.getByText('Inactive branch', { exact: true })).toBeVisible();

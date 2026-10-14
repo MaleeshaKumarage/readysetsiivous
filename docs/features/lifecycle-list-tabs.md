@@ -8,6 +8,8 @@ Management lists request inactive records where supported. Employee assignment s
 
 Tabs switch locally without an API reload. Counts reflect successfully loaded data; selected-tab empty states differ from a genuinely empty dataset. Creating an active record returns to Active. Existing deactivation/restoration actions move records to their matching tab after reload. Changing shift tabs closes assignments and discards pending roster responses, preventing hidden or stale assignment UI. Keyboard arrows, Home and End move between tabs; tab/panel associations and mobile layouts are shared.
 
+Selecting the current tab again, including Home/End when already at that end, preserves expanded views and selection.
+
 Checklist-template activity tabs affect only the template list. Editing an inactive template retains its activity and company/branch scope. Submissions, monthly summaries, PDF exports and public reports retain their existing historical filters.
 
 ## Playwright cases
