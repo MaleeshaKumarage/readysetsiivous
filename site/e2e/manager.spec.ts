@@ -31,7 +31,7 @@ async function setup(page: Page, options: { role?: string; documentRole?: string
     if (method === 'GET') {
       const json = path === '/companies' ? { items: [{ id: company, name: 'AAA', isActive: true }], total: 1 }
         : path.endsWith('/branches') ? [{ id: branch1, companyId: company, name: 'AAA1', isActive: true }, { id: branch2, companyId: company, name: 'AAA2', isActive: true }]
-        : path === '/employees' ? [{ id: cleaner, firstName: 'Test', lastName: 'Cleaner', phone: '', isActive: true }]
+        : path === '/employees' ? [{ id: cleaner, firstName: 'Test', lastName: 'Cleaner', phone: '', isActive: true }, { id: 'inactive', firstName: 'Inactive', lastName: 'Cleaner', phone: '', isActive: false }]
         : path.includes('/assignments') ? assignments : shifts;
       return route.fulfill({ status: 200, headers, json });
     }
@@ -99,6 +99,25 @@ test('verification and operational failures are visible and retry preserves ente
   await retained.getByRole('button', { name: 'Deactivate shift' }).click(); await expect(page.getByRole('main').getByRole('alert')).toContainText('deactivate failed');
   await retained.getByRole('button', { name: 'Deactivate shift' }).click(); await expect(retained).toHaveCount(0);
 });
+test('manager overlap is visible, selection survives and inactive employees are omitted', async ({ page }) => {
+  await setup(page); let conflict = true;
+  await page.route(/\/manager\/shifts\/[^/]+\/assignments$/, route => {
+    if (route.request().method() === 'POST' && conflict) {
+      conflict = false; return route.fulfill({ status: 409, headers, json: { detail: 'Employee is already assigned to an overlapping shift.' } });
+    }
+    return route.fallback();
+  });
+  await page.goto('/manager/'); const card = page.getByRole('article', { name: 'AAA1 weekdays' });
+  await card.getByRole('button', { name: 'Employees' }).click();
+  await expect(card.getByRole('option', { name: 'Inactive Cleaner' })).toHaveCount(0);
+  await card.getByLabel('Employee', { exact: true }).selectOption(cleaner);
+  await card.getByRole('button', { name: 'Assign employee' }).click();
+  await expect(page.getByRole('main').getByRole('alert')).toContainText('Employee is already assigned to an overlapping shift.');
+  await expect(card.getByLabel('Employee', { exact: true })).toHaveValue(cleaner);
+  await card.getByRole('button', { name: 'Assign employee' }).click();
+  await expect(card.getByRole('button', { name: 'Remove assignment' })).toBeVisible();
+});
+
 test('manager account links to operations and sign out removes operational access', async ({ page }) => {
   await setup(page); await page.goto('/account/?tenant=readysetsiivous'); await page.getByRole('link', { name: 'Manage tenant operations' }).click();
   await expect(page.getByRole('button', { name: 'Add shift' })).toBeVisible();

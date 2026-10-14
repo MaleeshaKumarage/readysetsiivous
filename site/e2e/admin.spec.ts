@@ -742,7 +742,7 @@ test.describe('Admin Panel - Shifts Page', () => {
     await page.locator('input[placeholder="Select employees"]').click();
     await page.getByRole('option', { name: 'Sami Siivooja' }).click();
 
-    await page.getByRole('button', { name: 'Assign' }).click();
+    await page.getByRole('button', { name: 'Assign', exact: true }).click();
     await expect(page.locator('p', { hasText: 'Sami Siivooja' })).toBeVisible();
 
     // Unassign employee

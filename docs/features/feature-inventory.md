@@ -165,7 +165,10 @@ creates or reactivates one assignment, and soft-deactivates on removal. Touching
 time boundaries are not overlaps. Inactive employee/shift assignments are now
 rejected. Two simultaneous assignments can both pass a read-before-write
 overlap check; verify against a real database. UI batch assignment is sequential
-and can partially succeed without a clear per-employee result.
+and now reports partial success and employee-specific failures, retaining failed
+choices. Inactive/already assigned choices are omitted; overlap checks run on
+submission. See [assignment feedback](shift-assignment-feedback.md) for retry,
+fresh-roster and desktop/mobile test coverage.
 
 Quality Cycle now uses one tenant-bound dispatcher on assignment, template changes,
 manual recovery and a five-minute worker. It creates a rolling 32-day record window
@@ -304,7 +307,7 @@ P0 security/data isolation; P1 correctness/data integrity; P2 feature coverage/U
 | G18 | P2 FE | No tenant settings/content/provisioning UI; public content API unused | Document as BE-only; test API separately, no fabricated settings selectors. |
 | G19 | P2 FE | Employee advanced fields/edit/invite/reactivation absent | Test API contracts now; UI coverage limited to actual create/deactivate controls. |
 | G20 | P2 FE | Company/branch editing/deactivation/search/paging absent; lists capped at 100 | Records beyond first page inaccessible; selectors must not silently select wrong company. |
-| G21 | P2 FE | Shift editing/validity/type-1/occurrences absent; batch assignment lacks partial-failure UX | BE-only cases and failed batch reconciliation needed. |
+| G21 | P2 FE | Admin shift editing/validity/type-1/occurrences absent; batch partial-failure UX fixed | Remaining admin schedule capabilities need FE coverage; assignment reconciliation is covered. |
 | G22 | P2 FE | Agreement post-create signer/lifecycle controls absent; signing UI English on all language routes | Keep before-create rows distinct from persisted signer operations; localization incomplete. |
 | G23 | P2 FE/BE | QC FE limit 10 vs BE unlimited; scope-preserving edits added but scope/active/date-filter controls remain; photo viewer/drop handler missing | Preserve unsupported scope on edit; enforce agreed limits server-side. |
 | G24 | P2 FE | Admin network throws can leave spinners; failed lists look empty; raw uploads/downloads bypass token refresh | Abort/retry/session expiry matrix must exercise real adapters. |

@@ -164,9 +164,14 @@ reload/readback. A success toast, mock call, or HTTP 200 alone is not sufficient
 | SHIFT-013 | P1 API | Assign missing/inactive employee; missing/inactive shift | Missing404; inactive guard desired; currently handler does not reject inactive entities. | C/R G06 |
 | SHIFT-014 | P1 BE/API | Overlap beyond180days, open-ended and validity-limited shifts | Test documented conflict horizon; decide whether conflicts beyond cap may be accepted. | C/D |
 | SHIFT-015 | P1 BE/API | Concurrent same/different overlapping shift assignments for E | No duplicate/conflicting active assignments; DB race protection currently missing. | R/G06 |
-| SHIFT-016 | P1 UI | Assign three employees; second fails409/network; unassign fails | Clearly show partial results and actual assignment list; no falsely successful full batch. | R/G21 |
+| SHIFT-016 | P1 UI | Assign several employees; one fails409/network; unassign fails | Show success count and employee-specific errors; retain failed choices; reconcile fresh roster. Covered desktop/mobile in shift-assignment.spec.ts. | C |
 | SHIFT-017 | P1 UI | Select company A branch; change company B before response | Clear old branch selection; submitted branch belongs to chosen company; avoid stale parent state. | R/G25 |
 | SHIFT-018 | P2 UI/API | Edit schedule/validity/reactivate/view occurrences | BE routes work; no corresponding FE control/view. | B/G21 |
+| SHIFT-019 | P1 UI | Assignment list fails or a save succeeds but refresh fails | Show error rather than empty roster; disable picker until Refresh assignments succeeds. | C |
+| SHIFT-020 | P1 UI | Inactive/already assigned employee; remove then reopen | Omit ineligible choices; removed employee selectable; reopen fetches fresh roster. | C |
+| SHIFT-021 | P1 UI | Hold mutation response; switch/close row or click again | Pending mutation locks navigation, deactivation, selection and repeat writes; no duplicate request. | C |
+| SHIFT-022 | P1 UI | Switch rows while previous roster request pending | Late success/failure cannot overwrite current roster, error or loading state. | C |
+| SHIFT-023 | P1 UI | Server saves but response is lost | Retain uncertainty message; fresh saved roster removes employee from retry selection. | C |
 
 ## Quality Cycle templates, dispatch, submissions and reporting
 
