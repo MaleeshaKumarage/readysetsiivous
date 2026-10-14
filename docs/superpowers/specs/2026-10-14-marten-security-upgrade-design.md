@@ -16,6 +16,10 @@ concurrency must keep their behavior; do not introduce numeric revision migratio
 The application is a document store and has no event projections/daemon to migrate.
 Build every configured document mapping during startup to retain fail-fast behavior
 under Marten9's lazy mappings. Preserve the configured AutoCreate policy.
+The current schema initializer logs and swallows migration errors. For this
+runtime upgrade, schema/mapping initialization must succeed before startup can
+report healthy; propagate initialization failures instead of silently serving an
+incompatible schema. Test that failure boundary and keep AutoCreate.None respected.
 
 Audit all exposed repository LINQ/raw-SQL calls and tenant lifecycle inputs against
 the advisory's dictionary-key, projected runtime-constant and tenant-maintenance
