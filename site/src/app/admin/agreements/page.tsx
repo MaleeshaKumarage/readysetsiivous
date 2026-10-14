@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge, ActionIcon, Tooltip, CopyButton } from '@mantine/core';
 import { Plus, Trash2, Copy, Mail, Check, Eye } from 'lucide-react';
-import { adminAgreements, adminCompanies, type AgreementListItem, type AgreementDetail, type Company } from '@/lib/adminApi';
+import { adminAgreements, adminCompanies, authorizedFetch, invalidateAdminCache, type AgreementListItem, type AgreementDetail, type Company } from '@/lib/adminApi';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
 
 export default function AgreementsPage() {
@@ -11,6 +11,8 @@ export default function AgreementsPage() {
   const [lifecycle, setLifecycle] = useState<LifecycleStatus>('active');
   const visibleItems = items?.filter(item => inLifecycle(item, lifecycle)) ?? [];
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [lifecycleError, setLifecycleError] = useState('');
+  const [lifecycleBusy, setLifecycleBusy] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [companyId, setCompanyId] = useState<string | null>(null);
@@ -28,6 +30,19 @@ export default function AgreementsPage() {
   const load = useCallback(async () => { setItems(await adminAgreements.list()); }, []);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { adminCompanies.list('', 0, 100).then((r) => { if (r) setCompanies(r.items); }); }, []);
+
+  const changeActivity = async (agreement: AgreementListItem) => {
+    setLifecycleBusy(agreement.id); setLifecycleError('');
+    try {
+      const response = await authorizedFetch(`/api/v1/admin/agreements/${agreement.id}/${agreement.isActive ? 'deactivate' : 'activate'}`, { method: 'POST' });
+      if (!response.ok) {
+        const problem = await response.json().catch(() => ({}));
+        throw new Error(problem.detail || problem.title || 'Could not update agreement activity. Please retry.');
+      }
+      invalidateAdminCache(); await load();
+    } catch (failure) { setLifecycleError(failure instanceof Error ? failure.message : 'Could not update agreement activity. Please retry.'); }
+    finally { setLifecycleBusy(null); }
+  };
 
   const create = async () => {
     const validSigners = signers.filter((s) => s.name.trim() && s.email.trim());
@@ -109,6 +124,7 @@ export default function AgreementsPage() {
         <Button leftSection={<Plus size={16} />} onClick={() => setOpen(true)}>New agreement</Button>
       </Group>
 
+      {lifecycleError && <Text role="alert" c="red">{lifecycleError}</Text>}
       <LifecycleTabs value={lifecycle} onChange={setLifecycle} label="Agreement activity"
         activeCount={items?.filter(item => item.isActive).length} inactiveCount={items?.filter(item => !item.isActive).length}>
       {items === null ? <Loader /> : items.length === 0 ? (
@@ -129,9 +145,11 @@ export default function AgreementsPage() {
                   <Table.Td>{a.signedCount} / {a.signerCount}</Table.Td>
                   <Table.Td><Badge color={a.isActive ? 'green' : 'gray'}>{a.status}</Badge></Table.Td>
                   <Table.Td>
-                    <Group gap={6} wrap="nowrap">
+                    <Group gap={6} wrap="wrap">
                       <Button size="xs" variant="light" leftSection={<Eye size={14} />} onClick={() => openDetail(a.id)}>Signers</Button>
                       <Button size="xs" variant="outline" onClick={() => handleDownload(a.id)}>PDF</Button>
+                      <Button size="xs" loading={lifecycleBusy === a.id} disabled={!!lifecycleBusy || (!a.isActive && a.status === 'Cancelled')} onClick={() => changeActivity(a)}>{a.isActive ? 'Deactivate' : 'Reactivate'}</Button>
+                      {!a.isActive && a.status === 'Cancelled' && <Text size="xs">Cancelled agreements cannot be reactivated.</Text>}
                     </Group>
                   </Table.Td>
                 </Table.Tr>

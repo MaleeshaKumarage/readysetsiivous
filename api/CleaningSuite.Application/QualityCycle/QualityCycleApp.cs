@@ -64,6 +64,7 @@ public record UpdateQualityCycleTemplateCommand(
     Guid? BranchId = null) : IRequest<QualityCycleTemplateDto>;
 
 public record DeleteQualityCycleTemplateCommand(Guid Id) : IRequest;
+public record SetQualityCycleTemplateActiveCommand(Guid Id, bool Active) : IRequest;
 public record GetQualityCycleTemplateQuery(Guid Id) : IRequest<QualityCycleTemplateDto>;
 public record ListQualityCycleTemplatesQuery(Guid? CompanyId = null, Guid? BranchId = null) : IRequest<IReadOnlyList<QualityCycleTemplateDto>>;
 
@@ -137,6 +138,19 @@ public class QualityCycleHandlers
             template.Update(request.Title, request.Items, request.Description, request.IsActive, request.CompanyId, request.BranchId);
             await _repository.SaveTemplateAsync(template, ct);
             return MapTemplate(template);
+        }
+    }
+
+    public class SetQualityCycleTemplateActiveCommandHandler(IQualityCycleRepository repository, ICompanyRepository companies, IBranchRepository branches) : IRequestHandler<SetQualityCycleTemplateActiveCommand>
+    {
+        public async Task Handle(SetQualityCycleTemplateActiveCommand request, CancellationToken ct)
+        {
+            var template = await repository.GetTemplateAsync(request.Id, ct) ?? throw new NotFoundException("QualityCycleTemplate", request.Id);
+            if (request.Active)
+                await ValidateTemplateScopeAsync(companies, branches, template.CompanyId, template.BranchId, ct);
+            template.IsActive = request.Active;
+            template.UpdatedUtc = DateTime.UtcNow;
+            await repository.SaveTemplateAsync(template, ct);
         }
     }
 

@@ -31,6 +31,7 @@ export interface Employee {
   keycloakUserId?: string;
   inviteLastSentUtc?: string | null;
   inviteError?: string | null;
+  identitySyncPending?: boolean;
   firstName: string;
   lastName: string;
   phone: string;
@@ -79,7 +80,7 @@ export async function authorizedFetch(path: string, init: RequestInit = {}): Pro
 const _cache = new Map<string, { data: unknown; ts: number }>();
 const _CACHE_TTL = 30_000;
 
-function _invalidate() {
+export function invalidateAdminCache() {
   _cache.clear();
 }
 
@@ -103,7 +104,7 @@ export async function adminSend(
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const ok = response.ok || response.status === 204;
-  if (ok) _invalidate();
+  if (ok) invalidateAdminCache();
   return ok;
 }
 
@@ -118,7 +119,7 @@ export async function adminSendJson<T>(
   });
   if (!response.ok) return null;
   const data = (await response.json()) as T;
-  _invalidate();
+  invalidateAdminCache();
   return data;
 }
 
@@ -196,9 +197,19 @@ export interface EmployeeFields {
   notes?: string | null;
 }
 
+async function employeeMutation(path: string, body?: unknown): Promise<boolean> {
+  const response = await authorizedFetch(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) });
+  if (!response.ok) {
+    const problem = await response.json().catch(() => ({})) as { detail?: string; title?: string };
+    throw new Error(problem.detail || problem.title || `Employee update failed (${response.status}). Please retry.`);
+  }
+  invalidateAdminCache(); return true;
+}
+
 export const adminEmployees = {
   list: (includeInactive = false) => adminGet<Employee[]>(`/api/v1/admin/employees${includeInactive ? '?includeInactive=true' : ''}`),
-  create: (fields: EmployeeFields) => adminSend('/api/v1/admin/employees', 'POST', { fields }),
+  create: (fields: EmployeeFields) => employeeMutation('/api/v1/admin/employees', { fields }),
+  reactivate: (id: string) => employeeMutation(`/api/v1/admin/employees/${id}/reactivate`),
   update: (id: string, fields: EmployeeFields, isActive: boolean) =>
     adminSend(`/api/v1/admin/employees/${id}`, 'PUT', { fields, isActive }),
   deactivate: (id: string) => adminSend(`/api/v1/admin/employees/${id}/deactivate`, 'POST'),
@@ -208,7 +219,7 @@ export const adminEmployees = {
       const problem = await response.json().catch(() => ({})) as { detail?: string; title?: string };
       throw new Error(problem.detail || problem.title || `Invitation failed (${response.status}).`);
     }
-    _invalidate(); return response.json();
+    invalidateAdminCache(); return response.json();
   },
 };
 
@@ -259,7 +270,7 @@ export const adminAgreements = {
       method: 'POST', headers: { Authorization: `Bearer ${t}` }, body: form,
     });
     if (response.ok) {
-      _invalidate();
+      invalidateAdminCache();
       return { ok: true, data: (await response.json()) as AgreementDetail };
     }
     return { ok: false, error: await agreementCreateError(response) };
@@ -413,7 +424,7 @@ async function shiftAssignmentRequest<T>(path: string, method = 'GET', body?: un
     const detail = response.status < 500 && typeof problem?.detail === 'string' ? problem.detail.trim() : '';
     throw new Error(detail || `Could not ${operation}. Please retry.`);
   }
-  if (method !== 'GET') { _invalidate(); return undefined as T; }
+  if (method !== 'GET') { invalidateAdminCache(); return undefined as T; }
   try {
     const data = await response.json();
     if (!Array.isArray(data) || data.some(a => !a || typeof a.employeeId !== 'string' || typeof a.isActive !== 'boolean')) throw new Error('Invalid roster');
@@ -460,7 +471,7 @@ async function companyRequest<T>(path: string, method: 'POST' | 'PUT', body: unk
     throw new Error(detail || title || 'Could not save. Please retry.');
   }
   const result = await response.json() as T;
-  _invalidate();
+  invalidateAdminCache();
   return result;
 }
 

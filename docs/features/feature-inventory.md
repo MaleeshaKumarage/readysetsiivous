@@ -370,3 +370,5 @@ profile-linking guidance through Account. My shifts can return through Account t
 management. Coverage includes all staff roles, forged IDs, cross-owner completion,
 lifecycle denials, empty schedules and desktop/mobile journeys. See
 [management own shifts](management-own-shifts.md) and SELF-SHIFT-001–008.
+
+Reactivation and duplicate-email behavior: [workflow and edge cases](reactivation.md).

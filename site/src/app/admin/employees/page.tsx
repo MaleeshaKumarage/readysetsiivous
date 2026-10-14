@@ -18,6 +18,8 @@ export default function EmployeesAdminPage() {
   const [form, setForm] = useState({ email: '', firstName: '', lastName: '', phone: '', role: 'employee' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [retryEmployee, setRetryEmployee] = useState<Employee | null>(null);
+  const [restoring, setRestoring] = useState<string | null>(null);
   const [inviteBusy, setInviteBusy] = useState<string | null>(null);
   const [inviteMessage, setInviteMessage] = useState('');
   const [inviteFailure, setInviteFailure] = useState('');
@@ -31,6 +33,7 @@ export default function EmployeesAdminPage() {
   const submit = async () => {
     if (!form.email.trim() || !form.firstName.trim() || !form.lastName.trim()) { setError('Email, first and last name are required.'); return; }
     setSaving(true); setError('');
+    try {
     const created = await adminEmployees.create({
       email: form.email.trim(),
       firstName: form.firstName.trim(),
@@ -50,12 +53,28 @@ export default function EmployeesAdminPage() {
     setLifecycle('active');
     setForm({ email: '', firstName: '', lastName: '', phone: '', role: 'employee' });
     setModalOpen(false); await load();
+    } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not create employee. Please retry.'); }
+    finally { setSaving(false); }
   };
 
   const deactivate = async (id: string) => {
     setInviteFailure('');
     try { if (!await adminEmployees.deactivate(id)) setInviteFailure('Employee access update could not be confirmed. Reload and retry or contact an administrator.'); await load(); }
     catch { setInviteFailure('Employee access update could not be confirmed. Please retry.'); }
+  };
+
+  const reactivate = async (employee: Employee) => {
+    setRestoring(employee.id); setInviteFailure(''); setInviteMessage('');
+    try {
+      await adminEmployees.reactivate(employee.id);
+      setRetryEmployee(null);
+      await load();
+      setInviteMessage(`${employee.firstName} ${employee.lastName} reactivated. Existing account and history preserved.`);
+    } catch (failure) {
+      setRetryEmployee(employee);
+      setInviteFailure(failure instanceof Error ? failure.message : 'Could not reactivate employee. Please retry.');
+      await load();
+    } finally { setRestoring(null); }
   };
 
   const invite = async (employee: Employee) => {
@@ -76,6 +95,7 @@ export default function EmployeesAdminPage() {
 
       {inviteMessage && <Text role="status" c="green" mb="sm">{inviteMessage}</Text>}
       {inviteFailure && <Text role="alert" c="red" mb="sm">{inviteFailure}</Text>}
+      {retryEmployee && !(lifecycle === 'active' && employees.some(employee => employee.id === retryEmployee.id && employee.isActive && employee.identitySyncPending)) && <Button mb="sm" loading={restoring === retryEmployee.id} disabled={!!restoring} onClick={() => reactivate(retryEmployee)}>Retry reactivation</Button>}
       <LifecycleTabs value={lifecycle} onChange={setLifecycle} label="Employee activity"
         activeCount={loading ? undefined : employees.filter(employee => employee.isActive).length}
         inactiveCount={loading ? undefined : employees.filter(employee => !employee.isActive).length}>
@@ -99,6 +119,8 @@ export default function EmployeesAdminPage() {
                   <Table.Td>{e.keycloakUserId ? <Badge color="green">Invited</Badge> : <Badge color="gray">Not invited</Badge>}</Table.Td>
                   <Table.Td><Group gap="xs">
                     {isAdmin() && e.isActive && <Button size="xs" variant="light" loading={inviteBusy === e.id} disabled={Boolean(inviteBusy && inviteBusy !== e.id)} onClick={() => invite(e)}>{e.keycloakUserId ? 'Resend setup email' : 'Invite'}</Button>}
+                    {isAdmin() && e.isActive && e.identitySyncPending && <Button size="xs" loading={restoring === e.id} disabled={!!restoring} onClick={() => reactivate(e)}>Retry reactivation</Button>}
+                    {isAdmin() && !e.isActive && <Button size="xs" loading={restoring === e.id} disabled={!!restoring} onClick={() => reactivate(e)}>Reactivate</Button>}
                     {isAdmin() && e.isActive && <Button size="xs" variant="subtle" color="red" onClick={() => deactivate(e.id)}>Deactivate</Button>}
                   </Group></Table.Td>
                 </Table.Tr>
@@ -118,7 +140,7 @@ export default function EmployeesAdminPage() {
           </Group>
           <TextInput label="Phone" value={form.phone} onChange={set('phone')} />
           <Select label="Role" data={ROLES} value={form.role} onChange={(v) => setForm((f) => ({ ...f, role: v ?? 'employee' }))} />
-          {error && <Text size="sm" c="red">{error}</Text>}
+          {error && <Text role="alert" size="sm" c="red">{error}</Text>}
           <Group justify="flex-end" mt="xs">
             <Button variant="default" onClick={() => setModalOpen(false)}>Cancel</Button>
             <Button loading={saving} onClick={submit}>Create employee</Button>

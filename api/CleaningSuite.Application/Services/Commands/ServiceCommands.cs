@@ -27,6 +27,22 @@ public record UpdateServiceCommand(Guid Id, ServiceFields Fields, bool IsActive)
 
 public record SoftDeleteServiceCommand(Guid Id) : IRequest<Unit>;
 
+public record SetServiceActivityCommand(Guid Id, bool IsActive) : IRequest<Unit>;
+
+public class SetServiceActivityHandler(IServiceRepository services) : IRequestHandler<SetServiceActivityCommand, Unit>
+{
+    public async Task<Unit> Handle(SetServiceActivityCommand request, CancellationToken ct)
+    {
+        var service = await services.GetByIdAsync(request.Id, ct)
+            ?? throw new NotFoundException("Service", request.Id);
+        if (service.IsActive == request.IsActive) return Unit.Value;
+        service.IsActive = request.IsActive;
+        service.UpdatedUtc = DateTime.UtcNow;
+        await services.SaveAsync(service, ct);
+        return Unit.Value;
+    }
+}
+
 public class ServiceFieldsValidator : AbstractValidator<ServiceFields>
 {
     public ServiceFieldsValidator()

@@ -501,7 +501,7 @@ test.describe('Admin Panel - Employees Page', () => {
     await page.getByLabel('First name').fill('Err');
     await page.getByLabel('Last name').fill('User');
     await page.getByRole('button', { name: 'Create employee' }).click();
-    await expect(page.getByText('Failed to create employee.')).toBeVisible();
+    await expect(page.getByText('Employee update failed (500). Please retry.')).toBeVisible();
   });
 });
 

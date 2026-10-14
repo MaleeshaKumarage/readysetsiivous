@@ -18,6 +18,8 @@ public class SetAgreementActiveHandler : IRequestHandler<SetAgreementActiveComma
         var a = await _repo.GetAsync(_context.TenantId, request.AgreementId, ct)
             ?? throw new NotFoundException("Agreement", request.AgreementId);
 
+        if (request.Active && a.Status == Agreement.StatusCancelled)
+            throw new AgreementConflictException("Cancelled agreements cannot be reactivated. The original agreement and signing evidence are preserved.");
         a.IsActive = request.Active;
         a.UpdatedUtc = DateTime.UtcNow;
         await _repo.SaveAsync(_context.TenantId, a, ct);

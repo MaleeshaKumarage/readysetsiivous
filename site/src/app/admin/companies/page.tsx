@@ -6,6 +6,7 @@ import {
 } from '@mantine/core';
 import { Plus, ChevronDown } from 'lucide-react';
 import { adminCompanies, adminBranches, type Company, type Branch } from '@/lib/adminApi';
+import { companyLifecycle, branchLifecycle } from '@/lib/reactivationApi';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
 
 const emptyForm = { businessId: '', name: '', contactName: '', contactEmail: '', contactPhone: '', notes: '' };
@@ -14,6 +15,8 @@ export default function CompaniesAdminPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [status, setStatus] = useState<LifecycleStatus>('active');
   const [branchStatus, setBranchStatus] = useState<LifecycleStatus>('active');
+  const [actionError, setActionError] = useState('');
+  const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [listError, setListError] = useState('');
   const loadGeneration = useRef(0);
   const branchGeneration = useRef(0);
@@ -98,6 +101,18 @@ export default function CompaniesAdminPage() {
     } finally { setBranchSaving(false); }
   };
 
+  const changeActivity = async (id: string, active: boolean, companyId?: string) => {
+    setActionBusy(id); setActionError('');
+    try {
+      const api = companyId ? branchLifecycle : companyLifecycle;
+      await (active ? api.deactivate(id) : api.reactivate(id));
+      if (companyId) await loadBranches(companyId);
+      else { setExpanded(null); await load(); }
+    } catch (failure) {
+      setActionError(failure instanceof Error ? failure.message : 'Could not change activity. Please retry.');
+    } finally { setActionBusy(null); }
+  };
+
   return (
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
@@ -105,6 +120,7 @@ export default function CompaniesAdminPage() {
         <Button leftSection={<Plus size={16} />} onClick={() => setModalOpen(true)}>Add company</Button>
       </Group>
 
+      {actionError && <Text c="red" role="alert" mb="sm">{actionError}</Text>}
       <LifecycleTabs value={status} onChange={next => { setStatus(next); setExpanded(null); branchGeneration.current++; setBranchLoading(null); setBranchLoadError(''); }} label="Company activity"
         activeCount={loading || listError ? undefined : companies.filter(c => c.isActive).length}
         inactiveCount={loading || listError ? undefined : companies.filter(c => !c.isActive).length}>
@@ -123,6 +139,7 @@ export default function CompaniesAdminPage() {
                 <Table.Th>Business ID</Table.Th>
                 <Table.Th>Contact</Table.Th>
                 <Table.Th w={120}>Branches</Table.Th>
+                <Table.Th>Activity</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -141,10 +158,13 @@ export default function CompaniesAdminPage() {
                           {isExpanded ? currentBranches.length : 'Branches'} <ChevronDown size={14} />
                         </Button>
                       </Table.Td>
+                      <Table.Td><Button size="xs" variant="light" color={c.isActive ? 'red' : undefined}
+                        loading={actionBusy === c.id} disabled={actionBusy !== null && actionBusy !== c.id}
+                        onClick={() => void changeActivity(c.id, c.isActive)}>{c.isActive ? 'Deactivate' : 'Reactivate'}</Button></Table.Td>
                     </Table.Tr>
                     {isExpanded && (
                       <Table.Tr>
-                        <Table.Td colSpan={4} p="sm">
+                        <Table.Td colSpan={5} p="sm">
                           <Group justify="space-between" align="center" mb="xs" wrap="wrap" gap="xs">
                             <Text size="sm" fw={600}>Branches</Text>
                             <Button size="xs" variant="light" leftSection={<Plus size={14} />} onClick={() => { setBranchError(''); setBranchModal(true); }}>Add branch</Button>
@@ -161,7 +181,11 @@ export default function CompaniesAdminPage() {
                               {visibleBranches.map((b) => (
                                 <Group key={b.id} justify="space-between" wrap="wrap" gap="xs">
                                   <Text size="sm">{b.name}{b.city ? ` · ${b.city}` : ''}</Text>
-                                  {!b.isActive && <Badge color="gray" size="xs">Inactive</Badge>}
+                                  <Group gap="xs">{!b.isActive && <Badge color="gray" size="xs">Inactive</Badge>}
+                                    <Button size="xs" variant="light" color={b.isActive ? 'red' : undefined}
+                                      loading={actionBusy === b.id} disabled={actionBusy !== null && actionBusy !== b.id}
+                                      onClick={() => void changeActivity(b.id, b.isActive, c.id)}>{b.isActive ? 'Deactivate' : 'Reactivate'}</Button>
+                                  </Group>
                                 </Group>
                               ))}
                             </Stack>

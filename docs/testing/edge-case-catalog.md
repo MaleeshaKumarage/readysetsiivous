@@ -406,3 +406,5 @@ Implementation/test contract: [shift photo reporting](../features/shift-photo-re
 | SELF-SHIFT-008 | Handler/report | Admin/manager scheduled work; optional activities and photo annotations | Same occurrence/assignment restrictions; all submitted staff contribute to normal branch/shift report counts |
 
 Contract: [personal shifts for all staff roles](../features/management-own-shifts.md).
+
+Reactivation cases REACT-001 through REACT-008: see [reactivation workflow](../features/reactivation.md).
