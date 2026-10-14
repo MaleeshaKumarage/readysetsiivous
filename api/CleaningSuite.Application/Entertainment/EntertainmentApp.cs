@@ -197,6 +197,7 @@ public class StartEntertainmentGameCommandHandler
         StartEntertainmentGameCommand request,
         CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         var group = await _repository.GetGroupAsync(request.GroupId, ct)
             ?? throw new EntertainmentGroupNotFoundException(request.GroupId.ToString());
 
@@ -221,7 +222,9 @@ public class StartEntertainmentGameCommandHandler
         {
             sentence = await _gemini.GenerateAsync(group.Description, translator.Level, apiKey, previousSentences, ct);
             attempts++;
-        } while (attempts < 3 && await _repository.SentenceExistsAsync(group.Id, sentence.SentenceEn, ct));
+        } while (attempts < 3 && !sentence.IsSample && await _repository.SentenceExistsAsync(group.Id, sentence.SentenceEn, ct));
+
+        ct.ThrowIfCancellationRequested();
 
         var round = EntertainmentRound.Create(
             group.Id, 1, translator.Id, sentence.SentenceEn, sentence.SentenceFi, sentence.BaseForms);
@@ -281,6 +284,7 @@ public class StartNextEntertainmentRoundCommandHandler
         StartNextEntertainmentRoundCommand request,
         CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         var group = await _repository.GetGroupAsync(request.GroupId, ct)
             ?? throw new EntertainmentGroupNotFoundException(request.GroupId.ToString());
 
@@ -295,7 +299,9 @@ public class StartNextEntertainmentRoundCommandHandler
         {
             sentence = await _gemini.GenerateAsync(group.Description, translator.Level, apiKey, previousSentences, ct);
             attempts++;
-        } while (attempts < 3 && await _repository.SentenceExistsAsync(group.Id, sentence.SentenceEn, ct));
+        } while (attempts < 3 && !sentence.IsSample && await _repository.SentenceExistsAsync(group.Id, sentence.SentenceEn, ct));
+
+        ct.ThrowIfCancellationRequested();
 
         var round = EntertainmentRound.Create(
             group.Id, request.RoundNumber, translator.Id, sentence.SentenceEn, sentence.SentenceFi, sentence.BaseForms);

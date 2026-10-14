@@ -5,10 +5,13 @@ namespace CleaningSuite.Application.Entertainment;
 public record GeminiSentence(
     string SentenceEn,
     string SentenceFi,
-    IReadOnlyList<string> BaseForms);
+    IReadOnlyList<string> BaseForms)
+{
+    public bool IsSample { get; init; }
+}
 
 /// <summary>Generates a level-appropriate English sentence (and its Finnish
-/// translation + base forms) from a group description via the Gemini API.</summary>
+/// translation + base forms) via Gemini, with sample fallback when unavailable.</summary>
 public interface IGeminiSentenceService
 {
     Task<GeminiSentence> GenerateAsync(

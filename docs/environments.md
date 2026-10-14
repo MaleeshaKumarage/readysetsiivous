@@ -203,3 +203,11 @@ the empty manager role idempotently when an admin selects/invites that role.
 No existing identity automatically gains manager access. Native account setup
 emails continue; QC activity forms are filled through authenticated My shifts and
 do not send emails. See [tenant manager access](features/tenant-manager-access.md).
+## Language-game generation fallback
+
+Gemini generation has a sample fallback in all environments. Configure
+`Entertainment__Gemini__TimeoutSeconds` to adjust its default8-second provider
+deadline (allowed range1–30). Sample practice uses predefined A1–C2 sentences with
+Finnish translations/hints; successful Gemini responses remain preferred. The
+normal group API-key encryption and access rules remain in effect. See
+[game fallback](features/game-sample-fallback.md) for failure/cancellation behavior.
