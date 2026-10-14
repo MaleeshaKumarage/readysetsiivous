@@ -450,6 +450,20 @@ export const adminShifts = {
     ),
 };
 
+// Keep company/branch failures visible without changing legacy helper semantics.
+async function companyRequest<T>(path: string, method: 'POST' | 'PUT', body: unknown): Promise<T> {
+  const response = await authorizedFetch(path, { method, body: JSON.stringify(body) });
+  if (!response.ok) {
+    const problem = await response.json().catch(() => null);
+    const detail = response.status < 500 && typeof problem?.detail === 'string' ? problem.detail.trim() : '';
+    const title = response.status < 500 && typeof problem?.title === 'string' ? problem.title.trim() : '';
+    throw new Error(detail || title || 'Could not save. Please retry.');
+  }
+  const result = await response.json() as T;
+  _invalidate();
+  return result;
+}
+
 export const adminCompanies = {
   list: (search = '', skip = 0, take = 100) =>
     adminGet<{ items: Company[]; total: number }>(
@@ -463,7 +477,7 @@ export const adminCompanies = {
     contactEmail?: string;
     contactPhone?: string;
     notes?: string;
-  }) => adminSendJson<Company>('/api/v1/admin/companies', 'POST', body),
+  }) => companyRequest<Company>('/api/v1/admin/companies', 'POST', body),
   update: (
     id: string,
     body: {
@@ -475,7 +489,7 @@ export const adminCompanies = {
       notes?: string;
       isActive: boolean;
     }
-  ) => adminSendJson<Company>(`/api/v1/admin/companies/${id}`, 'PUT', { id, ...body }),
+  ) => companyRequest<Company>(`/api/v1/admin/companies/${id}`, 'PUT', { id, ...body }),
   deactivate: (id: string) => adminSend(`/api/v1/admin/companies/${id}/deactivate`, 'POST'),
 };
 
@@ -490,7 +504,7 @@ export const adminBranches = {
       country?: string;
       contactPhone?: string;
     }
-  ) => adminSendJson<Branch>(`/api/v1/admin/companies/${companyId}/branches`, 'POST', { companyId, ...body }),
+  ) => companyRequest<Branch>(`/api/v1/admin/companies/${companyId}/branches`, 'POST', { companyId, ...body }),
   update: (
     id: string,
     body: {

@@ -1,5 +1,7 @@
 using CleaningSuite.Application.Agreements;
 using CleaningSuite.Application.Agreements.Queries;
+using CleaningSuite.Application.Common;
+using CleaningSuite.Application.Companies;
 using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Agreements;
 using FluentValidation;
@@ -32,14 +34,18 @@ public class CreateAgreementHandler : IRequestHandler<CreateAgreementCommand, Ag
     private readonly ITenantContext _context;
     private readonly IAgreementRepository _repo;
     private readonly IAgreementFileStore _store;
+    private readonly ICompanyRepository _companies;
 
-    public CreateAgreementHandler(ITenantContext context, IAgreementRepository repo, IAgreementFileStore store)
+    public CreateAgreementHandler(ITenantContext context, IAgreementRepository repo, IAgreementFileStore store, ICompanyRepository companies)
     {
         _context = context; _repo = repo; _store = store;
+        _companies = companies;
     }
 
     public async Task<AgreementDetailDto> Handle(CreateAgreementCommand request, CancellationToken ct)
     {
+        _ = await _companies.GetAsync(request.CompanyId, ct)
+            ?? throw new NotFoundException("Company", request.CompanyId);
         var tenantId = _context.TenantId;
         var agreement = new Agreement
         {

@@ -8,8 +8,8 @@ using Microsoft.Extensions.Caching.Memory;
 namespace CleaningSuite.Api.Tenancy;
 
 /// <summary>
-/// Resolves the request tenant: realm from JWT issuer for authenticated calls,
-/// URL slug for public calls. Rejects tenants that are not registered Active.
+/// Resolves public calls from the URL slug and private calls from the JWT realm.
+/// Public authenticated identities must match the URL tenant. Rejects inactive tenants.
 /// </summary>
 public class TenantResolutionMiddleware
 {
@@ -37,7 +37,33 @@ public class TenantResolutionMiddleware
         var path = context.Request.Path.Value ?? "";
         var tenantId = "";
 
-        if (context.User.Identity?.IsAuthenticated == true)
+        if (TryGetPublicSlug(path, out var slug))
+        {
+            context.Items["Slug"] = slug;
+            tenantId = slug;
+            if (context.User.Identity?.IsAuthenticated == true)
+            {
+                var realm = KeycloakJwt.RealmFromIssuer(context.User.FindFirstValue("iss") ?? "", _serverUrl);
+                context.Items["Realm"] = realm;
+                if (!string.Equals(realm, slug, StringComparison.Ordinal))
+                {
+                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    await context.Response.WriteAsJsonAsync(new
+                    {
+                        type = "https://cleaning-suite.local/errors/tenant-mismatch",
+                        title = "Authenticated tenant does not match the requested tenant",
+                        status = 403,
+                    });
+                    return;
+                }
+            }
+            if (!await IsActiveAsync(registry, slug, context.RequestAborted))
+            {
+                await WriteInactiveAsync(context, slug);
+                return;
+            }
+        }
+        else if (context.User.Identity?.IsAuthenticated == true)
         {
             var issuer = context.User.FindFirstValue("iss") ?? "";
             var realm = KeycloakJwt.RealmFromIssuer(issuer, _serverUrl);
@@ -65,16 +91,6 @@ public class TenantResolutionMiddleware
                 }
             }
         }
-        else if (TryGetPublicSlug(path, out var slug))
-        {
-            context.Items["Slug"] = slug;
-            tenantId = slug;
-            if (!await IsActiveAsync(registry, slug, context.RequestAborted))
-            {
-                await WriteInactiveAsync(context, slug);
-                return;
-            }
-        }
 
         context.Items["TenantId"] = tenantId;
         if (!await employeeAccess.AllowAsync(context)) return;
@@ -91,11 +107,10 @@ public class TenantResolutionMiddleware
     {
         slug = "";
         const string prefix = "/api/v1/public/";
-        var index = path.IndexOf(prefix, StringComparison.OrdinalIgnoreCase);
-        if (index < 0)
+        if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             return false;
 
-        var rest = path[(index + prefix.Length)..];
+        var rest = path[prefix.Length..];
         var slash = rest.IndexOf('/');
         slug = slash >= 0 ? rest[..slash] : rest;
         return slug.Length > 0;

@@ -111,7 +111,7 @@ reload/readback. A success toast, mock call, or HTTP 200 alone is not sufficient
 | AUTH-006 | P1 UI/DEV | Expired token → image upload, agreement create/PDF, invoice/QC PDF | These direct fetch paths currently skip common refresh; correct explicit recovery needed. | R/G24 |
 | AUTH-007 | P0 API/DEV | Valid issuer/signature but unrelated audience; master user without provisioning permission | Reject unauthorized audience/provisioning role desired; currently audience disabled and system gate realm-only. | R/G14 |
 | AUTH-008 | P0 API/DEV | AdminA requests tenant B object GUIDs across entity types | No B data read/write;404 or403 according route; persist B state unchanged. Include QC separately. | C/R G01 |
-| AUTH-009 | P0 API/DEV | Token realm A → `/public/B/...`; anonymous URL B control | Explicit URL-vs-token tenant policy; current middleware picks authenticated realm. | D/G30 |
+| AUTH-009 | P0 API/DEV | Token realm A → `/public/B/...`; anonymous URL B control | URL tenant governs; matching/anonymous allowed, foreign realm403 before dispatch; inactive/unknown URL tenant403. | C |
 | AUTH-010 | P1 UI | Mobile drawer keyboard open/close, route change, Escape, focus | Navigation remains reachable; run without helper CSS that hides drawer. | C |
 | AUTH-011 | P1 UI/DEV | User/tenant switch without full reload after cached list | Never show other principal's path-keyed cached data; verify invalidation beyond auth mock. | R/G24 |
 | SVC-001 | P1 UI/DEV | Create S, edit displayed name, deactivate/reactivate → reload/catalogue | Correct payload, persisted data and public visibility, active badge/actions reconcile. | C |
@@ -139,7 +139,11 @@ reload/readback. A success toast, mock call, or HTTP 200 alone is not sufficient
 | EMP-008 | P2 UI | Edit/reactivate employee or resend invite from page | Missing UI action; test available APIs independently. | B/G19 |
 | COMP-001 | P1 UI/DEV | Create company+branch with contacts; expand/collapse → reload | Persist parent relationship and fields; expanding one company does not display another's branches. | C |
 | COMP-002 | P1 API | Blank/space business ID or name; same trimmed business ID; duplicate update | Required400; unique constraint exists; duplicate needs defined409 rather than unmapped database500. | C/R |
-| COMP-003 | P1 API | Create branch with Guid.Empty/nonexistent company/other-tenant company | Empty400; nonexistent/foreign parent rejection desired before write; existence handler missing. | R/G10 |
+| COMP-003 | P1 API | Create branch with Guid.Empty/nonexistent company/other-tenant company | Empty400; nonexistent/foreign company404 before any branch write. Genuine tenant isolation coverage. | C |
+| COMP-TENANT-001 | P0 DB | Same trimmed business ID in tenants A and B | Both succeed; each tenant reads only its own record; foreign JSON/ID/version unchanged. | C |
+| COMP-TENANT-002 | P1 API/DB | Duplicate create/update within tenant, including parallel creates and inactive existing company | 409 safe detail; one winning concurrent create; failed update leaves stored original ID unchanged. | C |
+| COMP-TENANT-003 | P1 DB/DEPLOY | Legacy global index → per-tenant index; reapply schema | Exactly one business-ID unique index includes tenant_id; unchanged document contents/IDs/versions; second reconciliation succeeds. Rollback must retain scoped uniqueness once cross-tenant duplicates exist. | C |
+| COMP-TENANT-004 | P1 PW | Company duplicate/branch missing-parent response | Error visible; input retained; loading clears; corrected company retry succeeds on desktop/mobile. | C |
 | COMP-004 | P1 API | Edit/deactivate company/branch; relationship-linked shifts and agreements exist | APIs persist flag/fields; decide cascading/selection eligibility; no data deletion unless explicit. | C/D |
 | COMP-005 | P2 UI/API | 0/100/101+ companies; search accents; negative/huge skip/take | BE clamps skip≥0/take1–200, returns total and sorts by name; UI cannot access later pages. | C/B G20 |
 | COMP-006 | P1 UI | Switch expanded company or shift company rapidly; responses reverse order | Branches belong to current selection; pending response cannot overwrite newer parent. | R/G25 |
@@ -212,7 +216,7 @@ reload/readback. A success toast, mock call, or HTTP 200 alone is not sufficient
 | AGR-002 | P1 UI/API | Missing company/title/PDF/signers; title200/201; incomplete row mixed with valid row | Required/max400; FE currently drops incomplete row silently—require explicit correction or warning. | C/R G22 |
 | AGR-003 | P1 API | Invalid signersJson, malformed signer email, duplicate signer email/name | Parse/validation400 desired; duplicate identity behavior needs policy. | C/D/R G11 |
 | AGR-004 | P1 API/BE | Fake PDF extension/MIME, corrupt/empty/encrypted/many-page PDF; oversized upload | Reject invalid/unsupported files deterministically, no orphan agreement; parser/request-size behavior recorded. | R/G11 |
-| AGR-005 | P1 API | Missing/inactive/foreign company GUID | Ensure company exists in request tenant and define inactive parent policy; current handler only requires nonempty GUID. | R/G10 |
+| AGR-005 | P1 API | Missing/inactive/foreign company GUID | Empty400; missing/foreign company404 before agreement/PDF write. Existing inactive-parent behavior preserved; eligibility policy remains open. | C/D |
 | AGR-006 | P1 UI | Detail response contains only actual BE fields, no signerCount/signedCount | Counts computed correctly or contract extended; not `undefined/undefined`; realistic mocks expose current mismatch. | R/G03 |
 | AGR-007 | P2 UI | Copy link/email text, clipboard denied, mailto with Unicode/reserved chars | Clipboard content and encoded mailto correct; current origin and `/fi/sign` route; denial recoverable. No real mail sent by test. | C |
 | AGR-008 | P1 API | Add/remove persisted signer in Draft/Partial/Completed/Cancelled | Allowed states mutate; forbidden states conflict409 desired, some currently500; no FE post-create controls. | C/R G08/B G22 |
