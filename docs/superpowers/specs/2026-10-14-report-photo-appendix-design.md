@@ -32,7 +32,9 @@ month grouping. Sort evidence by occurrence time; keep separate cleaner
 submissions separate, without introducing identities into the appendix.
 
 The evidence collection has an empty default to remain compatible with older
-serialized reports. For existing stored forms, the report generator may project
+serialized reports. The sharing handler explicitly clears both Forms and Evidence
+until public evidence sharing is authorized; test serialized snapshots and their
+PDFs for absence of private notes/photos. For existing stored forms, the report generator may project
 evidence from forms when the new collection is absent/empty.
 
 In domain submission, normalize photo entries and trim the note before mutation.
@@ -59,7 +61,11 @@ the current public UI's advertised limit. Malformed, unsupported, missing or rem
 legacy image references produce a visible image-unavailable entry with the date
 and note retained; they do not fail the whole report. Never fetch a remote URL or
 local file path from a stored photo string, and never print raw data URLs or tokens.
-Large-image ingestion/storage limits remain part of the broader issue77 work.
+Read dimensions through the existing SkiaSharp codec metadata API before pixel
+decoding. Limit a photo to 40 million pixels and 16,384 pixels on either axis;
+oversized images use the same visible fallback. Eagerly validate image data before
+constructing the QuestPDF page so corrupt data cannot fail a later generation
+stage. Large-image ingestion/storage limits remain part of the broader issue77 work.
 
 The legacy generator also gets an appendix, using UTC since it has no tenant
 timezone parameter. It should no longer imply that a photo count means images
@@ -87,7 +93,8 @@ rollover; two cleaners' evidence; older snapshot defaults; shared report privacy
 
 PDF cases: real image resources and rendered pages, multiple photos, portrait and
 landscape photos, long notes/multipage output, no-evidence output, and corrupt or
-remote historical references with visible fallback. Visually render sample PDFs
+remote historical references with visible fallback, oversized encoded input and
+compressed images with excessive dimensions. Visually render sample PDFs
 and inspect all pages. HTTP tests verify admin-only exports remain enforced.
 
 Playwright: upload+blank/whitespace note blocked before request, successful upload
