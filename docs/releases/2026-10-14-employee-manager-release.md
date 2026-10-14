@@ -1,10 +1,9 @@
 # Employee permissions, tenant managers and shift restoration
 
 Implementation: PR99, main `b5bbae3d1f22f649540ee8efc3cddd8da781542c`.
-Website deployment38486219783 succeeded. API image build38486220034 is in
-progress; production API verification remains pending. Issues65/82/96/97 stay
-open until that verification. The preceding no-QC-email release93 is already
-verified live through main82d2cb7.
+Production verified on 2026-10-14. API image build [38486220034](https://github.com/MaleeshaKumarage/readysetsiivous/actions/runs/38486220034) and production deployment [38487792867](https://github.com/MaleeshaKumarage/readysetsiivous/actions/runs/38487792867) succeeded. The running API container was inspected directly and uses `ghcr.io/maleeshakumarage/readysetsiivous-api:sha-b5bbae3d1f22f649540ee8efc3cddd8da781542c`; its health status is `ok`.
+
+The final website deployment [38486961309](https://github.com/MaleeshaKumarage/readysetsiivous/actions/runs/38486961309) succeeded after verification notes and manager navigation tests merged in PR100 (`cfedd967`). Public bundles contain the manager workspace, inactive-shift filter/reactivation actions and future-start message. Anonymous production requests to manager shifts, self profile and admin shifts return 401. Issues65/82/96/97 have met their release verification criteria. The preceding no-QC-email release93 is also verified live.
 
 ## Resulting behavior
 
