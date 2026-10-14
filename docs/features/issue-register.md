@@ -87,6 +87,10 @@ See [invitation contract](employee-invitations.md) and its legacy migration step
 Validation covers real PostgreSQL, captured SMTP and Keycloak24/26.1 in isolated
 test services. Production users, SMTP and database were not changed by this work.
 
+## Related company tenant integrity
+
+Related company tenant integrity is covered by [PR119](https://github.com/MaleeshaKumarage/readysetsiivous/pull/119): #98 per-tenant business-ID uniqueness, #67 public URL tenant policy, and #81 branch/agreement/template parent ownership before writes. #81 remains open for semantic upload validation and signature/PDF race integrity. See [behavior, migration and test evidence](company-tenant-integrity.md).
+
 ## Issues63/64 implementation progress
 
 Separate tenant/platform resource audiences and explicit platform tenant-management

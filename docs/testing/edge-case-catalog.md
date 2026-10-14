@@ -184,7 +184,7 @@ reload/readback. A success toast, mock call, or HTTP 200 alone is not sufficient
 | QC-001 | P1 UI/DEV | Create T, add/remove item, edit/cancel edit/delete with confirmation | Text/order readback stable; cancelled deletion no mutation; committed deletion absent after reload. | C |
 | QC-002 | P1 UI/API | Title blank/space, items[]/all spaces/mixed blank+valid | FE prevents blank effective checklist; BE trims/filters; all-blank list currently can500 and needs400. | C/R G08 |
 | QC-003 | P2 UI/API | Item counts1/10/11, duplicated text, long description/title | FE caps add at10; BE lacks limit; decide count/text size/duplicate policy before enforcing. | D/G23 |
-| QC-004 | P1 API | Global/company/branch-scoped templates; nonexistent/foreign parent IDs | Null scopes included as global; foreign/nonexistent scope relationships rejected desired. | C/R G10 |
+| QC-004 | P1 API | Global/company/branch-scoped templates; nonexistent/foreign parent IDs | Global/company-only/branch-only nullable scopes preserved; foreign/missing/orphan/mismatched parents404 before create/update; empty IDs400; failed update leaves stored template unchanged. | C |
 | QC-005 | P1 UI/DEV | Edit a scoped or inactive template using current unscoped form | Preserve scope/active state; missing controls must not silently clear existing metadata. | R/G23 |
 | QC-006 | P0 DEV/API | AdminA creates T/form; AdminB lists/gets/uses A token | No cross-tenant data; tenant-bound persistence must be proved against actual QC repository. | R/G01 |
 | QC-007 | P1 API/BE | Dispatch same day twice; two simultaneous dispatches | Sequential existing check avoids duplicates; parallel requests must yield one occurrence+employee form. | C/R G15 |
