@@ -5,6 +5,12 @@ on:
     workflows: ["docker-build-push"]
     types: [completed]
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Full commit SHA of an already built API release
+        required: true
+        type: string
 
 concurrency:
   group: oracle-deploy
@@ -12,22 +18,27 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       packages: read
+    env:
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha || inputs.release_sha }}
+      REGISTRY_USER: ${{ github.actor }}
+      REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Validate release SHA
+        run: '[[ "$RELEASE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]'
       - name: Deploy to Oracle via SSH
         uses: appleboy/ssh-action@v1
         with:
           host: 130.61.140.7
           username: ubuntu
           key: ${{ secrets.ORACLE_SSH_KEY }}
-          script: |
-            cd /home/ubuntu/cleaning-suite
-            sed -i -E "s|^(IMAGE_TAG=).*|\1sha-${{ github.event.workflow_run.head_sha }}|" .env
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-            docker compose pull
-            docker compose up -d --remove-orphans
-            for i in $(seq 1 60); do curl -sf http://localhost:8090/healthz && break; sleep 2; done
-            curl -sf http://localhost:8090/healthz | grep -q '"ok"' || { docker logs cleaning-suite-api-1 --tail 50; exit 1; }
+          envs: RELEASE_SHA,REGISTRY_USER,REGISTRY_TOKEN
+          script_path: scripts/deploy-api.sh
+          command_timeout: 10m

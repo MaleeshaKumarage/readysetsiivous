@@ -1,0 +1,24 @@
+name: deployment-tests
+on:
+  pull_request:
+    paths:
+      - scripts/deploy-api.sh
+      - scripts/tests/test_deploy_api.py
+      - .github/workflows/docker-deploy-oracle.yml
+      - .github/workflows/deployment-tests.yml
+  push:
+    branches: [main]
+    paths:
+      - scripts/deploy-api.sh
+      - scripts/tests/test_deploy_api.py
+      - .github/workflows/docker-deploy-oracle.yml
+      - .github/workflows/deployment-tests.yml
+permissions:
+  contents: read
+jobs:
+  deployment-script:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sh -n scripts/deploy-api.sh
+      - run: python3 scripts/tests/test_deploy_api.py
