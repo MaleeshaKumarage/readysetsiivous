@@ -211,3 +211,25 @@ deadline (allowed range1–30). Sample practice uses predefined A1–C2 sentence
 Finnish translations/hints; successful Gemini responses remain preferred. The
 normal group API-key encryption and access rules remain in effect. See
 [game fallback](features/game-sample-fallback.md) for failure/cancellation behavior.
+
+## Backend runtime and migration rehearsals
+
+Backend projects use .NET10 LTS, SDK10.0.402 (`global.json`), runtime10.0.13,
+and Marten/Marten.Newtonsoft9.50.1. Docker and GitHub CI use the same pinned
+versions. Newtonsoft JSON, GUID optimistic-concurrency versions and tenant sessions
+retain their existing behavior. Startup builds all mappings, applies only the
+configured AutoCreate policy, and verifies the schema; initialization failure
+prevents the API from reporting healthy.
+
+CI creates disposable PostgreSQL16 data for tenant-isolation, dictionary-input,
+serialization, concurrent task creation and stale-write regressions. Local tests
+use `QC_TEST_CONNECTION_STRING` and `INVITE_TEST_DATABASE` only with an isolated
+synthetic database. Two live Keycloak fixtures still require separate credentials.
+
+`BackgroundWorkers__Enabled=false` disables QC generation and entertainment
+cleanup in new-image private rehearsals; normal environments default to enabled.
+Previous images do not understand this flag. Restrict older-image restore checks
+to an internal network and a read-only database connection, stop after startup
+health before the 15-second QC delay, and avoid the UTC midnight cleanup boundary.
+Never publish restored customer data or credentials. Backups must be restored and
+verified before upgrading production, and the previous image must be retained.

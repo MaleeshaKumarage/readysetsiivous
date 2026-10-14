@@ -51,7 +51,8 @@ var autoCreate = builder.Configuration.GetValue<AutoCreate?>("Marten:AutoCreateS
 
 builder.Services.AddCleaningMarten(connectionString, autoCreate);
 builder.Services.AddHostedService<MartenSchemaInitializer>();
-builder.Services.AddHostedService<CleaningSuite.Api.Services.EntertainmentGroupCleanupService>();
+if (builder.Configuration.GetValue("BackgroundWorkers:Enabled", true))
+    builder.Services.AddHostedService<CleaningSuite.Api.Services.EntertainmentGroupCleanupService>();
 
 builder.Services.AddKeycloakAuth(builder.Configuration);
 
@@ -104,7 +105,8 @@ builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCycleP
 builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCycleDispatcher, CleaningSuite.Application.QualityCycle.QualityCycleDispatcher>();
 builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.QualityCycleMonthlyReportService>();
 builder.Services.AddScoped<CleaningSuite.Application.Access.ManagerOperations>();
-builder.Services.AddHostedService<CleaningSuite.Api.QualityCycleWorker>();
+if (builder.Configuration.GetValue("BackgroundWorkers:Enabled", true))
+    builder.Services.AddHostedService<CleaningSuite.Api.QualityCycleWorker>();
 builder.Services.AddScoped<CleaningSuite.Application.Entertainment.IEntertainmentRepository, CleaningSuite.Infrastructure.Persistence.EntertainmentRepository>();
 builder.Services.AddSingleton<CleaningSuite.Application.Entertainment.IEntertainmentKeyProtector, CleaningSuite.Infrastructure.Entertainment.EntertainmentKeyProtector>();
 builder.Services.AddHttpClient<CleaningSuite.Application.Entertainment.IGeminiSentenceService, CleaningSuite.Infrastructure.Entertainment.GeminiSentenceService>();
@@ -190,20 +192,16 @@ public class MartenSchemaInitializer : Microsoft.Extensions.Hosting.IHostedServi
     {
         try
         {
+            _ = _store.Storage.ToDatabaseScript();
             await _store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
-        }
-        catch (Npgsql.NpgsqlException ex)
-        {
-            _logger.LogWarning(ex, "Database unreachable during Marten schema build; will retry on next startup.");
+            await _store.Storage.Database.AssertDatabaseMatchesConfigurationAsync(ct);
         }
         catch (Exception ex)
         {
-            // A schema build failure (e.g. a bad index) must not take down the
-            // whole API — log it loudly so it is fixed, but keep serving.
-            _logger.LogError(ex, "Failed to initialize Marten schema on startup; API will start with the existing schema.");
+            _logger.LogCritical(ex, "Marten schema initialization failed; API startup aborted.");
+            throw;
         }
     }
-
     public Task StopAsync(CancellationToken ct) => Task.CompletedTask;
 }
 

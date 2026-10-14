@@ -1,5 +1,5 @@
 # Multi-stage build: sdk for build/publish, aspnet for runtime.
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.402 AS build
 WORKDIR /src
 
 COPY CleaningSuite.Backend.sln ./
@@ -13,7 +13,7 @@ RUN dotnet restore CleaningSuite.Api/CleaningSuite.Api.csproj
 COPY . .
 RUN dotnet publish CleaningSuite.Api/CleaningSuite.Api.csproj -c Release -o /app/publish --no-restore
 
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.13 AS runtime
 WORKDIR /app
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080

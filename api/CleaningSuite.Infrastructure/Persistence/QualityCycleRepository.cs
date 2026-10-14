@@ -122,6 +122,7 @@ public class QualityCycleRepository : IQualityCycleRepository
         await _session.Query<QualityCycleReportShare>().OrderByDescending(s => s.CreatedUtc).ToListAsync(ct);
 
     private static bool IsDuplicate(Exception ex) =>
-        ex is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.UniqueViolation }
+        ex is JasperFx.DocumentAlreadyExistsException
+        || ex is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.UniqueViolation }
         || (ex.InnerException is { } inner && IsDuplicate(inner));
 }

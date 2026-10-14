@@ -1,3 +1,4 @@
+using Marten.Newtonsoft;
 using CleaningSuite.Application.QualityCycle;
 using CleaningSuite.Application.Shifts;
 using CleaningSuite.Application.Companies;
@@ -181,7 +182,8 @@ public class QualityCycleRepositoryIntegrationTests
     [QualityCycleDatabaseFact]
     public async Task TenantIsolationConcurrentGenerationAndOptimisticCompletion()
     {
-        var options = new StoreOptions(); options.Connection(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!);
+        var options = new StoreOptions(); options.RestoreV8Defaults(); options.UseNewtonsoftForSerialization();
+        options.DatabaseSchemaName = "fixture_" + Guid.NewGuid().ToString("N"); options.Connection(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!);
         options.Policies.AllDocumentsAreMultiTenanted(); options.Schema.For<QualityCycleForm>().UniqueIndex(x => x.Token);
         using var store = new DocumentStore(options);
         await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();

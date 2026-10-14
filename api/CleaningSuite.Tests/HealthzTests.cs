@@ -1,3 +1,4 @@
+using CleaningSuite.Api;
 using System.Net;
 using JasperFx;
 using Marten;
@@ -15,6 +16,8 @@ public class HealthzTests
         {
             builder.ConfigureServices(services =>
             {
+                services.Remove(services.Single(x => x.ImplementationType == typeof(MartenSchemaInitializer)));
+                services.Remove(services.Single(x => x.ImplementationType == typeof(QualityCycleWorker)));
                 services.Configure<StoreOptions>(opts =>
                 {
                     opts.AutoCreateSchemaObjects = AutoCreate.None;

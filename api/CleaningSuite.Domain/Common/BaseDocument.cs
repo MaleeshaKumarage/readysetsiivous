@@ -1,4 +1,4 @@
-using Marten.Metadata;
+using JasperFx.Metadata;
 
 namespace CleaningSuite.Domain.Common;
 
@@ -12,6 +12,6 @@ public abstract class BaseDocument : IVersioned
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedUtc { get; set; } = DateTime.UtcNow;
 
-    /// <summary>Optimistic concurrency version (GUID in Marten 8), maintained by Marten.</summary>
+    /// <summary>Optimistic concurrency version (GUID in Marten 8 and 9), maintained by Marten.</summary>
     public Guid Version { get; set; }
 }

@@ -3,7 +3,7 @@
 Multi-tenant SaaS backend for cleaning companies. First tenant: ReadySetSiivous (readysetsiivous.fi).
 
 ## Stack
-- ASP.NET Core 8.0 Web API, Clean Architecture (Api / Application / Domain / Infrastructure / Tests)
+- ASP.NET Core 10.0 Web API, Clean Architecture (Api / Application / Domain / Infrastructure / Tests)
 - Marten document store on PostgreSQL (conjoined multi-tenancy, optimistic concurrency)
 - Keycloak for auth (realm per tenant, provisioned via Admin REST)
 - QuestPDF for invoice PDFs
