@@ -1,8 +1,8 @@
 # Tenant manager access — issues65/82
 
 Implementation merged through PR99 as `b5bbae3`. The user explicitly
-specified managers for the whole tenant, not individual branches. No manager
-permissions are claimed deployed until API production verification is recorded.
+specified managers for the whole tenant, not individual branches. Manager
+permissions are deployed: the API image, website deployment and production health are verified in the [release evidence](../releases/2026-10-14-employee-manager-release.md).
 
 | Capability | Tenant admin | Tenant manager | Cleaner |
 | --- | --- | --- | --- |

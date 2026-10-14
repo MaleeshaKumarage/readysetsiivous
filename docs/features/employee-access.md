@@ -1,7 +1,7 @@
 # Employee access and response contracts — issue65
 
 Implementation merged through PR99 as `b5bbae3`, built on main `82d2cb7`.
-Website deployment succeeded; API production verification is pending. The
+Website and API deployments succeeded; the running API image and health were verified. See [release evidence](../releases/2026-10-14-employee-manager-release.md). The
 preceding invitation and audience release is already in production; this issue
 adds narrower read scopes and tenant-wide manager operations.
 
