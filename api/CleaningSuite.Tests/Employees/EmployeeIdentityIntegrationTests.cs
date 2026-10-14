@@ -1,3 +1,4 @@
+using Marten.Newtonsoft;
 using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -166,7 +167,8 @@ public class EmployeeIdentityIntegrationTests
         ["EmployeeInvites:Smtp:From"] = "no-reply@example.invalid", ["EmployeeInvites:Smtp:Auth"] = "false", ["EmployeeInvites:Smtp:StartTls"] = "false"
     }).Build();
     private static DocumentStore Store() {
-        var options = new StoreOptions(); options.Connection(Environment.GetEnvironmentVariable("INVITE_TEST_DATABASE")!);
+        var options = new StoreOptions(); options.RestoreV8Defaults(); options.UseNewtonsoftForSerialization();
+        options.DatabaseSchemaName = "fixture_" + Guid.NewGuid().ToString("N"); options.Connection(Environment.GetEnvironmentVariable("INVITE_TEST_DATABASE")!);
         options.Policies.AllDocumentsAreMultiTenanted(); options.Schema.For<Employee>().Index(x => x.KeycloakUserId).UniqueIndex(Marten.Schema.UniqueIndexType.Computed, "mt_doc_employee_uidx_keycloak_identity_key", Marten.Schema.Indexing.Unique.TenancyScope.PerTenant, x => x.KeycloakIdentityKey!);
         return new DocumentStore(options);
     }

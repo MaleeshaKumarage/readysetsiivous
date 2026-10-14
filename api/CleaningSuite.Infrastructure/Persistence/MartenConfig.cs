@@ -1,3 +1,4 @@
+using CleaningSuite.Domain.Agreements;
 using CleaningSuite.Domain.Bookings;
 using CleaningSuite.Domain.Common;
 using CleaningSuite.Domain.Companies;
@@ -10,6 +11,7 @@ using CleaningSuite.Domain.Shifts;
 using CleaningSuite.Domain.Tenants;
 using JasperFx;
 using Marten;
+using Marten.Newtonsoft;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CleaningSuite.Infrastructure.Persistence;
@@ -23,9 +25,15 @@ public static class MartenConfig
     public static IServiceCollection AddCleaningMarten(
         this IServiceCollection services,
         string connectionString,
-        AutoCreate autoCreate = AutoCreate.CreateOrUpdate)
+        AutoCreate autoCreate = AutoCreate.CreateOrUpdate,
+        string? databaseSchemaName = null)
     {
         var options = new StoreOptions();
+        if (databaseSchemaName is not null) options.DatabaseSchemaName = databaseSchemaName;
+        // Keep existing JSON, document/session behavior and event schema defaults
+        // while taking the patched LINQ provider and .NET10-compatible runtime.
+        options.RestoreV8Defaults();
+        options.UseNewtonsoftForSerialization();
         options.Connection(connectionString);
         options.AutoCreateSchemaObjects = autoCreate;
 
@@ -80,10 +88,15 @@ public static class MartenConfig
         options.Schema.For<EntertainmentRound>()
             .Index(x => x.GroupId);
 
+        // Include documents otherwise discovered only on their first repository call.
+        options.Schema.For<Agreement>();
+        options.Schema.For<TenantProfile>();
+        options.Schema.For<Counter>();
+
         // Registry partition: unique slug across all tenants.
         options.Schema.For<TenantRegistration>().UniqueIndex(x => x.Slug);
 
-        services.AddMarten(options);
+        services.AddMarten(options).UseIdentitySessions();
 
         return services;
     }

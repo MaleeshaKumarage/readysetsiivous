@@ -1,3 +1,4 @@
+using Marten.Newtonsoft;
 using CleaningSuite.Application.Access;
 using CleaningSuite.Application.Common;
 using CleaningSuite.Application.Employees;
@@ -16,7 +17,8 @@ public class ManagerDatabaseTests
     [EmployeeIdentityDatabaseFact]
     public async Task RealManagerEditCannotCrossTenantsOrOverwriteConcurrentAdminTemplateChange()
     {
-        var options = new StoreOptions(); options.Connection(Environment.GetEnvironmentVariable("INVITE_TEST_DATABASE")!);
+        var options = new StoreOptions(); options.RestoreV8Defaults(); options.UseNewtonsoftForSerialization();
+        options.DatabaseSchemaName = "fixture_" + Guid.NewGuid().ToString("N"); options.Connection(Environment.GetEnvironmentVariable("INVITE_TEST_DATABASE")!);
         options.Policies.AllDocumentsAreMultiTenanted(); options.Policies.ForAllDocuments(d => d.UseOptimisticConcurrency = true);
         options.Schema.For<Company>(); options.Schema.For<Branch>(); options.Schema.For<Shift>();
         using var store = new DocumentStore(options); await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();

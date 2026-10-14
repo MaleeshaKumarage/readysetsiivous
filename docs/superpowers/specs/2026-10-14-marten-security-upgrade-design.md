@@ -47,7 +47,16 @@ previous image/config reference. Never publish credentials or customer data.
 The private production backup must be complete and usable: validate its archive
 and restore it to a separate private database using the rehearsed procedure, compare
 table/document counts, and verify the previous image can start without exposing
-that database or enabling workers. Do not run injection/destructive tests on real
+that database or permitting background side effects. New images support
+`BackgroundWorkers:Enabled=false` for isolated rehearsals. Previous images lack
+that switch: restore into a dedicated PostgreSQL container on a private internal
+network, use a non-owning reader role with SELECT-only grants and a pg_hba rule
+rejecting that role for every other database. Enforce a hard 10-second API
+container deadline covering startup failure/health timeout, stop immediately after
+health, and unconditionally remove the smoke API container. Run away from the
+entertainment cleanup's UTC-midnight boundary. The role also defaults to read-only
+transactions; connection settings alone are not the write barrier.
+Verify restored counts before and after that smoke test. Do not run injection/destructive tests on real
 customer copies; those remain synthetic shared-dev tests. Remove only the private
 verification database after proof, retaining the recoverable backup for rollout.
 Merge only after compile/full tests, real tenant-isolation/concurrency, upgrade rehearsal,

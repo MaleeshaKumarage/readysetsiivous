@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'global.json'
       - 'api/**'
       - '.github/workflows/docker-build-push.yml'
       - '.github/workflows/ci-build-test.yml'
