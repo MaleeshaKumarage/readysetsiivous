@@ -145,7 +145,7 @@ All admin routes require the current tenant's `admin` realm role.
 | POST | `/api/v1/admin/quality-cycle/report-shares` | tenant admin | year/month plus companyId/branchId/shiftId scope; frozen summary token with 30-day expiry |
 | GET | `/api/v1/admin/quality-cycle/report-shares` | tenant admin | own-tenant shared link metadata |
 | DELETE | `/api/v1/admin/quality-cycle/report-shares/{id:guid}` | tenant admin | revoke own-tenant link |
-| GET | `/api/v1/public/{slug}/quality-cycle/reports/{token}/pdf` | anonymous token holder | summary-only PDF; expired/revoked/unknown404; no-store/noindex |
+| GET | `/api/v1/public/{slug}/quality-cycle/reports/{token}/pdf` | anonymous token holder | frozen report PDF; new links include submitted photo/note appendix; old snapshots unchanged; expired/revoked/unknown404; no-store/noindex |
 
 Existing `summary-pdf` now uses the activity report builder. Existing submission
 requires exact checklist structure, permits any checked subset and empty notes,
