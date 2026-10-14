@@ -23,6 +23,10 @@ implying a batch rollback. If a network failure actually saved an assignment, a
 successful refresh reconciles that employee out of the selection; retain the
 uncertain-operation message. Guard late assignment-list responses when switching
 or closing rows so they cannot overwrite the current selection/error/loading state.
+While a mutation is pending, prevent row switching/closing and shift deactivation;
+use a synchronous pending ref to prevent repeated clicks before React renders.
+Apply generation checks to mutation refresh and final selection/error/loading
+updates too. Test delayed mutations and disabled navigation until completion.
 
 Managers already receive problem-detail errors and retain selection on failure;
 verify their overlapping-shift notification and filter inactive employees too.
