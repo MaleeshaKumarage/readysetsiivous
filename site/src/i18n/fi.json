@@ -13,7 +13,8 @@
     "whatsappButton": "Keskustele WhatsAppissa",
     "callUs": "Soita meille",
     "booking": "Varaa",
-    "login": "Kirjaudu"
+    "login": "Kirjaudu",
+    "toggleMenu": "Avaa tai sulje valikko"
   },
   "hero": {
     "headline": "Ammattitaitoista kotisiivousta Helsingissä, Espoossa & Vantaalla",
