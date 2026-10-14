@@ -397,6 +397,31 @@ export interface ShiftOccurrence {
   endUtc: string;
 }
 
+// Assignment failures must reach the UI; the generic admin boolean helpers are
+// retained for other pages. Roster reads bypass their 30-second in-memory cache.
+async function shiftAssignmentRequest<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
+  const operation = method === 'GET' ? 'load assignments' : method === 'DELETE' ? 'remove employee' : 'assign employee';
+  let response: Response;
+  try {
+    response = await authorizedFetch(path, { method, cache: 'no-store',
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  } catch {
+    throw new Error(`Could not confirm the operation. Refresh assignments before retrying to ${operation}.`);
+  }
+  if (!response.ok) {
+    const problem = await response.json().catch(() => null);
+    const detail = response.status < 500 && typeof problem?.detail === 'string' ? problem.detail.trim() : '';
+    throw new Error(detail || `Could not ${operation}. Please retry.`);
+  }
+  if (method !== 'GET') { _invalidate(); return undefined as T; }
+  try {
+    const data = await response.json();
+    if (!Array.isArray(data) || data.some(a => !a || typeof a.employeeId !== 'string' || typeof a.isActive !== 'boolean')) throw new Error('Invalid roster');
+    return data as T;
+  }
+  catch { throw new Error('Could not load assignments. Please retry.'); }
+}
+
 export const adminShifts = {
   list: (companyId?: string, branchId?: string, includeInactive = false) => {
     const query = new URLSearchParams();
@@ -414,11 +439,11 @@ export const adminShifts = {
   deactivate: (id: string) => adminSend(`/api/v1/admin/shifts/${id}/deactivate`, 'POST'),
   reactivate: (id: string) => adminSendJson<Shift>(`/api/v1/admin/shifts/${id}/reactivate`, 'POST'),
   assignments: (id: string) =>
-    adminGet<ShiftAssignment[]>(`/api/v1/admin/shifts/${id}/assignments`),
+    shiftAssignmentRequest<ShiftAssignment[]>(`/api/v1/admin/shifts/${id}/assignments`),
   assign: (id: string, employeeId: string) =>
-    adminSend(`/api/v1/admin/shifts/${id}/assignments`, 'POST', { employeeId }),
+    shiftAssignmentRequest<void>(`/api/v1/admin/shifts/${id}/assignments`, 'POST', { employeeId }),
   unassign: (id: string, employeeId: string) =>
-    adminSend(`/api/v1/admin/shifts/${id}/assignments/${employeeId}`, 'DELETE'),
+    shiftAssignmentRequest<void>(`/api/v1/admin/shifts/${id}/assignments/${employeeId}`, 'DELETE'),
   occurrences: (id: string, fromUtc: string, toUtc: string) =>
     adminGet<ShiftOccurrence[]>(
       `/api/v1/admin/shifts/${id}/occurrences?from=${encodeURIComponent(fromUtc)}&to=${encodeURIComponent(toUtc)}`

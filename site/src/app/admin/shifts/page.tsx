@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import {
   Title, Button, Table, Modal, TextInput, Select, MultiSelect, Group, Stack, Text, Loader, ActionIcon, NumberInput, Checkbox,
 } from '@mantine/core';
@@ -55,6 +55,13 @@ export default function ShiftsAdminPage() {
   const [assignOpen, setAssignOpen] = useState<string | null>(null);
   const [assignments, setAssignments] = useState<Record<string, ShiftAssignment[]>>({});
   const [assignSel, setAssignSel] = useState<string[]>([]);
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [assignBusy, setAssignBusy] = useState(false);
+  const [assignError, setAssignError] = useState('');
+  const [assignStatus, setAssignStatus] = useState('');
+  const assignmentGeneration = useRef(0);
+  const assignmentPending = useRef(false);
+  useEffect(() => () => { assignmentGeneration.current++; }, []);
 
   const load = () => adminShifts.list(undefined, undefined, includeInactive).then((r) => { if (r) setShifts(r); setLoading(false); });
   useEffect(() => { setLoading(true); load(); }, [includeInactive]);
@@ -117,23 +124,72 @@ export default function ShiftsAdminPage() {
   };
 
   const openAssign = async (id: string) => {
-    if (assignOpen === id) { setAssignOpen(null); return; }
-    setAssignOpen(id); setAssignSel([]);
-    const a = await adminShifts.assignments(id);
-    if (a) setAssignments((m) => ({ ...m, [id]: a }));
+    if (assignmentPending.current) return;
+    const version = ++assignmentGeneration.current;
+    setAssignError(''); setAssignStatus(''); setAssignSel([]);
+    if (assignOpen === id) { setAssignOpen(null); setAssignLoading(false); return; }
+    setAssignOpen(id); setAssignLoading(true);
+    try {
+      const a = await adminShifts.assignments(id);
+      if (version === assignmentGeneration.current) setAssignments(m => ({ ...m, [id]: a }));
+    } catch (e) {
+      if (version === assignmentGeneration.current) {
+        setAssignments(m => { const next = { ...m }; delete next[id]; return next; });
+        setAssignError(e instanceof Error ? e.message : 'Could not load assignments. Please retry.');
+      }
+    } finally { if (version === assignmentGeneration.current) setAssignLoading(false); }
+  };
+
+  const refreshAssignments = async (id: string, version: number) => {
+    try {
+      const a = await adminShifts.assignments(id);
+      if (version === assignmentGeneration.current) setAssignments(m => ({ ...m, [id]: a }));
+      return a;
+    } catch (e) {
+      if (version === assignmentGeneration.current) setAssignments(m => { const next = { ...m }; delete next[id]; return next; });
+      throw e;
+    }
   };
 
   const doAssign = async (shiftId: string) => {
-    for (const empId of assignSel) await adminShifts.assign(shiftId, empId);
-    setAssignSel([]);
-    const a = await adminShifts.assignments(shiftId);
-    if (a) setAssignments((m) => ({ ...m, [shiftId]: a }));
+    if (assignmentPending.current || assignLoading || !assignSel.length || !assignments[shiftId]) return;
+    assignmentPending.current = true; setAssignBusy(true); setAssignError(''); setAssignStatus('');
+    const version = assignmentGeneration.current;
+    const failed: string[] = []; const messages: string[] = []; let succeeded = 0;
+    try {
+      for (const empId of assignSel) {
+        try { await adminShifts.assign(shiftId, empId); succeeded++; }
+        catch (e) { failed.push(empId); messages.push(`${employeeName(empId)}: ${e instanceof Error ? e.message : 'Could not assign employee. Please retry.'}`); }
+      }
+      let selected = failed;
+      try {
+        const a = await refreshAssignments(shiftId, version);
+        selected = failed.filter(id => !a.some(x => x.isActive && x.employeeId === id));
+      } catch { messages.push('Could not refresh assignments. Refresh them before making further changes.'); }
+      if (version === assignmentGeneration.current) {
+        setAssignSel(selected); setAssignError(messages.join(' '));
+        setAssignStatus(succeeded ? `Assigned ${succeeded} employee${succeeded === 1 ? '' : 's'}.${failed.length ? ` ${failed.length} assignment${failed.length === 1 ? '' : 's'} could not be confirmed.` : ''}` : '');
+      }
+    } finally {
+      assignmentPending.current = false;
+      if (version === assignmentGeneration.current) setAssignBusy(false);
+    }
   };
 
   const doUnassign = async (shiftId: string, employeeId: string) => {
-    await adminShifts.unassign(shiftId, employeeId);
-    const a = await adminShifts.assignments(shiftId);
-    setAssignments((m) => ({ ...m, [shiftId]: a ?? [] }));
+    if (assignmentPending.current || assignLoading) return;
+    assignmentPending.current = true; setAssignBusy(true); setAssignError(''); setAssignStatus('');
+    const version = assignmentGeneration.current;
+    try {
+      await adminShifts.unassign(shiftId, employeeId);
+      if (version === assignmentGeneration.current) setAssignStatus(`${employeeName(employeeId)} removed from this shift.`);
+      await refreshAssignments(shiftId, version);
+    } catch (e) {
+      if (version === assignmentGeneration.current) setAssignError(`${employeeName(employeeId)}: ${e instanceof Error ? e.message : 'Could not update assignments. Please retry.'}`);
+    } finally {
+      assignmentPending.current = false;
+      if (version === assignmentGeneration.current) setAssignBusy(false);
+    }
   };
 
   const employeeName = (id: string) => {
@@ -176,9 +232,9 @@ export default function ShiftsAdminPage() {
                     <Table.Td>{assignments[s.id]?.length ?? 0}</Table.Td>
                     <Table.Td>
                       <Group gap={6} wrap="nowrap">
-                        {s.isActive && <Button size="xs" variant="light" onClick={() => openAssign(s.id)}>Employees</Button>}
+                        {s.isActive && <Button size="xs" variant="light" disabled={assignBusy} onClick={() => openAssign(s.id)}>Employees</Button>}
                         {isAdmin() && s.isActive && <Button size="xs" variant="light" onClick={() => { setTemplateShift(s); setAssignedTemplate(s.qualityCycleTemplateId ?? null); setTemplateError(''); }}>Checklist template</Button>}
-                        {s.isActive && <Button size="xs" variant="subtle" color="red" onClick={() => deactivate(s.id)}>Deactivate</Button>}
+                        {s.isActive && <Button size="xs" variant="subtle" color="red" disabled={assignBusy} onClick={() => deactivate(s.id)}>Deactivate</Button>}
                         {!s.isActive && <Button size="xs" loading={restoring === s.id} disabled={!!restoring} onClick={() => reactivate(s.id)}>Reactivate</Button>}
                       </Group>
                     </Table.Td>
@@ -190,22 +246,35 @@ export default function ShiftsAdminPage() {
                           <MultiSelect
                             label="Assign employees"
                             placeholder="Select employees"
-                            data={employees.map((e) => ({ value: e.id, label: `${e.firstName} ${e.lastName}` }))}
+                            data={employees.filter(e => e.isActive && !(assignments[s.id] ?? []).some(a => a.isActive && a.employeeId === e.id)).map((e) => ({ value: e.id, label: `${e.firstName} ${e.lastName}` }))}
                             value={assignSel}
                             onChange={setAssignSel}
                             style={{ flex: 1, minWidth: 200 }}
                             searchable
+                            disabled={assignLoading || assignBusy || !assignments[s.id]}
                           />
-                          <Button size="xs" onClick={() => doAssign(s.id)}>Assign</Button>
+                          <Button size="xs" loading={assignBusy} disabled={assignLoading || !assignSel.length || !assignments[s.id]} onClick={() => doAssign(s.id)}>Assign</Button>
+                          <Button size="xs" variant="default" disabled={assignLoading || assignBusy} onClick={async () => {
+                            const version = ++assignmentGeneration.current;
+                            setAssignLoading(true); setAssignError(''); setAssignStatus('');
+                            try {
+                              const a = await refreshAssignments(s.id, version);
+                              if (version === assignmentGeneration.current) setAssignSel(selected => selected.filter(id => !a.some(x => x.isActive && x.employeeId === id)));
+                            } catch (e) { if (version === assignmentGeneration.current) setAssignError(e instanceof Error ? e.message : 'Could not load assignments. Please retry.'); }
+                            finally { if (version === assignmentGeneration.current) setAssignLoading(false); }
+                          }}>Refresh assignments</Button>
                         </Group>
-                        {(assignments[s.id] ?? []).length === 0 ? (
+                        <Text size="sm" c="dimmed">Overlapping shifts are checked when you assign employees. Any conflict will be shown here.</Text>
+                        {assignError && <Text role="alert" aria-label="Assignment error" c="red">{assignError}</Text>}
+                        {assignStatus && <Text role="status">{assignStatus}</Text>}
+                        {assignLoading ? <Text>Loading assignments…</Text> : !assignments[s.id] ? <Text>Assignments could not be loaded. Use Refresh assignments to retry.</Text> : assignments[s.id].length === 0 ? (
                           <Text size="sm" c="dimmed">No employees assigned.</Text>
                         ) : (
                           <Stack gap={4}>
                             {(assignments[s.id] ?? []).map((a) => (
                               <Group key={a.id} justify="space-between" wrap="wrap" gap="xs">
                                 <Text size="sm">{employeeName(a.employeeId)}</Text>
-                                <ActionIcon variant="subtle" color="red" size="sm" aria-label="Unassign" onClick={() => doUnassign(s.id, a.employeeId)}><Trash2 size={14} /></ActionIcon>
+                                <ActionIcon variant="subtle" color="red" size="sm" disabled={assignBusy || assignLoading} aria-label={`Unassign ${employeeName(a.employeeId)}`} onClick={() => doUnassign(s.id, a.employeeId)}><Trash2 size={14} /></ActionIcon>
                               </Group>
                             ))}
                           </Stack>

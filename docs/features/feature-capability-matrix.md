@@ -44,7 +44,7 @@ test families, not proof that those tests are currently implemented.
 | Shifts | Daily/weekly/biweekly/monthly/on-call | Yes | Yes | Biweekly UI should be single-day; persist correctly when changing schedule type | SHIFT-001/008 |
 | Shifts | Different times per weekday (type1) | Yes | None | Add to shift editor, not a new top-level feature | SHIFT-002 |
 | Shifts | Occurrence preview/calendar | Yes | None | Add calendar/detail preview after timezone/validity policy is fixed | SHIFT-009–011/018 |
-| Shifts | Assign/unassign/batch employees | Yes | Yes, sequential batch | Transactional overlap/duplicate rules and per-employee partial results missing | SHIFT-012–016 |
+| Shifts | Assign/unassign/batch employees | Yes | Yes, sequential batch with employee errors and partial success | Transactional overlap/duplicate rules remain; UI retry/reconciliation fixed | SHIFT-012–016,019–023 |
 | Employee schedule | Booking day view | Yes, admin-only | None | Integrate into Operations calendar; distinguish booking schedule from recurring shifts | OPS-005/006 |
 | QC templates | Create/read/update/hard-delete | Yes | Yes | Scope/active state must survive edit; deletion policy for referenced template unresolved | QC-001–005/016 |
 | QC templates | Company/branch scope and active state | Yes | None | Add scope/active controls and ownership validation | QC-004/005 |
