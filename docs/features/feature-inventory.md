@@ -355,3 +355,13 @@ unbound registration findings. Admin Invite/Resend controls and /account/ landin
 now exist;24-hour native setup emails bind realm+subject to the intended employee.
 Role/deactivation synchronization and database guards reject stale elevated tokens.
 Advanced employee editing, linked-email-change UI and My Work remain separate.
+
+## Personal work for management roles — 2026-10-14
+
+Admins and tenant-wide managers can have assigned shifts and use the shared
+employee clock/checklist flow without changing roles. Admin and manager workspace
+shortcuts require a verified active linked employee profile; unbound owners get
+profile-linking guidance through Account. My shifts can return through Account to
+management. Coverage includes all staff roles, forged IDs, cross-owner completion,
+lifecycle denials, empty schedules and desktop/mobile journeys. See
+[management own shifts](management-own-shifts.md) and SELF-SHIFT-001–008.

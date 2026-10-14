@@ -7,7 +7,7 @@ const people = [
   { id: 'inactive', firstName: 'Inactive', lastName: 'Cleaner', isActive: false },
 ];
 type Failure = 'conflict' | 'server' | 'html' | 'network' | 'saved-network';
-async function setup(page: Page, options: { failure?: Failure; partial?: boolean; assigned?: boolean; loadFailure?: boolean; removeFailure?: boolean; refreshFailure?: boolean } = {}) {
+async function setup(page: Page, options: { failure?: Failure; partial?: boolean; assigned?: boolean; loadFailure?: boolean; removeFailure?: boolean; refreshFailure?: boolean; managementPeople?: boolean } = {}) {
   await setupAdminMocks(page);
   let assigned: any[] = options.assigned ? [{ id: 'existing', employeeId: 'alice', isActive: true }] : [];
   let failure = options.failure; let loadFailure = options.loadFailure; let removeFailure = options.removeFailure;
@@ -41,7 +41,9 @@ async function setup(page: Page, options: { failure?: Failure; partial?: boolean
       return route.fulfill({ status: 200, headers, json: assigned.at(-1) });
     }
     const json = path.endsWith('/shifts') ? ['one', 'two'].map(id => ({ id, name: 'Shift ' + id, schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' }, isActive: true }))
-      : path.endsWith('/employees') ? people : path.endsWith('/companies') ? { items: [], total: 0 } : [];
+      : path.endsWith('/employees') ? (options.managementPeople ? [...people,
+          { id: 'working-admin', firstName: 'Working', lastName: 'Admin', role: 'admin', isActive: true },
+          { id: 'working-manager', firstName: 'Working', lastName: 'Manager', role: 'manager', isActive: true }] : people) : path.endsWith('/companies') ? { items: [], total: 0 } : [];
     return route.fulfill({ status: 200, headers, json });
   });
   await page.goto('/admin/shifts/');
@@ -166,4 +168,13 @@ test('late failed roster read does not overwrite another opened row', async ({ p
   const response = page.waitForResponse(r => r.url().endsWith('/shifts/one/assignments') && r.status() === 500);
   release(); await response;
   await expect(alert(page)).toHaveCount(0); await expect(page.getByRole('textbox', { name: 'Assign employees', exact: true })).toBeEnabled();
+});
+
+test('active administrators and tenant managers can be assigned as working staff', async ({ page }) => {
+  const state = await setup(page, { managementPeople: true });
+  await select(page, 'Working Admin'); await select(page, 'Working Manager');
+  await page.getByRole('button', { name: 'Assign', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Unassign Working Admin', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Unassign Working Manager', exact: true })).toBeVisible();
+  expect(state.writes).toEqual(['working-admin', 'working-manager']);
 });

@@ -35,6 +35,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [access, setAccess] = useState<'pending' | 'allowed' | 'denied' | 'error'>('pending');
+  const [hasOwnWorkIdentity, setHasOwnWorkIdentity] = useState(false);
   const verification = useRef(0);
   const [opened, { toggle, close }] = useDisclosure(false);
   const pathname = usePathname() ?? '';
@@ -42,6 +43,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const verifyAccess = useCallback(async () => {
     const attempt = ++verification.current;
     setAccess('pending');
+    setHasOwnWorkIdentity(false);
     try {
       await initAuth();
       if (attempt !== verification.current) return;
@@ -64,7 +66,10 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       });
       const allowed = identity.realm === authTenant() && hasAdmin
         && (!identity.employee || (identity.employee.role === 'admin' && identity.employee.isActive === true));
-      if (attempt === verification.current) setAccess(allowed ? 'allowed' : 'denied');
+      if (attempt === verification.current) {
+        setAccess(allowed ? 'allowed' : 'denied');
+        setHasOwnWorkIdentity(allowed && identity.employee?.isActive === true);
+      }
     } catch {
       if (attempt === verification.current) { setReady(true); setAccess('error'); }
     }
@@ -163,6 +168,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             </Group>
 
             <Group gap="xs" wrap="nowrap">
+              <Button component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="subtle" size="xs">My account</Button>
+              {hasOwnWorkIdentity && <Button component={Link} href="/me/shifts/" variant="light" size="xs">My shifts</Button>}
               <PwaInstallButton variant="light" size="xs" compact />
               <Tooltip label="Sign out" withArrow>
                 <Button

@@ -102,3 +102,12 @@ across two branches, foreign-tenant denials, shift creation/assignment/restorati
 template preservation and stale-token denial after role/lifecycle changes.
 TypeScript and the production build passed. Merge/deployment verification remains
 pending; this document does not claim manager permissions are already live.
+
+## Managers who perform assigned shifts
+
+Managers and linked tenant admins use My shifts to clock their own assignments
+and record the activities performed. Both workspaces expose the shared entry after
+identity verification, and My account returns to management. Keep the existing
+role; every worker needs an active employee profile linked to their login.
+Management access cannot clock another employee's work. See
+[personal shifts for all staff](management-own-shifts.md).
