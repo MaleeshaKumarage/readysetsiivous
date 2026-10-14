@@ -8,6 +8,8 @@ Checklist template create/update also checks optional company and branch scopes 
 
 Public services/content, booking availability/create/lookup/cancel, agreement signing/files and QC/shared PDF routes use `/api/v1/public/{slug}/...` as their tenant. Anonymous access and a matching authenticated tenant work normally. A different authenticated realm receives 403 before dispatch; no request is redirected to the token's tenant. Unknown or inactive URL tenants also receive 403. Frontends should send bearer tokens only to their authenticated workspaces, as the existing frontend does.
 
+Manager endpoints also require a registered Active tenant, matching admin/me workspaces. Unknown/suspended manager realms return403 before employee lookup or operational reads/writes, even with an existing signed token. Provisioner identities cannot enter the manager workspace. Active managers retain their tenant-wide operations. This closes the guard omission tracked in #120.
+
 ## Index migration
 
 The existing `mt_doc_company_uidx_business_id` index keeps its name and changes to include `tenant_id`. Rehearse Marten schema reconciliation on a private restored database, verify preserved document contents/IDs/versions and a second idempotent reconciliation, then release through the normal API pipeline. Preserve a recoverable backup before rollout. A code rollback to the global definition is unsafe once separate tenants legitimately share an ID; retain the scoped index and use a forward fix.

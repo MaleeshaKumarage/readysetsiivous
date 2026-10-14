@@ -77,6 +77,7 @@ public class TenantResolutionMiddleware
             else
             {
                 if (realm == _provisionerRealm && (path.Contains("/admin/", StringComparison.OrdinalIgnoreCase)
+                    || path.StartsWith("/api/v1/manager", StringComparison.OrdinalIgnoreCase)
                     || path.StartsWith("/api/v1/me", StringComparison.OrdinalIgnoreCase)))
                 {
                     context.Response.StatusCode = StatusCodes.Status403Forbidden;
@@ -97,10 +98,11 @@ public class TenantResolutionMiddleware
         await _next(context);
     }
 
-    /// <summary>Admin and public endpoints must resolve to a registered Active tenant.</summary>
+    /// <summary>Tenant workspaces and public endpoints require a registered Active tenant.</summary>
     private static bool RequiresActiveTenant(string path) =>
         path.Contains("/admin/", StringComparison.OrdinalIgnoreCase)
         || path.Contains("/public/", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWith("/api/v1/manager", StringComparison.OrdinalIgnoreCase)
         || path.StartsWith("/api/v1/me", StringComparison.OrdinalIgnoreCase);
 
     private static bool TryGetPublicSlug(string path, out string slug)

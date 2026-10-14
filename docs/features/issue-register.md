@@ -91,6 +91,8 @@ test services. Production users, SMTP and database were not changed by this work
 
 Related company tenant integrity is covered by [PR119](https://github.com/MaleeshaKumarage/readysetsiivous/pull/119): #98 per-tenant business-ID uniqueness, #67 public URL tenant policy, and #81 branch/agreement/template parent ownership before writes. #81 remains open for semantic upload validation and signature/PDF race integrity. See [behavior, migration and test evidence](company-tenant-integrity.md).
 
+The same audit identified [#120](https://github.com/MaleeshaKumarage/readysetsiivous/issues/120): manager routes were omitted from the shared registered-active tenant guard. PR119 includes that guard and signed JWT denial checks while preserving active managers' tenant-wide permissions.
+
 ## Issues63/64 implementation progress
 
 Separate tenant/platform resource audiences and explicit platform tenant-management

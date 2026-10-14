@@ -99,6 +99,31 @@ public class PublicTenantResolutionTests
         Assert.Empty(host.Registry.Invocations); Assert.Empty(host.Mediator.Invocations);
     }
 
+    [Theory]
+    [InlineData("inactive")] [InlineData("unknown")]
+    public async Task Manager_requests_require_active_tenant_before_any_employee_or_operation_lookup(string realm)
+    {
+        using var host = new Host();
+        foreach (var method in new[] { "GET", "POST" })
+        {
+            using var response = await host.SendPrivate("/api/v1/manager/shifts", realm, method);
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+            Assert.Contains("tenant-inactive", await response.Content.ReadAsStringAsync());
+        }
+        Assert.Empty(host.Employees.Invocations);
+        Assert.Empty(host.Mediator.Invocations);
+    }
+
+    [Fact]
+    public async Task Provisioner_realm_cannot_enter_manager_workspace()
+    {
+        using var host = new Host();
+        using var response = await host.SendPrivate("/api/v1/manager/shifts", "master", "GET");
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Empty(host.Registry.Invocations);
+        Assert.Empty(host.Employees.Invocations);
+    }
+
     private sealed class Host : IDisposable
     {
         private readonly RSA rsa = RSA.Create(2048);
@@ -157,7 +182,12 @@ public class PublicTenantResolutionTests
 
         public Task<HttpResponseMessage> Send(string slug, string? realm, (string Method, string Route, string? Body) route)
         {
-            var request = new HttpRequestMessage(new HttpMethod(route.Method), $"/api/v1/public/{slug}/{route.Route}");
+            return SendPrivate($"/api/v1/public/{slug}/{route.Route}", realm, route.Method, route.Body);
+        }
+
+        public Task<HttpResponseMessage> SendPrivate(string path, string? realm, string method, string? body = null)
+        {
+            var request = new HttpRequestMessage(new HttpMethod(method), path);
             if (realm is not null)
             {
                 var token = new JwtSecurityToken("https://auth.test/realms/" + realm,
@@ -166,7 +196,7 @@ public class PublicTenantResolutionTests
                     new SigningCredentials(key, SecurityAlgorithms.RsaSha256));
                 request.Headers.Authorization = new("Bearer", new JwtSecurityTokenHandler().WriteToken(token));
             }
-            if (route.Body is not null) request.Content = new StringContent(route.Body, System.Text.Encoding.UTF8, "application/json");
+            if (body is not null) request.Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
             return Client.SendAsync(request);
         }
 
