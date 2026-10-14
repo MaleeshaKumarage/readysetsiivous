@@ -30,7 +30,7 @@ export default function FAQ() {
             >
               <button
                 onClick={() => toggle(i)}
-                className="w-full flex items-center justify-between px-5 py-4 text-left"
+                className="w-full flex items-center justify-between px-5 py-4 text-left transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-700/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset"
                 aria-expanded={openIndex === i}
                 aria-controls={`faq-panel-${i}`}
               >
