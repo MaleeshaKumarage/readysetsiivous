@@ -38,3 +38,20 @@ and that data/key/database services and volumes are never removed. Real producti
 verification checks the final running SHA/health after the tested image release.
 Workflow-only change; no application/schema behavior changes or full issue90
 reconciliation. Merge this fix and rerun release deployment for built bb82ad4.
+
+The workflow checks out trusted main, independently of the completed build SHA,
+with contents:read and packages:read permissions. Forward RELEASE_SHA,
+REGISTRY_USER and REGISTRY_TOKEN through ssh-action envs and use script_path.
+Login uses password-stdin inside the script; never interpolate secrets into
+script text or enable tracing. Validate SHA locally and remotely. Allow manual
+workflow_dispatch with a required release_sha to deploy an already built release.
+
+Before changing .env, back it up privately and record the running image separately.
+On any failure restore the original .env, remove the private backup, and preserve
+the nonzero exit code. Environment restoration does not roll back a replaced
+container; print that limitation. Use 30 health attempts, connect timeout 2 seconds,
+request timeout 5 seconds, and 2 seconds between attempts. Parse JSON and require
+status to be exactly the string ok. After health succeeds, recheck compose container
+identity, configured image, actual image ID and running state before success.
+Tests cover restoration on every failure, bounded retries, and a container that
+changes or stops after health succeeds.
