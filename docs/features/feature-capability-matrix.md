@@ -53,9 +53,9 @@ test families, not proof that those tests are currently implemented.
 | QC dispatch | Recurring at shift end | None wired; local untracked draft files | None | Implement shared dispatcher and worker before reporting this as an active feature | QC-010 |
 | QC submissions | Read/filter by shift | Yes | Yes | Tenant-session isolation is a release-blocking verification task | QC-006/013 |
 | QC submissions | Filter date/status/employee; inspect full detail/photos | Date/shift list filters; no dedicated complete reviewer flow | Partial: table/photo count | Define useful review filters/detail view; photo URL-size/schema safeguards | QC-013/017, QCP-006 |
-| QC reporting | Monthly PDF | Yes | Yes | Real PDF content, timezone/month boundaries and failure feedback unproven | QC-014/015 |
+| QC reporting | Monthly PDF | Yes, including submitted photo/note appendix | Admin download | Images/dates/notes and real rendered pages verified in issue102; public links retain summary-only privacy | QC-014/015, QC-EVID-001–006 |
 | Public QC | Token lookup/items/notes/one-time submit | Yes | Yes | Repeat-submit409, precise item matching and identity/token policies need work | QCP-001–004/008/009 |
-| Public QC | Photos | String/dataURL persistence, no upload endpoint | File picker/preview/remove | Decide bounded upload storage; no drag/drop handler or admin viewer | QCP-005–007 |
+| Public QC | Photos | String/dataURL persistence; nonblank note required with images | File picker/preview/remove; note validation; read/error state | Private upload storage/server limits and full admin reviewer remain issue77 | QCP-005–007, QC-EVID-001–003 |
 | Agreements | Create/read/list/detail | Yes | Yes | FE/BE count mismatch and company/PDF validation; partially filled signer rows need explicit errors | AGR-001–006 |
 | Agreements | Copy signer links/mailto/document download | Token/file APIs | Yes | Actual email dispatch absent; distinguish client mailto from delivered invitation | AGR-007/012 |
 | Agreements | Add/remove persisted signer | Yes | None | Add in agreement detail only after signed-signer/completion policy is defined | AGR-008/009 |

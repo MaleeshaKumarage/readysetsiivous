@@ -175,7 +175,8 @@ FE action to attach/change templates without reassigning cleaners. Started and
 submitted checklist snapshots survive changes; future pending records update.
 
 Cleaners select the activities performed that day. Unchecked items and empty notes
-are permitted; submission records an occurrence once and is not a requirement to
+without photos are permitted; attached photos require a nonblank shift note.
+Submission records an occurrence once and is not a requirement to
 do every listed activity. Original checklist text/order/count must match; repeat
 and future submission return 409. Photo data URLs remain unbounded legacy evidence
 storage and need the private upload/size-policy work documented in G11/G23.
@@ -184,7 +185,9 @@ Monthly company/branch/shift reports show individual activity days and occurrenc
 counts, recording/missing/pending totals and scheduled hours counted once per
 occurrence. Separate shift and branch PDFs are available. Tenant admins can create
 30-day public summary links and revoke them. Shared reports are immutable snapshots
-with no cleaner forms, identity, notes, photos or checklist tokens. Tenant isolation
+with no cleaner forms, identity, notes, photos or checklist tokens. Downloaded
+admin PDFs include a dated photo/note appendix, including standalone notes; see
+[photo reporting](shift-photo-reporting.md). Tenant isolation
 and concurrent generation/submission were tested against isolated PostgreSQL.
 
 See [QC workflow](quality-cycle-workflow.md) for the full business contract, test

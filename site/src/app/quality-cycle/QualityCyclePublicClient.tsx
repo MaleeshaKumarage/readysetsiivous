@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   CheckCircle2,
@@ -17,6 +17,7 @@ import { publicQualityCycle, QualityCycleForm, QualityCycleFormItem } from '@/li
 import { Logo } from '@/ds/Logo';
 import { Card } from '@/ds/Card';
 import { Button } from '@/ds/Button';
+import { photoNoteMessage, readShiftPhotos } from '@/lib/shiftPhotos';
 
 export default function QualityCyclePublicClient() {
   const searchParams = useSearchParams();
@@ -32,6 +33,9 @@ export default function QualityCyclePublicClient() {
   const [items, setItems] = useState<QualityCycleFormItem[]>([]);
   const [cleanerNotes, setCleanerNotes] = useState('');
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+  const [photoReading, setPhotoReading] = useState(false);
+  const [noteError, setNoteError] = useState(false);
+  const noteRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (token) {
@@ -68,19 +72,14 @@ export default function QualityCyclePublicClient() {
     setItems(current => current.map((item, i) => i === index ? { ...item, isChecked: !item.isChecked } : item));
   }
 
-  function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files;
-    if (!files) return;
-
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (reader.result) {
-          setPhotoUrls((prev) => [...prev, reader.result as string]);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (files.length === 0) return;
+    setPhotoReading(true); setError(null);
+    try { const uploaded = await readShiftPhotos(files); setPhotoUrls(prev => [...prev, ...uploaded]); }
+    catch (error) { setError(error instanceof Error ? error.message : 'Could not read the photo. Please select it again.'); }
+    finally { setPhotoReading(false); }
   }
 
   function handleRemovePhoto(index: number) {
@@ -89,6 +88,11 @@ export default function QualityCyclePublicClient() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (photoReading) return;
+    if (photoUrls.length > 0 && !cleanerNotes.trim()) {
+      setNoteError(true); setError(photoNoteMessage); noteRef.current?.focus(); return;
+    }
+    setNoteError(false);
     if (form && new Date(form.shiftOccurrenceUtc).getTime() > Date.now()) {
       setError('This task can be completed after the shift starts.'); return;
     }
@@ -194,7 +198,7 @@ export default function QualityCyclePublicClient() {
 
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
             {error && (
-              <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+              <div role="alert" aria-label="Form error" className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
                 <span>{error}</span>
               </div>
@@ -249,18 +253,21 @@ export default function QualityCyclePublicClient() {
               <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-gray-300 dark:border-gray-700 hover:border-brand-400 dark:hover:border-brand-500 rounded-2xl cursor-pointer bg-gray-50/50 dark:bg-gray-800/50 hover:bg-brand-50/30 transition-colors group">
                 <Upload className="w-6 h-6 text-gray-400 group-hover:text-brand-600 mb-1 transition-colors" />
                 <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                  Click or drag images to upload
+                  Select photos to upload
                 </span>
-                <span className="text-[11px] text-gray-400">PNG, JPG up to 10MB</span>
+                <span className="text-[11px] text-gray-400">PNG, JPEG, WebP or BMP, up to 10 MB each</span>
                 <input
                   type="file"
-                  accept="image/*"
+                  aria-label="Add shift photos"
+                  accept="image/png,image/jpeg,image/webp,image/bmp"
+                  disabled={submitting || photoReading}
                   multiple
                   onChange={handlePhotoUpload}
                   className="hidden"
                 />
               </label>
 
+              {photoReading && <p role="status">Reading photos...</p>}
               {photoUrls.length > 0 && (
                 <div className="grid grid-cols-3 gap-3 pt-1">
                   {photoUrls.map((url, idx) => (
@@ -268,6 +275,8 @@ export default function QualityCyclePublicClient() {
                       <img src={url} alt={`Upload ${idx + 1}`} className="h-24 w-full object-cover" />
                       <button
                         type="button"
+                        aria-label="Remove photo"
+                        disabled={submitting}
                         onClick={() => handleRemovePhoto(idx)}
                         className="absolute top-1.5 right-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full p-1 shadow-md transition-colors"
                       >
@@ -282,9 +291,14 @@ export default function QualityCyclePublicClient() {
             {/* Cleaner Notes */}
             <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
               <label className="block text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
-                Notes / Comments (Optional)
+                Notes / Comments ({photoUrls.length > 0 ? 'Required with photos' : 'Optional'})
               </label>
               <textarea
+                ref={noteRef}
+                aria-required={photoUrls.length > 0}
+                aria-invalid={noteError && photoUrls.length > 0 && !cleanerNotes.trim()}
+                aria-describedby="photo-note-help"
+                disabled={submitting}
                 aria-label="Notes / Comments"
                 value={cleanerNotes}
                 onChange={(e) => setCleanerNotes(e.target.value)}
@@ -292,6 +306,7 @@ export default function QualityCyclePublicClient() {
                 rows={3}
                 className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all text-gray-800 dark:text-gray-200 placeholder-gray-400"
               />
+              <p id="photo-note-help" className="text-xs text-gray-600 dark:text-gray-300">A note is required when photos are attached. You can add a note without a photo.</p>
             </div>
 
             {form && new Date(form.shiftOccurrenceUtc).getTime() > Date.now() && <p role="status">This task becomes available when the shift starts.</p>}
@@ -301,7 +316,7 @@ export default function QualityCyclePublicClient() {
               variant="primary"
               size="lg"
               fullWidth
-              disabled={submitting || Boolean(form && new Date(form.shiftOccurrenceUtc).getTime() > Date.now())}
+              disabled={submitting || photoReading || Boolean(form && new Date(form.shiftOccurrenceUtc).getTime() > Date.now())}
               className="mt-4"
             >
               {submitting ? (

@@ -351,3 +351,17 @@ scope98 are open findings, not completed by this authorization release.
 | GAME-FALLBACK-006 | BE | Full game with failed provider | Create/join/start/rotation/end complete; valid distinct sentences/hints and standings |
 
 Contract: [game sample fallback](../features/game-sample-fallback.md).
+
+
+## Shift evidence appendix — issue102
+
+| ID | Layer | Setup/action | Observable result |
+| --- | --- | --- | --- |
+| QC-EVID-001 | Domain/API/UI | Photo + null/blank/whitespace note | 400 or inline rejection; no save/checklist/timestamp mutation; note focused; inputs retained |
+| QC-EVID-002 | Domain/UI | Notes alone; no evidence; remove last image | Completion allowed, conditional note requirement removed, checklist remains optional |
+| QC-EVID-003 | UI | Delayed/error photo read; failed submission and retry | No completion request while reading; visible error; existing photos/notes/selections retained |
+| QC-EVID-004 | Report/PDF | Submitted vs draft records; two cleaners; branch/shift filtering; UTC date rollover | Only submitted evidence in correct group; scheduled date uses tenant timezone; original counts unchanged |
+| QC-EVID-005 | PDF | Multiple portrait/landscape/phone photos; long note; note-only record | Real image resources and visible rendered photos; date/note per photo; long text paginates; no clipped content |
+| QC-EVID-006 | PDF/API | Corrupt/base64/unsupported/remote/oversized legacy photo; older report; public share | Visible fallback, date/note retained, no remote reads or report failure; old snapshots work; shared PDF omits private evidence |
+
+Implementation/test contract: [shift photo reporting](../features/shift-photo-reporting.md).

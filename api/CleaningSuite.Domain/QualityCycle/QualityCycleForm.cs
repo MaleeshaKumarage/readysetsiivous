@@ -92,6 +92,11 @@ public class QualityCycleForm : BaseDocument
             || items.Where((item, i) => item.ItemText != Items[i].ItemText).Any())
             throw new ArgumentException("Submit the complete checklist in its original order.", nameof(items));
 
+        var photos = photoUrls?.Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => p.Trim()).ToList() ?? new List<string>();
+        var notes = cleanerNotes?.Trim();
+        if (photos.Count > 0 && string.IsNullOrWhiteSpace(notes))
+            throw new ArgumentException("Add a note describing the attached photos.", nameof(cleanerNotes));
+
         if (items.Count > 0)
         {
             // Preserve original template item texts and structure; only update IsChecked property
@@ -101,8 +106,8 @@ public class QualityCycleForm : BaseDocument
             }
         }
 
-        PhotoUrls = photoUrls?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? new List<string>();
-        CleanerNotes = cleanerNotes?.Trim();
+        PhotoUrls = photos;
+        CleanerNotes = notes;
         IsSubmitted = true;
         SubmittedUtc = DateTime.UtcNow;
         EndedAtUtc = DateTime.UtcNow;

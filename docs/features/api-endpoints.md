@@ -119,6 +119,9 @@ Total: **77 controller endpoints**. Non-controller public entries:
   TimeSpan inputs; outputs can use HH:mm:ss.
 - Public QC submit route token overrides body's Token. The body carries items,
   photoUrls and cleanerNotes. Photo URLs currently include FileReader data URLs.
+  Any nonblank photo entry requires a nonblank cleanerNotes value; notes alone
+  remain valid. The same rule applies to authenticated end-shift submission.
+  See [photo/report contract](shift-photo-reporting.md).
 - Agreement sign accepts typedName and signaturePng (base64/data URI), not a raw
   canvas upload. File retrieval is a separate token-authenticated public request.
 - QC summary query uses shiftId/year/month; filters and PDF routes may carry query
