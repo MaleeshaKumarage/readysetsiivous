@@ -36,11 +36,20 @@ representative documents, then apply v9 mappings and verify identical IDs/conten
 and GUID versions. Capture and review the schema delta; refuse table/data deletion
 or unexpected version-type changes. Verify a repeated apply is idempotent and
 assess old-image read/write compatibility against the migrated rehearsal database.
+Also restore the rehearsal backup into a separate isolated database, verify
+representative document counts/content, and start the previous image against that
+restore. Rehearse recovery rather than assuming a successful dump is sufficient.
 A destructive or rollback-incompatible delta must be resolved or presented as a
 concrete deployment decision before touching production.
 
 Before production rollout retain a private recoverable database backup and the
 previous image/config reference. Never publish credentials or customer data. Merge
+The private production backup must be complete and usable: validate its archive
+and restore it to a separate private database using the rehearsed procedure, compare
+table/document counts, and verify the previous image can start without exposing
+that database or enabling workers. Do not run injection/destructive tests on real
+customer copies; those remain synthetic shared-dev tests. Remove only the private
+verification database after proof, retaining the recoverable backup for rollout.
 only after compile/full tests, real tenant-isolation/concurrency, upgrade rehearsal,
 package vulnerability audit and the container smoke checks pass. Deploy API only
 with the hardened exact-image verification. Verify runtime/package versions in the
