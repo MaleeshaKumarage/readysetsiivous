@@ -9,34 +9,37 @@ namespace CleaningSuite.Tests.Entertainment;
 
 /// <summary>
 /// Drives a full game against the REAL Gemini API: create → join two players →
-/// start → rotate two more rounds → end. One live Gemini call per round. Skips
-/// silently when GEMINI_KEY is not set.
+/// start → rotate two more rounds → end, with runtime sample fallback if Gemini
+/// is unavailable. The optional live probe returns when GEMINI_KEY is not set;
+/// the deterministic outage game always runs.
 ///   GEMINI_KEY=<key> dotnet test --filter "FullyQualifiedName~EntertainmentFullRoundLive"
 /// </summary>
 public class EntertainmentFullRoundLiveTests
 {
     [Fact]
-    public async Task FullGame_GeneratesSentencePerRound_FromLiveApi()
+    public async Task FullGame_CompletesWithLiveGeminiOrSamples()
     {
         var apiKey = Environment.GetEnvironmentVariable("GEMINI_KEY");
         if (string.IsNullOrWhiteSpace(apiKey))
             return; // skipped — GEMINI_KEY not set
 
-        try
-        {
-            await RunFullGameAsync(apiKey);
-        }
-        catch (InvalidOperationException ex) when (IsTransientGeminiError(ex))
-        {
-            // Rate limit / model overload — environmental, not a code failure.
-            return;
-        }
+        await RunFullGameAsync(apiKey);
     }
 
-    private static bool IsTransientGeminiError(Exception ex)
-        => ex.Message.Contains("429") || ex.Message.Contains("503");
+    [Fact]
+    public async Task FullGame_CompletesWithSamples_WhenGeminiIsUnavailable()
+    {
+        using var http = new HttpClient(new UnavailableProvider());
+        await RunFullGameAsync("test-key", new GeminiSentenceService(http, new ConfigurationBuilder().Build()), waitBetweenRounds: false);
+    }
 
-    private static async Task RunFullGameAsync(string apiKey)
+    private sealed class UnavailableProvider : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.ServiceUnavailable));
+    }
+
+    private static async Task RunFullGameAsync(string apiKey, IGeminiSentenceService? sentenceService = null, bool waitBetweenRounds = true)
     {
         var protector = new EntertainmentKeyProtector(new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -45,7 +48,7 @@ public class EntertainmentFullRoundLiveTests
             })
             .Build());
 
-        var gemini = new GeminiSentenceService(new HttpClient(), new ConfigurationBuilder().Build());
+        var gemini = sentenceService ?? new GeminiSentenceService(new HttpClient(), new ConfigurationBuilder().Build());
         var repo = new InMemoryEntertainmentRepository();
 
         // Create group (per-group key = GEMINI_KEY).
@@ -68,7 +71,7 @@ public class EntertainmentFullRoundLiveTests
 
         // Real games space rounds by player time; add a delay to avoid bursting
         // the API and tripping the model's demand throttle.
-        await Task.Delay(TimeSpan.FromSeconds(3));
+        if (waitBetweenRounds) await Task.Delay(TimeSpan.FromSeconds(3));
 
         // Rotate: round 2, translator = Bob (A2) — live Gemini call.
         var nextHandler = new StartNextEntertainmentRoundCommandHandler(repo, protector, gemini);
@@ -77,7 +80,7 @@ public class EntertainmentFullRoundLiveTests
         Assert.False(string.IsNullOrWhiteSpace(round2.SentenceEn));
         Assert.NotEqual(round1.Round.SentenceEn, round2.SentenceEn);
 
-        await Task.Delay(TimeSpan.FromSeconds(3));
+        if (waitBetweenRounds) await Task.Delay(TimeSpan.FromSeconds(3));
 
         // Rotate: round 3, translator = Carol (C1) — live Gemini call.
         var round3 = await nextHandler.Handle(

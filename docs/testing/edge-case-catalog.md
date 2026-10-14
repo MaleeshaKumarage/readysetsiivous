@@ -339,3 +339,15 @@ The original generic registration assumptions are superseded by the
 These cases are implemented alongside65/82/96/97; production evidence is tracked
 separately from mocked UI assertions. Dependency advisory95 and company-index
 scope98 are open findings, not completed by this authorization release.
+# Language-game provider fallback — issue105
+
+| ID | Layer | Setup/action | Observable result |
+| --- | --- | --- | --- |
+| GAME-FALLBACK-001 | BE | Gemini returns valid English/Finnish/string or fi-object hints | Same content returned, not marked as sample |
+| GAME-FALLBACK-002 | BE | HTTP401/429/5xx, network/deadline failure | One bounded attempt; valid sample at translator level |
+| GAME-FALLBACK-003 | BE | Missing/wrong/blank output or corrupt JSON | Sample returned; unexpected programming exceptions still propagate |
+| GAME-FALLBACK-004 | BE | All six levels, ten recent samples, exhausted larger history | Twelve complete samples per level; recent text avoided; bounded least-recent cycling |
+| GAME-FALLBACK-005 | BE | Pre-cancel/during generation/ignored cancellation, start and next round | Cancellation propagated; no group/round mutation or save |
+| GAME-FALLBACK-006 | BE | Full game with failed provider | Create/join/start/rotation/end complete; valid distinct sentences/hints and standings |
+
+Contract: [game sample fallback](../features/game-sample-fallback.md).

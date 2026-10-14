@@ -3,6 +3,8 @@ using System.Text.Json;
 using CleaningSuite.Application.Entertainment;
 using CleaningSuite.Domain.Entertainment;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace CleaningSuite.Infrastructure.Entertainment;
 
@@ -11,13 +13,17 @@ public class GeminiSentenceService : IGeminiSentenceService
     private readonly HttpClient _http;
     private readonly string _model;
     private readonly string _baseUrl;
+    private readonly TimeSpan _timeout;
+    private readonly ILogger<GeminiSentenceService> _logger;
 
-    public GeminiSentenceService(HttpClient http, IConfiguration configuration)
+    public GeminiSentenceService(HttpClient http, IConfiguration configuration, ILogger<GeminiSentenceService>? logger = null)
     {
         _http = http;
         _model = configuration["Entertainment:Gemini:Model"] ?? "gemini-flash-latest";
         _baseUrl = configuration["Entertainment:Gemini:BaseUrl"]
             ?? "https://generativelanguage.googleapis.com";
+        _timeout = TimeSpan.FromSeconds(Math.Clamp(configuration.GetValue<int?>("Entertainment:Gemini:TimeoutSeconds") ?? 8, 1, 30));
+        _logger = logger ?? NullLogger<GeminiSentenceService>.Instance;
     }
 
     public async Task<GeminiSentence> GenerateAsync(
@@ -27,6 +33,9 @@ public class GeminiSentenceService : IGeminiSentenceService
         IReadOnlyList<string> previousSentences,
         CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
+        if (!Enum.IsDefined(level)) throw new ArgumentOutOfRangeException(nameof(level));
+        ArgumentNullException.ThrowIfNull(previousSentences);
         var url = $"{_baseUrl}/v1beta/models/{_model}:generateContent";
         var requestBody = new
         {
@@ -43,8 +52,7 @@ public class GeminiSentenceService : IGeminiSentenceService
             },
         };
 
-        const int maxAttempts = 3;
-        for (var attempt = 1; ; attempt++)
+        try
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, url)
             {
@@ -53,25 +61,44 @@ public class GeminiSentenceService : IGeminiSentenceService
             request.Headers.Add("X-goog-api-key", apiKey);
 
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeoutCts.CancelAfter(TimeSpan.FromSeconds(30));
+            timeoutCts.CancelAfter(_timeout);
 
             using var response = await _http.SendAsync(request, timeoutCts.Token);
-            if (response.IsSuccessStatusCode)
-            {
-                var json = await response.Content.ReadAsStringAsync(timeoutCts.Token);
-                return Parse(json);
-            }
-
-            var status = (int)response.StatusCode;
-            if (attempt >= maxAttempts || !IsTransient(status))
-                throw new InvalidOperationException($"Gemini request failed with {status}.");
-
-            await Task.Delay(TimeSpan.FromSeconds(attempt * 2), ct);
+            if (!response.IsSuccessStatusCode)
+                return Fallback(level, previousSentences, ct, $"HTTP {(int)response.StatusCode}");
+            var json = await response.Content.ReadAsStringAsync(timeoutCts.Token);
+            var parsed = ParseValidResponse(json);
+            if (parsed is null) return Fallback(level, previousSentences, ct, "invalid response");
+            ct.ThrowIfCancellationRequested();
+            return parsed;
         }
+        catch (HttpRequestException) { return Fallback(level, previousSentences, ct, "network failure"); }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return Fallback(level, previousSentences, ct, "provider timeout"); }
     }
 
-    private static bool IsTransient(int status)
-        => status is 429 or 500 or 502 or 503 or 504;
+    private GeminiSentence Fallback(CefrLevel level, IReadOnlyList<string> previousSentences, CancellationToken ct, string reason)
+    {
+        ct.ThrowIfCancellationRequested();
+        var sample = SampleSentenceCatalog.Select(level, previousSentences);
+        _logger.LogWarning("Gemini unavailable ({Reason}); using a sample sentence for {Level}.", reason, level);
+        ct.ThrowIfCancellationRequested();
+        return sample;
+    }
+
+    private static GeminiSentence? ParseValidResponse(string json)
+    {
+        try
+        {
+            var sentence = Parse(json);
+            if (string.IsNullOrWhiteSpace(sentence.SentenceEn) || string.IsNullOrWhiteSpace(sentence.SentenceFi)
+                || sentence.BaseForms.Count == 0 || sentence.BaseForms.Any(string.IsNullOrWhiteSpace)) return null;
+            return sentence;
+        }
+        catch (JsonException) { return null; }
+        catch (KeyNotFoundException) { return null; }
+        catch (InvalidOperationException) { return null; }
+        catch (IndexOutOfRangeException) { return null; }
+    }
 
     public static string BuildPrompt(string description, CefrLevel level, IReadOnlyList<string>? previousSentences = null)
     {
@@ -128,6 +155,7 @@ public class GeminiSentenceService : IGeminiSentenceService
                 else if (item.ValueKind == System.Text.Json.JsonValueKind.Object
                     && item.TryGetProperty("fi", out var fiForm))
                     baseForms.Add(fiForm.GetString() ?? "");
+                else throw new InvalidOperationException("Gemini returned an unsupported word-hint format.");
             }
         }
 
