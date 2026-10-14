@@ -132,8 +132,9 @@ test('real employee and tenant manager login, clocking, isolation, reinvite and 
   await managedCard.getByRole('button', { name: 'Assign employee' }).click(); await expect(managedCard.getByRole('button', { name: 'Remove assignment' })).toBeVisible();
   await managedCard.getByRole('button', { name: 'Remove assignment' }).click(); await expect(managedCard.getByText('No employees assigned.')).toBeVisible();
   await managedCard.getByRole('button', { name: 'Deactivate shift' }).click(); await expect(managedCard).toHaveCount(0);
-  await managerPage.getByRole('checkbox', { name: 'Show deactivated shifts' }).check(); await expect(managedCard).toBeVisible();
-  await managedCard.getByRole('button', { name: 'Reactivate shift' }).click(); await expect(managedCard.getByText('Active', { exact: true })).toBeVisible();
+  await managerPage.getByRole('tab', { name: /^Inactive/ }).click(); await expect(managedCard).toBeVisible();
+  await managedCard.getByRole('button', { name: 'Reactivate shift' }).click(); await expect(managedCard).toHaveCount(0);
+  await managerPage.getByRole('tab', { name: /^Active/ }).click(); await expect(managedCard.getByText('Active', { exact: true })).toBeVisible();
   await managerContext.close();
   const promoted = await request.put(`${api}/api/v1/admin/employees/${fixture.employeeId}`, { headers: { Authorization: `Bearer ${ownerJwt}` }, data: fields('admin') });
   expect(promoted.status()).toBe(204);

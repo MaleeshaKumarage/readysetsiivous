@@ -33,7 +33,7 @@ test families, not proof that those tests are currently implemented.
 | Employees | Work hours/skills/areas/pay/certifications/notes | Yes | None | Group into employee profile tabs; restrict payroll/HR visibility | EMP-004 |
 | Employees | Send invite/reinvite | Yes; flow incomplete | None | Fix identity binding/registration destination, then add invite/status action; existing issue49 | EMP-005/006 |
 | Employees | Own profile/work schedule | Some lookup helpers; no complete self-service API | None | Add employee My work workspace with server-side own-resource authorization | AUTH-004, OPS-005 |
-| Companies | Create/read | Yes | Yes | Current list first100 only; separate loading failure from empty | COMP-001/005/007 |
+| Companies | Create/read | Yes | Yes | Management list loads all pages with Active/Inactive tabs; failed/inconsistent pagination is an error | COMP-001/005/007 |
 | Companies | Update/deactivate | Yes | None | Add customer-detail actions; physical delete policy separate | COMP-004 |
 | Companies | Search/pagination | Yes, take1–200 | None | Add list search and pagination; fix selectors in agreement/shift forms too | COMP-005 |
 | Branches | Create/list within company | Yes | Yes | Reject missing/foreign company relationships before write | COMP-001/003 |

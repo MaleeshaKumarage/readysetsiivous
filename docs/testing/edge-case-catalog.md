@@ -11,6 +11,19 @@ parameter sets and the cross-feature failure matrix expand into additional tests
 
 ## Conventions
 
+Lifecycle tab additions (2026-10-14), see [behavior and browser coverage](../features/lifecycle-list-tabs.md):
+
+| ID | Layer | Trigger | Expected result |
+| --- | --- | --- | --- |
+| LIFE-001 | P1 UI | Mixed active/inactive records on every supported management list | Active default; exclusive isActive filtering, accurate full-list counts; local switching adds no reads. |
+| LIFE-002 | P0 UI | Completed/partially signed agreements in either lifecycle | Visible in matching tab; signer details/PDF downloads retained; no cleanup, deletion or mutation. |
+| LIFE-003 | P1 UI | Create from Inactive; deactivate/reactivate through existing actions | Create returns Active; records move to matching tab after successful reload. Permissions and existing actions preserved. |
+| LIFE-004 | P1 UI | Inactive employees in management and active assignment selector | Management exposes inactive rows; inactive invite/deactivate actions absent; assignment options remain active-only. |
+| LIFE-005 | P1 UI | Company after page100; failed/empty/changing-total/duplicate page | Complete validated pagination before counts/filtering; failed/inconsistent data shows error and fresh Refresh retry, no misleading partial list. |
+| LIFE-006 | P1 UI | Branch or shift selection, tab change, delayed detail/roster response | Hidden views close; stale responses discarded; branch tabs scoped and reset on company expansion. |
+| LIFE-007 | P1 UI | Inactive checklist edit and activity switching during reports | isActive/company/branch preserved; create returns Active; report/submission history unaffected. |
+| LIFE-008 | P2 UI/DEVICE | Keyboard arrows/Home/End, mobile and empty selected tab | Correct selected tab/panel associations and focus; helpful lifecycle empty state distinct from first-use empty dataset. |
+
 Each ID is stable and should appear in test titles. Expand semicolon-separated
 parameter values into independently reported tests, not one opaque mega-test.
 `C` = current supported contract; `R/Gxx` = desired regression outcome for a known

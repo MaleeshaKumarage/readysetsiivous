@@ -20,6 +20,11 @@ requirements for template assignment after shift creation, per-occurrence cleane
 activity recording, per-item day totals, separate branch/shift monthly reports
 and tenant-admin-only management/sharing.
 
+The [Active/Inactive list contract](lifecycle-list-tabs.md) records the later
+management tabs across agreements, shifts, employees, services, companies,
+branches and templates, including signed-agreement preservation and complete
+company management pagination.
+
 Scope: **24 feature groups, 84 controller endpoints, 32 FE/BE gaps, and 203
 edge-case families**. Families with parameter sets expand into multiple tests.
 
@@ -49,7 +54,7 @@ the current behavior, or expect an unimplemented feature to pass.
 | F08 | Admin shell and identity | `/admin/`, navigation/dashboard, sign-in/out, responsive drawer | Keycloak JWT, realm roles, `/me`, tenant resolution | Partial role-aware UI; AUTH |
 | F09 | Service administration / images | `/admin/services/`: list, create, edit, activate/deactivate | Full localized fields, image upload, soft-delete | Partial/data-loss risks; SVC |
 | F10 | Employee administration / invitations | `/admin/employees/`: list, create basic fields, deactivate | Full employee CRUD, invite email, hours, skills, areas, pay, certifications | Partial; EMP |
-| F11 | Companies and branches | `/admin/companies/`: first 100 companies, expand branches, create company/branch | Search/paging, CRUD, deactivate | Partial; COMP |
+| F11 | Companies and branches | `/admin/companies/`: all company pages, Active/Inactive tabs, expand branches, create company/branch | Search/paging, CRUD, deactivate | Partial; COMP |
 | F12 | Recurring shifts and assignment | `/admin/shifts/`: create five schedule choices, assign/unassign employees, deactivate | Six schedule types, CRUD, occurrences, bounded overlap checks | Partial; SHIFT |
 | F13 | Quality Cycle templates and reporting | `/admin/quality-cycle/`: create/edit/delete templates, submissions, shift filter, PDF | Templates, dispatch, forms, monthly PDF | Partial/integration risks; QC |
 | F14 | Public Quality Cycle checklist | `/quality-cycle?token=...`: items, photo files, notes, submit/thanks | Token lookup and one-time submission | Implemented with validation/tenant gaps; QCP |
@@ -138,7 +143,7 @@ user or assign their realm roles. Deactivation is a data flag, not Keycloak logo
 Company business ID/name are required and trimmed; a database unique index exists
 for business ID. Contact/address formats are mostly not validated. Company list
 supports case-insensitive name/business-ID search, skip clamped to ≥0 and take
-clamped to 1–200; FE requests the first 100. Branch requires a non-empty
+clamped to 1–200; management traverses all100-item pages for lifecycle tabs. Other company selectors still request the first100. Branch requires a non-empty
 company GUID and name, but its handler does not resolve the parent company.
 Company and branch edit/deactivate APIs exist without corresponding UI actions.
 
@@ -307,7 +312,7 @@ P0 security/data isolation; P1 correctness/data integrity; P2 feature coverage/U
 | G17 | P2 FE | No customer lookup/cancel or admin bookings/invoices/schedule screens | Use APIRequestContext now; UI tests blocked until screen exists. |
 | G18 | P2 FE | No tenant settings/content/provisioning UI; public content API unused | Document as BE-only; test API separately, no fabricated settings selectors. |
 | G19 | P2 FE | Employee advanced fields/edit/invite/reactivation absent | Test API contracts now; UI coverage limited to actual create/deactivate controls. |
-| G20 | P2 FE | Company/branch editing/deactivation/search/paging absent; lists capped at 100 | Records beyond first page inaccessible; selectors must not silently select wrong company. |
+| G20 | P2 FE | Company/branch editing/deactivation/search controls absent; some company selectors capped at100 | Management lists load all pages with activity tabs; other selectors still need complete options and must not silently select the wrong company. |
 | G21 | P2 FE | Admin shift editing/validity/type-1/occurrences absent; batch partial-failure UX fixed | Remaining admin schedule capabilities need FE coverage; assignment reconciliation is covered. |
 | G22 | P2 FE | Agreement post-create signer/lifecycle controls absent; signing UI English on all language routes | Keep before-create rows distinct from persisted signer operations; localization incomplete. |
 | G23 | P2 FE/BE | QC FE limit 10 vs BE unlimited; scope-preserving edits added but scope/active/date-filter controls remain; photo viewer/drop handler missing | Preserve unsupported scope on edit; enforce agreed limits server-side. |

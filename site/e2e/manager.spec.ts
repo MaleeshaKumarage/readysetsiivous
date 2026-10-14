@@ -3,10 +3,10 @@ import { setupAdminMocks } from './admin-helpers';
 const company = '11111111-1111-4111-8111-111111111111', branch1 = '22222222-2222-4222-8222-222222222222', branch2 = '33333333-3333-4333-8333-333333333333';
 const cleaner = '44444444-4444-4444-8444-444444444444';
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
-async function setup(page: Page, options: { role?: string; documentRole?: string; unbound?: boolean; failIdentity?: boolean; failures?: string[] } = {}) {
+async function setup(page: Page, options: { role?: string; documentRole?: string; unbound?: boolean; failIdentity?: boolean; failures?: string[]; inactiveShift?: boolean } = {}) {
   await setupAdminMocks(page); const role = options.role ?? 'manager';
   await page.addInitScript(role => { (window as any).__MOCK_ROLES__ = role ? [role] : []; }, role);
-  let identity = 0; let requests = 0; let adminRequests = 0;
+  let identity = 0; let requests = 0; let adminRequests = 0; let shiftLoads = 0;
   const writes: any[] = []; const failures = [...options.failures ?? []];
   let loadFailure = failures.includes('load');
   await page.route(/\/api\/v1\/me$/, route => {
@@ -18,7 +18,7 @@ async function setup(page: Page, options: { role?: string; documentRole?: string
   await page.route(/\/api\/v1\/admin\//, route => { adminRequests++; return route.fulfill({ status: 403, headers }); });
   let shifts: any[] = [
     { id: '55555555-5555-4555-8555-555555555555', companyId: company, branchId: branch1, name: 'AAA1 weekdays', schedule: { type: 0, dailyStart: '08:00:00', dailyEnd: '10:00:00' }, isActive: true, validFrom: null, validUntil: null },
-    { id: '66666666-6666-4666-8666-666666666666', companyId: company, branchId: branch2, name: 'AAA2 biweekly', schedule: { type: 3, biWeeklyDay: 1, biWeeklyWeekParity: 1, biWeeklyStart: '11:00:00', biWeeklyEnd: '14:00:00' }, isActive: true, validFrom: null, validUntil: null },
+    { id: '66666666-6666-4666-8666-666666666666', companyId: company, branchId: branch2, name: 'AAA2 biweekly', schedule: { type: 3, biWeeklyDay: 1, biWeeklyWeekParity: 1, biWeeklyStart: '11:00:00', biWeeklyEnd: '14:00:00' }, isActive: !options.inactiveShift, validFrom: null, validUntil: null },
   ];
   let assignments: any[] = [];
   await page.route(/\/api\/v1\/manager\//, route => {
@@ -26,7 +26,10 @@ async function setup(page: Page, options: { role?: string; documentRole?: string
     requests++; const path = new URL(request.url()).pathname.split('/manager')[1]; const method = request.method();
     const kind = path.endsWith('deactivate') ? 'deactivate' : path.includes('/assignments') && method === 'POST' ? 'assign' : method === 'GET' && path === '/shifts' ? 'load' : method === 'POST' || method === 'PUT' ? 'save' : '';
     if (kind === 'load' && loadFailure) return route.fulfill({ status: 409, headers, json: { detail: 'load failed; please retry' } });
-    if (kind === 'load') return route.fulfill({ status: 200, headers, json: new URL(request.url()).searchParams.get('includeInactive') === 'true' ? shifts : shifts.filter(s => s.isActive) });
+    if (kind === 'load') {
+      shiftLoads++; expect(new URL(request.url()).searchParams.get('includeInactive')).toBe('true');
+      return route.fulfill({ status: 200, headers, json: shifts });
+    }
     const fail = failures.indexOf(kind); if (fail >= 0) { failures.splice(fail, 1); return route.fulfill({ status: 409, headers, json: { detail: `${kind} failed; please retry` } }); }
     if (method === 'GET') {
       const json = path === '/companies' ? { items: [{ id: company, name: 'AAA', isActive: true }], total: 1 }
@@ -47,7 +50,7 @@ async function setup(page: Page, options: { role?: string; documentRole?: string
     shifts = method === 'PUT' ? shifts.map(s => s.id === saved.id ? saved : s) : [...shifts, saved];
     return route.fulfill({ status: 200, headers, json: saved });
   });
-  return { writes, recoverLoad() { loadFailure = false; }, get requests() { return requests; }, get adminRequests() { return adminRequests; } };
+  return { writes, recoverLoad() { loadFailure = false; }, get requests() { return requests; }, get adminRequests() { return adminRequests; }, get shiftLoads() { return shiftLoads; } };
 }
 
 test('tenant manager sees both branches and creates, edits, assigns, removes and deactivates shifts', async ({ page }) => {
@@ -57,11 +60,13 @@ test('tenant manager sees both branches and creates, edits, assigns, removes and
   await expect(page.getByRole('link', { name: 'Account', exact: true })).toHaveAttribute('href', '/account/?tenant=readysetsiivous');
   await expect(page.getByText(/Payroll|Invoice|Checklist template|Monthly report/)).toHaveCount(0);
   await page.getByRole('button', { name: 'Add shift' }).click(); await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('tab', { name: /^Inactive/ }).click();
   await page.getByRole('button', { name: 'Add shift' }).click();
   await page.getByLabel('Shift name', { exact: true }).fill('New branch2 shift');
   await page.getByLabel('Company', { exact: true }).selectOption(company); await page.getByLabel('Branch', { exact: true }).selectOption(branch2);
   await page.getByRole('button', { name: 'Save shift' }).click();
   const card = page.getByRole('article', { name: 'New branch2 shift' }); await expect(card).toBeVisible();
+  await expect(page.getByRole('tab', { name: /^Active/ })).toHaveAttribute('aria-selected', 'true');
   await card.getByRole('button', { name: 'Edit shift' }).click(); await expect(page.getByLabel('Company', { exact: true })).toBeDisabled();
   await page.getByLabel('Shift name', { exact: true }).fill('Edited branch2 shift'); await page.getByRole('button', { name: 'Save shift' }).click();
   const edited = page.getByRole('article', { name: 'Edited branch2 shift' }); await edited.getByRole('button', { name: 'Employees' }).click();
@@ -69,9 +74,9 @@ test('tenant manager sees both branches and creates, edits, assigns, removes and
   await expect(edited.getByText('Test Cleaner', { exact: true })).toBeVisible(); await edited.getByRole('button', { name: 'Remove assignment' }).click();
   await expect(edited.getByText('No employees assigned.')).toBeVisible(); await edited.getByRole('button', { name: 'Close assignments' }).click();
   await edited.getByRole('button', { name: 'Deactivate shift' }).click(); await expect(edited).toHaveCount(0);
-  await page.getByRole('checkbox', { name: 'Show deactivated shifts' }).check(); await expect(edited).toBeVisible();
-  await edited.getByRole('button', { name: 'Reactivate shift' }).click(); await expect(edited.getByText('Active', { exact: true })).toBeVisible();
-  await page.getByRole('checkbox', { name: 'Show deactivated shifts' }).uncheck(); await expect(edited).toBeVisible();
+  await page.getByRole('tab', { name: /^Inactive/ }).click(); await expect(edited).toBeVisible();
+  await edited.getByRole('button', { name: 'Reactivate shift' }).click(); await expect(edited).toHaveCount(0);
+  await page.getByRole('tab', { name: /^Active/ }).click(); await expect(edited).toBeVisible();
   await page.getByRole('button', { name: 'Refresh operations' }).click();
   expect(state.writes[0].branchId).toBe(branch2); expect(state.writes[1]).not.toHaveProperty('branchId');
   for (const write of state.writes) { expect(write).not.toHaveProperty('qualityCycleTemplateId'); expect(write).not.toHaveProperty('notes'); expect(write).not.toHaveProperty('role'); }
@@ -148,4 +153,45 @@ test('manager creates each schedule type with explicit fields', async ({ page })
   expect(state.writes.map(w => w.schedule.type)).toEqual([1, 2, 3, 4, 5]);
   expect(state.writes[0].schedule.dailyTimes.Monday.start).toBe('09:00'); expect(state.writes[1].schedule.weeklyDays).toContain(2);
   expect(state.writes[2].schedule.biWeeklyWeekParity).toBe(2); expect(state.writes[4].schedule.monthlyDay).toBe(15);
+});
+
+for (const width of [1280, 390]) test(`manager lifecycle tabs filter locally and clear assignment selections at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 844 });
+  const state = await setup(page, { inactiveShift: true }); await page.goto('/manager/');
+  const active = page.getByRole('tab', { name: 'Active (1)', exact: true });
+  const inactive = page.getByRole('tab', { name: 'Inactive (1)', exact: true });
+  await expect(active).toHaveAttribute('aria-selected', 'true');
+  const first = page.getByRole('article', { name: 'AAA1 weekdays' });
+  await expect(first).toBeVisible(); await expect(page.getByRole('article', { name: 'AAA2 biweekly' })).toHaveCount(0);
+  await first.getByRole('button', { name: 'Employees' }).click();
+  await first.getByLabel('Employee', { exact: true }).selectOption(cleaner);
+  const requests = state.requests; const loads = state.shiftLoads;
+  await active.focus(); await active.press('ArrowRight');
+  await expect(inactive).toBeFocused(); await expect(inactive).toHaveAttribute('aria-selected', 'true');
+  const second = page.getByRole('article', { name: 'AAA2 biweekly' });
+  await expect(second).toBeVisible(); await expect(second.getByRole('button', { name: 'Employees' })).toHaveCount(0);
+  await inactive.press('Home'); await expect(first).toBeVisible();
+  await expect(first.getByLabel('Employee', { exact: true })).toHaveCount(0);
+  expect(state.requests).toBe(requests); expect(state.shiftLoads).toBe(loads);
+  await first.getByRole('button', { name: 'Employees' }).click();
+  await expect(first.getByLabel('Employee', { exact: true })).toHaveValue('');
+  expect(state.adminRequests).toBe(0);
+});
+
+test('late manager assignment response cannot reopen or populate a hidden lifecycle selection', async ({ page }) => {
+  await setup(page, { inactiveShift: true });
+  let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; });
+  let started = false; let delayed = true;
+  await page.route(/\/manager\/shifts\/[^/]+\/assignments$/, async route => {
+    if (route.request().method() !== 'GET' || !delayed) return route.fallback();
+    delayed = false; started = true; await gate;
+    return route.fulfill({ status: 200, headers, json: [{ id: 'late', employeeId: cleaner, isActive: true }] });
+  });
+  await page.goto('/manager/'); const card = page.getByRole('article', { name: 'AAA1 weekdays' });
+  await card.getByRole('button', { name: 'Employees' }).click(); await expect.poll(() => started).toBe(true);
+  await page.getByRole('tab', { name: /^Inactive/ }).click(); await page.getByRole('tab', { name: /^Active/ }).click();
+  release(); await expect(card.getByLabel('Employee', { exact: true })).toHaveCount(0);
+  await card.getByRole('button', { name: 'Employees' }).click();
+  await expect(card.getByText('No employees assigned.')).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Remove assignment' })).toHaveCount(0);
 });

@@ -35,13 +35,16 @@ import {
 import { adminQualityCycle, QualityCycleTemplate, QualityCycleForm, MonthlyReport, ReportShare, reportShareUrl } from '@/lib/qualityCycleApi';
 import { isAdmin } from '@/lib/auth';
 import { adminShifts, Shift } from '@/lib/adminApi';
+import { LifecycleTabs, type LifecycleStatus, inLifecycle } from '@/components/LifecycleTabs';
 
 export default function AdminQualityCyclePage() {
   const [activeTab, setActiveTab] = useState<'templates' | 'submissions'>('templates');
 
   // Templates state
   const [templates, setTemplates] = useState<QualityCycleTemplate[]>([]);
-  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [templateStatus, setTemplateStatus] = useState<LifecycleStatus>('active');
+  const visibleTemplates = templates.filter(template => inLifecycle(template, templateStatus));
+  const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [editingTemplate, setEditingTemplate] = useState<Partial<QualityCycleTemplate> | null>(null);
   const [templateTitle, setTemplateTitle] = useState('');
   const [templateDesc, setTemplateDesc] = useState('');
@@ -140,6 +143,7 @@ export default function AdminQualityCyclePage() {
       }
 
       if (!saved) { alert('Template could not be saved. Please retry.'); return; }
+      if (!editingTemplate?.id) setTemplateStatus('active');
       setEditingTemplate(null);
       setTemplateTitle('');
       setTemplateDesc('');
@@ -318,6 +322,9 @@ export default function AdminQualityCyclePage() {
                 <Text fw={600} size="lg">
                   Existing Templates
                 </Text>
+                <LifecycleTabs value={templateStatus} onChange={setTemplateStatus} label="Checklist template activity"
+                  activeCount={loadingTemplates ? undefined : templates.filter(template => template.isActive).length}
+                  inactiveCount={loadingTemplates ? undefined : templates.filter(template => !template.isActive).length}>
                 {loadingTemplates ? (
                   <Group justify="center" py="xl">
                     <Loader size="sm" />
@@ -329,9 +336,13 @@ export default function AdminQualityCyclePage() {
                   <Text size="sm" c="dimmed" fs="italic">
                     No quality cycle templates created yet.
                   </Text>
+                ) : visibleTemplates.length === 0 ? (
+                  <Text size="sm" c="dimmed" fs="italic">
+                    No {templateStatus} checklist templates. Select {templateStatus === 'active' ? 'Inactive' : 'Active'} to view your other templates.
+                  </Text>
                 ) : (
                   <Stack gap="sm">
-                    {templates.map((t) => (
+                    {visibleTemplates.map((t) => (
                       <Card key={t.id} padding="sm" radius="md" withBorder>
                         <Group justify="space-between" align="flex-start">
                           <div>
@@ -388,6 +399,7 @@ export default function AdminQualityCyclePage() {
                     ))}
                   </Stack>
                 )}
+                </LifecycleTabs>
               </Stack>
             </Paper>
           </Grid.Col>

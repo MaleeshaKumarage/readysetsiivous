@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { managerApi, type ManagerShift, type ManagerEmployee, type ManagerCompany, type ManagerBranch, type ManagerAssignment, type ManagerSchedule } from '@/lib/managerApi';
+import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const input = 'block w-full rounded border border-gray-300 bg-white p-2 mt-1 text-gray-900';
 const button = 'rounded border border-gray-300 bg-white px-3 py-2 disabled:opacity-50';
@@ -12,7 +13,7 @@ export default function ManagerPage() {
   const [companies, setCompanies] = useState<ManagerCompany[]>([]);
   const [branches, setBranches] = useState<ManagerBranch[]>([]);
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
-  const [includeInactive, setIncludeInactive] = useState(false);
+  const [lifecycle, setLifecycle] = useState<LifecycleStatus>('active');
   const [editing, setEditing] = useState<ManagerShift | 'new' | null>(null);
   const [name, setName] = useState(''); const [company, setCompany] = useState(''); const [branch, setBranch] = useState('');
   const [schedule, setSchedule] = useState<ManagerSchedule>(daily());
@@ -23,19 +24,27 @@ export default function ManagerPage() {
   async function load() {
     const version = ++generation.current; setError('');
     try {
-      const [work, roster, clients] = await Promise.all([managerApi.shifts(includeInactive), managerApi.employees(), managerApi.companies()]);
+      const [work, roster, clients] = await Promise.all([managerApi.shifts(true), managerApi.employees(), managerApi.companies()]);
       if (version !== generation.current) return;
       setShifts(work); setEmployees(roster); setCompanies(clients);
     } catch (e) { if (version === generation.current) setError(e instanceof Error ? e.message : 'Could not load operations.'); }
   }
-  useEffect(() => { void load(); return () => { generation.current++; assignmentGeneration.current++; }; }, [includeInactive]);
+  useEffect(() => { void load(); return () => { generation.current++; assignmentGeneration.current++; }; }, []);
+  function closeAssignments() {
+    assignmentGeneration.current++; setAssignmentShift(null); setAssignments(null); setEmployee('');
+  }
+  function changeLifecycle(status: LifecycleStatus) {
+    if (status === lifecycle) return;
+    closeAssignments(); setEditing(null); setError(''); setLifecycle(status);
+  }
+  const visibleShifts = shifts?.filter(s => inLifecycle(s, lifecycle)) ?? [];
   useEffect(() => {
     let active = true; setBranches([]);
     if (company) managerApi.branches(company).then(r => { if (active) setBranches(r); }).catch(e => { if (active) setError(e.message); });
     return () => { active = false; };
   }, [company]);
   function open(shift: ManagerShift | 'new') {
-    setError(''); setEditing(shift); setAssignmentShift(null);
+    setError(''); setEditing(shift); closeAssignments();
     if (shift === 'new') { setName(''); setCompany(''); setBranch(''); setSchedule(daily()); setValidFrom(''); setValidUntil(''); }
     else { setName(shift.name); setCompany(shift.companyId); setBranch(shift.branchId); setSchedule(structuredClone(shift.schedule)); setValidFrom(shift.validFrom?.slice(0, 10) ?? ''); setValidUntil(shift.validUntil?.slice(0, 10) ?? ''); }
   }
@@ -47,7 +56,7 @@ export default function ManagerPage() {
     if (!name.trim() || !company || !branch) { setError('Company, branch and name are required.'); return; }
     await action(async () => {
       const body = { name: name.trim(), schedule, validFrom: validFrom || null, validUntil: validUntil || null };
-      if (editing === 'new') await managerApi.create({ ...body, companyId: company, branchId: branch });
+      if (editing === 'new') { await managerApi.create({ ...body, companyId: company, branchId: branch }); changeLifecycle('active'); }
       else if (editing) await managerApi.update(editing.id, { ...body, isActive: editing.isActive });
       setEditing(null); await load();
     });
@@ -67,11 +76,12 @@ export default function ManagerPage() {
     <div className="flex justify-between items-center"><h2 className="text-xl font-semibold">Shifts</h2><button className={button} disabled={busy} onClick={() => open('new')}>Add shift</button></div>
     {error && <p role="alert" className="text-red-700">{error}</p>}
     <button className={button} disabled={busy} onClick={load}>Refresh operations</button>
-    <label className="block"><input type="checkbox" checked={includeInactive} disabled={busy} onChange={e => setIncludeInactive(e.target.checked)} /> Show deactivated shifts</label>
-    {shifts === null ? <p role="status">{error ? 'Operations could not be loaded. Use Refresh operations to retry.' : 'Loading operations…'}</p> : shifts.length === 0 ? <p>No shifts yet.</p> : shifts.map(s => <article key={s.id} className="rounded-xl border bg-white p-4 space-y-3" aria-label={s.name}>
+    <LifecycleTabs value={lifecycle} onChange={changeLifecycle} label="Shift activity" disabled={busy}
+      activeCount={shifts?.filter(s => s.isActive).length} inactiveCount={shifts?.filter(s => !s.isActive).length}>
+    {shifts === null ? <p role="status">{error ? 'Operations could not be loaded. Use Refresh operations to retry.' : 'Loading operations…'}</p> : visibleShifts.length === 0 ? <p>{shifts.length === 0 ? 'No shifts yet.' : `No ${lifecycle} shifts. Check the ${lifecycle === 'active' ? 'Inactive' : 'Active'} tab.`}</p> : visibleShifts.map(s => <article key={s.id} className="rounded-xl border bg-white p-4 space-y-3" aria-label={s.name}>
       <h3 className="font-bold">{s.name}</h3><p>{companies.find(c => c.id === s.companyId)?.name ?? 'Company'} · {['Daily', 'Daily times', 'Weekly', 'Biweekly', 'Flexible', 'Monthly'][s.schedule.type]}</p>
       <p>{s.isActive ? 'Active' : 'Deactivated'}</p>
-      <div className="flex flex-wrap gap-2"><button className={button} disabled={busy} onClick={() => open(s)}>Edit shift</button>{s.isActive ? <><button className={button} disabled={busy} onClick={() => openAssignments(s.id)}>Employees</button><button className={button} disabled={busy} onClick={() => action(async () => { await managerApi.deactivate(s.id); if (assignmentShift === s.id) setAssignmentShift(null); await load(); })}>Deactivate shift</button></> : <button className={button} disabled={busy} onClick={() => action(async () => { await managerApi.reactivate(s.id); await load(); })}>Reactivate shift</button>}</div>
+      <div className="flex flex-wrap gap-2"><button className={button} disabled={busy} onClick={() => open(s)}>Edit shift</button>{s.isActive ? <><button className={button} disabled={busy} onClick={() => openAssignments(s.id)}>Employees</button><button className={button} disabled={busy} onClick={() => action(async () => { await managerApi.deactivate(s.id); if (assignmentShift === s.id) closeAssignments(); await load(); })}>Deactivate shift</button></> : <button className={button} disabled={busy} onClick={() => action(async () => { await managerApi.reactivate(s.id); await load(); })}>Reactivate shift</button>}</div>
       {assignmentShift === s.id && <div className="space-y-3">
         {assignments === null ? <><p>Loading assignments…</p><button className={button} onClick={() => openAssignments(s.id)}>Retry assignments</button></> : <>
           <label>Employee<select aria-label="Employee" className={input} value={employee} disabled={busy} onChange={e => setEmployee(e.target.value)}><option value="">Choose employee</option>{employees.filter(e => e.isActive && !assignments.some(a => a.employeeId === e.id)).map(e => <option key={e.id} value={e.id}>{e.firstName} {e.lastName}</option>)}</select></label>
@@ -79,9 +89,10 @@ export default function ManagerPage() {
           {assignments.length === 0 && <p>No employees assigned.</p>}
           {assignments.map(a => { const person = employees.find(e => e.id === a.employeeId); return <div key={a.id} className="flex flex-wrap justify-between gap-2"><span>{person ? `${person.firstName} ${person.lastName}` : 'Inactive employee'}</span><button className={button} disabled={busy} onClick={() => action(async () => { await managerApi.unassign(s.id, a.employeeId); await openAssignments(s.id); })}>Remove assignment</button></div>; })}
         </>}
-        <button className={button} disabled={busy} onClick={() => { assignmentGeneration.current++; setAssignmentShift(null); }}>Close assignments</button>
+        <button className={button} disabled={busy} onClick={closeAssignments}>Close assignments</button>
       </div>}
     </article>)}
+    </LifecycleTabs>
     {editing && <form onSubmit={save} className="rounded-xl border bg-white p-5 space-y-4" aria-label={editing === 'new' ? 'Create shift' : 'Edit shift'}>
       <h2 className="text-xl font-semibold">{editing === 'new' ? 'Create shift' : 'Edit shift'}</h2>
       <label>Shift name<input className={input} value={name} disabled={busy} onChange={e => setName(e.target.value)} required /></label>
