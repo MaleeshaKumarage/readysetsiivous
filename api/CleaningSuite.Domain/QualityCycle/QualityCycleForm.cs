@@ -8,6 +8,8 @@ public class QualityCycleFormItem
     public bool IsChecked { get; set; }
 }
 
+public record QualityCyclePhoto(string Url, string Note);
+
 public class QualityCycleForm : BaseDocument
 {
     public Guid ShiftId { get; set; }
@@ -21,6 +23,7 @@ public class QualityCycleForm : BaseDocument
     public string Token { get; set; } = string.Empty;
     public List<QualityCycleFormItem> Items { get; set; } = new();
     public List<string> PhotoUrls { get; set; } = new();
+    public List<QualityCyclePhoto> Photos { get; set; } = new();
     public string? CleanerNotes { get; set; }
     public bool IsSubmitted { get; set; }
     public DateTime? SubmittedUtc { get; set; }
@@ -83,7 +86,7 @@ public class QualityCycleForm : BaseDocument
         UpdatedUtc = DateTime.UtcNow;
     }
 
-    public void Submit(List<QualityCycleFormItem> items, List<string>? photoUrls, string? cleanerNotes)
+    public void Submit(List<QualityCycleFormItem> items, List<string>? photoUrls, string? cleanerNotes, List<QualityCyclePhoto>? photos = null)
     {
         if (IsSubmitted)
             throw new InvalidOperationException("Quality Cycle Form has already been submitted.");
@@ -92,10 +95,13 @@ public class QualityCycleForm : BaseDocument
             || items.Where((item, i) => item.ItemText != Items[i].ItemText).Any())
             throw new ArgumentException("Submit the complete checklist in its original order.", nameof(items));
 
-        var photos = photoUrls?.Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => p.Trim()).ToList() ?? new List<string>();
+        var legacyUrls = photoUrls?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? new List<string>();
         var notes = cleanerNotes?.Trim();
-        if (photos.Count > 0 && string.IsNullOrWhiteSpace(notes))
-            throw new ArgumentException("Add a note describing the attached photos.", nameof(cleanerNotes));
+        if (legacyUrls.Count > 0)
+            throw new ArgumentException("Add a separate note for each photo and submit paired photos rather than photoUrls.", nameof(photos));
+        if (photos?.Any(p => p is null || string.IsNullOrWhiteSpace(p.Url) || string.IsNullOrWhiteSpace(p.Note)) == true)
+            throw new ArgumentException("Add a separate note for each photo.", nameof(photos));
+        var evidence = photos?.Select(p => new QualityCyclePhoto(p.Url.Trim(), p.Note.Trim())).ToList() ?? new();
 
         if (items.Count > 0)
         {
@@ -106,7 +112,10 @@ public class QualityCycleForm : BaseDocument
             }
         }
 
-        PhotoUrls = photos;
+        Photos = evidence;
+        // New evidence stores each image once, paired with its note. PhotoUrls
+        // remains for historical documents; DTOs derive the compatibility view.
+        PhotoUrls = new();
         CleanerNotes = notes;
         IsSubmitted = true;
         SubmittedUtc = DateTime.UtcNow;

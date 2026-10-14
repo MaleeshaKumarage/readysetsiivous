@@ -114,7 +114,7 @@ public class QualityCycleWorkflowTests
         forms.Setup(x => x.SaveReportShareAsync(It.IsAny<QualityCycleReportShare>(), default)).Callback<QualityCycleReportShare, CancellationToken>((share, _) => saved = share).Returns(Task.CompletedTask);
         var link = await new CreateQualityCycleReportShareHandler(service, forms.Object, context.Object, new Clock()).Handle(new(2026, 10, ShiftId: shift.Id), default);
         Assert.Equal(Now.AddDays(30), link.ExpiresUtc);
-        Assert.DoesNotContain("PRIVATE CLEANER", saved!.ReportJson); Assert.DoesNotContain("PRIVATE NOTES", saved.ReportJson);
+        Assert.DoesNotContain("PRIVATE CLEANER", saved!.ReportJson); Assert.Contains("PRIVATE NOTES", saved.ReportJson);
         Assert.DoesNotContain(records[0].Token, saved.ReportJson);
         var snapshot = System.Text.Json.JsonSerializer.Deserialize<QualityCycleMonthlyReport>(saved.ReportJson)!;
         Assert.Empty(snapshot.Shifts[0].Forms); Assert.Equal(12, snapshot.Shifts[0].Items.Single(x => x.ItemText == "Corridor").DaysPerformed);

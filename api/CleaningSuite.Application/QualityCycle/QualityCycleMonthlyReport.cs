@@ -12,7 +12,10 @@ namespace CleaningSuite.Application.QualityCycle;
 
 public record QualityCycleOccurrenceReport(DateTime StartUtc, DateTime EndUtc, int ExpectedTasks,
     int SubmittedTasks, string Status);
-public record QualityCycleEvidenceReport(DateTime StartUtc, DateTime EndUtc, string? Note, IReadOnlyList<string> PhotoUrls);
+public record QualityCycleEvidenceReport(DateTime StartUtc, DateTime EndUtc, string? Note, IReadOnlyList<string> PhotoUrls)
+{
+    public IReadOnlyList<QualityCyclePhoto> Photos { get; init; } = Array.Empty<QualityCyclePhoto>();
+}
 public record QualityCycleShiftReport(Guid ShiftId, string ShiftName, Guid CompanyId, string CompanyName,
     Guid BranchId, string BranchName, int ScheduledOccurrences, decimal ScheduledHours,
     int CompletedOccurrences, int MissingOccurrences, int PendingOccurrences, int TotalTasks,
@@ -149,7 +152,7 @@ public class QualityCycleMonthlyReportService(IShiftRepository shifts, IQualityC
                         (!string.IsNullOrWhiteSpace(f.CleanerNotes) || f.PhotoUrls.Count > 0))
                         .OrderBy(f => f.ShiftOccurrenceUtc).ThenBy(f => f.Id)
                         .Select(f => new QualityCycleEvidenceReport(f.ShiftOccurrenceUtc, f.ShiftOccurrenceEndUtc,
-                            f.CleanerNotes, f.PhotoUrls.ToArray())).ToList()
+                            f.CleanerNotes, f.Photos.Count > 0 ? Array.Empty<string>() : f.PhotoUrls.ToArray()) { Photos = f.Photos.ToArray() }).ToList()
                 });
             }
         }

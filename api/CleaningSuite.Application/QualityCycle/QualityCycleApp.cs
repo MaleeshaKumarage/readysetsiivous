@@ -42,6 +42,7 @@ public record QualityCycleFormDto(
 {
     public DateTime? StartedAtUtc { get; init; }
     public DateTime? EndedAtUtc { get; init; }
+    public IReadOnlyList<QualityCyclePhoto> Photos { get; init; } = Array.Empty<QualityCyclePhoto>();
 }
 
 // Template Commands & Queries
@@ -72,14 +73,14 @@ public record SubmitQualityCycleFormCommand(
     string Token,
     List<QualityCycleFormItemDto> Items,
     List<string>? PhotoUrls = null,
-    string? CleanerNotes = null) : IRequest<QualityCycleFormDto>;
+    string? CleanerNotes = null, List<QualityCyclePhoto>? Photos = null) : IRequest<QualityCycleFormDto>;
 
 public record ListQualityCycleFormsQuery(Guid? ShiftId = null, DateTime? FromUtc = null, DateTime? ToUtc = null) : IRequest<IReadOnlyList<QualityCycleFormDto>>;
 public record GetQualityCycleSummaryPdfQuery(Guid ShiftId, int Year, int Month) : IRequest<byte[]>;
 
 // Employee clock/flow commands & queries
 public record StartQualityCycleFormCommand(Guid ShiftId, Guid EmployeeId, DateTime OccurrenceStartUtc, DateTime OccurrenceEndUtc) : IRequest<QualityCycleFormDto>;
-public record EndQualityCycleFormCommand(Guid FormId, Guid EmployeeId, List<QualityCycleFormItemDto> Items, List<string>? PhotoUrls = null, string? CleanerNotes = null) : IRequest<QualityCycleFormDto>;
+public record EndQualityCycleFormCommand(Guid FormId, Guid EmployeeId, List<QualityCycleFormItemDto> Items, List<string>? PhotoUrls = null, string? CleanerNotes = null, List<QualityCyclePhoto>? Photos = null) : IRequest<QualityCycleFormDto>;
 public record MyShiftOccurrenceDto(Guid ShiftId, string ShiftName, DateTime StartUtc, DateTime EndUtc, QualityCycleFormDto? Form);
 public record GetMyShiftsQuery(Guid EmployeeId, DateTime FromUtc, DateTime ToUtc) : IRequest<IReadOnlyList<MyShiftOccurrenceDto>>;
 
@@ -199,7 +200,7 @@ public class QualityCycleHandlers
             var form = await _repository.GetFormByTokenAsync(request.Token, ct)
                 ?? throw new NotFoundException("QualityCycleForm", Guid.Empty);
 
-            RecordActivity(form, request.Items, request.PhotoUrls, request.CleanerNotes, _clock);
+            RecordActivity(form, request.Items, request.PhotoUrls, request.CleanerNotes, _clock, request.Photos);
             await _repository.SaveFormAsync(form, ct);
             return MapForm(form);
         }
@@ -312,7 +313,7 @@ public class QualityCycleHandlers
             if (!form.StartedAtUtc.HasValue)
                 throw new QualityCycleConflictException("Start your shift before ending it.");
 
-            RecordActivity(form, request.Items, request.PhotoUrls, request.CleanerNotes, _clock);
+            RecordActivity(form, request.Items, request.PhotoUrls, request.CleanerNotes, _clock, request.Photos);
             await _repository.SaveFormAsync(form, ct);
             return MapForm(form);
         }
@@ -358,7 +359,7 @@ public class QualityCycleHandlers
         }
     }
 
-    private static void RecordActivity(QualityCycleForm form, List<QualityCycleFormItemDto>? items, List<string>? photoUrls, string? cleanerNotes, TimeProvider clock)
+    private static void RecordActivity(QualityCycleForm form, List<QualityCycleFormItemDto>? items, List<string>? photoUrls, string? cleanerNotes, TimeProvider clock, List<QualityCyclePhoto>? photos)
     {
             if (form.IsSubmitted) throw new QualityCycleConflictException("This shift task has already been completed.");
             if (form.ShiftOccurrenceUtc > clock.GetUtcNow().UtcDateTime)
@@ -369,11 +370,11 @@ public class QualityCycleHandlers
                 IsChecked = i.IsChecked
             }).ToList() ?? new List<QualityCycleFormItem>();
 
-            try { form.Submit(domainItems, photoUrls, cleanerNotes); }
+            try { form.Submit(domainItems, photoUrls, cleanerNotes, photos); }
             catch (ArgumentException ex)
             {
                 throw new ValidationException(new[] { new FluentValidation.Results.ValidationFailure(
-                    ex.ParamName == "cleanerNotes" ? "CleanerNotes" : "Checklist", ex.Message) });
+                    ex.ParamName == "photos" ? "Photos" : "Checklist", ex.Message) });
             }
     }
 
@@ -393,12 +394,12 @@ public class QualityCycleHandlers
             f.ShiftOccurrenceEndUtc,
             f.Token,
             f.Items.Select(i => new QualityCycleFormItemDto(i.ItemText, i.IsChecked)).ToList(),
-            f.PhotoUrls,
+            f.Photos.Count > 0 ? f.Photos.Select(p => p.Url).ToList() : f.PhotoUrls,
             f.CleanerNotes,
             f.IsSubmitted,
             f.SubmittedUtc,
             f.CreatedUtc,
-            f.TaskStatus) { StartedAtUtc = f.StartedAtUtc, EndedAtUtc = f.EndedAtUtc };
+            f.TaskStatus) { StartedAtUtc = f.StartedAtUtc, EndedAtUtc = f.EndedAtUtc, Photos = f.Photos };
 }
 
 public class QualityCycleValidators

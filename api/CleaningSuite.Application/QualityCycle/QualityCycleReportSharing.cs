@@ -17,9 +17,10 @@ public class CreateQualityCycleReportShareHandler(QualityCycleMonthlyReportServi
         if (!request.ShiftId.HasValue && !request.BranchId.HasValue && !request.CompanyId.HasValue)
             throw new QualityCycleConflictException("Select a company, branch or shift before sharing a report.");
         var report = await reports.BuildAsync(new(request.Year, request.Month, request.CompanyId, request.BranchId, request.ShiftId), ct);
-        // Freeze the approved summary. Never publish form tokens, cleaner names, notes or photos.
+        // Freeze summary and approved submitted evidence, excluding full forms and
+        // their employee identities/form tokens. Existing snapshots remain unchanged.
         report = report with { Shifts = report.Shifts.Select(s => s with {
-            Forms = Array.Empty<QualityCycleFormDto>(), Evidence = Array.Empty<QualityCycleEvidenceReport>()
+            Forms = Array.Empty<QualityCycleFormDto>()
         }).ToList() };
         var share = new QualityCycleReportShare { CreatedUtc = clock.GetUtcNow().UtcDateTime,
             ExpiresUtc = clock.GetUtcNow().UtcDateTime.AddDays(30), ReportJson = JsonSerializer.Serialize(report) };

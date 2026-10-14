@@ -157,12 +157,13 @@ public class QualityCycleTests
             new QualityCycleFormItem { ItemText = "Task 2", IsChecked = false }
         };
 
-        form.Submit(submissionItems, new List<string> { "https://example.com/photo1.jpg", "  " }, "  All clear  ");
+        form.Submit(submissionItems, null, "  All clear  ", new() { new("https://example.com/photo1.jpg", "  Corridor cleaned  ") });
 
         Assert.True(form.IsSubmitted);
         Assert.NotNull(form.SubmittedUtc);
         Assert.Equal("All clear", form.CleanerNotes);
-        Assert.Single(form.PhotoUrls);
+        Assert.Single(form.Photos); Assert.Empty(form.PhotoUrls);
+        Assert.Single(QualityCycleHandlers.MapForm(form).PhotoUrls);
         Assert.True(form.Items[0].IsChecked);
         Assert.False(form.Items[1].IsChecked);
     }
@@ -330,8 +331,8 @@ public class QualityCycleTests
         var command = new SubmitQualityCycleFormCommand(
             form.Token,
             new List<QualityCycleFormItemDto> { new QualityCycleFormItemDto("Item 1", true) },
-            new List<string> { "data:image/png;base64,123" },
-            "Done!");
+            null,
+            "Done!", new() { new("data:image/png;base64,123", "Cleaned floor") });
 
         var result = await handler.Handle(command, CancellationToken.None);
 

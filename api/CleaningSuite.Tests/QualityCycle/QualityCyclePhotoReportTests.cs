@@ -35,8 +35,8 @@ public class QualityCyclePhotoReportTests
     public void Photos_require_a_note_before_any_domain_state_changes(string? note)
     {
         var form = Form(); var updated = form.UpdatedUtc;
-        var exception = Assert.Throws<ArgumentException>(() => form.Submit(new() { new() { ItemText = "Corridor", IsChecked = true } }, new() { "photo" }, note));
-        Assert.Equal("cleanerNotes", exception.ParamName);
+        var exception = Assert.Throws<ArgumentException>(() => form.Submit(new() { new() { ItemText = "Corridor", IsChecked = true } }, null, "General note is insufficient", new() { new("photo", note!) }));
+        Assert.Equal("photos", exception.ParamName);
         Assert.False(form.IsSubmitted); Assert.False(form.Items[0].IsChecked);
         Assert.Null(form.EndedAtUtc); Assert.Null(form.SubmittedUtc); Assert.Equal(updated, form.UpdatedUtc);
         Assert.Empty(form.PhotoUrls); Assert.Null(form.CleanerNotes);
@@ -54,7 +54,7 @@ public class QualityCyclePhotoReportTests
         var exception = authenticated
             ? await Assert.ThrowsAsync<ValidationException>(() => new QualityCycleHandlers.EndQualityCycleFormCommandHandler(repository.Object, new Clock()).Handle(new(form.Id, form.EmployeeId, items, new() { "photo" }, "  "), default))
             : await Assert.ThrowsAsync<ValidationException>(() => new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(repository.Object, new Clock()).Handle(new(form.Token, items, new() { "photo" }, null), default));
-        Assert.Equal("CleanerNotes", Assert.Single(exception.Errors).PropertyName);
+        Assert.Equal("Photos", Assert.Single(exception.Errors).PropertyName);
         Assert.False(form.IsSubmitted); Assert.False(form.Items[0].IsChecked);
         repository.Verify(x => x.SaveFormAsync(It.IsAny<QualityCycleForm>(), default), Times.Never);
     }
@@ -86,9 +86,9 @@ public class QualityCyclePhotoReportTests
         using var client = factory.CreateClient();
         var route = $"/api/v1/public/tenant-a/quality-cycle/{form.Token}/submit";
         var items = new[] { new QualityCycleFormItemDto("Corridor", true) };
-        var failed = await client.PostAsJsonAsync(route, new { token = form.Token, items, photoUrls = new[] { "photo" }, cleanerNotes = "  " });
+        var failed = await client.PostAsJsonAsync(route, new { token = form.Token, items, photos = new[] { new QualityCyclePhoto("photo", "  ") }, cleanerNotes = "General note" });
         Assert.Equal(HttpStatusCode.BadRequest, failed.StatusCode);
-        Assert.Contains("Add a note describing the attached photos.", await failed.Content.ReadAsStringAsync());
+        Assert.Contains("Add a separate note for each photo", await failed.Content.ReadAsStringAsync());
         Assert.False(form.IsSubmitted); Assert.False(form.Items[0].IsChecked);
         repository.Verify(x => x.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);
         var success = await client.PostAsJsonAsync(route, new { token = form.Token, items, photoUrls = Array.Empty<string>(), cleanerNotes = "Note without image" });
@@ -96,14 +96,14 @@ public class QualityCyclePhotoReportTests
     }
 
     [Fact]
-    public async Task Report_projects_submitted_evidence_and_public_snapshot_redacts_both_evidence_and_forms()
+    public async Task Report_projects_submitted_evidence_and_public_snapshot_retains_evidence_but_redacts_forms()
     {
         var company = Company.Create("7654321-0", "AAA"); var branch = Branch.Create(company.Id, "AAA1");
         var shift = Shift.Create(company.Id, branch.Id, "Weekday shift", new() { Type = ShiftScheduleType.DailySameTime,
             DailyStart = TimeSpan.FromHours(23.5), DailyEnd = TimeSpan.FromHours(23.75) }, null, null, null);
         shift.CreatedUtc = Start.AddMonths(-1);
         var submitted = Form(); submitted.ShiftId = shift.Id; submitted.CompanyId = company.Id; submitted.BranchId = branch.Id;
-        submitted.Submit(new() { new() { ItemText = "Corridor", IsChecked = true } }, new() { Photo(SKColors.Blue, 200, 400) }, "  Corridor cleaned  ");
+        submitted.Submit(new() { new() { ItemText = "Corridor", IsChecked = true } }, null, "  Corridor cleaned  ", new() { new(Photo(SKColors.Blue, 200, 400), "Corridor photo note") });
         var note = Form(); note.ShiftId = shift.Id; note.CompanyId = company.Id; note.BranchId = branch.Id;
         note.Submit(new() { new() { ItemText = "Corridor" } }, null, "Notes without a photo");
         var draft = Form(); draft.ShiftId = shift.Id; draft.CompanyId = company.Id; draft.BranchId = branch.Id; draft.CleanerNotes = "DRAFT NOTE";
@@ -120,7 +120,7 @@ public class QualityCyclePhotoReportTests
         var service = new QualityCycleMonthlyReportService(shifts.Object, forms.Object, companies.Object, branches.Object, profiles.Object, context.Object, new Clock());
         var report = await service.BuildAsync(new(2026, 10, BranchId: branch.Id, ShiftId: shift.Id), default);
         var row = Assert.Single(report.Shifts); Assert.Equal(2, row.Evidence.Count);
-        Assert.Contains(row.Evidence, x => x.Note == "Corridor cleaned" && x.PhotoUrls.Count == 1 && x.StartUtc == Start);
+        Assert.Contains(row.Evidence, x => x.Note == "Corridor cleaned" && x.Photos.Count == 1 && x.PhotoUrls.Count == 0 && x.StartUtc == Start);
         Assert.Contains(row.Evidence, x => x.Note == "Notes without a photo" && x.PhotoUrls.Count == 0);
         Assert.DoesNotContain(row.Evidence, x => x.Note == "DRAFT NOTE");
         forms.Verify(x => x.ListFormsAsync(shift.Id, new DateTime(2026, 9, 30, 21, 0, 0, DateTimeKind.Utc),
@@ -128,19 +128,27 @@ public class QualityCyclePhotoReportTests
         QualityCycleReportShare? saved = null;
         forms.Setup(x => x.SaveReportShareAsync(It.IsAny<QualityCycleReportShare>(), default)).Callback<QualityCycleReportShare, CancellationToken>((share, _) => saved = share).Returns(Task.CompletedTask);
         await new CreateQualityCycleReportShareHandler(service, forms.Object, context.Object, new Clock()).Handle(new(2026, 10, ShiftId: shift.Id), default);
-        Assert.DoesNotContain("Corridor cleaned", saved!.ReportJson); Assert.DoesNotContain("Notes without a photo", saved.ReportJson);
-        Assert.DoesNotContain("data:image", saved.ReportJson); Assert.DoesNotContain(submitted.Token, saved.ReportJson);
+        Assert.Contains("Corridor cleaned", saved!.ReportJson); Assert.Contains("Notes without a photo", saved.ReportJson);
+        Assert.Contains("data:image", saved.ReportJson); Assert.Contains("Corridor photo note", saved.ReportJson); Assert.DoesNotContain(submitted.Token, saved.ReportJson);
         Assert.DoesNotContain("PRIVATE CLEANER", saved.ReportJson);
+        Assert.DoesNotContain(submitted.EmployeeId.ToString(), saved.ReportJson);
+        Assert.DoesNotContain("DRAFT NOTE", saved.ReportJson);
+        submitted.CleanerNotes = "CHANGED AFTER SHARE"; submitted.Photos[0] = new(submitted.Photos[0].Url, "CHANGED CAPTION");
+        Assert.DoesNotContain("CHANGED AFTER SHARE", saved.ReportJson); Assert.DoesNotContain("CHANGED CAPTION", saved.ReportJson);
         var snapshot = JsonSerializer.Deserialize<QualityCycleMonthlyReport>(saved.ReportJson)!;
-        Assert.Empty(snapshot.Shifts[0].Evidence); Assert.Empty(snapshot.Shifts[0].Forms);
-        Assert.Equal(1, Conversion.GetPageCount(new QualityCyclePdfGenerator().GenerateMonthlyReportPdf(snapshot)));
+        Assert.Equal(2, snapshot.Shifts[0].Evidence.Count); Assert.Empty(snapshot.Shifts[0].Forms);
+        Assert.Equal(3, Conversion.GetPageCount(new QualityCyclePdfGenerator().GenerateMonthlyReportPdf(snapshot)));
+        forms.Setup(x => x.GetReportShareByTokenAsync(saved.Token, default)).ReturnsAsync(saved);
+        var sharedPdf = await new GetSharedQualityCycleReportPdfHandler(forms.Object, new QualityCyclePdfGenerator(), new Clock()).Handle(new(saved.Token), default);
+        Assert.Equal(3, Conversion.GetPageCount(sharedPdf)); Assert.Contains("/Subtype /Image", System.Text.Encoding.Latin1.GetString(sharedPdf));
     }
 
     [Fact]
     public async Task Monthly_pdf_embeds_portrait_and_landscape_images_and_note_only_entries()
     {
         var photos = new[] { Photo(SKColors.Blue, 200, 400), Photo(SKColors.Red, 600, 200) };
-        var report = Report(new(Start, Start.AddHours(2), "Corridor cleaned; equipment put away.", photos),
+        var report = Report(new QualityCycleEvidenceReport(Start, Start.AddHours(2), "General shift note: equipment put away.", photos) {
+                Photos = new[] { new QualityCyclePhoto(photos[0], "Corridor cleaned and inspected."), new QualityCyclePhoto(photos[1], "Gym floor cleaned and inspected.") } },
             new(Start.AddDays(1), Start.AddDays(1).AddHours(2), "Gym closed today. No photos were taken.", Array.Empty<string>()));
         var pdf = new QualityCyclePdfGenerator().GenerateMonthlyReportPdf(report);
         Assert.Equal(4, Conversion.GetPageCount(pdf));
@@ -194,8 +202,10 @@ public class QualityCyclePhotoReportTests
     [Fact]
     public void Long_notes_paginate_and_older_reports_can_use_submitted_forms()
     {
-        var form = Form(); form.Submit(new() { new() { ItemText = "Corridor" } }, new() { Photo(SKColors.Blue, 200, 400) },
+        var form = Form(); form.Submit(new() { new() { ItemText = "Corridor" } }, null,
             string.Join("\n", Enumerable.Range(0, 180).Select(i => $"Observation {i}: detailed note about this shift.")));
+        // Simulate a previously stored URL-only document, without rewriting history.
+        form.PhotoUrls.Add(Photo(SKColors.Blue, 200, 400));
         var report = Report();
         report = report with { Shifts = new[] { report.Shifts[0] with { Forms = new[] { QualityCycleHandlers.MapForm(form) } } } };
         Assert.True(Conversion.GetPageCount(new QualityCyclePdfGenerator().GenerateMonthlyReportPdf(report)) > 2);
