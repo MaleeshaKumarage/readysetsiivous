@@ -7,7 +7,7 @@ import {
 import { Plus, Trash2, Pencil } from 'lucide-react';
 import {
   adminShifts, adminCompanies, adminEmployees, adminTenant,
-  type Shift, type Company, type Branch, type Employee, type ShiftAssignment,
+  type Shift, type Company, type Branch, type Employee, type ShiftAssignment, type ShiftOccurrence,
 } from '@/lib/adminApi';
 import { isAdmin } from '@/lib/auth';
 import { adminQualityCycle, type QualityCycleTemplate } from '@/lib/qualityCycleApi';
@@ -22,6 +22,33 @@ const SCHEDULE_TYPES = [
   { value: '5', label: 'Monthly' },
   { value: '4', label: 'On-call / flexible' },
 ];
+
+const OCCURRENCE_STATUSES = [
+  { value: '1', label: 'Move / change time' },
+  { value: '2', label: 'Customer cancelled' },
+  { value: '3', label: 'Company cancelled' },
+  { value: '4', label: 'Extra visit' },
+];
+
+const localInputValue = (utc: string, timeZone: string) => {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(new Date(utc)).reduce<Record<string, string>>((all, part) => ({ ...all, [part.type]: part.value }), {});
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+};
+
+const tenantLocalToUtc = (value: string, timeZone: string) => {
+  const [date, time] = value.split('T');
+  const [year, month, day] = date.split('-').map(Number); const [hour, minute] = time.split(':').map(Number);
+  const wanted = Date.UTC(year, month - 1, day, hour, minute); let instant = wanted;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(new Date(instant)).reduce<Record<string, string>>((all, part) => ({ ...all, [part.type]: part.value }), {});
+    const represented = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour), Number(parts.minute));
+    if (represented === wanted) return new Date(instant).toISOString();
+    instant += wanted - represented;
+  }
+  throw new Error('That local time does not exist in the tenant time zone. Choose another time.');
+};
 
 export default function ShiftsAdminPage() {
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -66,6 +93,20 @@ export default function ShiftsAdminPage() {
   const [assignStatus, setAssignStatus] = useState('');
   const assignmentGeneration = useRef(0);
   const assignmentPending = useRef(false);
+  const [occurrenceShift, setOccurrenceShift] = useState<Shift | null>(null);
+  const [occurrences, setOccurrences] = useState<ShiftOccurrence[]>([]);
+  const [occurrenceLoading, setOccurrenceLoading] = useState(false);
+  const [occurrenceError, setOccurrenceError] = useState('');
+  const [occurrenceEditError, setOccurrenceEditError] = useState('');
+  const [occurrenceFrom, setOccurrenceFrom] = useState(new Date().toISOString().slice(0, 10));
+  const [occurrenceTo, setOccurrenceTo] = useState(new Date(Date.now() + 31 * 86400000).toISOString().slice(0, 10));
+  const [editingOccurrence, setEditingOccurrence] = useState<ShiftOccurrence | null>(null);
+  const [occurrenceStatus, setOccurrenceStatus] = useState('1');
+  const [occurrenceStart, setOccurrenceStart] = useState('');
+  const [occurrenceEnd, setOccurrenceEnd] = useState('');
+  const [occurrenceReason, setOccurrenceReason] = useState('');
+  const [occurrenceEmployee, setOccurrenceEmployee] = useState<string | null>(null);
+  const [occurrenceSaving, setOccurrenceSaving] = useState(false);
   useEffect(() => () => { assignmentGeneration.current++; }, []);
 
   const load = () => adminShifts.list(undefined, undefined, true).then((r) => { if (r) setShifts(r); setLoading(false); });
@@ -245,6 +286,56 @@ export default function ShiftsAdminPage() {
     return e ? `${e.firstName} ${e.lastName}` : id.slice(0, 8);
   };
 
+  const loadOccurrences = async (shift = occurrenceShift) => {
+    if (!shift) return;
+    setOccurrenceLoading(true); setOccurrenceError('');
+    try {
+      const result = await adminShifts.occurrences(shift.id, occurrenceFrom, occurrenceTo);
+      if (!result) throw new Error('Could not load occurrences.');
+      setOccurrences(result);
+    } catch (failure) { setOccurrenceError(failure instanceof Error ? failure.message : 'Could not load occurrences.'); }
+    finally { setOccurrenceLoading(false); }
+  };
+
+  const openOccurrences = async (shift: Shift) => {
+    setOccurrenceShift(shift); setOccurrences([]); setOccurrenceError('');
+    await loadOccurrences(shift);
+  };
+
+  const openOccurrenceEditor = (occurrence?: ShiftOccurrence, status = '1') => {
+    setEditingOccurrence(occurrence ?? { startUtc: '', endUtc: '' });
+    setOccurrenceStatus(occurrence?.status ? String(occurrence.status) : status);
+    setOccurrenceStart(occurrence?.startUtc ? localInputValue(occurrence.startUtc, timeZoneId) : '');
+    setOccurrenceEnd(occurrence?.endUtc ? localInputValue(occurrence.endUtc, timeZoneId) : '');
+    setOccurrenceReason(occurrence?.reason ?? ''); setOccurrenceEmployee(occurrence?.employeeId ?? null); setOccurrenceEditError('');
+  };
+
+  const saveOccurrence = async () => {
+    if (!occurrenceShift || !editingOccurrence || !occurrenceStart || !occurrenceEnd || !occurrenceReason.trim()) {
+      setOccurrenceEditError('Start, end and reason are required.'); return;
+    }
+    setOccurrenceSaving(true); setOccurrenceEditError('');
+    try {
+      const status = Number(occurrenceStatus);
+      await adminShifts.saveOccurrenceException(occurrenceShift.id, {
+        id: editingOccurrence.exceptionId,
+        originalStartUtc: status === 4 ? null : (editingOccurrence.originalStartUtc ?? editingOccurrence.startUtc),
+        startUtc: tenantLocalToUtc(occurrenceStart, timeZoneId), endUtc: tenantLocalToUtc(occurrenceEnd, timeZoneId),
+        status, reason: occurrenceReason.trim(), employeeId: occurrenceEmployee,
+      });
+      setEditingOccurrence(null); await loadOccurrences();
+    } catch (failure) { setOccurrenceEditError(failure instanceof Error ? failure.message : 'Could not update this occurrence.'); }
+    finally { setOccurrenceSaving(false); }
+  };
+
+  const restoreOccurrence = async (occurrence: ShiftOccurrence) => {
+    if (!occurrenceShift || !occurrence.exceptionId) return;
+    setOccurrenceSaving(true); setOccurrenceError('');
+    try { await adminShifts.deleteOccurrenceException(occurrenceShift.id, occurrence.exceptionId); await loadOccurrences(); }
+    catch (failure) { setOccurrenceError(failure instanceof Error ? failure.message : 'Could not restore this occurrence.'); }
+    finally { setOccurrenceSaving(false); }
+  };
+
   return (
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
@@ -284,6 +375,7 @@ export default function ShiftsAdminPage() {
                       <Group gap={6} wrap="nowrap">
                         {isAdmin() && <Button size="xs" variant="light" leftSection={<Pencil size={13} />} onClick={() => openEdit(s)}>Edit</Button>}
                         {s.isActive && <Button size="xs" variant="light" disabled={assignBusy} onClick={() => openAssign(s.id)}>Employees</Button>}
+                        {s.isActive && <Button size="xs" variant="light" onClick={() => openOccurrences(s)}>Occurrences</Button>}
                         {isAdmin() && s.isActive && <Button size="xs" variant="light" onClick={() => { setTemplateShift(s); setAssignedTemplate(s.qualityCycleTemplateId ?? null); setTemplateError(''); }}>Checklist template</Button>}
                         {s.isActive && <Button size="xs" variant="subtle" color="red" disabled={assignBusy} onClick={() => deactivate(s.id)}>Deactivate</Button>}
                         {!s.isActive && <Button size="xs" loading={restoring === s.id} disabled={!!restoring} onClick={() => reactivate(s.id)}>Reactivate</Button>}
@@ -341,6 +433,49 @@ export default function ShiftsAdminPage() {
         </Table.ScrollContainer>
       )}
       </LifecycleTabs>
+
+      <Modal opened={Boolean(occurrenceShift)} onClose={() => { setOccurrenceShift(null); setEditingOccurrence(null); }} title={`Occurrences${occurrenceShift ? ` — ${occurrenceShift.name}` : ''}`} size="xl">
+        <Stack>
+          <Text size="sm" c="dimmed">Times use the tenant time zone: {timeZoneId}. Changes apply only to the selected visit.</Text>
+          <Group align="flex-end" wrap="wrap">
+            <TextInput label="From" type="date" value={occurrenceFrom} onChange={e => setOccurrenceFrom(e.target.value)} />
+            <TextInput label="To" type="date" value={occurrenceTo} onChange={e => setOccurrenceTo(e.target.value)} />
+            <Button variant="default" loading={occurrenceLoading} onClick={() => loadOccurrences()}>Load</Button>
+            <Button onClick={() => openOccurrenceEditor(undefined, '4')}>Add extra visit</Button>
+          </Group>
+          {occurrenceError && <Text role="alert" c="red">{occurrenceError}</Text>}
+          {occurrenceLoading ? <Loader /> : occurrences.length === 0 ? <Text c="dimmed">No occurrences in this period.</Text> : (
+            <Table striped withTableBorder>
+              <Table.Thead><Table.Tr><Table.Th>Start</Table.Th><Table.Th>End</Table.Th><Table.Th>Status</Table.Th><Table.Th>Reason</Table.Th><Table.Th></Table.Th></Table.Tr></Table.Thead>
+              <Table.Tbody>{occurrences.map((item) => <Table.Tr key={item.exceptionId ?? item.startUtc}>
+                <Table.Td>{new Date(item.startUtc).toLocaleString(undefined, { timeZone: timeZoneId })}</Table.Td>
+                <Table.Td>{new Date(item.endUtc).toLocaleString(undefined, { timeZone: timeZoneId })}</Table.Td>
+                <Table.Td>{item.status ? OCCURRENCE_STATUSES.find(x => x.value === String(item.status))?.label : 'Scheduled'}</Table.Td>
+                <Table.Td>{item.reason ?? '—'}</Table.Td>
+                <Table.Td><Group gap={4} wrap="nowrap">
+                  <Button size="xs" variant="subtle" onClick={() => openOccurrenceEditor(item)}>Change</Button>
+                  {!item.exceptionId && <Button size="xs" variant="subtle" color="orange" onClick={() => openOccurrenceEditor(item, '2')}>Cancel</Button>}
+                  {item.exceptionId && <Button size="xs" variant="subtle" color="red" loading={occurrenceSaving} onClick={() => restoreOccurrence(item)}>{item.status === 4 ? 'Delete extra' : 'Restore'}</Button>}
+                </Group></Table.Td>
+              </Table.Tr>)}</Table.Tbody>
+            </Table>
+          )}
+        </Stack>
+      </Modal>
+
+      <Modal opened={Boolean(editingOccurrence)} onClose={() => setEditingOccurrence(null)} title="Change occurrence">
+        <Stack>
+          <Select label="Action" value={occurrenceStatus} onChange={value => setOccurrenceStatus(value ?? '1')} data={OCCURRENCE_STATUSES}
+            disabled={Boolean(editingOccurrence?.exceptionId)} />
+          <TextInput label={`Start (${timeZoneId})`} type="datetime-local" required value={occurrenceStart} onChange={e => setOccurrenceStart(e.target.value)} />
+          <TextInput label={`End (${timeZoneId})`} type="datetime-local" required value={occurrenceEnd} onChange={e => setOccurrenceEnd(e.target.value)} />
+          <Select label="Replacement employee (optional)" clearable searchable value={occurrenceEmployee} onChange={setOccurrenceEmployee}
+            data={employees.filter(e => e.isActive).map(e => ({ value: e.id, label: `${e.firstName} ${e.lastName}` }))} />
+          <TextInput label="Reason" required maxLength={500} value={occurrenceReason} onChange={e => setOccurrenceReason(e.target.value)} />
+          {occurrenceEditError && <Text role="alert" c="red">{occurrenceEditError}</Text>}
+          <Group justify="flex-end"><Button variant="default" onClick={() => setEditingOccurrence(null)}>Cancel</Button><Button loading={occurrenceSaving} onClick={saveOccurrence}>Save occurrence</Button></Group>
+        </Stack>
+      </Modal>
 
       <Modal opened={Boolean(templateShift)} onClose={() => setTemplateShift(null)} title="Assign checklist template">
         <Stack>

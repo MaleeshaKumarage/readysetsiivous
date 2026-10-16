@@ -76,17 +76,26 @@ public sealed class GetOwnWorkHandler(IBookingRepository bookings, IShiftReposit
             && b.StartUtc >= from && b.StartUtc < to).OrderBy(b => b.StartUtc).Select(SelfResponses.Booking).ToArray();
         var ownShifts = new List<OperationalShiftResponse>();
         var assignments = await shifts.ListAssignmentsByEmployeeAsync(request.EmployeeId, ct);
-        foreach (var assignment in assignments.Where(a => a.IsActive && a.EmployeeId == request.EmployeeId))
+        var assignedExceptions = await shifts.ListOccurrenceExceptionsByEmployeeAsync(request.EmployeeId, from, to, ct)
+            ?? Array.Empty<ShiftOccurrenceException>();
+        var assignmentByShift = assignments.Where(a => a.IsActive && a.EmployeeId == request.EmployeeId)
+            .GroupBy(a => a.ShiftId).ToDictionary(g => g.Key, g => g.First());
+        foreach (var shiftId in assignmentByShift.Keys.Concat(assignedExceptions.Select(x => x.ShiftId)).Distinct())
         {
-            var shift = await shifts.GetAsync(assignment.ShiftId, ct);
-            if (shift is null || shift.Id != assignment.ShiftId || !shift.IsActive) continue;
+            var shift = await shifts.GetAsync(shiftId, ct);
+            if (shift is null || shift.Id != shiftId || !shift.IsActive) continue;
             var company = await companies.GetAsync(shift.CompanyId, ct);
             var branch = await branches.GetAsync(shift.BranchId, ct);
             if (company is null || company.Id != shift.CompanyId || !company.IsActive
                 || branch is null || branch.Id != shift.BranchId || branch.CompanyId != company.Id || !branch.IsActive) continue;
             var (localFrom, localTo) = TenantTimeZone.LocalDatesForUtcRange(from, to, zone);
-            foreach (var occurrence in ShiftScheduleCalculator.GenerateOccurrences(shift, localFrom, localTo, zone)
-                .Where(o => o.StartUtc >= from && o.StartUtc < to && assignment.Overlaps(o.StartUtc, o.EndUtc)))
+            var exceptions = await shifts.ListOccurrenceExceptionsAsync(shift.Id, from, to, ct)
+                ?? Array.Empty<ShiftOccurrenceException>();
+            var occurrences = ShiftOccurrenceResolver.Apply(
+                ShiftScheduleCalculator.GenerateOccurrences(shift, localFrom, localTo, zone), exceptions);
+            assignmentByShift.TryGetValue(shift.Id, out var assignment);
+            foreach (var occurrence in occurrences.Where(o => o.StartUtc >= from && o.StartUtc < to
+                && (o.EmployeeId == request.EmployeeId || (!o.EmployeeId.HasValue && assignment is not null && assignment.Overlaps(o.StartUtc, o.EndUtc)))))
                 ownShifts.Add(new(shift.Id, shift.Name, company.Id, company.Name, branch.Id, branch.Name,
                     new(branch.Street ?? "", branch.PostalCode ?? "", branch.City ?? "", branch.Country),
                     occurrence.StartUtc, occurrence.EndUtc));

@@ -70,6 +70,11 @@ public static class MartenConfig
             .Index(x => x.ShiftId)
             .Index(x => x.EmployeeId);
 
+        options.Schema.For<ShiftOccurrenceException>()
+            .Index(x => x.ShiftId)
+            .Index(x => x.OriginalStartUtc)
+            .Index(x => x.StartUtc);
+
         options.Schema.For<QualityCycleTemplate>()
             .Index(x => x.CompanyId)
             .Index(x => x.BranchId);

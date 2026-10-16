@@ -313,12 +313,26 @@ public class QualityCycleHandlers
                 throw new UnauthorizedAccessException();
             var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
             var (localFrom, localTo) = TenantTimeZone.LocalDatesForUtcRange(start, end, zone);
+            var exceptionFrom = TenantTimeZone.StartOfLocalDay(localFrom, zone);
+            var exceptionTo = TenantTimeZone.StartOfLocalDay(localTo.AddDays(1), zone);
+            var exceptions = await _shiftRepository.ListOccurrenceExceptionsAsync(shift.Id, exceptionFrom, exceptionTo, ct)
+                ?? Array.Empty<ShiftOccurrenceException>();
+            var resolved = ShiftOccurrenceResolver.Apply(
+                ShiftScheduleCalculator.GenerateOccurrences(shift, localFrom, localTo, zone), exceptions);
+            var selected = resolved.SingleOrDefault(o => o.StartUtc == start && o.EndUtc == end);
             if (end <= start || end - start > TimeSpan.FromDays(2)
-                || !ShiftScheduleCalculator.GenerateOccurrences(shift, localFrom, localTo, zone).Any(o => o.StartUtc == start && o.EndUtc == end))
+                || selected is null)
                 throw new QualityCycleConflictException("Choose an actual scheduled shift occurrence.");
-            var assignment = await _shiftRepository.GetAssignmentAsync(shift.Id, employee.Id, ct);
-            if (assignment == null || !assignment.IsActive || !assignment.Overlaps(start, end))
-                throw new UnauthorizedAccessException();
+            if (selected.EmployeeId.HasValue)
+            {
+                if (selected.EmployeeId != employee.Id) throw new UnauthorizedAccessException();
+            }
+            else
+            {
+                var assignment = await _shiftRepository.GetAssignmentAsync(shift.Id, employee.Id, ct);
+                if (assignment == null || !assignment.IsActive || !assignment.Overlaps(start, end))
+                    throw new UnauthorizedAccessException();
+            }
             if (TenantTimeZone.LocalDate(start, zone) != TenantTimeZone.LocalDate(_clock.GetUtcNow().UtcDateTime, zone))
                 throw new QualityCycleConflictException("This shift can be started on its scheduled date.");
 
@@ -404,16 +418,25 @@ public class QualityCycleHandlers
             var (zoneId, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
             var (localFrom, localTo) = TenantTimeZone.LocalDatesForUtcRange(from, to, zone);
             var assignments = await _shiftRepository.ListAssignmentsByEmployeeAsync(request.EmployeeId, ct);
+            var employeeExceptions = await _shiftRepository.ListOccurrenceExceptionsByEmployeeAsync(request.EmployeeId, from, to, ct)
+                ?? Array.Empty<ShiftOccurrenceException>();
+            var assignmentByShift = assignments.Where(a => a.IsActive && a.EmployeeId == request.EmployeeId)
+                .GroupBy(a => a.ShiftId).ToDictionary(g => g.Key, g => g.First());
+            var shiftIds = assignmentByShift.Keys.Concat(employeeExceptions.Select(x => x.ShiftId)).Distinct().ToArray();
             var result = new List<MyShiftOccurrenceDto>();
 
-            foreach (var assignment in assignments)
+            foreach (var shiftId in shiftIds)
             {
-                if (!assignment.IsActive || assignment.EmployeeId != request.EmployeeId) continue;
-                var shift = await _shiftRepository.GetAsync(assignment.ShiftId, ct);
-                if (shift == null || shift.Id != assignment.ShiftId || !shift.IsActive) continue;
+                var shift = await _shiftRepository.GetAsync(shiftId, ct);
+                if (shift == null || shift.Id != shiftId || !shift.IsActive) continue;
 
-                var occurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, localFrom, localTo, zone);
-                foreach (var occurrence in occurrences.Where(o => o.StartUtc >= from && o.StartUtc < to && assignment.Overlaps(o.StartUtc, o.EndUtc)))
+                var exceptions = await _shiftRepository.ListOccurrenceExceptionsAsync(shift.Id, from, to, ct)
+                    ?? Array.Empty<ShiftOccurrenceException>();
+                var occurrences = ShiftOccurrenceResolver.Apply(
+                    ShiftScheduleCalculator.GenerateOccurrences(shift, localFrom, localTo, zone), exceptions);
+                assignmentByShift.TryGetValue(shift.Id, out var assignment);
+                foreach (var occurrence in occurrences.Where(o => o.StartUtc >= from && o.StartUtc < to
+                    && (o.EmployeeId == request.EmployeeId || (!o.EmployeeId.HasValue && assignment is not null && assignment.Overlaps(o.StartUtc, o.EndUtc)))))
                 {
                     var form = await _repository.GetFormByShiftOccurrenceAsync(shift.Id, request.EmployeeId, occurrence.StartUtc, ct);
                     if (form is not null && (form.EmployeeId != request.EmployeeId || form.ShiftId != shift.Id || form.ShiftOccurrenceUtc != occurrence.StartUtc))

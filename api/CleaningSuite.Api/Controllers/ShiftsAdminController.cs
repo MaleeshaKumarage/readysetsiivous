@@ -89,6 +89,18 @@ public class ShiftsAdminController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPut("{id:guid}/occurrence-exceptions")]
+    public async Task<IActionResult> SaveOccurrenceException(Guid id,
+        [FromBody] SaveShiftOccurrenceExceptionCommand command, CancellationToken ct) =>
+        Ok(await _mediator.Send(command with { ShiftId = id }, ct));
+
+    [HttpDelete("{id:guid}/occurrence-exceptions/{exceptionId:guid}")]
+    public async Task<IActionResult> DeleteOccurrenceException(Guid id, Guid exceptionId, CancellationToken ct)
+    {
+        await _mediator.Send(new DeleteShiftOccurrenceExceptionCommand(id, exceptionId), ct);
+        return NoContent();
+    }
+
     [HttpPost("{id:guid}/assignments")]
     public async Task<IActionResult> AssignEmployee(
         Guid id,

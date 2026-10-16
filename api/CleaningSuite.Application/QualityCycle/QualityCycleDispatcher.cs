@@ -40,14 +40,22 @@ public class QualityCycleDispatcher : IQualityCycleDispatcher
         var count = 0;
         foreach (var shift in shifts.Where(s => s.IsActive))
         {
-            var occurrences = QualityCycleOccurrences.InWindow(shift, fromUtc, toUtc, zone)
-                .Where(x => x.Occurrence.EndUtc > now).Select(x => x.Occurrence).ToList();
-            count += await DispatchAsync(shift, occurrences, ct);
+            var generated = QualityCycleOccurrences.InWindow(shift, fromUtc, toUtc, zone)
+                .Select(x => x.Occurrence).ToList();
+            var exceptions = await _shifts.ListOccurrenceExceptionsAsync(shift.Id, fromUtc, toUtc, ct)
+                ?? Array.Empty<ShiftOccurrenceException>();
+            var occurrences = ShiftOccurrenceResolver.Apply(generated, exceptions)
+                .Where(x => x.EndUtc > now).ToList();
+            count += await DispatchResolvedAsync(shift, occurrences, ct);
         }
         return count;
     }
 
     public async Task<int> DispatchAsync(Shift shift, IReadOnlyList<ShiftOccurrence> occurrences, CancellationToken ct = default)
+        => await DispatchResolvedAsync(shift,
+            occurrences.Select(o => new ResolvedShiftOccurrence(o.StartUtc, o.EndUtc)).ToArray(), ct);
+
+    private async Task<int> DispatchResolvedAsync(Shift shift, IReadOnlyList<ResolvedShiftOccurrence> occurrences, CancellationToken ct)
     {
         if (!shift.IsActive || !shift.QualityCycleTemplateId.HasValue) return 0;
         var template = await _forms.GetTemplateAsync(shift.QualityCycleTemplateId.Value, ct);
@@ -58,13 +66,17 @@ public class QualityCycleDispatcher : IQualityCycleDispatcher
         var assignments = await _shifts.ListAssignmentsByShiftAsync(shift.Id, ct);
         var now = _clock.GetUtcNow().UtcDateTime;
         var count = 0;
-        foreach (var assignment in assignments.Where(a => a.IsActive))
+        foreach (var occurrence in occurrences)
         {
-            var employee = await _employees.GetByIdAsync(assignment.EmployeeId, ct);
-            if (employee is null || !employee.IsActive) continue;
-            foreach (var occurrence in occurrences.Where(o => o.EndUtc > assignment.AssignedAtUtc))
+            var employeeIds = occurrence.EmployeeId.HasValue
+                ? new[] { occurrence.EmployeeId.Value }
+                : assignments.Where(a => a.IsActive && a.Overlaps(occurrence.StartUtc, occurrence.EndUtc))
+                    .Select(a => a.EmployeeId).Distinct().ToArray();
+            foreach (var employeeId in employeeIds)
             {
                 ct.ThrowIfCancellationRequested();
+                var employee = await _employees.GetByIdAsync(employeeId, ct);
+                if (employee is null || !employee.IsActive) continue;
                 var form = await _forms.GetFormByShiftOccurrenceAsync(shift.Id, employee.Id, occurrence.StartUtc, ct);
                 if (form is null)
                 {

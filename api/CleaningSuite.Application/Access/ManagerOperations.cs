@@ -140,6 +140,15 @@ public sealed class ManagerOperations(IShiftRepository shifts, IEmployeeReposito
         await Load(id, ct); await mediator.Send(new RemoveEmployeeFromShiftCommand(id, employeeId), ct);
     }
 
+    public async Task<IReadOnlyList<ShiftOccurrenceDto>> Occurrences(Guid id, DateTime from, DateTime to, CancellationToken ct)
+    { await Load(id, ct); return await mediator.Send(new GetShiftOccurrencesQuery(id, from, to), ct); }
+
+    public async Task<ShiftOccurrenceDto> SaveOccurrence(Guid id, SaveShiftOccurrenceExceptionCommand command, CancellationToken ct)
+    { await Load(id, ct); return await mediator.Send(command with { ShiftId = id }, ct); }
+
+    public async Task DeleteOccurrence(Guid id, Guid exceptionId, CancellationToken ct)
+    { await Load(id, ct); await mediator.Send(new DeleteShiftOccurrenceExceptionCommand(id, exceptionId), ct); }
+
     private async Task<Shift> Load(Guid id, CancellationToken ct)
     {
         var shift = await shifts.GetAsync(id, ct);

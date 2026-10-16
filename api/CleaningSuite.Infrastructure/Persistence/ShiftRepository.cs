@@ -105,4 +105,27 @@ public class ShiftRepository : IShiftRepository
 
     public async Task<IReadOnlyList<ShiftAssignment>> ListAssignmentHistoryByEmployeeAsync(Guid employeeId, CancellationToken ct = default) =>
         await Session.Query<ShiftAssignment>().Where(a => a.EmployeeId == employeeId).ToListAsync(ct);
+
+    public Task<ShiftOccurrenceException?> GetOccurrenceExceptionAsync(Guid id, CancellationToken ct = default) =>
+        Session.LoadAsync<ShiftOccurrenceException>(id, ct);
+
+    public Task<ShiftOccurrenceException?> GetOccurrenceExceptionByOriginalAsync(Guid shiftId, DateTime originalStartUtc, CancellationToken ct = default) =>
+        Session.Query<ShiftOccurrenceException>().FirstOrDefaultAsync(x => x.ShiftId == shiftId && x.OriginalStartUtc == originalStartUtc, ct);
+
+    public async Task<IReadOnlyList<ShiftOccurrenceException>> ListOccurrenceExceptionsAsync(Guid shiftId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default) =>
+        await Session.Query<ShiftOccurrenceException>()
+            .Where(x => x.ShiftId == shiftId && ((x.StartUtc >= fromUtc && x.StartUtc < toUtc)
+                || (x.OriginalStartUtc != null && x.OriginalStartUtc >= fromUtc && x.OriginalStartUtc < toUtc)))
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<ShiftOccurrenceException>> ListOccurrenceExceptionsByEmployeeAsync(Guid employeeId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default) =>
+        await Session.Query<ShiftOccurrenceException>()
+            .Where(x => x.EmployeeId == employeeId && x.StartUtc >= fromUtc && x.StartUtc < toUtc)
+            .ToListAsync(ct);
+
+    public async Task SaveOccurrenceExceptionAsync(ShiftOccurrenceException exception, CancellationToken ct = default)
+    { Session.Store(exception); await Session.SaveChangesAsync(ct); }
+
+    public async Task DeleteOccurrenceExceptionAsync(Guid id, CancellationToken ct = default)
+    { Session.Delete<ShiftOccurrenceException>(id); await Session.SaveChangesAsync(ct); }
 }
