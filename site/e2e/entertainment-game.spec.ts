@@ -47,7 +47,7 @@ test('word diff leaves punctuation unmarked', async ({ page }) => {
   hub.push('answerEvaluated', { roundId: 'round-1', answer: original, evaluation: { ...EVALUATION, correctedAnswer: corrected } });
   const comparison = page.getByTestId('word-comparison');
   await expect(comparison.getByLabel('Original sentence')).toHaveText(original); await expect(comparison.getByLabel('Corrected sentence')).toHaveText(corrected);
-  await expect(comparison.locator('span[aria-label^="Incorrect"], span[aria-label^="Corrected"], span[aria-label^="Added"], span[aria-label^="Removed"]')).toHaveCount(0);
+  await expect(comparison.locator('span[aria-label^="Incorrect original word:"], span[aria-label^="Corrected word:"], span[aria-label^="Added word:"], span[aria-label^="Removed word:"]')).toHaveCount(0);
 });
 test('current translator is visible to every player and updates with each accepted round', async ({ page }) => {
   const hub = await setupGame(page, true); await expect(page.getByTestId('current-turn')).toHaveText('Current turn: Alice');
