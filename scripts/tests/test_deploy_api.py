@@ -31,7 +31,8 @@ elif a[:2]==['compose','config']:
     assert a==['compose','config','--format','json']
     print(json.dumps({'services': {'api': {'image': 'wrong' if mode=='config' else os.environ['EXPECTED'],
                                   'environment': {'Entertainment__Gemini__ApiKey': os.environ.get('GAME_GEMINI_API_KEY', ''),
-                                                  'Entertainment__OpenAI__Keys__1': os.environ.get('OPENAI_API_KEY_1', '')}},
+                                                  **{f'Entertainment__Gemini__Keys__{i}': os.environ.get(f'GEMINI_KEY_{i}', '') for i in range(1, 11)},
+                                                  **{f'Entertainment__OpenAI__Keys__{i}': os.environ.get(f'OPENAI_API_KEY_{i}', '') for i in range(1, 11)}}},
                                   'postgres': {'image':'postgres:16-alpine'},
                                   'keycloak': {'image':'quay.io/keycloak/keycloak:26.1'}}}))
 elif a[0]=='login':
@@ -134,6 +135,12 @@ class DeploymentTests(unittest.TestCase):
         result, _, _ = self.run_deploy(GAME_GEMINI_API_KEY="", OPENAI_API_KEY_1="openai-private")
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertNotIn("openai-private", result.stdout + result.stderr)
+
+    def test_multiple_gemini_slots_are_accepted(self):
+        result, _, _ = self.run_deploy(GAME_GEMINI_API_KEY="", GEMINI_KEY_1="gemini-one-private", GEMINI_KEY_2="gemini-two-private")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertNotIn("gemini-one-private", result.stdout + result.stderr)
+        self.assertNotIn("gemini-two-private", result.stdout + result.stderr)
 
     def test_empty_provider_pool_is_rejected_and_restored(self):
         result, commands, _ = self.run_deploy(GAME_GEMINI_API_KEY="")

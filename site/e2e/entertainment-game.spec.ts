@@ -12,7 +12,9 @@ test('typed check shows original, corrected changes and why before explicit Next
 });
 test('provider failure retains typed answer and same round for retry', async ({ page }) => {
   const hub = await setupGame(page); await page.getByLabel('Your Finnish answer').fill('Kissa istuu matto'); await page.getByRole('button', { name: 'Check answer' }).click();
-  hub.push('gameError', 'AI unavailable. Please retry.'); await expect(page.locator('[role="alert"]').filter({ hasText: 'AI unavailable' })).toContainText('AI unavailable'); await expect(page.getByLabel('Your Finnish answer')).toHaveValue('Kissa istuu matto'); await expect(page.getByRole('heading', { name: 'Round 1' })).toBeVisible();
+  hub.push('gameError', 'AI unavailable. Please retry.'); hub.push('gameErrorDetail', 'Gemini key slot 1: rate limit or quota exceeded (HTTP 429). Retry after about 30 seconds.'); await expect(page.locator('[role="alert"]').filter({ hasText: 'AI unavailable' })).toContainText('AI unavailable'); await expect(page.getByLabel('Your Finnish answer')).toHaveValue('Kissa istuu matto'); await expect(page.getByRole('heading', { name: 'Round 1' })).toBeVisible();
+  const detail = page.getByText('Gemini key slot 1: rate limit or quota exceeded (HTTP 429). Retry after about 30 seconds.'); await expect(detail).not.toBeVisible();
+  await page.getByText('View error').click(); await expect(detail).toBeVisible();
   await page.getByRole('button', { name: 'Retry', exact: true }).click(); await expect.poll(() => hub.invocations.filter(i => i.target === 'CheckAnswer').length).toBe(2);
   hub.push('answerEvaluated', { roundId: 'round-1', answer: 'Kissa istuu matto', evaluation: EVALUATION }); await expect(page.getByRole('button', { name: 'Next round' })).toBeVisible();
 });

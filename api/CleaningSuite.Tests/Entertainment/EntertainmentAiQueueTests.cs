@@ -97,6 +97,29 @@ public class EntertainmentAiQueueTests
         Assert.Equal(new[] { "g1", "g2", "g3", "o1" }, attempts);
     }
 
+    [Fact]
+    public async Task CoordinatorReturnsSafeProviderDiagnosticAndRedactsCredential()
+    {
+        const string secret = "gemini-secret-test-value";
+        var handler = new FakeProviderHandler(_ => new HttpResponseMessage(HttpStatusCode.TooManyRequests)
+        {
+            Content = new StringContent(JsonSerializer.Serialize(new { error = new { message = $"Quota exceeded for {secret}." } }), Encoding.UTF8, "application/json")
+        });
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Entertainment:Gemini:Keys:1"] = secret
+        }).Build();
+        var coordinator = new EntertainmentAiCoordinator(new(new FakeHttpClientFactory(handler), config), config, NullLogger<EntertainmentAiCoordinator>.Instance);
+
+        var error = await Assert.ThrowsAsync<CleaningSuite.Application.Entertainment.EntertainmentAiUnavailableException>(
+            () => coordinator.GenerateAsync("cats", CleaningSuite.Domain.Entertainment.CefrLevel.A1, [], CancellationToken.None));
+
+        Assert.Contains("Gemini key slot 1", error.Diagnostic);
+        Assert.Contains("HTTP 429", error.Diagnostic);
+        Assert.Contains("Quota exceeded", error.Diagnostic);
+        Assert.DoesNotContain(secret, error.Diagnostic);
+    }
+
     private sealed class FakeProviderHandler(Func<HttpRequestMessage, HttpResponseMessage> response) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => Task.FromResult(response(request));
