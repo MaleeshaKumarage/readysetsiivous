@@ -56,6 +56,21 @@ test.describe('Entertainment â€” Create group', () => {
     await expect(page.getByText('At least 10 characters required.')).toBeVisible();
   });
 
+  test('selected language level has a clear visual state', async ({ page }) => {
+    await page.goto('/entertainment/');
+    await page.getByRole('button', { name: 'Create group' }).click();
+
+    const a2 = page.getByRole('button', { name: 'A2', exact: true });
+    const b1 = page.getByRole('button', { name: 'B1', exact: true });
+    await b1.click();
+
+    await expect(b1).toHaveAttribute('aria-pressed', 'true');
+    await expect(b1).toHaveClass(/bg-primary/);
+    await expect(b1.locator('[aria-hidden="true"]')).toHaveText('✓');
+    await expect(a2).toHaveAttribute('aria-pressed', 'false');
+    await expect(a2).not.toHaveClass(/bg-primary/);
+  });
+
   test('create form Back returns to landing', async ({ page }) => {
     await page.goto('/entertainment/');
     await page.getByRole('button', { name: 'Create group' }).click();
