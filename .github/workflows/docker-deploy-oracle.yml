@@ -34,6 +34,16 @@ jobs:
           ref: main
       - name: Validate release SHA
         run: '[[ "$RELEASE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]'
+      - name: Sync production Compose configuration
+        uses: appleboy/scp-action@v1
+        with:
+          host: 130.61.140.7
+          username: ubuntu
+          key: ${{ secrets.ORACLE_SSH_KEY }}
+          source: api/deploy/docker-compose.yml
+          target: /home/ubuntu/cleaning-suite
+          strip_components: 2
+          overwrite: true
       - name: Deploy to Oracle via SSH
         uses: appleboy/ssh-action@v1
         with:
