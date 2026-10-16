@@ -155,7 +155,9 @@ test('legacy session without a player token is cleared instead of rebound', asyn
   const hub = mockEntertainmentSignalR(page); await page.goto('/entertainment/');
   await expect(page.getByRole('button', { name: 'Create group' })).toBeVisible();
   expect(hub.invocations.some(i => i.target === 'JoinLobby')).toBe(false);
-  expect(await page.evaluate(() => localStorage.getItem('entSession'))).toBeNull();
+  // The landing buttons are server-rendered and can be visible before hydration runs
+  // loadEntertainmentSession(). Wait for the client-side legacy-session cleanup.
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('entSession'))).toBeNull();
 });
 
 test('authenticated session includes token in initial JoinLobby and refresh rejoin', async ({ page }) => {
