@@ -133,7 +133,13 @@ function GroupForm({ create, onBack, onSession }: { create: boolean; onBack: () 
       <Field label="Description" hint={`${description.length} / 2000 characters (minimum 10)`} error={description.length > 0 && description.trim().length < 10 ? 'At least 10 characters required.' : undefined}><Textarea maxLength={2000} placeholder="Describe the topic or theme" value={description} onChange={e => setDescription(e.target.value)} /></Field></> :
       <Field label="Join key"><Input placeholder="6-character key" value={joinKey} onChange={e => setJoinKey(e.target.value)} /></Field>}
     <Field label="Your name"><Input placeholder="Your name" value={playerName} onChange={e => setPlayerName(e.target.value)} /></Field>
-    <div><p>Your level</p><div className="flex gap-2">{CEFR_LEVELS.map(l => <button type="button" key={l} aria-pressed={level === l} onClick={() => setLevel(l)} className="border rounded p-2">{l}</button>)}</div></div>
+    <div><p id="language-level-label" className="mb-2 font-medium">Your level</p><div aria-labelledby="language-level-label" className="flex flex-wrap gap-2">{CEFR_LEVELS.map(l => {
+      const selected = level === l;
+      return <button type="button" key={l} aria-pressed={selected} onClick={() => setLevel(l)}
+        className={`min-w-14 rounded-md border px-3 py-2 font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${selected ? 'border-primary bg-primary text-primary-foreground shadow-sm' : 'border-gray-300 bg-white text-gray-800 hover:border-primary hover:text-primary'}`}>
+        <span aria-hidden="true" className={`mr-1 ${selected ? 'inline' : 'hidden'}`}>✓</span>{l}
+      </button>;
+    })}</div></div>
     {error && <p role="alert">{error}</p>}<Button onClick={onBack}>Back</Button><Button disabled={busy} onClick={() => void submit()}>{busy ? 'Working…' : create ? 'Create group' : 'Join group'}</Button>
   </Card>;
 }
