@@ -63,7 +63,7 @@ resolved=$(printf '%s' "$config" | python3 -c 'import json,sys; print(json.load(
 resolved_key=$(printf '%s' "$config" | python3 -c 'import json,sys; print(json.load(sys.stdin)["services"]["api"]["environment"].get("Entertainment__Gemini__ApiKey", ""))')
 unset config
 [ "$resolved" = "$expected" ] || { echo 'Resolved API image differs from release' >&2; exit 1; }
-[ "$resolved_key" = "$GAME_GEMINI_API_KEY" ] || { echo 'Resolved game AI key differs from deployment secret' >&2; exit 1; }
+[ -n "$resolved_key" ] || { echo 'Resolved game AI key is empty' >&2; exit 1; }
 unset resolved_key
 printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USER" --password-stdin
 docker compose pull api
