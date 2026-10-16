@@ -30,7 +30,7 @@ test('word diff colors only changed words and preserves Finnish punctuation and 
   const comparison = page.getByTestId('word-comparison');
   await expect(comparison.getByLabel('Original sentence')).toHaveText(original);
   await expect(comparison.getByLabel('Corrected sentence')).toHaveText(corrected);
-  await expect(comparison.getByLabel('Unchanged word: Minä')).toBeVisible(); await expect(comparison.getByLabel('Unchanged word: asun')).toBeVisible();
+  await expect(comparison.getByLabel('Original sentence').getByLabel('Unchanged word: Minä')).toBeVisible(); await expect(comparison.getByLabel('Original sentence').getByLabel('Unchanged word: asun')).toBeVisible();
   await expect(comparison.getByLabel('Incorrect original word: Helsingilla')).toBeVisible(); await expect(comparison.getByLabel('Corrected word: Helsingissä')).toBeVisible();
 });
 test('word diff labels additions and removals around repeated Finnish words', async ({ page }) => {
@@ -47,7 +47,7 @@ test('word diff leaves punctuation unmarked', async ({ page }) => {
   hub.push('answerEvaluated', { roundId: 'round-1', answer: original, evaluation: { ...EVALUATION, correctedAnswer: corrected } });
   const comparison = page.getByTestId('word-comparison');
   await expect(comparison.getByLabel('Original sentence')).toHaveText(original); await expect(comparison.getByLabel('Corrected sentence')).toHaveText(corrected);
-  await expect(comparison.locator('[aria-label^="Incorrect"], [aria-label^="Corrected"], [aria-label^="Added"], [aria-label^="Removed"]')).toHaveCount(0);
+  await expect(comparison.locator('span[aria-label^="Incorrect"], span[aria-label^="Corrected"], span[aria-label^="Added"], span[aria-label^="Removed"]')).toHaveCount(0);
 });
 test('current translator is visible to every player and updates with each accepted round', async ({ page }) => {
   const hub = await setupGame(page, true); await expect(page.getByTestId('current-turn')).toHaveText('Current turn: Alice');
@@ -55,8 +55,9 @@ test('current translator is visible to every player and updates with each accept
   hub.push('roundStarted', { ...ROUND, roundId: 'round-1-stale', roundNumber: 1, translatorPlayerId: 'player-1' }); await expect(page.getByTestId('current-turn')).toHaveText('Current turn: Bob (you)');
 });
 test('current translator reconnecting status is displayed', async ({ page }) => {
-  const hub = await setupGame(page); hub.push('lobbyUpdated', { groupId: 'group-1', groupName: 'Travel English', status: 'InGame', players: [{ playerId: 'player-1', name: 'Alice', level: 'B1', isCreator: true, isOnline: false }, { playerId: 'player-2', name: 'Bob', level: 'A2', isCreator: false, isOnline: true }] });
-  await expect(page.getByTestId('current-turn')).toHaveText('Current turn: Alice (reconnecting)');
+  const hub = await setupGame(page); hub.push('lobbyUpdated', { groupId: 'group-1', groupName: 'Travel English', status: 'InGame', players: [{ playerId: 'player-1', name: 'Alice', level: 'B1', isCreator: true, isOnline: true }, { playerId: 'player-2', name: 'Bob', level: 'A2', isCreator: false, isOnline: false }] });
+  hub.push('roundStarted', { ...ROUND, roundId: 'round-2', roundNumber: 2, translatorPlayerId: 'player-2' });
+  await expect(page.getByTestId('current-turn')).toHaveText('Current turn: Bob (reconnecting)');
 });
 test('server score and end standings display and leave notifies server', async ({ page }) => {
   const hub = await setupGame(page); hub.push('scoreUpdated', [{ playerId: 'player-1', score: 5 }]); await expect(page.getByText('5', { exact: true })).toBeVisible();
