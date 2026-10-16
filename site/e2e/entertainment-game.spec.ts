@@ -12,7 +12,7 @@ test('typed check shows original, corrected changes and why before explicit Next
 });
 test('provider failure retains typed answer and same round for retry', async ({ page }) => {
   const hub = await setupGame(page); await page.getByLabel('Your Finnish answer').fill('Kissa istuu matto'); await page.getByRole('button', { name: 'Check answer' }).click();
-  hub.push('gameError', 'AI unavailable. Please retry.'); await expect(page.getByRole('alert')).toContainText('AI unavailable'); await expect(page.getByLabel('Your Finnish answer')).toHaveValue('Kissa istuu matto'); await expect(page.getByRole('heading', { name: 'Round 1' })).toBeVisible();
+  hub.push('gameError', 'AI unavailable. Please retry.'); await expect(page.locator('[role="alert"]').filter({ hasText: 'AI unavailable' })).toContainText('AI unavailable'); await expect(page.getByLabel('Your Finnish answer')).toHaveValue('Kissa istuu matto'); await expect(page.getByRole('heading', { name: 'Round 1' })).toBeVisible();
   await page.getByRole('button', { name: 'Retry', exact: true }).click(); await expect.poll(() => hub.invocations.filter(i => i.target === 'CheckAnswer').length).toBe(2);
   hub.push('answerEvaluated', { roundId: 'round-1', answer: 'Kissa istuu matto', evaluation: EVALUATION }); await expect(page.getByRole('button', { name: 'Next round' })).toBeVisible();
 });
@@ -38,7 +38,7 @@ test('failed Next keeps feedback and retries same transition without advancing',
   const hub = await setupGame(page);
   hub.push('answerEvaluated', { roundId: 'round-1', answer: 'Kissa istuu matto', evaluation: EVALUATION });
   await page.getByRole('button', { name: 'Next round' }).click(); hub.push('gameError', 'Generation unavailable. Retry.');
-  await expect(page.getByRole('alert')).toContainText('Generation unavailable'); await expect(page.getByTestId('answer-feedback')).toBeVisible(); await expect(page.getByRole('heading', { name: 'Round 1' })).toBeVisible();
+  await expect(page.locator('[role="alert"]').filter({ hasText: 'Generation unavailable' })).toContainText('Generation unavailable'); await expect(page.getByTestId('answer-feedback')).toBeVisible(); await expect(page.getByRole('heading', { name: 'Round 1' })).toBeVisible();
   await page.getByRole('button', { name: 'Retry', exact: true }).click(); await expect.poll(() => hub.invocations.filter(i => i.target === 'NextRound').length).toBe(2);
 });
 

@@ -4,7 +4,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import {
   Title, Button, Table, Modal, TextInput, Select, MultiSelect, Group, Stack, Text, Loader, ActionIcon, NumberInput,
 } from '@mantine/core';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Pencil } from 'lucide-react';
 import {
   adminShifts, adminCompanies, adminEmployees, adminTenant,
   type Shift, type Company, type Branch, type Employee, type ShiftAssignment,
@@ -16,6 +16,7 @@ import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/L
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const SCHEDULE_TYPES = [
   { value: '0', label: 'Daily' },
+  { value: '1', label: 'Daily (different times)' },
   { value: '2', label: 'Specific days' },
   { value: '3', label: 'Bi-weekly' },
   { value: '5', label: 'Monthly' },
@@ -33,6 +34,7 @@ export default function ShiftsAdminPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingShift, setEditingShift] = useState<Shift | null>(null);
 
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [branchId, setBranchId] = useState<string | null>(null);
@@ -43,6 +45,7 @@ export default function ShiftsAdminPage() {
   const [weekDays, setWeekDays] = useState<string[]>([]);
   const [weekParity, setWeekParity] = useState('1');
   const [monthlyDay, setMonthlyDay] = useState<string | number>(1);
+  const [dailyTimes, setDailyTimes] = useState<Record<string, { start: string; end: string }>>({});
   const [notes, setNotes] = useState('');
   const [qualityCycleTemplateId, setQualityCycleTemplateId] = useState<string | null>(null);
   const [templates, setTemplates] = useState<QualityCycleTemplate[]>([]);
@@ -80,7 +83,7 @@ export default function ShiftsAdminPage() {
   const visibleShifts = shifts.filter(s => inLifecycle(s, lifecycle));
 
   useEffect(() => {
-    adminCompanies.list('', 0, 100).then((r) => { if (r) setCompanies(r.items); });
+    adminCompanies.listAll().then((r) => { if (r) setCompanies(r); });
     adminEmployees.list().then((e) => { if (e) setEmployees(e); });
     adminQualityCycle.listTemplates().then((t) => { if (t) setTemplates(t.filter((x) => x.isActive)); });
   }, []);
@@ -93,6 +96,7 @@ export default function ShiftsAdminPage() {
   const buildSchedule = () => {
     const t = Number(scheduleType);
     if (t === 0) return { type: 0, dailyStart: start, dailyEnd: end };
+    if (t === 1) return { type: 1, dailyTimes: Object.fromEntries(weekDays.map(day => [DAYS[Number(day)], dailyTimes[day] ?? { start, end }])) };
     if (t === 2) return {
       type: 2,
       weeklyDay: weekDays.length ? Number(weekDays[0]) : null,
@@ -112,18 +116,36 @@ export default function ShiftsAdminPage() {
   };
 
   const closeModal = () => {
-    setName(''); setNotes(''); setWeekDays([]); setCompanyId(null); setBranchId(null); setQualityCycleTemplateId(null); setError(''); setModalOpen(false);
+    setName(''); setNotes(''); setWeekDays([]); setCompanyId(null); setBranchId(null); setQualityCycleTemplateId(null); setScheduleType('0'); setStart('08:00'); setEnd('17:00'); setWeekParity('1'); setMonthlyDay(1); setDailyTimes({}); setEditingShift(null); setError(''); setModalOpen(false);
+  };
+
+  const openCreate = () => { closeModal(); setModalOpen(true); };
+  const openEdit = (shift: Shift) => {
+    const schedule = shift.schedule;
+    setEditingShift(shift); setCompanyId(shift.companyId); setBranchId(shift.branchId);
+    setName(shift.name); setNotes(shift.notes ?? ''); setQualityCycleTemplateId(shift.qualityCycleTemplateId ?? null);
+    setScheduleType(String(schedule.type));
+    setStart((schedule.dailyStart ?? schedule.weeklyStart ?? schedule.biWeeklyStart ?? schedule.monthlyStart ?? '08:00').slice(0, 5));
+    setEnd((schedule.dailyEnd ?? schedule.weeklyEnd ?? schedule.biWeeklyEnd ?? schedule.monthlyEnd ?? '17:00').slice(0, 5));
+    const dayIndex = (day: string) => /^\d+$/.test(day) ? Number(day) : DAYS.indexOf(day);
+    setWeekDays(schedule.type === 2 ? (schedule.weeklyDays?.length ? schedule.weeklyDays : [schedule.weeklyDay ?? 0]).map(String) : schedule.type === 3 ? [String(schedule.biWeeklyDay ?? 0)] : schedule.type === 1 ? Object.keys(schedule.dailyTimes ?? {}).map(day => String(dayIndex(day))).filter(day => Number(day) >= 0) : []);
+    setDailyTimes(Object.fromEntries(Object.entries(schedule.dailyTimes ?? {}).map(([day, range]) => [String(dayIndex(day)), { start: range.start?.slice(0, 5) ?? '08:00', end: range.end?.slice(0, 5) ?? '17:00' }])));
+    setWeekParity(String(schedule.biWeeklyWeekParity ?? 1)); setMonthlyDay(schedule.monthlyDay ?? 1);
+    setError(''); setModalOpen(true);
   };
 
   const submit = async () => {
     if (!companyId || !branchId || !name.trim()) { setError('Company, branch and name are required.'); return; }
     if (scheduleType === '2' && weekDays.length === 0) { setError('Select at least one day.'); return; }
+    if (scheduleType === '1' && (!weekDays.length || weekDays.some(day => !dailyTimes[day]?.start || !dailyTimes[day]?.end || dailyTimes[day].end <= dailyTimes[day].start))) { setError('Select at least one day and ensure each end time is after its start time.'); return; }
     if (scheduleType === '3' && weekDays.length === 0) { setError('Select a day.'); return; }
     setSaving(true); setError('');
-    const created = await adminShifts.create({ companyId, branchId, name: name.trim(), schedule: buildSchedule(), notes: notes.trim() || undefined, qualityCycleTemplateId: qualityCycleTemplateId || undefined });
+    const fields = { companyId, branchId, name: name.trim(), schedule: buildSchedule(), notes: notes.trim() || undefined, isActive: editingShift?.isActive ?? true, validFrom: editingShift?.validFrom, validUntil: editingShift?.validUntil, qualityCycleTemplateId: qualityCycleTemplateId || undefined };
+    const created = editingShift ? await adminShifts.update(editingShift.id, fields) : await adminShifts.create(fields);
     setSaving(false);
-    if (!created) { setError('Failed to create shift.'); return; }
-    closeModal(); changeLifecycle('active'); await load();
+    if (!created) { setError(editingShift ? 'Failed to update shift. Check that the company and branch are valid, then retry.' : 'Failed to create shift.'); return; }
+    const wasEditing = Boolean(editingShift);
+    closeModal(); if (!wasEditing) changeLifecycle('active'); await load();
   };
 
   const deactivate = async (id: string) => { await adminShifts.deactivate(id); if (assignOpen === id) closeAssignments(); await load(); };
@@ -221,7 +243,7 @@ export default function ShiftsAdminPage() {
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
         <Title order={2}>Shifts</Title>
-        <Button leftSection={<Plus size={16} />} onClick={() => setModalOpen(true)}>Add shift</Button>
+        <Button leftSection={<Plus size={16} />} onClick={openCreate}>Add shift</Button>
       </Group>
 
       {listError && <Text role="alert" c="red" mb="md">{listError}</Text>}
@@ -243,6 +265,7 @@ export default function ShiftsAdminPage() {
                     <Table.Td fw={500}>{s.name}</Table.Td>
                     <Table.Td>
                       {s.schedule.type === 0 && `Daily ${s.schedule.dailyStart}–${s.schedule.dailyEnd}`}
+                      {s.schedule.type === 1 && `Daily by day (${Object.keys(s.schedule.dailyTimes ?? {}).length} days)`}
                       {s.schedule.type === 2 && (s.schedule.weeklyDays?.length
                         ? `${s.schedule.weeklyDays.map((d) => DAYS[d]).join(', ')} ${s.schedule.weeklyStart}–${s.schedule.weeklyEnd}`
                         : `${DAYS[s.schedule.weeklyDay ?? 0]} ${s.schedule.weeklyStart}–${s.schedule.weeklyEnd}`)}
@@ -253,6 +276,7 @@ export default function ShiftsAdminPage() {
                     <Table.Td>{assignments[s.id]?.length ?? 0}</Table.Td>
                     <Table.Td>
                       <Group gap={6} wrap="nowrap">
+                        {isAdmin() && <Button size="xs" variant="light" leftSection={<Pencil size={13} />} onClick={() => openEdit(s)}>Edit</Button>}
                         {s.isActive && <Button size="xs" variant="light" disabled={assignBusy} onClick={() => openAssign(s.id)}>Employees</Button>}
                         {isAdmin() && s.isActive && <Button size="xs" variant="light" onClick={() => { setTemplateShift(s); setAssignedTemplate(s.qualityCycleTemplateId ?? null); setTemplateError(''); }}>Checklist template</Button>}
                         {s.isActive && <Button size="xs" variant="subtle" color="red" disabled={assignBusy} onClick={() => deactivate(s.id)}>Deactivate</Button>}
@@ -330,11 +354,11 @@ export default function ShiftsAdminPage() {
           }}>Save template assignment</Button>
         </Stack>
       </Modal>
-      <Modal opened={modalOpen} onClose={closeModal} title="Add shift" size="lg" radius="md">
+      <Modal opened={modalOpen} onClose={closeModal} title={editingShift ? 'Edit shift' : 'Add shift'} size="lg" radius="md">
         <Stack gap="sm">
           <Text size="sm" c="dimmed">Schedule times use the tenant time zone: {timeZoneId}.</Text>
-          <Select label="Company" data={companies.map((c) => ({ value: c.id, label: c.name }))} value={companyId} onChange={(v) => { setCompanyId(v); setBranchId(null); setQualityCycleTemplateId(null); }} searchable />
-          <Select label="Branch" data={branches.map((b) => ({ value: b.id, label: b.name }))} value={branchId} onChange={v => { setBranchId(v); setQualityCycleTemplateId(null); }} searchable disabled={!companyId} />
+          <Select label="Company" data={companies.filter(c => c.isActive || c.id === editingShift?.companyId).map((c) => ({ value: c.id, label: `${c.name}${c.isActive ? '' : ' (inactive)'}` }))} value={companyId} onChange={(v) => { setCompanyId(v); setBranchId(null); setQualityCycleTemplateId(null); }} searchable />
+          <Select label="Branch" data={branches.filter(b => b.companyId === companyId && (b.isActive || b.id === editingShift?.branchId)).map((b) => ({ value: b.id, label: `${b.name}${b.isActive ? '' : ' (inactive)'}` }))} value={branchId} onChange={v => { setBranchId(v); setQualityCycleTemplateId(null); }} searchable disabled={!companyId} />
           <TextInput label="Name" required value={name} onChange={(e) => setName(e.target.value)} />
           <Select label="Schedule" data={SCHEDULE_TYPES} value={scheduleType} onChange={(v) => setScheduleType(v ?? '0')} />
 
@@ -346,6 +370,14 @@ export default function ShiftsAdminPage() {
               onChange={setWeekDays}
             />
           )}
+          {scheduleType === '1' && <>
+            <MultiSelect label="Days" data={DAYS.map((d, i) => ({ value: String(i), label: d }))} value={weekDays} onChange={setWeekDays} />
+            {weekDays.map(day => <Group key={day} wrap="wrap" grow gap="xs">
+              <Text size="sm" fw={500}>{DAYS[Number(day)]}</Text>
+              <TextInput label="Start" type="time" value={dailyTimes[day]?.start ?? '08:00'} onChange={e => setDailyTimes(current => ({ ...current, [day]: { ...(current[day] ?? { start: '08:00', end: '17:00' }), start: e.target.value } }))} />
+              <TextInput label="End" type="time" value={dailyTimes[day]?.end ?? '17:00'} onChange={e => setDailyTimes(current => ({ ...current, [day]: { ...(current[day] ?? { start: '08:00', end: '17:00' }), end: e.target.value } }))} />
+            </Group>)}
+          </>}
           {scheduleType === '3' && (
             <Group wrap="wrap" grow gap="xs">
               <Select label="Week parity" data={[{ value: '1', label: 'Week 1' }, { value: '2', label: 'Week 2' }]} value={weekParity} onChange={(v) => setWeekParity(v ?? '1')} />
@@ -355,7 +387,7 @@ export default function ShiftsAdminPage() {
           {scheduleType === '5' && (
             <NumberInput label="Day of month (1-31)" min={1} max={31} value={monthlyDay} onChange={setMonthlyDay} />
           )}
-          {scheduleType !== '4' && (
+          {scheduleType !== '4' && scheduleType !== '1' && (
             <Group wrap="wrap" grow gap="xs">
               <TextInput label="Start" type="time" value={start} onChange={(e) => setStart(e.target.value)} />
               <TextInput label="End" type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
@@ -374,7 +406,7 @@ export default function ShiftsAdminPage() {
           {error && <Text size="sm" c="red">{error}</Text>}
           <Group justify="flex-end" mt="xs">
             <Button variant="default" onClick={closeModal}>Cancel</Button>
-            <Button loading={saving} onClick={submit}>Create shift</Button>
+            <Button loading={saving} onClick={submit}>{editingShift ? 'Save changes' : 'Create shift'}</Button>
           </Group>
         </Stack>
       </Modal>
