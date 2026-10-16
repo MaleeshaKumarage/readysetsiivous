@@ -36,7 +36,7 @@ public class ShiftOccurrenceExceptionTests
     public async Task Save_handler_rejects_an_original_occurrence_that_is_not_in_the_schedule()
     {
         var shift = Shift.Create(Guid.NewGuid(), Guid.NewGuid(), "Weekday",
-            new ShiftSchedule { Type = ShiftScheduleType.Daily, DailyStart = TimeSpan.FromHours(8), DailyEnd = TimeSpan.FromHours(10) },
+            new ShiftSchedule { Type = ShiftScheduleType.DailySameTime, DailyStart = TimeSpan.FromHours(8), DailyEnd = TimeSpan.FromHours(10) },
             null, null, null);
         var shifts = new Mock<IShiftRepository>(); var employees = new Mock<IEmployeeRepository>();
         shifts.Setup(x => x.GetAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
@@ -52,7 +52,7 @@ public class ShiftOccurrenceExceptionTests
     public async Task Occurrence_query_merges_move_cancellation_and_extra_visit()
     {
         var shift = Shift.Create(Guid.NewGuid(), Guid.NewGuid(), "Daily",
-            new ShiftSchedule { Type = ShiftScheduleType.Daily, DailyStart = TimeSpan.FromHours(8), DailyEnd = TimeSpan.FromHours(10) },
+            new ShiftSchedule { Type = ShiftScheduleType.DailySameTime, DailyStart = TimeSpan.FromHours(8), DailyEnd = TimeSpan.FromHours(10) },
             null, null, null);
         var day = new DateTime(2026, 11, 2, 0, 0, 0, DateTimeKind.Utc);
         var original = day.AddHours(8);
