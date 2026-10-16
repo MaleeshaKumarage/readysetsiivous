@@ -3,6 +3,7 @@ using CleaningSuite.Application.Entertainment;
 using CleaningSuite.Domain.Entertainment;
 using CleaningSuite.Infrastructure.Entertainment;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
