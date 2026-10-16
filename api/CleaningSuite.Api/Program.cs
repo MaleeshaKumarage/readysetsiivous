@@ -110,7 +110,6 @@ if (builder.Configuration.GetValue("BackgroundWorkers:Enabled", true))
 builder.Services.AddScoped<CleaningSuite.Application.Entertainment.IEntertainmentRepository, CleaningSuite.Infrastructure.Persistence.EntertainmentRepository>();
 builder.Services.AddSingleton<CleaningSuite.Application.Entertainment.IEntertainmentKeyProtector, CleaningSuite.Infrastructure.Entertainment.EntertainmentKeyProtector>();
 builder.Services.AddHttpClient("Gemini");
-builder.Services.AddHttpClient("OpenAI");
 builder.Services.AddSingleton<CleaningSuite.Infrastructure.Entertainment.EntertainmentAiProviderTransport>();
 builder.Services.AddSingleton<CleaningSuite.Infrastructure.Entertainment.EntertainmentAiCoordinator>();
 builder.Services.AddSingleton<CleaningSuite.Infrastructure.Entertainment.EntertainmentAiPromptQueue>();

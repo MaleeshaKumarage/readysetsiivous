@@ -36,24 +36,23 @@ from pathlib import Path
 
 path = Path('.env')
 lines = path.read_text().splitlines()
-names = ['GAME_GEMINI_API_KEY', 'OPENAI_API_KEY', 'GAME_OPENAI_MODEL', 'GAME_GEMINI_RPM', 'GAME_GEMINI_RPD', 'GAME_OPENAI_RPM', 'GAME_OPENAI_RPD'] + [f'GEMINI_KEY_{i}' for i in range(1, 11)] + [f'OPENAI_API_KEY_{i}' for i in range(1, 11)]
+names = ['GAME_GEMINI_API_KEY', 'GAME_GEMINI_RPM', 'GAME_GEMINI_RPD'] + [f'GEMINI_KEY_{i}' for i in range(1, 11)]
+retired_names = ['OPENAI_API_KEY', 'GAME_OPENAI_MODEL', 'GAME_OPENAI_RPM', 'GAME_OPENAI_RPD'] + [f'OPENAI_API_KEY_{i}' for i in range(1, 11)]
 values = {name: os.environ.get(name, '') for name in names}
-key_names = ['GAME_GEMINI_API_KEY', 'OPENAI_API_KEY'] + [f'GEMINI_KEY_{i}' for i in range(1, 11)] + [f'OPENAI_API_KEY_{i}' for i in range(1, 11)]
+key_names = ['GAME_GEMINI_API_KEY'] + [f'GEMINI_KEY_{i}' for i in range(1, 11)]
 keys = [values[name] for name in key_names if values[name]]
 if not keys:
-    raise SystemExit('No server-owned Gemini or OpenAI game AI key is configured')
+    raise SystemExit('No server-owned Gemini game AI key is configured')
 if any(any(ord(c) < 32 or ord(c) == 127 for c in value) for value in keys):
     raise SystemExit('Invalid game AI key format')
-if not values['GAME_OPENAI_MODEL']:
-    values['GAME_OPENAI_MODEL'] = 'gpt-4.1-mini'
-for name, default, maximum in [('GAME_GEMINI_RPM', '3', 1000), ('GAME_GEMINI_RPD', '15', 100000), ('GAME_OPENAI_RPM', '5', 1000), ('GAME_OPENAI_RPD', '50', 100000)]:
+for name, default, maximum in [('GAME_GEMINI_RPM', '3', 1000), ('GAME_GEMINI_RPD', '15', 100000)]:
     raw = values[name] or default
     if not raw.isdigit() or int(raw) < 1:
         raise SystemExit(f'Invalid positive integer rate limit: {name}')
     if int(raw) > maximum:
         raise SystemExit(f'Rate limit too high: {name} (maximum {maximum})')
     values[name] = raw
-managed = set(names)
+managed = set(names + retired_names)
 updated = []
 for line in lines:
     if not any(line.startswith(name + '=') for name in managed):
@@ -72,7 +71,7 @@ else
 fi
 config=$(docker compose config --format json)
 resolved=$(printf '%s' "$config" | python3 -c 'import json,sys; print(json.load(sys.stdin)["services"]["api"]["image"])')
-resolved_ai=$(printf '%s' "$config" | python3 -c 'import json,sys; e=json.load(sys.stdin)["services"]["api"]["environment"]; names=["Entertainment__Gemini__ApiKey"]+[f"Entertainment__Gemini__Keys__{i}" for i in range(1,11)]+[f"Entertainment__OpenAI__Keys__{i}" for i in range(1,11)]; sys.exit(0 if any(e.get(n) for n in names) else 1)' && echo yes || echo no)
+resolved_ai=$(printf '%s' "$config" | python3 -c 'import json,sys; e=json.load(sys.stdin)["services"]["api"]["environment"]; names=["Entertainment__Gemini__ApiKey"]+[f"Entertainment__Gemini__Keys__{i}" for i in range(1,11)]; sys.exit(0 if any(e.get(n) for n in names) else 1)' && echo yes || echo no)
 unset config
 [ "$resolved" = "$expected" ] || { echo 'Resolved API image differs from release' >&2; exit 1; }
 [ "$resolved_ai" = yes ] || { echo 'Resolved game AI key pool is empty' >&2; exit 1; }

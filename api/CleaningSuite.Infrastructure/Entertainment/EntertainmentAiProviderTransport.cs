@@ -1,157 +1,155 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
+using CleaningSuite.Application.Entertainment;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace CleaningSuite.Infrastructure.Entertainment;
 
-public sealed class ProviderRequestFailure(HttpStatusCode? status, TimeSpan? retryAfter, bool malformed = false, string? providerMessage = null) : Exception
+public sealed class ProviderRequestFailure(
+    HttpStatusCode? status,
+    TimeSpan? retryAfter,
+    bool malformed = false,
+    string? providerMessage = null,
+    string? providerCode = null,
+    string? providerReason = null,
+    GeminiFailureKind kind = GeminiFailureKind.Unknown) : Exception
 {
     public HttpStatusCode? Status { get; } = status;
     public TimeSpan? RetryAfter { get; } = retryAfter;
     public bool Malformed { get; } = malformed;
     public string? ProviderMessage { get; } = providerMessage;
+    public string? ProviderCode { get; } = providerCode;
+    public string? ProviderReason { get; } = providerReason;
+    public GeminiFailureKind Kind { get; } = kind;
 }
 
+/// <summary>Gemini-only game transport with bounded retries and response parsing.</summary>
 public sealed class EntertainmentAiProviderTransport(IHttpClientFactory clients, IConfiguration config, ILogger<EntertainmentAiProviderTransport>? logger = null)
 {
+    private static readonly TimeSpan RequestBudget = TimeSpan.FromSeconds(55);
+    private const int MaxErrorBodyBytes = 16 * 1024;
+
     public async Task<JsonDocument> SendAsync(ProviderKey key, string instruction, string input, object schema, CancellationToken ct)
     {
-        var timeout = Math.Clamp(config.GetValue<int?>("Entertainment:Ai:ProviderTimeoutSeconds") ?? 12, 1, 30);
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        deadline.CancelAfter(TimeSpan.FromSeconds(timeout));
-        try
+        if (!string.Equals(key.Provider, "Gemini", StringComparison.Ordinal))
+            throw new InvalidOperationException("The language game supports Gemini requests only.");
+
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        budget.CancelAfter(RequestBudget);
+        var started = DateTimeOffset.UtcNow;
+        for (var attempt = 0; attempt < 2; attempt++)
         {
-            using var request = key.Provider == "Gemini"
-                ? GeminiRequest(key.Value, instruction, input, schema)
-                : OpenAiRequest(key.Value, instruction, input, schema);
-            using var response = await clients.CreateClient(key.Provider).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
-            if (response.IsSuccessStatusCode)
-            {
-                var limit = Header(response, "x-ratelimit-limit-requests");
-                var remaining = Header(response, "x-ratelimit-remaining-requests");
-                var reset = Header(response, "x-ratelimit-reset-requests");
-                if (limit is not null || remaining is not null || reset is not null)
-                    logger?.LogInformation("Game AI {Provider} request-limit headers: limit {RequestLimit}, remaining {RequestRemaining}, reset {RequestReset}.", key.Provider, limit ?? "unknown", remaining ?? "unknown", reset ?? "unknown");
-            }
-            if (!response.IsSuccessStatusCode)
-            {
-                var retry = response.Headers.RetryAfter?.Delta ?? (response.Headers.RetryAfter?.Date - DateTimeOffset.UtcNow);
-                var errorBody = await response.Content.ReadAsStringAsync(deadline.Token);
-                throw new ProviderRequestFailure(response.StatusCode, retry, providerMessage: ExtractProviderMessage(errorBody, key.Value));
-            }
-            await using var responseStream = await response.Content.ReadAsStreamAsync(deadline.Token);
-            using var output = new MemoryStream();
-            var buffer = new byte[4096];
-            int read;
-            while ((read = await responseStream.ReadAsync(buffer, deadline.Token)) > 0)
-            {
-                if (output.Length + read > 32768) throw new ProviderRequestFailure(null, null, malformed: true);
-                await output.WriteAsync(buffer.AsMemory(0, read), deadline.Token);
-            }
-            var body = Encoding.UTF8.GetString(output.ToArray());
+            budget.Token.ThrowIfCancellationRequested();
             try
             {
-                using var envelope = JsonDocument.Parse(body);
-                var text = key.Provider == "Gemini" ? GeminiText(envelope.RootElement) : OpenAiText(envelope.RootElement);
-                return JsonDocument.Parse(text);
+                return await SendOnceAsync(key, instruction, input, schema, budget.Token);
             }
-            catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or IndexOutOfRangeException)
+            catch (ProviderRequestFailure failure) when (attempt == 0 && ShouldRetry(failure))
             {
-                throw new ProviderRequestFailure(null, null, malformed: true);
+                var wait = failure.RetryAfter ?? Backoff(attempt);
+                if (!CanRetryWithinBudget(started, wait)) throw;
+                logger?.LogInformation("Gemini returned {Kind} (HTTP {Status}); retrying once after {DelayMilliseconds} ms.", failure.Kind, (int?)failure.Status, (int)wait.TotalMilliseconds);
+                await Task.Delay(wait, budget.Token);
+            }
+            catch (HttpRequestException) when (attempt == 0)
+            {
+                var wait = Backoff(attempt);
+                if (!CanRetryWithinBudget(started, wait)) throw new ProviderRequestFailure(null, null, kind: GeminiFailureKind.ProviderUnavailable);
+                await Task.Delay(wait, budget.Token);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested && attempt == 0 && !budget.IsCancellationRequested)
+            {
+                await Task.Delay(Backoff(attempt), budget.Token);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                throw new ProviderRequestFailure(null, null, kind: GeminiFailureKind.ProviderUnavailable);
+            }
+            catch (HttpRequestException)
+            {
+                throw new ProviderRequestFailure(null, null, kind: GeminiFailureKind.ProviderUnavailable);
             }
         }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        {
-            throw new ProviderRequestFailure(null, null);
-        }
-        catch (HttpRequestException)
-        {
-            throw new ProviderRequestFailure(null, null);
-        }
+
+        throw new ProviderRequestFailure(null, null, kind: GeminiFailureKind.ProviderUnavailable);
     }
 
-    private HttpRequestMessage GeminiRequest(string apiKey, string instruction, string input, object schema)
+    private async Task<JsonDocument> SendOnceAsync(ProviderKey key, string instruction, string input, object schema, CancellationToken ct)
     {
+        var timeout = GetAttemptTimeout();
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(timeout);
         var baseUrl = config["Entertainment:Gemini:BaseUrl"] ?? "https://generativelanguage.googleapis.com";
         var model = config["Entertainment:Gemini:Model"] ?? "gemini-3.5-flash-lite";
-        var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl.TrimEnd('/')}/v1beta/models/{Uri.EscapeDataString(model)}:generateContent");
-        request.Headers.Add("X-goog-api-key", apiKey);
-        request.Content = JsonContent(new { systemInstruction = new { parts = new[] { new { text = instruction } } }, contents = new[] { new { role = "user", parts = new[] { new { text = input } } } }, generationConfig = new { responseMimeType = "application/json", responseSchema = schema, maxOutputTokens = 2048 } });
-        return request;
-    }
-
-    private HttpRequestMessage OpenAiRequest(string apiKey, string instruction, string input, object schema)
-    {
-        var model = config["Entertainment:OpenAI:Model"] ?? "gpt-4.1-mini";
-        var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/responses");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-        request.Content = JsonContent(new { model, instructions = instruction, input, text = new { format = new { type = "json_schema", name = "game_result", strict = true, schema = ToOpenAiSchema(JsonSerializer.SerializeToNode(schema)!) } }, max_output_tokens = 2048 });
-        return request;
-    }
-
-    private static HttpContent JsonContent(object value) => new StringContent(JsonSerializer.Serialize(value), Encoding.UTF8, "application/json");
-
-    private static string? Header(HttpResponseMessage response, string name) =>
-        response.Headers.TryGetValues(name, out var values) ? string.Join(",", values).Replace("\r", string.Empty).Replace("\n", string.Empty) :
-        response.Content.Headers.TryGetValues(name, out values) ? string.Join(",", values).Replace("\r", string.Empty).Replace("\n", string.Empty) : null;
-
-    private static JsonNode ToOpenAiSchema(JsonNode node)
-    {
-        if (node is JsonObject obj)
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl.TrimEnd('/')}/v1beta/models/{Uri.EscapeDataString(model)}:generateContent");
+        request.Headers.Add("X-goog-api-key", key.Value);
+        request.Content = new StringContent(JsonSerializer.Serialize(new
         {
-            foreach (var property in obj.ToArray())
-            {
-                if (property.Key == "type" && property.Value is JsonValue typeValue)
-                {
-                    var type = typeValue.GetValue<string>();
-                    obj["type"] = type.ToLowerInvariant();
-                }
-                else if (property.Key == "properties" && property.Value is JsonObject properties)
-                {
-                    obj["additionalProperties"] = false;
-                    foreach (var child in properties) ToOpenAiSchema(child.Value!);
-                    if (obj["required"] is null) obj["required"] = new JsonArray(properties.Select(p => (JsonNode?)JsonValue.Create(p.Key)).ToArray());
-                }
-                else if (property.Value is not null) ToOpenAiSchema(property.Value);
-            }
+            systemInstruction = new { parts = new[] { new { text = instruction } } },
+            contents = new[] { new { role = "user", parts = new[] { new { text = input } } } },
+            generationConfig = new { responseMimeType = "application/json", responseSchema = schema, maxOutputTokens = 2048 }
+        }), Encoding.UTF8, "application/json");
+
+        using var response = await clients.CreateClient("Gemini").SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
+        if (!response.IsSuccessStatusCode)
+        {
+            var retry = GetRetryAfter(response);
+            var body = await ReadBoundedAsync(response.Content, deadline.Token);
+            var parsed = GeminiProviderErrorParser.Parse(response.StatusCode, body, key.Value);
+            throw new ProviderRequestFailure(response.StatusCode, retry, providerMessage: parsed.Message,
+                providerCode: parsed.Code, providerReason: parsed.Reason, kind: parsed.Kind);
         }
-        else if (node is JsonArray array)
-            foreach (var item in array) if (item is not null) ToOpenAiSchema(item);
-        return node;
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync(deadline.Token);
+        using var output = new MemoryStream();
+        var buffer = new byte[4096];
+        int read;
+        while ((read = await responseStream.ReadAsync(buffer, deadline.Token)) > 0)
+        {
+            if (output.Length + read > 32768) throw new ProviderRequestFailure(null, null, malformed: true);
+            await output.WriteAsync(buffer.AsMemory(0, read), deadline.Token);
+        }
+        try
+        {
+            using var envelope = JsonDocument.Parse(Encoding.UTF8.GetString(output.ToArray()));
+            var text = GeminiText(envelope.RootElement);
+            return JsonDocument.Parse(text);
+        }
+        catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or IndexOutOfRangeException)
+        {
+            throw new ProviderRequestFailure(null, null, malformed: true);
+        }
+    }
+
+    private static bool ShouldRetry(ProviderRequestFailure failure) =>
+        failure.Kind is GeminiFailureKind.RateLimited or GeminiFailureKind.UnknownRateLimit or GeminiFailureKind.ProviderUnavailable;
+
+    private TimeSpan GetAttemptTimeout() => TimeSpan.FromSeconds(Math.Clamp(config.GetValue<int?>("Entertainment:Ai:ProviderTimeoutSeconds") ?? 25, 1, 30));
+
+    private static TimeSpan Backoff(int attempt) => TimeSpan.FromMilliseconds(500 * Math.Pow(2, attempt) + Random.Shared.Next(100, 401));
+
+    private bool CanRetryWithinBudget(DateTimeOffset started, TimeSpan wait) =>
+        DateTimeOffset.UtcNow - started + wait + GetAttemptTimeout() + TimeSpan.FromSeconds(1) < RequestBudget;
+
+    private static TimeSpan? GetRetryAfter(HttpResponseMessage response)
+    {
+        var value = response.Headers.RetryAfter?.Delta ?? (response.Headers.RetryAfter?.Date - DateTimeOffset.UtcNow);
+        if (value is null || value <= TimeSpan.Zero) return null;
+        return TimeSpan.FromSeconds(Math.Min(value.Value.TotalSeconds, 86400));
+    }
+
+    private static async Task<string> ReadBoundedAsync(HttpContent content, CancellationToken ct)
+    {
+        await using var stream = await content.ReadAsStreamAsync(ct);
+        using var output = new MemoryStream();
+        var buffer = new byte[2048];
+        int read;
+        while (output.Length < MaxErrorBodyBytes && (read = await stream.ReadAsync(buffer.AsMemory(0, Math.Min(buffer.Length, MaxErrorBodyBytes - (int)output.Length)), ct)) > 0)
+            await output.WriteAsync(buffer.AsMemory(0, read), ct);
+        return Encoding.UTF8.GetString(output.ToArray());
     }
 
     private static string GeminiText(JsonElement root) => root.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString() ?? throw new JsonException();
-
-    private static string? ExtractProviderMessage(string body, string secret)
-    {
-        try
-        {
-            using var error = JsonDocument.Parse(body);
-            if (!error.RootElement.TryGetProperty("error", out var detail) ||
-                !detail.TryGetProperty("message", out var message) || message.ValueKind != JsonValueKind.String)
-                return null;
-            var value = message.GetString();
-            if (string.IsNullOrWhiteSpace(value)) return null;
-            value = value.Replace(secret, "[redacted]", StringComparison.Ordinal);
-            value = string.Concat(value.Where(c => !char.IsControl(c))).Trim();
-            return value.Length <= 240 ? value : value[..240];
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
-    private static string OpenAiText(JsonElement root)
-    {
-        if (root.TryGetProperty("output_text", out var direct) && direct.ValueKind == JsonValueKind.String) return direct.GetString()!;
-        foreach (var item in root.GetProperty("output").EnumerateArray())
-            foreach (var content in item.GetProperty("content").EnumerateArray())
-                if (content.TryGetProperty("type", out var type) && type.GetString() == "output_text") return content.GetProperty("text").GetString() ?? throw new JsonException();
-        throw new JsonException();
-    }
 }

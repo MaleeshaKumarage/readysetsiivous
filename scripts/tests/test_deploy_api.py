@@ -31,8 +31,7 @@ elif a[:2]==['compose','config']:
     assert a==['compose','config','--format','json']
     print(json.dumps({'services': {'api': {'image': 'wrong' if mode=='config' else os.environ['EXPECTED'],
                                   'environment': {'Entertainment__Gemini__ApiKey': os.environ.get('GAME_GEMINI_API_KEY', ''),
-                                                  **{f'Entertainment__Gemini__Keys__{i}': os.environ.get(f'GEMINI_KEY_{i}', '') for i in range(1, 11)},
-                                                  **{f'Entertainment__OpenAI__Keys__{i}': os.environ.get(f'OPENAI_API_KEY_{i}', '') for i in range(1, 11)}}},
+                                                  **{f'Entertainment__Gemini__Keys__{i}': os.environ.get(f'GEMINI_KEY_{i}', '') for i in range(1, 11)}}},
                                   'postgres': {'image':'postgres:16-alpine'},
                                   'keycloak': {'image':'quay.io/keycloak/keycloak:26.1'}}}))
 elif a[0]=='login':
@@ -62,7 +61,7 @@ class DeploymentTests(unittest.TestCase):
     def run_deploy(self, mode="success", sha=SHA, **credentials):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            initial = "IMAGE_TAG=sha-old\nDATABASE_PASSWORD=private-value\n"
+            initial = "IMAGE_TAG=sha-old\nDATABASE_PASSWORD=private-value\nOPENAI_API_KEY_1='old-openai-secret'\n"
             (root / ".env").write_text(initial)
             bin_dir = root / "bin"
             bin_dir.mkdir()
@@ -74,6 +73,10 @@ class DeploymentTests(unittest.TestCase):
                        REGISTRY_USER="test-user", REGISTRY_TOKEN="test-secret",
                        MODE=mode, EXPECTED=IMAGE,
                        PATH=str(bin_dir) + os.pathsep + os.environ["PATH"])
+            for name in (["GAME_GEMINI_API_KEY", "OPENAI_API_KEY"] +
+                         [f"GEMINI_KEY_{i}" for i in range(1, 11)] +
+                         [f"OPENAI_API_KEY_{i}" for i in range(1, 11)]):
+                env[name] = ""
             supplied_credentials = credentials or {"GAME_GEMINI_API_KEY": "new-owner-ai-secret"}
             env.update(supplied_credentials)
             result = subprocess.run(["sh", str(SCRIPT)], env=env,
@@ -94,7 +97,8 @@ class DeploymentTests(unittest.TestCase):
             else:
                 self.assertIn("IMAGE_TAG=sha-" + SHA, current)
                 self.assertIn("GAME_GEMINI_API_KEY='" + supplied_credentials.get("GAME_GEMINI_API_KEY", "") + "'", current)
-                self.assertIn("GAME_OPENAI_MODEL='gpt-4.1-mini'", current)
+                self.assertNotIn("OPENAI_API_KEY", current)
+                self.assertNotIn("GAME_OPENAI", current)
             return result, commands, attempts
 
     def test_success(self):
@@ -131,9 +135,10 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(3, attempts)
 
-    def test_openai_only_credentials_are_accepted(self):
+    def test_openai_only_credentials_are_rejected(self):
         result, _, _ = self.run_deploy(GAME_GEMINI_API_KEY="", OPENAI_API_KEY_1="openai-private")
-        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertNotEqual(0, result.returncode, result.stderr)
+        self.assertIn("No server-owned Gemini", result.stderr)
         self.assertNotIn("openai-private", result.stdout + result.stderr)
 
     def test_multiple_gemini_slots_are_accepted(self):

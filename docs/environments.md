@@ -206,18 +206,26 @@ do not send emails. See [tenant manager access](features/tenant-manager-access.m
 ## Language-game AI
 
 Game generation and answer evaluation use a shared FIFO with one worker. Every
-configured Gemini key is tried before OpenAI keys; empty numbered slots are
-ignored, so the key count matches the number of configured slots. Production
-GitHub Actions supports `GEMINI_KEY_1` through `GEMINI_KEY_10` and
-`OPENAI_API_KEY_1` through `OPENAI_API_KEY_10`. Legacy Gemini secrets remain
-supported. The deployment script writes them to the API host's private `.env`,
-validates that at least one key resolves without printing values, and restores
-the previous environment file if deployment fails. Local dev can set the same
+Gemini is the only game provider; OpenAI keys and models are not configured or
+used by the game. Production GitHub Actions supports `GEMINI_KEY_1` through
+`GEMINI_KEY_10` and legacy Gemini secrets. Empty numbered slots are ignored.
+The deployment script writes keys to the API host's private `.env`, validates
+that at least one key resolves without printing values, and restores the
+previous environment file if deployment fails. Local dev can set the same
 numbered variables in its untracked `.env`; no key belongs in source control or
-browser settings. `GAME_OPENAI_MODEL` selects the OpenAI model and defaults to
-`gpt-4.1-mini`.
+browser settings.
 
-The `game-ai-live-smoke` workflow is manual because it consumes provider quota.
+The coordinator limits Gemini to the configured RPM (default 3) and rolling
+24-hour request count (default 15), reserving usage in the database. All keys
+from one Google project share quota; key rotation only handles explicit
+key-specific authentication failures. Retryable 429/5xx errors receive at most
+one bounded retry with jitter and `Retry-After` support. Daily quota resets are
+reported only when Gemini identifies a daily limit; generic quota errors keep
+an internal cooldown and show that the reset time is unknown. The database
+reservation is safe for the current single API instance and must become atomic
+before horizontal scaling.
+
+The Gemini-only `game-ai-live-smoke` workflow is manual because it consumes provider quota.
 Ordinary CI uses provider fakes and never needs a provider secret. There is no
 sample-answer or local-grading fallback: a failed request leaves the current
 question and typed answer available for retry.

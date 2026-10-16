@@ -1,9 +1,13 @@
 # Gemini-only game AI reliability design
 
 Date: 2026-10-16
-Status: Proposed; awaiting user review
+Status: Approved; implementation prepared locally
 
 ## Problem
+
+This spec supersedes provider-selection and provider-reliability decisions in
+[the earlier game AI design](2026-10-15-game-platform-ai-design.md). Its other
+game identity, scoring, and round-lifecycle decisions remain in effect.
 
 The language game must use Gemini for both question generation and answer
 evaluation. The current coordinator still constructs Gemini and OpenAI provider
