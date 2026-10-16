@@ -1,0 +1,9 @@
+# Gemini and OpenAI game provider implementation plan
+
+1. Add a normalized provider key-pool configuration reader. Preserve the current Gemini setting aliases; read indexed Gemini/OpenAI slots, discard empty/exact duplicates, cap each provider at ten, and keep secrets out of logs.
+2. Refactor Gemini transport to use the shared provider contract and return categorized failures with status and Retry-After metadata. Add an OpenAI Responses API adapter using the configured model and strict structured JSON output matching game schemas.
+3. Add shared per-key cooldown/disabled state, round-robin cursors, provider fallback order (Gemini then OpenAI), bounded attempts and deadlines. Both generation and answer evaluation use the same coordinator and produce existing validated domain contracts.
+4. Add one bounded FIFO AI prompt channel with a single hosted consumer. Enqueue both generation and evaluation; skip canceled/expired queue items; return completion through a task completion source; reject when full. The queue and provider coordinator are singletons for the current one-instance deployment.
+5. Wire services and hosted worker in Program.cs. Update production and development Compose plus deploy workflow/script to pass all indexed secrets securely and preserve legacy values. Configure OpenAI model without adding credentials to source files.
+6. Add deterministic tests for configuration precedence, queue order/capacity/cancellation/deadline, failover, key cooldown/recovery/disablement, 400 cross-provider fallback, malformed output fallback, safe logs/errors, and retry-only game state retention.
+7. Document secret names and operational behavior. Run focused backend tests and build, then full CI. After the owner adds secrets, run bounded live generation/evaluation through the normal queue and ship through the existing production workflow.

@@ -30,7 +30,8 @@ if a[:3]==['compose','ps','-q']:
 elif a[:2]==['compose','config']:
     assert a==['compose','config','--format','json']
     print(json.dumps({'services': {'api': {'image': 'wrong' if mode=='config' else os.environ['EXPECTED'],
-                                  'environment': {'Entertainment__Gemini__ApiKey': os.environ['GAME_GEMINI_API_KEY']}},
+                                  'environment': {'Entertainment__Gemini__ApiKey': os.environ.get('GAME_GEMINI_API_KEY', ''),
+                                                  'Entertainment__OpenAI__Keys__1': os.environ.get('OPENAI_API_KEY_1', '')}},
                                   'postgres': {'image':'postgres:16-alpine'},
                                   'keycloak': {'image':'quay.io/keycloak/keycloak:26.1'}}}))
 elif a[0]=='login':
@@ -57,7 +58,7 @@ else: sys.exit(91)
 
 @unittest.skipUnless(os.name == "posix", "deployment script requires a POSIX shell; exercised on Linux CI")
 class DeploymentTests(unittest.TestCase):
-    def run_deploy(self, mode="success", sha=SHA):
+    def run_deploy(self, mode="success", sha=SHA, **credentials):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             initial = "IMAGE_TAG=sha-old\nDATABASE_PASSWORD=private-value\n"
@@ -70,9 +71,9 @@ class DeploymentTests(unittest.TestCase):
                 path.chmod(0o755)
             env = dict(os.environ, DEPLOY_DIR=tmp, RELEASE_SHA=sha,
                        REGISTRY_USER="test-user", REGISTRY_TOKEN="test-secret",
-                       GAME_GEMINI_API_KEY="new-owner-ai-secret",
                        MODE=mode, EXPECTED=IMAGE,
                        PATH=str(bin_dir) + os.pathsep + os.environ["PATH"])
+            env.update(credentials or {"GAME_GEMINI_API_KEY": "new-owner-ai-secret"})
             result = subprocess.run(["sh", str(SCRIPT)], env=env,
                                     text=True, capture_output=True, timeout=15)
             commands = (root / "commands").read_text() if (root / "commands").exists() else ""
@@ -89,7 +90,9 @@ class DeploymentTests(unittest.TestCase):
             if result.returncode:
                 self.assertEqual(initial, current)
             else:
-                self.assertEqual(initial.replace("sha-old", "sha-" + SHA) + "GAME_GEMINI_API_KEY='new-owner-ai-secret'\n", current)
+                self.assertIn("IMAGE_TAG=sha-" + SHA, current)
+                self.assertIn("GAME_GEMINI_API_KEY='new-owner-ai-secret'", current)
+                self.assertIn("GAME_OPENAI_MODEL='gpt-4.1-mini'", current)
             return result, commands, attempts
 
     def test_success(self):
@@ -125,6 +128,16 @@ class DeploymentTests(unittest.TestCase):
         result, _, attempts = self.run_deploy("retry")
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(3, attempts)
+
+    def test_openai_only_credentials_are_accepted(self):
+        result, _, _ = self.run_deploy(GAME_GEMINI_API_KEY="", OPENAI_API_KEY_1="openai-private")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertNotIn("openai-private", result.stdout + result.stderr)
+
+    def test_empty_provider_pool_is_rejected_and_restored(self):
+        result, commands, _ = self.run_deploy(GAME_GEMINI_API_KEY="")
+        self.assertNotEqual(0, result.returncode)
+        self.assertNotIn("compose pull", commands)
 
 
 if __name__ == "__main__":

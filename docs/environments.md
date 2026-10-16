@@ -205,21 +205,22 @@ emails continue; QC activity forms are filled through authenticated My shifts an
 do not send emails. See [tenant manager access](features/tenant-manager-access.md).
 ## Language-game AI
 
-Game generation and answer evaluation use a server-owned Gemini key. Production
-GitHub Actions reads `GEMINI_KEY_2`, falling back to `GEMINI_KEY` and then
-`GEMINI_API_KEY`, and delivers it over the deployment SSH session. The deployment
-script writes it to the API host's private `.env`, validates the resolved API
-container configuration without printing the value, and restores the previous
-environment file if deployment fails. The production and dev Compose files map
-`GAME_GEMINI_API_KEY` to `Entertainment__Gemini__ApiKey`. Local dev can set
-`GAME_GEMINI_API_KEY` in its untracked `.env`; no key belongs in source control or
-browser settings.
+Game generation and answer evaluation use a shared FIFO with one worker. Every
+configured Gemini key is tried before OpenAI keys; empty numbered slots are
+ignored, so the key count matches the number of configured slots. Production
+GitHub Actions supports `GEMINI_KEY_1` through `GEMINI_KEY_10` and
+`OPENAI_API_KEY_1` through `OPENAI_API_KEY_10`. Legacy Gemini secrets remain
+supported. The deployment script writes them to the API host's private `.env`,
+validates that at least one key resolves without printing values, and restores
+the previous environment file if deployment fails. Local dev can set the same
+numbered variables in its untracked `.env`; no key belongs in source control or
+browser settings. `GAME_OPENAI_MODEL` selects the OpenAI model and defaults to
+`gpt-4.1-mini`.
 
-The `game-ai-live-smoke` workflow is manual because it consumes the configured
-Gemini quota. It makes one generation and one evaluation request (each operation
-may make one bounded transient retry). Ordinary CI uses provider fakes and never
-needs a Gemini secret. There is no sample-answer or local-grading fallback: a
-failed request leaves the current question and typed answer available for retry.
+The `game-ai-live-smoke` workflow is manual because it consumes provider quota.
+Ordinary CI uses provider fakes and never needs a provider secret. There is no
+sample-answer or local-grading fallback: a failed request leaves the current
+question and typed answer available for retry.
 See [language game](features/language-game.md) for scoring, hint visibility and
 game-flow behavior.
 

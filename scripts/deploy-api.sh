@@ -6,8 +6,7 @@ esac
 [ "${#RELEASE_SHA}" -eq 40 ] || { echo 'Invalid release SHA' >&2; exit 1; }
 : "${REGISTRY_USER:?Registry user required}"
 : "${REGISTRY_TOKEN:?Registry token required}"
-: "${GAME_GEMINI_API_KEY:?Server-owned game AI key required}"
-GAME_GEMINI_API_KEY="$GAME_GEMINI_API_KEY" python3 -c 'import os,sys; key=os.environ["GAME_GEMINI_API_KEY"]; sys.exit(1 if any(ord(c)<32 or ord(c)==127 for c in key) else 0)' || { echo 'Invalid game AI key format' >&2; exit 1; }
+GAME_GEMINI_API_KEY="${GAME_GEMINI_API_KEY:-}"
 export GAME_GEMINI_API_KEY
 cd "${DEPLOY_DIR:-/home/ubuntu/cleaning-suite}"
 expected="ghcr.io/maleeshakumarage/readysetsiivous-api:sha-$RELEASE_SHA"
@@ -31,25 +30,30 @@ cleanup() {
   exit "$result"
 }
 trap cleanup EXIT
-GAME_GEMINI_API_KEY="$GAME_GEMINI_API_KEY" python3 - <<'PY'
+python3 - <<'PY'
 import os
 from pathlib import Path
 
 path = Path('.env')
 lines = path.read_text().splitlines()
-value = os.environ['GAME_GEMINI_API_KEY']
-encoded = "GAME_GEMINI_API_KEY='" + value.replace('\\', '\\\\').replace("'", "\\'") + "'"
+names = ['GAME_GEMINI_API_KEY', 'GAME_OPENAI_MODEL'] + [f'GEMINI_KEY_{i}' for i in range(1, 11)] + [f'OPENAI_API_KEY_{i}' for i in range(1, 11)]
+values = {name: os.environ.get(name, '') for name in names}
+keys = [value for name, value in values.items() if name != 'GAME_OPENAI_MODEL' and value]
+if not keys:
+    raise SystemExit('No server-owned Gemini or OpenAI game AI key is configured')
+if any(any(ord(c) < 32 or ord(c) == 127 for c in value) for value in keys):
+    raise SystemExit('Invalid game AI key format')
+if not values['GAME_OPENAI_MODEL']:
+    values['GAME_OPENAI_MODEL'] = 'gpt-4.1-mini'
+managed = set(names)
 updated = []
-found = False
 for line in lines:
-    if line.startswith('GAME_GEMINI_API_KEY='):
-        if not found:
-            updated.append(encoded)
-            found = True
-    else:
+    if not any(line.startswith(name + '=') for name in managed):
         updated.append(line)
-if not found:
-    updated.append(encoded)
+for name in names:
+    value = values[name]
+    encoded = "'" + value.replace('\\', '\\\\').replace("'", "\\'") + "'"
+    updated.append(f'{name}={encoded}')
 path.write_text('\n'.join(updated) + '\n')
 path.chmod(0o600)
 PY
@@ -60,11 +64,11 @@ else
 fi
 config=$(docker compose config --format json)
 resolved=$(printf '%s' "$config" | python3 -c 'import json,sys; print(json.load(sys.stdin)["services"]["api"]["image"])')
-resolved_key=$(printf '%s' "$config" | python3 -c 'import json,sys; print(json.load(sys.stdin)["services"]["api"]["environment"].get("Entertainment__Gemini__ApiKey", ""))')
+resolved_ai=$(printf '%s' "$config" | python3 -c 'import json,sys; e=json.load(sys.stdin)["services"]["api"]["environment"]; names=["Entertainment__Gemini__ApiKey"]+[f"Entertainment__Gemini__Keys__{i}" for i in range(1,11)]+[f"Entertainment__OpenAI__Keys__{i}" for i in range(1,11)]; sys.exit(0 if any(e.get(n) for n in names) else 1)' && echo yes || echo no)
 unset config
 [ "$resolved" = "$expected" ] || { echo 'Resolved API image differs from release' >&2; exit 1; }
-[ -n "$resolved_key" ] || { echo 'Resolved game AI key is empty' >&2; exit 1; }
-unset resolved_key
+[ "$resolved_ai" = yes ] || { echo 'Resolved game AI key pool is empty' >&2; exit 1; }
+unset resolved_ai
 printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USER" --password-stdin
 docker compose pull api
 docker compose up -d --no-deps api

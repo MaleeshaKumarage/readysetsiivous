@@ -1,0 +1,110 @@
+using System.Text.Json;
+using System.Diagnostics;
+using CleaningSuite.Application.Entertainment;
+using CleaningSuite.Domain.Entertainment;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+
+namespace CleaningSuite.Infrastructure.Entertainment;
+
+public sealed class EntertainmentAiCoordinator(EntertainmentAiProviderTransport transport, IConfiguration config, ILogger<EntertainmentAiCoordinator> logger)
+{
+    private readonly object _sync = new();
+    private readonly Dictionary<(string Provider, string Slot), DateTimeOffset> _cooldowns = [];
+    private readonly HashSet<(string Provider, string Slot)> _disabled = [];
+    private readonly Dictionary<string, int> _cursor = new(StringComparer.Ordinal);
+
+    public Task<GeminiSentence> GenerateAsync(string topic, CefrLevel level, IReadOnlyList<string> previous, CancellationToken ct)
+    {
+        if (!Enum.IsDefined(level)) throw new ArgumentOutOfRangeException(nameof(level));
+        var input = GeminiSentenceService.BuildPrompt(topic, level, previous);
+        return ExecuteAsync("generate", GeminiSentenceService.Instruction, input, GeminiSentenceService.Schema,
+            doc => GeminiSentenceService.ParseSentence(doc.RootElement), ct);
+    }
+
+    public Task<EntertainmentAnswerEvaluation> EvaluateAsync(string sentenceEn, string referenceFi, string answer, CefrLevel level, CancellationToken ct)
+    {
+        if (sentenceEn.Length > 1000 || referenceFi.Length > 1000 || answer.Length > 4000) throw new EntertainmentAiUnavailableException();
+        var input = JsonSerializer.Serialize(new { sentenceEn, referenceFi, answer, level = level.ToString() });
+        return ExecuteAsync("evaluate", GeminiAnswerEvaluator.Instruction, input, GeminiAnswerEvaluator.Schema,
+            doc => GeminiAnswerEvaluator.ParseEvaluation(doc.RootElement, answer), ct);
+    }
+
+    private async Task<T> ExecuteAsync<T>(string operation, string instruction, string input, object schema, Func<JsonDocument, T> parse, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var providers = new[] { EntertainmentAiKeyPool.Gemini(config), EntertainmentAiKeyPool.OpenAi(config) };
+        if (providers.All(pool => pool.Count == 0))
+            logger.LogWarning("Game AI unavailable: no provider credentials are configured on the server.");
+        foreach (var pool in providers)
+        {
+            var keys = Rotate(pool);
+            foreach (var key in keys)
+            {
+                ct.ThrowIfCancellationRequested();
+                var elapsed = Stopwatch.StartNew();
+                try
+                {
+                    using var result = await transport.SendAsync(key, instruction, input, schema, ct);
+                    var parsed = parse(result);
+                    MarkHealthy(key);
+                    logger.LogInformation("Game AI {Operation} succeeded with {Provider} slot {Slot} in {ElapsedMilliseconds} ms.", operation, key.Provider, key.Slot, elapsed.ElapsedMilliseconds);
+                    return parsed;
+                }
+                catch (ProviderRequestFailure failure)
+                {
+                    var status = (int?)failure.Status;
+                    var transient = status is null or 408 or 429 or >= 500;
+                    var stopProvider = false;
+                    var cooldownSeconds = 0;
+                    var disabled = false;
+                    if (status is 401 or 403) { Disable(key); disabled = true; }
+                    else if (failure.Malformed) { Cooldown(key, TimeSpan.FromSeconds(2)); cooldownSeconds = 2; }
+                    else if (transient) { var cooldown = failure.RetryAfter ?? (status == 429 ? TimeSpan.FromSeconds(30) : TimeSpan.FromSeconds(5)); Cooldown(key, cooldown); cooldownSeconds = (int)Math.Clamp(cooldown.TotalSeconds, 1, 60); }
+                    else if (status is >= 400 and < 500) stopProvider = true;
+                    logger.LogWarning("Game AI {Operation} failed with {Provider} slot {Slot}, category {Category}, status {Status}, cooldown {CooldownSeconds}s, disabled {Disabled}, elapsed {ElapsedMilliseconds} ms; advancing to another key/provider.", operation, key.Provider, key.Slot, failure.Malformed ? "malformed-response" : transient ? "transient" : "request-rejected", status, cooldownSeconds, disabled, elapsed.ElapsedMilliseconds);
+                    if (stopProvider) break;
+                }
+                catch (Exception error) when (error is JsonException or KeyNotFoundException or InvalidOperationException or IndexOutOfRangeException)
+                {
+                    Cooldown(key, TimeSpan.FromSeconds(2));
+                    logger.LogWarning("Game AI {Operation} returned a structurally invalid result from {Provider} slot {Slot} in {ElapsedMilliseconds} ms; advancing to another key/provider.", operation, key.Provider, key.Slot, elapsed.ElapsedMilliseconds);
+                }
+                catch (EntertainmentAiUnavailableException)
+                {
+                    Cooldown(key, TimeSpan.FromSeconds(2));
+                    logger.LogWarning("Game AI {Operation} returned an invalid game result from {Provider} slot {Slot} in {ElapsedMilliseconds} ms; advancing to another key/provider.", operation, key.Provider, key.Slot, elapsed.ElapsedMilliseconds);
+                }
+            }
+        }
+        throw new EntertainmentAiUnavailableException();
+    }
+
+    private IReadOnlyList<ProviderKey> Rotate(IReadOnlyList<ProviderKey> pool)
+    {
+        if (pool.Count == 0) return [];
+        lock (_sync)
+        {
+            var provider = pool[0].Provider;
+            var start = _cursor.GetValueOrDefault(provider) % pool.Count;
+            _cursor[provider] = (start + 1) % pool.Count;
+            var now = DateTimeOffset.UtcNow;
+            foreach (var expired in _cooldowns.Where(pair => pair.Value <= now).Select(pair => pair.Key).ToArray()) _cooldowns.Remove(expired);
+            return Enumerable.Range(0, pool.Count).Select(i => pool[(start + i) % pool.Count])
+                .Where(k => !_disabled.Contains((k.Provider, k.Slot)) && !_cooldowns.ContainsKey((k.Provider, k.Slot))).ToArray();
+        }
+    }
+
+    private void Cooldown(ProviderKey key, TimeSpan duration) { lock (_sync) _cooldowns[(key.Provider, key.Slot)] = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(Math.Clamp(duration.TotalSeconds, 1, 60)); }
+    private void Disable(ProviderKey key) { lock (_sync) _disabled.Add((key.Provider, key.Slot)); }
+    private void MarkHealthy(ProviderKey key) { lock (_sync) _cooldowns.Remove((key.Provider, key.Slot)); }
+}
+
+public sealed class QueuedEntertainmentAiService(EntertainmentAiPromptQueue queue, EntertainmentAiCoordinator coordinator) : IGeminiSentenceService, IEntertainmentAnswerEvaluator
+{
+    public Task<GeminiSentence> GenerateAsync(string description, CefrLevel level, string apiKey, IReadOnlyList<string> previousSentences, CancellationToken ct = default) =>
+        queue.EnqueueAsync(token => coordinator.GenerateAsync(description, level, previousSentences, token), ct);
+
+    public Task<EntertainmentAnswerEvaluation> EvaluateAsync(string sentenceEn, string referenceFi, string answer, CefrLevel level, CancellationToken ct = default) =>
+        queue.EnqueueAsync(token => coordinator.EvaluateAsync(sentenceEn, referenceFi, answer, level, token), ct);
+}
