@@ -3,6 +3,7 @@ using CleaningSuite.Domain.Entertainment;
 using CleaningSuite.Infrastructure.Entertainment;
 using Xunit;
 namespace CleaningSuite.Tests.Entertainment;
+[Collection(GeminiProviderCollection.Name)]
 public class GeminiSentenceServiceTests
 {
     [Fact] public void Prompt_keeps_injection_and_history_as_JSON_data()
