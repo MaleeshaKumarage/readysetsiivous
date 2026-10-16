@@ -9,6 +9,7 @@ using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Services;
 using CleaningSuite.Domain.Shifts;
 using CleaningSuite.Domain.Tenants;
+using CleaningSuite.Infrastructure.Entertainment;
 using JasperFx;
 using Marten;
 using Marten.Newtonsoft;
@@ -95,6 +96,8 @@ public static class MartenConfig
         options.Schema.For<EntertainmentRound>()
             .Index(x => x.GroupId);
         options.Schema.For<EntertainmentSentenceReservation>().Index(x => x.GroupId);
+        // Account-level provider quota timestamps shared by all game groups.
+        options.Schema.For<EntertainmentAiUsageWindow>();
 
         // Include documents otherwise discovered only on their first repository call.
         options.Schema.For<Agreement>();

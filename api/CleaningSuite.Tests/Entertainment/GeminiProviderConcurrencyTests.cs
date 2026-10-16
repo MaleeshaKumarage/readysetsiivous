@@ -18,7 +18,7 @@ public class GeminiProviderConcurrencyTests
                 using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(ct));
                 var instruction = body.RootElement.GetProperty("systemInstruction").GetProperty("parts")[0].GetProperty("text").GetString()!;
                 if (instruction.StartsWith("Generate")) { firstEntered.SetResult(); await releaseFirst.Task.WaitAsync(ct); return GeminiFallbackTests.Response(GeminiFallbackTests.Sentence); }
-                return GeminiFallbackTests.Response(new { isCorrect = true, meaningPoints = 7, finnishPoints = 3, correctedAnswer = "Kissa nukkuu.", explanation = "Natural translation.", corrections = Array.Empty<object>() });
+                return GeminiFallbackTests.Response(new { isCorrect = true, meaningPoints = 7, finnishPoints = 3, correctedAnswer = "Kissa nukkuu.", explanation = "Natural translation.", corrections = Array.Empty<object>(), grammarRules = Array.Empty<string>() });
             } finally { Interlocked.Decrement(ref active); }
         });
         var generation = new GeminiSentenceService(new(provider, false), GeminiFallbackTests.Config()).GenerateAsync("cats", CefrLevel.A1, "", []);
@@ -41,7 +41,7 @@ public class GeminiProviderConcurrencyTests
             using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(ct));
             using var data = JsonDocument.Parse(body.RootElement.GetProperty("contents")[0].GetProperty("parts")[0].GetProperty("text").GetString()!);
             Assert.Equal(answer, data.RootElement.GetProperty("answer").GetString());
-            return GeminiFallbackTests.Response(new { isCorrect = false, meaningPoints = 0, finnishPoints = 0, correctedAnswer = "Kissa nukkuu.", explanation = "This is not a Finnish translation.", corrections = new[] { new { original = answer, replacement = "Kissa nukkuu.", reason = "Translate the English meaning." } } });
+            return GeminiFallbackTests.Response(new { isCorrect = false, meaningPoints = 0, finnishPoints = 0, correctedAnswer = "Kissa nukkuu.", explanation = "This is not a Finnish translation.", corrections = new[] { new { original = answer, replacement = "Kissa nukkuu.", reason = "Translate the English meaning." } }, grammarRules = Array.Empty<string>() });
         });
         var result = await new GeminiAnswerEvaluator(new(provider), GeminiFallbackTests.Config()).EvaluateAsync("The cat sleeps.", "Kissa nukkuu.", answer, CefrLevel.A1);
         Assert.False(result.IsCorrect);

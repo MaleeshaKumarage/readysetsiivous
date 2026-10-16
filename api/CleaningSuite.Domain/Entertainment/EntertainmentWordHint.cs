@@ -8,4 +8,5 @@ public record EntertainmentAnswerEvaluation(
     IReadOnlyList<EntertainmentCorrection> Corrections,
     int MeaningPoints = 0,
     int FinnishPoints = 0,
-    int ScorePoints = 0);
+    int ScorePoints = 0,
+    IReadOnlyList<string>? GrammarRules = null);

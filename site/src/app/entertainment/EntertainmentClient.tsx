@@ -5,6 +5,7 @@ import { Button } from '@/ds/Button';
 import { Input, Textarea, Field } from '@/ds/Input';
 import { CEFR_LEVELS, CefrLevel, EntertainmentSession, Lobby, RoundStarted, AnswerEvaluation, Standing, createEntertainmentGroup, joinEntertainmentGroup, getEntertainmentLobby, loadEntertainmentSession, saveEntertainmentSession, clearEntertainmentSession } from '@/lib/entertainmentApi';
 import { createEntertainmentHub } from '@/lib/entertainmentHub';
+import { WordComparison } from './WordComparison';
 import type { HubConnection } from '@microsoft/signalr';
 
 type View = 'landing' | 'create' | 'join' | 'lobby' | 'game' | 'results';
@@ -25,6 +26,7 @@ export default function EntertainmentClient() {
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const connectionRef = useRef<HubConnection | null>(null);
   const roundIdRef = useRef<string | null>(null);
+  const roundRef = useRef<RoundStarted | null>(null);
   const busyRef = useRef(false);
   const pendingRef = useRef<{ method: string; args: unknown[] } | null>(null);
   useEffect(() => {
@@ -34,10 +36,13 @@ export default function EntertainmentClient() {
     getEntertainmentLobby(session.groupId).then(l => { if (!cancelled) setLobby(l); }).catch(() => {});
     connection.on('lobbyUpdated', (l: Lobby) => setLobby(l));
     connection.on('roundStarted', (r: RoundStarted) => {
-      const sameRound = roundIdRef.current === r.roundId;
+      const current = roundRef.current;
+      if (current && (r.roundNumber < current.roundNumber || (r.roundNumber === current.roundNumber && r.roundId !== current.roundId))) return;
+      const sameRound = current?.roundId === r.roundId;
+      roundRef.current = r;
       setAnswer(previous => r.submittedAnswer ?? (sameRound ? previous : ''));
       setHints(previous => sameRound ? previous : {});
-      setRevealedAnswer(r.sentenceFi); setEvaluation(r.evaluation ?? null); setRound(r); roundIdRef.current = r.roundId;
+      setRevealedAnswer(r.sentenceFi); setEvaluation(previous => r.evaluation ?? (sameRound ? previous : null)); setRound(r); roundIdRef.current = r.roundId;
       setBusy(false); busyRef.current = false; pendingRef.current = null; setError(null); setErrorDetail(null); setView('game');
     });
     connection.on('hintRevealed', (h: { roundId: string; index: number; finnish: string }) => {
@@ -79,10 +84,12 @@ export default function EntertainmentClient() {
     if (session && connected) {
       try { await Promise.race([connectionRef.current?.invoke('LeaveLobby', session.groupId, session.playerId), new Promise(resolve => setTimeout(resolve, 3000))]); } catch {}
     }
-    clearEntertainmentSession(); setSession(null); setLobby(null); setRound(null); roundIdRef.current = null; setError(null); setView('landing');
+    clearEntertainmentSession(); setSession(null); setLobby(null); setRound(null); roundRef.current = null; roundIdRef.current = null; setError(null); setView('landing');
   }
   function adopt(s: EntertainmentSession) { saveEntertainmentSession(s); setSession(s); setView('lobby'); }
   const translator = round?.translatorPlayerId === session?.playerId;
+  const currentTranslator = lobby?.players.find(player => player.playerId === round?.translatorPlayerId);
+  const currentTurn = currentTranslator ? `Current turn: ${currentTranslator.name}${currentTranslator.playerId === session?.playerId ? ' (you)' : currentTranslator.isOnline ? '' : ' (reconnecting)'}` : 'Current turn';
   const disabled = !connected || busy;
   return <main className="mx-auto max-w-2xl px-4 py-10 space-y-6">
     <h1 className="text-3xl font-bold">Language Game</h1><p>Create a group, share the join key, and play a realtime translation game together.</p>
@@ -100,7 +107,7 @@ export default function EntertainmentClient() {
       {session.isCreator && <Button disabled={disabled} onClick={() => void send('StartGame', session.groupId, session.playerId)}>Start game</Button>}
       <Button onClick={() => void leave()}>Leave</Button></Card>}
     {view === 'game' && session && round && <Card padding="lg" className="space-y-5">
-      <h2 className="text-xl">Round {round.roundNumber}</h2><p>{translator ? 'Translate this into Finnish' : 'Someone is translating — you have the answer'}</p>
+      <h2 className="text-xl">Round {round.roundNumber}</h2><p data-testid="current-turn" aria-live="polite" className="rounded-lg bg-sky-100 px-3 py-2 font-semibold text-sky-950 dark:bg-sky-950 dark:text-sky-100">{currentTurn}</p><p>{translator ? 'Translate this into Finnish' : 'Someone is translating — you have the answer'}</p>
       <div>{lobby?.players.map(p => <span className="mr-4" key={p.playerId}>{p.name} <b>{scores[p.playerId] ?? 0}</b></span>)}</div>
       <p data-testid="sentence-en" className="text-2xl">{round.sentenceEn}</p>
       {!translator && (revealedAnswer ? <p data-testid="sentence-fi-revealed">{revealedAnswer}</p> : <Button data-testid="sentence-fi" disabled={disabled} onClick={() => void send('RevealAnswer', session.groupId, session.playerId, round.roundId)}>Reveal Finnish answer</Button>)}
@@ -109,8 +116,9 @@ export default function EntertainmentClient() {
         {!evaluation && <Button disabled={disabled || !answer.trim()} onClick={() => void send('CheckAnswer', session.groupId, session.playerId, round.roundId, answer)}>Check answer</Button>}</>}
       {evaluation && <div data-testid="answer-feedback" aria-live="polite" className="space-y-3"><h3>{evaluation.isCorrect ? 'Meaning correct' : 'Meaning not fully matched'}</h3>
         <p data-testid="round-score">Score this round: {evaluation.scorePoints} / 10 ({evaluation.meaningPoints} / 7 meaning, {evaluation.finnishPoints} / 3 Finnish)</p>
-        <p>Original answer: <span>{answer}</span></p><p>Corrected answer: <span>{evaluation.correctedAnswer}</span></p>
+        <WordComparison originalText={answer} correctedText={evaluation.correctedAnswer} />
         <ul>{evaluation.corrections.map((c, index) => <li key={index}><del>{c.original}</del> → <mark>{c.replacement}</mark>: {c.reason}</li>)}</ul><p>Why: {evaluation.explanation}</p>
+        {!!evaluation.grammarRules?.length && <section aria-label="Finnish grammar rules" className="rounded-lg border border-violet-300 bg-violet-50 p-3 text-violet-950 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-100"><h4 className="font-semibold">Finnish grammar rules</h4><ul className="list-disc space-y-1 pl-5">{evaluation.grammarRules.map((rule, index) => <li key={index}>{rule}</li>)}</ul></section>}
         {translator && <Button disabled={disabled} onClick={() => void send('NextRound', session.groupId, session.playerId, round.roundId)}>Next round</Button>}</div>}
       {session.isCreator && <Button disabled={disabled} onClick={() => void send('EndGame', session.groupId, session.playerId)}>End game</Button>}<Button onClick={() => void leave()}>Leave</Button>
     </Card>}
