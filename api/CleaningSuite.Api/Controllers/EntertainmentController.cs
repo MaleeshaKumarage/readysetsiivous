@@ -11,8 +11,9 @@ namespace CleaningSuite.Api.Controllers;
 public class EntertainmentController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly CleaningSuite.Api.Hubs.GameSessionManager _sessions;
 
-    public EntertainmentController(IMediator mediator) => _mediator = mediator;
+    public EntertainmentController(IMediator mediator, CleaningSuite.Api.Hubs.GameSessionManager sessions) { _mediator = mediator; _sessions = sessions; }
 
     [HttpPost("groups")]
     public async Task<IActionResult> CreateGroup(
@@ -38,6 +39,6 @@ public class EntertainmentController : ControllerBase
     public async Task<IActionResult> GetLobby(Guid groupId, CancellationToken ct)
     {
         var result = await _mediator.Send(new GetEntertainmentLobbyQuery(groupId), ct);
-        return Ok(result);
+        return Ok(result with { Players = result.Players.Select(p => p with { IsOnline = _sessions.IsConnected(groupId, p.PlayerId) }).ToList() });
     }
 }

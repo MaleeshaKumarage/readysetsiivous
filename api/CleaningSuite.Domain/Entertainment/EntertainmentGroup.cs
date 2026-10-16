@@ -22,6 +22,9 @@ public class EntertainmentGroup : BaseDocument
     public string Description { get; set; } = string.Empty;
     public string JoinKey { get; set; } = string.Empty;
     public EntertainmentStatus Status { get; set; } = EntertainmentStatus.Lobby;
+    public List<Guid> TurnOrder { get; set; } = new();
+    public Dictionary<Guid, int> Scores { get; set; } = new();
+    public Guid? CurrentRoundId { get; set; }
 
     public static EntertainmentGroup Create(
         string name,

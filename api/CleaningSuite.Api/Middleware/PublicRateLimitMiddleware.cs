@@ -21,7 +21,7 @@ public class PublicRateLimitMiddleware
     {
         var path = context.Request.Path.Value ?? "";
         if (!path.Contains("/api/v1/public/", StringComparison.OrdinalIgnoreCase)
-            && !path.Contains("/api/v1/entertainment/groups/", StringComparison.OrdinalIgnoreCase))
+            && !(path.Equals("/api/v1/entertainment/groups", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/api/v1/entertainment/groups/", StringComparison.OrdinalIgnoreCase)))
         {
             await _next(context);
             return;

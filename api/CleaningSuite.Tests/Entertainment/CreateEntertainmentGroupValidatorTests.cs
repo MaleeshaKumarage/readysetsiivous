@@ -11,7 +11,6 @@ public class CreateEntertainmentGroupValidatorTests
     private static CreateEntertainmentGroupCommand ValidCommand() =>
         new(
             Name: "Travel English",
-            GeminiApiKey: "sk-test",
             Description: new string('x', 200),
             CreatorName: "Alice",
             CreatorLevel: "A2");
@@ -33,22 +32,22 @@ public class CreateEntertainmentGroupValidatorTests
     [Fact]
     public void ShortDescription_Fails()
     {
-        var cmd = ValidCommand() with { Description = new string('x', 199) };
+        var cmd = ValidCommand() with { Description = new string('x', 9) };
         _validator.TestValidate(cmd).ShouldHaveValidationErrorFor(x => x.Description);
     }
 
     [Fact]
-    public void DescriptionAtLeast200_Passes()
+    public void DescriptionAtLeast10_Passes()
     {
         var cmd = ValidCommand() with { Description = new string('x', 200) };
         _validator.TestValidate(cmd).ShouldNotHaveValidationErrorFor(x => x.Description);
     }
 
     [Fact]
-    public void EmptyGeminiKey_Fails()
+    public void TooLongDescription_Fails()
     {
-        var cmd = ValidCommand() with { GeminiApiKey = "" };
-        _validator.TestValidate(cmd).ShouldHaveValidationErrorFor(x => x.GeminiApiKey);
+        var cmd = ValidCommand() with { Description = new string('x', 2001) };
+        _validator.TestValidate(cmd).ShouldHaveValidationErrorFor(x => x.Description);
     }
 
     [Fact]

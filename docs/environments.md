@@ -203,14 +203,25 @@ the empty manager role idempotently when an admin selects/invites that role.
 No existing identity automatically gains manager access. Native account setup
 emails continue; QC activity forms are filled through authenticated My shifts and
 do not send emails. See [tenant manager access](features/tenant-manager-access.md).
-## Language-game generation fallback
+## Language-game AI
 
-Gemini generation has a sample fallback in all environments. Configure
-`Entertainment__Gemini__TimeoutSeconds` to adjust its default8-second provider
-deadline (allowed range1–30). Sample practice uses predefined A1–C2 sentences with
-Finnish translations/hints; successful Gemini responses remain preferred. The
-normal group API-key encryption and access rules remain in effect. See
-[game fallback](features/game-sample-fallback.md) for failure/cancellation behavior.
+Game generation and answer evaluation use a server-owned Gemini key. Production
+GitHub Actions reads `GEMINI_KEY_2`, falling back to `GEMINI_KEY` and then
+`GEMINI_API_KEY`, and delivers it over the deployment SSH session. The deployment
+script writes it to the API host's private `.env`, validates the resolved API
+container configuration without printing the value, and restores the previous
+environment file if deployment fails. The production and dev Compose files map
+`GAME_GEMINI_API_KEY` to `Entertainment__Gemini__ApiKey`. Local dev can set
+`GAME_GEMINI_API_KEY` in its untracked `.env`; no key belongs in source control or
+browser settings.
+
+The `game-ai-live-smoke` workflow is manual because it consumes the configured
+Gemini quota. It makes one generation and one evaluation request (each operation
+may make one bounded transient retry). Ordinary CI uses provider fakes and never
+needs a Gemini secret. There is no sample-answer or local-grading fallback: a
+failed request leaves the current question and typed answer available for retry.
+See [language game](features/language-game.md) for scoring, hint visibility and
+game-flow behavior.
 
 ## Backend runtime and migration rehearsals
 

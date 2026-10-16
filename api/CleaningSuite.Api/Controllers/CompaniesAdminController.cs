@@ -70,12 +70,20 @@ public class CompaniesAdminController : ControllerBase
         return NoContent();
     }
 
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    { await _mediator.Send(new DeleteCompanyCommand(id), ct); return NoContent(); }
+
     [HttpPost("branches/{branchId:guid}/reactivate")]
     public async Task<IActionResult> ReactivateBranch(Guid branchId, CancellationToken ct)
     {
         await _mediator.Send(new ReactivateBranchCommand(branchId), ct);
         return NoContent();
     }
+
+    [HttpDelete("branches/{branchId:guid}")]
+    public async Task<IActionResult> DeleteBranch(Guid branchId, CancellationToken ct)
+    { await _mediator.Send(new DeleteBranchCommand(branchId), ct); return NoContent(); }
 
     [HttpPost("{companyId:guid}/branches")]
     public async Task<IActionResult> CreateBranch(Guid companyId, [FromBody] CreateBranchCommand command, CancellationToken ct)

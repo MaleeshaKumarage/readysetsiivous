@@ -89,6 +89,7 @@ public static class MartenConfig
 
         options.Schema.For<EntertainmentRound>()
             .Index(x => x.GroupId);
+        options.Schema.For<EntertainmentSentenceReservation>().Index(x => x.GroupId);
 
         // Include documents otherwise discovered only on their first repository call.
         options.Schema.For<Agreement>();

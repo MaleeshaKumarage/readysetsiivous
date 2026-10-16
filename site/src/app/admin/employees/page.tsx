@@ -86,6 +86,13 @@ export default function EmployeesAdminPage() {
     } catch (error) { setInviteFailure(error instanceof Error ? error.message : 'Could not send the setup email. Please retry.'); }
     finally { setInviteBusy(null); }
   };
+  const deleteEmployee = async (employee: Employee) => {
+    if (!window.confirm(`Permanently delete ${employee.firstName} ${employee.lastName}'s inactive profile? Profiles with a login or work history are retained.`)) return;
+    setRestoring(employee.id); setInviteFailure('');
+    try { await adminEmployees.deleteInactive(employee.id); await load(); }
+    catch (failure) { setInviteFailure(failure instanceof Error ? failure.message : 'Could not delete employee. Please retry.'); }
+    finally { setRestoring(null); }
+  };
   return (
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
@@ -121,6 +128,7 @@ export default function EmployeesAdminPage() {
                     {isAdmin() && e.isActive && <Button size="xs" variant="light" loading={inviteBusy === e.id} disabled={Boolean(inviteBusy && inviteBusy !== e.id)} onClick={() => invite(e)}>{e.keycloakUserId ? 'Resend setup email' : 'Invite'}</Button>}
                     {isAdmin() && e.isActive && e.identitySyncPending && <Button size="xs" loading={restoring === e.id} disabled={!!restoring} onClick={() => reactivate(e)}>Retry reactivation</Button>}
                     {isAdmin() && !e.isActive && <Button size="xs" loading={restoring === e.id} disabled={!!restoring} onClick={() => reactivate(e)}>Reactivate</Button>}
+                    {isAdmin() && !e.isActive && <Button size="xs" color="red" variant="subtle" loading={restoring === e.id} disabled={!!restoring} onClick={() => deleteEmployee(e)}>Delete</Button>}
                     {isAdmin() && e.isActive && <Button size="xs" variant="subtle" color="red" onClick={() => deactivate(e.id)}>Deactivate</Button>}
                   </Group></Table.Td>
                 </Table.Tr>

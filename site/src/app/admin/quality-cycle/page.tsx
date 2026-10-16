@@ -175,6 +175,18 @@ export default function AdminQualityCyclePage() {
     } finally { setActivityBusy(null); }
   }
 
+  async function handleDeleteTemplate(t: QualityCycleTemplate) {
+    if (!window.confirm(`Permanently delete inactive checklist template “${t.title}”? Templates referenced by a shift or checklist history are retained.`)) return;
+    setActivityBusy(t.id); setActivityError('');
+    try {
+      await adminQualityCycle.deleteTemplate(t.id);
+      if (editingTemplate?.id === t.id) setEditingTemplate(null);
+      await loadTemplates();
+    } catch (failure) {
+      setActivityError(failure instanceof Error ? failure.message : 'Could not delete the template. Please retry.');
+    } finally { setActivityBusy(null); }
+  }
+
   async function handleDownloadPdf() {
     if (!selectedShiftId) {
       alert('Please select a shift to generate the monthly summary PDF.');
@@ -377,6 +389,7 @@ export default function AdminQualityCyclePage() {
                               onClick={() => void handleTemplateActivity(t)}>
                               {t.isActive ? 'Deactivate' : 'Reactivate'}
                             </Button>
+                            {!t.isActive && <Button size="xs" variant="subtle" color="red" loading={activityBusy === t.id} disabled={activityBusy !== null && activityBusy !== t.id} onClick={() => void handleDeleteTemplate(t)}>Delete</Button>}
                           </Group>
                         </Group>
 

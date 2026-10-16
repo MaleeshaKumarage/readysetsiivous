@@ -67,6 +67,10 @@ public class ShiftsAdminController : ControllerBase
     [HttpPost("{id:guid}/reactivate")]
     public async Task<IActionResult> Reactivate(Guid id, CancellationToken ct) => Ok(await _mediator.Send(new ReactivateShiftCommand(id), ct));
 
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    { await _mediator.Send(new DeleteShiftCommand(id), ct); return NoContent(); }
+
     [HttpGet("{id:guid}/assignments")]
     public async Task<IActionResult> GetAssignments(Guid id, CancellationToken ct)
     {

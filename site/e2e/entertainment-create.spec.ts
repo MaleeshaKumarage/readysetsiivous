@@ -18,7 +18,7 @@ function mockCreateGroup(page: any, result: any) {
   });
 }
 
-test.describe('Entertainment — Create group', () => {
+test.describe('Entertainment â€” Create group', () => {
   test('landing shows create and join options', async ({ page }) => {
     await page.goto('/entertainment/');
     await expect(page.getByRole('heading', { name: 'Language Game' })).toBeVisible();
@@ -30,14 +30,13 @@ test.describe('Entertainment — Create group', () => {
     await mockCreateGroup(page, {
       groupId: 'group-1',
       joinKey: 'ABC234',
-      creatorPlayerId: 'player-1',
+      creatorPlayerId: 'player-1', playerToken: 'secret-player-token',
     });
 
     await page.goto('/entertainment/');
     await page.getByRole('button', { name: 'Create group' }).click();
 
     await page.getByPlaceholder('e.g. Travel English').fill('Travel English');
-    await page.getByPlaceholder('Your Gemini API key').fill('sk-test');
     await page.getByPlaceholder('Describe the topic or theme').fill('x'.repeat(200));
     await page.getByPlaceholder('Your name').fill('Alice');
     await page.getByRole('button', { name: 'B1' }).click();
@@ -54,7 +53,7 @@ test.describe('Entertainment — Create group', () => {
 
     await page.getByPlaceholder('Describe the topic or theme').fill('too short');
 
-    await expect(page.getByText('At least 200 characters required.')).toBeVisible();
+    await expect(page.getByText('At least 10 characters required.')).toBeVisible();
   });
 
   test('create form Back returns to landing', async ({ page }) => {
@@ -74,4 +73,18 @@ test.describe('Entertainment — Create group', () => {
     await page.getByRole('button', { name: 'Back' }).click();
     await expect(page.getByRole('button', { name: 'Create group' })).toBeVisible();
   });
+});
+
+test('create uses platform AI without a key input or request credential', async ({ page }) => {
+  let body: Record<string, unknown> = {};
+  await page.route(/\/api\/v1\/entertainment\/groups$/, async route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+    body = route.request().postDataJSON(); return route.fulfill({ status: 200, headers: CORS_HEADERS, json: { groupId: 'group-1', creatorPlayerId: 'player-1', playerToken: 'private-token', joinKey: 'ABC234' } });
+  });
+  await page.goto('/entertainment/'); await page.getByRole('button', { name: 'Create group' }).click();
+  await expect(page.locator('input[type=password]')).toHaveCount(0);
+  await page.getByPlaceholder('e.g. Travel English').fill('Travel'); await page.getByPlaceholder('Describe the topic or theme').fill('Travel in Finland'); await page.getByPlaceholder('Your name').fill('Alice');
+  await page.getByRole('button', { name: 'B1' }).click(); await expect(page.getByRole('button', { name: 'B1' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Create group' }).click(); await expect(page.getByText('ABC234')).toBeVisible();
+  expect(body).toEqual({ name: 'Travel', description: 'Travel in Finland', creatorName: 'Alice', creatorLevel: 'B1' });
 });

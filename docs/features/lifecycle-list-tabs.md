@@ -12,6 +12,14 @@ Selecting the current tab again, including Home/End when already at that end, pr
 
 Checklist-template activity tabs affect only the template list. Editing an inactive template retains its activity and company/branch scope. Submissions, monthly summaries, PDF exports and public reports retain their existing historical filters.
 
+## Permanent deletion
+
+Each inactive record now has a Delete action. The API requires the record to be inactive and checks references before removing it. A conflict response explains why the record must stay. Companies with branches or business records, branches with shift/checklist history, shifts with assignments or forms, employees with work history, services used by bookings, and templates referenced by shifts/forms are retained. Employee profiles linked to a Keycloak login are retained; deleting a profile does not silently delete an external identity.
+
+Agreements containing any signature, a signed PDF, or a partially/completely signed status are never deleted. Draft or cancelled unsigned inactive agreements can be deleted. Signed PDFs and signer evidence are preserved. Deleting an unsigned agreement removes the tenant record; its local source file may remain on disk for later storage cleanup.
+
+Delete is tenant-admin-only for admin lists. Tenant-wide managers can delete inactive shifts through the manager API; the same shift history guard applies. Active records must first be deactivated. UI confirmation is required, while API checks remain authoritative against direct requests and stale pages.
+
 ## Playwright cases
 
 - Default Active, exclusive Inactive content, switching back without extra reads, and keyboard selection.
@@ -20,4 +28,5 @@ Checklist-template activity tabs affect only the template list. Editing an inact
 - Shift create from Inactive returns to Active; deactivation/restoration transitions; delayed assignment responses after tab changes are ignored.
 - Companies beyond the first100 records, missing/failed/inconsistent pages, fresh retries and scoped branch tabs.
 - Service activation/deactivation, inactive-template edit preserving scope, create returning to Active, and unchanged report/submission navigation.
+- Inactive Delete actions for every lifecycle list; active-record rejection; referenced-record conflict messages; clean records disappear after deletion; signed/partially signed agreements remain protected; linked-login employees remain retained.
 - Desktop/mobile, empty selected tab, all-empty initial state and existing permission denials.

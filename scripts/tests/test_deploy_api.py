@@ -29,7 +29,8 @@ if a[:3]==['compose','ps','-q']:
     print('changed' if mode=='changed' and (p/'attempts').exists() else 'container')
 elif a[:2]==['compose','config']:
     assert a==['compose','config','--format','json']
-    print(json.dumps({'services': {'api': {'image': 'wrong' if mode=='config' else os.environ['EXPECTED']},
+    print(json.dumps({'services': {'api': {'image': 'wrong' if mode=='config' else os.environ['EXPECTED'],
+                                  'environment': {'Entertainment__Gemini__ApiKey': os.environ['GAME_GEMINI_API_KEY']}},
                                   'postgres': {'image':'postgres:16-alpine'},
                                   'keycloak': {'image':'quay.io/keycloak/keycloak:26.1'}}}))
 elif a[0]=='login':
@@ -54,6 +55,7 @@ else: sys.exit(91)
 '''
 
 
+@unittest.skipUnless(os.name == "posix", "deployment script requires a POSIX shell; exercised on Linux CI")
 class DeploymentTests(unittest.TestCase):
     def run_deploy(self, mode="success", sha=SHA):
         with tempfile.TemporaryDirectory() as tmp:
@@ -68,6 +70,7 @@ class DeploymentTests(unittest.TestCase):
                 path.chmod(0o755)
             env = dict(os.environ, DEPLOY_DIR=tmp, RELEASE_SHA=sha,
                        REGISTRY_USER="test-user", REGISTRY_TOKEN="test-secret",
+                       GAME_GEMINI_API_KEY="new-owner-ai-secret",
                        MODE=mode, EXPECTED=IMAGE,
                        PATH=str(bin_dir) + os.pathsep + os.environ["PATH"])
             result = subprocess.run(["sh", str(SCRIPT)], env=env,
@@ -78,6 +81,7 @@ class DeploymentTests(unittest.TestCase):
             self.assertFalse(list(root.glob(".deploy-env.*")))
             self.assertNotIn("test-secret", result.stdout + result.stderr + commands)
             self.assertNotIn("private-value", result.stdout + result.stderr + commands)
+            self.assertNotIn("new-owner-ai-secret", result.stdout + result.stderr + commands)
             self.assertNotIn("prune", commands)
             self.assertNotIn("remove", commands)
             self.assertNotIn("postgres", commands)
@@ -85,7 +89,7 @@ class DeploymentTests(unittest.TestCase):
             if result.returncode:
                 self.assertEqual(initial, current)
             else:
-                self.assertEqual(initial.replace("sha-old", "sha-" + SHA), current)
+                self.assertEqual(initial.replace("sha-old", "sha-" + SHA) + "GAME_GEMINI_API_KEY='new-owner-ai-secret'\n", current)
             return result, commands, attempts
 
     def test_success(self):

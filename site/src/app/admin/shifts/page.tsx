@@ -6,7 +6,7 @@ import {
 } from '@mantine/core';
 import { Plus, Trash2 } from 'lucide-react';
 import {
-  adminShifts, adminCompanies, adminEmployees,
+  adminShifts, adminCompanies, adminEmployees, adminTenant,
   type Shift, type Company, type Branch, type Employee, type ShiftAssignment,
 } from '@/lib/adminApi';
 import { isAdmin } from '@/lib/auth';
@@ -27,6 +27,7 @@ export default function ShiftsAdminPage() {
   const [loading, setLoading] = useState(true);
   const [lifecycle, setLifecycle] = useState<LifecycleStatus>('active');
   const [listError, setListError] = useState('');
+  const [timeZoneId, setTimeZoneId] = useState('Europe/Helsinki');
   const [restoring, setRestoring] = useState<string | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -65,7 +66,7 @@ export default function ShiftsAdminPage() {
   useEffect(() => () => { assignmentGeneration.current++; }, []);
 
   const load = () => adminShifts.list(undefined, undefined, true).then((r) => { if (r) setShifts(r); setLoading(false); });
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); adminTenant.get().then(profile => { if (profile?.timeZoneId) setTimeZoneId(profile.timeZoneId); }); }, []);
 
   const closeAssignments = () => {
     assignmentGeneration.current++;
@@ -132,6 +133,13 @@ export default function ShiftsAdminPage() {
       if (!await adminShifts.reactivate(id)) { setListError('Could not reactivate shift. Check that its company and branch are active, then retry.'); return; }
       await load();
     } catch { setListError('Could not reactivate shift. Please retry.'); }
+    finally { setRestoring(null); }
+  };
+  const deleteShift = async (shift: Shift) => {
+    if (!window.confirm(`Permanently delete inactive shift “${shift.name}”? Shifts with assignments or checklist records are retained.`)) return;
+    setRestoring(shift.id); setListError('');
+    try { await adminShifts.deleteInactive(shift.id); await load(); }
+    catch (failure) { setListError(failure instanceof Error ? failure.message : 'Could not delete shift. Please retry.'); }
     finally { setRestoring(null); }
   };
 
@@ -249,6 +257,7 @@ export default function ShiftsAdminPage() {
                         {isAdmin() && s.isActive && <Button size="xs" variant="light" onClick={() => { setTemplateShift(s); setAssignedTemplate(s.qualityCycleTemplateId ?? null); setTemplateError(''); }}>Checklist template</Button>}
                         {s.isActive && <Button size="xs" variant="subtle" color="red" disabled={assignBusy} onClick={() => deactivate(s.id)}>Deactivate</Button>}
                         {!s.isActive && <Button size="xs" loading={restoring === s.id} disabled={!!restoring} onClick={() => reactivate(s.id)}>Reactivate</Button>}
+                        {!s.isActive && <Button size="xs" color="red" variant="subtle" loading={restoring === s.id} disabled={!!restoring} onClick={() => deleteShift(s)}>Delete</Button>}
                       </Group>
                     </Table.Td>
                   </Table.Tr>
@@ -323,6 +332,7 @@ export default function ShiftsAdminPage() {
       </Modal>
       <Modal opened={modalOpen} onClose={closeModal} title="Add shift" size="lg" radius="md">
         <Stack gap="sm">
+          <Text size="sm" c="dimmed">Schedule times use the tenant time zone: {timeZoneId}.</Text>
           <Select label="Company" data={companies.map((c) => ({ value: c.id, label: c.name }))} value={companyId} onChange={(v) => { setCompanyId(v); setBranchId(null); setQualityCycleTemplateId(null); }} searchable />
           <Select label="Branch" data={branches.map((b) => ({ value: b.id, label: b.name }))} value={branchId} onChange={v => { setBranchId(v); setQualityCycleTemplateId(null); }} searchable disabled={!companyId} />
           <TextInput label="Name" required value={name} onChange={(e) => setName(e.target.value)} />

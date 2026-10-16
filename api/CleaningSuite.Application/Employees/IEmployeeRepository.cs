@@ -10,4 +10,5 @@ public interface IEmployeeRepository
     Task<Employee?> GetByKeycloakUserIdAsync(string keycloakUserId, CancellationToken ct = default);
     Task<Employee?> ReloadAsync(Guid id, CancellationToken ct = default);
     Task SaveAsync(Employee employee, CancellationToken ct = default);
+    Task DeleteAsync(Guid id, CancellationToken ct = default);
 }

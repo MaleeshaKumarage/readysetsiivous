@@ -52,6 +52,46 @@ public class ShiftScheduleCalculatorTests
     }
 
     [Fact]
+    public void Occurrences_Convert_Tenant_WallClock_Times_To_Utc()
+    {
+        var schedule = new ShiftSchedule { Type = ShiftScheduleType.DailySameTime,
+            DailyStart = TimeSpan.FromHours(8), DailyEnd = TimeSpan.FromHours(10) };
+        var zone = TimeZoneInfo.CreateCustomTimeZone("tenant-plus-three", TimeSpan.FromHours(3), "Tenant +03", "Tenant +03");
+        var occurrence = Assert.Single(ShiftScheduleCalculator.Calculate(schedule,
+            new DateTime(2026, 1, 15), new DateTime(2026, 1, 15), zone));
+        Assert.Equal(new DateTime(2026, 1, 15, 5, 0, 0, DateTimeKind.Utc), occurrence.StartUtc);
+        Assert.Equal(new DateTime(2026, 1, 15, 7, 0, 0, DateTimeKind.Utc), occurrence.EndUtc);
+    }
+
+    [Fact]
+    public void Occurrence_On_SpringForward_Gap_Is_Omitted()
+    {
+        var schedule = new ShiftSchedule { Type = ShiftScheduleType.DailySameTime,
+            DailyStart = TimeSpan.FromHours(2.5), DailyEnd = TimeSpan.FromHours(4) };
+        var start = TimeZoneInfo.TransitionTime.CreateFixedDateRule(new DateTime(1, 1, 1, 2, 0, 0), 3, 29);
+        var end = TimeZoneInfo.TransitionTime.CreateFixedDateRule(new DateTime(1, 1, 1, 3, 0, 0), 10, 25);
+        var rule = TimeZoneInfo.AdjustmentRule.CreateAdjustmentRule(new DateTime(2026, 1, 1), new DateTime(2026, 12, 31),
+            TimeSpan.FromHours(1), start, end);
+        var zone = TimeZoneInfo.CreateCustomTimeZone("test-dst", TimeSpan.FromHours(2), "Test DST", "Test Standard", "Test Daylight", new[] { rule });
+        Assert.Empty(ShiftScheduleCalculator.Calculate(schedule, new DateTime(2026, 3, 29), new DateTime(2026, 3, 29), zone));
+    }
+
+    [Fact]
+    public void Ambiguous_FallBack_Time_Uses_First_Clock_Occurrence()
+    {
+        var schedule = new ShiftSchedule { Type = ShiftScheduleType.DailySameTime,
+            DailyStart = new TimeSpan(1, 30, 0), DailyEnd = new TimeSpan(2, 30, 0) };
+        var start = TimeZoneInfo.TransitionTime.CreateFixedDateRule(new DateTime(1, 1, 1, 2, 0, 0), 3, 29);
+        var end = TimeZoneInfo.TransitionTime.CreateFixedDateRule(new DateTime(1, 1, 1, 2, 0, 0), 10, 25);
+        var rule = TimeZoneInfo.AdjustmentRule.CreateAdjustmentRule(new DateTime(2026, 1, 1), new DateTime(2026, 12, 31),
+            TimeSpan.FromHours(1), start, end);
+        var zone = TimeZoneInfo.CreateCustomTimeZone("test-dst", TimeSpan.Zero, "Test DST", "Test Standard", "Test Daylight", new[] { rule });
+        var occurrence = Assert.Single(ShiftScheduleCalculator.Calculate(schedule,
+            new DateTime(2026, 10, 25), new DateTime(2026, 10, 25), zone));
+        Assert.Equal(new DateTime(2026, 10, 25, 0, 30, 0, DateTimeKind.Utc), occurrence.StartUtc);
+    }
+
+    [Fact]
     public void DailySameTime_ReturnsEmpty_WhenStartOrEndIsNull()
     {
         var schedule = new ShiftSchedule

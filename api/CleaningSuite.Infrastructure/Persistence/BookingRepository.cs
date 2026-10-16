@@ -82,6 +82,18 @@ public class BookingRepository : IBookingRepository
         return await query.OrderBy(b => b.StartUtc).ToListAsync(ct);
     }
 
+    public async Task<bool> HasHistoryForEmployeeAsync(Guid employeeId, CancellationToken ct = default)
+    {
+        var id = employeeId.ToString();
+        return (await _tenantSession.Session.Query<Booking>().Where(b => b.EmployeeId == id).Take(1).ToListAsync(ct)).Count > 0;
+    }
+
+    public async Task<bool> HasHistoryForServiceAsync(Guid serviceId, CancellationToken ct = default)
+    {
+        var id = serviceId.ToString();
+        return (await _tenantSession.Session.Query<Booking>().Where(b => b.ServiceId == id).Take(1).ToListAsync(ct)).Count > 0;
+    }
+
     /// <summary>
     /// Next value for a per-tenant sequence. Runs inside the request's session
     /// so the increment commits atomically with the booking insert.

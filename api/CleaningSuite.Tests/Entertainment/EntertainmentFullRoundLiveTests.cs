@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using CleaningSuite.Application.Entertainment;
 using CleaningSuite.Domain.Entertainment;
 using CleaningSuite.Infrastructure.Entertainment;
@@ -7,99 +6,54 @@ using Xunit;
 
 namespace CleaningSuite.Tests.Entertainment;
 
-/// <summary>
-/// Drives a full game against the REAL Gemini API: create → join two players →
-/// start → rotate two more rounds → end, with runtime sample fallback if Gemini
-/// is unavailable. The optional live probe returns when GEMINI_KEY is not set;
-/// the deterministic outage game always runs.
-///   GEMINI_KEY=<key> dotnet test --filter "FullyQualifiedName~EntertainmentFullRoundLive"
-/// </summary>
+/// <summary>Explicit bounded live provider smoke. Requires ENTERTAINMENT_LIVE_SMOKE=1
+/// and the server-owned Gemini key. Ordinary CI does not call an external provider.</summary>
 public class EntertainmentFullRoundLiveTests
 {
     [Fact]
-    public async Task FullGame_CompletesWithLiveGeminiOrSamples()
+    public async Task BoundedSmoke_GeneratesAndEvaluatesOneRoundWithLiveGemini()
     {
-        var apiKey = Environment.GetEnvironmentVariable("GEMINI_KEY");
-        if (string.IsNullOrWhiteSpace(apiKey))
-            return; // skipped — GEMINI_KEY not set
+        var apiKey = Environment.GetEnvironmentVariable("GAME_GEMINI_API_KEY") ?? Environment.GetEnvironmentVariable("GEMINI_KEY");
+        if (Environment.GetEnvironmentVariable("ENTERTAINMENT_LIVE_SMOKE") != "1" || string.IsNullOrWhiteSpace(apiKey))
+            return; // skipped — live smoke not opted in
 
         await RunFullGameAsync(apiKey);
     }
 
-    [Fact]
-    public async Task FullGame_CompletesWithSamples_WhenGeminiIsUnavailable()
+    private static async Task RunFullGameAsync(string apiKey, IGeminiSentenceService? sentenceService = null)
     {
-        using var http = new HttpClient(new UnavailableProvider());
-        await RunFullGameAsync("test-key", new GeminiSentenceService(http, new ConfigurationBuilder().Build()), waitBetweenRounds: false);
-    }
-
-    private sealed class UnavailableProvider : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.ServiceUnavailable));
-    }
-
-    private static async Task RunFullGameAsync(string apiKey, IGeminiSentenceService? sentenceService = null, bool waitBetweenRounds = true)
-    {
-        var protector = new EntertainmentKeyProtector(new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Entertainment:KeyEncryptionKey"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
-            })
-            .Build());
-
-        var gemini = sentenceService ?? new GeminiSentenceService(new HttpClient(), new ConfigurationBuilder().Build());
+        var gemini = sentenceService ?? new GeminiSentenceService(new HttpClient(), new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Entertainment:Gemini:ApiKey"] = apiKey }).Build());
         var repo = new InMemoryEntertainmentRepository();
 
-        // Create group (per-group key = GEMINI_KEY).
-        var createHandler = new CreateEntertainmentGroupCommandHandler(repo, protector);
+        // Create group with no per-user credential.
+        var createHandler = new CreateEntertainmentGroupCommandHandler(repo);
         var created = await createHandler.Handle(new CreateEntertainmentGroupCommand(
-            "Travel English", apiKey, new string('x', 200), "Alice", "B1"), CancellationToken.None);
+            "Travel English", new string('x', 200), "Alice", "B1"), CancellationToken.None);
 
-        // Two more players at different levels.
-        var joinHandler = new JoinEntertainmentGroupCommandHandler(repo);
-        var bob = await joinHandler.Handle(new JoinEntertainmentGroupCommand(created.JoinKey, "Bob", "A2"), CancellationToken.None);
-        var carol = await joinHandler.Handle(new JoinEntertainmentGroupCommand(created.JoinKey, "Carol", "C1"), CancellationToken.None);
-
-        // Start: round 1, translator = Alice (B1) — live Gemini call.
-        var startHandler = new StartEntertainmentGameCommandHandler(repo, protector, gemini);
+        // Generate one round and check its reference answer with one bounded call.
+        var startHandler = new StartEntertainmentGameCommandHandler(repo, gemini);
         var round1 = await startHandler.Handle(
             new StartEntertainmentGameCommand(created.GroupId, created.CreatorPlayerId), CancellationToken.None);
         Assert.False(string.IsNullOrWhiteSpace(round1.Round.SentenceEn));
         Assert.False(string.IsNullOrWhiteSpace(round1.Round.SentenceFi));
         Assert.NotEmpty(round1.Round.BaseForms);
 
-        // Real games space rounds by player time; add a delay to avoid bursting
-        // the API and tripping the model's demand throttle.
-        if (waitBetweenRounds) await Task.Delay(TimeSpan.FromSeconds(3));
+        var evaluator = new GeminiAnswerEvaluator(new HttpClient(), new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Entertainment:Gemini:ApiKey"] = apiKey }).Build());
+        var evaluation = await evaluator.EvaluateAsync(round1.Round.SentenceEn, round1.Round.SentenceFi, round1.Round.SentenceFi, CefrLevel.B1);
+        Assert.True(evaluation.IsCorrect);
+        Assert.Equal(10, EntertainmentScoring.ScoreAnswer(evaluation));
 
-        // Rotate: round 2, translator = Bob (A2) — live Gemini call.
-        var nextHandler = new StartNextEntertainmentRoundCommandHandler(repo, protector, gemini);
-        var round2 = await nextHandler.Handle(
-            new StartNextEntertainmentRoundCommand(created.GroupId, bob.PlayerId, 2), CancellationToken.None);
-        Assert.False(string.IsNullOrWhiteSpace(round2.SentenceEn));
-        Assert.NotEqual(round1.Round.SentenceEn, round2.SentenceEn);
-
-        if (waitBetweenRounds) await Task.Delay(TimeSpan.FromSeconds(3));
-
-        // Rotate: round 3, translator = Carol (C1) — live Gemini call.
-        var round3 = await nextHandler.Handle(
-            new StartNextEntertainmentRoundCommand(created.GroupId, carol.PlayerId, 3), CancellationToken.None);
-        Assert.False(string.IsNullOrWhiteSpace(round3.SentenceEn));
-
-        // End: standings for all three players.
+        // End with points calculated by the same internal rubric.
         var endHandler = new EndEntertainmentGameCommandHandler(repo);
         var standings = await endHandler.Handle(new EndEntertainmentGameCommand(
             created.GroupId,
             created.CreatorPlayerId,
             new Dictionary<Guid, int>
             {
-                [created.CreatorPlayerId] = 5,
-                [bob.PlayerId] = 2,
-                [carol.PlayerId] = 3,
+                [created.CreatorPlayerId] = EntertainmentScoring.ScoreAnswer(evaluation),
             }), CancellationToken.None);
 
-        Assert.Equal(3, standings.Count);
+        Assert.Single(standings);
     }
 
     private sealed class InMemoryEntertainmentRepository : IEntertainmentRepository
@@ -108,6 +62,17 @@ public class EntertainmentFullRoundLiveTests
         private readonly Dictionary<Guid, EntertainmentPlayer> _players = new();
         private readonly Dictionary<Guid, EntertainmentRound> _rounds = new();
 
+        public Task JoinPlayerAsync(EntertainmentGroup group, EntertainmentPlayer player, CancellationToken ct = default) => SavePlayerAsync(player, ct);
+        public Task SaveGeneratedRoundAsync(EntertainmentGroup group, EntertainmentRound round, CancellationToken ct = default)
+        {
+            if (_rounds.Values.Any(r => r.GroupId == group.Id && EntertainmentSentenceIdentity.Normalize(r.SentenceEn) == EntertainmentSentenceIdentity.Normalize(round.SentenceEn))) throw new EntertainmentDuplicateSentenceException();
+            _rounds[round.Id] = round; _groups[group.Id] = group;
+            return Task.CompletedTask;
+        }
+        public Task SaveGameStateAsync(EntertainmentGroup group, EntertainmentRound round, CancellationToken ct = default)
+        { _rounds[round.Id] = round; _groups[group.Id] = group; return Task.CompletedTask; }
+        public Task<IReadOnlyList<string>> ListAllSentencesAsync(Guid groupId, CancellationToken ct = default) => ListRecentSentencesAsync(groupId, int.MaxValue, ct);
+        public Task<EntertainmentRound?> GetLatestRoundAsync(Guid groupId, CancellationToken ct = default) => Task.FromResult(_rounds.Values.Where(r => r.GroupId == groupId).OrderByDescending(r => r.RoundNumber).FirstOrDefault());
         public Task CreateGroupAsync(EntertainmentGroup group, EntertainmentPlayer creator, CancellationToken ct = default)
         {
             _groups[group.Id] = group;

@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using CleaningSuite.Application.Employees;
 using CleaningSuite.Application.Shifts;
+using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Shifts;
 
@@ -14,24 +15,29 @@ public class QualityCycleDispatcher : IQualityCycleDispatcher
     private readonly IQualityCycleRepository _forms;
     private readonly IEmployeeRepository _employees;
     private readonly TimeProvider _clock;
+    private readonly ITenantProfileRepository? _profiles;
+    private readonly ITenantContext? _tenant;
 
     public QualityCycleDispatcher(IShiftRepository shifts, IQualityCycleRepository forms,
-        IEmployeeRepository employees, TimeProvider? clock = null)
+        IEmployeeRepository employees, TimeProvider? clock = null,
+        ITenantProfileRepository? profiles = null, ITenantContext? tenant = null)
     {
         _shifts = shifts; _forms = forms; _employees = employees;
         _clock = clock ?? TimeProvider.System;
+        _profiles = profiles; _tenant = tenant;
     }
 
     public async Task<int> EnsureUpcomingAsync(Guid? shiftId = null, CancellationToken ct = default)
     {
         var now = _clock.GetUtcNow().UtcDateTime;
+        var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
         IReadOnlyList<Shift> shifts = shiftId.HasValue
             ? (await _shifts.GetAsync(shiftId.Value, ct) is { } selectedShift ? new[] { selectedShift } : Array.Empty<Shift>())
             : await _shifts.ListAsync(null, null, ct);
         var count = 0;
         foreach (var shift in shifts.Where(s => s.IsActive))
         {
-            var occurrences = QualityCycleOccurrences.InWindow(shift, now.Date, now.Date.AddDays(32))
+            var occurrences = QualityCycleOccurrences.InWindow(shift, now, now.AddDays(32), zone)
                 .Where(x => x.Occurrence.EndUtc > now).Select(x => x.Occurrence).ToList();
             count += await DispatchAsync(shift, occurrences, ct);
         }

@@ -6,7 +6,6 @@ using CleaningSuite.Domain.Shifts;
 using CleaningSuite.Domain.QualityCycle;
 using FluentValidation;
 using MediatR;
-using TimeZoneConverter;
 
 namespace CleaningSuite.Application.QualityCycle;
 
@@ -76,8 +75,8 @@ public class QualityCycleMonthlyReportService(IShiftRepository shifts, IQualityC
                 throw new NotFoundException("Branch", request.BranchId.Value);
         }
         var profile = await profiles.GetAsync(tenant.TenantId, ct);
-        var zoneId = profile?.TimeZoneId ?? "Europe/Helsinki";
-        var zone = TZConvert.GetTimeZoneInfo(zoneId);
+        var zoneId = string.IsNullOrWhiteSpace(profile?.TimeZoneId) ? TenantTimeZone.DefaultId : profile.TimeZoneId;
+        var zone = TenantTimeZone.Resolve(zoneId);
         var from = TimeZoneInfo.ConvertTimeToUtc(new DateTime(request.Year, request.Month, 1), zone);
         var to = TimeZoneInfo.ConvertTimeToUtc(new DateTime(request.Year, request.Month, 1).AddMonths(1), zone);
         var now = clock.GetUtcNow().UtcDateTime;
@@ -89,7 +88,7 @@ public class QualityCycleMonthlyReportService(IShiftRepository shifts, IQualityC
         {
             var saved = await forms.ListFormsAsync(shift.Id, from, to, ct);
             var history = await shifts.ListAssignmentHistoryAsync(shift.Id, ct);
-            var planned = QualityCycleOccurrences.InWindow(shift, from, to);
+            var planned = QualityCycleOccurrences.InWindow(shift, from, to, zone);
             // Submitted historical evidence remains visible even after a shift/template is removed.
             var keys = planned.Select(x => (x.Plan.CompanyId, x.Plan.BranchId))
                 .Concat(saved.Where(f => f.IsSubmitted).Select(f => (f.CompanyId == Guid.Empty ? shift.CompanyId : f.CompanyId,

@@ -42,7 +42,6 @@ jobs:
       - run: dotnet build CleaningSuite.Backend.sln --no-restore -c Release
       - run: dotnet test CleaningSuite.Backend.sln --no-build -c Release --verbosity minimal
         env:
-          GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
           QC_TEST_CONNECTION_STRING: Host=localhost;Port=5432;Database=security_tests;Username=security_tests;Password=synthetic_ci_only
           INVITE_TEST_DATABASE: Host=localhost;Port=5432;Database=security_tests;Username=security_tests;Password=synthetic_ci_only
 

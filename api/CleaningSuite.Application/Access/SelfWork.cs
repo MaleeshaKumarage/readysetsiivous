@@ -84,7 +84,8 @@ public sealed class GetOwnWorkHandler(IBookingRepository bookings, IShiftReposit
             var branch = await branches.GetAsync(shift.BranchId, ct);
             if (company is null || company.Id != shift.CompanyId || !company.IsActive
                 || branch is null || branch.Id != shift.BranchId || branch.CompanyId != company.Id || !branch.IsActive) continue;
-            foreach (var occurrence in ShiftScheduleCalculator.GenerateOccurrences(shift, from.Date, to.Date)
+            var (localFrom, localTo) = TenantTimeZone.LocalDatesForUtcRange(from, to, zone);
+            foreach (var occurrence in ShiftScheduleCalculator.GenerateOccurrences(shift, localFrom, localTo, zone)
                 .Where(o => o.StartUtc >= from && o.StartUtc < to && assignment.Overlaps(o.StartUtc, o.EndUtc)))
                 ownShifts.Add(new(shift.Id, shift.Name, company.Id, company.Name, branch.Id, branch.Name,
                     new(branch.Street ?? "", branch.PostalCode ?? "", branch.City ?? "", branch.Country),

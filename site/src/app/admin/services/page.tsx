@@ -106,6 +106,14 @@ export default function ServicesAdminPage() {
     }
   };
 
+  const deleteService = async (service: ServiceRowLocal) => {
+    if (!window.confirm(`Permanently delete inactive service “${service.name?.values?.fi ?? service.slug}”? Services used by bookings are retained.`)) return;
+    setActivityBusy(service.id); setActivityError('');
+    try { await adminServices.deleteInactive(service.id); await load(); }
+    catch (failure) { setActivityError(failure instanceof Error ? failure.message : 'Could not delete service. Please retry.'); }
+    finally { setActivityBusy(null); }
+  };
+
   return (
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
@@ -150,6 +158,7 @@ export default function ServicesAdminPage() {
                       >
                         {s.isActive ? 'Deactivate' : 'Reactivate'}
                       </Button>
+                      {!s.isActive && <Button size="xs" variant="subtle" color="red" loading={activityBusy === s.id} disabled={activityBusy !== null && activityBusy !== s.id} onClick={() => deleteService(s)}>Delete</Button>}
                     </Group>
                   </Table.Td>
                 </Table.Tr>

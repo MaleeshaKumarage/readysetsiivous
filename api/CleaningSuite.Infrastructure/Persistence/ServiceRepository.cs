@@ -30,6 +30,12 @@ public class ServiceRepository : IServiceRepository
         await _tenantSession.Session.SaveChangesAsync(ct);
     }
 
+    public async Task DeleteAsync(Guid id, CancellationToken ct = default)
+    {
+        _tenantSession.Session.Delete<Service>(id);
+        await _tenantSession.Session.SaveChangesAsync(ct);
+    }
+
     public async Task<bool> SlugExistsAsync(string slug, Guid? exceptId = null, CancellationToken ct = default)
     {
         var matches = await _tenantSession.Session.Query<Service>()

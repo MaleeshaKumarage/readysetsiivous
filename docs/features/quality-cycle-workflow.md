@@ -76,12 +76,20 @@ New submissions affect fresh reports, but never rewrite an existing shared
 snapshot. Generate another link to share updated totals. Suspension of the tenant
 also denies its public report links through tenant resolution.
 
-Month boundaries use the tenant profile timezone, falling back to Europe/Helsinki,
-with an exclusive next-month boundary. Existing shift schedule time fields retain
-the repository's UTC convention. Month grouping does not convert recurrence entry
-times into local-time schedules. Activity identity is exact snapshot text within
-one shift: renaming an activity produces separate historical labels. No stable
-activity catalog, holiday exclusions or actual worked-hours tracking exists.
+Month boundaries and recurring schedule wall-clock times use the tenant profile
+timezone, falling back to Europe/Helsinki. Shift forms convert the tenant-local
+schedule time to a UTC instant on the server. My Shifts displays date/time in the
+tenant timezone even when the cleaner's device uses a different zone. Admin and
+manager forms label the timezone used for entered shift times. On a spring-forward
+gap, the affected occurrence is omitted; an ambiguous fall-back time uses the
+first clock appearance (the earlier UTC instant). Start/end authorization,
+overlap checks, dispatch and monthly reports use these same UTC instants and local
+calendar dates. Tenant timezone changes affect future generation; existing forms
+keep their saved UTC occurrence instants.
+
+Activity identity is exact snapshot text within one shift: renaming an activity
+produces separate historical labels. No stable activity catalog, holiday
+exclusions or actual worked-hours tracking exists.
 
 ## Persistence and rollout
 
@@ -98,6 +106,11 @@ form/template tables were empty during the read-only partition check on 2026-10-
 Production partition contents were not inspected or migrated in this change.
 
 ## Test contract and remaining gaps
+
+Shift-time cases: same tenant-local time renders identically on admin, manager,
+and cleaner devices; offset conversion is applied once; month/day boundaries use
+the tenant date; shift starts are enabled by the UTC occurrence instant; spring
+gap occurrences are skipped and fall-back ambiguity is deterministic.
 
 | Case | Expected result / coverage |
 | --- | --- |

@@ -8,14 +8,12 @@ namespace CleaningSuite.Tests.Entertainment;
 public class CreateEntertainmentGroupHandlerTests
 {
     [Fact]
-    public async Task Handle_EncryptsKey_CreatesGroupAndCreator()
+    public async Task Handle_CreatesGroupAndCreatorWithHashedCapability()
     {
         var repo = new Mock<IEntertainmentRepository>();
         repo.Setup(r => r.JoinKeyExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
-        var protector = new Mock<IEntertainmentKeyProtector>();
-        protector.Setup(p => p.Protect("sk-test")).Returns("encrypted");
 
         EntertainmentGroup? savedGroup = null;
         EntertainmentPlayer? savedCreator = null;
@@ -27,14 +25,15 @@ public class CreateEntertainmentGroupHandlerTests
             })
             .Returns(Task.CompletedTask);
 
-        var handler = new CreateEntertainmentGroupCommandHandler(repo.Object, protector.Object);
+        var handler = new CreateEntertainmentGroupCommandHandler(repo.Object);
 
         var result = await handler.Handle(new CreateEntertainmentGroupCommand(
-            "Travel English", "sk-test", new string('x', 200), "Alice", "B1"), CancellationToken.None);
+            "Travel English", new string('x', 200), "Alice", "B1"), CancellationToken.None);
 
         Assert.NotNull(savedGroup);
         Assert.NotNull(savedCreator);
-        Assert.Equal("encrypted", savedGroup!.GeminiApiKeyEncrypted);
+        Assert.Empty(savedGroup!.GeminiApiKeyEncrypted);
+        Assert.True(EntertainmentPlayerToken.Verify(result.PlayerToken, savedCreator!.PlayerTokenHash));
         Assert.NotEqual("sk-test", savedGroup.GeminiApiKeyEncrypted);
         Assert.Equal(6, savedGroup.JoinKey.Length);
         Assert.Equal(EntertainmentStatus.Lobby, savedGroup.Status);
@@ -52,13 +51,11 @@ public class CreateEntertainmentGroupHandlerTests
         repo.Setup(r => r.JoinKeyExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => keys.Dequeue());
 
-        var protector = new Mock<IEntertainmentKeyProtector>();
-        protector.Setup(p => p.Protect(It.IsAny<string>())).Returns("encrypted");
 
-        var handler = new CreateEntertainmentGroupCommandHandler(repo.Object, protector.Object);
+        var handler = new CreateEntertainmentGroupCommandHandler(repo.Object);
 
         var result = await handler.Handle(new CreateEntertainmentGroupCommand(
-            "Travel English", "sk-test", new string('x', 200), "Alice", "A1"), CancellationToken.None);
+            "Travel English", new string('x', 200), "Alice", "A1"), CancellationToken.None);
 
         Assert.Equal(6, result.JoinKey.Length);
         repo.Verify(r => r.JoinKeyExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Exactly(2));

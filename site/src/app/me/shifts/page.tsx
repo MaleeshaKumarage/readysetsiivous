@@ -45,6 +45,16 @@ function statusClasses(s: Status): string {
   }
 }
 
+function formatTenantDate(utc: string, timeZoneId: string, dateStyle: 'date' | 'time' | 'datetime') {
+  const options: Intl.DateTimeFormatOptions = dateStyle === 'date'
+    ? { year: 'numeric', month: 'short', day: 'numeric', timeZone: timeZoneId }
+    : dateStyle === 'time'
+      ? { hour: '2-digit', minute: '2-digit', timeZone: timeZoneId }
+      : { dateStyle: 'medium', timeStyle: 'short', timeZone: timeZoneId };
+  try { return new Intl.DateTimeFormat(undefined, options).format(new Date(utc)); }
+  catch { return new Date(utc).toLocaleString(); }
+}
+
 export default function MyShiftsPage() {
   const [ready, setReady] = useState(false);
   const [authed, setAuthed] = useState(false);
@@ -238,13 +248,14 @@ export default function MyShiftsPage() {
                         <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 dark:text-gray-400 pt-1">
                           <span className="flex items-center gap-1">
                             <Calendar className="w-3.5 h-3.5" />
-                            {new Date(o.startUtc).toLocaleDateString()}
+                            {formatTenantDate(o.startUtc, o.timeZoneId, 'date')}
                           </span>
                           <span className="flex items-center gap-1">
                             <Clock className="w-3.5 h-3.5" />
-                            {new Date(o.startUtc).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {formatTenantDate(o.startUtc, o.timeZoneId, 'time')}
                             {' – '}
-                            {new Date(o.endUtc).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {formatTenantDate(o.endUtc, o.timeZoneId, 'time')}
+                            {' · '}{o.timeZoneId}
                           </span>
                         </div>
                       </div>
@@ -270,7 +281,7 @@ export default function MyShiftsPage() {
                     {status === 'submitted' && (
                       <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
                         <CheckCircle2 className="w-4 h-4" />
-                        Submitted {o.form?.submittedUtc ? new Date(o.form.submittedUtc).toLocaleString() : ''}
+                        Submitted {o.form?.submittedUtc ? formatTenantDate(o.form.submittedUtc, o.timeZoneId, 'datetime') : ''}
                       </div>
                     )}
 

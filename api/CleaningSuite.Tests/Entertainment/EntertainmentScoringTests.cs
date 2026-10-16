@@ -1,51 +1,33 @@
 using CleaningSuite.Application.Entertainment;
+using CleaningSuite.Domain.Entertainment;
 using Xunit;
 
 namespace CleaningSuite.Tests.Entertainment;
 
 public class EntertainmentScoringTests
 {
-    private static readonly Guid Translator = Guid.NewGuid();
-    private static readonly Guid A = Guid.NewGuid();
-    private static readonly Guid B = Guid.NewGuid();
-    private static readonly List<Guid> Players = new() { Translator, A, B };
-
-    [Fact]
-    public void TranslatorRevealedHint_AwardsEachOtherPlayer()
+    [Theory]
+    [InlineData(true, 7, 3, 10)]
+    [InlineData(true, 7, 1, 8)]
+    [InlineData(false, 5, 2, 7)]
+    [InlineData(false, 0, 3, 3)]
+    [InlineData(false, 0, 0, 0)]
+    public void Score_is_sum_of_bounded_meaning_and_finnish_grades(bool correct, int meaning, int finnish, int expected)
     {
-        var deltas = EntertainmentScoring.TranslatorRevealedHint(Players, Translator);
+        var evaluation = new EntertainmentAnswerEvaluation(correct, "answer", "explanation", [], meaning, finnish);
 
-        Assert.Equal(1, deltas[A]);
-        Assert.Equal(1, deltas[B]);
-        Assert.False(deltas.ContainsKey(Translator));
+        Assert.Equal(expected, EntertainmentScoring.ScoreAnswer(evaluation));
     }
 
-    [Fact]
-    public void CleanSolve_AwardsTranslator()
+    [Theory]
+    [InlineData(true, 6, 3)]
+    [InlineData(false, 7, 3)]
+    [InlineData(false, 8, 0)]
+    [InlineData(false, 0, 4)]
+    public void Invalid_or_inconsistent_ai_grades_are_rejected(bool correct, int meaning, int finnish)
     {
-        var deltas = EntertainmentScoring.CleanSolve(Translator);
+        var evaluation = new EntertainmentAnswerEvaluation(correct, "answer", "explanation", [], meaning, finnish);
 
-        Assert.Equal(5, deltas[Translator]);
-        Assert.Single(deltas);
-    }
-
-    [Fact]
-    public void Skipped_AwardsEachOtherPlayer()
-    {
-        var deltas = EntertainmentScoring.Skipped(Players, Translator);
-
-        Assert.Equal(1, deltas[A]);
-        Assert.Equal(1, deltas[B]);
-        Assert.False(deltas.ContainsKey(Translator));
-    }
-
-    [Fact]
-    public void AnswerRevealed_AwardsEveryoneExceptRevealer()
-    {
-        var deltas = EntertainmentScoring.AnswerRevealed(Players, A);
-
-        Assert.Equal(2, deltas[Translator]);
-        Assert.Equal(2, deltas[B]);
-        Assert.False(deltas.ContainsKey(A));
+        Assert.Throws<ArgumentException>(() => EntertainmentScoring.ScoreAnswer(evaluation));
     }
 }

@@ -103,7 +103,7 @@ public class SelfWorkTests
             Type = ShiftScheduleType.DailySameTime, DailyStart = TimeSpan.FromHours(22.5), DailyEnd = TimeSpan.FromHours(23.5)
         }, "secret-shift-notes", null, null);
         var assignment = ShiftAssignment.Create(shift.Id, f.Employee, "secret-assignment-note");
-        var start = new DateTime(2026,10,12,22,30,0,DateTimeKind.Utc);
+        var start = new DateTime(2026,10,13,19,30,0,DateTimeKind.Utc);
         assignment.AssignedAtUtc = start.AddMinutes(30);
         switch (scenario) {
             case "after": assignment.AssignedAtUtc = start.AddHours(2); break;

@@ -6,7 +6,6 @@ export const CEFR_LEVELS: CefrLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
 export interface CreateGroupRequest {
   name: string;
-  geminiApiKey: string;
   description: string;
   creatorName: string;
   creatorLevel: CefrLevel;
@@ -16,6 +15,7 @@ export interface CreateGroupResult {
   groupId: string;
   joinKey: string;
   creatorPlayerId: string;
+  playerToken: string;
 }
 
 export async function createEntertainmentGroup(
@@ -37,6 +37,7 @@ export interface JoinGroupResult {
   groupId: string;
   playerId: string;
   playerName: string;
+  playerToken: string;
   level: string;
 }
 
@@ -45,7 +46,7 @@ export async function joinEntertainmentGroup(
   playerName: string,
   level: CefrLevel
 ): Promise<JoinGroupResult> {
-  const response = await fetch(`${API_URL}/api/v1/entertainment/groups/${joinKey}/join`, {
+  const response = await fetch(`${API_URL}/api/v1/entertainment/groups/${encodeURIComponent(joinKey)}/join`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ joinKey, playerName, level }),
@@ -81,11 +82,25 @@ export async function getEntertainmentLobby(groupId: string): Promise<Lobby> {
 }
 
 export interface RoundStarted {
+  roundId: string;
   roundNumber: number;
   translatorPlayerId: string;
   sentenceEn: string;
   sentenceFi: string | null;
   baseForms: string[];
+  hints: { english: string; finnish: string }[];
+  submittedAnswer?: string | null;
+  evaluation?: AnswerEvaluation | null;
+}
+
+export interface AnswerEvaluation {
+  isCorrect: boolean;
+  meaningPoints: number;
+  finnishPoints: number;
+  scorePoints: number;
+  correctedAnswer: string;
+  explanation: string;
+  corrections: { original: string; replacement: string; reason: string }[];
 }
 
 export interface ScoreEntry {
@@ -109,6 +124,7 @@ export const ENT_SESSION_KEYS = {
 export interface EntertainmentSession {
   groupId: string;
   playerId: string;
+  playerToken: string;
   joinKey?: string;
   isCreator?: boolean;
 }
@@ -119,15 +135,22 @@ export function saveEntertainmentSession(session: EntertainmentSession): void {
   try {
     localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
   } catch {
-    // storage unavailable (private mode) — reconnect just won't persist.
+    // storage unavailable (private mode) â€” reconnect just won't persist.
   }
 }
 
 export function loadEntertainmentSession(): EntertainmentSession | null {
   try {
     const raw = localStorage.getItem(SESSION_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as EntertainmentSession) : null;
+    if (!raw) return null;
+    const session = JSON.parse(raw);
+    if (!session || ['groupId', 'playerId', 'playerToken'].some(key => typeof session[key] !== 'string' || !session[key].trim())) {
+      clearEntertainmentSession();
+      return null;
+    }
+    return session as EntertainmentSession;
   } catch {
+    clearEntertainmentSession();
     return null;
   }
 }

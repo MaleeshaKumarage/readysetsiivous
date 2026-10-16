@@ -49,4 +49,10 @@ public class EmployeeRepository : IEmployeeRepository
         _tenantSession.Session.Store(employee);
         await _tenantSession.Session.SaveChangesAsync(ct);
     }
+
+    public async Task DeleteAsync(Guid id, CancellationToken ct = default)
+    {
+        _tenantSession.Session.Delete<Employee>(id);
+        await _tenantSession.Session.SaveChangesAsync(ct);
+    }
 }

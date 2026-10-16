@@ -1,5 +1,7 @@
 # Entertainment — Realtime Language Game (Kahoot-like) — Design & Plan
 
+> Historical design note. The AI evaluation and server-calculated 7+3 rubric in [the platform AI design](2026-10-15-game-platform-ai-design.md) supersede the reveal-count scoring described below.
+
 Date: 2026-10-11
 Status: Approved design, ready for implementation
 

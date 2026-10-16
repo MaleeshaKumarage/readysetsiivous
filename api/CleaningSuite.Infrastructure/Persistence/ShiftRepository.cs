@@ -52,6 +52,12 @@ public class ShiftRepository : IShiftRepository
         await Session.SaveChangesAsync(ct);
     }
 
+    public async Task DeleteAsync(Guid id, CancellationToken ct = default)
+    {
+        Session.Delete<Shift>(id);
+        await Session.SaveChangesAsync(ct);
+    }
+
     public async Task<ShiftAssignment?> GetAssignmentAsync(
         Guid shiftId,
         Guid employeeId,
@@ -96,4 +102,7 @@ public class ShiftRepository : IShiftRepository
 
     public async Task<IReadOnlyList<ShiftAssignment>> ListAssignmentHistoryAsync(Guid shiftId, CancellationToken ct = default) =>
         await Session.Query<ShiftAssignment>().Where(a => a.ShiftId == shiftId).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<ShiftAssignment>> ListAssignmentHistoryByEmployeeAsync(Guid employeeId, CancellationToken ct = default) =>
+        await Session.Query<ShiftAssignment>().Where(a => a.EmployeeId == employeeId).ToListAsync(ct);
 }

@@ -1,4 +1,7 @@
 using CleaningSuite.Application.Common;
+using CleaningSuite.Application.Bookings;
+using CleaningSuite.Application.QualityCycle;
+using CleaningSuite.Application.Shifts;
 using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Common;
 using CleaningSuite.Domain.Employees;
@@ -31,6 +34,7 @@ public record UpdateEmployeeCommand(Guid Id, EmployeeFields Fields, bool IsActiv
 public record DeactivateEmployeeCommand(Guid Id) : IRequest<Unit>;
 
 public record ReactivateEmployeeCommand(Guid Id) : IRequest<Unit>;
+public record DeleteEmployeeCommand(Guid Id) : IRequest<Unit>;
 
 public record InviteEmployeeCommand(Guid Id) : IRequest<EmployeeInviteResult>;
 
@@ -195,6 +199,24 @@ public class DeactivateEmployeeHandler : IRequestHandler<DeactivateEmployeeComma
             await _identities.SynchronizeAccessAsync(_tenant.TenantId, employee.KeycloakUserId, employee.Role, false, ct);
             employee.IdentitySyncPending = false; await _employees.SaveAsync(employee, ct);
         }
+        return Unit.Value;
+    }
+}
+
+public sealed class DeleteEmployeeHandler(IEmployeeRepository employees, IShiftRepository shifts,
+    IBookingRepository bookings, IQualityCycleRepository forms) : IRequestHandler<DeleteEmployeeCommand, Unit>
+{
+    public async Task<Unit> Handle(DeleteEmployeeCommand request, CancellationToken ct)
+    {
+        var employee = await employees.GetByIdAsync(request.Id, ct) ?? throw new NotFoundException("Employee", request.Id);
+        if (employee.IsActive) throw new InactiveRecordDeleteConflictException("Deactivate the employee before deleting the profile.");
+        if (!string.IsNullOrWhiteSpace(employee.KeycloakUserId))
+            throw new InactiveRecordDeleteConflictException("This employee is linked to a login account. Disable the account and retain the profile, or remove the login through identity administration first.");
+        if ((await shifts.ListAssignmentHistoryByEmployeeAsync(employee.Id, ct)).Count > 0
+            || (await bookings.HasHistoryForEmployeeAsync(employee.Id, ct))
+            || (await forms.ListFormsAsync(null, null, null, ct, employee.Id, null, null, null)).Count > 0)
+            throw new InactiveRecordDeleteConflictException("This employee has shift, booking, or checklist history and must be retained.");
+        await employees.DeleteAsync(employee.Id, ct);
         return Unit.Value;
     }
 }

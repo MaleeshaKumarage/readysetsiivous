@@ -2,6 +2,7 @@ using CleaningSuite.Application.Common;
 using CleaningSuite.Application.Companies;
 using CleaningSuite.Application.Employees;
 using CleaningSuite.Application.Shifts;
+using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Shifts;
 using FluentValidation;
@@ -83,7 +84,7 @@ public record GetQualityCycleSummaryPdfQuery(Guid ShiftId, int Year, int Month) 
 // Employee clock/flow commands & queries
 public record StartQualityCycleFormCommand(Guid ShiftId, Guid EmployeeId, DateTime OccurrenceStartUtc, DateTime OccurrenceEndUtc) : IRequest<QualityCycleFormDto>;
 public record EndQualityCycleFormCommand(Guid FormId, Guid EmployeeId, List<QualityCycleFormItemDto> Items, List<string>? PhotoUrls = null, string? CleanerNotes = null, List<QualityCyclePhoto>? Photos = null) : IRequest<QualityCycleFormDto>;
-public record MyShiftOccurrenceDto(Guid ShiftId, string ShiftName, DateTime StartUtc, DateTime EndUtc, QualityCycleFormDto? Form);
+public record MyShiftOccurrenceDto(Guid ShiftId, string ShiftName, DateTime StartUtc, DateTime EndUtc, QualityCycleFormDto? Form, string TimeZoneId = "Europe/Helsinki");
 public record GetMyShiftsQuery(Guid EmployeeId, DateTime FromUtc, DateTime ToUtc) : IRequest<IReadOnlyList<MyShiftOccurrenceDto>>;
 
 // Handlers
@@ -157,10 +158,19 @@ public class QualityCycleHandlers
     public class DeleteQualityCycleTemplateCommandHandler : IRequestHandler<DeleteQualityCycleTemplateCommand>
     {
         private readonly IQualityCycleRepository _repository;
-        public DeleteQualityCycleTemplateCommandHandler(IQualityCycleRepository repository) => _repository = repository;
+        private readonly IShiftRepository _shifts;
+        public DeleteQualityCycleTemplateCommandHandler(IQualityCycleRepository repository, IShiftRepository shifts)
+        { _repository = repository; _shifts = shifts; }
 
         public async Task Handle(DeleteQualityCycleTemplateCommand request, CancellationToken ct)
         {
+            var template = await _repository.GetTemplateAsync(request.Id, ct)
+                ?? throw new NotFoundException("QualityCycleTemplate", request.Id);
+            if (template.IsActive) throw new InactiveRecordDeleteConflictException("Deactivate the checklist template before deleting it.");
+            if ((await _shifts.ListForReportingAsync(ct)).Any(s => s.QualityCycleTemplateId == template.Id
+                    || s.QualityCyclePlans.Any(p => p.TemplateId == template.Id))
+                || (await _repository.ListFormsAsync(null, null, null, ct, null, template.Id, null, null)).Count > 0)
+                throw new InactiveRecordDeleteConflictException("This template is referenced by a shift or checklist history and must be retained.");
             await _repository.DeleteTemplateAsync(request.Id, ct);
         }
     }
@@ -194,21 +204,25 @@ public class QualityCycleHandlers
     {
         private readonly IShiftRepository _shifts;
         private readonly IQualityCycleDispatcher _dispatcher;
-        public DispatchQualityCycleFormsCommandHandler(IShiftRepository shifts, IQualityCycleDispatcher dispatcher)
-        { _shifts = shifts; _dispatcher = dispatcher; }
+        private readonly ITenantProfileRepository? _profiles;
+        private readonly ITenantContext? _tenant;
+        public DispatchQualityCycleFormsCommandHandler(IShiftRepository shifts, IQualityCycleDispatcher dispatcher,
+            ITenantProfileRepository? profiles = null, ITenantContext? tenant = null)
+        { _shifts = shifts; _dispatcher = dispatcher; _profiles = profiles; _tenant = tenant; }
 
         public async Task<int> Handle(DispatchQualityCycleFormsCommand request, CancellationToken ct)
         {
             if (!request.TargetDateUtc.HasValue)
                 return await _dispatcher.EnsureUpcomingAsync(request.ShiftId, ct);
             var date = request.TargetDateUtc.Value.Date;
+            var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
             IReadOnlyList<Shift> shifts = request.ShiftId.HasValue
                 ? (await _shifts.GetAsync(request.ShiftId.Value, ct) is { } selectedShift ? new[] { selectedShift } : Array.Empty<Shift>())
                 : await _shifts.ListAsync(null, null, ct);
             var count = 0;
             foreach (var shift in shifts)
                 count += await _dispatcher.DispatchAsync(shift,
-                    QualityCycleOccurrences.InWindow(shift, date, date.AddDays(1)).Select(x => x.Occurrence).ToList(), ct);
+                    QualityCycleOccurrences.InWindow(shift, date, date.AddDays(1), zone).Select(x => x.Occurrence).ToList(), ct);
             return count;
         }
     }
@@ -272,13 +286,18 @@ public class QualityCycleHandlers
         private readonly IEmployeeRepository _employeeRepository;
         private readonly IQualityCycleRepository _repository;
         private readonly TimeProvider _clock;
+        private readonly ITenantProfileRepository? _profiles;
+        private readonly ITenantContext? _tenant;
 
-        public StartQualityCycleFormCommandHandler(IShiftRepository shiftRepository, IEmployeeRepository employeeRepository, IQualityCycleRepository repository, TimeProvider? clock = null)
+        public StartQualityCycleFormCommandHandler(IShiftRepository shiftRepository, IEmployeeRepository employeeRepository, IQualityCycleRepository repository, TimeProvider? clock = null,
+            ITenantProfileRepository? profiles = null, ITenantContext? tenant = null)
         {
             _shiftRepository = shiftRepository;
             _employeeRepository = employeeRepository;
             _repository = repository;
             _clock = clock ?? TimeProvider.System;
+            _profiles = profiles;
+            _tenant = tenant;
         }
 
         public async Task<QualityCycleFormDto> Handle(StartQualityCycleFormCommand request, CancellationToken ct)
@@ -293,8 +312,10 @@ public class QualityCycleHandlers
             if (!shift.IsActive || !employee.IsActive)
                 throw new UnauthorizedAccessException();
             if (start > _clock.GetUtcNow().UtcDateTime) throw new QualityCycleConflictException("This shift has not started yet.");
+            var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
+            var (localFrom, localTo) = TenantTimeZone.LocalDatesForUtcRange(start, end, zone);
             if (end <= start || end - start > TimeSpan.FromDays(2)
-                || !ShiftScheduleCalculator.GenerateOccurrences(shift, start.Date, end.Date.AddDays(1)).Any(o => o.StartUtc == start && o.EndUtc == end))
+                || !ShiftScheduleCalculator.GenerateOccurrences(shift, localFrom, localTo, zone).Any(o => o.StartUtc == start && o.EndUtc == end))
                 throw new QualityCycleConflictException("Choose an actual scheduled shift occurrence.");
             var assignment = await _shiftRepository.GetAssignmentAsync(shift.Id, employee.Id, ct);
             if (assignment == null || !assignment.IsActive || !assignment.Overlaps(start, end))
@@ -361,11 +382,16 @@ public class QualityCycleHandlers
     {
         private readonly IShiftRepository _shiftRepository;
         private readonly IQualityCycleRepository _repository;
+        private readonly ITenantProfileRepository? _profiles;
+        private readonly ITenantContext? _tenant;
 
-        public GetMyShiftsQueryHandler(IShiftRepository shiftRepository, IQualityCycleRepository repository)
+        public GetMyShiftsQueryHandler(IShiftRepository shiftRepository, IQualityCycleRepository repository,
+            ITenantProfileRepository? profiles = null, ITenantContext? tenant = null)
         {
             _shiftRepository = shiftRepository;
             _repository = repository;
+            _profiles = profiles;
+            _tenant = tenant;
         }
 
         public async Task<IReadOnlyList<MyShiftOccurrenceDto>> Handle(GetMyShiftsQuery request, CancellationToken ct)
@@ -374,6 +400,8 @@ public class QualityCycleHandlers
             var to = request.ToUtc.Kind == DateTimeKind.Local ? request.ToUtc.ToUniversalTime() : DateTime.SpecifyKind(request.ToUtc, DateTimeKind.Utc);
             if (to <= from || to - from > TimeSpan.FromDays(32) || to.Date >= DateTime.MaxValue.Date)
                 throw new ValidationException(new[] { new FluentValidation.Results.ValidationFailure("range", "Choose an increasing UTC interval of at most 32 days within supported calendar bounds.") });
+            var (zoneId, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
+            var (localFrom, localTo) = TenantTimeZone.LocalDatesForUtcRange(from, to, zone);
             var assignments = await _shiftRepository.ListAssignmentsByEmployeeAsync(request.EmployeeId, ct);
             var result = new List<MyShiftOccurrenceDto>();
 
@@ -383,13 +411,13 @@ public class QualityCycleHandlers
                 var shift = await _shiftRepository.GetAsync(assignment.ShiftId, ct);
                 if (shift == null || shift.Id != assignment.ShiftId || !shift.IsActive) continue;
 
-                var occurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, from, to);
+                var occurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, localFrom, localTo, zone);
                 foreach (var occurrence in occurrences.Where(o => o.StartUtc >= from && o.StartUtc < to && assignment.Overlaps(o.StartUtc, o.EndUtc)))
                 {
                     var form = await _repository.GetFormByShiftOccurrenceAsync(shift.Id, request.EmployeeId, occurrence.StartUtc, ct);
                     if (form is not null && (form.EmployeeId != request.EmployeeId || form.ShiftId != shift.Id || form.ShiftOccurrenceUtc != occurrence.StartUtc))
                         form = null;
-                    result.Add(new MyShiftOccurrenceDto(shift.Id, shift.Name, occurrence.StartUtc, occurrence.EndUtc, form == null ? null : MapForm(form)));
+                    result.Add(new MyShiftOccurrenceDto(shift.Id, shift.Name, occurrence.StartUtc, occurrence.EndUtc, form == null ? null : MapForm(form), zoneId));
                 }
             }
 

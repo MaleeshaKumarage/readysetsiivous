@@ -15,6 +15,37 @@ public class EntertainmentRepository : IEntertainmentRepository
 
     public EntertainmentRepository(IDocumentStore store) => _store = store;
 
+    public async Task SaveGeneratedRoundAsync(EntertainmentGroup group, EntertainmentRound round, CancellationToken ct = default)
+    {
+        await using var session = _store.LightweightSession(TenantIds.Entertainment);
+        session.Insert(new EntertainmentSentenceReservation { Id = EntertainmentSentenceIdentity.ReservationId(group.Id, round.SentenceEn), GroupId = group.Id, RoundId = round.Id });
+        session.Insert(round);
+        session.Store(group);
+        try { await session.SaveChangesAsync(ct); }
+        catch (JasperFx.DocumentAlreadyExistsException) { throw new EntertainmentDuplicateSentenceException(); }
+    }
+
+    public async Task SaveGameStateAsync(EntertainmentGroup group, EntertainmentRound round, CancellationToken ct = default)
+    {
+        await using var session = _store.LightweightSession(TenantIds.Entertainment);
+        session.Store(group);
+        session.Store(round);
+        await session.SaveChangesAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<string>> ListAllSentencesAsync(Guid groupId, CancellationToken ct = default)
+    {
+        await using var session = _store.QuerySession(TenantIds.Entertainment);
+        var rounds = await session.Query<EntertainmentRound>().Where(x => x.GroupId == groupId).OrderByDescending(x => x.StartedUtc).ToListAsync(ct);
+        return rounds.Select(x => x.SentenceEn).ToList();
+    }
+
+    public async Task<EntertainmentRound?> GetLatestRoundAsync(Guid groupId, CancellationToken ct = default)
+    {
+        await using var session = _store.QuerySession(TenantIds.Entertainment);
+        return (await session.Query<EntertainmentRound>().Where(x => x.GroupId == groupId).OrderByDescending(x => x.RoundNumber).Take(1).ToListAsync(ct)).FirstOrDefault();
+    }
+
     public async Task CreateGroupAsync(
         EntertainmentGroup group,
         EntertainmentPlayer creator,
@@ -30,6 +61,21 @@ public class EntertainmentRepository : IEntertainmentRepository
     {
         await using var session = _store.LightweightSession(TenantIds.Entertainment);
         session.Store(player);
+        await session.SaveChangesAsync(ct);
+    }
+
+    public async Task JoinPlayerAsync(EntertainmentGroup group, EntertainmentPlayer player, CancellationToken ct = default)
+    {
+        await using var session = _store.LightweightSession(TenantIds.Entertainment);
+        if (group.Status != EntertainmentStatus.Lobby || player.GroupId != group.Id)
+            throw new EntertainmentJoinClosedException(group.JoinKey);
+        if (await session.Query<EntertainmentPlayer>().Where(x => x.GroupId == group.Id).CountAsync(ct) >= 16)
+            throw new InvalidOperationException("This room is full (maximum 16 players).");
+        // Updating the versioned group makes simultaneous joins/start conflict
+        // atomically instead of allowing an overfull room or late player insert.
+        group.UpdatedUtc = DateTime.UtcNow;
+        session.Store(group);
+        session.Insert(player);
         await session.SaveChangesAsync(ct);
     }
 
@@ -124,6 +170,7 @@ public class EntertainmentRepository : IEntertainmentRepository
         session.Delete<EntertainmentGroup>(groupId);
         session.DeleteWhere<EntertainmentPlayer>(x => x.GroupId == groupId);
         session.DeleteWhere<EntertainmentRound>(x => x.GroupId == groupId);
+        session.DeleteWhere<EntertainmentSentenceReservation>(x => x.GroupId == groupId);
         await session.SaveChangesAsync(ct);
     }
 }

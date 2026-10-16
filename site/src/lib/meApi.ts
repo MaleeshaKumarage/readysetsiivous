@@ -41,6 +41,7 @@ export interface MyShiftOccurrence {
   shiftName: string;
   startUtc: string;
   endUtc: string;
+  timeZoneId: string;
   form: QualityCycleForm | null;
 }
 
