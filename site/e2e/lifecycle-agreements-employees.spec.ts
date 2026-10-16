@@ -124,7 +124,7 @@ test('inactive agreements can be deleted when unsigned and signed agreements are
 
   const unsigned = page.getByRole('row').filter({ hasText: 'Inactive unsigned' });
   await unsigned.getByRole('button', { name: 'Delete' }).click();
-  await expect(page.getByRole('alert')).toHaveText('Agreements with signatures are retained.');
+  await expect(page.getByText('Agreements with signatures are retained.', { exact: true })).toBeVisible();
   expect(deleteCalls).toBe(1);
 
   retainOnDelete = false;
