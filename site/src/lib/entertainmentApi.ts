@@ -18,6 +18,15 @@ export interface CreateGroupResult {
   playerToken: string;
 }
 
+type ApiProblem = { title?: string; detail?: string; errors?: Record<string, string[]> };
+
+function problemMessage(body: ApiProblem | null, fallback: string): string {
+  const validationMessages = Object.values(body?.errors ?? {}).flat()
+    .filter((message): message is string => typeof message === 'string' && message.trim().length > 0);
+  if (validationMessages.length > 0) return [...new Set(validationMessages)].join(' ');
+  return body?.detail || body?.title || fallback;
+}
+
 export async function createEntertainmentGroup(
   fields: CreateGroupRequest
 ): Promise<CreateGroupResult> {
@@ -27,8 +36,8 @@ export async function createEntertainmentGroup(
     body: JSON.stringify(fields),
   });
   if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    throw new Error(body?.title || `Create group failed (${response.status})`);
+    const body = await response.json().catch(() => null) as ApiProblem | null;
+    throw new Error(problemMessage(body, `Create group failed (${response.status})`));
   }
   return (await response.json()) as CreateGroupResult;
 }
@@ -52,8 +61,8 @@ export async function joinEntertainmentGroup(
     body: JSON.stringify({ joinKey, playerName, level }),
   });
   if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    throw new Error(body?.title || `Join group failed (${response.status})`);
+    const body = await response.json().catch(() => null) as ApiProblem | null;
+    throw new Error(problemMessage(body, `Join group failed (${response.status})`));
   }
   return (await response.json()) as JoinGroupResult;
 }
