@@ -12,7 +12,6 @@ namespace CleaningSuite.Infrastructure.Entertainment;
 public sealed class EntertainmentAiCoordinator(EntertainmentAiProviderTransport transport, IConfiguration config, ILogger<EntertainmentAiCoordinator> logger, IDocumentStore? store = null)
 {
     private readonly object _sync = new();
-    private readonly Dictionary<(string Provider, string Slot), DateTimeOffset> _cooldowns = [];
     private readonly Dictionary<(string Provider, string Model), DateTimeOffset> _providerCooldowns = [];
     private readonly HashSet<(string Provider, string Slot)> _disabled = [];
     private readonly Dictionary<string, int> _cursor = new(StringComparer.Ordinal);
@@ -37,67 +36,80 @@ public sealed class EntertainmentAiCoordinator(EntertainmentAiProviderTransport 
     private async Task<T> ExecuteAsync<T>(string operation, string instruction, string input, object schema, Func<JsonDocument, T> parse, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
-        var providers = new[] { EntertainmentAiKeyPool.Gemini(config), EntertainmentAiKeyPool.OpenAi(config) };
+        var pool = EntertainmentAiKeyPool.Gemini(config);
         var diagnostics = new List<string>();
-        if (providers.All(pool => pool.Count == 0))
+        if (pool.Count == 0)
         {
-            logger.LogWarning("Game AI unavailable: no provider credentials are configured on the server.");
-            throw new EntertainmentAiUnavailableException(diagnostic: "No Gemini or OpenAI API keys are configured on the server.");
+            logger.LogWarning("Game AI unavailable: no Gemini credentials are configured on the server.");
+            throw new EntertainmentAiUnavailableException(diagnostic: "No Gemini API keys are configured on the server.");
         }
-        foreach (var pool in providers)
+
+        var keys = Rotate(pool);
+        if (keys.Count == 0) diagnostics.Add(GetUnavailablePoolDiagnostic(pool));
+        foreach (var key in keys)
         {
-            var keys = Rotate(pool);
-            if (pool.Count > 0 && keys.Count == 0)
+            ct.ThrowIfCancellationRequested();
+            var budgetNextAvailable = await ReserveProviderRequestAsync(ct);
+            if (budgetNextAvailable is { } nextAvailable)
             {
-                diagnostics.Add(GetUnavailablePoolDiagnostic(pool));
-                continue;
+                diagnostics.Add($"Gemini model {GetModel()} has reached the configured rolling 24-hour request budget; the next request can run after {nextAvailable:O}.");
+                logger.LogWarning("Game AI {Operation} skipped Gemini model {Model}: rolling 24-hour budget exhausted until {NextAvailableUtc}.", operation, GetModel(), nextAvailable);
+                break;
             }
-            foreach (var key in keys)
+            var elapsed = Stopwatch.StartNew();
+            try
             {
-                ct.ThrowIfCancellationRequested();
-                if (!await ReserveProviderRequestAsync(key, ct))
+                using var result = await transport.SendAsync(key, instruction, input, schema, ct);
+                var parsed = parse(result);
+                MarkHealthy(key);
+                logger.LogInformation("Game AI {Operation} succeeded with Gemini slot {Slot} in {ElapsedMilliseconds} ms.", operation, key.Slot, elapsed.ElapsedMilliseconds);
+                return parsed;
+            }
+            catch (ProviderRequestFailure failure)
+            {
+                var status = (int?)failure.Status;
+                var disabled = false;
+                var cooldown = TimeSpan.Zero;
+                var stop = true;
+
+                if (failure.Kind == GeminiFailureKind.InvalidCredential)
                 {
-                    diagnostics.Add($"{key.Provider} model {GetModel(key.Provider)}: the configured rolling 24-hour request budget is exhausted.");
-                    logger.LogWarning("Game AI {Operation} skipped {Provider} model {Model}: rolling 24-hour request budget exhausted.", operation, key.Provider, GetModel(key.Provider));
-                    break;
+                    Disable(key);
+                    disabled = true;
+                    stop = false;
                 }
-                var elapsed = Stopwatch.StartNew();
-                try
+                else if (status == 429)
                 {
-                    using var result = await transport.SendAsync(key, instruction, input, schema, ct);
-                    var parsed = parse(result);
-                    MarkHealthy(key);
-                    logger.LogInformation("Game AI {Operation} succeeded with {Provider} slot {Slot} in {ElapsedMilliseconds} ms.", operation, key.Provider, key.Slot, elapsed.ElapsedMilliseconds);
-                    return parsed;
+                    cooldown = QuotaCooldown(failure);
+                    CooldownProvider(key, cooldown);
                 }
-                catch (ProviderRequestFailure failure)
+                else if (failure.Kind == GeminiFailureKind.ProjectAccessDenied)
                 {
-                    var status = (int?)failure.Status;
-                    var transient = status is null or 408 or 429 or >= 500;
-                    var stopProvider = false;
-                    var cooldownSeconds = 0;
-                    var disabled = false;
-                    if (status is 401 or 403) { Disable(key); disabled = true; }
-                    else if (failure.Malformed) { Cooldown(key, TimeSpan.FromSeconds(2)); cooldownSeconds = 2; }
-                    else if (status == 429) { var cooldown = failure.RetryAfter ?? TimeSpan.FromMinutes(1); CooldownProvider(key, cooldown); stopProvider = true; cooldownSeconds = (int)Math.Clamp(cooldown.TotalSeconds, 1, 86400); }
-                    else if (transient) { var cooldown = failure.RetryAfter ?? TimeSpan.FromSeconds(5); Cooldown(key, cooldown); cooldownSeconds = (int)Math.Clamp(cooldown.TotalSeconds, 1, 60); }
-                    else if (status is >= 400 and < 500) stopProvider = true;
-                    diagnostics.Add(FormatFailure(key, status, failure, disabled, cooldownSeconds));
-                    logger.LogWarning("Game AI {Operation} failed with {Provider} slot {Slot}, category {Category}, status {Status}, cooldown {CooldownSeconds}s, disabled {Disabled}, elapsed {ElapsedMilliseconds} ms; advancing to another key/provider.", operation, key.Provider, key.Slot, failure.Malformed ? "malformed-response" : transient ? "transient" : "request-rejected", status, cooldownSeconds, disabled, elapsed.ElapsedMilliseconds);
-                    if (stopProvider) break;
+                    cooldown = TimeSpan.FromMinutes(5);
+                    CooldownProvider(key, cooldown);
                 }
-                catch (Exception error) when (error is JsonException or KeyNotFoundException or InvalidOperationException or IndexOutOfRangeException)
+                else if (failure.Kind == GeminiFailureKind.ProviderUnavailable || status is null or 408 or >= 500)
                 {
-                    Cooldown(key, TimeSpan.FromSeconds(2));
-                    diagnostics.Add($"{key.Provider} key slot {key.Slot}: the provider returned an invalid structured response.");
-                    logger.LogWarning("Game AI {Operation} returned a structurally invalid result from {Provider} slot {Slot} in {ElapsedMilliseconds} ms; advancing to another key/provider.", operation, key.Provider, key.Slot, elapsed.ElapsedMilliseconds);
+                    cooldown = failure.RetryAfter ?? TimeSpan.FromSeconds(30);
+                    CooldownProvider(key, cooldown);
                 }
-                catch (EntertainmentAiUnavailableException)
+                else if (failure.Malformed)
                 {
-                    Cooldown(key, TimeSpan.FromSeconds(2));
-                    diagnostics.Add($"{key.Provider} key slot {key.Slot}: the provider response did not pass game validation.");
-                    logger.LogWarning("Game AI {Operation} returned an invalid game result from {Provider} slot {Slot} in {ElapsedMilliseconds} ms; advancing to another key/provider.", operation, key.Provider, key.Slot, elapsed.ElapsedMilliseconds);
+                    cooldown = TimeSpan.FromSeconds(5);
+                    CooldownProvider(key, cooldown);
                 }
+
+                var cooldownSeconds = cooldown > TimeSpan.Zero ? (int)Math.Clamp(Math.Ceiling(cooldown.TotalSeconds), 1, 86400) : 0;
+                diagnostics.Add(FormatFailure(key, status, failure, disabled, cooldownSeconds));
+                logger.LogWarning("Game AI {Operation} failed with Gemini slot {Slot}, category {Category}, status {Status}, code {ProviderCode}, reason {ProviderReason}, cooldown {CooldownSeconds}s, disabled {Disabled}, elapsed {ElapsedMilliseconds} ms.", operation, key.Slot, failure.Kind, status, failure.ProviderCode, failure.ProviderReason, cooldownSeconds, disabled, elapsed.ElapsedMilliseconds);
+                if (stop) break;
+            }
+            catch (Exception error) when (error is JsonException or KeyNotFoundException or InvalidOperationException or IndexOutOfRangeException or EntertainmentAiUnavailableException)
+            {
+                CooldownProvider(key, TimeSpan.FromSeconds(5));
+                diagnostics.Add($"Gemini model {GetModel()}: the provider returned a response that did not pass game validation.");
+                logger.LogWarning("Game AI {Operation} returned invalid structured output from Gemini slot {Slot} in {ElapsedMilliseconds} ms.", operation, key.Slot, elapsed.ElapsedMilliseconds);
+                break;
             }
         }
         var diagnostic = string.Join(Environment.NewLine, diagnostics.Distinct(StringComparer.Ordinal));
@@ -114,31 +126,27 @@ public sealed class EntertainmentAiCoordinator(EntertainmentAiProviderTransport 
             var start = _cursor.GetValueOrDefault(provider) % pool.Count;
             _cursor[provider] = (start + 1) % pool.Count;
             var now = DateTimeOffset.UtcNow;
-            foreach (var expired in _cooldowns.Where(pair => pair.Value <= now).Select(pair => pair.Key).ToArray()) _cooldowns.Remove(expired);
             foreach (var expired in _providerCooldowns.Where(pair => pair.Value <= now).Select(pair => pair.Key).ToArray()) _providerCooldowns.Remove(expired);
             return Enumerable.Range(0, pool.Count).Select(i => pool[(start + i) % pool.Count])
-                .Where(k => !_disabled.Contains((k.Provider, k.Slot)) && !_cooldowns.ContainsKey((k.Provider, k.Slot)) && !_providerCooldowns.ContainsKey((k.Provider, GetModel(k.Provider)))).ToArray();
+                .Where(k => !_disabled.Contains((k.Provider, k.Slot)) && !_providerCooldowns.ContainsKey((k.Provider, GetModel()))).ToArray();
         }
     }
 
-    private void Cooldown(ProviderKey key, TimeSpan duration) { lock (_sync) _cooldowns[(key.Provider, key.Slot)] = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(Math.Clamp(duration.TotalSeconds, 1, 60)); }
-    private void CooldownProvider(ProviderKey key, TimeSpan duration) { lock (_sync) _providerCooldowns[(key.Provider, GetModel(key.Provider))] = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(Math.Clamp(duration.TotalSeconds, 1, 86400)); }
+    private void CooldownProvider(ProviderKey key, TimeSpan duration) { lock (_sync) _providerCooldowns[(key.Provider, GetModel())] = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(Math.Clamp(duration.TotalSeconds, 1, 86400)); }
     private void Disable(ProviderKey key) { lock (_sync) _disabled.Add((key.Provider, key.Slot)); }
-    private void MarkHealthy(ProviderKey key) { lock (_sync) _cooldowns.Remove((key.Provider, key.Slot)); }
+    private void MarkHealthy(ProviderKey key) { lock (_sync) _providerCooldowns.Remove((key.Provider, GetModel())); }
 
     private int GetLimit(string provider, string limit, int fallback, int maximum) =>
         Math.Clamp(config.GetValue<int?>($"Entertainment:{provider}:RateLimits:{limit}") ?? fallback, 1, maximum);
 
-    private string GetModel(string provider) => provider == "Gemini"
-        ? config["Entertainment:Gemini:Model"] ?? "gemini-3.5-flash-lite"
-        : config["Entertainment:OpenAI:Model"] ?? "gpt-4.1-mini";
+    private string GetModel() => config["Entertainment:Gemini:Model"] ?? "gemini-3.5-flash-lite";
 
-    private async Task<bool> ReserveProviderRequestAsync(ProviderKey key, CancellationToken ct)
+    private async Task<DateTimeOffset?> ReserveProviderRequestAsync(CancellationToken ct)
     {
-        var requestsPerMinute = GetLimit(key.Provider, "RequestsPerMinute", key.Provider == "Gemini" ? 3 : 5, 1000);
-        var requestsPerDay = GetLimit(key.Provider, "RequestsPerDay", key.Provider == "Gemini" ? 15 : 50, 100000);
+        var requestsPerMinute = GetLimit("Gemini", "RequestsPerMinute", 3, 1000);
+        var requestsPerDay = GetLimit("Gemini", "RequestsPerDay", 15, 100000);
         var minimumInterval = TimeSpan.FromSeconds(60d / requestsPerMinute);
-        var usageId = $"{key.Provider}:{GetModel(key.Provider)}";
+        var usageId = $"Gemini:{GetModel()}";
         while (true)
         {
             ct.ThrowIfCancellationRequested();
@@ -151,9 +159,10 @@ public sealed class EntertainmentAiCoordinator(EntertainmentAiProviderTransport 
                 usage.RequestUtcTimestamps = usage.RequestUtcTimestamps.Where(time => time > now.AddHours(-24)).ToList();
                 if (usage.RequestUtcTimestamps.Count >= requestsPerDay)
                 {
+                    var nextAvailable = usage.RequestUtcTimestamps.Min().AddHours(24);
                     session.Store(usage);
                     await session.SaveChangesAsync(ct);
-                    return false;
+                    return nextAvailable;
                 }
                 waitUntil = GetWaitUntil(usage.RequestUtcTimestamps, now, requestsPerMinute, minimumInterval);
                 if (waitUntil <= now)
@@ -161,7 +170,7 @@ public sealed class EntertainmentAiCoordinator(EntertainmentAiProviderTransport 
                     usage.RequestUtcTimestamps.Add(now);
                     session.Store(usage);
                     await session.SaveChangesAsync(ct);
-                    return true;
+                    return null;
                 }
             }
             else
@@ -170,9 +179,9 @@ public sealed class EntertainmentAiCoordinator(EntertainmentAiProviderTransport 
                 {
                     if (!_localUsage.TryGetValue(usageId, out var timestamps)) _localUsage[usageId] = timestamps = [];
                     timestamps.RemoveAll(time => time <= now.AddHours(-24));
-                    if (timestamps.Count >= requestsPerDay) return false;
+                    if (timestamps.Count >= requestsPerDay) return timestamps.Min().AddHours(24);
                     waitUntil = GetWaitUntil(timestamps, now, requestsPerMinute, minimumInterval);
-                    if (waitUntil <= now) { timestamps.Add(now); return true; }
+                    if (waitUntil <= now) { timestamps.Add(now); return null; }
                 }
             }
             await Task.Delay(waitUntil.Value - now, ct);
@@ -194,33 +203,64 @@ public sealed class EntertainmentAiCoordinator(EntertainmentAiProviderTransport 
     {
         lock (_sync)
         {
+            if (_providerCooldowns.TryGetValue((pool[0].Provider, GetModel()), out var providerUntil) && providerUntil > DateTimeOffset.UtcNow)
+                return $"Gemini model {GetModel()} is temporarily cooling down; retry in about {Math.Max(1, (int)Math.Ceiling((providerUntil - DateTimeOffset.UtcNow).TotalSeconds))} seconds.";
             var disabled = pool.Count(key => _disabled.Contains((key.Provider, key.Slot)));
-            var cooling = pool.Count(key => _cooldowns.TryGetValue((key.Provider, key.Slot), out var until) && until > DateTimeOffset.UtcNow);
-            if (_providerCooldowns.TryGetValue((pool[0].Provider, GetModel(pool[0].Provider)), out var providerUntil) && providerUntil > DateTimeOffset.UtcNow)
-                return $"{pool[0].Provider} model {GetModel(pool[0].Provider)} is rate limited; retry in about {Math.Max(1, (int)Math.Ceiling((providerUntil - DateTimeOffset.UtcNow).TotalSeconds))} seconds.";
-            if (cooling == 0 && disabled > 0)
+            if (disabled > 0)
                 return $"{pool[0].Provider}: all {pool.Count} configured key slots have been rejected and are disabled until the API restarts.";
-            var remaining = _cooldowns.Where(pair => pair.Key.Provider == pool[0].Provider && pair.Value > DateTimeOffset.UtcNow).Select(pair => pair.Value).DefaultIfEmpty(DateTimeOffset.UtcNow.AddSeconds(1)).Min() - DateTimeOffset.UtcNow;
-            return $"{pool[0].Provider}: all {pool.Count} configured key slots are unavailable ({disabled} rejected credentials, {cooling} in cooldown; retry in about {Math.Max(1, (int)Math.Ceiling(remaining.TotalSeconds))} seconds).";
+            return $"Gemini model {GetModel()} is temporarily unavailable; retry later.";
         }
+    }
+
+    private static TimeSpan QuotaCooldown(ProviderRequestFailure failure)
+    {
+        if (failure.RetryAfter is { } retryAfter && retryAfter > TimeSpan.Zero) return retryAfter;
+        if (IsDailyQuota(failure))
+        {
+            var now = DateTimeOffset.UtcNow;
+            try
+            {
+                var pacific = TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles");
+                var localNow = TimeZoneInfo.ConvertTime(now, pacific);
+                var nextLocalMidnight = DateTime.SpecifyKind(localNow.Date.AddDays(1), DateTimeKind.Unspecified);
+                var nextResetUtc = TimeZoneInfo.ConvertTimeToUtc(nextLocalMidnight, pacific);
+                return new DateTimeOffset(nextResetUtc, TimeSpan.Zero) - now;
+            }
+            catch (TimeZoneNotFoundException) { return TimeSpan.FromHours(24); }
+            catch (InvalidTimeZoneException) { return TimeSpan.FromHours(24); }
+        }
+        return failure.Kind == GeminiFailureKind.QuotaExceeded ? TimeSpan.FromMinutes(15) : TimeSpan.FromMinutes(1);
+    }
+
+    private static bool IsDailyQuota(ProviderRequestFailure failure)
+    {
+        var text = $"{failure.ProviderCode} {failure.ProviderReason} {failure.ProviderMessage}";
+        return failure.Kind == GeminiFailureKind.QuotaExceeded &&
+            (text.Contains("daily", StringComparison.OrdinalIgnoreCase) || text.Contains("per day", StringComparison.OrdinalIgnoreCase));
     }
 
     private static string FormatFailure(ProviderKey key, int? status, ProviderRequestFailure failure, bool disabled, int cooldownSeconds)
     {
-        var reason = failure.Malformed ? "invalid response" : status switch
+        var reason = failure.Malformed ? "invalid response" : failure.Kind switch
         {
-            401 or 403 => "credentials rejected",
-            408 => "provider request timed out",
-            429 => "rate limit or quota exceeded",
-            >= 500 => "provider service error",
-            null => "network or provider timeout",
-            >= 400 => "request rejected",
-            _ => "provider request failed"
+            GeminiFailureKind.RateLimited => "request rate limited",
+            GeminiFailureKind.QuotaExceeded => "project or daily quota exhausted",
+            GeminiFailureKind.UnknownRateLimit => "Gemini returned an unclassified 429; this model is cooling down",
+            GeminiFailureKind.InvalidCredential => "Gemini credential rejected",
+            GeminiFailureKind.ProjectAccessDenied => "Gemini project/model access denied",
+            GeminiFailureKind.InvalidRequest => "Gemini rejected the request or model configuration",
+            GeminiFailureKind.ProviderUnavailable => "Gemini service or network unavailable",
+            _ => status switch { >= 400 => "Gemini request rejected", _ => "Gemini provider request failed" }
         };
         var statusText = status.HasValue ? $" (HTTP {status.Value})" : string.Empty;
-        var state = disabled ? " and is disabled until the API restarts" : cooldownSeconds > 0 ? $"; retry after about {cooldownSeconds} seconds" : string.Empty;
+        var state = disabled ? " and is disabled until the API restarts" :
+            failure.Kind == GeminiFailureKind.QuotaExceeded && failure.RetryAfter is null && !IsDailyQuota(failure)
+                ? $"; Gemini did not provide a reliable reset time; retry later (internal cooldown about {cooldownSeconds} seconds)"
+                : cooldownSeconds > 0 ? $"; internal cooldown is about {cooldownSeconds} seconds" : string.Empty;
+        var providerCode = string.IsNullOrWhiteSpace(failure.ProviderCode) ? string.Empty : $" [{failure.ProviderCode}]";
+        var providerReason = string.IsNullOrWhiteSpace(failure.ProviderReason) ? string.Empty : $" ({failure.ProviderReason})";
         var providerMessage = string.IsNullOrWhiteSpace(failure.ProviderMessage) ? string.Empty : $" — {failure.ProviderMessage}";
-        return $"{key.Provider} key slot {key.Slot}: {reason}{statusText}{state}{providerMessage}.";
+        return $"Gemini key slot {key.Slot}: {reason}{statusText}{providerCode}{providerReason}{state}{providerMessage}.";
     }
 }
 
