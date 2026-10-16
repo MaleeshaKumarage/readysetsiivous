@@ -1,5 +1,6 @@
 using System.Threading.Channels;
 using CleaningSuite.Application.Entertainment;
+using Microsoft.Extensions.Hosting;
 
 namespace CleaningSuite.Infrastructure.Entertainment;
 
