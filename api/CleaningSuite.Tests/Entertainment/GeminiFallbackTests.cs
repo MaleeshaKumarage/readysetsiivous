@@ -6,6 +6,7 @@ using CleaningSuite.Infrastructure.Entertainment;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 namespace CleaningSuite.Tests.Entertainment;
+[Collection(GeminiProviderCollection.Name)]
 public class GeminiFallbackTests
 {
     internal sealed class Provider(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send) : HttpMessageHandler

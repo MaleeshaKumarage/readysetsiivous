@@ -8,6 +8,7 @@ namespace CleaningSuite.Tests.Entertainment;
 
 /// <summary>Explicit bounded live provider smoke. Requires ENTERTAINMENT_LIVE_SMOKE=1
 /// and the server-owned Gemini key. Ordinary CI does not call an external provider.</summary>
+[Collection(GeminiProviderCollection.Name)]
 public class EntertainmentFullRoundLiveTests
 {
     [Fact]

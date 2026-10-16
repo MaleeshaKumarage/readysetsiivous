@@ -71,6 +71,24 @@ test.describe('Entertainment â€” Create group', () => {
     await expect(a2).not.toHaveClass(/bg-primary/);
   });
 
+  test('shows the actual API validation reason', async ({ page }) => {
+    await page.route(/\/api\/v1\/entertainment\/groups$/, route => route.fulfill({
+      status: 400,
+      headers: CORS_HEADERS,
+      json: { title: 'One or more validation errors occurred.', errors: { Description: ['Choose a more specific game topic.'] } },
+    }));
+    await page.goto('/entertainment/');
+    await page.getByRole('button', { name: 'Create group' }).click();
+    await page.getByPlaceholder('e.g. Travel English').fill('Travel');
+    await page.getByPlaceholder('Describe the topic or theme').fill('Travel in Finland');
+    await page.getByPlaceholder('Your name').fill('Alice');
+    await page.getByRole('button', { name: 'B1', exact: true }).click();
+    await page.getByRole('button', { name: 'Create group' }).click();
+
+    await expect(page.getByRole('alert').filter({ hasText: 'Choose a more specific game topic.' }))
+      .toHaveText('Choose a more specific game topic.');
+  });
+
   test('create form Back returns to landing', async ({ page }) => {
     await page.goto('/entertainment/');
     await page.getByRole('button', { name: 'Create group' }).click();

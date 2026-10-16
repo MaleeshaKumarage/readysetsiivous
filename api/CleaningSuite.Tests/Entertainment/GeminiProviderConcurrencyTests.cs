@@ -4,6 +4,7 @@ using CleaningSuite.Domain.Entertainment;
 using CleaningSuite.Infrastructure.Entertainment;
 using Xunit;
 namespace CleaningSuite.Tests.Entertainment;
+[Collection(GeminiProviderCollection.Name)]
 public class GeminiProviderConcurrencyTests
 {
     [Fact] public async Task Generation_and_evaluation_share_one_active_provider_lane()

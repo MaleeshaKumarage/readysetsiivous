@@ -3,6 +3,7 @@ using CleaningSuite.Domain.Entertainment;
 using CleaningSuite.Infrastructure.Entertainment;
 using Xunit;
 namespace CleaningSuite.Tests.Entertainment;
+[Collection(GeminiProviderCollection.Name)]
 public class GeminiAnswerEvaluatorTests
 {
     [Theory] [InlineData("Kissa nukkuu.")] [InlineData("Kissa on unessa.")]
