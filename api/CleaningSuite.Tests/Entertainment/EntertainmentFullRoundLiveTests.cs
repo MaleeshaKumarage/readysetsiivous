@@ -20,24 +20,47 @@ public class EntertainmentFullRoundLiveTests
 
         var values = new Dictionary<string, string?>
         {
-            ["Entertainment:Gemini:ApiKey"] = Environment.GetEnvironmentVariable("GAME_GEMINI_API_KEY")
+            ["Entertainment:Gemini:ApiKey"] = Environment.GetEnvironmentVariable("GAME_GEMINI_API_KEY"),
+            ["Entertainment:Gemini:Model"] = Environment.GetEnvironmentVariable("GAME_GEMINI_MODEL")
         };
         AddNumberedKeys(values, "Entertainment:Gemini:Keys", "GEMINI_KEY", 10);
         AddNumberedKeys(values, "Entertainment:OpenAI:Keys", "OPENAI_API_KEY", 10);
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
-        Assert.NotEmpty(EntertainmentAiKeyPool.Gemini(configuration).Concat(EntertainmentAiKeyPool.OpenAi(configuration)));
+        var geminiKeys = EntertainmentAiKeyPool.Gemini(configuration);
+        var openAiKeys = EntertainmentAiKeyPool.OpenAi(configuration);
+        Assert.NotEmpty(geminiKeys.Concat(openAiKeys));
 
         var coordinator = new EntertainmentAiCoordinator(
             new EntertainmentAiProviderTransport(new LiveHttpClientFactory(), configuration),
             configuration,
             NullLogger<EntertainmentAiCoordinator>.Instance);
 
-        var round = await coordinator.GenerateAsync("Travel English", CefrLevel.B1, [], CancellationToken.None);
+        GeminiSentence round;
+        try
+        {
+            round = await coordinator.GenerateAsync("Travel English", CefrLevel.B1, [], CancellationToken.None);
+        }
+        catch (EntertainmentAiUnavailableException error)
+        {
+            throw new Xunit.Sdk.XunitException(
+                $"Question generation failed with {geminiKeys.Count} unique Gemini key(s) and {openAiKeys.Count} unique OpenAI key(s). " +
+                (error.Diagnostic ?? error.Message));
+        }
         Assert.False(string.IsNullOrWhiteSpace(round.SentenceEn));
         Assert.False(string.IsNullOrWhiteSpace(round.SentenceFi));
         Assert.NotEmpty(round.Hints);
 
-        var evaluation = await coordinator.EvaluateAsync(round.SentenceEn, round.SentenceFi, round.SentenceFi, CefrLevel.B1, CancellationToken.None);
+        EntertainmentAnswerEvaluation evaluation;
+        try
+        {
+            evaluation = await coordinator.EvaluateAsync(round.SentenceEn, round.SentenceFi, round.SentenceFi, CefrLevel.B1, CancellationToken.None);
+        }
+        catch (EntertainmentAiUnavailableException error)
+        {
+            throw new Xunit.Sdk.XunitException(
+                $"Answer evaluation failed with {geminiKeys.Count} unique Gemini key(s) and {openAiKeys.Count} unique OpenAI key(s). " +
+                (error.Diagnostic ?? error.Message));
+        }
         Assert.True(evaluation.IsCorrect);
         Assert.Equal(10, EntertainmentScoring.ScoreAnswer(evaluation));
     }

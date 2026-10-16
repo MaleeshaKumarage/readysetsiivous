@@ -68,7 +68,7 @@ public sealed class EntertainmentAiProviderTransport(IHttpClientFactory clients,
     private HttpRequestMessage GeminiRequest(string apiKey, string instruction, string input, object schema)
     {
         var baseUrl = config["Entertainment:Gemini:BaseUrl"] ?? "https://generativelanguage.googleapis.com";
-        var model = config["Entertainment:Gemini:Model"] ?? "gemini-flash-latest";
+        var model = config["Entertainment:Gemini:Model"] ?? "gemini-3.5-flash-lite";
         var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl.TrimEnd('/')}/v1beta/models/{Uri.EscapeDataString(model)}:generateContent");
         request.Headers.Add("X-goog-api-key", apiKey);
         request.Content = JsonContent(new { systemInstruction = new { parts = new[] { new { text = instruction } } }, contents = new[] { new { role = "user", parts = new[] { new { text = input } } } }, generationConfig = new { responseMimeType = "application/json", responseSchema = schema, maxOutputTokens = 2048 } });

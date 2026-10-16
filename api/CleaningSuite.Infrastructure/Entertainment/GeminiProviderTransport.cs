@@ -28,7 +28,7 @@ public sealed class GeminiProviderTransport(HttpClient http, IConfiguration conf
                 using var deadline = CancellationTokenSource.CreateLinkedTokenSource(budget.Token);
                 deadline.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(configuration.GetValue<int?>("Entertainment:Gemini:TimeoutSeconds") ?? 25, 1, 25)));
                 var baseUrl = configuration["Entertainment:Gemini:BaseUrl"] ?? "https://generativelanguage.googleapis.com";
-                var model = configuration["Entertainment:Gemini:Model"] ?? "gemini-flash-latest";
+                var model = configuration["Entertainment:Gemini:Model"] ?? "gemini-3.5-flash-lite";
                 using var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl.TrimEnd('/')}/v1beta/models/{Uri.EscapeDataString(model)}:generateContent");
                 request.Headers.Add("X-goog-api-key", key);
                 request.Content = new StringContent(JsonSerializer.Serialize(new {
