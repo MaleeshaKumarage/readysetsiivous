@@ -12,13 +12,15 @@ Keep the language game available when one AI provider or key has a temporary fai
 
 ## Provider and key selection
 
-- Attempt Gemini keys first in round-robin order, skipping keys in cooldown or marked invalid. If all currently available Gemini keys fail, attempt OpenAI keys using the same policy.
-- Keep separate key state for each provider and slot: available, cooldown until a time, or disabled until process restart/configuration changes.
+- Every game generation and grading prompt enters one bounded FIFO queue. A single background worker processes one prompt at a time across both providers. The queue is process-local and held in memory; the current production deployment runs one API instance. Queue capacity is 20 waiting prompts. If full, reject the new operation with the safe retry message. The end-to-end operation deadline is 180 seconds and includes time waiting in the queue; expired or canceled items are skipped without calling a provider. An API restart drops queued work; the game retains its current round and submitted answer so the player can retry. If the API is later scaled to multiple instances, replace this with a distributed queue and a single shared consumer before scaling.
+- For each queued operation, attempt Gemini keys first in round-robin order, skipping keys in cooldown or marked invalid. If no Gemini key returns a valid result, attempt OpenAI keys using the same policy. Both key health and round-robin position are shared by generation and grading.
+- Use one-based indexed GitHub secrets `GEMINI_KEY_1` through `GEMINI_KEY_10`; append legacy `GEMINI_KEY`, `GEMINI_API_KEY`, and `GAME_GEMINI_API_KEY` after indexed Gemini slots, omitting empty or exact duplicate values, then cap the resolved pool at ten slots. Indexed slots always take priority over legacy aliases. `GEMINI_KEY_2` is slot 2, with no separate precedence rule. For OpenAI, use `OPENAI_API_KEY_1` through `OPENAI_API_KEY_10`. Empty slots are ignored. Logs identify resolved slots as provider plus pool index, without printing GitHub secret names or values.
+- Keep separate key state for each provider and slot: available, cooldown until a time, or disabled until API restart. Configuration is loaded at startup; changing GitHub secrets takes effect after the next deployment/restart.
 - Treat HTTP 408, 429, 5xx, timeouts, and connection failures as transient. Honor a valid `Retry-After`; otherwise apply bounded exponential cooldown with jitter. Advance to another key immediately. A later request may use a recovered key after its cooldown expires.
-- Treat HTTP 400 as a provider request/model/schema failure and do not rotate through every key for the same malformed request. Treat 401/403 as a key configuration/access failure and disable that slot for the process lifetime. Treat other non-transient 4xx responses as request failures. Never include upstream response bodies or credentials in player-visible errors.
+- Cap any `Retry-After` cooldown at 60 seconds for in-memory state; do not wait inside the active operation for that cooldown. Try other eligible keys and the other provider, then return the safe retry message if none can serve the request. Treat HTTP 400 as a provider request/model/schema failure: do not rotate through every key for the same provider request, but allow one attempt with the other provider because its model and schema support can differ. Treat 401/403 as a key configuration/access failure and disable that slot until API restart. Treat other non-transient 4xx responses as provider request failures. Never include upstream response bodies or credentials in player-visible errors.
 - If a provider returns HTTP success but its result is malformed or fails the existing domain validation, try the next credential/provider within the same overall request budget. Do not award points or advance the game unless a valid result is returned.
 - Bound each operation by an overall deadline and maximum attempts: at most one attempt per configured slot, capped to ten per provider. Respect caller cancellation immediately. If the complete pool fails, preserve the answer/current round and emit the existing Retry-only error.
-- Keep existing single-key settings as compatibility aliases while indexed settings are introduced. Empty slots are ignored. Do not require all twenty keys to be configured; a request may proceed with any one configured credential.
+- Configuration is loaded at API startup. Key-health state, provider round-robin cursors, and disabled slots reset on API restart. Do not require all twenty keys to be configured; a request may proceed with any one configured credential.
 
 ## Contracts and provider adapters
 
@@ -30,15 +32,15 @@ Use OpenAI's server-side API with a configurable model. Require structured JSON 
 
 - GitHub Actions secrets: `GEMINI_KEY_1` through `GEMINI_KEY_10`, and `OPENAI_API_KEY_1` through `OPENAI_API_KEY_10`.
 - Continue accepting existing `GEMINI_KEY_2`, `GEMINI_KEY`, and `GEMINI_API_KEY` as legacy Gemini fallback inputs, plus the current `GAME_GEMINI_API_KEY` deployment value.
-- Add configurable OpenAI model and endpoint defaults in backend configuration. Only configure secret values in GitHub Actions and the server's protected deployment `.env`; do not commit credentials.
+- Add a configurable OpenAI model in backend configuration and use the fixed official endpoint `https://api.openai.com/v1/responses`. Only configure secret values in GitHub Actions and the server's protected deployment `.env`; do not commit credentials.
 - Sync version-controlled production Compose configuration as part of deploy. Map every configured slot into indexed .NET configuration keys. The deploy script validates that at least one provider key resolves and verifies the deployed container image and health.
-- Manual provider diagnostic reports per-slot status category (working, rate-limited/cooling down, invalid/access denied, request/model error, timeout/network, malformed response). It makes one bounded minimal request per populated key, masks slot values, and never prints key strings or raw upstream response content.
+- Operational logs report provider name, slot index, operation, safe failure category, elapsed time, and cooldown decision. Never log key strings, raw upstream response bodies, player answers, or full prompts. Provider diagnostic calls are not game prompts and are out of scope; test environments use stubbed responses, while production verification uses the normal game queue.
 
 ## Failure and user behavior
 
 Successful generation/evaluation returns the same game result as today. Provider failover stays invisible to the player. When all configured credentials fail, show the current safe retry message, keep the typed answer and round, and permit Retry only. Do not use sample content as an AI result and do not allow Next until evaluation succeeds.
 
-If no credentials are configured, emit a safe server configuration category and the same retry-only player behavior. Diagnostics distinguish this from provider rate limits. A key that receives a transient 429 is cooling down, not permanently disabled; a later request can retry it when its wait expires. Daily/project quota exhaustion may last until Google's documented reset; switching to OpenAI can still allow the operation.
+If no credentials are configured, emit a safe server configuration category and the same retry-only player behavior. Operational logs distinguish missing server credentials from provider rate limits. A key that receives a transient 429 is cooling down, not permanently disabled; a later request can retry it when its wait expires. Daily/project quota exhaustion may last until Google's documented reset; switching to OpenAI can still allow the operation.
 
 ## Verification
 
@@ -46,8 +48,8 @@ If no credentials are configured, emit a safe server configuration category and 
 - Verify the same coordinator is used by generation and evaluation; verify valid output contract equivalence and server-side score validation.
 - Verify player answer and current round survive pool exhaustion and that no Next event/points occur after failed evaluation.
 - Verify logs and all client errors contain no key values, upstream response bodies, or submitted answer text.
-- Exercise production Compose resolution with mixed legacy and indexed secrets, with Gemini only, OpenAI only, both providers, and no keys. Ordinary CI uses stubbed HTTP responses; live provider checks remain manual and bounded.
-- After the owner adds secrets, run one minimal provider diagnostic per configured slot and a full production generation/evaluation smoke test.
+- Exercise production Compose resolution with mixed legacy and indexed secrets, with Gemini only, OpenAI only, both providers, and no keys. Ordinary CI uses stubbed HTTP responses; live provider checks use the normal queue and remain bounded.
+- After the owner adds secrets, run a full production generation/evaluation smoke test through the normal queue.
 
 ## Explicit limits
 
