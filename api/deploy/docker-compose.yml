@@ -83,7 +83,7 @@ services:
       Entertainment__Gemini__Keys__8: ${GEMINI_KEY_8:-}
       Entertainment__Gemini__Keys__9: ${GEMINI_KEY_9:-}
       Entertainment__Gemini__Keys__10: ${GEMINI_KEY_10:-}
-      Entertainment__OpenAI__Keys__1: ${OPENAI_API_KEY_1:-}
+      Entertainment__OpenAI__Keys__1: ${OPENAI_API_KEY_1:-${OPENAI_API_KEY:-}}
       Entertainment__OpenAI__Keys__2: ${OPENAI_API_KEY_2:-}
       Entertainment__OpenAI__Keys__3: ${OPENAI_API_KEY_3:-}
       Entertainment__OpenAI__Keys__4: ${OPENAI_API_KEY_4:-}
@@ -94,6 +94,10 @@ services:
       Entertainment__OpenAI__Keys__9: ${OPENAI_API_KEY_9:-}
       Entertainment__OpenAI__Keys__10: ${OPENAI_API_KEY_10:-}
       Entertainment__OpenAI__Model: ${GAME_OPENAI_MODEL:-gpt-4.1-mini}
+      Entertainment__Gemini__RateLimits__RequestsPerMinute: ${GAME_GEMINI_RPM:-3}
+      Entertainment__Gemini__RateLimits__RequestsPerDay: ${GAME_GEMINI_RPD:-15}
+      Entertainment__OpenAI__RateLimits__RequestsPerMinute: ${GAME_OPENAI_RPM:-5}
+      Entertainment__OpenAI__RateLimits__RequestsPerDay: ${GAME_OPENAI_RPD:-50}
       Resend__ApiKey: ${RESEND_API_KEY:-}
       EmployeeInvites__LifespanSeconds: 86400
       EmployeeInvites__Smtp__Host: ${INVITE_SMTP_HOST:-}
