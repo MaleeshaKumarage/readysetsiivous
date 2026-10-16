@@ -22,6 +22,7 @@ export default function EntertainmentClient() {
   const [connected, setConnected] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const connectionRef = useRef<HubConnection | null>(null);
   const roundIdRef = useRef<string | null>(null);
   const busyRef = useRef(false);
@@ -37,7 +38,7 @@ export default function EntertainmentClient() {
       setAnswer(previous => r.submittedAnswer ?? (sameRound ? previous : ''));
       setHints(previous => sameRound ? previous : {});
       setRevealedAnswer(r.sentenceFi); setEvaluation(r.evaluation ?? null); setRound(r); roundIdRef.current = r.roundId;
-      setBusy(false); busyRef.current = false; pendingRef.current = null; setError(null); setView('game');
+      setBusy(false); busyRef.current = false; pendingRef.current = null; setError(null); setErrorDetail(null); setView('game');
     });
     connection.on('hintRevealed', (h: { roundId: string; index: number; finnish: string }) => {
       if (h.roundId === roundIdRef.current) setHints(previous => ({ ...previous, [h.index]: h.finnish }));
@@ -47,11 +48,12 @@ export default function EntertainmentClient() {
     });
     connection.on('answerEvaluated', (a: { roundId: string; answer: string; evaluation: AnswerEvaluation }) => {
       if (a.roundId !== roundIdRef.current) return;
-      setAnswer(a.answer); setEvaluation(a.evaluation); setBusy(false); busyRef.current = false; pendingRef.current = null; setError(null);
+      setAnswer(a.answer); setEvaluation(a.evaluation); setBusy(false); busyRef.current = false; pendingRef.current = null; setError(null); setErrorDetail(null);
     });
     connection.on('scoreUpdated', (entries: { playerId: string; score: number }[]) => setScores(Object.fromEntries(entries.map(e => [e.playerId, e.score]))));
     connection.on('gameEnded', (s: Standing[]) => { setStandings(s); setView('results'); setBusy(false); busyRef.current = false; pendingRef.current = null; });
-    connection.on('gameError', (message: string) => { setBusy(false); busyRef.current = false; setError(message || 'Request failed. Please retry.'); });
+    connection.on('gameError', (message: string) => { setBusy(false); busyRef.current = false; setError(message || 'Request failed. Please retry.'); setErrorDetail(null); });
+    connection.on('gameErrorDetail', (detail: string) => setErrorDetail(detail || null));
     const join = async () => {
       setConnected(false);
       let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -67,7 +69,7 @@ export default function EntertainmentClient() {
   }, [session]);
   async function send(method: string, ...args: unknown[]) {
     if (!connected || busyRef.current || !connectionRef.current) return;
-    busyRef.current = true; setBusy(true); setError(null); pendingRef.current = { method, args };
+    busyRef.current = true; setBusy(true); setError(null); setErrorDetail(null); pendingRef.current = { method, args };
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try { await Promise.race([connectionRef.current.invoke(method, ...args), new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('Timeout')), 70000); })]); }
     catch { setError('Request failed. Please retry.'); }
@@ -87,7 +89,7 @@ export default function EntertainmentClient() {
     {view === 'landing' && <div className="flex gap-4"><Button onClick={() => setView('create')}>Create group</Button><Button onClick={() => setView('join')}>Join group</Button></div>}
     {(view === 'create' || view === 'join') && <GroupForm create={view === 'create'} onBack={() => setView('landing')} onSession={adopt} />}
     {session && <p role="status">{connected ? 'Connected' : 'Connecting…'}</p>}
-    {error && <div role="alert">{error}{connected && pendingRef.current && <Button onClick={() => { const action = pendingRef.current; if (action) void send(action.method, ...action.args); }}>Retry</Button>}
+    {error && <div role="alert">{error}{errorDetail && <details className="mt-2 text-sm"><summary className="cursor-pointer underline">View error</summary><pre className="mt-2 whitespace-pre-wrap font-sans">{errorDetail}</pre></details>}{connected && pendingRef.current && <Button onClick={() => { const action = pendingRef.current; if (action) void send(action.method, ...action.args); }}>Retry</Button>}
       {!connected && <Button onClick={() => setSession(session ? { ...session } : null)}>Reconnect</Button>}</div>}
     {busy && <p role="status">Working…</p>}
     {view === 'lobby' && session && <Card padding="lg" className="space-y-4"><h2>{lobby?.groupName || 'Lobby'}</h2>

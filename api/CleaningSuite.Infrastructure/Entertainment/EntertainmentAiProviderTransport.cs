@@ -7,11 +7,12 @@ using Microsoft.Extensions.Configuration;
 
 namespace CleaningSuite.Infrastructure.Entertainment;
 
-public sealed class ProviderRequestFailure(HttpStatusCode? status, TimeSpan? retryAfter, bool malformed = false) : Exception
+public sealed class ProviderRequestFailure(HttpStatusCode? status, TimeSpan? retryAfter, bool malformed = false, string? providerMessage = null) : Exception
 {
     public HttpStatusCode? Status { get; } = status;
     public TimeSpan? RetryAfter { get; } = retryAfter;
     public bool Malformed { get; } = malformed;
+    public string? ProviderMessage { get; } = providerMessage;
 }
 
 public sealed class EntertainmentAiProviderTransport(IHttpClientFactory clients, IConfiguration config)
@@ -30,7 +31,8 @@ public sealed class EntertainmentAiProviderTransport(IHttpClientFactory clients,
             if (!response.IsSuccessStatusCode)
             {
                 var retry = response.Headers.RetryAfter?.Delta ?? (response.Headers.RetryAfter?.Date - DateTimeOffset.UtcNow);
-                throw new ProviderRequestFailure(response.StatusCode, retry);
+                var errorBody = await response.Content.ReadAsStringAsync(deadline.Token);
+                throw new ProviderRequestFailure(response.StatusCode, retry, providerMessage: ExtractProviderMessage(errorBody, key.Value));
             }
             await using var responseStream = await response.Content.ReadAsStreamAsync(deadline.Token);
             using var output = new MemoryStream();
@@ -110,6 +112,27 @@ public sealed class EntertainmentAiProviderTransport(IHttpClientFactory clients,
     }
 
     private static string GeminiText(JsonElement root) => root.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString() ?? throw new JsonException();
+
+    private static string? ExtractProviderMessage(string body, string secret)
+    {
+        try
+        {
+            using var error = JsonDocument.Parse(body);
+            if (!error.RootElement.TryGetProperty("error", out var detail) ||
+                !detail.TryGetProperty("message", out var message) || message.ValueKind != JsonValueKind.String)
+                return null;
+            var value = message.GetString();
+            if (string.IsNullOrWhiteSpace(value)) return null;
+            value = value.Replace(secret, "[redacted]", StringComparison.Ordinal);
+            value = string.Concat(value.Where(c => !char.IsControl(c))).Trim();
+            return value.Length <= 240 ? value : value[..240];
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     private static string OpenAiText(JsonElement root)
     {
         if (root.TryGetProperty("output_text", out var direct) && direct.ValueKind == JsonValueKind.String) return direct.GetString()!;

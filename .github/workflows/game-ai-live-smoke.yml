@@ -11,11 +11,31 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ENTERTAINMENT_LIVE_SMOKE: "1"
-      GAME_GEMINI_API_KEY: ${{ secrets.GEMINI_KEY_2 || secrets.GEMINI_KEY || secrets.GEMINI_API_KEY }}
+      GAME_GEMINI_API_KEY: ${{ secrets.GAME_GEMINI_API_KEY || secrets.GEMINI_KEY_1 || secrets.GEMINI_KEY_2 || secrets.GEMINI_KEY || secrets.GEMINI_API_KEY }}
+      GEMINI_KEY_1: ${{ secrets.GEMINI_KEY_1 || secrets.GEMINI_KEY }}
+      GEMINI_KEY_2: ${{ secrets.GEMINI_KEY_2 || secrets.GEMINI_API_KEY }}
+      GEMINI_KEY_3: ${{ secrets.GEMINI_KEY_3 }}
+      GEMINI_KEY_4: ${{ secrets.GEMINI_KEY_4 }}
+      GEMINI_KEY_5: ${{ secrets.GEMINI_KEY_5 }}
+      GEMINI_KEY_6: ${{ secrets.GEMINI_KEY_6 }}
+      GEMINI_KEY_7: ${{ secrets.GEMINI_KEY_7 }}
+      GEMINI_KEY_8: ${{ secrets.GEMINI_KEY_8 }}
+      GEMINI_KEY_9: ${{ secrets.GEMINI_KEY_9 }}
+      GEMINI_KEY_10: ${{ secrets.GEMINI_KEY_10 }}
+      OPENAI_API_KEY_1: ${{ secrets.OPENAI_API_KEY_1 }}
+      OPENAI_API_KEY_2: ${{ secrets.OPENAI_API_KEY_2 }}
+      OPENAI_API_KEY_3: ${{ secrets.OPENAI_API_KEY_3 }}
+      OPENAI_API_KEY_4: ${{ secrets.OPENAI_API_KEY_4 }}
+      OPENAI_API_KEY_5: ${{ secrets.OPENAI_API_KEY_5 }}
+      OPENAI_API_KEY_6: ${{ secrets.OPENAI_API_KEY_6 }}
+      OPENAI_API_KEY_7: ${{ secrets.OPENAI_API_KEY_7 }}
+      OPENAI_API_KEY_8: ${{ secrets.OPENAI_API_KEY_8 }}
+      OPENAI_API_KEY_9: ${{ secrets.OPENAI_API_KEY_9 }}
+      OPENAI_API_KEY_10: ${{ secrets.OPENAI_API_KEY_10 }}
     steps:
       - uses: actions/checkout@v4
       - name: Validate configured server key
-        run: test -n "$GAME_GEMINI_API_KEY"
+        run: test -n "${GEMINI_KEY_1}${GEMINI_KEY_2}${GEMINI_KEY_3}${GEMINI_KEY_4}${GEMINI_KEY_5}${GEMINI_KEY_6}${GEMINI_KEY_7}${GEMINI_KEY_8}${GEMINI_KEY_9}${GEMINI_KEY_10}${OPENAI_API_KEY_1}${OPENAI_API_KEY_2}${OPENAI_API_KEY_3}${OPENAI_API_KEY_4}${OPENAI_API_KEY_5}${OPENAI_API_KEY_6}${OPENAI_API_KEY_7}${OPENAI_API_KEY_8}${OPENAI_API_KEY_9}${OPENAI_API_KEY_10}"
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.402

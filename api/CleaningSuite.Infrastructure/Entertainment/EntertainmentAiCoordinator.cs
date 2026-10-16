@@ -34,11 +34,20 @@ public sealed class EntertainmentAiCoordinator(EntertainmentAiProviderTransport 
     {
         ct.ThrowIfCancellationRequested();
         var providers = new[] { EntertainmentAiKeyPool.Gemini(config), EntertainmentAiKeyPool.OpenAi(config) };
+        var diagnostics = new List<string>();
         if (providers.All(pool => pool.Count == 0))
+        {
             logger.LogWarning("Game AI unavailable: no provider credentials are configured on the server.");
+            throw new EntertainmentAiUnavailableException(diagnostic: "No Gemini or OpenAI API keys are configured on the server.");
+        }
         foreach (var pool in providers)
         {
             var keys = Rotate(pool);
+            if (pool.Count > 0 && keys.Count == 0)
+            {
+                diagnostics.Add(GetUnavailablePoolDiagnostic(pool));
+                continue;
+            }
             foreach (var key in keys)
             {
                 ct.ThrowIfCancellationRequested();
@@ -62,22 +71,27 @@ public sealed class EntertainmentAiCoordinator(EntertainmentAiProviderTransport 
                     else if (failure.Malformed) { Cooldown(key, TimeSpan.FromSeconds(2)); cooldownSeconds = 2; }
                     else if (transient) { var cooldown = failure.RetryAfter ?? (status == 429 ? TimeSpan.FromSeconds(30) : TimeSpan.FromSeconds(5)); Cooldown(key, cooldown); cooldownSeconds = (int)Math.Clamp(cooldown.TotalSeconds, 1, 60); }
                     else if (status is >= 400 and < 500) stopProvider = true;
+                    diagnostics.Add(FormatFailure(key, status, failure, disabled, cooldownSeconds));
                     logger.LogWarning("Game AI {Operation} failed with {Provider} slot {Slot}, category {Category}, status {Status}, cooldown {CooldownSeconds}s, disabled {Disabled}, elapsed {ElapsedMilliseconds} ms; advancing to another key/provider.", operation, key.Provider, key.Slot, failure.Malformed ? "malformed-response" : transient ? "transient" : "request-rejected", status, cooldownSeconds, disabled, elapsed.ElapsedMilliseconds);
                     if (stopProvider) break;
                 }
                 catch (Exception error) when (error is JsonException or KeyNotFoundException or InvalidOperationException or IndexOutOfRangeException)
                 {
                     Cooldown(key, TimeSpan.FromSeconds(2));
+                    diagnostics.Add($"{key.Provider} key slot {key.Slot}: the provider returned an invalid structured response.");
                     logger.LogWarning("Game AI {Operation} returned a structurally invalid result from {Provider} slot {Slot} in {ElapsedMilliseconds} ms; advancing to another key/provider.", operation, key.Provider, key.Slot, elapsed.ElapsedMilliseconds);
                 }
                 catch (EntertainmentAiUnavailableException)
                 {
                     Cooldown(key, TimeSpan.FromSeconds(2));
+                    diagnostics.Add($"{key.Provider} key slot {key.Slot}: the provider response did not pass game validation.");
                     logger.LogWarning("Game AI {Operation} returned an invalid game result from {Provider} slot {Slot} in {ElapsedMilliseconds} ms; advancing to another key/provider.", operation, key.Provider, key.Slot, elapsed.ElapsedMilliseconds);
                 }
             }
         }
-        throw new EntertainmentAiUnavailableException();
+        var diagnostic = string.Join(Environment.NewLine, diagnostics.Distinct(StringComparer.Ordinal));
+        if (diagnostic.Length > 2400) diagnostic = diagnostic[..2400] + "…";
+        throw new EntertainmentAiUnavailableException(diagnostic: string.IsNullOrWhiteSpace(diagnostic) ? "No configured provider key is currently available. Retry shortly." : diagnostic);
     }
 
     private IReadOnlyList<ProviderKey> Rotate(IReadOnlyList<ProviderKey> pool)
@@ -98,6 +112,37 @@ public sealed class EntertainmentAiCoordinator(EntertainmentAiProviderTransport 
     private void Cooldown(ProviderKey key, TimeSpan duration) { lock (_sync) _cooldowns[(key.Provider, key.Slot)] = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(Math.Clamp(duration.TotalSeconds, 1, 60)); }
     private void Disable(ProviderKey key) { lock (_sync) _disabled.Add((key.Provider, key.Slot)); }
     private void MarkHealthy(ProviderKey key) { lock (_sync) _cooldowns.Remove((key.Provider, key.Slot)); }
+
+    private string GetUnavailablePoolDiagnostic(IReadOnlyList<ProviderKey> pool)
+    {
+        lock (_sync)
+        {
+            var disabled = pool.Count(key => _disabled.Contains((key.Provider, key.Slot)));
+            var cooling = pool.Count(key => _cooldowns.TryGetValue((key.Provider, key.Slot), out var until) && until > DateTimeOffset.UtcNow);
+            if (cooling == 0 && disabled > 0)
+                return $"{pool[0].Provider}: all {pool.Count} configured key slots have been rejected and are disabled until the API restarts.";
+            var remaining = _cooldowns.Where(pair => pair.Key.Provider == pool[0].Provider && pair.Value > DateTimeOffset.UtcNow).Select(pair => pair.Value).DefaultIfEmpty(DateTimeOffset.UtcNow.AddSeconds(1)).Min() - DateTimeOffset.UtcNow;
+            return $"{pool[0].Provider}: all {pool.Count} configured key slots are unavailable ({disabled} rejected credentials, {cooling} in cooldown; retry in about {Math.Max(1, (int)Math.Ceiling(remaining.TotalSeconds))} seconds).";
+        }
+    }
+
+    private static string FormatFailure(ProviderKey key, int? status, ProviderRequestFailure failure, bool disabled, int cooldownSeconds)
+    {
+        var reason = failure.Malformed ? "invalid response" : status switch
+        {
+            401 or 403 => "credentials rejected",
+            408 => "provider request timed out",
+            429 => "rate limit or quota exceeded",
+            >= 500 => "provider service error",
+            null => "network or provider timeout",
+            >= 400 => "request rejected",
+            _ => "provider request failed"
+        };
+        var statusText = status.HasValue ? $" (HTTP {status.Value})" : string.Empty;
+        var state = disabled ? " and is disabled until the API restarts" : cooldownSeconds > 0 ? $"; retry after about {cooldownSeconds} seconds" : string.Empty;
+        var providerMessage = string.IsNullOrWhiteSpace(failure.ProviderMessage) ? string.Empty : $" — {failure.ProviderMessage}";
+        return $"{key.Provider} key slot {key.Slot}: {reason}{statusText}{state}{providerMessage}.";
+    }
 }
 
 public sealed class QueuedEntertainmentAiService(EntertainmentAiPromptQueue queue, EntertainmentAiCoordinator coordinator) : IGeminiSentenceService, IEntertainmentAnswerEvaluator
