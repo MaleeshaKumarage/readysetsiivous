@@ -20,7 +20,8 @@ public class EntertainmentFullRoundLiveTests
 
         var values = new Dictionary<string, string?>
         {
-            ["Entertainment:Gemini:ApiKey"] = Environment.GetEnvironmentVariable("GAME_GEMINI_API_KEY")
+            ["Entertainment:Gemini:ApiKey"] = Environment.GetEnvironmentVariable("GAME_GEMINI_API_KEY"),
+            ["Entertainment:Gemini:Model"] = Environment.GetEnvironmentVariable("GAME_GEMINI_MODEL")
         };
         AddNumberedKeys(values, "Entertainment:Gemini:Keys", "GEMINI_KEY", 10);
         AddNumberedKeys(values, "Entertainment:OpenAI:Keys", "OPENAI_API_KEY", 10);
