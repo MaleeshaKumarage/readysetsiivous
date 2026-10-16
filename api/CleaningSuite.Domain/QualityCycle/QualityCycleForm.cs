@@ -79,14 +79,15 @@ public class QualityCycleForm : BaseDocument
         };
     }
 
-    public void Start()
+    public void Start(DateTime? startedAtUtc = null)
     {
         if (StartedAtUtc.HasValue) return;
-        StartedAtUtc = DateTime.UtcNow;
-        UpdatedUtc = DateTime.UtcNow;
+        var now = AsUtc(startedAtUtc ?? DateTime.UtcNow);
+        StartedAtUtc = now;
+        UpdatedUtc = now;
     }
 
-    public void Submit(List<QualityCycleFormItem> items, List<string>? photoUrls, string? cleanerNotes, List<QualityCyclePhoto>? photos = null)
+    public void Submit(List<QualityCycleFormItem> items, List<string>? photoUrls, string? cleanerNotes, List<QualityCyclePhoto>? photos = null, DateTime? endedAtUtc = null)
     {
         if (IsSubmitted)
             throw new InvalidOperationException("Quality Cycle Form has already been submitted.");
@@ -118,8 +119,16 @@ public class QualityCycleForm : BaseDocument
         PhotoUrls = new();
         CleanerNotes = notes;
         IsSubmitted = true;
-        SubmittedUtc = DateTime.UtcNow;
-        EndedAtUtc = DateTime.UtcNow;
-        UpdatedUtc = DateTime.UtcNow;
+        var now = AsUtc(endedAtUtc ?? DateTime.UtcNow);
+        SubmittedUtc = now;
+        EndedAtUtc = now;
+        UpdatedUtc = now;
     }
+
+    private static DateTime AsUtc(DateTime value) => value.Kind switch
+    {
+        DateTimeKind.Utc => value,
+        DateTimeKind.Local => value.ToUniversalTime(),
+        _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+    };
 }

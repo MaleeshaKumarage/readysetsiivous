@@ -311,7 +311,6 @@ public class QualityCycleHandlers
             var end = request.OccurrenceEndUtc.Kind == DateTimeKind.Local ? request.OccurrenceEndUtc.ToUniversalTime() : DateTime.SpecifyKind(request.OccurrenceEndUtc, DateTimeKind.Utc);
             if (!shift.IsActive || !employee.IsActive)
                 throw new UnauthorizedAccessException();
-            if (start > _clock.GetUtcNow().UtcDateTime) throw new QualityCycleConflictException("This shift has not started yet.");
             var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
             var (localFrom, localTo) = TenantTimeZone.LocalDatesForUtcRange(start, end, zone);
             if (end <= start || end - start > TimeSpan.FromDays(2)
@@ -320,6 +319,8 @@ public class QualityCycleHandlers
             var assignment = await _shiftRepository.GetAssignmentAsync(shift.Id, employee.Id, ct);
             if (assignment == null || !assignment.IsActive || !assignment.Overlaps(start, end))
                 throw new UnauthorizedAccessException();
+            if (TenantTimeZone.LocalDate(start, zone) != TenantTimeZone.LocalDate(_clock.GetUtcNow().UtcDateTime, zone))
+                throw new QualityCycleConflictException("This shift can be started on its scheduled date.");
 
             var form = await _repository.GetFormByShiftOccurrenceAsync(shift.Id, employee.Id, start, ct);
             if (form == null)
@@ -337,7 +338,7 @@ public class QualityCycleHandlers
                     start, template?.Items ?? new List<string>(), end);
                 form.Id = QualityCycleDispatcher.TaskId(shift.Id, employee.Id, start);
                 form.CompanyId = shift.CompanyId; form.BranchId = shift.BranchId;
-                form.Start();
+                form.Start(_clock.GetUtcNow().UtcDateTime);
                 if (await _repository.TryCreateFormAsync(form, ct)) return MapForm(form);
                 // A simultaneous clock start or worker dispatch owns the same deterministic id.
                 form = await _repository.GetFormByShiftOccurrenceAsync(shift.Id, employee.Id, start, ct)
@@ -348,7 +349,7 @@ public class QualityCycleHandlers
                 throw new UnauthorizedAccessException();
             if (form.IsSubmitted) throw new QualityCycleConflictException("This shift task has already been completed.");
             if (form.StartedAtUtc.HasValue) return MapForm(form);
-            form.Start();
+            form.Start(_clock.GetUtcNow().UtcDateTime);
             await _repository.SaveFormAsync(form, ct);
             return MapForm(form);
         }
@@ -428,7 +429,7 @@ public class QualityCycleHandlers
     private static void RecordActivity(QualityCycleForm form, List<QualityCycleFormItemDto>? items, List<string>? photoUrls, string? cleanerNotes, TimeProvider clock, List<QualityCyclePhoto>? photos)
     {
             if (form.IsSubmitted) throw new QualityCycleConflictException("This shift task has already been completed.");
-            if (form.ShiftOccurrenceUtc > clock.GetUtcNow().UtcDateTime)
+            if (!form.StartedAtUtc.HasValue && form.ShiftOccurrenceUtc > clock.GetUtcNow().UtcDateTime)
                 throw new QualityCycleConflictException("This shift task has not started yet.");
             var domainItems = items?.Select(i => new QualityCycleFormItem
             {
@@ -436,7 +437,7 @@ public class QualityCycleHandlers
                 IsChecked = i.IsChecked
             }).ToList() ?? new List<QualityCycleFormItem>();
 
-            try { form.Submit(domainItems, photoUrls, cleanerNotes, photos); }
+            try { form.Submit(domainItems, photoUrls, cleanerNotes, photos, clock.GetUtcNow().UtcDateTime); }
             catch (ArgumentException ex)
             {
                 throw new ValidationException(new[] { new FluentValidation.Results.ValidationFailure(
