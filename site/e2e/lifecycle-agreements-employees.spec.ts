@@ -3,7 +3,7 @@ import { setupAdminMocks } from './admin-helpers';
 
 const headers = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
@@ -93,4 +93,43 @@ test('inactive-only employees and agreements show helpful Active empty states', 
   await expect(page.getByText('No active agreements. Check the Inactive tab.')).toBeVisible();
   await page.getByRole('tab', { name: 'Inactive (1)', exact: true }).click();
   await expect(page.getByText('Old agreement', { exact: true })).toBeVisible();
+});
+
+test('inactive agreements can be deleted when unsigned and signed agreements are retained', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  let items = [
+    { id: 'unsigned', title: 'Inactive unsigned', code: 'unsigned', status: 'Draft', isActive: false, signerCount: 1, signedCount: 0 },
+    { id: 'signed', title: 'Inactive partially signed', code: 'signed', status: 'PartiallySigned', isActive: false, signerCount: 2, signedCount: 1 },
+  ];
+  let deleteCalls = 0;
+  let retainOnDelete = true;
+  await page.route('**/api/v1/admin/agreements**', async route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    if (route.request().method() === 'GET') return route.fulfill({ headers, json: items });
+    if (route.request().method() === 'DELETE') {
+      deleteCalls++;
+      if (retainOnDelete) return route.fulfill({ status: 409, headers, json: { detail: 'Agreements with signatures are retained.' } });
+      items = items.filter(item => item.id !== 'unsigned');
+      return route.fulfill({ status: 204, headers });
+    }
+    return route.fulfill({ status: 405, headers });
+  });
+
+  page.on('dialog', dialog => dialog.accept());
+  await page.goto('/admin/agreements/');
+  await page.getByRole('tab', { name: 'Inactive (2)', exact: true }).click();
+  const signed = page.getByRole('row').filter({ hasText: 'Inactive partially signed' });
+  await expect(signed.getByRole('button', { name: 'Delete' })).toBeDisabled();
+  await expect(signed.getByRole('button', { name: 'Delete' })).toHaveAttribute('title', 'Agreements with signatures are retained.');
+
+  const unsigned = page.getByRole('row').filter({ hasText: 'Inactive unsigned' });
+  await unsigned.getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByRole('alert')).toHaveText('Agreements with signatures are retained.');
+  expect(deleteCalls).toBe(1);
+
+  retainOnDelete = false;
+  await unsigned.getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByText('Inactive unsigned', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Inactive partially signed', { exact: true })).toBeVisible();
+  expect(deleteCalls).toBe(2);
 });

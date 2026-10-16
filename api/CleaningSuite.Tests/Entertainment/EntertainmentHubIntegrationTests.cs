@@ -52,8 +52,8 @@ public class EntertainmentHubIntegrationTests
     }
     private sealed class Client:IAsyncDisposable
     {
-        public HubConnection Connection{get;}public Channel<EntertainmentRoundDto> Round{get;}=Channel.CreateUnbounded<EntertainmentRoundDto>();public Channel<string> Errors{get;}=Channel.CreateUnbounded<string>();public Channel<object> Evaluations{get;}=Channel.CreateUnbounded<object>();public int AnswerEvents;
-        public Client(HubConnection c){Connection=c;c.On<EntertainmentRoundDto>("roundStarted",r=>Round.Writer.TryWrite(r));c.On<string>("gameError",e=>Errors.Writer.TryWrite(e));c.On<object>("answerEvaluated",e=>Evaluations.Writer.TryWrite(e));c.On<object>("answerRevealed",_=>Interlocked.Increment(ref AnswerEvents));}
+        public HubConnection Connection{get;}public Channel<EntertainmentRoundDto> Round{get;}=Channel.CreateUnbounded<EntertainmentRoundDto>();public Channel<string> Errors{get;}=Channel.CreateUnbounded<string>();public Channel<object> Evaluations{get;}=Channel.CreateUnbounded<object>();public int AnswerEvents,HintEvents;
+        public Client(HubConnection c){Connection=c;c.On<EntertainmentRoundDto>("roundStarted",r=>Round.Writer.TryWrite(r));c.On<string>("gameError",e=>Errors.Writer.TryWrite(e));c.On<object>("answerEvaluated",e=>Evaluations.Writer.TryWrite(e));c.On<object>("answerRevealed",_=>Interlocked.Increment(ref AnswerEvents));c.On<object>("hintRevealed",_=>Interlocked.Increment(ref HintEvents));}
         public async Task<EntertainmentRoundDto> Next()=>await Round.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(8));
         public async ValueTask DisposeAsync()=>await Connection.DisposeAsync();
     }
@@ -64,6 +64,7 @@ public class EntertainmentHubIntegrationTests
         await using var owner=await host.Connect(game.GroupId,game.CreatorPlayerId,game.PlayerToken);await using var other=await host.Connect(game.GroupId,observer.PlayerId,observer.PlayerToken);
         await Assert.ThrowsAsync<Microsoft.AspNetCore.SignalR.HubException>(()=>other.Connection.InvokeAsync("JoinLobby",game.GroupId,game.CreatorPlayerId,observer.PlayerToken));
         await owner.Connection.InvokeAsync("StartGame",game.GroupId,game.CreatorPlayerId);var round=await owner.Next();Assert.Null(round.SentenceFi);Assert.All(round.Hints!,h=>Assert.Equal("",h.Finnish));
+        await other.Connection.InvokeAsync("RevealHint",game.GroupId,observer.PlayerId,0,round.RoundId);Assert.Contains("Only the current translator",await other.Errors.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(8)));Assert.Equal(0,other.HintEvents);
         await using var replacement=await host.Connect(game.GroupId,game.CreatorPlayerId,game.PlayerToken);await replacement.Next();
         await Assert.ThrowsAsync<Microsoft.AspNetCore.SignalR.HubException>(()=>owner.Connection.InvokeAsync("CheckAnswer",game.GroupId,game.CreatorPlayerId,round.RoundId,"Kissa nukkuu."));
         await other.Connection.InvokeAsync("RevealAnswer",game.GroupId,observer.PlayerId,round.RoundId);

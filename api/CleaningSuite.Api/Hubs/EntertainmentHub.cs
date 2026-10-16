@@ -29,6 +29,7 @@ public class EntertainmentHub(IMediator mediator,IEntertainmentRepository reposi
     });
     public Task RevealHint(Guid groupId,Guid playerId,int index,Guid roundId)=>Action(groupId,playerId,async()=>{
         var (group,round)=await Current(groupId,roundId);
+        RequireTranslator(round,playerId);
         if(index<0||index>=round.Hints.Count)throw new HubException("Invalid hint.");
         if(round.TranslatorPlayerId==playerId && !round.RevealedHintIndexes.Contains(index)){
             if(round.Evaluation is not null)throw new HubException("This answer has already been checked.");
