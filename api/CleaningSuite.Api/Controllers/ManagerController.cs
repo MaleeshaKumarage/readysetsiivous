@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using CleaningSuite.Api.Auth;
 using CleaningSuite.Application.Access;
+using CleaningSuite.Application.Shifts;
 using CleaningSuite.Domain.Shifts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -26,6 +27,9 @@ public sealed class ManagerController(ManagerOperations operations) : Controller
     [HttpGet("shifts/{id:guid}/assignments")] public async Task<IActionResult> Assignments(Guid id, CancellationToken ct) => Ok(await operations.Assignments(id, ct));
     [HttpPost("shifts/{id:guid}/assignments")] public async Task<IActionResult> Assign(Guid id, ManagerAssignmentRequest body, CancellationToken ct) => Ok(await operations.Assign(id, body.EmployeeId, ct));
     [HttpDelete("shifts/{id:guid}/assignments/{employeeId:guid}")] public async Task<IActionResult> Unassign(Guid id, Guid employeeId, CancellationToken ct) { await operations.Unassign(id, employeeId, ct); return NoContent(); }
+    [HttpGet("shifts/{id:guid}/occurrences")] public async Task<IActionResult> Occurrences(Guid id, [FromQuery] DateTime from, [FromQuery] DateTime to, CancellationToken ct) => Ok(await operations.Occurrences(id, from, to, ct));
+    [HttpPut("shifts/{id:guid}/occurrence-exceptions")] public async Task<IActionResult> SaveOccurrence(Guid id, SaveShiftOccurrenceExceptionCommand body, CancellationToken ct) => Ok(await operations.SaveOccurrence(id, body, ct));
+    [HttpDelete("shifts/{id:guid}/occurrence-exceptions/{exceptionId:guid}")] public async Task<IActionResult> DeleteOccurrence(Guid id, Guid exceptionId, CancellationToken ct) { await operations.DeleteOccurrence(id, exceptionId, ct); return NoContent(); }
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

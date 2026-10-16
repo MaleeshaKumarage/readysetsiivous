@@ -418,6 +418,32 @@ export interface ShiftAssignment {
 export interface ShiftOccurrence {
   startUtc: string;
   endUtc: string;
+  exceptionId?: string | null;
+  originalStartUtc?: string | null;
+  status?: number | null;
+  reason?: string | null;
+  employeeId?: string | null;
+}
+
+export interface ShiftOccurrenceExceptionInput {
+  id?: string | null;
+  originalStartUtc?: string | null;
+  startUtc: string;
+  endUtc: string;
+  status: number;
+  reason: string;
+  employeeId?: string | null;
+}
+
+async function occurrenceRequest<T>(path: string, method: 'PUT' | 'DELETE', body?: unknown): Promise<T> {
+  const response = await authorizedFetch(path, { method, cache: 'no-store',
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  if (!response.ok) {
+    const problem = await response.json().catch(() => null);
+    throw new Error(typeof problem?.detail === 'string' ? problem.detail : 'Could not update this occurrence. Please retry.');
+  }
+  invalidateAdminCache();
+  return method === 'DELETE' ? undefined as T : await response.json() as T;
 }
 
 // Assignment failures must reach the UI; the generic admin boolean helpers are
@@ -472,6 +498,10 @@ export const adminShifts = {
     adminGet<ShiftOccurrence[]>(
       `/api/v1/admin/shifts/${id}/occurrences?from=${encodeURIComponent(fromUtc)}&to=${encodeURIComponent(toUtc)}`
     ),
+  saveOccurrenceException: (id: string, fields: ShiftOccurrenceExceptionInput) =>
+    occurrenceRequest<ShiftOccurrence>(`/api/v1/admin/shifts/${id}/occurrence-exceptions`, 'PUT', fields),
+  deleteOccurrenceException: (id: string, exceptionId: string) =>
+    occurrenceRequest<void>(`/api/v1/admin/shifts/${id}/occurrence-exceptions/${exceptionId}`, 'DELETE'),
 };
 
 // Keep company/branch failures visible without changing legacy helper semantics.
