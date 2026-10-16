@@ -4,7 +4,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import {
   Title, Button, Table, Modal, TextInput, Textarea, Group, Stack, Text, Loader, Badge,
 } from '@mantine/core';
-import { Plus, ChevronDown } from 'lucide-react';
+import { Plus, ChevronDown, Pencil } from 'lucide-react';
 import { adminCompanies, adminBranches, type Company, type Branch } from '@/lib/adminApi';
 import { companyLifecycle, branchLifecycle } from '@/lib/reactivationApi';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
@@ -25,6 +25,7 @@ export default function CompaniesAdminPage() {
   const visibleCompanies = companies.filter(company => inLifecycle(company, status));
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -32,6 +33,7 @@ export default function CompaniesAdminPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [companyBranchesMap, setCompanyBranchesMap] = useState<Record<string, Branch[]>>({});
   const [branchModal, setBranchModal] = useState(false);
+  const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
   const [branchForm, setBranchForm] = useState({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '' });
   const [branchSaving, setBranchSaving] = useState(false);
   const [branchError, setBranchError] = useState('');
@@ -57,15 +59,23 @@ export default function CompaniesAdminPage() {
     if (!form.businessId.trim() || !form.name.trim()) { setError('Business ID and name are required.'); return; }
     setSaving(true); setError('');
     try {
-      await adminCompanies.create({
+      const fields = {
         businessId: form.businessId.trim(), name: form.name.trim(),
         contactName: form.contactName.trim() || undefined, contactEmail: form.contactEmail.trim() || undefined,
         contactPhone: form.contactPhone.trim() || undefined, notes: form.notes.trim() || undefined,
-      });
-      setForm(emptyForm); setModalOpen(false); setStatus('active'); await load();
+      };
+      if (editingCompany) await adminCompanies.update(editingCompany.id, { ...fields, isActive: editingCompany.isActive });
+      else await adminCompanies.create(fields);
+      setForm(emptyForm); setEditingCompany(null); setModalOpen(false); if (!editingCompany) setStatus('active'); await load();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Could not create company. Please retry.');
     } finally { setSaving(false); }
+  };
+
+  const openCompanyEdit = (company: Company) => {
+    setEditingCompany(company);
+    setForm({ businessId: company.businessId, name: company.name, contactName: company.contactName ?? '', contactEmail: company.contactEmail ?? '', contactPhone: company.contactPhone ?? '', notes: company.notes ?? '' });
+    setError(''); setModalOpen(true);
   };
 
   const loadBranches = async (id: string) => {
@@ -87,18 +97,29 @@ export default function CompaniesAdminPage() {
     if (!expanded || !branchForm.name.trim()) return;
     setBranchSaving(true); setBranchError('');
     try {
-      await adminBranches.create(expanded, {
+      const fields = {
         name: branchForm.name.trim(), street: branchForm.street.trim() || undefined,
         postalCode: branchForm.postalCode.trim() || undefined, city: branchForm.city.trim() || undefined,
         country: branchForm.country.trim() || undefined, contactPhone: branchForm.contactPhone.trim() || undefined,
-      });
+      };
+      if (editingBranch) {
+        const updated = await adminBranches.update(editingBranch.id, { ...fields, isActive: editingBranch.isActive });
+        if (!updated) throw new Error('Could not update branch. Please retry.');
+      } else await adminBranches.create(expanded, fields);
       setBranchForm({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '' });
+      setEditingBranch(null);
       setBranchModal(false);
-      setBranchStatus('active');
+      if (!editingBranch) setBranchStatus('active');
       await loadBranches(expanded);
     } catch (failure) {
       setBranchError(failure instanceof Error ? failure.message : 'Could not create branch. Please retry.');
     } finally { setBranchSaving(false); }
+  };
+
+  const openBranchEdit = (branch: Branch) => {
+    setEditingBranch(branch);
+    setBranchForm({ name: branch.name, street: branch.street ?? '', postalCode: branch.postalCode ?? '', city: branch.city ?? '', country: branch.country ?? '', contactPhone: branch.contactPhone ?? '' });
+    setBranchError(''); setBranchModal(true);
   };
 
   const changeActivity = async (id: string, active: boolean, companyId?: string) => {
@@ -113,11 +134,27 @@ export default function CompaniesAdminPage() {
     } finally { setActionBusy(null); }
   };
 
+  const deleteCompany = async (company: Company) => {
+    if (!window.confirm(`Permanently delete inactive company “${company.name}”? Companies with branches or business history are retained.`)) return;
+    setActionBusy(company.id); setActionError('');
+    try { await adminCompanies.deleteInactive(company.id); setExpanded(null); await load(); }
+    catch (failure) { setActionError(failure instanceof Error ? failure.message : 'Could not delete company. Please retry.'); }
+    finally { setActionBusy(null); }
+  };
+
+  const deleteBranch = async (branch: Branch, companyId: string) => {
+    if (!window.confirm(`Permanently delete inactive branch “${branch.name}”? Branches with shift or checklist history are retained.`)) return;
+    setActionBusy(branch.id); setActionError('');
+    try { await adminBranches.deleteInactive(branch.id); await loadBranches(companyId); }
+    catch (failure) { setActionError(failure instanceof Error ? failure.message : 'Could not delete branch. Please retry.'); }
+    finally { setActionBusy(null); }
+  };
+
   return (
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
         <Title order={2}>Companies</Title>
-        <Button leftSection={<Plus size={16} />} onClick={() => setModalOpen(true)}>Add company</Button>
+        <Button leftSection={<Plus size={16} />} onClick={() => { setEditingCompany(null); setForm(emptyForm); setError(''); setModalOpen(true); }}>Add company</Button>
       </Group>
 
       {actionError && <Text c="red" role="alert" mb="sm">{actionError}</Text>}
@@ -139,7 +176,7 @@ export default function CompaniesAdminPage() {
                 <Table.Th>Business ID</Table.Th>
                 <Table.Th>Contact</Table.Th>
                 <Table.Th w={120}>Branches</Table.Th>
-                <Table.Th>Activity</Table.Th>
+                <Table.Th>Activity</Table.Th><Table.Th w={110}>Actions</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -161,13 +198,14 @@ export default function CompaniesAdminPage() {
                       <Table.Td><Button size="xs" variant="light" color={c.isActive ? 'red' : undefined}
                         loading={actionBusy === c.id} disabled={actionBusy !== null && actionBusy !== c.id}
                         onClick={() => void changeActivity(c.id, c.isActive)}>{c.isActive ? 'Deactivate' : 'Reactivate'}</Button></Table.Td>
+                      <Table.Td><Group gap={4} wrap="nowrap"><Button size="xs" variant="subtle" leftSection={<Pencil size={13} />} onClick={() => openCompanyEdit(c)}>Edit</Button>{!c.isActive && <Button size="xs" color="red" variant="subtle" loading={actionBusy === c.id} disabled={!!actionBusy} onClick={() => void deleteCompany(c)}>Delete</Button>}</Group></Table.Td>
                     </Table.Tr>
                     {isExpanded && (
                       <Table.Tr>
-                        <Table.Td colSpan={5} p="sm">
+                        <Table.Td colSpan={6} p="sm">
                           <Group justify="space-between" align="center" mb="xs" wrap="wrap" gap="xs">
                             <Text size="sm" fw={600}>Branches</Text>
-                            <Button size="xs" variant="light" leftSection={<Plus size={14} />} onClick={() => { setBranchError(''); setBranchModal(true); }}>Add branch</Button>
+                            <Button size="xs" variant="light" leftSection={<Plus size={14} />} onClick={() => { setEditingBranch(null); setBranchForm({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '' }); setBranchError(''); setBranchModal(true); }}>Add branch</Button>
                           </Group>
                           <LifecycleTabs value={branchStatus} onChange={setBranchStatus} label="Branch activity"
                             activeCount={branchLoading === c.id || branchLoadError ? undefined : currentBranches.filter(b => b.isActive).length}
@@ -182,9 +220,11 @@ export default function CompaniesAdminPage() {
                                 <Group key={b.id} justify="space-between" wrap="wrap" gap="xs">
                                   <Text size="sm">{b.name}{b.city ? ` · ${b.city}` : ''}</Text>
                                   <Group gap="xs">{!b.isActive && <Badge color="gray" size="xs">Inactive</Badge>}
+                                    <Button size="xs" variant="subtle" leftSection={<Pencil size={13} />} onClick={() => openBranchEdit(b)}>Edit</Button>
                                     <Button size="xs" variant="light" color={b.isActive ? 'red' : undefined}
                                       loading={actionBusy === b.id} disabled={actionBusy !== null && actionBusy !== b.id}
                                       onClick={() => void changeActivity(b.id, b.isActive, c.id)}>{b.isActive ? 'Deactivate' : 'Reactivate'}</Button>
+                                    {!b.isActive && <Button size="xs" color="red" variant="subtle" loading={actionBusy === b.id} disabled={!!actionBusy} onClick={() => void deleteBranch(b, c.id)}>Delete</Button>}
                                   </Group>
                                 </Group>
                               ))}
@@ -203,7 +243,7 @@ export default function CompaniesAdminPage() {
       )}
       </LifecycleTabs>
 
-      <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title="Add company" radius="md">
+      <Modal opened={modalOpen} onClose={() => { setModalOpen(false); setEditingCompany(null); }} title={editingCompany ? 'Edit company' : 'Add company'} radius="md">
         <Stack gap="sm">
           <TextInput label="Business ID" required value={form.businessId} onChange={set('businessId')} />
           <TextInput label="Name" required value={form.name} onChange={set('name')} />
@@ -214,12 +254,12 @@ export default function CompaniesAdminPage() {
           {error && <Text size="sm" c="red" role="alert">{error}</Text>}
           <Group justify="flex-end" mt="xs">
             <Button variant="default" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button loading={saving} onClick={submit}>Create company</Button>
+            <Button loading={saving} onClick={submit}>{editingCompany ? 'Save changes' : 'Create company'}</Button>
           </Group>
         </Stack>
       </Modal>
 
-      <Modal opened={branchModal} onClose={() => setBranchModal(false)} title="Add branch" radius="md">
+      <Modal opened={branchModal} onClose={() => { setBranchModal(false); setEditingBranch(null); }} title={editingBranch ? 'Edit branch' : 'Add branch'} radius="md">
         <Stack gap="sm">
           <TextInput label="Name" required value={branchForm.name} onChange={setB('name')} />
           {branchError && <Text c="red" role="alert">{branchError}</Text>}
@@ -230,7 +270,7 @@ export default function CompaniesAdminPage() {
           <TextInput label="Phone" value={branchForm.contactPhone} onChange={setB('contactPhone')} />
           <Group justify="flex-end" mt="xs">
             <Button variant="default" onClick={() => setBranchModal(false)}>Cancel</Button>
-            <Button loading={branchSaving} onClick={submitBranch}>Add branch</Button>
+            <Button loading={branchSaving} onClick={submitBranch}>{editingBranch ? 'Save changes' : 'Add branch'}</Button>
           </Group>
         </Stack>
       </Modal>

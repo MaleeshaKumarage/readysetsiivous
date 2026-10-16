@@ -5,7 +5,7 @@ const shiftId = '11111111-1111-4111-8111-111111111111';
 const formId = '22222222-2222-4222-8222-222222222222';
 const evidencePhoto = { name: 'corridor.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64') };
 
-async function setupWork(page: Page, options: { empty?: boolean; failStart?: boolean; failEnd?: boolean; lostStart?: boolean; lostEnd?: boolean; loadFailure?: boolean; future?: boolean; role?: 'employee' | 'admin' | 'manager' } = {}) {
+async function setupWork(page: Page, options: { empty?: boolean; failStart?: boolean; failEnd?: boolean; lostStart?: boolean; lostEnd?: boolean; loadFailure?: boolean; future?: boolean; startAt?: string; role?: 'employee' | 'admin' | 'manager' } = {}) {
   await setupAdminMocks(page);
   const role = options.role ?? 'employee';
   await page.addInitScript(role => { (window as any).__MOCK_ROLES__ = [role]; }, role);
@@ -13,8 +13,9 @@ async function setupWork(page: Page, options: { empty?: boolean; failStart?: boo
     json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: [role] })],
       employee: { id: 'employee-a', firstName: 'Test', lastName: 'Staff', role, isActive: true } } }));
   const start = new Date(Date.now() - 3600000).toISOString();
-  const occurrence: any = { shiftId, shiftName: 'AAA1 weekday shift', startUtc: options.future ? new Date(Date.now()+86400000).toISOString() : start,
-    endUtc: new Date(Date.now()+(options.future ? 90000000 : 3600000)).toISOString(), form: null };
+  const scheduledStart = options.startAt ? Date.parse(options.startAt) : options.future ? Date.now() + 86400000 : Date.parse(start);
+  const occurrence: any = { shiftId, shiftName: 'AAA1 weekday shift', startUtc: new Date(scheduledStart).toISOString(),
+    endUtc: new Date(scheduledStart + (options.startAt ? 8 * 3600000 : options.future ? 3600000 : 2 * 3600000)).toISOString(), timeZoneId: 'Europe/Helsinki', form: null };
   let startCalls = 0; let endCalls = 0; let loadCalls = 0; let submitted: any = null;
   await page.route(/\/api\/v1\/me\/shifts$/, route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
@@ -46,12 +47,14 @@ for (const selected of ['none', 'subset', 'all']) {
     const work = await setupWork(page);
     await page.goto('/me/shifts/');
     await page.getByRole('button', { name: 'Start', exact: true }).click();
+    await expect(page.getByText(/^Actual start: /)).toBeVisible();
     await page.getByRole('button', { name: 'Record activities & end', exact: true }).click();
     if (selected !== 'none') await page.getByRole('checkbox', { name: 'Corridor', exact: true }).check();
     if (selected === 'all') await page.getByRole('checkbox', { name: 'Gym', exact: true }).check();
     await expect(page.getByRole('checkbox', { name: 'Corridor', exact: true })).toBeChecked({ checked: selected !== 'none' });
     await page.getByRole('button', { name: 'End shift', exact: true }).click();
     await expect(page.getByText('Done', { exact: true })).toBeVisible();
+    await expect(page.getByText(/^Actual end: /)).toBeVisible();
     expect(work.submitted.items).toEqual([{ itemText: 'Corridor', isChecked: selected !== 'none' }, { itemText: 'Gym', isChecked: selected === 'all' }]);
     expect(work.submitted.cleanerNotes).toBe(''); expect(work.endCalls).toBe(1);
   });
@@ -198,15 +201,32 @@ test('anonymous employee must sign in before loading shifts', async ({ page }) =
   await page.goto('/me/shifts/'); await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible(); expect(requests).toBe(0);
 });
 
-test('a future shift becomes startable at its actual scheduled instant', async ({ page }) => {
+test('a future shift becomes startable on its scheduled local date', async ({ page }) => {
   const now = Date.now(); await page.clock.install({ time: new Date(now) });
   const work = await setupWork(page, { future: true }); await page.goto('/me/shifts/');
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeDisabled();
-  await expect(page.getByText('Available at the scheduled start time.')).toBeVisible(); expect(work.startCalls).toBe(0);
+  await expect(page.getByText('Available on the scheduled date. The actual start time will be recorded.')).toBeVisible(); expect(work.startCalls).toBe(0);
   await page.clock.fastForward(86405000);
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Start', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Record activities & end' })).toBeVisible(); expect(work.startCalls).toBe(1);
+});
+
+test('a shift can be started before its scheduled time on the scheduled date', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-10-16T06:00:00Z') });
+  const work = await setupWork(page, { startAt: '2026-10-16T18:00:00Z' }); await page.goto('/me/shifts/');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
+  await expect(page.getByText(/Scheduled:.*Oct 16, 2026/)).toBeVisible();
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(page.getByText(/^Actual start: /)).toBeVisible(); expect(work.startCalls).toBe(1);
+});
+
+test('a shift can be started after its scheduled time on the scheduled date', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-10-16T20:00:00Z') });
+  const work = await setupWork(page, { startAt: '2026-10-16T18:00:00Z' }); await page.goto('/me/shifts/');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(page.getByText(/^Actual start: /)).toBeVisible(); expect(work.startCalls).toBe(1);
 });
 
 test('clock start displays the actual API rejection reason', async ({ page }) => {

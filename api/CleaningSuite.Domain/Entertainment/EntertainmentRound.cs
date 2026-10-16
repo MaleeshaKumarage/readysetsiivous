@@ -14,6 +14,13 @@ public class EntertainmentRound : BaseDocument
     public string SentenceEn { get; set; } = string.Empty;
     public string SentenceFi { get; set; } = string.Empty;
     public List<string> BaseForms { get; set; } = new();
+    public List<EntertainmentWordHint> Hints { get; set; } = new();
+    public List<int> RevealedHintIndexes { get; set; } = new();
+    public bool AnswerRevealed { get; set; }
+    public string? SubmittedAnswer { get; set; }
+    public EntertainmentAnswerEvaluation? Evaluation { get; set; }
+    public bool IsEvaluated => Evaluation is not null;
+    public Guid? NextRoundId { get; set; }
     public DateTime StartedUtc { get; set; }
     public DateTime? EndedUtc { get; set; }
     /// <summary>Snapshot of every player's score when the round ended (null while live).</summary>

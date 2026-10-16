@@ -6,6 +6,8 @@ esac
 [ "${#RELEASE_SHA}" -eq 40 ] || { echo 'Invalid release SHA' >&2; exit 1; }
 : "${REGISTRY_USER:?Registry user required}"
 : "${REGISTRY_TOKEN:?Registry token required}"
+: "${GAME_GEMINI_API_KEY:?Server-owned game AI key required}"
+GAME_GEMINI_API_KEY="$GAME_GEMINI_API_KEY" python3 -c 'import os,sys; key=os.environ["GAME_GEMINI_API_KEY"]; sys.exit(1 if any(ord(c)<32 or ord(c)==127 for c in key) else 0)' || { echo 'Invalid game AI key format' >&2; exit 1; }
 cd "${DEPLOY_DIR:-/home/ubuntu/cleaning-suite}"
 expected="ghcr.io/maleeshakumarage/readysetsiivous-api:sha-$RELEASE_SHA"
 previous_container=$(docker compose ps -q api)
@@ -28,6 +30,28 @@ cleanup() {
   exit "$result"
 }
 trap cleanup EXIT
+GAME_GEMINI_API_KEY="$GAME_GEMINI_API_KEY" python3 - <<'PY'
+import os
+from pathlib import Path
+
+path = Path('.env')
+lines = path.read_text().splitlines()
+value = os.environ['GAME_GEMINI_API_KEY']
+encoded = "GAME_GEMINI_API_KEY='" + value.replace('\\', '\\\\').replace("'", "\\'") + "'"
+updated = []
+found = False
+for line in lines:
+    if line.startswith('GAME_GEMINI_API_KEY='):
+        if not found:
+            updated.append(encoded)
+            found = True
+    else:
+        updated.append(line)
+if not found:
+    updated.append(encoded)
+path.write_text('\n'.join(updated) + '\n')
+path.chmod(0o600)
+PY
 if grep -q '^IMAGE_TAG=' .env; then
   sed -i -E "s|^IMAGE_TAG=.*|IMAGE_TAG=sha-$RELEASE_SHA|" .env
 else
@@ -35,8 +59,11 @@ else
 fi
 config=$(docker compose config --format json)
 resolved=$(printf '%s' "$config" | python3 -c 'import json,sys; print(json.load(sys.stdin)["services"]["api"]["image"])')
+resolved_key=$(printf '%s' "$config" | python3 -c 'import json,sys; print(json.load(sys.stdin)["services"]["api"]["environment"].get("Entertainment__Gemini__ApiKey", ""))')
 unset config
 [ "$resolved" = "$expected" ] || { echo 'Resolved API image differs from release' >&2; exit 1; }
+[ "$resolved_key" = "$GAME_GEMINI_API_KEY" ] || { echo 'Resolved game AI key differs from deployment secret' >&2; exit 1; }
+unset resolved_key
 printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USER" --password-stdin
 docker compose pull api
 docker compose up -d --no-deps api

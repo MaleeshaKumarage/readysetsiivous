@@ -2,6 +2,8 @@ using System.Security.Claims;
 using CleaningSuite.Domain.Employees;
 using CleaningSuite.Application.QualityCycle;
 using CleaningSuite.Application.Access;
+using CleaningSuite.Application.Tenants;
+using CleaningSuite.Application.Shifts;
 using CleaningSuite.Application.Common;
 using CleaningSuite.Api.Auth;
 using MediatR;
@@ -17,9 +19,13 @@ namespace CleaningSuite.Api.Controllers;
 public class MeController : ControllerBase
 {
     private readonly IMediator _mediator;
-    public MeController(IMediator mediator)
+    private readonly ITenantProfileRepository _profiles;
+    private readonly ITenantContext _tenant;
+    public MeController(IMediator mediator, ITenantProfileRepository profiles, ITenantContext tenant)
     {
         _mediator = mediator;
+        _profiles = profiles;
+        _tenant = tenant;
     }
 
     [HttpGet]
@@ -55,10 +61,12 @@ public class MeController : ControllerBase
         CancellationToken ct = default)
     {
         var employeeId = VerifiedEmployee().Id;
-        var fromUtc = from ?? DateTime.UtcNow.Date;
+        var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
+        var localToday = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, zone).Date;
+        var fromUtc = from ?? TenantTimeZone.StartOfLocalDay(localToday, zone);
         if (!to.HasValue && fromUtc > DateTime.MaxValue.AddDays(-7))
             throw new FluentValidation.ValidationException("Choose a supported shift date range.");
-        var toUtc = to ?? fromUtc.AddDays(7);
+        var toUtc = to ?? TenantTimeZone.StartOfLocalDay(localToday.AddDays(7), zone);
 
         var result = await _mediator.Send(new GetMyShiftsQuery(employeeId, fromUtc, toUtc), ct);
         return Ok(result);

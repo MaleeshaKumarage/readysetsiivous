@@ -51,7 +51,7 @@ public class ServicesAdminController : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        await _mediator.Send(new SoftDeleteServiceCommand(id), ct);
+        await _mediator.Send(new DeleteServiceCommand(id), ct);
         return NoContent();
     }
 

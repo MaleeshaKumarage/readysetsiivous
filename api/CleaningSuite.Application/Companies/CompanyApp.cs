@@ -1,4 +1,8 @@
 using CleaningSuite.Application.Common;
+using CleaningSuite.Application.Agreements;
+using CleaningSuite.Application.QualityCycle;
+using CleaningSuite.Application.Shifts;
+using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Companies;
 using FluentValidation;
 using MediatR;
@@ -33,6 +37,7 @@ public interface ICompanyRepository
     Task<Company?> GetAsync(Guid id, CancellationToken ct = default);
     Task<(IReadOnlyList<Company> Items, int Total)> ListAsync(string? search, int skip, int take, CancellationToken ct = default);
     Task SaveAsync(Company company, CancellationToken ct = default);
+    Task DeleteAsync(Guid id, CancellationToken ct = default);
 }
 
 public interface IBranchRepository
@@ -41,6 +46,7 @@ public interface IBranchRepository
     Task<IReadOnlyList<Branch>> ListByCompanyAsync(Guid companyId, CancellationToken ct = default);
     Task<IReadOnlyList<Branch>> ListByCompanyAsync(Guid companyId, bool includeInactive, CancellationToken ct = default);
     Task SaveAsync(Branch branch, CancellationToken ct = default);
+    Task DeleteAsync(Guid id, CancellationToken ct = default);
 }
 
 public record CreateCompanyCommand(
@@ -63,6 +69,7 @@ public record UpdateCompanyCommand(
 
 public record DeactivateCompanyCommand(Guid Id) : IRequest;
 public record ReactivateCompanyCommand(Guid Id) : IRequest;
+public record DeleteCompanyCommand(Guid Id) : IRequest;
 
 public record ListCompaniesQuery(string? Search, int Skip, int Take) : IRequest<Paged<CompanyDto>>;
 
@@ -89,6 +96,7 @@ public record UpdateBranchCommand(
 
 public record DeactivateBranchCommand(Guid Id) : IRequest;
 public record ReactivateBranchCommand(Guid Id) : IRequest;
+public record DeleteBranchCommand(Guid Id) : IRequest;
 
 public class CompanyHandlers
 {
@@ -169,6 +177,25 @@ public class CompanyHandlers
             company.IsActive = true;
             company.UpdatedUtc = DateTime.UtcNow;
             await repository.SaveAsync(company, ct);
+        }
+    }
+
+    public sealed class DeleteCompanyCommandHandler(ICompanyRepository companies, IBranchRepository branches,
+        IShiftRepository shifts, IAgreementRepository agreements, IQualityCycleRepository forms,
+        ITenantContext tenant) : IRequestHandler<DeleteCompanyCommand>
+    {
+        public async Task Handle(DeleteCompanyCommand request, CancellationToken ct)
+        {
+            var company = await companies.GetAsync(request.Id, ct) ?? throw new NotFoundException("Company", request.Id);
+            if (company.IsActive) throw new InactiveRecordDeleteConflictException("Deactivate the company before deleting it.");
+            if ((await branches.ListByCompanyAsync(company.Id, true, ct)).Count > 0)
+                throw new InactiveRecordDeleteConflictException("Delete or move the company's branches before deleting it.");
+            if ((await shifts.ListForReportingAsync(ct)).Any(s => s.CompanyId == company.Id)
+                || (await forms.ListFormsAsync(null, null, null, ct, null, null, company.Id, null)).Count > 0)
+                throw new InactiveRecordDeleteConflictException("This company has shift or checklist history and must be retained.");
+            if ((await agreements.ListAsync(tenant.TenantId, ct)).Any(a => a.CompanyId == company.Id))
+                throw new InactiveRecordDeleteConflictException("This company has agreement records and must be retained.");
+            await companies.DeleteAsync(company.Id, ct);
         }
     }
 
@@ -293,6 +320,20 @@ public class CompanyHandlers
                     ?? throw new NotFoundException("Branch", request.Id);
                 branch.Deactivate();
                 await _repository.SaveAsync(branch, ct);
+            }
+        }
+
+        public sealed class DeleteBranchCommandHandler(IBranchRepository branches, IShiftRepository shifts,
+            IQualityCycleRepository forms) : IRequestHandler<DeleteBranchCommand>
+        {
+            public async Task Handle(DeleteBranchCommand request, CancellationToken ct)
+            {
+                var branch = await branches.GetAsync(request.Id, ct) ?? throw new NotFoundException("Branch", request.Id);
+                if (branch.IsActive) throw new InactiveRecordDeleteConflictException("Deactivate the branch before deleting it.");
+                if ((await shifts.ListForReportingAsync(ct)).Any(s => s.BranchId == branch.Id)
+                    || (await forms.ListFormsAsync(null, null, null, ct, null, null, null, branch.Id)).Count > 0)
+                    throw new InactiveRecordDeleteConflictException("This branch has shift or checklist history and must be retained.");
+                await branches.DeleteAsync(branch.Id, ct);
             }
         }
     }

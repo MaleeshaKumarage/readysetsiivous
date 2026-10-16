@@ -20,6 +20,8 @@ public interface IQualityCycleRepository
     Task<QualityCycleForm?> GetFormByTokenAsync(string token, CancellationToken ct = default);
     Task<QualityCycleForm?> GetFormByShiftOccurrenceAsync(Guid shiftId, Guid employeeId, DateTime shiftOccurrenceUtc, CancellationToken ct = default);
     Task<IReadOnlyList<QualityCycleForm>> ListFormsAsync(Guid? shiftId, DateTime? fromUtc, DateTime? toUtc, CancellationToken ct = default);
+    Task<IReadOnlyList<QualityCycleForm>> ListFormsAsync(Guid? shiftId, DateTime? fromUtc, DateTime? toUtc, CancellationToken ct,
+        Guid? employeeId, Guid? templateId, Guid? companyId, Guid? branchId);
     Task SaveFormAsync(QualityCycleForm form, CancellationToken ct = default);
     Task<bool> TryCreateFormAsync(QualityCycleForm form, CancellationToken ct = default);
 }

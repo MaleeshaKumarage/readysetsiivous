@@ -202,6 +202,7 @@ public class EmployeeReadScopeTests
         private readonly WebApplicationFactory<Program> factory;
         public Mock<IMediator> Mediator { get; } = new();
         public Mock<IEmployeeRepository> Employees { get; } = new();
+        public Mock<ITenantProfileRepository> Profiles { get; } = new();
         public Employee Employee { get; } = new() { KeycloakUserId = "scope-sub" };
         private readonly HttpClient client;
         public Host()
@@ -209,12 +210,15 @@ public class EmployeeReadScopeTests
             key = new(rsa) { KeyId = "scope-key" }; var pub = rsa.ExportParameters(false);
             var jwks = JsonSerializer.Serialize(new { keys = new[] { new { kty = "RSA", kid = key.KeyId, use = "sig", alg = "RS256", n = Base64UrlEncoder.Encode(pub.Modulus!), e = Base64UrlEncoder.Encode(pub.Exponent!) } } });
             Employees.Setup(r => r.GetByKeycloakUserIdAsync("scope-sub", It.IsAny<CancellationToken>())).ReturnsAsync(Employee);
+            Profiles.Setup(r => r.GetAsync("tenant-a", It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new TenantProfile { TimeZoneId = "Europe/Helsinki" });
             var registry = new Mock<ITenantRegistry>(); registry.Setup(r => r.GetBySlugAsync("tenant-a", It.IsAny<CancellationToken>())).ReturnsAsync(new TenantRegistration { Slug = "tenant-a", Status = TenantRegistration.StatusActive });
             factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => {
                 builder.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string,string?> { ["Auth:Keycloak:ServerUrl"]="https://auth.test", ["Auth:Keycloak:Audience"]="cleaning-suite-api" }));
                 builder.ConfigureTestServices(services => {
                     foreach (var d in services.Where(d => d.ImplementationType == typeof(MartenSchemaInitializer) || d.ImplementationType == typeof(QualityCycleWorker)).ToList()) services.Remove(d);
                     services.RemoveAll<IEmployeeRepository>(); services.AddSingleton(Employees.Object);
+                    services.RemoveAll<ITenantProfileRepository>(); services.AddSingleton(Profiles.Object);
                     services.RemoveAll<ITenantRegistry>(); services.AddSingleton(registry.Object);
                     services.RemoveAll<IMediator>(); services.AddSingleton(Mediator.Object);
                     services.AddHttpClient("KeycloakSigningKeys").ConfigurePrimaryHttpMessageHandler(() => new Keys(jwks));

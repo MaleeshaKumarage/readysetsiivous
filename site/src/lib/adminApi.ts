@@ -123,6 +123,15 @@ export async function adminSendJson<T>(
   return data;
 }
 
+export async function adminDelete(path: string): Promise<void> {
+  const response = await authorizedFetch(path, { method: 'DELETE' });
+  if (!response.ok) {
+    const problem = await response.json().catch(() => ({})) as { detail?: string; title?: string };
+    throw new Error(problem.detail || problem.title || `Delete failed (${response.status}). Please retry.`);
+  }
+  invalidateAdminCache();
+}
+
 export const adminBookings = {
   list: (query = '') => adminGet<Booking[]>(`/api/v1/admin/bookings${query}`),
   confirm: (id: string) => adminSend(`/api/v1/admin/bookings/${id}/confirm`, 'POST', {}),
@@ -158,6 +167,7 @@ export const adminServices = {
   update: (id: string, fields: ServiceFields, isActive: boolean) =>
     adminSend(`/api/v1/admin/services/${id}`, 'PUT', { fields, isActive }),
   remove: (id: string) => adminSend(`/api/v1/admin/services/${id}`, 'DELETE'),
+  deleteInactive: (id: string) => adminDelete(`/api/v1/admin/services/${id}`),
   uploadImage: async (id: string, file: File): Promise<string | null> => {
     const t = token();
     const body = new FormData();
@@ -213,6 +223,7 @@ export const adminEmployees = {
   update: (id: string, fields: EmployeeFields, isActive: boolean) =>
     adminSend(`/api/v1/admin/employees/${id}`, 'PUT', { fields, isActive }),
   deactivate: (id: string) => adminSend(`/api/v1/admin/employees/${id}/deactivate`, 'POST'),
+  deleteInactive: (id: string) => adminDelete(`/api/v1/admin/employees/${id}`),
   invite: async (id: string): Promise<{ email: string; keycloakUserId: string; status: 'Sent' | 'AlreadySent'; sentUtc: string }> => {
     const response = await authorizedFetch(`/api/v1/admin/employees/${id}/invite`, { method: 'POST' });
     if (!response.ok) {
@@ -235,7 +246,7 @@ export interface AgreementDetail extends AgreementListItem {
 }
 
 export const adminTenant = {
-  get: () => adminGet<{ companyName: string }>('/api/v1/admin/tenant'),
+  get: () => adminGet<{ companyName: string; timeZoneId?: string }>('/api/v1/admin/tenant'),
 };
 
 // Parse RFC 7807 problem details into a single human-readable message, so the
@@ -282,6 +293,7 @@ export const adminAgreements = {
   cancel: (id: string) => adminSend(`/api/v1/admin/agreements/${id}/cancel`, 'POST'),
   activate: (id: string) => adminSend(`/api/v1/admin/agreements/${id}/activate`, 'POST'),
   deactivate: (id: string) => adminSend(`/api/v1/admin/agreements/${id}/deactivate`, 'POST'),
+  deleteInactive: (id: string) => adminDelete(`/api/v1/admin/agreements/${id}`),
   documentUrl: (id: string) => `${API_URL}/api/v1/admin/agreements/${id}/document`,
   downloadDocument: async (id: string): Promise<void> => {
     const t = token();
@@ -449,6 +461,7 @@ export const adminShifts = {
   setQualityCycleTemplate: (id: string, templateId: string | null) => adminSendJson<Shift>(`/api/v1/admin/shifts/${id}/quality-cycle-template`, "PUT", { templateId }),
   deactivate: (id: string) => adminSend(`/api/v1/admin/shifts/${id}/deactivate`, 'POST'),
   reactivate: (id: string) => adminSendJson<Shift>(`/api/v1/admin/shifts/${id}/reactivate`, 'POST'),
+  deleteInactive: (id: string) => adminDelete(`/api/v1/admin/shifts/${id}`),
   assignments: (id: string) =>
     shiftAssignmentRequest<ShiftAssignment[]>(`/api/v1/admin/shifts/${id}/assignments`),
   assign: (id: string, employeeId: string) =>
@@ -525,6 +538,7 @@ export const adminCompanies = {
     }
   ) => companyRequest<Company>(`/api/v1/admin/companies/${id}`, 'PUT', { id, ...body }),
   deactivate: (id: string) => adminSend(`/api/v1/admin/companies/${id}/deactivate`, 'POST'),
+  deleteInactive: (id: string) => adminDelete(`/api/v1/admin/companies/${id}`),
 };
 
 export const adminBranches = {
@@ -552,4 +566,5 @@ export const adminBranches = {
     }
   ) => adminSendJson<Branch>(`/api/v1/admin/companies/branches/${id}`, 'PUT', { id, ...body }),
   deactivate: (id: string) => adminSend(`/api/v1/admin/companies/branches/${id}/deactivate`, 'POST'),
+  deleteInactive: (id: string) => adminDelete(`/api/v1/admin/companies/branches/${id}`),
 };

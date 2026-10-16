@@ -1,189 +1,44 @@
 using System.Collections.Concurrent;
-using CleaningSuite.Application.Entertainment;
-
+using Microsoft.AspNetCore.SignalR;
 namespace CleaningSuite.Api.Hubs;
 
-/// <summary>
-/// In-memory live game state. Persisted state lives in Marten; this tracks only
-/// what changes per connection/round: player connections, turn order, current
-/// translator, reveal counts, and running scores.
-/// </summary>
-public class GameSessionManager
+/// <summary>Connection/presence and bounded per-game locks only; game state is durable.</summary>
+public sealed class GameSessionManager
 {
-    private readonly ConcurrentDictionary<Guid, GameSession> _sessions = new();
-    private readonly ConcurrentDictionary<string, Guid> _connectionToGroup = new();
-
-    public class GameSession
+    private sealed class Room { public SemaphoreSlim Gate { get; } = new(1,1); public Dictionary<Guid,string> Connections { get; } = new(); }
+    private readonly ConcurrentDictionary<Guid,Room> _rooms = new();
+    private readonly ConcurrentDictionary<string,(Guid Group,Guid Player)> _connections = new();
+    private readonly ConcurrentDictionary<string,Queue<DateTime>> _actions = new();
+    public async Task<IAsyncDisposable> AcquireAsync(Guid groupId,CancellationToken ct=default)
     {
-        public Dictionary<Guid, string> ConnectionIds { get; } = new(); // playerId -> connectionId
-        public List<Guid> TurnOrder { get; set; } = new();
-        public int TranslatorIndex { get; set; }
-        public Dictionary<Guid, int> Scores { get; } = new();
-        public RoundState? CurrentRound { get; set; }
+        if (!_rooms.ContainsKey(groupId) && _rooms.Count >= 1000) throw new HubException("Game capacity reached. Please retry later.");
+        var room=_rooms.GetOrAdd(groupId,_=>new());
+        if (!await room.Gate.WaitAsync(TimeSpan.FromSeconds(1),ct)) throw new HubException("An action is already being processed. Please wait and retry.");
+        return new Lease(room.Gate);
     }
-
-    public class RoundState
-    {
-        public Guid RoundId { get; init; }
-        public int RoundNumber { get; init; }
-        public Guid TranslatorId { get; init; }
-        public string SentenceEn { get; init; } = "";
-        public string SentenceFi { get; init; } = "";
-        public List<string> BaseForms { get; init; } = new();
-        public int TranslatorHintReveals { get; set; }
-        public bool AnswerRevealed { get; set; }
+    private sealed class Lease(SemaphoreSlim gate):IAsyncDisposable { public ValueTask DisposeAsync(){gate.Release();return ValueTask.CompletedTask;} }
+    public string? GetConnectionId(Guid groupId,Guid playerId) {
+        if (!_rooms.TryGetValue(groupId,out var room)) return null;
+        lock(room.Connections) return room.Connections.GetValueOrDefault(playerId);
     }
-
-    public void RegisterConnection(Guid groupId, Guid playerId, string connectionId)
-    {
-        var session = _sessions.GetOrAdd(groupId, _ => new GameSession());
-        lock (session)
-        {
-            session.ConnectionIds[playerId] = connectionId;
+    public bool IsConnected(Guid groupId,Guid playerId)=>GetConnectionId(groupId,playerId) is not null;
+    public (Guid Group,Guid Player)? GetMembership(string connectionId)=>_connections.TryGetValue(connectionId,out var value)?value:null;
+    public void RegisterConnection(Guid groupId,Guid playerId,string connectionId) {
+        RemoveConnection(connectionId);
+        var room=_rooms.GetOrAdd(groupId,_=>new());
+        lock(room.Connections) {
+            if(room.Connections.TryGetValue(playerId,out var old)) { _connections.TryRemove(old,out _); _actions.TryRemove(old,out _); }
+            room.Connections[playerId]=connectionId;
         }
-        _connectionToGroup[connectionId] = groupId;
+        _connections[connectionId]=(groupId,playerId);
     }
-
-    public void RemoveConnection(string connectionId)
-    {
-        if (!_connectionToGroup.TryRemove(connectionId, out var groupId))
-            return;
-
-        if (!_sessions.TryGetValue(groupId, out var session))
-            return;
-
-        lock (session)
-        {
-            var playerId = session.ConnectionIds
-                .FirstOrDefault(kv => kv.Value == connectionId).Key;
-            if (playerId != default)
-                session.ConnectionIds.Remove(playerId);
-        }
+    public void RemoveConnection(string connectionId) {
+        _actions.TryRemove(connectionId,out _);
+        if(!_connections.TryRemove(connectionId,out var value)||!_rooms.TryGetValue(value.Group,out var room))return;
+        lock(room.Connections) if(room.Connections.GetValueOrDefault(value.Player)==connectionId) room.Connections.Remove(value.Player);
     }
-
-    public void StartGame(Guid groupId, IReadOnlyList<Guid> turnOrder)
-    {
-        var session = _sessions.GetOrAdd(groupId, _ => new GameSession());
-        lock (session)
-        {
-            session.TurnOrder = turnOrder.ToList();
-            session.TranslatorIndex = 0;
-            session.Scores.Clear();
-            foreach (var playerId in turnOrder)
-                session.Scores[playerId] = 0;
-        }
-    }
-
-    public void StartRound(Guid groupId, EntertainmentRoundDto round)
-    {
-        var session = _sessions.GetOrAdd(groupId, _ => new GameSession());
-        lock (session)
-        {
-            session.CurrentRound = new RoundState
-            {
-                RoundId = round.RoundId,
-                RoundNumber = round.RoundNumber,
-                TranslatorId = round.TranslatorPlayerId,
-                SentenceEn = round.SentenceEn,
-                SentenceFi = round.SentenceFi ?? "",
-                BaseForms = round.BaseForms.ToList(),
-            };
-        }
-    }
-
-    public RoundState? GetRound(Guid groupId)
-    {
-        if (!_sessions.TryGetValue(groupId, out var session))
-            return null;
-        lock (session)
-        {
-            return session.CurrentRound;
-        }
-    }
-
-    public void RecordTranslatorHintReveal(Guid groupId)
-    {
-        var session = _sessions.GetOrAdd(groupId, _ => new GameSession());
-        lock (session)
-        {
-            if (session.CurrentRound is not null)
-                session.CurrentRound.TranslatorHintReveals += 1;
-        }
-    }
-
-    public void RecordAnswerRevealed(Guid groupId)
-    {
-        var session = _sessions.GetOrAdd(groupId, _ => new GameSession());
-        lock (session)
-        {
-            if (session.CurrentRound is not null)
-                session.CurrentRound.AnswerRevealed = true;
-        }
-    }
-
-    public bool WasCleanSolve(Guid groupId)
-    {
-        if (!_sessions.TryGetValue(groupId, out var session))
-            return false;
-        lock (session)
-        {
-            return session.CurrentRound is not null && session.CurrentRound.TranslatorHintReveals == 0;
-        }
-    }
-
-    public void ApplyDeltas(Guid groupId, IReadOnlyDictionary<Guid, int> deltas)
-    {
-        var session = _sessions.GetOrAdd(groupId, _ => new GameSession());
-        lock (session)
-        {
-            foreach (var (playerId, delta) in deltas)
-                session.Scores[playerId] = session.Scores.GetValueOrDefault(playerId) + delta;
-        }
-    }
-
-    public IReadOnlyDictionary<Guid, int> GetScores(Guid groupId)
-    {
-        if (!_sessions.TryGetValue(groupId, out var session))
-            return new Dictionary<Guid, int>();
-        lock (session)
-        {
-            return new Dictionary<Guid, int>(session.Scores);
-        }
-    }
-
-    public Guid? AdvanceTranslator(Guid groupId)
-    {
-        if (!_sessions.TryGetValue(groupId, out var session))
-            return null;
-        lock (session)
-        {
-            if (session.TurnOrder.Count == 0)
-                return null;
-            session.TranslatorIndex = (session.TranslatorIndex + 1) % session.TurnOrder.Count;
-            return session.TurnOrder[session.TranslatorIndex];
-        }
-    }
-
-    public IReadOnlyList<Guid> GetTurnOrder(Guid groupId)
-    {
-        if (!_sessions.TryGetValue(groupId, out var session))
-            return Array.Empty<Guid>();
-        lock (session)
-        {
-            return session.TurnOrder.ToList();
-        }
-    }
-
-    public string? GetConnectionId(Guid groupId, Guid playerId)
-    {
-        if (!_sessions.TryGetValue(groupId, out var session))
-            return null;
-
-        lock (session)
-        {
-            return session.ConnectionIds.TryGetValue(playerId, out var connectionId)
-                ? connectionId
-                : null;
-        }
+    public void CheckRate(string connectionId) {
+        var queue=_actions.GetOrAdd(connectionId,_=>new()); var now=DateTime.UtcNow;
+        lock(queue){while(queue.Count>0 && now-queue.Peek()>TimeSpan.FromMinutes(1))queue.Dequeue();if(queue.Count>=60)throw new HubException("Too many game actions. Wait a moment and retry.");queue.Enqueue(now);}
     }
 }

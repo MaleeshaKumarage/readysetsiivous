@@ -1,649 +1,139 @@
 'use client';
-
 import { useEffect, useRef, useState } from 'react';
 import { Card } from '@/ds/Card';
 import { Button } from '@/ds/Button';
 import { Input, Textarea, Field } from '@/ds/Input';
-import {
-  CEFR_LEVELS,
-  CefrLevel,
-  createEntertainmentGroup,
-  getEntertainmentLobby,
-  joinEntertainmentGroup,
-  Lobby,
-  LobbyPlayer,
-  RoundStarted,
-  ScoreEntry,
-  Standing,
-  saveEntertainmentSession,
-  loadEntertainmentSession,
-  clearEntertainmentSession,
-} from '@/lib/entertainmentApi';
+import { CEFR_LEVELS, CefrLevel, EntertainmentSession, Lobby, RoundStarted, AnswerEvaluation, Standing, createEntertainmentGroup, joinEntertainmentGroup, getEntertainmentLobby, loadEntertainmentSession, saveEntertainmentSession, clearEntertainmentSession } from '@/lib/entertainmentApi';
 import { createEntertainmentHub } from '@/lib/entertainmentHub';
 import type { HubConnection } from '@microsoft/signalr';
-import { toast } from 'sonner';
 
 type View = 'landing' | 'create' | 'join' | 'lobby' | 'game' | 'results';
-
-interface Session {
-  groupId: string;
-  playerId: string;
-  joinKey?: string;
-  isCreator?: boolean;
-}
-
 export default function EntertainmentClient() {
-  const [view, setView] = useState<View>(() => (loadEntertainmentSession() ? 'lobby' : 'landing'));
-  const [session, setSession] = useState<Session | null>(() => loadEntertainmentSession());
+  const [session, setSession] = useState<EntertainmentSession | null>(() => loadEntertainmentSession());
+  const [view, setView] = useState<View>(() => loadEntertainmentSession() ? 'lobby' : 'landing');
   const [lobby, setLobby] = useState<Lobby | null>(null);
   const [round, setRound] = useState<RoundStarted | null>(null);
+  const [answer, setAnswer] = useState('');
+  const [evaluation, setEvaluation] = useState<AnswerEvaluation | null>(null);
+  const [hints, setHints] = useState<Record<number, string>>({});
+  const [revealedAnswer, setRevealedAnswer] = useState<string | null>(null);
   const [scores, setScores] = useState<Record<string, number>>({});
-  const [standings, setStandings] = useState<Standing[] | null>(null);
-  const [answerRevealed, setAnswerRevealed] = useState(false);
-  const [roundLoading, setRoundLoading] = useState(false);
+  const [standings, setStandings] = useState<Standing[]>([]);
+  const [connected, setConnected] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const connectionRef = useRef<HubConnection | null>(null);
-
+  const roundIdRef = useRef<string | null>(null);
+  const busyRef = useRef(false);
+  const pendingRef = useRef<{ method: string; args: unknown[] } | null>(null);
   useEffect(() => {
     if (!session) return;
     let cancelled = false;
-
-    getEntertainmentLobby(session.groupId)
-      .then((l) => { if (!cancelled) setLobby(l); })
-      .catch(() => {});
-
-    const connection = createEntertainmentHub();
-    connectionRef.current = connection;
-
+    const connection = createEntertainmentHub(); connectionRef.current = connection;
+    getEntertainmentLobby(session.groupId).then(l => { if (!cancelled) setLobby(l); }).catch(() => {});
     connection.on('lobbyUpdated', (l: Lobby) => setLobby(l));
     connection.on('roundStarted', (r: RoundStarted) => {
-      setRound(r);
-      setAnswerRevealed(false);
-      setRoundLoading(false);
-      setView('game');
-      toast(r.translatorPlayerId === session.playerId
-        ? `Round ${r.roundNumber} — your turn!`
-        : `Round ${r.roundNumber} started`);
+      const sameRound = roundIdRef.current === r.roundId;
+      setAnswer(previous => r.submittedAnswer ?? (sameRound ? previous : ''));
+      setHints(previous => sameRound ? previous : {});
+      setRevealedAnswer(r.sentenceFi); setEvaluation(r.evaluation ?? null); setRound(r); roundIdRef.current = r.roundId;
+      setBusy(false); busyRef.current = false; pendingRef.current = null; setError(null); setView('game');
     });
-    connection.on('answerRevealed', () => setAnswerRevealed(true));
-    connection.on('scoreUpdated', (entries: ScoreEntry[]) => {
-      const map: Record<string, number> = {};
-      entries.forEach((e) => { map[e.playerId] = e.score; });
-      setScores(map);
+    connection.on('hintRevealed', (h: { roundId: string; index: number; finnish: string }) => {
+      if (h.roundId === roundIdRef.current) setHints(previous => ({ ...previous, [h.index]: h.finnish }));
     });
-    connection.on('gameEnded', (st: Standing[]) => {
-      setRoundLoading(false);
-      setStandings(st);
-      setView('results');
-      toast('Game over — check the results!');
+    connection.on('answerRevealed', (a: { roundId: string; sentenceFi: string }) => {
+      if (a.roundId === roundIdRef.current) setRevealedAnswer(a.sentenceFi);
     });
-    connection.on('gameError', (message: string) => {
-      setRoundLoading(false);
-      toast.error(message || 'Something went wrong. Please try again.');
+    connection.on('answerEvaluated', (a: { roundId: string; answer: string; evaluation: AnswerEvaluation }) => {
+      if (a.roundId !== roundIdRef.current) return;
+      setAnswer(a.answer); setEvaluation(a.evaluation); setBusy(false); busyRef.current = false; pendingRef.current = null; setError(null);
     });
-
-    connection
-      .start()
-      .then(() => connection.invoke('JoinLobby', session.groupId, session.playerId))
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-      connectionRef.current = null;
-      connection.stop().catch(() => {});
+    connection.on('scoreUpdated', (entries: { playerId: string; score: number }[]) => setScores(Object.fromEntries(entries.map(e => [e.playerId, e.score]))));
+    connection.on('gameEnded', (s: Standing[]) => { setStandings(s); setView('results'); setBusy(false); busyRef.current = false; pendingRef.current = null; });
+    connection.on('gameError', (message: string) => { setBusy(false); busyRef.current = false; setError(message || 'Request failed. Please retry.'); });
+    const join = async () => {
+      setConnected(false);
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      try { await Promise.race([connection.invoke('JoinLobby', session.groupId, session.playerId, session.playerToken), new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('Rejoin timed out')), 15000); })]); } finally { clearTimeout(timeout); }
+      if (!cancelled) { setConnected(true); setError(null); }
     };
+    const disconnected = () => { setConnected(false); setBusy(false); busyRef.current = false; setError('Connection lost. Please reconnect.'); };
+    connection.onreconnecting(disconnected); connection.onclose(disconnected);
+    connection.onreconnected(() => { void join().catch(() => setError('Rejoin failed. Please reconnect.')); });
+    let connectTimeout: ReturnType<typeof setTimeout> | undefined;
+    Promise.race([connection.start(), new Promise((_, reject) => { connectTimeout = setTimeout(() => reject(new Error('Connection timed out')), 15000); })]).then(join).finally(() => clearTimeout(connectTimeout)).catch(() => { if (!cancelled) setError('Connection failed. Please reconnect.'); });
+    return () => { cancelled = true; connectionRef.current = null; void connection.stop().catch(() => {}); };
   }, [session]);
-
-  function send(method: string, ...args: unknown[]) {
-    connectionRef.current?.invoke(method, ...args).catch(() => {});
+  async function send(method: string, ...args: unknown[]) {
+    if (!connected || busyRef.current || !connectionRef.current) return;
+    busyRef.current = true; setBusy(true); setError(null); pendingRef.current = { method, args };
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try { await Promise.race([connectionRef.current.invoke(method, ...args), new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('Timeout')), 70000); })]); }
+    catch { setError('Request failed. Please retry.'); }
+    finally { clearTimeout(timeout); setBusy(false); busyRef.current = false; }
   }
-
-  function startGame() {
-    if (!session) return;
-    setRoundLoading(true);
-    toast('Starting game…');
-    send('StartGame', session.groupId, session.playerId);
+  async function leave() {
+    if (session && connected) {
+      try { await Promise.race([connectionRef.current?.invoke('LeaveLobby', session.groupId, session.playerId), new Promise(resolve => setTimeout(resolve, 3000))]); } catch {}
+    }
+    clearEntertainmentSession(); setSession(null); setLobby(null); setRound(null); roundIdRef.current = null; setError(null); setView('landing');
   }
-
-  function leave() {
-    clearEntertainmentSession();
-    setSession(null);
-    setLobby(null);
-    setRound(null);
-    setStandings(null);
-    setScores({});
-    setView('landing');
-  }
-
-  function sendRoundAction(method: string) {
-    if (!session) return;
-    setRoundLoading(true);
-    toast(method === 'Done' ? 'Submitting…' : 'Next round…');
-    send(method, session.groupId, session.playerId);
-  }
-
-  return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
-      <h1 className="text-3xl font-bold text-accent-900 dark:text-white mb-2">Language Game</h1>
-      <p className="text-gray-600 dark:text-gray-300 mb-8">
-        Create a group, share the join key, and play a realtime translation game together.
-      </p>
-
-      {view === 'landing' && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Card variant="elevated" padding="lg" className="text-center">
-            <h2 className="text-xl font-semibold mb-2">Create group</h2>
-            <p className="text-gray-500 dark:text-gray-400 mb-4">
-              Start a new group and get a join key to share.
-            </p>
-            <Button onClick={() => setView('create')} fullWidth>
-              Create group
-            </Button>
-          </Card>
-          <Card variant="elevated" padding="lg" className="text-center">
-            <h2 className="text-xl font-semibold mb-2">Join group</h2>
-            <p className="text-gray-500 dark:text-gray-400 mb-4">
-              Have a key? Join an existing group.
-            </p>
-            <Button variant="outline" onClick={() => setView('join')} fullWidth>
-              Join group
-            </Button>
-          </Card>
-        </div>
-      )}
-
-      {view === 'create' && (
-        <CreateForm
-          onBack={() => setView('landing')}
-          onCreated={(result) => {
-            const s: Session = {
-              groupId: result.groupId,
-              playerId: result.creatorPlayerId,
-              joinKey: result.joinKey,
-              isCreator: true,
-            };
-            saveEntertainmentSession(s);
-            setSession(s);
-            setView('lobby');
-          }}
-        />
-      )}
-
-      {view === 'join' && (
-        <JoinForm
-          onBack={() => setView('landing')}
-          onJoined={(result) => {
-            const s: Session = { groupId: result.groupId, playerId: result.playerId, isCreator: false };
-            saveEntertainmentSession(s);
-            setSession(s);
-            setView('lobby');
-          }}
-        />
-      )}
-
-      {roundLoading ? (
-        <LoadingView />
-      ) : (
-        <>
-          {view === 'lobby' && session && (
-            <LobbyView
-              session={session}
-              lobby={lobby}
-              onStart={startGame}
-              onLeave={leave}
-            />
-          )}
-
-          {view === 'game' && session && round && (
-            <GameView
-              key={round.roundNumber}
-              session={session}
-              round={round}
-              isTranslator={round.translatorPlayerId === session.playerId}
-              players={lobby?.players ?? []}
-              scores={scores}
-              answerRevealed={answerRevealed}
-              send={send}
-              sendRoundAction={sendRoundAction}
-            />
-          )}
-
-          {view === 'results' && standings && (
-            <ResultsView standings={standings} onLeave={leave} />
-          )}
-        </>
-      )}
-    </main>
-  );
+  function adopt(s: EntertainmentSession) { saveEntertainmentSession(s); setSession(s); setView('lobby'); }
+  const translator = round?.translatorPlayerId === session?.playerId;
+  const disabled = !connected || busy;
+  return <main className="mx-auto max-w-2xl px-4 py-10 space-y-6">
+    <h1 className="text-3xl font-bold">Language Game</h1><p>Create a group, share the join key, and play a realtime translation game together.</p>
+    {view === 'landing' && <div className="flex gap-4"><Button onClick={() => setView('create')}>Create group</Button><Button onClick={() => setView('join')}>Join group</Button></div>}
+    {(view === 'create' || view === 'join') && <GroupForm create={view === 'create'} onBack={() => setView('landing')} onSession={adopt} />}
+    {session && <p role="status">{connected ? 'Connected' : 'Connecting…'}</p>}
+    {error && <div role="alert">{error}{connected && pendingRef.current && <Button onClick={() => { const action = pendingRef.current; if (action) void send(action.method, ...action.args); }}>Retry</Button>}
+      {!connected && <Button onClick={() => setSession(session ? { ...session } : null)}>Reconnect</Button>}</div>}
+    {busy && <p role="status">Working…</p>}
+    {view === 'lobby' && session && <Card padding="lg" className="space-y-4"><h2>{lobby?.groupName || 'Lobby'}</h2>
+      {session.joinKey && <><p className="text-3xl">{session.joinKey}</p><Button onClick={() => void navigator.clipboard.writeText(session.joinKey!)}>Copy key</Button>
+        <Button onClick={() => void navigator.clipboard.writeText(`${window.location.origin}/entertainment/?join=${encodeURIComponent(session.joinKey!)}`)}>Copy join link</Button></>}
+      {!lobby?.players.length && <p>Waiting for players to join...</p>}
+      <ul>{lobby?.players.map(p => <li key={p.playerId}>{p.name} {p.level} {p.isCreator && <span>Host</span>}</li>)}</ul>
+      {session.isCreator && <Button disabled={disabled} onClick={() => void send('StartGame', session.groupId, session.playerId)}>Start game</Button>}
+      <Button onClick={() => void leave()}>Leave</Button></Card>}
+    {view === 'game' && session && round && <Card padding="lg" className="space-y-5">
+      <h2 className="text-xl">Round {round.roundNumber}</h2><p>{translator ? 'Translate this into Finnish' : 'Someone is translating — you have the answer'}</p>
+      <div>{lobby?.players.map(p => <span className="mr-4" key={p.playerId}>{p.name} <b>{scores[p.playerId] ?? 0}</b></span>)}</div>
+      <p data-testid="sentence-en" className="text-2xl">{round.sentenceEn}</p>
+      {!translator && (revealedAnswer ? <p data-testid="sentence-fi-revealed">{revealedAnswer}</p> : <Button data-testid="sentence-fi" disabled={disabled} onClick={() => void send('RevealAnswer', session.groupId, session.playerId, round.roundId)}>Reveal Finnish answer</Button>)}
+      <table className="w-full text-left"><caption>Hint words</caption><thead><tr><th>English</th><th>Finnish</th></tr></thead><tbody>{round.hints.map((hint, index) => <tr key={index}><td>{hint.english}</td><td>{hints[index] !== undefined ? <span data-testid="revealed-word">{hints[index]}</span> : <button type="button" data-testid="covered-word" aria-label={`Reveal Finnish for ${hint.english}`} disabled={disabled || !!evaluation} onClick={() => void send('RevealHint', session.groupId, session.playerId, index, round.roundId)}>Reveal</button>}</td></tr>)}</tbody></table>
+      {translator && <><Field label="Your Finnish answer"><Textarea aria-label="Your Finnish answer" value={answer} maxLength={2000} disabled={!!evaluation} onChange={e => setAnswer(e.target.value)} /></Field>
+        {!evaluation && <Button disabled={disabled || !answer.trim()} onClick={() => void send('CheckAnswer', session.groupId, session.playerId, round.roundId, answer)}>Check answer</Button>}</>}
+      {evaluation && <div data-testid="answer-feedback" aria-live="polite" className="space-y-3"><h3>{evaluation.isCorrect ? 'Meaning correct' : 'Meaning not fully matched'}</h3>
+        <p data-testid="round-score">Score this round: {evaluation.scorePoints} / 10 ({evaluation.meaningPoints} / 7 meaning, {evaluation.finnishPoints} / 3 Finnish)</p>
+        <p>Original answer: <span>{answer}</span></p><p>Corrected answer: <span>{evaluation.correctedAnswer}</span></p>
+        <ul>{evaluation.corrections.map((c, index) => <li key={index}><del>{c.original}</del> → <mark>{c.replacement}</mark>: {c.reason}</li>)}</ul><p>Why: {evaluation.explanation}</p>
+        {translator && <Button disabled={disabled} onClick={() => void send('NextRound', session.groupId, session.playerId, round.roundId)}>Next round</Button>}</div>}
+      {session.isCreator && <Button disabled={disabled} onClick={() => void send('EndGame', session.groupId, session.playerId)}>End game</Button>}<Button onClick={() => void leave()}>Leave</Button>
+    </Card>}
+    {view === 'results' && <Card padding="lg"><h2>Results</h2><ol>{standings.map((s, index) => <li key={s.playerId}>{s.name} {s.score} {index === 0 && <span>Winner</span>}</li>)}</ol><Button onClick={() => void leave()}>Leave</Button></Card>}
+  </main>;
 }
-
-function LoadingView() {
-  return (
-    <Card variant="elevated" padding="lg" className="text-center space-y-6">
-      <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-brand-500" />
-      <h2 className="text-xl font-semibold">Generating question…</h2>
-      <p className="text-sm text-gray-500 dark:text-gray-400">
-        Asking the AI to prepare the next sentence…
-      </p>
-      <div className="w-full h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-        <div className="h-full w-full bg-brand-500 rounded-full animate-pulse" />
-      </div>
-    </Card>
-  );
-}
-
-function LevelSelect({ value, onChange }: { value: CefrLevel | ''; onChange: (v: CefrLevel) => void }) {
-  return (
-    <div className="grid grid-cols-6 gap-2">
-      {CEFR_LEVELS.map((lvl) => (
-        <button
-          key={lvl}
-          type="button"
-          onClick={() => onChange(lvl)}
-          className={
-            'rounded-xl border px-2 py-2 text-sm font-semibold transition-colors ' +
-            (value === lvl
-              ? 'bg-accent-900 text-white border-accent-900'
-              : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:border-brand-500')
-          }
-        >
-          {lvl}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function CreateForm({
-  onBack,
-  onCreated,
-}: {
-  onBack: () => void;
-  onCreated: (result: { groupId: string; joinKey: string; creatorPlayerId: string }) => void;
-}) {
-  const [name, setName] = useState('');
-  const [geminiApiKey, setGeminiApiKey] = useState('');
-  const [description, setDescription] = useState('');
-  const [creatorName, setCreatorName] = useState('');
-  const [level, setLevel] = useState<CefrLevel | ''>('');
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  const descriptionCount = description.length;
-
+function GroupForm({ create, onBack, onSession }: { create: boolean; onBack: () => void; onSession: (s: EntertainmentSession) => void }) {
+  const [name, setName] = useState(''); const [description, setDescription] = useState(''); const [playerName, setPlayerName] = useState('');
+  const [joinKey, setJoinKey] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('join') ?? '');
+  const [level, setLevel] = useState<CefrLevel | ''>(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   async function submit() {
-    if (!level) {
-      setError('Choose your level.');
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
+    if (!level) { setError('Choose your level.'); return; }
+    if (create && (description.trim().length < 10 || description.length > 2000)) { setError('Description must contain 10 to 2000 characters.'); return; }
+    setBusy(true); setError('');
     try {
-      const result = await createEntertainmentGroup({
-        name,
-        geminiApiKey,
-        description,
-        creatorName,
-        creatorLevel: level,
-      });
-      onCreated(result);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Create group failed.');
-    } finally {
-      setSubmitting(false);
-    }
+      if (create) { const r = await createEntertainmentGroup({ name, description, creatorName: playerName, creatorLevel: level }); onSession({ groupId: r.groupId, playerId: r.creatorPlayerId, playerToken: r.playerToken, joinKey: r.joinKey, isCreator: true }); }
+      else { const r = await joinEntertainmentGroup(joinKey.trim(), playerName, level); onSession({ groupId: r.groupId, playerId: r.playerId, playerToken: r.playerToken, isCreator: false }); }
+    } catch (e) { setError(e instanceof Error ? e.message : 'Request failed.'); } finally { setBusy(false); }
   }
-
-  return (
-    <Card variant="elevated" padding="lg" className="space-y-5">
-      <h2 className="text-xl font-semibold">Create group</h2>
-
-      <Field label="Group name">
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Travel English" />
-      </Field>
-
-      <Field label="Gemini API key" hint="Used to generate sentences. Stored encrypted, never shown.">
-        <Input
-          type="password"
-          value={geminiApiKey}
-          onChange={(e) => setGeminiApiKey(e.target.value)}
-          placeholder="Your Gemini API key"
-        />
-      </Field>
-
-      <Field
-        label="Description"
-        hint={`${descriptionCount} / 200 characters minimum`}
-        error={descriptionCount > 0 && descriptionCount < 200 ? 'At least 200 characters required.' : undefined}
-      >
-        <Textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Describe the topic or theme the sentences should be about..."
-        />
-      </Field>
-
-      <Field label="Your name">
-        <Input value={creatorName} onChange={(e) => setCreatorName(e.target.value)} placeholder="Your name" />
-      </Field>
-
-      <div>
-        <span className="block mb-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200">Your level</span>
-        <LevelSelect value={level} onChange={setLevel} />
-      </div>
-
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-
-      <div className="flex gap-3">
-        <Button variant="outline" onClick={onBack}>
-          Back
-        </Button>
-        <Button onClick={submit} disabled={submitting} fullWidth>
-          {submitting ? 'Creating...' : 'Create group'}
-        </Button>
-      </div>
-    </Card>
-  );
-}
-
-function JoinForm({
-  onBack,
-  onJoined,
-}: {
-  onBack: () => void;
-  onJoined: (result: { groupId: string; playerId: string }) => void;
-}) {
-  const [joinKey, setJoinKey] = useState('');
-  const [playerName, setPlayerName] = useState('');
-  const [level, setLevel] = useState<CefrLevel | ''>('');
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  async function submit() {
-    if (!level) {
-      setError('Choose your level.');
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    try {
-      const result = await joinEntertainmentGroup(joinKey.trim(), playerName, level);
-      onJoined(result);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Join group failed.');
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <Card variant="elevated" padding="lg" className="space-y-5">
-      <h2 className="text-xl font-semibold">Join group</h2>
-
-      <Field label="Join key">
-        <Input value={joinKey} onChange={(e) => setJoinKey(e.target.value)} placeholder="6-character key" />
-      </Field>
-
-      <Field label="Your name">
-        <Input value={playerName} onChange={(e) => setPlayerName(e.target.value)} placeholder="Your name" />
-      </Field>
-
-      <div>
-        <span className="block mb-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200">Your level</span>
-        <LevelSelect value={level} onChange={setLevel} />
-      </div>
-
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-
-      <div className="flex gap-3">
-        <Button variant="outline" onClick={onBack}>
-          Back
-        </Button>
-        <Button onClick={submit} disabled={submitting} fullWidth>
-          {submitting ? 'Joining...' : 'Join group'}
-        </Button>
-      </div>
-    </Card>
-  );
-}
-
-function LobbyView({
-  session,
-  lobby,
-  onStart,
-  onLeave,
-}: {
-  session: Session;
-  lobby: Lobby | null;
-  onStart: () => void;
-  onLeave: () => void;
-}) {
-  const players = lobby?.players ?? [];
-
-  return (
-    <Card variant="elevated" padding="lg" className="space-y-5">
-      <div className="text-center">
-        <h2 className="text-xl font-semibold">{lobby?.groupName || 'Lobby'}</h2>
-        {session.joinKey && (
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Share this key so others can join:
-          </p>
-        )}
-        {session.joinKey && (
-          <div className="mt-1 text-3xl font-mono tracking-[0.5em] text-accent-900 dark:text-white">
-            {session.joinKey}
-          </div>
-        )}
-      </div>
-
-      <div>
-        <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">Players</h3>
-        {players.length === 0 ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400">Waiting for players to join...</p>
-        ) : (
-          <ul className="space-y-2">
-            {players.map((p) => (
-              <li
-                key={p.playerId}
-                className="flex items-center justify-between rounded-xl border border-gray-100 dark:border-gray-700 px-4 py-2"
-              >
-                <span className="font-medium">
-                  {p.name}
-                  {p.isCreator && <span className="ml-2 text-xs text-brand-600">Host</span>}
-                </span>
-                <span className="text-sm text-gray-500 dark:text-gray-400">{p.level}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {session.isCreator && (
-        <Button onClick={onStart} fullWidth>
-          Start game
-        </Button>
-      )}
-      <Button variant="ghost" onClick={onLeave} fullWidth>
-        Leave
-      </Button>
-    </Card>
-  );
-}
-
-function ScoreBoard({ players, scores }: { players: LobbyPlayer[]; scores: Record<string, number> }) {
-  return (
-    <div className="flex flex-wrap gap-2 justify-center">
-      {players.map((p) => (
-        <span
-          key={p.playerId}
-          className="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-gray-800 px-3 py-1 text-sm"
-        >
-          <span className="font-medium">{p.name}</span>
-          <span className="font-bold text-accent-900 dark:text-white">{scores[p.playerId] ?? 0}</span>
-        </span>
-      ))}
-    </div>
-  );
-}
-
-function HintChip({ text, revealed, onReveal }: { text: string; revealed: boolean; onReveal: () => void }) {
-  if (revealed) {
-    return (
-      <span
-        data-testid="revealed-word"
-        className="inline-flex items-center rounded-lg bg-brand-500/15 border border-brand-500/40 px-3 py-1.5 text-sm font-medium"
-      >
-        {text}
-      </span>
-    );
-  }
-  return (
-    <button
-      type="button"
-      data-testid="covered-word"
-      onClick={onReveal}
-      className="inline-flex items-center justify-center rounded-lg border border-dashed border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 text-sm text-transparent select-none hover:border-brand-500"
-    >
-      {text}
-    </button>
-  );
-}
-
-function GameView({
-  session,
-  round,
-  isTranslator,
-  players,
-  scores,
-  answerRevealed,
-  send,
-  sendRoundAction,
-}: {
-  session: Session;
-  round: RoundStarted;
-  isTranslator: boolean;
-  players: LobbyPlayer[];
-  scores: Record<string, number>;
-  answerRevealed: boolean;
-  send: (method: string, ...args: unknown[]) => void;
-  sendRoundAction: (method: string) => void;
-}) {
-  const [revealedHints, setRevealedHints] = useState<Set<number>>(new Set());
-  const [localAnswerRevealed, setLocalAnswerRevealed] = useState(false);
-
-  function revealHint(index: number) {
-    setRevealedHints((prev) => new Set(prev).add(index));
-    if (isTranslator) {
-      send('RevealHint', session.groupId, session.playerId);
-    }
-  }
-
-  function revealAnswer() {
-    // Optimistic: reveal locally immediately, and let the server broadcast to
-    // the other observers. This keeps the tap responsive even if the hub event
-    // is delayed.
-    setLocalAnswerRevealed(true);
-    send('RevealAnswer', session.groupId, session.playerId);
-  }
-
-  return (
-    <Card variant="elevated" padding="lg" className="space-y-6">
-      <div className="text-center">
-        <h2 className="text-xl font-semibold">Round {round.roundNumber}</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          {isTranslator ? 'Translate this into Finnish' : 'Someone is translating — you have the answer'}
-        </p>
-      </div>
-
-      <ScoreBoard players={players} scores={scores} />
-
-      <div data-testid="sentence-en" className="text-2xl font-medium text-center leading-relaxed">
-        {round.sentenceEn}
-      </div>
-
-      {!isTranslator && round.sentenceFi && (
-        <div className="text-center">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">
-            Finnish (tap to reveal)
-          </p>
-          {answerRevealed || localAnswerRevealed ? (
-            <div data-testid="sentence-fi-revealed" className="text-xl rounded-lg px-4 py-3 bg-brand-500/10">
-              {round.sentenceFi}
-            </div>
-          ) : (
-            <button
-              type="button"
-              data-testid="sentence-fi"
-              onClick={revealAnswer}
-              className="w-full text-xl text-transparent select-none bg-gray-100 dark:bg-gray-800 rounded-lg px-4 py-3 hover:bg-gray-200 dark:hover:bg-gray-700"
-            >
-              {round.sentenceFi}
-            </button>
-          )}
-        </div>
-      )}
-
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Hint words</p>
-        <div className="flex flex-wrap gap-2">
-          {round.baseForms.map((word, i) => (
-            <HintChip
-              key={`${word}-${i}`}
-              text={word}
-              revealed={revealedHints.has(i)}
-              onReveal={() => revealHint(i)}
-            />
-          ))}
-        </div>
-      </div>
-
-      {isTranslator && (
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={() => sendRoundAction('Skip')} fullWidth>
-            Skip
-          </Button>
-          <Button onClick={() => sendRoundAction('Done')} fullWidth>
-            Done
-          </Button>
-        </div>
-      )}
-
-      {session.isCreator && (
-        <Button
-          variant="outline"
-          onClick={() => send('EndGame', session.groupId, session.playerId)}
-          fullWidth
-        >
-          End game
-        </Button>
-      )}
-    </Card>
-  );
-}
-
-function ResultsView({ standings, onLeave }: { standings: Standing[]; onLeave: () => void }) {
-  return (
-    <Card variant="elevated" padding="lg" className="space-y-5">
-      <h2 className="text-xl font-semibold text-center">Results</h2>
-      <ol className="space-y-2">
-        {standings.map((s, i) => (
-          <li
-            key={s.playerId}
-            className={
-              'flex items-center justify-between rounded-xl border px-4 py-3 ' +
-              (i === 0 ? 'border-brand-500 bg-brand-500/10' : 'border-gray-100 dark:border-gray-700')
-            }
-          >
-            <span className="font-medium">
-              {i + 1}. {s.name}
-              {i === 0 && <span className="ml-2 text-xs text-brand-600">Winner</span>}
-            </span>
-            <span className="font-bold text-accent-900 dark:text-white">{s.score}</span>
-          </li>
-        ))}
-      </ol>
-      <Button variant="ghost" onClick={onLeave} fullWidth>
-        Leave
-      </Button>
-    </Card>
-  );
+  return <Card padding="lg" className="space-y-5"><h2>{create ? 'Create group' : 'Join group'}</h2>
+    {create ? <><Field label="Group name"><Input placeholder="e.g. Travel English" value={name} onChange={e => setName(e.target.value)} /></Field>
+      <Field label="Description" hint={`${description.length} / 2000 characters (minimum 10)`} error={description.length > 0 && description.trim().length < 10 ? 'At least 10 characters required.' : undefined}><Textarea maxLength={2000} placeholder="Describe the topic or theme" value={description} onChange={e => setDescription(e.target.value)} /></Field></> :
+      <Field label="Join key"><Input placeholder="6-character key" value={joinKey} onChange={e => setJoinKey(e.target.value)} /></Field>}
+    <Field label="Your name"><Input placeholder="Your name" value={playerName} onChange={e => setPlayerName(e.target.value)} /></Field>
+    <div><p>Your level</p><div className="flex gap-2">{CEFR_LEVELS.map(l => <button type="button" key={l} aria-pressed={level === l} onClick={() => setLevel(l)} className="border rounded p-2">{l}</button>)}</div></div>
+    {error && <p role="alert">{error}</p>}<Button onClick={onBack}>Back</Button><Button disabled={busy} onClick={() => void submit()}>{busy ? 'Working…' : create ? 'Create group' : 'Join group'}</Button>
+  </Card>;
 }

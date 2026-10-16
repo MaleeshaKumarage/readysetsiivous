@@ -1,6 +1,6 @@
 import { API_URL } from './api';
 import { lifecycleRequest } from './reactivationApi';
-import { adminGet, adminSend, adminSendJson } from './adminApi';
+import { adminDelete, adminGet, adminSend, adminSendJson } from './adminApi';
 import { refreshToken } from './auth';
 import type { ShiftPhoto } from './shiftPhotos';
 
@@ -67,7 +67,7 @@ export const adminQualityCycle = {
     adminSendJson<QualityCycleTemplate>(`/api/v1/admin/quality-cycle/templates/${id}`, 'PUT', fields),
   reactivateTemplate: (id: string) => lifecycleRequest(`/api/v1/admin/quality-cycle/templates/${id}/reactivate`),
   deactivateTemplate: (id: string) => lifecycleRequest(`/api/v1/admin/quality-cycle/templates/${id}/deactivate`),
-  deleteTemplate: (id: string) => adminSend(`/api/v1/admin/quality-cycle/templates/${id}`, 'DELETE'),
+  deleteTemplate: (id: string) => adminDelete(`/api/v1/admin/quality-cycle/templates/${id}`),
 
   listForms: (shiftId?: string, from?: string, to?: string) => {
     const query = new URLSearchParams();

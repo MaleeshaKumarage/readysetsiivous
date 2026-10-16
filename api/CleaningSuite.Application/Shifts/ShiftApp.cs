@@ -2,6 +2,7 @@ using CleaningSuite.Application.Common;
 using CleaningSuite.Application.Companies;
 using CleaningSuite.Application.Employees;
 using CleaningSuite.Application.QualityCycle;
+using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Employees;
 using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Shifts;
@@ -38,6 +39,7 @@ public interface IShiftRepository
     Task<IReadOnlyList<Shift>> ListAsync(Guid? companyId, Guid? branchId, CancellationToken ct = default);
     Task<IReadOnlyList<Shift>> ListByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct = default);
     Task SaveAsync(Shift shift, CancellationToken ct = default);
+    Task DeleteAsync(Guid id, CancellationToken ct = default);
     Task<ShiftAssignment?> GetAssignmentAsync(Guid shiftId, Guid employeeId, CancellationToken ct = default);
     Task<IReadOnlyList<ShiftAssignment>> ListAssignmentsByEmployeeAsync(Guid employeeId, CancellationToken ct = default);
     Task<IReadOnlyList<ShiftAssignment>> ListAssignmentsByShiftAsync(Guid shiftId, CancellationToken ct = default);
@@ -45,6 +47,7 @@ public interface IShiftRepository
     Task DeleteAssignmentAsync(Guid assignmentId, CancellationToken ct = default);
     Task<IReadOnlyList<Shift>> ListForReportingAsync(CancellationToken ct = default);
     Task<IReadOnlyList<ShiftAssignment>> ListAssignmentHistoryAsync(Guid shiftId, CancellationToken ct = default);
+    Task<IReadOnlyList<ShiftAssignment>> ListAssignmentHistoryByEmployeeAsync(Guid employeeId, CancellationToken ct = default);
 }
 
 public class ShiftConflictException : Exception
@@ -76,6 +79,7 @@ public record UpdateShiftCommand(
 
 public record DeactivateShiftCommand(Guid Id) : IRequest;
 public record ReactivateShiftCommand(Guid Id) : IRequest<ShiftDto>;
+public record DeleteShiftCommand(Guid Id) : IRequest;
 
 public record ListShiftsQuery(Guid? CompanyId, Guid? BranchId, bool IncludeInactive = false) : IRequest<IReadOnlyList<ShiftDto>>;
 
@@ -249,6 +253,20 @@ public class ShiftHandlers
         }
     }
 
+    public sealed class DeleteShiftCommandHandler(IShiftRepository shifts, IQualityCycleRepository forms)
+        : IRequestHandler<DeleteShiftCommand>
+    {
+        public async Task Handle(DeleteShiftCommand request, CancellationToken ct)
+        {
+            var shift = await shifts.GetAsync(request.Id, ct) ?? throw new NotFoundException("Shift", request.Id);
+            if (shift.IsActive) throw new InactiveRecordDeleteConflictException("Deactivate the shift before deleting it.");
+            if ((await shifts.ListAssignmentHistoryAsync(shift.Id, ct)).Count > 0
+                || (await forms.ListFormsAsync(shift.Id, null, null, ct)).Count > 0)
+                throw new InactiveRecordDeleteConflictException("This shift has assignment or checklist history and must be retained.");
+            await shifts.DeleteAsync(shift.Id, ct);
+        }
+    }
+
     public class ListShiftAssignmentsQueryHandler : IRequestHandler<ListShiftAssignmentsQuery, IReadOnlyList<ShiftAssignmentDto>>
     {
         private readonly IShiftRepository _repository;
@@ -285,22 +303,29 @@ public class ShiftHandlers
     public class GetShiftOccurrencesQueryHandler : IRequestHandler<GetShiftOccurrencesQuery, IReadOnlyList<ShiftOccurrenceDto>>
     {
         private readonly IShiftRepository _repository;
+        private readonly ITenantProfileRepository? _profiles;
+        private readonly ITenantContext? _tenant;
 
-        public GetShiftOccurrencesQueryHandler(IShiftRepository repository)
+        public GetShiftOccurrencesQueryHandler(IShiftRepository repository, ITenantProfileRepository? profiles = null, ITenantContext? tenant = null)
         {
             _repository = repository;
+            _profiles = profiles;
+            _tenant = tenant;
         }
 
         public async Task<IReadOnlyList<ShiftOccurrenceDto>> Handle(GetShiftOccurrencesQuery request, CancellationToken ct)
         {
-            // Query-string DateTime binding yields DateTimeKind.Unspecified. Treat the caller's
-            // input as UTC explicitly so occurrence generation is anchored unambiguously.
+            // Query-string DateTime binding yields DateTimeKind.Unspecified. Inputs select
+            // inclusive calendar dates, interpreted in the tenant's time zone.
             var from = NormalizeUtc(request.From);
             var to = NormalizeUtc(request.To);
 
             var shift = await _repository.GetAsync(request.ShiftId, ct)
                 ?? throw new NotFoundException("Shift", request.ShiftId);
-            var occurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, from, to);
+            var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
+            var localFrom = TenantTimeZone.LocalDate(from, zone);
+            var localTo = TenantTimeZone.LocalDate(to, zone);
+            var occurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, localFrom, localTo, zone);
             return occurrences
                 .Select(x => new ShiftOccurrenceDto(NormalizeUtc(x.StartUtc), NormalizeUtc(x.EndUtc)))
                 .ToList();
@@ -322,6 +347,8 @@ public class ShiftHandlers
         private readonly IEmailSender _emailSender;
         private readonly int _maxConflictWindowDays;
         private readonly IQualityCycleDispatcher? _dispatcher;
+        private readonly ITenantProfileRepository? _profiles;
+        private readonly ITenantContext? _tenant;
 
         public AssignEmployeeToShiftCommandHandler(
             IShiftRepository repository,
@@ -329,7 +356,9 @@ public class ShiftHandlers
             IQualityCycleRepository qcRepository,
             IEmailSender emailSender,
             int maxConflictWindowDays = DefaultMaxConflictWindowDays,
-            IQualityCycleDispatcher? dispatcher = null)
+            IQualityCycleDispatcher? dispatcher = null,
+            ITenantProfileRepository? profiles = null,
+            ITenantContext? tenant = null)
         {
             if (maxConflictWindowDays <= 0)
             {
@@ -342,6 +371,8 @@ public class ShiftHandlers
             _emailSender = emailSender;
             _maxConflictWindowDays = maxConflictWindowDays;
             _dispatcher = dispatcher;
+            _profiles = profiles;
+            _tenant = tenant;
         }
 
         public async Task<ShiftAssignmentDto> Handle(AssignEmployeeToShiftCommand request, CancellationToken ct)
@@ -360,8 +391,9 @@ public class ShiftHandlers
             // regardless of handler lifetime and is anchored to UTC rather than server-local time.
             var utcNow = DateTime.UtcNow;
 
-            var (from, to) = ResolveConflictWindow(shift, utcNow);
-            var candidateOccurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, from, to);
+            var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
+            var (from, to) = ResolveConflictWindow(shift, utcNow, zone);
+            var candidateOccurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, from, to, zone);
             var existingAssignments = await _repository.ListAssignmentsByEmployeeAsync(request.EmployeeId, ct);
 
             // Load every other shift the employee is assigned to in a single query instead of
@@ -377,7 +409,7 @@ public class ShiftHandlers
                 var otherShifts = await _repository.ListByIdsAsync(otherShiftIds, ct);
                 foreach (var existingShift in otherShifts)
                 {
-                    var existingOccurrences = ShiftScheduleCalculator.GenerateOccurrences(existingShift, from, to);
+                    var existingOccurrences = ShiftScheduleCalculator.GenerateOccurrences(existingShift, from, to, zone);
                     if (ShiftScheduleCalculator.HasOverlap(candidateOccurrences, existingOccurrences))
                     {
                         throw new ShiftConflictException($"Employee is already assigned to an overlapping shift.");
@@ -398,13 +430,13 @@ public class ShiftHandlers
                 existingAssignment.UnassignedAtUtc = null;
                 existingAssignment.UpdatedUtc = utcNow;
                 await _repository.SaveAssignmentAsync(existingAssignment, ct);
-                await DispatchQualityCycleFormAsync(shift, employee, utcNow, ct);
+                await DispatchQualityCycleFormAsync(shift, ct);
                 return MapAssignment(existingAssignment);
             }
 
             var newAssignment = ShiftAssignment.Create(request.ShiftId, request.EmployeeId, request.Note);
             await _repository.SaveAssignmentAsync(newAssignment, ct);
-            await DispatchQualityCycleFormAsync(shift, employee, utcNow, ct);
+            await DispatchQualityCycleFormAsync(shift, ct);
             return MapAssignment(newAssignment);
         }
 
@@ -412,21 +444,16 @@ public class ShiftHandlers
         /// If the shift has a quality-cycle template, create (or reuse) the form for the
         /// employee's next shift occurrence and email them the fill-in link.
         /// </summary>
-        private async Task DispatchQualityCycleFormAsync(Shift shift, Employee employee, DateTime utcNow, CancellationToken ct)
+        private async Task DispatchQualityCycleFormAsync(Shift shift, CancellationToken ct)
         {
             if (!shift.QualityCycleTemplateId.HasValue) return;
-            var occurrences = QualityCycleOccurrences.InWindow(shift, utcNow.Date, utcNow.Date.AddDays(32))
-                .Where(x => x.Occurrence.EndUtc > utcNow).Select(x => x.Occurrence).ToList();
             var dispatcher = _dispatcher ?? new QualityCycleDispatcher(_repository, _qcRepository, _employeeRepository);
-            await dispatcher.DispatchAsync(shift, occurrences, ct);
+            await dispatcher.EnsureUpcomingAsync(shift.Id, ct);
         }
 
-        private (DateTime From, DateTime To) ResolveConflictWindow(Shift shift, DateTime utcNow)
+        private (DateTime From, DateTime To) ResolveConflictWindow(Shift shift, DateTime utcNow, TimeZoneInfo zone)
         {
-            // Anchor the window on the UTC date supplied by the caller, not server-local time, so
-            // the generated occurrences line up with the *Utc values used elsewhere and don't
-            // drift with the host timezone or DST.
-            var today = utcNow.Date;
+            var today = TenantTimeZone.LocalDate(utcNow, zone);
             var from = shift.ValidFrom?.Date ?? today;
             if (from < today)
             {

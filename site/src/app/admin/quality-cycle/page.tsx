@@ -175,6 +175,18 @@ export default function AdminQualityCyclePage() {
     } finally { setActivityBusy(null); }
   }
 
+  async function handleDeleteTemplate(t: QualityCycleTemplate) {
+    if (!window.confirm(`Permanently delete inactive checklist template “${t.title}”? Templates referenced by a shift or checklist history are retained.`)) return;
+    setActivityBusy(t.id); setActivityError('');
+    try {
+      await adminQualityCycle.deleteTemplate(t.id);
+      if (editingTemplate?.id === t.id) setEditingTemplate(null);
+      await loadTemplates();
+    } catch (failure) {
+      setActivityError(failure instanceof Error ? failure.message : 'Could not delete the template. Please retry.');
+    } finally { setActivityBusy(null); }
+  }
+
   async function handleDownloadPdf() {
     if (!selectedShiftId) {
       alert('Please select a shift to generate the monthly summary PDF.');
@@ -377,6 +389,7 @@ export default function AdminQualityCyclePage() {
                               onClick={() => void handleTemplateActivity(t)}>
                               {t.isActive ? 'Deactivate' : 'Reactivate'}
                             </Button>
+                            {!t.isActive && <Button size="xs" variant="subtle" color="red" loading={activityBusy === t.id} disabled={activityBusy !== null && activityBusy !== t.id} onClick={() => void handleDeleteTemplate(t)}>Delete</Button>}
                           </Group>
                         </Group>
 
@@ -507,11 +520,13 @@ export default function AdminQualityCyclePage() {
                   No quality cycle forms logged for the selected filter.
                 </Text>
               ) : (
-                <Table.ScrollContainer minWidth={600}>
+                <Table.ScrollContainer minWidth={1050}>
                   <Table striped highlightOnHover withTableBorder>
                     <Table.Thead>
                       <Table.Tr>
-                        <Table.Th>Occurrence Date</Table.Th>
+                        <Table.Th>Scheduled shift</Table.Th>
+                        <Table.Th>Actual start</Table.Th>
+                        <Table.Th>Actual end</Table.Th>
                         <Table.Th>Shift</Table.Th>
                         <Table.Th>Cleaner</Table.Th>
                         <Table.Th>Status</Table.Th>
@@ -525,8 +540,10 @@ export default function AdminQualityCyclePage() {
                         return (
                           <Table.Tr key={f.id}>
                             <Table.Td fw={500}>
-                              {new Date(f.shiftOccurrenceUtc).toLocaleString()}
+                              {new Date(f.shiftOccurrenceUtc).toLocaleString(undefined, { timeZone: report?.timeZoneId ?? 'Europe/Helsinki' })}
                             </Table.Td>
+                            <Table.Td>{f.startedAtUtc ? new Date(f.startedAtUtc).toLocaleString(undefined, { timeZone: report?.timeZoneId ?? 'Europe/Helsinki' }) : '—'}</Table.Td>
+                            <Table.Td>{f.endedAtUtc ? new Date(f.endedAtUtc).toLocaleString(undefined, { timeZone: report?.timeZoneId ?? 'Europe/Helsinki' }) : '—'}</Table.Td>
                             <Table.Td>{f.shiftName}</Table.Td>
                             <Table.Td>{f.employeeName}</Table.Td>
                             <Table.Td>

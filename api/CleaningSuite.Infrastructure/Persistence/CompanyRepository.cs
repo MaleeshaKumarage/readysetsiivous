@@ -57,6 +57,12 @@ public class CompanyRepository : ICompanyRepository
         }
     }
 
+    public async Task DeleteAsync(Guid id, CancellationToken ct = default)
+    {
+        Session.Delete<Company>(id);
+        await Session.SaveChangesAsync(ct);
+    }
+
     private static bool IsBusinessIdConflict(Exception error) =>
         error is Npgsql.PostgresException
         {

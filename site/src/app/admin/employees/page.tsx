@@ -15,6 +15,7 @@ export default function EmployeesAdminPage() {
   const visibleEmployees = employees.filter(employee => inLifecycle(employee, lifecycle));
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [form, setForm] = useState({ email: '', firstName: '', lastName: '', phone: '', role: 'employee' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -34,20 +35,26 @@ export default function EmployeesAdminPage() {
     if (!form.email.trim() || !form.firstName.trim() || !form.lastName.trim()) { setError('Email, first and last name are required.'); return; }
     setSaving(true); setError('');
     try {
-    const created = await adminEmployees.create({
+    const fields = {
       email: form.email.trim(),
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
       phone: form.phone.trim(),
       role: form.role,
-      skills: [],
-      serviceAreas: [],
-      colorHex: null,
-      payRate: null,
-      notes: null,
-      certifications: [],
-      defaultHours: {},
-    });
+      skills: editingEmployee?.skills ?? [],
+      serviceAreas: editingEmployee?.serviceAreas ?? [],
+      colorHex: editingEmployee?.colorHex ?? null,
+      payRate: editingEmployee?.payRate ?? null,
+      notes: editingEmployee?.notes ?? null,
+      certifications: editingEmployee?.certifications ?? [],
+      defaultHours: editingEmployee?.defaultHours ?? {},
+    };
+    if (editingEmployee) {
+      if (!await adminEmployees.update(editingEmployee.id, fields, editingEmployee.isActive)) throw new Error('Could not update employee. Please retry.');
+      setModalOpen(false); setEditingEmployee(null); await load();
+      return;
+    }
+    const created = await adminEmployees.create(fields);
     setSaving(false);
     if (!created) { setError('Failed to create employee.'); return; }
     setLifecycle('active');
@@ -55,6 +62,12 @@ export default function EmployeesAdminPage() {
     setModalOpen(false); await load();
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not create employee. Please retry.'); }
     finally { setSaving(false); }
+  };
+
+  const openEdit = (employee: Employee) => {
+    setEditingEmployee(employee);
+    setForm({ email: employee.email, firstName: employee.firstName, lastName: employee.lastName, phone: employee.phone ?? '', role: employee.role });
+    setError(''); setModalOpen(true);
   };
 
   const deactivate = async (id: string) => {
@@ -86,11 +99,18 @@ export default function EmployeesAdminPage() {
     } catch (error) { setInviteFailure(error instanceof Error ? error.message : 'Could not send the setup email. Please retry.'); }
     finally { setInviteBusy(null); }
   };
+  const deleteEmployee = async (employee: Employee) => {
+    if (!window.confirm(`Permanently delete ${employee.firstName} ${employee.lastName}'s inactive profile? Profiles with a login or work history are retained.`)) return;
+    setRestoring(employee.id); setInviteFailure('');
+    try { await adminEmployees.deleteInactive(employee.id); await load(); }
+    catch (failure) { setInviteFailure(failure instanceof Error ? failure.message : 'Could not delete employee. Please retry.'); }
+    finally { setRestoring(null); }
+  };
   return (
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
         <Title order={2}>Employees</Title>
-        {isAdmin() && <Button leftSection={<Plus size={16} />} onClick={() => setModalOpen(true)}>Add employee</Button>}
+        {isAdmin() && <Button leftSection={<Plus size={16} />} onClick={() => { setEditingEmployee(null); setForm({ email: '', firstName: '', lastName: '', phone: '', role: 'employee' }); setError(''); setModalOpen(true); }}>Add employee</Button>}
       </Group>
 
       {inviteMessage && <Text role="status" c="green" mb="sm">{inviteMessage}</Text>}
@@ -117,10 +137,12 @@ export default function EmployeesAdminPage() {
                   <Table.Td>{e.role}</Table.Td>
                   <Table.Td>{e.isActive ? <Badge color="green">Active</Badge> : <Badge color="gray">Inactive</Badge>}</Table.Td>
                   <Table.Td>{e.keycloakUserId ? <Badge color="green">Invited</Badge> : <Badge color="gray">Not invited</Badge>}</Table.Td>
-                  <Table.Td><Group gap="xs">
+                  <Table.Td><Group gap="xs" wrap="wrap">
+                    {isAdmin() && <Button size="xs" variant="light" onClick={() => openEdit(e)}>Edit</Button>}
                     {isAdmin() && e.isActive && <Button size="xs" variant="light" loading={inviteBusy === e.id} disabled={Boolean(inviteBusy && inviteBusy !== e.id)} onClick={() => invite(e)}>{e.keycloakUserId ? 'Resend setup email' : 'Invite'}</Button>}
                     {isAdmin() && e.isActive && e.identitySyncPending && <Button size="xs" loading={restoring === e.id} disabled={!!restoring} onClick={() => reactivate(e)}>Retry reactivation</Button>}
                     {isAdmin() && !e.isActive && <Button size="xs" loading={restoring === e.id} disabled={!!restoring} onClick={() => reactivate(e)}>Reactivate</Button>}
+                    {isAdmin() && !e.isActive && <Button size="xs" color="red" variant="subtle" loading={restoring === e.id} disabled={!!restoring} onClick={() => deleteEmployee(e)}>Delete</Button>}
                     {isAdmin() && e.isActive && <Button size="xs" variant="subtle" color="red" onClick={() => deactivate(e.id)}>Deactivate</Button>}
                   </Group></Table.Td>
                 </Table.Tr>
@@ -131,9 +153,9 @@ export default function EmployeesAdminPage() {
       )}
       </LifecycleTabs>
 
-      <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title="Add employee" radius="md">
+      <Modal opened={modalOpen} onClose={() => { setModalOpen(false); setEditingEmployee(null); }} title={editingEmployee ? 'Edit employee' : 'Add employee'} radius="md">
         <Stack gap="sm">
-          <TextInput label="Email" required type="email" value={form.email} onChange={set('email')} />
+          <TextInput label="Email" required type="email" value={form.email} onChange={set('email')} readOnly={Boolean(editingEmployee?.keycloakUserId)} description={editingEmployee?.keycloakUserId ? 'Email is locked because this profile is linked to a sign-in account.' : undefined} />
           <Group wrap="wrap" grow gap="xs">
             <TextInput label="First name" required value={form.firstName} onChange={set('firstName')} />
             <TextInput label="Last name" required value={form.lastName} onChange={set('lastName')} />
@@ -143,7 +165,7 @@ export default function EmployeesAdminPage() {
           {error && <Text role="alert" size="sm" c="red">{error}</Text>}
           <Group justify="flex-end" mt="xs">
             <Button variant="default" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button loading={saving} onClick={submit}>Create employee</Button>
+            <Button loading={saving} onClick={submit}>{editingEmployee ? 'Save changes' : 'Create employee'}</Button>
           </Group>
         </Stack>
       </Modal>

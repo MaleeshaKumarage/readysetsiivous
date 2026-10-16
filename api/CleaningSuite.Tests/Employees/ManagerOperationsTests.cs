@@ -27,7 +27,7 @@ public class ManagerOperationsTests
         var body = JsonSerializer.Serialize(result, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         Assert.DoesNotContain("admin-private", body); Assert.DoesNotContain("qualityCycle", body); Assert.DoesNotContain("version", body);
         using var json = JsonDocument.Parse(body);
-        Assert.Equal(new[] { "id", "companyId", "branchId", "name", "schedule", "isActive", "validFrom", "validUntil" }.Order(), json.RootElement.EnumerateObject().Select(p => p.Name).Order());
+        Assert.Equal(new[] { "id", "companyId", "branchId", "name", "schedule", "isActive", "validFrom", "validUntil", "timeZoneId" }.Order(), json.RootElement.EnumerateObject().Select(p => p.Name).Order());
         Assert.IsType<ManagerScheduleResponse>(result.Schedule);
     }
 

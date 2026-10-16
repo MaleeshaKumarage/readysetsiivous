@@ -110,6 +110,7 @@ if (builder.Configuration.GetValue("BackgroundWorkers:Enabled", true))
 builder.Services.AddScoped<CleaningSuite.Application.Entertainment.IEntertainmentRepository, CleaningSuite.Infrastructure.Persistence.EntertainmentRepository>();
 builder.Services.AddSingleton<CleaningSuite.Application.Entertainment.IEntertainmentKeyProtector, CleaningSuite.Infrastructure.Entertainment.EntertainmentKeyProtector>();
 builder.Services.AddHttpClient<CleaningSuite.Application.Entertainment.IGeminiSentenceService, CleaningSuite.Infrastructure.Entertainment.GeminiSentenceService>();
+builder.Services.AddHttpClient<CleaningSuite.Application.Entertainment.IEntertainmentAnswerEvaluator, CleaningSuite.Infrastructure.Entertainment.GeminiAnswerEvaluator>();
 builder.Services.AddSingleton<CleaningSuite.Api.Hubs.GameSessionManager>();
 
 builder.Services.AddMediatR(cfg =>
@@ -264,6 +265,7 @@ public class DefaultExceptionHandler : IExceptionHandler
         {
             CleaningSuite.Application.Common.SlugConflictException => (409, "Slug already exists"),
             CleaningSuite.Application.Companies.CompanyConflictException => (409, "Company business ID conflict"),
+            CleaningSuite.Application.Common.InactiveRecordDeleteConflictException => (409, "Record cannot be deleted"),
             CleaningSuite.Application.Common.NotFoundException => (404, "Not found"),
             CleaningSuite.Application.Bookings.SlotConflictException => (409, "Slot conflict"),
             CleaningSuite.Application.Agreements.AgreementConflictException => (409, "Agreement conflict"),

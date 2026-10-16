@@ -6,7 +6,6 @@ namespace CleaningSuite.Application.Entertainment;
 
 public record CreateEntertainmentGroupCommand(
     string Name,
-    string GeminiApiKey,
     string Description,
     string CreatorName,
     string CreatorLevel) : IRequest<CreateEntertainmentGroupResult>;
@@ -14,20 +13,18 @@ public record CreateEntertainmentGroupCommand(
 public record CreateEntertainmentGroupResult(
     Guid GroupId,
     string JoinKey,
-    Guid CreatorPlayerId);
+    Guid CreatorPlayerId,
+    string PlayerToken);
 
 public class CreateEntertainmentGroupCommandHandler
     : IRequestHandler<CreateEntertainmentGroupCommand, CreateEntertainmentGroupResult>
 {
     private readonly IEntertainmentRepository _repository;
-    private readonly IEntertainmentKeyProtector _keyProtector;
 
     public CreateEntertainmentGroupCommandHandler(
-        IEntertainmentRepository repository,
-        IEntertainmentKeyProtector keyProtector)
+        IEntertainmentRepository repository)
     {
         _repository = repository;
-        _keyProtector = keyProtector;
     }
 
     public async Task<CreateEntertainmentGroupResult> Handle(
@@ -40,20 +37,22 @@ public class CreateEntertainmentGroupCommandHandler
 
         var group = EntertainmentGroup.Create(
             request.Name,
-            _keyProtector.Protect(request.GeminiApiKey),
+            string.Empty,
             request.Description,
             joinKey);
 
         var creator = EntertainmentPlayer.Create(group.Id, request.CreatorName, level, isCreator: true);
+        var token = EntertainmentPlayerToken.Generate();
+        creator.PlayerTokenHash = EntertainmentPlayerToken.Hash(token);
 
         await _repository.CreateGroupAsync(group, creator, ct);
 
-        return new CreateEntertainmentGroupResult(group.Id, joinKey, creator.Id);
+        return new CreateEntertainmentGroupResult(group.Id, joinKey, creator.Id, token);
     }
 
     private static CefrLevel ParseLevel(string level)
     {
-        if (!Enum.TryParse<CefrLevel>(level, ignoreCase: true, out var parsed))
+        if (!Enum.TryParse<CefrLevel>(level, ignoreCase: true, out var parsed) || !Enum.IsDefined(parsed))
             throw new ArgumentException($"Invalid level '{level}'.", nameof(level));
         return parsed;
     }
@@ -80,7 +79,8 @@ public record JoinEntertainmentGroupResult(
     Guid GroupId,
     Guid PlayerId,
     string PlayerName,
-    string Level);
+    string Level,
+    string PlayerToken);
 
 public record EntertainmentLobbyPlayerDto(
     Guid PlayerId,
@@ -115,20 +115,24 @@ public class JoinEntertainmentGroupCommandHandler
             throw new EntertainmentJoinClosedException(request.JoinKey);
 
         var level = ParseLevel(request.Level);
+        if ((await _repository.ListPlayersAsync(group.Id, ct) ?? Array.Empty<EntertainmentPlayer>()).Count >= 16)
+            throw new InvalidOperationException("This room is full (maximum 16 players).");
         var player = EntertainmentPlayer.Create(group.Id, request.PlayerName, level, isCreator: false);
+        var token = EntertainmentPlayerToken.Generate();
+        player.PlayerTokenHash = EntertainmentPlayerToken.Hash(token);
 
-        await _repository.SavePlayerAsync(player, ct);
+        await _repository.JoinPlayerAsync(group, player, ct);
 
         return new JoinEntertainmentGroupResult(
             group.Id,
             player.Id,
             player.Name,
-            player.Level.ToString());
+            player.Level.ToString(), token);
     }
 
     private static CefrLevel ParseLevel(string level)
     {
-        if (!Enum.TryParse<CefrLevel>(level, ignoreCase: true, out var parsed))
+        if (!Enum.TryParse<CefrLevel>(level, ignoreCase: true, out var parsed) || !Enum.IsDefined(parsed))
             throw new ArgumentException($"Invalid level '{level}'.", nameof(level));
         return parsed;
     }
@@ -169,7 +173,10 @@ public record EntertainmentRoundDto(
     Guid TranslatorPlayerId,
     string SentenceEn,
     string? SentenceFi,
-    IReadOnlyList<string> BaseForms);
+    IReadOnlyList<string> BaseForms,
+    IReadOnlyList<EntertainmentWordHint>? Hints = null,
+    string? SubmittedAnswer = null,
+    EntertainmentAnswerEvaluation? Evaluation = null);
 
 public record StartEntertainmentGameResult(
     Guid GroupId,
@@ -180,16 +187,13 @@ public class StartEntertainmentGameCommandHandler
     : IRequestHandler<StartEntertainmentGameCommand, StartEntertainmentGameResult>
 {
     private readonly IEntertainmentRepository _repository;
-    private readonly IEntertainmentKeyProtector _keyProtector;
     private readonly IGeminiSentenceService _gemini;
 
     public StartEntertainmentGameCommandHandler(
         IEntertainmentRepository repository,
-        IEntertainmentKeyProtector keyProtector,
         IGeminiSentenceService gemini)
     {
         _repository = repository;
-        _keyProtector = keyProtector;
         _gemini = gemini;
     }
 
@@ -214,30 +218,16 @@ public class StartEntertainmentGameCommandHandler
             throw new InvalidOperationException("No players in group.");
 
         var translator = players[0];
-        var apiKey = _keyProtector.Unprotect(group.GeminiApiKeyEncrypted);
-        var previousSentences = await _repository.ListRecentSentencesAsync(group.Id, 10, ct);
-        GeminiSentence sentence;
-        var attempts = 0;
-        do
-        {
-            sentence = await _gemini.GenerateAsync(group.Description, translator.Level, apiKey, previousSentences, ct);
-            attempts++;
-        } while (attempts < 3 && !sentence.IsSample && await _repository.SentenceExistsAsync(group.Id, sentence.SentenceEn, ct));
-
-        ct.ThrowIfCancellationRequested();
-
-        var round = EntertainmentRound.Create(
-            group.Id, 1, translator.Id, sentence.SentenceEn, sentence.SentenceFi, sentence.BaseForms);
-
-        group.Status = EntertainmentStatus.InGame;
-        group.UpdatedUtc = DateTime.UtcNow;
-
-        await _repository.SaveGroupAsync(group, ct);
-        await _repository.SaveRoundAsync(round, ct);
-
+        var oldTurns = group.TurnOrder;
+        var oldScores = group.Scores;
+        group.TurnOrder = turnOrder;
+        group.Scores = turnOrder.ToDictionary(id => id, _ => 0);
+        EntertainmentRound round;
+        try { round = await EntertainmentRoundGeneration.GenerateAsync(_repository, _gemini, group, translator, 1, ct); }
+        catch { group.TurnOrder = oldTurns; group.Scores = oldScores; throw; }
         return new StartEntertainmentGameResult(
             group.Id,
-            new EntertainmentRoundDto(round.Id, round.RoundNumber, round.TranslatorPlayerId, round.SentenceEn, round.SentenceFi, round.BaseForms),
+            new EntertainmentRoundDto(round.Id, round.RoundNumber, round.TranslatorPlayerId, round.SentenceEn, round.SentenceFi, round.BaseForms, round.Hints),
             turnOrder);
     }
 }
@@ -267,16 +257,13 @@ public class StartNextEntertainmentRoundCommandHandler
     : IRequestHandler<StartNextEntertainmentRoundCommand, EntertainmentRoundDto>
 {
     private readonly IEntertainmentRepository _repository;
-    private readonly IEntertainmentKeyProtector _keyProtector;
     private readonly IGeminiSentenceService _gemini;
 
     public StartNextEntertainmentRoundCommandHandler(
         IEntertainmentRepository repository,
-        IEntertainmentKeyProtector keyProtector,
         IGeminiSentenceService gemini)
     {
         _repository = repository;
-        _keyProtector = keyProtector;
         _gemini = gemini;
     }
 
@@ -291,24 +278,10 @@ public class StartNextEntertainmentRoundCommandHandler
         var translator = await _repository.GetPlayerAsync(request.TranslatorPlayerId, ct)
             ?? throw new EntertainmentGroupNotFoundException(request.TranslatorPlayerId.ToString());
 
-        var apiKey = _keyProtector.Unprotect(group.GeminiApiKeyEncrypted);
-        var previousSentences = await _repository.ListRecentSentencesAsync(group.Id, 10, ct);
-        GeminiSentence sentence;
-        var attempts = 0;
-        do
-        {
-            sentence = await _gemini.GenerateAsync(group.Description, translator.Level, apiKey, previousSentences, ct);
-            attempts++;
-        } while (attempts < 3 && !sentence.IsSample && await _repository.SentenceExistsAsync(group.Id, sentence.SentenceEn, ct));
-
-        ct.ThrowIfCancellationRequested();
-
-        var round = EntertainmentRound.Create(
-            group.Id, request.RoundNumber, translator.Id, sentence.SentenceEn, sentence.SentenceFi, sentence.BaseForms);
-
-        await _repository.SaveRoundAsync(round, ct);
-
-        return new EntertainmentRoundDto(round.Id, round.RoundNumber, round.TranslatorPlayerId, round.SentenceEn, round.SentenceFi, round.BaseForms);
+        if (group.Status != EntertainmentStatus.InGame || translator.GroupId != group.Id)
+            throw new InvalidOperationException("The game is not active or the translator is not a member.");
+        var round = await EntertainmentRoundGeneration.GenerateAsync(_repository, _gemini, group, translator, request.RoundNumber, ct);
+        return new EntertainmentRoundDto(round.Id, round.RoundNumber, round.TranslatorPlayerId, round.SentenceEn, round.SentenceFi, round.BaseForms, round.Hints);
     }
 }
 
@@ -377,31 +350,30 @@ public class EntertainmentValidators
     {
         public CreateEntertainmentGroupCommandValidator()
         {
-            RuleFor(x => x.Name).NotEmpty().WithMessage("Group name is required.");
-            RuleFor(x => x.GeminiApiKey).NotEmpty().WithMessage("Gemini API key is required.");
+            RuleFor(x => x.Name).MaximumLength(100).NotEmpty().WithMessage("Group name is required.");
             RuleFor(x => x.Description)
                 .NotEmpty().WithMessage("Description is required.")
-                .MinimumLength(200).WithMessage("Description must be at least 200 characters.");
-            RuleFor(x => x.CreatorName).NotEmpty().WithMessage("Your name is required.");
+                .MaximumLength(2000).MinimumLength(10).WithMessage("Description must be at least 10 characters.");
+            RuleFor(x => x.CreatorName).MaximumLength(60).NotEmpty().WithMessage("Your name is required.");
             RuleFor(x => x.CreatorLevel)
                 .Must(IsValidLevel).WithMessage("Level must be one of A1, A2, B1, B2, C1, C2.");
         }
 
         private static bool IsValidLevel(string level)
-            => Enum.TryParse<CefrLevel>(level, ignoreCase: true, out _);
+            => Enum.TryParse<CefrLevel>(level, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed);
     }
 
     public class JoinEntertainmentGroupCommandValidator : AbstractValidator<JoinEntertainmentGroupCommand>
     {
         public JoinEntertainmentGroupCommandValidator()
         {
-            RuleFor(x => x.JoinKey).NotEmpty().WithMessage("Join key is required.");
-            RuleFor(x => x.PlayerName).NotEmpty().WithMessage("Your name is required.");
+            RuleFor(x => x.JoinKey).MaximumLength(12).NotEmpty().WithMessage("Join key is required.");
+            RuleFor(x => x.PlayerName).MaximumLength(60).NotEmpty().WithMessage("Your name is required.");
             RuleFor(x => x.Level)
                 .Must(IsValidLevel).WithMessage("Level must be one of A1, A2, B1, B2, C1, C2.");
         }
 
         private static bool IsValidLevel(string level)
-            => Enum.TryParse<CefrLevel>(level, ignoreCase: true, out _);
+            => Enum.TryParse<CefrLevel>(level, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed);
     }
 }

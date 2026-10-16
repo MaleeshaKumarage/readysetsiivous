@@ -22,8 +22,8 @@ public class JoinEntertainmentGroupHandlerTests
         repo.Setup(r => r.GetGroupByJoinKeyAsync("ABC234", It.IsAny<CancellationToken>())).ReturnsAsync(group);
 
         EntertainmentPlayer? saved = null;
-        repo.Setup(r => r.SavePlayerAsync(It.IsAny<EntertainmentPlayer>(), It.IsAny<CancellationToken>()))
-            .Callback<EntertainmentPlayer, CancellationToken>((p, _) => saved = p)
+        repo.Setup(r => r.JoinPlayerAsync(group, It.IsAny<EntertainmentPlayer>(), It.IsAny<CancellationToken>()))
+            .Callback<EntertainmentGroup, EntertainmentPlayer, CancellationToken>((g, p, _) => saved = p)
             .Returns(Task.CompletedTask);
 
         var handler = new JoinEntertainmentGroupCommandHandler(repo.Object);

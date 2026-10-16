@@ -24,6 +24,7 @@ public class EntertainmentPlayer : BaseDocument
     public CefrLevel Level { get; set; }
     public int Score { get; set; }
     public bool IsCreator { get; set; }
+    public string PlayerTokenHash { get; set; } = string.Empty;
     public DateTime JoinedUtc { get; set; } = DateTime.UtcNow;
 
     public static EntertainmentPlayer Create(

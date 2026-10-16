@@ -48,4 +48,10 @@ public class BranchRepository : IBranchRepository
         Session.Store(branch);
         await Session.SaveChangesAsync(ct);
     }
+
+    public async Task DeleteAsync(Guid id, CancellationToken ct = default)
+    {
+        Session.Delete<Branch>(id);
+        await Session.SaveChangesAsync(ct);
+    }
 }

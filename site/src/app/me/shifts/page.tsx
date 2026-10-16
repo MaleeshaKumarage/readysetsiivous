@@ -45,6 +45,23 @@ function statusClasses(s: Status): string {
   }
 }
 
+function formatTenantDate(utc: string, timeZoneId: string, dateStyle: 'date' | 'time' | 'datetime') {
+  const options: Intl.DateTimeFormatOptions = dateStyle === 'date'
+    ? { year: 'numeric', month: 'short', day: 'numeric', timeZone: timeZoneId }
+    : dateStyle === 'time'
+      ? { hour: '2-digit', minute: '2-digit', timeZone: timeZoneId }
+      : { dateStyle: 'medium', timeStyle: 'short', timeZone: timeZoneId };
+  try { return new Intl.DateTimeFormat(undefined, options).format(new Date(utc)); }
+  catch { return new Date(utc).toLocaleString(); }
+}
+
+function tenantDateKey(instant: string | Date, timeZoneId: string) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: timeZoneId }).formatToParts(new Date(instant));
+    return `${parts.find(p => p.type === 'year')?.value}-${parts.find(p => p.type === 'month')?.value}-${parts.find(p => p.type === 'day')?.value}`;
+  } catch { return new Date(instant).toISOString().slice(0, 10); }
+}
+
 export default function MyShiftsPage() {
   const [ready, setReady] = useState(false);
   const [authed, setAuthed] = useState(false);
@@ -229,6 +246,9 @@ export default function MyShiftsPage() {
               const key = `${o.shiftId}-${o.startUtc}`;
               const status = statusOf(o);
               const isOpen = openId === key;
+              const scheduledDate = tenantDateKey(o.startUtc, o.timeZoneId);
+              const today = tenantDateKey(new Date(now), o.timeZoneId);
+              const canStart = scheduledDate === today;
               return (
                 <Card key={key} role="group" aria-label={`${o.shiftName} ${o.startUtc}`} variant="elevated" padding="none" className="overflow-hidden">
                   <div className="p-5 space-y-3">
@@ -238,15 +258,18 @@ export default function MyShiftsPage() {
                         <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 dark:text-gray-400 pt-1">
                           <span className="flex items-center gap-1">
                             <Calendar className="w-3.5 h-3.5" />
-                            {new Date(o.startUtc).toLocaleDateString()}
+                            Scheduled: {formatTenantDate(o.startUtc, o.timeZoneId, 'date')}
                           </span>
                           <span className="flex items-center gap-1">
                             <Clock className="w-3.5 h-3.5" />
-                            {new Date(o.startUtc).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {formatTenantDate(o.startUtc, o.timeZoneId, 'time')}
                             {' – '}
-                            {new Date(o.endUtc).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {formatTenantDate(o.endUtc, o.timeZoneId, 'time')}
+                            {' · '}{o.timeZoneId}
                           </span>
                         </div>
+                        {o.form?.startedAtUtc && <p className="text-xs text-gray-600 dark:text-gray-300 pt-1">Actual start: {formatTenantDate(o.form.startedAtUtc, o.timeZoneId, 'datetime')}</p>}
+                        {o.form?.endedAtUtc && <p className="text-xs text-gray-600 dark:text-gray-300">Actual end: {formatTenantDate(o.form.endedAtUtc, o.timeZoneId, 'datetime')}</p>}
                       </div>
                       <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${statusClasses(status)}`}>
                         {statusLabel(status)}
@@ -254,11 +277,11 @@ export default function MyShiftsPage() {
                     </div>
 
                     {status === 'not-started' && (
-                      <Button size="sm" onClick={() => handleStart(o)} disabled={busy || Date.parse(o.startUtc) > now} className="gap-1.5">
+                      <Button size="sm" onClick={() => handleStart(o)} disabled={busy || !canStart} className="gap-1.5">
                         <Play className="w-4 h-4" /> Start
                       </Button>
                     )}
-                    {status === 'not-started' && Date.parse(o.startUtc) > now && <p className="text-sm text-gray-500">Available at the scheduled start time.</p>}
+                    {status === 'not-started' && !canStart && <p className="text-sm text-gray-500">{scheduledDate > today ? 'Available on the scheduled date. The actual start time will be recorded.' : 'This shift can only be started on its scheduled date. Contact your tenant administrator if you need help.'}</p>}
 
                     {status === 'in-progress' && (
                       <Button variant="outline" size="sm" disabled={photoReading || submitting} onClick={() => openForm(o)} className="gap-1.5">
@@ -270,7 +293,7 @@ export default function MyShiftsPage() {
                     {status === 'submitted' && (
                       <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
                         <CheckCircle2 className="w-4 h-4" />
-                        Submitted {o.form?.submittedUtc ? new Date(o.form.submittedUtc).toLocaleString() : ''}
+                        Submitted {o.form?.submittedUtc ? formatTenantDate(o.form.submittedUtc, o.timeZoneId, 'datetime') : ''}
                       </div>
                     )}
 

@@ -3,6 +3,7 @@ using CleaningSuite.Application.Companies;
 using CleaningSuite.Application.Employees;
 using CleaningSuite.Application.QualityCycle;
 using CleaningSuite.Application.Shifts;
+using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Employees;
 using CleaningSuite.Domain.Shifts;
 using FluentValidation;
@@ -23,7 +24,8 @@ public record ManagerScheduleResponse(ShiftScheduleType Type, TimeSpan? DailySta
     int? BiWeeklyWeekParity, DayOfWeek? BiWeeklyDay, TimeSpan? BiWeeklyStart, TimeSpan? BiWeeklyEnd,
     int? MonthlyDay, TimeSpan? MonthlyStart, TimeSpan? MonthlyEnd);
 public record ManagerShiftResponse(Guid Id, Guid CompanyId, Guid BranchId, string Name,
-    ManagerScheduleResponse Schedule, bool IsActive, DateTime? ValidFrom, DateTime? ValidUntil);
+    ManagerScheduleResponse Schedule, bool IsActive, DateTime? ValidFrom, DateTime? ValidUntil,
+    string TimeZoneId = "Europe/Helsinki");
 public record ManagerAssignmentResponse(Guid Id, Guid ShiftId, Guid EmployeeId, DateTime AssignedAtUtc, bool IsActive);
 
 public static class ManagerResponses
@@ -34,16 +36,19 @@ public static class ManagerResponses
         s.DailyTimes.ToDictionary(x => x.Key, x => new ScheduleRangeResponse(x.Value.Start, x.Value.End)),
         s.WeeklyDay, s.WeeklyDays.ToArray(), s.WeeklyStart, s.WeeklyEnd, s.BiWeeklyWeekParity,
         s.BiWeeklyDay, s.BiWeeklyStart, s.BiWeeklyEnd, s.MonthlyDay, s.MonthlyStart, s.MonthlyEnd);
-    public static ManagerShiftResponse Shift(Shift s) => new(s.Id, s.CompanyId, s.BranchId, s.Name,
-        Schedule(s.Schedule), s.IsActive, s.ValidFrom, s.ValidUntil);
+    public static ManagerShiftResponse Shift(Shift s, string timeZoneId = "Europe/Helsinki") => new(s.Id, s.CompanyId, s.BranchId, s.Name,
+        Schedule(s.Schedule), s.IsActive, s.ValidFrom, s.ValidUntil, timeZoneId);
     public static ManagerAssignmentResponse Assignment(ShiftAssignmentDto a) => new(a.Id, a.ShiftId, a.EmployeeId, a.AssignedAtUtc, a.IsActive);
 }
 
 /// <summary>Tenant-scoped operational contracts; no administrative persistence serialization.</summary>
 public sealed class ManagerOperations(IShiftRepository shifts, IEmployeeRepository employees,
     ICompanyRepository companies, IBranchRepository branches, IQualityCycleDispatcher dispatcher,
-    IMediator mediator)
+    IMediator mediator, ITenantProfileRepository? profiles = null, ITenantContext? tenant = null)
 {
+    public async Task<string> TimeZone(CancellationToken ct)
+    { var (id, _) = await TenantTimeZone.LoadAsync(profiles, tenant, ct); return id; }
+
     public async Task<IReadOnlyList<ManagerEmployeeResponse>> Roster(CancellationToken ct) =>
         (await employees.ListAsync(false, ct)).Where(e => e.IsActive).Select(ManagerResponses.Employee).ToArray();
 
@@ -65,14 +70,16 @@ public sealed class ManagerOperations(IShiftRepository shifts, IEmployeeReposito
 
     public async Task<IReadOnlyList<ManagerShiftResponse>> List(CancellationToken ct, bool includeInactive = false)
     {
+        var (timeZoneId, _) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
         var result = new List<ManagerShiftResponse>();
         foreach (var shift in includeInactive ? await shifts.ListForReportingAsync(ct) : await shifts.ListAsync(null, null, ct)) {
-            if (await ValidParents(shift.CompanyId, shift.BranchId, ct)) result.Add(ManagerResponses.Shift(shift));
+            if (await ValidParents(shift.CompanyId, shift.BranchId, ct)) result.Add(ManagerResponses.Shift(shift, timeZoneId));
         }
         return result;
     }
 
-    public async Task<ManagerShiftResponse> Get(Guid id, CancellationToken ct) => ManagerResponses.Shift(await Load(id, ct));
+    public async Task<ManagerShiftResponse> Get(Guid id, CancellationToken ct)
+    { var (timeZoneId, _) = await TenantTimeZone.LoadAsync(profiles, tenant, ct); return ManagerResponses.Shift(await Load(id, ct), timeZoneId); }
 
     public async Task<ManagerShiftResponse> Create(Guid companyId, Guid branchId, string name,
         ShiftSchedule schedule, DateTime? validFrom, DateTime? validUntil, CancellationToken ct)
@@ -105,6 +112,9 @@ public sealed class ManagerOperations(IShiftRepository shifts, IEmployeeReposito
     {
         await Load(id, ct); await mediator.Send(new DeactivateShiftCommand(id), ct);
     }
+
+    public async Task Delete(Guid id, CancellationToken ct)
+    { await mediator.Send(new DeleteShiftCommand(id), ct); }
 
     public async Task<ManagerShiftResponse> Reactivate(Guid id, CancellationToken ct)
     {

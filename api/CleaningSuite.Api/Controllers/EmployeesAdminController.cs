@@ -59,6 +59,10 @@ public class EmployeesAdminController : ControllerBase
         return NoContent();
     }
 
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    { await _mediator.Send(new DeleteEmployeeCommand(id), ct); return NoContent(); }
+
     /// <summary>Links the employee login and sends a secure Keycloak account-setup email; never returns passwords.</summary>
     [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost("{id:guid}/invite")]

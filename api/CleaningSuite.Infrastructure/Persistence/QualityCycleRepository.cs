@@ -68,7 +68,11 @@ public class QualityCycleRepository : IQualityCycleRepository
             .FirstOrDefaultAsync(x => x.ShiftId == shiftId && x.EmployeeId == employeeId && x.ShiftOccurrenceUtc == start, ct);
     }
 
-    public async Task<IReadOnlyList<QualityCycleForm>> ListFormsAsync(Guid? shiftId, DateTime? fromUtc, DateTime? toUtc, CancellationToken ct = default)
+    public Task<IReadOnlyList<QualityCycleForm>> ListFormsAsync(Guid? shiftId, DateTime? fromUtc, DateTime? toUtc, CancellationToken ct = default) =>
+        ListFormsAsync(shiftId, fromUtc, toUtc, ct, null, null, null, null);
+
+    public async Task<IReadOnlyList<QualityCycleForm>> ListFormsAsync(Guid? shiftId, DateTime? fromUtc, DateTime? toUtc,
+        CancellationToken ct, Guid? employeeId, Guid? templateId, Guid? companyId, Guid? branchId)
     {
         var query = _session.Query<QualityCycleForm>().AsQueryable();
 
@@ -76,6 +80,10 @@ public class QualityCycleRepository : IQualityCycleRepository
         {
             query = query.Where(x => x.ShiftId == shiftId.Value);
         }
+        if (employeeId.HasValue) query = query.Where(x => x.EmployeeId == employeeId.Value);
+        if (templateId.HasValue) query = query.Where(x => x.TemplateId == templateId.Value);
+        if (companyId.HasValue) query = query.Where(x => x.CompanyId == companyId.Value);
+        if (branchId.HasValue) query = query.Where(x => x.BranchId == branchId.Value);
 
         if (fromUtc.HasValue)
         {

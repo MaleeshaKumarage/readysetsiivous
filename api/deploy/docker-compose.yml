@@ -72,6 +72,7 @@ services:
       Cors__AllowedOrigins__0: https://readysetsiivous.fi
       Uploads__Path: /app/uploads
       Entertainment__KeyFilePath: /app/keys/entertainment.key
+      Entertainment__Gemini__ApiKey: ${GAME_GEMINI_API_KEY:-}
       Resend__ApiKey: ${RESEND_API_KEY:-}
       EmployeeInvites__LifespanSeconds: 86400
       EmployeeInvites__Smtp__Host: ${INVITE_SMTP_HOST:-}

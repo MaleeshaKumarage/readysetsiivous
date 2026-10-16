@@ -14,6 +14,7 @@ async function send<T>(path: string, method = 'GET', body?: unknown): Promise<T>
   return response.status === 204 ? undefined as T : await response.json() as T;
 }
 export const managerApi = {
+  timeZone: () => send<{ timeZoneId: string }>('/time-zone'),
   shifts: (includeInactive = false) => send<ManagerShift[]>(`/shifts${includeInactive ? '?includeInactive=true' : ''}`),
   employees: () => send<ManagerEmployee[]>('/employees'),
   companies: async () => {
@@ -29,6 +30,7 @@ export const managerApi = {
   update: (id: string, body: unknown) => send<ManagerShift>(`/shifts/${id}`, 'PUT', body),
   deactivate: (id: string) => send<void>(`/shifts/${id}/deactivate`, 'POST'),
   reactivate: (id: string) => send<ManagerShift>(`/shifts/${id}/reactivate`, 'POST'),
+  deleteInactive: (id: string) => send<void>(`/shifts/${id}`, 'DELETE'),
   assignments: (id: string) => send<ManagerAssignment[]>(`/shifts/${id}/assignments`),
   assign: (id: string, employeeId: string) => send<ManagerAssignment>(`/shifts/${id}/assignments`, 'POST', { employeeId }),
   unassign: (id: string, employeeId: string) => send<void>(`/shifts/${id}/assignments/${employeeId}`, 'DELETE'),

@@ -13,6 +13,10 @@ public class QualityCycleClockTests
 {
     private static readonly DateTime FromUtc = new(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
     private static readonly DateTime ToUtc = new(2026, 10, 2, 23, 59, 59, DateTimeKind.Utc);
+    private sealed class FixedClock(DateTime nowUtc) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => new(DateTime.SpecifyKind(nowUtc, DateTimeKind.Utc));
+    }
 
     private static Shift NewShift(Guid? templateId) =>
         Shift.Create(Guid.NewGuid(), Guid.NewGuid(), "Daily",
@@ -49,7 +53,7 @@ public class QualityCycleClockTests
         qcRepo.Setup(r => r.GetFormByShiftOccurrenceAsync(shift.Id, emp.Id, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((QualityCycleForm?)null);
 
-        var handler = new QualityCycleHandlers.StartQualityCycleFormCommandHandler(shiftRepo.Object, empRepo.Object, qcRepo.Object);
+        var handler = new QualityCycleHandlers.StartQualityCycleFormCommandHandler(shiftRepo.Object, empRepo.Object, qcRepo.Object, new FixedClock(FromUtc.AddHours(8)));
         qcRepo.Setup(r => r.TryCreateFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
         var start = kind == DateTimeKind.Local ? FromUtc.AddHours(8).ToLocalTime() : DateTime.SpecifyKind(FromUtc.AddHours(8), kind);
         var end = kind == DateTimeKind.Local ? FromUtc.AddHours(16).ToLocalTime() : DateTime.SpecifyKind(FromUtc.AddHours(16), kind);
@@ -63,6 +67,59 @@ public class QualityCycleClockTests
         qcRepo.Verify(r => r.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Theory]
+    [InlineData(2)] // Before the scheduled start
+    [InlineData(20)] // After the scheduled end, but still on the scheduled tenant date
+    public async Task Start_AllowsStartingOutsideScheduledHoursOnScheduledDate_AndRecordsActualTime(int actualHourUtc)
+    {
+        var shift = NewShift(null); var employee = NewEmployee(); var clock = new FixedClock(FromUtc.AddHours(actualHourUtc));
+        var shifts = new Mock<IShiftRepository>(); var employees = new Mock<IEmployeeRepository>(); var forms = new Mock<IQualityCycleRepository>();
+        shifts.Setup(r => r.GetAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+        employees.Setup(r => r.GetByIdAsync(employee.Id, It.IsAny<CancellationToken>())).ReturnsAsync(employee);
+        shifts.Setup(r => r.GetAssignmentAsync(shift.Id, employee.Id, It.IsAny<CancellationToken>())).ReturnsAsync(ExistingAssignment(shift.Id, employee.Id));
+        forms.Setup(r => r.GetFormByShiftOccurrenceAsync(shift.Id, employee.Id, It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync((QualityCycleForm?)null);
+        forms.Setup(r => r.TryCreateFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
+
+        var result = await new QualityCycleHandlers.StartQualityCycleFormCommandHandler(shifts.Object, employees.Object, forms.Object, clock)
+            .Handle(new(shift.Id, employee.Id, FromUtc.AddHours(8), FromUtc.AddHours(16)), default);
+
+        Assert.Equal(FromUtc.AddHours(actualHourUtc), result.StartedAtUtc);
+    }
+
+    [Fact]
+    public async Task Start_RejectsStartingOutsideScheduledTenantDate()
+    {
+        var shift = NewShift(null); var employee = NewEmployee(); var clock = new FixedClock(FromUtc.AddHours(2));
+        var shifts = new Mock<IShiftRepository>(); var employees = new Mock<IEmployeeRepository>(); var forms = new Mock<IQualityCycleRepository>();
+        shifts.Setup(r => r.GetAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+        employees.Setup(r => r.GetByIdAsync(employee.Id, It.IsAny<CancellationToken>())).ReturnsAsync(employee);
+        shifts.Setup(r => r.GetAssignmentAsync(shift.Id, employee.Id, It.IsAny<CancellationToken>())).ReturnsAsync(ExistingAssignment(shift.Id, employee.Id));
+        var handler = new QualityCycleHandlers.StartQualityCycleFormCommandHandler(shifts.Object, employees.Object, forms.Object, clock);
+
+        var error = await Assert.ThrowsAsync<QualityCycleConflictException>(() => handler.Handle(
+            new(shift.Id, employee.Id, FromUtc.AddDays(1).AddHours(8), FromUtc.AddDays(1).AddHours(16)), default));
+
+        Assert.Equal("This shift can be started on its scheduled date.", error.Message);
+        forms.Verify(r => r.GetFormByShiftOccurrenceAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(5)] // Before the scheduled end
+    [InlineData(20)] // After the scheduled end
+    public async Task End_AllowsEndingOutsideScheduledHoursAfterActualStart_AndRecordsActualTime(int actualHourUtc)
+    {
+        var shift = NewShift(null); var employee = NewEmployee(); var clock = new FixedClock(FromUtc.AddHours(actualHourUtc));
+        var form = QualityCycleForm.Create(shift.Id, shift.Name, employee.Id, "A B", Guid.Empty, "Shift activities", FromUtc.AddHours(8), new(), FromUtc.AddHours(16));
+        form.Start(FromUtc.AddHours(2));
+        var repository = new Mock<IQualityCycleRepository>(); repository.Setup(r => r.GetFormAsync(form.Id, It.IsAny<CancellationToken>())).ReturnsAsync(form);
+
+        var result = await new QualityCycleHandlers.EndQualityCycleFormCommandHandler(repository.Object, clock)
+            .Handle(new(form.Id, employee.Id, new()), default);
+
+        Assert.Equal(FromUtc.AddHours(2), result.StartedAtUtc);
+        Assert.Equal(FromUtc.AddHours(actualHourUtc), result.EndedAtUtc);
+    }
+
     [Fact]
     public async Task Start_ReusesExistingForm_DoesNotOverwriteStartedAt()
     {
@@ -70,7 +127,7 @@ public class QualityCycleClockTests
         var shift = NewShift(template.Id);
         var emp = NewEmployee();
         var existing = QualityCycleForm.Create(shift.Id, shift.Name, emp.Id, "A B", template.Id, template.Title, FromUtc.AddHours(8), template.Items, FromUtc.AddHours(16));
-        existing.Start();
+        existing.Start(FromUtc.AddHours(9));
 
         var shiftRepo = new Mock<IShiftRepository>();
         var empRepo = new Mock<IEmployeeRepository>();
@@ -84,7 +141,7 @@ public class QualityCycleClockTests
         qcRepo.Setup(r => r.GetFormByShiftOccurrenceAsync(shift.Id, emp.Id, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(existing);
 
-        var handler = new QualityCycleHandlers.StartQualityCycleFormCommandHandler(shiftRepo.Object, empRepo.Object, qcRepo.Object);
+        var handler = new QualityCycleHandlers.StartQualityCycleFormCommandHandler(shiftRepo.Object, empRepo.Object, qcRepo.Object, new FixedClock(FromUtc.AddHours(10)));
         var result = await handler.Handle(new StartQualityCycleFormCommand(shift.Id, emp.Id, FromUtc.AddHours(8), FromUtc.AddHours(16)), CancellationToken.None);
 
         Assert.Equal(existing.StartedAtUtc, result.StartedAtUtc);
@@ -107,7 +164,7 @@ public class QualityCycleClockTests
         shiftRepo.Setup(r => r.GetAssignmentAsync(shift.Id, emp.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync((ShiftAssignment?)null);
 
-        var handler = new QualityCycleHandlers.StartQualityCycleFormCommandHandler(shiftRepo.Object, empRepo.Object, qcRepo.Object);
+        var handler = new QualityCycleHandlers.StartQualityCycleFormCommandHandler(shiftRepo.Object, empRepo.Object, qcRepo.Object, new FixedClock(FromUtc.AddHours(10)));
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
             handler.Handle(new StartQualityCycleFormCommand(shift.Id, emp.Id, FromUtc.AddHours(8), FromUtc.AddHours(16)), CancellationToken.None));
     }
@@ -158,7 +215,7 @@ public class QualityCycleClockTests
         forms.Setup(r => r.GetTemplateAsync(template.Id, It.IsAny<CancellationToken>())).ReturnsAsync(template);
         QualityCycleForm? created = null;
         forms.Setup(r => r.TryCreateFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>())).Callback<QualityCycleForm,CancellationToken>((f,_) => created=f).ReturnsAsync(true);
-        var dto = await new QualityCycleHandlers.StartQualityCycleFormCommandHandler(shifts.Object, employees.Object, forms.Object)
+        var dto = await new QualityCycleHandlers.StartQualityCycleFormCommandHandler(shifts.Object, employees.Object, forms.Object, new FixedClock(FromUtc.AddHours(10)))
             .Handle(new(shift.Id, employee.Id, FromUtc.AddHours(8), FromUtc.AddHours(16)), default);
         Assert.Empty(dto.Items); Assert.NotNull(dto.StartedAtUtc); Assert.Equal(Guid.Empty, dto.TemplateId);
         Assert.Equal(employee.Id, created!.EmployeeId); Assert.Equal(shift.CompanyId, created.CompanyId); Assert.Equal(shift.BranchId, created.BranchId);

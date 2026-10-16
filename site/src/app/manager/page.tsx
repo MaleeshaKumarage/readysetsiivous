@@ -13,6 +13,7 @@ export default function ManagerPage() {
   const [companies, setCompanies] = useState<ManagerCompany[]>([]);
   const [branches, setBranches] = useState<ManagerBranch[]>([]);
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
+  const [timeZoneId, setTimeZoneId] = useState('Europe/Helsinki');
   const [lifecycle, setLifecycle] = useState<LifecycleStatus>('active');
   const [editing, setEditing] = useState<ManagerShift | 'new' | null>(null);
   const [name, setName] = useState(''); const [company, setCompany] = useState(''); const [branch, setBranch] = useState('');
@@ -24,9 +25,9 @@ export default function ManagerPage() {
   async function load() {
     const version = ++generation.current; setError('');
     try {
-      const [work, roster, clients] = await Promise.all([managerApi.shifts(true), managerApi.employees(), managerApi.companies()]);
+      const [work, roster, clients, timeZone] = await Promise.all([managerApi.shifts(true), managerApi.employees(), managerApi.companies(), managerApi.timeZone()]);
       if (version !== generation.current) return;
-      setShifts(work); setEmployees(roster); setCompanies(clients);
+      setShifts(work); setEmployees(roster); setCompanies(clients); setTimeZoneId(timeZone.timeZoneId);
     } catch (e) { if (version === generation.current) setError(e instanceof Error ? e.message : 'Could not load operations.'); }
   }
   useEffect(() => { void load(); return () => { generation.current++; assignmentGeneration.current++; }; }, []);
@@ -66,6 +67,10 @@ export default function ManagerPage() {
     try { const result = await managerApi.assignments(id); if (version === assignmentGeneration.current) setAssignments(result); }
     catch (e) { if (version === assignmentGeneration.current) setError(e instanceof Error ? e.message : 'Could not load assignments.'); }
   }
+  async function deleteShift(shift: ManagerShift) {
+    if (!window.confirm(`Permanently delete inactive shift “${shift.name}”? Shifts with assignments or checklist records are retained.`)) return;
+    await action(async () => { await managerApi.deleteInactive(shift.id); closeAssignments(); await load(); });
+  }
   const type = schedule.type;
   const timeKeys = type === 0 ? ['dailyStart', 'dailyEnd'] : type === 2 ? ['weeklyStart', 'weeklyEnd'] : type === 3 ? ['biWeeklyStart', 'biWeeklyEnd'] : ['monthlyStart', 'monthlyEnd'];
   function changeType(value: number) {
@@ -81,7 +86,7 @@ export default function ManagerPage() {
     {shifts === null ? <p role="status">{error ? 'Operations could not be loaded. Use Refresh operations to retry.' : 'Loading operations…'}</p> : visibleShifts.length === 0 ? <p>{shifts.length === 0 ? 'No shifts yet.' : `No ${lifecycle} shifts. Check the ${lifecycle === 'active' ? 'Inactive' : 'Active'} tab.`}</p> : visibleShifts.map(s => <article key={s.id} className="rounded-xl border bg-white p-4 space-y-3" aria-label={s.name}>
       <h3 className="font-bold">{s.name}</h3><p>{companies.find(c => c.id === s.companyId)?.name ?? 'Company'} · {['Daily', 'Daily times', 'Weekly', 'Biweekly', 'Flexible', 'Monthly'][s.schedule.type]}</p>
       <p>{s.isActive ? 'Active' : 'Deactivated'}</p>
-      <div className="flex flex-wrap gap-2"><button className={button} disabled={busy} onClick={() => open(s)}>Edit shift</button>{s.isActive ? <><button className={button} disabled={busy} onClick={() => openAssignments(s.id)}>Employees</button><button className={button} disabled={busy} onClick={() => action(async () => { await managerApi.deactivate(s.id); if (assignmentShift === s.id) closeAssignments(); await load(); })}>Deactivate shift</button></> : <button className={button} disabled={busy} onClick={() => action(async () => { await managerApi.reactivate(s.id); await load(); })}>Reactivate shift</button>}</div>
+      <div className="flex flex-wrap gap-2"><button className={button} disabled={busy} onClick={() => open(s)}>Edit shift</button>{s.isActive ? <><button className={button} disabled={busy} onClick={() => openAssignments(s.id)}>Employees</button><button className={button} disabled={busy} onClick={() => action(async () => { await managerApi.deactivate(s.id); if (assignmentShift === s.id) closeAssignments(); await load(); })}>Deactivate shift</button></> : <><button className={button} disabled={busy} onClick={() => action(async () => { await managerApi.reactivate(s.id); await load(); })}>Reactivate shift</button><button className={button} disabled={busy} onClick={() => deleteShift(s)}>Delete</button></>}</div>
       {assignmentShift === s.id && <div className="space-y-3">
         {assignments === null ? <><p>Loading assignments…</p><button className={button} onClick={() => openAssignments(s.id)}>Retry assignments</button></> : <>
           <label>Employee<select aria-label="Employee" className={input} value={employee} disabled={busy} onChange={e => setEmployee(e.target.value)}><option value="">Choose employee</option>{employees.filter(e => e.isActive && !assignments.some(a => a.employeeId === e.id)).map(e => <option key={e.id} value={e.id}>{e.firstName} {e.lastName}</option>)}</select></label>
@@ -99,6 +104,7 @@ export default function ManagerPage() {
       <label>Company<select aria-label="Company" className={input} value={company} disabled={busy || editing !== 'new'} onChange={e => { setCompany(e.target.value); setBranch(''); }} required><option value="">Choose company</option>{companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
       <label>Branch<select aria-label="Branch" className={input} value={branch} disabled={busy || editing !== 'new'} onChange={e => setBranch(e.target.value)} required><option value="">Choose branch</option>{branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
       <label>Schedule<select aria-label="Schedule" className={input} value={type} disabled={busy} onChange={e => changeType(Number(e.target.value))}>{['Daily', 'Different times per day', 'Weekly', 'Biweekly', 'Flexible', 'Monthly'].map((v, i) => <option key={i} value={i}>{v}</option>)}</select></label>
+      <p className="text-sm text-gray-600">Schedule times use the tenant time zone: {timeZoneId}.</p>
       {type !== 1 && type !== 4 && <div className="grid sm:grid-cols-2 gap-4">{timeKeys.map((key, i) => <label key={key}>{i ? 'End time' : 'Start time'}<input className={input} type="time" disabled={busy} value={(schedule[key as keyof ManagerSchedule] as string | undefined)?.slice(0, 5) ?? ''} onChange={e => setSchedule({ ...schedule, [key]: e.target.value })} required /></label>)}</div>}
       {type === 2 && <fieldset><legend>Days</legend><div className="flex flex-wrap gap-3">{DAYS.map((d, i) => <label key={d}><input type="checkbox" disabled={busy} checked={(schedule.weeklyDays?.length ? schedule.weeklyDays : [schedule.weeklyDay]).includes(i)} onChange={e => { const days = schedule.weeklyDays?.length ? schedule.weeklyDays : schedule.weeklyDay == null ? [] : [schedule.weeklyDay]; setSchedule({ ...schedule, weeklyDay: null, weeklyDays: e.target.checked ? [...days, i] : days.filter(v => v !== i) }); }} /> {d}</label>)}</div></fieldset>}
       {type === 3 && <><label>Week parity<select aria-label="Week parity" className={input} disabled={busy} value={schedule.biWeeklyWeekParity ?? 1} onChange={e => setSchedule({ ...schedule, biWeeklyWeekParity: Number(e.target.value) })}><option value={1}>Odd weeks</option><option value={2}>Even weeks</option></select></label><label>Day<select aria-label="Day" className={input} disabled={busy} value={schedule.biWeeklyDay ?? 1} onChange={e => setSchedule({ ...schedule, biWeeklyDay: Number(e.target.value) })}>{DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}</select></label></>}

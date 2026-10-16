@@ -1,4 +1,5 @@
 using CleaningSuite.Application.Common;
+using CleaningSuite.Application.Bookings;
 using CleaningSuite.Domain.Common;
 using CleaningSuite.Domain.Services;
 using FluentValidation;
@@ -26,6 +27,7 @@ public record CreateServiceCommand(ServiceFields Fields) : IRequest<Guid>;
 public record UpdateServiceCommand(Guid Id, ServiceFields Fields, bool IsActive) : IRequest<Unit>;
 
 public record SoftDeleteServiceCommand(Guid Id) : IRequest<Unit>;
+public record DeleteServiceCommand(Guid Id) : IRequest<Unit>;
 
 public record SetServiceActivityCommand(Guid Id, bool IsActive) : IRequest<Unit>;
 
@@ -159,6 +161,20 @@ public class SoftDeleteServiceHandler : IRequestHandler<SoftDeleteServiceCommand
         service.IsActive = false;
         service.UpdatedUtc = DateTime.UtcNow;
         await _services.SaveAsync(service, ct);
+        return Unit.Value;
+    }
+}
+
+public sealed class DeleteServiceHandler(IServiceRepository services, IBookingRepository bookings)
+    : IRequestHandler<DeleteServiceCommand, Unit>
+{
+    public async Task<Unit> Handle(DeleteServiceCommand request, CancellationToken ct)
+    {
+        var service = await services.GetByIdAsync(request.Id, ct) ?? throw new NotFoundException("Service", request.Id);
+        if (service.IsActive) throw new InactiveRecordDeleteConflictException("Deactivate the service before deleting it.");
+        if (await bookings.HasHistoryForServiceAsync(service.Id, ct))
+            throw new InactiveRecordDeleteConflictException("This service is referenced by booking history and must be retained.");
+        await services.DeleteAsync(service.Id, ct);
         return Unit.Value;
     }
 }

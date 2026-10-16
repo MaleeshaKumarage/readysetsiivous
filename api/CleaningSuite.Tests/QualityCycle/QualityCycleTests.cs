@@ -247,8 +247,14 @@ public class QualityCycleTests
     public async Task DeleteQualityCycleTemplateCommandHandler_CallsRepositoryDelete()
     {
         var repoMock = new Mock<IQualityCycleRepository>();
-        var handler = new QualityCycleHandlers.DeleteQualityCycleTemplateCommandHandler(repoMock.Object);
-        var id = Guid.NewGuid();
+        var template = QualityCycleTemplate.Create("Title", new List<string> { "Item 1" }); template.IsActive = false;
+        repoMock.Setup(r => r.GetTemplateAsync(template.Id, It.IsAny<CancellationToken>())).ReturnsAsync(template);
+        repoMock.Setup(r => r.ListFormsAsync(null, null, null, It.IsAny<CancellationToken>(), null, template.Id, null, null))
+            .ReturnsAsync(Array.Empty<QualityCycleForm>());
+        var shifts = new Mock<IShiftRepository>();
+        shifts.Setup(r => r.ListForReportingAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<Shift>());
+        var handler = new QualityCycleHandlers.DeleteQualityCycleTemplateCommandHandler(repoMock.Object, shifts.Object);
+        var id = template.Id;
 
         await handler.Handle(new DeleteQualityCycleTemplateCommand(id), CancellationToken.None);
 

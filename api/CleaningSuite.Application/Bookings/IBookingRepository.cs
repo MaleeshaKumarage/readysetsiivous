@@ -18,6 +18,8 @@ public interface IBookingRepository
     Task SaveAsync(Booking booking, CancellationToken ct = default);
     Task<IReadOnlyList<Booking>> ListAsync(
         DateTime? fromUtc, DateTime? toUtc, string? status, Guid? employeeId, CancellationToken ct = default);
+    Task<bool> HasHistoryForEmployeeAsync(Guid employeeId, CancellationToken ct = default);
+    Task<bool> HasHistoryForServiceAsync(Guid serviceId, CancellationToken ct = default);
 
     /// <summary>Next value for a per-tenant sequence, committed with the caller's session.</summary>
     Task<long> NextCounterAsync(string name, CancellationToken ct = default);

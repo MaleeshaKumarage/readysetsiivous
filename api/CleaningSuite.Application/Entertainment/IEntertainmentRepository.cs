@@ -4,10 +4,15 @@ namespace CleaningSuite.Application.Entertainment;
 
 public interface IEntertainmentRepository
 {
+    Task SaveGeneratedRoundAsync(EntertainmentGroup group, EntertainmentRound round, CancellationToken ct = default);
+    Task SaveGameStateAsync(EntertainmentGroup group, EntertainmentRound round, CancellationToken ct = default);
+    Task<IReadOnlyList<string>> ListAllSentencesAsync(Guid groupId, CancellationToken ct = default);
+    Task<EntertainmentRound?> GetLatestRoundAsync(Guid groupId, CancellationToken ct = default);
     /// <summary>Persists a new group and its creator player atomically.</summary>
     Task CreateGroupAsync(EntertainmentGroup group, EntertainmentPlayer creator, CancellationToken ct = default);
 
     Task SavePlayerAsync(EntertainmentPlayer player, CancellationToken ct = default);
+    Task JoinPlayerAsync(EntertainmentGroup group, EntertainmentPlayer player, CancellationToken ct = default);
 
     Task SaveGroupAsync(EntertainmentGroup group, CancellationToken ct = default);
 

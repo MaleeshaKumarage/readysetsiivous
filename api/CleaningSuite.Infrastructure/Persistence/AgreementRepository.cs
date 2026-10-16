@@ -23,6 +23,12 @@ public class AgreementRepository : IAgreementRepository, IDisposable
         await Session(tenantId).SaveChangesAsync(ct);
     }
 
+    public async Task DeleteAsync(string tenantId, Guid id, CancellationToken ct = default)
+    {
+        Session(tenantId).Delete<Agreement>(id);
+        await Session(tenantId).SaveChangesAsync(ct);
+    }
+
     public async Task<Agreement?> FindBySignerTokenAsync(string tenantId, string token, CancellationToken ct = default) =>
         // Marten 8.37 translates `Signers.Any(predicate)` on a JSON child collection into a
         // child-collection filter (CTE); this is the supported form for an element predicate.

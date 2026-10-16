@@ -87,4 +87,8 @@ public class AgreementsAdminController : ControllerBase
         await _mediator.Send(new SetAgreementActiveCommand(id, false), ct);
         return NoContent();
     }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    { await _mediator.Send(new DeleteAgreementCommand(id), ct); return NoContent(); }
 }
