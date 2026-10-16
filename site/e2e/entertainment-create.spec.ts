@@ -85,7 +85,8 @@ test.describe('Entertainment â€” Create group', () => {
     await page.getByRole('button', { name: 'B1', exact: true }).click();
     await page.getByRole('button', { name: 'Create group' }).click();
 
-    await expect(page.getByRole('alert')).toHaveText('Choose a more specific game topic.');
+    await expect(page.getByRole('alert').filter({ hasText: 'Choose a more specific game topic.' }))
+      .toHaveText('Choose a more specific game topic.');
   });
 
   test('create form Back returns to landing', async ({ page }) => {
