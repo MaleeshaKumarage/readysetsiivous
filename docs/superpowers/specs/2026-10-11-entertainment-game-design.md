@@ -102,7 +102,7 @@ in-memory in `GameSessionManager`; Marten is the source of truth for history.
 - Prompt per round: generate one `{level}`-level Finnish-learning English
   sentence about `{description}`, return JSON `{sentenceEn, sentenceFi,
   baseForms[]}`.
-- Model `gemini-flash-latest` (auth via `X-goog-api-key` header), retry with
+- Model `gemini-3.5-flash-lite` (auth via `X-goog-api-key` header), retry with
   backoff on transient 429/5xx. On failure reuse cached sentence for
   that level or abort the round gracefully.
 - Local dev/test uses env `GEMINI_KEY` (repo Codespaces secret). Production uses
