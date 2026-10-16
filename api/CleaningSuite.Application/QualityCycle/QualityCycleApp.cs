@@ -319,10 +319,16 @@ public class QualityCycleHandlers
                 ?? Array.Empty<ShiftOccurrenceException>();
             var resolved = ShiftOccurrenceResolver.Apply(
                 ShiftScheduleCalculator.GenerateOccurrences(shift, localFrom, localTo, zone), exceptions);
-            var selected = resolved.SingleOrDefault(o => o.StartUtc == start && o.EndUtc == end);
+            var matching = resolved.Where(o => o.StartUtc == start && o.EndUtc == end).ToList();
             if (end <= start || end - start > TimeSpan.FromDays(2)
-                || selected is null)
+                || matching.Count == 0)
                 throw new QualityCycleConflictException("Choose an actual scheduled shift occurrence.");
+            // An extra visit can intentionally share the same time window as a scheduled
+            // occurrence. Prefer the occurrence explicitly assigned to this employee, then
+            // fall back to the regular shift assignment, instead of throwing on duplicates.
+            var selected = matching.FirstOrDefault(o => o.EmployeeId == employee.Id)
+                ?? matching.FirstOrDefault(o => !o.EmployeeId.HasValue)
+                ?? matching[0];
             if (selected.EmployeeId.HasValue)
             {
                 if (selected.EmployeeId != employee.Id) throw new UnauthorizedAccessException();
