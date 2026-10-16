@@ -73,7 +73,8 @@ class DeploymentTests(unittest.TestCase):
                        REGISTRY_USER="test-user", REGISTRY_TOKEN="test-secret",
                        MODE=mode, EXPECTED=IMAGE,
                        PATH=str(bin_dir) + os.pathsep + os.environ["PATH"])
-            env.update(credentials or {"GAME_GEMINI_API_KEY": "new-owner-ai-secret"})
+            supplied_credentials = credentials or {"GAME_GEMINI_API_KEY": "new-owner-ai-secret"}
+            env.update(supplied_credentials)
             result = subprocess.run(["sh", str(SCRIPT)], env=env,
                                     text=True, capture_output=True, timeout=15)
             commands = (root / "commands").read_text() if (root / "commands").exists() else ""
@@ -91,7 +92,7 @@ class DeploymentTests(unittest.TestCase):
                 self.assertEqual(initial, current)
             else:
                 self.assertIn("IMAGE_TAG=sha-" + SHA, current)
-                self.assertIn("GAME_GEMINI_API_KEY='new-owner-ai-secret'", current)
+                self.assertIn("GAME_GEMINI_API_KEY='" + supplied_credentials.get("GAME_GEMINI_API_KEY", "") + "'", current)
                 self.assertIn("GAME_OPENAI_MODEL='gpt-4.1-mini'", current)
             return result, commands, attempts
 
