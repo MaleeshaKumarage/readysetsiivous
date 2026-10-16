@@ -326,6 +326,7 @@ public class ShiftHandlers
             var (localFrom, localTo) = TenantTimeZone.LocalDatesForUtcRange(from, to, zone);
             var occurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, localFrom, localTo, zone);
             return occurrences
+                .Where(x => x.StartUtc >= from && x.StartUtc < to)
                 .Select(x => new ShiftOccurrenceDto(NormalizeUtc(x.StartUtc), NormalizeUtc(x.EndUtc)))
                 .ToList();
         }

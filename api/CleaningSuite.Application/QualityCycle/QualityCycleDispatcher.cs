@@ -31,13 +31,16 @@ public class QualityCycleDispatcher : IQualityCycleDispatcher
     {
         var now = _clock.GetUtcNow().UtcDateTime;
         var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
+        var localToday = TenantTimeZone.LocalDate(now, zone);
+        var fromUtc = TenantTimeZone.StartOfLocalDay(localToday, zone);
+        var toUtc = TenantTimeZone.StartOfLocalDay(localToday.AddDays(32), zone);
         IReadOnlyList<Shift> shifts = shiftId.HasValue
             ? (await _shifts.GetAsync(shiftId.Value, ct) is { } selectedShift ? new[] { selectedShift } : Array.Empty<Shift>())
             : await _shifts.ListAsync(null, null, ct);
         var count = 0;
         foreach (var shift in shifts.Where(s => s.IsActive))
         {
-            var occurrences = QualityCycleOccurrences.InWindow(shift, now, now.AddDays(32), zone)
+            var occurrences = QualityCycleOccurrences.InWindow(shift, fromUtc, toUtc, zone)
                 .Where(x => x.Occurrence.EndUtc > now).Select(x => x.Occurrence).ToList();
             count += await DispatchAsync(shift, occurrences, ct);
         }

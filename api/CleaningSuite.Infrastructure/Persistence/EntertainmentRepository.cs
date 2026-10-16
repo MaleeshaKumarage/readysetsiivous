@@ -22,8 +22,16 @@ public class EntertainmentRepository : IEntertainmentRepository
         session.Insert(round);
         session.Store(group);
         try { await session.SaveChangesAsync(ct); }
-        catch (JasperFx.DocumentAlreadyExistsException) { throw new EntertainmentDuplicateSentenceException(); }
+        catch (Exception e) when (ContainsDuplicateDocument(e)) { throw new EntertainmentDuplicateSentenceException(); }
     }
+
+    private static bool ContainsDuplicateDocument(Exception error) => error switch
+    {
+        JasperFx.DocumentAlreadyExistsException => true,
+        AggregateException aggregate => aggregate.InnerExceptions.Any(ContainsDuplicateDocument),
+        _ when error.InnerException is not null => ContainsDuplicateDocument(error.InnerException),
+        _ => false,
+    };
 
     public async Task SaveGameStateAsync(EntertainmentGroup group, EntertainmentRound round, CancellationToken ct = default)
     {
