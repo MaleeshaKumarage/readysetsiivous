@@ -110,6 +110,7 @@ export interface AnswerEvaluation {
   correctedAnswer: string;
   explanation: string;
   corrections: { original: string; replacement: string; reason: string }[];
+  grammarRules?: string[];
 }
 
 export interface ScoreEntry {

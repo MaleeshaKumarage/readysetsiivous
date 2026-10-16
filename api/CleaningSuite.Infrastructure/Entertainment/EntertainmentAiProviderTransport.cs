@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace CleaningSuite.Infrastructure.Entertainment;
 
@@ -15,7 +16,7 @@ public sealed class ProviderRequestFailure(HttpStatusCode? status, TimeSpan? ret
     public string? ProviderMessage { get; } = providerMessage;
 }
 
-public sealed class EntertainmentAiProviderTransport(IHttpClientFactory clients, IConfiguration config)
+public sealed class EntertainmentAiProviderTransport(IHttpClientFactory clients, IConfiguration config, ILogger<EntertainmentAiProviderTransport>? logger = null)
 {
     public async Task<JsonDocument> SendAsync(ProviderKey key, string instruction, string input, object schema, CancellationToken ct)
     {
@@ -28,6 +29,14 @@ public sealed class EntertainmentAiProviderTransport(IHttpClientFactory clients,
                 ? GeminiRequest(key.Value, instruction, input, schema)
                 : OpenAiRequest(key.Value, instruction, input, schema);
             using var response = await clients.CreateClient(key.Provider).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
+            if (response.IsSuccessStatusCode)
+            {
+                var limit = Header(response, "x-ratelimit-limit-requests");
+                var remaining = Header(response, "x-ratelimit-remaining-requests");
+                var reset = Header(response, "x-ratelimit-reset-requests");
+                if (limit is not null || remaining is not null || reset is not null)
+                    logger?.LogInformation("Game AI {Provider} request-limit headers: limit {RequestLimit}, remaining {RequestRemaining}, reset {RequestReset}.", key.Provider, limit ?? "unknown", remaining ?? "unknown", reset ?? "unknown");
+            }
             if (!response.IsSuccessStatusCode)
             {
                 var retry = response.Headers.RetryAfter?.Delta ?? (response.Headers.RetryAfter?.Date - DateTimeOffset.UtcNow);
@@ -85,6 +94,10 @@ public sealed class EntertainmentAiProviderTransport(IHttpClientFactory clients,
     }
 
     private static HttpContent JsonContent(object value) => new StringContent(JsonSerializer.Serialize(value), Encoding.UTF8, "application/json");
+
+    private static string? Header(HttpResponseMessage response, string name) =>
+        response.Headers.TryGetValues(name, out var values) ? string.Join(",", values).Replace("\r", string.Empty).Replace("\n", string.Empty) :
+        response.Content.Headers.TryGetValues(name, out values) ? string.Join(",", values).Replace("\r", string.Empty).Replace("\n", string.Empty) : null;
 
     private static JsonNode ToOpenAiSchema(JsonNode node)
     {

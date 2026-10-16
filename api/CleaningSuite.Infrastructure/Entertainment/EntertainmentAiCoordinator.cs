@@ -4,15 +4,19 @@ using CleaningSuite.Application.Entertainment;
 using CleaningSuite.Domain.Entertainment;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Marten;
+using CleaningSuite.Infrastructure.Persistence;
 
 namespace CleaningSuite.Infrastructure.Entertainment;
 
-public sealed class EntertainmentAiCoordinator(EntertainmentAiProviderTransport transport, IConfiguration config, ILogger<EntertainmentAiCoordinator> logger)
+public sealed class EntertainmentAiCoordinator(EntertainmentAiProviderTransport transport, IConfiguration config, ILogger<EntertainmentAiCoordinator> logger, IDocumentStore? store = null)
 {
     private readonly object _sync = new();
     private readonly Dictionary<(string Provider, string Slot), DateTimeOffset> _cooldowns = [];
+    private readonly Dictionary<(string Provider, string Model), DateTimeOffset> _providerCooldowns = [];
     private readonly HashSet<(string Provider, string Slot)> _disabled = [];
     private readonly Dictionary<string, int> _cursor = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, List<DateTimeOffset>> _localUsage = new(StringComparer.Ordinal);
 
     public Task<GeminiSentence> GenerateAsync(string topic, CefrLevel level, IReadOnlyList<string> previous, CancellationToken ct)
     {
@@ -51,6 +55,12 @@ public sealed class EntertainmentAiCoordinator(EntertainmentAiProviderTransport 
             foreach (var key in keys)
             {
                 ct.ThrowIfCancellationRequested();
+                if (!await ReserveProviderRequestAsync(key, ct))
+                {
+                    diagnostics.Add($"{key.Provider} model {GetModel(key.Provider)}: the configured rolling 24-hour request budget is exhausted.");
+                    logger.LogWarning("Game AI {Operation} skipped {Provider} model {Model}: rolling 24-hour request budget exhausted.", operation, key.Provider, GetModel(key.Provider));
+                    break;
+                }
                 var elapsed = Stopwatch.StartNew();
                 try
                 {
@@ -69,7 +79,8 @@ public sealed class EntertainmentAiCoordinator(EntertainmentAiProviderTransport 
                     var disabled = false;
                     if (status is 401 or 403) { Disable(key); disabled = true; }
                     else if (failure.Malformed) { Cooldown(key, TimeSpan.FromSeconds(2)); cooldownSeconds = 2; }
-                    else if (transient) { var cooldown = failure.RetryAfter ?? (status == 429 ? TimeSpan.FromSeconds(30) : TimeSpan.FromSeconds(5)); Cooldown(key, cooldown); cooldownSeconds = (int)Math.Clamp(cooldown.TotalSeconds, 1, 60); }
+                    else if (status == 429) { var cooldown = failure.RetryAfter ?? TimeSpan.FromMinutes(1); CooldownProvider(key, cooldown); stopProvider = true; cooldownSeconds = (int)Math.Clamp(cooldown.TotalSeconds, 1, 86400); }
+                    else if (transient) { var cooldown = failure.RetryAfter ?? TimeSpan.FromSeconds(5); Cooldown(key, cooldown); cooldownSeconds = (int)Math.Clamp(cooldown.TotalSeconds, 1, 60); }
                     else if (status is >= 400 and < 500) stopProvider = true;
                     diagnostics.Add(FormatFailure(key, status, failure, disabled, cooldownSeconds));
                     logger.LogWarning("Game AI {Operation} failed with {Provider} slot {Slot}, category {Category}, status {Status}, cooldown {CooldownSeconds}s, disabled {Disabled}, elapsed {ElapsedMilliseconds} ms; advancing to another key/provider.", operation, key.Provider, key.Slot, failure.Malformed ? "malformed-response" : transient ? "transient" : "request-rejected", status, cooldownSeconds, disabled, elapsed.ElapsedMilliseconds);
@@ -104,14 +115,80 @@ public sealed class EntertainmentAiCoordinator(EntertainmentAiProviderTransport 
             _cursor[provider] = (start + 1) % pool.Count;
             var now = DateTimeOffset.UtcNow;
             foreach (var expired in _cooldowns.Where(pair => pair.Value <= now).Select(pair => pair.Key).ToArray()) _cooldowns.Remove(expired);
+            foreach (var expired in _providerCooldowns.Where(pair => pair.Value <= now).Select(pair => pair.Key).ToArray()) _providerCooldowns.Remove(expired);
             return Enumerable.Range(0, pool.Count).Select(i => pool[(start + i) % pool.Count])
-                .Where(k => !_disabled.Contains((k.Provider, k.Slot)) && !_cooldowns.ContainsKey((k.Provider, k.Slot))).ToArray();
+                .Where(k => !_disabled.Contains((k.Provider, k.Slot)) && !_cooldowns.ContainsKey((k.Provider, k.Slot)) && !_providerCooldowns.ContainsKey((k.Provider, GetModel(k.Provider)))).ToArray();
         }
     }
 
     private void Cooldown(ProviderKey key, TimeSpan duration) { lock (_sync) _cooldowns[(key.Provider, key.Slot)] = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(Math.Clamp(duration.TotalSeconds, 1, 60)); }
+    private void CooldownProvider(ProviderKey key, TimeSpan duration) { lock (_sync) _providerCooldowns[(key.Provider, GetModel(key.Provider))] = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(Math.Clamp(duration.TotalSeconds, 1, 86400)); }
     private void Disable(ProviderKey key) { lock (_sync) _disabled.Add((key.Provider, key.Slot)); }
     private void MarkHealthy(ProviderKey key) { lock (_sync) _cooldowns.Remove((key.Provider, key.Slot)); }
+
+    private int GetLimit(string provider, string limit, int fallback, int maximum) =>
+        Math.Clamp(config.GetValue<int?>($"Entertainment:{provider}:RateLimits:{limit}") ?? fallback, 1, maximum);
+
+    private string GetModel(string provider) => provider == "Gemini"
+        ? config["Entertainment:Gemini:Model"] ?? "gemini-3.5-flash-lite"
+        : config["Entertainment:OpenAI:Model"] ?? "gpt-4.1-mini";
+
+    private async Task<bool> ReserveProviderRequestAsync(ProviderKey key, CancellationToken ct)
+    {
+        var requestsPerMinute = GetLimit(key.Provider, "RequestsPerMinute", key.Provider == "Gemini" ? 3 : 5, 1000);
+        var requestsPerDay = GetLimit(key.Provider, "RequestsPerDay", key.Provider == "Gemini" ? 15 : 50, 100000);
+        var minimumInterval = TimeSpan.FromSeconds(60d / requestsPerMinute);
+        var usageId = $"{key.Provider}:{GetModel(key.Provider)}";
+        while (true)
+        {
+            ct.ThrowIfCancellationRequested();
+            var now = DateTimeOffset.UtcNow;
+            DateTimeOffset? waitUntil;
+            if (store is not null)
+            {
+                await using var session = store.LightweightSession(TenantIds.Entertainment);
+                var usage = await session.LoadAsync<EntertainmentAiUsageWindow>(usageId, ct) ?? new EntertainmentAiUsageWindow { Id = usageId };
+                usage.RequestUtcTimestamps = usage.RequestUtcTimestamps.Where(time => time > now.AddHours(-24)).ToList();
+                if (usage.RequestUtcTimestamps.Count >= requestsPerDay)
+                {
+                    session.Store(usage);
+                    await session.SaveChangesAsync(ct);
+                    return false;
+                }
+                waitUntil = GetWaitUntil(usage.RequestUtcTimestamps, now, requestsPerMinute, minimumInterval);
+                if (waitUntil <= now)
+                {
+                    usage.RequestUtcTimestamps.Add(now);
+                    session.Store(usage);
+                    await session.SaveChangesAsync(ct);
+                    return true;
+                }
+            }
+            else
+            {
+                lock (_sync)
+                {
+                    if (!_localUsage.TryGetValue(usageId, out var timestamps)) _localUsage[usageId] = timestamps = [];
+                    timestamps.RemoveAll(time => time <= now.AddHours(-24));
+                    if (timestamps.Count >= requestsPerDay) return false;
+                    waitUntil = GetWaitUntil(timestamps, now, requestsPerMinute, minimumInterval);
+                    if (waitUntil <= now) { timestamps.Add(now); return true; }
+                }
+            }
+            await Task.Delay(waitUntil.Value - now, ct);
+        }
+    }
+
+    private static DateTimeOffset GetWaitUntil(IReadOnlyList<DateTimeOffset> timestamps, DateTimeOffset now, int requestsPerMinute, TimeSpan minimumInterval)
+    {
+        var waitUntil = timestamps.Count == 0 ? now : timestamps[^1] + minimumInterval;
+        var recent = timestamps.Where(time => time > now.AddMinutes(-1)).OrderBy(time => time).ToArray();
+        if (recent.Length >= requestsPerMinute)
+            waitUntil = waitUntil >= recent[recent.Length - requestsPerMinute] + TimeSpan.FromMinutes(1)
+                ? waitUntil
+                : recent[recent.Length - requestsPerMinute] + TimeSpan.FromMinutes(1);
+        return waitUntil;
+    }
 
     private string GetUnavailablePoolDiagnostic(IReadOnlyList<ProviderKey> pool)
     {
@@ -119,6 +196,8 @@ public sealed class EntertainmentAiCoordinator(EntertainmentAiProviderTransport 
         {
             var disabled = pool.Count(key => _disabled.Contains((key.Provider, key.Slot)));
             var cooling = pool.Count(key => _cooldowns.TryGetValue((key.Provider, key.Slot), out var until) && until > DateTimeOffset.UtcNow);
+            if (_providerCooldowns.TryGetValue((pool[0].Provider, GetModel(pool[0].Provider)), out var providerUntil) && providerUntil > DateTimeOffset.UtcNow)
+                return $"{pool[0].Provider} model {GetModel(pool[0].Provider)} is rate limited; retry in about {Math.Max(1, (int)Math.Ceiling((providerUntil - DateTimeOffset.UtcNow).TotalSeconds))} seconds.";
             if (cooling == 0 && disabled > 0)
                 return $"{pool[0].Provider}: all {pool.Count} configured key slots have been rejected and are disabled until the API restarts.";
             var remaining = _cooldowns.Where(pair => pair.Key.Provider == pool[0].Provider && pair.Value > DateTimeOffset.UtcNow).Select(pair => pair.Value).DefaultIfEmpty(DateTimeOffset.UtcNow.AddSeconds(1)).Min() - DateTimeOffset.UtcNow;
@@ -152,4 +231,10 @@ public sealed class QueuedEntertainmentAiService(EntertainmentAiPromptQueue queu
 
     public Task<EntertainmentAnswerEvaluation> EvaluateAsync(string sentenceEn, string referenceFi, string answer, CefrLevel level, CancellationToken ct = default) =>
         queue.EnqueueAsync(token => coordinator.EvaluateAsync(sentenceEn, referenceFi, answer, level, token), ct);
+}
+
+public sealed class EntertainmentAiUsageWindow
+{
+    public string Id { get; set; } = string.Empty;
+    public List<DateTimeOffset> RequestUtcTimestamps { get; set; } = [];
 }

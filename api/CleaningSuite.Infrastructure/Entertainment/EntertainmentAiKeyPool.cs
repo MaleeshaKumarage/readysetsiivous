@@ -14,8 +14,13 @@ public static class EntertainmentAiKeyPool
         return Distinct(indexed.Concat(legacy));
     }
 
-    public static IReadOnlyList<ProviderKey> OpenAi(IConfiguration config) =>
-        Distinct(ReadIndexed(config, "Entertainment:OpenAI:Keys"));
+    public static IReadOnlyList<ProviderKey> OpenAi(IConfiguration config)
+    {
+        var indexed = ReadIndexed(config, "Entertainment:OpenAI:Keys");
+        var legacy = new[] { config["Entertainment:OpenAI:ApiKey"], config["OPENAI_API_KEY"], config["GAME_OPENAI_API_KEY"] }
+            .Where(x => !string.IsNullOrWhiteSpace(x)).Select((x, i) => new ProviderKey("OpenAI", $"legacy-{i + 1}", x!.Trim()));
+        return Distinct(indexed.Concat(legacy));
+    }
 
     private static IEnumerable<ProviderKey> ReadIndexed(IConfiguration config, string path)
     {

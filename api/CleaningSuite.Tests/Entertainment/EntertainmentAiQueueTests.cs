@@ -20,13 +20,14 @@ public class EntertainmentAiQueueTests
             ["Entertainment:Gemini:Keys:4"] = "g1",
             ["Entertainment:Gemini:ApiKey"] = "legacy",
             ["Entertainment:OpenAI:Keys:1"] = "o1",
-            ["Entertainment:OpenAI:Keys:4"] = "o4"
+            ["Entertainment:OpenAI:Keys:4"] = "o4",
+            ["OPENAI_API_KEY"] = "legacy-openai"
         }).Build();
 
         Assert.Equal(new[] { "1", "3", "legacy-1" }, EntertainmentAiKeyPool.Gemini(config).Select(k => k.Slot));
-        Assert.Equal(new[] { "1", "4" }, EntertainmentAiKeyPool.OpenAi(config).Select(k => k.Slot));
+        Assert.Equal(new[] { "1", "4", "legacy-1" }, EntertainmentAiKeyPool.OpenAi(config).Select(k => k.Slot));
         Assert.Equal(3, EntertainmentAiKeyPool.Gemini(config).Count);
-        Assert.Equal(2, EntertainmentAiKeyPool.OpenAi(config).Count);
+        Assert.Equal(3, EntertainmentAiKeyPool.OpenAi(config).Count);
     }
 
     [Fact]
@@ -65,7 +66,7 @@ public class EntertainmentAiQueueTests
     }
 
     [Fact]
-    public async Task CoordinatorTriesEveryRateLimitedGeminiKeyThenFallsBackToOpenAi()
+    public async Task CoordinatorDoesNotProbeOtherGeminiKeysAfterSharedProviderRateLimitAndFallsBackToOpenAi()
     {
         var attempts = new List<string>();
         var handler = new FakeProviderHandler(request =>
@@ -94,7 +95,55 @@ public class EntertainmentAiQueueTests
         var result = await coordinator.GenerateAsync("cats", CleaningSuite.Domain.Entertainment.CefrLevel.A1, [], CancellationToken.None);
 
         Assert.Equal("The cat sleeps.", result.SentenceEn);
-        Assert.Equal(new[] { "g1", "g2", "g3", "o1" }, attempts);
+        Assert.Equal(new[] { "g1", "o1" }, attempts);
+    }
+
+    [Fact]
+    public async Task CoordinatorEnforcesConfiguredRollingDailyRequestBudget()
+    {
+        var attempts = 0;
+        var handler = new FakeProviderHandler(_ =>
+        {
+            attempts++;
+            var answer = "{\"sentenceEn\":\"The cat sleeps.\",\"sentenceFi\":\"Kissa nukkuu.\",\"hints\":[{\"english\":\"cat\",\"finnish\":\"kissa\"}]}";
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(new { output_text = answer }), Encoding.UTF8, "application/json") };
+        });
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Entertainment:OpenAI:Keys:1"] = "o1",
+            ["Entertainment:OpenAI:RateLimits:RequestsPerMinute"] = "1000",
+            ["Entertainment:OpenAI:RateLimits:RequestsPerDay"] = "1"
+        }).Build();
+        var coordinator = new EntertainmentAiCoordinator(new(new FakeHttpClientFactory(handler), config), config, NullLogger<EntertainmentAiCoordinator>.Instance);
+        await coordinator.GenerateAsync("cats", CleaningSuite.Domain.Entertainment.CefrLevel.A1, [], CancellationToken.None);
+
+        var error = await Assert.ThrowsAsync<CleaningSuite.Application.Entertainment.EntertainmentAiUnavailableException>(
+            () => coordinator.GenerateAsync("cats", CleaningSuite.Domain.Entertainment.CefrLevel.A1, [], CancellationToken.None));
+
+        Assert.Equal(1, attempts);
+        Assert.Contains("rolling 24-hour request budget", error.Diagnostic);
+    }
+
+    [Fact]
+    public async Task CoordinatorSmoothsRequestsToStayWithinConfiguredRequestsPerMinute()
+    {
+        var requestTimes = new List<DateTimeOffset>();
+        var handler = new FakeProviderHandler(_ =>
+        {
+            requestTimes.Add(DateTimeOffset.UtcNow);
+            var answer = "{\"sentenceEn\":\"The cat sleeps.\",\"sentenceFi\":\"Kissa nukkuu.\",\"hints\":[{\"english\":\"cat\",\"finnish\":\"kissa\"}]}";
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(new { output_text = answer }), Encoding.UTF8, "application/json") };
+        });
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Entertainment:OpenAI:Keys:1"] = "o1",
+            ["Entertainment:OpenAI:RateLimits:RequestsPerMinute"] = "60",
+            ["Entertainment:OpenAI:RateLimits:RequestsPerDay"] = "10"
+        }).Build();
+        var coordinator = new EntertainmentAiCoordinator(new(new FakeHttpClientFactory(handler), config), config, NullLogger<EntertainmentAiCoordinator>.Instance);
+        await coordinator.GenerateAsync("cats", CleaningSuite.Domain.Entertainment.CefrLevel.A1, [], CancellationToken.None);
+        await coordinator.GenerateAsync("cats", CleaningSuite.Domain.Entertainment.CefrLevel.A1, [], CancellationToken.None);
+        Assert.True((requestTimes[1] - requestTimes[0]).TotalMilliseconds >= 900);
     }
 
     [Fact]
