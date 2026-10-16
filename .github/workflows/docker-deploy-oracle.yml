@@ -38,17 +38,17 @@ jobs:
       GEMINI_KEY_8: ${{ secrets.GEMINI_KEY_8 }}
       GEMINI_KEY_9: ${{ secrets.GEMINI_KEY_9 }}
       GEMINI_KEY_10: ${{ secrets.GEMINI_KEY_10 }}
-      OPENAI_API_KEY_1: ${{ secrets.OPENAI_API_KEY_1 }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || secrets.OPENAI_API_KEY_1 }}
-      OPENAI_API_KEY_2: ${{ secrets.OPENAI_API_KEY_2 }}
-      OPENAI_API_KEY_3: ${{ secrets.OPENAI_API_KEY_3 }}
-      OPENAI_API_KEY_4: ${{ secrets.OPENAI_API_KEY_4 }}
-      OPENAI_API_KEY_5: ${{ secrets.OPENAI_API_KEY_5 }}
-      OPENAI_API_KEY_6: ${{ secrets.OPENAI_API_KEY_6 }}
-      OPENAI_API_KEY_7: ${{ secrets.OPENAI_API_KEY_7 }}
-      OPENAI_API_KEY_8: ${{ secrets.OPENAI_API_KEY_8 }}
-      OPENAI_API_KEY_9: ${{ secrets.OPENAI_API_KEY_9 }}
-      OPENAI_API_KEY_10: ${{ secrets.OPENAI_API_KEY_10 }}
+      OPENAI_API_KEY_1: ${{ secrets.OPENAI_API_KEY_1 || secrets.OPENAI_KEY_1 }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || secrets.OPENAI_API_KEY_1 || secrets.OPENAI_KEY_1 }}
+      OPENAI_API_KEY_2: ${{ secrets.OPENAI_API_KEY_2 || secrets.OPENAI_KEY_2 }}
+      OPENAI_API_KEY_3: ${{ secrets.OPENAI_API_KEY_3 || secrets.OPENAI_KEY_3 }}
+      OPENAI_API_KEY_4: ${{ secrets.OPENAI_API_KEY_4 || secrets.OPENAI_KEY_4 }}
+      OPENAI_API_KEY_5: ${{ secrets.OPENAI_API_KEY_5 || secrets.OPENAI_KEY_5 }}
+      OPENAI_API_KEY_6: ${{ secrets.OPENAI_API_KEY_6 || secrets.OPENAI_KEY_6 }}
+      OPENAI_API_KEY_7: ${{ secrets.OPENAI_API_KEY_7 || secrets.OPENAI_KEY_7 }}
+      OPENAI_API_KEY_8: ${{ secrets.OPENAI_API_KEY_8 || secrets.OPENAI_KEY_8 }}
+      OPENAI_API_KEY_9: ${{ secrets.OPENAI_API_KEY_9 || secrets.OPENAI_KEY_9 }}
+      OPENAI_API_KEY_10: ${{ secrets.OPENAI_API_KEY_10 || secrets.OPENAI_KEY_10 }}
       GAME_OPENAI_MODEL: ${{ vars.GAME_OPENAI_MODEL || 'gpt-4.1-mini' }}
       GAME_GEMINI_RPM: ${{ vars.GAME_GEMINI_RPM || '3' }}
       GAME_GEMINI_RPD: ${{ vars.GAME_GEMINI_RPD || '15' }}
