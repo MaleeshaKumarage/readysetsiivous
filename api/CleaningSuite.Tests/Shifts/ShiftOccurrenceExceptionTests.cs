@@ -72,4 +72,20 @@ public class ShiftOccurrenceExceptionTests
         Assert.Contains(result, x => x.ExceptionId == moved.Id && x.StartUtc == day.AddHours(12));
         Assert.Contains(result, x => x.ExceptionId == extra.Id && x.Status == ShiftOccurrenceExceptionStatus.Extra);
     }
+
+    [Fact]
+    public void Resolver_includes_a_moved_visit_when_only_its_new_date_is_in_the_window()
+    {
+        var original = new DateTime(2026, 11, 30, 8, 0, 0, DateTimeKind.Utc);
+        var moved = ShiftOccurrenceException.Create(Guid.NewGuid(), original,
+            new DateTime(2026, 12, 2, 8, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 12, 2, 10, 0, 0, DateTimeKind.Utc),
+            ShiftOccurrenceExceptionStatus.Moved, "Customer closure");
+
+        var result = ShiftOccurrenceResolver.Apply(Array.Empty<ShiftOccurrence>(), new[] { moved });
+
+        var occurrence = Assert.Single(result);
+        Assert.Equal(moved.StartUtc, occurrence.StartUtc);
+        Assert.Equal(original, occurrence.OriginalStartUtc);
+    }
 }

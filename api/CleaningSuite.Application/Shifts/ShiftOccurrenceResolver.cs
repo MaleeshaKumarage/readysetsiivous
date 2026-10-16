@@ -18,6 +18,7 @@ public static class ShiftOccurrenceResolver
             .GroupBy(x => Utc(x.OriginalStartUtc!.Value))
             .ToDictionary(x => x.Key, x => x.OrderByDescending(v => v.UpdatedUtc).First());
         var result = new List<ResolvedShiftOccurrence>();
+        var consumed = new HashSet<Guid>();
         foreach (var occurrence in generated)
         {
             var original = Utc(occurrence.StartUtc);
@@ -26,11 +27,17 @@ public static class ShiftOccurrenceResolver
                 result.Add(new(original, Utc(occurrence.EndUtc)));
                 continue;
             }
+            consumed.Add(change.Id);
             if (!includeCancelled && change.Status is ShiftOccurrenceExceptionStatus.CustomerCancelled or ShiftOccurrenceExceptionStatus.CompanyCancelled)
                 continue;
             result.Add(Map(change));
         }
-        result.AddRange(changes.Where(x => !x.OriginalStartUtc.HasValue).Select(Map));
+        // A moved visit can fall into a query window that does not include its original
+        // generated date. Include such unmatched exceptions exactly once in the target window.
+        result.AddRange(changes.Where(x => !consumed.Contains(x.Id)
+            && (!x.OriginalStartUtc.HasValue || includeCancelled
+                || x.Status is not (ShiftOccurrenceExceptionStatus.CustomerCancelled or ShiftOccurrenceExceptionStatus.CompanyCancelled)))
+            .Select(Map));
         return result.OrderBy(x => x.StartUtc).ToArray();
     }
 
