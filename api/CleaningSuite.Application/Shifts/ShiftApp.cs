@@ -315,18 +315,18 @@ public class ShiftHandlers
 
         public async Task<IReadOnlyList<ShiftOccurrenceDto>> Handle(GetShiftOccurrencesQuery request, CancellationToken ct)
         {
-            // Query-string DateTime binding yields DateTimeKind.Unspecified. Treat the caller's
-            // input as UTC explicitly so occurrence generation is anchored unambiguously.
+            // Query-string DateTime binding yields DateTimeKind.Unspecified. Inputs select
+            // inclusive calendar dates, interpreted in the tenant's time zone.
             var from = NormalizeUtc(request.From);
             var to = NormalizeUtc(request.To);
 
             var shift = await _repository.GetAsync(request.ShiftId, ct)
                 ?? throw new NotFoundException("Shift", request.ShiftId);
             var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
-            var (localFrom, localTo) = TenantTimeZone.LocalDatesForUtcRange(from, to, zone);
+            var localFrom = TenantTimeZone.LocalDate(from, zone);
+            var localTo = TenantTimeZone.LocalDate(to, zone);
             var occurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, localFrom, localTo, zone);
             return occurrences
-                .Where(x => x.StartUtc >= from && x.StartUtc < to)
                 .Select(x => new ShiftOccurrenceDto(NormalizeUtc(x.StartUtc), NormalizeUtc(x.EndUtc)))
                 .ToList();
         }
