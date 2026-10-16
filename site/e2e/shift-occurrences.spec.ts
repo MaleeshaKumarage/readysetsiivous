@@ -57,6 +57,24 @@ test('admin cancellation requires a reason', async ({ page }) => {
   await expect(page.getByRole('dialog', { name: 'Change occurrence' }).getByRole('alert')).toHaveText('Start, end and reason are required.');
 });
 
+test('admin records a company-cancelled scheduled occurrence', async ({ page }) => {
+  const state = await setup(page);
+  await page.getByRole('button', { name: 'Occurrences', exact: true }).click();
+  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  await list.getByRole('button', { name: 'Cancel' }).click();
+  const editor = page.getByRole('dialog', { name: 'Change occurrence' });
+  await editor.getByLabel('Action').click();
+  await page.getByRole('option', { name: 'Company cancelled' }).click();
+  await editor.getByLabel('Reason').fill('Cleaner unavailable');
+  await editor.getByRole('button', { name: 'Save occurrence' }).click();
+
+  expect(state.writes[0]).toMatchObject({
+    originalStartUtc: '2026-11-02T06:00:00.000Z',
+    status: 3,
+  });
+  await expect(list.getByText('Company cancelled')).toBeVisible();
+});
+
 test('admin adds an extra visit with a replacement employee and deletes it', async ({ page }) => {
   const state = await setup(page);
   await page.getByRole('button', { name: 'Occurrences', exact: true }).click();

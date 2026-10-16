@@ -311,6 +311,8 @@ public class QualityCycleHandlers
             var end = request.OccurrenceEndUtc.Kind == DateTimeKind.Local ? request.OccurrenceEndUtc.ToUniversalTime() : DateTime.SpecifyKind(request.OccurrenceEndUtc, DateTimeKind.Utc);
             if (!shift.IsActive || !employee.IsActive)
                 throw new UnauthorizedAccessException();
+            if (end <= start || end - start > TimeSpan.FromDays(2))
+                throw new QualityCycleConflictException("Choose an actual scheduled shift occurrence.");
             var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
             var (localFrom, localTo) = TenantTimeZone.LocalDatesForUtcRange(start, end, zone);
             var exceptionFrom = TenantTimeZone.StartOfLocalDay(localFrom, zone);
@@ -320,8 +322,7 @@ public class QualityCycleHandlers
             var resolved = ShiftOccurrenceResolver.Apply(
                 ShiftScheduleCalculator.GenerateOccurrences(shift, localFrom, localTo, zone), exceptions);
             var matching = resolved.Where(o => o.StartUtc == start && o.EndUtc == end).ToList();
-            if (end <= start || end - start > TimeSpan.FromDays(2)
-                || matching.Count == 0)
+            if (matching.Count == 0)
                 throw new QualityCycleConflictException("Choose an actual scheduled shift occurrence.");
             // An extra visit can intentionally share the same time window as a scheduled
             // occurrence. Prefer the occurrence explicitly assigned to this employee, then

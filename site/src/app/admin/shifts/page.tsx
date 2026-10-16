@@ -50,6 +50,11 @@ const tenantLocalToUtc = (value: string, timeZone: string) => {
   throw new Error('That local time does not exist in the tenant time zone. Choose another time.');
 };
 
+const addCalendarDays = (date: string, days: number) => {
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+};
+
 export default function ShiftsAdminPage() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
@@ -290,7 +295,10 @@ export default function ShiftsAdminPage() {
     if (!shift) return;
     setOccurrenceLoading(true); setOccurrenceError('');
     try {
-      const result = await adminShifts.occurrences(shift.id, occurrenceFrom, occurrenceTo);
+      const fromUtc = tenantLocalToUtc(`${occurrenceFrom}T00:00`, timeZoneId);
+      const nextDayUtc = tenantLocalToUtc(`${addCalendarDays(occurrenceTo, 1)}T00:00`, timeZoneId);
+      const toUtc = new Date(Date.parse(nextDayUtc) - 1).toISOString();
+      const result = await adminShifts.occurrences(shift.id, fromUtc, toUtc);
       if (!result) throw new Error('Could not load occurrences.');
       setOccurrences(result);
     } catch (failure) { setOccurrenceError(failure instanceof Error ? failure.message : 'Could not load occurrences.'); }
