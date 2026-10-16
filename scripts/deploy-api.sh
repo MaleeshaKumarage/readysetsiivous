@@ -8,6 +8,7 @@ esac
 : "${REGISTRY_TOKEN:?Registry token required}"
 : "${GAME_GEMINI_API_KEY:?Server-owned game AI key required}"
 GAME_GEMINI_API_KEY="$GAME_GEMINI_API_KEY" python3 -c 'import os,sys; key=os.environ["GAME_GEMINI_API_KEY"]; sys.exit(1 if any(ord(c)<32 or ord(c)==127 for c in key) else 0)' || { echo 'Invalid game AI key format' >&2; exit 1; }
+export GAME_GEMINI_API_KEY
 cd "${DEPLOY_DIR:-/home/ubuntu/cleaning-suite}"
 expected="ghcr.io/maleeshakumarage/readysetsiivous-api:sha-$RELEASE_SHA"
 previous_container=$(docker compose ps -q api)
