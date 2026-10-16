@@ -44,6 +44,27 @@ services:
       Auth__Keycloak__AdminUser: ${KEYCLOAK_ADMIN_USER}
       Auth__Keycloak__AdminPassword: ${KEYCLOAK_ADMIN_PASSWORD}
       Entertainment__Gemini__ApiKey: ${GAME_GEMINI_API_KEY:-}
+      Entertainment__Gemini__Keys__1: ${GEMINI_KEY_1:-}
+      Entertainment__Gemini__Keys__2: ${GEMINI_KEY_2:-}
+      Entertainment__Gemini__Keys__3: ${GEMINI_KEY_3:-}
+      Entertainment__Gemini__Keys__4: ${GEMINI_KEY_4:-}
+      Entertainment__Gemini__Keys__5: ${GEMINI_KEY_5:-}
+      Entertainment__Gemini__Keys__6: ${GEMINI_KEY_6:-}
+      Entertainment__Gemini__Keys__7: ${GEMINI_KEY_7:-}
+      Entertainment__Gemini__Keys__8: ${GEMINI_KEY_8:-}
+      Entertainment__Gemini__Keys__9: ${GEMINI_KEY_9:-}
+      Entertainment__Gemini__Keys__10: ${GEMINI_KEY_10:-}
+      Entertainment__OpenAI__Keys__1: ${OPENAI_API_KEY_1:-}
+      Entertainment__OpenAI__Keys__2: ${OPENAI_API_KEY_2:-}
+      Entertainment__OpenAI__Keys__3: ${OPENAI_API_KEY_3:-}
+      Entertainment__OpenAI__Keys__4: ${OPENAI_API_KEY_4:-}
+      Entertainment__OpenAI__Keys__5: ${OPENAI_API_KEY_5:-}
+      Entertainment__OpenAI__Keys__6: ${OPENAI_API_KEY_6:-}
+      Entertainment__OpenAI__Keys__7: ${OPENAI_API_KEY_7:-}
+      Entertainment__OpenAI__Keys__8: ${OPENAI_API_KEY_8:-}
+      Entertainment__OpenAI__Keys__9: ${OPENAI_API_KEY_9:-}
+      Entertainment__OpenAI__Keys__10: ${OPENAI_API_KEY_10:-}
+      Entertainment__OpenAI__Model: ${GAME_OPENAI_MODEL:-gpt-4.1-mini}
       Cors__AllowedOrigins__0: "*"
       Resend__ApiKey: ${RESEND_API_KEY:-}
       EmployeeInvites__LifespanSeconds: 86400

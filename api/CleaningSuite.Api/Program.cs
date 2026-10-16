@@ -109,8 +109,15 @@ if (builder.Configuration.GetValue("BackgroundWorkers:Enabled", true))
     builder.Services.AddHostedService<CleaningSuite.Api.QualityCycleWorker>();
 builder.Services.AddScoped<CleaningSuite.Application.Entertainment.IEntertainmentRepository, CleaningSuite.Infrastructure.Persistence.EntertainmentRepository>();
 builder.Services.AddSingleton<CleaningSuite.Application.Entertainment.IEntertainmentKeyProtector, CleaningSuite.Infrastructure.Entertainment.EntertainmentKeyProtector>();
-builder.Services.AddHttpClient<CleaningSuite.Application.Entertainment.IGeminiSentenceService, CleaningSuite.Infrastructure.Entertainment.GeminiSentenceService>();
-builder.Services.AddHttpClient<CleaningSuite.Application.Entertainment.IEntertainmentAnswerEvaluator, CleaningSuite.Infrastructure.Entertainment.GeminiAnswerEvaluator>();
+builder.Services.AddHttpClient("Gemini");
+builder.Services.AddHttpClient("OpenAI");
+builder.Services.AddSingleton<CleaningSuite.Infrastructure.Entertainment.EntertainmentAiProviderTransport>();
+builder.Services.AddSingleton<CleaningSuite.Infrastructure.Entertainment.EntertainmentAiCoordinator>();
+builder.Services.AddSingleton<CleaningSuite.Infrastructure.Entertainment.EntertainmentAiPromptQueue>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<CleaningSuite.Infrastructure.Entertainment.EntertainmentAiPromptQueue>());
+builder.Services.AddSingleton<CleaningSuite.Infrastructure.Entertainment.QueuedEntertainmentAiService>();
+builder.Services.AddSingleton<CleaningSuite.Application.Entertainment.IGeminiSentenceService>(sp => sp.GetRequiredService<CleaningSuite.Infrastructure.Entertainment.QueuedEntertainmentAiService>());
+builder.Services.AddSingleton<CleaningSuite.Application.Entertainment.IEntertainmentAnswerEvaluator>(sp => sp.GetRequiredService<CleaningSuite.Infrastructure.Entertainment.QueuedEntertainmentAiService>());
 builder.Services.AddSingleton<CleaningSuite.Api.Hubs.GameSessionManager>();
 
 builder.Services.AddMediatR(cfg =>
