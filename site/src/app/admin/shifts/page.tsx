@@ -16,7 +16,7 @@ import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/L
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const SCHEDULE_TYPES = [
   { value: '0', label: 'Daily' },
-  { value: '1', label: 'Daily (different times)' },
+  { value: '1', label: 'Varied times by weekday' },
   { value: '2', label: 'Specific days' },
   { value: '3', label: 'Bi-weekly' },
   { value: '5', label: 'Monthly' },
@@ -83,7 +83,7 @@ export default function ShiftsAdminPage() {
   const visibleShifts = shifts.filter(s => inLifecycle(s, lifecycle));
 
   useEffect(() => {
-    adminCompanies.listAll().then((r) => { if (r) setCompanies(r); });
+    adminCompanies.list('', 0, 100).then((r) => { if (r) setCompanies(r.items); });
     adminEmployees.list().then((e) => { if (e) setEmployees(e); });
     adminQualityCycle.listTemplates().then((t) => { if (t) setTemplates(t.filter((x) => x.isActive)); });
   }, []);
@@ -120,7 +120,7 @@ export default function ShiftsAdminPage() {
   };
 
   const openCreate = () => { closeModal(); setModalOpen(true); };
-  const openEdit = (shift: Shift) => {
+  const openEdit = async (shift: Shift) => {
     const schedule = shift.schedule;
     setEditingShift(shift); setCompanyId(shift.companyId); setBranchId(shift.branchId);
     setName(shift.name); setNotes(shift.notes ?? ''); setQualityCycleTemplateId(shift.qualityCycleTemplateId ?? null);
@@ -131,7 +131,13 @@ export default function ShiftsAdminPage() {
     setWeekDays(schedule.type === 2 ? (schedule.weeklyDays?.length ? schedule.weeklyDays : [schedule.weeklyDay ?? 0]).map(String) : schedule.type === 3 ? [String(schedule.biWeeklyDay ?? 0)] : schedule.type === 1 ? Object.keys(schedule.dailyTimes ?? {}).map(day => String(dayIndex(day))).filter(day => Number(day) >= 0) : []);
     setDailyTimes(Object.fromEntries(Object.entries(schedule.dailyTimes ?? {}).map(([day, range]) => [String(dayIndex(day)), { start: range.start?.slice(0, 5) ?? '08:00', end: range.end?.slice(0, 5) ?? '17:00' }])));
     setWeekParity(String(schedule.biWeeklyWeekParity ?? 1)); setMonthlyDay(schedule.monthlyDay ?? 1);
-    setError(''); setModalOpen(true);
+    setError('');
+    const detail = await adminCompanies.get(shift.companyId);
+    if (detail) {
+      setCompanies(current => current.some(company => company.id === detail.company.id) ? current : [...current, detail.company]);
+      setBranches(detail.branches);
+    }
+    setModalOpen(true);
   };
 
   const submit = async () => {
@@ -357,8 +363,8 @@ export default function ShiftsAdminPage() {
       <Modal opened={modalOpen} onClose={closeModal} title={editingShift ? 'Edit shift' : 'Add shift'} size="lg" radius="md">
         <Stack gap="sm">
           <Text size="sm" c="dimmed">Schedule times use the tenant time zone: {timeZoneId}.</Text>
-          <Select label="Company" data={companies.filter(c => c.isActive || c.id === editingShift?.companyId).map((c) => ({ value: c.id, label: `${c.name}${c.isActive ? '' : ' (inactive)'}` }))} value={companyId} onChange={(v) => { setCompanyId(v); setBranchId(null); setQualityCycleTemplateId(null); }} searchable />
-          <Select label="Branch" data={branches.filter(b => b.companyId === companyId && (b.isActive || b.id === editingShift?.branchId)).map((b) => ({ value: b.id, label: `${b.name}${b.isActive ? '' : ' (inactive)'}` }))} value={branchId} onChange={v => { setBranchId(v); setQualityCycleTemplateId(null); }} searchable disabled={!companyId} />
+          <Select label="Company" data={companies.filter(c => c.isActive !== false || c.id === editingShift?.companyId).map((c) => ({ value: c.id, label: `${c.name}${c.isActive === false ? ' (inactive)' : ''}` }))} value={companyId} onChange={(v) => { setBranches([]); setCompanyId(v); setBranchId(null); setQualityCycleTemplateId(null); }} searchable />
+          <Select label="Branch" data={branches.filter(b => b.isActive !== false || b.id === editingShift?.branchId).map((b) => ({ value: b.id, label: `${b.name}${b.isActive === false ? ' (inactive)' : ''}` }))} value={branchId} onChange={v => { setBranchId(v); setQualityCycleTemplateId(null); }} searchable disabled={!companyId} />
           <TextInput label="Name" required value={name} onChange={(e) => setName(e.target.value)} />
           <Select label="Schedule" data={SCHEDULE_TYPES} value={scheduleType} onChange={(v) => setScheduleType(v ?? '0')} />
 
