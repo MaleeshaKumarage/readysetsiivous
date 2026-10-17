@@ -36,7 +36,7 @@ export default function Hero() {
   const isDesktop = useMinWidth('(min-width: 1024px)');
 
   return (
-    <section className="relative overflow-hidden bg-gradient-to-br from-brand-50 via-white to-accent-50 dark:from-gray-950 dark:via-gray-950 dark:to-gray-900">
+    <section className="public-hero relative overflow-hidden bg-accent-950 text-white">
       {/* Background decorative blobs */}
       <div className="absolute top-0 right-0 -translate-y-1/3 translate-x-1/4 w-[500px] h-[500px] rounded-full bg-brand-200/30 dark:bg-brand-500/10 blur-3xl pointer-events-none" />
       <div className="absolute bottom-0 left-0 translate-y-1/3 -translate-x-1/4 w-[400px] h-[400px] rounded-full bg-accent-200/25 dark:bg-accent-500/8 blur-3xl pointer-events-none" />
@@ -50,10 +50,10 @@ export default function Hero() {
         >
           {/* Text column */}
           <div className="flex-1 text-center lg:text-left max-w-2xl">
-            <motion.h1 data-motion-reveal variants={heroItem} className="heading-xl text-gray-900 dark:text-gray-50 text-balance">
+            <motion.h1 data-motion-reveal variants={heroItem} className="heading-xl text-white text-balance">
               {t('hero.headline')}
             </motion.h1>
-            <motion.p data-motion-reveal variants={heroItem} className="mt-6 text-lg sm:text-xl text-gray-600 dark:text-gray-300 leading-relaxed text-balance">
+            <motion.p data-motion-reveal variants={heroItem} className="mt-6 text-lg sm:text-xl text-accent-100 leading-relaxed text-balance">
               {t('hero.subheadline')}
             </motion.p>
 
@@ -85,7 +85,7 @@ export default function Hero() {
               </a>
               <a
                 href="#services"
-                className="inline-flex items-center gap-2 px-6 py-3.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-base font-semibold rounded-full border border-gray-200 dark:border-gray-700 hover:border-brand-300 dark:hover:border-brand-500 hover:text-brand-700 dark:hover:text-brand-400 hover:shadow-md transition-all whitespace-nowrap"
+                className="inline-flex items-center gap-2 px-6 py-3.5 bg-white text-accent-900 text-base font-semibold rounded-full border border-white/30 hover:border-brand-300 hover:text-brand-700 hover:shadow-md transition-all whitespace-nowrap"
               >
                 {t('hero.secondaryCta')}
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -97,7 +97,7 @@ export default function Hero() {
               <div className="flex justify-center">
               <a
                 href="tel:+358468044231"
-                className="inline-flex items-center gap-2 px-6 py-3.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-base font-semibold rounded-full border border-gray-200 dark:border-gray-700 hover:border-brand-300 dark:hover:border-brand-500 hover:text-brand-700 dark:hover:text-brand-400 hover:shadow-md transition-all whitespace-nowrap"
+                className="inline-flex items-center gap-2 px-6 py-3.5 bg-white text-accent-900 text-base font-semibold rounded-full border border-white/30 hover:border-brand-300 hover:text-brand-700 hover:shadow-md transition-all whitespace-nowrap"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
@@ -172,9 +172,9 @@ export default function Hero() {
       {/* Wave divider */}
       <div className="absolute bottom-0 left-0 right-0">
         <svg viewBox="0 0 1440 100" className="w-full h-auto" preserveAspectRatio="none">
-          <path
+            <path
             d="M0,40 C360,80 720,0 1080,30 C1260,45 1380,55 1440,60 L1440,100 L0,100 Z"
-            className="fill-white dark:fill-gray-950"
+            className="fill-[#f7f4ed] dark:fill-accent-950"
           />
         </svg>
       </div>
