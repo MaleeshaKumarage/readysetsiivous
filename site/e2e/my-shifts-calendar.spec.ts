@@ -26,7 +26,9 @@ async function calendar(page: Page) {
         : [shift('soon', 'Upcoming cleaning', '2026-10-20T08:00:00Z'), shift('next-month', 'Next month cleaning', '2026-11-03T08:00:00Z')]
       : cursor ? [shift('older', 'Older recorded work', '2026-09-10T08:00:00Z', true)]
         : [shift('gym', 'Past gym', '2026-10-16T12:00:00Z', true), shift('corridor', 'Past corridor', '2026-10-16T08:00:00Z', true, true),
-          shift('thursday', 'Previous day', '2026-10-15T08:00:00Z', true), shift('old-week', 'Previous week', '2026-10-08T08:00:00Z', true)];
+          shift('thursday', 'Previous day', '2026-10-15T08:00:00Z', true), shift('old-week', 'Previous week', '2026-10-08T08:00:00Z', true, true)];
+    const detachedStarted = occurrences.find(item => item.shiftId === 'old-week');
+    if (detachedStarted?.form) detachedStarted.form.isSubmitted = false;
     return route.fulfill({ headers, json: { occurrences, timeZoneId: 'Europe/Helsinki',
       fromLocalDate: view === 'past' ? cursor ? '2026-08-16' : '2026-09-16' : view === 'future' ? cursor ?? '2026-10-18' : '2026-10-17',
       toLocalDate: view === 'past' ? cursor ?? '2026-10-17' : view === 'future' ? cursor ? '2026-12-19' : '2026-11-18' : '2026-10-18' } });
@@ -47,7 +49,7 @@ test('Today is default; past weeks show daily counts while folded, with only one
   await recent.getByRole('button', { name: /Oct 16.*2 shifts/ }).click();
   await expect(page.getByRole('heading', { name: 'Past gym' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Past corridor' })).toBeVisible();
-  await expect(page.getByText('Deleted shift · historical record')).toBeVisible();
+  await expect(recent.getByText('Deleted shift · historical record')).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('past-calendar.png'), fullPage: true });
   await recent.getByRole('button', { name: /Oct 15.*1 shift/ }).click();
   await expect(page.getByRole('heading', { name: 'Past corridor' })).toHaveCount(0);
@@ -55,6 +57,9 @@ test('Today is default; past weeks show daily counts while folded, with only one
   await older.getByRole('button', { name: /Oct 8.*1 shift/ }).click();
   await expect(recent.getByRole('button', { name: /Week of/ })).toHaveAttribute('aria-expanded', 'false');
   await expect(page.getByRole('region', { name: /^Shifts on / })).toHaveCount(1);
+  await expect(page.getByText('In progress', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Record activities & end' })).toHaveCount(0);
   await older.getByRole('button', { name: /Week of/ }).click();
   await expect(page.getByRole('region', { name: /^Shifts on / })).toHaveCount(0);
   await expect(older.getByRole('button', { name: /Oct 8.*1 shift/ })).toBeVisible();
@@ -93,4 +98,11 @@ test('a delayed past response cannot replace the selected future calendar and ta
   release();
   await expect(page.getByRole('tab', { name: 'Future', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByTestId('shift-week-2026-10-12')).toHaveCount(0);
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByRole('tab', { name: 'Today', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Future', exact: true })).toBeFocused();
+  await page.keyboard.press('Home');
+  await expect(page.getByRole('tab', { name: 'Past', exact: true })).toBeFocused();
+  await expect(page.getByTestId('shift-week-2026-10-12')).toBeVisible();
 });
