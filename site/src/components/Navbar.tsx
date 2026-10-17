@@ -41,7 +41,7 @@ export default function Navbar({ lang }: NavbarProps) {
           {/* Logo */}
           <a href={baseUrl(`/${lang}/`)} className="flex items-center gap-2 shrink-0">
             <Image
-              src="/logo.webp"
+              src="/brand/readyset-logomark.png"
               alt="ReadySetSiivous"
               width={40}
               height={40}

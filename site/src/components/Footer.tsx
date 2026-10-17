@@ -18,7 +18,7 @@ export default function Footer() {
           <div className="sm:col-span-2 lg:col-span-1">
             <a href="#" className="inline-flex items-center gap-2">
               <Image
-                src="/logo.webp"
+                src="/brand/readyset-logomark.png"
                 alt="ReadySetSiivous"
                 width={40}
                 height={40}

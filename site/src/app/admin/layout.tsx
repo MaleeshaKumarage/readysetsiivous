@@ -3,6 +3,7 @@
 import '@mantine/core/styles.css';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   MantineProvider, AppShell, NavLink, Group, Text, Button, Stack, Paper, createTheme, Burger, ActionIcon, Tooltip,
@@ -159,7 +160,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" aria-label="Toggle navigation" />
               <Link href="/admin/" onClick={close} style={{ textDecoration: 'none', color: 'inherit' }}>
                 <Group gap="xs">
-                  <LayoutDashboard size={22} className="text-indigo-500" />
+                  <Image src="/brand/readyset-logomark.png" alt="ReadySetSiivous" width={28} height={28} />
                   <Text fw={700} size="lg" visibleFrom="xs">
                     ReadySet<Text component="span" c="indigo" fw={700}>Siivous</Text>
                   </Text>
@@ -199,7 +200,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
         <AppShell.Navbar p="md">
           <Group mb="lg" gap="xs">
-            <LayoutDashboard size={20} />
+            <Image src="/brand/readyset-logomark.png" alt="ReadySetSiivous" width={28} height={28} />
             <Text fw={700}>ReadySet<Text component="span" c="indigo">Siivous</Text></Text>
           </Group>
           <Stack gap={4}>
