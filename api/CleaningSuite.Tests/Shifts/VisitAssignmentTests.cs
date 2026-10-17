@@ -110,6 +110,37 @@ public class VisitAssignmentTests
     }
 
     [Fact]
+    public async Task Occurrence_list_exposes_started_work_lock_before_opening_assignment_editor()
+    {
+        var s = new Setup(); var form = QualityCycleForm.Create(s.Shift.Id, "Daily", s.A, "Cleaner", Guid.NewGuid(), "Tasks", Start, []);
+        form.StartedAtUtc = Start; s.Evidence.Add(form);
+        var list = await new ShiftHandlers.GetShiftOccurrencesQueryHandler(s.Shifts.Object, forms: s.Forms.Object, clock: new Clock())
+            .Handle(new(s.Shift.Id, Start.Date, Start.Date), default);
+        var visit = Assert.Single(list); Assert.False(visit.CanAssign); Assert.Contains("Started", visit.AssignmentLockReason);
+    }
+
+    [Fact]
+    public async Task Daily_own_work_discovers_override_only_employee_and_hides_replaced_employee()
+    {
+        var s = new Setup();
+        s.Overrides.Add(ShiftOccurrenceAssignment.Create(s.Shift.Id, Start, null, OccurrenceAssignmentMode.Replace, [s.B], "Cover"));
+        s.Shifts.Setup(x => x.ListAssignmentsByEmployeeAsync(s.A, It.IsAny<CancellationToken>())).ReturnsAsync(s.History);
+        s.Shifts.Setup(x => x.ListOccurrenceAssignmentsByEmployeeAsync(s.B, It.IsAny<CancellationToken>())).ReturnsAsync(s.Overrides);
+        var bookings = new Mock<CleaningSuite.Application.Bookings.IBookingRepository>();
+        bookings.Setup(x => x.ListAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), null, It.IsAny<Guid?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<CleaningSuite.Domain.Bookings.Booking>());
+        var companies = new Mock<CleaningSuite.Application.Companies.ICompanyRepository>();
+        companies.Setup(x => x.GetAsync(s.Shift.CompanyId, It.IsAny<CancellationToken>())).ReturnsAsync(new CleaningSuite.Domain.Companies.Company { Id = s.Shift.CompanyId, IsActive = true });
+        var branches = new Mock<CleaningSuite.Application.Companies.IBranchRepository>();
+        branches.Setup(x => x.GetAsync(s.Shift.BranchId, It.IsAny<CancellationToken>())).ReturnsAsync(new CleaningSuite.Domain.Companies.Branch { Id = s.Shift.BranchId, CompanyId = s.Shift.CompanyId, IsActive = true });
+        var context = new Mock<CleaningSuite.Application.Tenants.ITenantContext>(); context.SetupGet(x => x.TenantId).Returns("test");
+        var profiles = new Mock<CleaningSuite.Application.Tenants.ITenantProfileRepository>();
+        profiles.Setup(x => x.GetAsync("test", It.IsAny<CancellationToken>())).ReturnsAsync(new CleaningSuite.Domain.Tenants.TenantProfile { TimeZoneId = "UTC" });
+        var handler = new CleaningSuite.Application.Access.GetOwnWorkHandler(bookings.Object, s.Shifts.Object, companies.Object, branches.Object, profiles.Object, context.Object);
+        Assert.Single((await handler.Handle(new(s.B, "2026-10-18"), default)).Shifts);
+        Assert.Empty((await handler.Handle(new(s.A, "2026-10-18"), default)).Shifts);
+    }
+
+    [Fact]
     public async Task Reports_apply_cross_month_moves_cancellation_extras_and_team_overrides_once()
     {
         var s = new Setup(); var from = Start.Date; var to = from.AddMonths(1);
