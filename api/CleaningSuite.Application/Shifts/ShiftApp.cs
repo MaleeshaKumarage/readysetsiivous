@@ -57,6 +57,11 @@ public interface IShiftRepository
     Task DeleteAssignmentAsync(Guid assignmentId, CancellationToken ct = default);
     Task<IReadOnlyList<Shift>> ListForReportingAsync(CancellationToken ct = default);
     Task<IReadOnlyList<Shift>> ListIncludingInactiveAsync(CancellationToken ct = default);
+    Task<ShiftOccurrenceAssignment?> GetOccurrenceAssignmentAsync(Guid id, CancellationToken ct = default);
+    Task<IReadOnlyList<ShiftOccurrenceAssignment>> ListOccurrenceAssignmentsAsync(Guid shiftId, CancellationToken ct = default);
+    Task<IReadOnlyList<ShiftOccurrenceAssignment>> ListOccurrenceAssignmentsByEmployeeAsync(Guid employeeId, CancellationToken ct = default);
+    Task SaveOccurrenceAssignmentAsync(ShiftOccurrenceAssignment assignment, CancellationToken ct = default);
+    Task SaveAssignmentPeriodsAsync(IReadOnlyList<ShiftAssignment> assignments, CancellationToken ct = default);
     Task<IReadOnlyList<ShiftAssignment>> ListAssignmentHistoryAsync(Guid shiftId, CancellationToken ct = default);
     Task<IReadOnlyList<ShiftAssignment>> ListAssignmentHistoryByEmployeeAsync(Guid employeeId, CancellationToken ct = default);
     Task<ShiftOccurrenceException?> GetOccurrenceExceptionAsync(Guid id, CancellationToken ct = default);

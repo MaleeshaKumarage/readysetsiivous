@@ -19,6 +19,28 @@ public class ShiftAssignment : BaseDocument
         ? Periods.Any(p => p.FromUtc < end && (!p.ToUtc.HasValue || p.ToUtc > start))
         : AssignedAtUtc < end && (IsActive || (UnassignedAtUtc ?? UpdatedUtc) > start);
 
+    public bool CoversVisit(DateTime start, DateTime end) => Periods.Count > 0
+        ? Periods.Any(p => p.FromUtc <= start && (!p.ToUtc.HasValue || start < p.ToUtc.Value))
+        : Overlaps(start, end);
+
+    public void EndFrom(DateTime boundaryUtc, DateTime nowUtc)
+    {
+        EnsureHistory();
+        Periods = Periods.Where(p => p.FromUtc < boundaryUtc).Select(p => new ShiftAssignmentPeriod {
+            FromUtc = p.FromUtc, ToUtc = p.ToUtc.HasValue && p.ToUtc.Value < boundaryUtc ? p.ToUtc : boundaryUtc
+        }).ToList();
+        IsActive = Periods.Any(p => !p.ToUtc.HasValue || p.ToUtc > nowUtc);
+        UnassignedAtUtc = boundaryUtc; UpdatedUtc = nowUtc;
+    }
+
+    public void BeginFrom(DateTime boundaryUtc, DateTime nowUtc, string reason)
+    {
+        if (Periods.Count == 0 && (IsActive || UnassignedAtUtc.HasValue)) EnsureHistory();
+        if (!Periods.Any(p => p.FromUtc <= boundaryUtc && !p.ToUtc.HasValue))
+            Periods.Add(new() { FromUtc = boundaryUtc });
+        IsActive = true; UnassignedAtUtc = null; Note = reason; UpdatedUtc = nowUtc;
+    }
+
     public static ShiftAssignment Create(
         Guid shiftId,
         Guid employeeId,
