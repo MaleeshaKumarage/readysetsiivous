@@ -87,8 +87,7 @@ public class QualityCycleMonthlyReportService(IShiftRepository shifts, IQualityC
         foreach (var shift in candidates)
         {
             var saved = await forms.ListFormsAsync(shift.Id, from, to, ct);
-            var history = await shifts.ListAssignmentHistoryAsync(shift.Id, ct);
-            var planned = QualityCycleOccurrences.InWindow(shift, from, to, zone);
+            var planned = await QualityCycleOccurrences.ResolvedInWindowAsync(shifts, shift, from, to, zone, ct);
             // Submitted historical evidence remains visible even after a shift/template is removed.
             var keys = planned.Select(x => (x.Plan.CompanyId, x.Plan.BranchId))
                 .Concat(saved.Where(f => f.IsSubmitted).Select(f => (f.CompanyId == Guid.Empty ? shift.CompanyId : f.CompanyId,
@@ -110,8 +109,7 @@ public class QualityCycleMonthlyReportService(IShiftRepository shifts, IQualityC
                 foreach (var time in times)
                 {
                     var expected = groupPlans.FirstOrDefault(x => x.Occurrence.StartUtc == time);
-                    var assignedEmployees = history.Where(a => a.Overlaps(time, expected.Occurrence?.EndUtc
-                        ?? groupForms.Where(f => f.ShiftOccurrenceUtc == time).Max(f => f.ShiftOccurrenceEndUtc))).Select(a => a.EmployeeId).ToHashSet();
+                    var assignedEmployees = (expected.EmployeeIds ?? Array.Empty<Guid>()).ToHashSet();
                     var matching = groupForms.Where(f => f.ShiftOccurrenceUtc == time && (f.IsSubmitted || assignedEmployees.Contains(f.EmployeeId)))
                         .GroupBy(f => f.EmployeeId).Select(g => g.OrderByDescending(f => f.IsSubmitted).First()).ToList();
                     var end = expected.Occurrence?.EndUtc ?? matching.Max(f => f.ShiftOccurrenceEndUtc);

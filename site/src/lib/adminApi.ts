@@ -439,6 +439,12 @@ export interface ShiftAssignment {
   note?: string | null;
 }
 
+export interface VisitAssigneesInput {
+  originalStartUtc: string | null; extraExceptionId: string | null;
+  mode: number; employeeIds: string[]; reason: string; rosterVersion: string;
+  assignmentVersion: string | null; fromThisDate: boolean; preview: boolean;
+}
+export interface VisitAssignmentResult { employeeIds: string[]; message: string; preview: boolean }
 export interface ShiftOccurrence {
   startUtc: string;
   endUtc: string;
@@ -447,6 +453,9 @@ export interface ShiftOccurrence {
   status?: number | null;
   reason?: string | null;
   employeeId?: string | null;
+  assigneeIds?: string[]; assignmentSource?: string; assignmentMode?: number | null;
+  assignmentVersion?: string | null; overrideEmployeeIds?: string[];
+  assignmentReason?: string | null; rosterVersion?: string; canAssign?: boolean; assignmentLockReason?: string | null;
 }
 
 export interface ShiftOccurrenceExceptionInput {
@@ -522,6 +531,8 @@ export const adminShifts = {
     adminGet<ShiftOccurrence[]>(
       `/api/v1/admin/shifts/${id}/occurrences?from=${encodeURIComponent(fromUtc)}&to=${encodeURIComponent(toUtc)}`
     ),
+  setVisitAssignees: (id: string, fields: VisitAssigneesInput) =>
+    occurrenceRequest<VisitAssignmentResult>(`/api/v1/admin/shifts/${id}/visit-assignees`, 'PUT', fields),
   saveOccurrenceException: (id: string, fields: ShiftOccurrenceExceptionInput) =>
     occurrenceRequest<ShiftOccurrence>(`/api/v1/admin/shifts/${id}/occurrence-exceptions`, 'PUT', fields),
   deleteOccurrenceException: (id: string, exceptionId: string) =>

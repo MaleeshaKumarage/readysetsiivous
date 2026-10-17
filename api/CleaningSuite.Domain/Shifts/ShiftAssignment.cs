@@ -19,11 +19,30 @@ public class ShiftAssignment : BaseDocument
         ? Periods.Any(p => p.FromUtc < end && (!p.ToUtc.HasValue || p.ToUtc > start))
         : AssignedAtUtc < end && (IsActive || (UnassignedAtUtc ?? UpdatedUtc) > start);
 
-    // A regular legacy assignment covers the shift's configured date range.
-    // Explicit periods (handover/unassignment history) always retain their own boundaries.
+    public bool CoversVisit(DateTime start, DateTime end, DateTime? shiftStartUtc = null) => Periods.Count > 0
+        ? Periods.Any(p => p.FromUtc <= start && (!p.ToUtc.HasValue || start < p.ToUtc.Value))
+        : !IsActive && !UnassignedAtUtc.HasValue ? false : CoversOccurrence(start, end, shiftStartUtc);
+
     public bool CoversOccurrence(DateTime start, DateTime end, DateTime? shiftStartUtc = null) =>
-        Periods.Count == 0 && IsActive && shiftStartUtc.HasValue
-            ? shiftStartUtc.Value < end : Overlaps(start, end);
+        Periods.Count == 0 && IsActive && shiftStartUtc.HasValue ? shiftStartUtc.Value < end : Overlaps(start, end);
+
+    public void EndFrom(DateTime boundaryUtc, DateTime nowUtc)
+    {
+        EnsureHistory();
+        Periods = Periods.Where(p => p.FromUtc < boundaryUtc).Select(p => new ShiftAssignmentPeriod {
+            FromUtc = p.FromUtc, ToUtc = p.ToUtc.HasValue && p.ToUtc.Value < boundaryUtc ? p.ToUtc : boundaryUtc
+        }).ToList();
+        IsActive = Periods.Any(p => !p.ToUtc.HasValue || p.ToUtc > nowUtc);
+        UnassignedAtUtc = boundaryUtc; UpdatedUtc = nowUtc;
+    }
+
+    public void BeginFrom(DateTime boundaryUtc, DateTime nowUtc, string reason)
+    {
+        if (Periods.Count == 0 && AssignedAtUtc < boundaryUtc && (IsActive || UnassignedAtUtc.HasValue)) EnsureHistory();
+        if (!Periods.Any(p => p.FromUtc <= boundaryUtc && !p.ToUtc.HasValue))
+            Periods.Add(new() { FromUtc = boundaryUtc });
+        IsActive = true; UnassignedAtUtc = null; Note = reason; UpdatedUtc = nowUtc;
+    }
 
     public static ShiftAssignment Create(
         Guid shiftId,

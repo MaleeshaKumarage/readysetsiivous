@@ -5,6 +5,11 @@ Reviewed on 2026-10-13 against commit `ceff5bd`, branch
 that this commit is deployed in dev or production. The QC section was updated
 after implementation of the confirmed activity-recording/report-sharing workflow.
 
+October 17 scheduling addendum: the original gap rows are historical. See
+[shift dates](shift-date-range.md), [personal calendar/deletion](personal-shift-calendar.md)
+and [visit assignees/handovers](visit-assignees.md) for the implemented create/edit,
+backdated work, one-visit teams, handover and effective-roster contracts.
+
 Use this document with the [edge-case catalogue](../testing/edge-case-catalog.md),
 [Playwright plan](../testing/playwright-test-plan.md),
 [HTTP endpoint inventory](api-endpoints.md), and [environment guide](../environments.md).

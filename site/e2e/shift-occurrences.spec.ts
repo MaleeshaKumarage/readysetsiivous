@@ -6,7 +6,7 @@ const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Meth
 async function setup(page: Page) {
   await setupAdminMocks(page);
   const original = '2026-11-02T06:00:00.000Z';
-  let occurrences: any[] = [{ startUtc: original, endUtc: '2026-11-02T08:00:00.000Z' }];
+  let occurrences: any[] = [{ startUtc: original, endUtc: '2026-11-02T08:00:00.000Z', assigneeIds: [], rosterVersion: 'v1' }];
   const writes: any[] = [];
   const occurrenceQueries: URLSearchParams[] = [];
   let deletes = 0;
@@ -24,7 +24,7 @@ async function setup(page: Page) {
       return route.fulfill({ status: 200, headers, json: occurrences });
     }
     const json = path.endsWith('/shifts') ? [{ id: 'shift', name: 'Morning clean', companyId: 'company', branchId: 'branch', isActive: true, schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' } }]
-      : path.endsWith('/employees') ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', isActive: true }]
+      : path.endsWith('/employees') ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', isActive: true }, { id: 'second', firstName: 'Second', lastName: 'Cleaner', isActive: true }]
       : path.endsWith('/companies') ? { items: [], total: 0 }
       : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [];
     return route.fulfill({ status: 200, headers, json });
@@ -120,4 +120,85 @@ test('admin cancels occurrence editing without saving', async ({ page }) => {
   await editor.getByRole('button', { name: 'Cancel' }).click();
   await expect(editor).toBeHidden();
   expect(state.writes).toHaveLength(0);
+});
+
+for (const mode of ['Replace regular assignees', 'Add extra employees', 'Restore recurring assignment']) {
+  test(`visit assignee preview and save: ${mode}`, async ({ page }) => {
+    await setup(page); const calls: any[] = []; let fail = true;
+    await page.route(/\/visit-assignees$/, route => {
+      const body = route.request().postDataJSON(); calls.push(body);
+      if (fail) { fail = false; return route.fulfill({ status: 409, headers, json: { detail: 'Overlapping visit. Retry after reviewing assignments.' } }); }
+      return route.fulfill({ status: 200, headers, json: { employeeIds: body.employeeIds, preview: body.preview, message: 'Other visits unchanged.' } });
+    });
+    await page.getByRole('button', { name: 'Occurrences', exact: true }).click();
+    const list = page.getByRole('dialog', { name: /Occurrences/ });
+    await expect(list.getByRole('columnheader', { name: 'Assignees' })).toBeVisible();
+    await list.getByRole('button', { name: 'Assign', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Assign visit', exact: true });
+    await dialog.getByLabel('Assignment action').click(); await page.getByRole('option', { name: mode, exact: true }).click();
+    if (!mode.startsWith('Restore')) {
+      await dialog.getByLabel('Employees').click(); await page.getByRole('option', { name: 'Test Cleaner', exact: true }).click(); await page.keyboard.press('Escape');
+    }
+    await dialog.getByLabel('Assignment reason').fill('Planned coverage');
+    await expect(dialog.getByRole('button', { name: 'Save assignment' })).toBeDisabled();
+    await dialog.getByRole('button', { name: 'Preview assignment' }).click();
+    await expect(dialog.getByRole('alert')).toHaveText('Overlapping visit. Retry after reviewing assignments.');
+    await expect(dialog.getByLabel('Assignment reason')).toHaveValue('Planned coverage');
+    await dialog.getByRole('button', { name: 'Preview assignment' }).click();
+    await expect(dialog.getByText('Assignment preview')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Save assignment' }).click();
+    await expect(dialog).toHaveCount(0);
+    expect(calls.at(-1)).toMatchObject({ mode: mode.startsWith('Replace') ? 1 : mode.startsWith('Add') ? 2 : 0,
+      preview: false, fromThisDate: false, rosterVersion: 'v1', originalStartUtc: '2026-11-02T06:00:00.000Z' });
+  });
+}
+
+test('handover previews and saves from the chosen date', async ({ page }) => {
+  await setup(page); const calls: any[] = [];
+  await page.route(/\/visit-assignees$/, route => { const body = route.request().postDataJSON(); calls.push(body); return route.fulfill({ headers, json: { employeeIds: body.employeeIds, preview: body.preview, message: 'One-off overrides remain.' } }); });
+  await page.getByRole('button', { name: 'Occurrences', exact: true }).click();
+  await page.getByRole('dialog', { name: /Occurrences/ }).getByRole('button', { name: 'Assign', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Assign visit', exact: true });
+  await dialog.getByLabel('Apply to').click(); await page.getByRole('option', { name: 'From this date onward' }).click();
+  await dialog.getByLabel('Employees').click(); await page.getByRole('option', { name: 'Test Cleaner', exact: true }).click(); await page.keyboard.press('Escape');
+  await dialog.getByLabel('Assignment reason').fill('Permanent handover');
+  await dialog.getByRole('button', { name: 'Preview assignment' }).click();
+  await expect(dialog.getByText(/Replace also removes later recurring handovers/)).toBeVisible();
+  await dialog.getByRole('button', { name: 'Save assignment' }).click();
+  expect(calls.at(-1)).toMatchObject({ fromThisDate: true, preview: false, originalStartUtc: '2026-11-02T06:00:00.000Z' });
+});
+
+test('team assignment includes both selected employees in preview and request', async ({ page }) => {
+  await setup(page); const calls: any[] = [];
+  await page.route(/\/visit-assignees$/, route => { const body = route.request().postDataJSON(); calls.push(body); return route.fulfill({ headers, json: { employeeIds: body.employeeIds, preview: body.preview, message: 'Team cover.' } }); });
+  await page.getByRole('button', { name: 'Occurrences', exact: true }).click();
+  await page.getByRole('dialog', { name: /Occurrences/ }).getByRole('button', { name: 'Assign', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Assign visit', exact: true });
+  await dialog.getByLabel('Employees').click(); await page.getByRole('option', { name: 'Test Cleaner', exact: true }).click();
+  await dialog.getByLabel('Employees').click(); await page.getByRole('option', { name: 'Second Cleaner', exact: true }).click(); await page.keyboard.press('Escape');
+  await dialog.getByLabel('Assignment reason').fill('Two cleaner team'); await dialog.getByRole('button', { name: 'Preview assignment' }).click();
+  await expect(dialog.getByText(/Selected visit:.*Test Cleaner.*Second Cleaner/)).toBeVisible();
+  await dialog.getByRole('button', { name: 'Save assignment' }).click();
+  expect(calls.at(-1).employeeIds).toEqual(['cleaner', 'second']);
+});
+
+test('assignee cells explain named, unassigned and locked work; Cancel sends no assignment', async ({ page }) => {
+  await setup(page); let writes = 0;
+  await page.route(/\/visit-assignees$/, route => { writes++; return route.fulfill({ status: 500, headers }); });
+  await page.route(/\/occurrences\?/, route => route.fulfill({ headers, json: [
+    { startUtc: '2026-11-02T06:00:00Z', endUtc: '2026-11-02T08:00:00Z', assigneeIds: ['cleaner'], assignmentSource: 'Replacement', canAssign: true },
+    { startUtc: '2026-11-03T06:00:00Z', endUtc: '2026-11-03T08:00:00Z', assigneeIds: [], assignmentSource: 'Cancelled', status: 2, canAssign: false },
+    { startUtc: '2026-11-04T06:00:00Z', endUtc: '2026-11-04T08:00:00Z', assigneeIds: ['cleaner'], assignmentSource: 'Recurring', canAssign: false, assignmentLockReason: 'Started work cannot be reassigned.' },
+  ] }));
+  await page.getByRole('button', { name: 'Occurrences', exact: true }).click();
+  const list = page.getByRole('dialog', { name: /Occurrences/ }); const rows = list.getByRole('row');
+  await expect(rows.nth(1).getByText('Test Cleaner', { exact: true })).toBeVisible();
+  await expect(rows.nth(1).getByText('Replacement', { exact: true })).toBeVisible();
+  await expect(rows.nth(2).getByText('Unassigned', { exact: true })).toBeVisible();
+  await expect(rows.nth(2).getByRole('button', { name: 'Assign', exact: true })).toBeDisabled();
+  await expect(rows.nth(3).getByRole('button', { name: 'Assign', exact: true })).toBeDisabled();
+  await expect(rows.nth(3).getByText('Started work cannot be reassigned.')).toBeVisible();
+  await rows.nth(1).getByRole('button', { name: 'Assign', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Assign visit', exact: true }); await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(dialog).toHaveCount(0); expect(writes).toBe(0);
 });

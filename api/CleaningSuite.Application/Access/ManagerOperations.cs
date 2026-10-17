@@ -44,8 +44,11 @@ public static class ManagerResponses
 /// <summary>Tenant-scoped operational contracts; no administrative persistence serialization.</summary>
 public sealed class ManagerOperations(IShiftRepository shifts, IEmployeeRepository employees,
     ICompanyRepository companies, IBranchRepository branches, IQualityCycleDispatcher dispatcher,
-    IMediator mediator, ITenantProfileRepository? profiles = null, ITenantContext? tenant = null)
+    IMediator mediator, ITenantProfileRepository? profiles = null, ITenantContext? tenant = null, IShiftWorkReservation? reservation = null)
 {
+    public async Task<VisitAssignmentResult> SetVisitAssignees(Guid id, SetVisitAssigneesCommand command, CancellationToken ct)
+    { await Load(id, ct); return await mediator.Send(command with { ShiftId = id }, ct); }
+
     public async Task<string> TimeZone(CancellationToken ct)
     { var (id, _) = await TenantTimeZone.LoadAsync(profiles, tenant, ct); return id; }
 
@@ -95,6 +98,7 @@ public sealed class ManagerOperations(IShiftRepository shifts, IEmployeeReposito
     public async Task<ManagerShiftResponse> Update(Guid id, string name, ShiftSchedule schedule,
         bool active, DateTime? validFrom, DateTime? validUntil, CancellationToken ct)
     {
+        await using var lease = reservation is null ? null : await reservation.AcquireAsync(ct);
         var shift = await Load(id, ct);
         validFrom ??= shift.ValidFrom;
         ValidateSchedule(schedule, validFrom, validUntil);

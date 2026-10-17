@@ -34,7 +34,18 @@ public record ShiftAssignmentDto(
 public record ShiftOccurrenceDto(DateTime StartUtc, DateTime EndUtc,
     Guid? ExceptionId = null, DateTime? OriginalStartUtc = null,
     ShiftOccurrenceExceptionStatus? Status = null, string? Reason = null,
-    Guid? EmployeeId = null);
+    Guid? EmployeeId = null)
+{
+    public IReadOnlyList<Guid> AssigneeIds { get; init; } = Array.Empty<Guid>();
+    public string AssignmentSource { get; init; } = "Recurring";
+    public OccurrenceAssignmentMode? AssignmentMode { get; init; }
+    public Guid? AssignmentVersion { get; init; }
+    public IReadOnlyList<Guid> OverrideEmployeeIds { get; init; } = Array.Empty<Guid>();
+    public string? AssignmentReason { get; init; }
+    public string RosterVersion { get; init; } = "";
+    public bool CanAssign { get; init; } = true;
+    public string? AssignmentLockReason { get; init; }
+}
 
 public record SaveShiftOccurrenceExceptionCommand(Guid ShiftId, Guid? Id,
     DateTime? OriginalStartUtc, DateTime StartUtc, DateTime EndUtc,
@@ -57,6 +68,11 @@ public interface IShiftRepository
     Task DeleteAssignmentAsync(Guid assignmentId, CancellationToken ct = default);
     Task<IReadOnlyList<Shift>> ListForReportingAsync(CancellationToken ct = default);
     Task<IReadOnlyList<Shift>> ListIncludingInactiveAsync(CancellationToken ct = default);
+    Task<ShiftOccurrenceAssignment?> GetOccurrenceAssignmentAsync(Guid id, CancellationToken ct = default);
+    Task<IReadOnlyList<ShiftOccurrenceAssignment>> ListOccurrenceAssignmentsAsync(Guid shiftId, CancellationToken ct = default);
+    Task<IReadOnlyList<ShiftOccurrenceAssignment>> ListOccurrenceAssignmentsByEmployeeAsync(Guid employeeId, CancellationToken ct = default);
+    Task SaveOccurrenceAssignmentAsync(ShiftOccurrenceAssignment assignment, CancellationToken ct = default);
+    Task SaveAssignmentPeriodsAsync(IReadOnlyList<ShiftAssignment> assignments, CancellationToken ct = default);
     Task<IReadOnlyList<ShiftAssignment>> ListAssignmentHistoryAsync(Guid shiftId, CancellationToken ct = default);
     Task<IReadOnlyList<ShiftAssignment>> ListAssignmentHistoryByEmployeeAsync(Guid employeeId, CancellationToken ct = default);
     Task<ShiftOccurrenceException?> GetOccurrenceExceptionAsync(Guid id, CancellationToken ct = default);
@@ -319,12 +335,14 @@ public class ShiftHandlers
         private readonly IShiftRepository _repository;
         private readonly ITenantProfileRepository? _profiles;
         private readonly ITenantContext? _tenant;
+        private readonly IQualityCycleRepository? _forms;
+        private readonly TimeProvider _clock;
 
-        public GetShiftOccurrencesQueryHandler(IShiftRepository repository, ITenantProfileRepository? profiles = null, ITenantContext? tenant = null)
+        public GetShiftOccurrencesQueryHandler(IShiftRepository repository, ITenantProfileRepository? profiles = null, ITenantContext? tenant = null, IQualityCycleRepository? forms = null, TimeProvider? clock = null)
         {
             _repository = repository;
             _profiles = profiles;
-            _tenant = tenant;
+            _tenant = tenant; _forms = forms; _clock = clock ?? TimeProvider.System;
         }
 
         public async Task<IReadOnlyList<ShiftOccurrenceDto>> Handle(GetShiftOccurrencesQuery request, CancellationToken ct)
@@ -339,15 +357,18 @@ public class ShiftHandlers
             var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
             var localFrom = TenantTimeZone.LocalDate(from, zone);
             var localTo = TenantTimeZone.LocalDate(to, zone);
-            var occurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, localFrom, localTo, zone);
-            var exceptions = await _repository.ListOccurrenceExceptionsAsync(shift.Id,
-                TenantTimeZone.StartOfLocalDay(localFrom, zone), TenantTimeZone.StartOfLocalDay(localTo.AddDays(1), zone), ct)
-                ?? Array.Empty<ShiftOccurrenceException>();
-            return ShiftOccurrenceResolver.Apply(occurrences, exceptions, includeCancelled: true)
-                .Select(x => new ShiftOccurrenceDto(x.StartUtc, x.EndUtc, x.ExceptionId,
-                    x.OriginalStartUtc, x.Status,
-                    x.ExceptionId.HasValue ? exceptions.First(e => e.Id == x.ExceptionId).Reason : null,
-                    x.EmployeeId)).ToList();
+            var roster = await _repository.ResolveRosterAsync(shift, TenantTimeZone.StartOfLocalDay(localFrom, zone),
+                TenantTimeZone.StartOfLocalDay(localTo.AddDays(1), zone), zone, ct, includeCancelled: true);
+            var saved = _forms is null ? [] : await _forms.ListFormsAsync(shift.Id, null, null, ct) ?? [];
+            var today = TenantTimeZone.LocalDate(_clock.GetUtcNow().UtcDateTime, zone);
+            return roster.Select(entry => {
+                var reason = entry.IsCancelled ? "Restore the cancelled visit before assigning employees."
+                    : TenantTimeZone.LocalDate(entry.Occurrence.StartUtc, zone) < today ? "Past visits cannot be reassigned."
+                    : saved.Any(f => (f.IsSubmitted || f.StartedAtUtc.HasValue)
+                        && (f.ShiftOccurrenceUtc == entry.Occurrence.StartUtc || f.ShiftOccurrenceUtc == entry.OriginalStartUtc))
+                        ? "Started or completed work cannot be reassigned." : null;
+                return ShiftRosterReader.ToDto(entry) with { CanAssign = reason is null, AssignmentLockReason = reason };
+            }).ToList();
         }
     }
 
@@ -378,25 +399,6 @@ public class ShiftHandlers
                 var employee = await employees.GetByIdAsync(request.EmployeeId.Value, ct)
                     ?? throw new NotFoundException("Employee", request.EmployeeId.Value);
                 if (!employee.IsActive) throw new ShiftConflictException("Choose an active employee.");
-                if (request.Status is not (ShiftOccurrenceExceptionStatus.CustomerCancelled or ShiftOccurrenceExceptionStatus.CompanyCancelled))
-                {
-                    var otherAssignments = await shifts.ListAssignmentsByEmployeeAsync(employee.Id, ct);
-                    var otherIds = otherAssignments.Where(a => a.IsActive && a.ShiftId != shift.Id)
-                        .Select(a => a.ShiftId).Distinct().ToArray();
-                    foreach (var other in await shifts.ListByIdsAsync(otherIds, ct))
-                    {
-                        if (!other.IsActive) continue;
-                        var (otherFrom, otherTo) = TenantTimeZone.LocalDatesForUtcRange(start, end, zone);
-                        var otherExceptions = await shifts.ListOccurrenceExceptionsAsync(other.Id,
-                            TenantTimeZone.StartOfLocalDay(otherFrom, zone), TenantTimeZone.StartOfLocalDay(otherTo.AddDays(1), zone), ct)
-                            ?? Array.Empty<ShiftOccurrenceException>();
-                        var otherOccurrences = ShiftOccurrenceResolver.Apply(
-                            ShiftScheduleCalculator.GenerateOccurrences(other, otherFrom, otherTo, zone), otherExceptions);
-                        if (otherOccurrences.Any(o => o.StartUtc < end && o.EndUtc > start
-                            && (!o.EmployeeId.HasValue || o.EmployeeId == employee.Id)))
-                            throw new ShiftConflictException("Employee is already assigned to an overlapping shift occurrence.");
-                    }
-                }
             }
 
             ShiftOccurrenceException? item = null;
@@ -412,20 +414,42 @@ public class ShiftHandlers
                 item = ShiftOccurrenceException.Create(shift.Id, original, start, end, request.Status, request.Reason, request.EmployeeId);
             else
                 item.Update(shift.Id, original, start, end, request.Status, request.Reason, request.EmployeeId);
+            var (rangeFrom, rangeTo) = TenantTimeZone.LocalDatesForUtcRange(start, end, zone);
+            var changes = (await shifts.ListOccurrenceExceptionsAsync(shift.Id,
+                TenantTimeZone.StartOfLocalDay(rangeFrom, zone), TenantTimeZone.StartOfLocalDay(rangeTo.AddDays(1), zone), ct) ?? [])
+                .Where(x => x.Id != item.Id).Append(item);
+            var history = await shifts.ListAssignmentHistoryAsync(shift.Id, ct) ?? [];
+            var overrides = await shifts.ListOccurrenceAssignmentsAsync(shift.Id, ct) ?? [];
+            var candidate = ShiftVisitRoster.Resolve(shift.Id, ShiftScheduleCalculator.GenerateOccurrences(shift, rangeFrom, rangeTo, zone), changes, history, overrides,
+                legacyStartUtc: shift.ValidFrom.HasValue ? TenantTimeZone.StartOfLocalDay(shift.ValidFrom.Value.Date, zone) : null)
+                .Where(x => x.Occurrence.ExceptionId == item.Id).ToList();
+            await VisitAssignmentSafety.CheckConflicts(shifts, shift, candidate, zone, ct);
             await shifts.SaveOccurrenceExceptionAsync(item, ct);
             if (dispatcher is not null) await dispatcher.EnsureUpcomingAsync(shift.Id, ct);
             return MapOccurrence(item);
         }
     }
 
-    public sealed class DeleteShiftOccurrenceExceptionCommandHandler(IShiftRepository shifts)
+    public sealed class DeleteShiftOccurrenceExceptionCommandHandler(IShiftRepository shifts, ITenantProfileRepository? profiles = null, ITenantContext? tenant = null)
         : IRequestHandler<DeleteShiftOccurrenceExceptionCommand>
     {
         public async Task Handle(DeleteShiftOccurrenceExceptionCommand request, CancellationToken ct)
         {
-            _ = await shifts.GetAsync(request.ShiftId, ct) ?? throw new NotFoundException("Shift", request.ShiftId);
+            var shift = await shifts.GetAsync(request.ShiftId, ct) ?? throw new NotFoundException("Shift", request.ShiftId);
             var item = await shifts.GetOccurrenceExceptionAsync(request.Id, ct);
             if (item is null || item.ShiftId != request.ShiftId) throw new NotFoundException("ShiftOccurrenceException", request.Id);
+            if (item.OriginalStartUtc.HasValue)
+            {
+                var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
+                var day = TenantTimeZone.LocalDate(item.OriginalStartUtc.Value, zone);
+                var changes = (await shifts.ListOccurrenceExceptionsAsync(shift.Id, TenantTimeZone.StartOfLocalDay(day, zone), TenantTimeZone.StartOfLocalDay(day.AddDays(1), zone), ct) ?? []).Where(x => x.Id != item.Id);
+                var history = await shifts.ListAssignmentHistoryAsync(shift.Id, ct) ?? [];
+                var overrides = await shifts.ListOccurrenceAssignmentsAsync(shift.Id, ct) ?? [];
+                var restored = ShiftVisitRoster.Resolve(shift.Id, ShiftScheduleCalculator.GenerateOccurrences(shift, day, day, zone), changes, history, overrides,
+                    legacyStartUtc: shift.ValidFrom.HasValue ? TenantTimeZone.StartOfLocalDay(shift.ValidFrom.Value.Date, zone) : null)
+                    .Where(x => x.OriginalStartUtc == item.OriginalStartUtc && !x.ExtraExceptionId.HasValue).ToList();
+                await VisitAssignmentSafety.CheckConflicts(shifts, shift, restored, zone, ct);
+            }
             await shifts.DeleteOccurrenceExceptionAsync(item.Id, ct);
         }
     }
@@ -493,27 +517,17 @@ public class ShiftHandlers
             var (from, to) = ResolveConflictWindow(shift, utcNow, zone);
             var candidateOccurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, from, to, zone);
             var existingAssignments = await _repository.ListAssignmentsByEmployeeAsync(request.EmployeeId, ct);
-
-            // Load every other shift the employee is assigned to in a single query instead of
-            // issuing a GetAsync per assignment, and generate each shift's occurrences just once.
-            var otherShiftIds = existingAssignments
-                .Select(a => a.ShiftId)
-                .Where(id => id != request.ShiftId)
-                .Distinct()
-                .ToList();
-
-            if (otherShiftIds.Count > 0)
-            {
-                var otherShifts = await _repository.ListByIdsAsync(otherShiftIds, ct);
-                foreach (var existingShift in otherShifts)
-                {
-                    var existingOccurrences = ShiftScheduleCalculator.GenerateOccurrences(existingShift, from, to, zone);
-                    if (ShiftScheduleCalculator.HasOverlap(candidateOccurrences, existingOccurrences))
-                    {
-                        throw new ShiftConflictException($"Employee is already assigned to an overlapping shift.");
-                    }
-                }
-            }
+            var history = (await _repository.ListAssignmentHistoryAsync(shift.Id, ct) ?? [])
+                .Concat(existingAssignments.Where(x => x.ShiftId == shift.Id)).GroupBy(x => (x.Id, x.EmployeeId)).Select(x => x.First()).ToList();
+            if (!history.Any(x => x.EmployeeId == request.EmployeeId && x.IsActive))
+                history.Add(new ShiftAssignment { ShiftId = shift.Id, EmployeeId = request.EmployeeId, IsActive = true,
+                    AssignedAtUtc = utcNow });
+            var exceptions = await _repository.ListOccurrenceExceptionsAsync(shift.Id,
+                TenantTimeZone.StartOfLocalDay(from, zone), TenantTimeZone.StartOfLocalDay(to.AddDays(1), zone), ct) ?? [];
+            var overrides = await _repository.ListOccurrenceAssignmentsAsync(shift.Id, ct) ?? [];
+            var candidate = ShiftVisitRoster.Resolve(shift.Id, candidateOccurrences, exceptions, history, overrides,
+                legacyStartUtc: shift.ValidFrom.HasValue ? TenantTimeZone.StartOfLocalDay(shift.ValidFrom.Value.Date, zone) : null);
+            await VisitAssignmentSafety.CheckConflicts(_repository, shift, candidate.Where(x => x.EmployeeIds.Contains(request.EmployeeId)).ToList(), zone, ct);
 
             var existingAssignment = await _repository.GetAssignmentAsync(request.ShiftId, request.EmployeeId, ct);
             if (existingAssignment is not null)
@@ -594,11 +608,7 @@ public class ShiftHandlers
             // Soft-deactivate rather than hard-delete so removal is auditable and consistent with
             // the IsActive pattern used elsewhere (and which ListAssignmentsByEmployeeAsync filters
             // on). The row is retained; only its active flag is flipped.
-            assignment.EnsureHistory();
-            assignment.Periods.Last().ToUtc = DateTime.UtcNow;
-            assignment.IsActive = false;
-            assignment.UnassignedAtUtc = DateTime.UtcNow;
-            assignment.UpdatedUtc = DateTime.UtcNow;
+            assignment.EndFrom(DateTime.UtcNow, DateTime.UtcNow);
             await _repository.SaveAssignmentAsync(assignment, ct);
         }
     }

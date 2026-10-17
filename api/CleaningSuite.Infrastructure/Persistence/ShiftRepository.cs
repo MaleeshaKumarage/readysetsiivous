@@ -66,6 +66,9 @@ public class ShiftRepository : IShiftRepository
         foreach (var assignment in assignments) Session.Delete<ShiftAssignment>(assignment.Id);
         var exceptions = await Session.Query<ShiftOccurrenceException>().Where(x => x.ShiftId == id).ToListAsync(ct);
         archive.OccurrenceExceptions = exceptions.ToList();
+        var rosterOverrides = await Session.Query<ShiftOccurrenceAssignment>().Where(x => x.ShiftId == id).ToListAsync(ct);
+        archive.OccurrenceAssignments = rosterOverrides.ToList();
+        foreach (var item in rosterOverrides) Session.Delete<ShiftOccurrenceAssignment>(item.Id);
         Session.Store(archive);
         foreach (var exception in exceptions) Session.Delete<ShiftOccurrenceException>(exception.Id);
         var forms = await Session.Query<QualityCycleForm>().Where(x => x.ShiftId == id).ToListAsync(ct);
@@ -113,6 +116,25 @@ public class ShiftRepository : IShiftRepository
         Session.Store(assignment);
         await Session.SaveChangesAsync(ct);
     }
+
+    public Task<ShiftOccurrenceAssignment?> GetOccurrenceAssignmentAsync(Guid id, CancellationToken ct = default) =>
+        Session.LoadAsync<ShiftOccurrenceAssignment>(id, ct);
+
+    public async Task<IReadOnlyList<ShiftOccurrenceAssignment>> ListOccurrenceAssignmentsAsync(Guid shiftId, CancellationToken ct = default)
+    {
+        var archive = await Session.LoadAsync<DeletedShift>(shiftId, ct);
+        return archive is not null ? archive.OccurrenceAssignments
+            : await Session.Query<ShiftOccurrenceAssignment>().Where(x => x.ShiftId == shiftId).ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<ShiftOccurrenceAssignment>> ListOccurrenceAssignmentsByEmployeeAsync(Guid employeeId, CancellationToken ct = default) =>
+        await Session.Query<ShiftOccurrenceAssignment>().Where(x => x.Mode != OccurrenceAssignmentMode.Inherit && x.EmployeeIds.Contains(employeeId)).ToListAsync(ct);
+
+    public async Task SaveOccurrenceAssignmentAsync(ShiftOccurrenceAssignment assignment, CancellationToken ct = default)
+    { Session.Store(assignment); await Session.SaveChangesAsync(ct); }
+
+    public async Task SaveAssignmentPeriodsAsync(IReadOnlyList<ShiftAssignment> assignments, CancellationToken ct = default)
+    { foreach (var assignment in assignments) Session.Store(assignment); await Session.SaveChangesAsync(ct); }
 
     public async Task DeleteAssignmentAsync(Guid assignmentId, CancellationToken ct = default)
     {

@@ -89,6 +89,10 @@ public class ShiftsAdminController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPut("{id:guid}/visit-assignees")]
+    public async Task<IActionResult> SetVisitAssignees(Guid id, [FromBody] SetVisitAssigneesCommand command, CancellationToken ct) =>
+        Ok(await _mediator.Send(command with { ShiftId = id }, ct));
+
     [HttpPut("{id:guid}/occurrence-exceptions")]
     public async Task<IActionResult> SaveOccurrenceException(Guid id,
         [FromBody] SaveShiftOccurrenceExceptionCommand command, CancellationToken ct) =>

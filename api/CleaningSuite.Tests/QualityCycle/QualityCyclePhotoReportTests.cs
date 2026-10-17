@@ -70,8 +70,18 @@ public class QualityCyclePhotoReportTests
     [Fact]
     public async Task Http_submission_returns_note_validation_400_and_allows_note_only_retry()
     {
-        var form = Form(); var repository = new Mock<IQualityCycleRepository>();
+        var form = Form(); form.ShiftOccurrenceUtc = Start.Date.AddHours(8); form.ShiftOccurrenceEndUtc = Start.Date.AddHours(10); var repository = new Mock<IQualityCycleRepository>();
         repository.Setup(x => x.GetFormByTokenAsync(form.Token, It.IsAny<CancellationToken>())).ReturnsAsync(form);
+        var shifts = new Mock<IShiftRepository>();
+        shifts.Setup(x => x.GetAsync(form.ShiftId, It.IsAny<CancellationToken>())).ReturnsAsync(new Shift {
+            Id = form.ShiftId, IsActive = true, Schedule = new() { Type = ShiftScheduleType.DailySameTime,
+                DailyStart = form.ShiftOccurrenceUtc.TimeOfDay, DailyEnd = form.ShiftOccurrenceEndUtc.TimeOfDay } });
+        shifts.Setup(x => x.ListAssignmentHistoryAsync(form.ShiftId, It.IsAny<CancellationToken>())).ReturnsAsync(new[] {
+            new ShiftAssignment { ShiftId = form.ShiftId, EmployeeId = form.EmployeeId, AssignedAtUtc = form.ShiftOccurrenceUtc.AddDays(-1), IsActive = true } });
+        var employees = new Mock<CleaningSuite.Application.Employees.IEmployeeRepository>();
+        employees.Setup(x => x.GetByIdAsync(form.EmployeeId, It.IsAny<CancellationToken>())).ReturnsAsync(new CleaningSuite.Domain.Employees.Employee { Id = form.EmployeeId, IsActive = true });
+        var profiles = new Mock<ITenantProfileRepository>(); profiles.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(new TenantProfile { TimeZoneId = "UTC" });
+        var reservation = new Mock<IShiftWorkReservation>(); reservation.Setup(x => x.AcquireAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Mock.Of<IAsyncDisposable>());
         var registry = new Mock<ITenantRegistry>();
         registry.Setup(x => x.GetBySlugAsync("tenant-a", It.IsAny<CancellationToken>())).ReturnsAsync(new TenantRegistration { Slug = "tenant-a", Status = TenantRegistration.StatusActive });
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => {
@@ -79,6 +89,10 @@ public class QualityCyclePhotoReportTests
             builder.ConfigureTestServices(services => {
                 foreach (var descriptor in services.Where(x => x.ImplementationType == typeof(MartenSchemaInitializer) || x.ImplementationType == typeof(QualityCycleWorker)).ToList()) services.Remove(descriptor);
                 services.RemoveAll<IQualityCycleRepository>(); services.AddSingleton(repository.Object);
+                services.RemoveAll<IShiftRepository>(); services.AddSingleton(shifts.Object);
+                services.RemoveAll<CleaningSuite.Application.Employees.IEmployeeRepository>(); services.AddSingleton(employees.Object);
+                services.RemoveAll<ITenantProfileRepository>(); services.AddSingleton(profiles.Object);
+                services.RemoveAll<IShiftWorkReservation>(); services.AddSingleton(reservation.Object);
                 services.RemoveAll<ITenantRegistry>(); services.AddSingleton(registry.Object);
                 services.RemoveAll<TimeProvider>(); services.AddSingleton<TimeProvider>(new Clock());
             });
@@ -87,7 +101,7 @@ public class QualityCyclePhotoReportTests
         var route = $"/api/v1/public/tenant-a/quality-cycle/{form.Token}/submit";
         var items = new[] { new QualityCycleFormItemDto("Corridor", true) };
         var failed = await client.PostAsJsonAsync(route, new { token = form.Token, items, photos = new[] { new QualityCyclePhoto("photo", "  ") }, cleanerNotes = "General note" });
-        Assert.Equal(HttpStatusCode.BadRequest, failed.StatusCode);
+        Assert.True(failed.StatusCode == HttpStatusCode.BadRequest, await failed.Content.ReadAsStringAsync());
         Assert.Contains("Add a separate note for each photo", await failed.Content.ReadAsStringAsync());
         Assert.False(form.IsSubmitted); Assert.False(form.Items[0].IsChecked);
         repository.Verify(x => x.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);
