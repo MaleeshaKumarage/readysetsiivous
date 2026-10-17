@@ -9,6 +9,8 @@ October 17 scheduling addendum: the original gap rows are historical. See
 [shift dates](shift-date-range.md), [personal calendar/deletion](personal-shift-calendar.md)
 and [visit assignees/handovers](visit-assignees.md) for the implemented create/edit,
 backdated work, one-visit teams, handover and effective-roster contracts.
+The [branded quality report](branded-quality-reports.md) adds the approved PDF
+layout, branch address and safe actual staff-hour projections.
 
 Use this document with the [edge-case catalogue](../testing/edge-case-catalog.md),
 [Playwright plan](../testing/playwright-test-plan.md),
