@@ -195,6 +195,26 @@ test('manager requires a start date and supports optional end dates', async ({ p
   await page.getByRole('button', { name: 'Save shift' }).click();
   await expect(page.getByRole('article', { name: 'Dated shift', exact: true })).toBeVisible();
   expect(state.writes[0].validFrom).toBe('2026-11-01'); expect(state.writes[0].validUntil).toBeNull();
+  const card = page.getByRole('article', { name: 'Dated shift', exact: true });
+  await card.getByRole('button', { name: 'Edit shift' }).click();
+  await expect(page.getByLabel('Start date', { exact: true })).toHaveValue('2026-11-01');
+  const end = page.getByLabel('End date (optional)', { exact: true });
+  await expect(end).toHaveAttribute('min', '2026-11-01');
+  await end.fill('2026-10-31');
+  await page.getByRole('button', { name: 'Save shift' }).click();
+  expect(state.writes).toHaveLength(1);
+  expect(await end.evaluate((input: HTMLInputElement) => input.validity.rangeUnderflow)).toBe(true);
+  await end.fill('2026-11-30');
+  await page.getByRole('button', { name: 'Save shift' }).click();
+  await expect(page.getByLabel('Start date', { exact: true })).toHaveCount(0);
+  expect(state.writes[1].validUntil).toBe('2026-11-30');
+  await card.getByRole('button', { name: 'Edit shift' }).click();
+  await expect(page.getByLabel('Start date', { exact: true })).toHaveValue('2026-11-01');
+  await expect(end).toHaveValue('2026-11-30');
+  await end.fill('');
+  await page.getByRole('button', { name: 'Save shift' }).click();
+  await expect(page.getByLabel('Start date', { exact: true })).toHaveCount(0);
+  expect(state.writes[2].validUntil).toBeNull();
 });
 
 for (const width of [1280, 390]) test(`manager lifecycle tabs filter locally and clear assignment selections at ${width}px`, async ({ page }) => {
