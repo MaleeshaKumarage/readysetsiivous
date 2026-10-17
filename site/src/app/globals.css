@@ -91,6 +91,87 @@
   }
 }
 
+/* Public website design-system scope. Authenticated product screens keep the
+   existing root tokens while localized marketing pages opt into these roles. */
+.public-site {
+  --font-outfit: 'Outfit', 'Arial', sans-serif;
+  --font-work-sans: 'Work Sans', 'Arial', sans-serif;
+  --background: #f7f4ed;
+  --foreground: #14214d;
+  --card: #ffffff;
+  --card-foreground: #14214d;
+  --popover: #ffffff;
+  --popover-foreground: #14214d;
+  --primary: #14214d;
+  --primary-foreground: #ffffff;
+  --secondary: #eeeae0;
+  --secondary-foreground: #14214d;
+  --muted: #eeeae0;
+  --muted-foreground: #5a6383;
+  --accent: #c9a24a;
+  --accent-foreground: #14214d;
+  --border: #e4dfd3;
+  --input: #e4dfd3;
+  --ring: #c9a24a;
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-work-sans), 'Work Sans', sans-serif;
+}
+
+.dark .public-site {
+  --background: #0b1330;
+  --foreground: #f7f4ed;
+  --card: #14214d;
+  --card-foreground: #f7f4ed;
+  --popover: #14214d;
+  --popover-foreground: #f7f4ed;
+  --primary: #c9a24a;
+  --primary-foreground: #14214d;
+  --secondary: #26335e;
+  --secondary-foreground: #f7f4ed;
+  --muted: #26335e;
+  --muted-foreground: #a9b0c8;
+  --accent: #e0be6e;
+  --accent-foreground: #0b1330;
+  --border: #26335e;
+  --input: #26335e;
+  --ring: #e0be6e;
+}
+
+.public-site h1,
+.public-site h2,
+.public-site h3,
+.public-site h4,
+.public-site button,
+.public-site a {
+  font-family: var(--font-outfit), 'Outfit', sans-serif;
+}
+
+.public-site .bg-white { background-color: var(--card); }
+.public-site .text-gray-900 { color: var(--foreground); }
+.public-site .text-gray-700,
+.public-site .text-gray-600 { color: var(--muted-foreground); }
+.public-site .border-gray-200,
+.public-site .border-gray-100 { border-color: var(--border); }
+
+.public-site .public-hero {
+  background-image: linear-gradient(rgba(20, 33, 77, 0.92), rgba(20, 33, 77, 0.92)), url('/brand/readyset-pattern.jpg');
+  background-size: cover, 420px 420px;
+  background-position: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-site *,
+  .public-site *::before,
+  .public-site *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 @layer components {
   .container-page {
     @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
@@ -101,7 +182,7 @@
   }
 
   .heading-xl {
-    @apply text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight;
+    @apply text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight;
   }
 
   .heading-lg {

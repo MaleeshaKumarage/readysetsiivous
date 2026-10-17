@@ -1,17 +1,10 @@
 import './globals.css';
-import { Inter } from 'next/font/google';
 import { MotionConfig } from 'framer-motion';
 import { Toaster } from 'sonner';
 import { ThemeProvider } from '@/context/ThemeContext';
 import type { Metadata, Viewport } from 'next';
 import { cn } from "@/lib/utils";
 
-
-const inter = Inter({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-inter',
-});
 
 // Applies the saved theme before first paint to prevent a light-mode flash
 // for dark-mode users (ThemeProvider applies it only after hydration).
@@ -80,7 +73,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="fi" suppressHydrationWarning translate="no" className={`notranslate ${inter.variable}`}>
+    <html lang="fi" suppressHydrationWarning translate="no" className="notranslate">
       <body className="min-h-screen flex flex-col bg-white dark:bg-accent-950 text-gray-900 dark:text-gray-100 transition-colors">
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <MotionConfig reducedMotion="user">

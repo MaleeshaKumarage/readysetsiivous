@@ -92,9 +92,9 @@ export default function LangLayout({
   const dict = getDictionary(lang);
 
   return (
-    <>
+    <div className="public-site">
       <SchemaScript lang={lang} dict={dict} />
       <LanguageProvider initialLang={lang}>{children}</LanguageProvider>
-    </>
+    </div>
   );
 }
