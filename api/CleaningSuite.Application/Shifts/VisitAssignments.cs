@@ -21,7 +21,7 @@ public sealed class SetVisitAssigneesHandler(IShiftRepository shifts, IEmployeeR
 {
     public async Task<VisitAssignmentResult> Handle(SetVisitAssigneesCommand request, CancellationToken ct)
     {
-        await using var lease = reservation is null ? null : await reservation.AcquireAsync(ct);
+        await using var lease = reservation is null || request.Preview ? null : await reservation.AcquireAsync(ct);
         if (request.EmployeeIds is null || !Enum.IsDefined(request.Mode)
             || request.EmployeeIds.Any(x => x == Guid.Empty) || request.EmployeeIds.Count > 100
             || (request.Mode != OccurrenceAssignmentMode.Inherit && request.EmployeeIds.Count == 0)
@@ -73,12 +73,14 @@ public sealed class SetVisitAssigneesHandler(IShiftRepository shifts, IEmployeeR
         var end = visit.Occurrence.EndUtc;
         if (request.FromThisDate)
         {
-            // This matches the existing assignment conflict policy, expanded to a full year.
-            end = TenantTimeZone.StartOfLocalDay(day.AddDays(367), zone);
+            // Match the established bounded recurring-assignment conflict window.
+            end = TenantTimeZone.StartOfLocalDay(day.AddDays(180), zone);
             if (shift.ValidUntil.HasValue)
-                end = TenantTimeZone.StartOfLocalDay(shift.ValidUntil.Value.Date.AddDays(1), zone);
-            if (end <= boundary || (end - boundary).TotalDays > 3660)
-                throw new ShiftConflictException("Choose a handover within a supported shift range (up to ten years).");
+            {
+                var until = TenantTimeZone.StartOfLocalDay(shift.ValidUntil.Value.Date.AddDays(1), zone);
+                if (until < end) end = until;
+            }
+            if (end <= boundary) throw new ShiftConflictException("The handover date is outside this shift’s date range.");
             foreach (var item in history.Where(x => x.IsActive && x.Periods.Count == 0 && shift.ValidFrom.HasValue))
                 item.Periods.Add(new() { FromUtc = TenantTimeZone.StartOfLocalDay(shift.ValidFrom!.Value.Date, zone) });
             if (request.Mode == OccurrenceAssignmentMode.Replace)
@@ -129,20 +131,38 @@ public static class VisitAssignmentSafety
         if (candidate.Count == 0) return;
         var from = candidate.Min(x => x.Occurrence.StartUtc).AddDays(-1);
         var to = candidate.Max(x => x.Occurrence.EndUtc).AddDays(1);
-        // Read all tenant shifts: override-only and future handover memberships must be checked too.
-        var others = await shifts.ListAsync(null, null, ct) ?? [];
-        var visits = candidate.Select(x => (current.Id, Entry: x)).ToList();
-        var own = await shifts.ResolveRosterAsync(current, from, to, zone, ct);
-        visits.AddRange(own.Where(x => !candidate.Any(c => c.OriginalStartUtc == x.OriginalStartUtc
-            && c.ExtraExceptionId == x.ExtraExceptionId)).Select(x => (current.Id, Entry: x)));
-        foreach (var other in others.Where(x => x.IsActive && x.Id != current.Id))
-            visits.AddRange((await shifts.ResolveRosterAsync(other, from, to, zone, ct)).Select(x => (other.Id, Entry: x)));
-        foreach (var visit in candidate)
-        foreach (var employee in visit.EmployeeIds)
+        // Discover only shifts involving the affected employees, including future periods and override-only work.
+        var affected = candidate.SelectMany(x => x.EmployeeIds).Distinct().ToArray();
+        var ids = new HashSet<Guid>();
+        foreach (var employee in affected)
         {
-            if (visits.Any(x => !ReferenceEquals(x.Entry, visit) && x.Entry.EmployeeIds.Contains(employee)
-                && x.Entry.Occurrence.StartUtc < visit.Occurrence.EndUtc && x.Entry.Occurrence.EndUtc > visit.Occurrence.StartUtc))
-                throw new ShiftConflictException("An employee is already assigned to an overlapping visit. No assignments were saved.");
+            var history = await shifts.ListAssignmentHistoryByEmployeeAsync(employee, ct) ?? [];
+            var active = await shifts.ListAssignmentsByEmployeeAsync(employee, ct) ?? [];
+            var overrides = await shifts.ListOccurrenceAssignmentsByEmployeeAsync(employee, ct) ?? [];
+            var legacy = await shifts.ListOccurrenceExceptionsByEmployeeAsync(employee, from, to, ct) ?? [];
+            ids.UnionWith(history.Concat(active).Select(x => x.ShiftId));
+            ids.UnionWith(overrides.Select(x => x.ShiftId)); ids.UnionWith(legacy.Select(x => x.ShiftId));
+        }
+        ids.Remove(current.Id);
+        var others = ids.Count == 0 ? [] : await shifts.ListByIdsAsync(ids, ct) ?? [];
+        var visits = candidate.ToList();
+        var own = await shifts.ResolveRosterAsync(current, from, to, zone, ct);
+        var changedKeys = candidate.Select(x => (x.OriginalStartUtc, x.ExtraExceptionId)).ToHashSet();
+        visits.AddRange(own.Where(x => !changedKeys.Contains((x.OriginalStartUtc, x.ExtraExceptionId))));
+        foreach (var other in others.Where(x => x.IsActive && x.Id != current.Id))
+            visits.AddRange(await shifts.ResolveRosterAsync(other, from, to, zone, ct));
+        var changed = new HashSet<ShiftVisitRosterEntry>(candidate, ReferenceEqualityComparer.Instance);
+        foreach (var employee in affected)
+        {
+            var allEnd = DateTime.MinValue; var changedEnd = DateTime.MinValue;
+            foreach (var visit in visits.Where(x => x.EmployeeIds.Contains(employee)).OrderBy(x => x.Occurrence.StartUtc))
+            {
+                var isChanged = changed.Contains(visit);
+                if (visit.Occurrence.StartUtc < (isChanged ? allEnd : changedEnd))
+                    throw new ShiftConflictException("An employee is already assigned to an overlapping visit. No assignments were saved.");
+                if (visit.Occurrence.EndUtc > allEnd) allEnd = visit.Occurrence.EndUtc;
+                if (isChanged && visit.Occurrence.EndUtc > changedEnd) changedEnd = visit.Occurrence.EndUtc;
+            }
         }
     }
 }

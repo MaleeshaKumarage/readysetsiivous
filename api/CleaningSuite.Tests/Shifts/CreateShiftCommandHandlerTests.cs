@@ -284,7 +284,7 @@ public class CreateShiftCommandHandlerTests
         _employeeRepoMock.Setup(r => r.GetByIdAsync(empId, It.IsAny<CancellationToken>())).ReturnsAsync(emp);
         _shiftRepoMock.Setup(r => r.ListAssignmentsByEmployeeAsync(empId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ShiftAssignment> { existingAssignment });
-        _shiftRepoMock.Setup(r => r.ListAsync(null, null, It.IsAny<CancellationToken>())).ReturnsAsync(new[] { shift1, shift2 });
+        _shiftRepoMock.Setup(r => r.ListByIdsAsync(It.Is<IReadOnlyCollection<Guid>>(ids => ids.Contains(shift1.Id)), It.IsAny<CancellationToken>())).ReturnsAsync(new[] { shift1 });
         _shiftRepoMock.Setup(r => r.ListAssignmentHistoryAsync(shift1.Id, It.IsAny<CancellationToken>())).ReturnsAsync(new[] { existingAssignment });
 
         var handler = new ShiftHandlers.AssignEmployeeToShiftCommandHandler(_shiftRepoMock.Object, _employeeRepoMock.Object, new Mock<CleaningSuite.Application.QualityCycle.IQualityCycleRepository>().Object, new Mock<CleaningSuite.Application.Common.IEmailSender>().Object);
