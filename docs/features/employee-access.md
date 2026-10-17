@@ -52,11 +52,14 @@ Days use strict ISO date parsing and exclusive next-midnight UTC boundaries in
 the tenant timezone. Blank/missing timezone uses Europe/Helsinki. Invalid stored
 timezone returns a validation error before operational queries. Midnight clock
 gaps start at the first existing instant; repeated midnight uses the earlier UTC
-instant. A skipped local day is rejected. Shift recurrence still follows its
-existing UTC schedule interpretation; issue84 owns broader timezone policy.
-Current active assignments authorize reads only when a stored assignment period
-overlaps the actual occurrence. Unassignment revokes historical self reads;
-reassignment gaps and assignments beginning exactly at shift end are excluded.
+instant. A skipped local day is rejected. Shift recurrence uses tenant-local
+schedule times converted to UTC. Effective visit rosters govern both My Shifts
+and daily work: explicit periods use visit-start membership, one-off overrides
+can replace or add staff, and known past periods retain their boundaries.
+Regular legacy assignments cover the configured shift start date, including
+backdated creation. Inactive legacy assignments without a known end/period do
+not grant access. Reassignment gaps remain excluded. Inactive/deleted shifts
+are hidden entirely; completed evidence remains available in admin reports.
 Existing shift interval reads reject non-increasing, overflowing or >32-day ranges.
 
 The admin shell verifies current identity without caching before mounting any

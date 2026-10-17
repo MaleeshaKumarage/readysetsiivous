@@ -141,6 +141,32 @@ public class VisitAssignmentTests
     }
 
     [Fact]
+    public async Task Old_unstarted_public_checklist_token_does_not_authorize_a_replaced_cleaner()
+    {
+        var s = new Setup(); var form = QualityCycleForm.Create(s.Shift.Id, "Daily", s.A, "Cleaner", Guid.NewGuid(), "Tasks", Start, [], Start.AddHours(2));
+        s.Overrides.Add(ShiftOccurrenceAssignment.Create(s.Shift.Id, Start, null, OccurrenceAssignmentMode.Replace, [s.B], "Cover"));
+        s.Forms.Setup(x => x.GetFormByTokenAsync(form.Token, It.IsAny<CancellationToken>())).ReturnsAsync(form);
+        var handler = new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(s.Forms.Object,
+            Mock.Of<CleaningSuite.Application.Common.IUploadContentValidator>(), new Clock(), s.Shifts.Object, s.Employees.Object);
+        var error = await Assert.ThrowsAsync<QualityCycleConflictException>(() => handler.Handle(new(form.Token, []), default));
+        Assert.Contains("reassigned", error.Message); Assert.False(form.IsSubmitted);
+        s.Forms.Verify(x => x.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Manual_dispatch_does_not_create_tasks_for_a_cancelled_visit()
+    {
+        var s = new Setup();
+        var template = QualityCycleTemplate.Create("Activities", ["Corridor"], null, null, null);
+        s.Shift.QualityCycleTemplateId = template.Id;
+        s.Forms.Setup(x => x.GetTemplateAsync(template.Id, It.IsAny<CancellationToken>())).ReturnsAsync(template);
+        s.Exceptions.Add(ShiftOccurrenceException.Create(s.Shift.Id, Start, Start, Start.AddHours(2), ShiftOccurrenceExceptionStatus.CompanyCancelled, "Closed"));
+        var dispatcher = new QualityCycleDispatcher(s.Shifts.Object, s.Forms.Object, s.Employees.Object, new Clock());
+        Assert.Equal(0, await dispatcher.DispatchAsync(s.Shift, [new ShiftOccurrence { StartUtc = Start, EndUtc = Start.AddHours(2) }]));
+        s.Forms.Verify(x => x.TryCreateFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Reports_apply_cross_month_moves_cancellation_extras_and_team_overrides_once()
     {
         var s = new Setup(); var from = Start.Date; var to = from.AddMonths(1);

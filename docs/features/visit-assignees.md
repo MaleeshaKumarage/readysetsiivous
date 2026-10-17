@@ -12,6 +12,6 @@ Calendars, clock-start authorization, checklist dispatch and report expectations
 
 Clock starts and scheduling writes share a tenant-scoped PostgreSQL reservation across API replicas. Real database tests cover both race outcomes, partition isolation and archived overrides. Historical QC evidence and existing shared-report snapshots remain intact. Reports apply moves at the destination, preserve the original plan attribution, omit cancellations from expected work and include extras once.
 
-Conflict preview checks the full dated shift range up to ten years; for open-ended handovers it checks one year and states the checked-through date. As with the existing bounded recurring-assignment policy, scheduling beyond that horizon must be checked when changing assignments.
+Conflict checks use the existing 180-day recurring-assignment horizon (or an earlier shift end) and state the checked-through date. Only shifts involving affected employees are loaded; overlap checks use sorted interval sweeps. Preview is read-only and holds no scheduling reservation; save takes the reservation and repeats validation. Scheduling beyond the checked horizon must be checked when changing assignments.
 
 Regression coverage: Replace/Add/Restore, duplicate selection, preview without writes, required reasons, stale versions, inactive employees, cancelled/past/started work, one-off preservation, handover history, same-shift extra collisions, adjacent visits, cross-month reports, tenant scope and real database concurrency; desktop/mobile preview, failure/retry and handover flows.

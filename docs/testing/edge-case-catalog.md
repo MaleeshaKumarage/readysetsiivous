@@ -419,3 +419,21 @@ Implementation/test contract: [shift photo reporting](../features/shift-photo-re
 Contract: [personal shifts for all staff roles](../features/management-own-shifts.md).
 
 Reactivation cases REACT-001 through REACT-008: see [reactivation workflow](../features/reactivation.md).
+
+## Visit assignment and backdated work — October 17 contract
+
+| ID | Layer | Setup/action | Observable result |
+| --- | --- | --- | --- |
+| VISIT-001 | API/UI | Shift starts October 1; create and regularly assign October 17 | Past contains October 1–16; those visits may start/end now; future dates remain blocked; scheduled timestamps unchanged |
+| VISIT-002 | API/UI | Replace A with B on one visit; Add A+B on another | Exact effective team in occurrences, daily work, My Shifts, start authorization and expected report tasks; surrounding visits unchanged |
+| VISIT-003 | API/UI | Restore recurring assignment on moved visit with legacy replacement | Inherit suppresses legacy replacement; schedule move and its reason remain intact |
+| VISIT-004 | API/UI | Handover at tenant-local midnight; overnight previous visit; later one-off override | Earlier visit remains outgoing; future recurring membership changes; one-off remains authoritative |
+| VISIT-005 | DB | Start races with reassignment in two sessions | Start wins: assignment409; assignment wins: outgoing start denied; no dual authority |
+| VISIT-006 | API | Old unstarted checklist token after replacement | Submission rejected without changes; draft is not proof of assignment |
+| VISIT-007 | API/UI | Cancelled/past/started/submitted visit; stale roster version | Clear lock/conflict; unsafe Assign disabled; selections kept on retryable error |
+| VISIT-008 | API/UI | Team overlaps recurring or override-only visit; adjacent visit | Entire conflicting team rejected; adjacent allowed; preview writes nothing and holds no reservation; save rechecks |
+| VISIT-009 | Report | Cross-month move, cancellation, extra visit, handover | Destination month only; original plan attribution; cancelled expectations omitted; extra counted once |
+| VISIT-010 | UI | Two selected cleaners, Cancel dialog, named/unassigned/locked assignee cells | Both IDs/names in preview; Cancel sends no write; labels and disabled state match DTO |
+| VISIT-011 | API/UI | Deactivate/delete a shift with completed historical forms | No personal tab shows that shift; admin historical evidence retained |
+
+Contracts: [visit assignees](../features/visit-assignees.md), [personal calendar](../features/personal-shift-calendar.md).

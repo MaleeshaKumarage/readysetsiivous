@@ -21,7 +21,7 @@ public class ShiftAssignment : BaseDocument
 
     public bool CoversVisit(DateTime start, DateTime end, DateTime? shiftStartUtc = null) => Periods.Count > 0
         ? Periods.Any(p => p.FromUtc <= start && (!p.ToUtc.HasValue || start < p.ToUtc.Value))
-        : CoversOccurrence(start, end, shiftStartUtc);
+        : !IsActive && !UnassignedAtUtc.HasValue ? false : CoversOccurrence(start, end, shiftStartUtc);
 
     public bool CoversOccurrence(DateTime start, DateTime end, DateTime? shiftStartUtc = null) =>
         Periods.Count == 0 && IsActive && shiftStartUtc.HasValue ? shiftStartUtc.Value < end : Overlaps(start, end);

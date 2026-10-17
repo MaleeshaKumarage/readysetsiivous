@@ -52,18 +52,23 @@ public class QualityCycleDispatcher : IQualityCycleDispatcher
     }
 
     public async Task<int> DispatchAsync(Shift shift, IReadOnlyList<ShiftOccurrence> occurrences, CancellationToken ct = default)
-        => await DispatchResolvedAsync(shift,
-            occurrences.Select(o => new ResolvedShiftOccurrence(o.StartUtc, o.EndUtc)).ToArray(), ct);
+    {
+        if (occurrences.Count == 0) return 0;
+        var from = occurrences.Min(x => x.StartUtc); var to = occurrences.Max(x => x.EndUtc);
+        var exceptions = await _shifts.ListOccurrenceExceptionsAsync(shift.Id, from, to, ct) ?? [];
+        return await DispatchResolvedAsync(shift, ShiftOccurrenceResolver.Apply(occurrences, exceptions)
+            .Where(x => x.StartUtc >= from && x.StartUtc < to).ToList(), ct);
+    }
 
     private async Task<int> DispatchResolvedAsync(Shift shift, IReadOnlyList<ResolvedShiftOccurrence> occurrences, CancellationToken ct)
     {
-        if (!shift.IsActive || !shift.QualityCycleTemplateId.HasValue) return 0;
+        if (!shift.IsActive || !shift.QualityCycleTemplateId.HasValue || occurrences.Count == 0) return 0;
         var template = await _forms.GetTemplateAsync(shift.QualityCycleTemplateId.Value, ct);
         if (template is null || !template.IsActive) return 0;
         if ((template.CompanyId.HasValue && template.CompanyId != shift.CompanyId)
             || (template.BranchId.HasValue && template.BranchId != shift.BranchId))
             throw new ShiftConflictException("The checklist template does not belong to this shift's company/branch.");
-        var assignments = await _shifts.ListAssignmentsByShiftAsync(shift.Id, ct);
+        var assignments = await _shifts.ListAssignmentsByShiftAsync(shift.Id, ct) ?? [];
         var history = await _shifts.ListAssignmentHistoryAsync(shift.Id, ct) ?? [];
         var overrides = await _shifts.ListOccurrenceAssignmentsAsync(shift.Id, ct) ?? [];
         var recurring = history.Concat(assignments).GroupBy(x => (x.Id, x.EmployeeId)).Select(x => x.First()).ToList();
