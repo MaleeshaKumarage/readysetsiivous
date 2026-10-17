@@ -120,6 +120,9 @@ public class ShiftRepository : IShiftRepository
         await Session.SaveChangesAsync(ct);
     }
 
+    public async Task<IReadOnlyList<Shift>> ListIncludingInactiveAsync(CancellationToken ct = default) =>
+        await Session.Query<Shift>().OrderBy(s => s.Name).ToListAsync(ct);
+
     public async Task<IReadOnlyList<Shift>> ListForReportingAsync(CancellationToken ct = default)
     {
         var live = await Session.Query<Shift>().ToListAsync(ct);

@@ -72,7 +72,7 @@ public sealed class ManagerOperations(IShiftRepository shifts, IEmployeeReposito
     {
         var (timeZoneId, _) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
         var result = new List<ManagerShiftResponse>();
-        foreach (var shift in includeInactive ? await shifts.ListForReportingAsync(ct) : await shifts.ListAsync(null, null, ct)) {
+        foreach (var shift in includeInactive ? await shifts.ListIncludingInactiveAsync(ct) : await shifts.ListAsync(null, null, ct)) {
             if (await ValidParents(shift.CompanyId, shift.BranchId, ct)) result.Add(ManagerResponses.Shift(shift, timeZoneId));
         }
         return result;

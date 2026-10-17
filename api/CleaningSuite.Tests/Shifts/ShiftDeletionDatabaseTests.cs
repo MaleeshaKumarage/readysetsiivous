@@ -1,4 +1,7 @@
 using CleaningSuite.Application.Companies;
+using CleaningSuite.Application.Access;
+using CleaningSuite.Application.Employees;
+using CleaningSuite.Application.Shifts;
 using CleaningSuite.Application.QualityCycle;
 using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Companies;
@@ -9,6 +12,7 @@ using CleaningSuite.Infrastructure.Persistence;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
+using MediatR;
 using System.Text.Json;
 
 namespace CleaningSuite.Tests.Shifts;
@@ -51,9 +55,19 @@ public class ShiftDeletionDatabaseTests
         var branches = new Mock<IBranchRepository>(); branches.Setup(x => x.GetAsync(branch.Id, It.IsAny<CancellationToken>())).ReturnsAsync(branch);
         var profiles = new Mock<ITenantProfileRepository>(); profiles.Setup(x => x.GetAsync(tenant, It.IsAny<CancellationToken>())).ReturnsAsync(new TenantProfile { TimeZoneId = "UTC" });
         var reports = new QualityCycleMonthlyReportService(shifts, forms, companies.Object, branches.Object, profiles.Object, context.Object, TimeProvider.System);
+        var adminList = new ShiftHandlers.ListShiftsQueryHandler(shifts);
+        var manager = new ManagerOperations(shifts, Mock.Of<IEmployeeRepository>(), companies.Object, branches.Object,
+            Mock.Of<IQualityCycleDispatcher>(), Mock.Of<IMediator>(), profiles.Object, context.Object);
+        Assert.Equal(shift.Id, Assert.Single(await adminList.Handle(new(null, null, IncludeInactive: true), default)).Id);
+        Assert.Equal(shift.Id, Assert.Single(await manager.List(default, includeInactive: true)).Id);
         var before = await reports.BuildAsync(new(2026, 10, ShiftId: shift.Id), default);
         await shifts.DeleteAsync(shift.Id);
         Assert.Null(await shifts.GetAsync(shift.Id));
+        // Regression: management lists must not resurrect the reporting snapshot.
+        Assert.Empty(await shifts.ListIncludingInactiveAsync());
+        Assert.Empty(await adminList.Handle(new(null, null, IncludeInactive: true), default));
+        Assert.Empty(await manager.List(default, includeInactive: true));
+        Assert.Equal(shift.Id, Assert.Single(await shifts.ListForReportingAsync()).Id);
         Assert.Empty(await shifts.ListAssignmentsByEmployeeAsync(employee));
         Assert.Empty(await shifts.ListOccurrenceExceptionsByEmployeeAsync(employee, day.AddDays(-1), day.AddDays(1)));
         var retained = await forms.GetFormAsync(form.Id);

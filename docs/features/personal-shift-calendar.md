@@ -9,6 +9,7 @@ Updated 2026-10-17. Employees, tenant managers, and admins with an active linked
 - Activity selections, photo notes and general notes survive switching days/tabs in the current browser session. Successful submission clears the draft.
 - Calendar dates use the tenant time zone. A tenant-midnight rollover refreshes the selected period. Starting still requires the scheduled local date; actual start/end timestamps are unchanged.
 - Past includes recorded work even after the employee was unassigned, the shift deactivated, or the shift deleted. Deleted work is labelled as historical and cannot be started or edited.
+- Deactivated/deleted shifts are excluded from Today/Future and unfinished personal work, including already-created checklist forms. Only completed visits on earlier tenant-local dates remain in Past history.
 
 ## API and paging
 
@@ -21,6 +22,8 @@ Today covers one local calendar date. Past and Future load 31 local dates per pa
 Assignments and QC records no longer block deletion. The live shift, roster links, and occurrence exceptions are removed atomically. A separate `DeletedShift` reporting snapshot preserves schedule/assignment history and all occurrence overrides; shift-specific historical exception reads use that archive. QC records retain their original historical identifier/name and get `ShiftDeletedUtc`, detaching them from active work while keeping checklist answers, notes, photos, and actual timestamps intact.
 
 Monthly reports can read deleted-shift snapshots, including an explicit deleted shift filter. Old QC tokens cannot modify detached history. Active shifts must be deactivated first. Deletion remains scoped to the caller's tenant and existing admin/manager permissions.
+
+Admin and manager Active/Inactive lists read only live shift documents. Reporting snapshots must never appear in either management tab or its counts. Deleting a shift therefore removes it from management lists while retaining it in historical reports.
 
 ## Regression coverage
 

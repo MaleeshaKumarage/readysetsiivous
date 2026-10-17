@@ -45,6 +45,10 @@ async function setup(page: Page, options: { role?: string; documentRole?: string
       assignments = [{ id: cleaner, employeeId: request.postDataJSON().employeeId, shiftId: path.split('/')[2], isActive: true }];
       return route.fulfill({ status: 200, headers, json: assignments[0] });
     }
+    if (method === 'DELETE' && path.startsWith('/shifts/')) {
+      shifts = shifts.filter(s => s.id !== path.split('/')[2]);
+      return route.fulfill({ status: 204, headers });
+    }
     const body = request.postDataJSON(); writes.push(body);
     const saved = { ...body, id: method === 'PUT' ? path.split('/')[2] : `77777777-7777-4777-8777-${String(writes.length).padStart(12, '0')}`, companyId: company, branchId: body.branchId ?? branch1, isActive: true };
     shifts = method === 'PUT' ? shifts.map(s => s.id === saved.id ? saved : s) : [...shifts, saved];
@@ -153,6 +157,27 @@ test('manager creates each schedule type with explicit fields', async ({ page })
   expect(state.writes.map(w => w.schedule.type)).toEqual([1, 2, 3, 4, 5]);
   expect(state.writes[0].schedule.dailyTimes.Monday.start).toBe('09:00'); expect(state.writes[1].schedule.weeklyDays).toContain(2);
   expect(state.writes[2].schedule.biWeeklyWeekParity).toBe(2); expect(state.writes[4].schedule.monthlyDay).toBe(15);
+});
+
+test('manager deletion removes inactive work and its count after refresh while active work remains', async ({ page }) => {
+  const state = await setup(page, { inactiveShift: true });
+  let accept = false; const messages: string[] = [];
+  page.on('dialog', dialog => { messages.push(dialog.message()); return accept ? dialog.accept() : dialog.dismiss(); });
+  await page.goto('/manager/');
+  await page.getByRole('tab', { name: 'Inactive (1)', exact: true }).click();
+  const inactive = page.getByRole('article', { name: 'AAA2 biweekly' });
+  await inactive.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(inactive).toBeVisible();
+  accept = true;
+  await inactive.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(inactive).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: 'Inactive (0)', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Refresh operations' }).click();
+  await expect(inactive).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Active (1)', exact: true }).click();
+  await expect(page.getByRole('article', { name: 'AAA1 weekdays' })).toBeVisible();
+  expect(messages.at(-1)).toContain('Completed checklist records, photos and reports will remain in history.');
+  expect(state.adminRequests).toBe(0);
 });
 
 for (const width of [1280, 390]) test(`manager lifecycle tabs filter locally and clear assignment selections at ${width}px`, async ({ page }) => {

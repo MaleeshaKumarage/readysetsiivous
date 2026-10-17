@@ -9,6 +9,44 @@ namespace CleaningSuite.Tests.Shifts;
 
 public class ShiftCalendarTests
 {
+    private sealed class CalendarClock : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => new(2026, 10, 17, 22, 0, 0, TimeSpan.Zero);
+    }
+
+    [Theory]
+    [InlineData("inactive", false, -1, false)]
+    [InlineData("inactive", true, -1, true)]
+    [InlineData("inactive", false, 0, false)]
+    [InlineData("inactive", true, 0, false)]
+    [InlineData("inactive", false, 1, false)]
+    [InlineData("inactive", true, 1, false)]
+    [InlineData("deleted", false, -1, false)]
+    [InlineData("deleted", true, -1, true)]
+    [InlineData("deleted", true, 0, false)]
+    [InlineData("deleted", false, 1, false)]
+    [InlineData("active", false, 0, true)]
+    [InlineData("active", true, 0, true)]
+    public async Task Inactive_shifts_only_retain_completed_past_history(string lifecycle, bool submitted, int dayOffset, bool visible)
+    {
+        var employee = Guid.NewGuid(); var shift = Guid.NewGuid();
+        var from = new DateTime(2026, 10, 15, 0, 0, 0, DateTimeKind.Utc); var to = from.AddDays(6);
+        // 22:00 UTC is the following local date in Helsinki. The fixed clock's local date is October 18.
+        var start = new DateTime(2026, 10, 17, 22, 0, 0, DateTimeKind.Utc).AddDays(dayOffset);
+        var form = QualityCycleForm.Create(shift, "Cleaning", employee, "Cleaner", Guid.NewGuid(), "Activities", start, ["Corridor"], start.AddHours(2));
+        form.StartedAtUtc = start; form.IsSubmitted = submitted;
+        if (lifecycle == "deleted") form.ShiftDeletedUtc = start.AddHours(3);
+        var shifts = new Mock<IShiftRepository>();
+        shifts.Setup(x => x.ListAssignmentsByEmployeeAsync(employee, It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<ShiftAssignment>());
+        if (lifecycle != "deleted") shifts.Setup(x => x.GetAsync(shift, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Shift { Id = shift, IsActive = lifecycle == "active" });
+        var forms = new Mock<IQualityCycleRepository>();
+        forms.Setup(x => x.ListFormsAsync(null, from, to, It.IsAny<CancellationToken>(), employee, null, null, null)).ReturnsAsync(new[] { form });
+        var result = await new QualityCycleHandlers.GetMyShiftsQueryHandler(shifts.Object, forms.Object, clock: new CalendarClock())
+            .Handle(new(employee, from, to), default);
+        Assert.Equal(visible ? 1 : 0, result.Count);
+    }
+
     [Theory]
     [InlineData(true)] [InlineData(false)]
     public async Task Shift_deletion_requires_deactivation_but_does_not_block_on_roster_history(bool active)

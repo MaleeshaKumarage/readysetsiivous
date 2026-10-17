@@ -410,14 +410,16 @@ public class QualityCycleHandlers
         private readonly IQualityCycleRepository _repository;
         private readonly ITenantProfileRepository? _profiles;
         private readonly ITenantContext? _tenant;
+        private readonly TimeProvider _clock;
 
         public GetMyShiftsQueryHandler(IShiftRepository shiftRepository, IQualityCycleRepository repository,
-            ITenantProfileRepository? profiles = null, ITenantContext? tenant = null)
+            ITenantProfileRepository? profiles = null, ITenantContext? tenant = null, TimeProvider? clock = null)
         {
             _shiftRepository = shiftRepository;
             _repository = repository;
             _profiles = profiles;
             _tenant = tenant;
+            _clock = clock ?? TimeProvider.System;
         }
 
         public async Task<IReadOnlyList<MyShiftOccurrenceDto>> Handle(GetMyShiftsQuery request, CancellationToken ct)
@@ -435,10 +437,13 @@ public class QualityCycleHandlers
                 .GroupBy(a => a.ShiftId).ToDictionary(g => g.Key, g => g.First());
             var shiftIds = assignmentByShift.Keys.Concat(employeeExceptions.Select(x => x.ShiftId)).Distinct().ToArray();
             var result = new List<MyShiftOccurrenceDto>();
+            var liveShifts = new Dictionary<Guid, Shift?>();
+            var today = TenantTimeZone.LocalDate(_clock.GetUtcNow().UtcDateTime, zone);
 
             foreach (var shiftId in shiftIds)
             {
                 var shift = await _shiftRepository.GetAsync(shiftId, ct);
+                liveShifts[shiftId] = shift;
                 if (shift == null || shift.Id != shiftId || !shift.IsActive) continue;
 
                 var exceptions = await _shiftRepository.ListOccurrenceExceptionsAsync(shift.Id, from, to, ct)
@@ -464,6 +469,15 @@ public class QualityCycleHandlers
                 && f.ShiftOccurrenceUtc >= from && f.ShiftOccurrenceUtc < to
                 && (f.IsSubmitted || f.StartedAtUtc.HasValue)))
             {
+                if (!liveShifts.TryGetValue(form.ShiftId, out var liveShift))
+                {
+                    liveShift = await _shiftRepository.GetAsync(form.ShiftId, ct);
+                    liveShifts[form.ShiftId] = liveShift;
+                }
+                // Inactive/deleted shifts are never current work. Only completed
+                // visits on earlier tenant-local dates belong in personal history.
+                if ((liveShift is not { IsActive: true } || form.ShiftDeletedUtc.HasValue)
+                    && (!form.IsSubmitted || TenantTimeZone.LocalDate(form.ShiftOccurrenceUtc, zone) >= today)) continue;
                 var index = result.FindIndex(x => x.ShiftId == form.ShiftId && x.StartUtc == form.ShiftOccurrenceUtc);
                 var occurrence = new MyShiftOccurrenceDto(form.ShiftId, form.ShiftName, form.ShiftOccurrenceUtc,
                     form.ShiftOccurrenceEndUtc, MapForm(form), zoneId, form.ShiftDeletedUtc.HasValue);
