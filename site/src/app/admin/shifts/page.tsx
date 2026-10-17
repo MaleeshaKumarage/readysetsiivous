@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Title, Button, Table, Modal, TextInput, Select, MultiSelect, Group, Stack, Text, Loader, ActionIcon, NumberInput,
 } from '@mantine/core';
@@ -126,7 +126,24 @@ export default function ShiftsAdminPage() {
     if (status === lifecycle) return;
     closeAssignments(); setTemplateShift(null); setLifecycle(status);
   };
-  const visibleShifts = shifts.filter(s => inLifecycle(s, lifecycle));
+
+  // Performance Optimization: Memoize visible shifts and counts to avoid recalculating
+  // filtered arrays on every component render (e.g., input updates in modals or selection state changes).
+  const visibleShifts = useMemo(
+    () => shifts.filter((s) => inLifecycle(s, lifecycle)),
+    [shifts, lifecycle]
+  );
+
+  const { activeCount, inactiveCount } = useMemo(() => {
+    if (loading) return { activeCount: undefined, inactiveCount: undefined };
+    let active = 0;
+    let inactive = 0;
+    for (const s of shifts) {
+      if (s.isActive) active++;
+      else inactive++;
+    }
+    return { activeCount: active, inactiveCount: inactive };
+  }, [loading, shifts]);
 
   useEffect(() => {
     adminCompanies.list('', 0, 100).then((r) => { if (r) setCompanies(r.items); });
@@ -354,7 +371,7 @@ export default function ShiftsAdminPage() {
       {listError && <Text role="alert" c="red" mb="md">{listError}</Text>}
 
       <LifecycleTabs value={lifecycle} onChange={changeLifecycle} label="Shift activity" disabled={assignBusy || templateSaving}
-        activeCount={loading ? undefined : shifts.filter(s => s.isActive).length} inactiveCount={loading ? undefined : shifts.filter(s => !s.isActive).length}>
+        activeCount={activeCount} inactiveCount={inactiveCount}>
       {loading ? <Loader /> : visibleShifts.length === 0 ? (
         <Text c="dimmed">{shifts.length === 0 ? 'No shifts yet.' : `No ${lifecycle} shifts. Check the ${lifecycle === 'active' ? 'Inactive' : 'Active'} tab.`}</Text>
       ) : (
