@@ -84,6 +84,7 @@ public sealed class ManagerOperations(IShiftRepository shifts, IEmployeeReposito
     public async Task<ManagerShiftResponse> Create(Guid companyId, Guid branchId, string name,
         ShiftSchedule schedule, DateTime? validFrom, DateTime? validUntil, CancellationToken ct)
     {
+        if (!validFrom.HasValue) throw new ValidationException("Shift start date is required.");
         ValidateSchedule(schedule, validFrom, validUntil);
         if (!await ValidParents(companyId, branchId, ct)) throw new NotFoundException("Branch", branchId);
         var result = await mediator.Send(new CreateShiftCommand(companyId, branchId, name, schedule,
@@ -95,6 +96,7 @@ public sealed class ManagerOperations(IShiftRepository shifts, IEmployeeReposito
         bool active, DateTime? validFrom, DateTime? validUntil, CancellationToken ct)
     {
         var shift = await Load(id, ct);
+        validFrom ??= shift.ValidFrom;
         ValidateSchedule(schedule, validFrom, validUntil);
         // Validate before mutation. Retain the same versioned document and all admin-owned fields.
         await new ShiftValidators.UpdateShiftCommandValidator().ValidateAndThrowAsync(new(id, shift.CompanyId, shift.BranchId,

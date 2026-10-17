@@ -32,6 +32,7 @@ public class ShiftValidationTests
             CompanyId: Guid.NewGuid(),
             BranchId: Guid.NewGuid(),
             Name: "Morning Shift",
+            ValidFrom: new DateTime(2026, 10, 17),
             Schedule: new ShiftSchedule
             {
                 Type = ShiftScheduleType.DailySameTime,

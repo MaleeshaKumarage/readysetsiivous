@@ -437,7 +437,6 @@ public class QualityCycleHandlers
                 .Concat(individualAssignments.Select(x => x.ShiftId)).Distinct().ToArray();
             var result = new List<MyShiftOccurrenceDto>();
             var liveShifts = new Dictionary<Guid, Shift?>();
-            var today = TenantTimeZone.LocalDate(_clock.GetUtcNow().UtcDateTime, zone);
 
             foreach (var shiftId in shiftIds)
             {
@@ -456,8 +455,8 @@ public class QualityCycleHandlers
                 }
             }
 
-            // Recorded work belongs to the employee's history even after roster
-            // changes, deactivation or deletion of its original shift.
+            // Preserve personal history after roster changes only while the shift is active.
+            // Deleted/inactive evidence remains available through administrative reports.
             var recorded = await _repository.ListFormsAsync(null, from, to, ct, request.EmployeeId, null, null, null)
                 ?? Array.Empty<QualityCycleForm>();
             foreach (var form in recorded.Where(f => f.EmployeeId == request.EmployeeId
@@ -469,10 +468,7 @@ public class QualityCycleHandlers
                     liveShift = await _shiftRepository.GetAsync(form.ShiftId, ct);
                     liveShifts[form.ShiftId] = liveShift;
                 }
-                // Inactive/deleted shifts are never current work. Only completed
-                // visits on earlier tenant-local dates belong in personal history.
-                if ((liveShift is not { IsActive: true } || form.ShiftDeletedUtc.HasValue)
-                    && (!form.IsSubmitted || TenantTimeZone.LocalDate(form.ShiftOccurrenceUtc, zone) >= today)) continue;
+                if (liveShift is not { IsActive: true } || form.ShiftDeletedUtc.HasValue) continue;
                 var index = result.FindIndex(x => x.ShiftId == form.ShiftId && x.StartUtc == form.ShiftOccurrenceUtc);
                 var occurrence = new MyShiftOccurrenceDto(form.ShiftId, form.ShiftName, form.ShiftOccurrenceUtc,
                     form.ShiftOccurrenceEndUtc, MapForm(form), zoneId, form.ShiftDeletedUtc.HasValue);
