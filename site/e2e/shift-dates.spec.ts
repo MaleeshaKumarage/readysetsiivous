@@ -1,6 +1,23 @@
 import { test, expect } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
 
+test('admin waits for valid scheduling settings before defaulting a new shift date', async ({ page }) => {
+  await setupAdminMocks(page); let zone = 'Invalid/Zone'; let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
+  await page.route(/\/api\/v1\/admin\//, route => route.fulfill({ headers, json: new URL(route.request().url()).pathname.endsWith('/companies') ? { items: [], total: 0 } : [] }));
+  await page.route('**/api/v1/admin/tenant', async route => { await gate; return route.fulfill({ headers, json: { timeZoneId: zone } }); });
+  await page.goto('/admin/shifts/');
+  await expect(page.getByRole('button', { name: 'Add shift', exact: true })).toBeDisabled();
+  release();
+  await expect(page.getByText('Could not load scheduling time zone.', { exact: false })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add shift', exact: true })).toBeDisabled();
+  zone = 'Europe/Helsinki'; await page.reload();
+  await expect(page.getByRole('button', { name: 'Add shift', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Add shift', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Add shift', exact: true }).getByRole('textbox', { name: 'Start date', exact: true })).not.toHaveValue('');
+});
+
 test('admin requires a start date, supports an open end date, and edits the range', async ({ page }) => {
   await setupAdminMocks(page);
   await page.clock.install({ time: new Date('2026-10-17T22:00:00Z') });
@@ -38,6 +55,11 @@ test('admin requires a start date, supports an open end date, and edits the rang
   await page.getByRole('row').filter({ hasText: 'Dated cleaning' }).getByRole('button', { name: 'Edit', exact: true }).click();
   const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
   await expect(edit.getByRole('textbox', { name: 'Start date', exact: true })).toHaveValue('2026-11-01');
+  await edit.getByRole('textbox', { name: 'Start date', exact: true }).fill('');
+  await edit.getByRole('button', { name: 'Save changes' }).click();
+  await expect(edit.getByText('Shift start date is required.')).toBeVisible();
+  expect(writes).toHaveLength(1);
+  await edit.getByRole('textbox', { name: 'Start date', exact: true }).fill('2026-11-01');
   await edit.getByLabel('End date (optional)', { exact: true }).fill('2026-11-30');
   await edit.getByRole('button', { name: 'Save changes' }).click();
   await expect(edit).toHaveCount(0); expect(writes[1].validUntil).toBe('2026-11-30');

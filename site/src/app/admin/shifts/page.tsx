@@ -61,6 +61,7 @@ export default function ShiftsAdminPage() {
   const [lifecycle, setLifecycle] = useState<LifecycleStatus>('active');
   const [listError, setListError] = useState('');
   const [timeZoneId, setTimeZoneId] = useState('Europe/Helsinki');
+  const [schedulingReady, setSchedulingReady] = useState(false);
   const [restoring, setRestoring] = useState<string | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -117,7 +118,12 @@ export default function ShiftsAdminPage() {
   useEffect(() => () => { assignmentGeneration.current++; }, []);
 
   const load = () => adminShifts.list(undefined, undefined, true).then((r) => { if (r) setShifts(r); setLoading(false); });
-  useEffect(() => { load(); adminTenant.get().then(profile => { if (profile?.timeZoneId) setTimeZoneId(profile.timeZoneId); }); }, []);
+  useEffect(() => { load(); adminTenant.get().then(profile => {
+    if (!profile) throw new Error('Could not load scheduling settings. Refresh the page to retry.');
+    const zone = profile.timeZoneId?.trim() || 'Europe/Helsinki';
+    new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(new Date());
+    setTimeZoneId(zone); setSchedulingReady(true);
+  }).catch(() => setListError('Could not load scheduling time zone. Refresh the page or ask a tenant administrator to check its settings.')); }, []);
 
   const closeAssignments = () => {
     assignmentGeneration.current++;
@@ -184,7 +190,7 @@ export default function ShiftsAdminPage() {
     setName(''); setNotes(''); setWeekDays([]); setCompanyId(null); setBranchId(null); setQualityCycleTemplateId(null); setScheduleType('0'); setStart('08:00'); setEnd('17:00'); setWeekParity('1'); setMonthlyDay(1); setDailyTimes({}); setEditingShift(null); setError(''); setModalOpen(false);
   };
 
-  const openCreate = () => { closeModal(); setValidFrom(localInputValue(new Date().toISOString(), timeZoneId).slice(0, 10)); setValidUntil(''); setModalOpen(true); };
+  const openCreate = () => { if (!schedulingReady) return; closeModal(); setValidFrom(localInputValue(new Date().toISOString(), timeZoneId).slice(0, 10)); setValidUntil(''); setModalOpen(true); };
   const openEdit = async (shift: Shift) => {
     const schedule = shift.schedule;
     setEditingShift(shift); setCompanyId(shift.companyId); setBranchId(shift.branchId);
@@ -207,7 +213,7 @@ export default function ShiftsAdminPage() {
   };
 
   const submit = async () => {
-    if (!editingShift && !validFrom) { setError('Shift start date is required.'); return; }
+    if ((!editingShift || editingShift.validFrom) && !validFrom) { setError('Shift start date is required.'); return; }
     if (validFrom && validUntil && validUntil < validFrom) { setError('End date must be on or after the start date.'); return; }
     if (!companyId || !branchId || !name.trim()) { setError('Company, branch and name are required.'); return; }
     if (scheduleType === '2' && weekDays.length === 0) { setError('Select at least one day.'); return; }
@@ -370,7 +376,7 @@ export default function ShiftsAdminPage() {
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
         <Title order={2}>Shifts</Title>
-        <Button leftSection={<Plus size={16} />} onClick={openCreate}>Add shift</Button>
+        <Button leftSection={<Plus size={16} />} disabled={!schedulingReady} onClick={openCreate}>Add shift</Button>
       </Group>
 
       {listError && <Text role="alert" c="red" mb="md">{listError}</Text>}
@@ -532,7 +538,7 @@ export default function ShiftsAdminPage() {
           <Select label="Branch" data={branches.filter(b => b.isActive !== false || b.id === editingShift?.branchId).map((b) => ({ value: b.id, label: `${b.name}${b.isActive === false ? ' (inactive)' : ''}` }))} value={branchId} onChange={v => { setBranchId(v); setQualityCycleTemplateId(null); }} searchable disabled={!companyId} />
           <TextInput label="Name" required value={name} onChange={(e) => setName(e.target.value)} />
           <Group grow>
-            <TextInput label="Start date" type="date" required={!editingShift} value={validFrom} onChange={e => setValidFrom(e.target.value)} />
+            <TextInput label="Start date" type="date" required={!editingShift || Boolean(editingShift.validFrom)} value={validFrom} onChange={e => setValidFrom(e.target.value)} />
             <TextInput label="End date (optional)" type="date" min={validFrom || undefined} value={validUntil} onChange={e => setValidUntil(e.target.value)} />
           </Group>
           <Select label="Schedule" data={SCHEDULE_TYPES} value={scheduleType} onChange={(v) => setScheduleType(v ?? '0')} />

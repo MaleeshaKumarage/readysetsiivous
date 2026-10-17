@@ -96,6 +96,7 @@ public sealed class ManagerOperations(IShiftRepository shifts, IEmployeeReposito
         bool active, DateTime? validFrom, DateTime? validUntil, CancellationToken ct)
     {
         var shift = await Load(id, ct);
+        validFrom ??= shift.ValidFrom;
         ValidateSchedule(schedule, validFrom, validUntil);
         // Validate before mutation. Retain the same versioned document and all admin-owned fields.
         await new ShiftValidators.UpdateShiftCommandValidator().ValidateAndThrowAsync(new(id, shift.CompanyId, shift.BranchId,

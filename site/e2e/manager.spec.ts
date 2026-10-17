@@ -200,6 +200,11 @@ test('manager requires a start date and supports optional end dates', async ({ p
   const card = page.getByRole('article', { name: 'Dated shift', exact: true });
   await card.getByRole('button', { name: 'Edit shift' }).click();
   await expect(page.getByLabel('Start date', { exact: true })).toHaveValue('2026-11-01');
+  await page.getByLabel('Start date', { exact: true }).fill('');
+  await page.getByRole('button', { name: 'Save shift' }).click();
+  expect(state.writes).toHaveLength(1);
+  expect(await page.getByLabel('Start date', { exact: true }).evaluate((input: HTMLInputElement) => input.validity.valueMissing)).toBe(true);
+  await page.getByLabel('Start date', { exact: true }).fill('2026-11-01');
   const end = page.getByLabel('End date (optional)', { exact: true });
   await expect(end).toHaveAttribute('min', '2026-11-01');
   await end.fill('2026-10-31');
@@ -217,6 +222,25 @@ test('manager requires a start date and supports optional end dates', async ({ p
   await page.getByRole('button', { name: 'Save shift' }).click();
   await expect(page.getByLabel('Start date', { exact: true })).toHaveCount(0);
   expect(state.writes[2].validUntil).toBeNull();
+});
+
+test('manager waits for a valid scheduling timezone and retries loading settings', async ({ page }) => {
+  await setup(page); let zone: string | undefined = 'Invalid/Zone'; let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/v1/manager/time-zone', async route => {
+    await gate; return route.fulfill({ headers, json: { timeZoneId: zone } });
+  });
+  await page.goto('/manager/');
+  await expect(page.getByRole('button', { name: 'Add shift', exact: true })).toBeDisabled();
+  release();
+  await expect(page.getByRole('alert').filter({ hasText: 'scheduling time zone is invalid' })).toBeVisible();
+  zone = undefined; await page.getByRole('button', { name: 'Refresh operations' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Could not load scheduling time zone' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add shift', exact: true })).toBeDisabled();
+  zone = 'Europe/Helsinki'; await page.getByRole('button', { name: 'Refresh operations' }).click();
+  await expect(page.getByRole('button', { name: 'Add shift', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Add shift', exact: true }).click();
+  await expect(page.getByLabel('Start date', { exact: true })).not.toHaveValue('');
 });
 
 for (const width of [1280, 390]) test(`manager lifecycle tabs filter locally and clear assignment selections at ${width}px`, async ({ page }) => {

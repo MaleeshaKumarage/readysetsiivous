@@ -199,7 +199,7 @@ public class ShiftHandlers
                 request.Schedule,
                 request.Notes,
                 request.IsActive,
-                request.ValidFrom,
+                request.ValidFrom ?? shift.ValidFrom,
                 request.ValidUntil,
                 request.QualityCycleTemplateId);
             if (shift.QualityCyclePlans.Count > 0 || shift.QualityCycleTemplateId.HasValue)
