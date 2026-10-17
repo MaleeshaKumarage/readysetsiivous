@@ -75,9 +75,13 @@ export default function AgreementsPage() {
   };
 
   const deleteAgreement = async (agreement: AgreementListItem) => {
-    if (!window.confirm(`Permanently delete inactive agreement “${agreement.title}”? Any agreement with a signature is retained.`)) return;
+    const signed = agreement.signedCount > 0 || agreement.status === 'PartiallySigned' || agreement.status === 'Completed';
+    const message = signed
+      ? `Permanently delete signed agreement “${agreement.title}”? Its signing and download links will stop working. This cannot be undone.`
+      : `Permanently delete inactive agreement “${agreement.title}”? This cannot be undone.`;
+    if (!window.confirm(message)) return;
     setLifecycleBusy(agreement.id); setLifecycleError('');
-    try { await adminAgreements.deleteInactive(agreement.id); await load(); }
+    try { await adminAgreements.deleteInactive(agreement.id, signed); await load(); }
     catch (failure) { setLifecycleError(failure instanceof Error ? failure.message : 'Could not delete agreement. Please retry.'); }
     finally { setLifecycleBusy(null); }
   };
@@ -205,7 +209,7 @@ export default function AgreementsPage() {
                       <Button size="xs" variant="light" leftSection={<Eye size={14} />} onClick={() => openDetail(a.id)}>Signers</Button>
                       <Button size="xs" variant="outline" onClick={() => handleDownload(a.id)}>PDF</Button>
                       <Button size="xs" loading={lifecycleBusy === a.id} disabled={!!lifecycleBusy || (!a.isActive && a.status === 'Cancelled')} onClick={() => changeActivity(a)}>{a.isActive ? 'Deactivate' : 'Reactivate'}</Button>
-                      {!a.isActive && <Button size="xs" color="red" variant="subtle" loading={lifecycleBusy === a.id} disabled={!!lifecycleBusy || a.signedCount > 0} title={a.signedCount > 0 ? 'Agreements with signatures are retained.' : undefined} onClick={() => deleteAgreement(a)}>Delete</Button>}
+                      {!a.isActive && <Button size="xs" color="red" variant="subtle" loading={lifecycleBusy === a.id} disabled={!!lifecycleBusy} onClick={() => deleteAgreement(a)}>Delete</Button>}
                       {!a.isActive && a.status === 'Cancelled' && <Text size="xs">Cancelled agreements cannot be reactivated.</Text>}
                     </Group>
                   </Table.Td>

@@ -137,7 +137,7 @@ test('inactive-only employees and agreements show helpful Active empty states', 
   await expect(page.getByText('Old agreement', { exact: true })).toBeVisible();
 });
 
-test('inactive agreements can be deleted when unsigned and signed agreements are retained', async ({ page }) => {
+test('inactive agreements support signed deletion confirmation, cancellation and conflict retry', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   let items = [
     { id: 'unsigned', title: 'Inactive unsigned', code: 'unsigned', status: 'Draft', isActive: false, signerCount: 1, signedCount: 0 },
@@ -145,29 +145,33 @@ test('inactive agreements can be deleted when unsigned and signed agreements are
   ];
   let deleteCalls = 0;
   let retainOnDelete = true;
+  let signedConfirmation = '';
+  let acceptConfirmation = true;
+  const confirmationMessages: string[] = [];
   await page.route('**/api/v1/admin/agreements**', async route => {
     if (new URL(route.request().url()).pathname.endsWith('/legacy-repairs')) return route.fulfill({ headers, json: { agreements: [], companies: [] } });
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
     if (route.request().method() === 'GET') return route.fulfill({ headers, json: items });
     if (route.request().method() === 'DELETE') {
       deleteCalls++;
-      if (retainOnDelete) return route.fulfill({ status: 409, headers, json: { detail: 'Agreements with signatures are retained.' } });
-      items = items.filter(item => item.id !== 'unsigned');
+      if (retainOnDelete) return route.fulfill({ status: 409, headers, json: { detail: 'Agreement changed. Refresh and retry.' } });
+      const url = new URL(route.request().url());
+      if (url.pathname.endsWith('/signed')) signedConfirmation = url.searchParams.get('confirmSigned') ?? '';
+      items = items.filter(item => !url.pathname.endsWith(`/${item.id}`));
       return route.fulfill({ status: 204, headers });
     }
     return route.fulfill({ status: 405, headers });
   });
 
-  page.on('dialog', dialog => dialog.accept());
+  page.on('dialog', dialog => { confirmationMessages.push(dialog.message()); return acceptConfirmation ? dialog.accept() : dialog.dismiss(); });
   await page.goto('/admin/agreements/');
   await page.getByRole('tab', { name: 'Inactive (2)', exact: true }).click();
   const signed = page.getByRole('row').filter({ hasText: 'Inactive partially signed' });
-  await expect(signed.getByRole('button', { name: 'Delete' })).toBeDisabled();
-  await expect(signed.getByRole('button', { name: 'Delete' })).toHaveAttribute('title', 'Agreements with signatures are retained.');
+  await expect(signed.getByRole('button', { name: 'Delete' })).toBeEnabled();
 
   const unsigned = page.getByRole('row').filter({ hasText: 'Inactive unsigned' });
   await unsigned.getByRole('button', { name: 'Delete' }).click();
-  await expect(page.getByText('Agreements with signatures are retained.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Agreement changed. Refresh and retry.', { exact: true })).toBeVisible();
   expect(deleteCalls).toBe(1);
 
   retainOnDelete = false;
@@ -175,4 +179,15 @@ test('inactive agreements can be deleted when unsigned and signed agreements are
   await expect(page.getByText('Inactive unsigned', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Inactive partially signed', { exact: true })).toBeVisible();
   expect(deleteCalls).toBe(2);
+  acceptConfirmation = false;
+  await signed.getByRole('button', { name: 'Delete' }).click();
+  expect(deleteCalls).toBe(2);
+  await expect(signed).toBeVisible();
+  acceptConfirmation = true;
+  await signed.getByRole('button', { name: 'Delete' }).click();
+  await expect(signed).toHaveCount(0);
+  expect(deleteCalls).toBe(3);
+  expect(signedConfirmation).toBe('true');
+  expect(confirmationMessages.at(-1)).toContain('Permanently delete signed agreement');
+  expect(confirmationMessages.at(-1)).toContain('This cannot be undone.');
 });
