@@ -180,6 +180,23 @@ test('manager deletion removes inactive work and its count after refresh while a
   expect(state.adminRequests).toBe(0);
 });
 
+test('manager requires a start date and supports optional end dates', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-10-17T22:00:00Z') });
+  const state = await setup(page); await page.goto('/manager/');
+  await page.getByRole('button', { name: 'Add shift' }).click();
+  await expect(page.getByLabel('Start date', { exact: true })).toHaveValue('2026-10-18');
+  await page.getByLabel('Start date', { exact: true }).fill('');
+  await page.getByRole('button', { name: 'Save shift' }).click();
+  expect(state.writes).toHaveLength(0);
+  await page.getByLabel('Start date', { exact: true }).fill('2026-11-01');
+  await page.getByLabel('Shift name', { exact: true }).fill('Dated shift');
+  await page.getByLabel('Company', { exact: true }).selectOption(company);
+  await page.getByLabel('Branch', { exact: true }).selectOption(branch1);
+  await page.getByRole('button', { name: 'Save shift' }).click();
+  await expect(page.getByRole('article', { name: 'Dated shift', exact: true })).toBeVisible();
+  expect(state.writes[0].validFrom).toBe('2026-11-01'); expect(state.writes[0].validUntil).toBeNull();
+});
+
 for (const width of [1280, 390]) test(`manager lifecycle tabs filter locally and clear assignment selections at ${width}px`, async ({ page }) => {
   await page.setViewportSize({ width, height: 844 });
   const state = await setup(page, { inactiveShift: true }); await page.goto('/manager/');

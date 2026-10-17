@@ -341,8 +341,11 @@ public class CreateShiftCommandHandlerTests
         var assignValidator = new ShiftValidators.AssignEmployeeToShiftCommandValidator();
 
         // Valid create
-        var validCreate = new CreateShiftCommand(Guid.NewGuid(), Guid.NewGuid(), "Shift", _validSchedule);
+        var validCreate = new CreateShiftCommand(Guid.NewGuid(), Guid.NewGuid(), "Shift", _validSchedule, ValidFrom: new DateTime(2026, 10, 17));
         createValidator.TestValidate(validCreate).ShouldNotHaveAnyValidationErrors();
+        createValidator.TestValidate(validCreate with { ValidFrom = null }).ShouldHaveValidationErrorFor(x => x.ValidFrom);
+        createValidator.TestValidate(validCreate with { ValidUntil = new DateTime(2026, 10, 16) }).ShouldHaveValidationErrorFor(x => x.ValidUntil);
+        createValidator.TestValidate(validCreate with { ValidUntil = new DateTime(2026, 10, 17) }).ShouldNotHaveAnyValidationErrors();
 
         // Invalid create with empty company & branch & invalid schedule
         var invalidCreate = new CreateShiftCommand(Guid.Empty, Guid.Empty, "", new ShiftSchedule { Type = ShiftScheduleType.DailySameTime });

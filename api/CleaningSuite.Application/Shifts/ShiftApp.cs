@@ -630,6 +630,9 @@ public class ShiftValidators
     {
         public CreateShiftCommandValidator()
         {
+            RuleFor(x => x.ValidFrom).NotNull().WithMessage("Shift start date is required.");
+            RuleFor(x => x.ValidUntil).Must((command, end) => !end.HasValue || !command.ValidFrom.HasValue
+                || end.Value.Date >= command.ValidFrom.Value.Date).WithMessage("End date must be on or after the start date.");
             RuleFor(x => x.CompanyId).NotEqual(Guid.Empty);
             RuleFor(x => x.BranchId).NotEqual(Guid.Empty);
             RuleFor(x => x.Name).NotEmpty().WithMessage("Shift name is mandatory.");
