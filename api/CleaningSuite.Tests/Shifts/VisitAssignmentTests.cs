@@ -110,6 +110,26 @@ public class VisitAssignmentTests
     }
 
     [Fact]
+    public async Task Reports_apply_cross_month_moves_cancellation_extras_and_team_overrides_once()
+    {
+        var s = new Setup(); var from = Start.Date; var to = from.AddMonths(1);
+        s.Shift.CreatedUtc = from.AddDays(-30); s.Shift.ValidUntil = to;
+        var original = Start; var destination = from.AddMonths(1).AddHours(12);
+        s.Exceptions.Add(ShiftOccurrenceException.Create(s.Shift.Id, original, destination, destination.AddHours(2), ShiftOccurrenceExceptionStatus.Moved, "Move"));
+        s.Exceptions.Add(ShiftOccurrenceException.Create(s.Shift.Id, Start.AddDays(1), Start.AddDays(1), Start.AddDays(1).AddHours(2), ShiftOccurrenceExceptionStatus.CustomerCancelled, "Closed"));
+        var extra = ShiftOccurrenceException.Create(s.Shift.Id, null, Start.AddHours(3), Start.AddHours(4), ShiftOccurrenceExceptionStatus.Extra, "Extra"); s.Exceptions.Add(extra);
+        s.Overrides.Add(ShiftOccurrenceAssignment.Create(s.Shift.Id, Start, null, OccurrenceAssignmentMode.Replace, [s.B], "Cover moved visit"));
+        s.Overrides.Add(ShiftOccurrenceAssignment.Create(s.Shift.Id, null, extra.Id, OccurrenceAssignmentMode.Add, [s.B], "Extra team"));
+        var zone = TimeZoneInfo.Utc;
+        var first = await CleaningSuite.Application.QualityCycle.QualityCycleOccurrences.ResolvedInWindowAsync(s.Shifts.Object, s.Shift, from, to, zone, default);
+        Assert.DoesNotContain(first, x => x.Occurrence.StartUtc == original || x.Occurrence.StartUtc == original.AddDays(1));
+        Assert.Equal(2, first.Single(x => x.Occurrence.StartUtc == extra.StartUtc).EmployeeIds.Count);
+        var next = await CleaningSuite.Application.QualityCycle.QualityCycleOccurrences.ResolvedInWindowAsync(s.Shifts.Object, s.Shift, to, to.AddDays(1), zone, default);
+        var moved = next.Single(x => x.Occurrence.StartUtc == destination);
+        Assert.Equal(s.B, Assert.Single(moved.EmployeeIds)); Assert.Equal(s.Shift.BranchId, moved.Plan.BranchId);
+    }
+
+    [Fact]
     public async Task Overlap_rejects_entire_team_but_adjacent_visits_are_allowed()
     {
         var s = new Setup(); var extra = ShiftOccurrenceException.Create(s.Shift.Id, null, Start, Start.AddHours(2), ShiftOccurrenceExceptionStatus.Extra, "Extra", s.B); s.Exceptions.Add(extra);

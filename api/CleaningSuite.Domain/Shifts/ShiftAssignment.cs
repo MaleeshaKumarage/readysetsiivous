@@ -38,7 +38,7 @@ public class ShiftAssignment : BaseDocument
 
     public void BeginFrom(DateTime boundaryUtc, DateTime nowUtc, string reason)
     {
-        if (Periods.Count == 0 && (IsActive || UnassignedAtUtc.HasValue)) EnsureHistory();
+        if (Periods.Count == 0 && AssignedAtUtc < boundaryUtc && (IsActive || UnassignedAtUtc.HasValue)) EnsureHistory();
         if (!Periods.Any(p => p.FromUtc <= boundaryUtc && !p.ToUtc.HasValue))
             Periods.Add(new() { FromUtc = boundaryUtc });
         IsActive = true; UnassignedAtUtc = null; Note = reason; UpdatedUtc = nowUtc;
