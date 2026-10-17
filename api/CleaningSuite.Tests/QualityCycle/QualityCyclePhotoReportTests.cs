@@ -112,14 +112,16 @@ public class QualityCyclePhotoReportTests
     [Fact]
     public async Task Report_projects_submitted_evidence_and_public_snapshot_retains_evidence_but_redacts_forms()
     {
-        var company = Company.Create("7654321-0", "AAA"); var branch = Branch.Create(company.Id, "AAA1");
+        var company = Company.Create("7654321-0", "AAA"); var branch = Branch.Create(company.Id, "AAA1", "Siivouskatu 12", "00100", "Helsinki", "Finland");
         var shift = Shift.Create(company.Id, branch.Id, "Weekday shift", new() { Type = ShiftScheduleType.DailySameTime,
             DailyStart = TimeSpan.FromHours(23.5), DailyEnd = TimeSpan.FromHours(23.75) }, null, null, null);
         shift.CreatedUtc = Start.AddMonths(-1);
         var submitted = Form(); submitted.ShiftId = shift.Id; submitted.CompanyId = company.Id; submitted.BranchId = branch.Id;
         submitted.Submit(new() { new() { ItemText = "Corridor", IsChecked = true } }, null, "  Corridor cleaned  ", new() { new(Photo(SKColors.Blue, 200, 400), "Corridor photo note") });
+        submitted.StartedAtUtc = Start; submitted.EndedAtUtc = Start.AddHours(2);
         var note = Form(); note.ShiftId = shift.Id; note.CompanyId = company.Id; note.BranchId = branch.Id;
         note.Submit(new() { new() { ItemText = "Corridor" } }, null, "Notes without a photo");
+        note.StartedAtUtc = Start; note.EndedAtUtc = null;
         var draft = Form(); draft.ShiftId = shift.Id; draft.CompanyId = company.Id; draft.BranchId = branch.Id; draft.CleanerNotes = "DRAFT NOTE";
         var shifts = new Mock<IShiftRepository>(); var forms = new Mock<IQualityCycleRepository>();
         var companies = new Mock<ICompanyRepository>(); var branches = new Mock<IBranchRepository>();
@@ -134,6 +136,8 @@ public class QualityCyclePhotoReportTests
         var service = new QualityCycleMonthlyReportService(shifts.Object, forms.Object, companies.Object, branches.Object, profiles.Object, context.Object, new Clock());
         var report = await service.BuildAsync(new(2026, 10, BranchId: branch.Id, ShiftId: shift.Id), default);
         var row = Assert.Single(report.Shifts); Assert.Equal(2, row.Evidence.Count);
+        Assert.Equal(2m, row.RecordedStaffHours); Assert.Equal(1, row.IncompleteTimingRecords);
+        Assert.Equal("Siivouskatu 12, 00100 Helsinki, Finland", row.BranchAddress);
         Assert.Contains(row.Evidence, x => x.Note == "Corridor cleaned" && x.Photos.Count == 1 && x.PhotoUrls.Count == 0 && x.StartUtc == Start);
         Assert.Contains(row.Evidence, x => x.Note == "Notes without a photo" && x.PhotoUrls.Count == 0);
         Assert.DoesNotContain(row.Evidence, x => x.Note == "DRAFT NOTE");
@@ -151,6 +155,9 @@ public class QualityCyclePhotoReportTests
         Assert.DoesNotContain("CHANGED AFTER SHARE", saved.ReportJson); Assert.DoesNotContain("CHANGED CAPTION", saved.ReportJson);
         var snapshot = JsonSerializer.Deserialize<QualityCycleMonthlyReport>(saved.ReportJson)!;
         Assert.Equal(2, snapshot.Shifts[0].Evidence.Count); Assert.Empty(snapshot.Shifts[0].Forms);
+        Assert.Equal(row.RecordedStaffHours, snapshot.Shifts[0].RecordedStaffHours);
+        Assert.Equal(row.IncompleteTimingRecords, snapshot.Shifts[0].IncompleteTimingRecords);
+        Assert.Equal(row.WorkRecords, snapshot.Shifts[0].WorkRecords);
         Assert.Equal(3, Conversion.GetPageCount(new QualityCyclePdfGenerator().GenerateMonthlyReportPdf(snapshot)));
         forms.Setup(x => x.GetReportShareByTokenAsync(saved.Token, default)).ReturnsAsync(saved);
         var sharedPdf = await new GetSharedQualityCycleReportPdfHandler(forms.Object, new QualityCyclePdfGenerator(), new Clock()).Handle(new(saved.Token), default);
@@ -199,7 +206,9 @@ public class QualityCyclePhotoReportTests
         var dense = PhotoWithDimensions(6500, 6500);
         var pdf = new QualityCyclePdfGenerator().GenerateMonthlyReportPdf(Report(new QualityCycleEvidenceReport(Start, Start.AddHours(2), "Large historical photos", new[] { oversized, huge, dense })));
         Assert.Equal(4, Conversion.GetPageCount(pdf));
-        Assert.DoesNotContain("/Subtype /Image", System.Text.Encoding.Latin1.GetString(pdf));
+        var baseline = new QualityCyclePdfGenerator().GenerateMonthlyReportPdf(Report());
+        Assert.Equal(System.Text.RegularExpressions.Regex.Matches(System.Text.Encoding.Latin1.GetString(baseline), "/Subtype /Image").Count * Conversion.GetPageCount(pdf),
+            System.Text.RegularExpressions.Regex.Matches(System.Text.Encoding.Latin1.GetString(pdf), "/Subtype /Image").Count); // only the embedded brand logo
     }
 
     [Theory]

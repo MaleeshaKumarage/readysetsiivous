@@ -437,3 +437,15 @@ Reactivation cases REACT-001 through REACT-008: see [reactivation workflow](../f
 | VISIT-011 | API/UI | Deactivate/delete a shift with completed historical forms | No personal tab shows that shift; admin historical evidence retained |
 
 Contracts: [visit assignees](../features/visit-assignees.md), [personal calendar](../features/personal-shift-calendar.md).
+
+## Branded report timing and snapshots
+
+| ID | Layer | Setup/action | Observable result |
+| --- | --- | --- | --- |
+| PDF-BRAND-001 | Report/PDF | Two cleaners each submit two actual hours for one two-hour visit | Scheduled hours2; recorded staff hours4; no elapsed-window inference |
+| PDF-BRAND-002 | Report/PDF | One valid pair, one missing end, duplicate form IDs, reversed timestamps | Deduplicated valid sum; incomplete count visible; no valid pair is Not available rather than0 |
+| PDF-BRAND-003 | Share/PDF | Create public link from internally timed report; edit source afterward | Same captured safe timing totals; no structured cleaner/form identity or QC tokens; no live refresh |
+| PDF-BRAND-004 | PDF | Old snapshot lacks timing/address fields; empty month; long table and Finnish text | Explicit unavailable/fallback; branded empty state; complete pagination with repeated headings and Page X of Y |
+| PDF-BRAND-005 | PDF | Portrait/landscape photos, per-photo notes, long notes, invalid historical image | Aspect ratio retained; no crop; notes paginate; safe unavailable placeholder; common appendix footer |
+
+Contract: [branded quality reports](../features/branded-quality-reports.md).
