@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Moq;
 using CleaningSuite.Application.QualityCycle;
 using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Infrastructure.QualityCycle;
@@ -54,6 +55,40 @@ public class BrandedQualityReportTests
         Assert.Null(unavailable.StaffHours); Assert.Equal(2, unavailable.IncompleteRecords);
         Assert.Null(QualityCycleWorkProjection.FromForms([]).StaffHours);
     }
+    [Fact]
+    public async Task Same_time_extra_with_a_separate_crew_counts_as_a_separate_visit_but_one_activity_day()
+    {
+        var company = new CleaningSuite.Domain.Companies.Company { Id = Guid.NewGuid(), IsActive = true };
+        var branch = new CleaningSuite.Domain.Companies.Branch { Id = Guid.NewGuid(), CompanyId = company.Id, IsActive = true };
+        var shift = CleaningSuite.Domain.Shifts.Shift.Create(company.Id, branch.Id, "Daily", new() {
+            Type = CleaningSuite.Domain.Shifts.ShiftScheduleType.DailySameTime, DailyStart = TimeSpan.FromHours(8), DailyEnd = TimeSpan.FromHours(10) }, null, Start.Date, Start.Date, Guid.NewGuid());
+        shift.CreatedUtc = Start.AddMonths(-1);
+        var a = Guid.NewGuid(); var b = Guid.NewGuid();
+        var forms = new[] { a, b }.Select(id => {
+            var form = QualityCycleForm.Create(shift.Id, shift.Name, id, "Cleaner", shift.QualityCycleTemplateId!.Value, "Activities", Start, ["Corridor"], Start.AddHours(2));
+            form.CompanyId = company.Id; form.BranchId = branch.Id; form.IsSubmitted = true; form.Items[0].IsChecked = true;
+            form.StartedAtUtc = Start; form.EndedAtUtc = Start.AddHours(2); return form;
+        }).ToArray();
+        var shifts = new Moq.Mock<CleaningSuite.Application.Shifts.IShiftRepository>();
+        shifts.Setup(x => x.GetAsync(shift.Id, Moq.It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+        shifts.Setup(x => x.ListAssignmentHistoryAsync(shift.Id, Moq.It.IsAny<CancellationToken>())).ReturnsAsync(new[] {
+            new CleaningSuite.Domain.Shifts.ShiftAssignment { ShiftId = shift.Id, EmployeeId = a, IsActive = true, AssignedAtUtc = Start.AddDays(-1) } });
+        shifts.Setup(x => x.ListOccurrenceExceptionsAsync(shift.Id, Moq.It.IsAny<DateTime>(), Moq.It.IsAny<DateTime>(), Moq.It.IsAny<CancellationToken>())).ReturnsAsync(new[] {
+            CleaningSuite.Domain.Shifts.ShiftOccurrenceException.Create(shift.Id, null, Start, Start.AddHours(2), CleaningSuite.Domain.Shifts.ShiftOccurrenceExceptionStatus.Extra, "Extra crew", b) });
+        var repository = new Moq.Mock<IQualityCycleRepository>();
+        repository.Setup(x => x.ListFormsAsync(shift.Id, Moq.It.IsAny<DateTime?>(), Moq.It.IsAny<DateTime?>(), Moq.It.IsAny<CancellationToken>())).ReturnsAsync(forms);
+        var companies = new Moq.Mock<CleaningSuite.Application.Companies.ICompanyRepository>(); companies.Setup(x => x.GetAsync(company.Id, Moq.It.IsAny<CancellationToken>())).ReturnsAsync(company);
+        var branches = new Moq.Mock<CleaningSuite.Application.Companies.IBranchRepository>(); branches.Setup(x => x.GetAsync(branch.Id, Moq.It.IsAny<CancellationToken>())).ReturnsAsync(branch);
+        var profiles = new Moq.Mock<CleaningSuite.Application.Tenants.ITenantProfileRepository>(); profiles.Setup(x => x.GetAsync(Moq.It.IsAny<string>(), Moq.It.IsAny<CancellationToken>())).ReturnsAsync(new CleaningSuite.Domain.Tenants.TenantProfile { TimeZoneId = "UTC" });
+        var tenant = new Moq.Mock<CleaningSuite.Application.Tenants.ITenantContext>(); tenant.SetupGet(x => x.TenantId).Returns("test");
+        var report = await new QualityCycleMonthlyReportService(shifts.Object, repository.Object, companies.Object, branches.Object, profiles.Object, tenant.Object, TimeProvider.System)
+            .BuildAsync(new(2026, 10, ShiftId: shift.Id), default);
+        var result = Assert.Single(report.Shifts);
+        Assert.Equal(2, result.ScheduledOccurrences); Assert.Equal(4m, result.ScheduledHours);
+        Assert.Equal(2, result.CompletedOccurrences); Assert.Equal(2, result.TotalTasks);
+        Assert.Equal(2, Assert.Single(result.Items).RecordedOccurrences); Assert.Equal(1, Assert.Single(result.Items).DaysPerformed);
+    }
+
     [Fact]
     public async Task Reports_render_timing_address_long_tables_empty_and_legacy_snapshots()
     {

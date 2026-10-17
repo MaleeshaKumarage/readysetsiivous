@@ -9,3 +9,5 @@ Scheduled hours describe visit duration. Recorded staff hours sum valid actual s
 New report snapshots include public-safe work timing rows and totals alongside existing approved evidence. Work rows contain no employee identity, form ID or QC token. Sharing still removes private Forms and retains the 30-day expiry/revocation behavior. Earlier snapshots render their captured content with new styling; absent address/timing fields remain unavailable and are never rebuilt from current data.
 
 Validation includes deduplication, two-cleaner totals, partial and invalid timings, public/internal aggregate parity, Finnish text, long tables, legacy/empty snapshots, safe image decoding and portrait/landscape photo appendices. PDF creation, downloads and sharing retain the existing tenant-admin authorization.
+
+A scheduled visit and an extra visit with a different crew remain separate report rows even when they start together. Their visit/hour counts stay separate; an activity performed on both still contributes one distinct calendar day.

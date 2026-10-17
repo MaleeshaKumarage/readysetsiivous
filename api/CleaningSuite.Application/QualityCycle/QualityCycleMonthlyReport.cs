@@ -109,24 +109,33 @@ public class QualityCycleMonthlyReportService(IShiftRepository shifts, IQualityC
                 var times = groupPlans.Select(x => x.Occurrence.StartUtc)
                     .Concat(groupForms.Where(f => f.IsSubmitted).Select(f => f.ShiftOccurrenceUtc)).Distinct().OrderBy(x => x);
                 var rows = new List<QualityCycleOccurrenceReport>();
+                var workByVisit = new List<IReadOnlyList<QualityCycleForm>>();
                 var missingTasks = 0; var pendingTasks = 0;
                 foreach (var time in times)
                 {
-                    var expected = groupPlans.FirstOrDefault(x => x.Occurrence.StartUtc == time);
-                    var assignedEmployees = (expected.EmployeeIds ?? Array.Empty<Guid>()).ToHashSet();
-                    var matching = groupForms.Where(f => f.ShiftOccurrenceUtc == time && (f.IsSubmitted || assignedEmployees.Contains(f.EmployeeId)))
-                        .GroupBy(f => f.EmployeeId).Select(g => g.OrderByDescending(f => f.IsSubmitted).First()).ToList();
-                    var end = expected.Occurrence?.EndUtc ?? matching.Max(f => f.ShiftOccurrenceEndUtc);
-                    var employees = assignedEmployees
-                        .Concat(matching.Select(f => f.EmployeeId)).Distinct().ToList();
-                    var submitted = matching.Count(f => f.IsSubmitted);
-                    var remaining = Math.Max(0, employees.Count - submitted);
-                    var completed = employees.Count > 0 && remaining == 0;
-                    var status = completed ? "Recorded"
-                        : end <= now ? "Missing" : "Pending";
-                    if (status == "Missing") missingTasks += remaining;
-                    if (status == "Pending") pendingTasks += remaining;
-                    rows.Add(new(time, end, employees.Count, submitted, status));
+                    // Stable visits may share a start time with different crews. Keep each
+                    // planned visit separate instead of collapsing an extra into the schedule.
+                    var expectations = groupPlans.Where(x => x.Occurrence.StartUtc == time).ToList();
+                    if (expectations.Count == 0) expectations.Add(default);
+                    for (var visitIndex = 0; visitIndex < expectations.Count; visitIndex++)
+                    {
+                        var expected = expectations[visitIndex];
+                        var assignedEmployees = (expected.EmployeeIds ?? Array.Empty<Guid>()).ToHashSet();
+                        var matching = groupForms.Where(f => f.ShiftOccurrenceUtc == time
+                            && (assignedEmployees.Contains(f.EmployeeId) || (f.IsSubmitted && visitIndex == 0
+                                && !expectations.Any(p => p.EmployeeIds is not null && p.EmployeeIds.Contains(f.EmployeeId)))))
+                            .GroupBy(f => f.EmployeeId).Select(g => g.OrderByDescending(f => f.IsSubmitted).First()).ToList();
+                        var end = expected.Occurrence?.EndUtc ?? matching.Max(f => f.ShiftOccurrenceEndUtc);
+                        var employees = assignedEmployees.Concat(matching.Select(f => f.EmployeeId)).Distinct().ToList();
+                        var submitted = matching.Count(f => f.IsSubmitted);
+                        var remaining = Math.Max(0, employees.Count - submitted);
+                        var completed = employees.Count > 0 && remaining == 0;
+                        var status = completed ? "Recorded" : end <= now ? "Missing" : "Pending";
+                        if (status == "Missing") missingTasks += remaining;
+                        if (status == "Pending") pendingTasks += remaining;
+                        rows.Add(new(time, end, employees.Count, submitted, status));
+                        workByVisit.Add(matching);
+                    }
                 }
                 var displayedForms = groupForms.Where(f => rows.Any(r => r.StartUtc == f.ShiftOccurrenceUtc))
                     .Select(QualityCycleHandlers.MapForm).ToList();
@@ -137,8 +146,8 @@ public class QualityCycleMonthlyReportService(IShiftRepository shifts, IQualityC
                     if (template is not null) foreach (var item in template.Items) labels.Add(item);
                 }
                 var itemReports = labels.OrderBy(x => x).Select(label => {
-                    var performed = groupForms.Where(f => f.IsSubmitted && f.Items.Any(i => i.ItemText == label && i.IsChecked))
-                        .Select(f => f.ShiftOccurrenceUtc).Distinct().ToList();
+                    var performed = workByVisit.Where(visit => visit.Any(f => f.IsSubmitted && f.Items.Any(i => i.ItemText == label && i.IsChecked)))
+                        .Select(visit => visit.First().ShiftOccurrenceUtc).ToList();
                     var dates = performed.Select(time => TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(time, DateTimeKind.Utc), zone).ToString("yyyy-MM-dd"))
                         .Distinct().OrderBy(x => x).ToList();
                     return new QualityCycleItemReport(label, performed.Count, dates.Count, dates);
