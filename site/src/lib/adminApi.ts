@@ -455,7 +455,7 @@ export interface ShiftOccurrence {
   employeeId?: string | null;
   assigneeIds?: string[]; assignmentSource?: string; assignmentMode?: number | null;
   assignmentVersion?: string | null; overrideEmployeeIds?: string[];
-  assignmentReason?: string | null; rosterVersion?: string;
+  assignmentReason?: string | null; rosterVersion?: string; canAssign?: boolean; assignmentLockReason?: string | null;
 }
 
 export interface ShiftOccurrenceExceptionInput {

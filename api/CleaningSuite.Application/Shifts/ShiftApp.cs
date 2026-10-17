@@ -43,6 +43,8 @@ public record ShiftOccurrenceDto(DateTime StartUtc, DateTime EndUtc,
     public IReadOnlyList<Guid> OverrideEmployeeIds { get; init; } = Array.Empty<Guid>();
     public string? AssignmentReason { get; init; }
     public string RosterVersion { get; init; } = "";
+    public bool CanAssign { get; init; } = true;
+    public string? AssignmentLockReason { get; init; }
 }
 
 public record SaveShiftOccurrenceExceptionCommand(Guid ShiftId, Guid? Id,
@@ -333,12 +335,14 @@ public class ShiftHandlers
         private readonly IShiftRepository _repository;
         private readonly ITenantProfileRepository? _profiles;
         private readonly ITenantContext? _tenant;
+        private readonly IQualityCycleRepository? _forms;
+        private readonly TimeProvider _clock;
 
-        public GetShiftOccurrencesQueryHandler(IShiftRepository repository, ITenantProfileRepository? profiles = null, ITenantContext? tenant = null)
+        public GetShiftOccurrencesQueryHandler(IShiftRepository repository, ITenantProfileRepository? profiles = null, ITenantContext? tenant = null, IQualityCycleRepository? forms = null, TimeProvider? clock = null)
         {
             _repository = repository;
             _profiles = profiles;
-            _tenant = tenant;
+            _tenant = tenant; _forms = forms; _clock = clock ?? TimeProvider.System;
         }
 
         public async Task<IReadOnlyList<ShiftOccurrenceDto>> Handle(GetShiftOccurrencesQuery request, CancellationToken ct)
@@ -355,7 +359,16 @@ public class ShiftHandlers
             var localTo = TenantTimeZone.LocalDate(to, zone);
             var roster = await _repository.ResolveRosterAsync(shift, TenantTimeZone.StartOfLocalDay(localFrom, zone),
                 TenantTimeZone.StartOfLocalDay(localTo.AddDays(1), zone), zone, ct, includeCancelled: true);
-            return roster.Select(ShiftRosterReader.ToDto).ToList();
+            var saved = _forms is null ? [] : await _forms.ListFormsAsync(shift.Id, null, null, ct) ?? [];
+            var today = TenantTimeZone.LocalDate(_clock.GetUtcNow().UtcDateTime, zone);
+            return roster.Select(entry => {
+                var reason = entry.IsCancelled ? "Restore the cancelled visit before assigning employees."
+                    : TenantTimeZone.LocalDate(entry.Occurrence.StartUtc, zone) < today ? "Past visits cannot be reassigned."
+                    : saved.Any(f => (f.IsSubmitted || f.StartedAtUtc.HasValue)
+                        && (f.ShiftOccurrenceUtc == entry.Occurrence.StartUtc || f.ShiftOccurrenceUtc == entry.OriginalStartUtc))
+                        ? "Started or completed work cannot be reassigned." : null;
+                return ShiftRosterReader.ToDto(entry) with { CanAssign = reason is null, AssignmentLockReason = reason };
+            }).ToList();
         }
     }
 

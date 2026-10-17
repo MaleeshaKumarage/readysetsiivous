@@ -490,10 +490,10 @@ export default function ShiftsAdminPage() {
                 <Table.Td>{new Date(item.endUtc).toLocaleString(undefined, { timeZone: timeZoneId })}</Table.Td>
                 <Table.Td>{item.status ? OCCURRENCE_STATUSES.find(x => x.value === String(item.status))?.label : 'Scheduled'}</Table.Td>
                 <Table.Td><Text size="sm">{(item.assigneeIds ?? []).map(employeeName).join(', ') || 'Unassigned'}</Text>
-                  <Text size="xs" c="dimmed">{item.assignmentSource ?? 'Recurring'}</Text></Table.Td>
+                  <Text size="xs" c="dimmed">{item.assignmentSource ?? 'Recurring'}</Text>{item.assignmentLockReason && <Text size="xs" c="dimmed">{item.assignmentLockReason}</Text>}</Table.Td>
                 <Table.Td>{item.reason ?? '—'}</Table.Td>
                 <Table.Td><Group gap={4} wrap="nowrap">
-                  <Button size="xs" variant="light" disabled={item.status === 2 || item.status === 3} onClick={() => setAssigningVisit(item)}>Assign</Button>
+                  <Button size="xs" variant="light" disabled={item.canAssign === false || item.status === 2 || item.status === 3} onClick={() => setAssigningVisit(item)}>Assign</Button>
                   <Button size="xs" variant="subtle" onClick={() => openOccurrenceEditor(item)}>Change</Button>
                   {!item.exceptionId && <Button size="xs" variant="subtle" color="orange" onClick={() => openOccurrenceEditor(item, '2')}>Cancel</Button>}
                   {item.exceptionId && <Button size="xs" variant="subtle" color="red" loading={occurrenceSaving} onClick={() => restoreOccurrence(item)}>{item.status === 4 ? 'Delete extra' : 'Restore'}</Button>}
