@@ -60,7 +60,8 @@ test families, not proof that those tests are currently implemented.
 | Agreements | Copy signer links/mailto/document download | Token/file APIs | Yes | Actual email dispatch absent; distinguish client mailto from delivered invitation | AGR-007/012 |
 | Agreements | Add/remove persisted signer | Yes | None | Add in agreement detail only after signed-signer/completion policy is defined | AGR-008/009 |
 | Agreements | Cancel/activate/deactivate | Yes | None | Add state-aware actions; fix conflict500 and document access policy | AGR-010, SIGN-004/005 |
-| Agreements | Replace PDF/title after creation, hard-delete | None | None | Separate decision; signed artifacts should not become generic editable CRUD | AGR-008/009, SIGN-014 |
+| Agreements | Replace PDF/title after creation | None | None | Signed artifacts remain locked for editing | AGR-008/009, SIGN-014 |
+| Agreements | Delete inactive unsigned or signed agreement | Yes | Yes | Tenant admin only; explicit signed confirmation required, active deletion rejected; see lifecycle-list-tabs.md (2026-10-17 policy) | LIFE-002 |
 | Public signing | Preview/draw/type/sign/completion/download | Yes | Yes | Same-token file race, corrupt image validation and recovery require BE integration | SIGN-001–016 |
 | Invoices | Create/list/detail/mark-paid/void/PDF | Yes | None | Add Billing workspace; guards, permission scope and parallel-create protection first | INV-001–007 |
 | Invoices | Edit issued document/draft CRUD/hard-delete | None beyond domain Draft constant | None | Decide invoicing policy; do not infer APIs from a status constant | INV-005 |

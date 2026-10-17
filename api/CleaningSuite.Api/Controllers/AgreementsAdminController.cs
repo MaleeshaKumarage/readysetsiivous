@@ -107,8 +107,8 @@ public class AgreementsAdminController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
-    { await _mediator.Send(new DeleteAgreementCommand(id), ct); return NoContent(); }
+    public async Task<IActionResult> Delete(Guid id, [FromQuery] bool confirmSigned = false, CancellationToken ct = default)
+    { await _mediator.Send(new DeleteAgreementCommand(id, confirmSigned), ct); return NoContent(); }
 }
 
 public sealed record RepairLegacyAgreementAssociationRequest(Guid CompanyId, Guid ExpectedVersion);

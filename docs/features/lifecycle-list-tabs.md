@@ -16,7 +16,7 @@ Checklist-template activity tabs affect only the template list. Editing an inact
 
 Each inactive record now has a Delete action. The API requires the record to be inactive and checks references before removing it. A conflict response explains why the record must stay. Companies with branches or business records, branches with shift/checklist history, shifts with assignments or forms, employees with work history, services used by bookings, and templates referenced by shifts/forms are retained. Employee profiles linked to a Keycloak login are retained; deleting a profile does not silently delete an external identity.
 
-Agreements containing any signature, a signed PDF, or a partially/completely signed status are never deleted. Draft or cancelled unsigned inactive agreements can be deleted. Signed PDFs and signer evidence are preserved. Deleting an unsigned agreement removes the tenant record; its local source file may remain on disk for later storage cleanup.
+Policy updated by explicit user approval on 2026-10-17: tenant admins can delete inactive agreements, including partially or fully signed agreements. The confirmation identifies signed agreements and warns that signing/download links stop working and the action cannot be undone. Signed deletion requires `confirmSigned=true` at the API boundary; active agreements must first be deactivated. Deletion removes the tenant record; local artifacts may remain on disk under the existing storage cleanup behavior. Filtering and reactivation never delete or rewrite evidence.
 
 Delete is tenant-admin-only for admin lists. Tenant-wide managers can delete inactive shifts through the manager API; the same shift history guard applies. Active records must first be deactivated. UI confirmation is required, while API checks remain authoritative against direct requests and stale pages.
 
@@ -28,5 +28,5 @@ Delete is tenant-admin-only for admin lists. Tenant-wide managers can delete ina
 - Shift create from Inactive returns to Active; deactivation/restoration transitions; delayed assignment responses after tab changes are ignored.
 - Companies beyond the first100 records, missing/failed/inconsistent pages, fresh retries and scoped branch tabs.
 - Service activation/deactivation, inactive-template edit preserving scope, create returning to Active, and unchanged report/submission navigation.
-- Inactive Delete actions for every lifecycle list; active-record rejection; referenced-record conflict messages; clean records disappear after deletion; signed/partially signed agreements remain protected; linked-login employees remain retained.
+- Inactive Delete actions for every lifecycle list; active-record rejection; referenced-record conflict messages; clean records disappear after deletion; signed/partially signed agreements require explicit deletion confirmation; canceling confirmation sends no request; linked-login employees remain retained.
 - Desktop/mobile, empty selected tab, all-empty initial state and existing permission denials.

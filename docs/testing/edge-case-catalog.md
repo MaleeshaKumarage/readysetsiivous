@@ -16,7 +16,7 @@ Lifecycle tab additions (2026-10-14), see [behavior and browser coverage](../fea
 | ID | Layer | Trigger | Expected result |
 | --- | --- | --- | --- |
 | LIFE-001 | P1 UI | Mixed active/inactive records on every supported management list | Active default; exclusive isActive filtering, accurate full-list counts; local switching adds no reads. |
-| LIFE-002 | P0 UI | Completed/partially signed agreements in either lifecycle | Visible in matching tab; signer details/PDF downloads retained; no cleanup, deletion or mutation. |
+| LIFE-002 | P0 UI/API | Completed/partially signed agreements in either lifecycle | Tab filtering preserves signer details/PDF downloads. Tenant admins may explicitly delete inactive signed agreements after confirmation; API requires confirmSigned=true; active deletion rejected; canceled confirmation sends no request. Policy updated 2026-10-17. |
 | LIFE-003 | P1 UI | Create from Inactive; deactivate/reactivate through existing actions | Create returns Active; records move to matching tab after successful reload. Permissions and existing actions preserved. |
 | LIFE-004 | P1 UI | Inactive employees in management and active assignment selector | Management exposes inactive rows; inactive invite/deactivate actions absent; assignment options remain active-only. |
 | LIFE-005 | P1 UI | Company after page100; failed/empty/changing-total/duplicate page | Complete validated pagination before counts/filtering; failed/inconsistent data shows error and fresh Refresh retry, no misleading partial list. |
