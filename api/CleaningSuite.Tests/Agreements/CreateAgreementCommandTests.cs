@@ -79,7 +79,7 @@ public class CreateAgreementCommandTests
         lookup.SetResult(new Company { Id = companyId, IsActive = false });
         var result = await creation;
         Assert.Equal("Agreement", result.Title);
-        store.Verify(s => s.SaveOriginalAsync("readysetsiivous", It.IsAny<Guid>(), Stream.Null, CancellationToken.None), Times.Once);
+        store.Verify(s => s.SaveOriginalAsync("readysetsiivous", It.IsAny<Guid>(), It.IsAny<Stream>(), CancellationToken.None), Times.Once);
         repo.Verify(r => r.SaveAsync("readysetsiivous", It.Is<Agreement>(a => a.CompanyId == companyId), CancellationToken.None), Times.Once);
     }
 

@@ -120,6 +120,11 @@ public sealed class UploadContentValidator : IUploadContentValidator
         try
         {
             if (bytes.Length == 0) Invalid(field, "The image is empty.");
+            // Skia can decode all pixels even when the PNG end chunk was cut off.
+            // Require the complete mandatory IEND chunk before accepting the file.
+            if (expectedFormat == SKEncodedImageFormat.Png
+                && (bytes.Length < 12 || !bytes[^12..].SequenceEqual(new byte[] { 0, 0, 0, 0, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82 })))
+                Invalid(field, "The PNG image is truncated or corrupt.");
 
             using var data = SKData.CreateCopy(bytes.ToArray());
             using var codec = SKCodec.Create(data);
