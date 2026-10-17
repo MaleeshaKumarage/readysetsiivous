@@ -7,6 +7,47 @@ const headers = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
+test('legacy agreement preview applies explicit company and version, retaining selection after a conflict', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const agreementId = '10000000-0000-0000-0000-000000000001';
+  const companyId = '20000000-0000-0000-0000-000000000001';
+  const expectedVersion = '30000000-0000-0000-0000-000000000001';
+  const companies = [{ id: companyId, name: 'Fixture company Oy', businessId: '1234567-8', isActive: true }];
+  const candidate = { agreementId, title: 'Legacy draft', status: 'Draft', expectedVersion, missingCompanyId: '00000000-0000-0000-0000-000000000000' };
+  let repaired = false;
+  let conflict = true;
+  const requests: unknown[] = [];
+  await page.route('**/api/v1/admin/companies**', route => route.fulfill({ headers, json: { items: companies, total: 1 } }));
+  await page.route('**/api/v1/admin/agreements**', async route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/legacy-repairs')) return route.fulfill({ headers, json: { agreements: repaired ? [] : [candidate], companies } });
+    if (path.endsWith(`/${agreementId}/repair-company`)) {
+      expect(route.request().method()).toBe('POST');
+      requests.push(route.request().postDataJSON());
+      if (conflict) return route.fulfill({ status: 409, headers, json: { detail: 'Agreement changed. Review the latest version.' } });
+      repaired = true;
+      return route.fulfill({ headers, json: { agreementId, companyId } });
+    }
+    return route.fulfill({ headers, json: [{ id: 'signed', title: 'Signed history', code: 'signed', status: 'Completed', isActive: true, signerCount: 1, signedCount: 1 }] });
+  });
+  await page.goto('/admin/agreements/');
+  await expect(page.getByText('Legacy draft', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Apply reviewed link' })).toBeDisabled();
+  const select = page.getByRole('textbox', { name: 'Company for Legacy draft' });
+  await select.click();
+  await page.getByRole('option', { name: 'Fixture company Oy' }).click();
+  await page.getByRole('button', { name: 'Apply reviewed link' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Agreement changed. Review the latest version.' })).toBeVisible();
+  await expect(select).toHaveValue('Fixture company Oy');
+  expect(requests).toEqual([{ companyId, expectedVersion }]);
+  conflict = false;
+  await page.getByRole('button', { name: 'Apply reviewed link' }).click();
+  await expect(page.getByText('Legacy draft', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Signed history', { exact: true })).toBeVisible();
+  expect(requests).toEqual([{ companyId, expectedVersion }, { companyId, expectedVersion }]);
+});
+
 test('agreement lifecycle preserves completed and partial documents independently of signing status', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   const items = [
