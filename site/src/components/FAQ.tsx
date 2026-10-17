@@ -30,7 +30,7 @@ export default function FAQ() {
             >
               <button
                 onClick={() => toggle(i)}
-                className="w-full flex items-center justify-between px-5 py-4 text-left transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-700/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset"
+                className="w-full flex items-center justify-between px-5 py-4 text-left transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-700/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset rounded-xl"
                 aria-expanded={openIndex === i}
                 aria-controls={`faq-panel-${i}`}
               >
@@ -39,7 +39,7 @@ export default function FAQ() {
                 </span>
                 <svg
                   aria-hidden="true"
-                  className={`w-5 h-5 shrink-0 text-gray-400 transition-transform ${openIndex === i ? 'rotate-180' : ''}`}
+                  className={`w-5 h-5 shrink-0 text-gray-400 transition-transform duration-200 ${openIndex === i ? 'rotate-180 text-brand-600 dark:text-brand-400' : ''}`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
