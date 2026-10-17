@@ -9,6 +9,7 @@ Updated 2026-10-17. Employees, tenant managers, and admins with an active linked
 - Activity selections, photo notes and general notes survive switching days/tabs in the current browser session. Successful submission clears the draft.
 - Calendar dates use the tenant time zone. A tenant-midnight rollover refreshes the selected period. Starting still requires the scheduled local date; actual start/end timestamps are unchanged.
 - Past includes recorded work even after the employee was unassigned, the shift deactivated, or the shift deleted. Deleted work is labelled as historical and cannot be started or edited.
+- Deactivated/deleted shifts are excluded from Today/Future and unfinished personal work, including already-created checklist forms. Only completed visits on earlier tenant-local dates remain in Past history.
 
 ## API and paging
 
