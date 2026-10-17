@@ -69,9 +69,13 @@ Use international format without `+` or leading zeros (e.g., `358401234567` for 
 
 Edit `src/components/Footer.tsx` and replace `info@readysetsiivous.fi` with your real email.
 
-### 3. Customize the logo
+### 3. Update the logo
 
-The logo is text-based (ReadySetSiivous with green accent). To add an image logo, edit `src/components/Navbar.tsx` and `src/components/Footer.tsx`.
+Official brand assets live in `public/brand/`. The shared UI uses
+`/brand/readyset-logomark.png`, the landing page uses
+`/brand/readyset-primary-logo.png`, and PWA/browser metadata uses
+`/brand/readyset-logo-badge.png`. Update those files only when the brand
+assets are intentionally replaced.
 
 ## Internationalization (i18n)
 
