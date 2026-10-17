@@ -9,6 +9,7 @@ import {
   adminShifts, adminCompanies, adminEmployees, adminTenant,
   type Shift, type Company, type Branch, type Employee, type ShiftAssignment, type ShiftOccurrence,
 } from '@/lib/adminApi';
+import { VisitAssigneesDialog } from '@/components/VisitAssigneesDialog';
 import { isAdmin } from '@/lib/auth';
 import { adminQualityCycle, type QualityCycleTemplate } from '@/lib/qualityCycleApi';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
@@ -115,6 +116,7 @@ export default function ShiftsAdminPage() {
   const [occurrenceReason, setOccurrenceReason] = useState('');
   const [occurrenceEmployee, setOccurrenceEmployee] = useState<string | null>(null);
   const [occurrenceSaving, setOccurrenceSaving] = useState(false);
+  const [assigningVisit, setAssigningVisit] = useState<ShiftOccurrence | null>(null);
   useEffect(() => () => { assignmentGeneration.current++; }, []);
 
   const load = () => adminShifts.list(undefined, undefined, true).then((r) => { if (r) setShifts(r); setLoading(false); });
@@ -482,13 +484,16 @@ export default function ShiftsAdminPage() {
           {occurrenceError && <Text role="alert" c="red">{occurrenceError}</Text>}
           {occurrenceLoading ? <Loader /> : occurrences.length === 0 ? <Text c="dimmed">No occurrences in this period.</Text> : (
             <Table striped withTableBorder>
-              <Table.Thead><Table.Tr><Table.Th>Start</Table.Th><Table.Th>End</Table.Th><Table.Th>Status</Table.Th><Table.Th>Reason</Table.Th><Table.Th></Table.Th></Table.Tr></Table.Thead>
+              <Table.Thead><Table.Tr><Table.Th>Start</Table.Th><Table.Th>End</Table.Th><Table.Th>Status</Table.Th><Table.Th>Assignees</Table.Th><Table.Th>Reason</Table.Th><Table.Th></Table.Th></Table.Tr></Table.Thead>
               <Table.Tbody>{occurrences.map((item) => <Table.Tr key={item.exceptionId ?? item.startUtc}>
                 <Table.Td>{new Date(item.startUtc).toLocaleString(undefined, { timeZone: timeZoneId })}</Table.Td>
                 <Table.Td>{new Date(item.endUtc).toLocaleString(undefined, { timeZone: timeZoneId })}</Table.Td>
                 <Table.Td>{item.status ? OCCURRENCE_STATUSES.find(x => x.value === String(item.status))?.label : 'Scheduled'}</Table.Td>
+                <Table.Td><Text size="sm">{(item.assigneeIds ?? []).map(employeeName).join(', ') || 'Unassigned'}</Text>
+                  <Text size="xs" c="dimmed">{item.assignmentSource ?? 'Recurring'}</Text></Table.Td>
                 <Table.Td>{item.reason ?? '—'}</Table.Td>
                 <Table.Td><Group gap={4} wrap="nowrap">
+                  <Button size="xs" variant="light" disabled={item.status === 2 || item.status === 3} onClick={() => setAssigningVisit(item)}>Assign</Button>
                   <Button size="xs" variant="subtle" onClick={() => openOccurrenceEditor(item)}>Change</Button>
                   {!item.exceptionId && <Button size="xs" variant="subtle" color="orange" onClick={() => openOccurrenceEditor(item, '2')}>Cancel</Button>}
                   {item.exceptionId && <Button size="xs" variant="subtle" color="red" loading={occurrenceSaving} onClick={() => restoreOccurrence(item)}>{item.status === 4 ? 'Delete extra' : 'Restore'}</Button>}
@@ -499,6 +504,9 @@ export default function ShiftsAdminPage() {
         </Stack>
       </Modal>
 
+      {assigningVisit && occurrenceShift && <VisitAssigneesDialog key={`${assigningVisit.exceptionId ?? assigningVisit.startUtc}`}
+        shiftId={occurrenceShift.id} visit={assigningVisit} employees={employees} timeZone={timeZoneId}
+        onClose={() => setAssigningVisit(null)} onSaved={async () => { await loadOccurrences(); }} />}
       <Modal opened={Boolean(editingOccurrence)} onClose={() => setEditingOccurrence(null)} title="Change occurrence">
         <Stack>
           <Select label="Action" value={occurrenceStatus} onChange={value => setOccurrenceStatus(value ?? '1')} data={OCCURRENCE_STATUSES}

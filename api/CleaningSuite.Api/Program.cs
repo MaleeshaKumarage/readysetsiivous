@@ -126,6 +126,7 @@ builder.Services.AddMediatR(cfg =>
 {
     cfg.RegisterServicesFromAssembly(typeof(AssemblyMarker).Assembly);
     cfg.AddOpenBehavior(typeof(ValidatorBehavior<,>));
+    cfg.AddOpenBehavior(typeof(CleaningSuite.Application.Shifts.SchedulingWriteBehavior<,>));
 });
 builder.Services.AddValidatorsFromAssembly(typeof(AssemblyMarker).Assembly);
 
