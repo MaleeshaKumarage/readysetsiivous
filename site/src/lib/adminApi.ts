@@ -238,6 +238,7 @@ export interface AgreementSignerDto {
   id: string; name: string; email: string; status: string; token: string;
 }
 export interface AgreementListItem {
+  hasSignedEvidence?: boolean;
   id: string; title: string; code: string; status: string; isActive: boolean; signerCount: number; signedCount: number; createdUtc: string;
 }
 export interface AgreementDetail extends AgreementListItem {

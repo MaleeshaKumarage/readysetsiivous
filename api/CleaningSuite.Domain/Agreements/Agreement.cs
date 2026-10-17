@@ -21,6 +21,10 @@ public class Agreement : BaseDocument
     public DateTime? CompletedUtc { get; set; }
 
     public bool AllSigned => Signers.Count > 0 && Signers.All(s => s.Status == Signer.StatusSigned);
+    public bool HasSignedEvidence => SignedPdfPath is not null
+        || Status is StatusPartiallySigned or StatusCompleted
+        || Signers.Any(s => s.Status == Signer.StatusSigned || s.SignedAtUtc.HasValue
+            || !string.IsNullOrWhiteSpace(s.SignatureImagePath));
 }
 
 public class Signer

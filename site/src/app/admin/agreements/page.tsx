@@ -75,7 +75,7 @@ export default function AgreementsPage() {
   };
 
   const deleteAgreement = async (agreement: AgreementListItem) => {
-    const signed = agreement.signedCount > 0 || agreement.status === 'PartiallySigned' || agreement.status === 'Completed';
+    const signed = agreement.hasSignedEvidence || agreement.signedCount > 0 || agreement.status === 'PartiallySigned' || agreement.status === 'Completed';
     const message = signed
       ? `Permanently delete signed agreement “${agreement.title}”? Its signing and download links will stop working. This cannot be undone.`
       : `Permanently delete inactive agreement “${agreement.title}”? This cannot be undone.`;

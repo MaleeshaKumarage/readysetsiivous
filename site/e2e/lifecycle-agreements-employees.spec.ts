@@ -141,7 +141,7 @@ test('inactive agreements support signed deletion confirmation, cancellation and
   await setupAdminMocks(page, { authenticated: true });
   let items = [
     { id: 'unsigned', title: 'Inactive unsigned', code: 'unsigned', status: 'Draft', isActive: false, signerCount: 1, signedCount: 0 },
-    { id: 'signed', title: 'Inactive partially signed', code: 'signed', status: 'PartiallySigned', isActive: false, signerCount: 2, signedCount: 1 },
+    { id: 'signed', title: 'Inactive partially signed', code: 'signed', status: 'Draft', isActive: false, signerCount: 2, signedCount: 0, hasSignedEvidence: true },
   ];
   let deleteCalls = 0;
   let retainOnDelete = true;

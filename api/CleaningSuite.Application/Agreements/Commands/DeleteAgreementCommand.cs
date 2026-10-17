@@ -16,10 +16,7 @@ public sealed class DeleteAgreementHandler(ITenantContext tenant, IAgreementRepo
             ?? throw new NotFoundException("Agreement", request.Id);
         if (agreement.IsActive)
             throw new InactiveRecordDeleteConflictException("Deactivate the agreement before deleting it.");
-        if (!request.ConfirmSigned && (agreement.Signers.Any(s => s.Status == Signer.StatusSigned
-                || s.SignedAtUtc.HasValue || !string.IsNullOrWhiteSpace(s.SignatureImagePath))
-            || agreement.SignedPdfPath is not null
-            || agreement.Status is Agreement.StatusPartiallySigned or Agreement.StatusCompleted))
+        if (!request.ConfirmSigned && agreement.HasSignedEvidence)
             throw new InactiveRecordDeleteConflictException("This agreement contains signed evidence. Explicitly confirm deletion of the signed agreement.");
         await agreements.DeleteAsync(tenant.TenantId, agreement.Id, ct);
     }

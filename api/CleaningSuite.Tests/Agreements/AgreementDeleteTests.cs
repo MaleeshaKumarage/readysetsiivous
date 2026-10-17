@@ -10,6 +10,30 @@ namespace CleaningSuite.Tests.Agreements;
 
 public class AgreementDeleteTests
 {
+    [Theory]
+    [InlineData("pdf")]
+    [InlineData("timestamp")]
+    [InlineData("image")]
+    public async Task Legacy_signed_evidence_is_exposed_and_requires_confirmation(string evidence)
+    {
+        var agreement = new Agreement { Id = Guid.NewGuid(), IsActive = false, Status = Agreement.StatusDraft,
+            SignedPdfPath = evidence == "pdf" ? "signed.pdf" : null,
+            Signers = [new Signer { SignedAtUtc = evidence == "timestamp" ? DateTime.UtcNow : null,
+                SignatureImagePath = evidence == "image" ? "signature.png" : null }] };
+        var repository = new Mock<IAgreementRepository>();
+        var tenant = new Mock<ITenantContext>(); tenant.SetupGet(x => x.TenantId).Returns("tenant-a");
+        repository.Setup(x => x.ListAsync("tenant-a", It.IsAny<CancellationToken>())).ReturnsAsync(new[] { agreement });
+        repository.Setup(x => x.GetAsync("tenant-a", agreement.Id, It.IsAny<CancellationToken>())).ReturnsAsync(agreement);
+        var listed = await new CleaningSuite.Application.Agreements.Queries.ListAgreementsHandler(tenant.Object, repository.Object)
+            .Handle(new(), default);
+        Assert.True(Assert.Single(listed).HasSignedEvidence);
+        Assert.Equal(0, listed[0].SignedCount);
+        var handler = new DeleteAgreementHandler(tenant.Object, repository.Object);
+        await Assert.ThrowsAsync<InactiveRecordDeleteConflictException>(() => handler.Handle(new(agreement.Id), default));
+        await handler.Handle(new(agreement.Id, ConfirmSigned: true), default);
+        repository.Verify(x => x.DeleteAsync("tenant-a", agreement.Id, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     [Fact]
     public async Task Delete_Requires_Explicit_Confirmation_For_Signed_Evidence()
     {
