@@ -92,7 +92,7 @@ export default function LangLayout({
   const dict = getDictionary(lang);
 
   return (
-    <div className="public-site">
+    <div className="public-site flex flex-col flex-1">
       <SchemaScript lang={lang} dict={dict} />
       <LanguageProvider initialLang={lang}>{children}</LanguageProvider>
     </div>
