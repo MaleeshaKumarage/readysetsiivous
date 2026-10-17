@@ -17,6 +17,22 @@ public class BrandedQualityReportTests
         return QualityCycleHandlers.MapForm(form);
     }
     [Fact]
+    public void Offline_embedded_logo_matches_the_approved_website_brand_asset()
+    {
+        using var stream = typeof(QualityCyclePdfGenerator).Assembly.GetManifestResourceStream("ReadySetSiivous.ReportLogo");
+        Assert.NotNull(stream); using var bytes = new MemoryStream(); stream.CopyTo(bytes);
+        DirectoryInfo? directory = new(AppContext.BaseDirectory); string? approved = null;
+        while (directory is not null) {
+            var candidate = Path.Combine(directory.FullName, "site", "public", "brand", "readyset-primary-logo.png");
+            if (File.Exists(candidate)) { approved = candidate; break; }
+            directory = directory.Parent;
+        }
+        Assert.NotNull(approved);
+        Assert.Equal(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(approved)),
+            System.Security.Cryptography.SHA256.HashData(bytes.ToArray()));
+    }
+
+    [Fact]
     public void Staff_hours_sum_individual_durations_and_deduplicate_forms()
     {
         var first = Form(); var second = Form();
