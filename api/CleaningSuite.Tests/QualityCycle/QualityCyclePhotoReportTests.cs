@@ -63,7 +63,7 @@ public class QualityCyclePhotoReportTests
     [InlineData(null)] [InlineData("Standalone note")]
     public void No_photos_allow_optional_notes_and_unchecked_activities(string? note)
     {
-        var form = Form(); form.Submit(new() { new() { ItemText = "Corridor" } }, Array.Empty<string>(), note);
+        var form = Form(); form.Submit(new() { new() { ItemText = "Corridor" } }, new List<string>(), note);
         Assert.True(form.IsSubmitted); Assert.Empty(form.PhotoUrls); Assert.Equal(note, form.CleanerNotes);
     }
 

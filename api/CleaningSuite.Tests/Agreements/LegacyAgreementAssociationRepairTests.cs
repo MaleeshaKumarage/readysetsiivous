@@ -14,11 +14,11 @@ public sealed class LegacyAgreementAssociationRepairTests
     [Fact]
     public async Task Preview_OnlyReturnsUnsignedDraftOrCancelledWithMissingCompany()
     {
-        var eligible = Agreement(Agreement.StatusDraft);
-        var cancelled = Agreement(Agreement.StatusCancelled);
-        var signedEvidence = Agreement(Agreement.StatusDraft);
+        var eligible = CreateAgreement(Agreement.StatusDraft);
+        var cancelled = CreateAgreement(Agreement.StatusCancelled);
+        var signedEvidence = CreateAgreement(Agreement.StatusDraft);
         signedEvidence.Signers[0].SignatureImagePath = "/private/evidence.png";
-        var validParent = Agreement(Agreement.StatusDraft);
+        var validParent = CreateAgreement(Agreement.StatusDraft);
         validParent.CompanyId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 
         var agreements = new Mock<IAgreementRepository>();
@@ -39,7 +39,7 @@ public sealed class LegacyAgreementAssociationRepairTests
     [Fact]
     public async Task Apply_UsesExplicitMappingAndAtomicallySavesAudit()
     {
-        var agreement = Agreement(Agreement.StatusDraft);
+        var agreement = CreateAgreement(Agreement.StatusDraft);
         var companyId = Guid.NewGuid();
         var agreements = new Mock<IAgreementRepository>();
         agreements.Setup(x => x.GetAssociationRepairAuditAsync("tenant-a", agreement.Id, It.IsAny<CancellationToken>()))
@@ -64,7 +64,7 @@ public sealed class LegacyAgreementAssociationRepairTests
     [Fact]
     public async Task Apply_RejectsStaleVersionAndNeverSaves()
     {
-        var agreement = Agreement(Agreement.StatusDraft);
+        var agreement = CreateAgreement(Agreement.StatusDraft);
         var agreements = new Mock<IAgreementRepository>();
         agreements.Setup(x => x.GetAssociationRepairAuditAsync("tenant-a", agreement.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync((AgreementAssociationRepairAudit?)null);
@@ -80,7 +80,7 @@ public sealed class LegacyAgreementAssociationRepairTests
     [Fact]
     public async Task Apply_RejectsSignedEvidenceEvenWhenStatusLooksDraft()
     {
-        var agreement = Agreement(Agreement.StatusDraft);
+        var agreement = CreateAgreement(Agreement.StatusDraft);
         agreement.Signers[0].TypedName = "Alice";
         var agreements = new Mock<IAgreementRepository>();
         agreements.Setup(x => x.GetAssociationRepairAuditAsync("tenant-a", agreement.Id, It.IsAny<CancellationToken>()))
@@ -99,7 +99,7 @@ public sealed class LegacyAgreementAssociationRepairTests
     [Fact]
     public async Task Apply_ReplaysSameTargetAndRejectsDifferentTarget()
     {
-        var agreement = Agreement(Agreement.StatusDraft);
+        var agreement = CreateAgreement(Agreement.StatusDraft);
         var targetId = Guid.NewGuid();
         agreement.CompanyId = targetId;
         var agreements = new Mock<IAgreementRepository>();
@@ -115,7 +115,7 @@ public sealed class LegacyAgreementAssociationRepairTests
         agreements.Verify(x => x.SaveAssociationRepairAsync(It.IsAny<string>(), It.IsAny<Agreement>(), It.IsAny<AgreementAssociationRepairAudit>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    private static Agreement Agreement(string status)
+    private static Agreement CreateAgreement(string status)
     {
         var agreement = new Agreement { Slug = "tenant-a", Title = "Service contract", Status = status, CompanyId = Guid.Empty, Version = Guid.NewGuid() };
         agreement.Signers.Add(new Signer { Name = "A", Email = "a@example.test", Token = "secret-token" });

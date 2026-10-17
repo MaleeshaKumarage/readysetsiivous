@@ -14,11 +14,22 @@ public class UploadContentValidatorTests
     private readonly UploadContentValidator _validator = new();
 
     [Fact]
+    public void Png_validation_accepts_trailing_data_but_rejects_incomplete_end_chunks()
+    {
+        var png = Image(SKEncodedImageFormat.Png, 80, 60);
+        var withTrailingData = png.Concat(new byte[] { 1, 2, 3, 4 }).ToArray();
+        _validator.ValidateSignaturePng(withTrailingData);
+        Assert.True(_validator.ValidateQualityCyclePhotos([new(DataUrl("image/png", withTrailingData), "Corridor cleaned")], []) > 0);
+        Assert.Throws<ValidationException>(() => _validator.ValidateSignaturePng(png[..^8]));
+        Assert.Throws<ValidationException>(() => _validator.ValidateQualityCyclePhotos([new(DataUrl("image/png", png[..^8]), "Corridor cleaned")], []));
+    }
+
+    [Fact]
     public void Signature_requires_a_decodable_png_within_dimensions()
     {
         var png = Image(SKEncodedImageFormat.Png, 1200, 400);
         _validator.ValidateSignaturePng(png);
-        Assert.Throws<ValidationException>(() => _validator.ValidateSignaturePng([1, 2, 3, 4, 5, 6, 7, 8]));
+        Assert.Throws<ValidationException>(() => _validator.ValidateSignaturePng(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }));
         Assert.Throws<ValidationException>(() => _validator.ValidateSignaturePng(Image(SKEncodedImageFormat.Png, 1201, 400)));
     }
 

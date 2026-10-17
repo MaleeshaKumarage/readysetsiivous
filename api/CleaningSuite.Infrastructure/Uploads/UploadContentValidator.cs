@@ -5,6 +5,7 @@ using FluentValidation.Results;
 using PDFtoImage;
 using SkiaSharp;
 using System.Diagnostics.CodeAnalysis;
+using System.Buffers.Binary;
 
 namespace CleaningSuite.Infrastructure.Uploads;
 
@@ -120,6 +121,10 @@ public sealed class UploadContentValidator : IUploadContentValidator
         try
         {
             if (bytes.Length == 0) Invalid(field, "The image is empty.");
+            // Skia can decode all pixels even when the PNG end chunk was cut off.
+            // Require the complete mandatory IEND chunk before accepting the file.
+            if (expectedFormat == SKEncodedImageFormat.Png && !HasCompletePngEnd(bytes))
+                Invalid(field, "The PNG image is truncated or corrupt.");
 
             using var data = SKData.CreateCopy(bytes.ToArray());
             using var codec = SKCodec.Create(data);
@@ -141,6 +146,23 @@ public sealed class UploadContentValidator : IUploadContentValidator
         {
             Invalid(field, "The image is corrupt or unsupported.");
         }
+    }
+
+    private static bool HasCompletePngEnd(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.Length < PngMagic.Length || !bytes[..PngMagic.Length].SequenceEqual(PngMagic)) return false;
+        var offset = PngMagic.Length;
+        while (bytes.Length - offset >= 12)
+        {
+            var length = BinaryPrimitives.ReadUInt32BigEndian(bytes.Slice(offset, 4));
+            if (length > bytes.Length - offset - 12) return false;
+            if (bytes.Slice(offset + 4, 4).SequenceEqual("IEND"u8))
+                // Require IEND at a real chunk boundary with its complete CRC,
+                // while preserving compatibility with trailing encoder data.
+                return length == 0 && bytes.Slice(offset + 8, 4).SequenceEqual(new byte[] { 0xae, 0x42, 0x60, 0x82 });
+            offset += 12 + (int)length;
+        }
+        return false;
     }
 
     private static (byte[] Bytes, string MimeType, SKEncodedImageFormat Format) ParseDataUrl(

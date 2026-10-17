@@ -109,19 +109,35 @@ public class ShiftRepository : IShiftRepository
     public Task<ShiftOccurrenceException?> GetOccurrenceExceptionAsync(Guid id, CancellationToken ct = default) =>
         Session.LoadAsync<ShiftOccurrenceException>(id, ct);
 
-    public Task<ShiftOccurrenceException?> GetOccurrenceExceptionByOriginalAsync(Guid shiftId, DateTime originalStartUtc, CancellationToken ct = default) =>
-        Session.Query<ShiftOccurrenceException>().FirstOrDefaultAsync(x => x.ShiftId == shiftId && x.OriginalStartUtc == originalStartUtc, ct);
+    public Task<ShiftOccurrenceException?> GetOccurrenceExceptionByOriginalAsync(Guid shiftId, DateTime originalStartUtc, CancellationToken ct = default)
+    {
+        // Marten's JSON DateTime predicates use PostgreSQL timestamp without time
+        // zone. Preserve UTC clock values, but use Unspecified query parameters,
+        // matching BookingRepository and QualityCycleRepository. Stored values
+        // remain UTC; this is only the database query boundary.
+        var start = DateTime.SpecifyKind(originalStartUtc, DateTimeKind.Unspecified);
+        return Session.Query<ShiftOccurrenceException>()
+            .FirstOrDefaultAsync(x => x.ShiftId == shiftId && x.OriginalStartUtc == start, ct);
+    }
 
-    public async Task<IReadOnlyList<ShiftOccurrenceException>> ListOccurrenceExceptionsAsync(Guid shiftId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default) =>
-        await Session.Query<ShiftOccurrenceException>()
-            .Where(x => x.ShiftId == shiftId && ((x.StartUtc >= fromUtc && x.StartUtc < toUtc)
-                || (x.OriginalStartUtc != null && x.OriginalStartUtc >= fromUtc && x.OriginalStartUtc < toUtc)))
+    public async Task<IReadOnlyList<ShiftOccurrenceException>> ListOccurrenceExceptionsAsync(Guid shiftId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default)
+    {
+        var from = DateTime.SpecifyKind(fromUtc, DateTimeKind.Unspecified);
+        var to = DateTime.SpecifyKind(toUtc, DateTimeKind.Unspecified);
+        return await Session.Query<ShiftOccurrenceException>()
+            .Where(x => x.ShiftId == shiftId && ((x.StartUtc >= from && x.StartUtc < to)
+                || (x.OriginalStartUtc != null && x.OriginalStartUtc >= from && x.OriginalStartUtc < to)))
             .ToListAsync(ct);
+    }
 
-    public async Task<IReadOnlyList<ShiftOccurrenceException>> ListOccurrenceExceptionsByEmployeeAsync(Guid employeeId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default) =>
-        await Session.Query<ShiftOccurrenceException>()
-            .Where(x => x.EmployeeId == employeeId && x.StartUtc >= fromUtc && x.StartUtc < toUtc)
+    public async Task<IReadOnlyList<ShiftOccurrenceException>> ListOccurrenceExceptionsByEmployeeAsync(Guid employeeId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default)
+    {
+        var from = DateTime.SpecifyKind(fromUtc, DateTimeKind.Unspecified);
+        var to = DateTime.SpecifyKind(toUtc, DateTimeKind.Unspecified);
+        return await Session.Query<ShiftOccurrenceException>()
+            .Where(x => x.EmployeeId == employeeId && x.StartUtc >= from && x.StartUtc < to)
             .ToListAsync(ct);
+    }
 
     public async Task SaveOccurrenceExceptionAsync(ShiftOccurrenceException exception, CancellationToken ct = default)
     { Session.Store(exception); await Session.SaveChangesAsync(ct); }
