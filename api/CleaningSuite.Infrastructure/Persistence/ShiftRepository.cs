@@ -1,4 +1,6 @@
 using CleaningSuite.Application.Shifts;
+using CleaningSuite.Application.Common;
+using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Shifts;
 using CleaningSuite.Infrastructure.Persistence;
 using Marten;
@@ -54,9 +56,28 @@ public class ShiftRepository : IShiftRepository
 
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
+        // Remove the live shift and roster atomically; keep a separate snapshot
+        // so completed QC evidence and historic reports remain meaningful.
+        await _tenantSession.BeginReservationAsync(ct);
+        var shift = await Session.LoadAsync<Shift>(id, ct) ?? throw new NotFoundException("Shift", id);
+        if (shift.IsActive) throw new InactiveRecordDeleteConflictException("Deactivate the shift before deleting it.");
+        var assignments = await Session.Query<ShiftAssignment>().Where(x => x.ShiftId == id).ToListAsync(ct);
+        Session.Store(new DeletedShift { Id = shift.Id, Snapshot = shift, Assignments = assignments.ToList() });
+        foreach (var assignment in assignments) Session.Delete<ShiftAssignment>(assignment.Id);
+        var exceptions = await Session.Query<ShiftOccurrenceException>().Where(x => x.ShiftId == id).ToListAsync(ct);
+        foreach (var exception in exceptions) Session.Delete<ShiftOccurrenceException>(exception.Id);
+        var forms = await Session.Query<QualityCycleForm>().Where(x => x.ShiftId == id).ToListAsync(ct);
+        foreach (var form in forms)
+        {
+            form.ShiftDeletedUtc = DateTime.UtcNow;
+            Session.Store(form);
+        }
         Session.Delete<Shift>(id);
         await Session.SaveChangesAsync(ct);
     }
+
+    public async Task<Shift?> GetDeletedSnapshotAsync(Guid id, CancellationToken ct = default) =>
+        (await Session.LoadAsync<DeletedShift>(id, ct))?.Snapshot;
 
     public async Task<ShiftAssignment?> GetAssignmentAsync(
         Guid shiftId,
@@ -97,11 +118,19 @@ public class ShiftRepository : IShiftRepository
         await Session.SaveChangesAsync(ct);
     }
 
-    public async Task<IReadOnlyList<Shift>> ListForReportingAsync(CancellationToken ct = default) =>
-        await Session.Query<Shift>().OrderBy(s => s.Name).ToListAsync(ct);
+    public async Task<IReadOnlyList<Shift>> ListForReportingAsync(CancellationToken ct = default)
+    {
+        var live = await Session.Query<Shift>().ToListAsync(ct);
+        var deleted = await Session.Query<DeletedShift>().ToListAsync(ct);
+        return live.Concat(deleted.Select(x => x.Snapshot)).OrderBy(x => x.Name).ToList();
+    }
 
-    public async Task<IReadOnlyList<ShiftAssignment>> ListAssignmentHistoryAsync(Guid shiftId, CancellationToken ct = default) =>
-        await Session.Query<ShiftAssignment>().Where(a => a.ShiftId == shiftId).ToListAsync(ct);
+    public async Task<IReadOnlyList<ShiftAssignment>> ListAssignmentHistoryAsync(Guid shiftId, CancellationToken ct = default)
+    {
+        var archive = await Session.LoadAsync<DeletedShift>(shiftId, ct);
+        return archive is not null ? archive.Assignments
+            : await Session.Query<ShiftAssignment>().Where(a => a.ShiftId == shiftId).ToListAsync(ct);
+    }
 
     public async Task<IReadOnlyList<ShiftAssignment>> ListAssignmentHistoryByEmployeeAsync(Guid employeeId, CancellationToken ct = default) =>
         await Session.Query<ShiftAssignment>().Where(a => a.EmployeeId == employeeId).ToListAsync(ct);

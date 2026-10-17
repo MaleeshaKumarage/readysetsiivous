@@ -36,6 +36,7 @@ public class QualityCycleForm : BaseDocument
         : "Recorded";
     public DateTime? StartedAtUtc { get; set; }
     public DateTime? EndedAtUtc { get; set; }
+    public DateTime? ShiftDeletedUtc { get; set; }
 
     public static QualityCycleForm Create(
         Guid shiftId,

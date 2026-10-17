@@ -84,7 +84,7 @@ public record GetQualityCycleSummaryPdfQuery(Guid ShiftId, int Year, int Month) 
 // Employee clock/flow commands & queries
 public record StartQualityCycleFormCommand(Guid ShiftId, Guid EmployeeId, DateTime OccurrenceStartUtc, DateTime OccurrenceEndUtc) : IRequest<QualityCycleFormDto>;
 public record EndQualityCycleFormCommand(Guid FormId, Guid EmployeeId, List<QualityCycleFormItemDto> Items, List<string>? PhotoUrls = null, string? CleanerNotes = null, List<QualityCyclePhoto>? Photos = null) : IRequest<QualityCycleFormDto>;
-public record MyShiftOccurrenceDto(Guid ShiftId, string ShiftName, DateTime StartUtc, DateTime EndUtc, QualityCycleFormDto? Form, string TimeZoneId = "Europe/Helsinki");
+public record MyShiftOccurrenceDto(Guid ShiftId, string ShiftName, DateTime StartUtc, DateTime EndUtc, QualityCycleFormDto? Form, string TimeZoneId = "Europe/Helsinki", bool IsDeleted = false);
 public record GetMyShiftsQuery(Guid EmployeeId, DateTime FromUtc, DateTime ToUtc) : IRequest<IReadOnlyList<MyShiftOccurrenceDto>>;
 
 // Handlers
@@ -456,12 +456,27 @@ public class QualityCycleHandlers
                 }
             }
 
+            // Recorded work belongs to the employee's history even after roster
+            // changes, deactivation or deletion of its original shift.
+            var recorded = await _repository.ListFormsAsync(null, from, to, ct, request.EmployeeId, null, null, null)
+                ?? Array.Empty<QualityCycleForm>();
+            foreach (var form in recorded.Where(f => f.EmployeeId == request.EmployeeId
+                && f.ShiftOccurrenceUtc >= from && f.ShiftOccurrenceUtc < to
+                && (f.IsSubmitted || f.StartedAtUtc.HasValue)))
+            {
+                var index = result.FindIndex(x => x.ShiftId == form.ShiftId && x.StartUtc == form.ShiftOccurrenceUtc);
+                var occurrence = new MyShiftOccurrenceDto(form.ShiftId, form.ShiftName, form.ShiftOccurrenceUtc,
+                    form.ShiftOccurrenceEndUtc, MapForm(form), zoneId, form.ShiftDeletedUtc.HasValue);
+                if (index >= 0) result[index] = occurrence;
+                else result.Add(occurrence);
+            }
             return result.OrderBy(r => r.StartUtc).ToList();
         }
     }
 
     private static void RecordActivity(QualityCycleForm form, List<QualityCycleFormItemDto>? items, List<string>? photoUrls, string? cleanerNotes, TimeProvider clock, List<QualityCyclePhoto>? photos)
     {
+            if (form.ShiftDeletedUtc.HasValue) throw new QualityCycleConflictException("This shift was deleted. Its checklist is retained as history.");
             if (form.IsSubmitted) throw new QualityCycleConflictException("This shift task has already been completed.");
             if (!form.StartedAtUtc.HasValue && form.ShiftOccurrenceUtc > clock.GetUtcNow().UtcDateTime)
                 throw new QualityCycleConflictException("This shift task has not started yet.");

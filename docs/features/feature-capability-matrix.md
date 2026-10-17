@@ -32,7 +32,7 @@ test families, not proof that those tests are currently implemented.
 | Employees | Deactivate/reactivate | Deactivate and IsActive update | Deactivate only | Lifecycle must also define linked identity/session policy | EMP-007/008 |
 | Employees | Work hours/skills/areas/pay/certifications/notes | Yes | None | Group into employee profile tabs; restrict payroll/HR visibility | EMP-004 |
 | Employees | Send invite/reinvite | Yes; flow incomplete | None | Fix identity binding/registration destination, then add invite/status action; existing issue49 | EMP-005/006 |
-| Employees | Own profile/work schedule | Some lookup helpers; no complete self-service API | None | Add employee My work workspace with server-side own-resource authorization | AUTH-004, OPS-005 |
+| Employees | Own profile/work schedule | Yes, verified employee identity | Yes, My shifts | Today default; Past/Future week/day calendar, paged dates and recorded history after roster changes/deletion; see personal-shift-calendar.md | AUTH-004, OPS-005 |
 | Companies | Create/read | Yes | Yes | Management list loads all pages with Active/Inactive tabs; failed/inconsistent pagination is an error | COMP-001/005/007 |
 | Companies | Update/deactivate | Yes | None | Add customer-detail actions; physical delete policy separate | COMP-004 |
 | Companies | Search/pagination | Yes, take1–200 | None | Add list search and pagination; fix selectors in agreement/shift forms too | COMP-005 |
@@ -40,6 +40,7 @@ test families, not proof that those tests are currently implemented.
 | Branches | Update/deactivate | Yes | None | Put branch lifecycle inside customer detail; preserve shift/document links | COMP-004 |
 | Branches | Manage related shifts | Yes through shift API | Partial, separate shift screen | Customer detail can link/filter Operations shifts; one editor, not duplicated CRUD | SHIFT-003/017 |
 | Shifts | Create/list/deactivate | Yes | Yes | Inactive eligibility, scope and recurrence correctness need BE fixes | SHIFT-001/003/013 |
+| Shifts | Delete inactive shift with assignments/QC | Yes | Yes | Live roster/occurrence links removed atomically; QC evidence and monthly reporting snapshots retained | SHIFT-DEL-001 |
 | Shifts | Edit/reactivate/validity dates | Yes | None | Reuse shift editor; BE update must check company/branch ownership | SHIFT-003/010/018 |
 | Shifts | Daily/weekly/biweekly/monthly/on-call | Yes | Yes | Biweekly UI should be single-day; persist correctly when changing schedule type | SHIFT-001/008 |
 | Shifts | Different times per weekday (type1) | Yes | None | Add to shift editor, not a new top-level feature | SHIFT-002 |

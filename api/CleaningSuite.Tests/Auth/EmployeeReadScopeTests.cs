@@ -154,6 +154,23 @@ public class EmployeeReadScopeTests
 
     [Theory]
     [InlineData("admin")] [InlineData("manager")] [InlineData("employee")]
+    public async Task CalendarUsesOnlyVerifiedEmployeeAndBoundedTenantPeriod(string role)
+    {
+        using var host = new Host(); host.Employee.Role = role;
+        host.Mediator.Setup(m => m.Send(It.IsAny<GetMyShiftsQuery>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<MyShiftOccurrenceDto>());
+        using var response = await host.Send("GET", "/api/v1/me/shifts/calendar?view=future&employeeId=" + Guid.NewGuid(), role);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(JsonValueKind.Array, json.RootElement.GetProperty("occurrences").ValueKind);
+        Assert.False(string.IsNullOrWhiteSpace(json.RootElement.GetProperty("timeZoneId").GetString()));
+        host.Mediator.Verify(m => m.Send(It.Is<GetMyShiftsQuery>(q => q.EmployeeId == host.Employee.Id
+            && q.FromUtc.Kind == DateTimeKind.Utc && (q.ToUtc - q.FromUtc).TotalDays > 30
+            && (q.ToUtc - q.FromUtc).TotalDays < 32), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData("admin")] [InlineData("manager")] [InlineData("employee")]
     public async Task ManagementRoleCannotEndAnotherPersonsTask(string role)
     {
         using var host = new Host(); host.Employee.Role = role;

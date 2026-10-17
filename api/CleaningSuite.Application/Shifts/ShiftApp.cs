@@ -45,6 +45,7 @@ public record DeleteShiftOccurrenceExceptionCommand(Guid ShiftId, Guid Id) : IRe
 public interface IShiftRepository
 {
     Task<Shift?> GetAsync(Guid id, CancellationToken ct = default);
+    Task<Shift?> GetDeletedSnapshotAsync(Guid id, CancellationToken ct = default);
     Task<IReadOnlyList<Shift>> ListAsync(Guid? companyId, Guid? branchId, CancellationToken ct = default);
     Task<IReadOnlyList<Shift>> ListByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct = default);
     Task SaveAsync(Shift shift, CancellationToken ct = default);
@@ -268,16 +269,13 @@ public class ShiftHandlers
         }
     }
 
-    public sealed class DeleteShiftCommandHandler(IShiftRepository shifts, IQualityCycleRepository forms)
+    public sealed class DeleteShiftCommandHandler(IShiftRepository shifts)
         : IRequestHandler<DeleteShiftCommand>
     {
         public async Task Handle(DeleteShiftCommand request, CancellationToken ct)
         {
             var shift = await shifts.GetAsync(request.Id, ct) ?? throw new NotFoundException("Shift", request.Id);
             if (shift.IsActive) throw new InactiveRecordDeleteConflictException("Deactivate the shift before deleting it.");
-            if ((await shifts.ListAssignmentHistoryAsync(shift.Id, ct)).Count > 0
-                || (await forms.ListFormsAsync(shift.Id, null, null, ct)).Count > 0)
-                throw new InactiveRecordDeleteConflictException("This shift has assignment or checklist history and must be retained.");
             await shifts.DeleteAsync(shift.Id, ct);
         }
     }

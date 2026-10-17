@@ -14,11 +14,11 @@ Checklist-template activity tabs affect only the template list. Editing an inact
 
 ## Permanent deletion
 
-Each inactive record now has a Delete action. The API requires the record to be inactive and checks references before removing it. A conflict response explains why the record must stay. Companies with branches or business records, branches with shift/checklist history, shifts with assignments or forms, employees with work history, services used by bookings, and templates referenced by shifts/forms are retained. Employee profiles linked to a Keycloak login are retained; deleting a profile does not silently delete an external identity.
+Each inactive record now has a Delete action. The API requires the record to be inactive and checks references before removing it. A conflict response explains why the record must stay. Companies with branches or business records, branches with shift/checklist history, employees with work history, services used by bookings, and templates referenced by shifts/forms are retained. Shift assignments and QC records no longer block deletion: roster links are removed and QC/report history is retained separately; see [personal shift calendar](personal-shift-calendar.md). Employee profiles linked to a Keycloak login are retained; deleting a profile does not silently delete an external identity.
 
 Policy updated by explicit user approval on 2026-10-17: tenant admins can delete inactive agreements, including partially or fully signed agreements. The confirmation identifies signed agreements and warns that signing/download links stop working and the action cannot be undone. Signed deletion requires `confirmSigned=true` at the API boundary; active agreements must first be deactivated. Deletion removes the tenant record; local artifacts may remain on disk under the existing storage cleanup behavior. Filtering and reactivation never delete or rewrite evidence.
 
-Delete is tenant-admin-only for admin lists. Tenant-wide managers can delete inactive shifts through the manager API; the same shift history guard applies. Active records must first be deactivated. UI confirmation is required, while API checks remain authoritative against direct requests and stale pages.
+Delete is tenant-admin-only for admin lists. Tenant-wide managers can delete inactive shifts through the manager API with the same history-preserving unlink behavior. Active records must first be deactivated. UI confirmation is required, while API checks remain authoritative against direct requests and stale pages.
 
 ## Playwright cases
 

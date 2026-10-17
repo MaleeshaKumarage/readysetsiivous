@@ -11,6 +11,17 @@ parameter sets and the cross-feature failure matrix expand into additional tests
 
 ## Conventions
 
+Personal calendar and deletion additions (2026-10-17), see [behavior and coverage](../features/personal-shift-calendar.md):
+
+| ID | Layer | Trigger | Expected result |
+| --- | --- | --- | --- |
+| WORK-CAL-001 | UI/API | Enter My shifts as employee/admin/manager, including tenant date different from device date | Today default, bounded tenant-local interval, verified employee identity; anonymous/unbound access remains denied. |
+| WORK-CAL-002 | UI | Past/Future with several dates/weeks and multiple shifts in a day | Most recent dates first; compact week/day counts visible while folded; selecting a day opens only its week/day; keyboard controls work on mobile and desktop. |
+| WORK-CAL-003 | UI/API | Load earlier/later dates, failed extra page, delayed response after changing tabs | Adjacent bounded pages; existing records retained on failure; same cursor retried; stale responses ignored; no duplicate occurrences. |
+| WORK-CAL-004 | UI/API | Completed task after roster removal, deactivation or shift deletion | Employee still sees own recorded history and actual times; deleted work is read-only; other employees' records remain private. |
+| WORK-CAL-005 | UI/API | Tenant midnight/DST rollover; activity draft when switching tabs/days | Date boundaries follow tenant zone; selected period refreshes at local midnight; draft checkboxes, notes and photos retained until submission. |
+| SHIFT-DEL-001 | UI/DB | Confirm deletion of inactive shift containing roster links, occurrence exceptions and submitted QC evidence | Live shift/roster/exceptions removed atomically; QC/photo notes and monthly report content preserved; other tenants untouched; old QC tokens cannot modify history. Canceling confirmation sends no delete; active shift deletion rejected. |
+
 Lifecycle tab additions (2026-10-14), see [behavior and browser coverage](../features/lifecycle-list-tabs.md):
 
 | ID | Layer | Trigger | Expected result |
