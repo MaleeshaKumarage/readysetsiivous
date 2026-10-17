@@ -188,6 +188,7 @@ test('manager requires a start date and supports optional end dates', async ({ p
   await expect(page.getByLabel('Start date', { exact: true })).toHaveValue('2026-10-18');
   await page.getByLabel('Start date', { exact: true }).fill('');
   await page.getByRole('button', { name: 'Save shift' }).click();
+  expect(await page.getByLabel('Start date', { exact: true }).evaluate((input: HTMLInputElement) => input.validity.valueMissing)).toBe(true);
   expect(state.writes).toHaveLength(0);
   await page.getByLabel('Start date', { exact: true }).fill('2026-11-01');
   await page.getByLabel('Shift name', { exact: true }).fill('Dated shift');

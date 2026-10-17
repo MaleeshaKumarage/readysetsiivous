@@ -10,7 +10,7 @@ test('admin requires a start date, supports an open end date, and edits the rang
     const method = route.request().method(); const path = new URL(route.request().url()).pathname;
     if (method === 'OPTIONS') return route.fulfill({ headers });
     if (path.endsWith('/shifts') && method === 'POST' || path.includes('/shifts/') && method === 'PUT') {
-      const body = route.request().postDataJSON(); writes.push(body); const saved = { id: 'shift', ...body };
+      const body = route.request().postDataJSON(); writes.push(body); const saved = { id: method === 'POST' ? 'shift' : path.split('/').at(-1), ...body };
       shifts = [saved]; return route.fulfill({ headers, json: saved });
     }
     return route.fulfill({ headers, json: path.endsWith('/shifts') ? shifts
@@ -41,4 +41,19 @@ test('admin requires a start date, supports an open end date, and edits the rang
   await edit.getByLabel('End date (optional)', { exact: true }).fill('2026-11-30');
   await edit.getByRole('button', { name: 'Save changes' }).click();
   await expect(edit).toHaveCount(0); expect(writes[1].validUntil).toBe('2026-11-30');
+  await page.getByRole('row').filter({ hasText: 'Dated cleaning' }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(edit.getByLabel('End date (optional)', { exact: true })).toHaveValue('2026-11-30');
+  await edit.getByLabel('End date (optional)', { exact: true }).fill('');
+  await edit.getByRole('button', { name: 'Save changes' }).click();
+  await expect(edit).toHaveCount(0);
+  expect(writes[2].validFrom).toBe('2026-11-01'); expect(writes[2].validUntil).toBeUndefined();
+  shifts = [{ ...shifts[0], id: 'legacy', name: 'Legacy cleaning', validFrom: null, validUntil: null }];
+  await page.reload();
+  await page.getByRole('row').filter({ hasText: 'Legacy cleaning' }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(edit.getByRole('textbox', { name: 'Start date', exact: true })).toHaveValue('');
+  await expect(edit.getByRole('textbox', { name: 'Start date', exact: true })).not.toHaveAttribute('required');
+  await edit.getByRole('textbox', { name: 'Name', exact: true }).fill('Legacy cleaning updated');
+  await edit.getByRole('button', { name: 'Save changes' }).click();
+  await expect(edit).toHaveCount(0);
+  expect(writes[3].validFrom).toBeUndefined(); expect(writes[3].validUntil).toBeUndefined();
 });
