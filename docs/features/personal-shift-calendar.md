@@ -22,6 +22,8 @@ Assignments and QC records no longer block deletion. The live shift, roster link
 
 Monthly reports can read deleted-shift snapshots, including an explicit deleted shift filter. Old QC tokens cannot modify detached history. Active shifts must be deactivated first. Deletion remains scoped to the caller's tenant and existing admin/manager permissions.
 
+Admin and manager Active/Inactive lists read only live shift documents. Reporting snapshots must never appear in either management tab or its counts. Deleting a shift therefore removes it from management lists while retaining it in historical reports.
+
 ## Regression coverage
 
 - PostgreSQL deletion regression compares monthly report content before/after deletion, checks roster/exception unlinking, preserves photo notes, and verifies another tenant's matching records remain untouched.
