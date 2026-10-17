@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+
 type WordKind = 'unchanged' | 'incorrect' | 'corrected' | 'added' | 'removed';
 type Word = { value: string; start: number; end: number };
 type Operation = { kind: 'same' | 'delete' | 'insert'; original?: number; corrected?: number };
@@ -55,8 +57,14 @@ function renderSentence(text: string, words: Word[], kinds: WordKind[], side: st
 }
 
 export function WordComparison({ originalText, correctedText }: { originalText: string; correctedText: string }) {
-  const original = wordsIn(originalText); const corrected = wordsIn(correctedText);
-  const { oldKinds, newKinds } = classify(original, corrected);
+  // Memoize regex word tokenization and O(M*N) DP diff calculation to avoid re-running on parent re-renders.
+  const { original, corrected, oldKinds, newKinds } = useMemo(() => {
+    const original = wordsIn(originalText);
+    const corrected = wordsIn(correctedText);
+    const { oldKinds, newKinds } = classify(original, corrected);
+    return { original, corrected, oldKinds, newKinds };
+  }, [originalText, correctedText]);
+
   return <div data-testid="word-comparison" className="grid gap-3 sm:grid-cols-2">
     <p><span className="font-medium">Original answer: </span><span aria-label="Original sentence">{renderSentence(originalText, original, oldKinds, 'original')}</span></p>
     <p><span className="font-medium">Corrected answer: </span><span aria-label="Corrected sentence">{renderSentence(correctedText, corrected, newKinds, 'corrected')}</span></p>
