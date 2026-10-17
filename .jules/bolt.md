@@ -1,0 +1,3 @@
+## 2025-05-20 - Map caching vs Flat Object Lookups for i18n
+**Learning:** In V8 / Node / JS engines, dynamically building string keys (`lang + ':' + path`) to index into a runtime `Map` cache for translation path lookups introduces higher overhead (string concatenation + Map lookup hash calculation) than simple array splitting and property access, and is ~10x slower than pre-flattening nested objects into a plain flat JS object lookup table.
+**Action:** For static JSON dictionaries or configuration trees, pre-flatten all nested keys into a flat plain object `{ 'nav.services': 'Services' }` at module load time for O(1) property access.
