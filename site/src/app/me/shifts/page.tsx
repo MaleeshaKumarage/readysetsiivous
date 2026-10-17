@@ -433,7 +433,7 @@ export default function MyShiftsPage() {
           </Card>
         ) : (
           <div className="space-y-4">
-            {view === 'today' ? occurrences.map(renderOccurrence) : <ShiftCalendar key={view} occurrences={occurrences} renderShift={renderOccurrence} disabled={busy || photoReading || submitting} onCloseForm={closeForm} />}
+            {view === 'today' ? occurrences.map(renderOccurrence) : <ShiftCalendar key={view} view={view} occurrences={occurrences} renderShift={renderOccurrence} disabled={busy || photoReading || submitting} onCloseForm={closeForm} />}
           </div>
         )}
         </div>
