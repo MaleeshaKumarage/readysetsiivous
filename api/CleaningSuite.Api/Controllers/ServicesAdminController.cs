@@ -1,6 +1,8 @@
 using CleaningSuite.Api.Auth;
 using CleaningSuite.Application.Services.Commands;
 using CleaningSuite.Application.Services.Queries;
+using CleaningSuite.Application.Services;
+using CleaningSuite.Application.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,11 +18,15 @@ public class ServicesAdminController : ControllerBase
 {
     private readonly IMediator _mediator;
     private readonly IConfiguration _configuration;
+    private readonly IServiceRepository _services;
+    private readonly IUploadContentValidator _uploadValidator;
 
-    public ServicesAdminController(IMediator mediator, IConfiguration configuration)
+    public ServicesAdminController(IMediator mediator, IConfiguration configuration, IServiceRepository services, IUploadContentValidator uploadValidator)
     {
         _mediator = mediator;
         _configuration = configuration;
+        _services = services;
+        _uploadValidator = uploadValidator;
     }
 
     [HttpGet]
@@ -74,28 +80,40 @@ public class ServicesAdminController : ControllerBase
     /// <summary>Uploads a card image for the service, returns the public path.</summary>
     [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost("{id:guid}/image")]
-    [RequestSizeLimit(5 * 1024 * 1024)]
+    [RequestSizeLimit(6 * 1024 * 1024)]
     public async Task<IActionResult> UploadImage(Guid id, IFormFile file, CancellationToken ct)
     {
-        if (file.Length == 0 || file.Length > 5 * 1024 * 1024)
-            return BadRequest(new { title = "Image must be under 5 MB" });
+        _ = await _services.GetByIdAsync(id, ct) ?? throw new NotFoundException("Service", id);
+        if (file is null || file.Length == 0)
+            throw new FluentValidation.ValidationException("Choose a non-empty service image.");
+        if (file.Length > 5 * 1024 * 1024)
+            throw new UploadPayloadTooLargeException("Service image must be 5 MiB or smaller.");
 
-        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
-        if (ext is not (".jpg" or ".jpeg" or ".png" or ".webp"))
-            return BadRequest(new { title = "Only jpg, png or webp allowed" });
+        await using var input = file.OpenReadStream();
+        using var buffer = new MemoryStream((int)file.Length);
+        await input.CopyToAsync(buffer, ct);
+        var content = buffer.ToArray();
+        var ext = _uploadValidator.ValidateServiceImage(content);
 
         var uploadsPath = _configuration["Uploads:Path"] ?? Path.Combine(Directory.GetCurrentDirectory(), "uploads");
         Directory.CreateDirectory(uploadsPath);
 
         var name = $"{Guid.NewGuid():N}{ext}";
         var fullPath = Path.Combine(uploadsPath, name);
-        await using (var stream = System.IO.File.Create(fullPath))
-        {
-            await file.CopyToAsync(stream, ct);
-        }
-
         var imageUrl = $"/uploads/{name}";
-        await _mediator.Send(new UpdateServiceImageCommand(id, imageUrl), ct);
+        try
+        {
+            await using (var stream = new FileStream(fullPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                await stream.WriteAsync(content, ct);
+            await _mediator.Send(new UpdateServiceImageCommand(id, imageUrl), ct);
+        }
+        catch
+        {
+            try { if (System.IO.File.Exists(fullPath)) System.IO.File.Delete(fullPath); }
+            catch (Exception cleanupError) when (cleanupError is IOException or UnauthorizedAccessException)
+            { /* Keep the original failure; orphan cleanup can be handled separately. */ }
+            throw;
+        }
         return Ok(new { imageUrl });
     }
 }

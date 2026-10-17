@@ -101,6 +101,7 @@ public static class MartenConfig
 
         // Include documents otherwise discovered only on their first repository call.
         options.Schema.For<Agreement>();
+        options.Schema.For<AgreementAssociationRepairAudit>();
         options.Schema.For<TenantProfile>();
         options.Schema.For<Counter>();
 

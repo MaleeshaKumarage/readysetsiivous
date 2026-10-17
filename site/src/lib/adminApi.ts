@@ -294,6 +294,15 @@ export const adminAgreements = {
   activate: (id: string) => adminSend(`/api/v1/admin/agreements/${id}/activate`, 'POST'),
   deactivate: (id: string) => adminSend(`/api/v1/admin/agreements/${id}/deactivate`, 'POST'),
   deleteInactive: (id: string) => adminDelete(`/api/v1/admin/agreements/${id}`),
+  legacyRepairPreview: () => adminGet<LegacyAgreementRepairPreview>('/api/v1/admin/agreements/legacy-repairs'),
+  repairLegacyCompany: async (agreementId: string, companyId: string, expectedVersion: string): Promise<{ ok: boolean; error?: string }> => {
+    const response = await authorizedFetch(`/api/v1/admin/agreements/${agreementId}/repair-company`, {
+      method: 'POST', body: JSON.stringify({ companyId, expectedVersion }),
+    });
+    if (response.ok) { invalidateAdminCache(); return { ok: true }; }
+    const body = await response.json().catch(() => ({})) as { detail?: string; title?: string };
+    return { ok: false, error: body.detail || body.title || `Repair failed (${response.status}).` };
+  },
   documentUrl: (id: string) => `${API_URL}/api/v1/admin/agreements/${id}/document`,
   downloadDocument: async (id: string): Promise<void> => {
     const t = token();
@@ -310,6 +319,20 @@ export const adminAgreements = {
     URL.revokeObjectURL(url);
   },
 };
+
+export interface LegacyAgreementRepairCandidate {
+  agreementId: string;
+  title: string;
+  status: string;
+  missingCompanyId: string;
+  expectedVersion: string;
+  createdUtc: string;
+}
+
+export interface LegacyAgreementRepairPreview {
+  agreements: LegacyAgreementRepairCandidate[];
+  companies: Company[];
+}
 
 export async function downloadInvoicePdf(id: string): Promise<void> {
   const t = token();

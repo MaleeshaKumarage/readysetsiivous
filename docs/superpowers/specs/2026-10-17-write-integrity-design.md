@@ -1,7 +1,7 @@
 # Write Integrity Design: Parent Validation, Uploads, and Agreement Evidence
 
 Date: 2026-10-17  
-Status: Approved scope; awaiting specification review and user review  
+Status: Approved by user; implementation in progress
 Related issues: [#81](https://github.com/MaleeshaKumarage/readysetsiivous/issues/81), [#73](https://github.com/MaleeshaKumarage/readysetsiivous/issues/73), [#77](https://github.com/MaleeshaKumarage/readysetsiivous/issues/77), [#121](https://github.com/MaleeshaKumarage/readysetsiivous/issues/121)
 
 ## Problem

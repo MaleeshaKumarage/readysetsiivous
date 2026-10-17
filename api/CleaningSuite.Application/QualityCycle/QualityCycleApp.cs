@@ -244,14 +244,16 @@ public class QualityCycleHandlers
     {
         private readonly IQualityCycleRepository _repository;
         private readonly TimeProvider _clock;
-        public SubmitQualityCycleFormCommandHandler(IQualityCycleRepository repository, TimeProvider? clock = null)
-        { _repository = repository; _clock = clock ?? TimeProvider.System; }
+        private readonly IUploadContentValidator _uploads;
+        public SubmitQualityCycleFormCommandHandler(IQualityCycleRepository repository, IUploadContentValidator uploads, TimeProvider? clock = null)
+        { _repository = repository; _uploads = uploads; _clock = clock ?? TimeProvider.System; }
 
         public async Task<QualityCycleFormDto> Handle(SubmitQualityCycleFormCommand request, CancellationToken ct)
         {
             var form = await _repository.GetFormByTokenAsync(request.Token, ct)
                 ?? throw new NotFoundException("QualityCycleForm", Guid.Empty);
 
+            _uploads.ValidateQualityCyclePhotos(request.Photos, request.PhotoUrls);
             RecordActivity(form, request.Items, request.PhotoUrls, request.CleanerNotes, _clock, request.Photos);
             await _repository.SaveFormAsync(form, ct);
             return MapForm(form);
@@ -379,9 +381,10 @@ public class QualityCycleHandlers
     public class EndQualityCycleFormCommandHandler : IRequestHandler<EndQualityCycleFormCommand, QualityCycleFormDto>
     {
         private readonly IQualityCycleRepository _repository;
+        private readonly IUploadContentValidator _uploads;
 
         private readonly TimeProvider _clock;
-        public EndQualityCycleFormCommandHandler(IQualityCycleRepository repository, TimeProvider? clock = null) { _repository = repository; _clock = clock ?? TimeProvider.System; }
+        public EndQualityCycleFormCommandHandler(IQualityCycleRepository repository, IUploadContentValidator uploads, TimeProvider? clock = null) { _repository = repository; _uploads = uploads; _clock = clock ?? TimeProvider.System; }
 
         public async Task<QualityCycleFormDto> Handle(EndQualityCycleFormCommand request, CancellationToken ct)
         {
@@ -394,6 +397,7 @@ public class QualityCycleHandlers
             if (!form.StartedAtUtc.HasValue)
                 throw new QualityCycleConflictException("Start your shift before ending it.");
 
+            _uploads.ValidateQualityCyclePhotos(request.Photos, request.PhotoUrls);
             RecordActivity(form, request.Items, request.PhotoUrls, request.CleanerNotes, _clock, request.Photos);
             await _repository.SaveFormAsync(form, ct);
             return MapForm(form);

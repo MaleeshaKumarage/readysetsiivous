@@ -96,9 +96,8 @@ public class QualityCycleForm : BaseDocument
             || items.Where((item, i) => item.ItemText != Items[i].ItemText).Any())
             throw new ArgumentException("Submit the complete checklist in its original order.", nameof(items));
 
-        var legacyUrls = photoUrls?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? new List<string>();
         var notes = cleanerNotes?.Trim();
-        if (legacyUrls.Count > 0)
+        if (photoUrls is { Count: > 0 })
             throw new ArgumentException("Add a separate note for each photo and submit paired photos rather than photoUrls.", nameof(photos));
         if (photos?.Any(p => p is null || string.IsNullOrWhiteSpace(p.Url) || string.IsNullOrWhiteSpace(p.Note)) == true)
             throw new ArgumentException("Add a separate note for each photo.", nameof(photos));
