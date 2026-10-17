@@ -22,6 +22,10 @@ public record QualityCycleShiftReport(Guid ShiftId, string ShiftName, Guid Compa
     IReadOnlyList<QualityCycleOccurrenceReport> Occurrences, IReadOnlyList<QualityCycleFormDto> Forms,
     IReadOnlyList<QualityCycleItemReport> Items)
 {
+    public string? BranchAddress { get; init; }
+    public IReadOnlyList<QualityCycleWorkTiming>? WorkRecords { get; init; }
+    public decimal? RecordedStaffHours { get; init; }
+    public int? IncompleteTimingRecords { get; init; }
     public IReadOnlyList<QualityCycleEvidenceReport> Evidence { get; init; } = Array.Empty<QualityCycleEvidenceReport>();
 }
 public record QualityCycleItemReport(string ItemText, int RecordedOccurrences, int DaysPerformed, IReadOnlyList<string> RecordedDates);
@@ -139,12 +143,17 @@ public class QualityCycleMonthlyReportService(IShiftRepository shifts, IQualityC
                         .Distinct().OrderBy(x => x).ToList();
                     return new QualityCycleItemReport(label, performed.Count, dates.Count, dates);
                 }).ToList();
+                var work = QualityCycleWorkProjection.FromForms(displayedForms);
                 reports.Add(new(shift.Id, name, companyId, company.Name, branchId, branch.Name,
                     rows.Count, rows.Sum(r => (decimal)(r.EndUtc - r.StartUtc).TotalHours),
                     rows.Count(r => r.Status == "Recorded"), rows.Count(r => r.Status == "Missing"),
                     rows.Count(r => r.Status == "Pending"), rows.Sum(r => r.ExpectedTasks),
                     rows.Sum(r => r.SubmittedTasks), missingTasks, pendingTasks, rows, displayedForms, itemReports)
                 {
+                    BranchAddress = string.Join(", ", new[] { branch.Street,
+                        string.Join(" ", new[] { branch.PostalCode, branch.City }.Where(x => !string.IsNullOrWhiteSpace(x))), branch.Country }
+                        .Where(x => !string.IsNullOrWhiteSpace(x))),
+                    WorkRecords = work.Records, RecordedStaffHours = work.StaffHours, IncompleteTimingRecords = work.IncompleteRecords,
                     Evidence = displayedForms.Where(f => f.IsSubmitted &&
                         (!string.IsNullOrWhiteSpace(f.CleanerNotes) || f.PhotoUrls.Count > 0))
                         .OrderBy(f => f.ShiftOccurrenceUtc).ThenBy(f => f.Id)
