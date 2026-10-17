@@ -114,13 +114,16 @@ public class CreateShiftCommandHandlerTests
         await Assert.ThrowsAsync<NotFoundException>(() => handler.Handle(command, CancellationToken.None));
     }
 
-    [Fact]
-    public async Task UpdateShift_Succeeds_WhenShiftExists()
+    [Theory]
+    [InlineData(true)] [InlineData(false)]
+    public async Task UpdateShift_Succeeds_WhenShiftExists(bool dated)
     {
         var shiftId = Guid.NewGuid();
         var companyId = Guid.NewGuid();
         var branchId = Guid.NewGuid();
         var shift = Shift.Create(companyId, branchId, "Old Name", _validSchedule, null, null, null);
+        shift.ValidFrom = dated ? new DateTime(2026, 10, 17) : null;
+        var originalStart = shift.ValidFrom;
 
         _shiftRepoMock.Setup(r => r.GetAsync(shiftId, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
         _shiftRepoMock.Setup(r => r.SaveAsync(It.IsAny<Shift>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
@@ -132,6 +135,7 @@ public class CreateShiftCommandHandlerTests
 
         Assert.Equal("New Name", result.Name);
         Assert.Equal("Note", result.Notes);
+        Assert.Equal(originalStart, result.ValidFrom);
     }
 
     [Fact]
@@ -341,8 +345,11 @@ public class CreateShiftCommandHandlerTests
         var assignValidator = new ShiftValidators.AssignEmployeeToShiftCommandValidator();
 
         // Valid create
-        var validCreate = new CreateShiftCommand(Guid.NewGuid(), Guid.NewGuid(), "Shift", _validSchedule);
+        var validCreate = new CreateShiftCommand(Guid.NewGuid(), Guid.NewGuid(), "Shift", _validSchedule, ValidFrom: new DateTime(2026, 10, 17));
         createValidator.TestValidate(validCreate).ShouldNotHaveAnyValidationErrors();
+        createValidator.TestValidate(validCreate with { ValidFrom = null }).ShouldHaveValidationErrorFor(x => x.ValidFrom);
+        createValidator.TestValidate(validCreate with { ValidUntil = new DateTime(2026, 10, 16) }).ShouldHaveValidationErrorFor(x => x.ValidUntil);
+        createValidator.TestValidate(validCreate with { ValidUntil = new DateTime(2026, 10, 17) }).ShouldNotHaveAnyValidationErrors();
 
         // Invalid create with empty company & branch & invalid schedule
         var invalidCreate = new CreateShiftCommand(Guid.Empty, Guid.Empty, "", new ShiftSchedule { Type = ShiftScheduleType.DailySameTime });
