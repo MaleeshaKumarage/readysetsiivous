@@ -15,11 +15,11 @@ export default function SchemaScript({ lang, dict }: SchemaProps) {
     url: `https://readysetsiivous.fi/${lang}/`,
     logo: {
       '@type': 'ImageObject',
-      url: 'https://readysetsiivous.fi/logo.webp',
+      url: 'https://readysetsiivous.fi/brand/readyset-primary-logo.png',
       width: 500,
       height: 500,
     },
-    image: 'https://readysetsiivous.fi/logo.webp',
+    image: 'https://readysetsiivous.fi/brand/readyset-primary-logo.png',
     telephone: '+358468044231',
     areaServed: [
       {
