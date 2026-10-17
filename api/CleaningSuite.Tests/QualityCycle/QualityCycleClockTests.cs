@@ -69,6 +69,7 @@ public class QualityCycleClockTests
 
     [Theory]
     [InlineData(2)] // Before the scheduled start
+    [InlineData(392)] // October 17: record an October 1 visit without rewriting scheduled time
     [InlineData(20)] // After the scheduled end, but still on the scheduled tenant date
     public async Task Start_AllowsStartingOutsideScheduledHoursOnScheduledDate_AndRecordsActualTime(int actualHourUtc)
     {
@@ -87,7 +88,24 @@ public class QualityCycleClockTests
     }
 
     [Fact]
-    public async Task Start_RejectsStartingOutsideScheduledTenantDate()
+    public async Task Start_Allows_Backdated_Visit_Assigned_Later_And_Keeps_Scheduled_And_Actual_Times_Separate()
+    {
+        var shift = NewShift(null); shift.ValidFrom = FromUtc;
+        var employee = NewEmployee(); var actual = FromUtc.AddDays(16).AddHours(12);
+        var assignment = ShiftAssignment.Create(shift.Id, employee.Id, null); assignment.AssignedAtUtc = actual;
+        var shifts = new Mock<IShiftRepository>(); var employees = new Mock<IEmployeeRepository>(); var forms = new Mock<IQualityCycleRepository>();
+        shifts.Setup(x => x.GetAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+        shifts.Setup(x => x.GetAssignmentAsync(shift.Id, employee.Id, It.IsAny<CancellationToken>())).ReturnsAsync(assignment);
+        employees.Setup(x => x.GetByIdAsync(employee.Id, It.IsAny<CancellationToken>())).ReturnsAsync(employee);
+        forms.Setup(x => x.TryCreateFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        var result = await new QualityCycleHandlers.StartQualityCycleFormCommandHandler(shifts.Object, employees.Object, forms.Object, new FixedClock(actual))
+            .Handle(new(shift.Id, employee.Id, FromUtc.AddHours(8), FromUtc.AddHours(16)), default);
+        Assert.Equal(FromUtc.AddHours(8), result.ShiftOccurrenceUtc);
+        Assert.Equal(actual, result.StartedAtUtc);
+    }
+
+    [Fact]
+    public async Task Start_RejectsFutureScheduledTenantDate()
     {
         var shift = NewShift(null); var employee = NewEmployee(); var clock = new FixedClock(FromUtc.AddHours(2));
         var shifts = new Mock<IShiftRepository>(); var employees = new Mock<IEmployeeRepository>(); var forms = new Mock<IQualityCycleRepository>();
@@ -99,12 +117,13 @@ public class QualityCycleClockTests
         var error = await Assert.ThrowsAsync<QualityCycleConflictException>(() => handler.Handle(
             new(shift.Id, employee.Id, FromUtc.AddDays(1).AddHours(8), FromUtc.AddDays(1).AddHours(16)), default));
 
-        Assert.Equal("This shift can be started on its scheduled date.", error.Message);
+        Assert.Equal("Future shifts cannot be started before their scheduled date.", error.Message);
         forms.Verify(r => r.GetFormByShiftOccurrenceAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Theory]
     [InlineData(5)] // Before the scheduled end
+    [InlineData(392)] // October 17: record an October 1 visit without rewriting scheduled time
     [InlineData(20)] // After the scheduled end
     public async Task End_AllowsEndingOutsideScheduledHoursAfterActualStart_AndRecordsActualTime(int actualHourUtc)
     {

@@ -65,12 +65,13 @@ public class QualityCycleDispatcher : IQualityCycleDispatcher
             throw new ShiftConflictException("The checklist template does not belong to this shift's company/branch.");
         var assignments = await _shifts.ListAssignmentsByShiftAsync(shift.Id, ct);
         var now = _clock.GetUtcNow().UtcDateTime;
+        var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
         var count = 0;
         foreach (var occurrence in occurrences)
         {
             var employeeIds = occurrence.EmployeeId.HasValue
                 ? new[] { occurrence.EmployeeId.Value }
-                : assignments.Where(a => a.IsActive && a.Overlaps(occurrence.StartUtc, occurrence.EndUtc))
+                : assignments.Where(a => a.IsActive && a.CoversOccurrence(occurrence.StartUtc, occurrence.EndUtc, shift.ValidFrom.HasValue ? TenantTimeZone.StartOfLocalDay(shift.ValidFrom.Value.Date, zone) : null))
                     .Select(a => a.EmployeeId).Distinct().ToArray();
             foreach (var employeeId in employeeIds)
             {
