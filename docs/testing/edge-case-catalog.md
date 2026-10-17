@@ -11,12 +11,23 @@ parameter sets and the cross-feature failure matrix expand into additional tests
 
 ## Conventions
 
+Personal calendar and deletion additions (2026-10-17), see [behavior and coverage](../features/personal-shift-calendar.md):
+
+| ID | Layer | Trigger | Expected result |
+| --- | --- | --- | --- |
+| WORK-CAL-001 | UI/API | Enter My shifts as employee/admin/manager, including tenant date different from device date | Today default, bounded tenant-local interval, verified employee identity; anonymous/unbound access remains denied. |
+| WORK-CAL-002 | UI | Past/Future with several dates/weeks and multiple shifts in a day | Most recent dates first; compact week/day counts visible while folded; selecting a day opens only its week/day; keyboard controls work on mobile and desktop. |
+| WORK-CAL-003 | UI/API | Load earlier/later dates, failed extra page, delayed response after changing tabs | Adjacent bounded pages; existing records retained on failure; same cursor retried; stale responses ignored; no duplicate occurrences. |
+| WORK-CAL-004 | UI/API | Completed task after roster removal, deactivation or shift deletion | Employee still sees own recorded history and actual times; deleted work is read-only; other employees' records remain private. |
+| WORK-CAL-005 | UI/API | Tenant midnight/DST rollover; activity draft when switching tabs/days | Date boundaries follow tenant zone; selected period refreshes at local midnight; draft checkboxes, notes and photos retained until submission. |
+| SHIFT-DEL-001 | UI/DB | Confirm deletion of inactive shift containing roster links, occurrence exceptions and submitted QC evidence | Live shift/roster/exceptions removed atomically; QC/photo notes and monthly report content preserved; other tenants untouched; old QC tokens cannot modify history. Canceling confirmation sends no delete; active shift deletion rejected. |
+
 Lifecycle tab additions (2026-10-14), see [behavior and browser coverage](../features/lifecycle-list-tabs.md):
 
 | ID | Layer | Trigger | Expected result |
 | --- | --- | --- | --- |
 | LIFE-001 | P1 UI | Mixed active/inactive records on every supported management list | Active default; exclusive isActive filtering, accurate full-list counts; local switching adds no reads. |
-| LIFE-002 | P0 UI | Completed/partially signed agreements in either lifecycle | Visible in matching tab; signer details/PDF downloads retained; no cleanup, deletion or mutation. |
+| LIFE-002 | P0 UI/API | Completed/partially signed agreements in either lifecycle | Tab filtering preserves signer details/PDF downloads. Tenant admins may explicitly delete inactive signed agreements after confirmation; API requires confirmSigned=true; active deletion rejected; canceled confirmation sends no request. Policy updated 2026-10-17. |
 | LIFE-003 | P1 UI | Create from Inactive; deactivate/reactivate through existing actions | Create returns Active; records move to matching tab after successful reload. Permissions and existing actions preserved. |
 | LIFE-004 | P1 UI | Inactive employees in management and active assignment selector | Management exposes inactive rows; inactive invite/deactivate actions absent; assignment options remain active-only. |
 | LIFE-005 | P1 UI | Company after page100; failed/empty/changing-total/duplicate page | Complete validated pagination before counts/filtering; failed/inconsistent data shows error and fresh Refresh retry, no misleading partial list. |

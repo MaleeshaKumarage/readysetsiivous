@@ -14,7 +14,8 @@ import {
   Upload,
 } from 'lucide-react';
 import { initAuth, isAuthenticated, authTenant, login, logout } from '@/lib/auth';
-import { meApi, MyShiftOccurrence, QualityCycleFormItem } from '@/lib/meApi';
+import { meApi, MyShiftOccurrence, QualityCycleFormItem, type ShiftCalendarView } from '@/lib/meApi';
+import ShiftCalendar from './ShiftCalendar';
 import { Logo } from '@/ds/Logo';
 import { Button } from '@/ds/Button';
 import { Card } from '@/ds/Card';
@@ -70,7 +71,14 @@ export default function MyShiftsPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [view, setView] = useState<ShiftCalendarView>('today');
+  const viewRef = useRef<ShiftCalendarView>('today');
+  const [range, setRange] = useState<{ fromLocalDate: string; toLocalDate: string } | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const drafts = useRef<Record<string, { items: QualityCycleFormItem[]; notes: string; photos: ShiftPhoto[] }>>({});
   const loadVersion = useRef(0);
+  const calendarZone = useRef('Europe/Helsinki');
+  const calendarDay = useRef('');
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
 
@@ -84,6 +92,15 @@ export default function MyShiftsPage() {
   const noteRef = useRef<(HTMLTextAreaElement | null)[]>([]);
 
   useEffect(() => {
+    if (!authed || !calendarDay.current || busy || photoReading || submitting) return;
+    const day = tenantDateKey(new Date(now), calendarZone.current);
+    if (day !== calendarDay.current) {
+      calendarDay.current = day; closeForm(); void loadShifts();
+    }
+  }, [now, authed, busy, photoReading, submitting]);
+
+
+  useEffect(() => {
     let active = true;
     initAuth().then((ok) => {
       if (!active) return;
@@ -95,18 +112,35 @@ export default function MyShiftsPage() {
     return () => { active = false; loadVersion.current++; };
   }, []);
 
-  async function loadShifts() {
+  async function loadShifts(selected: ShiftCalendarView = viewRef.current, cursor?: string, append = false) {
     const version = ++loadVersion.current;
-    setLoading(true);
+    if (append) setLoadingMore(true); else setLoading(true);
     setError(null);
     try {
-      const data = await meApi.myShifts();
-      if (version === loadVersion.current) setOccurrences(data);
-    } catch {
-      if (version === loadVersion.current) setError('Failed to load your shifts.');
+      const data = await meApi.calendar(selected, cursor);
+      if (version === loadVersion.current) {
+        calendarZone.current = data.timeZoneId;
+        calendarDay.current = tenantDateKey(new Date(), data.timeZoneId);
+        setRange(data);
+        setOccurrences(previous => append ? [...new Map([...previous, ...data.occurrences].map(o => [`${o.shiftId}-${o.startUtc}`, o])).values()] : data.occurrences);
+      }
+    } catch (failure) {
+      if (version === loadVersion.current) setError(`Failed to load your shifts. ${failure instanceof Error ? failure.message : 'Please retry.'}`);
     } finally {
-      if (version === loadVersion.current) setLoading(false);
+      if (version === loadVersion.current) { setLoading(false); setLoadingMore(false); }
     }
+  }
+
+  function closeForm() {
+    if (openId) drafts.current[openId] = { items, notes, photos };
+    setOpenId(null);
+  }
+
+  function changeView(selected: ShiftCalendarView) {
+    if (busy || submitting || photoReading || selected === viewRef.current) return;
+    closeForm(); setView(selected); viewRef.current = selected;
+    setOccurrences([]); setRange(null); setLoadingMore(false);
+    void loadShifts(selected);
   }
 
   async function handleStart(o: MyShiftOccurrence) {
@@ -128,11 +162,11 @@ export default function MyShiftsPage() {
 
   async function recoverSavedOccurrence(o: MyShiftOccurrence, operation: 'start' | 'end'): Promise<boolean> {
     try {
-      const latest = await meApi.myShifts();
+      const latest = await meApi.myShifts(o.startUtc, new Date(Date.parse(o.startUtc) + 86400000).toISOString());
       const saved = latest.find(x => x.shiftId === o.shiftId && Date.parse(x.startUtc) === Date.parse(o.startUtc));
       if (!saved?.form || (operation === 'end' ? !saved.form.isSubmitted : !saved.form.startedAtUtc && !saved.form.isSubmitted)) return false;
       setOccurrences(current => current.map(x => x.shiftId === o.shiftId && Date.parse(x.startUtc) === Date.parse(o.startUtc) ? { ...x, form: saved.form } : x));
-      if (operation === 'end' || saved.form.isSubmitted) setOpenId(null);
+      if (operation === 'end' || saved.form.isSubmitted) { delete drafts.current[`${o.shiftId}-${o.startUtc}`]; setOpenId(null); }
       return true;
     } catch { return false; }
   }
@@ -140,7 +174,11 @@ export default function MyShiftsPage() {
   function openForm(o: MyShiftOccurrence) {
     if (photoReading || submitting) return;
     setNoteError(false);
-    setOpenId(openId === `${o.shiftId}-${o.startUtc}` ? null : `${o.shiftId}-${o.startUtc}`);
+    const key = `${o.shiftId}-${o.startUtc}`;
+    if (openId) drafts.current[openId] = { items, notes, photos };
+    setOpenId(openId === key ? null : key);
+    const draft = drafts.current[key];
+    if (draft) { setItems(draft.items); setNotes(draft.notes); setPhotos(draft.photos); return; }
     if (o.form) {
       setItems(o.form.items.map((i) => ({ ...i })));
       setNotes(o.form.cleanerNotes ?? '');
@@ -181,6 +219,7 @@ export default function MyShiftsPage() {
       if (result) {
         setOccurrences((prev) => prev.map((x) => (x.shiftId === o.shiftId && x.startUtc === o.startUtc ? { ...x, form: result } : x)));
         setOpenId(null);
+        delete drafts.current[`${o.shiftId}-${o.startUtc}`];
       } else {
         if (!(await recoverSavedOccurrence(o, 'end'))) setError('Could not end shift. Your selections are kept; please retry.');
       }
@@ -191,58 +230,7 @@ export default function MyShiftsPage() {
     }
   }
 
-  if (!ready) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <Loader2 className="w-6 h-6 animate-spin text-brand-500" />
-      </div>
-    );
-  }
-
-  if (!authed) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-accent-50 via-white to-brand-50 dark:from-gray-950 dark:to-gray-900 flex flex-col items-center justify-center p-4 gap-4">
-        <Logo size="lg" />
-        <p className="text-sm text-gray-600 dark:text-gray-300">Sign in to view your shifts.</p>
-        <Button onClick={() => login()}>Sign in</Button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-accent-50 via-white to-brand-50 dark:from-gray-950 dark:via-gray-950 dark:to-gray-900 py-8 px-4 sm:px-6">
-      <div className="max-w-2xl mx-auto space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Logo size="md" />
-            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">My Shifts</h1>
-          </div>
-          <nav className="flex items-center gap-3">
-            <Link className="text-sm underline text-gray-900 dark:text-gray-100" href={`/account/?tenant=${encodeURIComponent(authTenant())}`}>My account</Link>
-            <Button variant="ghost" size="sm" onClick={() => logout()}>Sign out</Button>
-          </nav>
-        </div>
-
-        {error && (
-          <div role="alert" aria-label="Shift error" className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        {loading ? (
-          <div className="flex items-center justify-center py-16 text-gray-500">
-            <Loader2 className="w-6 h-6 animate-spin" />
-          </div>
-        ) : error && occurrences.length === 0 ? (
-          <Button onClick={() => loadShifts()}>Retry loading shifts</Button>
-        ) : occurrences.length === 0 ? (
-          <Card variant="elevated" padding="lg" className="text-center text-gray-500 dark:text-gray-400">
-            No shifts scheduled.
-          </Card>
-        ) : (
-          <div className="space-y-4">
-            {occurrences.map((o) => {
+  function renderOccurrence(o: MyShiftOccurrence) {
               const key = `${o.shiftId}-${o.startUtc}`;
               const status = statusOf(o);
               const isOpen = openId === key;
@@ -276,14 +264,15 @@ export default function MyShiftsPage() {
                       </span>
                     </div>
 
-                    {status === 'not-started' && (
+                    {o.isDeleted && <p className="text-sm text-gray-500">Deleted shift · historical record</p>}
+                    {status === 'not-started' && !o.isDeleted && (
                       <Button size="sm" onClick={() => handleStart(o)} disabled={busy || !canStart} className="gap-1.5">
                         <Play className="w-4 h-4" /> Start
                       </Button>
                     )}
                     {status === 'not-started' && !canStart && <p className="text-sm text-gray-500">{scheduledDate > today ? 'Available on the scheduled date. The actual start time will be recorded.' : 'This shift can only be started on its scheduled date. Contact your tenant administrator if you need help.'}</p>}
 
-                    {status === 'in-progress' && (
+                    {status === 'in-progress' && !o.isDeleted && (
                       <Button variant="outline" size="sm" disabled={photoReading || submitting} onClick={() => openForm(o)} className="gap-1.5">
                         {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         Record activities & end
@@ -297,7 +286,7 @@ export default function MyShiftsPage() {
                       </div>
                     )}
 
-                    {isOpen && status === 'in-progress' && o.form && (
+                    {isOpen && status === 'in-progress' && !o.isDeleted && o.form && (
                       <div className="pt-3 border-t border-gray-100 dark:border-gray-700 space-y-4">
                         <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                           {o.form.templateTitle || 'Checklist'}
@@ -371,9 +360,87 @@ export default function MyShiftsPage() {
                   </div>
                 </Card>
               );
-            })}
+
+  }
+
+  if (!ready) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Loader2 className="w-6 h-6 animate-spin text-brand-500" />
+      </div>
+    );
+  }
+
+  if (!authed) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-accent-50 via-white to-brand-50 dark:from-gray-950 dark:to-gray-900 flex flex-col items-center justify-center p-4 gap-4">
+        <Logo size="lg" />
+        <p className="text-sm text-gray-600 dark:text-gray-300">Sign in to view your shifts.</p>
+        <Button onClick={() => login()}>Sign in</Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-accent-50 via-white to-brand-50 dark:from-gray-950 dark:via-gray-950 dark:to-gray-900 py-8 px-4 sm:px-6">
+      <div className="max-w-2xl mx-auto space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Logo size="md" />
+            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">My Shifts</h1>
+          </div>
+          <nav className="flex items-center gap-3">
+            <Link className="text-sm underline text-gray-900 dark:text-gray-100" href={`/account/?tenant=${encodeURIComponent(authTenant())}`}>My account</Link>
+            <Button variant="ghost" size="sm" onClick={() => logout()}>Sign out</Button>
+          </nav>
+        </div>
+
+        {error && (
+          <div role="alert" aria-label="Shift error" className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>{error}</span>
           </div>
         )}
+
+        <div role="tablist" aria-label="Shift dates" className="flex gap-2">
+          {(['past', 'today', 'future'] as const).map((tab, index, tabs) => <button
+            key={tab} id={`shift-tab-${tab}`} type="button" role="tab" aria-selected={view === tab}
+            aria-controls="my-shifts-panel" tabIndex={view === tab ? 0 : -1}
+            disabled={busy || photoReading || submitting}
+            className={`rounded-lg border px-4 py-2 font-semibold focus-visible:outline focus-visible:outline-2 ${view === tab ? 'bg-accent-900 text-white dark:bg-brand-400 dark:text-accent-950' : 'bg-white text-gray-800 dark:bg-gray-800 dark:text-gray-100'}`}
+            onClick={() => changeView(tab)} onKeyDown={event => {
+              let next = index;
+              if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+              else if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length;
+              else if (event.key === 'Home') next = 0;
+              else if (event.key === 'End') next = tabs.length - 1;
+              else return;
+              event.preventDefault(); changeView(tabs[next]); document.getElementById(`shift-tab-${tabs[next]}`)?.focus();
+            }}>{tab[0].toUpperCase() + tab.slice(1)}</button>)}
+        </div>
+
+        <div id="my-shifts-panel" role="tabpanel" aria-labelledby={`shift-tab-${view}`}>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-gray-500">
+            <Loader2 className="w-6 h-6 animate-spin" />
+          </div>
+        ) : error && occurrences.length === 0 ? (
+          <Button onClick={() => loadShifts()}>Retry loading shifts</Button>
+        ) : occurrences.length === 0 ? (
+          <Card variant="elevated" padding="lg" className="text-center text-gray-500 dark:text-gray-400">
+            No shifts scheduled.
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {view === 'today' ? occurrences.map(renderOccurrence) : <ShiftCalendar key={view} occurrences={occurrences} renderShift={renderOccurrence} disabled={busy || photoReading || submitting} onCloseForm={closeForm} />}
+          </div>
+        )}
+        </div>
+        {view !== 'today' && range && !loading && <Button variant="outline" disabled={loadingMore || busy || photoReading || submitting}
+          onClick={() => void loadShifts(view, view === 'past' ? range.fromLocalDate : range.toLocalDate, true)}>
+          {loadingMore ? 'Loading shifts…' : view === 'past' ? 'Load earlier shifts' : 'Load later shifts'}
+        </Button>}
       </div>
     </div>
   );

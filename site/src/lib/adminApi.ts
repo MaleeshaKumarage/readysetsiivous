@@ -238,6 +238,7 @@ export interface AgreementSignerDto {
   id: string; name: string; email: string; status: string; token: string;
 }
 export interface AgreementListItem {
+  hasSignedEvidence?: boolean;
   id: string; title: string; code: string; status: string; isActive: boolean; signerCount: number; signedCount: number; createdUtc: string;
 }
 export interface AgreementDetail extends AgreementListItem {
@@ -293,7 +294,7 @@ export const adminAgreements = {
   cancel: (id: string) => adminSend(`/api/v1/admin/agreements/${id}/cancel`, 'POST'),
   activate: (id: string) => adminSend(`/api/v1/admin/agreements/${id}/activate`, 'POST'),
   deactivate: (id: string) => adminSend(`/api/v1/admin/agreements/${id}/deactivate`, 'POST'),
-  deleteInactive: (id: string) => adminDelete(`/api/v1/admin/agreements/${id}`),
+  deleteInactive: (id: string, confirmSigned = false) => adminDelete(`/api/v1/admin/agreements/${id}${confirmSigned ? '?confirmSigned=true' : ''}`),
   legacyRepairPreview: () => adminGet<LegacyAgreementRepairPreview>('/api/v1/admin/agreements/legacy-repairs'),
   repairLegacyCompany: async (agreementId: string, companyId: string, expectedVersion: string): Promise<{ ok: boolean; error?: string }> => {
     const response = await authorizedFetch(`/api/v1/admin/agreements/${agreementId}/repair-company`, {

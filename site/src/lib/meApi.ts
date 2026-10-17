@@ -43,9 +43,28 @@ export interface MyShiftOccurrence {
   endUtc: string;
   timeZoneId: string;
   form: QualityCycleForm | null;
+  isDeleted?: boolean;
+}
+
+export type ShiftCalendarView = 'past' | 'today' | 'future';
+export interface MyShiftCalendar {
+  occurrences: MyShiftOccurrence[];
+  timeZoneId: string;
+  fromLocalDate: string;
+  toLocalDate: string;
 }
 
 export const meApi = {
+  calendar: async (view: ShiftCalendarView, cursor?: string): Promise<MyShiftCalendar> => {
+    const query = new URLSearchParams({ view });
+    if (cursor) query.set('cursor', cursor);
+    const response = await authorizedFetch(`/api/v1/me/shifts/calendar?${query}`, { cache: 'no-store' });
+    if (!response.ok) {
+      const problem = await response.json().catch(() => ({}));
+      throw new Error(problem.detail || (response.status === 403 ? 'Your access changed. Contact your tenant administrator.' : 'Could not load your shifts. Please retry.'));
+    }
+    return await response.json() as MyShiftCalendar;
+  },
   myShifts: async (from?: string, to?: string): Promise<MyShiftOccurrence[]> => {
     const q = new URLSearchParams();
     if (from) q.set('from', from);

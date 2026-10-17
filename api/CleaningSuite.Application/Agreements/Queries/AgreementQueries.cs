@@ -5,7 +5,7 @@ using MediatR;
 
 namespace CleaningSuite.Application.Agreements.Queries;
 
-public record AgreementListItemDto(Guid Id, string Title, string Code, string Status, bool IsActive, int SignerCount, int SignedCount, DateTime CreatedUtc);
+public record AgreementListItemDto(Guid Id, string Title, string Code, string Status, bool IsActive, int SignerCount, int SignedCount, DateTime CreatedUtc, bool HasSignedEvidence = false);
 public record SignerDto(Guid Id, string Name, string Email, string Status, string Token);
 public record AgreementDetailDto(Guid Id, string Title, string Code, string Status, bool IsActive, IReadOnlyList<SignerDto> Signers, DateTime CreatedUtc, DateTime? CompletedUtc)
 {
@@ -27,7 +27,7 @@ public class ListAgreementsHandler : IRequestHandler<ListAgreementsQuery, IReadO
     {
         var list = await _repo.ListAsync(_context.TenantId, ct);
         return list.Select(a => new AgreementListItemDto(a.Id, a.Title, a.Code, a.Status, a.IsActive,
-            a.Signers.Count, a.Signers.Count(s => s.Status == Signer.StatusSigned), a.CreatedUtc)).ToList();
+            a.Signers.Count, a.Signers.Count(s => s.Status == Signer.StatusSigned), a.CreatedUtc, a.HasSignedEvidence)).ToList();
     }
 }
 

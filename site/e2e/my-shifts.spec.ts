@@ -17,10 +17,10 @@ async function setupWork(page: Page, options: { empty?: boolean; failStart?: boo
   const occurrence: any = { shiftId, shiftName: 'AAA1 weekday shift', startUtc: new Date(scheduledStart).toISOString(),
     endUtc: new Date(scheduledStart + (options.startAt ? 8 * 3600000 : options.future ? 3600000 : 2 * 3600000)).toISOString(), timeZoneId: 'Europe/Helsinki', form: null };
   let startCalls = 0; let endCalls = 0; let loadCalls = 0; let submitted: any = null;
-  await page.route(/\/api\/v1\/me\/shifts$/, route => {
+  await page.route(/\/api\/v1\/me\/shifts(?:\/calendar)?(?:\?.*)?$/, route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
     loadCalls++;
-    return route.fulfill(options.loadFailure && loadCalls === 1 ? { status: 403, headers } : { status: 200, headers, json: [occurrence] });
+    return route.fulfill(options.loadFailure && loadCalls === 1 ? { status: 403, headers } : { status: 200, headers, json: route.request().url().includes('/calendar') ? { occurrences: [occurrence], timeZoneId: 'Europe/Helsinki', fromLocalDate: '2026-10-17', toLocalDate: '2026-10-18' } : [occurrence] });
   });
   await page.route(new RegExp(`/api/v1/me/shifts/${shiftId}/start$`), route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
@@ -39,7 +39,7 @@ async function setupWork(page: Page, options: { empty?: boolean; failStart?: boo
     occurrence.form = { ...occurrence.form, ...submitted, isSubmitted: true, submittedUtc: new Date().toISOString(), endedAtUtc: new Date().toISOString() };
     return route.fulfill(options.lostEnd ? { status: 503, headers } : { status: 200, headers, json: occurrence.form });
   });
-  return { get submitted() { return submitted; }, get startCalls() { return startCalls; }, get endCalls() { return endCalls; } };
+  return { occurrence, get loadCalls() { return loadCalls; }, get submitted() { return submitted; }, get startCalls() { return startCalls; }, get endCalls() { return endCalls; } };
 }
 
 for (const selected of ['none', 'subset', 'all']) {
@@ -59,6 +59,64 @@ for (const selected of ['none', 'subset', 'all']) {
     expect(work.submitted.cleanerNotes).toBe(''); expect(work.endCalls).toBe(1);
   });
 }
+
+test('activity selections and notes survive calendar tab changes', async ({ page }) => {
+  await setupWork(page); await page.goto('/me/shifts/');
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByRole('checkbox', { name: 'Corridor', exact: true }).check();
+  await page.getByRole('textbox', { name: 'Shift note' }).fill('Keep my work');
+  await page.getByRole('tab', { name: 'Past', exact: true }).click();
+  await page.getByRole('tab', { name: 'Today', exact: true }).click();
+  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await expect(page.getByRole('checkbox', { name: 'Corridor', exact: true })).toBeChecked();
+  await expect(page.getByRole('textbox', { name: 'Shift note' })).toHaveValue('Keep my work');
+});
+
+test('tenant midnight reloads Today and preserves an open activity draft', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-10-17T20:59:00Z') });
+  await page.clock.pauseAt(new Date('2026-10-17T20:59:10Z'));
+  const work = await setupWork(page, { startAt: '2026-10-17T20:00:00Z' }); await page.goto('/me/shifts/');
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByRole('checkbox', { name: 'Corridor', exact: true }).check();
+  await page.getByRole('textbox', { name: 'Shift note' }).fill('Midnight work');
+  const before = work.loadCalls;
+  await page.clock.fastForward(60000);
+  await expect.poll(() => work.loadCalls).toBeGreaterThan(before);
+  await expect(page.getByRole('tab', { name: 'Today', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('textbox', { name: 'Shift note' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await expect(page.getByRole('checkbox', { name: 'Corridor', exact: true })).toBeChecked();
+  await expect(page.getByRole('textbox', { name: 'Shift note' })).toHaveValue('Midnight work');
+});
+
+test('changing calendar days preserves activity selections, shift notes and photo notes', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-10-17T12:00:00Z') });
+  const work = await setupWork(page); await page.goto('/me/shifts/');
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await page.route(/\/api\/v1\/me\/shifts\/calendar\?/, route => route.fulfill({ headers, json: {
+    occurrences: [
+      { ...work.occurrence, startUtc: '2026-10-16T08:00:00Z', endUtc: '2026-10-16T10:00:00Z' },
+      { ...work.occurrence, shiftId: 'other', shiftName: 'Other day', startUtc: '2026-10-15T08:00:00Z', endUtc: '2026-10-15T10:00:00Z' },
+    ], timeZoneId: 'Europe/Helsinki', fromLocalDate: '2026-09-16', toLocalDate: '2026-10-17',
+  } }));
+  await page.getByRole('tab', { name: 'Past', exact: true }).click();
+  await page.getByRole('button', { name: /Oct 16.*1 shift/ }).click();
+  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByRole('checkbox', { name: 'Corridor', exact: true }).check();
+  await page.getByRole('textbox', { name: 'Shift note' }).fill('Preserve day draft');
+  await page.getByLabel('Add shift photos').setInputFiles(evidencePhoto);
+  await page.getByRole('textbox', { name: 'Photo 1 note' }).fill('Corridor evidence');
+  await page.getByRole('button', { name: /Oct 15.*1 shift/ }).click();
+  await expect(page.getByRole('heading', { name: 'Other day' })).toBeVisible();
+  await page.getByRole('button', { name: /Oct 16.*1 shift/ }).click();
+  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await expect(page.getByRole('checkbox', { name: 'Corridor', exact: true })).toBeChecked();
+  await expect(page.getByRole('textbox', { name: 'Shift note' })).toHaveValue('Preserve day draft');
+  await expect(page.getByRole('textbox', { name: 'Photo 1 note' })).toHaveValue('Corridor evidence');
+  await expect(page.getByRole('button', { name: 'Remove photo' })).toHaveCount(1);
+});
 
 test('employee can start and end a shift without an assigned checklist', async ({ page }) => {
   const work = await setupWork(page, { empty: true });
@@ -266,7 +324,7 @@ for (const role of ['admin', 'manager'] as const) {
 
   test(`${role} own-shift navigation remains available with no assignments`, async ({ page }) => {
     await setupWork(page, { role });
-    await page.route(/\/api\/v1\/me\/shifts$/, route => route.fulfill({ status: 200, headers, json: [] }));
+    await page.route(/\/api\/v1\/me\/shifts(?:\/calendar)?(?:\?.*)?$/, route => route.fulfill({ status: 200, headers, json: { occurrences: [], timeZoneId: 'Europe/Helsinki', fromLocalDate: '2026-10-17', toLocalDate: '2026-10-18' } }));
     await page.goto('/account/?tenant=readysetsiivous');
     await page.getByRole('link', { name: 'My shifts', exact: true }).click();
     await expect(page.getByText('No shifts scheduled.')).toBeVisible();

@@ -81,7 +81,7 @@ public class QualityCycleMonthlyReportService(IShiftRepository shifts, IQualityC
         var to = TimeZoneInfo.ConvertTimeToUtc(new DateTime(request.Year, request.Month, 1).AddMonths(1), zone);
         var now = clock.GetUtcNow().UtcDateTime;
         IReadOnlyList<Shift> candidates = request.ShiftId.HasValue
-            ? new[] { await shifts.GetAsync(request.ShiftId.Value, ct) ?? throw new NotFoundException("Shift", request.ShiftId.Value) }
+            ? new[] { await shifts.GetAsync(request.ShiftId.Value, ct) ?? await shifts.GetDeletedSnapshotAsync(request.ShiftId.Value, ct) ?? throw new NotFoundException("Shift", request.ShiftId.Value) }
             : await shifts.ListForReportingAsync(ct);
         var reports = new List<QualityCycleShiftReport>();
         foreach (var shift in candidates)

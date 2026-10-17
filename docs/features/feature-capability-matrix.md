@@ -32,7 +32,7 @@ test families, not proof that those tests are currently implemented.
 | Employees | Deactivate/reactivate | Deactivate and IsActive update | Deactivate only | Lifecycle must also define linked identity/session policy | EMP-007/008 |
 | Employees | Work hours/skills/areas/pay/certifications/notes | Yes | None | Group into employee profile tabs; restrict payroll/HR visibility | EMP-004 |
 | Employees | Send invite/reinvite | Yes; flow incomplete | None | Fix identity binding/registration destination, then add invite/status action; existing issue49 | EMP-005/006 |
-| Employees | Own profile/work schedule | Some lookup helpers; no complete self-service API | None | Add employee My work workspace with server-side own-resource authorization | AUTH-004, OPS-005 |
+| Employees | Own profile/work schedule | Yes, verified employee identity | Yes, My shifts | Today default; Past/Future week/day calendar, paged dates and recorded history after roster changes/deletion; see personal-shift-calendar.md | AUTH-004, OPS-005 |
 | Companies | Create/read | Yes | Yes | Management list loads all pages with Active/Inactive tabs; failed/inconsistent pagination is an error | COMP-001/005/007 |
 | Companies | Update/deactivate | Yes | None | Add customer-detail actions; physical delete policy separate | COMP-004 |
 | Companies | Search/pagination | Yes, take1–200 | None | Add list search and pagination; fix selectors in agreement/shift forms too | COMP-005 |
@@ -40,6 +40,7 @@ test families, not proof that those tests are currently implemented.
 | Branches | Update/deactivate | Yes | None | Put branch lifecycle inside customer detail; preserve shift/document links | COMP-004 |
 | Branches | Manage related shifts | Yes through shift API | Partial, separate shift screen | Customer detail can link/filter Operations shifts; one editor, not duplicated CRUD | SHIFT-003/017 |
 | Shifts | Create/list/deactivate | Yes | Yes | Inactive eligibility, scope and recurrence correctness need BE fixes | SHIFT-001/003/013 |
+| Shifts | Delete inactive shift with assignments/QC | Yes | Yes | Live roster/occurrence links removed atomically; QC evidence and monthly reporting snapshots retained | SHIFT-DEL-001 |
 | Shifts | Edit/reactivate/validity dates | Yes | None | Reuse shift editor; BE update must check company/branch ownership | SHIFT-003/010/018 |
 | Shifts | Daily/weekly/biweekly/monthly/on-call | Yes | Yes | Biweekly UI should be single-day; persist correctly when changing schedule type | SHIFT-001/008 |
 | Shifts | Different times per weekday (type1) | Yes | None | Add to shift editor, not a new top-level feature | SHIFT-002 |
@@ -60,7 +61,8 @@ test families, not proof that those tests are currently implemented.
 | Agreements | Copy signer links/mailto/document download | Token/file APIs | Yes | Actual email dispatch absent; distinguish client mailto from delivered invitation | AGR-007/012 |
 | Agreements | Add/remove persisted signer | Yes | None | Add in agreement detail only after signed-signer/completion policy is defined | AGR-008/009 |
 | Agreements | Cancel/activate/deactivate | Yes | None | Add state-aware actions; fix conflict500 and document access policy | AGR-010, SIGN-004/005 |
-| Agreements | Replace PDF/title after creation, hard-delete | None | None | Separate decision; signed artifacts should not become generic editable CRUD | AGR-008/009, SIGN-014 |
+| Agreements | Replace PDF/title after creation | None | None | Signed artifacts remain locked for editing | AGR-008/009, SIGN-014 |
+| Agreements | Delete inactive unsigned or signed agreement | Yes | Yes | Tenant admin only; explicit signed confirmation required, active deletion rejected; see lifecycle-list-tabs.md (2026-10-17 policy) | LIFE-002 |
 | Public signing | Preview/draw/type/sign/completion/download | Yes | Yes | Same-token file race, corrupt image validation and recovery require BE integration | SIGN-001–016 |
 | Invoices | Create/list/detail/mark-paid/void/PDF | Yes | None | Add Billing workspace; guards, permission scope and parallel-create protection first | INV-001–007 |
 | Invoices | Edit issued document/draft CRUD/hard-delete | None beyond domain Draft constant | None | Decide invoicing policy; do not infer APIs from a status constant | INV-005 |

@@ -227,7 +227,7 @@ export default function ShiftsAdminPage() {
     finally { setRestoring(null); }
   };
   const deleteShift = async (shift: Shift) => {
-    if (!window.confirm(`Permanently delete inactive shift “${shift.name}”? Shifts with assignments or checklist records are retained.`)) return;
+    if (!window.confirm(`Permanently delete inactive shift “${shift.name}” and remove its employee assignments? Completed checklist records, photos and reports will remain in history.`)) return;
     setRestoring(shift.id); setListError('');
     try { await adminShifts.deleteInactive(shift.id); await load(); }
     catch (failure) { setListError(failure instanceof Error ? failure.message : 'Could not delete shift. Please retry.'); }

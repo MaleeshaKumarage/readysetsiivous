@@ -67,6 +67,8 @@ public static class MartenConfig
             .Index(x => x.CompanyId)
             .Index(x => x.BranchId);
 
+        options.Schema.For<DeletedShift>();
+
         options.Schema.For<ShiftAssignment>()
             .Index(x => x.ShiftId)
             .Index(x => x.EmployeeId);
