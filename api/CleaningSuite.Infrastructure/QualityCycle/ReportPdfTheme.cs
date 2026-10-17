@@ -30,11 +30,12 @@ internal static class ReportPdfTheme
             });
         });
     }
-    internal static void Footer(IContainer container, DateTime generated)
+    internal static void Footer(IContainer container, DateTime generated, string language = "en")
     {
+        string T(string text) => CleaningSuite.Application.QualityCycle.ReportText.Get(language, text);
         container.BorderTop(1).BorderColor(Line).PaddingTop(6).Row(row => {
-            row.RelativeItem().Text($"Generated {generated:yyyy-MM-dd HH:mm} UTC").FontSize(8);
-            row.AutoItem().Text(text => { text.DefaultTextStyle(x => x.FontSize(8)); text.Span("Page "); text.CurrentPageNumber(); text.Span(" of "); text.TotalPages(); });
+            row.RelativeItem().Text($"{T("Generated")} {generated:yyyy-MM-dd HH:mm} UTC").FontSize(8);
+            row.AutoItem().Text(text => { text.DefaultTextStyle(x => x.FontSize(8)); text.Span(T("Page") + " "); text.CurrentPageNumber(); text.Span(" " + T("of") + " "); text.TotalPages(); });
         });
     }
     internal static IContainer Cell(IContainer container) => container.EnsureSpace(42).Border(0.5f).BorderColor(Line).Padding(6);

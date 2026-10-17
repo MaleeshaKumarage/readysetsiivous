@@ -28,7 +28,8 @@ public record BranchDto(
     string? City,
     string? Country,
     string? ContactPhone,
-    bool IsActive);
+    bool IsActive,
+    string? ContactEmail = null);
 
 public record CompanyDetailDto(CompanyDto Company, IReadOnlyList<BranchDto> Branches);
 
@@ -82,7 +83,8 @@ public record CreateBranchCommand(
     string? PostalCode = null,
     string? City = null,
     string? Country = null,
-    string? ContactPhone = null) : IRequest<BranchDto>;
+    string? ContactPhone = null,
+    string? ContactEmail = null) : IRequest<BranchDto>;
 
 public record UpdateBranchCommand(
     Guid Id,
@@ -92,7 +94,8 @@ public record UpdateBranchCommand(
     string? City = null,
     string? Country = null,
     string? ContactPhone = null,
-    bool IsActive = true) : IRequest<BranchDto>;
+    bool IsActive = true,
+    string? ContactEmail = null) : IRequest<BranchDto>;
 
 public record DeactivateBranchCommand(Guid Id) : IRequest;
 public record ReactivateBranchCommand(Guid Id) : IRequest;
@@ -262,6 +265,7 @@ public class CompanyHandlers
                     request.City,
                     request.Country,
                     request.ContactPhone);
+                branch.ContactEmail = request.ContactEmail?.Trim();
                 await _repository.SaveAsync(branch, ct);
                 return MapBranch(branch);
             }
@@ -288,6 +292,7 @@ public class CompanyHandlers
                     request.Country,
                     request.ContactPhone,
                     request.IsActive);
+                branch.ContactEmail = request.ContactEmail?.Trim();
                 await _repository.SaveAsync(branch, ct);
                 return MapBranch(branch);
             }
@@ -359,7 +364,8 @@ public class CompanyHandlers
             branch.City,
             branch.Country,
             branch.ContactPhone,
-            branch.IsActive);
+            branch.IsActive,
+            branch.ContactEmail);
 }
 
 public class CompanyValidators
@@ -387,6 +393,7 @@ public class CompanyValidators
     {
         public CreateBranchCommandValidator()
         {
+            RuleFor(x => x.ContactEmail).EmailAddress().MaximumLength(254).When(x => !string.IsNullOrWhiteSpace(x.ContactEmail));
             RuleFor(x => x.CompanyId).NotEqual(Guid.Empty);
             RuleFor(x => x.Name).NotEmpty().WithMessage("Branch name is mandatory.");
         }
@@ -396,6 +403,7 @@ public class CompanyValidators
     {
         public UpdateBranchCommandValidator()
         {
+            RuleFor(x => x.ContactEmail).EmailAddress().MaximumLength(254).When(x => !string.IsNullOrWhiteSpace(x.ContactEmail));
             RuleFor(x => x.Id).NotEqual(Guid.Empty);
             RuleFor(x => x.Name).NotEmpty().WithMessage("Branch name is mandatory.");
         }

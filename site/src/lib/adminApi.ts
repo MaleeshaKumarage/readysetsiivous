@@ -371,6 +371,7 @@ export interface Branch {
   city?: string | null;
   country?: string | null;
   contactPhone?: string | null;
+  contactEmail?: string | null;
   isActive: boolean;
 }
 
@@ -616,6 +617,7 @@ export const adminBranches = {
       city?: string;
       country?: string;
       contactPhone?: string;
+      contactEmail?: string;
     }
   ) => companyRequest<Branch>(`/api/v1/admin/companies/${companyId}/branches`, 'POST', { companyId, ...body }),
   update: (
@@ -627,6 +629,7 @@ export const adminBranches = {
       city?: string;
       country?: string;
       contactPhone?: string;
+      contactEmail?: string;
       isActive: boolean;
     }
   ) => adminSendJson<Branch>(`/api/v1/admin/companies/branches/${id}`, 'PUT', { id, ...body }),

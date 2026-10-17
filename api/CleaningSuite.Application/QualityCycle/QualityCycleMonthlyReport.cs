@@ -30,9 +30,18 @@ public record QualityCycleShiftReport(Guid ShiftId, string ShiftName, Guid Compa
 }
 public record QualityCycleItemReport(string ItemText, int RecordedOccurrences, int DaysPerformed, IReadOnlyList<string> RecordedDates);
 public record QualityCycleMonthlyReport(int Year, int Month, string TimeZoneId, DateTime GeneratedUtc,
-    IReadOnlyList<QualityCycleShiftReport> Shifts);
+    IReadOnlyList<QualityCycleShiftReport> Shifts)
+{
+    public string Language { get; init; } = "en";
+    public IReadOnlyList<QualityCycleReportPeriod>? Periods { get; init; }
+}
 public record GetQualityCycleMonthlyReportQuery(int Year, int Month, Guid? CompanyId = null,
-    Guid? BranchId = null, Guid? ShiftId = null) : IRequest<QualityCycleMonthlyReport>;
+    Guid? BranchId = null, Guid? ShiftId = null) : IRequest<QualityCycleMonthlyReport>
+{
+    internal DateOnly? FromDate { get; init; }
+    internal DateOnly? ToExclusiveDate { get; init; }
+    internal IReadOnlyList<Guid>? ShiftIds { get; init; }
+}
 public record GetQualityCycleBranchPdfQuery(int Year, int Month, Guid BranchId) : IRequest<byte[]>;
 
 public class MonthlyReportValidator : AbstractValidator<GetQualityCycleMonthlyReportQuery>
@@ -81,21 +90,27 @@ public class QualityCycleMonthlyReportService(IShiftRepository shifts, IQualityC
         var profile = await profiles.GetAsync(tenant.TenantId, ct);
         var zoneId = string.IsNullOrWhiteSpace(profile?.TimeZoneId) ? TenantTimeZone.DefaultId : profile.TimeZoneId;
         var zone = TenantTimeZone.Resolve(zoneId);
-        var from = TimeZoneInfo.ConvertTimeToUtc(new DateTime(request.Year, request.Month, 1), zone);
-        var to = TimeZoneInfo.ConvertTimeToUtc(new DateTime(request.Year, request.Month, 1).AddMonths(1), zone);
+        var from = TimeZoneInfo.ConvertTimeToUtc(request.FromDate?.ToDateTime(TimeOnly.MinValue) ?? new DateTime(request.Year, request.Month, 1), zone);
+        var to = TimeZoneInfo.ConvertTimeToUtc(request.ToExclusiveDate?.ToDateTime(TimeOnly.MinValue) ?? new DateTime(request.Year, request.Month, 1).AddMonths(1), zone);
         var now = clock.GetUtcNow().UtcDateTime;
-        IReadOnlyList<Shift> candidates = request.ShiftId.HasValue
+        IReadOnlyList<Shift> candidates = request.ShiftIds is not null
+            ? await shifts.ListByIdsAsync(request.ShiftIds, ct)
+            : request.ShiftId.HasValue
             ? new[] { await shifts.GetAsync(request.ShiftId.Value, ct) ?? await shifts.GetDeletedSnapshotAsync(request.ShiftId.Value, ct) ?? throw new NotFoundException("Shift", request.ShiftId.Value) }
             : await shifts.ListForReportingAsync(ct);
+        if (request.ShiftIds is not null && candidates.Count != request.ShiftIds.Count)
+            throw new QualityCycleConflictException("One or more selected shifts no longer exist. Refresh the shift selection.");
         var reports = new List<QualityCycleShiftReport>();
         foreach (var shift in candidates)
         {
             var saved = await forms.ListFormsAsync(shift.Id, from, to, ct);
-            var planned = await QualityCycleOccurrences.ResolvedInWindowAsync(shifts, shift, from, to, zone, ct);
+            var planned = await QualityCycleOccurrences.ResolvedInWindowAsync(shifts, shift, from, to, zone, ct, includeWithoutChecklist: request.ShiftIds is not null);
             // Submitted historical evidence remains visible even after a shift/template is removed.
             var keys = planned.Select(x => (x.Plan.CompanyId, x.Plan.BranchId))
                 .Concat(saved.Where(f => f.IsSubmitted).Select(f => (f.CompanyId == Guid.Empty ? shift.CompanyId : f.CompanyId,
                     f.BranchId == Guid.Empty ? shift.BranchId : f.BranchId))).Distinct().ToList();
+            // An explicitly selected shift still needs a summary row when the period has no visits.
+            if (request.ShiftIds is not null && keys.Count == 0) keys.Add((shift.CompanyId, shift.BranchId));
             foreach (var (companyId, branchId) in keys)
             {
                 if (request.CompanyId.HasValue && companyId != request.CompanyId.Value) continue;

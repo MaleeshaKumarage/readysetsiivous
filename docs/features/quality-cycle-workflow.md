@@ -57,17 +57,19 @@ Shifts. Public monthly-report sharing remains separate and admin-controlled.
 
 ## Reports and sharing
 
-Use **Quality Cycle → Submissions & PDF Reports**. Select year/month and optionally
-a shift, then **Load monthly report**. Each row shows company/branch/shift,
-scheduled occurrences/hours, recorded/missing/pending records and activity counts.
-**Shift PDF** exports one shift; **Branch PDF** contains separate shift sections.
-PDFs contain activity counts and occurrence/recording totals.
+Use **Quality Cycle → Reports**. Select shifts and either several months or an
+inclusive date range, then **Load report**. Rows show company, branch, shift,
+scheduled/completed visits and scheduled/actual staff hours. Export one shift or
+all selected shifts together, in English, Finnish or Swedish. Details are in
+[Quality report workspace](quality-report-workspace.md), including test cases.
 
-**Share shift report** or **Share branch report** creates a frozen report link
-that anyone possessing it can download as PDF. The confirmed expiry is 30 days.
-**Manage shared report links** lists existing links; **Copy link** and **Revoke
-link** are admin-only. Revoked/expired/unknown links return 404. Public responses
-use no-store/noindex headers. Sharing does not send email or messages automatically.
+**Share shift** or **Share all selected shifts** opens an email popup with company,
+branch or custom recipient. Sending creates a frozen report snapshot and emails a
+30-day link. The public landing page supports PDF download and explicit receipt
+acknowledgment. Admins can retry failed email, see acknowledgment time, and revoke
+links. Existing PDF-only links remain compatible. Revoked/expired/unknown links
+return 404 and public responses use no-store/noindex headers. Provider acceptance
+does not prove inbox delivery; acknowledgment is not a signature.
 
 New shared snapshots include submitted photos, individual photo notes and optional
 shift notes in the appendix, while removing full cleaner forms, names and tokens.
@@ -88,8 +90,9 @@ calendar dates. Tenant timezone changes affect future generation; existing forms
 keep their saved UTC occurrence instants.
 
 Activity identity is exact snapshot text within one shift: renaming an activity
-produces separate historical labels. No stable activity catalog, holiday
-exclusions or actual worked-hours tracking exists.
+produces separate historical labels. No stable activity catalog or holiday
+exclusions exist. Actual staff hours use submitted start/end timestamps; incomplete
+records are excluded and flagged rather than reported as zero.
 
 ## Persistence and rollout
 

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
 
 const CORS_HEADERS = {
@@ -14,6 +14,93 @@ function getBody(route: any) {
     return {};
   }
 }
+
+async function setupReportWorkspace(page: Page) {
+  await setupAdminMocks(page);
+  await page.clock.setFixedTime(new Date('2026-10-17T12:00:00Z'));
+  const rows = [
+    { shiftId: 'weekday', shiftName: 'Weekday 2 hours', companyName: 'AAA', branchId: 'aaa1', branchName: 'AAA1', scheduledOccurrences: 22, scheduledHours: 44, completedOccurrences: 20, recordedStaffHours: 43.5 },
+    { shiftId: 'biweekly', shiftName: 'Biweekly 3 hours', companyName: 'AAA', branchId: 'aaa1', branchName: 'AAA1', scheduledOccurrences: 2, scheduledHours: 6, completedOccurrences: 2, recordedStaffHours: null, incompleteTimingRecords: 1 },
+  ];
+  const calls = { previews: [] as any[], exports: [] as any[], sends: [] as any[], retry: 0 };
+  let shares: any[] = [];
+  await page.route(/\/api\/v1\/admin\/shifts(?:\?.*)?$/, route => route.fulfill({ headers: CORS_HEADERS, json: rows.map(row => ({ id: row.shiftId, name: row.shiftName, isActive: true })) }));
+  await page.route(/\/api\/v1\/admin\/quality-cycle\/templates$/, route => route.fulfill({ headers: CORS_HEADERS, json: [] }));
+  await page.route(/\/api\/v1\/admin\/quality-cycle\/(reports|report-shares)(\/.*)?$/, async route => {
+    const method = route.request().method(); const url = route.request().url(); const body = getBody(route);
+    if (method === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+    if (url.endsWith('/preview')) {
+      calls.previews.push(body);
+      return route.fulfill({ headers: CORS_HEADERS, json: { year: 2026, month: 10, timeZoneId: 'Europe/Helsinki', periods: [{ from: '2026-10-01', to: '2026-10-31' }], shifts: rows.filter(row => body.shiftIds.includes(row.shiftId)) } });
+    }
+    if (url.endsWith('/pdf')) { calls.exports.push(body); return route.fulfill({ headers: CORS_HEADERS, contentType: 'application/pdf', body: '%PDF-1.4 synthetic report' }); }
+    if (url.endsWith('/recipients')) return route.fulfill({ headers: CORS_HEADERS, json: [{ label: 'Company: AAA', email: 'company@example.test' }, { label: 'Branch: AAA1', email: 'branch@example.test' }] });
+    if (url.endsWith('/send')) {
+      calls.sends.push(body);
+      const share = { id: 'share', token: 'synthetic-token', tenantId: 'tenant-a', year: 2026, month: 10, recipientEmail: body.email, language: body.selection.language, expiresUtc: new Date(Date.now() + 30 * 86400000).toISOString(), isRevoked: false, emailError: 'Email could not be sent. Check email configuration and retry.' };
+      shares = [share]; return route.fulfill({ headers: CORS_HEADERS, json: share });
+    }
+    if (url.endsWith('/retry-email')) { calls.retry++; shares[0] = { ...shares[0], emailError: null, emailSentUtc: new Date().toISOString() }; return route.fulfill({ headers: CORS_HEADERS, json: shares[0] }); }
+    if (method === 'DELETE') { shares[0].isRevoked = true; return route.fulfill({ status: 204, headers: CORS_HEADERS }); }
+    return route.fulfill({ headers: CORS_HEADERS, json: shares });
+  });
+  await page.goto('/admin/quality-cycle/');
+  await page.getByText('Reports', { exact: true }).click();
+  return calls;
+}
+
+async function selectReportShifts(page: Page) {
+  await page.getByRole('textbox', { name: 'Shifts', exact: true }).click();
+  await page.getByRole('option', { name: 'Weekday 2 hours', exact: true }).click();
+  await page.getByRole('option', { name: 'Biweekly 3 hours', exact: true }).click();
+  await page.keyboard.press('Escape');
+}
+
+for (const [language, title, acknowledge, done] of [
+  ['en', 'Cleaning Quality Report', 'Acknowledge receipt', 'Receipt acknowledged'],
+  ['fi', 'Siivouksen laaturaportti', 'Kuittaa vastaanotto', 'Vastaanotto kuitattu'],
+  ['sv', 'Kvalitetsrapport för städning', 'Bekräfta mottagandet', 'Mottagandet bekräftat'],
+]) {
+  test(`public report ${language} requires explicit acknowledgment and survives reconnect`, async ({ page }, testInfo) => {
+    let posts = 0; let acknowledgedUtc: string | null = null;
+    await page.route(/\/api\/v1\/public\/tenant-a\/quality-cycle\/reports\/reader-token(?:\/acknowledge)?$/, route => {
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+      if (route.request().method() === 'POST') { posts++; acknowledgedUtc = '2026-10-17T12:00:00Z'; }
+      return route.fulfill({ headers: CORS_HEADERS, json: { language, expiresUtc: '2099-11-01T00:00:00Z', acknowledgedUtc,
+        year: 2026, month: 10, periods: [{ from: '2026-10-01', to: '2026-10-31' }], shifts: [{ companyName: 'AAA', branchName: 'AAA1', shiftName: 'Weekdays', scheduledOccurrences: 22, completedOccurrences: 20, scheduledHours: 44, actualHours: 43.5 }] } });
+    });
+    await page.goto('/quality-report/?tenant=tenant-a&token=reader-token');
+    await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '43.50', exact: true })).toBeVisible(); expect(posts).toBe(0);
+    await expect(page.locator('main')).toHaveAttribute('lang', language);
+    await page.screenshot({ path: testInfo.outputPath(`recipient-${language}.png`), fullPage: true });
+    await page.getByRole('button', { name: acknowledge, exact: true }).click();
+    await expect(page.getByRole('status')).toContainText(done); expect(posts).toBe(1);
+    await page.reload(); await expect(page.getByRole('status')).toContainText(done);
+    await expect(page.getByRole('button', { name: acknowledge, exact: true })).toHaveCount(0); expect(posts).toBe(1);
+  });
+}
+
+test('unavailable public report offers retry without acknowledgment controls', async ({ page }) => {
+  await page.route(/\/api\/v1\/public\/tenant-a\/quality-cycle\/reports\/expired-token$/, route => route.fulfill({ headers: CORS_HEADERS, status: 404, json: {} }));
+  await page.goto('/quality-report/?tenant=tenant-a&token=expired-token');
+  await expect(page.getByRole('alert').filter({ hasText: 'unavailable, expired or revoked' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Acknowledge receipt' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
+});
+
+test('month multi-select keeps selections across years without treating intervening months as selected', async ({ page }) => {
+  const calls = await setupReportWorkspace(page); await selectReportShifts(page);
+  const year = page.getByRole('textbox', { name: 'Month selection year' });
+  await year.fill(''); await year.pressSequentially('2027');
+  await page.getByRole('textbox', { name: 'Months', exact: true }).click();
+  await page.getByRole('option', { name: 'January 2027', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Load report', exact: true }).click();
+  await expect.poll(() => calls.previews.length).toBe(1);
+  expect(calls.previews[0].months).toEqual(['2026-10', '2027-01']);
+  expect(calls.previews[0].from).toBeUndefined();
+});
 
 test.describe('Admin Panel - Quality Cycle Page', () => {
   test('navigation, tab switching, template creation, edit and preserving deactivation', async ({ page }) => {
@@ -134,83 +221,22 @@ test.describe('Admin Panel - Quality Cycle Page', () => {
     expect(deleteConfirmed).toBe(false);
   });
 
-  test('submissions tab and PDF summary report export', async ({ page }) => {
-    await setupAdminMocks(page, { authenticated: true });
-
-    const mockShifts = [
-      { id: 'shift-1', name: 'Morning Office Shift', isActive: true },
-    ];
-
-    const mockForms = [
-      {
-        id: 'form-1',
-        shiftId: 'shift-1',
-        shiftName: 'Morning Office Shift',
-        employeeId: 'emp-1',
-        employeeName: 'Anna Cleaner',
-        templateId: 'tpl-1',
-        templateTitle: 'Daily Office Checklist',
-        shiftOccurrenceUtc: new Date().toISOString(),
-        token: 'token-abc',
-        items: [
-          { itemText: 'Vacuum carpets', isChecked: true },
-          { itemText: 'Wipe desks', isChecked: true },
-        ],
-        photoUrls: ['https://example.com/photo.jpg'],
-        cleanerNotes: 'Completed on time',
-        isSubmitted: true,
-        submittedUtc: new Date().toISOString(),
-        createdUtc: new Date().toISOString(),
-      },
-    ];
-
-    await page.route(/\/api\/v1\/admin\/shifts(\/.*)?$/, async (route) => {
-      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
-      return route.fulfill({ status: 200, json: mockShifts, headers: CORS_HEADERS });
-    });
-
-    await page.route(/\/api\/v1\/admin\/quality-cycle\/templates(\/.*)?$/, async (route) => {
-      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
-      return route.fulfill({ status: 200, json: [], headers: CORS_HEADERS });
-    });
-
-    await page.route(/\/api\/v1\/admin\/quality-cycle\/forms(\/.*|\?.*)?$/, async (route) => {
-      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
-      return route.fulfill({ status: 200, json: mockForms, headers: CORS_HEADERS });
-    });
-
-    await page.route(/\/api\/v1\/admin\/quality-cycle\/summary-pdf(\/.*|\?.*)?$/, async (route) => {
-      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/pdf',
-        body: Buffer.from('%PDF-1.4 mock pdf content'),
-        headers: CORS_HEADERS,
-      });
-    });
-
-    await page.goto('/admin/quality-cycle/');
-
-    // Switch to Submissions & PDF Reports tab
-    await page.getByText('Submissions & PDF Reports', { exact: true }).click();
-
-    await expect(page.getByText('Quality Cycle Submissions Log', { exact: true })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'Morning Office Shift' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'Anna Cleaner' })).toBeVisible();
-    await expect(page.getByText('Submitted')).toBeVisible();
-    await expect(page.getByText('2 / 2')).toBeVisible();
-    await expect(page.getByText('Note: Completed on time')).toBeVisible();
-
-    // Select shift for PDF summary download
-    await page.getByRole('textbox', { name: 'Filter by Shift' }).click();
-    await page.getByRole('option', { name: 'Morning Office Shift' }).click();
+  test('selected shift export uses the loaded period and selected PDF language', async ({ page }) => {
+    const calls = await setupReportWorkspace(page);
+    await selectReportShifts(page);
+    await page.getByRole('button', { name: 'Load report', exact: true }).click();
+    await expect(page.getByRole('cell', { name: 'Weekday 2 hours', exact: true })).toBeVisible();
+    await page.getByRole('textbox', { name: 'Report language', exact: true }).click();
+    await page.getByRole('option', { name: 'Finnish', exact: true }).click();
     const downloadPromise = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'Export PDF Summary' }).click();
-    const download = await downloadPromise;
-    expect(download.suggestedFilename()).toMatch(/^QualityCycle_Summary_shift-1_\d{4}_\d{2}\.pdf$/);
+    await page.getByRole('button', { name: 'Export all selected shifts', exact: true }).click();
+    expect((await downloadPromise).suggestedFilename()).toBe('Cleaning_Quality_Report_fi.pdf');
+    expect(calls.exports[0]).toMatchObject({ shiftIds: ['weekday', 'biweekly'], language: 'fi' });
+    const row = page.getByRole('row').filter({ hasText: 'Weekday 2 hours' });
+    const single = page.waitForEvent('download'); await row.getByRole('button', { name: 'Export shift', exact: true }).click(); await single;
+    expect(calls.exports[1].shiftIds).toEqual(['weekday']);
   });
 });
-
 test.describe('Public Quality Cycle Page', () => {
   test('happy path: complete and submit quality cycle form', async ({ page }) => {
     const mockForm = {
@@ -310,27 +336,25 @@ test('employee cannot open admin template or report controls', async ({ page }) 
   expect(qcRequests).toBe(0);
 });
 
-test('monthly report keeps weekday and biweekly shifts separate under one branch', async ({ page }) => {
-  await setupAdminMocks(page, { authenticated: true });
-  await page.route(/\/api\/v1\/admin\/quality-cycle\/monthly-summary\?/, route => route.fulfill({ status: 200, headers: CORS_HEADERS, json: {
-    year: 2026, month: 10, timeZoneId: 'Europe/Helsinki', generatedUtc: new Date().toISOString(), shifts: [
-      { shiftId: 'weekday', shiftName: 'Weekday 2 hours', companyName: 'AAA', branchId: 'aaa1', branchName: 'AAA1', scheduledOccurrences: 22, scheduledHours: 44, completedOccurrences: 20, missingOccurrences: 2, pendingOccurrences: 0, submittedTasks: 20, totalTasks: 22, items: [{ itemText: 'Corridor', daysPerformed: 12, recordedOccurrences: 12, recordedDates: [] }] },
-      { shiftId: 'biweekly', shiftName: 'Biweekly 3 hours', companyName: 'AAA', branchId: 'aaa1', branchName: 'AAA1', scheduledOccurrences: 2, scheduledHours: 6, completedOccurrences: 2, missingOccurrences: 0, pendingOccurrences: 0, submittedTasks: 2, totalTasks: 2, items: [{ itemText: 'Gym', daysPerformed: 4, recordedOccurrences: 4, recordedDates: [] }] },
-    ]
-  } }));
-  await page.goto('/admin/quality-cycle/');
-  await page.getByText('Submissions & PDF Reports', { exact: true }).click();
-  await page.getByRole('button', { name: 'Load monthly report' }).click();
+test('selected reports show summary columns, support a custom inclusive range and clear stale results', async ({ page }, testInfo) => {
+  const calls = await setupReportWorkspace(page);
+  await expect(page.getByRole('button', { name: 'Load report', exact: true })).toBeDisabled();
+  await selectReportShifts(page);
+  await page.getByRole('button', { name: 'Load report', exact: true }).click();
   const weekdays = page.getByRole('row').filter({ hasText: 'Weekday 2 hours' });
-  await expect(weekdays).toContainText('22 / 44');
-  await expect(weekdays).toContainText('Corridor: 12 days');
-  const biweekly = page.getByRole('row').filter({ hasText: 'Biweekly 3 hours' });
-  await expect(biweekly).toContainText('2 / 6');
-  await expect(biweekly).toContainText('Gym: 4 days');
-  await expect(page.getByRole('button', { name: 'Shift PDF', exact: true })).toHaveCount(2);
+  await expect(weekdays).toContainText('44.00'); await expect(weekdays).toContainText('43.50');
+  await expect(page.getByRole('columnheader')).toHaveText(['Company', 'Branch', 'Shift', 'Scheduled occurrences', 'Completed occurrences', 'Scheduled hours', 'Actual hours', 'Actions']);
+  await expect(page.getByRole('row').filter({ hasText: 'Biweekly 3 hours' })).toContainText('Not available');
+  await page.screenshot({ path: testInfo.outputPath('report-workspace.png'), fullPage: true });
+  await page.getByText('Date range', { exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Export all selected shifts' })).toHaveCount(0);
+  await page.getByLabel('From date', { exact: true }).fill('2026-10-02');
+  await page.getByLabel('To date (inclusive)', { exact: true }).fill('2026-10-02');
+  await page.getByRole('button', { name: 'Load report', exact: true }).click();
+  await expect.poll(() => calls.previews.length).toBe(2);
+  expect(calls.previews[1]).toMatchObject({ from: '2026-10-02', to: '2026-10-02' });
+  expect(calls.previews[1].months).toBeUndefined();
 });
-
-
 test('legacy photo submission requires a note and retains evidence after server failure', async ({ page }) => {
   const form = { id: 'photo-form', shiftName: 'Daily work', employeeName: 'Cleaner', shiftOccurrenceUtc: '2026-01-01T08:00:00Z',
     token: 'photo-token', items: [{ itemText: 'Corridor', isChecked: false }], photoUrls: [], cleanerNotes: '', isSubmitted: false };
@@ -414,24 +438,27 @@ test('cleaner records selected activities without completing every item or addin
   expect(submitted.cleanerNotes).toBe('');
 });
 
-test('tenant admin creates a share link and revokes it', async ({ page }) => {
-  await setupAdminMocks(page, { authenticated: true });
-  await page.route(/\/api\/v1\/admin\/quality-cycle\/monthly-summary\?/, route => route.fulfill({ status: 200, headers: CORS_HEADERS, json: {
-    year: 2026, month: 10, timeZoneId: 'Europe/Helsinki', shifts: [{ shiftId: 'weekday', shiftName: 'Weekdays', companyName: 'AAA', branchId: 'aaa1', branchName: 'AAA1', scheduledOccurrences: 22, scheduledHours: 44, completedOccurrences: 22, missingOccurrences: 0, pendingOccurrences: 0, submittedTasks: 22, totalTasks: 22, items: [{ itemText: 'Corridor', daysPerformed: 12, recordedOccurrences: 12 }] }]
-  } }));
-  await page.route(/\/api\/v1\/admin\/quality-cycle\/report-shares(\/.*)?$/, route => {
-    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
-    if (route.request().method() === 'DELETE') return route.fulfill({ status: 204, headers: CORS_HEADERS });
-    return route.fulfill({ status: 200, headers: CORS_HEADERS, json: { id: 'share', token: 'public-report-token', tenantId: 'tenant-a', expiresUtc: new Date(Date.now() + 30 * 86400000).toISOString(), year: 2026, month: 10, isRevoked: false } });
-  });
-  await page.goto('/admin/quality-cycle/'); await page.getByText('Submissions & PDF Reports', { exact: true }).click();
-  await page.getByRole('button', { name: 'Load monthly report' }).click();
-  await page.getByRole('button', { name: 'Share shift report', exact: true }).click();
-  await expect(page.getByRole('textbox', { name: 'Shareable report link' })).toHaveValue(/\/public\/tenant-a\/quality-cycle\/reports\/public-report-token\/pdf$/);
-  await page.getByRole('button', { name: 'Revoke link' }).click(); await expect(page.getByText('Inactive link', { exact: true })).toBeVisible();
+test('tenant admin emails a selected snapshot, retries failed email and revokes the link', async ({ page }) => {
+  const calls = await setupReportWorkspace(page); await selectReportShifts(page);
+  await page.getByRole('button', { name: 'Load report', exact: true }).click();
+  await page.getByRole('button', { name: 'Share all selected shifts' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('textbox', { name: 'Recipient source' }).click();
+  await page.getByRole('option', { name: /Branch: AAA1/ }).click();
+  await expect(dialog.getByLabel('Recipient email')).toHaveValue('branch@example.test');
+  await dialog.getByRole('textbox', { name: 'Recipient source' }).click();
+  await page.getByRole('option', { name: 'Other email address', exact: true }).click();
+  await dialog.getByLabel('Recipient email').fill('other@example.test');
+  await dialog.getByRole('textbox', { name: 'PDF and email language' }).click();
+  await page.getByRole('option', { name: 'Swedish', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Send report', exact: true }).click();
+  await expect(page.getByText('Email failed', { exact: true })).toBeVisible();
+  expect(calls.sends[0]).toMatchObject({ email: 'other@example.test', selection: { shiftIds: ['weekday', 'biweekly'], language: 'sv' } });
+  await page.getByRole('button', { name: 'Retry email', exact: true }).click();
+  await expect(page.getByText('Email sent', { exact: true })).toBeVisible(); expect(calls.retry).toBe(1);
+  await expect(page.getByRole('link', { name: 'Open report', exact: true })).toHaveAttribute('href', /quality-report\/\?tenant=tenant-a&token=synthetic-token$/);
+  await page.getByRole('button', { name: 'Revoke', exact: true }).click(); await expect(page.getByText('Inactive', { exact: true })).toBeVisible();
 });
-
-
 test('admin can attach a checklist to an existing shift', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   const shift = { id: 'existing-shift', companyId: 'company-a', branchId: 'branch-a', name: 'Existing shift', schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' }, isActive: true, qualityCycleTemplateId: null };

@@ -6,7 +6,15 @@ using MediatR;
 
 namespace CleaningSuite.Application.QualityCycle;
 public record CreateQualityCycleReportShareCommand(int Year, int Month, Guid? CompanyId = null, Guid? BranchId = null, Guid? ShiftId = null) : IRequest<QualityCycleReportShareDto>;
-public record QualityCycleReportShareDto(Guid Id, string Token, string TenantId, DateTime ExpiresUtc, bool IsRevoked, int Year, int Month);
+public record QualityCycleReportShareDto(Guid Id, string Token, string TenantId, DateTime ExpiresUtc, bool IsRevoked, int Year, int Month)
+{
+    public string? RecipientEmail { get; init; }
+    public DateTime? EmailSentUtc { get; init; }
+    public string? EmailError { get; init; }
+    public DateTime? AcknowledgedUtc { get; init; }
+    public string Language { get; init; } = "en";
+    public IReadOnlyList<QualityCycleReportPeriod>? Periods { get; init; }
+}
 public record RevokeQualityCycleReportShareCommand(Guid Id) : IRequest;
 public record ListQualityCycleReportSharesQuery : IRequest<IReadOnlyList<QualityCycleReportShareDto>>;
 public record GetSharedQualityCycleReportPdfQuery(string Token) : IRequest<byte[]>;
@@ -32,7 +40,7 @@ public class RevokeQualityCycleReportShareHandler(IQualityCycleRepository reposi
 {
     public async Task Handle(RevokeQualityCycleReportShareCommand request, CancellationToken ct) {
         var share = await repository.GetReportShareAsync(request.Id, ct) ?? throw new NotFoundException("Report", request.Id);
-        share.IsRevoked = true; await repository.SaveReportShareAsync(share, ct);
+        await repository.RevokeReportShareAsync(share.Id, ct);
     }
 }
 public class ListQualityCycleReportSharesHandler(IQualityCycleRepository repository, ITenantContext tenant)
@@ -41,7 +49,7 @@ public class ListQualityCycleReportSharesHandler(IQualityCycleRepository reposit
     public async Task<IReadOnlyList<QualityCycleReportShareDto>> Handle(ListQualityCycleReportSharesQuery request, CancellationToken ct) =>
         (await repository.ListReportSharesAsync(ct)).Select(s => {
             var report = JsonSerializer.Deserialize<QualityCycleMonthlyReport>(s.ReportJson)!;
-            return new QualityCycleReportShareDto(s.Id, s.Token, tenant.TenantId, s.ExpiresUtc, s.IsRevoked, report.Year, report.Month);
+            return ReportShareMapping.Dto(s, report, tenant.TenantId);
         }).ToList();
 }
 public class GetSharedQualityCycleReportPdfHandler(IQualityCycleRepository repository, IQualityCyclePdfGenerator pdf, TimeProvider clock)

@@ -11,6 +11,7 @@ public class Branch : BaseDocument
     public string? City { get; set; }
     public string? Country { get; set; }
     public string? ContactPhone { get; set; }
+    public string? ContactEmail { get; set; }
     public bool IsActive { get; set; }
 
     public static Branch Create(
