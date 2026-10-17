@@ -18,7 +18,7 @@ public class UploadContentValidatorTests
     {
         var png = Image(SKEncodedImageFormat.Png, 1200, 400);
         _validator.ValidateSignaturePng(png);
-        Assert.Throws<ValidationException>(() => _validator.ValidateSignaturePng([1, 2, 3, 4, 5, 6, 7, 8]));
+        Assert.Throws<ValidationException>(() => _validator.ValidateSignaturePng(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }));
         Assert.Throws<ValidationException>(() => _validator.ValidateSignaturePng(Image(SKEncodedImageFormat.Png, 1201, 400)));
     }
 
