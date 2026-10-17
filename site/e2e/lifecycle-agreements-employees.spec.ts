@@ -17,6 +17,7 @@ test('agreement lifecycle preserves completed and partial documents independentl
   ].map(item => ({ ...item, code: item.id, signerCount: 1, signedCount: item.status === 'Draft' ? 0 : 1 }));
   let listRequests = 0;
   await page.route('**/api/v1/admin/agreements**', async route => {
+    if (new URL(route.request().url()).pathname.endsWith('/legacy-repairs')) return route.fulfill({ headers, json: { agreements: [], companies: [] } });
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith('/document')) return route.fulfill({ headers, contentType: 'application/pdf', body: '%PDF-1.4\nSigned document\n%%EOF' });
@@ -84,7 +85,7 @@ test('employees request all lifecycle records and inactive employees offer react
 test('inactive-only employees and agreements show helpful Active empty states', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   await page.route('**/api/v1/admin/employees**', route => route.fulfill({ headers, json: [{ id: 'old', firstName: 'Old', lastName: 'Cleaner', email: 'old@example.com', role: 'employee', isActive: false }] }));
-  await page.route('**/api/v1/admin/agreements**', route => route.fulfill({ headers, json: [{ id: 'old', title: 'Old agreement', code: 'old', status: 'Completed', isActive: false, signerCount: 1, signedCount: 1 }] }));
+  await page.route('**/api/v1/admin/agreements**', route => route.fulfill({ headers, json: new URL(route.request().url()).pathname.endsWith('/legacy-repairs') ? { agreements: [], companies: [] } : [{ id: 'old', title: 'Old agreement', code: 'old', status: 'Completed', isActive: false, signerCount: 1, signedCount: 1 }] }));
   await page.goto('/admin/employees/');
   await expect(page.getByText('No active employees. Check the Inactive tab.')).toBeVisible();
   await page.getByRole('tab', { name: 'Inactive (1)', exact: true }).click();
@@ -104,6 +105,7 @@ test('inactive agreements can be deleted when unsigned and signed agreements are
   let deleteCalls = 0;
   let retainOnDelete = true;
   await page.route('**/api/v1/admin/agreements**', async route => {
+    if (new URL(route.request().url()).pathname.endsWith('/legacy-repairs')) return route.fulfill({ headers, json: { agreements: [], companies: [] } });
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
     if (route.request().method() === 'GET') return route.fulfill({ headers, json: items });
     if (route.request().method() === 'DELETE') {

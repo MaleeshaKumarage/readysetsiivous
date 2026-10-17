@@ -289,6 +289,7 @@ test.describe('Admin Panel - Agreements Page', () => {
     });
 
     await page.route('**/api/v1/admin/agreements**', async (route) => {
+      if (new URL(route.request().url()).pathname.endsWith('/legacy-repairs')) return route.fulfill({ status: 200, headers: CORS_HEADERS, json: { agreements: [], companies: [] } });
       const method = route.request().method();
       if (method === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
       if (method === 'GET') return route.fulfill({ status: 200, json: agreements, headers: CORS_HEADERS });
@@ -353,6 +354,7 @@ test.describe('Admin Panel - Agreements Page', () => {
       return route.fulfill({ status: 200, json: { items: [], total: 0 }, headers: CORS_HEADERS });
     });
     await page.route('**/api/v1/admin/agreements**', async (route) => {
+      if (new URL(route.request().url()).pathname.endsWith('/legacy-repairs')) return route.fulfill({ status: 200, headers: CORS_HEADERS, json: { agreements: [], companies: [] } });
       if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
       return route.fulfill({ status: 200, json: [], headers: CORS_HEADERS });
     });
