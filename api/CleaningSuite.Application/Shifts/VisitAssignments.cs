@@ -79,6 +79,8 @@ public sealed class SetVisitAssigneesHandler(IShiftRepository shifts, IEmployeeR
                 end = TenantTimeZone.StartOfLocalDay(shift.ValidUntil.Value.Date.AddDays(1), zone);
             if (end <= boundary || (end - boundary).TotalDays > 3660)
                 throw new ShiftConflictException("Choose a handover within a supported shift range (up to ten years).");
+            foreach (var item in history.Where(x => x.IsActive && x.Periods.Count == 0 && shift.ValidFrom.HasValue))
+                item.Periods.Add(new() { FromUtc = TenantTimeZone.StartOfLocalDay(shift.ValidFrom!.Value.Date, zone) });
             if (request.Mode == OccurrenceAssignmentMode.Replace)
                 foreach (var item in history) item.EndFrom(boundary, now);
             foreach (var id in selected)
