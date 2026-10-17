@@ -339,11 +339,11 @@ public class QualityCycleHandlers
             else
             {
                 var assignment = await _shiftRepository.GetAssignmentAsync(shift.Id, employee.Id, ct);
-                if (assignment == null || !assignment.IsActive || !assignment.Overlaps(start, end))
+                if (assignment == null || !assignment.IsActive || !assignment.CoversOccurrence(start, end, shift.ValidFrom.HasValue ? TenantTimeZone.StartOfLocalDay(shift.ValidFrom.Value.Date, zone) : null))
                     throw new UnauthorizedAccessException();
             }
-            if (TenantTimeZone.LocalDate(start, zone) != TenantTimeZone.LocalDate(_clock.GetUtcNow().UtcDateTime, zone))
-                throw new QualityCycleConflictException("This shift can be started on its scheduled date.");
+            if (TenantTimeZone.LocalDate(start, zone) > TenantTimeZone.LocalDate(_clock.GetUtcNow().UtcDateTime, zone))
+                throw new QualityCycleConflictException("Future shifts cannot be started before their scheduled date.");
 
             var form = await _repository.GetFormByShiftOccurrenceAsync(shift.Id, employee.Id, start, ct);
             if (form == null)
@@ -451,7 +451,7 @@ public class QualityCycleHandlers
                     ShiftScheduleCalculator.GenerateOccurrences(shift, localFrom, localTo, zone), exceptions);
                 assignmentByShift.TryGetValue(shift.Id, out var assignment);
                 foreach (var occurrence in occurrences.Where(o => o.StartUtc >= from && o.StartUtc < to
-                    && (o.EmployeeId == request.EmployeeId || (!o.EmployeeId.HasValue && assignment is not null && assignment.Overlaps(o.StartUtc, o.EndUtc)))))
+                    && (o.EmployeeId == request.EmployeeId || (!o.EmployeeId.HasValue && assignment is not null && assignment.CoversOccurrence(o.StartUtc, o.EndUtc, shift.ValidFrom.HasValue ? TenantTimeZone.StartOfLocalDay(shift.ValidFrom.Value.Date, zone) : null)))))
                 {
                     var form = await _repository.GetFormByShiftOccurrenceAsync(shift.Id, request.EmployeeId, occurrence.StartUtc, ct);
                     if (form is not null && (form.EmployeeId != request.EmployeeId || form.ShiftId != shift.Id || form.ShiftOccurrenceUtc != occurrence.StartUtc))
