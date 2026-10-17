@@ -36,6 +36,29 @@ public class AgreementRepository : IAgreementRepository, IDisposable
         await Session(tenantId).Query<Agreement>()
             .FirstOrDefaultAsync(a => a.Signers.Any(s => s.Token == token), ct);
 
+    public async Task<Agreement?> ReloadBySignerTokenAsync(string tenantId, string token, CancellationToken ct = default)
+    {
+        if (_sessions.Remove(tenantId, out var stale)) stale.Dispose();
+        var fresh = _store.DirtyTrackedSession(tenantId);
+        _sessions[tenantId] = fresh;
+        return await fresh.Query<Agreement>()
+            .FirstOrDefaultAsync(a => a.Signers.Any(s => s.Token == token), ct);
+    }
+
+    public async Task<IReadOnlyList<Agreement>> ListMissingCompanyAssociationsAsync(string tenantId, CancellationToken ct = default) =>
+        await Session(tenantId).Query<Agreement>().ToListAsync(ct);
+
+    public async Task<AgreementAssociationRepairAudit?> GetAssociationRepairAuditAsync(string tenantId, Guid agreementId, CancellationToken ct = default) =>
+        await Session(tenantId).LoadAsync<AgreementAssociationRepairAudit>(agreementId, ct);
+
+    public async Task SaveAssociationRepairAsync(string tenantId, Agreement agreement, AgreementAssociationRepairAudit audit, CancellationToken ct = default)
+    {
+        var session = Session(tenantId);
+        session.Store(agreement);
+        session.Insert(audit);
+        await session.SaveChangesAsync(ct);
+    }
+
     private IDocumentSession Session(string tenantId)
     {
         if (!_sessions.TryGetValue(tenantId, out var session))

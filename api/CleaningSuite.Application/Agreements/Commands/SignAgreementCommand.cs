@@ -57,19 +57,19 @@ public class SignAgreementHandler : IRequestHandler<SignAgreementCommand, SignRe
     private readonly IAgreementRepository _repo;
     private readonly IAgreementFileStore _store;
     private readonly IAgreementDocumentGenerator _generator;
+    private readonly IUploadContentValidator _uploads;
 
     public SignAgreementHandler(ITenantContext context, IAgreementRepository repo,
-        IAgreementFileStore store, IAgreementDocumentGenerator generator)
+        IAgreementFileStore store, IAgreementDocumentGenerator generator, IUploadContentValidator uploads)
     {
-        _context = context; _repo = repo; _store = store; _generator = generator;
+        _context = context; _repo = repo; _store = store; _generator = generator; _uploads = uploads;
     }
 
     public async Task<SignResult> Handle(SignAgreementCommand request, CancellationToken ct)
     {
         var tenantId = _context.TenantId;
+        _uploads.ValidateSignaturePng(request.SignaturePng);
 
-        // Load once to validate state and persist the signature image — a durable side
-        // effect we deliberately do not repeat on retry.
         var agreement = await _repo.FindBySignerTokenAsync(tenantId, request.Token, ct)
             ?? throw new NotFoundException("Agreement", Guid.Empty);
         var signer = agreement.Signers.FirstOrDefault(s => s.Token == request.Token)
@@ -82,73 +82,100 @@ public class SignAgreementHandler : IRequestHandler<SignAgreementCommand, SignRe
         if (signer.Status == Signer.StatusSigned)
             throw new AgreementConflictException("Already signed");
 
-        var signaturePath = await _store.SaveSignatureAsync(tenantId, agreement.Id, signer.Id, request.SignaturePng, ct);
-
-        // Parallel signers race on the agreement's optimistic-concurrency version; retry
-        // once against a fresh copy. The signature image is already on disk, so re-applying
-        // only re-sets the signer fields and re-evaluates completion. A second conflict
-        // surfaces as 409 via the exception mapping.
-        for (var attempt = 0; ; attempt++)
+        string? signaturePath = null;
+        string? signedPdfPath = null;
+        try
         {
-            try
+            signaturePath = await _store.SaveSignatureAsync(tenantId, agreement.Id, signer.Id, request.SignaturePng, ct);
+
+            // Marten concurrency serializes signer updates. Keep each attempt's files
+            // immutable and retry only while this signer remains pending.
+            for (var attempt = 0; ; attempt++)
             {
-                if (attempt > 0)
+                try
                 {
-                    agreement = await _repo.FindBySignerTokenAsync(tenantId, request.Token, ct)
+                    if (attempt > 0)
+                    {
+                        agreement = await _repo.ReloadBySignerTokenAsync(tenantId, request.Token, ct)
+                            ?? throw new NotFoundException("Agreement", Guid.Empty);
+                        signer = agreement.Signers.FirstOrDefault(s => s.Token == request.Token)
+                            ?? throw new NotFoundException("Signer", Guid.Empty);
+
+                        EnsureCanSign(agreement, signer);
+                    }
+
+                    signer.SignatureImagePath = signaturePath;
+                    signer.TypedName = request.TypedName;
+                    signer.SignedAtUtc = DateTime.UtcNow;
+                    signer.Status = Signer.StatusSigned;
+
+                    var signedCount = agreement.Signers.Count(s => s.Status == Signer.StatusSigned);
+                    var total = agreement.Signers.Count;
+
+                    if (agreement.AllSigned)
+                    {
+                        var tempPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+                        try
+                        {
+                            await _generator.GenerateSignedPdfAsync(agreement.OriginalPdfPath, agreement.Signers, tempPath, ct);
+                            await using var generated = File.OpenRead(tempPath);
+                            var pdfBytes = await BoundedStreamReader.ReadAsync(generated, 100 * 1024 * 1024, "Signed PDF", ct);
+                            if (pdfBytes.Length == 0)
+                                throw new AgreementConflictException("The signed document could not be generated. Please retry.");
+                            _uploads.ValidateGeneratedAgreementPdf(pdfBytes);
+                            await using var pdf = new MemoryStream(pdfBytes, writable: false);
+                            signedPdfPath = await _store.SaveSignedAsync(tenantId, agreement.Id, pdf, ct);
+                            agreement.SignedPdfPath = signedPdfPath;
+                        }
+                        finally
+                        {
+                            if (File.Exists(tempPath)) File.Delete(tempPath);
+                        }
+
+                        agreement.Status = Agreement.StatusCompleted;
+                        agreement.CompletedUtc = DateTime.UtcNow;
+                    }
+                    else agreement.Status = Agreement.StatusPartiallySigned;
+
+                    agreement.UpdatedUtc = DateTime.UtcNow;
+                    await _repo.SaveAsync(tenantId, agreement, ct);
+                    signaturePath = null;
+                    signedPdfPath = null;
+                    return new SignResult(agreement.Status == Agreement.StatusCompleted, total, signedCount);
+                }
+                catch (ConcurrencyException) when (attempt < 1)
+                {
+                    if (signedPdfPath is not null)
+                    {
+                        await _store.DeleteArtifactAsync(tenantId, agreement.Id, signedPdfPath, CancellationToken.None);
+                        signedPdfPath = null;
+                    }
+
+                    agreement = await _repo.ReloadBySignerTokenAsync(tenantId, request.Token, ct)
                         ?? throw new NotFoundException("Agreement", Guid.Empty);
                     signer = agreement.Signers.FirstOrDefault(s => s.Token == request.Token)
                         ?? throw new NotFoundException("Signer", Guid.Empty);
-
-                    if (agreement.Status == Agreement.StatusCancelled)
-                        throw new AgreementConflictException("Agreement cancelled");
-                    if (!agreement.IsActive)
-                        throw new AgreementConflictException("Agreement deactivated");
-                    if (signer.Status == Signer.StatusSigned)
-                        throw new AgreementConflictException("Already signed");
+                    EnsureCanSign(agreement, signer);
                 }
-
-                signer.SignatureImagePath = signaturePath;
-                signer.TypedName = request.TypedName;
-                signer.SignedAtUtc = DateTime.UtcNow;
-                signer.Status = Signer.StatusSigned;
-
-                var signedCount = agreement.Signers.Count(s => s.Status == Signer.StatusSigned);
-                var total = agreement.Signers.Count;
-
-                if (agreement.AllSigned)
-                {
-                    // Generate the signed PDF to a temp path, then copy it into the store.
-                    var tempPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
-                    try
-                    {
-                        await _generator.GenerateSignedPdfAsync(agreement.OriginalPdfPath, agreement.Signers, tempPath, ct);
-                        await using var pdf = File.OpenRead(tempPath);
-                        var signedPath = await _store.SaveSignedAsync(tenantId, agreement.Id, pdf, ct);
-                        agreement.SignedPdfPath = signedPath;
-                    }
-                    finally
-                    {
-                        if (File.Exists(tempPath))
-                            File.Delete(tempPath);
-                    }
-
-                    agreement.Status = Agreement.StatusCompleted;
-                    agreement.CompletedUtc = DateTime.UtcNow;
-                }
-                else
-                {
-                    agreement.Status = Agreement.StatusPartiallySigned;
-                }
-
-                agreement.UpdatedUtc = DateTime.UtcNow;
-                await _repo.SaveAsync(tenantId, agreement, ct);
-                return new SignResult(agreement.Status == Agreement.StatusCompleted, total, signedCount);
-            }
-            catch (ConcurrencyException)
-            {
-                if (attempt >= 1)
-                    throw;
             }
         }
+        catch
+        {
+            if (signedPdfPath is not null)
+                await _store.DeleteArtifactAsync(tenantId, agreement.Id, signedPdfPath, CancellationToken.None);
+            if (signaturePath is not null)
+                await _store.DeleteArtifactAsync(tenantId, agreement.Id, signaturePath, CancellationToken.None);
+            throw;
+        }
+    }
+
+    private static void EnsureCanSign(Agreement agreement, Signer signer)
+    {
+        if (agreement.Status == Agreement.StatusCancelled)
+            throw new AgreementConflictException("Agreement cancelled");
+        if (!agreement.IsActive)
+            throw new AgreementConflictException("Agreement deactivated");
+        if (signer.Status == Signer.StatusSigned || signer.SignatureImagePath is not null || signer.SignedAtUtc.HasValue)
+            throw new AgreementConflictException("Already signed");
     }
 }

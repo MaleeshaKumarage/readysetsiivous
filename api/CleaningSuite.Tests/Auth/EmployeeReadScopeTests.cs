@@ -161,7 +161,7 @@ public class EmployeeReadScopeTests
             Guid.NewGuid(), "Activities", DateTime.UtcNow, ["Corridor"], DateTime.UtcNow.AddHours(2));
         otherForm.Start(); var repository = new Mock<IQualityCycleRepository>();
         repository.Setup(r => r.GetFormAsync(otherForm.Id, It.IsAny<CancellationToken>())).ReturnsAsync(otherForm);
-        var handler = new QualityCycleHandlers.EndQualityCycleFormCommandHandler(repository.Object);
+        var handler = new QualityCycleHandlers.EndQualityCycleFormCommandHandler(repository.Object, NoopUploadContentValidator.Instance);
         host.Mediator.Setup(m => m.Send(It.IsAny<EndQualityCycleFormCommand>(), It.IsAny<CancellationToken>()))
             .Returns((EndQualityCycleFormCommand command, CancellationToken ct) => handler.Handle(command, ct));
         using var response = await host.Send("POST", $"/api/v1/me/quality-cycle/{otherForm.Id}/end", role,

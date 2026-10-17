@@ -158,7 +158,7 @@ export default function MyShiftsPage() {
     if (files.length === 0) return;
     setPhotoReading(true);
     setError(null);
-    try { const uploaded = await readShiftPhotos(files); setPhotos(prev => [...prev, ...uploaded.map(url => ({ url, note: '' }))]); }
+    try { const uploaded = await readShiftPhotos(files, photos); setPhotos(prev => [...prev, ...uploaded.map(url => ({ url, note: '' }))]); }
     catch (error) { setError(error instanceof Error ? error.message : 'Could not read the photo. Please select it again.'); }
     finally { setPhotoReading(false); }
   }

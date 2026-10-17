@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge, ActionIcon, Tooltip, CopyButton } from '@mantine/core';
+import { Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge, ActionIcon, Tooltip, CopyButton, Paper } from '@mantine/core';
 import { Plus, Trash2, Copy, Mail, Check, Eye } from 'lucide-react';
-import { adminAgreements, adminCompanies, authorizedFetch, invalidateAdminCache, type AgreementListItem, type AgreementDetail, type Company } from '@/lib/adminApi';
+import { adminAgreements, adminCompanies, authorizedFetch, invalidateAdminCache, type AgreementListItem, type AgreementDetail, type Company, type LegacyAgreementRepairPreview } from '@/lib/adminApi';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
 
 export default function AgreementsPage() {
@@ -26,10 +26,40 @@ export default function AgreementsPage() {
   const [loadingDetail, setLoadingDetail] = useState(false);
 
   const [createdAgreement, setCreatedAgreement] = useState<AgreementDetail | null>(null);
+  const [repairPreview, setRepairPreview] = useState<LegacyAgreementRepairPreview | null>(null);
+  const [repairLoading, setRepairLoading] = useState(true);
+  const [repairSelections, setRepairSelections] = useState<Record<string, string | null>>({});
+  const [repairBusy, setRepairBusy] = useState<string | null>(null);
+  const [repairError, setRepairError] = useState('');
 
   const load = useCallback(async () => { setItems(await adminAgreements.list()); }, []);
+  const loadRepairPreview = useCallback(async () => {
+    setRepairLoading(true);
+    try {
+      const preview = await adminAgreements.legacyRepairPreview();
+      setRepairPreview(preview);
+      if (!preview) setRepairError('Could not load legacy agreement links. Refresh and try again.');
+      else setRepairError('');
+      setRepairSelections(Object.fromEntries((preview?.agreements ?? []).map(item => [item.agreementId, null])));
+    } catch {
+      setRepairPreview(null);
+      setRepairError('Could not load legacy agreement links. Refresh and try again.');
+    } finally { setRepairLoading(false); }
+  }, []);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { adminCompanies.list('', 0, 100).then((r) => { if (r) setCompanies(r.items); }); }, []);
+  useEffect(() => { loadRepairPreview(); }, [loadRepairPreview]);
+
+  const repairCompany = async (agreementId: string) => {
+    const selectedCompanyId = repairSelections[agreementId];
+    const candidate = repairPreview?.agreements.find(item => item.agreementId === agreementId);
+    if (!selectedCompanyId || !candidate) return;
+    setRepairBusy(agreementId); setRepairError('');
+    const result = await adminAgreements.repairLegacyCompany(agreementId, selectedCompanyId, candidate.expectedVersion);
+    if (!result.ok) setRepairError(result.error || 'Could not repair this agreement.');
+    else await loadRepairPreview();
+    setRepairBusy(null);
+  };
 
   const changeActivity = async (agreement: AgreementListItem) => {
     setLifecycleBusy(agreement.id); setLifecycleError('');
@@ -133,6 +163,24 @@ export default function AgreementsPage() {
       </Group>
 
       {lifecycleError && <Text role="alert" c="red">{lifecycleError}</Text>}
+      {(repairLoading || repairError || (repairPreview && repairPreview.agreements.length > 0)) && <Paper withBorder p="md" mb="md" radius="md">
+        <Stack gap="sm">
+          <div><Text fw={600}>Legacy agreements needing a company link</Text><Text size="sm" c="dimmed">Review each unsigned agreement and select its correct company. Signed agreements are excluded.</Text></div>
+          {repairError && <Text role="alert" c="red">{repairError}</Text>}
+          {repairLoading && <Loader size="sm" />}
+          {!repairLoading && repairPreview?.agreements.length === 0 && <Text size="sm" c="dimmed">No eligible legacy agreements need repair.</Text>}
+          {!repairLoading && repairPreview && repairPreview.agreements.length > 0 && <>
+          <Table.ScrollContainer minWidth={650}><Table withTableBorder>
+            <Table.Thead><Table.Tr><Table.Th>Agreement</Table.Th><Table.Th>Status</Table.Th><Table.Th>Company</Table.Th><Table.Th>Action</Table.Th></Table.Tr></Table.Thead>
+            <Table.Tbody>{repairPreview.agreements.map(item => <Table.Tr key={item.agreementId}>
+              <Table.Td>{item.title}</Table.Td><Table.Td>{item.status}</Table.Td>
+              <Table.Td><Select aria-label={`Company for ${item.title}`} placeholder="Choose company" searchable data={repairPreview.companies.map(company => ({ value: company.id, label: `${company.name}${company.isActive ? '' : ' (inactive)'}` }))} value={repairSelections[item.agreementId] ?? null} onChange={value => setRepairSelections(current => ({ ...current, [item.agreementId]: value }))} /></Table.Td>
+              <Table.Td><Button size="xs" loading={repairBusy === item.agreementId} disabled={!repairSelections[item.agreementId] || !!repairBusy} onClick={() => repairCompany(item.agreementId)}>Apply reviewed link</Button></Table.Td>
+            </Table.Tr>)}</Table.Tbody>
+          </Table></Table.ScrollContainer>
+          </>}
+        </Stack>
+      </Paper>}
       <LifecycleTabs value={lifecycle} onChange={setLifecycle} label="Agreement activity"
         activeCount={items?.filter(item => item.isActive).length} inactiveCount={items?.filter(item => !item.isActive).length}>
       {items === null ? <Loader /> : items.length === 0 ? (

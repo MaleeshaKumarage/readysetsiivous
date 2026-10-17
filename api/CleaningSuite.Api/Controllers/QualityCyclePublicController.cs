@@ -25,6 +25,7 @@ public class QualityCyclePublicController : ControllerBase
     }
 
     [HttpPost("{token}/submit")]
+    [RequestSizeLimit(30 * 1024 * 1024)]
     public async Task<IActionResult> Submit(string token, [FromBody] SubmitQualityCycleFormCommand command, CancellationToken ct)
     {
         command = command with { Token = token };

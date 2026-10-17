@@ -333,7 +333,7 @@ public class QualityCycleTests
 
         repoMock.Setup(x => x.GetFormByTokenAsync(form.Token, It.IsAny<CancellationToken>())).ReturnsAsync(form);
 
-        var handler = new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(repoMock.Object);
+        var handler = new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(repoMock.Object, NoopUploadContentValidator.Instance);
         var command = new SubmitQualityCycleFormCommand(
             form.Token,
             new List<QualityCycleFormItemDto> { new QualityCycleFormItemDto("Item 1", true) },
@@ -353,7 +353,7 @@ public class QualityCycleTests
         var repoMock = new Mock<IQualityCycleRepository>();
         repoMock.Setup(r => r.GetFormByTokenAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((QualityCycleForm?)null);
 
-        var handler = new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(repoMock.Object);
+        var handler = new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(repoMock.Object, NoopUploadContentValidator.Instance);
         var command = new SubmitQualityCycleFormCommand("bad_token", new List<QualityCycleFormItemDto>());
 
         await Assert.ThrowsAsync<NotFoundException>(() => handler.Handle(command, CancellationToken.None));

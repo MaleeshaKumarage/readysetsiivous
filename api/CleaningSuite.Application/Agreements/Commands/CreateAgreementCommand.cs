@@ -35,17 +35,21 @@ public class CreateAgreementHandler : IRequestHandler<CreateAgreementCommand, Ag
     private readonly IAgreementRepository _repo;
     private readonly IAgreementFileStore _store;
     private readonly ICompanyRepository _companies;
+    private readonly IUploadContentValidator _uploads;
 
-    public CreateAgreementHandler(ITenantContext context, IAgreementRepository repo, IAgreementFileStore store, ICompanyRepository companies)
+    public CreateAgreementHandler(ITenantContext context, IAgreementRepository repo, IAgreementFileStore store, ICompanyRepository companies, IUploadContentValidator uploads)
     {
         _context = context; _repo = repo; _store = store;
         _companies = companies;
+        _uploads = uploads;
     }
 
     public async Task<AgreementDetailDto> Handle(CreateAgreementCommand request, CancellationToken ct)
     {
         _ = await _companies.GetAsync(request.CompanyId, ct)
             ?? throw new NotFoundException("Company", request.CompanyId);
+        var pdfBytes = await BoundedStreamReader.ReadAsync(request.Pdf, 20 * 1024 * 1024, "Agreement PDF", ct);
+        _uploads.ValidateAgreementPdf(pdfBytes);
         var tenantId = _context.TenantId;
         var agreement = new Agreement
         {
@@ -60,8 +64,14 @@ public class CreateAgreementHandler : IRequestHandler<CreateAgreementCommand, Ag
             }).ToList(),
         };
 
-        agreement.OriginalPdfPath = await _store.SaveOriginalAsync(tenantId, agreement.Id, request.Pdf, ct);
-        await _repo.SaveAsync(tenantId, agreement, ct);
+        await using var validatedPdf = new MemoryStream(pdfBytes, writable: false);
+        agreement.OriginalPdfPath = await _store.SaveOriginalAsync(tenantId, agreement.Id, validatedPdf, ct);
+        try { await _repo.SaveAsync(tenantId, agreement, ct); }
+        catch
+        {
+            await _store.DeleteArtifactAsync(tenantId, agreement.Id, agreement.OriginalPdfPath, ct);
+            throw;
+        }
         return AgreementDetailDto.From(agreement);
     }
 }

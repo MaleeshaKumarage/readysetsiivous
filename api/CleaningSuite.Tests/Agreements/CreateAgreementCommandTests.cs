@@ -21,9 +21,10 @@ public class CreateAgreementCommandTests
         var cmd = new CreateAgreementCommand("Service agreement", Guid.NewGuid(), Stream.Null, "a.pdf",
             new[] { new SignerInput("Alice", "alice@x.fi"), new SignerInput("Bob", "bob@x.fi") });
         var companies = new Mock<ICompanyRepository>();
+        var uploads = new Mock<IUploadContentValidator>();
         companies.Setup(c => c.GetAsync(cmd.CompanyId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Company { Id = cmd.CompanyId });
-        var handler = new CreateAgreementHandler(MockTenant(), repo.Object, store.Object, companies.Object);
+        var handler = new CreateAgreementHandler(MockTenant(), repo.Object, store.Object, companies.Object, uploads.Object);
 
         var dto = await handler.Handle(cmd, CancellationToken.None);
 
@@ -42,7 +43,8 @@ public class CreateAgreementCommandTests
         var companies = new Mock<ICompanyRepository>();
         var repo = new Mock<IAgreementRepository>();
         var store = new Mock<IAgreementFileStore>();
-        var handler = new CreateAgreementHandler(MockTenant(), repo.Object, store.Object, companies.Object);
+        var uploads = new Mock<IUploadContentValidator>();
+        var handler = new CreateAgreementHandler(MockTenant(), repo.Object, store.Object, companies.Object, uploads.Object);
         var command = new CreateAgreementCommand("Agreement", Guid.NewGuid(), Stream.Null, "a.pdf",
             new[] { new SignerInput("Alice", "alice@x.fi") });
 
@@ -62,9 +64,10 @@ public class CreateAgreementCommandTests
         companies.Setup(c => c.GetAsync(companyId, It.IsAny<CancellationToken>())).Returns(lookup.Task);
         var repo = new Mock<IAgreementRepository>();
         var store = new Mock<IAgreementFileStore>();
+        var uploads = new Mock<IUploadContentValidator>();
         store.Setup(s => s.SaveOriginalAsync("readysetsiivous", It.IsAny<Guid>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("original.pdf");
-        var handler = new CreateAgreementHandler(MockTenant(), repo.Object, store.Object, companies.Object);
+        var handler = new CreateAgreementHandler(MockTenant(), repo.Object, store.Object, companies.Object, uploads.Object);
         var command = new CreateAgreementCommand("Agreement", companyId, Stream.Null, "a.pdf",
             new[] { new SignerInput("Alice", "alice@x.fi") });
 

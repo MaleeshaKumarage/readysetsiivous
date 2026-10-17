@@ -113,7 +113,7 @@ public class QualityCycleClockTests
         form.Start(FromUtc.AddHours(2));
         var repository = new Mock<IQualityCycleRepository>(); repository.Setup(r => r.GetFormAsync(form.Id, It.IsAny<CancellationToken>())).ReturnsAsync(form);
 
-        var result = await new QualityCycleHandlers.EndQualityCycleFormCommandHandler(repository.Object, clock)
+        var result = await new QualityCycleHandlers.EndQualityCycleFormCommandHandler(repository.Object, NoopUploadContentValidator.Instance, clock)
             .Handle(new(form.Id, employee.Id, new()), default);
 
         Assert.Equal(FromUtc.AddHours(2), result.StartedAtUtc);
@@ -183,7 +183,7 @@ public class QualityCycleClockTests
         var qcRepo = new Mock<IQualityCycleRepository>();
         qcRepo.Setup(r => r.GetFormAsync(form.Id, It.IsAny<CancellationToken>())).ReturnsAsync(form);
 
-        var handler = new QualityCycleHandlers.EndQualityCycleFormCommandHandler(qcRepo.Object);
+        var handler = new QualityCycleHandlers.EndQualityCycleFormCommandHandler(qcRepo.Object, NoopUploadContentValidator.Instance);
         var result = await handler.Handle(new EndQualityCycleFormCommand(form.Id, emp.Id, new List<QualityCycleFormItemDto> { new("Item1", first), new("Item2", second) }), CancellationToken.None);
 
         Assert.True(result.IsSubmitted);
@@ -197,7 +197,7 @@ public class QualityCycleClockTests
     {
         var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Cleaner", Guid.Empty, "Shift activities", FromUtc, new());
         var repository = new Mock<IQualityCycleRepository>(); repository.Setup(r => r.GetFormAsync(form.Id, It.IsAny<CancellationToken>())).ReturnsAsync(form);
-        await Assert.ThrowsAsync<QualityCycleConflictException>(() => new QualityCycleHandlers.EndQualityCycleFormCommandHandler(repository.Object)
+        await Assert.ThrowsAsync<QualityCycleConflictException>(() => new QualityCycleHandlers.EndQualityCycleFormCommandHandler(repository.Object, NoopUploadContentValidator.Instance)
             .Handle(new(form.Id, form.EmployeeId, new()), default));
         repository.Verify(r => r.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -220,7 +220,7 @@ public class QualityCycleClockTests
         Assert.Empty(dto.Items); Assert.NotNull(dto.StartedAtUtc); Assert.Equal(Guid.Empty, dto.TemplateId);
         Assert.Equal(employee.Id, created!.EmployeeId); Assert.Equal(shift.CompanyId, created.CompanyId); Assert.Equal(shift.BranchId, created.BranchId);
         forms.Setup(r => r.GetFormAsync(created.Id, It.IsAny<CancellationToken>())).ReturnsAsync(created);
-        var ended = await new QualityCycleHandlers.EndQualityCycleFormCommandHandler(forms.Object).Handle(new(created.Id, employee.Id, new()), default);
+        var ended = await new QualityCycleHandlers.EndQualityCycleFormCommandHandler(forms.Object, NoopUploadContentValidator.Instance).Handle(new(created.Id, employee.Id, new()), default);
         Assert.True(ended.IsSubmitted); Assert.Empty(ended.Items);
     }
 
@@ -236,7 +236,7 @@ public class QualityCycleClockTests
         var qcRepo = new Mock<IQualityCycleRepository>();
         qcRepo.Setup(r => r.GetFormAsync(form.Id, It.IsAny<CancellationToken>())).ReturnsAsync(form);
 
-        var handler = new QualityCycleHandlers.EndQualityCycleFormCommandHandler(qcRepo.Object);
+        var handler = new QualityCycleHandlers.EndQualityCycleFormCommandHandler(qcRepo.Object, NoopUploadContentValidator.Instance);
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
             handler.Handle(new EndQualityCycleFormCommand(form.Id, other, new List<QualityCycleFormItemDto>()), CancellationToken.None));
     }

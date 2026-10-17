@@ -52,8 +52,8 @@ public class QualityCyclePhotoReportTests
         repository.Setup(x => x.GetFormByTokenAsync(form.Token, default)).ReturnsAsync(form);
         var items = new List<QualityCycleFormItemDto> { new("Corridor", true) };
         var exception = authenticated
-            ? await Assert.ThrowsAsync<ValidationException>(() => new QualityCycleHandlers.EndQualityCycleFormCommandHandler(repository.Object, new Clock()).Handle(new(form.Id, form.EmployeeId, items, new() { "photo" }, "  "), default))
-            : await Assert.ThrowsAsync<ValidationException>(() => new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(repository.Object, new Clock()).Handle(new(form.Token, items, new() { "photo" }, null), default));
+            ? await Assert.ThrowsAsync<ValidationException>(() => new QualityCycleHandlers.EndQualityCycleFormCommandHandler(repository.Object, NoopUploadContentValidator.Instance, new Clock()).Handle(new(form.Id, form.EmployeeId, items, new() { "photo" }, "  "), default))
+            : await Assert.ThrowsAsync<ValidationException>(() => new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(repository.Object, NoopUploadContentValidator.Instance, new Clock()).Handle(new(form.Token, items, new() { "photo" }, null), default));
         Assert.Equal("Photos", Assert.Single(exception.Errors).PropertyName);
         Assert.False(form.IsSubmitted); Assert.False(form.Items[0].IsChecked);
         repository.Verify(x => x.SaveFormAsync(It.IsAny<QualityCycleForm>(), default), Times.Never);
@@ -63,7 +63,7 @@ public class QualityCyclePhotoReportTests
     [InlineData(null)] [InlineData("Standalone note")]
     public void No_photos_allow_optional_notes_and_unchecked_activities(string? note)
     {
-        var form = Form(); form.Submit(new() { new() { ItemText = "Corridor" } }, new() { "  " }, note);
+        var form = Form(); form.Submit(new() { new() { ItemText = "Corridor" } }, Array.Empty<string>(), note);
         Assert.True(form.IsSubmitted); Assert.Empty(form.PhotoUrls); Assert.Equal(note, form.CleanerNotes);
     }
 

@@ -88,7 +88,8 @@ public class CompanyTenantDatabaseTests
         context.SetupGet(x => x.TenantId).Returns("tenant-a");
         var agreements = new Mock<IAgreementRepository>(MockBehavior.Strict);
         var files = new Mock<IAgreementFileStore>(MockBehavior.Strict);
-        var agreementHandler = new CreateAgreementHandler(context.Object, agreements.Object, files.Object, new CompanyRepository(tenant));
+        var uploadValidator = new Mock<IUploadContentValidator>();
+        var agreementHandler = new CreateAgreementHandler(context.Object, agreements.Object, files.Object, new CompanyRepository(tenant), uploadValidator.Object);
         await Assert.ThrowsAsync<CleaningSuite.Application.Common.NotFoundException>(() => agreementHandler.Handle(
             new CreateAgreementCommand("Forbidden agreement", foreign.Id, Stream.Null, "a.pdf", [new("Alice", "alice@example.invalid")]), default));
         agreements.VerifyNoOtherCalls();

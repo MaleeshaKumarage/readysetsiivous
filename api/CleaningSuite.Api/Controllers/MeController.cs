@@ -82,6 +82,7 @@ public class MeController : ControllerBase
     }
 
     [HttpPost("quality-cycle/{formId:guid}/end")]
+    [RequestSizeLimit(30 * 1024 * 1024)]
     public async Task<IActionResult> EndForm(Guid formId, [FromBody] EndFormRequest request, CancellationToken ct)
     {
         var employeeId = VerifiedEmployee().Id;

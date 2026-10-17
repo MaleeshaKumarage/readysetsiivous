@@ -16,11 +16,29 @@ public class AgreementsAdminController : ControllerBase
     private readonly IMediator _mediator;
     public AgreementsAdminController(IMediator mediator) => _mediator = mediator;
 
+    [HttpGet("legacy-repairs")]
+    public async Task<IActionResult> LegacyRepairPreview(CancellationToken ct) =>
+        Ok(await _mediator.Send(new PreviewLegacyAgreementRepairsQuery(), ct));
+
+    [HttpPost("{id:guid}/repair-company")]
+    public async Task<IActionResult> RepairLegacyCompany(Guid id, [FromBody] RepairLegacyAgreementAssociationRequest request, CancellationToken ct)
+    {
+        var actorId = User.FindFirst("sub")?.Value;
+        if (string.IsNullOrWhiteSpace(actorId)) return Unauthorized();
+        var result = await _mediator.Send(new RepairLegacyAgreementAssociationCommand(id, request.CompanyId, request.ExpectedVersion, actorId), ct);
+        return Ok(result);
+    }
+
     [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost]
+    [RequestSizeLimit(21 * 1024 * 1024)]
     public async Task<IActionResult> Create([FromForm] string title, [FromForm] Guid companyId, [FromForm] IFormFile pdf,
         [FromForm] string signersJson, CancellationToken ct)
     {
+        if (pdf is null)
+            throw new FluentValidation.ValidationException("A PDF document is required.");
+        if (pdf.Length > 20 * 1024 * 1024)
+            throw new CleaningSuite.Application.Common.UploadPayloadTooLargeException("Agreement PDF must be 20 MiB or smaller.");
         var signers = System.Text.Json.JsonSerializer.Deserialize<List<SignerInput>>(signersJson,
             new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true })
             ?? throw new BadHttpRequestException("signersJson invalid");
@@ -92,3 +110,5 @@ public class AgreementsAdminController : ControllerBase
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     { await _mediator.Send(new DeleteAgreementCommand(id), ct); return NoContent(); }
 }
+
+public sealed record RepairLegacyAgreementAssociationRequest(Guid CompanyId, Guid ExpectedVersion);

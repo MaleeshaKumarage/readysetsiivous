@@ -93,7 +93,9 @@ builder.Services.AddScoped<CleaningSuite.Application.Invoicing.IInvoiceRepositor
 builder.Services.AddScoped<CleaningSuite.Application.Agreements.IAgreementRepository, CleaningSuite.Infrastructure.Persistence.AgreementRepository>();
 builder.Services.AddSingleton<CleaningSuite.Application.Agreements.IAgreementFileStore>(sp =>
     new CleaningSuite.Infrastructure.Agreements.DiskAgreementFileStore(
-        builder.Configuration["Uploads:Path"] ?? Path.Combine(Directory.GetCurrentDirectory(), "uploads")));
+        builder.Configuration["Uploads:Path"] ?? Path.Combine(Directory.GetCurrentDirectory(), "uploads"),
+        sp.GetRequiredService<ILogger<CleaningSuite.Infrastructure.Agreements.DiskAgreementFileStore>>()));
+builder.Services.AddSingleton<CleaningSuite.Application.Common.IUploadContentValidator, CleaningSuite.Infrastructure.Uploads.UploadContentValidator>();
 builder.Services.AddSingleton<CleaningSuite.Application.Agreements.IAgreementDocumentGenerator, CleaningSuite.Infrastructure.Agreements.AgreementPdfSigner>();
 
 // New repositories for Companies and Shifts.
@@ -272,6 +274,8 @@ public class DefaultExceptionHandler : IExceptionHandler
             CleaningSuite.Application.Common.SlugConflictException => (409, "Slug already exists"),
             CleaningSuite.Application.Companies.CompanyConflictException => (409, "Company business ID conflict"),
             CleaningSuite.Application.Common.InactiveRecordDeleteConflictException => (409, "Record cannot be deleted"),
+            CleaningSuite.Application.Common.UploadPayloadTooLargeException => (413, "Payload too large"),
+            BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge } => (413, "Payload too large"),
             CleaningSuite.Application.Common.NotFoundException => (404, "Not found"),
             CleaningSuite.Application.Bookings.SlotConflictException => (409, "Slot conflict"),
             CleaningSuite.Application.Agreements.AgreementConflictException => (409, "Agreement conflict"),
