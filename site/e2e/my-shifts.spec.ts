@@ -334,12 +334,23 @@ for (const role of ['admin', 'manager'] as const) {
 test('a past visit can be started and ended with actual times recorded today', async ({ page }) => {
   await page.clock.install({ time: new Date('2026-10-17T12:00:00Z') });
   const work = await setupWork(page, { startAt: '2026-10-01T08:00:00Z' });
+  await page.route(/\/api\/v1\/me\/shifts\/calendar\?/, route => {
+    const past = new URL(route.request().url()).searchParams.get('view') === 'past';
+    return route.fulfill({ headers, json: { occurrences: past ? [work.occurrence] : [], timeZoneId: 'Europe/Helsinki',
+      fromLocalDate: past ? '2026-09-16' : '2026-10-17', toLocalDate: past ? '2026-10-17' : '2026-10-18' } });
+  });
   await page.goto('/me/shifts/');
+  await page.getByRole('tab', { name: 'Past', exact: true }).click();
+  await page.getByRole('button', { name: /Oct 1.*1 shift/ }).click();
+  await expect(page.getByText(/Scheduled:.*Oct 1, 2026/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Start', exact: true }).click();
   await expect(page.getByText(/^Actual start: /)).toBeVisible();
   await page.getByRole('button', { name: 'Record activities & end' }).click();
   await page.getByRole('button', { name: 'End shift', exact: true }).click();
   await expect(page.getByText('Done', { exact: true })).toBeVisible();
+  await expect(page.getByText(/Scheduled:.*Oct 1, 2026/)).toBeVisible();
+  await expect(page.getByText(/^Actual start:.*Oct 17, 2026/)).toBeVisible();
+  await expect(page.getByText(/^Actual end:.*Oct 17, 2026/)).toBeVisible();
   expect(work.startCalls).toBe(1); expect(work.endCalls).toBe(1);
 });
