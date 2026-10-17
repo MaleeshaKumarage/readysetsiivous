@@ -32,7 +32,8 @@ async function setup(page: Page, options: { role?: string; documentRole?: string
     }
     const fail = failures.indexOf(kind); if (fail >= 0) { failures.splice(fail, 1); return route.fulfill({ status: 409, headers, json: { detail: `${kind} failed; please retry` } }); }
     if (method === 'GET') {
-      const json = path === '/companies' ? { items: [{ id: company, name: 'AAA', isActive: true }], total: 1 }
+      const json = path === '/time-zone' ? { timeZoneId: 'Europe/Helsinki' }
+        : path === '/companies' ? { items: [{ id: company, name: 'AAA', isActive: true }], total: 1 }
         : path.endsWith('/branches') ? [{ id: branch1, companyId: company, name: 'AAA1', isActive: true }, { id: branch2, companyId: company, name: 'AAA2', isActive: true }]
         : path === '/employees' ? [{ id: cleaner, firstName: 'Test', lastName: 'Cleaner', phone: '', isActive: true }, { id: 'inactive', firstName: 'Inactive', lastName: 'Cleaner', phone: '', isActive: false }]
         : path.includes('/assignments') ? assignments : shifts;
