@@ -68,7 +68,7 @@ export default function ManagerPage() {
     catch (e) { if (version === assignmentGeneration.current) setError(e instanceof Error ? e.message : 'Could not load assignments.'); }
   }
   async function deleteShift(shift: ManagerShift) {
-    if (!window.confirm(`Permanently delete inactive shift “${shift.name}”? Shifts with assignments or checklist records are retained.`)) return;
+    if (!window.confirm(`Permanently delete inactive shift “${shift.name}” and remove its employee assignments? Completed checklist records, photos and reports will remain in history.`)) return;
     await action(async () => { await managerApi.deleteInactive(shift.id); closeAssignments(); await load(); });
   }
   const type = schedule.type;

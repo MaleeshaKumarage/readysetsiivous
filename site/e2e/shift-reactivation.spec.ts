@@ -25,6 +25,10 @@ test('inactive shift deletion removes the shift after confirmation without block
   await expect(page.getByRole('cell', { name: shift.name })).toHaveCount(0);
   expect(deleteCalls).toBe(1);
   expect(confirmations[0]).toContain('Completed checklist records, photos and reports will remain in history.');
+  await expect(page.getByRole('tab', { name: 'Inactive (0)', exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole('tab', { name: 'Inactive (0)', exact: true }).click();
+  await expect(page.getByRole('cell', { name: shift.name })).toHaveCount(0);
 });
 test('admin discovers deactivated shift, sees restore failure and reactivates it', async ({ page }) => {
   await setupAdminMocks(page); let active = false; let restores = 0;
