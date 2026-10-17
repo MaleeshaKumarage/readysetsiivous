@@ -64,14 +64,24 @@ public class QualityCycleDispatcher : IQualityCycleDispatcher
             || (template.BranchId.HasValue && template.BranchId != shift.BranchId))
             throw new ShiftConflictException("The checklist template does not belong to this shift's company/branch.");
         var assignments = await _shifts.ListAssignmentsByShiftAsync(shift.Id, ct);
+        var history = await _shifts.ListAssignmentHistoryAsync(shift.Id, ct) ?? [];
+        var overrides = await _shifts.ListOccurrenceAssignmentsAsync(shift.Id, ct) ?? [];
+        var recurring = history.Concat(assignments).GroupBy(x => (x.Id, x.EmployeeId)).Select(x => x.First()).ToList();
         var now = _clock.GetUtcNow().UtcDateTime;
+        var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
         var count = 0;
         foreach (var occurrence in occurrences)
         {
-            var employeeIds = occurrence.EmployeeId.HasValue
-                ? new[] { occurrence.EmployeeId.Value }
-                : assignments.Where(a => a.IsActive && a.Overlaps(occurrence.StartUtc, occurrence.EndUtc))
-                    .Select(a => a.EmployeeId).Distinct().ToArray();
+            var original = occurrence.Status == ShiftOccurrenceExceptionStatus.Extra ? (DateTime?)null
+                : occurrence.OriginalStartUtc ?? occurrence.StartUtc;
+            var change = overrides.FirstOrDefault(x => x.Id == ShiftOccurrenceAssignment.Identity(shift.Id, original,
+                occurrence.Status == ShiftOccurrenceExceptionStatus.Extra ? occurrence.ExceptionId : null));
+            var regular = recurring.Where(a => a.CoversVisit(occurrence.StartUtc, occurrence.EndUtc, shift.ValidFrom.HasValue ? TenantTimeZone.StartOfLocalDay(shift.ValidFrom.Value.Date, zone) : null)).Select(a => a.EmployeeId);
+            var employeeIds = (change is not null ? change.Mode switch {
+                OccurrenceAssignmentMode.Replace => change.EmployeeIds,
+                OccurrenceAssignmentMode.Add => regular.Concat(change.EmployeeIds),
+                _ => regular
+            } : occurrence.EmployeeId.HasValue ? new[] { occurrence.EmployeeId.Value } : regular).Distinct();
             foreach (var employeeId in employeeIds)
             {
                 ct.ThrowIfCancellationRequested();

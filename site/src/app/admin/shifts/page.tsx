@@ -9,6 +9,7 @@ import {
   adminShifts, adminCompanies, adminEmployees, adminTenant,
   type Shift, type Company, type Branch, type Employee, type ShiftAssignment, type ShiftOccurrence,
 } from '@/lib/adminApi';
+import { VisitAssigneesDialog } from '@/components/VisitAssigneesDialog';
 import { isAdmin } from '@/lib/auth';
 import { adminQualityCycle, type QualityCycleTemplate } from '@/lib/qualityCycleApi';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
@@ -61,6 +62,7 @@ export default function ShiftsAdminPage() {
   const [lifecycle, setLifecycle] = useState<LifecycleStatus>('active');
   const [listError, setListError] = useState('');
   const [timeZoneId, setTimeZoneId] = useState('Europe/Helsinki');
+  const [schedulingReady, setSchedulingReady] = useState(false);
   const [restoring, setRestoring] = useState<string | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -71,6 +73,8 @@ export default function ShiftsAdminPage() {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [branchId, setBranchId] = useState<string | null>(null);
   const [name, setName] = useState('');
+  const [validFrom, setValidFrom] = useState('');
+  const [validUntil, setValidUntil] = useState('');
   const [scheduleType, setScheduleType] = useState('0');
   const [start, setStart] = useState('08:00');
   const [end, setEnd] = useState('17:00');
@@ -112,10 +116,16 @@ export default function ShiftsAdminPage() {
   const [occurrenceReason, setOccurrenceReason] = useState('');
   const [occurrenceEmployee, setOccurrenceEmployee] = useState<string | null>(null);
   const [occurrenceSaving, setOccurrenceSaving] = useState(false);
+  const [assigningVisit, setAssigningVisit] = useState<ShiftOccurrence | null>(null);
   useEffect(() => () => { assignmentGeneration.current++; }, []);
 
   const load = () => adminShifts.list(undefined, undefined, true).then((r) => { if (r) setShifts(r); setLoading(false); });
-  useEffect(() => { load(); adminTenant.get().then(profile => { if (profile?.timeZoneId) setTimeZoneId(profile.timeZoneId); }); }, []);
+  useEffect(() => { load(); adminTenant.get().then(profile => {
+    if (!profile) throw new Error('Could not load scheduling settings. Refresh the page to retry.');
+    const zone = profile.timeZoneId?.trim() || 'Europe/Helsinki';
+    new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(new Date());
+    setTimeZoneId(zone); setSchedulingReady(true);
+  }).catch(() => setListError('Could not load scheduling time zone. Refresh the page or ask a tenant administrator to check its settings.')); }, []);
 
   const closeAssignments = () => {
     assignmentGeneration.current++;
@@ -182,11 +192,12 @@ export default function ShiftsAdminPage() {
     setName(''); setNotes(''); setWeekDays([]); setCompanyId(null); setBranchId(null); setQualityCycleTemplateId(null); setScheduleType('0'); setStart('08:00'); setEnd('17:00'); setWeekParity('1'); setMonthlyDay(1); setDailyTimes({}); setEditingShift(null); setError(''); setModalOpen(false);
   };
 
-  const openCreate = () => { closeModal(); setModalOpen(true); };
+  const openCreate = () => { if (!schedulingReady) return; closeModal(); setValidFrom(localInputValue(new Date().toISOString(), timeZoneId).slice(0, 10)); setValidUntil(''); setModalOpen(true); };
   const openEdit = async (shift: Shift) => {
     const schedule = shift.schedule;
     setEditingShift(shift); setCompanyId(shift.companyId); setBranchId(shift.branchId);
     setName(shift.name); setNotes(shift.notes ?? ''); setQualityCycleTemplateId(shift.qualityCycleTemplateId ?? null);
+    setValidFrom(shift.validFrom?.slice(0, 10) ?? ''); setValidUntil(shift.validUntil?.slice(0, 10) ?? '');
     setScheduleType(String(schedule.type));
     setStart((schedule.dailyStart ?? schedule.weeklyStart ?? schedule.biWeeklyStart ?? schedule.monthlyStart ?? '08:00').slice(0, 5));
     setEnd((schedule.dailyEnd ?? schedule.weeklyEnd ?? schedule.biWeeklyEnd ?? schedule.monthlyEnd ?? '17:00').slice(0, 5));
@@ -204,12 +215,14 @@ export default function ShiftsAdminPage() {
   };
 
   const submit = async () => {
+    if ((!editingShift || editingShift.validFrom) && !validFrom) { setError('Shift start date is required.'); return; }
+    if (validFrom && validUntil && validUntil < validFrom) { setError('End date must be on or after the start date.'); return; }
     if (!companyId || !branchId || !name.trim()) { setError('Company, branch and name are required.'); return; }
     if (scheduleType === '2' && weekDays.length === 0) { setError('Select at least one day.'); return; }
     if (scheduleType === '1' && (!weekDays.length || weekDays.some(day => !dailyTimes[day]?.start || !dailyTimes[day]?.end || dailyTimes[day].end <= dailyTimes[day].start))) { setError('Select at least one day and ensure each end time is after its start time.'); return; }
     if (scheduleType === '3' && weekDays.length === 0) { setError('Select a day.'); return; }
     setSaving(true); setError('');
-    const fields = { companyId, branchId, name: name.trim(), schedule: buildSchedule(), notes: notes.trim() || undefined, isActive: editingShift?.isActive ?? true, validFrom: editingShift?.validFrom, validUntil: editingShift?.validUntil, qualityCycleTemplateId: qualityCycleTemplateId || undefined };
+    const fields = { companyId, branchId, name: name.trim(), schedule: buildSchedule(), notes: notes.trim() || undefined, isActive: editingShift?.isActive ?? true, validFrom: validFrom || undefined, validUntil: validUntil || undefined, qualityCycleTemplateId: qualityCycleTemplateId || undefined };
     const created = editingShift ? await adminShifts.update(editingShift.id, fields) : await adminShifts.create(fields);
     setSaving(false);
     if (!created) { setError(editingShift ? 'Failed to update shift. Check that the company and branch are valid, then retry.' : 'Failed to create shift.'); return; }
@@ -365,7 +378,7 @@ export default function ShiftsAdminPage() {
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
         <Title order={2}>Shifts</Title>
-        <Button leftSection={<Plus size={16} />} onClick={openCreate}>Add shift</Button>
+        <Button leftSection={<Plus size={16} />} disabled={!schedulingReady} onClick={openCreate}>Add shift</Button>
       </Group>
 
       {listError && <Text role="alert" c="red" mb="md">{listError}</Text>}
@@ -471,13 +484,16 @@ export default function ShiftsAdminPage() {
           {occurrenceError && <Text role="alert" c="red">{occurrenceError}</Text>}
           {occurrenceLoading ? <Loader /> : occurrences.length === 0 ? <Text c="dimmed">No occurrences in this period.</Text> : (
             <Table striped withTableBorder>
-              <Table.Thead><Table.Tr><Table.Th>Start</Table.Th><Table.Th>End</Table.Th><Table.Th>Status</Table.Th><Table.Th>Reason</Table.Th><Table.Th></Table.Th></Table.Tr></Table.Thead>
+              <Table.Thead><Table.Tr><Table.Th>Start</Table.Th><Table.Th>End</Table.Th><Table.Th>Status</Table.Th><Table.Th>Assignees</Table.Th><Table.Th>Reason</Table.Th><Table.Th></Table.Th></Table.Tr></Table.Thead>
               <Table.Tbody>{occurrences.map((item) => <Table.Tr key={item.exceptionId ?? item.startUtc}>
                 <Table.Td>{new Date(item.startUtc).toLocaleString(undefined, { timeZone: timeZoneId })}</Table.Td>
                 <Table.Td>{new Date(item.endUtc).toLocaleString(undefined, { timeZone: timeZoneId })}</Table.Td>
                 <Table.Td>{item.status ? OCCURRENCE_STATUSES.find(x => x.value === String(item.status))?.label : 'Scheduled'}</Table.Td>
+                <Table.Td><Text size="sm">{(item.assigneeIds ?? []).map(employeeName).join(', ') || 'Unassigned'}</Text>
+                  <Text size="xs" c="dimmed">{item.assignmentSource ?? 'Recurring'}</Text></Table.Td>
                 <Table.Td>{item.reason ?? '—'}</Table.Td>
                 <Table.Td><Group gap={4} wrap="nowrap">
+                  <Button size="xs" variant="light" disabled={item.status === 2 || item.status === 3} onClick={() => setAssigningVisit(item)}>Assign</Button>
                   <Button size="xs" variant="subtle" onClick={() => openOccurrenceEditor(item)}>Change</Button>
                   {!item.exceptionId && <Button size="xs" variant="subtle" color="orange" onClick={() => openOccurrenceEditor(item, '2')}>Cancel</Button>}
                   {item.exceptionId && <Button size="xs" variant="subtle" color="red" loading={occurrenceSaving} onClick={() => restoreOccurrence(item)}>{item.status === 4 ? 'Delete extra' : 'Restore'}</Button>}
@@ -488,6 +504,9 @@ export default function ShiftsAdminPage() {
         </Stack>
       </Modal>
 
+      {assigningVisit && occurrenceShift && <VisitAssigneesDialog key={`${assigningVisit.exceptionId ?? assigningVisit.startUtc}`}
+        shiftId={occurrenceShift.id} visit={assigningVisit} employees={employees} timeZone={timeZoneId}
+        onClose={() => setAssigningVisit(null)} onSaved={async () => { await loadOccurrences(); }} />}
       <Modal opened={Boolean(editingOccurrence)} onClose={() => setEditingOccurrence(null)} title="Change occurrence">
         <Stack>
           <Select label="Action" value={occurrenceStatus} onChange={value => setOccurrenceStatus(value ?? '1')} data={OCCURRENCE_STATUSES}
@@ -526,6 +545,10 @@ export default function ShiftsAdminPage() {
           <Select label="Company" data={companies.filter(c => c.isActive !== false || c.id === editingShift?.companyId).map((c) => ({ value: c.id, label: `${c.name}${c.isActive === false ? ' (inactive)' : ''}` }))} value={companyId} onChange={(v) => { setBranches([]); setCompanyId(v); setBranchId(null); setQualityCycleTemplateId(null); }} searchable />
           <Select label="Branch" data={branches.filter(b => b.isActive !== false || b.id === editingShift?.branchId).map((b) => ({ value: b.id, label: `${b.name}${b.isActive === false ? ' (inactive)' : ''}` }))} value={branchId} onChange={v => { setBranchId(v); setQualityCycleTemplateId(null); }} searchable disabled={!companyId} />
           <TextInput label="Name" required value={name} onChange={(e) => setName(e.target.value)} />
+          <Group grow>
+            <TextInput label="Start date" type="date" required={!editingShift || Boolean(editingShift.validFrom)} value={validFrom} onChange={e => setValidFrom(e.target.value)} />
+            <TextInput label="End date (optional)" type="date" min={validFrom || undefined} value={validUntil} onChange={e => setValidUntil(e.target.value)} />
+          </Group>
           <Select label="Schedule" data={SCHEDULE_TYPES} value={scheduleType} onChange={(v) => setScheduleType(v ?? '0')} />
 
           {scheduleType === '2' && (

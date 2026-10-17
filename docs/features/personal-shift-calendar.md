@@ -8,7 +8,8 @@ Updated 2026-10-17. Employees, tenant managers, and admins with an active linked
 - Past and Future group work into Monday-based weeks, with the most recent week/day first. Week and daily counts are visible together even when folded. Clicking a day opens its week and shifts; at most one week and one day are open.
 - Activity selections, photo notes and general notes survive switching days/tabs in the current browser session. Successful submission clears the draft.
 - Calendar dates use the tenant time zone. A tenant-midnight rollover refreshes the selected period. Starting still requires the scheduled local date; actual start/end timestamps are unchanged.
-- Past includes recorded work even after the employee was unassigned, the shift deactivated, or the shift deleted. Deleted work is labelled as historical and cannot be started or edited.
+- Past includes recorded work after an employee was unassigned, provided the shift remains active.
+- Deactivated/deleted shifts are excluded from every personal calendar tab, including completed visits and already-created checklist forms. QC evidence remains available to administrative reports.
 
 ## API and paging
 
@@ -22,8 +23,14 @@ Assignments and QC records no longer block deletion. The live shift, roster link
 
 Monthly reports can read deleted-shift snapshots, including an explicit deleted shift filter. Old QC tokens cannot modify detached history. Active shifts must be deactivated first. Deletion remains scoped to the caller's tenant and existing admin/manager permissions.
 
+Admin and manager Active/Inactive lists read only live shift documents. Reporting snapshots must never appear in either management tab or its counts. Deleting a shift therefore removes it from management lists while retaining it in historical reports.
+
 ## Regression coverage
 
 - PostgreSQL deletion regression compares monthly report content before/after deletion, checks roster/exception unlinking, preserves photo notes, and verifies another tenant's matching records remain untouched.
 - Backend tests cover DST calendar boundaries, adjacent pages, invalid cursors, historical employee ownership and all staff-role calendar access.
 - Desktop/mobile Playwright covers default Today, folded counts, single-open week/day, ordering, paging failures/retry, stale responses, keyboard tabs, draft preservation, date rollover, confirmation cancellation and successful shift deletion.
+
+## Backdated visits
+
+A regular assignment on an active shift includes visits from the configured shift start date, even when the shift and assignment were created later. Past visits are visible in Past and may be started and ended now. Explicit assignment periods/handover dates retain their boundaries. Future tenant-local dates cannot be started. Scheduled dates/times remain unchanged; Actual start and Actual end record the button-click times. Inactive/deleted shifts remain hidden.

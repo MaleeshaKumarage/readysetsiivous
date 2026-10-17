@@ -2,6 +2,10 @@ import { test as baseTest, expect, Page } from '@playwright/test';
 
 export async function setupAdminMocks(page: Page, options: { authenticated?: boolean } = {}) {
   const authed = options.authenticated ?? true;
+  await page.route(/\/api\/v1\/admin\/tenant$/, route => route.fulfill({
+    headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' },
+    json: { companyName: 'ReadySetSiivous', timeZoneId: 'Europe/Helsinki' },
+  }));
 
   await page.route(/\/api\/v1\/me$/, route => route.fulfill({
     status: 200,

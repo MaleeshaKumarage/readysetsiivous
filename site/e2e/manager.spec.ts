@@ -32,7 +32,8 @@ async function setup(page: Page, options: { role?: string; documentRole?: string
     }
     const fail = failures.indexOf(kind); if (fail >= 0) { failures.splice(fail, 1); return route.fulfill({ status: 409, headers, json: { detail: `${kind} failed; please retry` } }); }
     if (method === 'GET') {
-      const json = path === '/companies' ? { items: [{ id: company, name: 'AAA', isActive: true }], total: 1 }
+      const json = path === '/time-zone' ? { timeZoneId: 'Europe/Helsinki' }
+        : path === '/companies' ? { items: [{ id: company, name: 'AAA', isActive: true }], total: 1 }
         : path.endsWith('/branches') ? [{ id: branch1, companyId: company, name: 'AAA1', isActive: true }, { id: branch2, companyId: company, name: 'AAA2', isActive: true }]
         : path === '/employees' ? [{ id: cleaner, firstName: 'Test', lastName: 'Cleaner', phone: '', isActive: true }, { id: 'inactive', firstName: 'Inactive', lastName: 'Cleaner', phone: '', isActive: false }]
         : path.includes('/assignments') ? assignments : shifts;
@@ -44,6 +45,10 @@ async function setup(page: Page, options: { role?: string; documentRole?: string
       if (method === 'DELETE') { assignments = []; return route.fulfill({ status: 204, headers }); }
       assignments = [{ id: cleaner, employeeId: request.postDataJSON().employeeId, shiftId: path.split('/')[2], isActive: true }];
       return route.fulfill({ status: 200, headers, json: assignments[0] });
+    }
+    if (method === 'DELETE' && path.startsWith('/shifts/')) {
+      shifts = shifts.filter(s => s.id !== path.split('/')[2]);
+      return route.fulfill({ status: 204, headers });
     }
     const body = request.postDataJSON(); writes.push(body);
     const saved = { ...body, id: method === 'PUT' ? path.split('/')[2] : `77777777-7777-4777-8777-${String(writes.length).padStart(12, '0')}`, companyId: company, branchId: body.branchId ?? branch1, isActive: true };
@@ -153,6 +158,89 @@ test('manager creates each schedule type with explicit fields', async ({ page })
   expect(state.writes.map(w => w.schedule.type)).toEqual([1, 2, 3, 4, 5]);
   expect(state.writes[0].schedule.dailyTimes.Monday.start).toBe('09:00'); expect(state.writes[1].schedule.weeklyDays).toContain(2);
   expect(state.writes[2].schedule.biWeeklyWeekParity).toBe(2); expect(state.writes[4].schedule.monthlyDay).toBe(15);
+});
+
+test('manager deletion removes inactive work and its count after refresh while active work remains', async ({ page }) => {
+  const state = await setup(page, { inactiveShift: true });
+  let accept = false; const messages: string[] = [];
+  page.on('dialog', dialog => { messages.push(dialog.message()); return accept ? dialog.accept() : dialog.dismiss(); });
+  await page.goto('/manager/');
+  await page.getByRole('tab', { name: 'Inactive (1)', exact: true }).click();
+  const inactive = page.getByRole('article', { name: 'AAA2 biweekly' });
+  await inactive.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(inactive).toBeVisible();
+  accept = true;
+  await inactive.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(inactive).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: 'Inactive (0)', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Refresh operations' }).click();
+  await expect(inactive).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Active (1)', exact: true }).click();
+  await expect(page.getByRole('article', { name: 'AAA1 weekdays' })).toBeVisible();
+  expect(messages.at(-1)).toContain('Completed checklist records, photos and reports will remain in history.');
+  expect(state.adminRequests).toBe(0);
+});
+
+test('manager requires a start date and supports optional end dates', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-10-17T22:00:00Z') });
+  const state = await setup(page); await page.goto('/manager/');
+  await page.getByRole('button', { name: 'Add shift' }).click();
+  await expect(page.getByLabel('Start date', { exact: true })).toHaveValue('2026-10-18');
+  await page.getByLabel('Start date', { exact: true }).fill('');
+  await page.getByRole('button', { name: 'Save shift' }).click();
+  expect(await page.getByLabel('Start date', { exact: true }).evaluate((input: HTMLInputElement) => input.validity.valueMissing)).toBe(true);
+  expect(state.writes).toHaveLength(0);
+  await page.getByLabel('Start date', { exact: true }).fill('2026-11-01');
+  await page.getByLabel('Shift name', { exact: true }).fill('Dated shift');
+  await page.getByLabel('Company', { exact: true }).selectOption(company);
+  await page.getByLabel('Branch', { exact: true }).selectOption(branch1);
+  await page.getByRole('button', { name: 'Save shift' }).click();
+  await expect(page.getByRole('article', { name: 'Dated shift', exact: true })).toBeVisible();
+  expect(state.writes[0].validFrom).toBe('2026-11-01'); expect(state.writes[0].validUntil).toBeNull();
+  const card = page.getByRole('article', { name: 'Dated shift', exact: true });
+  await card.getByRole('button', { name: 'Edit shift' }).click();
+  await expect(page.getByLabel('Start date', { exact: true })).toHaveValue('2026-11-01');
+  await page.getByLabel('Start date', { exact: true }).fill('');
+  await page.getByRole('button', { name: 'Save shift' }).click();
+  expect(state.writes).toHaveLength(1);
+  expect(await page.getByLabel('Start date', { exact: true }).evaluate((input: HTMLInputElement) => input.validity.valueMissing)).toBe(true);
+  await page.getByLabel('Start date', { exact: true }).fill('2026-11-01');
+  const end = page.getByLabel('End date (optional)', { exact: true });
+  await expect(end).toHaveAttribute('min', '2026-11-01');
+  await end.fill('2026-10-31');
+  await page.getByRole('button', { name: 'Save shift' }).click();
+  expect(state.writes).toHaveLength(1);
+  expect(await end.evaluate((input: HTMLInputElement) => input.validity.rangeUnderflow)).toBe(true);
+  await end.fill('2026-11-30');
+  await page.getByRole('button', { name: 'Save shift' }).click();
+  await expect(page.getByLabel('Start date', { exact: true })).toHaveCount(0);
+  expect(state.writes[1].validUntil).toBe('2026-11-30');
+  await card.getByRole('button', { name: 'Edit shift' }).click();
+  await expect(page.getByLabel('Start date', { exact: true })).toHaveValue('2026-11-01');
+  await expect(end).toHaveValue('2026-11-30');
+  await end.fill('');
+  await page.getByRole('button', { name: 'Save shift' }).click();
+  await expect(page.getByLabel('Start date', { exact: true })).toHaveCount(0);
+  expect(state.writes[2].validUntil).toBeNull();
+});
+
+test('manager waits for a valid scheduling timezone and retries loading settings', async ({ page }) => {
+  await setup(page); let zone: string | undefined = 'Invalid/Zone'; let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/v1/manager/time-zone', async route => {
+    await gate; return route.fulfill({ headers, json: { timeZoneId: zone } });
+  });
+  await page.goto('/manager/');
+  await expect(page.getByRole('button', { name: 'Add shift', exact: true })).toBeDisabled();
+  release();
+  await expect(page.getByRole('alert').filter({ hasText: 'scheduling time zone is invalid' })).toBeVisible();
+  zone = undefined; await page.getByRole('button', { name: 'Refresh operations' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Could not load scheduling time zone' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add shift', exact: true })).toBeDisabled();
+  zone = 'Europe/Helsinki'; await page.getByRole('button', { name: 'Refresh operations' }).click();
+  await expect(page.getByRole('button', { name: 'Add shift', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Add shift', exact: true }).click();
+  await expect(page.getByLabel('Start date', { exact: true })).not.toHaveValue('');
 });
 
 for (const width of [1280, 390]) test(`manager lifecycle tabs filter locally and clear assignment selections at ${width}px`, async ({ page }) => {
