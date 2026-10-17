@@ -24,4 +24,5 @@ public interface IQualityCycleRepository
         Guid? employeeId, Guid? templateId, Guid? companyId, Guid? branchId);
     Task SaveFormAsync(QualityCycleForm form, CancellationToken ct = default);
     Task<bool> TryCreateFormAsync(QualityCycleForm form, CancellationToken ct = default);
+    Task CreateStartedFormAsync(QualityCycleForm form, CancellationToken ct = default);
 }

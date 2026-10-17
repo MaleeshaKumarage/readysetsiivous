@@ -34,7 +34,16 @@ public record ShiftAssignmentDto(
 public record ShiftOccurrenceDto(DateTime StartUtc, DateTime EndUtc,
     Guid? ExceptionId = null, DateTime? OriginalStartUtc = null,
     ShiftOccurrenceExceptionStatus? Status = null, string? Reason = null,
-    Guid? EmployeeId = null);
+    Guid? EmployeeId = null)
+{
+    public IReadOnlyList<Guid> AssigneeIds { get; init; } = Array.Empty<Guid>();
+    public string AssignmentSource { get; init; } = "Recurring";
+    public OccurrenceAssignmentMode? AssignmentMode { get; init; }
+    public Guid? AssignmentVersion { get; init; }
+    public IReadOnlyList<Guid> OverrideEmployeeIds { get; init; } = Array.Empty<Guid>();
+    public string? AssignmentReason { get; init; }
+    public string RosterVersion { get; init; } = "";
+}
 
 public record SaveShiftOccurrenceExceptionCommand(Guid ShiftId, Guid? Id,
     DateTime? OriginalStartUtc, DateTime StartUtc, DateTime EndUtc,
@@ -344,15 +353,9 @@ public class ShiftHandlers
             var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
             var localFrom = TenantTimeZone.LocalDate(from, zone);
             var localTo = TenantTimeZone.LocalDate(to, zone);
-            var occurrences = ShiftScheduleCalculator.GenerateOccurrences(shift, localFrom, localTo, zone);
-            var exceptions = await _repository.ListOccurrenceExceptionsAsync(shift.Id,
-                TenantTimeZone.StartOfLocalDay(localFrom, zone), TenantTimeZone.StartOfLocalDay(localTo.AddDays(1), zone), ct)
-                ?? Array.Empty<ShiftOccurrenceException>();
-            return ShiftOccurrenceResolver.Apply(occurrences, exceptions, includeCancelled: true)
-                .Select(x => new ShiftOccurrenceDto(x.StartUtc, x.EndUtc, x.ExceptionId,
-                    x.OriginalStartUtc, x.Status,
-                    x.ExceptionId.HasValue ? exceptions.First(e => e.Id == x.ExceptionId).Reason : null,
-                    x.EmployeeId)).ToList();
+            var roster = await _repository.ResolveRosterAsync(shift, TenantTimeZone.StartOfLocalDay(localFrom, zone),
+                TenantTimeZone.StartOfLocalDay(localTo.AddDays(1), zone), zone, ct, includeCancelled: true);
+            return roster.Select(ShiftRosterReader.ToDto).ToList();
         }
     }
 

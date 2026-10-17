@@ -106,6 +106,15 @@ public class QualityCycleRepository : IQualityCycleRepository
         await _session.SaveChangesAsync(ct);
     }
 
+    public async Task CreateStartedFormAsync(QualityCycleForm form, CancellationToken ct = default)
+    {
+        // Clock-start authorisation and the started record use the same reservation session.
+        _session.Insert(form);
+        try { await _session.SaveChangesAsync(ct); }
+        catch (Exception error) when (IsDuplicate(error))
+        { throw new QualityCycleConflictException("The shift task changed. Reload your shifts and retry."); }
+    }
+
     public async Task<bool> TryCreateFormAsync(QualityCycleForm form, CancellationToken ct = default)
     {
         // A separate insert transaction prevents a competing generator from overwriting

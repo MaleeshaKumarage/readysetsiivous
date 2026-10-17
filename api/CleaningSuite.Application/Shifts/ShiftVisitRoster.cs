@@ -6,6 +6,8 @@ public record ShiftVisitRosterEntry(ResolvedShiftOccurrence Occurrence, DateTime
     Guid? ExtraExceptionId, IReadOnlyList<Guid> EmployeeIds, string AssignmentSource,
     ShiftOccurrenceAssignment? Assignment)
 {
+    public string RosterVersion { get; init; } = "";
+    public string? ScheduleReason { get; init; }
     public bool IsCancelled => Occurrence.Status is ShiftOccurrenceExceptionStatus.CustomerCancelled
         or ShiftOccurrenceExceptionStatus.CompanyCancelled;
 }
@@ -18,9 +20,11 @@ public static class ShiftVisitRoster
         IEnumerable<ShiftOccurrenceAssignment> overrides, bool includeCancelled = false)
     {
         var periods = recurring.Where(x => x.ShiftId == shiftId).ToList();
+        var scheduleChanges = exceptions.Where(x => x.ShiftId == shiftId).ToList();
+        var rosterVersion = ShiftRosterReader.Version(periods);
         var changes = overrides.Where(x => x.ShiftId == shiftId).GroupBy(x => x.Id)
             .ToDictionary(x => x.Key, x => x.OrderByDescending(item => item.UpdatedUtc).First());
-        return ShiftOccurrenceResolver.Apply(generated, exceptions.Where(x => x.ShiftId == shiftId), includeCancelled)
+        return ShiftOccurrenceResolver.Apply(generated, scheduleChanges, includeCancelled)
             .Select(visit =>
             {
                 var extra = visit.Status == ShiftOccurrenceExceptionStatus.Extra ? visit.ExceptionId : null;
@@ -45,7 +49,8 @@ public static class ShiftVisitRoster
                 var cancelled = visit.Status is ShiftOccurrenceExceptionStatus.CustomerCancelled or ShiftOccurrenceExceptionStatus.CompanyCancelled;
                 return new ShiftVisitRosterEntry(visit, original, extra,
                     cancelled ? Array.Empty<Guid>() : selected.Where(id => id != Guid.Empty).Distinct().Order().ToArray(),
-                    cancelled ? "Cancelled" : source, change);
+                    cancelled ? "Cancelled" : source, change) { RosterVersion = rosterVersion,
+                        ScheduleReason = scheduleChanges.FirstOrDefault(x => x.Id == visit.ExceptionId)?.Reason };
             }).ToList();
     }
 }
