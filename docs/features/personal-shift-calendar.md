@@ -18,7 +18,7 @@ Today covers one local calendar date. Past and Future load 31 local dates per pa
 
 ## Deleting inactive shifts
 
-Assignments and QC records no longer block deletion. The live shift, roster links, and occurrence exceptions are removed atomically. A separate `DeletedShift` reporting snapshot preserves schedule/assignment history. QC records retain their original historical identifier/name and get `ShiftDeletedUtc`, detaching them from active work while keeping checklist answers, notes, photos, and actual timestamps intact.
+Assignments and QC records no longer block deletion. The live shift, roster links, and occurrence exceptions are removed atomically. A separate `DeletedShift` reporting snapshot preserves schedule/assignment history and all occurrence overrides; shift-specific historical exception reads use that archive. QC records retain their original historical identifier/name and get `ShiftDeletedUtc`, detaching them from active work while keeping checklist answers, notes, photos, and actual timestamps intact.
 
 Monthly reports can read deleted-shift snapshots, including an explicit deleted shift filter. Old QC tokens cannot modify detached history. Active shifts must be deactivated first. Deletion remains scoped to the caller's tenant and existing admin/manager permissions.
 

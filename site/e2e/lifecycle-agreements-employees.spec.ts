@@ -146,6 +146,7 @@ test('inactive agreements support signed deletion confirmation, cancellation and
   let deleteCalls = 0;
   let retainOnDelete = true;
   let signedConfirmation = '';
+  let refreshedConfirmation = '';
   let acceptConfirmation = true;
   const confirmationMessages: string[] = [];
   await page.route('**/api/v1/admin/agreements**', async route => {
@@ -154,9 +155,13 @@ test('inactive agreements support signed deletion confirmation, cancellation and
     if (route.request().method() === 'GET') return route.fulfill({ headers, json: items });
     if (route.request().method() === 'DELETE') {
       deleteCalls++;
-      if (retainOnDelete) return route.fulfill({ status: 409, headers, json: { detail: 'Agreement changed. Refresh and retry.' } });
+      if (retainOnDelete) {
+        items = items.map(item => item.id === 'unsigned' ? { ...item, hasSignedEvidence: true } : item);
+        return route.fulfill({ status: 409, headers, json: { detail: 'This agreement contains signed evidence. Explicitly confirm deletion of the signed agreement.' } });
+      }
       const url = new URL(route.request().url());
       if (url.pathname.endsWith('/signed')) signedConfirmation = url.searchParams.get('confirmSigned') ?? '';
+      if (url.pathname.endsWith('/unsigned')) refreshedConfirmation = url.searchParams.get('confirmSigned') ?? '';
       items = items.filter(item => !url.pathname.endsWith(`/${item.id}`));
       return route.fulfill({ status: 204, headers });
     }
@@ -171,7 +176,7 @@ test('inactive agreements support signed deletion confirmation, cancellation and
 
   const unsigned = page.getByRole('row').filter({ hasText: 'Inactive unsigned' });
   await unsigned.getByRole('button', { name: 'Delete' }).click();
-  await expect(page.getByText('Agreement changed. Refresh and retry.', { exact: true })).toBeVisible();
+  await expect(page.getByText('This agreement contains signed evidence. Explicitly confirm deletion of the signed agreement.', { exact: true })).toBeVisible();
   expect(deleteCalls).toBe(1);
 
   retainOnDelete = false;
@@ -179,6 +184,8 @@ test('inactive agreements support signed deletion confirmation, cancellation and
   await expect(page.getByText('Inactive unsigned', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Inactive partially signed', { exact: true })).toBeVisible();
   expect(deleteCalls).toBe(2);
+  expect(refreshedConfirmation).toBe('true');
+  expect(confirmationMessages.at(-1)).toContain('Permanently delete signed agreement');
   acceptConfirmation = false;
   await signed.getByRole('button', { name: 'Delete' }).click();
   expect(deleteCalls).toBe(2);

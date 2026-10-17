@@ -82,7 +82,13 @@ export default function AgreementsPage() {
     if (!window.confirm(message)) return;
     setLifecycleBusy(agreement.id); setLifecycleError('');
     try { await adminAgreements.deleteInactive(agreement.id, signed); await load(); }
-    catch (failure) { setLifecycleError(failure instanceof Error ? failure.message : 'Could not delete agreement. Please retry.'); }
+    catch (failure) {
+      const message = failure instanceof Error ? failure.message : 'Could not delete agreement. Please retry.';
+      if (!signed && message.toLowerCase().includes('signed evidence')) {
+        invalidateAdminCache(); await load();
+      }
+      setLifecycleError(message);
+    }
     finally { setLifecycleBusy(null); }
   };
 

@@ -36,7 +36,7 @@ public class ShiftDeletionDatabaseTests
         var form = QualityCycleForm.Create(shift.Id, shift.Name, employee, "Cleaner", Guid.NewGuid(), "Activities", day, ["Corridor"], day.AddHours(2));
         form.CompanyId = company.Id; form.BranchId = branch.Id;
         form.Start(day); form.Submit([new() { ItemText = "Corridor", IsChecked = true }], null, "Completed", [new("data:image/png;base64,fixture", "Floor cleaned")], day.AddHours(2));
-        var exception = ShiftOccurrenceException.Create(shift.Id, null, day, day.AddHours(2), ShiftOccurrenceExceptionStatus.Extra, "Extra", employee);
+        var exception = ShiftOccurrenceException.Create(shift.Id, null, day.AddHours(4), day.AddHours(7), ShiftOccurrenceExceptionStatus.Extra, "Extra", employee);
         using (var writer = store.LightweightSession(tenant)) { writer.Store(shift); writer.Store(assignment); writer.Store(form); writer.Store(exception); await writer.SaveChangesAsync(); }
         using (var writer = store.LightweightSession(tenant + "-foreign"))
         {
@@ -60,6 +60,12 @@ public class ShiftDeletionDatabaseTests
         Assert.NotNull(retained!.ShiftDeletedUtc);
         Assert.True(retained.IsSubmitted); Assert.Equal("Floor cleaned", Assert.Single(retained.Photos).Note);
         Assert.NotNull(await shifts.GetDeletedSnapshotAsync(shift.Id));
+        var retainedException = Assert.Single(await shifts.ListOccurrenceExceptionsAsync(shift.Id, day, day.AddDays(1)));
+        Assert.Equal(day.AddHours(4), retainedException.StartUtc);
+        Assert.Equal(day.AddHours(7), retainedException.EndUtc);
+        Assert.Equal("Extra", retainedException.Reason);
+        using (var live = store.QuerySession(tenant))
+            Assert.Empty(await live.Query<ShiftOccurrenceException>().Where(x => x.ShiftId == shift.Id).ToListAsync());
         var after = await reports.BuildAsync(new(2026, 10, ShiftId: shift.Id), default);
         Assert.Equal(JsonSerializer.Serialize(before.Shifts), JsonSerializer.Serialize(after.Shifts));
         using var foreign = store.QuerySession(tenant + "-foreign");

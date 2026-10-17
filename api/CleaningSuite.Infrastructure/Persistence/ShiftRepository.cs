@@ -62,9 +62,11 @@ public class ShiftRepository : IShiftRepository
         var shift = await Session.LoadAsync<Shift>(id, ct) ?? throw new NotFoundException("Shift", id);
         if (shift.IsActive) throw new InactiveRecordDeleteConflictException("Deactivate the shift before deleting it.");
         var assignments = await Session.Query<ShiftAssignment>().Where(x => x.ShiftId == id).ToListAsync(ct);
-        Session.Store(new DeletedShift { Id = shift.Id, Snapshot = shift, Assignments = assignments.ToList() });
+        var archive = new DeletedShift { Id = shift.Id, Snapshot = shift, Assignments = assignments.ToList() };
         foreach (var assignment in assignments) Session.Delete<ShiftAssignment>(assignment.Id);
         var exceptions = await Session.Query<ShiftOccurrenceException>().Where(x => x.ShiftId == id).ToListAsync(ct);
+        archive.OccurrenceExceptions = exceptions.ToList();
+        Session.Store(archive);
         foreach (var exception in exceptions) Session.Delete<ShiftOccurrenceException>(exception.Id);
         var forms = await Session.Query<QualityCycleForm>().Where(x => x.ShiftId == id).ToListAsync(ct);
         foreach (var form in forms)
@@ -151,6 +153,10 @@ public class ShiftRepository : IShiftRepository
 
     public async Task<IReadOnlyList<ShiftOccurrenceException>> ListOccurrenceExceptionsAsync(Guid shiftId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default)
     {
+        var archive = await Session.LoadAsync<DeletedShift>(shiftId, ct);
+        if (archive is not null) return archive.OccurrenceExceptions.Where(x =>
+            (x.StartUtc >= fromUtc && x.StartUtc < toUtc)
+            || (x.OriginalStartUtc >= fromUtc && x.OriginalStartUtc < toUtc)).ToList();
         var from = DateTime.SpecifyKind(fromUtc, DateTimeKind.Unspecified);
         var to = DateTime.SpecifyKind(toUtc, DateTimeKind.Unspecified);
         return await Session.Query<ShiftOccurrenceException>()
