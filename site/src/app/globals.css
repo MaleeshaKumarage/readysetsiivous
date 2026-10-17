@@ -12,6 +12,10 @@
     @apply font-sans;
   }
 
+  :root {
+    --font-inter: Inter, system-ui, -apple-system, sans-serif;
+  }
+
   body {
     @apply font-sans bg-background text-foreground;
   }
@@ -148,7 +152,6 @@
   font-family: var(--font-outfit), 'Outfit', sans-serif;
 }
 
-.public-site .bg-white { background-color: var(--card); }
 .public-site .text-gray-900 { color: var(--foreground); }
 .public-site .text-gray-700,
 .public-site .text-gray-600 { color: var(--muted-foreground); }
