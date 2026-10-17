@@ -15,7 +15,9 @@ function mondayOf(date: string) {
 }
 
 function label(date: string) {
-  return new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`));
+  const [year, month, day] = date.split('-');
+  const weekday = new Intl.DateTimeFormat('en-GB', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`));
+  return `${day}/${month}/${year} ${weekday}`;
 }
 
 function weekNumber(monday: string) {
@@ -23,12 +25,13 @@ function weekNumber(monday: string) {
   return 1 + Math.round((Date.parse(`${monday}T00:00:00Z`) - Date.parse(`${mondayOf(`${thursday.getUTCFullYear()}-01-04`)}T00:00:00Z`)) / 604800000);
 }
 
-export default function ShiftCalendar({ occurrences, renderShift, disabled, onCloseForm }: {
+export default function ShiftCalendar({ occurrences, renderShift, disabled, onCloseForm, view }: {
   occurrences: MyShiftOccurrence[]; renderShift: (shift: MyShiftOccurrence) => ReactNode;
-  disabled: boolean; onCloseForm: () => void;
+  disabled: boolean; onCloseForm: () => void; view: 'past' | 'future';
 }) {
   const [openWeek, setOpenWeek] = useState<string | null>(null);
   const [openDay, setOpenDay] = useState<string | null>(null);
+  const compareDates = (a: string, b: string) => view === 'future' ? a.localeCompare(b) : b.localeCompare(a);
   const weeks = new Map<string, Map<string, MyShiftOccurrence[]>>();
   for (const occurrence of occurrences) {
     const day = dateKey(occurrence.startUtc, occurrence.timeZoneId);
@@ -43,8 +46,8 @@ export default function ShiftCalendar({ occurrences, renderShift, disabled, onCl
     setOpenDay(openWeek === week && openDay === day ? null : day);
   };
   return <div className="space-y-4" aria-label="Shifts by week and day">
-    {[...weeks.entries()].sort(([a], [b]) => b.localeCompare(a)).map(([week, days]) => {
-      const ordered = [...days.entries()].sort(([a], [b]) => b.localeCompare(a));
+    {[...weeks.entries()].sort(([a], [b]) => compareDates(a, b)).map(([week, days]) => {
+      const ordered = [...days.entries()].sort(([a], [b]) => compareDates(a, b));
       const expanded = openWeek === week;
       const count = ordered.reduce((sum, [, shifts]) => sum + shifts.length, 0);
       return <section key={week} data-testid={`shift-week-${week}`} className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
@@ -61,13 +64,14 @@ export default function ShiftCalendar({ occurrences, renderShift, disabled, onCl
               aria-label={`${label(day)} · ${shifts.length} ${shifts.length === 1 ? 'shift' : 'shifts'}`}
               onClick={() => selectDay(week, day)}
               className="whitespace-nowrap rounded-lg border border-gray-300 px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 dark:border-gray-600">
-              {new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${day}T12:00:00Z`))} · {shifts.length}
+              <span>{label(day)}</span>
+              <span className="ml-2 inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700 dark:bg-gray-800 dark:text-gray-200">{shifts.length} {shifts.length === 1 ? 'shift' : 'shifts'}</span>
             </button>)}
           </div>
         </div>
         <div id={`week-${week}`} hidden={!expanded}>
           {ordered.map(([day, shifts]) => <div key={day} id={`day-${day}`} hidden={!expanded || openDay !== day} className="mt-4 space-y-4" role="region" aria-label={`Shifts on ${day}`}>
-            {shifts.slice().sort((a, b) => b.startUtc.localeCompare(a.startUtc)).map(renderShift)}
+            {shifts.slice().sort((a, b) => view === 'future' ? Date.parse(a.startUtc) - Date.parse(b.startUtc) : Date.parse(b.startUtc) - Date.parse(a.startUtc)).map(renderShift)}
           </div>)}
         </div>
       </section>;
