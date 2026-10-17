@@ -90,7 +90,7 @@ public sealed class SetVisitAssigneesHandler(IShiftRepository shifts, IEmployeeR
             var (localFrom, localTo) = TenantTimeZone.LocalDatesForUtcRange(boundary, end, zone);
             var changes = await shifts.ListOccurrenceExceptionsAsync(shift.Id, boundary, end, ct) ?? [];
             var overrides = await shifts.ListOccurrenceAssignmentsAsync(shift.Id, ct) ?? [];
-            candidate = ShiftVisitRoster.Resolve(shift.Id, ShiftScheduleCalculator.GenerateOccurrences(shift, localFrom, localTo, zone), changes, history, overrides)
+            candidate = ShiftVisitRoster.Resolve(shift.Id, ShiftScheduleCalculator.GenerateOccurrences(shift, localFrom, localTo, zone), changes, history, overrides, legacyStartUtc: shift.ValidFrom.HasValue ? TenantTimeZone.StartOfLocalDay(shift.ValidFrom.Value.Date, zone) : null)
                 .Where(x => x.Occurrence.StartUtc >= boundary && x.Occurrence.StartUtc < end).ToList();
         }
         else
@@ -98,7 +98,7 @@ public sealed class SetVisitAssigneesHandler(IShiftRepository shifts, IEmployeeR
             change = visit.Assignment ?? ShiftOccurrenceAssignment.Create(shift.Id, visit.OriginalStartUtc,
                 visit.ExtraExceptionId, request.Mode, selected, request.Reason);
             change.Update(request.Mode, selected, request.Reason);
-            var regular = history.Where(x => x.CoversVisit(visit.Occurrence.StartUtc, visit.Occurrence.EndUtc)).Select(x => x.EmployeeId);
+            var regular = history.Where(x => x.CoversVisit(visit.Occurrence.StartUtc, visit.Occurrence.EndUtc, shift.ValidFrom.HasValue ? TenantTimeZone.StartOfLocalDay(shift.ValidFrom.Value.Date, zone) : null)).Select(x => x.EmployeeId);
             var ids = request.Mode switch { OccurrenceAssignmentMode.Replace => selected,
                 OccurrenceAssignmentMode.Add => regular.Concat(selected).Distinct().Order().ToArray(),
                 _ => regular.Distinct().Order().ToArray() };

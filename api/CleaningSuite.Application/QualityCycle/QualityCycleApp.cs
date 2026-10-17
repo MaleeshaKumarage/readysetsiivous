@@ -332,8 +332,8 @@ public class QualityCycleHandlers
             // occurrence. Prefer the occurrence explicitly assigned to this employee, then
             // fall back to the regular shift assignment, instead of throwing on duplicates.
             if (!matching.Any(o => o.EmployeeIds.Contains(employee.Id))) throw new UnauthorizedAccessException();
-            if (TenantTimeZone.LocalDate(start, zone) != TenantTimeZone.LocalDate(_clock.GetUtcNow().UtcDateTime, zone))
-                throw new QualityCycleConflictException("This shift can be started on its scheduled date.");
+            if (TenantTimeZone.LocalDate(start, zone) > TenantTimeZone.LocalDate(_clock.GetUtcNow().UtcDateTime, zone))
+                throw new QualityCycleConflictException("Future shifts cannot be started before their scheduled date.");
 
             var form = await _repository.GetFormByShiftOccurrenceAsync(shift.Id, employee.Id, start, ct);
             if (form == null)

@@ -17,7 +17,7 @@ public static class ShiftVisitRoster
 {
     public static IReadOnlyList<ShiftVisitRosterEntry> Resolve(Guid shiftId, IEnumerable<ShiftOccurrence> generated,
         IEnumerable<ShiftOccurrenceException> exceptions, IEnumerable<ShiftAssignment> recurring,
-        IEnumerable<ShiftOccurrenceAssignment> overrides, bool includeCancelled = false)
+        IEnumerable<ShiftOccurrenceAssignment> overrides, bool includeCancelled = false, DateTime? legacyStartUtc = null)
     {
         var periods = recurring.Where(x => x.ShiftId == shiftId).ToList();
         var scheduleChanges = exceptions.Where(x => x.ShiftId == shiftId).ToList();
@@ -30,7 +30,7 @@ public static class ShiftVisitRoster
                 var extra = visit.Status == ShiftOccurrenceExceptionStatus.Extra ? visit.ExceptionId : null;
                 DateTime? original = extra.HasValue ? null : visit.OriginalStartUtc ?? visit.StartUtc;
                 changes.TryGetValue(ShiftOccurrenceAssignment.Identity(shiftId, original, extra), out var change);
-                var regular = periods.Where(x => x.CoversVisit(visit.StartUtc, visit.EndUtc)).Select(x => x.EmployeeId);
+                var regular = periods.Where(x => x.CoversVisit(visit.StartUtc, visit.EndUtc, legacyStartUtc)).Select(x => x.EmployeeId);
                 IEnumerable<Guid> selected; string source;
                 if (change is not null)
                 {

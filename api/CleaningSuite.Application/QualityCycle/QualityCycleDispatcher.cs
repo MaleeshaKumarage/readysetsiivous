@@ -68,6 +68,7 @@ public class QualityCycleDispatcher : IQualityCycleDispatcher
         var overrides = await _shifts.ListOccurrenceAssignmentsAsync(shift.Id, ct) ?? [];
         var recurring = history.Concat(assignments).GroupBy(x => (x.Id, x.EmployeeId)).Select(x => x.First()).ToList();
         var now = _clock.GetUtcNow().UtcDateTime;
+        var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
         var count = 0;
         foreach (var occurrence in occurrences)
         {
@@ -75,7 +76,7 @@ public class QualityCycleDispatcher : IQualityCycleDispatcher
                 : occurrence.OriginalStartUtc ?? occurrence.StartUtc;
             var change = overrides.FirstOrDefault(x => x.Id == ShiftOccurrenceAssignment.Identity(shift.Id, original,
                 occurrence.Status == ShiftOccurrenceExceptionStatus.Extra ? occurrence.ExceptionId : null));
-            var regular = recurring.Where(a => a.CoversVisit(occurrence.StartUtc, occurrence.EndUtc)).Select(a => a.EmployeeId);
+            var regular = recurring.Where(a => a.CoversVisit(occurrence.StartUtc, occurrence.EndUtc, shift.ValidFrom.HasValue ? TenantTimeZone.StartOfLocalDay(shift.ValidFrom.Value.Date, zone) : null)).Select(a => a.EmployeeId);
             var employeeIds = (change is not null ? change.Mode switch {
                 OccurrenceAssignmentMode.Replace => change.EmployeeIds,
                 OccurrenceAssignmentMode.Add => regular.Concat(change.EmployeeIds),

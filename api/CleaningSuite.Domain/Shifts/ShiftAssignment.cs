@@ -19,9 +19,12 @@ public class ShiftAssignment : BaseDocument
         ? Periods.Any(p => p.FromUtc < end && (!p.ToUtc.HasValue || p.ToUtc > start))
         : AssignedAtUtc < end && (IsActive || (UnassignedAtUtc ?? UpdatedUtc) > start);
 
-    public bool CoversVisit(DateTime start, DateTime end) => Periods.Count > 0
+    public bool CoversVisit(DateTime start, DateTime end, DateTime? shiftStartUtc = null) => Periods.Count > 0
         ? Periods.Any(p => p.FromUtc <= start && (!p.ToUtc.HasValue || start < p.ToUtc.Value))
-        : Overlaps(start, end);
+        : CoversOccurrence(start, end, shiftStartUtc);
+
+    public bool CoversOccurrence(DateTime start, DateTime end, DateTime? shiftStartUtc = null) =>
+        Periods.Count == 0 && IsActive && shiftStartUtc.HasValue ? shiftStartUtc.Value < end : Overlaps(start, end);
 
     public void EndFrom(DateTime boundaryUtc, DateTime nowUtc)
     {

@@ -26,7 +26,7 @@ public static class ShiftRosterReader
             .GroupBy(x => (x.Id, x.EmployeeId)).Select(g => g.First());
         var overrides = await shifts.ListOccurrenceAssignmentsAsync(shift.Id, ct) ?? Array.Empty<ShiftOccurrenceAssignment>();
         return ShiftVisitRoster.Resolve(shift.Id, ShiftScheduleCalculator.GenerateOccurrences(shift, localFrom, localTo, zone),
-                exceptions, assignments, overrides, includeCancelled)
+                exceptions, assignments, overrides, includeCancelled, shift.ValidFrom.HasValue ? TenantTimeZone.StartOfLocalDay(shift.ValidFrom.Value.Date, zone) : null)
             .Where(x => x.Occurrence.StartUtc >= from && x.Occurrence.StartUtc < to).ToList();
     }
 

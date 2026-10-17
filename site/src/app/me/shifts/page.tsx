@@ -236,7 +236,7 @@ export default function MyShiftsPage() {
               const isOpen = openId === key;
               const scheduledDate = tenantDateKey(o.startUtc, o.timeZoneId);
               const today = tenantDateKey(new Date(now), o.timeZoneId);
-              const canStart = scheduledDate === today;
+              const canStart = scheduledDate <= today;
               return (
                 <Card key={key} role="group" aria-label={`${o.shiftName} ${o.startUtc}`} variant="elevated" padding="none" className="overflow-hidden">
                   <div className="p-5 space-y-3">
@@ -270,7 +270,7 @@ export default function MyShiftsPage() {
                         <Play className="w-4 h-4" /> Start
                       </Button>
                     )}
-                    {status === 'not-started' && !canStart && <p className="text-sm text-gray-500">{scheduledDate > today ? 'Available on the scheduled date. The actual start time will be recorded.' : 'This shift can only be started on its scheduled date. Contact your tenant administrator if you need help.'}</p>}
+                    {status === 'not-started' && !canStart && <p className="text-sm text-gray-500">Available on the scheduled date. The actual start time will be recorded.</p>}
 
                     {status === 'in-progress' && !o.isDeleted && (
                       <Button variant="outline" size="sm" disabled={photoReading || submitting} onClick={() => openForm(o)} className="gap-1.5">

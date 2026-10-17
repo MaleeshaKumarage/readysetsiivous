@@ -30,3 +30,7 @@ Admin and manager Active/Inactive lists read only live shift documents. Reportin
 - PostgreSQL deletion regression compares monthly report content before/after deletion, checks roster/exception unlinking, preserves photo notes, and verifies another tenant's matching records remain untouched.
 - Backend tests cover DST calendar boundaries, adjacent pages, invalid cursors, historical employee ownership and all staff-role calendar access.
 - Desktop/mobile Playwright covers default Today, folded counts, single-open week/day, ordering, paging failures/retry, stale responses, keyboard tabs, draft preservation, date rollover, confirmation cancellation and successful shift deletion.
+
+## Backdated visits
+
+A regular assignment on an active shift includes visits from the configured shift start date, even when the shift and assignment were created later. Past visits are visible in Past and may be started and ended now. Explicit assignment periods/handover dates retain their boundaries. Future tenant-local dates cannot be started. Scheduled dates/times remain unchanged; Actual start and Actual end record the button-click times. Inactive/deleted shifts remain hidden.
