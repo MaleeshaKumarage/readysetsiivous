@@ -99,7 +99,7 @@ export default function BookingFlow({ lang }: { lang: Language }) {
   }
 
   if (!services) {
-    return <p className="text-center text-gray-500 dark:text-gray-400">{t(lang, 'varaus.loading')}</p>;
+    return <p role="status" aria-live="polite" className="text-center text-gray-500 dark:text-gray-400">{t(lang, 'varaus.loading')}</p>;
   }
 
   return (
@@ -115,7 +115,7 @@ export default function BookingFlow({ lang }: { lang: Language }) {
                 setService(s);
                 setStep('time');
               }}
-              className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 text-left transition hover:border-brand"
+              className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 text-left transition hover:border-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
             >
               <div className="flex items-baseline justify-between gap-4">
                 <span className="text-lg font-semibold">{s.name}</span>
@@ -131,18 +131,19 @@ export default function BookingFlow({ lang }: { lang: Language }) {
 
       {step === 'time' && service && (
         <div>
-          <button onClick={() => setStep('service')} className="mb-4 text-sm underline">
+          <button onClick={() => setStep('service')} className="mb-4 text-sm underline rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
             ← {t(lang, 'varaus.back')}
           </button>
           <h2 className="mb-4 text-xl font-semibold">{service.name}</h2>
-          <label className="mb-6 block">
+          <label htmlFor="booking-date" className="mb-6 block">
             <span className="mb-1 block text-sm font-medium">{t(lang, 'varaus.date')}</span>
             <input
+              id="booking-date"
               type="date"
               min={today}
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2"
+              className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
             />
           </label>
           {date && (
@@ -153,13 +154,13 @@ export default function BookingFlow({ lang }: { lang: Language }) {
                   <button
                     type="button"
                     onClick={() => { setSlotsError(false); setSlots(null); setSlotsRetry((value) => value + 1); }}
-                    className="rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-2 text-sm"
+                    className="rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
                   >
                     {t(lang, 'varaus.retrySlots')}
                   </button>
                 </div>
               ) : slots === null ? (
-                <p className="col-span-full text-gray-500 dark:text-gray-400">{t(lang, 'varaus.loadingSlots')}</p>
+                <p role="status" aria-live="polite" className="col-span-full text-gray-500 dark:text-gray-400">{t(lang, 'varaus.loadingSlots')}</p>
               ) : slots.length === 0 ? (
                 <p className="col-span-full text-gray-500 dark:text-gray-400">{t(lang, 'varaus.noSlots')}</p>
               ) : (
@@ -170,7 +171,7 @@ export default function BookingFlow({ lang }: { lang: Language }) {
                       setSlot(s.startTime);
                       setStep('details');
                     }}
-                    className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm hover:border-brand"
+                    className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm hover:border-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
                   >
                     {s.startTime}
                   </button>
@@ -183,7 +184,7 @@ export default function BookingFlow({ lang }: { lang: Language }) {
 
       {step === 'details' && service && (
         <div>
-          <button onClick={() => setStep('time')} className="mb-4 text-sm underline">
+          <button onClick={() => setStep('time')} className="mb-4 text-sm underline rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
             ← {t(lang, 'varaus.back')}
           </button>
           <h2 className="mb-1 text-xl font-semibold">{t(lang, 'varaus.detailsTitle')}</h2>
@@ -191,30 +192,32 @@ export default function BookingFlow({ lang }: { lang: Language }) {
             {service.name} · {date} · {t(lang, 'varaus.at')} {slot}
           </p>
           <div className="grid gap-4">
-            <Field label={t(lang, 'varaus.name')} value={form.customerName} onChange={update('customerName')} />
-            <Field label={t(lang, 'varaus.phone')} value={form.customerPhone} onChange={update('customerPhone')} />
-            <Field label={t(lang, 'varaus.email')} value={form.customerEmail} onChange={update('customerEmail')} />
-            <Field label={t(lang, 'varaus.street')} value={form.street} onChange={update('street')} />
+            <Field id="customerName" label={t(lang, 'varaus.name')} value={form.customerName} onChange={update('customerName')} />
+            <Field id="customerPhone" label={t(lang, 'varaus.phone')} value={form.customerPhone} onChange={update('customerPhone')} />
+            <Field id="customerEmail" label={t(lang, 'varaus.email')} value={form.customerEmail} onChange={update('customerEmail')} />
+            <Field id="street" label={t(lang, 'varaus.street')} value={form.street} onChange={update('street')} />
             <div className="grid grid-cols-2 gap-4">
-              <Field label={t(lang, 'varaus.postalCode')} value={form.postalCode} onChange={update('postalCode')} />
-              <Field label={t(lang, 'varaus.city')} value={form.city} onChange={update('city')} />
+              <Field id="postalCode" label={t(lang, 'varaus.postalCode')} value={form.postalCode} onChange={update('postalCode')} />
+              <Field id="city" label={t(lang, 'varaus.city')} value={form.city} onChange={update('city')} />
             </div>
-            <label className="block">
+            <label htmlFor="notes" className="block">
               <span className="mb-1 block text-sm font-medium">{t(lang, 'varaus.notes')}</span>
               <textarea
+                id="notes"
                 value={form.notes}
                 onChange={update('notes')}
                 rows={3}
-                className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2"
+                className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
               />
             </label>
             {submitError && (
-              <p className="text-sm text-red-500">{t(lang, 'varaus.submitError')}</p>
+              <p role="alert" className="text-sm text-red-500">{t(lang, 'varaus.submitError')}</p>
             )}
             <button
               onClick={submit}
               disabled={submitting || !form.customerName || !form.customerPhone || !form.street || !form.city}
-              className="rounded-full bg-brand px-6 py-3 font-semibold text-accent-950 disabled:opacity-50"
+              aria-busy={submitting}
+              className="rounded-full bg-brand px-6 py-3 font-semibold text-accent-950 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
             >
               {submitting ? t(lang, 'varaus.submitting') : t(lang, 'varaus.confirm')}
             </button>
@@ -231,7 +234,7 @@ export default function BookingFlow({ lang }: { lang: Language }) {
           <p className="mb-8 text-gray-500 dark:text-gray-400">
             {t(lang, 'varaus.reference')}: <strong>{result.customerReference}</strong>
           </p>
-          <a href="/" className="rounded-full bg-brand px-6 py-3 font-semibold text-accent-950">
+          <a href="/" className="inline-block rounded-full bg-brand px-6 py-3 font-semibold text-accent-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
             {t(lang, 'varaus.backHome')}
           </a>
         </div>
@@ -241,21 +244,24 @@ export default function BookingFlow({ lang }: { lang: Language }) {
 }
 
 function Field({
+  id,
   label,
   value,
   onChange,
 }: {
+  id?: string;
   label: string;
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }) {
   return (
-    <label className="block">
+    <label htmlFor={id} className="block">
       <span className="mb-1 block text-sm font-medium">{label}</span>
       <input
+        id={id}
         value={value}
         onChange={onChange}
-        className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2"
+        className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
       />
     </label>
   );
