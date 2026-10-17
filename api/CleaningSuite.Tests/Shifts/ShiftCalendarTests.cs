@@ -16,18 +16,19 @@ public class ShiftCalendarTests
 
     [Theory]
     [InlineData("inactive", false, -1, false)]
-    [InlineData("inactive", true, -1, true)]
+    [InlineData("inactive", true, -1, false)]
     [InlineData("inactive", false, 0, false)]
     [InlineData("inactive", true, 0, false)]
     [InlineData("inactive", false, 1, false)]
     [InlineData("inactive", true, 1, false)]
     [InlineData("deleted", false, -1, false)]
-    [InlineData("deleted", true, -1, true)]
+    [InlineData("deleted", true, -1, false)]
     [InlineData("deleted", true, 0, false)]
     [InlineData("deleted", false, 1, false)]
+    [InlineData("active", true, -1, true)]
     [InlineData("active", false, 0, true)]
     [InlineData("active", true, 0, true)]
-    public async Task Inactive_shifts_only_retain_completed_past_history(string lifecycle, bool submitted, int dayOffset, bool visible)
+    public async Task Inactive_and_deleted_shifts_are_hidden_in_every_calendar_window(string lifecycle, bool submitted, int dayOffset, bool visible)
     {
         var employee = Guid.NewGuid(); var shift = Guid.NewGuid();
         var from = new DateTime(2026, 10, 15, 0, 0, 0, DateTimeKind.Utc); var to = from.AddDays(6);
@@ -101,8 +102,10 @@ public class ShiftCalendarTests
         Assert.Throws<ValidationException>(() => ShiftCalendarWindow.Create(view, cursor,
             new DateTime(2026, 10, 25, 12, 0, 0, DateTimeKind.Utc), TimeZoneInfo.Utc));
 
-    [Fact]
-    public async Task Own_completed_work_survives_deleted_shift_and_roster_changes_without_leaking_other_employees()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Completed_work_is_visible_only_for_active_shifts_and_preserves_evidence(bool deleted)
     {
         var employee = Guid.NewGuid();
         var from = new DateTime(2026, 10, 16, 0, 0, 0, DateTimeKind.Utc);
@@ -110,7 +113,9 @@ public class ShiftCalendarTests
         shifts.Setup(x => x.ListAssignmentsByEmployeeAsync(employee, It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<ShiftAssignment>());
         var recorded = QualityCycleForm.Create(Guid.NewGuid(), "Historic corridor shift", employee, "Cleaner", Guid.NewGuid(), "Activities", from.AddHours(8), ["Corridor"], from.AddHours(10));
         recorded.IsSubmitted = true; recorded.Items[0].IsChecked = true;
-        recorded.ShiftDeletedUtc = from.AddDays(1);
+        if (deleted) recorded.ShiftDeletedUtc = from.AddDays(1);
+        else shifts.Setup(x => x.GetAsync(recorded.ShiftId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Shift { Id = recorded.ShiftId, IsActive = true });
         recorded.Photos = [new("data:image/png;base64,history", "Corridor cleaned")];
         var foreign = QualityCycleForm.Create(Guid.NewGuid(), "Private", Guid.NewGuid(), "Other", Guid.NewGuid(), "Activities", from.AddHours(9), ["Private"]);
         foreign.IsSubmitted = true;
@@ -119,9 +124,15 @@ public class ShiftCalendarTests
             .ReturnsAsync(new[] { recorded, foreign });
         var result = await new QualityCycleHandlers.GetMyShiftsQueryHandler(shifts.Object, forms.Object)
             .Handle(new(employee, from, from.AddDays(1)), default);
-        var own = Assert.Single(result);
-        Assert.True(own.IsDeleted); Assert.Equal(recorded.ShiftName, own.ShiftName);
-        Assert.True(own.Form!.IsSubmitted);
-        Assert.Equal("Corridor cleaned", Assert.Single(own.Form.Photos!).Note);
+        if (deleted) Assert.Empty(result);
+        else
+        {
+            var own = Assert.Single(result);
+            Assert.False(own.IsDeleted); Assert.Equal(recorded.ShiftName, own.ShiftName);
+            Assert.True(own.Form!.IsSubmitted);
+        }
+        Assert.True(recorded.IsSubmitted);
+        Assert.Equal("Corridor cleaned", Assert.Single(recorded.Photos!).Note);
+        forms.Verify(x => x.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }
