@@ -330,3 +330,16 @@ for (const role of ['admin', 'manager'] as const) {
     await expect(page.getByText('No shifts scheduled.')).toBeVisible();
   });
 }
+
+test('a past visit can be started and ended with actual times recorded today', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-10-17T12:00:00Z') });
+  const work = await setupWork(page, { startAt: '2026-10-01T08:00:00Z' });
+  await page.goto('/me/shifts/');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(page.getByText(/^Actual start: /)).toBeVisible();
+  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByRole('button', { name: 'End shift', exact: true }).click();
+  await expect(page.getByText('Done', { exact: true })).toBeVisible();
+  expect(work.startCalls).toBe(1); expect(work.endCalls).toBe(1);
+});

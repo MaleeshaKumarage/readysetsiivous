@@ -14,6 +14,29 @@ public class ShiftCalendarTests
         public override DateTimeOffset GetUtcNow() => new(2026, 10, 17, 22, 0, 0, TimeSpan.Zero);
     }
 
+    [Fact]
+    public async Task Regular_assignment_created_on_October_17_exposes_October_1_visits_but_explicit_periods_do_not()
+    {
+        var employee = Guid.NewGuid();
+        var from = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
+        var shift = Shift.Create(Guid.NewGuid(), Guid.NewGuid(), "Backdated shift",
+            new ShiftSchedule { Type = ShiftScheduleType.DailySameTime, DailyStart = TimeSpan.FromHours(8), DailyEnd = TimeSpan.FromHours(10) },
+            null, from, null, null);
+        shift.CreatedUtc = from.AddDays(16);
+        var assignment = ShiftAssignment.Create(shift.Id, employee, null);
+        assignment.AssignedAtUtc = from.AddDays(16);
+        var shifts = new Mock<IShiftRepository>(); var forms = new Mock<IQualityCycleRepository>();
+        shifts.Setup(x => x.GetAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+        shifts.Setup(x => x.ListAssignmentsByEmployeeAsync(employee, It.IsAny<CancellationToken>())).ReturnsAsync(new[] { assignment });
+        var handler = new QualityCycleHandlers.GetMyShiftsQueryHandler(shifts.Object, forms.Object);
+        var result = await handler.Handle(new(employee, from, from.AddDays(17)), default);
+        Assert.Equal(17, result.Count);
+        Assert.Equal(from.AddHours(8), result[0].StartUtc); // no tenant profile in this fixture: UTC
+        assignment.Periods.Add(new() { FromUtc = from.AddDays(16) });
+        result = await handler.Handle(new(employee, from, from.AddDays(17)), default);
+        Assert.Single(result);
+    }
+
     [Theory]
     [InlineData("inactive", false, -1, false)]
     [InlineData("inactive", true, -1, false)]

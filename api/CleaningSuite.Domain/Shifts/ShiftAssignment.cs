@@ -19,6 +19,12 @@ public class ShiftAssignment : BaseDocument
         ? Periods.Any(p => p.FromUtc < end && (!p.ToUtc.HasValue || p.ToUtc > start))
         : AssignedAtUtc < end && (IsActive || (UnassignedAtUtc ?? UpdatedUtc) > start);
 
+    // A regular legacy assignment covers the shift's configured date range.
+    // Explicit periods (handover/unassignment history) always retain their own boundaries.
+    public bool CoversOccurrence(DateTime start, DateTime end, DateTime? shiftStartUtc = null) =>
+        Periods.Count == 0 && IsActive && shiftStartUtc.HasValue
+            ? shiftStartUtc.Value < end : Overlaps(start, end);
+
     public static ShiftAssignment Create(
         Guid shiftId,
         Guid employeeId,
