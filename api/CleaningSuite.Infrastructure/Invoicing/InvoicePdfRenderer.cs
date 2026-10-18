@@ -21,7 +21,9 @@ public static class InvoicePdfRenderer
         string Amount(decimal value) => value.ToString("N2", culture) + " " + invoice.Currency;
         string Number(decimal value) => value.ToString("0.##", culture);
         string Period(DateOnly? from, DateOnly? to) => $"{from:dd.MM.yyyy} – {to:dd.MM.yyyy}";
-        return Document.Create(container => container.Page(page =>
+        var barcode = FinnishBankBarcode.ForInvoice(invoice);
+        return Document.Create(container => {
+        container.Page(page =>
         {
             ReportPdfTheme.Page(page);
             page.Header().Element(c => ReportPdfTheme.Header(c, T("Invoice"), invoice.InvoiceNumber));
@@ -103,10 +105,62 @@ public static class InvoicePdfRenderer
                     payment.Item().Text("IBAN: " + invoice.Issuer.BankAccountIBAN);
                     payment.Item().Text("BIC: " + invoice.Issuer.BankBic);
                     if (!string.IsNullOrWhiteSpace(invoice.PaymentReference)) payment.Item().Text(T("Payment reference") + ": " + invoice.PaymentReference);
+                    if (invoice.IssuerIsSample) payment.Item().Text(T("Sample payment notice")).Bold();
                 });
             });
             page.Footer().Element(c => ReportPdfTheme.Footer(c, invoice.IssueDate, lang));
-        })).GeneratePdf();
+        });
+        // The official transfer form is 210 × 101.6 mm: keep its physical dimensions
+        // independent of the branded invoice's margins and overflowing line items.
+        if (barcode is not null) container.Page(page =>
+        {
+            page.Size(QuestPDF.Helpers.PageSizes.A4); page.Margin(0);
+            page.DefaultTextStyle(x => x.FontFamily(QuestPDF.Helpers.Fonts.Arial).FontSize(9)
+                .FontColor("#000000").DisableFontFeature("liga").DisableFontFeature("clig").DisableFontFeature("dlig"));
+            // Keep every payment field and its barcode together. Long legal names or
+            // addresses may expand the form upwards, never split off the barcode.
+            page.Content().AlignBottom().MinHeight(101.6f, Unit.Millimetre).ShowEntire().Column(form =>
+            {
+                form.Item().BorderTop(1.4f).PaddingHorizontal(12).PaddingVertical(4).Text(T("Credit transfer")).Bold();
+                form.Item().Row(row =>
+                {
+                    row.RelativeItem().Column(left =>
+                    {
+                        TransferField(left, T("Recipient account"), "IBAN " + Group(invoice.Issuer.BankAccountIBAN.Replace(" ", ""), 4, false) + "\nBIC " + invoice.Issuer.BankBic);
+                        TransferField(left, T("Recipient"), invoice.Issuer.CompanyName + "\n" + invoice.Issuer.CompanyAddress.Street + "\n" + invoice.Issuer.CompanyAddress.PostalCode + " " + invoice.Issuer.CompanyAddress.City);
+                        TransferField(left, T("Payer"), invoice.Customer.Name + "\n" + invoice.BillingAddress.Street + "\n" + invoice.BillingAddress.PostalCode + " " + invoice.BillingAddress.City);
+                    });
+                    row.RelativeItem().Column(right =>
+                    {
+                        right.Item().Padding(8).Text(T("Credit transfer terms")).FontSize(9);
+                        TransferField(right, T("Payment reference"), Group(invoice.PaymentReference.Replace(" ", ""), 5, true));
+                        right.Item().Row(r =>
+                        {
+                            r.RelativeItem().Column(c => TransferField(c, T("Due date"), invoice.DueDate.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture)));
+                            r.RelativeItem().Column(c => TransferField(c, "EUR", invoice.Total.Gross.ToString("N2", culture)));
+                        });
+                    });
+                });
+                form.Item().Row(row =>
+                {
+                    row.RelativeItem().Column(c => TransferField(c, T("Signature"), " "));
+                    row.RelativeItem().Column(c => TransferField(c, T("From account"), " "));
+                });
+                // The reserved barcode area contains no plaintext or branding.
+                form.Item().PaddingTop(5, Unit.Millimetre).AlignCenter().Width(145, Unit.Millimetre)
+                    .Height(17, Unit.Millimetre).Svg(FinnishBankBarcode.Svg(barcode));
+            });
+        });
+        }).GeneratePdf();
+    }
+
+    private static void TransferField(ColumnDescriptor column, string label, string value) => column.Item()
+        .Border(.37f).BorderColor("#000000").Padding(5).Column(c => { c.Item().Text(label); c.Item().Text(value); });
+    private static string Group(string value, int size, bool fromRight)
+    {
+        var first = fromRight ? value.Length % size : size;
+        if (first == 0) first = size;
+        return value.Length <= first ? value : value[..first] + " " + string.Join(" ", Enumerable.Range(0, (value.Length - first + size - 1) / size).Select(i => value.Substring(first + i * size, Math.Min(size, value.Length - first - i * size))));
     }
 
     private static IContainer Cell(IContainer container) => container.BorderBottom(.5f).BorderColor(ReportPdfTheme.Line).Padding(6);
@@ -118,9 +172,18 @@ public static class InvoicePdfRenderer
     }
     private static string Text(string key, string language)
     {
-        if (language == "en") return key switch { "Monthly" => "Fixed monthly rate", "Hourly" => "Hourly rate", "PerOccurrence" => "Per completed visit", _ => key };
+        if (language == "en") return key switch {
+            "Monthly" => "Fixed monthly rate", "Hourly" => "Hourly rate", "PerOccurrence" => "Per completed visit",
+            "Sample payment notice" => "Sample details: enter real bank details before payment. No payment barcode is generated.",
+            "Credit transfer terms" => "The payment will be cleared for the recipient in accordance with the general terms for payment transmission and only on the basis of the account number given by the payer.",
+            _ => key };
         var pair = key switch
         {
+            "Credit transfer" => ("Tilisiirto", "Girering"), "Recipient account" => ("Saajan tilinumero", "Mottagarens kontonummer"),
+            "Recipient" => ("Saaja", "Mottagare"), "Payer" => ("Maksajan nimi ja osoite", "Betalarens namn och adress"),
+            "Signature" => ("Allekirjoitus", "Underskrift"), "From account" => ("Tililtä nro", "Från konto nr"),
+            "Sample payment notice" => ("Esimerkkitiedot: lisää oikeat pankkitiedot ennen maksamista. Maksuviivakoodia ei luoda.", "Exempeluppgifter: ange riktiga bankuppgifter före betalning. Ingen betalningsstreckkod skapas."),
+            "Credit transfer terms" => ("Maksu välitetään saajalle maksujenvälityksen ehtojen mukaisesti ja vain maksajan ilmoittaman tilinumeron perusteella.", "Betalningen förmedlas till mottagaren enligt villkoren för betalningsförmedling och endast till det kontonummer som betalaren angivit."),
             "Status" => ("Tila", "Status"), "Issued" => ("Laadittu", "Utfärdad"),
             "Paid" => ("Maksettu", "Betald"), "Voided" => ("Mitätöity", "Makulerad"), "Draft" => ("Luonnos", "Utkast"),
             "Sample issuer details" => ("Esimerkkitiedot laskuttajasta", "Exempeluppgifter för fakturautställaren"),
