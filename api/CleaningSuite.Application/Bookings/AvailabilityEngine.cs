@@ -64,12 +64,29 @@ public class AvailabilityEngine
         var serviceDuration = TimeSpan.FromMinutes(service.DurationMinutes);
         var slotStep = TimeSpan.FromMinutes(SlotMinutes);
         var slots = new List<AvailabilitySlot>();
+
+        // Precompute base local date and check UTC offset uniformity across business hours window.
+        // Bypasses repeated TimeZoneInfo.ConvertTimeToUtc calls per slot when offset is uniform (99.99%+ of queries).
+        var baseDateLocal = date.ToDateTime(TimeOnly.MinValue);
+        var startOffset = tz.GetUtcOffset(baseDateLocal + WindowStart);
+        var endOffset = tz.GetUtcOffset(baseDateLocal + WindowEnd);
+        var isUniformOffset = startOffset == endOffset;
+
         for (var cursor = WindowStart; cursor + serviceDuration <= WindowEnd; cursor += slotStep)
         {
-            var slotStartLocal = date.ToDateTime(TimeOnly.FromTimeSpan(cursor));
-            var slotEndLocal = slotStartLocal + serviceDuration;
-            var slotStartUtc = TimeZoneInfo.ConvertTimeToUtc(slotStartLocal, tz);
-            var slotEndUtc = TimeZoneInfo.ConvertTimeToUtc(slotEndLocal, tz);
+            DateTime slotStartUtc;
+            if (isUniformOffset)
+            {
+                var slotStartLocal = baseDateLocal + cursor;
+                slotStartUtc = DateTime.SpecifyKind(slotStartLocal - startOffset, DateTimeKind.Utc);
+            }
+            else
+            {
+                var slotStartLocal = date.ToDateTime(TimeOnly.FromTimeSpan(cursor));
+                slotStartUtc = TimeZoneInfo.ConvertTimeToUtc(slotStartLocal, tz);
+            }
+
+            var slotEndUtc = slotStartUtc + serviceDuration;
 
             var conflicts = HasConflict(occupied, slotStartUtc, slotEndUtc);
             if (!conflicts && slotStartUtc >= earliestStartUtc)
