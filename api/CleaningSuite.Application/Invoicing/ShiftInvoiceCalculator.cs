@@ -36,19 +36,28 @@ public static class ShiftInvoiceCalculator
         }
         string Branch(Guid id) => branches.TryGetValue(id, out var name) ? name : throw new ShiftConflictException("A shift branch is missing. Restore its company/branch association before invoicing.");
         var monthlyDays = new List<(DateOnly Date, ShiftPricingPlan Price, QualityCyclePlan Plan)>();
+        var mixedBasisMonths = new HashSet<string>();
         for (var day = from; day <= to; day = day.AddDays(1))
         {
             var active = Active(day); if (active is null) continue;
             var price = Price(day);
             if (price is null) Invalid($"{shift.Name}: no price is configured for {day:yyyy-MM-dd}. Add an effective price before invoicing.");
             if (price!.Mode == "Monthly") monthlyDays.Add((day, price, active));
+            else mixedBasisMonths.Add(day.ToString("yyyy-MM"));
         }
         var lines = new List<InvoiceLine>();
         foreach (var group in monthlyDays.GroupBy(d => (Month: d.Date.ToString("yyyy-MM"), d.Price, d.Plan.BranchId, d.Plan.ShiftName)))
         {
             var days = group.Select(d => d.Date).ToHashSet(); var first = days.Min(); var last = days.Max();
             var visitsInLine = visits.Where(v => v.BranchId == group.Key.BranchId && days.Contains(DateOnly.FromDateTime(TenantTimeZone.LocalDate(v.StartUtc, zone)))).ToArray();
-            var denominator = DateTime.DaysInMonth(first.Year, first.Month);
+            var calendarDays = DateTime.DaysInMonth(first.Year, first.Month);
+            var wholeMonth = from <= new DateOnly(first.Year, first.Month, 1)
+                && to >= new DateOnly(first.Year, first.Month, calendarDays)
+                && !mixedBasisMonths.Contains(group.Key.Month);
+            // A selected full calendar month is one fixed monthly charge, even when
+            // the shift's first/last active day is inside that month. Split price/branch
+            // segments proportionally; retain calendar-day proration for partial selections.
+            var denominator = wholeMonth ? monthlyDays.Count(d => d.Date.Year == first.Year && d.Date.Month == first.Month) : calendarDays;
             lines.Add(new() { ShiftId = shift.Id, ShiftName = group.Key.ShiftName, BranchName = Branch(group.Key.BranchId),
                 PricingMode = "Monthly", Month = group.Key.Month, PeriodFrom = first, PeriodTo = last,
                 LineKey = $"{shift.Id:N}:{group.Key.Month}:{group.Key.Price.EffectiveFrom:yyyyMMdd}:{group.Key.BranchId:N}",
