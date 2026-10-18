@@ -15,7 +15,7 @@ function getBody(route: any) {
   }
 }
 
-async function setupReportWorkspace(page: Page) {
+async function setupReportWorkspace(page: Page, initialShares: any[] = []) {
   await setupAdminMocks(page);
   await page.clock.setFixedTime(new Date('2026-10-17T12:00:00Z'));
   const rows = [
@@ -23,7 +23,7 @@ async function setupReportWorkspace(page: Page) {
     { shiftId: 'biweekly', shiftName: 'Biweekly 3 hours', companyName: 'AAA', branchId: 'aaa1', branchName: 'AAA1', scheduledOccurrences: 2, scheduledHours: 6, completedOccurrences: 2, recordedStaffHours: null, incompleteTimingRecords: 1 },
   ];
   const calls = { previews: [] as any[], exports: [] as any[], sends: [] as any[], retry: 0 };
-  let shares: any[] = [];
+  let shares: any[] = initialShares;
   await page.route(/\/api\/v1\/admin\/shifts(?:\?.*)?$/, route => route.fulfill({ headers: CORS_HEADERS, json: rows.map(row => ({ id: row.shiftId, name: row.shiftName, isActive: true })) }));
   await page.route(/\/api\/v1\/admin\/quality-cycle\/templates$/, route => route.fulfill({ headers: CORS_HEADERS, json: [] }));
   await page.route(/\/api\/v1\/admin\/quality-cycle\/(reports|report-shares)(\/.*)?$/, async route => {
@@ -475,4 +475,45 @@ test('admin can attach a checklist to an existing shift', async ({ page }) => {
   await page.getByRole('button', { name: 'Save template assignment' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   expect(saved).toEqual({ templateId: 'template-a' });
+});
+test('per-row sharing sends only that shift and refresh restores persisted share status', async ({ page }) => {
+  const calls = await setupReportWorkspace(page, [{ id: 'saved-share', token: 'saved-token', tenantId: 'tenant-a', year: 2026, month: 10, recipientEmail: 'saved@example.test', expiresUtc: '2099-11-01T00:00:00Z', acknowledgedUtc: '2026-10-17T12:00:00Z', emailSentUtc: '2026-10-16T12:00:00Z', isRevoked: false }]);
+  await page.getByRole('button', { name: 'Refresh shared reports' }).click();
+  await expect(page.getByText('saved@example.test', { exact: true })).toBeVisible();
+  await expect(page.getByText('Acknowledged', { exact: true })).toBeVisible();
+  await expect(page.getByText(/Expires/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Revoke', exact: true })).toBeVisible();
+  await selectReportShifts(page);
+  await page.getByRole('button', { name: 'Load report', exact: true }).click();
+  await page.getByRole('row').filter({ hasText: 'Weekday 2 hours' }).getByRole('button', { name: 'Share shift', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Recipient email').fill('one@example.test');
+  await dialog.getByRole('button', { name: 'Send report', exact: true }).click();
+  await expect.poll(() => calls.sends.length).toBe(1);
+  expect(calls.sends[0].selection.shiftIds).toEqual(['weekday']);
+});
+
+test('public PDF download requests the report endpoint and failed acknowledgment can retry', async ({ page, context }) => {
+  const report = { language: 'en', expiresUtc: '2099-11-01T00:00:00Z', year: 2026, month: 10, shifts: [] };
+  let attempts = 0;
+  await context.route(/\/api\/v1\/public\/tenant-a\/quality-cycle\/reports\/retry-token(?:\/acknowledge|\/pdf)?$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+    if (route.request().url().endsWith('/pdf')) return route.fulfill({ headers: CORS_HEADERS, contentType: 'application/pdf', body: '%PDF-1.4 synthetic' });
+    if (route.request().method() === 'POST') {
+      attempts++;
+      return route.fulfill(attempts === 1 ? { status: 500, headers: CORS_HEADERS, json: {} } : { headers: CORS_HEADERS, json: { ...report, acknowledgedUtc: '2026-10-17T12:00:00Z' } });
+    }
+    return route.fulfill({ headers: CORS_HEADERS, json: report });
+  });
+  await page.goto('/quality-report/?tenant=tenant-a&token=retry-token');
+  const request = context.waitForEvent('request', r => r.url().endsWith('/retry-token/pdf'));
+  await page.getByRole('link', { name: 'Download PDF', exact: true }).click();
+  expect((await request).url()).toContain('/api/v1/public/tenant-a/quality-cycle/reports/retry-token/pdf');
+  const acknowledge = page.getByRole('button', { name: 'Acknowledge receipt', exact: true });
+  await acknowledge.click();
+  await expect(page.locator('main').getByRole('alert')).toHaveText('Could not acknowledge receipt. Please retry.');
+  await expect(acknowledge).toBeEnabled();
+  await acknowledge.click();
+  await expect(page.getByRole('status')).toContainText('Receipt acknowledged');
+  expect(attempts).toBe(2);
 });
