@@ -15,9 +15,10 @@ function mondayOf(date: string) {
 }
 
 function label(date: string) {
-  const [year, month, day] = date.split('-');
-  const weekday = new Intl.DateTimeFormat('en-GB', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`));
-  return `${day}/${month}/${year} ${weekday}`;
+  const d = new Date(`${date}T12:00:00Z`);
+  const month = d.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+  const day = d.getUTCDate();
+  return `${month} ${day}`;
 }
 
 function weekNumber(monday: string) {
