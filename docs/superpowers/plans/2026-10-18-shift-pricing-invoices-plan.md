@@ -7,3 +7,8 @@
 5. Apply narrowly scoped EUR150/month Methehe pricing and known issuer metadata with backup; do not create a customer invoice or invent missing bank/address details.
 
 The writing-plans skill is unavailable in installed skill directories; this plan implements the approved user requirements directly.
+
+6. Add branded localized report email with snapshot periods, included shifts, receipt guidance and original expiry. Verify escaping, multi-period dates, language labels and mobile/desktop rendering.
+7. Add Finnish bank payment barcode and credit-transfer form for eligible real issued invoices; exclude sample details. Verify official payloads, PDF rendering/decoding and long content.
+
+Update to step 5: user explicitly approved sample address/IBAN/BIC stored in issuer settings with the sample flag while awaiting real details. Preserve noninvoice tenant fields. Latest local email/barcode checks pass; full .NET10 CI, push/merge/deploy and production seeding remain pending after automatic approval review hit its usage limit.

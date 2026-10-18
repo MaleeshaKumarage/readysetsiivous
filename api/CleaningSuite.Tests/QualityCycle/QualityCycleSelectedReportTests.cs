@@ -176,7 +176,7 @@ public class QualityCycleSelectedReportTests
         Assert.NotNull(saved); var original = saved.ReportJson; var expiry = saved.ExpiresUtc;
         Assert.DoesNotContain("PRIVATE CLEANER", original); Assert.Empty(JsonSerializer.Deserialize<QualityCycleMonthlyReport>(original)!.Shifts.Single().Forms);
         Assert.DoesNotContain("reader@example.test", JsonSerializer.Serialize(ReportShareMapping.Public(saved)));
-        sender.Setup(s => s.SendAsync("reader@example.test", "Siivouksen laaturaportti", It.Is<string>(html => html.Contains("/quality-report/?tenant=tenant-a") && html.Contains("Avaa raportti")), default)).Returns(Task.CompletedTask);
+        sender.Setup(s => s.SendAsync("reader@example.test", "Siivouksen laaturaportti - lokakuu 2026", It.Is<string>(html => html.Contains("/quality-report/?tenant=tenant-a") && html.Contains("Avaa raportti")), default)).Returns(Task.CompletedTask);
         f.Forms.Setup(r => r.GetReportShareAsync(saved.Id, default)).ReturnsAsync(saved);
         var retry = await new RetryQualityCycleReportEmailHandler(f.Forms.Object, delivery).Handle(new(saved.Id), default);
         Assert.Null(retry.EmailError); Assert.Equal(Now, retry.EmailSentUtc); Assert.Equal(original, saved.ReportJson); Assert.Equal(expiry, saved.ExpiresUtc);
@@ -220,3 +220,4 @@ public class QualityCycleSelectedReportTests
         if (!string.IsNullOrWhiteSpace(output)) { Directory.CreateDirectory(output); await File.WriteAllBytesAsync(Path.Combine(output, $"quality-report-{language}.pdf"), bytes); }
     }
 }
+

@@ -20,6 +20,27 @@ public class ShiftInvoiceCalculatorTests
         Assert.Equal(expected,line.NetAmount); Assert.Equal((decimal)(end-start+1)/DateTime.DaysInMonth(year,month),line.Quantity);
         Assert.Equal(decimal.Round(expected*.255m,2),line.VatAmount);
     }
+    [Theory]
+    [InlineData(2,31)] [InlineData(17,31)] [InlineData(1,16)] [InlineData(17,17)]
+    public void Full_month_selection_charges_full_fixed_rate_for_part_month_active_shift(int start,int end)
+    {
+        var shift=Shift();shift.ValidFrom=new(2026,10,start);shift.ValidUntil=new(2026,10,end);
+        var line=Assert.Single(Calculate(shift,Price("Monthly",150,new(2026,10,1)),new(2026,10,1),new(2026,10,31)));
+        Assert.Equal(150m,line.NetAmount);Assert.Equal(1m,line.Quantity);Assert.Equal(38.25m,line.VatAmount);
+    }
+    [Fact]
+    public void Partial_selection_still_prorates_active_days_by_calendar_month()
+    {
+        var shift=Shift();shift.ValidFrom=new(2026,10,2);
+        var line=Assert.Single(Calculate(shift,Price("Monthly",150,new(2026,10,1)),new(2026,10,2),new(2026,10,31)));
+        Assert.Equal(145.16m,line.NetAmount);
+    }
+    [Fact]
+    public void Full_month_with_no_active_days_does_not_charge()
+    {
+        var shift=Shift();shift.ValidFrom=new(2026,11,1);
+        Assert.Empty(Calculate(shift,Price("Monthly",150,new(2026,10,1)),new(2026,10,1),new(2026,10,31)));
+    }
     [Fact]
     public void Monthly_override_replaces_proration_and_keeps_explanation()
     {
