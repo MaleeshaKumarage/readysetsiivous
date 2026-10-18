@@ -28,7 +28,7 @@ async function setupWork(page: Page, options: { empty?: boolean; failStart?: boo
     if (options.failStart && startCalls === 1) return route.fulfill({ status: 503, headers });
     occurrence.form = { id: formId, shiftId, employeeId: 'employee-a', templateId: options.empty ? '00000000-0000-0000-0000-000000000000' : formId,
       templateTitle: 'Daily activities', items: options.empty ? [] : [{ itemText: 'Corridor', isChecked: false }, { itemText: 'Gym', isChecked: false }],
-      photoUrls: [], cleanerNotes: '', isSubmitted: false, startedAtUtc: new Date().toISOString(), submittedUtc: null };
+      photoUrls: [], cleanerNotes: '', isSubmitted: false, startedAtUtc: '2026-10-17T12:00:00Z', submittedUtc: null };
     return route.fulfill(options.lostStart ? { status: 503, headers } : { status: 200, headers, json: occurrence.form });
   });
   await page.route(new RegExp(`/api/v1/me/quality-cycle/${formId}/end$`), route => {
@@ -36,7 +36,7 @@ async function setupWork(page: Page, options: { empty?: boolean; failStart?: boo
     endCalls++;
     if (options.failEnd && endCalls === 1) return route.fulfill({ status: 503, headers });
     submitted = route.request().postDataJSON();
-    occurrence.form = { ...occurrence.form, ...submitted, isSubmitted: true, submittedUtc: new Date().toISOString(), endedAtUtc: new Date().toISOString() };
+    occurrence.form = { ...occurrence.form, ...submitted, isSubmitted: true, submittedUtc: '2026-10-17T12:30:00Z', endedAtUtc: '2026-10-17T12:30:00Z' };
     return route.fulfill(options.lostEnd ? { status: 503, headers } : { status: 200, headers, json: occurrence.form });
   });
   return { occurrence, get loadCalls() { return loadCalls; }, get submitted() { return submitted; }, get startCalls() { return startCalls; }, get endCalls() { return endCalls; } };
@@ -93,7 +93,7 @@ test('tenant midnight reloads Today and preserves an open activity draft', async
 
 test('changing calendar days preserves activity selections, shift notes and photo notes', async ({ page }) => {
   await page.clock.install({ time: new Date('2026-10-17T12:00:00Z') });
-  const work = await setupWork(page); await page.goto('/me/shifts/');
+  const work = await setupWork(page, { startAt: '2026-10-17T10:00:00Z' }); await page.goto('/me/shifts/');
   await page.getByRole('button', { name: 'Start', exact: true }).click();
   await page.route(/\/api\/v1\/me\/shifts\/calendar\?/, route => route.fulfill({ headers, json: {
     occurrences: [
@@ -102,15 +102,15 @@ test('changing calendar days preserves activity selections, shift notes and phot
     ], timeZoneId: 'Europe/Helsinki', fromLocalDate: '2026-09-16', toLocalDate: '2026-10-17',
   } }));
   await page.getByRole('tab', { name: 'Past', exact: true }).click();
-  await page.getByRole('button', { name: /Oct 16.*1 shift/ }).click();
+  await page.getByRole('button', { name: /(Oct 16|16 Oct|16\/10).*1 shift/ }).click();
   await page.getByRole('button', { name: 'Record activities & end' }).click();
   await page.getByRole('checkbox', { name: 'Corridor', exact: true }).check();
   await page.getByRole('textbox', { name: 'Shift note' }).fill('Preserve day draft');
   await page.getByLabel('Add shift photos').setInputFiles(evidencePhoto);
   await page.getByRole('textbox', { name: 'Photo 1 note' }).fill('Corridor evidence');
-  await page.getByRole('button', { name: /Oct 15.*1 shift/ }).click();
+  await page.getByRole('button', { name: /(Oct 15|15 Oct|15\/10).*1 shift/ }).click();
   await expect(page.getByRole('heading', { name: 'Other day' })).toBeVisible();
-  await page.getByRole('button', { name: /Oct 16.*1 shift/ }).click();
+  await page.getByRole('button', { name: /(Oct 16|16 Oct|16\/10).*1 shift/ }).click();
   await page.getByRole('button', { name: 'Record activities & end' }).click();
   await expect(page.getByRole('checkbox', { name: 'Corridor', exact: true })).toBeChecked();
   await expect(page.getByRole('textbox', { name: 'Shift note' })).toHaveValue('Preserve day draft');
@@ -341,7 +341,7 @@ test('a past visit can be started and ended with actual times recorded today', a
   });
   await page.goto('/me/shifts/');
   await page.getByRole('tab', { name: 'Past', exact: true }).click();
-  await page.getByRole('button', { name: /Oct 1.*1 shift/ }).click();
+  await page.getByRole('button', { name: /(Oct 1|1\/10).*1 shift/ }).click();
   await expect(page.getByText(/Scheduled:.*Oct 1, 2026/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Start', exact: true }).click();
@@ -350,7 +350,7 @@ test('a past visit can be started and ended with actual times recorded today', a
   await page.getByRole('button', { name: 'End shift', exact: true }).click();
   await expect(page.getByText('Done', { exact: true })).toBeVisible();
   await expect(page.getByText(/Scheduled:.*Oct 1, 2026/)).toBeVisible();
-  await expect(page.getByText(/^Actual start:.*Oct 17, 2026/)).toBeVisible();
-  await expect(page.getByText(/^Actual end:.*Oct 17, 2026/)).toBeVisible();
+  await expect(page.getByText(/^Actual start:.*(Oct 17|17 Oct|17\/10)/)).toBeVisible();
+  await expect(page.getByText(/^Actual end:.*(Oct 17|17 Oct|17\/10)/)).toBeVisible();
   expect(work.startCalls).toBe(1); expect(work.endCalls).toBe(1);
 });
