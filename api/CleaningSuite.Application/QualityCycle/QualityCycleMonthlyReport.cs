@@ -104,7 +104,8 @@ public class QualityCycleMonthlyReportService(IShiftRepository shifts, IQualityC
         foreach (var shift in candidates)
         {
             var saved = await forms.ListFormsAsync(shift.Id, from, to, ct);
-            var planned = await QualityCycleOccurrences.ResolvedInWindowAsync(shifts, shift, from, to, zone, ct, includeWithoutChecklist: request.ShiftIds is not null);
+            var reportingShift = request.ShiftIds is not null ? ShiftContractSchedule.Snapshot(shift, zone) : shift;
+            var planned = await QualityCycleOccurrences.ResolvedInWindowAsync(shifts, reportingShift, from, to, zone, ct, includeWithoutChecklist: request.ShiftIds is not null);
             // Submitted historical evidence remains visible even after a shift/template is removed.
             var keys = planned.Select(x => (x.Plan.CompanyId, x.Plan.BranchId))
                 .Concat(saved.Where(f => f.IsSubmitted).Select(f => (f.CompanyId == Guid.Empty ? shift.CompanyId : f.CompanyId,

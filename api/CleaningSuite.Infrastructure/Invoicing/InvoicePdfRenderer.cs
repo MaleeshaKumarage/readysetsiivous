@@ -44,6 +44,7 @@ public static class InvoicePdfRenderer
                     {
                         meta.Item().Text(T("Invoice number") + ": " + invoice.InvoiceNumber);
                         meta.Item().Text(T("Issue date") + $": {invoice.IssueDate:dd.MM.yyyy}");
+                        meta.Item().Text(T("Status") + ": " + T(invoice.Status)).SemiBold();
                         meta.Item().Text(T("Due date") + $": {invoice.DueDate:dd.MM.yyyy}").Bold();
                         if (!string.IsNullOrWhiteSpace(invoice.PaymentReference)) meta.Item().Text(T("Payment reference") + ": " + invoice.PaymentReference);
                         if (invoice.PeriodFrom.HasValue) meta.Item().Text(T("Billing period") + ": " + Period(invoice.PeriodFrom, invoice.PeriodTo));
@@ -120,6 +121,8 @@ public static class InvoicePdfRenderer
         if (language == "en") return key switch { "Monthly" => "Fixed monthly rate", "Hourly" => "Hourly rate", "PerOccurrence" => "Per completed visit", _ => key };
         var pair = key switch
         {
+            "Status" => ("Tila", "Status"), "Issued" => ("Lähetettävissä", "Utfärdad"),
+            "Paid" => ("Maksettu", "Betald"), "Voided" => ("Mitätöity", "Makulerad"), "Draft" => ("Luonnos", "Utkast"),
             "Sample issuer details" => ("Esimerkkitiedot laskuttajasta", "Exempeluppgifter för fakturautställaren"),
             "Invoice" => ("Lasku", "Faktura"), "Supplier" => ("Myyjä", "Säljare"), "Business ID" => ("Y-tunnus", "FO-nummer"),
             "Invoice number" => ("Laskun numero", "Fakturanummer"), "Issue date" => ("Laskun päiväys", "Fakturadatum"),

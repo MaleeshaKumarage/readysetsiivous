@@ -6,6 +6,13 @@ namespace CleaningSuite.Tests.Invoicing;
 public class ShiftInvoicePdfTests
 {
     [Theory]
+    [InlineData("en", "Voided")] [InlineData("fi", "Mitätöity")] [InlineData("sv", "Makulerad")]
+    public void Voided_invoice_pdf_clearly_retains_its_cancelled_status(string language, string status)
+    {
+        var invoice = Sample(language); invoice.Status = Invoice.StatusVoided;
+        Assert.Contains(status, Extract(InvoicePdfRenderer.Render(invoice)));
+    }
+    [Theory]
     [InlineData("en", "Invoice", "Scheduled hours", "Amount due")]
     [InlineData("fi", "Lasku", "Suunnitellut tunnit", "Maksettavaa")]
     [InlineData("sv", "Faktura", "Planerade timmar", "Att betala")]

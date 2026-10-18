@@ -2,10 +2,10 @@ using System.Text.Json;
 using CleaningSuite.Application.Shifts;
 using CleaningSuite.Domain.Shifts;
 
-namespace CleaningSuite.Application.Invoicing;
+namespace CleaningSuite.Application.Shifts;
 
 /// <summary>Late data entry must not omit contracted visits before the record was created.</summary>
-public static class ShiftInvoiceSchedule
+public static class ShiftContractSchedule
 {
     public static Shift Snapshot(Shift source, TimeZoneInfo zone)
     {

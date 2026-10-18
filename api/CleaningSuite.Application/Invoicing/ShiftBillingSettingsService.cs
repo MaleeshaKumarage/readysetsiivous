@@ -59,7 +59,7 @@ public class ShiftBillingSettingsService(IShiftRepository shifts, IShiftBillingR
         var date = DateOnly.FromDateTime(TenantTimeZone.LocalDate(price.OccurrenceStartUtc, zone));
         if ((await invoices.ListAsync(null, null, ct)).Any(i => Billed(i, id) && i.PeriodFrom <= date && i.PeriodTo >= date))
             throw new ShiftConflictException("This visit has already been invoiced. Void the invoice before changing its price.");
-        var visits = await CleaningSuite.Application.QualityCycle.QualityCycleOccurrences.ResolvedInWindowAsync(shifts, ShiftInvoiceSchedule.Snapshot(shift, zone),
+        var visits = await CleaningSuite.Application.QualityCycle.QualityCycleOccurrences.ResolvedInWindowAsync(shifts, ShiftContractSchedule.Snapshot(shift, zone),
             price.OccurrenceStartUtc, price.OccurrenceStartUtc.AddTicks(1), zone, ct, true);
         if (!visits.Any(v => v.Occurrence.StartUtc == price.OccurrenceStartUtc)) Invalid("The selected visit no longer exists or was cancelled. Reload occurrences.");
         var profile = await billing.GetAsync(id, ct) ?? new() { Id = id, ShiftId = id };

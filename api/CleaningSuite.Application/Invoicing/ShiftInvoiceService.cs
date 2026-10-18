@@ -86,7 +86,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
         foreach (var shift in selected.OrderBy(s => s.Id))
         {
             var pricing = await billing.GetAsync(shift.Id, ct) ?? new ShiftBillingProfile { Id = shift.Id, ShiftId = shift.Id };
-            var schedule = ShiftInvoiceSchedule.Snapshot(shift, zone);
+            var schedule = ShiftContractSchedule.Snapshot(shift, zone);
             var resolved = await QualityCycleOccurrences.ResolvedInWindowAsync(shifts, schedule, from, to, zone, ct, true);
             if (resolved.Count > 10000) Invalid("Too many scheduled visits in this period. Select a shorter range.");
             var submitted = await forms.ListFormsAsync(shift.Id, from, to, ct);

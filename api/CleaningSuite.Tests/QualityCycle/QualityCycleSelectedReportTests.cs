@@ -17,6 +17,21 @@ namespace CleaningSuite.Tests.QualityCycle;
 
 public class QualityCycleSelectedReportTests
 {
+    [Theory]
+    [InlineData(true)] [InlineData(false)]
+    public async Task Contract_start_before_data_entry_counts_past_scheduled_visits_without_rewriting_evidence(bool history)
+    {
+        var f = new Fixture();
+        f.Shift.CreatedUtc = new(2026, 10, 17, 12, 0, 0, DateTimeKind.Utc);
+        f.Shift.ValidFrom = new(2026, 10, 1);
+        if (history) f.Shift.RecordQualityCyclePlan(f.Shift.CreatedUtc);
+        var report = await f.Reports.BuildAsync(new([f.Shift.Id], ["2026-10"]), default);
+        var row = Assert.Single(report.Shifts);
+        Assert.Equal(31, row.ScheduledOccurrences); Assert.Equal(62, row.ScheduledHours);
+        Assert.Empty(f.Records);
+        if (history) Assert.Equal(f.Shift.CreatedUtc, f.Shift.QualityCyclePlans[0].EffectiveFromUtc);
+        else Assert.Empty(f.Shift.QualityCyclePlans);
+    }
     private static readonly DateTime Now = new(2026, 12, 31, 12, 0, 0, DateTimeKind.Utc);
     private sealed class Clock : TimeProvider { public override DateTimeOffset GetUtcNow() => Now; }
     [Fact]
