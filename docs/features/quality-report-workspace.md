@@ -10,6 +10,8 @@ Changing shifts or periods clears the loaded table, preventing exports from stal
 
 Localization covers reference labels, visit statuses, missing-data messages, image warnings, photo captions, page footers and the legacy summary formatter (including localized month names). Unknown Finnish/Swedish system-label keys fail explicitly instead of silently falling back to English. PDF text regression tests inspect the generated documents, including empty reports and legacy records. The brand name, IANA timezone identifier and UTC abbreviation remain identifiers.
 
+The photo appendix uses two columns with up to four photos per page, grouped within each shift/location across occurrence dates. Every photo shows its own scheduled local date/time and full note. Images keep their proportions without cropping. General shift notes appear once per occurrence; notes-only entries and invalid-image warnings remain visible. Long notes can continue onto additional pages rather than being truncated. This applies to downloads, shared PDFs and legacy report generation.
+
 ## Email and acknowledgment
 
 Share one shift or all selected shifts; select a company contact email, branch contact email or custom address in the popup. Branch contact email is optional and editable in Companies → Branch. Suggestions deduplicate addresses. One email recipient per report creates an independent frozen snapshot and 30-day link.

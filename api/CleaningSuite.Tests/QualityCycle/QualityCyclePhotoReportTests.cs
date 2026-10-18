@@ -158,10 +158,10 @@ public class QualityCyclePhotoReportTests
         Assert.Equal(row.RecordedStaffHours, snapshot.Shifts[0].RecordedStaffHours);
         Assert.Equal(row.IncompleteTimingRecords, snapshot.Shifts[0].IncompleteTimingRecords);
         Assert.Equal(row.WorkRecords, snapshot.Shifts[0].WorkRecords);
-        Assert.Equal(3, Conversion.GetPageCount(new QualityCyclePdfGenerator().GenerateMonthlyReportPdf(snapshot)));
+        Assert.Equal(2, Conversion.GetPageCount(new QualityCyclePdfGenerator().GenerateMonthlyReportPdf(snapshot)));
         forms.Setup(x => x.GetReportShareByTokenAsync(saved.Token, default)).ReturnsAsync(saved);
         var sharedPdf = await new GetSharedQualityCycleReportPdfHandler(forms.Object, new QualityCyclePdfGenerator(), new Clock()).Handle(new(saved.Token), default);
-        Assert.Equal(3, Conversion.GetPageCount(sharedPdf)); Assert.Contains("/Subtype /Image", System.Text.Encoding.Latin1.GetString(sharedPdf));
+        Assert.Equal(2, Conversion.GetPageCount(sharedPdf)); Assert.Contains("/Subtype /Image", System.Text.Encoding.Latin1.GetString(sharedPdf));
     }
 
     [Fact]
@@ -172,7 +172,7 @@ public class QualityCyclePhotoReportTests
                 Photos = new[] { new QualityCyclePhoto(photos[0], "Corridor cleaned and inspected."), new QualityCyclePhoto(photos[1], "Gym floor cleaned and inspected.") } },
             new(Start.AddDays(1), Start.AddDays(1).AddHours(2), "Gym closed today. No photos were taken.", Array.Empty<string>()));
         var pdf = new QualityCyclePdfGenerator().GenerateMonthlyReportPdf(report);
-        Assert.Equal(4, Conversion.GetPageCount(pdf));
+        Assert.Equal(2, Conversion.GetPageCount(pdf));
         var bluePixels = 0; var redPixels = 0;
         await foreach (var bitmap in Conversion.ToImagesAsync(pdf)) {
             using (bitmap) for (var y = 0; y < bitmap.Height; y += 8) for (var x = 0; x < bitmap.Width; x += 8) {
@@ -205,7 +205,7 @@ public class QualityCyclePhotoReportTests
         var huge = Photo(SKColors.Blue, 20_000, 1);
         var dense = PhotoWithDimensions(6500, 6500);
         var pdf = new QualityCyclePdfGenerator().GenerateMonthlyReportPdf(Report(new QualityCycleEvidenceReport(Start, Start.AddHours(2), "Large historical photos", new[] { oversized, huge, dense })));
-        Assert.Equal(4, Conversion.GetPageCount(pdf));
+        Assert.Equal(2, Conversion.GetPageCount(pdf));
         var baseline = new QualityCyclePdfGenerator().GenerateMonthlyReportPdf(Report());
         Assert.Equal(System.Text.RegularExpressions.Regex.Matches(System.Text.Encoding.Latin1.GetString(baseline), "/Subtype /Image").Count * Conversion.GetPageCount(pdf),
             System.Text.RegularExpressions.Regex.Matches(System.Text.Encoding.Latin1.GetString(pdf), "/Subtype /Image").Count); // only the embedded brand logo

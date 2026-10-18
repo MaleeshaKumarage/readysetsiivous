@@ -114,50 +114,63 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
         string shiftName, IReadOnlyList<QualityCycleEvidenceReport> evidence, TimeZoneInfo zone, string zoneName, DateTime? generatedUtc = null, string language = "en")
     {
         string T(string text) => ReportText.Get(language, text);
-        foreach (var entry in evidence.OrderBy(e => e.StartUtc))
+        var cards = evidence.OrderBy(e => e.StartUtc).SelectMany(entry =>
         {
-            var localStart = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(entry.StartUtc, DateTimeKind.Utc), zone);
-            var localEnd = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(entry.EndUtc, DateTimeKind.Utc), zone);
             var paired = entry.Photos is { Count: > 0 } ? entry.Photos
                 : entry.PhotoUrls.Select(url => new QualityCyclePhoto(url, entry.Note ?? "")).ToList();
-            var hasPhotos = paired.Count > 0;
-            var photos = !hasPhotos ? new QualityCyclePhoto?[] { null } : paired.Cast<QualityCyclePhoto?>();
-            var index = 0;
-            foreach (var photo in photos)
+            if (paired.Count == 0)
+                return new[] { (Entry: entry, Photo: (QualityCyclePhoto?)null, Number: 0, Count: 0) };
+            return paired.Select((photo, index) => (Entry: entry, Photo: (QualityCyclePhoto?)photo, Number: index + 1, Count: paired.Count));
+        }).ToList();
+        foreach (var batch in cards.Chunk(4))
+        {
+            container.Page(page =>
             {
-                index++;
-                var image = photo is null ? null : DecodePhoto(photo.Url);
-                var photoNumber = index;
-                container.Page(page =>
+                ReportPdfTheme.Page(page);
+                page.Header().Column(header =>
                 {
-                    ReportPdfTheme.Page(page);
-                    page.Header().Column(header =>
-                    {
-                        header.Spacing(4);
-                        header.Item().Element(x => ReportPdfTheme.Header(x, T("Photos & Notes"), T("Appendix - shift photos and notes")));
-                        header.Item().Text($"{companyName} / {branchName} / {shiftName}").SemiBold();
-                        header.Item().Text($"{T("Shift date")}: {localStart:yyyy-MM-dd} | {localStart:HH:mm} - {localEnd:yyyy-MM-dd HH:mm} ({zoneName})");
-                        if (hasPhotos) header.Item().Text($"{T("Photo")} {photoNumber} {T("of")} {paired.Count}").FontSize(9);
-                    });
-                    page.Content().PaddingVertical(15).Column(content =>
-                    {
-                        content.Spacing(10);
-                        var note = photo?.Note ?? entry.Note;
-                        content.Item().Text(hasPhotos ? T("Photo note") : T("Shift note")).SemiBold();
-                        content.Item().Text(string.IsNullOrWhiteSpace(note) ? T("No note recorded for this historical entry.") : note);
-                        if (entry.Photos is { Count: > 0 } && !string.IsNullOrWhiteSpace(entry.Note)) {
-                            content.Item().Text(T("Shift note")).SemiBold(); content.Item().Text(entry.Note);
-                        }
-                        if (!hasPhotos) return;
-                        if (image is null)
-                            content.Item().Text(T("Photo unavailable: the saved image is unsupported, invalid or exceeds the report image limit."))
-                                .FontColor(Colors.Grey.Darken1).Italic();
-                        else
-                            content.Item().EnsureSpace(360).Height(360).Image(image).FitArea();
-                    });
-                    page.Footer().Element(x => ReportPdfTheme.Footer(x, generatedUtc ?? DateTime.UtcNow, language));
+                    header.Spacing(4);
+                    header.Item().Element(x => ReportPdfTheme.Header(x, T("Photos & Notes"), T("Appendix - shift photos and notes")));
+                    header.Item().Text($"{companyName} / {branchName} / {shiftName}").SemiBold();
                 });
-            }
+                page.Content().PaddingVertical(12).Table(table =>
+                {
+                    table.ColumnsDefinition(columns => { columns.RelativeColumn(); columns.RelativeColumn(); });
+                    foreach (var card in batch)
+                    {
+                        var entry = card.Entry;
+                        var localStart = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(entry.StartUtc, DateTimeKind.Utc), zone);
+                        var localEnd = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(entry.EndUtc, DateTimeKind.Utc), zone);
+                        var image = card.Photo is null ? null : DecodePhoto(card.Photo.Url);
+                        // A normal card stays together; unusually long notes may flow
+                        // onto additional pages instead of being clipped or omitted.
+                        table.Cell().Padding(4).EnsureSpace(260).Border(0.5f).BorderColor(ReportPdfTheme.Line).Padding(8).Column(content =>
+                        {
+                            content.Spacing(5);
+                            content.Item().Text($"{T("Shift date")}: {localStart:yyyy-MM-dd}").SemiBold();
+                            content.Item().Text($"{localStart:HH:mm} - {localEnd:yyyy-MM-dd HH:mm} ({zoneName})").FontSize(8);
+                            if (card.Photo is not null)
+                            {
+                                content.Item().Text($"{T("Photo")} {card.Number} {T("of")} {card.Count}").FontSize(8);
+                                if (image is null)
+                                    content.Item().Height(170).AlignMiddle().Text(T("Photo unavailable: the saved image is unsupported, invalid or exceeds the report image limit."))
+                                        .FontColor(Colors.Grey.Darken1).Italic();
+                                else
+                                    content.Item().Height(170).AlignCenter().AlignMiddle().Image(image).FitArea();
+                            }
+                            var note = card.Photo?.Note ?? entry.Note;
+                            content.Item().Text(card.Photo is not null ? T("Photo note") : T("Shift note")).SemiBold();
+                            content.Item().Text(string.IsNullOrWhiteSpace(note) ? T("No note recorded for this historical entry.") : note);
+                            if (card.Number == 1 && entry.Photos is { Count: > 0 } && !string.IsNullOrWhiteSpace(entry.Note))
+                            {
+                                content.Item().Text(T("Shift note")).SemiBold();
+                                content.Item().Text(entry.Note);
+                            }
+                        });
+                    }
+                });
+                page.Footer().Element(x => ReportPdfTheme.Footer(x, generatedUtc ?? DateTime.UtcNow, language));
+            });
         }
     }
 
