@@ -102,15 +102,15 @@ test('changing calendar days preserves activity selections, shift notes and phot
     ], timeZoneId: 'Europe/Helsinki', fromLocalDate: '2026-09-16', toLocalDate: '2026-10-17',
   } }));
   await page.getByRole('tab', { name: 'Past', exact: true }).click();
-  await page.getByRole('button', { name: /Oct 16.*1 shift/ }).click();
+  await page.getByRole('button', { name: /16\/10\/2026.*1 shift/ }).click();
   await page.getByRole('button', { name: 'Record activities & end' }).click();
   await page.getByRole('checkbox', { name: 'Corridor', exact: true }).check();
   await page.getByRole('textbox', { name: 'Shift note' }).fill('Preserve day draft');
   await page.getByLabel('Add shift photos').setInputFiles(evidencePhoto);
   await page.getByRole('textbox', { name: 'Photo 1 note' }).fill('Corridor evidence');
-  await page.getByRole('button', { name: /Oct 15.*1 shift/ }).click();
+  await page.getByRole('button', { name: /15\/10\/2026.*1 shift/ }).click();
   await expect(page.getByRole('heading', { name: 'Other day' })).toBeVisible();
-  await page.getByRole('button', { name: /Oct 16.*1 shift/ }).click();
+  await page.getByRole('button', { name: /16\/10\/2026.*1 shift/ }).click();
   await page.getByRole('button', { name: 'Record activities & end' }).click();
   await expect(page.getByRole('checkbox', { name: 'Corridor', exact: true })).toBeChecked();
   await expect(page.getByRole('textbox', { name: 'Shift note' })).toHaveValue('Preserve day draft');
@@ -341,7 +341,7 @@ test('a past visit can be started and ended with actual times recorded today', a
   });
   await page.goto('/me/shifts/');
   await page.getByRole('tab', { name: 'Past', exact: true }).click();
-  await page.getByRole('button', { name: /Oct 1.*1 shift/ }).click();
+  await page.getByRole('button', { name: /01\/10\/2026.*1 shift/ }).click();
   await expect(page.getByText(/Scheduled:.*Oct 1, 2026/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Start', exact: true }).click();
