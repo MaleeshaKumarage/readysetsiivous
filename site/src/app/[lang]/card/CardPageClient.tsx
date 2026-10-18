@@ -87,7 +87,7 @@ function CardContent({ lang }: { lang: Language }) {
             <a
               href={baseUrl('/contact.vcf')}
               download
-              className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-brand-500 text-white text-sm font-bold rounded-xl hover:bg-brand-600 transition-colors shadow-md shadow-brand-200 dark:shadow-brand-900/30"
+              className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-brand-500 text-white text-sm font-bold rounded-xl hover:bg-brand-600 transition-colors shadow-md shadow-brand-200 dark:shadow-brand-900/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800"
             >
               {L.saveContact}
             </a>
@@ -97,28 +97,28 @@ function CardContent({ lang }: { lang: Language }) {
               href={getWhatsAppChatUrl()}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-whatsapp/10 text-whatsapp dark:text-green-400 text-sm font-semibold rounded-xl hover:bg-whatsapp/20 transition-colors border border-whatsapp/20"
+              className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-whatsapp/10 text-whatsapp dark:text-green-400 text-sm font-semibold rounded-xl hover:bg-whatsapp/20 transition-colors border border-whatsapp/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-whatsapp focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800"
             >
               {L.chatWhatsApp}
             </a>
 
             <a
               href="tel:+358468044231"
-              className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-semibold rounded-xl hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+              className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-semibold rounded-xl hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800"
             >
               {L.callUs}
             </a>
 
             <a
               href="mailto:info@readysetsiivous.fi"
-              className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-semibold rounded-xl hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+              className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-semibold rounded-xl hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800"
             >
               {L.sendEmail}
             </a>
 
             <a
               href={baseUrl(`/${lang}/`)}
-              className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-semibold rounded-xl hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+              className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-semibold rounded-xl hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800"
             >
               {L.visitSite}
             </a>

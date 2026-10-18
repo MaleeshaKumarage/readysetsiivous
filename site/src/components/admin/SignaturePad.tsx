@@ -55,13 +55,15 @@ function SignaturePad(
     ctx.beginPath();
   }
 
+  function handleClear() {
+    clearCanvas();
+    setTyped('');
+    drawing.current = false;
+    hasInk.current = false;
+  }
+
   useImperativeHandle(ref, () => ({
-    clear: () => {
-      clearCanvas();
-      setTyped('');
-      drawing.current = false;
-      hasInk.current = false;
-    },
+    clear: handleClear,
     getPng: () => {
       const c = canvasRef.current;
       if (!c) return '';
@@ -108,21 +110,32 @@ function SignaturePad(
 
   return (
     <div className="space-y-2">
-      <div className="flex gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => setMode('draw')}
+            className={mode === 'draw'
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-muted text-muted-foreground hover:bg-muted/80'}
+          >Draw</Button>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => setMode('type')}
+            className={mode === 'type'
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-muted text-muted-foreground hover:bg-muted/80'}
+          >Type</Button>
+        </div>
         <Button
+          type="button"
           size="sm"
-          onClick={() => setMode('draw')}
-          className={mode === 'draw'
-            ? 'bg-primary text-primary-foreground'
-            : 'bg-muted text-muted-foreground hover:bg-muted/80'}
-        >Draw</Button>
-        <Button
-          size="sm"
-          onClick={() => setMode('type')}
-          className={mode === 'type'
-            ? 'bg-primary text-primary-foreground'
-            : 'bg-muted text-muted-foreground hover:bg-muted/80'}
-        >Type</Button>
+          variant="outline"
+          onClick={handleClear}
+          aria-label="Clear signature"
+        >Clear</Button>
       </div>
       <canvas
         ref={canvasRef} width={W} height={H}
