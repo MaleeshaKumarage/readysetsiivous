@@ -28,7 +28,7 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
                 container.Page(page => {
                     ReportPdfTheme.Page(page);
                     var reference = $"{report.Year}{report.Month:D2}-{shift.CompanyId.ToString("N")[..6]}-{shift.BranchId.ToString("N")[..6]}-{shift.ShiftId.ToString("N")[..6]}";
-                    page.Header().Element(x => ReportPdfTheme.Header(x, T("Cleaning Quality Report"), $"{period} | {report.TimeZoneId} | Ref. {reference}"));
+                    page.Header().Element(x => ReportPdfTheme.Header(x, T("Cleaning Quality Report"), $"{period} | {report.TimeZoneId} | {T("Reference")} {reference}"));
                     page.Content().PaddingVertical(14).Column(col => {
                         col.Spacing(10);
                         col.Item().Element(x => ReportPdfTheme.Band(x, T("PROPERTY & SERVICE")));
@@ -195,9 +195,12 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
         string branchName,
         int year,
         int month,
-        IReadOnlyList<QualityCycleFormDto> forms)
+        IReadOnlyList<QualityCycleFormDto> forms,
+        string language = "en")
     {
-        var monthName = new DateTime(year, month, 1).ToString("MMMM yyyy");
+        string T(string text) => ReportText.Get(language, text);
+        var culture = System.Globalization.CultureInfo.GetCultureInfo(language == "fi" ? "fi-FI" : language == "sv" ? "sv-SE" : "en-GB");
+        var monthName = new DateTime(year, month, 1).ToString("MMMM yyyy", culture);
 
         var doc = Document.Create(container =>
         {
@@ -205,27 +208,27 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
             {
                 ReportPdfTheme.Page(page);
 
-                page.Header().Element(header => ReportPdfTheme.Header(header, "Cleaning Quality Report", $"Monthly Summary Report - {monthName} | UTC"));
+                page.Header().Element(header => ReportPdfTheme.Header(header, T("Cleaning Quality Report"), $"{T("Monthly Summary Report")} - {monthName} | UTC"));
 
                 page.Content().PaddingVertical(15).Column(col =>
                 {
                     // Details Table / Summary Box
                     col.Item().Background(Colors.Grey.Lighten4).Padding(12).Column(box =>
                     {
-                        box.Item().Text($"Shift: {shiftName}").Bold().FontSize(11);
-                        box.Item().Text($"Company: {companyName} | Branch: {branchName}");
-                        box.Item().Text($"Total Shift Occurrences Logged: {forms.Count}");
+                        box.Item().Text($"{T("Shift")}: {shiftName}").Bold().FontSize(11);
+                        box.Item().Text($"{T("Company")}: {companyName} | {T("Branch")}: {branchName}");
+                        box.Item().Text($"{T("Total Shift Occurrences Logged")}: {forms.Count}");
 
                         int completedForms = forms.Count(f => f.IsSubmitted);
                         double completionRate = forms.Count > 0 ? (double)completedForms / forms.Count * 100 : 0;
-                        box.Item().Text($"Completed Forms: {completedForms}/{forms.Count} ({completionRate:F0}%)").Bold().FontColor(completionRate == 100 ? Colors.Green.Darken2 : Colors.Orange.Darken2);
+                        box.Item().Text($"{T("Completed Forms")}: {completedForms}/{forms.Count} ({completionRate.ToString("F0", culture)}%)").Bold().FontColor(completionRate == 100 ? Colors.Green.Darken2 : Colors.Orange.Darken2);
                     });
 
                     col.Item().Height(15);
 
                     if (forms.Count == 0)
                     {
-                        col.Item().Text("No Quality Cycle form submissions recorded for this month.").Italic();
+                        col.Item().Text(T("No Quality Cycle form submissions recorded for this month.")).Italic();
                         return;
                     }
 
@@ -236,19 +239,19 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
                         {
                             formBox.Item().Row(r =>
                             {
-                                r.RelativeItem().Text($"Date: {form.ShiftOccurrenceUtc:yyyy-MM-dd HH:mm UTC}").Bold();
-                                r.RelativeItem().Text($"Cleaner: {form.EmployeeName}").SemiBold();
-                                r.ConstantItem(100).AlignRight().Text(form.IsSubmitted ? "COMPLETED" : "PENDING")
+                                r.RelativeItem().Text($"{T("Date")}: {form.ShiftOccurrenceUtc:yyyy-MM-dd HH:mm UTC}").Bold();
+                                r.RelativeItem().Text($"{T("Cleaner")}: {form.EmployeeName}").SemiBold();
+                                r.ConstantItem(100).AlignRight().Text(T(form.IsSubmitted ? "COMPLETED" : "PENDING"))
                                     .Bold()
                                     .FontColor(form.IsSubmitted ? Colors.Green.Medium : Colors.Red.Medium);
                             });
 
                             if (form.IsSubmitted)
                             {
-                                formBox.Item().PaddingTop(6).Text("Checklist Items:").SemiBold().FontSize(9);
+                                formBox.Item().PaddingTop(6).Text(T("Checklist Items") + ":").SemiBold().FontSize(9);
 
                                 int checkedCount = form.Items.Count(i => i.IsChecked);
-                                formBox.Item().Text($"Completed {checkedCount} / {form.Items.Count} items").FontSize(9).FontColor(Colors.Grey.Darken1);
+                                formBox.Item().Text(string.Format(culture, T("Completed {0} / {1} items"), checkedCount, form.Items.Count)).FontSize(9).FontColor(Colors.Grey.Darken1);
 
                                 formBox.Item().PaddingTop(4).Column(itemsBox =>
                                 {
@@ -263,12 +266,12 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
 
                                 if (!string.IsNullOrWhiteSpace(form.CleanerNotes))
                                 {
-                                    formBox.Item().PaddingTop(6).Text($"Cleaner Notes: {form.CleanerNotes}").Italic().FontSize(9);
+                                    formBox.Item().PaddingTop(6).Text($"{T("Cleaner Notes")}: {form.CleanerNotes}").Italic().FontSize(9);
                                 }
 
                                 if (form.PhotoUrls != null && form.PhotoUrls.Count > 0)
                                 {
-                                    formBox.Item().PaddingTop(4).Text($"Attached Photos: {form.PhotoUrls.Count} photo(s) attached").FontSize(9).FontColor(Colors.Blue.Darken1);
+                                    formBox.Item().PaddingTop(4).Text(string.Format(culture, T("Attached Photos: {0} photo(s) attached"), form.PhotoUrls.Count)).FontSize(9).FontColor(Colors.Blue.Darken1);
                                 }
                             }
                         });
@@ -277,9 +280,9 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
                     }
                 });
 
-                page.Footer().Element(x => ReportPdfTheme.Footer(x, DateTime.UtcNow));
+                page.Footer().Element(x => ReportPdfTheme.Footer(x, DateTime.UtcNow, language));
             });
-            AppendEvidence(container, companyName, branchName, shiftName, ProjectEvidence(forms), TimeZoneInfo.Utc, "UTC");
+            AppendEvidence(container, companyName, branchName, shiftName, ProjectEvidence(forms), TimeZoneInfo.Utc, "UTC", language: language);
         });
 
         return doc.GeneratePdf();

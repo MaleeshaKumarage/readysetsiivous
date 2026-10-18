@@ -12,8 +12,9 @@ async function setupWork(page: Page, options: { empty?: boolean; failStart?: boo
   await page.route(/\/api\/v1\/me$/, route => route.fulfill({ status: 200, headers,
     json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: [role] })],
       employee: { id: 'employee-a', firstName: 'Test', lastName: 'Staff', role, isActive: true } } }));
-  const start = new Date(Date.now() - 3600000).toISOString();
-  const scheduledStart = options.startAt ? Date.parse(options.startAt) : options.future ? Date.now() + 86400000 : Date.parse(start);
+  const now = await page.evaluate(() => Date.now());
+  const start = new Date(now - 3600000).toISOString();
+  const scheduledStart = options.startAt ? Date.parse(options.startAt) : options.future ? now + 86400000 : Date.parse(start);
   const occurrence: any = { shiftId, shiftName: 'AAA1 weekday shift', startUtc: new Date(scheduledStart).toISOString(),
     endUtc: new Date(scheduledStart + (options.startAt ? 8 * 3600000 : options.future ? 3600000 : 2 * 3600000)).toISOString(), timeZoneId: 'Europe/Helsinki', form: null };
   let startCalls = 0; let endCalls = 0; let loadCalls = 0; let submitted: any = null;
@@ -22,21 +23,22 @@ async function setupWork(page: Page, options: { empty?: boolean; failStart?: boo
     loadCalls++;
     return route.fulfill(options.loadFailure && loadCalls === 1 ? { status: 403, headers } : { status: 200, headers, json: route.request().url().includes('/calendar') ? { occurrences: [occurrence], timeZoneId: 'Europe/Helsinki', fromLocalDate: '2026-10-17', toLocalDate: '2026-10-18' } : [occurrence] });
   });
-  await page.route(new RegExp(`/api/v1/me/shifts/${shiftId}/start$`), route => {
+  await page.route(new RegExp(`/api/v1/me/shifts/${shiftId}/start$`), async route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
     startCalls++;
     if (options.failStart && startCalls === 1) return route.fulfill({ status: 503, headers });
     occurrence.form = { id: formId, shiftId, employeeId: 'employee-a', templateId: options.empty ? '00000000-0000-0000-0000-000000000000' : formId,
       templateTitle: 'Daily activities', items: options.empty ? [] : [{ itemText: 'Corridor', isChecked: false }, { itemText: 'Gym', isChecked: false }],
-      photoUrls: [], cleanerNotes: '', isSubmitted: false, startedAtUtc: new Date().toISOString(), submittedUtc: null };
+      photoUrls: [], cleanerNotes: '', isSubmitted: false, startedAtUtc: await page.evaluate(() => new Date().toISOString()), submittedUtc: null };
     return route.fulfill(options.lostStart ? { status: 503, headers } : { status: 200, headers, json: occurrence.form });
   });
-  await page.route(new RegExp(`/api/v1/me/quality-cycle/${formId}/end$`), route => {
+  await page.route(new RegExp(`/api/v1/me/quality-cycle/${formId}/end$`), async route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
     endCalls++;
     if (options.failEnd && endCalls === 1) return route.fulfill({ status: 503, headers });
     submitted = route.request().postDataJSON();
-    occurrence.form = { ...occurrence.form, ...submitted, isSubmitted: true, submittedUtc: new Date().toISOString(), endedAtUtc: new Date().toISOString() };
+    const endedAtUtc = await page.evaluate(() => new Date().toISOString());
+    occurrence.form = { ...occurrence.form, ...submitted, isSubmitted: true, submittedUtc: endedAtUtc, endedAtUtc };
     return route.fulfill(options.lostEnd ? { status: 503, headers } : { status: 200, headers, json: occurrence.form });
   });
   return { occurrence, get loadCalls() { return loadCalls; }, get submitted() { return submitted; }, get startCalls() { return startCalls; }, get endCalls() { return endCalls; } };
@@ -102,15 +104,15 @@ test('changing calendar days preserves activity selections, shift notes and phot
     ], timeZoneId: 'Europe/Helsinki', fromLocalDate: '2026-09-16', toLocalDate: '2026-10-17',
   } }));
   await page.getByRole('tab', { name: 'Past', exact: true }).click();
-  await page.getByRole('button', { name: /Oct 16.*1 shift/ }).click();
+  await page.getByRole('button', { name: /16\/10\/2026 Friday.*1 shift/ }).click();
   await page.getByRole('button', { name: 'Record activities & end' }).click();
   await page.getByRole('checkbox', { name: 'Corridor', exact: true }).check();
   await page.getByRole('textbox', { name: 'Shift note' }).fill('Preserve day draft');
   await page.getByLabel('Add shift photos').setInputFiles(evidencePhoto);
   await page.getByRole('textbox', { name: 'Photo 1 note' }).fill('Corridor evidence');
-  await page.getByRole('button', { name: /Oct 15.*1 shift/ }).click();
+  await page.getByRole('button', { name: /15\/10\/2026 Thursday.*1 shift/ }).click();
   await expect(page.getByRole('heading', { name: 'Other day' })).toBeVisible();
-  await page.getByRole('button', { name: /Oct 16.*1 shift/ }).click();
+  await page.getByRole('button', { name: /16\/10\/2026 Friday.*1 shift/ }).click();
   await page.getByRole('button', { name: 'Record activities & end' }).click();
   await expect(page.getByRole('checkbox', { name: 'Corridor', exact: true })).toBeChecked();
   await expect(page.getByRole('textbox', { name: 'Shift note' })).toHaveValue('Preserve day draft');
@@ -341,7 +343,7 @@ test('a past visit can be started and ended with actual times recorded today', a
   });
   await page.goto('/me/shifts/');
   await page.getByRole('tab', { name: 'Past', exact: true }).click();
-  await page.getByRole('button', { name: /Oct 1.*1 shift/ }).click();
+  await page.getByRole('button', { name: /01\/10\/2026 Thursday.*1 shift/ }).click();
   await expect(page.getByText(/Scheduled:.*Oct 1, 2026/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Start', exact: true }).click();

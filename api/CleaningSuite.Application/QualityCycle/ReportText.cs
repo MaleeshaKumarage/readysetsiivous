@@ -9,6 +9,17 @@ public static class ReportText
         ["PROPERTY & SERVICE"] = ("KOHDE JA PALVELU", "FASTIGHET OCH TJÄNST"),
         ["MONTHLY SUMMARY"] = ("YHTEENVETO", "SAMMANFATTNING"),
         ["REPORT SUMMARY"] = ("RAPORTIN YHTEENVETO", "RAPPORTSAMMANFATTNING"),
+        ["Reference"] = ("Viite", "Referens"),
+        ["Monthly Summary Report"] = ("Kuukausiyhteenveto", "Månadssammanfattning"),
+        ["Total Shift Occurrences Logged"] = ("Kirjatut vuorot yhteensä", "Totalt registrerade arbetspass"),
+        ["Completed Forms"] = ("Lähetetyt lomakkeet", "Inskickade formulär"),
+        ["No Quality Cycle form submissions recorded for this month."] = ("Tälle kuukaudelle ei ole kirjattu laadunvalvontalomakkeita.", "Inga kvalitetskontrollformulär har registrerats för denna månad."),
+        ["Date"] = ("Päivämäärä", "Datum"), ["Cleaner"] = ("Siivooja", "Städare"),
+        ["COMPLETED"] = ("VALMIS", "SLUTFÖRT"), ["PENDING"] = ("ODOTTAA", "VÄNTAR"),
+        ["Checklist Items"] = ("Tarkistuslistan kohdat", "Checklistepunkter"),
+        ["Completed {0} / {1} items"] = ("Merkitty tehdyksi {0} / {1} kohtaa", "{0} / {1} punkter markerade som utförda"),
+        ["Cleaner Notes"] = ("Siivoojan muistiinpanot", "Städarens anteckningar"),
+        ["Attached Photos: {0} photo(s) attached"] = ("Liitetyt kuvat: {0} kuvaa", "Bifogade foton: {0} foton"),
         ["Company"] = ("Yritys", "Företag"), ["Branch"] = ("Toimipiste", "Verksamhetsställe"),
         ["Address"] = ("Osoite", "Adress"), ["Shift"] = ("Vuoro", "Arbetspass"),
         ["Not recorded"] = ("Ei kirjattu", "Ej registrerat"), ["Not available"] = ("Ei saatavilla", "Ej tillgängligt"),
@@ -42,6 +53,12 @@ public static class ReportText
         ["Please review the report and acknowledge receipt. This link expires after 30 days."] = ("Tarkista raportti ja kuittaa vastaanotto. Linkki vanhenee 30 päivän kuluttua.", "Granska rapporten och bekräfta mottagandet. Länken upphör att gälla efter 30 dagar."),
         ["Open report"] = ("Avaa raportti", "Öppna rapporten")
     };
-    public static string Get(string language, string text) => Labels.TryGetValue(text, out var value)
-        ? language == "fi" ? value.Fi : language == "sv" ? value.Sv : text : text;
+    public static string Get(string language, string text)
+    {
+        if (language == "en") return text;
+        if (language is not ("fi" or "sv")) throw new ArgumentException("Unsupported report language.", nameof(language));
+        if (!Labels.TryGetValue(text, out var value))
+            throw new InvalidOperationException($"Missing {language} report translation for '{text}'.");
+        return language == "fi" ? value.Fi : value.Sv;
+    }
 }

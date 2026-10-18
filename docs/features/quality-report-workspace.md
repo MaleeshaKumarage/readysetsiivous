@@ -8,6 +8,8 @@ The table shows company, branch, shift, scheduled visits, completed visits, sche
 
 Changing shifts or periods clears the loaded table, preventing exports from stale filters. Export one shift or all selected shifts in a single branded PDF. Language choices are English, Finnish and Swedish. All report labels and appendix labels are translated; customer names, activities and notes remain exactly as entered. PDFs preserve activity detail, actual work times, and dated photo/note appendices.
 
+Localization covers reference labels, visit statuses, missing-data messages, image warnings, photo captions, page footers and the legacy summary formatter (including localized month names). Unknown Finnish/Swedish system-label keys fail explicitly instead of silently falling back to English. PDF text regression tests inspect the generated documents, including empty reports and legacy records. The brand name, IANA timezone identifier and UTC abbreviation remain identifiers.
+
 ## Email and acknowledgment
 
 Share one shift or all selected shifts; select a company contact email, branch contact email or custom address in the popup. Branch contact email is optional and editable in Companies → Branch. Suggestions deduplicate addresses. One email recipient per report creates an independent frozen snapshot and 30-day link.

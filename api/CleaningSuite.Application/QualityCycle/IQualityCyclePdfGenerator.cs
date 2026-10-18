@@ -9,5 +9,6 @@ public interface IQualityCyclePdfGenerator
         string branchName,
         int year,
         int month,
-        IReadOnlyList<QualityCycleFormDto> forms);
+        IReadOnlyList<QualityCycleFormDto> forms,
+        string language = "en");
 }
