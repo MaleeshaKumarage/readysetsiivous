@@ -96,8 +96,9 @@ public class ShiftBillingSettingsService(IShiftRepository shifts, IShiftBillingR
         await profiles.SaveAsync(tenant.TenantId, p, ct);
         return await GetIssuerAsync(ct);
     }
-    internal static bool ValidIban(string value)
+    internal static bool ValidIban(string? value)
     {
+        if (string.IsNullOrWhiteSpace(value)) return false;
         var iban = value.Replace(" ", "").ToUpperInvariant();
         if (!System.Text.RegularExpressions.Regex.IsMatch(iban, "^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$")) return false;
         var reordered = iban[4..] + iban[..4]; var remainder = 0;

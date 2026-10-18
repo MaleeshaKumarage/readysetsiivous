@@ -73,6 +73,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
         }
         var company = await companies.GetAsync(request.CompanyId, ct) ?? throw new NotFoundException("Company", request.CompanyId);
         var profile = await profiles.GetAsync(tenant.TenantId, ct) ?? throw new NotFoundException("TenantProfile", Guid.Empty);
+        if (profile.PaymentTermsDays is < 0 or > 120) Invalid("Correct invoice payment terms to 0–120 days in issuer settings.");
         var zone = TenantTimeZone.Resolve(profile.TimeZoneId);
         var from = TenantTimeZone.StartOfLocalDay(request.From.ToDateTime(TimeOnly.MinValue), zone);
         var to = TenantTimeZone.StartOfLocalDay(request.To.AddDays(1).ToDateTime(TimeOnly.MinValue), zone);
