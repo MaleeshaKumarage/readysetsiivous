@@ -13,80 +13,85 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
     public byte[] GenerateMonthlyReportPdf(QualityCycleMonthlyReport report)
     {
         var zone = TimeZoneConverter.TZConvert.GetTimeZoneInfo(report.TimeZoneId);
+        string T(string text) => ReportText.Get(report.Language, text);
+        var period = report.Periods is { Count: > 0 } ? string.Join("; ", report.Periods.Select(p => $"{p.From:dd/MM/yyyy} - {p.To:dd/MM/yyyy}")) : $"{report.Year}-{report.Month:D2}";
         string Time(DateTime value) => TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(value, DateTimeKind.Utc), zone).ToString("yyyy-MM-dd HH:mm");
         var document = Document.Create(container => {
             if (report.Shifts.Count == 0)
                 container.Page(page => {
                     ReportPdfTheme.Page(page);
-                    page.Header().Element(x => ReportPdfTheme.Header(x, "Cleaning Quality Report", $"{report.Year}-{report.Month:D2} | {report.TimeZoneId}"));
-                    page.Content().PaddingTop(20).Text("No scheduled checklist shifts in this month.");
-                    page.Footer().Element(x => ReportPdfTheme.Footer(x, report.GeneratedUtc));
+                    page.Header().Element(x => ReportPdfTheme.Header(x, T("Cleaning Quality Report"), $"{period} | {report.TimeZoneId}"));
+                    page.Content().PaddingTop(20).Text(T("No scheduled checklist shifts in this month."));
+                    page.Footer().Element(x => ReportPdfTheme.Footer(x, report.GeneratedUtc, report.Language));
                 });
             foreach (var shift in report.Shifts)
                 container.Page(page => {
                     ReportPdfTheme.Page(page);
                     var reference = $"{report.Year}{report.Month:D2}-{shift.CompanyId.ToString("N")[..6]}-{shift.BranchId.ToString("N")[..6]}-{shift.ShiftId.ToString("N")[..6]}";
-                    page.Header().Element(x => ReportPdfTheme.Header(x, "Cleaning Quality Report", $"{report.Year}-{report.Month:D2} | {report.TimeZoneId} | Ref. {reference}"));
+                    page.Header().Element(x => ReportPdfTheme.Header(x, T("Cleaning Quality Report"), $"{period} | {report.TimeZoneId} | {T("Reference")} {reference}"));
                     page.Content().PaddingVertical(14).Column(col => {
                         col.Spacing(10);
-                        col.Item().Element(x => ReportPdfTheme.Band(x, "PROPERTY & SERVICE"));
+                        col.Item().Element(x => ReportPdfTheme.Band(x, T("PROPERTY & SERVICE")));
                         col.Item().Element(ReportPdfTheme.Cell).Column(details => {
                             details.Spacing(3);
-                            details.Item().Text($"Company: {shift.CompanyName}").SemiBold();
-                            details.Item().Text($"Branch: {shift.BranchName}");
-                            details.Item().Text($"Address: {(string.IsNullOrWhiteSpace(shift.BranchAddress) ? "Not recorded" : shift.BranchAddress)}");
-                            details.Item().Text($"Shift: {shift.ShiftName}");
+                            details.Item().Text($"{T("Company")}: {shift.CompanyName}").SemiBold();
+                            details.Item().Text($"{T("Branch")}: {shift.BranchName}");
+                            details.Item().Text($"{T("Address")}: {(string.IsNullOrWhiteSpace(shift.BranchAddress) ? T("Not recorded") : shift.BranchAddress)}");
+                            details.Item().Text($"{T("Shift")}: {shift.ShiftName}");
                         });
-                        col.Item().Element(x => ReportPdfTheme.Band(x, "MONTHLY SUMMARY"));
+                        col.Item().Element(x => ReportPdfTheme.Band(x, T(report.Periods is { Count: > 0 } ? "REPORT SUMMARY" : "MONTHLY SUMMARY")));
                         col.Item().Background(ReportPdfTheme.Pale).Padding(10).Column(summary => {
                             summary.Spacing(4);
-                            summary.Item().Text($"Scheduled occurrences: {shift.ScheduledOccurrences} | Scheduled hours: {shift.ScheduledHours:0.##}");
-                            summary.Item().Text($"Recorded occurrences: {shift.CompletedOccurrences} | Missing: {shift.MissingOccurrences} | Pending: {shift.PendingOccurrences}");
-                            summary.Item().Text($"Cleaner tasks: {shift.SubmittedTasks}/{shift.TotalTasks} submitted");
-                            summary.Item().Text($"Recorded staff hours: {(shift.RecordedStaffHours.HasValue ? shift.RecordedStaffHours.Value.ToString("0.##") : "Not available")}").SemiBold();
-                            if (shift.IncompleteTimingRecords is > 0) summary.Item().Text($"Incomplete timing records: {shift.IncompleteTimingRecords}");
-                            summary.Item().Text("Scheduled hours describe visits. Recorded staff hours sum each cleaner’s actual submitted duration; incomplete timings are excluded. Missing means no submission, not a failed cleaning activity.").FontSize(8);
+                            summary.Item().Text($"{T("Scheduled occurrences")}: {shift.ScheduledOccurrences} | {T("Scheduled hours")}: {shift.ScheduledHours:0.##}");
+                            summary.Item().Text($"{T("Recorded occurrences")}: {shift.CompletedOccurrences} | {T("Missing")}: {shift.MissingOccurrences} | {T("Pending")}: {shift.PendingOccurrences}");
+                            summary.Item().Text($"{T("Cleaner tasks")}: {shift.SubmittedTasks}/{shift.TotalTasks} {T("submitted")}");
+                            summary.Item().Text($"{T("Recorded staff hours")}: {(shift.RecordedStaffHours.HasValue ? shift.RecordedStaffHours.Value.ToString("0.##") : T("Not available"))}").SemiBold();
+                            if (shift.IncompleteTimingRecords is > 0) summary.Item().Text($"{T("Incomplete timing records")}: {shift.IncompleteTimingRecords}");
+                            summary.Item().Text(T("Scheduled hours describe visits. Recorded staff hours sum each cleaner’s actual submitted duration; incomplete timings are excluded. Missing means no submission, not a failed cleaning activity.")).FontSize(8);
                         });
-                        col.Item().Element(x => ReportPdfTheme.Band(x, "ACTIVITIES PERFORMED"));
-                        col.Item().Text("Activities are measured by recorded visits and distinct days. Unchecked items are not failures.").FontSize(8);
+                        col.Item().Element(x => ReportPdfTheme.Band(x, T("ACTIVITIES PERFORMED")));
+                        col.Item().Text(T("Activities are measured by recorded visits and distinct days. Unchecked items are not failures.")).FontSize(8);
                         col.Item().Table(table => {
                             table.ColumnsDefinition(c => { c.RelativeColumn(3); c.RelativeColumn(); c.RelativeColumn(); });
-                            table.Header(h => { h.Cell().Element(ReportPdfTheme.Head).Text("Activity"); h.Cell().Element(ReportPdfTheme.Head).Text("Days"); h.Cell().Element(ReportPdfTheme.Head).Text("Occurrences"); });
+                            table.Header(h => { h.Cell().Element(ReportPdfTheme.Head).Text(T("Activity")); h.Cell().Element(ReportPdfTheme.Head).Text(T("Days")); h.Cell().Element(ReportPdfTheme.Head).Text(T("Occurrences")); });
                             foreach (var item in shift.Items) {
                                 table.Cell().Element(ReportPdfTheme.Cell).Text(item.ItemText);
                                 table.Cell().Element(ReportPdfTheme.Cell).Text(item.DaysPerformed.ToString());
                                 table.Cell().Element(ReportPdfTheme.Cell).Text(item.RecordedOccurrences.ToString());
                             }
                         });
-                        col.Item().Element(x => ReportPdfTheme.Band(x, "VISIT RECORD"));
+                        col.Item().Element(x => ReportPdfTheme.Band(x, T("VISIT RECORD")));
                         col.Item().Table(table => {
                             table.ColumnsDefinition(c => { c.RelativeColumn(2); c.RelativeColumn(); c.RelativeColumn(); c.RelativeColumn(); });
-                            table.Header(h => { foreach (var label in new[] { "Scheduled date / start", "Hours", "Submitted / expected", "Status" }) h.Cell().Element(ReportPdfTheme.Head).Text(label); });
+                            table.Header(h => { foreach (var label in new[] { "Scheduled date / start", "Hours", "Submitted / expected", "Status" }) h.Cell().Element(ReportPdfTheme.Head).Text(T(label)); });
                             foreach (var visit in shift.Occurrences) {
                                 table.Cell().Element(ReportPdfTheme.Cell).Text(Time(visit.StartUtc));
                                 table.Cell().Element(ReportPdfTheme.Cell).Text((visit.EndUtc - visit.StartUtc).TotalHours.ToString("0.##"));
                                 table.Cell().Element(ReportPdfTheme.Cell).Text($"{visit.SubmittedTasks}/{visit.ExpectedTasks}");
-                                table.Cell().Element(ReportPdfTheme.Cell).Text(visit.Status);
+                                table.Cell().Element(ReportPdfTheme.Cell).Text(T(visit.Status));
                             }
                         });
-                        col.Item().Element(x => ReportPdfTheme.Band(x, "ACTUAL WORK TIMES"));
-                        if (shift.WorkRecords is not { Count: > 0 }) col.Item().Text("Actual work times: Not available for this report snapshot.").FontSize(8);
-                        else col.Item().Table(table => {
+                        col.Item().EnsureSpace(150).Column(actual => {
+                        actual.Spacing(6);
+                        actual.Item().Element(x => ReportPdfTheme.Band(x, T("ACTUAL WORK TIMES")));
+                        if (shift.WorkRecords is not { Count: > 0 }) actual.Item().Text(T("Actual work times: Not available for this report snapshot.")).FontSize(8);
+                        else actual.Item().Table(table => {
                             table.ColumnsDefinition(c => { c.RelativeColumn(); c.RelativeColumn(); c.RelativeColumn(); c.RelativeColumn(0.6f); });
-                            table.Header(h => { foreach (var label in new[] { "Scheduled visit", "Actual start", "Actual end", "Staff hours" }) h.Cell().Element(ReportPdfTheme.Head).Text(label); });
+                            table.Header(h => { foreach (var label in new[] { "Scheduled visit", "Actual start", "Actual end", "Staff hours" }) h.Cell().Element(ReportPdfTheme.Head).Text(T(label)); });
                             foreach (var work in shift.WorkRecords) {
                                 table.Cell().Element(ReportPdfTheme.Cell).Text(Time(work.ScheduledStartUtc));
-                                table.Cell().Element(ReportPdfTheme.Cell).Text(work.ActualStartUtc.HasValue ? Time(work.ActualStartUtc.Value) : "Not available");
-                                table.Cell().Element(ReportPdfTheme.Cell).Text(work.ActualEndUtc.HasValue ? Time(work.ActualEndUtc.Value) : "Not available");
-                                table.Cell().Element(ReportPdfTheme.Cell).Text(work.StaffHours?.ToString("0.##") ?? "Not available");
+                                table.Cell().Element(ReportPdfTheme.Cell).Text(work.ActualStartUtc.HasValue ? Time(work.ActualStartUtc.Value) : T("Not available"));
+                                table.Cell().Element(ReportPdfTheme.Cell).Text(work.ActualEndUtc.HasValue ? Time(work.ActualEndUtc.Value) : T("Not available"));
+                                table.Cell().Element(ReportPdfTheme.Cell).Text(work.StaffHours?.ToString("0.##") ?? T("Not available"));
                             }
                         });
+                        });
                     });
-                    page.Footer().Element(x => ReportPdfTheme.Footer(x, report.GeneratedUtc));
+                    page.Footer().Element(x => ReportPdfTheme.Footer(x, report.GeneratedUtc, report.Language));
                 });
             foreach (var shift in report.Shifts)
                 AppendEvidence(container, shift.CompanyName, shift.BranchName, shift.ShiftName,
-                    EvidenceFor(shift), zone, report.TimeZoneId, report.GeneratedUtc);
+                    EvidenceFor(shift), zone, report.TimeZoneId, report.GeneratedUtc, report.Language);
         });
         return document.GeneratePdf();
     }
@@ -106,8 +111,9 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
                 f.CleanerNotes, f.PhotoUrls ?? new List<string>()) { Photos = f.Photos }).ToList();
 
     private static void AppendEvidence(IDocumentContainer container, string companyName, string branchName,
-        string shiftName, IReadOnlyList<QualityCycleEvidenceReport> evidence, TimeZoneInfo zone, string zoneName, DateTime? generatedUtc = null)
+        string shiftName, IReadOnlyList<QualityCycleEvidenceReport> evidence, TimeZoneInfo zone, string zoneName, DateTime? generatedUtc = null, string language = "en")
     {
+        string T(string text) => ReportText.Get(language, text);
         foreach (var entry in evidence.OrderBy(e => e.StartUtc))
         {
             var localStart = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(entry.StartUtc, DateTimeKind.Utc), zone);
@@ -128,28 +134,28 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
                     page.Header().Column(header =>
                     {
                         header.Spacing(4);
-                        header.Item().Element(x => ReportPdfTheme.Header(x, "Photos & Notes", "Appendix - shift photos and notes"));
+                        header.Item().Element(x => ReportPdfTheme.Header(x, T("Photos & Notes"), T("Appendix - shift photos and notes")));
                         header.Item().Text($"{companyName} / {branchName} / {shiftName}").SemiBold();
-                        header.Item().Text($"Shift date: {localStart:yyyy-MM-dd} | {localStart:HH:mm} - {localEnd:yyyy-MM-dd HH:mm} ({zoneName})");
-                        if (hasPhotos) header.Item().Text($"Photo {photoNumber} of {paired.Count}").FontSize(9);
+                        header.Item().Text($"{T("Shift date")}: {localStart:yyyy-MM-dd} | {localStart:HH:mm} - {localEnd:yyyy-MM-dd HH:mm} ({zoneName})");
+                        if (hasPhotos) header.Item().Text($"{T("Photo")} {photoNumber} {T("of")} {paired.Count}").FontSize(9);
                     });
                     page.Content().PaddingVertical(15).Column(content =>
                     {
                         content.Spacing(10);
                         var note = photo?.Note ?? entry.Note;
-                        content.Item().Text(hasPhotos ? "Photo note" : "Shift note").SemiBold();
-                        content.Item().Text(string.IsNullOrWhiteSpace(note) ? "No note recorded for this historical entry." : note);
+                        content.Item().Text(hasPhotos ? T("Photo note") : T("Shift note")).SemiBold();
+                        content.Item().Text(string.IsNullOrWhiteSpace(note) ? T("No note recorded for this historical entry.") : note);
                         if (entry.Photos is { Count: > 0 } && !string.IsNullOrWhiteSpace(entry.Note)) {
-                            content.Item().Text("Shift note").SemiBold(); content.Item().Text(entry.Note);
+                            content.Item().Text(T("Shift note")).SemiBold(); content.Item().Text(entry.Note);
                         }
                         if (!hasPhotos) return;
                         if (image is null)
-                            content.Item().Text("Photo unavailable: the saved image is unsupported, invalid or exceeds the report image limit.")
+                            content.Item().Text(T("Photo unavailable: the saved image is unsupported, invalid or exceeds the report image limit."))
                                 .FontColor(Colors.Grey.Darken1).Italic();
                         else
                             content.Item().EnsureSpace(360).Height(360).Image(image).FitArea();
                     });
-                    page.Footer().Element(x => ReportPdfTheme.Footer(x, generatedUtc ?? DateTime.UtcNow));
+                    page.Footer().Element(x => ReportPdfTheme.Footer(x, generatedUtc ?? DateTime.UtcNow, language));
                 });
             }
         }
@@ -189,9 +195,12 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
         string branchName,
         int year,
         int month,
-        IReadOnlyList<QualityCycleFormDto> forms)
+        IReadOnlyList<QualityCycleFormDto> forms,
+        string language = "en")
     {
-        var monthName = new DateTime(year, month, 1).ToString("MMMM yyyy");
+        string T(string text) => ReportText.Get(language, text);
+        var culture = System.Globalization.CultureInfo.GetCultureInfo(language == "fi" ? "fi-FI" : language == "sv" ? "sv-SE" : "en-GB");
+        var monthName = new DateTime(year, month, 1).ToString("MMMM yyyy", culture);
 
         var doc = Document.Create(container =>
         {
@@ -199,27 +208,27 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
             {
                 ReportPdfTheme.Page(page);
 
-                page.Header().Element(header => ReportPdfTheme.Header(header, "Cleaning Quality Report", $"Monthly Summary Report - {monthName} | UTC"));
+                page.Header().Element(header => ReportPdfTheme.Header(header, T("Cleaning Quality Report"), $"{T("Monthly Summary Report")} - {monthName} | UTC"));
 
                 page.Content().PaddingVertical(15).Column(col =>
                 {
                     // Details Table / Summary Box
                     col.Item().Background(Colors.Grey.Lighten4).Padding(12).Column(box =>
                     {
-                        box.Item().Text($"Shift: {shiftName}").Bold().FontSize(11);
-                        box.Item().Text($"Company: {companyName} | Branch: {branchName}");
-                        box.Item().Text($"Total Shift Occurrences Logged: {forms.Count}");
+                        box.Item().Text($"{T("Shift")}: {shiftName}").Bold().FontSize(11);
+                        box.Item().Text($"{T("Company")}: {companyName} | {T("Branch")}: {branchName}");
+                        box.Item().Text($"{T("Total Shift Occurrences Logged")}: {forms.Count}");
 
                         int completedForms = forms.Count(f => f.IsSubmitted);
                         double completionRate = forms.Count > 0 ? (double)completedForms / forms.Count * 100 : 0;
-                        box.Item().Text($"Completed Forms: {completedForms}/{forms.Count} ({completionRate:F0}%)").Bold().FontColor(completionRate == 100 ? Colors.Green.Darken2 : Colors.Orange.Darken2);
+                        box.Item().Text($"{T("Completed Forms")}: {completedForms}/{forms.Count} ({completionRate.ToString("F0", culture)}%)").Bold().FontColor(completionRate == 100 ? Colors.Green.Darken2 : Colors.Orange.Darken2);
                     });
 
                     col.Item().Height(15);
 
                     if (forms.Count == 0)
                     {
-                        col.Item().Text("No Quality Cycle form submissions recorded for this month.").Italic();
+                        col.Item().Text(T("No Quality Cycle form submissions recorded for this month.")).Italic();
                         return;
                     }
 
@@ -230,19 +239,19 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
                         {
                             formBox.Item().Row(r =>
                             {
-                                r.RelativeItem().Text($"Date: {form.ShiftOccurrenceUtc:yyyy-MM-dd HH:mm UTC}").Bold();
-                                r.RelativeItem().Text($"Cleaner: {form.EmployeeName}").SemiBold();
-                                r.ConstantItem(100).AlignRight().Text(form.IsSubmitted ? "COMPLETED" : "PENDING")
+                                r.RelativeItem().Text($"{T("Date")}: {form.ShiftOccurrenceUtc:yyyy-MM-dd HH:mm UTC}").Bold();
+                                r.RelativeItem().Text($"{T("Cleaner")}: {form.EmployeeName}").SemiBold();
+                                r.ConstantItem(100).AlignRight().Text(T(form.IsSubmitted ? "COMPLETED" : "PENDING"))
                                     .Bold()
                                     .FontColor(form.IsSubmitted ? Colors.Green.Medium : Colors.Red.Medium);
                             });
 
                             if (form.IsSubmitted)
                             {
-                                formBox.Item().PaddingTop(6).Text("Checklist Items:").SemiBold().FontSize(9);
+                                formBox.Item().PaddingTop(6).Text(T("Checklist Items") + ":").SemiBold().FontSize(9);
 
                                 int checkedCount = form.Items.Count(i => i.IsChecked);
-                                formBox.Item().Text($"Completed {checkedCount} / {form.Items.Count} items").FontSize(9).FontColor(Colors.Grey.Darken1);
+                                formBox.Item().Text(string.Format(culture, T("Completed {0} / {1} items"), checkedCount, form.Items.Count)).FontSize(9).FontColor(Colors.Grey.Darken1);
 
                                 formBox.Item().PaddingTop(4).Column(itemsBox =>
                                 {
@@ -257,12 +266,12 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
 
                                 if (!string.IsNullOrWhiteSpace(form.CleanerNotes))
                                 {
-                                    formBox.Item().PaddingTop(6).Text($"Cleaner Notes: {form.CleanerNotes}").Italic().FontSize(9);
+                                    formBox.Item().PaddingTop(6).Text($"{T("Cleaner Notes")}: {form.CleanerNotes}").Italic().FontSize(9);
                                 }
 
                                 if (form.PhotoUrls != null && form.PhotoUrls.Count > 0)
                                 {
-                                    formBox.Item().PaddingTop(4).Text($"Attached Photos: {form.PhotoUrls.Count} photo(s) attached").FontSize(9).FontColor(Colors.Blue.Darken1);
+                                    formBox.Item().PaddingTop(4).Text(string.Format(culture, T("Attached Photos: {0} photo(s) attached"), form.PhotoUrls.Count)).FontSize(9).FontColor(Colors.Blue.Darken1);
                                 }
                             }
                         });
@@ -271,9 +280,9 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
                     }
                 });
 
-                page.Footer().Element(x => ReportPdfTheme.Footer(x, DateTime.UtcNow));
+                page.Footer().Element(x => ReportPdfTheme.Footer(x, DateTime.UtcNow, language));
             });
-            AppendEvidence(container, companyName, branchName, shiftName, ProjectEvidence(forms), TimeZoneInfo.Utc, "UTC");
+            AppendEvidence(container, companyName, branchName, shiftName, ProjectEvidence(forms), TimeZoneInfo.Utc, "UTC", language: language);
         });
 
         return doc.GeneratePdf();

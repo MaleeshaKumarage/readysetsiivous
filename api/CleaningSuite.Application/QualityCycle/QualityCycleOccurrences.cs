@@ -7,16 +7,16 @@ namespace CleaningSuite.Application.QualityCycle;
 public static class QualityCycleOccurrences
 {
     public static async Task<IReadOnlyList<(QualityCyclePlan Plan, ShiftOccurrence Occurrence, IReadOnlyList<Guid> EmployeeIds)>> ResolvedInWindowAsync(
-        IShiftRepository shifts, Shift shift, DateTime from, DateTime to, TimeZoneInfo zone, CancellationToken ct)
+        IShiftRepository shifts, Shift shift, DateTime from, DateTime to, TimeZoneInfo zone, CancellationToken ct, bool includeWithoutChecklist = false)
     {
         var exceptions = await shifts.ListOccurrenceExceptionsAsync(shift.Id, from, to, ct) ?? [];
-        var planned = InWindow(shift, from, to, zone).ToList();
+        var planned = InWindow(shift, from, to, zone, includeWithoutChecklist).ToList();
         // Include the original plan of inbound moves, even across a month boundary.
         foreach (var change in exceptions.Where(x => x.OriginalStartUtc.HasValue))
         {
             var original = change.OriginalStartUtc!.Value;
             if (!planned.Any(x => x.Occurrence.StartUtc == original))
-                planned.AddRange(InWindow(shift, original, original.AddTicks(1), zone));
+                planned.AddRange(InWindow(shift, original, original.AddTicks(1), zone, includeWithoutChecklist));
         }
         var history = await shifts.ListAssignmentHistoryAsync(shift.Id, ct) ?? [];
         var overrides = await shifts.ListOccurrenceAssignmentsAsync(shift.Id, ct) ?? [];
@@ -32,14 +32,14 @@ public static class QualityCycleOccurrences
                     .OrderByDescending(x => x.EffectiveFromUtc).FirstOrDefault()
                     ?? (shift.QualityCyclePlans.Count == 0 ? new QualityCyclePlan { CompanyId = shift.CompanyId,
                         BranchId = shift.BranchId, ShiftName = shift.Name, TemplateId = shift.QualityCycleTemplateId, IsActive = shift.IsActive } : null);
-            if (plan is null || !plan.IsActive || !plan.TemplateId.HasValue) continue;
+            if (plan is null || !plan.IsActive || (!includeWithoutChecklist && !plan.TemplateId.HasValue)) continue;
             result.Add((plan, new ShiftOccurrence { StartUtc = visit.Occurrence.StartUtc, EndUtc = visit.Occurrence.EndUtc }, visit.EmployeeIds));
         }
         return result;
     }
 
     public static IReadOnlyList<(QualityCyclePlan Plan, ShiftOccurrence Occurrence)> InWindow(
-        Shift shift, DateTime fromUtc, DateTime toUtc, TimeZoneInfo? timeZone = null)
+        Shift shift, DateTime fromUtc, DateTime toUtc, TimeZoneInfo? timeZone = null, bool includeWithoutChecklist = false)
     {
         timeZone ??= TimeZoneInfo.Utc;
         var plans = shift.QualityCyclePlans.Count > 0 ? shift.QualityCyclePlans.OrderBy(p => p.EffectiveFromUtc).ToList()
@@ -52,7 +52,7 @@ public static class QualityCycleOccurrences
         for (var i = 0; i < plans.Count; i++)
         {
             var plan = plans[i];
-            if (!plan.IsActive || !plan.TemplateId.HasValue) continue;
+            if (!plan.IsActive || (!includeWithoutChecklist && !plan.TemplateId.HasValue)) continue;
             var next = i + 1 < plans.Count ? plans[i + 1].EffectiveFromUtc : DateTime.MaxValue;
             var localFrom = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(fromUtc, DateTimeKind.Utc), timeZone).Date.AddDays(-1);
             var localTo = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(toUtc, DateTimeKind.Utc), timeZone).Date.AddDays(1);

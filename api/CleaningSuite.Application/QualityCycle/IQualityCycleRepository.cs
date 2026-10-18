@@ -14,6 +14,9 @@ public interface IQualityCycleRepository
     Task<QualityCycleReportShare?> GetReportShareAsync(Guid id, CancellationToken ct = default);
     Task<QualityCycleReportShare?> GetReportShareByTokenAsync(string token, CancellationToken ct = default);
     Task<IReadOnlyList<QualityCycleReportShare>> ListReportSharesAsync(CancellationToken ct = default);
+    Task AcknowledgeReportShareAsync(string token, DateTime now, CancellationToken ct = default);
+    Task UpdateReportShareDeliveryAsync(Guid id, DateTime? sentUtc, string? error, CancellationToken ct = default);
+    Task RevokeReportShareAsync(Guid id, CancellationToken ct = default);
 
     // Forms
     Task<QualityCycleForm?> GetFormAsync(Guid id, CancellationToken ct = default);

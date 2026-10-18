@@ -39,4 +39,22 @@ public class QualityCyclePublicController : ControllerBase
         Response.Headers["Referrer-Policy"] = "no-referrer";
         return File(await _mediator.Send(new GetSharedQualityCycleReportPdfQuery(token), ct), "application/pdf", "Monthly_Activity_Report.pdf");
     }
+
+    [HttpGet("reports/{token}")]
+    public async Task<IActionResult> SharedReport(string token, CancellationToken ct) {
+        PrivateReportHeaders();
+        return Ok(await _mediator.Send(new GetSharedQualityCycleReportQuery(token), ct));
+    }
+
+    [HttpPost("reports/{token}/acknowledge")]
+    public async Task<IActionResult> AcknowledgeReport(string token, CancellationToken ct) {
+        PrivateReportHeaders();
+        return Ok(await _mediator.Send(new AcknowledgeQualityCycleReportCommand(token), ct));
+    }
+
+    private void PrivateReportHeaders() {
+        Response.Headers.CacheControl = "no-store";
+        Response.Headers["X-Robots-Tag"] = "noindex, nofollow";
+        Response.Headers["Referrer-Policy"] = "no-referrer";
+    }
 }

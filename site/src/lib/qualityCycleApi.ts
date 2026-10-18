@@ -1,6 +1,6 @@
 import { API_URL } from './api';
 import { lifecycleRequest } from './reactivationApi';
-import { adminDelete, adminGet, adminSend, adminSendJson } from './adminApi';
+import { adminDelete, adminGet, adminSend, adminSendJson, authorizedFetch } from './adminApi';
 import { refreshToken } from './auth';
 import type { ShiftPhoto } from './shiftPhotos';
 
@@ -44,11 +44,28 @@ export interface QualityCycleForm {
   createdUtc: string;
 }
 
-export interface ReportShare { id: string; token: string; tenantId: string; expiresUtc: string; isRevoked: boolean; year: number; month: number; }
+export interface ReportPeriod { from: string; to: string; }
+export interface ReportSelection { shiftIds: string[]; months?: string[]; from?: string; to?: string; language: 'en' | 'fi' | 'sv'; }
+export interface ReportShare { id: string; token: string; tenantId: string; expiresUtc: string; isRevoked: boolean; year: number; month: number;
+  recipientEmail?: string | null; emailSentUtc?: string | null; emailError?: string | null; acknowledgedUtc?: string | null; language?: string; periods?: ReportPeriod[]; }
+export function reportLandingUrl(share: ReportShare): string {
+  return `${window.location.origin}/quality-report/?tenant=${encodeURIComponent(share.tenantId)}&token=${encodeURIComponent(share.token)}`;
+}
 export function reportShareUrl(share: ReportShare): string {
   return `${API_URL}/api/v1/public/${encodeURIComponent(share.tenantId)}/quality-cycle/reports/${encodeURIComponent(share.token)}/pdf`;
 }
 export const adminQualityCycle = {
+  selectedReport: (selection: ReportSelection) => reportRequest<MonthlyReport>('reports/preview', selection),
+  recipientOptions: (shiftIds: string[]) => reportRequest<{ label: string; email: string }[]>('reports/recipients', { shiftIds }),
+  sendReport: (selection: ReportSelection, email: string) => reportRequest<ReportShare>('reports/send', { selection, email }),
+  retryEmail: (id: string) => reportRequest<ReportShare>(`report-shares/${id}/retry-email`, {}),
+  downloadSelectedPdf: async (selection: ReportSelection) => {
+    const response = await authorizedFetch('/api/v1/admin/quality-cycle/reports/pdf', { method: 'POST', body: JSON.stringify(selection) });
+    if (!response.ok) throw new Error(await reportFailure(response));
+    const url = URL.createObjectURL(await response.blob());
+    const a = document.createElement('a'); a.href = url; a.download = `Cleaning_Quality_Report_${selection.language}.pdf`; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
   createReportShare: (year: number, month: number, shiftId?: string, branchId?: string) =>
     adminSendJson<ReportShare>('/api/v1/admin/quality-cycle/report-shares', 'POST', { year, month, shiftId, branchId }),
   listReportShares: () => adminGet<ReportShare[]>('/api/v1/admin/quality-cycle/report-shares'),
@@ -116,8 +133,18 @@ export interface ShiftReport {
   shiftId: string; shiftName: string; companyId: string; companyName: string; branchId: string; branchName: string;
   scheduledOccurrences: number; scheduledHours: number; completedOccurrences: number; missingOccurrences: number;
   pendingOccurrences: number; totalTasks: number; submittedTasks: number; missingTasks: number; pendingTasks: number; items: { itemText: string; daysPerformed: number; recordedOccurrences: number; recordedDates: string[] }[];
+  recordedStaffHours?: number | null; incompleteTimingRecords?: number | null;
 }
-export interface MonthlyReport { year: number; month: number; timeZoneId: string; generatedUtc: string; shifts: ShiftReport[]; }
+export interface MonthlyReport { year: number; month: number; timeZoneId: string; generatedUtc: string; shifts: ShiftReport[]; periods?: ReportPeriod[]; language?: string; }
+async function reportFailure(response: Response): Promise<string> {
+  try { const body = await response.json(); return Object.values(body.errors ?? {}).flat().join(' ') || body.detail || body.title || 'Report request failed.'; }
+  catch { return `Report request failed (${response.status}).`; }
+}
+async function reportRequest<T>(path: string, body: unknown): Promise<T> {
+  const response = await authorizedFetch(`/api/v1/admin/quality-cycle/${path}`, { method: 'POST', body: JSON.stringify(body) });
+  if (!response.ok) throw new Error(await reportFailure(response));
+  return response.json() as Promise<T>;
+}
 async function downloadReport(route: string, key: string, id: string, year: number, month: number): Promise<void> {
   const jwt = await refreshToken();
   if (!jwt) throw new Error('Please sign in again.');

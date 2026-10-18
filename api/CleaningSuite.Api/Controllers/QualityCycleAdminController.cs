@@ -28,6 +28,26 @@ public class QualityCycleAdminController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPost("reports/preview")]
+    public async Task<IActionResult> PreviewReport([FromBody] QualityCycleReportSelection selection, CancellationToken ct) =>
+        Ok(await _mediator.Send(new GetSelectedQualityCycleReportQuery(selection), ct));
+
+    [HttpPost("reports/send")]
+    public async Task<IActionResult> SendReport([FromBody] SendQualityCycleReportCommand command, CancellationToken ct) =>
+        Ok(await _mediator.Send(command, ct));
+
+    [HttpPost("report-shares/{id:guid}/retry-email")]
+    public async Task<IActionResult> RetryReportEmail(Guid id, CancellationToken ct) =>
+        Ok(await _mediator.Send(new RetryQualityCycleReportEmailCommand(id), ct));
+
+    [HttpPost("reports/pdf")]
+    public async Task<IActionResult> ReportPdf([FromBody] QualityCycleReportSelection selection, CancellationToken ct) =>
+        File(await _mediator.Send(new GetSelectedQualityCycleReportPdfQuery(selection), ct), "application/pdf", "Cleaning_Quality_Report.pdf");
+
+    [HttpPost("reports/recipients")]
+    public async Task<IActionResult> ReportRecipients([FromBody] GetQualityCycleRecipientOptionsQuery query, CancellationToken ct) =>
+        Ok(await _mediator.Send(query, ct));
+
     [HttpGet("templates/{id:guid}")]
     public async Task<IActionResult> GetTemplate(Guid id, CancellationToken ct)
     {

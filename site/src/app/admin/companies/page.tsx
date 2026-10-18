@@ -34,7 +34,7 @@ export default function CompaniesAdminPage() {
   const [companyBranchesMap, setCompanyBranchesMap] = useState<Record<string, Branch[]>>({});
   const [branchModal, setBranchModal] = useState(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
-  const [branchForm, setBranchForm] = useState({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '' });
+  const [branchForm, setBranchForm] = useState({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '', contactEmail: '' });
   const [branchSaving, setBranchSaving] = useState(false);
   const [branchError, setBranchError] = useState('');
 
@@ -100,13 +100,13 @@ export default function CompaniesAdminPage() {
       const fields = {
         name: branchForm.name.trim(), street: branchForm.street.trim() || undefined,
         postalCode: branchForm.postalCode.trim() || undefined, city: branchForm.city.trim() || undefined,
-        country: branchForm.country.trim() || undefined, contactPhone: branchForm.contactPhone.trim() || undefined,
+        country: branchForm.country.trim() || undefined, contactPhone: branchForm.contactPhone.trim() || undefined, contactEmail: branchForm.contactEmail.trim() || undefined,
       };
       if (editingBranch) {
         const updated = await adminBranches.update(editingBranch.id, { ...fields, isActive: editingBranch.isActive });
         if (!updated) throw new Error('Could not update branch. Please retry.');
       } else await adminBranches.create(expanded, fields);
-      setBranchForm({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '' });
+      setBranchForm({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '', contactEmail: '' });
       setEditingBranch(null);
       setBranchModal(false);
       if (!editingBranch) setBranchStatus('active');
@@ -118,7 +118,7 @@ export default function CompaniesAdminPage() {
 
   const openBranchEdit = (branch: Branch) => {
     setEditingBranch(branch);
-    setBranchForm({ name: branch.name, street: branch.street ?? '', postalCode: branch.postalCode ?? '', city: branch.city ?? '', country: branch.country ?? '', contactPhone: branch.contactPhone ?? '' });
+    setBranchForm({ name: branch.name, street: branch.street ?? '', postalCode: branch.postalCode ?? '', city: branch.city ?? '', country: branch.country ?? '', contactPhone: branch.contactPhone ?? '', contactEmail: branch.contactEmail ?? '' });
     setBranchError(''); setBranchModal(true);
   };
 
@@ -205,7 +205,7 @@ export default function CompaniesAdminPage() {
                         <Table.Td colSpan={6} p="sm">
                           <Group justify="space-between" align="center" mb="xs" wrap="wrap" gap="xs">
                             <Text size="sm" fw={600}>Branches</Text>
-                            <Button size="xs" variant="light" leftSection={<Plus size={14} />} onClick={() => { setEditingBranch(null); setBranchForm({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '' }); setBranchError(''); setBranchModal(true); }}>Add branch</Button>
+                            <Button size="xs" variant="light" leftSection={<Plus size={14} />} onClick={() => { setEditingBranch(null); setBranchForm({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '', contactEmail: '' }); setBranchError(''); setBranchModal(true); }}>Add branch</Button>
                           </Group>
                           <LifecycleTabs value={branchStatus} onChange={setBranchStatus} label="Branch activity"
                             activeCount={branchLoading === c.id || branchLoadError ? undefined : currentBranches.filter(b => b.isActive).length}
@@ -267,6 +267,7 @@ export default function CompaniesAdminPage() {
           <TextInput label="Postal code" value={branchForm.postalCode} onChange={setB('postalCode')} />
           <TextInput label="City" value={branchForm.city} onChange={setB('city')} />
           <TextInput label="Country" value={branchForm.country} onChange={setB('country')} />
+          <TextInput label="Contact email" type="email" value={branchForm.contactEmail} onChange={setB('contactEmail')} />
           <TextInput label="Phone" value={branchForm.contactPhone} onChange={setB('contactPhone')} />
           <Group justify="flex-end" mt="xs">
             <Button variant="default" onClick={() => setBranchModal(false)}>Cancel</Button>

@@ -1,6 +1,7 @@
 using CleaningSuite.Application.QualityCycle;
 using CleaningSuite.Domain.QualityCycle;
 using Marten;
+using Marten.Patching;
 
 namespace CleaningSuite.Infrastructure.Persistence;
 
@@ -133,10 +134,38 @@ public class QualityCycleRepository : IQualityCycleRepository
         _session.Store(share); await _session.SaveChangesAsync(ct);
     }
     public Task<QualityCycleReportShare?> GetReportShareAsync(Guid id, CancellationToken ct = default) => _session.LoadAsync<QualityCycleReportShare>(id, ct);
-    public Task<QualityCycleReportShare?> GetReportShareByTokenAsync(string token, CancellationToken ct = default) =>
-        _session.Query<QualityCycleReportShare>().FirstOrDefaultAsync(s => s.Token == token, ct);
+    public async Task<QualityCycleReportShare?> GetReportShareByTokenAsync(string token, CancellationToken ct = default)
+    {
+        await using var session = _store.QuerySession(_tenant.TenantId);
+        return await session.Query<QualityCycleReportShare>().FirstOrDefaultAsync(s => s.Token == token, ct);
+    }
     public async Task<IReadOnlyList<QualityCycleReportShare>> ListReportSharesAsync(CancellationToken ct = default) =>
         await _session.Query<QualityCycleReportShare>().OrderByDescending(s => s.CreatedUtc).ToListAsync(ct);
+
+    public async Task AcknowledgeReportShareAsync(string token, DateTime now, CancellationToken ct = default)
+    {
+        await using var session = _store.LightweightSession(_tenant.TenantId);
+        var boundary = DateTime.SpecifyKind(now, DateTimeKind.Unspecified);
+        session.Patch<QualityCycleReportShare>(s => s.Token == token && !s.IsRevoked && s.ExpiresUtc > boundary && s.AcknowledgedUtc == null)
+            .Set(s => s.AcknowledgedUtc, now);
+        await session.SaveChangesAsync(ct);
+    }
+
+    public async Task UpdateReportShareDeliveryAsync(Guid id, DateTime? sentUtc, string? error, CancellationToken ct = default)
+    {
+        await using var session = _store.LightweightSession(_tenant.TenantId);
+        // A later failed retry must never erase a successful provider acceptance.
+        session.Patch<QualityCycleReportShare>(s => s.Id == id && s.EmailSentUtc == null)
+            .Set(s => s.EmailSentUtc, sentUtc).Set(s => s.EmailError, error);
+        await session.SaveChangesAsync(ct);
+    }
+
+    public async Task RevokeReportShareAsync(Guid id, CancellationToken ct = default)
+    {
+        await using var session = _store.LightweightSession(_tenant.TenantId);
+        session.Patch<QualityCycleReportShare>(id).Set(s => s.IsRevoked, true);
+        await session.SaveChangesAsync(ct);
+    }
 
     private static bool IsDuplicate(Exception ex) =>
         ex is JasperFx.DocumentAlreadyExistsException

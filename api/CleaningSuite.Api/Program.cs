@@ -107,6 +107,8 @@ builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCycleR
 builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCyclePdfGenerator, CleaningSuite.Infrastructure.QualityCycle.QualityCyclePdfGenerator>();
 builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCycleDispatcher, CleaningSuite.Application.QualityCycle.QualityCycleDispatcher>();
 builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.QualityCycleMonthlyReportService>();
+builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.QualityCycleSelectedReportService>();
+builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.QualityCycleReportDelivery>();
 builder.Services.AddScoped<CleaningSuite.Application.Access.ManagerOperations>();
 if (builder.Configuration.GetValue("BackgroundWorkers:Enabled", true))
     builder.Services.AddHostedService<CleaningSuite.Api.QualityCycleWorker>();

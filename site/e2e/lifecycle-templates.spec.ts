@@ -56,10 +56,10 @@ test('template lifecycle tabs filter locally and remain independent of submissio
   await expect(page.getByText('Current checklist', { exact: true })).toBeVisible();
   expect(requests.loads()).toBe(initialLoads);
   await tabs.getByRole('tab', { name: 'Inactive (1)', exact: true }).click();
-  await page.getByText('Submissions & PDF Reports', { exact: true }).click();
+  await page.getByText('Reports', { exact: true }).click();
   await expect(tabs).toBeHidden();
-  await expect(page.getByRole('heading', { name: 'Monthly branch and shift reports' })).toBeVisible();
-  await expect(page.getByText('Quality Cycle Submissions Log', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Quality reports', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Load report', exact: true })).toBeDisabled();
   await page.getByText('Checklist Templates', { exact: true }).click();
   await expect(page.getByText('Archived checklist', { exact: true })).toBeVisible();
   expect(requests.loads()).toBe(initialLoads);
