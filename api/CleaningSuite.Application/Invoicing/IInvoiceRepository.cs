@@ -11,4 +11,5 @@ public interface IInvoiceRepository
 
     /// <summary>Next invoice number for the current tenant, committed with the caller's session.</summary>
     Task<long> NextInvoiceNumberAsync(CancellationToken ct = default);
+    Task<long> NextInvoiceNumberForYearAsync(int year, CancellationToken ct = default);
 }

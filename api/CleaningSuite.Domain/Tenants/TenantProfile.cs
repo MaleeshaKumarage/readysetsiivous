@@ -20,6 +20,7 @@ public class TenantProfile : BaseDocument
     public string Phone { get; set; } = "";
     public string BankAccountIBAN { get; set; } = "";
     public string BankBic { get; set; } = "";
+    public bool InvoiceIssuerIsSample { get; set; }
     public string? LogoUrl { get; set; }
 
     /// <summary>IANA time zone id, e.g. Europe/Helsinki.</summary>
