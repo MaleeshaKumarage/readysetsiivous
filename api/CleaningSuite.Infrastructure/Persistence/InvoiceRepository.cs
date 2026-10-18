@@ -41,9 +41,10 @@ public class InvoiceRepository : IInvoiceRepository
         await _tenantSession.Session.SaveChangesAsync(ct);
     }
 
-    public async Task<long> NextInvoiceNumberAsync(CancellationToken ct = default)
+    public Task<long> NextInvoiceNumberAsync(CancellationToken ct = default) => NextInvoiceNumberForYearAsync(DateTime.UtcNow.Year, ct);
+
+    public async Task<long> NextInvoiceNumberForYearAsync(int year, CancellationToken ct = default)
     {
-        var year = DateTime.UtcNow.Year;
         var id = TenantDocumentIds.Counter(_tenantSession.TenantId, $"invoice-{year}");
         var counter = await _tenantSession.Session.LoadAsync<Counter>(id, ct)
             ?? new Counter { Id = id, Name = $"invoice-{year}", Value = 0 };

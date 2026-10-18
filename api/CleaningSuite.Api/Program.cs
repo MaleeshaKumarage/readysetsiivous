@@ -90,6 +90,9 @@ builder.Services.AddScoped<CleaningSuite.Application.Bookings.IBookingRepository
 builder.Services.AddScoped<CleaningSuite.Application.Bookings.AvailabilityEngine>();
 builder.Services.AddScoped<CleaningSuite.Application.Employees.IEmployeeRepository, CleaningSuite.Infrastructure.Persistence.EmployeeRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.Invoicing.IInvoiceRepository, CleaningSuite.Infrastructure.Persistence.InvoiceRepository>();
+builder.Services.AddScoped<CleaningSuite.Application.Invoicing.IShiftBillingRepository, CleaningSuite.Infrastructure.Persistence.ShiftBillingRepository>();
+builder.Services.AddScoped<CleaningSuite.Application.Invoicing.ShiftBillingSettingsService>();
+builder.Services.AddScoped<CleaningSuite.Application.Invoicing.ShiftInvoiceService>();
 builder.Services.AddScoped<CleaningSuite.Application.Agreements.IAgreementRepository, CleaningSuite.Infrastructure.Persistence.AgreementRepository>();
 builder.Services.AddSingleton<CleaningSuite.Application.Agreements.IAgreementFileStore>(sp =>
     new CleaningSuite.Infrastructure.Agreements.DiskAgreementFileStore(

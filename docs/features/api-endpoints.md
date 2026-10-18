@@ -52,6 +52,11 @@ before deploying over pre-existing default-partition QC data.
 | POST | `/api/v1/admin/employees/{id:guid}/deactivate` | admin | [Deactivate](../../api/CleaningSuite.Api/Controllers/EmployeesAdminController.cs#L45) |
 | POST | `/api/v1/admin/employees/{id:guid}/invite` | admin | [Invite](../../api/CleaningSuite.Api/Controllers/EmployeesAdminController.cs#L54) |
 | GET | `/api/v1/admin/invoices` | admin | [List](../../api/CleaningSuite.Api/Controllers/InvoicesAdminController.cs#L21) |
+| GET / PUT | `/api/v1/admin/invoices/issuer` | admin | Invoice issuer/payment settings, including sample-data flag |
+| POST | `/api/v1/admin/invoices/shift-preview` | admin | Read-only shift invoice preview and token |
+| POST | `/api/v1/admin/invoices/shifts` | admin | Issue preview-verified immutable shift invoice |
+| GET / PUT | `/api/v1/admin/shifts/{id:guid}/pricing` | admin | Effective-dated net pricing |
+| PUT | `/api/v1/admin/shifts/{id:guid}/occurrence-price` | admin | Explained on-call visit price override |
 | POST | `/api/v1/admin/invoices` | admin | [Create](../../api/CleaningSuite.Api/Controllers/InvoicesAdminController.cs#L29) |
 | GET | `/api/v1/admin/invoices/{id:guid}` | admin | [Detail](../../api/CleaningSuite.Api/Controllers/InvoicesAdminController.cs#L37) |
 | POST | `/api/v1/admin/invoices/{id:guid}/mark-paid` | admin | [MarkPaid](../../api/CleaningSuite.Api/Controllers/InvoicesAdminController.cs#L44) |

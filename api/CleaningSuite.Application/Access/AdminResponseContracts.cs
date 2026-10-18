@@ -29,11 +29,36 @@ public record BookingAdminResponse(Guid Id, DateTime CreatedUtc, DateTime Update
 public record IssuerAdminResponse(string CompanyName, string BusinessId, AddressResponse CompanyAddress,
     string Email, string Phone, string BankAccountIBAN, string BankBic);
 public record InvoiceLineAdminResponse(string Description, decimal Quantity, decimal UnitPriceNet,
-    decimal VatRatePercent, decimal VatAmount, decimal Total);
+    decimal VatRatePercent, decimal VatAmount, decimal Total)
+{
+    public Guid? ShiftId { get; init; }
+    public string ShiftName { get; init; } = "";
+    public string BranchName { get; init; } = "";
+    public decimal Hours { get; init; }
+    public int Occurrences { get; init; }
+    public string PricingMode { get; init; } = "";
+    public DateOnly? PeriodFrom { get; init; }
+    public DateOnly? PeriodTo { get; init; }
+    public string LineKey { get; init; } = "";
+    public string? Month { get; init; }
+    public decimal NetAmount { get; init; }
+    public string? OverrideReason { get; init; }
+}
 public record InvoiceAdminResponse(Guid Id, DateTime CreatedUtc, DateTime UpdatedUtc, string InvoiceNumber,
     Guid BookingId, string BookingNumber, CustomerAdminResponse Customer, IssuerAdminResponse Issuer,
     IReadOnlyList<InvoiceLineAdminResponse> Lines, MoneyResponse Total, string Currency,
-    DateTime IssueDate, DateTime DueDate, string Status, DateTime? PaidAtUtc);
+    DateTime IssueDate, DateTime DueDate, string Status, DateTime? PaidAtUtc)
+{
+    public Guid? CompanyId { get; init; }
+    public DateOnly? PeriodFrom { get; init; }
+    public DateOnly? PeriodTo { get; init; }
+    public string Language { get; init; } = "fi";
+    public AddressResponse? BillingAddress { get; init; }
+    public string CustomerBusinessId { get; init; } = "";
+    public string PaymentReference { get; init; } = "";
+    public string? PreviewToken { get; init; }
+    public bool IssuerIsSample { get; init; }
+}
 
 public static class AdminResponses
 {
@@ -57,6 +82,12 @@ public static class AdminResponses
         i.InvoiceNumber, i.BookingId, i.BookingNumber, Customer(i.Customer),
         new(i.Issuer.CompanyName, i.Issuer.BusinessId, Address(i.Issuer.CompanyAddress), i.Issuer.Email,
             i.Issuer.Phone, i.Issuer.BankAccountIBAN, i.Issuer.BankBic),
-        i.Lines.Select(l => new InvoiceLineAdminResponse(l.Description, l.Quantity, l.UnitPriceNet, l.VatRatePercent, l.VatAmount, l.Total)).ToArray(),
-        Money(i.Total), i.Currency, i.IssueDate, i.DueDate, i.Status, i.PaidAtUtc);
+        i.Lines.Select(l => new InvoiceLineAdminResponse(l.Description, l.Quantity, l.UnitPriceNet, l.VatRatePercent, l.VatAmount, l.Total) {
+            ShiftId = l.ShiftId, ShiftName = l.ShiftName, BranchName = l.BranchName, Hours = l.Hours, Occurrences = l.Occurrences,
+            PricingMode = l.PricingMode, PeriodFrom = l.PeriodFrom, PeriodTo = l.PeriodTo, LineKey = l.LineKey, Month = l.Month,
+            NetAmount = l.NetAmount ?? l.Quantity * l.UnitPriceNet, OverrideReason = l.OverrideReason }).ToArray(),
+        Money(i.Total), i.Currency, i.IssueDate, i.DueDate, i.Status, i.PaidAtUtc) {
+            CompanyId = i.CompanyId, PeriodFrom = i.PeriodFrom, PeriodTo = i.PeriodTo, Language = i.Language,
+            BillingAddress = Address(i.BillingAddress), CustomerBusinessId = i.CustomerBusinessId,
+            PaymentReference = i.PaymentReference, IssuerIsSample = i.IssuerIsSample };
 }

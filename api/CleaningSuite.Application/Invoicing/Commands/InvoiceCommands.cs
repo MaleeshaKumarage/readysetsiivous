@@ -1,6 +1,7 @@
 using CleaningSuite.Application.Bookings;
 using CleaningSuite.Application.Common;
 using CleaningSuite.Application.Tenants;
+using CleaningSuite.Application.Shifts;
 using CleaningSuite.Domain.Bookings;
 using CleaningSuite.Domain.Invoicing;
 using MediatR;
@@ -19,21 +20,24 @@ public class CreateInvoiceHandler : IRequestHandler<CreateInvoiceCommand, Guid>
     private readonly IBookingRepository _bookings;
     private readonly ITenantProfileRepository _profiles;
     private readonly ITenantContext _context;
+    private readonly IShiftWorkReservation? _reservation;
 
     public CreateInvoiceHandler(
         IInvoiceRepository invoices,
         IBookingRepository bookings,
         ITenantProfileRepository profiles,
-        ITenantContext context)
+        ITenantContext context, IShiftWorkReservation? reservation = null)
     {
         _invoices = invoices;
         _bookings = bookings;
         _profiles = profiles;
         _context = context;
+        _reservation = reservation;
     }
 
     public async Task<Guid> Handle(CreateInvoiceCommand request, CancellationToken ct)
     {
+        await using var lease = _reservation is null ? null : await _reservation.AcquireAsync(ct);
         var booking = await _bookings.GetByIdAsync(request.BookingId, ct)
             ?? throw new NotFoundException("Booking", request.BookingId);
 
@@ -69,6 +73,8 @@ public class CreateInvoiceHandler : IRequestHandler<CreateInvoiceCommand, Guid>
             BookingId = booking.Id,
             BookingNumber = booking.BookingNumber,
             Customer = booking.Customer,
+            BillingAddress = booking.CleaningAddress,
+            IssuerIsSample = profile.InvoiceIssuerIsSample,
             Issuer = new IssuerInfo
             {
                 CompanyName = profile.CompanyName,

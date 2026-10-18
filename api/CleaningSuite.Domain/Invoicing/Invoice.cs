@@ -26,6 +26,14 @@ public class Invoice : BaseDocument
     public DateTime DueDate { get; set; }
     public string Status { get; set; } = StatusIssued;
     public DateTime? PaidAtUtc { get; set; }
+    public Guid? CompanyId { get; set; }
+    public DateOnly? PeriodFrom { get; set; }
+    public DateOnly? PeriodTo { get; set; }
+    public string Language { get; set; } = "fi";
+    public Address BillingAddress { get; set; } = new();
+    public string CustomerBusinessId { get; set; } = "";
+    public string PaymentReference { get; set; } = "";
+    public bool IssuerIsSample { get; set; }
 }
 
 public class IssuerInfo
@@ -46,5 +54,17 @@ public class InvoiceLine
     public decimal UnitPriceNet { get; set; }
     public decimal VatRatePercent { get; set; }
     public decimal VatAmount { get; set; }
-    public decimal Total => Quantity * UnitPriceNet + VatAmount;
+    public decimal? NetAmount { get; set; }
+    public decimal Total => (NetAmount ?? Quantity * UnitPriceNet) + VatAmount;
+    public Guid? ShiftId { get; set; }
+    public string ShiftName { get; set; } = "";
+    public string BranchName { get; set; } = "";
+    public decimal Hours { get; set; }
+    public int Occurrences { get; set; }
+    public string PricingMode { get; set; } = "";
+    public DateOnly? PeriodFrom { get; set; }
+    public DateOnly? PeriodTo { get; set; }
+    public string LineKey { get; set; } = "";
+    public string? Month { get; set; }
+    public string? OverrideReason { get; set; }
 }

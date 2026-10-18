@@ -68,7 +68,7 @@ the current behavior, or expect an unimplemented feature to pass.
 | F15 | Agreement administration | `/admin/agreements/`: company/PDF/signers, list/details, copy links/email text, mailto, document download | Create/read, add/remove signer, cancel, activate/deactivate | Partial; AGR |
 | F16 | Agreement signing | `/{lang}/sign/?token=...`: preview, draw/type, submit, completion/download | Token signing, PNG guards, concurrent updates, final PDF | Implemented; SIGN |
 | F17 | Booking operations and employee day schedule | Client helpers exist; no booking/calendar screen | Booking list/detail/status/assignment; employee day schedule | BE-only; OPS |
-| F18 | Invoices | Helpers exist; no invoice screen | Create from completed booking, list/detail, paid/void, PDF | BE-only; INV |
+| F18 | Invoices | Admin invoice workspace, issuer settings, shift pricing, preview/issue, monthly overrides, PDF/paid/void | Booking invoices retained; shift-period snapshots with duplicate/stale-preview guards | See [shift invoicing](shift-invoicing.md); INV |
 | F19 | Tenant profile/content management | Client has profile read helper; no settings/content screen | Profile GET/PUT and page-content PUT/public GET | BE-only UI; TEN |
 | F20 | Tenant provisioning and lifecycle | No system administration UI | Provision/list/activate/suspend; Keycloak realm setup | BE-only; TEN |
 | F21 | Digital contact card and QR | `/{lang}/card/`, vCard download, phone/email/WhatsApp/home; landing QR | Static vCard; external QR image provider | Implemented; CARD |
@@ -250,6 +250,8 @@ recomputing completion. Some lifecycle conflicts throw InvalidOperationException
 and return 500 rather than 409.
 
 ### Invoices, tenant management and infrastructure
+
+Updated 18 October 2026: shift pricing and the admin invoice workspace are now implemented. See [shift invoicing](shift-invoicing.md) for calculation rules, APIs and regression cases. The booking-specific notes below still describe the legacy booking invoice path; the old missing-invoice-screen gap is closed.
 
 Invoice creation requires Completed booking, no non-voided invoice for it and a
 tenant profile. It snapshots customer/issuer/service pricing, creates one quantity-1

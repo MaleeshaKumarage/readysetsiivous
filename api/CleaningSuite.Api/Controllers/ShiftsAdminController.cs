@@ -1,6 +1,8 @@
 using CleaningSuite.Api.Auth;
 using CleaningSuite.Application.Shifts;
 using CleaningSuite.Application.QualityCycle;
+using CleaningSuite.Application.Invoicing;
+using CleaningSuite.Domain.Invoicing;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,6 +21,18 @@ public class ShiftsAdminController : ControllerBase
     {
         _mediator = mediator;
     }
+
+    [HttpGet("{id:guid}/pricing")]
+    public async Task<IActionResult> Pricing(Guid id, [FromServices] ShiftBillingSettingsService billing, CancellationToken ct) => Ok(await billing.GetAsync(id, ct));
+
+    [HttpPut("{id:guid}/pricing")]
+    public async Task<IActionResult> SavePricing(Guid id, [FromBody] ShiftPricingPlan plan,
+        [FromServices] ShiftBillingSettingsService billing, CancellationToken ct) => Ok(await billing.SaveAsync(id, plan, ct));
+
+    [HttpPut("{id:guid}/occurrence-price")]
+    public async Task<IActionResult> SaveVisitPrice(Guid id, [FromBody] ShiftOccurrencePrice price,
+        [FromServices] ShiftBillingSettingsService billing, CancellationToken ct)
+    { await billing.SaveOccurrenceAsync(id, price, ct); return NoContent(); }
 
     [HttpGet]
     [OutputCache(Duration = 30)]

@@ -1,6 +1,7 @@
 using CleaningSuite.Api.Auth;
 using CleaningSuite.Application.Access;
 using CleaningSuite.Application.Invoicing.Commands;
+using CleaningSuite.Application.Invoicing;
 using CleaningSuite.Application.Invoicing.Queries;
 using CleaningSuite.Infrastructure.Invoicing;
 using MediatR;
@@ -18,6 +19,27 @@ public class InvoicesAdminController : ControllerBase
     private readonly IMediator _mediator;
 
     public InvoicesAdminController(IMediator mediator) => _mediator = mediator;
+
+    [HttpGet("issuer")]
+    public async Task<IActionResult> Issuer([FromServices] ShiftBillingSettingsService billing, CancellationToken ct) =>
+        Ok(await billing.GetIssuerAsync(ct));
+
+    [HttpPut("issuer")]
+    public async Task<IActionResult> SaveIssuer([FromBody] InvoiceIssuerSettings settings,
+        [FromServices] ShiftBillingSettingsService billing, CancellationToken ct) => Ok(await billing.SaveIssuerAsync(settings, ct));
+
+    [HttpPost("shift-preview")]
+    public async Task<IActionResult> PreviewShifts([FromBody] ShiftInvoiceRequest request,
+        [FromServices] ShiftInvoiceService service, CancellationToken ct)
+    {
+        var preview = await service.PreviewAsync(request, ct);
+        return Ok(AdminResponses.Invoice(preview.Invoice) with { PreviewToken = preview.PreviewToken });
+    }
+
+    [HttpPost("shifts")]
+    public async Task<IActionResult> IssueShifts([FromBody] ShiftInvoiceRequest request,
+        [FromServices] ShiftInvoiceService service, CancellationToken ct) =>
+        StatusCode(StatusCodes.Status201Created, AdminResponses.Invoice(await service.IssueAsync(request, ct)));
 
     [HttpGet]
     public async Task<IActionResult> List(

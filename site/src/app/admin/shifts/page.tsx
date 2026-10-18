@@ -9,6 +9,7 @@ import {
   adminShifts, adminCompanies, adminEmployees, adminTenant,
   type Shift, type Company, type Branch, type Employee, type ShiftAssignment, type ShiftOccurrence,
 } from '@/lib/adminApi';
+import { ShiftPricingDialog } from '@/components/ShiftPricingDialog';
 import { VisitAssigneesDialog } from '@/components/VisitAssigneesDialog';
 import { isAdmin } from '@/lib/auth';
 import { adminQualityCycle, type QualityCycleTemplate } from '@/lib/qualityCycleApi';
@@ -57,6 +58,8 @@ const addCalendarDays = (date: string, days: number) => {
 };
 
 export default function ShiftsAdminPage() {
+  const [pricingShift, setPricingShift] = useState<Shift | null>(null);
+  const [pricingOccurrence, setPricingOccurrence] = useState<ShiftOccurrence | undefined>();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
   const [lifecycle, setLifecycle] = useState<LifecycleStatus>('active');
@@ -411,6 +414,7 @@ export default function ShiftsAdminPage() {
                     <Table.Td>{assignments[s.id]?.length ?? 0}</Table.Td>
                     <Table.Td>
                       <Group gap={6} wrap="nowrap">
+                        {isAdmin() && <Button size="xs" variant="light" onClick={() => { setPricingShift(s); setPricingOccurrence(undefined); }}>Pricing</Button>}
                         {isAdmin() && <Button size="xs" variant="light" leftSection={<Pencil size={13} />} onClick={() => openEdit(s)}>Edit</Button>}
                         {s.isActive && <Button size="xs" variant="light" disabled={assignBusy} onClick={() => openAssign(s.id)}>Employees</Button>}
                         {s.isActive && <Button size="xs" variant="light" onClick={() => openOccurrences(s)}>Occurrences</Button>}
@@ -472,6 +476,7 @@ export default function ShiftsAdminPage() {
       )}
       </LifecycleTabs>
 
+      {pricingShift && <ShiftPricingDialog key={`${pricingShift.id}-${pricingOccurrence?.startUtc ?? "plan"}`} shift={pricingShift} occurrence={pricingOccurrence} onClose={() => { setPricingShift(null); setPricingOccurrence(undefined); }} />}
       <Modal opened={Boolean(occurrenceShift)} onClose={() => { setOccurrenceShift(null); setEditingOccurrence(null); }} title={`Occurrences${occurrenceShift ? ` — ${occurrenceShift.name}` : ''}`} size="xl">
         <Stack>
           <Text size="sm" c="dimmed">Times use the tenant time zone: {timeZoneId}. Changes apply only to the selected visit.</Text>
@@ -493,6 +498,7 @@ export default function ShiftsAdminPage() {
                   <Text size="xs" c="dimmed">{item.assignmentSource ?? 'Recurring'}</Text>{item.assignmentLockReason && <Text size="xs" c="dimmed">{item.assignmentLockReason}</Text>}</Table.Td>
                 <Table.Td>{item.reason ?? '—'}</Table.Td>
                 <Table.Td><Group gap={4} wrap="nowrap">
+                  {isAdmin() && occurrenceShift?.schedule.type === 4 && <Button size="xs" variant="light" onClick={() => { setPricingShift(occurrenceShift); setPricingOccurrence(item); }}>Visit price</Button>}
                   <Button size="xs" variant="light" disabled={item.canAssign === false || item.status === 2 || item.status === 3} onClick={() => setAssigningVisit(item)}>Assign</Button>
                   <Button size="xs" variant="subtle" onClick={() => openOccurrenceEditor(item)}>Change</Button>
                   {!item.exceptionId && <Button size="xs" variant="subtle" color="orange" onClick={() => openOccurrenceEditor(item, '2')}>Cancel</Button>}
