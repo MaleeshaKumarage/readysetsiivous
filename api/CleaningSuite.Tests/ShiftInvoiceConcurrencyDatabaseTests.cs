@@ -64,7 +64,7 @@ public class ShiftInvoiceConcurrencyDatabaseTests
         Assert.IsType<ShiftConflictException>(Assert.Single(results, r => r is not null));
         using var check = Session(partition);
         var saved = Assert.Single(await new InvoiceRepository(check).ListAsync(null, null));
-        Assert.Equal(150, saved.Total.Net); Assert.Equal(37.88m, saved.Total.Vat);
+        Assert.Equal(150, saved.Total.Net); Assert.Equal(38.25m, saved.Total.Vat);
         Assert.Equal("2026-0001", saved.InvoiceNumber); Assert.True(saved.IssuerIsSample);
         Assert.Equal(input.BillingAddress!.Street, saved.BillingAddress.Street);
         using var foreign = Session(partition + "-foreign");

@@ -131,7 +131,7 @@ test('branch contact email persists on creation and editing after reload', async
   expect(saved[0].contactEmail).toBe('branch@example.test');
   await page.reload();
   await page.getByRole('button', { name: 'Branches', exact: true }).click();
-  await page.getByRole('tabpanel').getByRole('button', { name: 'Edit', exact: true }).last().click();
+  await page.getByRole('tabpanel').getByRole('tabpanel').getByRole('button', { name: 'Edit', exact: true }).click();
   dialog = page.getByRole('dialog');
   await expect(dialog.getByLabel('Contact email', { exact: true })).toHaveValue('branch@example.test');
   await dialog.getByLabel('Contact email', { exact: true }).fill('updated@example.test');
@@ -140,6 +140,6 @@ test('branch contact email persists on creation and editing after reload', async
   expect(saved[1].contactEmail).toBe('updated@example.test');
   await page.reload();
   await page.getByRole('button', { name: 'Branches', exact: true }).click();
-  await page.getByRole('tabpanel').getByRole('button', { name: 'Edit', exact: true }).last().click();
+  await page.getByRole('tabpanel').getByRole('tabpanel').getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(page.getByRole('dialog').getByLabel('Contact email', { exact: true })).toHaveValue('updated@example.test');
 });
