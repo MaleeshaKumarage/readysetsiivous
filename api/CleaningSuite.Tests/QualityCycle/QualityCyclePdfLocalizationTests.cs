@@ -14,6 +14,63 @@ public class PdfTextVerificationCollection { }
 [Collection("PDF text verification")]
 public class QualityCyclePdfLocalizationTests
 {
+    private static byte[] AppendixPdf(string language, IReadOnlyList<QualityCycleEvidenceReport> evidence)
+    {
+        var row = new QualityCycleShiftReport(Guid.NewGuid(), "Vuoro", Guid.NewGuid(), "Yritys Oy", Guid.NewGuid(), "Kohde",
+            0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], []) { Evidence = evidence };
+        return new QualityCyclePdfGenerator().GenerateMonthlyReportPdf(new(2026, 10, "Europe/Helsinki", Start, [row]) { Language = language });
+    }
+
+    private static string SamplePhoto(int index)
+    {
+        using var bitmap = new SkiaSharp.SKBitmap(index % 2 == 0 ? 160 : 90, index % 2 == 0 ? 90 : 160);
+        using var canvas = new SkiaSharp.SKCanvas(bitmap);
+        canvas.Clear(new SkiaSharp.SKColor((byte)(40 + index * 20), 100, 170));
+        using var image = SkiaSharp.SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+        return "data:image/png;base64," + Convert.ToBase64String(data.ToArray());
+    }
+
+    [Theory]
+    [InlineData("en", 4)] [InlineData("fi", 4)] [InlineData("sv", 4)]
+    [InlineData("en", 5)] [InlineData("fi", 5)] [InlineData("sv", 5)]
+    public void Appendix_packs_four_photos_across_dates_and_keeps_odd_remainder(string language, int count)
+    {
+        var evidence = Enumerable.Range(0, count).Select(i => new QualityCycleEvidenceReport(Start.AddDays(i), Start.AddDays(i).AddHours(2), null, [])
+            { Photos = [new(SamplePhoto(i), $"Photo-note-{i + 1} unchanged ää ö")] }).ToArray();
+        var pdf = AppendixPdf(language, evidence);
+        SaveQa($"compact-appendix-{language}-{count}", pdf);
+        using var document = PdfDocument.Open(pdf);
+        var pages = document.GetPages().Where(p => string.Join(" ", p.GetWords().Select(w => w.Text)).Contains(ReportText.Get(language, "Photos & Notes"))).ToArray();
+        Assert.Equal((count + 3) / 4, pages.Length);
+        // One brand logo plus the actual evidence images on each appendix page.
+        Assert.Equal(5, pages[0].NumberOfImages);
+        if (count == 5) Assert.Equal(2, pages[1].NumberOfImages);
+        for (var i = 0; i < count; i++)
+        {
+            var text = string.Join(" ", pages[i / 4].GetWords().Select(w => w.Text));
+            Assert.Contains($"Photo-note-{i + 1} unchanged ää ö", text);
+            Assert.Contains(Start.AddDays(i).ToString("yyyy-MM-dd"), text);
+        }
+    }
+
+    [Theory]
+    [InlineData("en")] [InlineData("fi")] [InlineData("sv")]
+    public void Appendix_keeps_full_long_notes_and_prints_general_note_once(string language)
+    {
+        var note = string.Join(" ", Enumerable.Range(0, 160).Select(i => $"Detail{i} corridor cleaned.")) + " FULL-NOTE-END";
+        var pdf = AppendixPdf(language, [new(Start, Start.AddHours(2), "GENERAL-NOTE-ONCE", []) {
+            Photos = [new(SamplePhoto(0), note), new(SamplePhoto(1), "Second-photo-note")] },
+            new(Start.AddDays(1), Start.AddDays(1).AddHours(2), "NOTES-WITHOUT-PHOTO", [])]);
+        SaveQa($"compact-long-notes-{language}", pdf);
+        var text = Extract(pdf);
+        Assert.Contains("FULL-NOTE-END", text);
+        Assert.Contains("Second-photo-note", text);
+        Assert.Contains("NOTES-WITHOUT-PHOTO", text);
+        Assert.Equal(1, text.Split("GENERAL-NOTE-ONCE").Length - 1);
+        foreach (var i in Enumerable.Range(0, 160)) Assert.Contains($"Detail{i} ", text);
+    }
+
     private static readonly DateTime Start = new(2026, 10, 2, 8, 0, 0, DateTimeKind.Utc);
     private static readonly string[] EnglishSystemPhrases = [
         "Cleaning Quality Report", "PROPERTY & SERVICE", "REPORT SUMMARY", "MONTHLY SUMMARY",
