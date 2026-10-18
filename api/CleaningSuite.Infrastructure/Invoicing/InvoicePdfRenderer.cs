@@ -121,7 +121,7 @@ public static class InvoicePdfRenderer
         if (language == "en") return key switch { "Monthly" => "Fixed monthly rate", "Hourly" => "Hourly rate", "PerOccurrence" => "Per completed visit", _ => key };
         var pair = key switch
         {
-            "Status" => ("Tila", "Status"), "Issued" => ("Lähetettävissä", "Utfärdad"),
+            "Status" => ("Tila", "Status"), "Issued" => ("Laadittu", "Utfärdad"),
             "Paid" => ("Maksettu", "Betald"), "Voided" => ("Mitätöity", "Makulerad"), "Draft" => ("Luonnos", "Utkast"),
             "Sample issuer details" => ("Esimerkkitiedot laskuttajasta", "Exempeluppgifter för fakturautställaren"),
             "Invoice" => ("Lasku", "Faktura"), "Supplier" => ("Myyjä", "Säljare"), "Business ID" => ("Y-tunnus", "FO-nummer"),
