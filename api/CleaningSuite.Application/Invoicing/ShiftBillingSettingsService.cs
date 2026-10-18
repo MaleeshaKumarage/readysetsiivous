@@ -59,10 +59,12 @@ public class ShiftBillingSettingsService(IShiftRepository shifts, IShiftBillingR
         var date = DateOnly.FromDateTime(TenantTimeZone.LocalDate(price.OccurrenceStartUtc, zone));
         if ((await invoices.ListAsync(null, null, ct)).Any(i => Billed(i, id) && i.PeriodFrom <= date && i.PeriodTo >= date))
             throw new ShiftConflictException("This visit has already been invoiced. Void the invoice before changing its price.");
-        var visits = await CleaningSuite.Application.QualityCycle.QualityCycleOccurrences.ResolvedInWindowAsync(shifts, shift,
+        var visits = await CleaningSuite.Application.QualityCycle.QualityCycleOccurrences.ResolvedInWindowAsync(shifts, ShiftInvoiceSchedule.Snapshot(shift, zone),
             price.OccurrenceStartUtc, price.OccurrenceStartUtc.AddTicks(1), zone, ct, true);
         if (!visits.Any(v => v.Occurrence.StartUtc == price.OccurrenceStartUtc)) Invalid("The selected visit no longer exists or was cancelled. Reload occurrences.");
         var profile = await billing.GetAsync(id, ct) ?? new() { Id = id, ShiftId = id };
+        if (profile.Plans.Where(p => p.EffectiveFrom <= date).OrderByDescending(p => p.EffectiveFrom).FirstOrDefault()?.Mode != "PerOccurrence")
+            Invalid("Configure per-completed-visit pricing effective on this visit's date before adding a visit price override.");
         profile.Overrides.RemoveAll(p => p.OccurrenceStartUtc == price.OccurrenceStartUtc);
         profile.Overrides.Add(price with { Reason = price.Reason.Trim() });
         profile.UpdatedUtc = DateTime.UtcNow;

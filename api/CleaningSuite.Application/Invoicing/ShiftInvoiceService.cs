@@ -86,7 +86,8 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
         foreach (var shift in selected.OrderBy(s => s.Id))
         {
             var pricing = await billing.GetAsync(shift.Id, ct) ?? new ShiftBillingProfile { Id = shift.Id, ShiftId = shift.Id };
-            var resolved = await QualityCycleOccurrences.ResolvedInWindowAsync(shifts, shift, from, to, zone, ct, true);
+            var schedule = ShiftInvoiceSchedule.Snapshot(shift, zone);
+            var resolved = await QualityCycleOccurrences.ResolvedInWindowAsync(shifts, schedule, from, to, zone, ct, true);
             if (resolved.Count > 10000) Invalid("Too many scheduled visits in this period. Select a shorter range.");
             var submitted = await forms.ListFormsAsync(shift.Id, from, to, ct);
             var visits = resolved.Where(v => v.Plan.CompanyId == request.CompanyId).Select(v =>
@@ -102,7 +103,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
                 if (branch is null || branch.CompanyId != request.CompanyId) Invalid($"{shift.Name}: an associated branch is missing or belongs to another company.");
                 names[branchId] = branch!.Name;
             }
-            lines.AddRange(ShiftInvoiceCalculator.Calculate(shift, pricing, visits, request.From, request.To, zone, names, adjustments));
+            lines.AddRange(ShiftInvoiceCalculator.Calculate(schedule, pricing, visits, request.From, request.To, zone, names, adjustments));
             fingerprints.Add(JsonSerializer.Serialize(new { Shift = shift, Pricing = pricing, Visits = visits,
                 Completion = submitted.OrderBy(f => f.Id).Select(f => new { f.Id, f.EmployeeId, f.IsSubmitted, f.ShiftOccurrenceUtc, f.StartedAtUtc, f.EndedAtUtc, f.ShiftDeletedUtc }) }));
         }

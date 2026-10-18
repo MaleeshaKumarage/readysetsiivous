@@ -29,7 +29,7 @@ public static class ShiftInvoiceCalculator
             var end = TenantTimeZone.StartOfLocalDay(date.AddDays(1).ToDateTime(TimeOnly.MinValue), zone);
             var plan = history.LastOrDefault(p => p.EffectiveFromUtc < end)
                 ?? (history.Length == 0 ? new QualityCyclePlan { CompanyId = shift.CompanyId, BranchId = shift.BranchId,
-                    ShiftName = shift.Name, IsActive = shift.IsActive, ValidFrom = shift.ValidFrom, ValidUntil = shift.ValidUntil } : null);
+                    ShiftName = shift.Name, IsActive = shift.IsActive, ValidFrom = shift.ValidFrom ?? TenantTimeZone.LocalDate(shift.CreatedUtc, zone), ValidUntil = shift.ValidUntil } : null);
             return plan is not null && plan.IsActive && plan.CompanyId == shift.CompanyId
                 && (!plan.ValidFrom.HasValue || date >= DateOnly.FromDateTime(plan.ValidFrom.Value))
                 && (!plan.ValidUntil.HasValue || date <= DateOnly.FromDateTime(plan.ValidUntil.Value)) ? plan : null;

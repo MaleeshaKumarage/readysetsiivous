@@ -15,6 +15,21 @@ using Moq;
 namespace CleaningSuite.Tests.Invoicing;
 public class ShiftInvoiceServiceTests
 {
+    [Theory]
+    [InlineData(true)] [InlineData(false)]
+    public async Task Backdated_shift_bills_scheduled_visits_before_data_entry_without_changing_work_history(bool history)
+    {
+        var f = new Fixture();
+        f.Shift.CreatedUtc = new(2026, 10, 17, 0, 0, 0, DateTimeKind.Utc);
+        if (history) f.Shift.RecordQualityCyclePlan(f.Shift.CreatedUtc);
+        f.Pricing.Plans = [new("Hourly", 50, 25.5m, new(2026, 10, 1))];
+        var preview = await f.Service.PreviewAsync(f.Request, default);
+        var line = Assert.Single(preview.Invoice.Lines);
+        Assert.Equal(5, line.Occurrences); Assert.Equal(10, line.Hours); Assert.Equal(500, line.NetAmount);
+        Assert.Equal(new DateTime(2026, 10, 17, 0, 0, 0, DateTimeKind.Utc), f.Shift.CreatedUtc);
+        if (history) Assert.Equal(f.Shift.CreatedUtc, f.Shift.QualityCyclePlans[0].EffectiveFromUtc);
+        else Assert.Empty(f.Shift.QualityCyclePlans);
+    }
     [Fact]
     public async Task New_year_number_uses_the_tenant_local_issue_year_for_both_counter_and_prefix()
     {
