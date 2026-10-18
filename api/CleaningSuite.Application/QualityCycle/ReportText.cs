@@ -51,7 +51,28 @@ public static class ReportText
         ["Photo unavailable: the saved image is unsupported, invalid or exceeds the report image limit."] = ("Kuva ei ole saatavilla: tallennettu kuva on virheellinen, sen muotoa ei tueta tai se ylittää raportin kuvarajan.", "Fotot är inte tillgängligt: bilden är ogiltig, formatet stöds inte eller bilden överskrider rapportens bildgräns."),
         ["Generated"] = ("Luotu", "Skapad"), ["Page"] = ("Sivu", "Sida"),
         ["Please review the report and acknowledge receipt. This link expires after 30 days."] = ("Tarkista raportti ja kuittaa vastaanotto. Linkki vanhenee 30 päivän kuluttua.", "Granska rapporten och bekräfta mottagandet. Länken upphör att gälla efter 30 dagar."),
-        ["Open report"] = ("Avaa raportti", "Öppna rapporten")
+        ["Open report"] = ("Avaa raportti", "Öppna rapporten"),
+        ["Your cleaning quality report is ready to review."] = ("Siivouksen laaturaporttinne on valmis tarkasteltavaksi.", "Er kvalitetsrapport för städning är klar att granska."),
+        ["Reporting period"] = ("Raportointijakso", "Rapportperiod"),
+        ["Included shifts"] = ("Raportin vuorot", "Arbetspass i rapporten"),
+        ["What is included"] = ("Raportin sisältö", "Rapportens innehåll"),
+        ["The report summarises scheduled and recorded visits, scheduled hours, recorded work hours and cleaning activities. Available photos and their notes are included in the PDF appendix."] =
+            ("Raportti sisältää yhteenvedon suunnitelluista ja kirjatuista käynneistä, suunnitelluista ja kirjatuista työtunneista sekä siivoustehtävistä. Saatavilla olevat kuvat ja niiden muistiinpanot ovat PDF-raportin liitteessä.",
+             "Rapporten sammanfattar planerade och registrerade besök, planerade och registrerade arbetstimmar samt städaktiviteter. Tillgängliga foton och tillhörande anteckningar finns i PDF-rapportens bilaga."),
+        ["Recorded activities show what was done. Unchecked activities are not automatically treated as failures."] =
+            ("Kirjatut tehtävät osoittavat tehdyt työt. Valitsemattomia tehtäviä ei automaattisesti tulkita puutteiksi.",
+             "Registrerade aktiviteter visar vad som har utförts. Omarkerade aktiviteter räknas inte automatiskt som brister."),
+        ["Next steps"] = ("Seuraavat vaiheet", "Nästa steg"),
+        ["Open the report and review the summary."] = ("Avaa raportti ja tarkista yhteenveto.", "Öppna rapporten och granska sammanfattningen."),
+        ["Download the PDF for the full details and photo appendix."] = ("Lataa PDF-raportti nähdäksesi kaikki tiedot ja kuvaliitteen.", "Ladda ner PDF-rapporten för fullständiga uppgifter och fotobilagan."),
+        ["Select Acknowledge receipt on the report page to confirm you received it."] = ("Vahvista raportin vastaanotto valitsemalla raporttisivulla Kuittaa vastaanotto.", "Välj Bekräfta mottagandet på rapportsidan för att bekräfta att du har fått rapporten."),
+        ["Acknowledgment confirms receipt of this report. It is not a signature or approval of its contents."] =
+            ("Kuittaus vahvistaa raportin vastaanoton. Se ei ole allekirjoitus eikä sisällön hyväksyntä.",
+             "Bekräftelsen gäller mottagandet av rapporten. Den är inte en underskrift eller ett godkännande av innehållet."),
+        ["Link available until"] = ("Linkki on käytettävissä asti", "Länken är tillgänglig till"),
+        ["If the button does not work, copy this link into your browser:"] = ("Jos painike ei toimi, kopioi tämä linkki selaimeesi:", "Om knappen inte fungerar, kopiera den här länken till din webbläsare:"),
+        ["For questions about this report, contact your usual cleaning service contact."] =
+            ("Jos sinulla on kysyttävää raportista, ota yhteyttä siivouspalvelusi yhteyshenkilöön.", "Kontakta din ordinarie kontaktperson för städtjänsten om du har frågor om rapporten.")
     };
     public static string Get(string language, string text)
     {

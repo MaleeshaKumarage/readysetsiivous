@@ -1,4 +1,3 @@
-using System.Net;
 using System.Text.Json;
 using CleaningSuite.Application.Common;
 using CleaningSuite.Application.Tenants;
@@ -51,10 +50,8 @@ public class QualityCycleReportDelivery(IQualityCycleRepository repository, IEma
                 || uri.AbsolutePath != "/" || string.IsNullOrWhiteSpace(config["Resend:ApiKey"]))
                 throw new InvalidOperationException("Report email is not configured.");
             var link = $"{uri.GetLeftPart(UriPartial.Authority)}/quality-report/?tenant={Uri.EscapeDataString(tenant.TenantId)}&token={Uri.EscapeDataString(share.Token)}";
-            var subject = ReportText.Get(report.Language, "Cleaning Quality Report");
-            var body = ReportText.Get(report.Language, "Please review the report and acknowledge receipt. This link expires after 30 days.");
-            await email.SendAsync(share.RecipientEmail, subject,
-                $"<h2>{WebUtility.HtmlEncode(subject)}</h2><p>{WebUtility.HtmlEncode(body)}</p><p><a href=\"{WebUtility.HtmlEncode(link)}\">{WebUtility.HtmlEncode(ReportText.Get(report.Language, "Open report"))}</a></p>", ct);
+            var content = QualityCycleReportEmail.Build(report, link, share.ExpiresUtc);
+            await email.SendAsync(share.RecipientEmail, content.Subject, content.Html, ct);
             share.EmailSentUtc = clock.GetUtcNow().UtcDateTime;
             share.EmailError = null;
         }
