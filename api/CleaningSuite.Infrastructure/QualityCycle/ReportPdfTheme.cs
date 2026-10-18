@@ -17,7 +17,10 @@ internal static class ReportPdfTheme
     internal static void Page(PageDescriptor page)
     {
         page.Size(PageSizes.A4); page.Margin(36);
-        page.DefaultTextStyle(x => x.FontSize(9).FontFamily(Fonts.Arial).FontColor(Navy));
+        // Keep ordinary characters in the text layer: the pinned renderer can
+        // emit broken Unicode maps for combined Latin glyphs on Linux fonts.
+        page.DefaultTextStyle(x => x.FontSize(9).FontFamily(Fonts.Arial).FontColor(Navy)
+            .DisableFontFeature("liga").DisableFontFeature("clig").DisableFontFeature("dlig"));
     }
     internal static void Header(IContainer container, string title, string subtitle)
     {
