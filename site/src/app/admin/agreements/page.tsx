@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge, ActionIcon, Tooltip, CopyButton, Paper } from '@mantine/core';
 import { Plus, Trash2, Copy, Mail, Check, Eye } from 'lucide-react';
 import { adminAgreements, adminCompanies, authorizedFetch, invalidateAdminCache, type AgreementListItem, type AgreementDetail, type Company, type LegacyAgreementRepairPreview } from '@/lib/adminApi';
+import { AgreementEmailCopyButton } from '@/components/AgreementEmailCopyButton';
+import { agreementEmail } from '@/lib/agreementEmail';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
 
 export default function AgreementsPage() {
@@ -120,17 +122,12 @@ export default function AgreementsPage() {
 
   const getSignLink = (token: string) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    return `${origin}/fi/sign?token=${token}`;
-  };
-
-  const getEmailBody = (title: string, signerName: string, token: string) => {
-    const link = getSignLink(token);
-    return `Hei ${signerName},\n\nSopimuksen "${title}" allekirjoituslinkki:\n${link}\n\nLainvoimainen allekirjoitus suoritetaan verkkosivullamme.\n\nReadySetSiivous`;
+    return `${origin}/fi/sign?token=${encodeURIComponent(token)}`;
   };
 
   const renderSignerActions = (agreementTitle: string, signerName: string, signerEmail: string, token: string) => {
     const link = getSignLink(token);
-    const body = getEmailBody(agreementTitle, signerName, token);
+    const body = agreementEmail(agreementTitle, signerName, link).text;
     const subject = encodeURIComponent(`Sopimus allekirjoitettavaksi: ${agreementTitle}`);
     const mailto = `mailto:${signerEmail}?subject=${subject}&body=${encodeURIComponent(body)}`;
 
@@ -146,18 +143,10 @@ export default function AgreementsPage() {
           )}
         </CopyButton>
 
-        <CopyButton value={body} timeout={2000}>
-          {({ copied, copy }) => (
-            <Tooltip label={copied ? 'Copied email text!' : 'Copy email text'} withArrow>
-              <Button size="xs" variant="light" color={copied ? 'teal' : 'gray'} leftSection={copied ? <Check size={14} /> : <Mail size={14} />} onClick={copy}>
-                {copied ? 'Copied email' : 'Copy email'}
-              </Button>
-            </Tooltip>
-          )}
-        </CopyButton>
+        <AgreementEmailCopyButton title={agreementTitle} signerName={signerName} link={link} />
 
-        <Tooltip label="Open mail app" withArrow>
-          <ActionIcon component="a" href={mailto} variant="subtle" color="blue" size="sm">
+        <Tooltip label="Open mail app (plain text); use Copy email for formatting" withArrow>
+          <ActionIcon component="a" aria-label="Open mail app (plain text)" href={mailto} variant="subtle" color="blue" size="sm">
             <Mail size={14} />
           </ActionIcon>
         </Tooltip>
