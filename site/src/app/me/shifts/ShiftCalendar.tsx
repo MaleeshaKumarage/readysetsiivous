@@ -1,10 +1,26 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useState, useMemo, type ReactNode } from 'react';
 import type { MyShiftOccurrence } from '@/lib/meApi';
 
+/**
+ * Module-level cache for Intl.DateTimeFormat formatters by timezone to avoid costly
+ * repeated native ICU object instantiation inside render loops.
+ */
+const dateKeyFormatters = new Map<string, Intl.DateTimeFormat>();
+function getDateKeyFormatter(zone: string): Intl.DateTimeFormat {
+  let fmt = dateKeyFormatters.get(zone);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: zone });
+    dateKeyFormatters.set(zone, fmt);
+  }
+  return fmt;
+}
+
+const weekdayFormatter = new Intl.DateTimeFormat('en-GB', { weekday: 'long', timeZone: 'UTC' });
+
 function dateKey(instant: string, zone: string) {
-  const parts = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: zone }).formatToParts(new Date(instant));
+  const parts = getDateKeyFormatter(zone).formatToParts(new Date(instant));
   return `${parts.find(p => p.type === 'year')!.value}-${parts.find(p => p.type === 'month')!.value}-${parts.find(p => p.type === 'day')!.value}`;
 }
 
@@ -16,7 +32,7 @@ function mondayOf(date: string) {
 
 function label(date: string) {
   const [year, month, day] = date.split('-');
-  const weekday = new Intl.DateTimeFormat('en-GB', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`));
+  const weekday = weekdayFormatter.format(new Date(`${date}T12:00:00Z`));
   return `${day}/${month}/${year} ${weekday}`;
 }
 
@@ -31,15 +47,22 @@ export default function ShiftCalendar({ occurrences, renderShift, disabled, onCl
 }) {
   const [openWeek, setOpenWeek] = useState<string | null>(null);
   const [openDay, setOpenDay] = useState<string | null>(null);
+
+  // Group occurrences into weeks and days using useMemo to avoid re-grouping and date parsing on accordion toggle re-renders.
+  const weeks = useMemo(() => {
+    const map = new Map<string, Map<string, MyShiftOccurrence[]>>();
+    for (const occurrence of occurrences) {
+      const day = dateKey(occurrence.startUtc, occurrence.timeZoneId);
+      const week = mondayOf(day);
+      if (!map.has(week)) map.set(week, new Map());
+      const days = map.get(week)!;
+      days.set(day, [...(days.get(day) ?? []), occurrence]);
+    }
+    return map;
+  }, [occurrences]);
+
   const compareDates = (a: string, b: string) => view === 'future' ? a.localeCompare(b) : b.localeCompare(a);
-  const weeks = new Map<string, Map<string, MyShiftOccurrence[]>>();
-  for (const occurrence of occurrences) {
-    const day = dateKey(occurrence.startUtc, occurrence.timeZoneId);
-    const week = mondayOf(day);
-    if (!weeks.has(week)) weeks.set(week, new Map());
-    const days = weeks.get(week)!;
-    days.set(day, [...(days.get(day) ?? []), occurrence]);
-  }
+
   const selectDay = (week: string, day: string) => {
     onCloseForm();
     setOpenWeek(week);
