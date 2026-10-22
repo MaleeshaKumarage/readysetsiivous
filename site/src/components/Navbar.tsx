@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -33,6 +33,18 @@ export default function Navbar({ lang }: NavbarProps) {
       toggleRef.current?.focus();
     }
   }
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setMobileOpen(false);
+        toggleRef.current?.focus();
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mobileOpen]);
 
   return (
     <nav className="sticky top-0 z-50 bg-white/90 dark:bg-accent-950/90 backdrop-blur-md border-b border-gray-100 dark:border-accent-900 shadow-sm">
