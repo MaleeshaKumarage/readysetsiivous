@@ -76,22 +76,24 @@ export default function LeadsAdminPage() {
     if (!form.name.trim()) { setError('Name is required.'); return; }
     setSaving(true); setError('');
     try {
+      // Send empty strings (not omitted) so a cleared field wipes the stored value.
+      // Omitted/null on the API means "leave unchanged".
       const fields = {
         name: form.name.trim(),
-        businessId: form.businessId.trim() || undefined,
-        mainContactName: form.mainContactName.trim() || undefined,
-        mainContactEmail: form.mainContactEmail.trim() || undefined,
-        mainContactPhone: form.mainContactPhone.trim() || undefined,
+        businessId: form.businessId.trim(),
+        mainContactName: form.mainContactName.trim(),
+        mainContactEmail: form.mainContactEmail.trim(),
+        mainContactPhone: form.mainContactPhone.trim(),
         emails: form.emails.map((e) => e.trim()).filter(Boolean),
         contactPersons: form.contactPersons
           .map((p) => ({
             name: (p.name ?? '').trim(),
-            email: (p.email ?? '').trim() || undefined,
-            phone: (p.phone ?? '').trim() || undefined,
-            role: (p.role ?? '').trim() || undefined,
+            email: (p.email ?? '').trim(),
+            phone: (p.phone ?? '').trim(),
+            role: (p.role ?? '').trim(),
           }))
           .filter((p) => p.name),
-        notes: form.notes.trim() || undefined,
+        notes: form.notes.trim(),
       };
       if (editingLead) await adminLeads.update(editingLead.id, { ...fields, isActive: editingLead.isActive });
       else await adminLeads.create(fields);
