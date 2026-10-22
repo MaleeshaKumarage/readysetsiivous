@@ -81,8 +81,7 @@ public static class LeadHandlers
         {
             var lead = await repository.GetAsync(request.Id, ct)
                 ?? throw new NotFoundException("Lead", request.Id);
-            // Null Emails/ContactPersons/IsActive mean "leave existing values" so a partial
-            // PUT cannot wipe lists or reactivate a deactivated lead by default.
+            // Null optional fields mean "leave existing". Empty strings clear scalars.
             lead.Update(
                 request.Name,
                 request.BusinessId,
@@ -184,9 +183,13 @@ public static class LeadValidators
     {
         public CreateLeadCommandValidator()
         {
-            RuleFor(x => x.Name).NotEmpty().WithMessage("Name is mandatory.");
+            RuleFor(x => x.Name).NotEmpty().MaximumLength(200).WithMessage("Name is mandatory.");
+            RuleFor(x => x.BusinessId).MaximumLength(50).When(x => x.BusinessId is not null);
+            RuleFor(x => x.MainContactName).MaximumLength(200).When(x => x.MainContactName is not null);
             RuleFor(x => x.MainContactEmail).EmailAddress().MaximumLength(254)
                 .When(x => !string.IsNullOrWhiteSpace(x.MainContactEmail));
+            RuleFor(x => x.MainContactPhone).MaximumLength(40).When(x => x.MainContactPhone is not null);
+            RuleFor(x => x.Notes).MaximumLength(4000).When(x => x.Notes is not null);
             RuleForEach(x => x.Emails).EmailAddress().MaximumLength(254)
                 .When(x => x.Emails is not null);
             RuleForEach(x => x.ContactPersons)
@@ -194,9 +197,11 @@ public static class LeadValidators
                 .When(x => x.ContactPersons is not null);
             RuleForEach(x => x.ContactPersons).ChildRules(person =>
             {
-                person.RuleFor(p => p!.Name).NotEmpty().When(p => p is not null);
+                person.RuleFor(p => p!.Name).NotEmpty().MaximumLength(200).When(p => p is not null);
                 person.RuleFor(p => p!.Email).EmailAddress().MaximumLength(254)
                     .When(p => p is not null && !string.IsNullOrWhiteSpace(p.Email));
+                person.RuleFor(p => p!.Phone).MaximumLength(40).When(p => p is not null && p.Phone is not null);
+                person.RuleFor(p => p!.Role).MaximumLength(80).When(p => p is not null && p.Role is not null);
             }).When(x => x.ContactPersons is not null);
         }
     }
@@ -206,9 +211,13 @@ public static class LeadValidators
         public UpdateLeadCommandValidator()
         {
             RuleFor(x => x.Id).NotEqual(Guid.Empty);
-            RuleFor(x => x.Name).NotEmpty().WithMessage("Name is mandatory.");
+            RuleFor(x => x.Name).NotEmpty().MaximumLength(200).WithMessage("Name is mandatory.");
+            RuleFor(x => x.BusinessId).MaximumLength(50).When(x => x.BusinessId is not null);
+            RuleFor(x => x.MainContactName).MaximumLength(200).When(x => x.MainContactName is not null);
             RuleFor(x => x.MainContactEmail).EmailAddress().MaximumLength(254)
                 .When(x => !string.IsNullOrWhiteSpace(x.MainContactEmail));
+            RuleFor(x => x.MainContactPhone).MaximumLength(40).When(x => x.MainContactPhone is not null);
+            RuleFor(x => x.Notes).MaximumLength(4000).When(x => x.Notes is not null);
             RuleForEach(x => x.Emails).EmailAddress().MaximumLength(254)
                 .When(x => x.Emails is not null);
             RuleForEach(x => x.ContactPersons)
@@ -216,9 +225,11 @@ public static class LeadValidators
                 .When(x => x.ContactPersons is not null);
             RuleForEach(x => x.ContactPersons).ChildRules(person =>
             {
-                person.RuleFor(p => p!.Name).NotEmpty().When(p => p is not null);
+                person.RuleFor(p => p!.Name).NotEmpty().MaximumLength(200).When(p => p is not null);
                 person.RuleFor(p => p!.Email).EmailAddress().MaximumLength(254)
                     .When(p => p is not null && !string.IsNullOrWhiteSpace(p.Email));
+                person.RuleFor(p => p!.Phone).MaximumLength(40).When(p => p is not null && p.Phone is not null);
+                person.RuleFor(p => p!.Role).MaximumLength(80).When(p => p is not null && p.Role is not null);
             }).When(x => x.ContactPersons is not null);
         }
     }
