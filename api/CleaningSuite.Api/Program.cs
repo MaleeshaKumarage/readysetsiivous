@@ -101,9 +101,10 @@ builder.Services.AddSingleton<CleaningSuite.Application.Agreements.IAgreementFil
 builder.Services.AddSingleton<CleaningSuite.Application.Common.IUploadContentValidator, CleaningSuite.Infrastructure.Uploads.UploadContentValidator>();
 builder.Services.AddSingleton<CleaningSuite.Application.Agreements.IAgreementDocumentGenerator, CleaningSuite.Infrastructure.Agreements.AgreementPdfSigner>();
 
-// New repositories for Companies and Shifts.
+// New repositories for Companies, Leads and Shifts.
 builder.Services.AddScoped<CleaningSuite.Application.Companies.ICompanyRepository, CleaningSuite.Infrastructure.Persistence.CompanyRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.Companies.IBranchRepository, CleaningSuite.Infrastructure.Persistence.BranchRepository>();
+builder.Services.AddScoped<CleaningSuite.Application.Leads.ILeadRepository, CleaningSuite.Infrastructure.Persistence.LeadRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.Shifts.IShiftRepository, CleaningSuite.Infrastructure.Persistence.ShiftRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.Shifts.IShiftWorkReservation, CleaningSuite.Infrastructure.Persistence.ShiftWorkReservation>();
 builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCycleRepository, CleaningSuite.Infrastructure.Persistence.QualityCycleRepository>();
@@ -223,7 +224,7 @@ public class MartenSchemaInitializer : Microsoft.Extensions.Hosting.IHostedServi
 
 public partial class Program;
 
-/// <summary>Accepts "HH:mm" (and "HH:mm:ss") for TimeSpan, e.g. shift times from &lt;input type="time"&gt;.</summary>
+/// <summary>Accepts "HH:mm" (and "HH:mm:ss") for TimeSpan, e.g. shift times from <input type="time">.</summary>
 public class FlexibleTimeSpanConverter : System.Text.Json.Serialization.JsonConverter<TimeSpan>
 {
     public override TimeSpan Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
