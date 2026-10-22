@@ -5,7 +5,7 @@ export default defineConfig({
   testMatch: ['**/lifecycle-*.spec.ts', '**/company-integrity.spec.ts', '**/public-accessibility.spec.ts', '**/admin.spec.ts', '**/admin-scope.spec.ts', '**/manager.spec.ts', '**/shift-reactivation.spec.ts', '**/shift-assignment.spec.ts', '**/shift-occurrences.spec.ts', '**/shift-dates.spec.ts', '**/quality-cycle.spec.ts', '**/my-shifts*.spec.ts', '**/booking-availability.spec.ts', '**/employee-invite.spec.ts', '**/entertainment*.spec.ts'],
   timeout: 30000,
   use: {
-    baseURL: 'http://127.0.0.1:3000',
+    baseURL: 'http://localhost:3000',
     serviceWorkers: 'block',
   },
   projects: [
@@ -19,8 +19,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev -- --hostname 127.0.0.1 --port 3000',
-    url: 'http://127.0.0.1:3000',
+    command: 'npm run dev',
+    url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
   },
