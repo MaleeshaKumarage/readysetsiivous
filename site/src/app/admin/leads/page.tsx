@@ -5,11 +5,12 @@ import {
   Title, Button, Table, Modal, TextInput, Textarea, Group, Stack, Text, Loader, Badge, ActionIcon,
 } from '@mantine/core';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
-import { adminLeads, type Lead, type LeadContactPerson } from '@/lib/leadsApi';
+import { adminLeads, type Lead, type LeadAttachment, type LeadContactPerson } from '@/lib/leadsApi';
 import { leadLifecycle } from '@/lib/reactivationApi';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
 
 const emptyContact = (): LeadContactPerson => ({ name: '', email: '', phone: '', role: '' });
+const maxFiles = 3;
 
 const emptyForm = {
   name: '',
@@ -22,6 +23,37 @@ const emptyForm = {
   notes: '',
 };
 
+function LeadFileCard({ leadId, file, onRemove }: { leadId: string; file: LeadAttachment; onRemove: () => void }) {
+  const [src, setSrc] = useState<string | null>(null);
+  const isImage = file.contentType.startsWith('image/');
+
+  useEffect(() => {
+    if (!isImage) return;
+    let active = true;
+    let objectUrl = '';
+    adminLeads.fetchAttachment(leadId, file.id).then((blob) => {
+      if (!active) return;
+      objectUrl = URL.createObjectURL(blob);
+      setSrc(objectUrl);
+    }).catch(() => { if (active) setSrc(null); });
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [leadId, file.id, isImage]);
+
+  return (
+    <Group gap="sm" align="flex-start" wrap="nowrap">
+      {src ? <img src={src} alt={file.fileName} style={{ width: 96, height: 72, objectFit: 'cover', borderRadius: 6 }} /> : null}
+      <Stack gap={4} style={{ flex: 1 }}>
+        <Text size="sm">{file.fileName}</Text>
+        <Text size="xs" c="dimmed">{isImage ? 'Image' : 'File'} · {Math.max(1, Math.round(file.sizeBytes / 1024))} KB</Text>
+        <Button size="xs" variant="subtle" color="red" onClick={onRemove}>Remove {file.fileName}</Button>
+      </Stack>
+    </Group>
+  );
+}
+
 export default function LeadsAdminPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [status, setStatus] = useState<LifecycleStatus>('active');
@@ -33,9 +65,13 @@ export default function LeadsAdminPage() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [viewingId, setViewingId] = useState<string | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const viewingLead = leads.find((lead) => lead.id === viewingId) ?? null;
+  const editingSaved = editingLead ? leads.find((lead) => lead.id === editingLead.id) ?? editingLead : null;
 
   const load = async () => {
     const version = ++loadGeneration.current;
@@ -72,12 +108,20 @@ export default function LeadsAdminPage() {
       contactPersons: f.contactPersons.length <= 1 ? f.contactPersons : f.contactPersons.filter((_, i) => i !== index),
     }));
 
+  const uploadFiles = async (leadId: string, files: File[]) => {
+    const remaining = [...files];
+    while (remaining.length) {
+      await adminLeads.uploadAttachment(leadId, remaining[0]);
+      remaining.shift();
+      setPendingFiles([...remaining]);
+    }
+  };
+
   const submit = async () => {
     if (!form.name.trim()) { setError('Name is required.'); return; }
     setSaving(true); setError('');
+    const wasNew = !editingLead;
     try {
-      // Send empty strings (not omitted) so a cleared field wipes the stored value.
-      // Omitted/null on the API means "leave unchanged".
       const fields = {
         name: form.name.trim(),
         businessId: form.businessId.trim(),
@@ -95,16 +139,25 @@ export default function LeadsAdminPage() {
           .filter((p) => p.name),
         notes: form.notes.trim(),
       };
-      if (editingLead) await adminLeads.update(editingLead.id, { ...fields, isActive: editingLead.isActive });
-      else await adminLeads.create(fields);
-      setForm(emptyForm); setEditingLead(null); setModalOpen(false); if (!editingLead) setStatus('active'); await load();
+      let current = editingLead;
+      if (current) await adminLeads.update(current.id, { ...fields, isActive: current.isActive });
+      else {
+        current = await adminLeads.create(fields);
+        setEditingLead(current);
+      }
+      if (pendingFiles.length) await uploadFiles(current.id, pendingFiles);
+      setForm(emptyForm); setPendingFiles([]); setEditingLead(null); setModalOpen(false);
+      if (wasNew) setStatus('active');
+      await load();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Could not save lead. Please retry.');
     } finally { setSaving(false); }
   };
 
   const openEdit = (lead: Lead) => {
+    setViewingId(null);
     setEditingLead(lead);
+    setPendingFiles([]);
     setForm({
       name: lead.name,
       businessId: lead.businessId ?? '',
@@ -120,6 +173,28 @@ export default function LeadsAdminPage() {
     setError(''); setModalOpen(true);
   };
 
+  const addSavedFiles = async (leadId: string, list: FileList | null) => {
+    const files = Array.from(list ?? []);
+    if (!files.length) return;
+    setSaving(true); setError('');
+    try {
+      await uploadFiles(leadId, files);
+      await load();
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not upload file. Please retry.');
+    } finally { setSaving(false); }
+  };
+
+  const removeSavedFile = async (leadId: string, attachmentId: string) => {
+    setSaving(true); setError('');
+    try {
+      await adminLeads.removeAttachment(leadId, attachmentId);
+      await load();
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not remove file. Please retry.');
+    } finally { setSaving(false); }
+  };
+
   const changeActivity = async (id: string, active: boolean) => {
     setActionBusy(id); setActionError('');
     try {
@@ -133,16 +208,38 @@ export default function LeadsAdminPage() {
   const deleteLead = async (lead: Lead) => {
     if (!window.confirm(`Permanently delete inactive lead “${lead.name}”?`)) return;
     setActionBusy(lead.id); setActionError('');
-    try { await adminLeads.deleteInactive(lead.id); await load(); }
+    try {
+      await adminLeads.deleteInactive(lead.id);
+      if (viewingId === lead.id) setViewingId(null);
+      await load();
+    }
     catch (failure) { setActionError(failure instanceof Error ? failure.message : 'Could not delete lead. Please retry.'); }
     finally { setActionBusy(null); }
+  };
+
+  const filePicker = (leadId: string | null, savedCount: number) => {
+    const room = maxFiles - savedCount - (leadId ? 0 : pendingFiles.length);
+    return (
+      <Stack gap={6}>
+        <Text fw={600} size="sm">Files ({savedCount + (leadId ? 0 : pendingFiles.length)}/{maxFiles})</Text>
+        <Text size="xs" c="dimmed">Up to 3 images (JPEG, PNG, WebP) or PDF files, 5 MiB each.</Text>
+        <input aria-label="Lead files" type="file" multiple disabled={room <= 0 || saving}
+          accept="image/jpeg,image/png,image/webp,application/pdf,.pdf"
+          onChange={(event) => {
+            const chosen = event.target.files;
+            if (leadId) void addSavedFiles(leadId, chosen);
+            else setPendingFiles((prev) => [...prev, ...Array.from(chosen ?? [])].slice(0, maxFiles));
+            event.target.value = '';
+          }} />
+      </Stack>
+    );
   };
 
   return (
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
         <Title order={2}>Leads</Title>
-        <Button leftSection={<Plus size={16} />} onClick={() => { setEditingLead(null); setForm(emptyForm); setError(''); setModalOpen(true); }}>
+        <Button leftSection={<Plus size={16} />} onClick={() => { setViewingId(null); setEditingLead(null); setPendingFiles([]); setForm(emptyForm); setError(''); setModalOpen(true); }}>
           Add lead
         </Button>
       </Group>
@@ -158,7 +255,7 @@ export default function LeadsAdminPage() {
       ) : visibleLeads.length === 0 ? (
         <Text c="dimmed">{leads.length === 0 ? 'No leads yet. Add one to get started.' : `No ${status} leads.`}</Text>
       ) : (
-        <Table.ScrollContainer minWidth={600}>
+        <Table.ScrollContainer minWidth={700}>
           <Table striped highlightOnHover withTableBorder>
             <Table.Thead>
               <Table.Tr>
@@ -166,8 +263,9 @@ export default function LeadsAdminPage() {
                 <Table.Th>Main contact</Table.Th>
                 <Table.Th>Emails</Table.Th>
                 <Table.Th>People</Table.Th>
+                <Table.Th>Files</Table.Th>
                 <Table.Th>Activity</Table.Th>
-                <Table.Th w={110}>Actions</Table.Th>
+                <Table.Th w={160}>Actions</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -193,6 +291,7 @@ export default function LeadsAdminPage() {
                       </Group>
                     )}
                   </Table.Td>
+                  <Table.Td>{lead.attachments?.length ? lead.attachments.length : '—'}</Table.Td>
                   <Table.Td>
                     <Button size="xs" variant="light" color={lead.isActive ? 'red' : undefined}
                       loading={actionBusy === lead.id} disabled={actionBusy !== null && actionBusy !== lead.id}
@@ -202,6 +301,7 @@ export default function LeadsAdminPage() {
                   </Table.Td>
                   <Table.Td>
                     <Group gap={4} wrap="nowrap">
+                      <Button size="xs" variant="subtle" onClick={() => { setModalOpen(false); setError(''); setViewingId(lead.id); }}>View</Button>
                       <Button size="xs" variant="subtle" leftSection={<Pencil size={13} />} onClick={() => openEdit(lead)}>Edit</Button>
                       {!lead.isActive && (
                         <Button size="xs" color="red" variant="subtle" loading={actionBusy === lead.id} disabled={!!actionBusy}
@@ -217,7 +317,26 @@ export default function LeadsAdminPage() {
       )}
       </LifecycleTabs>
 
-      <Modal opened={modalOpen} onClose={() => { setModalOpen(false); setEditingLead(null); }}
+      <Modal opened={!!viewingLead} onClose={() => setViewingId(null)} title={viewingLead ? viewingLead.name : 'Lead'} radius="md" size="lg">
+        {viewingLead && (
+          <Stack gap="sm">
+            <Text size="sm">{viewingLead.mainContactName || 'No main contact'}{viewingLead.mainContactEmail ? ` · ${viewingLead.mainContactEmail}` : ''}</Text>
+            {(viewingLead.attachments ?? []).length === 0 && pendingFiles.length === 0
+              ? <Text size="sm" c="dimmed">No files yet.</Text>
+              : (viewingLead.attachments ?? []).map((file) => (
+                <LeadFileCard key={file.id} leadId={viewingLead.id} file={file} onRemove={() => void removeSavedFile(viewingLead.id, file.id)} />
+              ))}
+            {filePicker(viewingLead.id, viewingLead.attachments?.length ?? 0)}
+            {error && <Text size="sm" c="red" role="alert">{error}</Text>}
+            <Group justify="flex-end">
+              <Button variant="default" onClick={() => setViewingId(null)}>Close</Button>
+              <Button onClick={() => openEdit(viewingLead)}>Edit</Button>
+            </Group>
+          </Stack>
+        )}
+      </Modal>
+
+      <Modal opened={modalOpen} onClose={() => { setModalOpen(false); setEditingLead(null); setPendingFiles([]); }}
         title={editingLead ? 'Edit lead' : 'Add lead'} radius="md" size="lg">
         <Stack gap="sm">
           <TextInput label="Name" required value={form.name} onChange={setField('name')} />
@@ -268,9 +387,29 @@ export default function LeadsAdminPage() {
           ))}
 
           <Textarea label="Notes" value={form.notes} onChange={setField('notes')} />
+          {editingSaved
+            ? (
+              <Stack gap="xs">
+                {(editingSaved.attachments ?? []).map((file) => (
+                  <LeadFileCard key={file.id} leadId={editingSaved.id} file={file} onRemove={() => void removeSavedFile(editingSaved.id, file.id)} />
+                ))}
+                {filePicker(editingSaved.id, editingSaved.attachments?.length ?? 0)}
+              </Stack>
+            )
+            : (
+              <Stack gap="xs">
+                {pendingFiles.map((file) => (
+                  <Group key={file.name} justify="space-between">
+                    <Text size="sm">{file.name}</Text>
+                    <Button size="xs" variant="subtle" color="red" onClick={() => setPendingFiles((prev) => prev.filter((item) => item !== file))}>Remove {file.name}</Button>
+                  </Group>
+                ))}
+                {filePicker(null, 0)}
+              </Stack>
+            )}
           {error && <Text size="sm" c="red" role="alert">{error}</Text>}
           <Group justify="flex-end" mt="xs">
-            <Button variant="default" onClick={() => setModalOpen(false)}>Cancel</Button>
+            <Button variant="default" onClick={() => { setModalOpen(false); setPendingFiles([]); }}>Cancel</Button>
             <Button loading={saving} onClick={submit}>{editingLead ? 'Save changes' : 'Create lead'}</Button>
           </Group>
         </Stack>
