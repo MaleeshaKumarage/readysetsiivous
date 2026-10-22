@@ -34,7 +34,15 @@ public class LeadRepository : ILeadRepository
                 l.Name.ToLower().Contains(term)
                 || (l.BusinessId != null && l.BusinessId.ToLower().Contains(term))
                 || (l.MainContactName != null && l.MainContactName.ToLower().Contains(term))
-                || (l.MainContactEmail != null && l.MainContactEmail.ToLower().Contains(term)));
+                || (l.MainContactEmail != null && l.MainContactEmail.ToLower().Contains(term))
+                || (l.MainContactPhone != null && l.MainContactPhone.ToLower().Contains(term))
+                || (l.Notes != null && l.Notes.ToLower().Contains(term))
+                || l.Emails.Any(e => e.ToLower().Contains(term))
+                || l.ContactPersons.Any(p =>
+                    p.Name.ToLower().Contains(term)
+                    || (p.Email != null && p.Email.ToLower().Contains(term))
+                    || (p.Phone != null && p.Phone.ToLower().Contains(term))
+                    || (p.Role != null && p.Role.ToLower().Contains(term))));
         }
 
         var total = await query.CountAsync(ct);
