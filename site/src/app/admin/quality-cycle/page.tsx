@@ -227,6 +227,7 @@ export default function AdminQualityCyclePage() {
                                 variant="subtle"
                                 color="red"
                                 size="sm"
+                                aria-label={`Remove item ${index + 1}`}
                                 onClick={() => handleRemoveItemField(index)}
                               >
                                 <Trash2 size={14} />
