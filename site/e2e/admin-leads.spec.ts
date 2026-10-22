@@ -143,7 +143,9 @@ test('leads page empty state and create with multi-email and multi-person', asyn
   await expect(dialog).toHaveCount(0);
 
   await expect(page.getByRole('cell', { name: /Acme Prospect/ })).toBeVisible();
-  await expect(page.getByText('Ada Lovelace', { exact: true })).toBeVisible();
+  // Main contact cell concatenates name + email in accessible name — match via cell role.
+  await expect(page.getByRole('cell', { name: /Ada Lovelace/ })).toBeVisible();
+  await expect(page.getByRole('cell', { name: /ada@acme\.test/ })).toBeVisible();
   await expect(page.getByText('sales@acme.test', { exact: true })).toBeVisible();
   await expect(page.getByText('Bob Buyer', { exact: true })).toBeVisible();
   expect(store.leads).toHaveLength(1);
