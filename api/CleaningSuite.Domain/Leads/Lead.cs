@@ -64,7 +64,7 @@ public class Lead : BaseDocument
         IEnumerable<string>? emails,
         IEnumerable<LeadContactPerson>? contactPersons,
         string? notes,
-        bool isActive)
+        bool? isActive)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Name is mandatory.", nameof(name));
@@ -74,10 +74,14 @@ public class Lead : BaseDocument
         MainContactName = string.IsNullOrWhiteSpace(mainContactName) ? null : mainContactName.Trim();
         MainContactEmail = string.IsNullOrWhiteSpace(mainContactEmail) ? null : mainContactEmail.Trim();
         MainContactPhone = string.IsNullOrWhiteSpace(mainContactPhone) ? null : mainContactPhone.Trim();
-        Emails = NormalizeEmails(emails);
-        ContactPersons = NormalizePeople(contactPersons);
+        // Null means "leave unchanged" so partial updates cannot wipe lists or force IsActive=true.
+        if (emails is not null)
+            Emails = NormalizeEmails(emails);
+        if (contactPersons is not null)
+            ContactPersons = NormalizePeople(contactPersons);
         Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
-        IsActive = isActive;
+        if (isActive is not null)
+            IsActive = isActive.Value;
         UpdatedUtc = DateTime.UtcNow;
     }
 

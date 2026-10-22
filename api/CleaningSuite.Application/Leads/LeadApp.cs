@@ -47,7 +47,7 @@ public record UpdateLeadCommand(
     IReadOnlyList<string>? Emails = null,
     IReadOnlyList<LeadContactPersonDto>? ContactPersons = null,
     string? Notes = null,
-    bool IsActive = true) : IRequest<LeadDto>;
+    bool? IsActive = null) : IRequest<LeadDto>;
 
 public record DeactivateLeadCommand(Guid Id) : IRequest;
 public record ReactivateLeadCommand(Guid Id) : IRequest;
@@ -81,6 +81,8 @@ public static class LeadHandlers
         {
             var lead = await repository.GetAsync(request.Id, ct)
                 ?? throw new NotFoundException("Lead", request.Id);
+            // Null Emails/ContactPersons/IsActive mean "leave existing values" so a partial
+            // PUT cannot wipe lists or reactivate a deactivated lead by default.
             lead.Update(
                 request.Name,
                 request.BusinessId,
@@ -150,15 +152,17 @@ public static class LeadHandlers
     }
 
     private static IEnumerable<LeadContactPerson>? MapPeople(IReadOnlyList<LeadContactPersonDto>? people) =>
-        people?
-            .Where(p => p is not null)
-            .Select(p => new LeadContactPerson
-            {
-                Name = p.Name,
-                Email = p.Email,
-                Phone = p.Phone,
-                Role = p.Role
-            });
+        people is null
+            ? null
+            : people
+                .Where(p => p is not null)
+                .Select(p => new LeadContactPerson
+                {
+                    Name = p.Name,
+                    Email = p.Email,
+                    Phone = p.Phone,
+                    Role = p.Role
+                });
 
     public static LeadDto Map(Lead lead) =>
         new(
