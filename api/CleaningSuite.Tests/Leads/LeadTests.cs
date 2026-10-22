@@ -48,29 +48,37 @@ public class LeadDomainTests
     }
 
     [Fact]
-    public void Update_NullCollections_PreserveExisting()
+    public void Update_NullFields_PreserveExisting_BlankClears()
     {
         var lead = Lead.Create(
             "Acme",
+            businessId: "B-1",
+            mainContactName: "Ada",
+            mainContactEmail: "ada@acme.test",
+            mainContactPhone: "555",
             emails: ["ops@acme.test"],
-            contactPersons: [new LeadContactPerson { Name = "Bob", Email = "bob@acme.test" }]);
+            contactPersons: [new LeadContactPerson { Name = "Bob", Email = "bob@acme.test" }],
+            notes: "keep me");
         lead.Deactivate();
 
-        lead.Update(
-            name: "Acme Renamed",
-            businessId: null,
-            mainContactName: null,
-            mainContactEmail: null,
-            mainContactPhone: null,
-            emails: null,
-            contactPersons: null,
-            notes: null,
-            isActive: null);
+        lead.Update("Acme Renamed", null, null, null, null, null, null, null, null);
 
         Assert.Equal("Acme Renamed", lead.Name);
+        Assert.Equal("B-1", lead.BusinessId);
+        Assert.Equal("Ada", lead.MainContactName);
+        Assert.Equal("ada@acme.test", lead.MainContactEmail);
+        Assert.Equal("555", lead.MainContactPhone);
+        Assert.Equal("keep me", lead.Notes);
         Assert.Equal(new[] { "ops@acme.test" }, lead.Emails);
-        Assert.Single(lead.ContactPersons);
         Assert.Equal("Bob", lead.ContactPersons[0].Name);
+        Assert.False(lead.IsActive);
+
+        lead.Update("Acme Renamed", "", "", "", "", lead.Emails, lead.ContactPersons, "   ", false);
+        Assert.Null(lead.BusinessId);
+        Assert.Null(lead.MainContactName);
+        Assert.Null(lead.MainContactEmail);
+        Assert.Null(lead.MainContactPhone);
+        Assert.Null(lead.Notes);
         Assert.False(lead.IsActive);
     }
 
@@ -112,6 +120,30 @@ public class LeadHandlerTests
         Assert.Single(result.ContactPersons);
         Assert.Equal("Bob", result.ContactPersons[0].Name);
         repo.Verify(r => r.SaveAsync(It.IsAny<Lead>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Update_NameOnly_KeepsNotesAndInactive()
+    {
+        var lead = Lead.Create(
+            "Acme",
+            businessId: "B-1",
+            mainContactName: "Ada",
+            emails: ["ops@acme.test"],
+            notes: "keep me");
+        lead.Deactivate();
+        var repo = new Mock<ILeadRepository>();
+        repo.Setup(r => r.GetAsync(lead.Id, It.IsAny<CancellationToken>())).ReturnsAsync(lead);
+
+        var result = await new LeadHandlers.UpdateLeadCommandHandler(repo.Object)
+            .Handle(new UpdateLeadCommand(lead.Id, "Renamed"), default);
+
+        Assert.Equal("Renamed", result.Name);
+        Assert.Equal("keep me", result.Notes);
+        Assert.Equal("B-1", result.BusinessId);
+        Assert.Equal("Ada", result.MainContactName);
+        Assert.Equal(new[] { "ops@acme.test" }, result.Emails);
+        Assert.False(result.IsActive);
     }
 
     [Fact]
@@ -192,6 +224,14 @@ public class LeadValidatorTests
         var result = new LeadValidators.CreateLeadCommandValidator()
             .TestValidate(new CreateLeadCommand("Acme", MainContactEmail: "not-an-email"));
         result.ShouldHaveValidationErrorFor(x => x.MainContactEmail);
+    }
+
+    [Fact]
+    public void Create_TooLongNotes_IsInvalid()
+    {
+        var result = new LeadValidators.CreateLeadCommandValidator()
+            .TestValidate(new CreateLeadCommand("Acme", Notes: new string('n', 4001)));
+        result.ShouldHaveValidationErrorFor(x => x.Notes);
     }
 
     [Fact]
