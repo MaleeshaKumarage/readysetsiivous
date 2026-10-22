@@ -36,6 +36,7 @@ export type LeadFields = {
 async function leadRequest<T>(path: string, method: 'POST' | 'PUT', body?: unknown): Promise<T> {
   const response = await authorizedFetch(path, {
     method,
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) {

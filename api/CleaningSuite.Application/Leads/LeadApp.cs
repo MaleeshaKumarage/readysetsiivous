@@ -150,13 +150,15 @@ public static class LeadHandlers
     }
 
     private static IEnumerable<LeadContactPerson>? MapPeople(IReadOnlyList<LeadContactPersonDto>? people) =>
-        people?.Select(p => new LeadContactPerson
-        {
-            Name = p.Name,
-            Email = p.Email,
-            Phone = p.Phone,
-            Role = p.Role
-        });
+        people?
+            .Where(p => p is not null)
+            .Select(p => new LeadContactPerson
+            {
+                Name = p.Name,
+                Email = p.Email,
+                Phone = p.Phone,
+                Role = p.Role
+            });
 
     public static LeadDto Map(Lead lead) =>
         new(
@@ -183,11 +185,14 @@ public static class LeadValidators
                 .When(x => !string.IsNullOrWhiteSpace(x.MainContactEmail));
             RuleForEach(x => x.Emails).EmailAddress().MaximumLength(254)
                 .When(x => x.Emails is not null);
+            RuleForEach(x => x.ContactPersons)
+                .Must(p => p is not null).WithMessage("Contact person cannot be null.")
+                .When(x => x.ContactPersons is not null);
             RuleForEach(x => x.ContactPersons).ChildRules(person =>
             {
-                person.RuleFor(p => p.Name).NotEmpty().When(p => p is not null);
-                person.RuleFor(p => p.Email).EmailAddress().MaximumLength(254)
-                    .When(p => !string.IsNullOrWhiteSpace(p.Email));
+                person.RuleFor(p => p!.Name).NotEmpty().When(p => p is not null);
+                person.RuleFor(p => p!.Email).EmailAddress().MaximumLength(254)
+                    .When(p => p is not null && !string.IsNullOrWhiteSpace(p.Email));
             }).When(x => x.ContactPersons is not null);
         }
     }
@@ -202,11 +207,14 @@ public static class LeadValidators
                 .When(x => !string.IsNullOrWhiteSpace(x.MainContactEmail));
             RuleForEach(x => x.Emails).EmailAddress().MaximumLength(254)
                 .When(x => x.Emails is not null);
+            RuleForEach(x => x.ContactPersons)
+                .Must(p => p is not null).WithMessage("Contact person cannot be null.")
+                .When(x => x.ContactPersons is not null);
             RuleForEach(x => x.ContactPersons).ChildRules(person =>
             {
-                person.RuleFor(p => p.Name).NotEmpty().When(p => p is not null);
-                person.RuleFor(p => p.Email).EmailAddress().MaximumLength(254)
-                    .When(p => !string.IsNullOrWhiteSpace(p.Email));
+                person.RuleFor(p => p!.Name).NotEmpty().When(p => p is not null);
+                person.RuleFor(p => p!.Email).EmailAddress().MaximumLength(254)
+                    .When(p => p is not null && !string.IsNullOrWhiteSpace(p.Email));
             }).When(x => x.ContactPersons is not null);
         }
     }
