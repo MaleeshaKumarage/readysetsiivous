@@ -28,11 +28,13 @@ public class LeadRepository : ILeadRepository
 
         if (!string.IsNullOrWhiteSpace(search))
         {
+            // Avoid StringComparison overloads — Marten cannot translate them to SQL.
+            var term = search.Trim().ToLowerInvariant();
             query = query.Where(l =>
-                l.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
-                || (l.BusinessId != null && l.BusinessId.Contains(search, StringComparison.OrdinalIgnoreCase))
-                || (l.MainContactName != null && l.MainContactName.Contains(search, StringComparison.OrdinalIgnoreCase))
-                || (l.MainContactEmail != null && l.MainContactEmail.Contains(search, StringComparison.OrdinalIgnoreCase)));
+                l.Name.ToLower().Contains(term)
+                || (l.BusinessId != null && l.BusinessId.ToLower().Contains(term))
+                || (l.MainContactName != null && l.MainContactName.ToLower().Contains(term))
+                || (l.MainContactEmail != null && l.MainContactEmail.ToLower().Contains(term)));
         }
 
         var total = await query.CountAsync(ct);
