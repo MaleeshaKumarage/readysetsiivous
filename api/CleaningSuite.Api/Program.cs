@@ -224,7 +224,7 @@ public class MartenSchemaInitializer : Microsoft.Extensions.Hosting.IHostedServi
 
 public partial class Program;
 
-/// <summary>Accepts "HH:mm" (and "HH:mm:ss") for TimeSpan, e.g. shift times from <input type="time">.</summary>
+/// <summary>Accepts "HH:mm" (and "HH:mm:ss") for TimeSpan, e.g. shift times from an HTML time input.</summary>
 public class FlexibleTimeSpanConverter : System.Text.Json.Serialization.JsonConverter<TimeSpan>
 {
     public override TimeSpan Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
