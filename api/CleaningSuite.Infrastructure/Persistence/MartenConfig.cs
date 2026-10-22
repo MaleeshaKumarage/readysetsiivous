@@ -5,6 +5,7 @@ using CleaningSuite.Domain.Companies;
 using CleaningSuite.Domain.Employees;
 using CleaningSuite.Domain.Entertainment;
 using CleaningSuite.Domain.Invoicing;
+using CleaningSuite.Domain.Leads;
 using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Services;
 using CleaningSuite.Domain.Shifts;
@@ -63,6 +64,10 @@ public static class MartenConfig
         options.Schema.For<Branch>()
             .Index(x => x.CompanyId)
             .Index(x => x.Name);
+
+        options.Schema.For<Lead>()
+            .Index(x => x.Name)
+            .Index(x => x.MainContactEmail);
 
         options.Schema.For<Shift>()
             .Index(x => x.CompanyId)
