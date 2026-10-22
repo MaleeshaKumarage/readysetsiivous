@@ -10,7 +10,7 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import {
-  LayoutDashboard, Sparkles, FileSignature, Users, Building2, CalendarClock, CheckSquare, Receipt, LogOut, LogIn,
+  LayoutDashboard, Sparkles, FileSignature, Users, Building2, CalendarClock, CheckSquare, Receipt, LogOut, LogIn, ContactRound,
 } from 'lucide-react';
 import { initAuth, isAuthenticated, isAdmin, authTenant, refreshToken, login, logout } from '@/lib/auth';
 import { API_URL } from '@/lib/api';
@@ -22,6 +22,7 @@ const NAV = [
   { href: 'agreements', label: 'Agreements', icon: FileSignature },
   { href: 'employees', label: 'Employees', icon: Users },
   { href: 'companies', label: 'Companies', icon: Building2 },
+  { href: 'leads', label: 'Leads', icon: ContactRound },
   { href: 'shifts', label: 'Shifts', icon: CalendarClock },
   { href: 'invoices', label: 'Invoices', icon: Receipt },
   { href: 'quality-cycle', label: 'Quality Cycle', icon: CheckSquare },

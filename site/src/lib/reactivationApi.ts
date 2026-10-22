@@ -21,3 +21,7 @@ export const branchLifecycle = {
   reactivate: (id: string) => lifecycleRequest(`/api/v1/admin/companies/branches/${id}/reactivate`),
   deactivate: (id: string) => lifecycleRequest(`/api/v1/admin/companies/branches/${id}/deactivate`),
 };
+export const leadLifecycle = {
+  reactivate: (id: string) => lifecycleRequest(`/api/v1/admin/leads/${id}/reactivate`),
+  deactivate: (id: string) => lifecycleRequest(`/api/v1/admin/leads/${id}/deactivate`),
+};
