@@ -20,7 +20,11 @@ type LeadRecord = {
   isActive: boolean;
 };
 
-function installLeadsApi(page: import('@playwright/test').Page, store: { leads: LeadRecord[] }) {
+function installLeadsApi(
+  page: import('@playwright/test').Page,
+  store: { leads: LeadRecord[] },
+  options: { failList?: () => boolean } = {},
+) {
   return page.route('**/api/v1/admin/leads**', async (route) => {
     const method = route.request().method();
     if (method === 'OPTIONS') return route.fulfill({ status: 200, headers });
@@ -30,6 +34,9 @@ function installLeadsApi(page: import('@playwright/test').Page, store: { leads: 
     const idMatch = path.match(/\/api\/v1\/admin\/leads\/([^/]+)(?:\/(deactivate|reactivate))?$/);
 
     if (method === 'GET' && path.endsWith('/leads')) {
+      if (options.failList?.()) {
+        return route.fulfill({ status: 500, headers, json: { title: 'Server error' } });
+      }
       const skip = Number(url.searchParams.get('skip') || 0);
       const take = Number(url.searchParams.get('take') || 100);
       const items = store.leads.slice(skip, skip + take);
@@ -197,6 +204,51 @@ test('leads edit, deactivate, reactivate, delete and cancel', async ({ page }) =
   await page.getByRole('tab', { name: /^Inactive/ }).click();
   page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: 'Delete', exact: true }).click();
-  await expect(page.getByText('No inactive leads.', { exact: true })).toBeVisible();
+  // After the last lead is removed, the page shows the global empty state (not "No inactive leads.").
+  await expect(page.getByText('No leads yet. Add one to get started.', { exact: true })).toBeVisible();
   expect(store.leads).toHaveLength(0);
+});
+
+test('leads list error shows refresh and recovers', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const store = {
+    leads: [
+      {
+        id: 'lead-1',
+        name: 'Gamma LLC',
+        emails: [],
+        contactPersons: [],
+        isActive: true,
+      },
+    ] as LeadRecord[],
+  };
+  let fail = true;
+  await installLeadsApi(page, store, { failList: () => fail });
+
+  await page.goto('/admin/leads/');
+  await expect(page.getByRole('alert')).toHaveText('Leads could not be loaded completely. Refresh to retry.');
+  await expect(page.getByRole('cell', { name: /Gamma LLC/ })).not.toBeVisible();
+
+  fail = false;
+  await page.getByRole('button', { name: 'Refresh leads', exact: true }).click();
+  await expect(page.getByRole('cell', { name: /Gamma LLC/ })).toBeVisible();
+  await expect(page.getByRole('alert')).not.toBeVisible();
+});
+
+test('admin sidebar Leads nav opens the leads page', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const store = { leads: [] as LeadRecord[] };
+  await installLeadsApi(page, store);
+  // Dashboard may call other admin endpoints; fulfill them so layout loads.
+  await page.route('**/api/v1/admin/**', async (route) => {
+    if (route.request().url().includes('/leads')) return route.fallback();
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    return route.fulfill({ headers, json: { items: [], total: 0 } });
+  });
+
+  await page.goto('/admin/');
+  await page.getByRole('navigation').getByRole('link', { name: 'Leads', exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/leads\/?$/);
+  await expect(page.getByRole('heading', { name: 'Leads', exact: true })).toBeVisible();
+  await expect(page.getByText('No leads yet. Add one to get started.', { exact: true })).toBeVisible();
 });
