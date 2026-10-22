@@ -55,13 +55,15 @@ function SignaturePad(
     ctx.beginPath();
   }
 
+  function handleClear() {
+    clearCanvas();
+    setTyped('');
+    drawing.current = false;
+    hasInk.current = false;
+  }
+
   useImperativeHandle(ref, () => ({
-    clear: () => {
-      clearCanvas();
-      setTyped('');
-      drawing.current = false;
-      hasInk.current = false;
-    },
+    clear: handleClear,
     getPng: () => {
       const c = canvasRef.current;
       if (!c) return '';
@@ -108,24 +110,42 @@ function SignaturePad(
 
   return (
     <div className="space-y-2">
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2">
+        <div role="tablist" aria-label="Signature input mode" className="flex gap-2">
+          <Button
+            type="button"
+            size="sm"
+            role="tab"
+            aria-selected={mode === 'draw'}
+            onClick={() => setMode('draw')}
+            className={mode === 'draw'
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-muted text-muted-foreground hover:bg-muted/80'}
+          >Draw</Button>
+          <Button
+            type="button"
+            size="sm"
+            role="tab"
+            aria-selected={mode === 'type'}
+            onClick={() => setMode('type')}
+            className={mode === 'type'
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-muted text-muted-foreground hover:bg-muted/80'}
+          >Type</Button>
+        </div>
         <Button
+          type="button"
           size="sm"
-          onClick={() => setMode('draw')}
-          className={mode === 'draw'
-            ? 'bg-primary text-primary-foreground'
-            : 'bg-muted text-muted-foreground hover:bg-muted/80'}
-        >Draw</Button>
-        <Button
-          size="sm"
-          onClick={() => setMode('type')}
-          className={mode === 'type'
-            ? 'bg-primary text-primary-foreground'
-            : 'bg-muted text-muted-foreground hover:bg-muted/80'}
-        >Type</Button>
+          variant="ghost"
+          onClick={handleClear}
+          className="ml-auto text-xs text-muted-foreground hover:text-foreground"
+          aria-label="Clear signature"
+        >Clear</Button>
       </div>
       <canvas
         ref={canvasRef} width={W} height={H}
+        role="img"
+        aria-label="Signature drawing area. Draw your signature using touch or mouse."
         className={`block h-auto w-full touch-none select-none rounded-md border bg-white ${mode === 'draw' ? '' : 'hidden'}`}
         onPointerDown={start}
         onPointerMove={move}
@@ -133,9 +153,11 @@ function SignaturePad(
         onPointerCancel={end}
       />
       <Input
+        type="text"
         value={typed}
         onChange={(e) => setTyped(e.target.value)}
         placeholder="Type your name"
+        aria-label="Typed signature name"
         className={mode === 'type' ? '' : 'hidden'}
       />
     </div>
