@@ -48,6 +48,33 @@ public class LeadDomainTests
     }
 
     [Fact]
+    public void Update_NullCollections_PreserveExisting()
+    {
+        var lead = Lead.Create(
+            "Acme",
+            emails: ["ops@acme.test"],
+            contactPersons: [new LeadContactPerson { Name = "Bob", Email = "bob@acme.test" }]);
+        lead.Deactivate();
+
+        lead.Update(
+            name: "Acme Renamed",
+            businessId: null,
+            mainContactName: null,
+            mainContactEmail: null,
+            mainContactPhone: null,
+            emails: null,
+            contactPersons: null,
+            notes: null,
+            isActive: null);
+
+        Assert.Equal("Acme Renamed", lead.Name);
+        Assert.Equal(new[] { "ops@acme.test" }, lead.Emails);
+        Assert.Single(lead.ContactPersons);
+        Assert.Equal("Bob", lead.ContactPersons[0].Name);
+        Assert.False(lead.IsActive);
+    }
+
+    [Fact]
     public void DeactivateAndReactivate_ToggleActivity()
     {
         var lead = Lead.Create("Acme");
