@@ -1,11 +1,16 @@
 using CleaningSuite.Application.Common;
 using CleaningSuite.Domain.Leads;
 using FluentValidation;
+using FluentValidation.Results;
 using MediatR;
 
 namespace CleaningSuite.Application.Leads;
 
 public record LeadContactPersonDto(string Name, string? Email, string? Phone, string? Role);
+
+public record LeadAttachmentDto(Guid Id, string FileName, string ContentType, long SizeBytes);
+
+public record RemovedLeadAttachmentDto(Guid Id, string StorageName);
 
 public record LeadDto(
     Guid Id,
@@ -17,7 +22,8 @@ public record LeadDto(
     IReadOnlyList<string> Emails,
     IReadOnlyList<LeadContactPersonDto> ContactPersons,
     string? Notes,
-    bool IsActive);
+    bool IsActive,
+    IReadOnlyList<LeadAttachmentDto> Attachments);
 
 public interface ILeadRepository
 {
@@ -55,6 +61,15 @@ public record DeleteLeadCommand(Guid Id) : IRequest;
 public record ListLeadsQuery(string? Search, int Skip, int Take) : IRequest<Paged<LeadDto>>;
 public record GetLeadQuery(Guid Id) : IRequest<LeadDto>;
 
+public record AddLeadAttachmentCommand(
+    Guid LeadId,
+    string FileName,
+    string ContentType,
+    string StorageName,
+    long SizeBytes) : IRequest<LeadAttachmentDto>;
+
+public record RemoveLeadAttachmentCommand(Guid LeadId, Guid AttachmentId) : IRequest<RemovedLeadAttachmentDto>;
+
 public static class LeadHandlers
 {
     public sealed class CreateLeadCommandHandler(ILeadRepository repository) : IRequestHandler<CreateLeadCommand, LeadDto>
@@ -82,6 +97,7 @@ public static class LeadHandlers
             var lead = await repository.GetAsync(request.Id, ct)
                 ?? throw new NotFoundException("Lead", request.Id);
             // Null optional fields mean "leave existing". Empty strings clear scalars.
+            // Attachments are not part of this command, so a profile save cannot drop files.
             lead.Update(
                 request.Name,
                 request.BusinessId,
@@ -150,6 +166,40 @@ public static class LeadHandlers
         }
     }
 
+    public sealed class AddLeadAttachmentCommandHandler(ILeadRepository repository) : IRequestHandler<AddLeadAttachmentCommand, LeadAttachmentDto>
+    {
+        public async Task<LeadAttachmentDto> Handle(AddLeadAttachmentCommand request, CancellationToken ct)
+        {
+            var lead = await repository.GetAsync(request.LeadId, ct)
+                ?? throw new NotFoundException("Lead", request.LeadId);
+            if ((lead.Attachments?.Count ?? 0) >= Lead.MaxAttachments)
+                throw new ValidationException([new ValidationFailure("File", $"A lead can have at most {Lead.MaxAttachments} files.")]);
+            var attachment = lead.AddAttachment(request.FileName, request.ContentType, request.StorageName, request.SizeBytes);
+            await repository.SaveAsync(lead, ct);
+            return new LeadAttachmentDto(attachment.Id, attachment.FileName, attachment.ContentType, attachment.SizeBytes);
+        }
+    }
+
+    public sealed class RemoveLeadAttachmentCommandHandler(ILeadRepository repository) : IRequestHandler<RemoveLeadAttachmentCommand, RemovedLeadAttachmentDto>
+    {
+        public async Task<RemovedLeadAttachmentDto> Handle(RemoveLeadAttachmentCommand request, CancellationToken ct)
+        {
+            var lead = await repository.GetAsync(request.LeadId, ct)
+                ?? throw new NotFoundException("Lead", request.LeadId);
+            LeadAttachment attachment;
+            try
+            {
+                attachment = lead.RemoveAttachment(request.AttachmentId);
+            }
+            catch (InvalidOperationException)
+            {
+                throw new NotFoundException("Lead attachment", request.AttachmentId);
+            }
+            await repository.SaveAsync(lead, ct);
+            return new RemovedLeadAttachmentDto(attachment.Id, attachment.StorageName);
+        }
+    }
+
     private static IEnumerable<LeadContactPerson>? MapPeople(IReadOnlyList<LeadContactPersonDto>? people) =>
         people is null
             ? null
@@ -172,9 +222,10 @@ public static class LeadHandlers
             lead.MainContactEmail,
             lead.MainContactPhone,
             lead.Emails,
-            lead.ContactPersons.Select(p => new LeadContactPersonDto(p.Name, p.Email, p.Phone, p.Role)).ToList(),
+            (lead.ContactPersons ?? []).Select(p => new LeadContactPersonDto(p.Name, p.Email, p.Phone, p.Role)).ToList(),
             lead.Notes,
-            lead.IsActive);
+            lead.IsActive,
+            (lead.Attachments ?? []).Select(a => new LeadAttachmentDto(a.Id, a.FileName, a.ContentType, a.SizeBytes)).ToList());
 }
 
 public static class LeadValidators
