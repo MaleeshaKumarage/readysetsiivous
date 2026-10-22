@@ -25,9 +25,8 @@ function installLeadsApi(
   store: { leads: LeadRecord[] },
   options: {
     failList?: () => boolean;
-    /** Override total reported on list responses (for inconsistent-total path). */
+    failMutations?: () => boolean;
     listTotal?: () => number | undefined;
-    /** Duplicate an id in page items to exercise listAll guard. */
     duplicateFirstId?: () => boolean;
   } = {},
 ) {
@@ -54,6 +53,9 @@ function installLeadsApi(
     }
 
     if (method === 'POST' && path.endsWith('/leads')) {
+      if (options.failMutations?.()) {
+        return route.fulfill({ status: 500, headers, json: { detail: 'Create failed on server.' } });
+      }
       const body = route.request().postDataJSON() as Omit<LeadRecord, 'id' | 'isActive'>;
       const created: LeadRecord = {
         id: `lead-${store.leads.length + 1}`,
@@ -80,6 +82,9 @@ function installLeadsApi(
       if (method === 'GET') return route.fulfill({ headers, json: lead });
 
       if (method === 'PUT') {
+        if (options.failMutations?.()) {
+          return route.fulfill({ status: 500, headers, json: { detail: 'Update failed on server.' } });
+        }
         const body = route.request().postDataJSON();
         Object.assign(lead, {
           name: body.name,
@@ -87,8 +92,8 @@ function installLeadsApi(
           mainContactName: body.mainContactName ?? null,
           mainContactEmail: body.mainContactEmail ?? null,
           mainContactPhone: body.mainContactPhone ?? null,
-          emails: body.emails ?? [],
-          contactPersons: body.contactPersons ?? [],
+          emails: body.emails ?? lead.emails,
+          contactPersons: body.contactPersons ?? lead.contactPersons,
           notes: body.notes ?? null,
           isActive: body.isActive ?? lead.isActive,
         });
@@ -96,14 +101,23 @@ function installLeadsApi(
       }
 
       if (method === 'POST' && action === 'deactivate') {
+        if (options.failMutations?.()) {
+          return route.fulfill({ status: 500, headers, json: { detail: 'Deactivate failed on server.' } });
+        }
         lead.isActive = false;
         return route.fulfill({ status: 204, headers });
       }
       if (method === 'POST' && action === 'reactivate') {
+        if (options.failMutations?.()) {
+          return route.fulfill({ status: 500, headers, json: { detail: 'Reactivate failed on server.' } });
+        }
         lead.isActive = true;
         return route.fulfill({ status: 204, headers });
       }
       if (method === 'DELETE') {
+        if (options.failMutations?.()) {
+          return route.fulfill({ status: 500, headers, json: { detail: 'Delete failed on server.' } });
+        }
         store.leads = store.leads.filter((l) => l.id !== id);
         return route.fulfill({ status: 204, headers });
       }
@@ -160,7 +174,6 @@ test('leads page empty state and create with multi-email and multi-person', asyn
 
   await expect(page.getByRole('cell', { name: /Acme Prospect/ })).toBeVisible();
   await expect(page.getByRole('cell', { name: /BI-42/ })).toBeVisible();
-  // Main contact cell concatenates name + email in accessible name — match via cell role.
   await expect(page.getByRole('cell', { name: /Ada Lovelace/ })).toBeVisible();
   await expect(page.getByRole('cell', { name: /ada@acme\.test/ })).toBeVisible();
   await expect(page.getByText('sales@acme.test', { exact: true })).toBeVisible();
@@ -237,7 +250,6 @@ test('leads edit, deactivate, reactivate, delete and cancel', async ({ page }) =
   await page.getByRole('tab', { name: /^Inactive/ }).click();
   page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: 'Delete', exact: true }).click();
-  // After the last lead is removed, the page shows the global empty state (not "No inactive leads.").
   await expect(page.getByText('No leads yet. Add one to get started.', { exact: true })).toBeVisible();
   expect(store.leads).toHaveLength(0);
 });
@@ -272,7 +284,6 @@ test('admin sidebar Leads nav opens the leads page', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   const store = { leads: [] as LeadRecord[] };
   await installLeadsApi(page, store);
-  // Dashboard may call other admin endpoints; fulfill them so layout loads.
   await page.route('**/api/v1/admin/**', async (route) => {
     if (route.request().url().includes('/leads')) return route.fallback();
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
@@ -300,7 +311,6 @@ test('leads listAll paginates past 100 records', async ({ page }) => {
   await installLeadsApi(page, store);
 
   await page.goto('/admin/leads/');
-  // listAll fetches skip=0 then skip=100; both pages must merge.
   await expect(page.getByRole('cell', { name: /Lead 001/ })).toBeVisible();
   await expect(page.getByRole('cell', { name: /Lead 105/ })).toBeVisible();
   await expect(page.getByRole('tab', { name: /Active.*105/ })).toBeVisible();
@@ -317,19 +327,6 @@ test('leads listAll rejects inconsistent total and shows refresh', async ({ page
       isActive: true,
     })),
   };
-  // First page reports total=3, second response (if any) would differ; force total mismatch on every call.
-  let call = 0;
-  await installLeadsApi(page, store, {
-    listTotal: () => {
-      call += 1;
-      // After first successful-looking page, flip total so listAll returns null.
-      return call === 1 ? 3 : 99;
-    },
-  });
-
-  // With only 3 items and take=100, listAll completes in one page — force multi-page by
-  // reporting total > items length so the client advances skip and sees a total mismatch.
-  await page.unroute('**/api/v1/admin/leads**');
   await page.route('**/api/v1/admin/leads**', async (route) => {
     const method = route.request().method();
     if (method === 'OPTIONS') return route.fulfill({ status: 200, headers });
@@ -337,16 +334,9 @@ test('leads listAll rejects inconsistent total and shows refresh', async ({ page
     if (method === 'GET' && url.pathname.endsWith('/leads')) {
       const skip = Number(url.searchParams.get('skip') || 0);
       if (skip === 0) {
-        return route.fulfill({
-          headers,
-          json: { items: store.leads.slice(0, 2), total: 4 },
-        });
+        return route.fulfill({ headers, json: { items: store.leads.slice(0, 2), total: 4 } });
       }
-      // Second page reports a different total → listAll returns null.
-      return route.fulfill({
-        headers,
-        json: { items: store.leads.slice(2), total: 99 },
-      });
+      return route.fulfill({ headers, json: { items: store.leads.slice(2), total: 99 } });
     }
     return route.fulfill({ status: 404, headers, json: {} });
   });
@@ -372,4 +362,55 @@ test('leads listAll rejects duplicate ids and shows refresh', async ({ page }) =
 
   await page.goto('/admin/leads/');
   await expect(page.getByRole('alert')).toHaveText('Leads could not be loaded completely. Refresh to retry.');
+});
+
+test('leads actionError shows when deactivate or delete fails', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const store = {
+    leads: [
+      {
+        id: 'lead-1',
+        name: 'Fail Corp',
+        emails: [] as string[],
+        contactPersons: [] as LeadRecord['contactPersons'],
+        isActive: true,
+      },
+    ],
+  };
+  let fail = true;
+  await installLeadsApi(page, store, { failMutations: () => fail });
+
+  await page.goto('/admin/leads/');
+  await expect(page.getByRole('cell', { name: /Fail Corp/ })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Deactivate', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveText('Deactivate failed on server.');
+  expect(store.leads[0].isActive).toBe(true);
+
+  fail = false;
+  await page.getByRole('button', { name: 'Deactivate', exact: true }).click();
+  await page.getByRole('tab', { name: /^Inactive/ }).click();
+  await expect(page.getByRole('cell', { name: /Fail Corp/ })).toBeVisible();
+
+  fail = true;
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveText('Delete failed on server.');
+  expect(store.leads).toHaveLength(1);
+});
+
+test('leads modal stays open with server error on create failure', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const store = { leads: [] as LeadRecord[] };
+  await installLeadsApi(page, store, { failMutations: () => true });
+
+  await page.goto('/admin/leads/');
+  await page.getByRole('button', { name: 'Add lead', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('textbox', { name: 'Name', exact: true }).first().fill('Broken Lead');
+  await dialog.getByRole('button', { name: 'Create lead', exact: true }).click();
+
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('alert')).toHaveText('Create failed on server.');
+  expect(store.leads).toHaveLength(0);
 });
