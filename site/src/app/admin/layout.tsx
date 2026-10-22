@@ -192,6 +192,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                 onClick={() => logout()}
                 hiddenFrom="xs"
                 title="Sign out"
+                aria-label="Sign out"
               >
                 <LogOut size={18} />
               </ActionIcon>
