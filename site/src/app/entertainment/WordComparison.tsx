@@ -13,14 +13,22 @@ function wordsIn(text: string): Word[] {
 
 function classify(original: Word[], corrected: Word[]) {
   const rows = original.length + 1; const columns = corrected.length + 1;
-  const lcs = Array.from({ length: rows }, () => Array<number>(columns).fill(0));
-  for (let i = original.length - 1; i >= 0; i--) for (let j = corrected.length - 1; j >= 0; j--) {
-    lcs[i][j] = original[i].value === corrected[j].value ? 1 + lcs[i + 1][j + 1] : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+  // Use a contiguous 1D Int32Array for the LCS DP matrix instead of nested JS arrays.
+  // This eliminates O(N) array allocations and garbage collection pressure while enabling cache-friendly memory access.
+  const lcs = new Int32Array(rows * columns);
+  for (let i = original.length - 1; i >= 0; i--) {
+    const rowOffset = i * columns;
+    const nextRowOffset = (i + 1) * columns;
+    for (let j = corrected.length - 1; j >= 0; j--) {
+      lcs[rowOffset + j] = original[i].value === corrected[j].value
+        ? 1 + lcs[nextRowOffset + j + 1]
+        : Math.max(lcs[nextRowOffset + j], lcs[rowOffset + j + 1]);
+    }
   }
   const operations: Operation[] = []; let i = 0; let j = 0;
   while (i < original.length || j < corrected.length) {
     if (i < original.length && j < corrected.length && original[i].value === corrected[j].value) operations.push({ kind: 'same', original: i++, corrected: j++ });
-    else if (i < original.length && (j >= corrected.length || lcs[i + 1][j] >= lcs[i][j + 1])) operations.push({ kind: 'delete', original: i++ });
+    else if (i < original.length && (j >= corrected.length || lcs[(i + 1) * columns + j] >= lcs[i * columns + j + 1])) operations.push({ kind: 'delete', original: i++ });
     else operations.push({ kind: 'insert', corrected: j++ });
   }
   const oldKinds: WordKind[] = Array(original.length).fill('removed'); const newKinds: WordKind[] = Array(corrected.length).fill('added');
