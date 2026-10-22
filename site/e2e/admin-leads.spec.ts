@@ -23,7 +23,13 @@ type LeadRecord = {
 function installLeadsApi(
   page: import('@playwright/test').Page,
   store: { leads: LeadRecord[] },
-  options: { failList?: () => boolean } = {},
+  options: {
+    failList?: () => boolean;
+    /** Override total reported on list responses (for inconsistent-total path). */
+    listTotal?: () => number | undefined;
+    /** Duplicate an id in page items to exercise listAll guard. */
+    duplicateFirstId?: () => boolean;
+  } = {},
 ) {
   return page.route('**/api/v1/admin/leads**', async (route) => {
     const method = route.request().method();
@@ -39,8 +45,12 @@ function installLeadsApi(
       }
       const skip = Number(url.searchParams.get('skip') || 0);
       const take = Number(url.searchParams.get('take') || 100);
-      const items = store.leads.slice(skip, skip + take);
-      return route.fulfill({ headers, json: { items, total: store.leads.length } });
+      let items = store.leads.slice(skip, skip + take);
+      if (options.duplicateFirstId?.() && items.length > 0) {
+        items = [items[0], ...items];
+      }
+      const total = options.listTotal?.() ?? store.leads.length;
+      return route.fulfill({ headers, json: { items, total } });
     }
 
     if (method === 'POST' && path.endsWith('/leads')) {
@@ -120,8 +130,10 @@ test('leads page empty state and create with multi-email and multi-person', asyn
   await expect(dialog.getByRole('alert')).toHaveText('Name is required.');
 
   await dialog.getByRole('textbox', { name: 'Name', exact: true }).first().fill('Acme Prospect');
+  await dialog.getByLabel('Business ID', { exact: true }).fill('BI-42');
   await dialog.getByRole('textbox', { name: 'Name', exact: true }).nth(1).fill('Ada Lovelace');
   await dialog.getByLabel('Email', { exact: true }).first().fill('ada@acme.test');
+  await dialog.getByLabel('Phone', { exact: true }).first().fill('+358401111111');
 
   await dialog.getByRole('button', { name: 'Add email', exact: true }).click();
   const placeholders = dialog.getByPlaceholder('email@example.com');
@@ -135,22 +147,31 @@ test('leads page empty state and create with multi-email and multi-person', asyn
   await dialog.getByRole('button', { name: 'Remove contact person 2' }).click();
   await expect(dialog.getByText('Person 2', { exact: true })).not.toBeVisible();
 
-  await dialog.getByText('Person 1', { exact: true }).locator('..').locator('..').getByLabel('Name', { exact: true }).fill('Bob Buyer');
-  await dialog.getByText('Person 1', { exact: true }).locator('..').locator('..').getByLabel('Email', { exact: true }).fill('bob@acme.test');
-  await dialog.getByText('Person 1', { exact: true }).locator('..').locator('..').getByLabel('Role / title', { exact: true }).fill('Procurement');
+  const person1 = dialog.getByText('Person 1', { exact: true }).locator('..').locator('..');
+  await person1.getByLabel('Name', { exact: true }).fill('Bob Buyer');
+  await person1.getByLabel('Email', { exact: true }).fill('bob@acme.test');
+  await person1.getByLabel('Phone', { exact: true }).fill('+358402222222');
+  await person1.getByLabel('Role / title', { exact: true }).fill('Procurement');
+
+  await dialog.getByLabel('Notes', { exact: true }).fill('Follow up next week');
 
   await dialog.getByRole('button', { name: 'Create lead', exact: true }).click();
   await expect(dialog).toHaveCount(0);
 
   await expect(page.getByRole('cell', { name: /Acme Prospect/ })).toBeVisible();
+  await expect(page.getByRole('cell', { name: /BI-42/ })).toBeVisible();
   // Main contact cell concatenates name + email in accessible name — match via cell role.
   await expect(page.getByRole('cell', { name: /Ada Lovelace/ })).toBeVisible();
   await expect(page.getByRole('cell', { name: /ada@acme\.test/ })).toBeVisible();
   await expect(page.getByText('sales@acme.test', { exact: true })).toBeVisible();
   await expect(page.getByText('Bob Buyer', { exact: true })).toBeVisible();
   expect(store.leads).toHaveLength(1);
+  expect(store.leads[0].businessId).toBe('BI-42');
+  expect(store.leads[0].mainContactPhone).toBe('+358401111111');
   expect(store.leads[0].emails).toEqual(['sales@acme.test']);
   expect(store.leads[0].contactPersons[0].name).toBe('Bob Buyer');
+  expect(store.leads[0].contactPersons[0].phone).toBe('+358402222222');
+  expect(store.leads[0].notes).toBe('Follow up next week');
 });
 
 test('leads edit, deactivate, reactivate, delete and cancel', async ({ page }) => {
@@ -180,9 +201,19 @@ test('leads edit, deactivate, reactivate, delete and cancel', async ({ page }) =
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
   await dialog.getByRole('textbox', { name: 'Name', exact: true }).first().fill('Beta Corp Updated');
+  await dialog.getByLabel('Business ID', { exact: true }).fill('B-2');
+  await dialog.getByLabel('Phone', { exact: true }).first().fill('+358409999999');
+  await dialog.getByLabel('Notes', { exact: true }).fill('Updated notes');
+  const person1 = dialog.getByText('Person 1', { exact: true }).locator('..').locator('..');
+  await person1.getByLabel('Phone', { exact: true }).fill('+358408888888');
   await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole('cell', { name: /Beta Corp Updated/ })).toBeVisible();
+  await expect(page.getByRole('cell', { name: /B-2/ })).toBeVisible();
+  expect(store.leads[0].businessId).toBe('B-2');
+  expect(store.leads[0].mainContactPhone).toBe('+358409999999');
+  expect(store.leads[0].notes).toBe('Updated notes');
+  expect(store.leads[0].contactPersons[0].phone).toBe('+358408888888');
 
   await page.getByRole('button', { name: 'Add lead', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -253,4 +284,92 @@ test('admin sidebar Leads nav opens the leads page', async ({ page }) => {
   await expect(page).toHaveURL(/\/admin\/leads\/?$/);
   await expect(page.getByRole('heading', { name: 'Leads', exact: true })).toBeVisible();
   await expect(page.getByText('No leads yet. Add one to get started.', { exact: true })).toBeVisible();
+});
+
+test('leads listAll paginates past 100 records', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const store = {
+    leads: Array.from({ length: 105 }, (_, i) => ({
+      id: `lead-${i + 1}`,
+      name: `Lead ${String(i + 1).padStart(3, '0')}`,
+      emails: [] as string[],
+      contactPersons: [] as LeadRecord['contactPersons'],
+      isActive: true,
+    })),
+  };
+  await installLeadsApi(page, store);
+
+  await page.goto('/admin/leads/');
+  // listAll fetches skip=0 then skip=100; both pages must merge.
+  await expect(page.getByRole('cell', { name: /Lead 001/ })).toBeVisible();
+  await expect(page.getByRole('cell', { name: /Lead 105/ })).toBeVisible();
+  await expect(page.getByRole('tab', { name: /Active.*105/ })).toBeVisible();
+});
+
+test('leads listAll rejects inconsistent total and shows refresh', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const store = {
+    leads: Array.from({ length: 3 }, (_, i) => ({
+      id: `lead-${i + 1}`,
+      name: `Lead ${i + 1}`,
+      emails: [] as string[],
+      contactPersons: [] as LeadRecord['contactPersons'],
+      isActive: true,
+    })),
+  };
+  // First page reports total=3, second response (if any) would differ; force total mismatch on every call.
+  let call = 0;
+  await installLeadsApi(page, store, {
+    listTotal: () => {
+      call += 1;
+      // After first successful-looking page, flip total so listAll returns null.
+      return call === 1 ? 3 : 99;
+    },
+  });
+
+  // With only 3 items and take=100, listAll completes in one page — force multi-page by
+  // reporting total > items length so the client advances skip and sees a total mismatch.
+  await page.unroute('**/api/v1/admin/leads**');
+  await page.route('**/api/v1/admin/leads**', async (route) => {
+    const method = route.request().method();
+    if (method === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    const url = new URL(route.request().url());
+    if (method === 'GET' && url.pathname.endsWith('/leads')) {
+      const skip = Number(url.searchParams.get('skip') || 0);
+      if (skip === 0) {
+        return route.fulfill({
+          headers,
+          json: { items: store.leads.slice(0, 2), total: 4 },
+        });
+      }
+      // Second page reports a different total → listAll returns null.
+      return route.fulfill({
+        headers,
+        json: { items: store.leads.slice(2), total: 99 },
+      });
+    }
+    return route.fulfill({ status: 404, headers, json: {} });
+  });
+
+  await page.goto('/admin/leads/');
+  await expect(page.getByRole('alert')).toHaveText('Leads could not be loaded completely. Refresh to retry.');
+});
+
+test('leads listAll rejects duplicate ids and shows refresh', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const store = {
+    leads: [
+      {
+        id: 'lead-1',
+        name: 'Dup Lead',
+        emails: [] as string[],
+        contactPersons: [] as LeadRecord['contactPersons'],
+        isActive: true,
+      },
+    ],
+  };
+  await installLeadsApi(page, store, { duplicateFirstId: () => true });
+
+  await page.goto('/admin/leads/');
+  await expect(page.getByRole('alert')).toHaveText('Leads could not be loaded completely. Refresh to retry.');
 });
