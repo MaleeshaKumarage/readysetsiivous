@@ -1,10 +1,19 @@
 import { authorizedFetch, adminGet, adminDelete, invalidateAdminCache } from './adminApi';
+import { API_URL } from './api';
+import { token } from './auth';
 
 export interface LeadContactPerson {
   name: string;
   email?: string | null;
   phone?: string | null;
   role?: string | null;
+}
+
+export interface LeadAttachment {
+  id: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
 }
 
 export interface Lead {
@@ -20,6 +29,7 @@ export interface Lead {
   contactPersons: LeadContactPerson[];
   notes?: string | null;
   isActive: boolean;
+  attachments?: LeadAttachment[];
 }
 
 export type LeadFields = {
@@ -33,6 +43,16 @@ export type LeadFields = {
   notes?: string;
 };
 
+async function problemMessage(response: Response, fallback: string): Promise<string> {
+  const problem = await response.json().catch(() => ({})) as {
+    detail?: string;
+    title?: string;
+    errors?: Record<string, string[]>;
+  };
+  const first = problem.errors ? Object.values(problem.errors).flat().find(Boolean) : undefined;
+  return first || problem.detail || problem.title || fallback;
+}
+
 async function leadRequest<T>(path: string, method: 'POST' | 'PUT', body?: unknown): Promise<T> {
   const response = await authorizedFetch(path, {
     method,
@@ -40,8 +60,7 @@ async function leadRequest<T>(path: string, method: 'POST' | 'PUT', body?: unkno
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) {
-    const problem = await response.json().catch(() => ({})) as { detail?: string; title?: string };
-    throw new Error(problem.detail || problem.title || `Lead request failed (${response.status}). Please retry.`);
+    throw new Error(await problemMessage(response, `Lead request failed (${response.status}). Please retry.`));
   }
   invalidateAdminCache();
   if (response.status === 204) return undefined as T;
@@ -86,4 +105,27 @@ export const adminLeads = {
   deactivate: (id: string) => leadRequest<void>(`/api/v1/admin/leads/${id}/deactivate`, 'POST'),
   reactivate: (id: string) => leadRequest<void>(`/api/v1/admin/leads/${id}/reactivate`, 'POST'),
   deleteInactive: (id: string) => adminDelete(`/api/v1/admin/leads/${id}`),
+  uploadAttachment: async (id: string, file: File): Promise<LeadAttachment> => {
+    const body = new FormData();
+    body.append('file', file);
+    const response = await fetch(`${API_URL}/api/v1/admin/leads/${id}/attachments`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token()}` },
+      body,
+    });
+    if (!response.ok) {
+      throw new Error(await problemMessage(response, 'Could not upload file. Please retry.'));
+    }
+    invalidateAdminCache();
+    return (await response.json()) as LeadAttachment;
+  },
+  fetchAttachment: async (leadId: string, attachmentId: string): Promise<Blob> => {
+    const response = await fetch(`${API_URL}/api/v1/admin/leads/${leadId}/attachments/${attachmentId}`, {
+      headers: { Authorization: `Bearer ${token()}` },
+    });
+    if (!response.ok) throw new Error('Could not load file.');
+    return response.blob();
+  },
+  removeAttachment: (leadId: string, attachmentId: string) =>
+    adminDelete(`/api/v1/admin/leads/${leadId}/attachments/${attachmentId}`),
 };
