@@ -85,10 +85,10 @@ export default function LeadsAdminPage() {
         emails: form.emails.map((e) => e.trim()).filter(Boolean),
         contactPersons: form.contactPersons
           .map((p) => ({
-            name: p.name.trim(),
-            email: p.email.trim() || undefined,
-            phone: p.phone.trim() || undefined,
-            role: p.role.trim() || undefined,
+            name: (p.name ?? '').trim(),
+            email: (p.email ?? '').trim() || undefined,
+            phone: (p.phone ?? '').trim() || undefined,
+            role: (p.role ?? '').trim() || undefined,
           }))
           .filter((p) => p.name),
         notes: form.notes.trim() || undefined,
@@ -255,12 +255,12 @@ export default function LeadsAdminPage() {
               </Group>
               <TextInput label="Name" value={person.name} onChange={(e) => setPerson(i, 'name', e.currentTarget.value)} />
               <Group grow>
-                <TextInput label="Email" type="email" value={person.email}
+                <TextInput label="Email" type="email" value={person.email ?? ''}
                   onChange={(e) => setPerson(i, 'email', e.currentTarget.value)} />
-                <TextInput label="Phone" value={person.phone}
+                <TextInput label="Phone" value={person.phone ?? ''}
                   onChange={(e) => setPerson(i, 'phone', e.currentTarget.value)} />
               </Group>
-              <TextInput label="Role / title" value={person.role}
+              <TextInput label="Role / title" value={person.role ?? ''}
                 onChange={(e) => setPerson(i, 'role', e.currentTarget.value)} />
             </Stack>
           ))}
