@@ -3,9 +3,31 @@
 import { useState, type ReactNode } from 'react';
 import type { MyShiftOccurrence } from '@/lib/meApi';
 
+// Cache Intl.DateTimeFormat instances to avoid high allocation/initialization overhead on every occurrence loop iteration.
+// In JS engines, instantiating Intl.DateTimeFormat repeatedly is expensive (~20x slower than reusing instances).
+const dateKeyFormatterCache = new Map<string, Intl.DateTimeFormat>();
+const weekdayFormatter = new Intl.DateTimeFormat('en-GB', { weekday: 'long', timeZone: 'UTC' });
+
+function getDateKeyFormatter(zone: string): Intl.DateTimeFormat {
+  let fmt = dateKeyFormatterCache.get(zone);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: zone });
+    dateKeyFormatterCache.set(zone, fmt);
+  }
+  return fmt;
+}
+
 function dateKey(instant: string, zone: string) {
-  const parts = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: zone }).formatToParts(new Date(instant));
-  return `${parts.find(p => p.type === 'year')!.value}-${parts.find(p => p.type === 'month')!.value}-${parts.find(p => p.type === 'day')!.value}`;
+  const parts = getDateKeyFormatter(zone).formatToParts(new Date(instant));
+  let year = '', month = '', day = '';
+  // Single-pass loop over parts avoids 3x array search (parts.find) per date key
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (p.type === 'year') year = p.value;
+    else if (p.type === 'month') month = p.value;
+    else if (p.type === 'day') day = p.value;
+  }
+  return `${year}-${month}-${day}`;
 }
 
 function mondayOf(date: string) {
@@ -16,7 +38,7 @@ function mondayOf(date: string) {
 
 function label(date: string) {
   const [year, month, day] = date.split('-');
-  const weekday = new Intl.DateTimeFormat('en-GB', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`));
+  const weekday = weekdayFormatter.format(new Date(`${date}T12:00:00Z`));
   return `${day}/${month}/${year} ${weekday}`;
 }
 
