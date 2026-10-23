@@ -118,3 +118,22 @@ test('customer deep link expands the converted company and branch including inac
   await page.route('**/api/v1/admin/companies**', route => route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' }, json: new URL(route.request().url()).pathname.endsWith('/customer-1') ? { company, branches: [{ id: 'branch-1', companyId: company.id, name: 'Converted office', isActive: true, city: 'Helsinki' }] } : { items: [company], total: 1 } }));
   await page.goto('/admin/companies/?company=customer-1'); await expect(page.getByText('Converted office · Helsinki', { exact: true })).toBeVisible(); await expect(page.getByRole('row').filter({ hasText: 'Converted customer' }).getByRole('button', { name: 'Reactivate', exact: true })).toBeVisible();
 });
+
+test('lead reload confirms discarded edits and status persists after saving', async ({ page }) => {
+  const state = await setup(page); await open(page);
+  const description = page.getByRole('textbox', { name: 'Description', exact: true });
+  await description.fill('Unsaved draft');
+  page.once('dialog', dialog => dialog.dismiss());
+  await page.getByRole('button', { name: 'Reload lead', exact: true }).click();
+  await expect(description).toHaveValue('Unsaved draft');
+  state.lead.fields.description = 'Server update';
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Reload lead', exact: true }).click();
+  await expect(description).toHaveValue('Server update');
+  await page.getByRole('textbox', { name: 'Lead status', exact: true }).click();
+  await page.getByRole('option', { name: 'Contacted', exact: true }).click();
+  await page.getByRole('button', { name: 'Save lead', exact: true }).click();
+  await expect.poll(() => state.lead.status).toBe('Contacted');
+  await page.getByRole('button', { name: 'Reload lead', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Lead status', exact: true })).toHaveValue('Contacted');
+});

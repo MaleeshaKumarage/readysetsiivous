@@ -96,6 +96,7 @@ export default function CompaniesAdminPage() {
   const openedCustomer = useRef<string | null>(null);
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get('company');
+    // listAll loads both active and inactive records; visibleCompanies applies the tab filter separately.
     const customer = companies.find(company => company.id === requested);
     if (!customer || openedCustomer.current === requested) return;
     openedCustomer.current = requested;
