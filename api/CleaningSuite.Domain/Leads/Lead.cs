@@ -7,11 +7,13 @@ public class Lead : BaseDocument
     public bool IsActive { get; set; } = true;
     public Guid? CompanyId { get; set; }
     public Guid? BranchId { get; set; }
+    public List<LeadConvertedBranch>? ConvertedBranches { get; set; }
     public DateTime? ConvertedUtc { get; set; }
     public List<LeadImage> Images { get; set; } = [];
 }
 public record LeadFields
 {
+    public List<LeadBranchFields>? Branches { get; init; }
     public string Name { get; init; } = "";
     public string BusinessId { get; init; } = "";
     public string ContactName { get; init; } = "";
@@ -30,3 +32,15 @@ public record LeadFields
     public string BranchEmail { get; init; } = "";
 }
 public record LeadImage(Guid Id, string Extension);
+public record LeadConvertedBranch(Guid SourceBranchId, Guid CompanyBranchId);
+public record LeadBranchFields
+{
+    public Guid Id { get; init; } = Guid.NewGuid();
+    public string Name { get; init; } = "";
+    public string Street { get; init; } = "";
+    public string PostalCode { get; init; } = "";
+    public string City { get; init; } = "";
+    public string Country { get; init; } = "";
+    public string ContactPhone { get; init; } = "";
+    public string ContactEmail { get; init; } = "";
+}

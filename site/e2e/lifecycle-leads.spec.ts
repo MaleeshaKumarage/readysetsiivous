@@ -1,9 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
-const fields = () => ({ name: 'Prospect Oy', businessId: '1234567-8', contactName: 'Anna', contactPhone: '123', notes: 'Company note', description: 'Cleaning requirements', emails: ['one@example.test', 'two@example.test'], primaryEmail: 'one@example.test', status: 'New', branchName: 'Office', street: 'Street 1', postalCode: '00100', city: 'Helsinki', country: 'FI', branchPhone: '456', branchEmail: 'office@example.test' });
+const fields = () => ({ branches: undefined as { id: string; name: string; street: string; postalCode: string; city: string; country: string; contactPhone: string; contactEmail: string }[] | undefined, name: 'Prospect Oy', businessId: '1234567-8', contactName: 'Anna', contactPhone: '123', notes: 'Company note', description: 'Cleaning requirements', emails: ['one@example.test', 'two@example.test'], primaryEmail: 'one@example.test', status: 'New', branchName: 'Office', street: 'Street 1', postalCode: '00100', city: 'Helsinki', country: 'FI', branchPhone: '456', branchEmail: 'office@example.test' });
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jGZkAAAAASUVORK5CYII=', 'base64');
 async function setup(page: Page) {
   await setupAdminMocks(page, { authenticated: true });
+  await page.route('**/api/v1/manager/leads**', route => route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' }, json: route.request().url().endsWith('/settings') ? { timeZoneId: 'Europe/Helsinki' } : { items: [], total: 0 } }));
   const state = { lead: { id: 'lead-1', version: 'v1', fields: fields(), isActive: true, status: 'New', imageCount: 0, companyId: null as string | null, branchId: null as string | null, convertedUtc: null as string | null, updatedUtc: '2026-10-21T09:00:00Z' }, images: [] as { id: string; extension: string }[], customerAvailable: false, conversionError: '', saveError: '', uploadError: false, imageError: false, detailError: false, listError: false, requests: [] as { method: string; path: string; body: unknown }[], queries: [] as URLSearchParams[], total: 1 };
   const detail = () => ({ lead: state.lead, images: state.images, customerAvailable: state.customerAvailable });
   await page.route('**/api/v1/admin/leads**', async route => {
@@ -57,6 +58,10 @@ test('lead create and edit preserves multiple emails, primary contact and descri
 });
 test('lead images reject a fourth, upload privately, remove and retry failure', async ({ page }) => {
   const state = await setup(page); await open(page);
+  await expect(page.getByRole('tab', { name: 'View images', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Add images', { exact: true })).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Manage images', exact: true }).click();
   await page.getByLabel('Add images', { exact: true }).setInputFiles({ name: 'bad.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg/>') }); await expect(page.getByRole('alert').filter({ hasText: 'Choose JPEG' })).toBeVisible();
   const image = (i: number) => ({ name: `${i}.png`, mimeType: 'image/png', buffer: png });
   await page.getByLabel('Add images', { exact: true }).setInputFiles([1, 2, 3, 4].map(image));
@@ -65,6 +70,8 @@ test('lead images reject a fourth, upload privately, remove and retry failure', 
   state.uploadError = false; await page.getByLabel('Add images', { exact: true }).setInputFiles([1, 2, 3].map(image));
   await expect(page.getByRole('status').filter({ hasText: 'Images uploaded.' })).toBeVisible(); await expect(page.getByAltText('Lead image')).toHaveCount(3);
   await expect(page.getByLabel('Add images', { exact: true })).toBeDisabled();
+  await page.getByRole('tab', { name: 'View images', exact: true }).click(); await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toHaveCount(0); await expect(page.getByLabel('Add images', { exact: true })).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Manage images', exact: true }).click();
   page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Remove image', exact: true }).first().click();
   await expect(page.getByAltText('Lead image')).toHaveCount(2); await expect(page.getByLabel('Add images', { exact: true })).toBeEnabled();
 });
@@ -86,6 +93,10 @@ test('lead stale save preserves input and inactive records can edit reactivate a
   const state = await setup(page); state.lead.isActive = false; await page.goto('/admin/leads/');
   await page.getByRole('textbox', { name: 'Lead filter' }).click(); await page.getByRole('option', { name: 'Inactive', exact: true }).click();
   await page.getByRole('button', { name: 'View lead', exact: true }).click();
+  await page.getByRole('tab', { name: 'Manage images', exact: true }).click();
+  await expect(page.getByText('Reactivate this lead before managing images.')).toBeVisible();
+  await expect(page.getByLabel('Add images', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toHaveCount(0);
   await page.getByRole('textbox', { name: 'Description', exact: true }).fill('Unsaved change'); state.saveError = 'This lead changed. Refresh before retrying.';
   await page.getByRole('button', { name: 'Save lead', exact: true }).click(); await expect(page.getByRole('alert').filter({ hasText: 'This lead changed' })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Description', exact: true })).toHaveValue('Unsaved change'); await expect(page.getByRole('button', { name: 'Reactivate', exact: true })).toBeDisabled();
@@ -136,4 +147,51 @@ test('lead reload confirms discarded edits and status persists after saving', as
   await expect.poll(() => state.lead.status).toBe('Contacted');
   await page.getByRole('button', { name: 'Reload lead', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Lead status', exact: true })).toHaveValue('Contacted');
+});
+
+
+test('leads start without branches and admins explicitly add edit remove and page through multiple branches', async ({ page }) => {
+  const state = await setup(page); await page.goto('/admin/leads/'); await page.getByRole('button', { name: 'New lead', exact: true }).click();
+  await expect(page.getByText('No branches added. A lead can be saved and converted without a branch.')).toBeVisible();
+  await page.getByRole('textbox', { name: 'Company name', exact: true }).fill('Many offices');
+  await page.getByRole('button', { name: 'Add branch', exact: true }).click();
+  await page.getByRole('button', { name: 'Save lead', exact: true }).click(); await expect(page.getByRole('alert').filter({ hasText: 'Enter a name for each added branch' })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Branch 1 name', exact: true }).fill('Office one');
+  await page.getByRole('button', { name: 'Add branch', exact: true }).click(); await page.getByRole('textbox', { name: 'Branch 2 name', exact: true }).fill('Office two');
+  await page.getByRole('textbox', { name: 'Branch 2 email', exact: true }).fill('two@example.test');
+  await page.getByRole('button', { name: 'Save lead', exact: true }).click(); await expect.poll(() => state.lead.fields.branches?.length).toBe(2);
+  await page.getByRole('button', { name: 'Reload lead', exact: true }).click(); await expect(page.getByRole('textbox', { name: 'Branch 2 email', exact: true })).toHaveValue('two@example.test');
+  page.once('dialog', dialog => dialog.dismiss()); await page.getByRole('button', { name: 'Remove branch 2', exact: true }).click(); await expect(page.getByRole('textbox', { name: 'Branch 2 name', exact: true })).toHaveCount(1);
+  page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Remove branch 2', exact: true }).click(); await expect(page.getByRole('textbox', { name: 'Branch 2 name', exact: true })).toHaveCount(0);
+  for (let i = 2; i <= 6; i++) { await page.getByRole('button', { name: 'Add branch', exact: true }).click(); await page.getByRole('textbox', { name: `Branch ${i} name`, exact: true }).fill(`Office ${i}`); }
+  await expect(page.getByRole('button', { name: 'Next branches', exact: true })).toBeDisabled(); await page.getByRole('button', { name: 'Previous branches', exact: true }).click(); await expect(page.getByRole('textbox', { name: 'Branch 1 name', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Next branches', exact: true }).click(); await expect(page.getByRole('textbox', { name: 'Branch 6 name', exact: true })).toHaveValue('Office 6');
+  await page.getByRole('button', { name: 'Save lead', exact: true }).click(); await expect.poll(() => state.lead.fields.branches?.length).toBe(6);
+});
+test('zero branch conversion review and saved lead retain an explicit empty branch list', async ({ page }) => {
+  const state = await setup(page); await page.goto('/admin/leads/'); await page.getByRole('button', { name: 'New lead', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Company name', exact: true }).fill('No branch company'); await page.getByRole('textbox', { name: 'Business ID (required for conversion)' }).fill('ZERO-1');
+  await page.getByRole('button', { name: 'Save lead', exact: true }).click(); await expect.poll(() => state.lead.fields.branches?.length).toBe(0);
+  await page.getByRole('button', { name: 'Convert to customer', exact: true }).click(); const confirm = page.getByRole('dialog', { name: 'Convert lead to customer', exact: true }); await expect(confirm.getByText('0 branches will be created.')).toBeVisible();
+  await confirm.getByRole('button', { name: 'Confirm conversion', exact: true }).click(); await expect(page.getByRole('link', { name: 'Open customer' })).toBeVisible(); await expect(page.getByRole('tab', { name: 'Manage images', exact: true })).toHaveCount(0);
+});
+
+
+test('conversion confirmation includes every explicitly saved branch', async ({ page }) => {
+  const state = await setup(page); await open(page);
+  await page.getByRole('button', { name: 'Add branch', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Branch 2 name', exact: true }).fill('Gym');
+  await page.getByRole('textbox', { name: 'Branch 2 street', exact: true }).fill('Gym street');
+  await page.getByRole('button', { name: 'Save lead', exact: true }).click();
+  await expect.poll(() => state.lead.fields.branches?.length).toBe(2);
+  await page.getByRole('button', { name: 'Convert to customer', exact: true }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Convert lead to customer', exact: true });
+  await expect(confirmation.getByText('2 branches will be created.', { exact: true })).toBeVisible();
+  await expect(confirmation.getByText('Branch 1 · Office', { exact: true })).toBeVisible();
+  await expect(confirmation.getByText('Branch 2 · Gym', { exact: true })).toBeVisible();
+  await expect(confirmation.getByText('Gym street, FI', { exact: true })).toBeVisible();
+  await confirmation.getByRole('button', { name: 'Confirm conversion', exact: true }).click();
+  await expect(page.getByRole('link', { name: 'Open customer', exact: true })).toBeVisible();
+  expect(state.lead.fields.branches?.map(branch => branch.name)).toEqual(['Office', 'Gym']);
+  expect(state.requests.filter(request => request.path.endsWith('/convert'))).toHaveLength(1);
 });

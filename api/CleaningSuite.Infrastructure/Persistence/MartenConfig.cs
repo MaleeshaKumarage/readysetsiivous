@@ -53,6 +53,9 @@ public static class MartenConfig
         options.Schema.For<Service>().Index(x => x.Slug);
         options.Schema.For<Invoice>().Index(x => x.InvoiceNumber);
         options.Schema.For<CleaningSuite.Domain.Leads.Lead>().Index(x => x.UpdatedUtc).Index(x => x.Fields.Name).Index(x => x.Fields.BusinessId).Index(x => x.Fields.Status);
+        options.Schema.For<CleaningSuite.Domain.Leads.LeadVoiceNote>().Index(x => x.LeadId);
+        options.Schema.For<CleaningSuite.Domain.Leads.LeadFollowUp>().Index(x => x.LeadId).Index(x => x.NextCheckUtc).Index(x => x.State);
+        options.Schema.For<CleaningSuite.Domain.Leads.LeadFollowUpDelivery>().Index(x => x.LeadId).Index(x => x.FollowUpId);
         options.Schema.For<ShiftBillingProfile>();
         options.Schema.For<Employee>().Index(x => x.KeycloakUserId).UniqueIndex(Marten.Schema.UniqueIndexType.Computed, "mt_doc_employee_uidx_keycloak_identity_key", Marten.Schema.Indexing.Unique.TenancyScope.PerTenant, x => x.KeycloakIdentityKey!);
 

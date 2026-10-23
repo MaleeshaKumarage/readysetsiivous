@@ -25,13 +25,16 @@ public sealed class LeadRepository(ITenantSession tenant,IConfiguration config) 
         var total=await query.CountAsync(ct);
         return (await query.OrderByDescending(x=>x.UpdatedUtc).ThenBy(x=>x.Id).Skip(skip).Take(take).ToListAsync(ct),total);
     }
-    public async Task SaveAsync(Lead lead,CancellationToken ct) { Session.Store(lead);await Session.SaveChangesAsync(ct); }
-    public async Task DeleteAsync(Lead lead,CancellationToken ct) { Session.Delete(lead);await Session.SaveChangesAsync(ct); }
-    public async Task<bool> CustomerAvailableAsync(Guid companyId,Guid branchId,CancellationToken ct)=>await Session.LoadAsync<Company>(companyId,ct) is not null
-        && (await Session.LoadAsync<Branch>(branchId,ct))?.CompanyId==companyId;
-    public async Task ConvertAsync(Lead lead,Company company,Branch branch,CancellationToken ct)
+    public async Task SaveAsync(Lead lead,CancellationToken ct) { await LeadCollaborationRepository.CancelForLeadAsync(Session,lead,false,ct);Session.Store(lead);await Session.SaveChangesAsync(ct); }
+    public async Task DeleteAsync(Lead lead,CancellationToken ct) { await LeadCollaborationRepository.CancelForLeadAsync(Session,lead,true,ct);Session.Delete(lead);await Session.SaveChangesAsync(ct); }
+    public async Task<bool> CustomerAvailableAsync(Guid companyId,IReadOnlyList<Guid> branchIds,CancellationToken ct) {
+        if(await Session.LoadAsync<Company>(companyId,ct) is null) return false;
+        foreach(var id in branchIds) if((await Session.LoadAsync<Branch>(id,ct))?.CompanyId!=companyId) return false;
+        return true;
+    }
+    public async Task ConvertAsync(Lead lead,Company company,IReadOnlyList<Branch> branches,CancellationToken ct)
     {
-        Session.Store(company);Session.Store(branch);Session.Store(lead);
+        await LeadCollaborationRepository.CancelForLeadAsync(Session,lead,false,ct);Session.Store(company);foreach(var branch in branches) Session.Store(branch);Session.Store(lead);
         try { await Session.SaveChangesAsync(ct); }
         catch(Exception e) when(UniqueConflict(e)) { throw new LeadConflictException("A customer with this business ID already exists, including inactive customers. No new customer was created."); }
     }

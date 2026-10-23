@@ -14,7 +14,10 @@ COPY . .
 RUN dotnet publish CleaningSuite.Api/CleaningSuite.Api.csproj -c Release -o /app/publish --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.13 AS runtime
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
+ARG RELEASE_SHA=development
+ENV APP_RELEASE_SHA=$RELEASE_SHA
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080
 COPY --from=build /app/publish .

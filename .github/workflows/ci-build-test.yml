@@ -5,6 +5,8 @@ on:
   pull_request:
     paths:
       - 'global.json'
+      - 'scripts/wait-api-release.py'
+      - 'scripts/tests/test_wait_api_release.py'
       - 'api/**'
       - 'site/**'
       - '.github/workflows/ci-build-test.yml'
@@ -12,6 +14,8 @@ on:
     branches: [main]
     paths:
       - 'global.json'
+      - 'scripts/wait-api-release.py'
+      - 'scripts/tests/test_wait_api_release.py'
       - 'api/**'
       - 'site/**'
       - '.github/workflows/ci-build-test.yml'
@@ -38,6 +42,15 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.402
+      - name: Verify frontend/API release ordering
+        working-directory: .
+        run: python3 -m unittest scripts/tests/test_wait_api_release.py
+      - name: Ensure audio validation runtime
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
       - run: dotnet restore CleaningSuite.Backend.sln
       - run: dotnet build CleaningSuite.Backend.sln --no-restore -c Release
       - run: dotnet test CleaningSuite.Backend.sln --no-build -c Release --verbosity minimal
