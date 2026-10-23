@@ -13,3 +13,8 @@ The writing-plans skill is unavailable in the installed catalog; this plan follo
 8. Review final diff, create PR, address comments and require green CI before merge/deployment. Verify production release without creating production reminder emails.
 
 Progress will be recorded in feature documentation and the final PR. Do not modify unrelated untracked workspace files or merge the excluded alternative Leads PR #183.
+
+
+Approved scope supplement: `../specs/2026-10-23-lead-branches-image-tabs-design.md`. Optional multiple branches and atomic all-branch conversion are included, retaining legacy and old-client data. View images is the default; only a separate management tab exposes removal controls. Both specs passed their independent design reviews.
+
+Local implementation and verification are complete. Added a public release identifier and Pages readiness gate after production investigation confirmed a frontend/API deployment gap. Remaining release steps: PR automated review, required CI, merge and production verification. Chromium microphone tests use synthetic input; Safari's MP4/AAC format is validated by the backend, but an actual iOS-device microphone session has not been performed in this Windows workspace.

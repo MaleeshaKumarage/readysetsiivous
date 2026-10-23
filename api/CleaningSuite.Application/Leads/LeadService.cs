@@ -4,7 +4,7 @@ using CleaningSuite.Domain.Leads;
 namespace CleaningSuite.Application.Leads;
 
 public class LeadConflictException(string message) : Exception(message);
-public record LeadRow(Guid Id, Guid Version, LeadFields Fields, bool IsActive, string Status, int ImageCount, Guid? CompanyId, Guid? BranchId, DateTime? ConvertedUtc, DateTime UpdatedUtc);
+public record LeadRow(Guid Id, Guid Version, LeadFields Fields, bool IsActive, string Status, int ImageCount, Guid? CompanyId, Guid? BranchId, DateTime? ConvertedUtc, DateTime UpdatedUtc, IReadOnlyList<LeadConvertedBranch>? ConvertedBranches=null);
 public record LeadDetail(LeadRow Lead, IReadOnlyList<LeadImage> Images, bool CustomerAvailable);
 public interface ILeadRepository
 {
@@ -13,8 +13,8 @@ public interface ILeadRepository
     Task<(IReadOnlyList<Lead> Items,int Total)> ListAsync(string search,string status,int skip,int take,CancellationToken ct);
     Task SaveAsync(Lead lead,CancellationToken ct);
     Task DeleteAsync(Lead lead,CancellationToken ct);
-    Task ConvertAsync(Lead lead,Company company,Branch branch,CancellationToken ct);
-    Task<bool> CustomerAvailableAsync(Guid companyId,Guid branchId,CancellationToken ct);
+    Task ConvertAsync(Lead lead,Company company,IReadOnlyList<Branch> branches,CancellationToken ct);
+    Task<bool> CustomerAvailableAsync(Guid companyId,IReadOnlyList<Guid> branchIds,CancellationToken ct);
 }
 public interface ILeadFileStore
 {
@@ -24,13 +24,13 @@ public interface ILeadFileStore
 }
 public sealed class LeadService(ILeadRepository repository,ILeadFileStore files,IUploadContentValidator uploads,TimeProvider clock)
 {
-    public static LeadRow Row(Lead lead) => new(lead.Id,lead.Version,lead.Fields,lead.IsActive,lead.CompanyId.HasValue?"Converted":lead.Fields.Status,
-        lead.Images.Count,lead.CompanyId,lead.BranchId,lead.ConvertedUtc,lead.UpdatedUtc);
+    public static LeadRow Row(Lead lead) => new(lead.Id,lead.Version,LeadBranches.Project(lead),lead.IsActive,lead.CompanyId.HasValue?"Converted":lead.Fields.Status,
+        lead.Images.Count,lead.CompanyId,lead.BranchId,lead.ConvertedUtc,lead.UpdatedUtc,lead.ConvertedBranches);
     private async Task<Lead> Require(Guid id,CancellationToken ct) => await repository.GetAsync(id,ct) ?? throw new NotFoundException("Lead",id);
     public async Task<LeadDetail> GetAsync(Guid id,CancellationToken ct)
     {
         var lead=await Require(id,ct);
-        return new(Row(lead),lead.Images,lead.CompanyId.HasValue && lead.BranchId.HasValue && await repository.CustomerAvailableAsync(lead.CompanyId.Value,lead.BranchId.Value,ct));
+        return new(Row(lead),lead.Images,lead.CompanyId.HasValue && await repository.CustomerAvailableAsync(lead.CompanyId.Value,LeadBranches.ConvertedIds(lead),ct));
     }
     public async Task<Paged<LeadRow>> ListAsync(string? search,string? status,int skip,int take,CancellationToken ct)
     {
@@ -41,7 +41,7 @@ public sealed class LeadService(ILeadRepository repository,ILeadFileStore files,
     }
     public async Task<LeadDetail> CreateAsync(LeadFields fields,CancellationToken ct)
     {
-        var lead=new Lead { Fields=LeadValidation.Normalize(fields),CreatedUtc=clock.GetUtcNow().UtcDateTime,UpdatedUtc=clock.GetUtcNow().UtcDateTime };
+        var lead=new Lead { CreatedUtc=clock.GetUtcNow().UtcDateTime,UpdatedUtc=clock.GetUtcNow().UtcDateTime };lead.Fields=LeadValidation.Normalize(fields,lead.Id);
         await repository.SaveAsync(lead,ct);return new(Row(lead),lead.Images,false);
     }
     private static void Editable(Lead lead,Guid version,bool active=false)
@@ -53,7 +53,7 @@ public sealed class LeadService(ILeadRepository repository,ILeadFileStore files,
     public async Task<LeadDetail> UpdateAsync(Guid id,Guid version,LeadFields fields,CancellationToken ct)
     {
         await using var lease=await repository.LockAsync(id,ct);var lead=await Require(id,ct);Editable(lead,version);
-        lead.Fields=LeadValidation.Normalize(fields);lead.UpdatedUtc=clock.GetUtcNow().UtcDateTime;await repository.SaveAsync(lead,ct);
+        lead.Fields=LeadValidation.Normalize(fields,lead.Id,lead.Fields);lead.UpdatedUtc=clock.GetUtcNow().UtcDateTime;await repository.SaveAsync(lead,ct);
         return new(Row(lead),lead.Images,false);
     }
     public async Task<LeadDetail> SetActiveAsync(Guid id,Guid version,bool active,CancellationToken ct)
@@ -72,12 +72,13 @@ public sealed class LeadService(ILeadRepository repository,ILeadFileStore files,
         await using var lease=await repository.LockAsync(id,ct);var lead=await Require(id,ct);
         // Idempotent even if the browser retries with the original pre-conversion version.
         if(lead.CompanyId.HasValue) return await GetAsync(id,ct);
-        Editable(lead,version,true);var f=LeadValidation.Normalize(lead.Fields);LeadValidation.Conversion(f);
+        Editable(lead,version,true);var f=LeadValidation.Normalize(lead.Fields,lead.Id);LeadValidation.Conversion(f);
         var company=Company.Create(f.BusinessId,f.Name,f.ContactName,f.PrimaryEmail,f.ContactPhone,
             string.Join("\n\n",new[]{f.Notes,f.Description}.Where(x=>x.Length>0)));
-        var branch=Branch.Create(company.Id,f.BranchName,f.Street,f.PostalCode,f.City,f.Country,f.BranchPhone);branch.ContactEmail=f.BranchEmail;
-        lead.CompanyId=company.Id;lead.BranchId=branch.Id;lead.ConvertedUtc=clock.GetUtcNow().UtcDateTime;lead.UpdatedUtc=lead.ConvertedUtc.Value;
-        await repository.ConvertAsync(lead,company,branch,ct);return new(Row(lead),lead.Images,true);
+        var branches=f.Branches!.Select(b=>{var created=Branch.Create(company.Id,b.Name,b.Street,b.PostalCode,b.City,b.Country,b.ContactPhone);created.ContactEmail=b.ContactEmail;return created;}).ToArray();
+        lead.Fields=f;lead.ConvertedBranches=f.Branches.Select((b,index)=>new LeadConvertedBranch(b.Id,branches[index].Id)).ToList();
+        lead.CompanyId=company.Id;lead.BranchId=branches.FirstOrDefault()?.Id;lead.ConvertedUtc=clock.GetUtcNow().UtcDateTime;lead.UpdatedUtc=lead.ConvertedUtc.Value;
+        await repository.ConvertAsync(lead,company,branches,ct);return new(Row(lead),lead.Images,true);
     }
     public async Task<LeadDetail> UploadAsync(Guid id,Guid version,byte[] content,CancellationToken ct)
     {

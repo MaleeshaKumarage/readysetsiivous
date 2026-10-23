@@ -159,6 +159,8 @@ public class KeycloakAdminClient
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
         return await response.Content.ReadFromJsonAsync<JsonElement>(ct);
     }
+    public Task<JsonElement> GetRealmRoleUsersAsync(string realm, string role, int first, int max, CancellationToken ct = default) =>
+        GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/roles/{Uri.EscapeDataString(role)}/users?first={first}&max={max}", ct);
     public Task<JsonElement> FindUsersByEmailAsync(string realm, string email, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/users?email={Uri.EscapeDataString(email)}&exact=true", ct);
     public Task<JsonElement> GetUserRealmRolesAsync(string realm, string userId, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/role-mappings/realm", ct);
     public Task RemoveRealmRolesAsync(string realm, string userId, object[] roles, CancellationToken ct = default) => SendWithoutResultAsync(HttpMethod.Delete, $"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/role-mappings/realm", ct, roles);

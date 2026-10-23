@@ -13,8 +13,8 @@ public class LeadServiceTests
     { var fields=LeadValidation.Normalize(Fields());Assert.Equal("Prospect",fields.Name);Assert.Equal(2,fields.Emails.Count);Assert.Equal("a@example.test",fields.PrimaryEmail); }
     [Theory][InlineData("bad email","bad email")][InlineData("a@example.test","other@example.test")][InlineData("","other@example.test")]
     public void Invalid_email_or_primary_is_rejected(string email,string primary)=>Assert.Throws<ValidationException>(()=>LeadValidation.Normalize(Fields() with{Emails=email.Length>0?[email]:[],PrimaryEmail=primary}));
-    [Theory][InlineData("", "Office")][InlineData("123", "")]
-    public void Conversion_requires_business_id_and_branch(string business,string branch)=>Assert.Throws<ValidationException>(()=>LeadValidation.Conversion(Fields() with{BusinessId=business,BranchName=branch}));
+    [Theory][InlineData("", "Office")]
+    public void Conversion_requires_business_id(string business,string branch)=>Assert.Throws<ValidationException>(()=>LeadValidation.Conversion(Fields() with{BusinessId=business,BranchName=branch}));
     [Fact] public async Task Conversion_preserves_every_contact_and_image_and_retry_is_idempotent()
     {
         var f=new Fixture();var originalVersion=f.Lead.Version;f.Lead.Images.Add(new(Guid.NewGuid(),".png"));
@@ -22,7 +22,7 @@ public class LeadServiceTests
         Assert.Equal("Converted",result.Lead.Status);Assert.Equal(2,result.Lead.Fields.Emails.Count);Assert.Single(result.Images);
         Assert.NotNull(f.Company);Assert.Equal("a@example.test",f.Company.ContactEmail);Assert.Contains("Description",f.Company.Notes);Assert.Contains("Notes",f.Company.Notes);
         var retry=await f.Service.ConvertAsync(f.Lead.Id,originalVersion,default);Assert.Equal(result.Lead.CompanyId,retry.Lead.CompanyId);
-        f.Repo.Verify(r=>r.ConvertAsync(It.IsAny<Lead>(),It.IsAny<Company>(),It.IsAny<Branch>(),default),Times.Once);
+        f.Repo.Verify(r=>r.ConvertAsync(It.IsAny<Lead>(),It.IsAny<Company>(),It.IsAny<IReadOnlyList<Branch>>(),default),Times.Once);
         await Assert.ThrowsAsync<LeadConflictException>(()=>f.Service.UpdateAsync(f.Lead.Id,f.Lead.Version,Fields(),default));
         await Assert.ThrowsAsync<LeadConflictException>(()=>f.Service.DeleteAsync(f.Lead.Id,f.Lead.Version,default));
     }
@@ -72,8 +72,8 @@ public class LeadServiceTests
         {
             Repo.Setup(x=>x.LockAsync(Lead.Id,default)).ReturnsAsync(new Lease());Repo.Setup(x=>x.GetAsync(Lead.Id,default)).ReturnsAsync(Lead);
             Repo.Setup(x=>x.SaveAsync(It.IsAny<Lead>(),default)).Callback<Lead,CancellationToken>((l,_)=>l.Version=Guid.NewGuid()).Returns(Task.CompletedTask);
-            Repo.Setup(x=>x.ConvertAsync(Lead,It.IsAny<Company>(),It.IsAny<Branch>(),default)).Callback<Lead,Company,Branch,CancellationToken>((_,c,_,_)=>Company=c).Returns(Task.CompletedTask);
-            Repo.Setup(x=>x.CustomerAvailableAsync(It.IsAny<Guid>(),It.IsAny<Guid>(),default)).ReturnsAsync(true);
+            Repo.Setup(x=>x.ConvertAsync(Lead,It.IsAny<Company>(),It.IsAny<IReadOnlyList<Branch>>(),default)).Callback<Lead,Company,IReadOnlyList<Branch>,CancellationToken>((_,c,_,_)=>Company=c).Returns(Task.CompletedTask);
+            Repo.Setup(x=>x.CustomerAvailableAsync(It.IsAny<Guid>(),It.IsAny<IReadOnlyList<Guid>>(),default)).ReturnsAsync(true);
             Service=new(Repo.Object,Files.Object,NoopUploadContentValidator.Instance,TimeProvider.System);
         }
     }

@@ -1,13 +1,20 @@
 import { API_URL } from './api';
 import { authorizedFetch, invalidateAdminCache } from './adminApi';
 import { token, refreshToken } from './auth';
+export interface LeadBranchFields { id: string; name: string; street: string; postalCode: string; city: string; country: string; contactPhone: string; contactEmail: string }
+export function leadBranches(fields: LeadFields, leadId: string): LeadBranchFields[] {
+  if (fields.branches) return fields.branches;
+  if (![fields.branchName, fields.street, fields.postalCode, fields.city, fields.branchPhone, fields.branchEmail].some(value => value?.trim())) return [];
+  return [{ id: leadId, name: fields.branchName || '', street: fields.street || '', postalCode: fields.postalCode || '', city: fields.city || '', country: fields.country || '', contactPhone: fields.branchPhone || '', contactEmail: fields.branchEmail || '' }];
+}
 export interface LeadFields {
+  branches?: LeadBranchFields[];
   name: string; businessId: string; contactName: string; contactPhone: string; notes: string; description: string;
   emails: string[]; primaryEmail: string; status: string; branchName: string; street: string; postalCode: string; city: string;
   country: string; branchPhone: string; branchEmail: string;
 }
-export const emptyLead: LeadFields = { name: '', businessId: '', contactName: '', contactPhone: '', notes: '', description: '', emails: [], primaryEmail: '', status: 'New', branchName: '', street: '', postalCode: '', city: '', country: 'FI', branchPhone: '', branchEmail: '' };
-export interface LeadRow { id: string; version: string; fields: LeadFields; isActive: boolean; status: string; imageCount: number; companyId: string | null; branchId: string | null; convertedUtc: string | null; updatedUtc: string }
+export const emptyLead: LeadFields = { branches: [], name: '', businessId: '', contactName: '', contactPhone: '', notes: '', description: '', emails: [], primaryEmail: '', status: 'New', branchName: '', street: '', postalCode: '', city: '', country: '', branchPhone: '', branchEmail: '' };
+export interface LeadRow { id: string; version: string; fields: LeadFields; isActive: boolean; status: string; imageCount: number; companyId: string | null; branchId: string | null; convertedUtc: string | null; updatedUtc: string; convertedBranches?: { sourceBranchId: string; companyBranchId: string }[] }
 export interface LeadDetail { lead: LeadRow; images: { id: string; extension: string }[]; customerAvailable: boolean }
 const root = '/api/v1/admin/leads';
 async function read<T>(response: Response): Promise<T> {
@@ -16,7 +23,10 @@ async function read<T>(response: Response): Promise<T> {
     const messages: string[] = Object.values(problem.errors ?? {}).flat() as string[];
     throw new Error(messages.join(' ') || problem.detail || problem.title || `Request failed (${response.status}). Please retry.`);
   }
-  return response.status === 204 ? undefined as T : response.json();
+  if (response.status === 204) return undefined as T;
+  const data = await response.json();
+  if (data?.lead?.fields) data.lead.fields = { ...data.lead.fields, branches: leadBranches(data.lead.fields, data.lead.id) };
+  return data;
 }
 async function mutate<T>(path: string, method: string, body: unknown): Promise<T> {
   const result = await read<T>(await authorizedFetch(root + path, { method, body: JSON.stringify(body) })); invalidateAdminCache(); return result;

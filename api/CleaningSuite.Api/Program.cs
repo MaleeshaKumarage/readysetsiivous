@@ -104,6 +104,16 @@ builder.Services.AddSingleton<CleaningSuite.Application.Agreements.IAgreementDoc
 builder.Services.AddScoped<CleaningSuite.Application.Leads.ILeadRepository, CleaningSuite.Infrastructure.Persistence.LeadRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.Leads.ILeadFileStore, CleaningSuite.Infrastructure.Leads.DiskLeadFileStore>();
 builder.Services.AddScoped<CleaningSuite.Application.Leads.LeadService>();
+builder.Services.AddScoped<CleaningSuite.Application.Leads.ILeadCollaborationRepository, CleaningSuite.Infrastructure.Persistence.LeadCollaborationRepository>();
+builder.Services.AddScoped<CleaningSuite.Application.Leads.ILeadAudioStore, CleaningSuite.Infrastructure.Leads.DiskLeadAudioStore>();
+builder.Services.AddScoped<CleaningSuite.Application.Leads.ILeadAudioProbe, CleaningSuite.Infrastructure.Leads.LeadAudioProbe>();
+builder.Services.AddScoped<CleaningSuite.Application.Leads.ILeadAdminDirectory, CleaningSuite.Infrastructure.Leads.LeadAdminDirectory>();
+builder.Services.AddHttpClient<CleaningSuite.Application.Leads.ILeadReminderTransport, CleaningSuite.Infrastructure.Leads.LeadReminderTransport>();
+builder.Services.AddScoped<CleaningSuite.Application.Leads.LeadCollaborationService>();
+builder.Services.AddScoped<CleaningSuite.Application.Leads.LeadFollowUpDispatcher>();
+if (builder.Configuration.GetValue("BackgroundWorkers:Enabled", true))
+    builder.Services.AddHostedService<CleaningSuite.Api.LeadFollowUpWorker>();
+
 
 // New repositories for Companies and Shifts.
 builder.Services.AddScoped<CleaningSuite.Application.Companies.ICompanyRepository, CleaningSuite.Infrastructure.Persistence.CompanyRepository>();
@@ -164,7 +174,7 @@ builder.Services.AddExceptionHandler<DefaultExceptionHandler>();
 var app = builder.Build();
 
 // Health check: liveness only, no DB dependency.
-app.MapGet("/healthz", () => Results.Ok(new { status = "ok", utc = DateTime.UtcNow }));
+app.MapGet("/healthz", () => Results.Ok(new { status = "ok", utc = DateTime.UtcNow, releaseSha = Environment.GetEnvironmentVariable("APP_RELEASE_SHA") }));
 
 if (app.Environment.IsDevelopment())
 {
