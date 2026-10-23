@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Button, Modal, Text, Stack, Group, Tooltip, Badge } from '@mantine/core';
 import { Download, Smartphone, Check, Share } from 'lucide-react';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -20,6 +21,7 @@ export function PwaInstallButton({
   size = 'sm',
   compact = false,
 }: PwaInstallButtonProps) {
+  const { lang } = useLanguage();
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isStandalone, setIsStandalone] = useState(false);
   const [isIos, setIsIos] = useState(false);
@@ -97,15 +99,30 @@ export function PwaInstallButton({
     return null;
   }
 
+  const tooltipLabel =
+    lang === 'fi'
+      ? 'Asenna ReadySetSiivous Sovelluksena'
+      : lang === 'sv'
+      ? 'Installera ReadySetSiivous som app'
+      : 'Install ReadySetSiivous as App';
+
+  const ariaLabel =
+    lang === 'fi'
+      ? 'Asenna ReadySetSiivous-sovellus laitteellesi'
+      : lang === 'sv'
+      ? 'Installera ReadySetSiivous-appen på din enhet'
+      : 'Install ReadySetSiivous app on your device';
+
   return (
     <>
-      <Tooltip label="Install ReadySetSiivous Admin as App" withArrow>
+      <Tooltip label={tooltipLabel} withArrow>
         <Button
           variant={variant}
           color="indigo"
           size={size}
           leftSection={deferredPrompt ? <Download size={16} /> : <Smartphone size={16} />}
           onClick={handleInstallClick}
+          aria-label={ariaLabel}
         >
           {compact ? 'Install' : 'Install App'}
         </Button>
