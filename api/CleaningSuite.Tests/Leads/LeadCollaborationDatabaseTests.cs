@@ -56,6 +56,17 @@ public class LeadCollaborationDatabaseTests
         using(var reader=store.QuerySession("tenant-a")) { Assert.Equal(2,await reader.Query<CleaningSuite.Domain.Companies.Company>().CountAsync());Assert.Equal(3,await reader.Query<CleaningSuite.Domain.Companies.Branch>().CountAsync());Assert.Null((await reader.LoadAsync<Lead>(duplicate.Lead.Id))!.CompanyId); }
     }
     [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Uncertain_delivery_query_includes_review_history_and_remains_tenant_scoped()
+    {
+        using var services=Services();var store=services.GetRequiredService<IDocumentStore>();await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
+        var followId=Guid.NewGuid();var delivery=new LeadFollowUpDelivery{FollowUpId=followId,State="Needs review",FirstAttemptUtc=DateTime.UtcNow};
+        using(var session=store.LightweightSession("tenant-a")) { session.Store(delivery);await session.SaveChangesAsync(); }
+        using(var tenant=Tenant(store)) Assert.True(await new LeadCollaborationRepository(tenant).HasUncertainDeliveryAsync(followId,default));
+        using(var foreign=Tenant(store,"other")) Assert.False(await new LeadCollaborationRepository(foreign).HasUncertainDeliveryAsync(followId,default));
+        using(var session=store.LightweightSession("tenant-a")) { delivery.State="Sent";session.Store(delivery);await session.SaveChangesAsync(); }
+        using(var tenant=Tenant(store)) Assert.False(await new LeadCollaborationRepository(tenant).HasUncertainDeliveryAsync(followId,default));
+    }
+    [QualityCycle.QualityCycleDatabaseFact]
     public async Task Two_workers_send_one_delivery_and_persist_canonical_history()
     {
         using var services=Services();var store=services.GetRequiredService<IDocumentStore>();await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();

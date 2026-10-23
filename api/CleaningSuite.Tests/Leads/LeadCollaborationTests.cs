@@ -69,6 +69,23 @@ public class LeadCollaborationTests
         f.Deliveries.Add(new(){LeadId=f.Lead.Id,FollowUpId=follow.Id,FirstAttemptUtc=f.Clock.Utc.UtcDateTime});
         await Assert.ThrowsAsync<LeadConflictException>(()=>f.Service.SaveFollowUpAsync(f.Lead.Id,follow.Id,follow.Version,input,new("m","Manager"),default));
     }
+    [Theory][InlineData("Needs review",true)][InlineData("Pending",true)][InlineData("Sent",false)][InlineData("Failed",false)]
+    public async Task Editing_checks_uncertain_history_without_locking_successful_notifications(string state,bool blocked)
+    {
+        var f=new Fixture();var follow=f.AddFollow("Daily");
+        f.Deliveries.Add(new(){LeadId=f.Lead.Id,FollowUpId=follow.Id,State=state,FirstAttemptUtc=f.Clock.Utc.UtcDateTime});
+        var input=new LeadFollowUpInput("New reason","2026-10-23",null,"Daily",1,["admin"]);
+        if(blocked) await Assert.ThrowsAsync<LeadConflictException>(()=>f.Service.SaveFollowUpAsync(f.Lead.Id,follow.Id,follow.Version,input,new("m","Manager"),default));
+        else await f.Service.SaveFollowUpAsync(f.Lead.Id,follow.Id,follow.Version,input,new("m","Manager"),default);
+        Assert.Equal(state,f.Deliveries[0].State);
+    }
+    [Theory][InlineData("Completed")][InlineData("Cancelled")]
+    public async Task Cancelling_terminal_schedules_preserves_their_history(string state)
+    {
+        var f=new Fixture();var follow=f.AddFollow("Once");follow.State=state;
+        await Assert.ThrowsAsync<LeadConflictException>(()=>f.Service.CancelAsync(f.Lead.Id,follow.Id,follow.Version,default));
+        Assert.Equal(state,follow.State);
+    }
     [Fact] public async Task One_off_is_sent_once_and_retry_uses_immutable_payload()
     {
         var f=new Fixture();f.AddFollow("Once");await f.Dispatcher.DispatchAsync(f.Lead.Id,f.Follows[0].Id,default);
@@ -127,6 +144,7 @@ public class LeadCollaborationTests
             Repository.Setup(x=>x.VoiceAsync(Lead.Id,It.IsAny<Guid>(),default)).ReturnsAsync((Guid l,Guid id,CancellationToken ct)=>Voices.SingleOrDefault(x=>x.Id==id));
             Repository.Setup(x=>x.SaveVoiceAsync(It.IsAny<LeadVoiceNote>(),default)).Callback((LeadVoiceNote note,CancellationToken ct)=>{note.Version=Guid.NewGuid();Voices.Add(note);}).Returns(Task.CompletedTask);
             Repository.Setup(x=>x.FollowUpAsync(Lead.Id,It.IsAny<Guid>(),default)).ReturnsAsync((Guid l,Guid id,CancellationToken ct)=>Follows.SingleOrDefault(x=>x.Id==id));
+            Repository.Setup(x=>x.HasUncertainDeliveryAsync(It.IsAny<Guid>(),default)).ReturnsAsync((Guid id,CancellationToken ct)=>Deliveries.Any(x=>x.FollowUpId==id && x.FirstAttemptUtc.HasValue && (x.State=="Pending" || x.State=="Needs review")));
             Repository.Setup(x=>x.PendingAsync(It.IsAny<Guid>(),default)).ReturnsAsync((Guid id,CancellationToken ct)=>(IReadOnlyList<LeadFollowUpDelivery>)Deliveries.Where(x=>x.FollowUpId==id && x.State=="Pending").ToArray());
             Repository.Setup(x=>x.SaveAsync(It.IsAny<LeadFollowUp>(),It.IsAny<IEnumerable<LeadFollowUpDelivery>>(),default)).Callback((LeadFollowUp follow,IEnumerable<LeadFollowUpDelivery> deliveries,CancellationToken ct)=>{follow.Version=Guid.NewGuid();if(!Follows.Contains(follow)) Follows.Add(follow);foreach(var d in deliveries) if(!Deliveries.Any(x=>x.Id==d.Id)) Deliveries.Add(d);}).Returns(Task.CompletedTask);
             Service=new(Leads.Object,Repository.Object,Audio.Object,Probe.Object,Directory.Object,Profiles.Object,Tenant.Object,Clock);

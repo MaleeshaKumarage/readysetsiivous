@@ -22,6 +22,7 @@ public interface ILeadCollaborationRepository
     Task DeleteVoiceAsync(LeadVoiceNote note, CancellationToken ct);
     Task<LeadFollowUp?> FollowUpAsync(Guid leadId, Guid id, CancellationToken ct);
     Task<(IReadOnlyList<LeadFollowUp> Items, int Total)> FollowUpsAsync(Guid leadId, int skip, int take, CancellationToken ct);
+    Task<bool> HasUncertainDeliveryAsync(Guid id, CancellationToken ct);
     Task<IReadOnlyList<LeadFollowUpDelivery>> PendingAsync(Guid id, CancellationToken ct);
     Task<(IReadOnlyList<LeadFollowUpDelivery> Items, int Total)> HistoryAsync(Guid leadId, int skip, int take, CancellationToken ct);
     Task SaveAsync(LeadFollowUp followUp, IEnumerable<LeadFollowUpDelivery> deliveries, CancellationToken ct);

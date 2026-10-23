@@ -78,7 +78,7 @@ public sealed class LeadCollaborationService(ILeadRepository leads, ILeadCollabo
         if(first<today && !preserveAnchor) throw new ValidationException("Choose today or a future first date when creating or changing the schedule.");
         var nextDate=preserveAnchor?follow.NextDate??first:first;
         var pending=id.HasValue?await repository.PendingAsync(follow.Id,ct):[];
-        if(pending.Any(d=>d.FirstAttemptUtc.HasValue)) throw new LeadConflictException("A notification is awaiting email acceptance confirmation. Wait for its outcome, or cancel and review its history before creating a new reminder.");
+        if(id.HasValue && await repository.HasUncertainDeliveryAsync(follow.Id,ct)) throw new LeadConflictException("A notification is awaiting email acceptance confirmation. Wait for its outcome, or cancel and review its history before creating a new reminder.");
         foreach(var delivery in pending) { delivery.State="Cancelled";delivery.Error="Schedule edited."; }
         follow.Reason=reason;follow.FirstDate=first;follow.EndDate=end;follow.Recurrence=input.Recurrence;follow.Interval=input.Interval;
         follow.RecipientIds=recipients;follow.AuthorId=actor.Id;follow.AuthorName=actor.Name;follow.Revision=Guid.NewGuid();
@@ -91,7 +91,7 @@ public sealed class LeadCollaborationService(ILeadRepository leads, ILeadCollabo
         await using var reservation=await leads.LockAsync(leadId,ct);var lead=await Require(leadId,ct);
         if(lead.CompanyId.HasValue) throw new LeadConflictException("Converted lead history is read-only.");
         var follow=await repository.FollowUpAsync(leadId,id,ct)??throw new NotFoundException("Follow-up",id);
-        if(version==Guid.Empty || follow.Version!=version) throw new LeadConflictException("This follow-up changed. Refresh before cancelling.");
+        if(version==Guid.Empty || follow.Version!=version || follow.State!="Active") throw new LeadConflictException("This follow-up changed or is no longer active. Refresh before cancelling.");
         follow.State="Cancelled";follow.NextDate=null;follow.UpdatedUtc=clock.GetUtcNow().UtcDateTime;
         var pending=await repository.PendingAsync(id,ct);foreach(var delivery in pending) { delivery.State="Cancelled";delivery.Error="Follow-up cancelled."; }
         await repository.SaveAsync(follow,pending,ct);

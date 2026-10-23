@@ -17,6 +17,8 @@ public sealed class LeadCollaborationRepository(ITenantSession tenant) : ILeadCo
     { var follow=await Session.LoadAsync<LeadFollowUp>(id,ct);return follow?.LeadId==leadId?follow:null; }
     public async Task<(IReadOnlyList<LeadFollowUp> Items,int Total)> FollowUpsAsync(Guid leadId,int skip,int take,CancellationToken ct)
     { var query=Session.Query<LeadFollowUp>().Where(x=>x.LeadId==leadId);var total=await query.CountAsync(ct);return(await query.OrderByDescending(x=>x.CreatedUtc).ThenBy(x=>x.Id).Skip(skip).Take(take).ToListAsync(ct),total); }
+    public Task<bool> HasUncertainDeliveryAsync(Guid id,CancellationToken ct)=>
+        Session.Query<LeadFollowUpDelivery>().AnyAsync(x=>x.FollowUpId==id && x.FirstAttemptUtc!=null && (x.State=="Pending" || x.State=="Needs review"),ct);
     public async Task<IReadOnlyList<LeadFollowUpDelivery>> PendingAsync(Guid id,CancellationToken ct)=>
         await Session.Query<LeadFollowUpDelivery>().Where(x=>x.FollowUpId==id && x.State=="Pending").ToListAsync(ct);
     public async Task<(IReadOnlyList<LeadFollowUpDelivery> Items,int Total)> HistoryAsync(Guid leadId,int skip,int take,CancellationToken ct)

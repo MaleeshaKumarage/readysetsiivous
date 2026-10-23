@@ -93,6 +93,10 @@ test('lead stale save preserves input and inactive records can edit reactivate a
   const state = await setup(page); state.lead.isActive = false; await page.goto('/admin/leads/');
   await page.getByRole('textbox', { name: 'Lead filter' }).click(); await page.getByRole('option', { name: 'Inactive', exact: true }).click();
   await page.getByRole('button', { name: 'View lead', exact: true }).click();
+  await page.getByRole('tab', { name: 'Manage images', exact: true }).click();
+  await expect(page.getByText('Reactivate this lead before managing images.')).toBeVisible();
+  await expect(page.getByLabel('Add images', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toHaveCount(0);
   await page.getByRole('textbox', { name: 'Description', exact: true }).fill('Unsaved change'); state.saveError = 'This lead changed. Refresh before retrying.';
   await page.getByRole('button', { name: 'Save lead', exact: true }).click(); await expect(page.getByRole('alert').filter({ hasText: 'This lead changed' })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Description', exact: true })).toHaveValue('Unsaved change'); await expect(page.getByRole('button', { name: 'Reactivate', exact: true })).toBeDisabled();
@@ -170,4 +174,24 @@ test('zero branch conversion review and saved lead retain an explicit empty bran
   await page.getByRole('button', { name: 'Save lead', exact: true }).click(); await expect.poll(() => state.lead.fields.branches?.length).toBe(0);
   await page.getByRole('button', { name: 'Convert to customer', exact: true }).click(); const confirm = page.getByRole('dialog', { name: 'Convert lead to customer', exact: true }); await expect(confirm.getByText('0 branches will be created.')).toBeVisible();
   await confirm.getByRole('button', { name: 'Confirm conversion', exact: true }).click(); await expect(page.getByRole('link', { name: 'Open customer' })).toBeVisible(); await expect(page.getByRole('tab', { name: 'Manage images', exact: true })).toHaveCount(0);
+});
+
+
+test('conversion confirmation includes every explicitly saved branch', async ({ page }) => {
+  const state = await setup(page); await open(page);
+  await page.getByRole('button', { name: 'Add branch', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Branch 2 name', exact: true }).fill('Gym');
+  await page.getByRole('textbox', { name: 'Branch 2 street', exact: true }).fill('Gym street');
+  await page.getByRole('button', { name: 'Save lead', exact: true }).click();
+  await expect.poll(() => state.lead.fields.branches?.length).toBe(2);
+  await page.getByRole('button', { name: 'Convert to customer', exact: true }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Convert lead to customer', exact: true });
+  await expect(confirmation.getByText('2 branches will be created.', { exact: true })).toBeVisible();
+  await expect(confirmation.getByText('Branch 1 · Office', { exact: true })).toBeVisible();
+  await expect(confirmation.getByText('Branch 2 · Gym', { exact: true })).toBeVisible();
+  await expect(confirmation.getByText('Gym street, FI', { exact: true })).toBeVisible();
+  await confirmation.getByRole('button', { name: 'Confirm conversion', exact: true }).click();
+  await expect(page.getByRole('link', { name: 'Open customer', exact: true })).toBeVisible();
+  expect(state.lead.fields.branches?.map(branch => branch.name)).toEqual(['Office', 'Gym']);
+  expect(state.requests.filter(request => request.path.endsWith('/convert'))).toHaveLength(1);
 });

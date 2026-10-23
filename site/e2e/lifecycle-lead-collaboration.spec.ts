@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
 test.use({ launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] }, permissions: ['microphone'] });
 const id = '11111111-1111-4111-8111-111111111111';
-const fields = { name: 'Voice prospect', businessId: '123', contactName: 'Contact', contactPhone: '123', notes: '', description: 'Cleaning lead', emails: ['customer@example.test'], primaryEmail: 'customer@example.test', status: 'New', branchName: 'Office', street: 'Street', postalCode: '00100', city: 'Helsinki', country: 'FI', branchPhone: '', branchEmail: '' };
+const fields = { branches: undefined as any[] | undefined, name: 'Voice prospect', businessId: '123', contactName: 'Contact', contactPhone: '123', notes: '', description: 'Cleaning lead', emails: ['customer@example.test'], primaryEmail: 'customer@example.test', status: 'New', branchName: 'Office', street: 'Street', postalCode: '00100', city: 'Helsinki', country: 'FI', branchPhone: '', branchEmail: '' };
 async function setup(page: Page, role = 'admin') {
   await setupAdminMocks(page);
   await page.addInitScript(() => {
@@ -13,7 +13,7 @@ async function setup(page: Page, role = 'admin') {
     await page.addInitScript(role => { (window as any).__MOCK_ROLES__ = [role]; }, role);
     await page.route(/\/api\/v1\/me$/, route => route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' }, json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: [role] })], employee: { id: 'manager-1', role, isActive: true } } }));
   }
-  const state = { voices: [] as any[], followUps: [] as any[], deliveries: [] as any[], requests: [] as { method: string; path: string; body: any }[], images: [] as { id: string }[], leadRows: [] as any[], imageFailure: false, detailFailure: false, audioFailure: false, uploadFailure: false, recipientFailure: false, saveFailure: false, lastRecording: '', audioBytes: Buffer.from('audio fixture') as Buffer, lead: { id, version: 'v1', fields: { ...fields }, isActive: true, status: 'New', imageCount: 0, companyId: null as string | null, branchId: null, convertedUtc: null, updatedUtc: '2026-10-23T10:00:00Z' } };
+  const state = { voices: [] as any[], followUps: [] as any[], deliveries: [] as any[], requests: [] as { method: string; path: string; body: any }[], images: [] as { id: string }[], leadRows: [] as any[], listFailure: false, imageFailure: false, detailFailure: false, audioFailure: false, uploadFailure: false, recipientFailure: false, saveFailure: false, lastRecording: '', audioBytes: Buffer.from('audio fixture') as Buffer, lead: { id, version: 'v1', fields: { ...fields }, isActive: true, status: 'New', imageCount: 0, companyId: null as string | null, branchId: null, convertedUtc: null, updatedUtc: '2026-10-23T10:00:00Z' } };
   const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS' };
   const queries: string[] = [];
   const detail = () => ({ lead: state.lead, images: state.images, customerAvailable: false, capabilities: { canEditMetadata: role === 'admin', canRecord: state.lead.isActive && !state.lead.companyId && state.lead.status !== 'Lost', canSchedule: state.lead.isActive && !state.lead.companyId, canDeleteVoice: role === 'admin' && !state.lead.companyId } });
@@ -22,6 +22,7 @@ async function setup(page: Page, role = 'admin') {
     const request = route.request(); const path = new URL(request.url()).pathname; const method = request.method();
     if (method === 'OPTIONS') return route.fulfill({ headers });
     if (method === 'GET') { queries.push(request.url());
+      if (path.endsWith('/leads') && state.listFailure) return route.fulfill({ headers, status: 503, json: { detail: 'Lead list temporarily unavailable' } });
       if (path.endsWith('/settings')) return route.fulfill({ headers, json: { timeZoneId: 'Europe/Helsinki' } });
       if (path.endsWith('/recipients')) return route.fulfill({ headers, status: state.recipientFailure ? 503 : 200, json: state.recipientFailure ? { detail: 'Admin directory unavailable' } : [{ id: 'admin-1', name: 'Anna Admin', email: 'anna@example.test' }, { id: 'admin-2', name: 'Other Admin', email: 'other@example.test' }] });
       if (path.includes('/images/')) return route.fulfill({ headers, status: state.imageFailure ? 503 : 200, contentType: state.imageFailure ? 'application/json' : 'image/png', body: state.imageFailure ? JSON.stringify({ detail: 'Image storage temporarily unavailable' }) : Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64') });
@@ -155,4 +156,55 @@ test('manager lead list paginates and recovers failed detail and private image l
   await expect(image).toHaveAttribute('src', /^blob:/);
   await expect(image.locator('..')).toHaveAttribute('target', '_blank');
   await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toHaveCount(0);
+});
+
+
+test('manager recovers list, sees every branch read-only and records with attribution without delete access', async ({ page }) => {
+  const state = await setup(page, 'manager'); state.listFailure = true;
+  state.lead.fields.branches = [1, 2].map(index => ({ id: `branch-${index}`, name: `Office ${index}`, street: `Street ${index}`, postalCode: '00100', city: 'Helsinki', country: 'FI', contactPhone: `555${index}`, contactEmail: `office${index}@example.test` }));
+  await page.goto('/manager/leads/');
+  await expect(page.getByRole('alert').filter({ hasText: 'Lead list temporarily unavailable' })).toBeVisible();
+  state.listFailure = false; await page.getByRole('button', { name: 'Refresh leads', exact: true }).click();
+  await page.getByRole('button', { name: 'View lead', exact: true }).click();
+  const modal = page.getByRole('dialog');
+  for (const index of [1, 2]) {
+    await expect(modal.getByText(`Branch ${index} · Office ${index}`, { exact: true })).toBeVisible();
+    await expect(modal.getByText(`Street ${index}, 00100, Helsinki, FI`, { exact: true })).toBeVisible();
+    await expect(modal.getByText(`555${index} · office${index}@example.test`, { exact: true })).toBeVisible();
+  }
+  await expect(modal.getByRole('textbox', { name: /Branch/ })).toHaveCount(0);
+  await expect(modal.getByRole('button', { name: 'Add branch', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Record voice note', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Stop recording', exact: true })).toBeVisible();
+  await page.waitForTimeout(500); await page.getByRole('button', { name: 'Stop recording', exact: true }).click();
+  await expect(page.getByLabel('Preview voice recording')).toBeVisible();
+  await page.getByRole('button', { name: 'Save recording', exact: true }).click();
+  await expect(page.getByText('Manager Person', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Delete voice note', exact: true })).toHaveCount(0);
+});
+
+test('two independent follow-ups render processing errors and admin guards protect unsaved drafts', async ({ page }) => {
+  const state = await setup(page); await open(page);
+  for (const reason of ['Call about gym', 'Call about corridor']) {
+    await page.getByRole('button', { name: 'Add follow-up', exact: true }).click();
+    for (const label of ['Save lead', 'Reload lead', 'Deactivate', 'Convert to customer']) await expect(page.getByRole('button', { name: label, exact: true })).toBeDisabled();
+    await page.getByRole('textbox', { name: 'Follow-up reason', exact: true }).fill(reason);
+    await page.getByLabel('First reminder date').fill('2026-11-01');
+    await page.getByRole('textbox', { name: 'Notify tenant admins', exact: true }).click();
+    await page.getByRole('option', { name: 'Anna Admin (anna@example.test)', exact: true }).click(); await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Save follow-up', exact: true }).click();
+    await expect(page.getByText(reason, { exact: true })).toBeVisible();
+  }
+  expect(state.followUps).toHaveLength(2);
+  state.followUps[0].lastError = 'Identity directory unavailable; retry scheduled'; state.followUps[0].lastCheckedUtc = '2026-10-23T04:00:00Z';
+  await page.getByRole('button', { name: 'Refresh notes and follow-ups', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Identity directory unavailable; retry scheduled' })).toBeVisible();
+  await expect(page.getByText(/^Last checked:/)).toBeVisible();
+  await page.getByRole('button', { name: 'Add follow-up', exact: true }).click();
+  page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Discard follow-up', exact: true }).click();
+  for (const label of ['Save lead', 'Reload lead', 'Deactivate', 'Convert to customer']) await expect(page.getByRole('button', { name: label, exact: true })).toBeEnabled();
+  state.lead.isActive = false; await page.getByRole('button', { name: 'Reload lead', exact: true }).click();
+  // An inactive lead cannot open new drafts; its permanent-delete action remains available.
+  await expect(page.getByRole('button', { name: 'Add follow-up', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Delete lead', exact: true })).toBeEnabled();
 });
