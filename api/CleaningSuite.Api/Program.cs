@@ -101,6 +101,10 @@ builder.Services.AddSingleton<CleaningSuite.Application.Agreements.IAgreementFil
 builder.Services.AddSingleton<CleaningSuite.Application.Common.IUploadContentValidator, CleaningSuite.Infrastructure.Uploads.UploadContentValidator>();
 builder.Services.AddSingleton<CleaningSuite.Application.Agreements.IAgreementDocumentGenerator, CleaningSuite.Infrastructure.Agreements.AgreementPdfSigner>();
 
+builder.Services.AddScoped<CleaningSuite.Application.Leads.ILeadRepository, CleaningSuite.Infrastructure.Persistence.LeadRepository>();
+builder.Services.AddScoped<CleaningSuite.Application.Leads.ILeadFileStore, CleaningSuite.Infrastructure.Leads.DiskLeadFileStore>();
+builder.Services.AddScoped<CleaningSuite.Application.Leads.LeadService>();
+
 // New repositories for Companies and Shifts.
 builder.Services.AddScoped<CleaningSuite.Application.Companies.ICompanyRepository, CleaningSuite.Infrastructure.Persistence.CompanyRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.Companies.IBranchRepository, CleaningSuite.Infrastructure.Persistence.BranchRepository>();
@@ -279,6 +283,7 @@ public class DefaultExceptionHandler : IExceptionHandler
         var (status, title) = exception switch
         {
             CleaningSuite.Application.Common.SlugConflictException => (409, "Slug already exists"),
+            CleaningSuite.Application.Leads.LeadConflictException => (409, "Lead conflict"),
             CleaningSuite.Application.Companies.CompanyConflictException => (409, "Company business ID conflict"),
             CleaningSuite.Application.Common.InactiveRecordDeleteConflictException => (409, "Record cannot be deleted"),
             CleaningSuite.Application.Common.UploadPayloadTooLargeException => (413, "Payload too large"),

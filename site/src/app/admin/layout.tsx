@@ -21,6 +21,7 @@ const NAV = [
   { href: 'services', label: 'Services', icon: Sparkles },
   { href: 'agreements', label: 'Agreements', icon: FileSignature },
   { href: 'employees', label: 'Employees', icon: Users },
+  { href: 'leads', label: 'Leads', icon: Users },
   { href: 'companies', label: 'Companies', icon: Building2 },
   { href: 'shifts', label: 'Shifts', icon: CalendarClock },
   { href: 'invoices', label: 'Invoices', icon: Receipt },
