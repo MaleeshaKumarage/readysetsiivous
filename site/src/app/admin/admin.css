@@ -1,0 +1,8 @@
+/* The public site keeps its own saved/system theme. Admin uses one explicit
+   scheme on body as well, so portal dialogs and inherited text stay consistent. */
+html[data-admin-theme='light'] body {
+  color: var(--mantine-color-text) !important;
+  background-color: var(--mantine-color-body) !important;
+  color-scheme: light;
+}
+

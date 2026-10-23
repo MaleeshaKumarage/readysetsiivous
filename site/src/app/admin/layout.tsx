@@ -1,6 +1,7 @@
 'use client';
 
 import '@mantine/core/styles.css';
+import './admin.css';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -21,6 +22,7 @@ const NAV = [
   { href: 'services', label: 'Services', icon: Sparkles },
   { href: 'agreements', label: 'Agreements', icon: FileSignature },
   { href: 'employees', label: 'Employees', icon: Users },
+  { href: 'leads', label: 'Leads', icon: Users },
   { href: 'companies', label: 'Companies', icon: Building2 },
   { href: 'shifts', label: 'Shifts', icon: CalendarClock },
   { href: 'invoices', label: 'Invoices', icon: Receipt },
@@ -82,14 +84,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     return () => { verification.current++; };
   }, [verifyAccess]);
 
-  // Keep the site's dark class for any pages still using shadcn components.
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.add('dark');
-    root.setAttribute('data-mantine-color-scheme', 'dark');
+    const previous = root.getAttribute('data-admin-theme');
+    root.setAttribute('data-admin-theme', 'light');
     return () => {
-      root.classList.remove('dark');
-      root.removeAttribute('data-mantine-color-scheme');
+      if (previous === null) root.removeAttribute('data-admin-theme');
+      else root.setAttribute('data-admin-theme', previous);
     };
   }, []);
 
@@ -97,7 +98,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   if (!ready || (authed && access === 'pending')) {
     return (
-      <MantineProvider theme={adminTheme} forceColorScheme="dark">
+      <MantineProvider theme={adminTheme} forceColorScheme="light">
         <Group justify="center" h="100vh">
           <Text c="dimmed">Checking login…</Text>
         </Group>
@@ -107,7 +108,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   if (authed && access !== 'allowed') {
     return (
-      <MantineProvider theme={adminTheme} forceColorScheme="dark">
+      <MantineProvider theme={adminTheme} forceColorScheme="light">
         <Group justify="center" h="100vh" p="md">
           <Paper p="xl" radius="md" w="100%" maw={420} withBorder>
             <Stack>
@@ -125,7 +126,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   if (!authed) {
     return (
-      <MantineProvider theme={adminTheme} forceColorScheme="dark">
+      <MantineProvider theme={adminTheme} forceColorScheme="light">
         <Group justify="center" h="100vh" p="md">
           <Paper p="xl" radius="md" w="100%" maw={380} withBorder>
             <Stack align="center">
@@ -145,7 +146,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <MantineProvider theme={adminTheme} forceColorScheme="dark">
+    <MantineProvider theme={adminTheme} forceColorScheme="light">
       <AppShell
         header={{ height: 60 }}
         navbar={{

@@ -54,6 +54,7 @@ public class PublicUploadsTests
     [Theory]
     [InlineData("agreements/tenant/id/original.pdf")]
     [InlineData("agreements/tenant/id/0123456789abcdef0123456789abcdef.png")]
+    [InlineData("leads/tenant/lead/0123456789abcdef0123456789abcdef.png")]
     [InlineData("../0123456789abcdef0123456789abcdef.png")]
     [InlineData("agreements\\tenant\\id\\0123456789abcdef0123456789abcdef.png")]
     [InlineData("0123456789abcdef0123456789abcdef.pdf")]

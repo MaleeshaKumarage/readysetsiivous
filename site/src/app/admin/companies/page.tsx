@@ -93,6 +93,17 @@ export default function CompaniesAdminPage() {
     await loadBranches(id);
   };
 
+  const openedCustomer = useRef<string | null>(null);
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('company');
+    // listAll loads both active and inactive records; visibleCompanies applies the tab filter separately.
+    const customer = companies.find(company => company.id === requested);
+    if (!customer || openedCustomer.current === requested) return;
+    openedCustomer.current = requested;
+    setStatus(customer.isActive ? 'active' : 'inactive');
+    setExpanded(customer.id); setBranchStatus('active'); void loadBranches(customer.id);
+  }, [companies]);
+
   const submitBranch = async () => {
     if (!expanded || !branchForm.name.trim()) return;
     setBranchSaving(true); setBranchError('');
