@@ -13,10 +13,10 @@ async function setup(page: Page, role = 'admin') {
     await page.addInitScript(role => { (window as any).__MOCK_ROLES__ = [role]; }, role);
     await page.route(/\/api\/v1\/me$/, route => route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' }, json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: [role] })], employee: { id: 'manager-1', role, isActive: true } } }));
   }
-  const state = { voices: [] as any[], followUps: [] as any[], deliveries: [] as any[], requests: [] as { method: string; path: string; body: any }[], audioFailure: false, uploadFailure: false, recipientFailure: false, saveFailure: false, lastRecording: '', audioBytes: Buffer.from('audio fixture') as Buffer, lead: { id, version: 'v1', fields: { ...fields }, isActive: true, status: 'New', imageCount: 0, companyId: null as string | null, branchId: null, convertedUtc: null, updatedUtc: '2026-10-23T10:00:00Z' } };
+  const state = { voices: [] as any[], followUps: [] as any[], deliveries: [] as any[], requests: [] as { method: string; path: string; body: any }[], images: [] as { id: string }[], leadRows: [] as any[], imageFailure: false, detailFailure: false, audioFailure: false, uploadFailure: false, recipientFailure: false, saveFailure: false, lastRecording: '', audioBytes: Buffer.from('audio fixture') as Buffer, lead: { id, version: 'v1', fields: { ...fields }, isActive: true, status: 'New', imageCount: 0, companyId: null as string | null, branchId: null, convertedUtc: null, updatedUtc: '2026-10-23T10:00:00Z' } };
   const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS' };
   const queries: string[] = [];
-  const detail = () => ({ lead: state.lead, images: [], customerAvailable: false, capabilities: { canEditMetadata: role === 'admin', canRecord: state.lead.isActive && !state.lead.companyId && state.lead.status !== 'Lost', canSchedule: state.lead.isActive && !state.lead.companyId, canDeleteVoice: role === 'admin' && !state.lead.companyId } });
+  const detail = () => ({ lead: state.lead, images: state.images, customerAvailable: false, capabilities: { canEditMetadata: role === 'admin', canRecord: state.lead.isActive && !state.lead.companyId && state.lead.status !== 'Lost', canSchedule: state.lead.isActive && !state.lead.companyId, canDeleteVoice: role === 'admin' && !state.lead.companyId } });
   await page.route('**/api/v1/admin/leads**', route => route.fulfill({ headers, json: new URL(route.request().url()).pathname.endsWith('/leads') ? { items: [state.lead], total: 1 } : detail() }));
   await page.route('**/api/v1/manager/leads**', async route => {
     const request = route.request(); const path = new URL(request.url()).pathname; const method = request.method();
@@ -24,9 +24,11 @@ async function setup(page: Page, role = 'admin') {
     if (method === 'GET') { queries.push(request.url());
       if (path.endsWith('/settings')) return route.fulfill({ headers, json: { timeZoneId: 'Europe/Helsinki' } });
       if (path.endsWith('/recipients')) return route.fulfill({ headers, status: state.recipientFailure ? 503 : 200, json: state.recipientFailure ? { detail: 'Admin directory unavailable' } : [{ id: 'admin-1', name: 'Anna Admin', email: 'anna@example.test' }, { id: 'admin-2', name: 'Other Admin', email: 'other@example.test' }] });
+      if (path.includes('/images/')) return route.fulfill({ headers, status: state.imageFailure ? 503 : 200, contentType: state.imageFailure ? 'application/json' : 'image/png', body: state.imageFailure ? JSON.stringify({ detail: 'Image storage temporarily unavailable' }) : Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64') });
+      if (path === `/api/v1/manager/leads/${id}` && state.detailFailure) return route.fulfill({ headers, status: 503, json: { detail: 'Lead detail temporarily unavailable' } });
       if (path.endsWith('/audio')) return route.fulfill({ headers, status: state.audioFailure ? 503 : 200, contentType: 'audio/webm', body: state.audioFailure ? 'Unavailable' : state.audioBytes });
       const items = path.endsWith('/voice-notes') ? state.voices : path.endsWith('/follow-ups') ? state.followUps : path.endsWith('/deliveries') ? state.deliveries : null;
-      return route.fulfill({ headers, json: items ? { items: items.slice(Number(new URL(request.url()).searchParams.get('skip') || 0), Number(new URL(request.url()).searchParams.get('skip') || 0) + 25), total: items.length } : path.endsWith('/leads') ? { items: [state.lead], total: 1 } : detail() });
+      return route.fulfill({ headers, json: items ? { items: items.slice(Number(new URL(request.url()).searchParams.get('skip') || 0), Number(new URL(request.url()).searchParams.get('skip') || 0) + 25), total: items.length } : path.endsWith('/leads') ? { items: (state.leadRows.length ? state.leadRows : [state.lead]).slice(Number(new URL(request.url()).searchParams.get('skip') || 0), Number(new URL(request.url()).searchParams.get('skip') || 0) + 25), total: state.leadRows.length || 1 } : detail() });
     }
     const body = path.includes('/voice-notes/') && method === 'POST' ? request.postDataBuffer() : request.postDataJSON(); state.requests.push({ method, path, body });
     if (path.includes('/voice-notes/') && method === 'POST') {
@@ -122,4 +124,35 @@ test('recording auto-stops before five minutes and releases every microphone tra
   await expect(page.getByLabel('Preview voice recording')).toBeVisible(); await expect(page.getByRole('button', { name: 'Stop recording', exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => (window as any).__TEST_AUDIO_STREAMS__.every((stream: MediaStream) => stream.getTracks().every(track => track.readyState === 'ended')))).toBe(true);
   await page.getByRole('button', { name: 'Discard recording', exact: true }).click();
+});
+
+
+test('manager lead list paginates and recovers failed detail and private image loads', async ({ page }) => {
+  const state = await setup(page, 'manager');
+  state.leadRows = Array.from({ length: 26 }, (_, index) => ({ ...state.lead, id: index === 0 ? id : `lead-${index}`, fields: { ...fields, name: `Prospect ${index}` } }));
+  await page.goto('/manager/leads/');
+  await expect(page.getByRole('cell', { name: 'Prospect 0', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Prospect 25', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect.poll(() => state.queries.some(q => q.includes('/leads?') && q.includes('skip=25'))).toBe(true);
+  await expect(page.getByRole('cell', { name: 'Prospect 25', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Previous', exact: true }).click();
+  await expect(page.getByRole('cell', { name: 'Prospect 0', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Previous', exact: true })).toBeDisabled();
+  state.detailFailure = true;
+  await page.getByRole('button', { name: 'View lead', exact: true }).first().click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Lead detail temporarily unavailable' })).toBeVisible();
+  state.detailFailure = false; state.images = [{ id: 'image-1' }]; state.imageFailure = true;
+  await page.getByRole('button', { name: 'Retry loading lead', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Voice notes', exact: true })).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: 'Image storage temporarily unavailable' })).toBeVisible();
+  state.imageFailure = false;
+  await page.getByRole('button', { name: 'Retry lead image', exact: true }).click();
+  const image = page.getByRole('img', { name: 'Lead image', exact: true });
+  await expect(image).toBeVisible();
+  await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth > 0)).toBe(true);
+  await expect(image).toHaveAttribute('src', /^blob:/);
+  await expect(image.locator('..')).toHaveAttribute('target', '_blank');
+  await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toHaveCount(0);
 });
