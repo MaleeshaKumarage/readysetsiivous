@@ -136,4 +136,3 @@ public class LeadCollaborationTests
         public LeadFollowUp AddFollow(string recurrence) { var follow=new LeadFollowUp{LeadId=Lead.Id,Version=Guid.NewGuid(),FirstDate=new(2026,10,23),NextDate=new(2026,10,23),NextCheckUtc=Clock.Utc.UtcDateTime,Reason="<reason>",Recurrence=recurrence,RecipientIds=["admin"]};Follows.Add(follow);return follow; }
     }
 }
-
