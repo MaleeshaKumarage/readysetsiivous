@@ -4,7 +4,7 @@ async function readable(locator: Locator) {
   await expect.poll(async () => locator.evaluate(element => {
     const luminance = (color: string) => {
       const values = color.match(/[\d.]+/g)?.slice(0, 3).map(Number) ?? [];
-      if (values.length !== 3) throw new Error(`Unexpected computed color: ${color}`);
+      if (values.length !== 3) return Number.NaN;
       const linear = values.map(value => { const c = value / 255; return c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4; });
       return .2126 * linear[0] + .7152 * linear[1] + .0722 * linear[2];
     };
@@ -32,10 +32,27 @@ for (const scheme of ['light', 'dark'] as const) test.describe(`admin with ${sch
     await expect(page.locator('html')).toHaveAttribute('data-mantine-color-scheme', 'light');
     await readable(page.getByRole('heading', { name: 'Dashboard', exact: true }));
     await readable(page.getByRole('link', { name: 'Services Manage cleaning services, prices and descriptions.' }).getByText('Services', { exact: true }));
-    await page.goto('/admin/leads/'); await page.getByRole('button', { name: 'New lead', exact: true }).click();
+    await page.getByRole('link', { name: 'Leads Manage prospects, contact details and customer conversion.' }).click();
+    await expect(page).toHaveURL(/\/admin\/leads\//, { timeout: 15000 });
+    if (test.info().project.name === 'chromium-desktop') {
+      await page.goto('/admin/'); await page.getByRole('navigation').getByRole('link', { name: 'Leads', exact: true }).click();
+      await expect(page).toHaveURL(/\/admin\/leads\//, { timeout: 15000 });
+    }
+    await page.getByRole('button', { name: 'New lead', exact: true }).click();
     const dialog = page.getByRole('dialog'); await readable(dialog.getByRole('heading', { name: 'Company details' }));
     await readable(dialog.getByRole('textbox', { name: 'Company name' }));
     expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('dark');
+  });
+  test('all admin sections retain readable headings', async ({ page }) => {
+    await page.route('**/api/v1/admin/**', route => {
+      const path = new URL(route.request().url()).pathname;
+      return route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' }, json: path.endsWith('/legacy-repairs') ? { agreements: [] } : path.endsWith('/companies') ? { items: [], total: 0 } : path.endsWith('/issuer') ? null : [] });
+    });
+    await setupAdminMocks(page); await standaloneDarkSite(page);
+    for (const [path, title] of [['companies', 'Companies'], ['shifts', 'Shifts'], ['employees', 'Employees'], ['invoices', 'Invoices'], ['agreements', 'Agreements'], ['services', 'Services'], ['quality-cycle', 'Quality Cycle Management']]) {
+      await page.goto(`/admin/${path}/`);
+      await readable(page.getByRole('heading', { name: title, exact: true }));
+    }
   });
   test('signed out screen stays light', async ({ page }) => {
     await setupAdminMocks(page, { authenticated: false }); await standaloneDarkSite(page); await page.goto('/admin/');

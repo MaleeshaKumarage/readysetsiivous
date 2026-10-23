@@ -149,7 +149,7 @@ export default function AdminQualityCyclePage() {
   if (!allowed) return <Text role="alert">Only admins can manage checklist templates and view reports.</Text>;
 
   return (
-    <Stack gap="lg" p="md" style={{ color: 'var(--mantine-color-text)', background: 'var(--mantine-color-dark-8)', borderRadius: 12 }}>
+    <Stack gap="lg" p="md" style={{ color: 'var(--mantine-color-text)', background: 'var(--mantine-color-body)', borderRadius: 12 }}>
       <Group justify="space-between" align="flex-start" wrap="wrap">
         <div>
           <Title order={2}>Quality Cycle Management</Title>
