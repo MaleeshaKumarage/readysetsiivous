@@ -31,6 +31,7 @@ for (const scheme of ['light', 'dark'] as const) test.describe(`admin with ${sch
     expect(await page.evaluate(() => matchMedia('(display-mode: standalone)').matches)).toBe(true);
     await expect(page.locator('html')).toHaveAttribute('data-mantine-color-scheme', 'light');
     await readable(page.getByRole('heading', { name: 'Dashboard', exact: true }));
+    await readable(page.getByRole('link', { name: 'Services Manage cleaning services, prices and descriptions.' }).getByText('Services', { exact: true }));
     await page.goto('/admin/leads/'); await page.getByRole('button', { name: 'New lead', exact: true }).click();
     const dialog = page.getByRole('dialog'); await readable(dialog.getByRole('heading', { name: 'Company details' }));
     await readable(dialog.getByRole('textbox', { name: 'Company name' }));
