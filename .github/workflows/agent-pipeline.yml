@@ -1,440 +1,304 @@
 name: agent-pipeline
 
 on:
-  issue_comment:
-    types: [created]
-  schedule:
-    - cron: '7 * * * *'
   workflow_dispatch:
     inputs:
       issue-number:
-        description: 'Issue number to run (implement/test/pr/review chain)'
-        required: false
-
+        description: Approved issue number
+        required: true
+        type: string
+      plan-comment-id:
+        description: Exact trusted plan comment ID
+        required: true
+        type: string
+      plan-sha256:
+        description: SHA256 of exact UTF8 comment body
+        required: true
+        type: string
+      base-sha:
+        description: Approved full base commit SHA
+        required: true
+        type: string
+permissions:
+  contents: read
 concurrency:
-  group: agent-pipeline
+  group: agent-${{ github.run_id }}
   cancel-in-progress: false
-
 jobs:
-  # --- Stage 1: plan (real-time on @malku) ---
-  plan:
-    if: github.event_name == 'issue_comment' && contains(github.event.comment.body, '@malku') && !(contains(github.event.comment.body, 'implement') || contains(github.event.comment.body, 'approve') || contains(github.event.comment.body, 'start') || contains(github.event.comment.body, 'go')) && (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR')
+  control:
+    if: github.event_name == 'workflow_dispatch' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
-      issues: write
       contents: read
+      issues: read
+    outputs:
+      snapshot-sha256: ${{ steps.snapshot.outputs.sha256 }}
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+      artifact-digest: ${{ steps.upload.outputs.artifact-digest }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Get issue
-        id: issue
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Capture exact authorized plan
         env:
           GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ inputs.issue-number }}
+          COMMENT: ${{ inputs.plan-comment-id }}
+          PLAN_HASH: ${{ inputs.plan-sha256 }}
+          BASE_SHA: ${{ inputs.base-sha }}
+          SNAPSHOT_OUTPUT: snapshot/snapshot.json
         run: |
-          N=${{ github.event.issue.number }}
-          gh issue view "$N" --json title -q .title > /tmp/issue-title.txt
-          gh issue view "$N" --json body -q .body > /tmp/issue-body.txt
-          gh issue view "$N" --json comments -q '.comments[].body' > /tmp/issue-comments.txt
-          echo "number=$N" >> "$GITHUB_OUTPUT"
-
-      - name: Clarify + plan (DeepSeek)
-        env:
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          mkdir -p snapshot
+          python3 scripts/agent_contract.py prepare --repo "$GITHUB_REPOSITORY" --issue "$ISSUE" --comment "$COMMENT" --plan-sha256 "$PLAN_HASH" --base-sha "$BASE_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --actor "$GITHUB_TRIGGERING_ACTOR" --output "$SNAPSHOT_OUTPUT"
+      - name: Bind canonical snapshot
+        id: snapshot
         run: |
-          {
-            echo "## Issue"
-            cat /tmp/issue-title.txt
-            echo
-            cat /tmp/issue-body.txt
-            echo
-            echo "## Recent comments (clarifying Q&A, if any)"
-            cat /tmp/issue-comments.txt
-            echo
-            echo "## Repository files"
-            git ls-files | head -200
-            echo "---"
-          } | bash scripts/deepseek_wrap.sh \
-            "You are a senior software engineer. First decide whether the issue is clear enough to plan. If it is ambiguous, missing requirements, or has unanswered clarifying questions, do NOT write a plan — instead output the single line 'QUESTIONS' followed by a numbered list of concise clarifying questions for the user. If it is clear, write the implementation plan as markdown with a section exactly titled '## SUB_ISSUES' listing each sub-task as a one-line title prefixed '- '. Never write code, only the plan or questions." \
-            > plan.md
-
-      - name: Post plan (or clarifying questions) + label
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          N=${{ steps.issue.outputs.number }}
-          if head -1 plan.md | grep -qi '^QUESTIONS'; then
-            gh issue comment "$N" --body-file plan.md
-            gh issue edit "$N" --add-label "needs-clarification" --remove-label "planned"
-            exit 0
-          fi
-          gh issue comment "$N" --body-file plan.md
-          gh issue edit "$N" --add-label "planned" --remove-label "needs-clarification"
-
-  # --- Stage 1b: revise plan on disapprove/suggest ---
-  revise-plan:
-    if: github.event_name == 'issue_comment' && (contains(github.event.comment.body, 'disapprove') || contains(github.event.comment.body, 'suggest') || contains(github.event.comment.body, 'revise')) && (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR')
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          snapshot = json.loads(Path('snapshot/snapshot.json').read_text(encoding='utf-8'))
+          digest = hashlib.sha256(json.dumps(snapshot, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()).hexdigest()
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'sha256={digest}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        id: upload
+        with:
+          name: agent-snapshot-${{ github.run_attempt }}
+          path: snapshot/snapshot.json
+          if-no-files-found: error
+          retention-days: 3
+  generation:
+    needs: [control]
+    if: github.event_name == 'workflow_dispatch' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     permissions:
-      issues: write
       contents: read
+      actions: read
+      issues: read
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+      artifact-digest: ${{ steps.upload.outputs.artifact-digest }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Revise plan (DeepSeek)
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Download and authenticate snapshot artifact
         env:
           GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ needs.control.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ needs.control.outputs.artifact-digest }}
+          SNAPSHOT_HASH: ${{ needs.control.outputs.snapshot-sha256 }}
+          WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          python3 scripts/agent_artifact.py --repo "$GITHUB_REPOSITORY" --artifact-id "$ARTIFACT_ID" --digest "$ARTIFACT_DIGEST" --workflow-sha "$WORKFLOW_SHA" --kind snapshot --output snapshot/snapshot.json
+          python3 scripts/agent_contract.py check-artifact --snapshot snapshot/snapshot.json \
+          --artifact-id "$ARTIFACT_ID" --digest "$ARTIFACT_DIGEST" --workflow-sha "$WORKFLOW_SHA" \
+          --kind snapshot --expected-snapshot-sha256 "$SNAPSHOT_HASH"
+      - name: Fetch approved base objects as data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64, json, os, re, subprocess
+          from pathlib import Path
+          base = json.loads(Path('snapshot/snapshot.json').read_text(encoding='utf-8'))['base_sha']
+          if not re.fullmatch(r'[0-9a-f]{40}', base):
+              raise SystemExit('invalid base SHA')
+          environment = dict(os.environ)
+          credential = base64.b64encode(('x-access-token:' + environment.pop('GH_TOKEN')).encode()).decode()
+          environment.update(GIT_CONFIG_COUNT='1', GIT_CONFIG_KEY_0='http.https://github.com/.extraheader', GIT_CONFIG_VALUE_0='AUTHORIZATION: basic ' + credential)
+          subprocess.run(['git', 'fetch', '--no-tags', 'origin', base], env=environment, check=True)
+          PY
+      - name: Revalidate approval immediately before generation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ inputs.issue-number }}
+          COMMENT: ${{ inputs.plan-comment-id }}
+          PLAN_HASH: ${{ inputs.plan-sha256 }}
+          BASE_SHA: ${{ inputs.base-sha }}
+          SNAPSHOT_OUTPUT: revalidated.json
+          SNAPSHOT_HASH: ${{ needs.control.outputs.snapshot-sha256 }}
+        run: |
+          python3 scripts/agent_contract.py prepare --repo "$GITHUB_REPOSITORY" --issue "$ISSUE" --comment "$COMMENT" --plan-sha256 "$PLAN_HASH" --base-sha "$BASE_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --actor "$GITHUB_TRIGGERING_ACTOR" --output "$SNAPSHOT_OUTPUT"
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          body = json.loads(Path('revalidated.json').read_text(encoding='utf-8'))
+          actual = hashlib.sha256(json.dumps(body, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()).hexdigest()
+          if actual != os.environ['SNAPSHOT_HASH']:
+              raise SystemExit('approval changed; new explicit approval required')
+          PY
+      - name: Pull approved immutable python image
+        env:
+          APPROVED_IMAGE: ${{ vars.AGENT_PYTHON_IMAGE }}
+        run: |
+          python3 - <<'PY'
+          import os, re, subprocess
+          image = os.environ['APPROVED_IMAGE']
+          if not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9./:_-]*@sha256:[0-9a-f]{64}', image):
+              raise SystemExit('approved immutable image required')
+          subprocess.run(['docker', 'pull', image], check=True)
+          PY
+      - name: Enable bridge firewall enforcement
+        run: |
+          sudo modprobe br_netfilter
+          sudo sysctl -w net.bridge.bridge-nf-call-iptables=1
+      - name: Generate bounded proposal through isolated gateway
+        env:
+          AGENT_PYTHON_IMAGE: ${{ vars.AGENT_PYTHON_IMAGE }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
-          N=${{ github.event.issue.number }}
-          gh issue view "$N" --json title -q .title > /tmp/issue-title.txt
-          gh issue view "$N" --json body -q .body > /tmp/issue-body.txt
-          gh issue view "$N" --json comments -q '.comments[].body' | tail -30 > /tmp/prev-plan.txt
-          {
-            echo "## Issue"
-            cat /tmp/issue-title.txt
-            echo
-            cat /tmp/issue-body.txt
-            echo
-            echo "## Previous plan + feedback"
-            cat /tmp/prev-plan.txt
-            echo
-            echo "## Reviewer feedback (latest comment)"
-            echo "${{ github.event.comment.body }}"
-            echo
-            echo "Revise the plan to address the feedback."
-          } | bash scripts/deepseek_wrap.sh \
-            "You are a senior software engineer. Rewrite the implementation plan to incorporate the reviewer's feedback. Output only the revised plan as markdown, keeping the '## SUB_ISSUES' section format." \
-            > plan.md
-          gh issue comment "$N" --body-file plan.md
-
-  # --- Stage 2: resolve which issue to run (off-peak gate + blocked resume) ---
-  resolve:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'issue_comment' && (contains(github.event.comment.body, 'approve') || contains(github.event.comment.body, 'implement') || contains(github.event.comment.body, 'start') || contains(github.event.comment.body, 'go') || contains(github.event.issue.labels.*.name, 'blocked')) && (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR'))
+          mkdir -p proposal
+          sudo --preserve-env=AGENT_PYTHON_IMAGE,DEEPSEEK_API_KEY python3 scripts/agent_sandbox.py generate --snapshot snapshot/snapshot.json --output proposal/proposal.json
+      - uses: actions/upload-artifact@v4
+        id: upload
+        with:
+          name: agent-proposal-${{ github.run_attempt }}
+          path: proposal/proposal.json
+          if-no-files-found: error
+          retention-days: 3
+  verification:
+    needs: [control, generation]
+    if: github.event_name == 'workflow_dispatch' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     permissions:
-      issues: write
+      contents: read
+      actions: read
+      issues: read
     outputs:
-      issue: ${{ steps.res.outputs.issue }}
-      resume: ${{ steps.res.outputs.resume }}
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+      artifact-digest: ${{ steps.upload.outputs.artifact-digest }}
     steps:
-      - id: res
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Download and authenticate snapshot artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ needs.control.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ needs.control.outputs.artifact-digest }}
+          SNAPSHOT_HASH: ${{ needs.control.outputs.snapshot-sha256 }}
+          WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          python3 scripts/agent_artifact.py --repo "$GITHUB_REPOSITORY" --artifact-id "$ARTIFACT_ID" --digest "$ARTIFACT_DIGEST" --workflow-sha "$WORKFLOW_SHA" --kind snapshot --output snapshot/snapshot.json
+          python3 scripts/agent_contract.py check-artifact --snapshot snapshot/snapshot.json \
+          --artifact-id "$ARTIFACT_ID" --digest "$ARTIFACT_DIGEST" --workflow-sha "$WORKFLOW_SHA" \
+          --kind snapshot --expected-snapshot-sha256 "$SNAPSHOT_HASH"
+      - name: Download and authenticate proposal artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ needs.generation.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ needs.generation.outputs.artifact-digest }}
+          SNAPSHOT_HASH: ${{ needs.control.outputs.snapshot-sha256 }}
+          WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          python3 scripts/agent_artifact.py --repo "$GITHUB_REPOSITORY" --artifact-id "$ARTIFACT_ID" --digest "$ARTIFACT_DIGEST" --workflow-sha "$WORKFLOW_SHA" --kind proposal --output proposal/proposal.json
+          python3 scripts/agent_contract.py check-artifact --snapshot snapshot/snapshot.json \
+          --artifact-id "$ARTIFACT_ID" --digest "$ARTIFACT_DIGEST" --workflow-sha "$WORKFLOW_SHA" \
+          --kind proposal --expected-snapshot-sha256 "$SNAPSHOT_HASH"
+      - name: Fetch approved base objects as data
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          is_peak() {
-            H=$(date -u +%H); D=$(date -u +%u)
-            [ "$D" -lt 6 ] || return 1
-            case "$H" in 01|02|03|06|07|08|09) return 0 ;; *) return 1 ;; esac
-          }
-          ISSUE=""
-          RESUME="0"
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            ISSUE="${{ github.event.inputs.issue-number }}"
-          elif [ "${{ github.event_name }}" = "issue_comment" ]; then
-            if echo '${{ toJson(github.event.issue.labels.*.name) }}' | grep -q '"blocked"'; then
-              echo "blocked issue — resume immediately"
-              ISSUE="${{ github.event.issue.number }}"
-              RESUME="1"
-            else
-              echo "explicit trigger — implement immediately"
-              ISSUE="${{ github.event.issue.number }}"
-            fi
-          else
-            if is_peak; then
-              echo "peak — skip"
-            else
-              ISSUE=$(gh issue list --label approved --state open --json number -q '.[0].number' 2>/dev/null || echo "")
-            fi
-          fi
-          echo "resolved issue: $ISSUE (resume=$RESUME)"
-          echo "issue=$ISSUE" >> "$GITHUB_OUTPUT"
-          echo "resume=$RESUME" >> "$GITHUB_OUTPUT"
-
-  # --- Stage 3: implement (aider) + build gate ---
-  implement:
-    needs: resolve
-    if: needs.resolve.outputs.issue != ''
-    runs-on: [self-hosted, agent]
+          python3 - <<'PY'
+          import base64, json, os, re, subprocess
+          from pathlib import Path
+          base = json.loads(Path('snapshot/snapshot.json').read_text(encoding='utf-8'))['base_sha']
+          if not re.fullmatch(r'[0-9a-f]{40}', base):
+              raise SystemExit('invalid base SHA')
+          environment = dict(os.environ)
+          credential = base64.b64encode(('x-access-token:' + environment.pop('GH_TOKEN')).encode()).decode()
+          environment.update(GIT_CONFIG_COUNT='1', GIT_CONFIG_KEY_0='http.https://github.com/.extraheader', GIT_CONFIG_VALUE_0='AUTHORIZATION: basic ' + credential)
+          subprocess.run(['git', 'fetch', '--no-tags', 'origin', base], env=environment, check=True)
+          PY
+      - name: Pull approved immutable toolchain image
+        env:
+          APPROVED_IMAGE: ${{ vars.AGENT_TOOLCHAIN_IMAGE }}
+        run: |
+          python3 - <<'PY'
+          import os, re, subprocess
+          image = os.environ['APPROVED_IMAGE']
+          if not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9./:_-]*@sha256:[0-9a-f]{64}', image):
+              raise SystemExit('approved immutable image required')
+          subprocess.run(['docker', 'pull', image], check=True)
+          PY
+      - name: Verify proposal in offline restricted container
+        env:
+          AGENT_TOOLCHAIN_IMAGE: ${{ vars.AGENT_TOOLCHAIN_IMAGE }}
+          AGENT_SOURCE_BASE_SHA: ${{ inputs.base-sha }}
+        run: |
+          mkdir -p verification
+          python3 scripts/agent_sandbox.py verify --snapshot snapshot/snapshot.json --proposal proposal/proposal.json --output verification/verification.json
+      - uses: actions/upload-artifact@v4
+        id: upload
+        with:
+          name: agent-verification-${{ github.run_attempt }}
+          path: verification/verification.json
+          if-no-files-found: error
+          retention-days: 3
+  publication:
+    needs: [control, generation, verification]
+    if: github.event_name == 'workflow_dispatch' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
-      issues: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.402
-
-      - name: Configure git
-        run: |
-          git config user.name "cleaning-agent"
-          git config user.email "agent@readysetsiivous.fi"
-
-      - name: Reset cost log
-        run: python3 scripts/cost.py reset
-
-      - name: Get issue + plan
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          N=${{ needs.resolve.outputs.issue }}
-          echo "N=$N" >> "$GITHUB_ENV"
-          gh issue view "$N" --json title -q .title > /tmp/issue-title.txt
-          gh issue view "$N" --json body -q .body > /tmp/issue-body.txt
-          gh issue view "$N" --json comments -q '.comments[].body' | tail -20 > /tmp/plan.txt
-
-      - name: Create or reuse branch
-        run: |
-          if git ls-remote --heads origin "feature/issue-$N" | grep -q .; then
-            echo "branch exists — reusing (skip re-implement)"
-            git fetch origin "feature/issue-$N"
-            git checkout "feature/issue-$N"
-            echo "REUSE=1" >> "$GITHUB_ENV"
-          else
-            echo "fresh branch — implement from scratch"
-            git checkout main
-            git checkout -B "feature/issue-$N"
-            echo "REUSE=0" >> "$GITHUB_ENV"
-          fi
-
-      - name: Resume (aider) on blocked
-        if: needs.resolve.outputs.resume == '1'
-        env:
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-        run: |
-          bash scripts/aider_wrap.sh \
-            --model deepseek/deepseek-v4-pro \
-            --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
-            --message "Resume the blocked implementation. The build/test failed and the user replied with guidance. Fix the failure following the user's guidance and ensure it compiles. Latest comments/plan (guidance is the last one): $(cat /tmp/plan.txt)"
-          gh issue edit "$N" --remove-label "blocked"
-
-      - name: Implement (aider)
-        if: env.REUSE != '1'
-        env:
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-        run: |
-          bash scripts/aider_wrap.sh \
-            --model deepseek/deepseek-v4-pro \
-            --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
-            --message "You are a senior developer. Implement the feature COMPLETELY following the plan exactly. Critical rules: follow the plan, add tests for new behavior, leave no TODOs or stubs, handle edge cases and error paths, and ensure it compiles. Issue: $(cat /tmp/issue-title.txt). $(cat /tmp/issue-body.txt). Plan: $(cat /tmp/plan.txt)"
-
-      - name: Build gate (retryable)
-        env:
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-        run: |
-          set +e
-          retry() {
-            local what="$1"; shift
-            local i
-            for i in 1 2 3; do
-              echo "===== $what (attempt $i) ====="
-              "$@" > /tmp/retry.log 2>&1
-              if [ $? -eq 0 ]; then echo "$what OK"; return 0; fi
-              echo "$what FAILED (attempt $i). DeepSeek fix..."
-              tail -30 /tmp/retry.log
-              bash scripts/aider_wrap.sh --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
-                --message "Fix this build/test failure with the MINIMAL edit to the specific lines causing the error. Do NOT rewrite or regenerate whole files — preserve all existing classes and code. Error: $(tail -40 /tmp/retry.log)"
-            done
-            echo "$what FAILED after 3 retries"
-            return 1
-          }
-          retry "dotnet build" bash -c 'cd api && dotnet build CleaningSuite.Backend.sln -c Release --nologo' || {
-            echo "build gate failed — pausing for guidance"
-            { echo "⚠️ Build failed after retries. I'm blocked."; echo; echo "Last error:"; tail -30 /tmp/retry.log; echo; echo "Reply with guidance and mention @malku to resume."; } > /tmp/blocker.md
-            gh issue comment "$N" --body-file /tmp/blocker.md
-            gh issue edit "$N" --add-label "blocked"
-            exit 1
-          }
-
-      - name: Push branch
-        run: git push -u --force origin "feature/issue-$N"
-
-  # --- Stage 4: test + coverage + site build ---
-  test:
-    needs: [implement, resolve]
-    runs-on: [self-hosted, agent]
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout branch
-        uses: actions/checkout@v4
-        with:
-          ref: feature/issue-${{ needs.resolve.outputs.issue }}
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.402
-
-      - name: Test + coverage + site (retryable)
-        env:
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-        run: |
-          set +e
-          retry() {
-            local what="$1"; shift
-            local i
-            for i in 1 2 3; do
-              echo "===== $what (attempt $i) ====="
-              "$@" > /tmp/retry.log 2>&1
-              if [ $? -eq 0 ]; then echo "$what OK"; return 0; fi
-              echo "$what FAILED (attempt $i). DeepSeek fix..."
-              tail -30 /tmp/retry.log
-              bash scripts/aider_wrap.sh --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
-                --message "Fix this build/test failure with the MINIMAL edit to the specific lines causing the error. Do NOT rewrite or regenerate whole files — preserve all existing classes and code. Error: $(tail -40 /tmp/retry.log)"
-            done
-            echo "$what FAILED after 3 retries"
-            return 1
-          }
-          retry "dotnet test" bash -c 'cd api && dotnet test CleaningSuite.Backend.sln -c Release --collect:"XPlat Code Coverage" --results-directory ./TestResults' || exit 1
-          retry "coverage" bash -c 'cd api && python3 ../scripts/check_coverage.py' || exit 1
-          retry "site build" bash -c 'cd site && npm ci && npm run build' || exit 1
-          git push origin "feature/issue-${{ needs.resolve.outputs.issue }}"
-
-  # --- Stage 5: deploy + seed + create PR ---
-  pr:
-    needs: [test, resolve]
-    runs-on: [self-hosted, agent]
-    permissions:
-      contents: write
-      pull-requests: write
-      packages: read
-    outputs:
-      pr: ${{ steps.pr.outputs.pr }}
-    steps:
-      - name: Checkout branch
-        uses: actions/checkout@v4
-        with:
-          ref: feature/issue-${{ needs.resolve.outputs.issue }}
-
-      - name: Deploy + seed dev
-        run: |
-          N=${{ needs.resolve.outputs.issue }}
-          cd api && docker build -f docker/Dockerfile -t cleaning-dev-api:dev .
-          cp "$GITHUB_WORKSPACE/api/deploy/docker-compose.dev.yml" /home/ubuntu/cleaning-dev/docker-compose.yml
-          cp "$GITHUB_WORKSPACE/api/deploy/keycloak-realm.json" /home/ubuntu/cleaning-dev/keycloak-realm.json
-          cd /home/ubuntu/cleaning-dev && docker compose up -d
-          for i in $(seq 1 30); do docker exec cleaning-dev-postgres-1 pg_isready -U cleaning >/dev/null 2>&1 && break; sleep 2; done
-          docker exec -i cleaning-dev-postgres-1 psql -U cleaning -d cleaning < "$GITHUB_WORKSPACE/api/deploy/seed-dev.sql"
-          cd "$GITHUB_WORKSPACE/site" && npm ci && NEXT_PUBLIC_API_URL=http://130.61.208.211:8090/ NEXT_PUBLIC_KEYCLOAK_URL=http://130.61.208.211:8081/ npm run build
-          sudo mkdir -p /home/ubuntu/cleaning-dev/site && sudo rm -rf /home/ubuntu/cleaning-dev/site/* && sudo cp -r out/. /home/ubuntu/cleaning-dev/site/
-          sudo pkill -f "http.server 80" || true
-          sudo nohup python3 -m http.server 80 -d /home/ubuntu/cleaning-dev/site >/tmp/site-http.log 2>&1 &
-
-      - name: Create PR (idempotent)
-        id: pr
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          N=${{ needs.resolve.outputs.issue }}
-          BR="feature/issue-$N"
-          PR=$(gh pr list --head "$BR" --state open --json number -q '.[0].number' 2>/dev/null || echo "")
-          if [ -z "$PR" ]; then
-            BODY=$(printf 'Implements %s.\n\n## Dev preview\nUI: http://130.61.208.211/\nAPI: http://130.61.208.211:8090/' "$BR")
-            PR=$(gh pr create --draft --base main --head "$BR" --title "$BR" --body "$BODY" | grep -oE '[0-9]+$')
-          fi
-          echo "PR=$PR"
-          echo "pr=$PR" >> "$GITHUB_OUTPUT"
-
-  # --- Stage 6: review + self-heal + verify (loop until fully passing) ---
-  review-verify:
-    needs: [pr, resolve]
-    runs-on: [self-hosted, agent]
-    permissions:
-      contents: write
+      actions: read
+      issues: read
       pull-requests: write
     steps:
-      - name: Checkout branch
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          ref: feature/issue-${{ needs.resolve.outputs.issue }}
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.402
-
-      - name: Review + self-heal + verify loop
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Download and authenticate snapshot artifact
         env:
           GH_TOKEN: ${{ github.token }}
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          ARTIFACT_ID: ${{ needs.control.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ needs.control.outputs.artifact-digest }}
+          SNAPSHOT_HASH: ${{ needs.control.outputs.snapshot-sha256 }}
+          WORKFLOW_SHA: ${{ github.sha }}
         run: |
-          PR=${{ needs.pr.outputs.pr }}
-          N=${{ needs.resolve.outputs.issue }}
-          BR="feature/issue-$N"
-          git fetch origin main --quiet 2>/dev/null || true
-
-          retry() {
-            local what="$1"; shift
-            local i
-            for i in 1 2 3; do
-              echo "===== $what (attempt $i) ====="
-              "$@" > /tmp/retry.log 2>&1
-              if [ $? -eq 0 ]; then echo "$what OK"; return 0; fi
-              echo "$what FAILED. DeepSeek fix..."
-              tail -30 /tmp/retry.log
-              bash scripts/aider_wrap.sh --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
-                --message "Fix this build/test failure with the MINIMAL edit to the specific lines causing the error. Do NOT rewrite or regenerate whole files — preserve all existing classes and code. Error: $(tail -40 /tmp/retry.log)"
-            done
-            return 1
-          }
-
-          # install site deps + playwright browser ONCE (outside the loop)
-          (cd site && npm ci && npx playwright install chromium) > /tmp/pw-install.log 2>&1 || true
-
-          for round in $(seq 1 10); do
-            echo "===== self-heal round $round ====="
-
-            # 1. restore destructive edits vs main
-            for f in $(git diff --name-only origin/main 2>/dev/null); do
-              [ -f "$f" ] || continue
-              old=$(git show origin/main:"$f" 2>/dev/null | wc -l)
-              new=$(wc -l < "$f" 2>/dev/null)
-              if [ "$old" -gt 20 ] && [ "$new" -lt $((old / 2)) ]; then
-                echo "restoring destructive edit: $f ($old -> $new lines)"
-                git checkout origin/main -- "$f"
-              fi
-            done
-
-            # 2. review + fix one-by-one
-            HEAD_SHA=$(git rev-parse HEAD)
-            gh pr diff "$PR" > /tmp/diff.txt
-            bash scripts/deepseek_wrap.sh \
-              "You are a senior code reviewer who improves quality AND teaches. Review the diff for correctness, security, maintainability, performance, and testing — not style nits. Be specific, explain why. Output each issue as a 3-line block, one per issue, blank line between: '### FILE: <file path>', '### LINE: <line number>', '### FIX: <priority> <what to change, and why it matters>'. Priority: 🔴 blocker, 🟡 suggestion, 💭 nit. Do not report files under .github/workflows/. If no issues, output exactly NO_ISSUES and nothing else." \
-              < /tmp/diff.txt > /tmp/review.txt
-            python3 scripts/post_review_comments.py "$PR" "$HEAD_SHA" < /tmp/review.txt
-
-            if ! grep -q "NO_ISSUES" /tmp/review.txt && [ -s /tmp/fixes.list ]; then
-              while IFS=$'\t' read -r file line cid fix; do
-                bash scripts/aider_wrap.sh --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
-                  --file "$file" \
-                  --message "Fix ONLY this one issue in $file near line $line. Make the minimal edit to the specific lines. Do NOT rewrite or regenerate the entire file — preserve all existing classes, methods, and surrounding code unchanged. $fix"
-                # Leave the conversation open for reviewer verification.
-              done < /tmp/fixes.list
-            fi
-
-            # 3. verify build + test + playwright
-            retry "build" bash -c 'cd api && dotnet build CleaningSuite.Backend.sln -c Release --nologo' || { git push origin "$BR" 2>/dev/null; continue; }
-            retry "test" bash -c 'cd api && dotnet test CleaningSuite.Backend.sln -c Release --no-build' || { git push origin "$BR" 2>/dev/null; continue; }
-            retry "playwright" bash -c 'cd site && npx playwright test --config=playwright.static.config.ts' || { git push origin "$BR" 2>/dev/null; continue; }
-
-            # 4. plan conformance
-            gh issue view "$N" --json comments -q '.comments[].body' | tail -20 > /tmp/verify-plan.txt
-            { echo "## Plan"; cat /tmp/verify-plan.txt; echo "## Diff"; head -200 /tmp/diff.txt; } | bash scripts/deepseek_wrap.sh "Compare the diff to the plan. If key plan items are NOT implemented, output exactly MISSING. Otherwise output OK." > /tmp/conformance.txt
-            if grep -q "MISSING" /tmp/conformance.txt; then
-              echo "plan conformance missing — next round"
-              continue
-            fi
-
-            # all pass
-            git push origin "$BR"
-            gh pr ready "$PR"
-            TOTAL=$(python3 scripts/cost.py total)
-            gh pr comment "$PR" --body "Total LLM cost for this implementation: \$$TOTAL"
-            echo "SELF-HEAL COMPLETE — PR ready (cost \$$TOTAL)"
-            exit 0
-          done
-
-          gh pr comment "$PR" --body "Self-healing exhausted after 10 rounds — build/test/E2E/plan did not all pass."
-          exit 1
+          python3 scripts/agent_artifact.py --repo "$GITHUB_REPOSITORY" --artifact-id "$ARTIFACT_ID" --digest "$ARTIFACT_DIGEST" --workflow-sha "$WORKFLOW_SHA" --kind snapshot --output snapshot/snapshot.json
+          python3 scripts/agent_contract.py check-artifact --snapshot snapshot/snapshot.json \
+          --artifact-id "$ARTIFACT_ID" --digest "$ARTIFACT_DIGEST" --workflow-sha "$WORKFLOW_SHA" \
+          --kind snapshot --expected-snapshot-sha256 "$SNAPSHOT_HASH"
+      - name: Download and authenticate proposal artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ needs.generation.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ needs.generation.outputs.artifact-digest }}
+          SNAPSHOT_HASH: ${{ needs.control.outputs.snapshot-sha256 }}
+          WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          python3 scripts/agent_artifact.py --repo "$GITHUB_REPOSITORY" --artifact-id "$ARTIFACT_ID" --digest "$ARTIFACT_DIGEST" --workflow-sha "$WORKFLOW_SHA" --kind proposal --output proposal/proposal.json
+          python3 scripts/agent_contract.py check-artifact --snapshot snapshot/snapshot.json \
+          --artifact-id "$ARTIFACT_ID" --digest "$ARTIFACT_DIGEST" --workflow-sha "$WORKFLOW_SHA" \
+          --kind proposal --expected-snapshot-sha256 "$SNAPSHOT_HASH"
+      - name: Download and authenticate verification artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ needs.verification.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ needs.verification.outputs.artifact-digest }}
+          SNAPSHOT_HASH: ${{ needs.control.outputs.snapshot-sha256 }}
+          WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          python3 scripts/agent_artifact.py --repo "$GITHUB_REPOSITORY" --artifact-id "$ARTIFACT_ID" --digest "$ARTIFACT_DIGEST" --workflow-sha "$WORKFLOW_SHA" --kind verification --output verification/verification.json
+          python3 scripts/agent_contract.py check-artifact --snapshot snapshot/snapshot.json \
+          --artifact-id "$ARTIFACT_ID" --digest "$ARTIFACT_DIGEST" --workflow-sha "$WORKFLOW_SHA" \
+          --kind verification --expected-snapshot-sha256 "$SNAPSHOT_HASH"
+      - name: Validate receipt and publish only a dedicated draft PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SNAPSHOT_HASH: ${{ needs.control.outputs.snapshot-sha256 }}
+        run: >-
+          python3 scripts/agent_contract.py publish --snapshot snapshot/snapshot.json
+          --proposal proposal/proposal.json --verification verification/verification.json
+          --expected-snapshot-sha256 "$SNAPSHOT_HASH" --output publication.json
