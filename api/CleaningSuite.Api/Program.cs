@@ -139,6 +139,7 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<CleaningSuite.Infr
 builder.Services.AddSingleton<CleaningSuite.Infrastructure.Entertainment.QueuedEntertainmentAiService>();
 builder.Services.AddSingleton<CleaningSuite.Application.Entertainment.IGeminiSentenceService>(sp => sp.GetRequiredService<CleaningSuite.Infrastructure.Entertainment.QueuedEntertainmentAiService>());
 builder.Services.AddSingleton<CleaningSuite.Application.Entertainment.IEntertainmentAnswerEvaluator>(sp => sp.GetRequiredService<CleaningSuite.Infrastructure.Entertainment.QueuedEntertainmentAiService>());
+builder.Services.Configure<CleaningSuite.Api.Hubs.GameSessionOptions>(builder.Configuration.GetSection("Entertainment:Rooms"));
 builder.Services.AddSingleton<CleaningSuite.Api.Hubs.GameSessionManager>();
 
 builder.Services.AddMediatR(cfg =>
