@@ -10,9 +10,9 @@ Status words distinguish verified fixes, source-grounded leads, hardening and de
 | SEC-01 | Review failure must not claim a clean review | PR190 merged; strict provider/review contracts | Existing 6 regressions and merged code | Fixed, merged |
 | SEC-02 | Approved agent input and isolated generation/verification/publication | PR191 merged; issue116 closed | 50 regressions, 2 real Linux tests, real artifact roundtrip | Code fixed, merged |
 | SEC-02A | Activate replacement agent safely | Immutable images/offline caches are required but not configured | Approved images, exact-base cache, complete offline app verification, synthetic end-to-end dispatch before paid use | Pending activation |
-| SEC-03 | Public booking phone/number credentials | PublicBookingsController and BookingCommands/Queries still authorize with phone | Strong credential negative/positive tenant tests and confirmation UI coverage; legacy policy documented | Proposed design |
-| SEC-04 | Inactive cleaner retains started QC token access | QualityCycleApp skips employee checks when StartedAtUtc exists; public token GET checks no identity/lifecycle | Synthetic deactivation/reassignment/read/submit cases; persisted history unchanged | Source-grounded, fix pending |
-| SEC-05 | Disconnected game rooms exhaust process admission | GameSessionManager never removes rooms; non-atomic Count/GetOrAdd admission | >1000 lifecycle fixture, concurrent acquire/eviction/cancellation/reconnect tests | Source-grounded, fix pending |
+| SEC-03 | Public booking phone/number credentials | Draft PR196, commit 1133952; fresh independent source review, 63 targeted backend tests (0 skipped), 12 browser tests and typecheck passed | CI, final review and merged state; legacy policy documented | Implemented, draft PR; CI pending |
+| SEC-04 | Inactive cleaner retains started QC token access | Draft PR195, commit 99d0e81; corrective independent source review passed; targeted tests: 301 passed, 11 DB tests skipped | CI must execute real PostgreSQL race tests, final review and merged state; persisted history unchanged | Implemented, draft PR; CI database verification pending |
+| SEC-05 | Disconnected game rooms exhaust process admission | Draft PR194, commit eda475a; fresh independent source review and targeted tests passed: 10 passed, 0 failed, 0 skipped; backend CI passed, frontend CI pending | CI, final review and merged state; lifecycle, concurrent admission, waiter/cancellation/reconnect coverage retained | Implemented, draft PR; CI pending |
 | INF-01 | Public rate limits share proxy IP and retain idle buckets | RemoteIpAddress used without forwarded-header setup; dictionary has no eviction | Trusted/untrusted proxy tests, independent customer quotas, bounded bucket retention | Source-grounded, fix pending |
 | INF-02 | JWKS request amplification/blocking | KeycloakJwt fetches synchronously, caches successful responses only | Concurrent cache misses, invalid realms, bounded negative cache/time/body, rotation and cancellation tests | Source-grounded, fix pending |
 | INF-03 | Runtime Keycloak bootstrap admin credential | Prod/dev API Compose injects AdminUser/AdminPassword | Scoped service-account credentials; no bootstrap credentials in runtime; real synthetic identity operations | Fix/migration pending |
@@ -23,7 +23,7 @@ Status words distinguish verified fixes, source-grounded leads, hardening and de
 | HARD-03 | Mutable Actions/container versions | Workflow Actions and deployment base/service images use tags | Verified immutable SHA/digest inventory and update instructions; offline workflow checks | Hardening pending |
 | HARD-04 | Docker build context / restore reproducibility | api/docker/Dockerfile COPY . .; no api .dockerignore or packages.lock.json found | Narrow build context, reviewed locked restore and repeatable clean build | Hardening pending |
 | HARD-05 | Comment text shell interpolation | Former unsafe agent comment path replaced with manual immutable snapshot pipeline | Recheck current workflow event interpolation and PR191 tests | Superseded by SEC-02; source rechecked |
-| VERIFY-01 | AI retry quota reservation | PR192 merged as94f47c0; 6 new cases, 847 Linux backend tests passed (2 skipped), 484 desktop/mobile Playwright tests passed; independent and automated reviews clear | Main release jobs still running; no paid provider smoke test performed | Code fixed, merged; release pending |
+| VERIFY-01 | AI retry quota reservation | PR192 merged as94f47c0; 6 new cases, 847 Linux backend tests passed (2 skipped), 484 desktop/mobile Playwright tests passed; independent and automated reviews clear | Main docker-build-push run40108641286 succeeded at94f47c0; deployment and health not observed; no paid provider smoke test performed | Code fixed, merged; deployment observation pending |
 | VERIFY-02 | Dependency/advisory hints | Original offline feed matches were not proven reachable | Current primary advisory/version/applicability evidence; fix confirmed reachable issues, document dismissed hints | Validation pending |
 | VERIFY-03 | Original audit tooling gaps | Windows strict validators could not run; old audit explicitly incomplete | Supported isolated Linux validators and bounded synthetic demonstrations for remaining leads | Validation pending |
 
@@ -33,15 +33,15 @@ No item closes based only on a spec, green unrelated CI, a source-only claim, or
 
 ## Design review
 
-A separate read-only reviewer found no concrete blockers in the consolidated and booking designs. This does not approve implementation on behalf of the user. The reviewer highlighted that authenticated QC started-work policies must be reconciled before centralizing checks; keep historical evidence and intentional completion rules intact.
+A separate read-only reviewer found no concrete blockers in the consolidated and booking designs. The user subsequently approved the combined design. The reviewer highlighted that authenticated QC started-work policies must be reconciled before centralizing checks; keep historical evidence and intentional completion rules intact.
 
 ## Latest environment evidence
 
-Local Docker Linux daemon is unavailable: dockerDesktopLinuxEngine named pipe missing on 2026-10-24. Do not claim the old Windows validator gap is fixed. PR192 backend job120911559956 completed successfully (847 passed,2 skipped); frontend job120911560240 still installing Chromium at the latest observation. The full goal remains active and the consolidated approval remains pending.
+Local Docker Linux daemon is unavailable: dockerDesktopLinuxEngine named pipe missing on 2026-10-24. Do not claim the old Windows validator gap is fixed. PR192 main docker-build-push run40108641286 completed successfully at94f47c0. Deployment and production health have not been observed. The full goal is not complete. The combined design is approved, and implementation and verification are in progress.
 
 ## QC lifecycle clarification
 
-The proposed consolidated design now explicitly preserves original-owner completion of started work after roster changes, while checking current employee activity and shift availability. Unstarted reassigned work is denied. Source: EndQualityCycleFormCommandHandler checks ownership/start; GetMyShifts preserves recorded history only while a shift is active; RecordActivity blocks deleted forms. This avoids accidentally revoking valid started-work completion when fixing inactive employee token access. User approval is still pending.
+The approved consolidated design explicitly preserves original-owner completion of started work after roster changes, while checking current employee activity and shift availability. Unstarted reassigned work is denied. Source: EndQualityCycleFormCommandHandler checks ownership/start; GetMyShifts preserves recorded history only while a shift is active; RecordActivity blocks deleted forms. This avoids accidentally revoking valid started-work completion when fixing inactive employee token access. The user approved this lifecycle matrix as part of the combined design; corrective independent source review has passed, while real database verification remains pending in CI.
 
 ## Dependency audit follow-up
 
@@ -50,3 +50,7 @@ The NuGet transitive advisory query exited0 without vulnerable package entries a
 ## Consolidated approval
 
 The user explicitly approved the combined design on 2026-10-24: "Approve the combined design". The booking legacy-access policy and the revised QC lifecycle matrix are approved. Implementation, synthetic verification, review and PR work may proceed. Production role/credential migrations and paid/provider or live-customer tests retain the separate boundaries stated in the approved design.
+
+## Phase 3 progress
+
+Trusted proxy/bounded limiter and asynchronous bounded JWKS work are underway in isolated implementation lanes under the approved design. INF-01 and INF-02 remain open until scoped tests, independent review and merged evidence are available.
