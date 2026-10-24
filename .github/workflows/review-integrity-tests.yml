@@ -34,5 +34,6 @@ jobs:
         env:
           AGENT_LINUX_INTEGRATION: '1'
         run: |
+          sudo modprobe br_netfilter
           sudo sysctl -w net.bridge.bridge-nf-call-iptables=1
           sudo --preserve-env=AGENT_PYTHON_IMAGE,AGENT_LINUX_INTEGRATION python3 -m unittest discover -s scripts/tests -p test_agent_linux.py -v
