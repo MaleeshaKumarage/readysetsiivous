@@ -37,3 +37,33 @@ jobs:
           sudo modprobe br_netfilter
           sudo sysctl -w net.bridge.bridge-nf-call-iptables=1
           sudo --preserve-env=AGENT_PYTHON_IMAGE,AGENT_LINUX_INTEGRATION python3 -m unittest discover -s scripts/tests -p test_agent_linux.py -v
+  artifact-roundtrip:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Create synthetic bounded JSON
+        run: |
+          mkdir -p synthetic
+          printf '%s' '{"synthetic":true}' > synthetic/snapshot.json
+      - uses: actions/upload-artifact@v4
+        id: fixture
+        with:
+          name: agent-snapshot-${{ github.run_attempt }}
+          path: synthetic/snapshot.json
+          retention-days: 1
+          if-no-files-found: error
+      - name: Authenticate actual ZIP bytes and same-run metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ steps.fixture.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.fixture.outputs.artifact-digest }}
+          WORKFLOW_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python3 scripts/agent_artifact.py --repo "$GITHUB_REPOSITORY" --artifact-id "$ARTIFACT_ID" --digest "$ARTIFACT_DIGEST" --workflow-sha "$WORKFLOW_SHA" --kind snapshot --output authenticated/snapshot.json
+          cmp synthetic/snapshot.json authenticated/snapshot.json
