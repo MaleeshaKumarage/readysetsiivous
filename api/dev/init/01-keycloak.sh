@@ -13,23 +13,21 @@ psql -X --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB
 SELECT format('CREATE ROLE keycloak_dev LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD %L', :'dev_kc_password')
 WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'keycloak_dev')
 \gexec
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'keycloak_dev'
+      AND NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole AND rolcanlogin) THEN
+    RAISE EXCEPTION 'Existing keycloak_dev role has unexpected privileges; review manually.';
+  END IF;
+END $$;
 SELECT 'CREATE DATABASE keycloak_dev OWNER keycloak_dev'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'keycloak_dev')
 \gexec
-SELECT (NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole AND rolcanlogin) AS safe_role
-FROM pg_roles WHERE rolname = 'keycloak_dev'
-\gset
-\if :safe_role
-\else
-  \echo 'Existing keycloak_dev role has unexpected privileges; review manually.'
-  \quit 1
-\endif
-SELECT pg_get_userbyid(datdba) = 'keycloak_dev' AS expected_owner
-FROM pg_database WHERE datname = 'keycloak_dev'
-\gset
-\if :expected_owner
-\else
-  \echo 'Existing keycloak_dev database has unexpected owner; review manually.'
-  \quit 1
-\endif
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'keycloak_dev'
+      AND pg_get_userbyid(datdba) = 'keycloak_dev') THEN
+    RAISE EXCEPTION 'Existing keycloak_dev database has unexpected owner; review manually.';
+  END IF;
+END $$;
 SQL

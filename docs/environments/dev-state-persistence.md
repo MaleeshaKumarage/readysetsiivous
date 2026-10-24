@@ -89,6 +89,9 @@ them and reuse their bytes. Do not store real keys in source control.
 for both checked-in Compose configurations, creates a dummy realm/user, writes
 synthetic upload/key bytes, removes/recreates containers and checks identity IDs,
 database role restrictions and byte retention. It never starts the API or calls AI.
+It also seeds an unsafe existing superuser role and a database with the wrong
+owner on separate fresh projects for each configuration. Both must produce a
+nonzero PostgreSQL initialization exit and prevent Keycloak from starting.
 The preview API volumes are tested with a disposable helper container because
 the API image/build belongs to other verification lanes. A real API encrypted-data
 smoke test remains required before migrating an existing installation.

@@ -19,7 +19,7 @@ def run(args, env=None, check=True):
     return result
 
 
-def rehearse(relative):
+def rehearse(relative, unsafe=None):
     project = "devpersist-" + uuid.uuid4().hex[:16]
     assert project.startswith("devpersist-") and len(project) == 27
     env = {**os.environ, "DEV_KC_DB_PASSWORD": "synthetic'quoted-password",
@@ -45,6 +45,18 @@ def rehearse(relative):
         assert not volume.get("external"), "No external volumes permitted"
         assert volume.get("name", "").startswith(project + "_"), "Unowned volume"
     with tempfile.TemporaryDirectory(prefix=project) as directory:
+        if unsafe:
+            # First-boot seed precedes the actual mounted initialization script.
+            # PostgreSQL must fail that script; healthy dependency must keep KC down.
+            seed = Path(directory) / "00-unsafe-fixture.sql"
+            seeds = {
+                "role": "CREATE ROLE keycloak_dev LOGIN SUPERUSER;",
+                "owner": "CREATE ROLE keycloak_dev LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE; CREATE DATABASE keycloak_dev OWNER cleaning;",
+            }
+            seed.write_text(seeds[unsafe], encoding="utf-8")
+            config["services"]["postgres"]["volumes"].append({
+                "type": "bind", "source": str(seed),
+                "target": "/docker-entrypoint-initdb.d/00-unsafe-fixture.sql", "read_only": True})
         path = Path(directory) / "compose.json"
         path.write_text(json.dumps(config), encoding="utf-8")
         compose = ["docker", "compose", "-p", project, "-f", str(path)]
@@ -67,6 +79,19 @@ def rehearse(relative):
             raise RuntimeError("Synthetic Keycloak did not become ready")
 
         try:
+            if unsafe:
+                failure = dc("up", "-d", "keycloak", check=False)
+                assert failure.returncode != 0, "Unsafe initialization must fail Compose startup"
+                pg_id = dc("ps", "-a", "-q", "postgres").stdout.strip()
+                assert pg_id, "PostgreSQL fixture container missing"
+                state = json.loads(run(["docker", "inspect", "--format", "{{json .State}}", pg_id]).stdout)
+                assert state["Status"] == "exited" and state["ExitCode"] != 0
+                logs = dc("logs", "--no-color", "postgres").stdout
+                marker = "unexpected privileges" if unsafe == "role" else "unexpected owner"
+                assert marker in logs, "Expected SQL validation failure was not reached"
+                assert dc("ps", "--status", "running", "-q", "keycloak").stdout.strip() == ""
+                print(f"PASS {relative}: unsafe {unsafe} fails nonzero before Keycloak starts")
+                return
             dc("up", "-d")
             login()
             # Re-running init on an existing volume must not reset identity data.
@@ -100,4 +125,6 @@ def rehearse(relative):
 
 if __name__ == "__main__":
     for filename in ("api/dev/docker-compose.yml", "api/deploy/docker-compose.dev.yml"):
+        for unsafe in ("role", "owner"):
+            rehearse(filename, unsafe)
         rehearse(filename)
