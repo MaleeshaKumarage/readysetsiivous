@@ -23,7 +23,7 @@ Status words distinguish verified fixes, source-grounded leads, hardening and de
 | HARD-03 | Mutable Actions/container versions | Workflow Actions and deployment base/service images use tags | Verified immutable SHA/digest inventory and update instructions; offline workflow checks | Hardening pending |
 | HARD-04 | Docker build context / restore reproducibility | api/docker/Dockerfile COPY . .; no api .dockerignore or packages.lock.json found | Narrow build context, reviewed locked restore and repeatable clean build | Hardening pending |
 | HARD-05 | Comment text shell interpolation | Former unsafe agent comment path replaced with manual immutable snapshot pipeline | Recheck current workflow event interpolation and PR191 tests | Superseded by SEC-02; source rechecked |
-| VERIFY-01 | AI retry quota reservation | Synthetic tests reproduced five failures: internal HTTP retries exceeded RPD and skipped RPM spacing. Fix in separate fix/game-retry-quota checkout; initial 14 queue tests pass and separate review found no blockers | Complete cancellation/broader tests, PR, CI and merge; no paid calls | Runtime reproduced, fix in verification |
+| VERIFY-01 | AI retry quota reservation | Synthetic tests reproduced five failures: internal HTTP retries exceeded RPD and skipped RPM spacing. Fix in draft PR192 at874bd97; 111 local entertainment tests pass (2 skipped), separate review found no blockers; Linux backend CI passes 847 tests (2 skipped) | Finish browser CI and merge; cancellation case passes; no paid calls | Runtime reproduced, fix in PR192 |
 | VERIFY-02 | Dependency/advisory hints | Original offline feed matches were not proven reachable | Current primary advisory/version/applicability evidence; fix confirmed reachable issues, document dismissed hints | Validation pending |
 | VERIFY-03 | Original audit tooling gaps | Windows strict validators could not run; old audit explicitly incomplete | Supported isolated Linux validators and bounded synthetic demonstrations for remaining leads | Validation pending |
 
@@ -34,3 +34,7 @@ No item closes based only on a spec, green unrelated CI, a source-only claim, or
 ## Design review
 
 A separate read-only reviewer found no concrete blockers in the consolidated and booking designs. This does not approve implementation on behalf of the user. The reviewer highlighted that authenticated QC started-work policies must be reconciled before centralizing checks; keep historical evidence and intentional completion rules intact.
+
+## Latest environment evidence
+
+Local Docker Linux daemon is unavailable: dockerDesktopLinuxEngine named pipe missing on 2026-10-24. Do not claim the old Windows validator gap is fixed. PR192 backend job120911559956 completed successfully (847 passed,2 skipped); frontend job120911560240 still installing Chromium at the latest observation. The full goal remains active and the consolidated approval remains pending.
