@@ -1,6 +1,6 @@
 # Remaining security remediation design
 
-Status: proposed, awaiting consolidated approval.
+Status: approved by user on 2026-10-24 ("Approve the combined design").
 Date: 2026-10-24
 Scope and closure evidence: docs/security-remediation-ledger.md. Keep every ledger item in scope until proven resolved or disproved with evidence.
 

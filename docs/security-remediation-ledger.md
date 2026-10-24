@@ -46,3 +46,7 @@ The proposed consolidated design now explicitly preserves original-owner complet
 ## Dependency audit follow-up
 
 The NuGet transitive advisory query exited0 without vulnerable package entries across five restored projects. The npm package-lock-only audit exited1 with36 package entries (4critical,16high,10moderate,6low), including dev/build tooling and propagated dependencies. These are registry findings requiring applicability review, not36 confirmed production exploits. Normalized evidence is in security-nuget-advisory-evidence.json and security-npm-advisory-evidence.json; VERIFY-02 remains open. No dependencies were changed.
+
+## Consolidated approval
+
+The user explicitly approved the combined design on 2026-10-24: "Approve the combined design". The booking legacy-access policy and the revised QC lifecycle matrix are approved. Implementation, synthetic verification, review and PR work may proceed. Production role/credential migrations and paid/provider or live-customer tests retain the separate boundaries stated in the approved design.

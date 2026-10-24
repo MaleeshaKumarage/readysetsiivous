@@ -1,6 +1,6 @@
 # Public booking management credentials
 
-Status: proposed; implementation awaits design approval.
+Status: approved by user on 2026-10-24 ("Approve the combined design").
 Date: 2026-10-24
 Baseline: main a57c6bdc2c1e0361d8bf7dcb2430e50f303382c5
 Related: issue #79; security audit run-1 lead 2 (source-grounded, runtime demonstration pending).
