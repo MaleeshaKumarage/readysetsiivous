@@ -116,8 +116,9 @@ public class UpdateEmployeeHandler : IRequestHandler<UpdateEmployeeCommand, Unit
     private readonly IEmployeeIdentityProvider _identities;
     private readonly ITenantContext _tenant;
     private readonly IEmployeeIdentityLock _locks;
-    public UpdateEmployeeHandler(IEmployeeRepository employees, IEmployeeIdentityProvider identities, ITenantContext tenant, IEmployeeIdentityLock locks)
-    { _employees = employees; _identities = identities; _tenant = tenant; _locks = locks; }
+    private readonly IShiftWorkReservation _reservation;
+    public UpdateEmployeeHandler(IEmployeeRepository employees, IEmployeeIdentityProvider identities, ITenantContext tenant, IEmployeeIdentityLock locks, IShiftWorkReservation reservation)
+    { _employees = employees; _identities = identities; _tenant = tenant; _locks = locks; _reservation = reservation; }
 
     public async Task<Unit> Handle(UpdateEmployeeCommand request, CancellationToken ct)
     {
@@ -125,20 +126,23 @@ public class UpdateEmployeeHandler : IRequestHandler<UpdateEmployeeCommand, Unit
             ?? throw new NotFoundException("Employee", request.Id);
 
         await using var lease = await _locks.AcquireAsync(_tenant.TenantId, employee.Email, ct);
-        employee = await _employees.ReloadAsync(request.Id, ct) ?? throw new NotFoundException("Employee", request.Id);
-        if (!string.IsNullOrWhiteSpace(employee.KeycloakUserId) && !employee.Email.Equals(request.Fields.Email.Trim(), StringComparison.OrdinalIgnoreCase))
-            throw new EmployeeIdentityConflictException("Changing a linked login email requires an identity reconciliation flow.");
-        if (await _employees.GetByEmailAsync(request.Fields.Email.Trim(), ct) is { } existing && existing.Id != employee.Id)
-            throw CreateEmployeeHandler.DuplicateEmail(existing);
-        var accessChanged = employee.Role != request.Fields.Role || employee.IsActive != request.IsActive;
-        CreateEmployeeHandler.Apply(employee, request.Fields);
-        employee.IsActive = request.IsActive;
-        employee.IdentitySyncPending = !string.IsNullOrWhiteSpace(employee.KeycloakUserId) && (accessChanged || employee.IdentitySyncPending);
-        await _employees.SaveAsync(employee, ct);
-        if (employee.IdentitySyncPending) {
-            await _identities.SynchronizeAccessAsync(_tenant.TenantId, employee.KeycloakUserId, employee.Role, employee.IsActive, ct);
-            employee.IdentitySyncPending = false; await _employees.SaveAsync(employee, ct);
+        // Identity locks always precede work reservations; never reset the reservation session.
+        await using (var work = await _reservation.AcquireAsync(ct))
+        {
+            employee = await _employees.GetByIdAsync(request.Id, ct) ?? throw new NotFoundException("Employee", request.Id);
+            if (!string.IsNullOrWhiteSpace(employee.KeycloakUserId) && !employee.Email.Equals(request.Fields.Email.Trim(), StringComparison.OrdinalIgnoreCase))
+                throw new EmployeeIdentityConflictException("Changing a linked login email requires an identity reconciliation flow.");
+            if (await _employees.GetByEmailAsync(request.Fields.Email.Trim(), ct) is { } existing && existing.Id != employee.Id)
+                throw CreateEmployeeHandler.DuplicateEmail(existing);
+            var accessChanged = employee.Role != request.Fields.Role || employee.IsActive != request.IsActive;
+            CreateEmployeeHandler.Apply(employee, request.Fields);
+            employee.IsActive = request.IsActive;
+            employee.IdentitySyncPending = !string.IsNullOrWhiteSpace(employee.KeycloakUserId) && (accessChanged || employee.IdentitySyncPending);
+            await _employees.SaveAsync(employee, ct);
         }
+        // The local lifecycle is committed before provider I/O; keep only the identity lock here.
+        if (employee.IdentitySyncPending)
+            await EmployeeAccessSynchronization.CompleteAsync(_employees, _identities, _tenant.TenantId, employee, ct);
         return Unit.Value;
     }
 }
@@ -181,8 +185,9 @@ public class DeactivateEmployeeHandler : IRequestHandler<DeactivateEmployeeComma
     private readonly IEmployeeIdentityProvider _identities;
     private readonly ITenantContext _tenant;
     private readonly IEmployeeIdentityLock _locks;
-    public DeactivateEmployeeHandler(IEmployeeRepository employees, IEmployeeIdentityProvider identities, ITenantContext tenant, IEmployeeIdentityLock locks)
-    { _employees = employees; _identities = identities; _tenant = tenant; _locks = locks; }
+    private readonly IShiftWorkReservation _reservation;
+    public DeactivateEmployeeHandler(IEmployeeRepository employees, IEmployeeIdentityProvider identities, ITenantContext tenant, IEmployeeIdentityLock locks, IShiftWorkReservation reservation)
+    { _employees = employees; _identities = identities; _tenant = tenant; _locks = locks; _reservation = reservation; }
 
     public async Task<Unit> Handle(DeactivateEmployeeCommand request, CancellationToken ct)
     {
@@ -190,16 +195,38 @@ public class DeactivateEmployeeHandler : IRequestHandler<DeactivateEmployeeComma
             ?? throw new NotFoundException("Employee", request.Id);
 
         await using var lease = await _locks.AcquireAsync(_tenant.TenantId, employee.Email, ct);
-        employee = await _employees.ReloadAsync(request.Id, ct) ?? throw new NotFoundException("Employee", request.Id);
-        employee.IsActive = false;
-        employee.IdentitySyncPending = !string.IsNullOrWhiteSpace(employee.KeycloakUserId);
-        employee.UpdatedUtc = DateTime.UtcNow;
-        await _employees.SaveAsync(employee, ct);
-        if (employee.IdentitySyncPending) {
-            await _identities.SynchronizeAccessAsync(_tenant.TenantId, employee.KeycloakUserId, employee.Role, false, ct);
-            employee.IdentitySyncPending = false; await _employees.SaveAsync(employee, ct);
+        // Identity locks always precede work reservations; never reset the reservation session.
+        await using (var work = await _reservation.AcquireAsync(ct))
+        {
+            employee = await _employees.GetByIdAsync(request.Id, ct) ?? throw new NotFoundException("Employee", request.Id);
+            employee.IsActive = false;
+            employee.IdentitySyncPending = !string.IsNullOrWhiteSpace(employee.KeycloakUserId);
+            employee.UpdatedUtc = DateTime.UtcNow;
+            await _employees.SaveAsync(employee, ct);
         }
+        // The local lifecycle is committed before provider I/O; keep only the identity lock here.
+        if (employee.IdentitySyncPending)
+            await EmployeeAccessSynchronization.CompleteAsync(_employees, _identities, _tenant.TenantId, employee, ct);
         return Unit.Value;
+    }
+}
+
+internal static class EmployeeAccessSynchronization
+{
+    public static async Task CompleteAsync(IEmployeeRepository employees, IEmployeeIdentityProvider identities,
+        string tenantId, Employee employee, CancellationToken ct)
+    {
+        var id = employee.Id;
+        var userId = employee.KeycloakUserId;
+        var role = employee.Role;
+        var active = employee.IsActive;
+        await identities.SynchronizeAccessAsync(tenantId, userId, role, active, ct);
+        // Provider I/O can be slow. Reload after it so clearing the flag cannot replay stale profile fields.
+        // IVersioned also rejects a write racing this fresh read; failed saves leave the stored flag pending.
+        var current = await employees.ReloadAsync(id, ct) ?? throw new NotFoundException("Employee", id);
+        if (current.KeycloakUserId != userId || current.Role != role || current.IsActive != active) return;
+        current.IdentitySyncPending = false;
+        await employees.SaveAsync(current, ct);
     }
 }
 

@@ -1,3 +1,4 @@
+using CleaningSuite.Tests.QualityCycle;
 using CleaningSuite.Application.Shifts;
 using CleaningSuite.Application.Employees;
 using CleaningSuite.Application.QualityCycle;
@@ -146,8 +147,7 @@ public class VisitAssignmentTests
         var s = new Setup(); var form = QualityCycleForm.Create(s.Shift.Id, "Daily", s.A, "Cleaner", Guid.NewGuid(), "Tasks", Start, [], Start.AddHours(2));
         s.Overrides.Add(ShiftOccurrenceAssignment.Create(s.Shift.Id, Start, null, OccurrenceAssignmentMode.Replace, [s.B], "Cover"));
         s.Forms.Setup(x => x.GetFormByTokenAsync(form.Token, It.IsAny<CancellationToken>())).ReturnsAsync(form);
-        var handler = new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(s.Forms.Object,
-            Mock.Of<CleaningSuite.Application.Common.IUploadContentValidator>(), new Clock(), s.Shifts.Object, s.Employees.Object);
+        var handler = new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(s.Forms.Object, Mock.Of<CleaningSuite.Application.Common.IUploadContentValidator>(), s.Shifts.Object, s.Employees.Object, WorkAccessFixtures.Reservation, new Clock());
         var error = await Assert.ThrowsAsync<QualityCycleConflictException>(() => handler.Handle(new(form.Token, []), default));
         Assert.Contains("reassigned", error.Message); Assert.False(form.IsSubmitted);
         s.Forms.Verify(x => x.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);

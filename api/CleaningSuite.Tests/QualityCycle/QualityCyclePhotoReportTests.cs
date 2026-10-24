@@ -52,8 +52,8 @@ public class QualityCyclePhotoReportTests
         repository.Setup(x => x.GetFormByTokenAsync(form.Token, default)).ReturnsAsync(form);
         var items = new List<QualityCycleFormItemDto> { new("Corridor", true) };
         var exception = authenticated
-            ? await Assert.ThrowsAsync<ValidationException>(() => new QualityCycleHandlers.EndQualityCycleFormCommandHandler(repository.Object, NoopUploadContentValidator.Instance, new Clock()).Handle(new(form.Id, form.EmployeeId, items, new() { "photo" }, "  "), default))
-            : await Assert.ThrowsAsync<ValidationException>(() => new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(repository.Object, NoopUploadContentValidator.Instance, new Clock()).Handle(new(form.Token, items, new() { "photo" }, null), default));
+            ? await Assert.ThrowsAsync<ValidationException>(() => new QualityCycleHandlers.EndQualityCycleFormCommandHandler(repository.Object, NoopUploadContentValidator.Instance, WorkAccessFixtures.ActiveShifts(), WorkAccessFixtures.ActiveEmployees(), WorkAccessFixtures.Reservation, new Clock()).Handle(new(form.Id, form.EmployeeId, items, new() { "photo" }, "  "), default))
+            : await Assert.ThrowsAsync<ValidationException>(() => new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(repository.Object, NoopUploadContentValidator.Instance, WorkAccessFixtures.ActiveShifts(), WorkAccessFixtures.ActiveEmployees(), WorkAccessFixtures.Reservation, new Clock()).Handle(new(form.Token, items, new() { "photo" }, null), default));
         Assert.Equal("Photos", Assert.Single(exception.Errors).PropertyName);
         Assert.False(form.IsSubmitted); Assert.False(form.Items[0].IsChecked);
         repository.Verify(x => x.SaveFormAsync(It.IsAny<QualityCycleForm>(), default), Times.Never);

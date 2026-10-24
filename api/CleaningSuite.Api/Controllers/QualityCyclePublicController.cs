@@ -20,6 +20,7 @@ public class QualityCyclePublicController : ControllerBase
     [HttpGet("{token}")]
     public async Task<IActionResult> GetByToken(string token, CancellationToken ct)
     {
+        PrivateResponseHeaders();
         var result = await _mediator.Send(new GetQualityCycleFormByTokenQuery(token), ct);
         return Ok(result);
     }
@@ -28,6 +29,7 @@ public class QualityCyclePublicController : ControllerBase
     [RequestSizeLimit(30 * 1024 * 1024)]
     public async Task<IActionResult> Submit(string token, [FromBody] SubmitQualityCycleFormCommand command, CancellationToken ct)
     {
+        PrivateResponseHeaders();
         command = command with { Token = token };
         var result = await _mediator.Send(command, ct);
         return Ok(result);
@@ -42,17 +44,17 @@ public class QualityCyclePublicController : ControllerBase
 
     [HttpGet("reports/{token}")]
     public async Task<IActionResult> SharedReport(string token, CancellationToken ct) {
-        PrivateReportHeaders();
+        PrivateResponseHeaders();
         return Ok(await _mediator.Send(new GetSharedQualityCycleReportQuery(token), ct));
     }
 
     [HttpPost("reports/{token}/acknowledge")]
     public async Task<IActionResult> AcknowledgeReport(string token, CancellationToken ct) {
-        PrivateReportHeaders();
+        PrivateResponseHeaders();
         return Ok(await _mediator.Send(new AcknowledgeQualityCycleReportCommand(token), ct));
     }
 
-    private void PrivateReportHeaders() {
+    private void PrivateResponseHeaders() {
         Response.Headers.CacheControl = "no-store";
         Response.Headers["X-Robots-Tag"] = "noindex, nofollow";
         Response.Headers["Referrer-Policy"] = "no-referrer";

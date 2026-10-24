@@ -306,9 +306,10 @@ public class QualityCycleTests
     {
         var repoMock = new Mock<IQualityCycleRepository>();
         var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Cleaner", Guid.NewGuid(), "Template", DateTime.UtcNow, new List<string> { "Item 1" });
+        form.Start();
         repoMock.Setup(r => r.GetFormByTokenAsync(form.Token, It.IsAny<CancellationToken>())).ReturnsAsync(form);
 
-        var handler = new QualityCycleHandlers.GetQualityCycleFormByTokenQueryHandler(repoMock.Object);
+        var handler = new QualityCycleHandlers.GetQualityCycleFormByTokenQueryHandler(repoMock.Object, WorkAccessFixtures.ActiveShifts(), WorkAccessFixtures.ActiveEmployees(), WorkAccessFixtures.Reservation);
         var result = await handler.Handle(new GetQualityCycleFormByTokenQuery(form.Token), CancellationToken.None);
 
         Assert.Equal(form.Token, result.Token);
@@ -320,7 +321,7 @@ public class QualityCycleTests
         var repoMock = new Mock<IQualityCycleRepository>();
         repoMock.Setup(r => r.GetFormByTokenAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((QualityCycleForm?)null);
 
-        var handler = new QualityCycleHandlers.GetQualityCycleFormByTokenQueryHandler(repoMock.Object);
+        var handler = new QualityCycleHandlers.GetQualityCycleFormByTokenQueryHandler(repoMock.Object, WorkAccessFixtures.ActiveShifts(), WorkAccessFixtures.ActiveEmployees(), WorkAccessFixtures.Reservation);
         await Assert.ThrowsAsync<NotFoundException>(() => handler.Handle(new GetQualityCycleFormByTokenQuery("invalid_token"), CancellationToken.None));
     }
 
@@ -331,9 +332,10 @@ public class QualityCycleTests
         var form = QualityCycleForm.Create(
             Guid.NewGuid(), "Shift 1", Guid.NewGuid(), "Cleaner 1", Guid.NewGuid(), "Template 1", DateTime.UtcNow, new List<string> { "Item 1" });
 
+        form.Start();
         repoMock.Setup(x => x.GetFormByTokenAsync(form.Token, It.IsAny<CancellationToken>())).ReturnsAsync(form);
 
-        var handler = new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(repoMock.Object, NoopUploadContentValidator.Instance);
+        var handler = new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(repoMock.Object, NoopUploadContentValidator.Instance, WorkAccessFixtures.ActiveShifts(), WorkAccessFixtures.ActiveEmployees(), WorkAccessFixtures.Reservation);
         var command = new SubmitQualityCycleFormCommand(
             form.Token,
             new List<QualityCycleFormItemDto> { new QualityCycleFormItemDto("Item 1", true) },
@@ -353,7 +355,7 @@ public class QualityCycleTests
         var repoMock = new Mock<IQualityCycleRepository>();
         repoMock.Setup(r => r.GetFormByTokenAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((QualityCycleForm?)null);
 
-        var handler = new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(repoMock.Object, NoopUploadContentValidator.Instance);
+        var handler = new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(repoMock.Object, NoopUploadContentValidator.Instance, WorkAccessFixtures.ActiveShifts(), WorkAccessFixtures.ActiveEmployees(), WorkAccessFixtures.Reservation);
         var command = new SubmitQualityCycleFormCommand("bad_token", new List<QualityCycleFormItemDto>());
 
         await Assert.ThrowsAsync<NotFoundException>(() => handler.Handle(command, CancellationToken.None));

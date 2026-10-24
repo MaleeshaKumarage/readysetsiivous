@@ -90,6 +90,24 @@ public record GetMyShiftsQuery(Guid EmployeeId, DateTime FromUtc, DateTime ToUtc
 // Handlers
 public class QualityCycleHandlers
 {
+    private static async Task ValidateWorkAccessAsync(QualityCycleForm form, IShiftRepository shifts,
+        IEmployeeRepository employees, ITenantProfileRepository? profiles, ITenantContext? tenant, CancellationToken ct)
+    {
+        if (await employees.GetByIdAsync(form.EmployeeId, ct) is not { IsActive: true })
+            throw new UnauthorizedAccessException();
+        var shift = await shifts.GetAsync(form.ShiftId, ct);
+        if (shift is not { IsActive: true } || form.ShiftDeletedUtc.HasValue)
+            throw new QualityCycleConflictException("This visit is no longer available. Open My Shifts to see assigned work.");
+        // Recorded work belongs to the original owner even after roster changes.
+        if (form.StartedAtUtc.HasValue || form.IsSubmitted) return;
+        var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
+        var roster = await shifts.ResolveRosterAsync(shift, form.ShiftOccurrenceUtc,
+            form.ShiftOccurrenceUtc.AddTicks(1), zone, ct);
+        if (!roster.Any(x => x.Occurrence.StartUtc == form.ShiftOccurrenceUtc
+            && x.Occurrence.EndUtc == form.ShiftOccurrenceEndUtc && x.EmployeeIds.Contains(form.EmployeeId)))
+            throw new QualityCycleConflictException("This visit was reassigned. Open My Shifts to see your current work.");
+    }
+
     private static async Task ValidateTemplateScopeAsync(ICompanyRepository companies, IBranchRepository branches,
         Guid? companyId, Guid? branchId, CancellationToken ct)
     {
@@ -227,15 +245,16 @@ public class QualityCycleHandlers
         }
     }
 
-    public class GetQualityCycleFormByTokenQueryHandler : IRequestHandler<GetQualityCycleFormByTokenQuery, QualityCycleFormDto>
+    public class GetQualityCycleFormByTokenQueryHandler(IQualityCycleRepository repository, IShiftRepository shifts,
+        IEmployeeRepository employees, IShiftWorkReservation reservation,
+        ITenantProfileRepository? profiles = null, ITenantContext? tenant = null) : IRequestHandler<GetQualityCycleFormByTokenQuery, QualityCycleFormDto>
     {
-        private readonly IQualityCycleRepository _repository;
-        public GetQualityCycleFormByTokenQueryHandler(IQualityCycleRepository repository) => _repository = repository;
-
         public async Task<QualityCycleFormDto> Handle(GetQualityCycleFormByTokenQuery request, CancellationToken ct)
         {
-            var form = await _repository.GetFormByTokenAsync(request.Token, ct)
+            await using var lease = await reservation.AcquireAsync(ct);
+            var form = await repository.GetFormByTokenAsync(request.Token, ct)
                 ?? throw new NotFoundException("QualityCycleForm", Guid.Empty);
+            await ValidateWorkAccessAsync(form, shifts, employees, profiles, tenant, ct);
             return MapForm(form);
         }
     }
@@ -245,37 +264,24 @@ public class QualityCycleHandlers
         private readonly IQualityCycleRepository _repository;
         private readonly TimeProvider _clock;
         private readonly IUploadContentValidator _uploads;
-        private readonly IShiftRepository? _shifts;
-        private readonly IEmployeeRepository? _employees;
+        private readonly IShiftRepository _shifts;
+        private readonly IEmployeeRepository _employees;
         private readonly ITenantProfileRepository? _profiles;
         private readonly ITenantContext? _tenant;
-        private readonly IShiftWorkReservation? _reservation;
-        public SubmitQualityCycleFormCommandHandler(IQualityCycleRepository repository, IUploadContentValidator uploads, TimeProvider? clock = null,
-            IShiftRepository? shifts = null, IEmployeeRepository? employees = null, ITenantProfileRepository? profiles = null,
-            ITenantContext? tenant = null, IShiftWorkReservation? reservation = null)
+        private readonly IShiftWorkReservation _reservation;
+        public SubmitQualityCycleFormCommandHandler(IQualityCycleRepository repository, IUploadContentValidator uploads,
+            IShiftRepository shifts, IEmployeeRepository employees, IShiftWorkReservation reservation, TimeProvider? clock = null,
+            ITenantProfileRepository? profiles = null, ITenantContext? tenant = null)
         { _repository = repository; _uploads = uploads; _clock = clock ?? TimeProvider.System;
             _shifts = shifts; _employees = employees; _profiles = profiles; _tenant = tenant; _reservation = reservation; }
 
         public async Task<QualityCycleFormDto> Handle(SubmitQualityCycleFormCommand request, CancellationToken ct)
         {
-            await using var lease = _reservation is null ? null : await _reservation.AcquireAsync(ct);
+            await using var lease = await _reservation.AcquireAsync(ct);
             var form = await _repository.GetFormByTokenAsync(request.Token, ct)
                 ?? throw new NotFoundException("QualityCycleForm", Guid.Empty);
 
-            if (_shifts is not null && !form.StartedAtUtc.HasValue && !form.IsSubmitted)
-            {
-                var shift = await _shifts.GetAsync(form.ShiftId, ct);
-                if (shift is not { IsActive: true } || form.ShiftDeletedUtc.HasValue)
-                    throw new QualityCycleConflictException("This visit is no longer available. Open My Shifts to see assigned work.");
-                if (_employees is not null && await _employees.GetByIdAsync(form.EmployeeId, ct) is not { IsActive: true })
-                    throw new QualityCycleConflictException("This employee is no longer active.");
-                var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
-                var roster = await _shifts.ResolveRosterAsync(shift, form.ShiftOccurrenceUtc,
-                    form.ShiftOccurrenceUtc.AddTicks(1), zone, ct);
-                if (!roster.Any(x => x.Occurrence.StartUtc == form.ShiftOccurrenceUtc
-                    && x.Occurrence.EndUtc == form.ShiftOccurrenceEndUtc && x.EmployeeIds.Contains(form.EmployeeId)))
-                    throw new QualityCycleConflictException("This visit was reassigned. Open My Shifts to see your current work.");
-            }
+            await ValidateWorkAccessAsync(form, _shifts, _employees, _profiles, _tenant, ct);
             _uploads.ValidateQualityCyclePhotos(request.Photos, request.PhotoUrls);
             RecordActivity(form, request.Items, request.PhotoUrls, request.CleanerNotes, _clock, request.Photos);
             await _repository.SaveFormAsync(form, ct);
@@ -313,10 +319,10 @@ public class QualityCycleHandlers
         private readonly TimeProvider _clock;
         private readonly ITenantProfileRepository? _profiles;
         private readonly ITenantContext? _tenant;
-        private readonly IShiftWorkReservation? _reservation;
+        private readonly IShiftWorkReservation _reservation;
 
-        public StartQualityCycleFormCommandHandler(IShiftRepository shiftRepository, IEmployeeRepository employeeRepository, IQualityCycleRepository repository, TimeProvider? clock = null,
-            ITenantProfileRepository? profiles = null, ITenantContext? tenant = null, IShiftWorkReservation? reservation = null)
+        public StartQualityCycleFormCommandHandler(IShiftRepository shiftRepository, IEmployeeRepository employeeRepository, IQualityCycleRepository repository, IShiftWorkReservation reservation, TimeProvider? clock = null,
+            ITenantProfileRepository? profiles = null, ITenantContext? tenant = null)
         {
             _shiftRepository = shiftRepository;
             _employeeRepository = employeeRepository;
@@ -329,7 +335,7 @@ public class QualityCycleHandlers
 
         public async Task<QualityCycleFormDto> Handle(StartQualityCycleFormCommand request, CancellationToken ct)
         {
-            await using var lease = _reservation is null ? null : await _reservation.AcquireAsync(ct);
+            await using var lease = await _reservation.AcquireAsync(ct);
             var shift = await _shiftRepository.GetAsync(request.ShiftId, ct)
                 ?? throw new NotFoundException("Shift", request.ShiftId);
             var employee = await _employeeRepository.GetByIdAsync(request.EmployeeId, ct)
@@ -375,19 +381,13 @@ public class QualityCycleHandlers
                 form.Id = QualityCycleDispatcher.TaskId(shift.Id, employee.Id, start);
                 form.CompanyId = shift.CompanyId; form.BranchId = shift.BranchId;
                 form.Start(_clock.GetUtcNow().UtcDateTime);
-                if (_reservation is not null)
-                {
-                    await _repository.CreateStartedFormAsync(form, ct);
-                    return MapForm(form);
-                }
-                if (await _repository.TryCreateFormAsync(form, ct)) return MapForm(form);
-                // A simultaneous clock start or worker dispatch owns the same deterministic id.
-                form = await _repository.GetFormByShiftOccurrenceAsync(shift.Id, employee.Id, start, ct)
-                    ?? throw new QualityCycleConflictException("The task changed. Reload your shifts and retry.");
+                await _repository.CreateStartedFormAsync(form, ct);
+                return MapForm(form);
             }
 
             if (form.EmployeeId != employee.Id || form.ShiftId != shift.Id || form.ShiftOccurrenceUtc != start)
                 throw new UnauthorizedAccessException();
+            if (form.ShiftDeletedUtc.HasValue) throw new QualityCycleConflictException("This visit is no longer available.");
             if (form.IsSubmitted) throw new QualityCycleConflictException("This shift task has already been completed.");
             if (form.StartedAtUtc.HasValue) return MapForm(form);
             form.Start(_clock.GetUtcNow().UtcDateTime);
@@ -402,16 +402,27 @@ public class QualityCycleHandlers
         private readonly IUploadContentValidator _uploads;
 
         private readonly TimeProvider _clock;
-        public EndQualityCycleFormCommandHandler(IQualityCycleRepository repository, IUploadContentValidator uploads, TimeProvider? clock = null) { _repository = repository; _uploads = uploads; _clock = clock ?? TimeProvider.System; }
+        private readonly IShiftRepository _shifts;
+        private readonly IEmployeeRepository _employees;
+        private readonly IShiftWorkReservation _reservation;
+        private readonly ITenantProfileRepository? _profiles;
+        private readonly ITenantContext? _tenant;
+        public EndQualityCycleFormCommandHandler(IQualityCycleRepository repository, IUploadContentValidator uploads,
+            IShiftRepository shifts, IEmployeeRepository employees, IShiftWorkReservation reservation, TimeProvider? clock = null,
+            ITenantProfileRepository? profiles = null, ITenantContext? tenant = null)
+        { _repository = repository; _uploads = uploads; _shifts = shifts; _employees = employees; _reservation = reservation;
+            _clock = clock ?? TimeProvider.System; _profiles = profiles; _tenant = tenant; }
 
         public async Task<QualityCycleFormDto> Handle(EndQualityCycleFormCommand request, CancellationToken ct)
         {
+            await using var lease = await _reservation.AcquireAsync(ct);
             var form = await _repository.GetFormAsync(request.FormId, ct)
                 ?? throw new NotFoundException("QualityCycleForm", request.FormId);
 
             if (form.EmployeeId != request.EmployeeId)
                 throw new UnauthorizedAccessException();
 
+            await ValidateWorkAccessAsync(form, _shifts, _employees, _profiles, _tenant, ct);
             if (!form.StartedAtUtc.HasValue)
                 throw new QualityCycleConflictException("Start your shift before ending it.");
 
@@ -430,11 +441,16 @@ public class QualityCycleHandlers
         private readonly ITenantContext? _tenant;
         private readonly TimeProvider _clock;
 
+        private readonly IEmployeeRepository _employees;
+        private readonly IShiftWorkReservation _reservation;
         public GetMyShiftsQueryHandler(IShiftRepository shiftRepository, IQualityCycleRepository repository,
+            IEmployeeRepository employees, IShiftWorkReservation reservation,
             ITenantProfileRepository? profiles = null, ITenantContext? tenant = null, TimeProvider? clock = null)
         {
             _shiftRepository = shiftRepository;
             _repository = repository;
+            _employees = employees;
+            _reservation = reservation;
             _profiles = profiles;
             _tenant = tenant;
             _clock = clock ?? TimeProvider.System;
@@ -446,6 +462,9 @@ public class QualityCycleHandlers
             var to = request.ToUtc.Kind == DateTimeKind.Local ? request.ToUtc.ToUniversalTime() : DateTime.SpecifyKind(request.ToUtc, DateTimeKind.Utc);
             if (to <= from || to - from > TimeSpan.FromDays(32) || to.Date >= DateTime.MaxValue.Date)
                 throw new ValidationException(new[] { new FluentValidation.Results.ValidationFailure("range", "Choose an increasing UTC interval of at most 32 days within supported calendar bounds.") });
+            await using var lease = await _reservation.AcquireAsync(ct);
+            if (await _employees.GetByIdAsync(request.EmployeeId, ct) is not { IsActive: true })
+                throw new UnauthorizedAccessException();
             var (zoneId, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
             var (localFrom, localTo) = TenantTimeZone.LocalDatesForUtcRange(from, to, zone);
             var currentAssignments = await _shiftRepository.ListAssignmentsByEmployeeAsync(request.EmployeeId, ct);
@@ -472,7 +491,7 @@ public class QualityCycleHandlers
                 {
                     var occurrence = entry.Occurrence;
                     var form = await _repository.GetFormByShiftOccurrenceAsync(shift.Id, request.EmployeeId, occurrence.StartUtc, ct);
-                    if (form is not null && (form.EmployeeId != request.EmployeeId || form.ShiftId != shift.Id || form.ShiftOccurrenceUtc != occurrence.StartUtc))
+                    if (form is not null && (form.EmployeeId != request.EmployeeId || form.ShiftId != shift.Id || form.ShiftOccurrenceUtc != occurrence.StartUtc || form.ShiftDeletedUtc.HasValue))
                         form = null;
                     result.Add(new MyShiftOccurrenceDto(shift.Id, shift.Name, occurrence.StartUtc, occurrence.EndUtc, form == null ? null : MapForm(form), zoneId));
                 }

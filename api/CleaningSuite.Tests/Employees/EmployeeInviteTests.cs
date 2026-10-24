@@ -1,3 +1,4 @@
+using CleaningSuite.Tests.QualityCycle;
 using CleaningSuite.Application.Common;
 using CleaningSuite.Application.Employees;
 using CleaningSuite.Application.Employees.Commands;
@@ -92,7 +93,7 @@ public class EmployeeInviteTests
         _identity.Setup(x => x.SynchronizeAccessAsync("tenant-a", "user-a", "employee", false, default)).Callback(() => {
             Assert.False(_employee.IsActive); _employees.Verify(x => x.SaveAsync(_employee, default), Times.Once);
         }).Returns(Task.CompletedTask);
-        await new DeactivateEmployeeHandler(_employees.Object, _identity.Object, _tenant.Object, _locks.Object).Handle(new(_employee.Id), default);
+        await new DeactivateEmployeeHandler(_employees.Object, _identity.Object, _tenant.Object, _locks.Object, WorkAccessFixtures.Reservation).Handle(new(_employee.Id), default);
         _identity.Verify(x => x.SynchronizeAccessAsync("tenant-a", "user-a", "employee", false, default), Times.Once);
     }
     [Fact]
@@ -101,7 +102,7 @@ public class EmployeeInviteTests
         _employee.KeycloakUserId = "user-a";
         _identity.SetupSequence(x => x.SynchronizeAccessAsync("tenant-a", "user-a", "admin", true, default))
             .ThrowsAsync(new EmployeeIdentityProviderException("Provider failed")).Returns(Task.CompletedTask);
-        var handler = new UpdateEmployeeHandler(_employees.Object, _identity.Object, _tenant.Object, _locks.Object);
+        var handler = new UpdateEmployeeHandler(_employees.Object, _identity.Object, _tenant.Object, _locks.Object, WorkAccessFixtures.Reservation);
         var command = new UpdateEmployeeCommand(_employee.Id, Fields("admin"), true);
         await Assert.ThrowsAsync<EmployeeIdentityProviderException>(() => handler.Handle(command, default));
         Assert.Equal("admin", _employee.Role); Assert.True(_employee.IdentitySyncPending);
@@ -113,14 +114,14 @@ public class EmployeeInviteTests
     public async Task UnrelatedProfileEditsDoNotChangeSessionsOrPasswords()
     {
         _employee.KeycloakUserId = "user-a";
-        await new UpdateEmployeeHandler(_employees.Object, _identity.Object, _tenant.Object, _locks.Object).Handle(new(_employee.Id, Fields("employee"), true), default);
+        await new UpdateEmployeeHandler(_employees.Object, _identity.Object, _tenant.Object, _locks.Object, WorkAccessFixtures.Reservation).Handle(new(_employee.Id, Fields("employee"), true), default);
         _identity.Verify(x => x.SynchronizeAccessAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), default), Times.Never);
     }
     [Fact]
     public async Task BoundEmailCannotBeSilentlyChanged()
     {
         _employee.KeycloakUserId = "user-a";
-        await Assert.ThrowsAsync<EmployeeIdentityConflictException>(() => new UpdateEmployeeHandler(_employees.Object, _identity.Object, _tenant.Object, _locks.Object)
+        await Assert.ThrowsAsync<EmployeeIdentityConflictException>(() => new UpdateEmployeeHandler(_employees.Object, _identity.Object, _tenant.Object, _locks.Object, WorkAccessFixtures.Reservation)
             .Handle(new(_employee.Id, Fields("employee") with { Email = "other@example.invalid" }, true), default));
         _employees.Verify(x => x.SaveAsync(It.IsAny<Employee>(), default), Times.Never);
     }
