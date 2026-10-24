@@ -19,3 +19,7 @@ Primary references:
 - https://github.com/nodejs/undici/security/advisories
 
 The absence of a reachable public server path is a scoped source/deployment inference, not proof that every install/build environment is safe. NuGet/native transitive advisories and all four feed hints must receive final evidence before VERIFY-02 closes. Do not upgrade framework major versions solely to clear an incorrectly aggregated feed match.
+
+## NuGet follow-up
+
+On 2026-10-24 the pinned SDK ran `dotnet list api/CleaningSuite.Backend.sln package --vulnerable --include-transitive --format json --no-restore` against restored assets. It exited0 and reported no vulnerable package entries for all five projects. See security-nuget-advisory-evidence.json (local paths normalized; raw output retained outside the repository). This is bounded to NuGet advisory coverage and the restored dependency graph; native libraries and remaining npm/tooling cases are still open.
