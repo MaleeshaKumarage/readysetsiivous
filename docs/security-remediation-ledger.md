@@ -2,7 +2,7 @@
 
 Goal: fix all issues found in the ReadySetSiivous audit and infrastructure follow-up. This is not a claim that all historical product backlog issues are part of this audit.
 Baseline checked: main a57c6bdc2c1e0361d8bf7dcb2430e50f303382c5, 2026-10-24.
-Source audit: ../../../../security-audits/readysetsiivous/run-1/REPORT.md (local, not committed here).
+Source audit: local security-audits/readysetsiivous/run-1/REPORT.md, stored outside this repository.
 Status words distinguish verified fixes, source-grounded leads, hardening and deployment prerequisites. A source pattern alone is not a confirmed exploitable vulnerability.
 
 | ID | Finding / requirement | Current evidence | Required completion evidence | State |
@@ -23,10 +23,14 @@ Status words distinguish verified fixes, source-grounded leads, hardening and de
 | HARD-03 | Mutable Actions/container versions | Workflow Actions and deployment base/service images use tags | Verified immutable SHA/digest inventory and update instructions; offline workflow checks | Hardening pending |
 | HARD-04 | Docker build context / restore reproducibility | api/docker/Dockerfile COPY . .; no api .dockerignore or packages.lock.json found | Narrow build context, reviewed locked restore and repeatable clean build | Hardening pending |
 | HARD-05 | Comment text shell interpolation | Former unsafe agent comment path replaced with manual immutable snapshot pipeline | Recheck current workflow event interpolation and PR191 tests | Superseded by SEC-02; source rechecked |
-| VERIFY-01 | AI retry quota reservation | Coordinator reserves before each key attempt; inspect transport internals next | Transport attempts each consume quota, retry tests with fake clock/provider; no paid calls | Validation pending |
+| VERIFY-01 | AI retry quota reservation | Synthetic tests reproduced five failures: internal HTTP retries exceeded RPD and skipped RPM spacing. Fix in separate fix/game-retry-quota checkout; initial 14 queue tests pass and separate review found no blockers | Complete cancellation/broader tests, PR, CI and merge; no paid calls | Runtime reproduced, fix in verification |
 | VERIFY-02 | Dependency/advisory hints | Original offline feed matches were not proven reachable | Current primary advisory/version/applicability evidence; fix confirmed reachable issues, document dismissed hints | Validation pending |
 | VERIFY-03 | Original audit tooling gaps | Windows strict validators could not run; old audit explicitly incomplete | Supported isolated Linux validators and bounded synthetic demonstrations for remaining leads | Validation pending |
 
 ## Closure rules
 
 No item closes based only on a spec, green unrelated CI, a source-only claim, or an intended deployment. Each fix must have scoped tests and review evidence plus merged state; deployment/migration requirements remain open until observed. Existing booking issue79 and game issue126 overlap this work but must not be closed unless their full acceptance criteria are met. Preserve signed agreements, attachments and historical reports. Do not probe real customers or mutate production to demonstrate a defect.
+
+## Design review
+
+A separate read-only reviewer found no concrete blockers in the consolidated and booking designs. This does not approve implementation on behalf of the user. The reviewer highlighted that authenticated QC started-work policies must be reconciled before centralizing checks; keep historical evidence and intentional completion rules intact.
