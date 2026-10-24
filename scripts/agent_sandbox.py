@@ -213,14 +213,14 @@ class Isolation:
         listener = socket.socket()
         listener.bind(("0.0.0.0", 0))
         listener.listen(4)
-        probe = ("import socket,sys; targets=" + repr([(host_ip, listener.getsockname()[1]), (gateway_egress_ip, 8080)]) +
-                 ";\nfor h,p in targets:\n s=socket.socket();s.settimeout(2)\n try:s.connect((h,p));sys.exit(1)\n except OSError:pass\n finally:s.close()\n" +
-                 "import time\n"
+        probe = ("import socket,sys,time\n"
                  "for attempt in range(10):\n"
                  " try:s=socket.create_connection(('gateway',8080),1);s.close();break\n"
                  " except OSError:\n"
                  "  if attempt==9:sys.exit(1)\n"
-                 "  time.sleep(.3)\n")
+                 "  time.sleep(.3)\n" +
+                 "targets=" + repr([(host_ip, listener.getsockname()[1]), (gateway_egress_ip, 8080)]) +
+                 ";\nfor h,p in targets:\n s=socket.socket();s.settimeout(2)\n try:s.connect((h,p));sys.exit(1)\n except OSError:pass\n finally:s.close()\n")
         name = self.tag + "-probe"
         self.containers.append(name)
         try:

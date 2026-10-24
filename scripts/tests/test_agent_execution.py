@@ -122,6 +122,7 @@ class SandboxTests(unittest.TestCase):
         self.assertIn("gateway", probe)
         isolation.cleanup()
         self.assertIn("range(10)", probe)
+        self.assertLess(probe.index("create_connection"), probe.index("targets="))
         self.assertTrue(any(args[:4] == ["iptables", "-w", "1", "-D"] for args, _ in calls))
 
     def test_model_context_excludes_control_and_config_files(self):
