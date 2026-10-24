@@ -29,6 +29,9 @@ foreach (var envPath in new[] { ".env", Path.Combine("..", ".env") })
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(options => CleaningSuite.Api.Middleware.TrustedProxyConfiguration.Configure(options, builder.Configuration));
+builder.Services.Configure<CleaningSuite.Api.Middleware.PublicRateLimitOptions>(builder.Configuration.GetSection("PublicRateLimit"));
+
 builder.Services.AddControllers().AddJsonOptions(o =>
 {
     o.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
@@ -173,6 +176,8 @@ builder.Services.AddExceptionHandler<ValidationExceptionHandler>();
 builder.Services.AddExceptionHandler<DefaultExceptionHandler>();
 
 var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 // Health check: liveness only, no DB dependency.
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok", utc = DateTime.UtcNow, releaseSha = Environment.GetEnvironmentVariable("APP_RELEASE_SHA") }));
