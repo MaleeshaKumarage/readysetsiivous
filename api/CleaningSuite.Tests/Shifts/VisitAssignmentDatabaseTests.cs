@@ -74,8 +74,7 @@ public class VisitAssignmentDatabaseTests
         var pause = new PauseReservation(startWins ? startReservation : assignReservation);
         var version = ShiftRosterReader.Version(await assignRepo.ListAssignmentHistoryAsync(shift.Id));
         var clock = new Clock();
-        var starter = new QualityCycleHandlers.StartQualityCycleFormCommandHandler(startRepo, employees.Object, new QualityCycleRepository(startSession, store), clock,
-            reservation: startWins ? pause : startReservation);
+        var starter = new QualityCycleHandlers.StartQualityCycleFormCommandHandler(startRepo, employees.Object, new QualityCycleRepository(startSession, store), startWins ? pause : startReservation, clock);
         var setter = new SetVisitAssigneesHandler(assignRepo, employees.Object, new QualityCycleRepository(assignSession, store), reservation: startWins ? assignReservation : pause, clock: clock);
         var command = new SetVisitAssigneesCommand(shift.Id, Start, null, OccurrenceAssignmentMode.Replace, [b.Id], "Cover", version);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));

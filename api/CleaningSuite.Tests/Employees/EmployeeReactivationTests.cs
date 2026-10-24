@@ -1,3 +1,4 @@
+using CleaningSuite.Tests.QualityCycle;
 using CleaningSuite.Application.Common;
 using CleaningSuite.Application.Employees;
 using CleaningSuite.Application.Employees.Commands;
@@ -97,7 +98,7 @@ public class EmployeeReactivationTests
         var existing = new Employee { Email = "other@example.invalid", IsActive = false };
         _employees.Setup(x => x.GetByEmailAsync(existing.Email, default)).ReturnsAsync(existing);
         var fields = new EmployeeFields(existing.Email, "First", "Last", "", "employee", null, new(), null, null, null, null, null);
-        await Assert.ThrowsAsync<EmployeeIdentityConflictException>(() => new UpdateEmployeeHandler(_employees.Object, _identity.Object, _tenant.Object, _locks.Object).Handle(new(_employee.Id, fields, true), default));
+        await Assert.ThrowsAsync<EmployeeIdentityConflictException>(() => new UpdateEmployeeHandler(_employees.Object, _identity.Object, _tenant.Object, _locks.Object, WorkAccessFixtures.Reservation).Handle(new(_employee.Id, fields, true), default));
         _employees.Verify(x => x.SaveAsync(It.IsAny<Employee>(), default), Times.Never);
     }
 }
