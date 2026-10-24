@@ -144,6 +144,10 @@ jobs:
               raise SystemExit('approved immutable image required')
           subprocess.run(['docker', 'pull', image], check=True)
           PY
+      - name: Enable bridge firewall enforcement
+        run: |
+          sudo modprobe br_netfilter
+          sudo sysctl -w net.bridge.bridge-nf-call-iptables=1
       - name: Generate bounded proposal through isolated gateway
         env:
           AGENT_PYTHON_IMAGE: ${{ vars.AGENT_PYTHON_IMAGE }}
