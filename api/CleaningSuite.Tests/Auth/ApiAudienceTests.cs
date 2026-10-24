@@ -140,6 +140,28 @@ public class ApiAudienceTests
         Assert.Empty(host.Mediator.Invocations);
     }
 
+    [Theory]
+    [InlineData("foreign-issuer")]
+    [InlineData("invalid-realm")]
+    public async Task InvalidBearerIssuerNeverReachesRegistryOrJwks(string defect)
+    {
+        using var host = new Host();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await host.Get("/api/v1/me", host.Token("tenant-a", "cleaning-suite-api", defect: defect))).StatusCode);
+        Assert.Empty(host.Registry.Invocations);
+        Assert.Equal(0, host.SigningKeyRequests);
+    }
+
+    [Fact]
+    public async Task UnknownRealmIsNegativelyCachedWithoutFetchingJwks()
+    {
+        using var host = new Host();
+        host.Registry.Setup(x => x.GetBySlugAsync("unknown-realm", It.IsAny<CancellationToken>())).ReturnsAsync((TenantRegistration?)null);
+        for (var i = 0; i < 3; i++)
+            Assert.Equal(HttpStatusCode.Unauthorized, (await host.Get("/api/v1/me", host.Token("unknown-realm", "cleaning-suite-api"))).StatusCode);
+        host.Registry.Verify(x => x.GetBySlugAsync("unknown-realm", It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Equal(0, host.SigningKeyRequests);
+    }
+
     private static Dictionary<string, string?> Configuration() => new() {
         ["Auth:Keycloak:ServerUrl"] = "https://auth.test", ["Auth:Keycloak:Audience"] = "cleaning-suite-api",
         ["Auth:Keycloak:PlatformAudience"] = "cleaning-suite-platform-api", ["Auth:Keycloak:ProvisionerRealm"] = "master",
@@ -151,6 +173,8 @@ public class ApiAudienceTests
         private readonly RSA _rsa = RSA.Create(2048);
         private readonly RsaSecurityKey _key;
         private readonly WebApplicationFactory<Program> _factory;
+        public Mock<ITenantRegistry> Registry { get; } = new();
+        public int SigningKeyRequests;
         public Mock<IMediator> Mediator { get; } = new();
         public Mock<IEmployeeRepository> Employees { get; } = new();
         public AuditLogger Audit { get; } = new();
@@ -162,7 +186,7 @@ public class ApiAudienceTests
             var parameters = _rsa.ExportParameters(false);
             var publicKey = new { kty = "RSA", kid = _key.KeyId, use = "sig", alg = "RS256",
                 n = Base64UrlEncoder.Encode(parameters.Modulus!), e = Base64UrlEncoder.Encode(parameters.Exponent!) };
-            var registry = new Mock<ITenantRegistry>();
+            var registry = Registry;
             registry.Setup(x => x.GetBySlugAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((string slug, CancellationToken _) => new TenantRegistration { Slug = slug, Status = TenantRegistration.StatusActive });
             Mediator.Setup(x => x.Send(It.IsAny<ListTenantsQuery>(), It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<TenantRegistration>());
             Mediator.Setup(x => x.Send(It.IsAny<ProvisionTenantCommand>(), It.IsAny<CancellationToken>())).ReturnsAsync(new ProvisionTenantResult("tenant-new", "tenant-new", "cleaning-suite-web", "do-not-log-password", false));
@@ -174,7 +198,7 @@ public class ApiAudienceTests
                     services.RemoveAll<ITenantRegistry>(); services.AddSingleton(registry.Object);
                     services.RemoveAll<IEmployeeRepository>(); services.AddSingleton(Employees.Object);
                     services.RemoveAll<IMediator>(); services.AddSingleton(Mediator.Object);
-                    services.AddHttpClient("KeycloakSigningKeys").ConfigurePrimaryHttpMessageHandler(() => new Jwks(JsonSerializer.Serialize(new { keys = new[] { publicKey } })));
+                    services.AddHttpClient("KeycloakSigningKeys").ConfigurePrimaryHttpMessageHandler(() => new Jwks(JsonSerializer.Serialize(new { keys = new[] { publicKey } }), () => Interlocked.Increment(ref SigningKeyRequests)));
                     services.AddSingleton<ILogger<PlatformAuditMiddleware>>(Audit);
                 });
             });
@@ -197,9 +221,13 @@ public class ApiAudienceTests
         public Task<HttpResponseMessage> Get(string path, string? token) { var request = new HttpRequestMessage(HttpMethod.Get, path); if (token is not null) request.Headers.Authorization = new("Bearer", token); return Client.SendAsync(request); }
         public void Dispose() { Client.Dispose(); _factory.Dispose(); _rsa.Dispose(); }
     }
-    private sealed class Jwks(string json) : HttpMessageHandler
+    private sealed class Jwks(string json, Action? observed = null) : HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) });
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            observed?.Invoke();
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) });
+        }
     }
     private sealed class AuditLogger : ILogger<PlatformAuditMiddleware>
     {

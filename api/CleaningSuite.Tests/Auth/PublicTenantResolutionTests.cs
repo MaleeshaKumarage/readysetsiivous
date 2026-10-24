@@ -117,8 +117,10 @@ public class PublicTenantResolutionTests
         foreach (var method in new[] { "GET", "POST" })
         {
             using var response = await host.SendPrivate("/api/v1/manager/shifts", realm, method);
-            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-            Assert.Contains("tenant-inactive", await response.Content.ReadAsStringAsync());
+            // Unknown realms are rejected during authentication, before signing-key discovery.
+            // Registered suspended realms still reach the explicit tenant-status boundary.
+            Assert.Equal(realm == "unknown" ? HttpStatusCode.Unauthorized : HttpStatusCode.Forbidden, response.StatusCode);
+            if (realm != "unknown") Assert.Contains("tenant-inactive", await response.Content.ReadAsStringAsync());
         }
         Assert.Empty(host.Employees.Invocations);
         Assert.Empty(host.Mediator.Invocations);
