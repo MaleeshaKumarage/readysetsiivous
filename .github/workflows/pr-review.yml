@@ -36,10 +36,9 @@ jobs:
             exit 0
           fi
 
-          # 1. Resolve prior review threads whose file changed in this commit.
-          python3 scripts/resolve_fixed_comments.py "$PR" "$HEAD_SHA"
+          # Reviewers resolve their own threads after verifying the fix.
 
-          # 2. Review for critical / breaking issues + missing coverage.
+          # Provider failures must fail the job without claiming a clean review.
           python3 scripts/deepseek.py \
             "You are a senior code reviewer. Do two checks. (1) Find critical / breaking issues: correctness bugs, security vulnerabilities, crashes, data loss, breaking API or DB changes. (2) Find missing Playwright E2E coverage: for every new or changed UI feature (page, button, form, interaction), verify site/e2e/ has a test exercising it — a page with N buttons needs all N tested. Ignore style, formatting, naming, minor suggestions, and nitpicks. Output each issue (critical bug OR missing coverage) as a 3-line block, blank line between blocks: '### FILE: <path>', '### LINE: <n>', '### FIX: <what to change and why>'. LINE is the exact 1-based line number in the NEW file (the '+' side of the hunk). Do not report files under .github/workflows/. If there are no issues, output exactly NO_CRITICAL and nothing else." \
             < /tmp/diff.txt > /tmp/review.txt
@@ -47,9 +46,11 @@ jobs:
           # Keep the response visible even when the reviewer misses the block format.
           cat /tmp/review.txt
 
-          # 3. No critical issues -> ready to merge, stop.
-          if grep -q "NO_CRITICAL" /tmp/review.txt; then
-            gh pr comment "$PR" --body "✅ No critical issues. Ready to merge."
+          python3 scripts/validate_pr_review.py < /tmp/review.txt
+
+          # Only an exact, standalone clean result reaches this branch.
+          if [ "$(cat /tmp/review.txt)" = "NO_CRITICAL" ]; then
+            gh pr comment "$PR" --body "AI review completed: no critical issues reported. Existing review conversations still require verification."
             exit 0
           fi
 

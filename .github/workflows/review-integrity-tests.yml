@@ -1,0 +1,16 @@
+name: review-integrity-tests
+on:
+  pull_request:
+    paths: ['scripts/**', '.github/workflows/**']
+  push:
+    branches: [main]
+    paths: ['scripts/**', '.github/workflows/**']
+permissions:
+  contents: read
+jobs:
+  review-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s scripts/tests -p test_pr_review.py -v
+      - run: bash -n scripts/deepseek_wrap.sh
