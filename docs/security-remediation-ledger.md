@@ -38,3 +38,7 @@ A separate read-only reviewer found no concrete blockers in the consolidated and
 ## Latest environment evidence
 
 Local Docker Linux daemon is unavailable: dockerDesktopLinuxEngine named pipe missing on 2026-10-24. Do not claim the old Windows validator gap is fixed. PR192 backend job120911559956 completed successfully (847 passed,2 skipped); frontend job120911560240 still installing Chromium at the latest observation. The full goal remains active and the consolidated approval remains pending.
+
+## QC lifecycle clarification
+
+The proposed consolidated design now explicitly preserves original-owner completion of started work after roster changes, while checking current employee activity and shift availability. Unstarted reassigned work is denied. Source: EndQualityCycleFormCommandHandler checks ownership/start; GetMyShifts preserves recorded history only while a shift is active; RecordActivity blocks deleted forms. This avoids accidentally revoking valid started-work completion when fixing inactive employee token access. User approval is still pending.

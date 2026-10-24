@@ -12,7 +12,19 @@ Recommended: small related PRs, each with a bounded synthetic regression, code r
 
 Booking credentials follow the separate 2026-10-24-booking-access-hardening-design.md: 32-byte random management key, hashed storage, POST body credentials, no phone fallback; existing bookings remain staff-managed. Preserve current cancellation rules. OTP/accounts and a full management/recovery screen are separate product decisions, not silently bundled.
 
-QC: centralize current employee and form availability checks for public token reads and every mutation, including started visits. Inactive/missing employee, deleted form/shift, inactive shift and stale assignment must not grant anonymous access or mutation. Started work/history/attachments must be retained. Preserve authorized read-only historical reporting and existing conflict/idempotency rules. Make security dependencies required in production rather than allowing optional injection to skip checks. Confirm authenticated owner end/start rules and intentional started-assignment behavior before unifying them. Test deactivation during a request under the existing work reservation, no partial writes, completed replay, and tenant/owner boundaries.
+QC: centralize employee and form availability checks for public token reads and every mutation, including started visits. Inactive/missing employees must never gain public token access or mutation. Deleted forms/shifts and inactive shifts are unavailable through the personal/public work paths; preserve authorized administrative historical reporting. Make security dependencies required in production rather than allowing optional injection to skip checks.
+
+Preserve the existing intentional distinction between starting unstarted work and finishing already-owned work after a roster change:
+
+| Condition | Public token work access | Mutation |
+|---|---|---|
+| Inactive/missing employee | Deny, even when already started/submitted | Deny |
+| Inactive/deleted shift or deleted form | Deny; administrative history remains | Deny |
+| Active employee, active shift, unstarted visit removed from roster | Deny | Deny |
+| Active employee, active shift, visit already started by that employee before roster change | Retain original owner's recorded task | Original owner may finish; no ownership transfer or snapshot rewrite |
+| Completed visit | Existing authorized history rules | Reject repeat mutation under existing conflict rules |
+
+Authenticated operations additionally require the current identity to own the form, regardless of role. Preserve past/today start and future-start restrictions, optional checklist selections and existing actual-clock behavior. Use the existing work reservation around lifecycle checks/writes so reassign/deactivate races do not leave partial evidence. Verify the current deactivation write path uses the same reservation, or introduce a coherent version/transaction check rather than assuming a local lock covers it. Test each matrix row, retained attachments, completed replay and tenant boundaries.
 
 ## 2. Game admission and reconnect
 
