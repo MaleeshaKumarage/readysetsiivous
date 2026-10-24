@@ -255,3 +255,9 @@ to an internal network and a read-only database connection, stop after startup
 health before the 15-second QC delay, and avoid the UTC midnight cleanup boundary.
 Never publish restored customer data or credentials. Backups must be restored and
 verified before upgrading production, and the previous image must be retained.
+## Dev identity and file persistence
+
+Before applying the persistent dev database/upload/key configuration to an existing
+stack, follow [the backup, migration and rollback procedure](environments/dev-state-persistence.md).
+Keep the existing Compose project name and preserve the current embedded Keycloak
+data, uploads and encryption key before recreating containers.

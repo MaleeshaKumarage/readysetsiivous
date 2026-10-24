@@ -1,0 +1,32 @@
+name: dev-persistence-tests
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - api/dev/docker-compose.yml
+      - api/deploy/docker-compose.dev.yml
+      - api/dev/init/**
+      - api/dev/tests/dev-persistence-recreate.py
+      - .github/workflows/dev-persistence-tests.yml
+  push:
+    branches: [main]
+    paths:
+      - api/dev/docker-compose.yml
+      - api/deploy/docker-compose.dev.yml
+      - api/dev/init/**
+      - api/dev/tests/dev-persistence-recreate.py
+      - .github/workflows/dev-persistence-tests.yml
+permissions:
+  contents: read
+jobs:
+  recreate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4, verified tag inventory
+        with:
+          persist-credentials: false
+      - name: Validate initialization syntax
+        run: bash -n api/dev/init/01-keycloak.sh
+      - name: Recreate disposable dev stacks with synthetic state
+        run: python3 api/dev/tests/dev-persistence-recreate.py
