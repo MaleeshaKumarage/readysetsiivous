@@ -23,3 +23,7 @@ The absence of a reachable public server path is a scoped source/deployment infe
 ## NuGet follow-up
 
 On 2026-10-24 the pinned SDK ran `dotnet list api/CleaningSuite.Backend.sln package --vulnerable --include-transitive --format json --no-restore` against restored assets. It exited0 and reported no vulnerable package entries for all five projects. See security-nuget-advisory-evidence.json (local paths normalized; raw output retained outside the repository). This is bounded to NuGet advisory coverage and the restored dependency graph; native libraries and remaining npm/tooling cases are still open.
+
+## Complete npm registry query
+
+The locked graph query `npm audit --json --package-lock-only --ignore-scripts` exited1 and returned36 affected package entries (4critical,16high,10moderate,6low). See security-npm-advisory-evidence.json for every package, propagated dependency, advisory URL and proposed registry fix. This extends the original four feed hints, and keeps all entries open for triage. Some suggested fixes are major upgrades or even downgrades; do not run force-fix blindly. Storybook dev-server origin/network advisories also require local-development exposure review, even though the public website is static. No package manifests or lockfiles changed during these read-only queries.

@@ -23,7 +23,7 @@ Status words distinguish verified fixes, source-grounded leads, hardening and de
 | HARD-03 | Mutable Actions/container versions | Workflow Actions and deployment base/service images use tags | Verified immutable SHA/digest inventory and update instructions; offline workflow checks | Hardening pending |
 | HARD-04 | Docker build context / restore reproducibility | api/docker/Dockerfile COPY . .; no api .dockerignore or packages.lock.json found | Narrow build context, reviewed locked restore and repeatable clean build | Hardening pending |
 | HARD-05 | Comment text shell interpolation | Former unsafe agent comment path replaced with manual immutable snapshot pipeline | Recheck current workflow event interpolation and PR191 tests | Superseded by SEC-02; source rechecked |
-| VERIFY-01 | AI retry quota reservation | Synthetic tests reproduced five failures: internal HTTP retries exceeded RPD and skipped RPM spacing. Fix in draft PR192 at874bd97; 111 local entertainment tests pass (2 skipped), separate review found no blockers; Linux backend CI passes 847 tests (2 skipped) | Finish browser CI and merge; cancellation case passes; no paid calls | Runtime reproduced, fix in PR192 |
+| VERIFY-01 | AI retry quota reservation | PR192 merged as94f47c0; 6 new cases, 847 Linux backend tests passed (2 skipped), 484 desktop/mobile Playwright tests passed; independent and automated reviews clear | Main release jobs still running; no paid provider smoke test performed | Code fixed, merged; release pending |
 | VERIFY-02 | Dependency/advisory hints | Original offline feed matches were not proven reachable | Current primary advisory/version/applicability evidence; fix confirmed reachable issues, document dismissed hints | Validation pending |
 | VERIFY-03 | Original audit tooling gaps | Windows strict validators could not run; old audit explicitly incomplete | Supported isolated Linux validators and bounded synthetic demonstrations for remaining leads | Validation pending |
 
@@ -42,3 +42,7 @@ Local Docker Linux daemon is unavailable: dockerDesktopLinuxEngine named pipe mi
 ## QC lifecycle clarification
 
 The proposed consolidated design now explicitly preserves original-owner completion of started work after roster changes, while checking current employee activity and shift availability. Unstarted reassigned work is denied. Source: EndQualityCycleFormCommandHandler checks ownership/start; GetMyShifts preserves recorded history only while a shift is active; RecordActivity blocks deleted forms. This avoids accidentally revoking valid started-work completion when fixing inactive employee token access. User approval is still pending.
+
+## Dependency audit follow-up
+
+The NuGet transitive advisory query exited0 without vulnerable package entries across five restored projects. The npm package-lock-only audit exited1 with36 package entries (4critical,16high,10moderate,6low), including dev/build tooling and propagated dependencies. These are registry findings requiring applicability review, not36 confirmed production exploits. Normalized evidence is in security-nuget-advisory-evidence.json and security-npm-advisory-evidence.json; VERIFY-02 remains open. No dependencies were changed.

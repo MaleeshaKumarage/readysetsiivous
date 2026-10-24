@@ -1,0 +1,864 @@
+{
+  "checked_date": "2026-10-24",
+  "source_commit": "874bd9796fb58f0959bf9b91b543c4ae926b8be3",
+  "command": "npm audit --json --package-lock-only --ignore-scripts",
+  "exit_code": 1,
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 6,
+      "moderate": 10,
+      "high": 16,
+      "critical": 4,
+      "total": 36
+    },
+    "dependencies": {
+      "prod": 394,
+      "dev": 579,
+      "optional": 62,
+      "peer": 0,
+      "peerOptional": 0,
+      "total": 981
+    }
+  },
+  "interpretation": "Registry advisory report, not 36 confirmed exploitable production defects. Includes propagated/transitive package entries and dev/build tooling. Reported fixes can suggest major upgrades or downgrades and must not be applied blindly. No package changes made. Raw report retained outside repository.",
+  "packages": [
+    {
+      "package": "@modelcontextprotocol/sdk",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "<=1.31.0",
+      "reported_fix": true,
+      "via": [
+        {
+          "title": "MCP TypeScript SDK: OAuth client could send credentials to an authorization server chosen by the MCP server",
+          "url": "https://github.com/advisories/GHSA-6qxp-vccf-f47h",
+          "range": ">=1.12.0 <1.31.0"
+        },
+        {
+          "title": "MCP TypeScript SDK: Experimental tasks were not tied to the session that created them",
+          "url": "https://github.com/advisories/GHSA-22jm-h49p-29qw",
+          "range": ">=1.24.0 <1.32.0"
+        },
+        {
+          "title": "MCP TypeScript client SDK: HTTP client transports and OAuth requests followed cross-origin redirects and re-sent custom headers and request bodies",
+          "url": "https://github.com/advisories/GHSA-6prh-2h8m-c8cw",
+          "range": "<1.32.0"
+        },
+        {
+          "title": "MCP TypeScript SDK: One HTTP request within the default size limit could exhaust server memory during validation",
+          "url": "https://github.com/advisories/GHSA-46jr-4wx8-v453",
+          "range": ">=1.3.0 <1.32.0"
+        },
+        {
+          "title": "MCP TypeScript SDK: Server bearer authentication accepted tokens issued for another service",
+          "url": "https://github.com/advisories/GHSA-rvq5-wwqv-78pq",
+          "range": ">=1.6.0 <1.32.0"
+        }
+      ]
+    },
+    {
+      "package": "@storybook/addon-actions",
+      "severity": "moderate",
+      "direct": false,
+      "affected_range": "<=0.0.0-pr-34011-sha-c45b0f3f || 3.1.6 - 6.2.0-rc.13 || 7.0.7 - 9.0.0-rc.5",
+      "reported_fix": {
+        "name": "@storybook/addon-essentials",
+        "version": "7.0.6",
+        "isSemVerMajor": true
+      },
+      "via": [
+        {
+          "dependency": "uuid"
+        }
+      ]
+    },
+    {
+      "package": "@storybook/addon-essentials",
+      "severity": "moderate",
+      "direct": true,
+      "affected_range": "<=5.3.0-rc.14 || 6.0.0-alpha.0 - 6.2.0-rc.13 || 7.0.7 - 9.0.0-alpha.3",
+      "reported_fix": {
+        "name": "@storybook/addon-essentials",
+        "version": "7.0.6",
+        "isSemVerMajor": true
+      },
+      "via": [
+        {
+          "dependency": "@storybook/addon-actions"
+        }
+      ]
+    },
+    {
+      "package": "@storybook/builder-webpack5",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "<=11.0.0-alpha.4",
+      "reported_fix": {
+        "name": "@storybook/nextjs",
+        "version": "10.6.3",
+        "isSemVerMajor": true
+      },
+      "via": [
+        {
+          "dependency": "webpack-dev-middleware"
+        }
+      ]
+    },
+    {
+      "package": "@storybook/core",
+      "severity": "critical",
+      "direct": false,
+      "affected_range": "8.2.0-beta.0 - 8.6.18",
+      "reported_fix": {
+        "name": "storybook",
+        "version": "8.6.19",
+        "isSemVerMajor": false
+      },
+      "via": [
+        {
+          "title": "Storybook: Missing origin validation in Storybook preview allows code injection from malicious websites",
+          "url": "https://github.com/advisories/GHSA-f2ph-cmg5-wxc8",
+          "range": ">=8.0.0 <8.6.19"
+        },
+        {
+          "title": "Storybook dev server vulnerable to code injection from the local network",
+          "url": "https://github.com/advisories/GHSA-px85-f4q5-jh77",
+          "range": ">=8.0.0 <8.6.19"
+        }
+      ]
+    },
+    {
+      "package": "@storybook/nextjs",
+      "severity": "high",
+      "direct": true,
+      "affected_range": "<=11.0.0-alpha.4",
+      "reported_fix": {
+        "name": "@storybook/nextjs",
+        "version": "10.6.3",
+        "isSemVerMajor": true
+      },
+      "via": [
+        {
+          "dependency": "@storybook/builder-webpack5"
+        },
+        {
+          "dependency": "node-polyfill-webpack-plugin"
+        },
+        {
+          "dependency": "sharp"
+        }
+      ]
+    },
+    {
+      "package": "body-parser",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "2.0.0 - 2.3.0",
+      "reported_fix": true,
+      "via": [
+        {
+          "title": "body-parser vulnerable to Denial of Service via trailing bytes after a compressed request body",
+          "url": "https://github.com/advisories/GHSA-27r3-jxmh-p828",
+          "range": ">=2.0.0 <2.4.0"
+        }
+      ]
+    },
+    {
+      "package": "brace-expansion",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "<=1.1.20 || 4.0.0 - 5.0.11",
+      "reported_fix": true,
+      "via": [
+        {
+          "title": "brace-expansion: Quadratic-time expansion of the `{a},b}` rewrite causes CPU denial of service",
+          "url": "https://github.com/advisories/GHSA-q2hr-2g5m-vwhr",
+          "range": "<1.1.21"
+        },
+        {
+          "title": "brace-expansion: Quadratic-time expansion of the `{a},b}` rewrite causes CPU denial of service",
+          "url": "https://github.com/advisories/GHSA-q2hr-2g5m-vwhr",
+          "range": ">=4.0.0 <5.0.12"
+        },
+        {
+          "title": "brace-expansion: DoS via uncontrolled recursion on nested brace groups causing stack exhaustion",
+          "url": "https://github.com/advisories/GHSA-qhr7-859c-m2p7",
+          "range": "<1.1.20"
+        },
+        {
+          "title": "brace-expansion: DoS via uncontrolled recursion on nested brace groups causing stack exhaustion",
+          "url": "https://github.com/advisories/GHSA-qhr7-859c-m2p7",
+          "range": ">=4.0.0 <5.0.11"
+        },
+        {
+          "title": "brace-expansion: DoS via uncontrolled recursion in parseCommaParts causing stack exhaustion",
+          "url": "https://github.com/advisories/GHSA-6j4f-fj2g-mc7p",
+          "range": "<1.1.19"
+        },
+        {
+          "title": "brace-expansion: DoS via uncontrolled recursion in parseCommaParts causing stack exhaustion",
+          "url": "https://github.com/advisories/GHSA-6j4f-fj2g-mc7p",
+          "range": ">=4.0.0 <5.0.10"
+        }
+      ]
+    },
+    {
+      "package": "browserify-sign",
+      "severity": "low",
+      "direct": false,
+      "affected_range": ">=2.4.0",
+      "reported_fix": {
+        "name": "@storybook/nextjs",
+        "version": "10.6.3",
+        "isSemVerMajor": true
+      },
+      "via": [
+        {
+          "dependency": "elliptic"
+        }
+      ]
+    },
+    {
+      "package": "create-ecdh",
+      "severity": "low",
+      "direct": false,
+      "affected_range": "*",
+      "reported_fix": {
+        "name": "@storybook/nextjs",
+        "version": "10.6.3",
+        "isSemVerMajor": true
+      },
+      "via": [
+        {
+          "dependency": "elliptic"
+        }
+      ]
+    },
+    {
+      "package": "crypto-browserify",
+      "severity": "low",
+      "direct": false,
+      "affected_range": ">=3.4.0",
+      "reported_fix": {
+        "name": "@storybook/nextjs",
+        "version": "10.6.3",
+        "isSemVerMajor": true
+      },
+      "via": [
+        {
+          "dependency": "browserify-sign"
+        },
+        {
+          "dependency": "create-ecdh"
+        }
+      ]
+    },
+    {
+      "package": "elliptic",
+      "severity": "low",
+      "direct": false,
+      "affected_range": "*",
+      "reported_fix": {
+        "name": "@storybook/nextjs",
+        "version": "10.6.3",
+        "isSemVerMajor": true
+      },
+      "via": [
+        {
+          "title": "Elliptic Uses a Cryptographic Primitive with a Risky Implementation",
+          "url": "https://github.com/advisories/GHSA-848j-6mx2-7j84",
+          "range": "<=6.6.1"
+        }
+      ]
+    },
+    {
+      "package": "fast-uri",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "3.0.0 - 3.1.8",
+      "reported_fix": true,
+      "via": [
+        {
+          "title": "fast-uri vulnerable to authority injection via an unvalidated port in serialize",
+          "url": "https://github.com/advisories/GHSA-qw65-cvwx-89v3",
+          "range": ">=3.0.0 <3.1.7"
+        },
+        {
+          "title": "fast-uri vulnerable to host confusion via an unclosed bracket in the URI authority",
+          "url": "https://github.com/advisories/GHSA-58mr-gqgx-xq4g",
+          "range": "=3.1.6"
+        },
+        {
+          "title": "fast-uri vulnerable to inconsistent host case normalization via percent-encoded octets",
+          "url": "https://github.com/advisories/GHSA-hrr3-gc8f-f4qj",
+          "range": ">=3.0.0 <3.1.8"
+        },
+        {
+          "title": "fast-uri vulnerable to URI scheme spoofing via percent-encoded scheme decoding",
+          "url": "https://github.com/advisories/GHSA-w74x-v6f9-j3xg",
+          "range": ">=3.0.0 <3.1.9"
+        },
+        {
+          "title": "fast-uri vulnerable to improper path equivalence in relative reference normalization",
+          "url": "https://github.com/advisories/GHSA-xhq7-xmqj-769h",
+          "range": ">=3.0.0 <3.1.9"
+        },
+        {
+          "title": "fast-uri vulnerable to host confusion via unchecked WHATWG host canonicalization",
+          "url": "https://github.com/advisories/GHSA-wjr9-j795-jxcr",
+          "range": ">=3.1.3 <3.1.9"
+        },
+        {
+          "title": "fast-uri vulnerable to scheme injection via an unescaped first-segment colon in suffix references",
+          "url": "https://github.com/advisories/GHSA-333x-w4r6-6crp",
+          "range": ">=3.0.0 <3.1.9"
+        }
+      ]
+    },
+    {
+      "package": "hono",
+      "severity": "moderate",
+      "direct": false,
+      "affected_range": "4.12.4 - 4.13.10",
+      "reported_fix": true,
+      "via": [
+        {
+          "title": "Hono: `serveStatic` decodes the request path a second time, leading to bypass of middleware on static paths",
+          "url": "https://github.com/advisories/GHSA-5r4p-p66f-jhc7",
+          "range": ">=4.12.4 <4.13.11"
+        }
+      ]
+    },
+    {
+      "package": "image-size",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "0.6.3 - 2.0.2",
+      "reported_fix": true,
+      "via": [
+        {
+          "title": "image-size: JXL and HEIF parsers allow denial of service through infinite loops",
+          "url": "https://github.com/advisories/GHSA-5p2g-fcmc-qvqq",
+          "range": ">=1.2.0 <=2.0.2"
+        },
+        {
+          "title": "image-size: ICNS parser allows denial of service through an infinite loop",
+          "url": "https://github.com/advisories/GHSA-w3rx-r6r6-pgpr",
+          "range": ">=0.6.3 <=2.0.2"
+        }
+      ]
+    },
+    {
+      "package": "ip-address",
+      "severity": "moderate",
+      "direct": false,
+      "affected_range": "<=10.7.3",
+      "reported_fix": true,
+      "via": [
+        {
+          "title": "ip-address: isInSubnet() and isHostInSubnet() compare addresses of different families as if they shared an address space, allowing an allowlist check to admit an address outside its range",
+          "url": "https://github.com/advisories/GHSA-j6r3-76f7-8jcv",
+          "range": "<=10.7.0"
+        },
+        {
+          "title": "ip-address: Address6 builds a parse diagnostic proportional to the input with no length bound, allowing a single long string to stall or crash the process",
+          "url": "https://github.com/advisories/GHSA-h3mg-xc3c-68pw",
+          "range": "<=10.7.0"
+        },
+        {
+          "title": "ip-address: Address6 matches a zone identifier in quadratic time ahead of its length limit, allowing a single long string to stall the process",
+          "url": "https://github.com/advisories/GHSA-rxp7-6hxx-x8q5",
+          "range": "<=10.7.3"
+        }
+      ]
+    },
+    {
+      "package": "js-yaml",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "4.0.0 - 4.3.1",
+      "reported_fix": true,
+      "via": [
+        {
+          "title": "js-yaml: maxTotalMergeKeys does not limit CPU use for empty merge sources",
+          "url": "https://github.com/advisories/GHSA-2883-xcg3-v3hh",
+          "range": ">=4.0.0 <4.3.2"
+        }
+      ]
+    },
+    {
+      "package": "nanoid",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "<3.3.18",
+      "reported_fix": true,
+      "via": [
+        {
+          "title": "nanoid: custom generators can loop indefinitely when size is zero",
+          "url": "https://github.com/advisories/GHSA-2v37-7h3g-55p8",
+          "range": "<3.3.18"
+        }
+      ]
+    },
+    {
+      "package": "next",
+      "severity": "critical",
+      "direct": true,
+      "affected_range": "9.3.4-canary.0 - 16.3.0-preview.10",
+      "reported_fix": {
+        "name": "next",
+        "version": "16.4.3",
+        "isSemVerMajor": true
+      },
+      "via": [
+        {
+          "title": "Next.js self-hosted applications vulnerable to DoS via Image Optimizer remotePatterns configuration",
+          "url": "https://github.com/advisories/GHSA-9g9p-9gw9-jx7f",
+          "range": ">=10.0.0 <15.5.10"
+        },
+        {
+          "title": "Next.js HTTP request deserialization can lead to DoS when using insecure React Server Components",
+          "url": "https://github.com/advisories/GHSA-h25m-26qc-wcjf",
+          "range": ">=13.0.0 <15.0.8"
+        },
+        {
+          "title": "Next.js: HTTP request smuggling in rewrites",
+          "url": "https://github.com/advisories/GHSA-ggv3-7p47-pfv8",
+          "range": ">=9.5.0 <15.5.13"
+        },
+        {
+          "title": "Next.js: Unbounded next/image disk cache growth can exhaust storage",
+          "url": "https://github.com/advisories/GHSA-3x4c-7xq6-9pq8",
+          "range": ">=10.0.0 <15.5.14"
+        },
+        {
+          "title": "Next.js has a Denial of Service with Server Components",
+          "url": "https://github.com/advisories/GHSA-q4gf-8mx6-v5v3",
+          "range": ">=13.0.0 <15.5.15"
+        },
+        {
+          "title": "Next.js Vulnerable to Denial of Service with Server Components",
+          "url": "https://github.com/advisories/GHSA-8h8q-6873-q5fj",
+          "range": ">=13.0.0 <15.5.16"
+        },
+        {
+          "title": "Next.js's Middleware / Proxy redirects can be cache-poisoned",
+          "url": "https://github.com/advisories/GHSA-3g8h-86w9-wvmq",
+          "range": ">=12.2.0 <15.5.16"
+        },
+        {
+          "title": "Next.js vulnerable to cross-site scripting in App Router applications using CSP nonces",
+          "url": "https://github.com/advisories/GHSA-ffhc-5mcf-pf4q",
+          "range": ">=13.4.0 <15.5.16"
+        },
+        {
+          "title": "Next.js vulnerable to cache poisoning via collisions in React Server Component cache-busting",
+          "url": "https://github.com/advisories/GHSA-vfv6-92ff-j949",
+          "range": ">=13.4.6 <15.5.16"
+        },
+        {
+          "title": "Next.js has cross-site scripting in beforeInteractive scripts with untrusted input",
+          "url": "https://github.com/advisories/GHSA-gx5p-jg67-6x7h",
+          "range": ">=13.0.0 <15.5.16"
+        },
+        {
+          "title": "Next.js has a Denial of Service in the Image Optimization API",
+          "url": "https://github.com/advisories/GHSA-h64f-5h5j-jqjh",
+          "range": ">=10.0.0 <15.5.16"
+        },
+        {
+          "title": "Next.js vulnerable to server-side request forgery in applications using WebSocket upgrades",
+          "url": "https://github.com/advisories/GHSA-c4j6-fc7j-m34r",
+          "range": ">=13.4.13 <15.5.16"
+        },
+        {
+          "title": "Next.js vulnerable to cache poisoning in React Server Component responses",
+          "url": "https://github.com/advisories/GHSA-wfc6-r584-vfw7",
+          "range": ">=14.2.0 <15.5.16"
+        },
+        {
+          "title": "Next.js has a Middleware / Proxy bypass in Pages Router applications using i18n",
+          "url": "https://github.com/advisories/GHSA-36qx-fr4f-26g5",
+          "range": ">=12.2.0 <15.5.16"
+        },
+        {
+          "title": "Next.js: Denial of Service in App Router using Server Actions",
+          "url": "https://github.com/advisories/GHSA-m99w-x7hq-7vfj",
+          "range": ">=13.0.0 <15.5.21"
+        },
+        {
+          "title": "Next.js: Server-Side Request Forgery in Server Actions on custom servers",
+          "url": "https://github.com/advisories/GHSA-89xv-2m56-2m9x",
+          "range": ">=14.1.1 <15.5.21"
+        },
+        {
+          "title": "Next.js: Cache confusion of response bodies for requests with bodies",
+          "url": "https://github.com/advisories/GHSA-68g3-v927-f742",
+          "range": ">=13.0.0 <15.5.21"
+        },
+        {
+          "title": "Next.js: Cache confusion of response bodies for requests with bodies containing invalid UTF-8 byte sequences",
+          "url": "https://github.com/advisories/GHSA-4633-3j49-mh5q",
+          "range": ">=13.0.0 <15.5.21"
+        },
+        {
+          "title": "Next.js: Unbounded Server Action payload in Edge runtime",
+          "url": "https://github.com/advisories/GHSA-4c39-4ccg-62r3",
+          "range": ">=13.0.0 <15.5.21"
+        },
+        {
+          "title": "Next.js: Server-Side Request Forgery in rewrites via attacker-controlled destination hostname",
+          "url": "https://github.com/advisories/GHSA-p9j2-gv94-2wf4",
+          "range": ">=12.0.0 <15.5.21"
+        },
+        {
+          "title": "Next.js: Unauthenticated disclosure of internal Server Function endpoints",
+          "url": "https://github.com/advisories/GHSA-955p-x3mx-jcvp",
+          "range": ">=13.0.0 <15.5.21"
+        },
+        {
+          "title": "Next.js: Unauthenticated Remote Code Execution on windows-hosted servers",
+          "url": "https://github.com/advisories/GHSA-p293-qw3h-jr36",
+          "range": ">=13.4.0 <15.5.24"
+        },
+        {
+          "title": "Next.js: Unauthenticated Remote Code Execution in Image Optimization API when AVIF files are used",
+          "url": "https://github.com/advisories/GHSA-2xp9-vwfh-vxw4",
+          "range": ">=10.0.0 <15.5.24"
+        },
+        {
+          "title": "Next.js: Unauthenticated Remote Code Execution in Image Optimization API when SVG files are used",
+          "url": "https://github.com/advisories/GHSA-2464-fhr4-w9xw",
+          "range": ">=10.0.0 <=15.5.27"
+        },
+        {
+          "title": "Next.js: Denial of Service in App Router using Server Actions",
+          "url": "https://github.com/advisories/GHSA-p3m5-59mp-jv5r",
+          "range": ">=13.0.0 <=15.5.27"
+        },
+        {
+          "dependency": "postcss"
+        }
+      ]
+    },
+    {
+      "package": "node-polyfill-webpack-plugin",
+      "severity": "low",
+      "direct": false,
+      "affected_range": "<=4.0.0",
+      "reported_fix": {
+        "name": "@storybook/nextjs",
+        "version": "10.6.3",
+        "isSemVerMajor": true
+      },
+      "via": [
+        {
+          "dependency": "crypto-browserify"
+        }
+      ]
+    },
+    {
+      "package": "pbkdf2",
+      "severity": "moderate",
+      "direct": false,
+      "affected_range": "<=3.1.6",
+      "reported_fix": true,
+      "via": [
+        {
+          "title": "pbkdf2 rehashes long passwords on every iteration, enabling denial of service",
+          "url": "https://github.com/advisories/GHSA-477h-4r7f-fvrx",
+          "range": "<=3.1.6"
+        }
+      ]
+    },
+    {
+      "package": "postcss",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "<=8.5.22",
+      "reported_fix": {
+        "name": "next",
+        "version": "16.4.3",
+        "isSemVerMajor": true
+      },
+      "via": [
+        {
+          "title": "PostCSS has XSS via Unescaped </style> in its CSS Stringify Output",
+          "url": "https://github.com/advisories/GHSA-qx2v-qp2m-jg93",
+          "range": "<8.5.10"
+        },
+        {
+          "title": "PostCSS: Arbitrary file read and information disclosure via attacker-controlled sourceMappingURL in CSS comments",
+          "url": "https://github.com/advisories/GHSA-6g55-p6wh-862q",
+          "range": "<=8.5.11"
+        },
+        {
+          "title": "PostCSS: incomplete fix of GHSA-6g55-p6wh-862q \u2014 attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset",
+          "url": "https://github.com/advisories/GHSA-fxqj-rqcc-2cmp",
+          "range": "<=8.5.22"
+        },
+        {
+          "title": "PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure",
+          "url": "https://github.com/advisories/GHSA-r28c-9q8g-f849",
+          "range": "<=8.5.17"
+        }
+      ]
+    },
+    {
+      "package": "postcss-nested",
+      "severity": "moderate",
+      "direct": false,
+      "affected_range": "2.0.3 - 6.2.0",
+      "reported_fix": true,
+      "via": [
+        {
+          "dependency": "postcss-selector-parser"
+        }
+      ]
+    },
+    {
+      "package": "postcss-selector-parser",
+      "severity": "moderate",
+      "direct": false,
+      "affected_range": "<7.1.6",
+      "reported_fix": {
+        "name": "tailwindcss",
+        "version": "4.3.3",
+        "isSemVerMajor": true
+      },
+      "via": [
+        {
+          "title": "PostCSS: Quadratic complexity in flat selector parsing allows CPU exhaustion",
+          "url": "https://github.com/advisories/GHSA-rj75-hqrm-r3gf",
+          "range": "<7.1.6"
+        }
+      ]
+    },
+    {
+      "package": "proxy-addr",
+      "severity": "critical",
+      "direct": false,
+      "affected_range": "1.1.0 - 2.0.7",
+      "reported_fix": true,
+      "via": [
+        {
+          "title": "proxy-addr vulnerable to IP spoofing via IPv4-mapped IPv6 trust subnet",
+          "url": "https://github.com/advisories/GHSA-jqcg-44mw-7w3h",
+          "range": ">=1.1.0 <2.0.8"
+        }
+      ]
+    },
+    {
+      "package": "qs",
+      "severity": "moderate",
+      "direct": false,
+      "affected_range": "2.2.5 - 6.15.3",
+      "reported_fix": true,
+      "via": [
+        {
+          "title": "qs array-limit bypass via bracket-key comma parsing",
+          "url": "https://github.com/advisories/GHSA-x5fp-wj9c-mxmx",
+          "range": ">=6.14.2 <=6.15.3"
+        },
+        {
+          "title": "qs: Denial of Service via Attacker Controlled isBuffer",
+          "url": "https://github.com/advisories/GHSA-4mjr-xmp4-gh2g",
+          "range": ">=2.2.5 <6.16.0"
+        }
+      ]
+    },
+    {
+      "package": "shadcn",
+      "severity": "high",
+      "direct": true,
+      "affected_range": "<=0.0.0-rc-20261007105214 || 2.0.0 - 4.21.5",
+      "reported_fix": true,
+      "via": [
+        {
+          "dependency": "zod"
+        }
+      ]
+    },
+    {
+      "package": "sharp",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "<=0.35.5-rc.1",
+      "reported_fix": {
+        "name": "@storybook/nextjs",
+        "version": "10.6.3",
+        "isSemVerMajor": true
+      },
+      "via": [
+        {
+          "title": "sharp inherited vulnerabilities in libvips: CVE-2026-33327, CVE-2026-33328, CVE-2026-35590, CVE-2026-35591",
+          "url": "https://github.com/advisories/GHSA-f88m-g3jw-g9cj",
+          "range": "<0.35.0"
+        },
+        {
+          "title": "sharp: Vulnerabilities in libheif: GHSA-g89c-p67h-r497 and GHSA-2jg2-4ch7-h545",
+          "url": "https://github.com/advisories/GHSA-rgj7-g3m4-5g8c",
+          "range": "<0.35.4"
+        },
+        {
+          "title": "sharp : Vulnerability in librsvg dependency CVE-2026-96889",
+          "url": "https://github.com/advisories/GHSA-wq5f-xc86-pv6w",
+          "range": "<0.35.5"
+        }
+      ]
+    },
+    {
+      "package": "source-map-js",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "1.0.0 - 1.2.1",
+      "reported_fix": true,
+      "via": [
+        {
+          "title": "source-map-js allows event-loop denial of service through indexed source-map section offsets",
+          "url": "https://github.com/advisories/GHSA-68fv-2mgg-jv7q",
+          "range": ">=1.0.0 <1.2.2"
+        }
+      ]
+    },
+    {
+      "package": "storybook",
+      "severity": "critical",
+      "direct": true,
+      "affected_range": "8.0.0 - 8.6.18",
+      "reported_fix": {
+        "name": "storybook",
+        "version": "8.6.19",
+        "isSemVerMajor": false
+      },
+      "via": [
+        {
+          "dependency": "@storybook/core"
+        },
+        {
+          "title": "Storybook: Missing origin validation in Storybook preview allows code injection from malicious websites",
+          "url": "https://github.com/advisories/GHSA-f2ph-cmg5-wxc8",
+          "range": ">=8.0.0 <8.6.19"
+        },
+        {
+          "title": "Storybook dev server vulnerable to code injection from the local network",
+          "url": "https://github.com/advisories/GHSA-px85-f4q5-jh77",
+          "range": ">=8.0.0 <8.6.19"
+        }
+      ]
+    },
+    {
+      "package": "tailwindcss",
+      "severity": "moderate",
+      "direct": true,
+      "affected_range": "<=0.0.0-oxide-insiders.ff2c25f || 0.5.0 - 3.4.19",
+      "reported_fix": {
+        "name": "tailwindcss",
+        "version": "4.3.3",
+        "isSemVerMajor": true
+      },
+      "via": [
+        {
+          "dependency": "postcss-nested"
+        },
+        {
+          "dependency": "postcss-selector-parser"
+        }
+      ]
+    },
+    {
+      "package": "undici",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "7.0.0 - 7.30.0",
+      "reported_fix": true,
+      "via": [
+        {
+          "title": "undici vulnerable to Denial of Service via unbounded memory in the EventSource parser",
+          "url": "https://github.com/advisories/GHSA-4qv8-2p9j-2685",
+          "range": ">=7.0.0 <7.30.1"
+        },
+        {
+          "title": "undici vulnerable to Subresource Integrity bypass via non-lowercase algorithm tokens",
+          "url": "https://github.com/advisories/GHSA-f72v-6w45-q472",
+          "range": ">=7.15.0 <7.30.1"
+        },
+        {
+          "title": "undici vulnerable to Denial of Service via unhandled error on excessive content-encodings",
+          "url": "https://github.com/advisories/GHSA-xjj6-f33q-929c",
+          "range": ">=7.18.0 <7.30.1"
+        }
+      ]
+    },
+    {
+      "package": "uuid",
+      "severity": "moderate",
+      "direct": false,
+      "affected_range": "<11.1.1",
+      "reported_fix": {
+        "name": "@storybook/addon-essentials",
+        "version": "7.0.6",
+        "isSemVerMajor": true
+      },
+      "via": [
+        {
+          "title": "uuid: Missing buffer bounds check in v3/v5/v6 when buf is provided",
+          "url": "https://github.com/advisories/GHSA-w5hq-g745-h8pq",
+          "range": "<11.1.1"
+        }
+      ]
+    },
+    {
+      "package": "webpack",
+      "severity": "low",
+      "direct": false,
+      "affected_range": "5.49.0 - 5.104.0",
+      "reported_fix": true,
+      "via": [
+        {
+          "title": "webpack buildHttp: allowedUris allow-list bypass via URL userinfo (@) leading to build-time SSRF behavior",
+          "url": "https://github.com/advisories/GHSA-8fgc-7cc6-rx7x",
+          "range": ">=5.49.0 <=5.104.0"
+        },
+        {
+          "title": "webpack buildHttp HttpUriPlugin allowedUris bypass via HTTP redirects \u2192 SSRF + cache persistence",
+          "url": "https://github.com/advisories/GHSA-38r7-794h-5758",
+          "range": ">=5.49.0 <5.104.0"
+        }
+      ]
+    },
+    {
+      "package": "webpack-dev-middleware",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "<7.4.5",
+      "reported_fix": {
+        "name": "@storybook/nextjs",
+        "version": "10.6.3",
+        "isSemVerMajor": true
+      },
+      "via": [
+        {
+          "title": "webpack-dev-middleware vulnerable to Path Traversal via non-slash-terminated publicPath",
+          "url": "https://github.com/advisories/GHSA-g84c-rxfj-3j2c",
+          "range": "<7.4.5"
+        }
+      ]
+    },
+    {
+      "package": "zod",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "<4.6.6",
+      "reported_fix": true,
+      "via": [
+        {
+          "title": "Zod can exhaust memory while validating oversized constrained collections",
+          "url": "https://github.com/advisories/GHSA-mrhx-c7xc-m3w5",
+          "range": "<4.6.6"
+        }
+      ]
+    }
+  ]
+}
