@@ -59,11 +59,17 @@ public sealed class EntertainmentAiCoordinator(EntertainmentAiProviderTransport 
             var elapsed = Stopwatch.StartNew();
             try
             {
-                using var result = await transport.SendAsync(key, instruction, input, schema, ct);
+                using var result = await transport.SendAsync(key, instruction, input, schema, ct, ReserveRetryAsync);
                 var parsed = parse(result);
                 MarkHealthy(key);
                 logger.LogInformation("Game AI {Operation} succeeded with Gemini slot {Slot} in {ElapsedMilliseconds} ms.", operation, key.Slot, elapsed.ElapsedMilliseconds);
                 return parsed;
+            }
+            catch (ProviderBudgetExhaustedException exhausted)
+            {
+                diagnostics.Add($"Gemini model {GetModel()} has reached the configured rolling 24-hour request budget; the next request can run after {exhausted.NextAvailable:O}.");
+                logger.LogWarning("Game AI {Operation} retry skipped: rolling 24-hour budget exhausted until {NextAvailableUtc}.", operation, exhausted.NextAvailable);
+                break;
             }
             catch (ProviderRequestFailure failure)
             {
@@ -115,6 +121,17 @@ public sealed class EntertainmentAiCoordinator(EntertainmentAiProviderTransport 
         var diagnostic = string.Join(Environment.NewLine, diagnostics.Distinct(StringComparer.Ordinal));
         if (diagnostic.Length > 2400) diagnostic = diagnostic[..2400] + "…";
         throw new EntertainmentAiUnavailableException(diagnostic: string.IsNullOrWhiteSpace(diagnostic) ? "No configured provider key is currently available. Retry shortly." : diagnostic);
+    }
+
+    private sealed class ProviderBudgetExhaustedException(DateTimeOffset nextAvailable) : Exception
+    {
+        public DateTimeOffset NextAvailable { get; } = nextAvailable;
+    }
+
+    private async Task ReserveRetryAsync(CancellationToken ct)
+    {
+        if (await ReserveProviderRequestAsync(ct) is { } nextAvailable)
+            throw new ProviderBudgetExhaustedException(nextAvailable);
     }
 
     private IReadOnlyList<ProviderKey> Rotate(IReadOnlyList<ProviderKey> pool)
