@@ -29,7 +29,7 @@ The dev database uses its own `dev_pgdata` volume and host port `5436`. Producti
 uses `cleaning_pgdata` and loopback port `5435`. The identical tenant name does
 not imply shared data: these stacks run on separate hosts and databases.
 
-The environment map comes from `.github/workflows/agent-pipeline.yml`,
+The environment map comes from the former preview configuration,
 `.github/workflows/docker-deploy-oracle.yml`, and the two deployment Compose files.
 The former Mac mini deployment is not the current workflow target.
 
@@ -100,11 +100,13 @@ these settings.
 
 ## Updating the shared dev preview
 
-The `agent-pipeline.yml` preview job runs on the self-hosted runner labelled
-`agent`. It builds the API locally, starts the dev Compose stack, seeds the dev
-catalog, builds the frontend with dev API/auth URLs, and serves the static output
-on port `80`. That workflow also performs issue/PR work; do not trigger the whole
-pipeline merely to run a smoke test.
+The coding-agent workflow no longer deploys or seeds shared dev. Deployment is a
+separate manual operator operation using an explicitly reviewed commit. A feature
+branch push or draft agent PR does not update this environment. Coordinate with
+other testers before replacing the shared stack; review the chosen commit and
+its deployment files before running them on the host. A future automated dev
+deployment requires a new separately reviewed manual workflow and protected
+environment approval; it is not supplied by the agent pipeline.
 
 To reproduce just the API preview deployment, run on the agent VM from a checkout
 of the intended commit:

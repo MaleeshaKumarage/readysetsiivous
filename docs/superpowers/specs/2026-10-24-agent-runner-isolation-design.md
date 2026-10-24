@@ -1,6 +1,6 @@
 # Isolate issue-driven coding from repository and deployment authority
 
-Status: proposed next security remediation after merged PR190. Implementation awaits review of the changed automation/deployment behavior.
+Status: approved by the user on2026-10-24 after independent design review. Shared-dev deployment becomes a separate manual operation.
 
 ## Problem and preserved behavior
 
@@ -48,7 +48,7 @@ Existing feature branches are never resumed blindly: require review of the exact
 
 Recommended behavior: remove shared-dev deployment/seeding from the coding pipeline and retain it as a separate manual operation documented in environments.md. This also prevents concurrent automation from reseeding shared test data. The alternative is a separately approved deployment job consuming only a reviewed commit, behind a protected environment approval; it must never execute a fresh unreviewed proposal.
 
-This behavior decision needs the user's choice before implementation. No dev/prod host is changed by this design document.
+The user approved the recommended separate manual deployment behavior. No dev/prod host is changed by this design document.
 
 ## Implementation sequence
 
