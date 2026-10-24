@@ -410,10 +410,7 @@ jobs:
                 bash scripts/aider_wrap.sh --model deepseek/deepseek-v4-flash --yes --no-gitignore --no-show-model-warnings --no-detect-urls \
                   --file "$file" \
                   --message "Fix ONLY this one issue in $file near line $line. Make the minimal edit to the specific lines. Do NOT rewrite or regenerate the entire file — preserve all existing classes, methods, and surrounding code unchanged. $fix"
-                if [ -n "$cid" ] && [ "$cid" != "0" ]; then
-                  SHA=$(git rev-parse --short HEAD)
-                  python3 scripts/resolve_comment.py "$PR" "$cid" "$SHA" || true
-                fi
+                # Leave the conversation open for reviewer verification.
               done < /tmp/fixes.list
             fi
 
