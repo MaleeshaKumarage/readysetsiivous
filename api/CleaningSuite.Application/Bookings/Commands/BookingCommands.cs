@@ -29,7 +29,11 @@ public record CreatePublicBookingCommand(
 public record PublicBookingResult(
     Guid BookingId,
     string BookingNumber,
-    string CustomerReference);
+    string CustomerReference,
+    string ManagementKey)
+{
+    public override string ToString() => nameof(PublicBookingResult);
+}
 
 public class CreatePublicBookingValidator : AbstractValidator<CreatePublicBookingCommand>
 {
@@ -79,6 +83,7 @@ public class CreatePublicBookingHandler : IRequestHandler<CreatePublicBookingCom
                     _context.TenantId, request.LocalDate, request.StartTime, service, ct: ct);
                 var number = await _bookings.NextCounterAsync($"booking-{startUtc.Year}", ct);
 
+                var managementKey = BookingManagementKey.Generate();
                 var booking = new Booking
                 {
                     BookingNumber = $"RSS-{startUtc.Year}-{number:D6}",
@@ -112,12 +117,13 @@ public class CreatePublicBookingHandler : IRequestHandler<CreatePublicBookingCom
                     Status = Booking.StatusNew,
                     Source = "Public",
                     CustomerReference = GenerateReference(),
+                    ManagementKeyHash = BookingManagementKey.Hash(managementKey),
                     Notes = request.Notes,
                     History = [new StatusEvent { Status = Booking.StatusNew, By = "customer" }],
                 };
 
                 await _bookings.SaveAsync(booking, ct);
-                return new PublicBookingResult(booking.Id, booking.BookingNumber, booking.CustomerReference!);
+                return new PublicBookingResult(booking.Id, booking.BookingNumber, booking.CustomerReference!, managementKey);
             }
             catch (Exception ex) when (IsReservationConflict(ex))
             {
@@ -147,15 +153,9 @@ public class CreatePublicBookingHandler : IRequestHandler<CreatePublicBookingCom
 
 // ---- public cancel ----
 
-public record CancelPublicBookingCommand(string BookingNumber, string Phone) : IRequest<Unit>;
-
-public class CancelPublicBookingValidator : AbstractValidator<CancelPublicBookingCommand>
+public record CancelPublicBookingCommand(string BookingNumber, string? ManagementKey) : IRequest<Unit>
 {
-    public CancelPublicBookingValidator()
-    {
-        RuleFor(x => x.BookingNumber).NotEmpty();
-        RuleFor(x => x.Phone).NotEmpty();
-    }
+    public override string ToString() => nameof(CancelPublicBookingCommand);
 }
 
 public class CancelPublicBookingHandler : IRequestHandler<CancelPublicBookingCommand, Unit>
@@ -166,11 +166,9 @@ public class CancelPublicBookingHandler : IRequestHandler<CancelPublicBookingCom
 
     public async Task<Unit> Handle(CancelPublicBookingCommand request, CancellationToken ct)
     {
-        var booking = await _bookings.GetByNumberAsync(request.BookingNumber, ct)
-            ?? throw new NotFoundException("Booking", Guid.Empty);
-
-        if (!string.Equals(booking.Customer.Phone.Trim(), request.Phone.Trim(), StringComparison.OrdinalIgnoreCase))
-            throw new UnauthorizedAccessException("Phone does not match booking");
+        var booking = await _bookings.GetByNumberAsync(request.BookingNumber, ct);
+        if (booking is null || !BookingManagementKey.Verify(request.ManagementKey, booking.ManagementKeyHash))
+            throw new NotFoundException("Booking", Guid.Empty);
 
         if (booking.Status is Booking.StatusCancelled or Booking.StatusCompleted)
             throw new SlotConflictException("Booking can no longer be cancelled");

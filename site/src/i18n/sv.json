@@ -358,6 +358,11 @@
     "priceRange": "€€"
   },
   "varaus": {
+    "managementKey": "Bokningens hanteringsnyckel",
+    "managementKeyHelp": "Förvara nyckeln säkert. Med nyckeln och bokningsnumret kan du visa och avboka bokningen. Nyckeln visas bara nu och försvinner när du lämnar eller laddar om sidan.",
+    "copyManagementKey": "Kopiera hanteringsnyckel",
+    "managementKeyCopied": "Hanteringsnyckeln har kopierats.",
+    "managementKeyCopyFailed": "Kunde inte kopiera nyckeln. Markera och kopiera den manuellt.",
     "title": "Boka städning",
     "loading": "Laddar tjänster…",
     "unavailableTitle": "Bokning är inte tillgänglig just nu",

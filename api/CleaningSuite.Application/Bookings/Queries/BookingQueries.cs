@@ -22,7 +22,10 @@ public class GetAvailabilityHandler : IRequestHandler<GetAvailabilityQuery, IRea
         _availability.GetSlotsAsync(_context.TenantId, request.LocalDate, request.ServiceId, ct);
 }
 
-public record GetPublicBookingQuery(string BookingNumber, string Phone) : IRequest<PublicBookingDto?>;
+public record GetPublicBookingQuery(string BookingNumber, string? ManagementKey) : IRequest<PublicBookingDto?>
+{
+    public override string ToString() => nameof(GetPublicBookingQuery);
+}
 
 public record PublicBookingDto(
     string BookingNumber,
@@ -42,7 +45,7 @@ public class GetPublicBookingHandler : IRequestHandler<GetPublicBookingQuery, Pu
     {
         var booking = await _bookings.GetByNumberAsync(request.BookingNumber, ct);
         if (booking is null
-            || !string.Equals(booking.Customer.Phone.Trim(), request.Phone.Trim(), StringComparison.OrdinalIgnoreCase))
+            || !BookingManagementKey.Verify(request.ManagementKey, booking.ManagementKeyHash))
             return null;
 
         return new PublicBookingDto(
