@@ -16,6 +16,16 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi.Models;
 
+// Resource worker modes deliberately precede .env, authentication and database setup.
+if (args.Length == 1 && args[0] == "--pdf-worker-host")
+{
+    await CleaningSuite.Api.PdfWorkerMode.RunHostAsync(); return;
+}
+if (args.Length == 2 && args[0] == "--pdf-worker-task")
+{
+    Environment.ExitCode = await CleaningSuite.Api.PdfWorkerMode.RunTaskAsync(args[1]); return;
+}
+
 // Load .env before config builds. dotnet run executes with the project dir as cwd,
 // so look in the project dir first, then the repo root. No-op if absent.
 foreach (var envPath in new[] { ".env", Path.Combine("..", ".env") })
@@ -109,6 +119,7 @@ builder.Services.AddSingleton<CleaningSuite.Application.Agreements.IAgreementFil
     new CleaningSuite.Infrastructure.Agreements.DiskAgreementFileStore(
         builder.Configuration["Uploads:Path"] ?? Path.Combine(Directory.GetCurrentDirectory(), "uploads"),
         sp.GetRequiredService<ILogger<CleaningSuite.Infrastructure.Agreements.DiskAgreementFileStore>>()));
+builder.Services.AddSingleton<CleaningSuite.Infrastructure.Agreements.IPdfWorkerClient, CleaningSuite.Infrastructure.Agreements.PdfWorkerClient>();
 builder.Services.AddSingleton<CleaningSuite.Application.Common.IUploadContentValidator, CleaningSuite.Infrastructure.Uploads.UploadContentValidator>();
 builder.Services.AddSingleton<CleaningSuite.Application.Agreements.IAgreementDocumentGenerator, CleaningSuite.Infrastructure.Agreements.AgreementPdfSigner>();
 

@@ -8,7 +8,7 @@ using SkiaSharp;
 
 namespace CleaningSuite.Infrastructure.Agreements;
 
-public class AgreementPdfSigner : IAgreementDocumentGenerator
+public class NativeAgreementPdfSigner : IAgreementDocumentGenerator
 {
     // QuestPDF ships Lato in the output tree; the Linux container has no system fonts, so
     // SKTypeface.Default renders nothing there. Load Lato explicitly with a default fallback.
@@ -32,34 +32,52 @@ public class AgreementPdfSigner : IAgreementDocumentGenerator
     public async Task GenerateSignedPdfAsync(
         string originalPdfPath, IReadOnlyList<Signer> signers, string outputPath, CancellationToken ct = default)
     {
-        // Render every page to a PNG (PDFtoImage 5.4.0 streams SKBitmap pages via ToImagesAsync).
-        // Note: the string overloads expect Base64 content, so pass the raw PDF bytes.
+        // Native entry point: only the isolated task process may call this in production.
         var pdfBytes = await File.ReadAllBytesAsync(originalPdfPath, ct);
-        var pageImages = new List<byte[]>();
-        await foreach (var bitmap in Conversion.ToImagesAsync(
-                           pdfBytes, password: null, options: new RenderOptions(), cancellationToken: ct))
+        var dimensions = PdfRasterBudget.Inspect(pdfBytes);
+        var pageImages = new List<string>();
+        var job = Path.Combine(Path.GetTempPath(), "rasters-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(job);
+        try
         {
-            pageImages.Add(EncodePng(bitmap));
-            bitmap.Dispose();
-        }
-
-        // Stamp the signature block on the last page.
-        pageImages[^1] = StampLastPage(pageImages[^1], signers);
-
-        // Rebuild the PDF from images (one full-bleed page each).
-        QuestPDF.Settings.License = LicenseType.Community;
-        Document.Create(c =>
-        {
-            foreach (var img in pageImages)
+            long encodedBytes = 0;
+            for (var page = 0; page < dimensions.Count; page++)
             {
-                c.Page(p =>
-                {
-                    p.Size(PageSizes.A4);
-                    p.Margin(0);
-                    p.Content().Image(img);
-                });
+                ct.ThrowIfCancellationRequested();
+                var size = dimensions[page];
+                using var bitmap = Conversion.ToImage(pdfBytes, page, password: null,
+                    options: new RenderOptions(Dpi: PdfRasterBudget.Dpi, Width: size.Width, Height: size.Height));
+                var png = EncodePng(bitmap);
+                encodedBytes = checked(encodedBytes + png.LongLength);
+                if (encodedBytes > PdfRasterBudget.EncodedBytes)
+                    throw new FluentValidation.ValidationException("PDF encoded raster budget exceeded.");
+                var pagePath = Path.Combine(job, $"page-{page}.png");
+                await File.WriteAllBytesAsync(pagePath, png, ct);
+                pageImages.Add(pagePath);
             }
-        }).GeneratePdf(outputPath);
+
+            var last = await File.ReadAllBytesAsync(pageImages[^1], ct);
+            var stamped = StampLastPage(last, signers);
+            if (checked(encodedBytes - last.LongLength + stamped.LongLength) > PdfRasterBudget.EncodedBytes)
+                throw new FluentValidation.ValidationException("Stamped PDF exceeds encoded raster budget.");
+            await File.WriteAllBytesAsync(pageImages[^1], stamped, ct);
+
+            QuestPDF.Settings.License = LicenseType.Community;
+            using var output = new PdfOutputStream(new FileStream(outputPath, FileMode.CreateNew, FileAccess.Write, FileShare.None), 100L * 1024 * 1024);
+            Document.Create(c =>
+            {
+                foreach (var imagePath in pageImages)
+                {
+                    c.Page(p =>
+                    {
+                        p.Size(PageSizes.A4);
+                        p.Margin(0);
+                        p.Content().Image(imagePath);
+                    });
+                }
+            }).GeneratePdf(output);
+        }
+        finally { Directory.Delete(job, true); }
     }
 
     private static byte[] EncodePng(SKBitmap bitmap)

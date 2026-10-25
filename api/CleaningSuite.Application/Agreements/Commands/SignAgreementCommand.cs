@@ -122,7 +122,7 @@ public class SignAgreementHandler : IRequestHandler<SignAgreementCommand, SignRe
                             var pdfBytes = await BoundedStreamReader.ReadAsync(generated, 100 * 1024 * 1024, "Signed PDF", ct);
                             if (pdfBytes.Length == 0)
                                 throw new AgreementConflictException("The signed document could not be generated. Please retry.");
-                            _uploads.ValidateGeneratedAgreementPdf(pdfBytes);
+                            await _uploads.ValidateGeneratedAgreementPdfAsync(pdfBytes, ct);
                             await using var pdf = new MemoryStream(pdfBytes, writable: false);
                             signedPdfPath = await _store.SaveSignedAsync(tenantId, agreement.Id, pdf, ct);
                             agreement.SignedPdfPath = signedPdfPath;

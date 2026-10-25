@@ -74,9 +74,11 @@ services:
     # Required protected host file; only this service receives per-tenant credentials.
     env_file:
       - ${API_IDENTITY_ENV_FILE:?Set API_IDENTITY_ENV_FILE to the reviewed protected tenant identity environment file}
-    image: cleaning-dev-api:${DEV_IMAGE_TAG:?set reviewed dev image tag}
+    image: &api_image cleaning-dev-api:${DEV_IMAGE_TAG:?set reviewed dev image tag}
     restart: unless-stopped
+    networks: [default, pdf-private]
     environment:
+      PdfWorker__Url: http://pdf-worker:8080/process
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
       # Empty trust lists disable forwarded processing; configure only verified upstream peers.
@@ -130,6 +132,29 @@ services:
     depends_on:
       postgres:
         condition: service_started
+
+  # Same reviewed release image; only this mode may invoke native PDF code.
+  pdf-worker:
+    image: *api_image
+    command: ["--pdf-worker-host"]
+    restart: unless-stopped
+    user: "1654:1654"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    mem_limit: 1g
+    memswap_limit: 1g
+    cpus: 1.0
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=384m,uid=1654,gid=1654,mode=700"]
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      DOTNET_EnableDiagnostics: "0"
+    networks: [pdf-private]
+
+networks:
+  pdf-private:
+    internal: true
 
 volumes:
   dev_pgdata: {}
