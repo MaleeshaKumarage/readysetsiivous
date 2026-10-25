@@ -23,7 +23,7 @@ class ProxyComposeTests(unittest.TestCase):
             folder = Path(tmp)
             identity = folder / 'tenant-runtime.env'
             identity.write_text('Auth__Keycloak__TenantAccounts__synthetic__ClientId=tenant-runtime\nAuth__Keycloak__TenantAccounts__synthetic__ClientSecret=synthetic-unusable-credential\n')
-            values = dict(POSTGRES_PASSWORD='synthetic-unusable-db', KC_DB_PASSWORD='synthetic-unusable-kc',
+            values = dict(POSTGRES_PASSWORD='synthetic-unusable-db', KC_DB_PASSWORD='synthetic-unusable-kc', DEV_KC_DB_PASSWORD='synthetic-unusable-dev-kc',
                 KEYCLOAK_ADMIN_USER='synthetic-admin', KEYCLOAK_ADMIN_PASSWORD='synthetic-unusable-password',
                 API_IDENTITY_ENV_FILE=identity.as_posix(), API_IMAGE='example.invalid/synthetic@sha256:' + 'a' * 64,
                 POSTGRES_RUNTIME_PASSWORD='synthetic-runtime-db')
