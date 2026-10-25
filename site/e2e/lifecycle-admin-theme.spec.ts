@@ -74,6 +74,9 @@ for (const width of [375, 768, 1440]) test(`workspace navigation and surfaces at
   await page.route('**/api/v1/admin/leads**', route => route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' }, json: { items: [{ id: 'theme-lead', fields: { name: 'Workspace preview company', businessId: '1234567-8', emails: ['preview@example.test'], primaryEmail: 'preview@example.test', branches: [] }, status: 'New', imageCount: 0, isActive: true }], total: 1 } }));
   await page.goto('/admin/');
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  const header = page.getByRole('banner');
+  await expect(header.getByText('Tenant administration', { exact: true })).toBeVisible();
+  await expect(header.getByText('Dashboard', { exact: true })).toBeVisible();
   // The shared legacy helper hides the mobile sidebar; exercise the real shell.
   await page.locator('#mock-test-style').evaluate(element => element.remove());
   const main = page.getByRole('main');
@@ -91,6 +94,8 @@ for (const width of [375, 768, 1440]) test(`workspace navigation and surfaces at
   await expect(navigation.getByRole('link', { name: 'Dashboard', exact: true })).toHaveAttribute('aria-current', 'page');
   await navigation.getByRole('link', { name: 'Leads', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Leads', exact: true })).toBeVisible();
+  await expect(header.getByText('Tenant administration', { exact: true })).toBeVisible();
+  await expect(header.getByText('Leads', { exact: true })).toBeVisible();
   if (width < 768) await expect(burger).toHaveAttribute('aria-expanded', 'false');
   await expect(navigation.getByRole('link', { name: 'Leads', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('cell', { name: 'Workspace preview company' })).toBeVisible();
@@ -141,4 +146,11 @@ test('phone header with own shifts and invoice form remain within viewport', asy
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(246, 247, 251)');
   await expect.poll(() => page.getByText('No invoices yet.', { exact: true }).evaluate(element => getComputedStyle(element).color)).toBe('rgb(89, 100, 119)');
   await page.screenshot({ path: testInfo.outputPath('invoices-own-shifts-375.png'), fullPage: true });
+  const accountLink = page.getByRole('banner').getByRole('link', { name: 'My account', exact: true }).filter({ visible: true });
+  await expect(accountLink).toBeVisible();
+  await expect(accountLink).toHaveAttribute('href', '/account/?tenant=readysetsiivous');
+  await accountLink.click();
+  await expect(page).toHaveURL(/\/account\/\?tenant=readysetsiivous$/);
+  await expect(page.getByRole('heading', { name: 'Your ReadySetSiivous account', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Continue to administration', exact: true })).toBeVisible();
 });
