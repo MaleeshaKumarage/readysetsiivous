@@ -66,3 +66,79 @@ for (const scheme of ['light', 'dark'] as const) test.describe(`admin with ${sch
 });
 
 
+
+for (const width of [375, 768, 1440]) test(`workspace navigation and surfaces at ${width}px`, async ({ page }, testInfo) => {
+  await page.setViewportSize({ width, height: 1000 });
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await setupAdminMocks(page); await standaloneDarkSite(page);
+  await page.route('**/api/v1/admin/leads**', route => route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' }, json: { items: [{ id: 'theme-lead', fields: { name: 'Workspace preview company', businessId: '1234567-8', emails: ['preview@example.test'], primaryEmail: 'preview@example.test', branches: [] }, status: 'New', imageCount: 0, isActive: true }], total: 1 } }));
+  await page.goto('/admin/');
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  // The shared legacy helper hides the mobile sidebar; exercise the real shell.
+  await page.locator('#mock-test-style').evaluate(element => element.remove());
+  const main = page.getByRole('main');
+  for (const destination of ['shifts', 'quality-cycle', 'leads', 'companies', 'agreements', 'employees', 'invoices', 'services']) {
+    await expect(main.locator(`a[href="/admin/${destination}/"]`)).toHaveCount(1);
+  }
+  const noOverflow = async () => expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await noOverflow();
+  await page.screenshot({ path: testInfo.outputPath(`dashboard-${width}.png`), fullPage: true });
+  const navigation = page.getByRole('navigation', { name: 'Administration' });
+  const burger = page.getByRole('button', { name: 'Toggle navigation' });
+  if (width < 768) { await burger.click(); await expect(burger).toHaveAttribute('aria-expanded', 'true'); }
+  await expect(navigation.getByText('Operations', { exact: true })).toBeVisible();
+  await expect(navigation.getByText('Customers', { exact: true })).toBeVisible();
+  await expect(navigation.getByRole('link', { name: 'Dashboard', exact: true })).toHaveAttribute('aria-current', 'page');
+  await navigation.getByRole('link', { name: 'Leads', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Leads', exact: true })).toBeVisible();
+  if (width < 768) await expect(burger).toHaveAttribute('aria-expanded', 'false');
+  await expect(navigation.getByRole('link', { name: 'Leads', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('cell', { name: 'Workspace preview company' })).toBeVisible();
+  await noOverflow();
+  await page.screenshot({ path: testInfo.outputPath(`leads-${width}.png`), fullPage: true });
+  await page.getByRole('textbox', { name: 'Lead filter', exact: true }).click();
+  const option = page.getByRole('option', { name: 'Inactive', exact: true });
+  await readable(option);
+  await option.click();
+  await page.getByRole('button', { name: 'New lead', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await readable(dialog.getByRole('textbox', { name: 'Company name', exact: true }));
+  await expect(dialog).toBeVisible(); await noOverflow();
+  await expect.poll(() => dialog.evaluate(element => getComputedStyle(element).opacity)).toBe('1');
+  await expect.poll(() => dialog.evaluate(element => element.getAnimations({ subtree: true }).filter(animation => animation.playState === 'running').length)).toBe(0);
+  await page.screenshot({ path: testInfo.outputPath(`lead-editor-${width}.png`), fullPage: true });
+});
+
+for (const priorScheme of [null, 'dark'] as const) test(`leaving admin restores prior Mantine scheme ${priorScheme}`, async ({ page }) => {
+  await setupAdminMocks(page); await standaloneDarkSite(page);
+  await page.goto('/account/');
+  await expect(page.getByRole('link', { name: 'Continue to administration' })).toBeVisible();
+  await page.evaluate(prior => {
+    if (prior === null) document.documentElement.removeAttribute('data-mantine-color-scheme');
+    else document.documentElement.setAttribute('data-mantine-color-scheme', prior);
+  }, priorScheme);
+  await page.getByRole('link', { name: 'Continue to administration' }).click();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-mantine-color-scheme', 'light');
+  await page.getByRole('link', { name: 'My account', exact: true }).filter({ visible: true }).click();
+  await expect(page).toHaveURL(/\/account\//);
+  await expect.poll(() => page.locator('html').getAttribute('data-mantine-color-scheme')).toBe(priorScheme);
+  await expect(page.locator('html')).not.toHaveAttribute('data-admin-theme');
+  expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('dark');
+});
+
+test('phone header with own shifts and invoice form remain within viewport', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 375, height: 1000 });
+  await setupAdminMocks(page);
+  await page.route(/\/api\/v1\/me$/, route => route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' }, json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: ['admin'] })], employee: { role: 'admin', isActive: true } } }));
+  await page.route('**/api/v1/admin/**', route => route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' }, json: new URL(route.request().url()).pathname.endsWith('/issuer') ? null : [] }));
+  await page.goto('/admin/invoices/');
+  await expect(page.getByRole('heading', { name: 'Invoices', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const fields = page.getByRole('textbox', { name: 'Billing street', exact: true });
+  await expect(fields).toBeVisible(); expect((await fields.boundingBox())!.width).toBeGreaterThan(160);
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(246, 247, 251)');
+  await expect.poll(() => page.getByText('No invoices yet.', { exact: true }).evaluate(element => getComputedStyle(element).color)).toBe('rgb(89, 100, 119)');
+  await page.screenshot({ path: testInfo.outputPath('invoices-own-shifts-375.png'), fullPage: true });
+});
