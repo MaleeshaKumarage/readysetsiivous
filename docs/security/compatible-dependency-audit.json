@@ -1,0 +1,672 @@
+{
+  "checked_date": "2026-10-25",
+  "baseline_commit": "25dddcfabd1a453f3e51840d8af0284010109e22",
+  "command": "npm audit --json --package-lock-only --ignore-scripts",
+  "exit_code": 1,
+  "original_entries": 36,
+  "metadata": {
+    "info": 0,
+    "low": 5,
+    "moderate": 6,
+    "high": 6,
+    "critical": 1,
+    "total": 18
+  },
+  "interpretation": "Registry advisory package entries, including propagated dev/build chains; not a count of demonstrated exploitable production defects.",
+  "packages": [
+    {
+      "package": "@modelcontextprotocol/sdk",
+      "before_severity": "high",
+      "remaining": false,
+      "after_versions": [
+        {
+          "path": "node_modules/@modelcontextprotocol/sdk",
+          "version": "1.32.2"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "@storybook/addon-actions",
+      "before_severity": "moderate",
+      "remaining": true,
+      "after_versions": [
+        {
+          "path": "node_modules/@storybook/addon-actions",
+          "version": "8.6.19"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "@storybook/addon-essentials",
+      "before_severity": "moderate",
+      "remaining": true,
+      "after_versions": [
+        {
+          "path": "node_modules/@storybook/addon-essentials",
+          "version": "8.6.19"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "@storybook/builder-webpack5",
+      "before_severity": "high",
+      "remaining": true,
+      "after_versions": [
+        {
+          "path": "node_modules/@storybook/builder-webpack5",
+          "version": "8.6.19"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "@storybook/core",
+      "before_severity": "critical",
+      "remaining": false,
+      "after_versions": [
+        {
+          "path": "node_modules/@storybook/core",
+          "version": "8.6.19"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "@storybook/nextjs",
+      "before_severity": "high",
+      "remaining": true,
+      "after_versions": [
+        {
+          "path": "node_modules/@storybook/nextjs",
+          "version": "8.6.19"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "body-parser",
+      "before_severity": "high",
+      "remaining": false,
+      "after_versions": [
+        {
+          "path": "node_modules/body-parser",
+          "version": "2.4.0"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "brace-expansion",
+      "before_severity": "high",
+      "remaining": false,
+      "after_versions": [
+        {
+          "path": "node_modules/@ts-morph/common/node_modules/brace-expansion",
+          "version": "5.0.12"
+        },
+        {
+          "path": "node_modules/brace-expansion",
+          "version": "1.1.21"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "browserify-sign",
+      "before_severity": "low",
+      "remaining": true,
+      "after_versions": [
+        {
+          "path": "node_modules/browserify-sign",
+          "version": "4.2.6"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "create-ecdh",
+      "before_severity": "low",
+      "remaining": true,
+      "after_versions": [
+        {
+          "path": "node_modules/create-ecdh",
+          "version": "4.0.4"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "crypto-browserify",
+      "before_severity": "low",
+      "remaining": true,
+      "after_versions": [
+        {
+          "path": "node_modules/crypto-browserify",
+          "version": "3.12.1"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "elliptic",
+      "before_severity": "low",
+      "remaining": true,
+      "after_versions": [
+        {
+          "path": "node_modules/elliptic",
+          "version": "6.6.1"
+        }
+      ],
+      "advisories": [
+        {
+          "title": "Elliptic Uses a Cryptographic Primitive with a Risky Implementation",
+          "url": "https://github.com/advisories/GHSA-848j-6mx2-7j84",
+          "range": "<=6.6.1"
+        }
+      ]
+    },
+    {
+      "package": "fast-uri",
+      "before_severity": "high",
+      "remaining": false,
+      "after_versions": [
+        {
+          "path": "node_modules/fast-uri",
+          "version": "3.1.9"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "hono",
+      "before_severity": "moderate",
+      "remaining": false,
+      "after_versions": [
+        {
+          "path": "node_modules/hono",
+          "version": "4.13.13"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "image-size",
+      "before_severity": "high",
+      "remaining": true,
+      "after_versions": [
+        {
+          "path": "node_modules/image-size",
+          "version": "1.2.1"
+        }
+      ],
+      "advisories": [
+        {
+          "title": "image-size: JXL and HEIF parsers allow denial of service through infinite loops",
+          "url": "https://github.com/advisories/GHSA-5p2g-fcmc-qvqq",
+          "range": ">=1.2.0 <=2.0.2"
+        },
+        {
+          "title": "image-size: ICNS parser allows denial of service through an infinite loop",
+          "url": "https://github.com/advisories/GHSA-w3rx-r6r6-pgpr",
+          "range": ">=0.6.3 <=2.0.2"
+        }
+      ]
+    },
+    {
+      "package": "ip-address",
+      "before_severity": "moderate",
+      "remaining": false,
+      "after_versions": [
+        {
+          "path": "node_modules/ip-address",
+          "version": "10.7.5"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "js-yaml",
+      "before_severity": "high",
+      "remaining": false,
+      "after_versions": [
+        {
+          "path": "node_modules/js-yaml",
+          "version": "4.3.2"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "nanoid",
+      "before_severity": "high",
+      "remaining": false,
+      "after_versions": [
+        {
+          "path": "node_modules/nanoid",
+          "version": "3.3.20"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "next",
+      "before_severity": "critical",
+      "remaining": true,
+      "after_versions": [
+        {
+          "path": "node_modules/next",
+          "version": "14.2.35"
+        }
+      ],
+      "advisories": [
+        {
+          "title": "Next.js self-hosted applications vulnerable to DoS via Image Optimizer remotePatterns configuration",
+          "url": "https://github.com/advisories/GHSA-9g9p-9gw9-jx7f",
+          "range": ">=10.0.0 <15.5.10"
+        },
+        {
+          "title": "Next.js HTTP request deserialization can lead to DoS when using insecure React Server Components",
+          "url": "https://github.com/advisories/GHSA-h25m-26qc-wcjf",
+          "range": ">=13.0.0 <15.0.8"
+        },
+        {
+          "title": "Next.js: HTTP request smuggling in rewrites",
+          "url": "https://github.com/advisories/GHSA-ggv3-7p47-pfv8",
+          "range": ">=9.5.0 <15.5.13"
+        },
+        {
+          "title": "Next.js: Unbounded next/image disk cache growth can exhaust storage",
+          "url": "https://github.com/advisories/GHSA-3x4c-7xq6-9pq8",
+          "range": ">=10.0.0 <15.5.14"
+        },
+        {
+          "title": "Next.js has a Denial of Service with Server Components",
+          "url": "https://github.com/advisories/GHSA-q4gf-8mx6-v5v3",
+          "range": ">=13.0.0 <15.5.15"
+        },
+        {
+          "title": "Next.js Vulnerable to Denial of Service with Server Components",
+          "url": "https://github.com/advisories/GHSA-8h8q-6873-q5fj",
+          "range": ">=13.0.0 <15.5.16"
+        },
+        {
+          "title": "Next.js's Middleware / Proxy redirects can be cache-poisoned",
+          "url": "https://github.com/advisories/GHSA-3g8h-86w9-wvmq",
+          "range": ">=12.2.0 <15.5.16"
+        },
+        {
+          "title": "Next.js vulnerable to cross-site scripting in App Router applications using CSP nonces",
+          "url": "https://github.com/advisories/GHSA-ffhc-5mcf-pf4q",
+          "range": ">=13.4.0 <15.5.16"
+        },
+        {
+          "title": "Next.js vulnerable to cache poisoning via collisions in React Server Component cache-busting",
+          "url": "https://github.com/advisories/GHSA-vfv6-92ff-j949",
+          "range": ">=13.4.6 <15.5.16"
+        },
+        {
+          "title": "Next.js has cross-site scripting in beforeInteractive scripts with untrusted input",
+          "url": "https://github.com/advisories/GHSA-gx5p-jg67-6x7h",
+          "range": ">=13.0.0 <15.5.16"
+        },
+        {
+          "title": "Next.js has a Denial of Service in the Image Optimization API",
+          "url": "https://github.com/advisories/GHSA-h64f-5h5j-jqjh",
+          "range": ">=10.0.0 <15.5.16"
+        },
+        {
+          "title": "Next.js vulnerable to server-side request forgery in applications using WebSocket upgrades",
+          "url": "https://github.com/advisories/GHSA-c4j6-fc7j-m34r",
+          "range": ">=13.4.13 <15.5.16"
+        },
+        {
+          "title": "Next.js vulnerable to cache poisoning in React Server Component responses",
+          "url": "https://github.com/advisories/GHSA-wfc6-r584-vfw7",
+          "range": ">=14.2.0 <15.5.16"
+        },
+        {
+          "title": "Next.js has a Middleware / Proxy bypass in Pages Router applications using i18n",
+          "url": "https://github.com/advisories/GHSA-36qx-fr4f-26g5",
+          "range": ">=12.2.0 <15.5.16"
+        },
+        {
+          "title": "Next.js: Denial of Service in App Router using Server Actions",
+          "url": "https://github.com/advisories/GHSA-m99w-x7hq-7vfj",
+          "range": ">=13.0.0 <15.5.21"
+        },
+        {
+          "title": "Next.js: Server-Side Request Forgery in Server Actions on custom servers",
+          "url": "https://github.com/advisories/GHSA-89xv-2m56-2m9x",
+          "range": ">=14.1.1 <15.5.21"
+        },
+        {
+          "title": "Next.js: Cache confusion of response bodies for requests with bodies",
+          "url": "https://github.com/advisories/GHSA-68g3-v927-f742",
+          "range": ">=13.0.0 <15.5.21"
+        },
+        {
+          "title": "Next.js: Cache confusion of response bodies for requests with bodies containing invalid UTF-8 byte sequences",
+          "url": "https://github.com/advisories/GHSA-4633-3j49-mh5q",
+          "range": ">=13.0.0 <15.5.21"
+        },
+        {
+          "title": "Next.js: Unbounded Server Action payload in Edge runtime",
+          "url": "https://github.com/advisories/GHSA-4c39-4ccg-62r3",
+          "range": ">=13.0.0 <15.5.21"
+        },
+        {
+          "title": "Next.js: Server-Side Request Forgery in rewrites via attacker-controlled destination hostname",
+          "url": "https://github.com/advisories/GHSA-p9j2-gv94-2wf4",
+          "range": ">=12.0.0 <15.5.21"
+        },
+        {
+          "title": "Next.js: Unauthenticated disclosure of internal Server Function endpoints",
+          "url": "https://github.com/advisories/GHSA-955p-x3mx-jcvp",
+          "range": ">=13.0.0 <15.5.21"
+        },
+        {
+          "title": "Next.js: Unauthenticated Remote Code Execution on windows-hosted servers",
+          "url": "https://github.com/advisories/GHSA-p293-qw3h-jr36",
+          "range": ">=13.4.0 <15.5.24"
+        },
+        {
+          "title": "Next.js: Unauthenticated Remote Code Execution in Image Optimization API when AVIF files are used",
+          "url": "https://github.com/advisories/GHSA-2xp9-vwfh-vxw4",
+          "range": ">=10.0.0 <15.5.24"
+        },
+        {
+          "title": "Next.js: Unauthenticated Remote Code Execution in Image Optimization API when SVG files are used",
+          "url": "https://github.com/advisories/GHSA-2464-fhr4-w9xw",
+          "range": ">=10.0.0 <=15.5.27"
+        },
+        {
+          "title": "Next.js: Denial of Service in App Router using Server Actions",
+          "url": "https://github.com/advisories/GHSA-p3m5-59mp-jv5r",
+          "range": ">=13.0.0 <=15.5.27"
+        }
+      ]
+    },
+    {
+      "package": "node-polyfill-webpack-plugin",
+      "before_severity": "low",
+      "remaining": true,
+      "after_versions": [
+        {
+          "path": "node_modules/node-polyfill-webpack-plugin",
+          "version": "2.0.1"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "pbkdf2",
+      "before_severity": "moderate",
+      "remaining": false,
+      "after_versions": [
+        {
+          "path": "node_modules/pbkdf2",
+          "version": "3.1.7"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "postcss",
+      "before_severity": "high",
+      "remaining": true,
+      "after_versions": [
+        {
+          "path": "node_modules/next/node_modules/postcss",
+          "version": "8.4.31"
+        },
+        {
+          "path": "node_modules/postcss",
+          "version": "8.5.25"
+        }
+      ],
+      "advisories": [
+        {
+          "title": "PostCSS has XSS via Unescaped </style> in its CSS Stringify Output",
+          "url": "https://github.com/advisories/GHSA-qx2v-qp2m-jg93",
+          "range": "<8.5.10"
+        },
+        {
+          "title": "PostCSS: Arbitrary file read and information disclosure via attacker-controlled sourceMappingURL in CSS comments",
+          "url": "https://github.com/advisories/GHSA-6g55-p6wh-862q",
+          "range": "<=8.5.11"
+        },
+        {
+          "title": "PostCSS: incomplete fix of GHSA-6g55-p6wh-862q — attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset",
+          "url": "https://github.com/advisories/GHSA-fxqj-rqcc-2cmp",
+          "range": "<=8.5.22"
+        },
+        {
+          "title": "PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure",
+          "url": "https://github.com/advisories/GHSA-r28c-9q8g-f849",
+          "range": "<=8.5.17"
+        }
+      ]
+    },
+    {
+      "package": "postcss-nested",
+      "before_severity": "moderate",
+      "remaining": true,
+      "after_versions": [
+        {
+          "path": "node_modules/postcss-nested",
+          "version": "6.2.0"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "postcss-selector-parser",
+      "before_severity": "moderate",
+      "remaining": true,
+      "after_versions": [
+        {
+          "path": "node_modules/postcss-modules-local-by-default/node_modules/postcss-selector-parser",
+          "version": "7.1.7"
+        },
+        {
+          "path": "node_modules/postcss-modules-scope/node_modules/postcss-selector-parser",
+          "version": "7.1.7"
+        },
+        {
+          "path": "node_modules/postcss-selector-parser",
+          "version": "6.1.4"
+        },
+        {
+          "path": "node_modules/shadcn/node_modules/postcss-selector-parser",
+          "version": "7.1.6"
+        }
+      ],
+      "advisories": [
+        {
+          "title": "PostCSS: Quadratic complexity in flat selector parsing allows CPU exhaustion",
+          "url": "https://github.com/advisories/GHSA-rj75-hqrm-r3gf",
+          "range": "<7.1.6"
+        }
+      ]
+    },
+    {
+      "package": "proxy-addr",
+      "before_severity": "critical",
+      "remaining": false,
+      "after_versions": [
+        {
+          "path": "node_modules/proxy-addr",
+          "version": "2.0.8"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "qs",
+      "before_severity": "moderate",
+      "remaining": false,
+      "after_versions": [
+        {
+          "path": "node_modules/qs",
+          "version": "6.16.1"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "shadcn",
+      "before_severity": "high",
+      "remaining": false,
+      "after_versions": [
+        {
+          "path": "node_modules/shadcn",
+          "version": "4.22.1"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "sharp",
+      "before_severity": "high",
+      "remaining": true,
+      "after_versions": [
+        {
+          "path": "node_modules/sharp",
+          "version": "0.33.5"
+        }
+      ],
+      "advisories": [
+        {
+          "title": "sharp inherited vulnerabilities in libvips: CVE-2026-33327, CVE-2026-33328, CVE-2026-35590, CVE-2026-35591",
+          "url": "https://github.com/advisories/GHSA-f88m-g3jw-g9cj",
+          "range": "<0.35.0"
+        },
+        {
+          "title": "sharp: Vulnerabilities in libheif: GHSA-g89c-p67h-r497 and GHSA-2jg2-4ch7-h545",
+          "url": "https://github.com/advisories/GHSA-rgj7-g3m4-5g8c",
+          "range": "<0.35.4"
+        },
+        {
+          "title": "sharp : Vulnerability in librsvg dependency CVE-2026-96889",
+          "url": "https://github.com/advisories/GHSA-wq5f-xc86-pv6w",
+          "range": "<0.35.5"
+        }
+      ]
+    },
+    {
+      "package": "source-map-js",
+      "before_severity": "high",
+      "remaining": false,
+      "after_versions": [
+        {
+          "path": "node_modules/source-map-js",
+          "version": "1.2.2"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "storybook",
+      "before_severity": "critical",
+      "remaining": false,
+      "after_versions": [
+        {
+          "path": "node_modules/storybook",
+          "version": "8.6.19"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "tailwindcss",
+      "before_severity": "moderate",
+      "remaining": true,
+      "after_versions": [
+        {
+          "path": "node_modules/tailwindcss",
+          "version": "3.4.19"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "undici",
+      "before_severity": "high",
+      "remaining": false,
+      "after_versions": [
+        {
+          "path": "node_modules/undici",
+          "version": "7.30.1"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "uuid",
+      "before_severity": "moderate",
+      "remaining": true,
+      "after_versions": [
+        {
+          "path": "node_modules/uuid",
+          "version": "9.0.1"
+        }
+      ],
+      "advisories": [
+        {
+          "title": "uuid: Missing buffer bounds check in v3/v5/v6 when buf is provided",
+          "url": "https://github.com/advisories/GHSA-w5hq-g745-h8pq",
+          "range": "<11.1.1"
+        }
+      ]
+    },
+    {
+      "package": "webpack",
+      "before_severity": "low",
+      "remaining": false,
+      "after_versions": [
+        {
+          "path": "node_modules/webpack",
+          "version": "5.104.1"
+        }
+      ],
+      "advisories": []
+    },
+    {
+      "package": "webpack-dev-middleware",
+      "before_severity": "high",
+      "remaining": true,
+      "after_versions": [
+        {
+          "path": "node_modules/webpack-dev-middleware",
+          "version": "6.1.3"
+        }
+      ],
+      "advisories": [
+        {
+          "title": "webpack-dev-middleware vulnerable to Path Traversal via non-slash-terminated publicPath",
+          "url": "https://github.com/advisories/GHSA-g84c-rxfj-3j2c",
+          "range": "<7.4.5"
+        }
+      ]
+    },
+    {
+      "package": "zod",
+      "before_severity": "high",
+      "remaining": false,
+      "after_versions": [
+        {
+          "path": "node_modules/zod",
+          "version": "4.6.7"
+        }
+      ],
+      "advisories": []
+    }
+  ],
+  "original_audit_source_commit": "874bd9796fb58f0959bf9b91b543c4ae926b8be3",
+  "original_audit_date": "2026-10-24",
+  "new_advisory_packages": [],
+  "lockfile_integrity": "sha256:f11602bc98688af1ccb99a452960762e017a42b52e17087507f64c75352cb9a5"
+}
