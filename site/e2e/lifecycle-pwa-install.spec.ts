@@ -9,6 +9,7 @@ const languages = [
 
 for (const language of languages) {
   test(`${language.lang}: installation uses saved language and invokes native prompt`, async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 1000 });
     await setupAdminMocks(page);
     await page.route('**/api/v1/admin/companies**', route => route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' }, json: { items: [], total: 0 } }));
     await page.route('**/api/v1/admin/agreements**', route => route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' }, json: new URL(route.request().url()).pathname.endsWith('/legacy-repairs') ? { agreements: [] } : [] }));
@@ -17,7 +18,10 @@ for (const language of languages) {
     await expect(page.getByRole('heading', { name: 'Agreements', exact: true })).toBeVisible();
     await page.locator('#mock-test-style').evaluate(element => element.remove());
     const burger = page.getByRole('button', { name: 'Toggle navigation' });
-    if (await burger.isVisible()) await burger.click();
+    await expect(burger).toBeVisible();
+    await expect(burger).toHaveAttribute('aria-expanded', 'false');
+    await burger.click();
+    await expect(burger).toHaveAttribute('aria-expanded', 'true');
     const variants = page.getByRole('button', { name: language.name, exact: true, includeHidden: true });
     await expect(variants).toHaveCount(1);
     await expect(variants.nth(0)).toHaveText(language.full);

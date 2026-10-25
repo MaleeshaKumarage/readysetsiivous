@@ -154,3 +154,81 @@ test('phone header with own shifts and invoice form remain within viewport', asy
   await expect(page.getByRole('heading', { name: 'Your ReadySetSiivous account', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Continue to administration', exact: true })).toBeVisible();
 });
+
+// Shapes mirror lifecycle-companies-services, lifecycle-agreements-employees,
+// lifecycle-invoice-billing and quality-cycle fixtures. Only list reads are mocked.
+async function setupPopulatedWorkspace(page: Page) {
+  await setupAdminMocks(page);
+  const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS' };
+  const issuer = { companyName: 'Supplier', businessId: '123', companyAddress: { street: 'Street', postalCode: '00100', city: 'Helsinki', country: 'FI' }, email: 'supplier@example.test', phone: '', bankAccountIBAN: 'FI123', bankBic: 'BIC', paymentTermsDays: 14, defaultVatRatePercent: 25.5 };
+  const responses: Record<string, unknown> = {
+    companies: { items: [{ id: 'company', name: 'Fixture company Oy', businessId: '1234567-8', isActive: true }], total: 1 },
+    employees: [{ id: 'active', firstName: 'Active', lastName: 'Cleaner', email: 'active@example.com', role: 'employee', isActive: true }],
+    services: [{ id: 'service-0', slug: 'service-0', name: { values: { fi: 'Service 0' } }, description: { values: { fi: 'Description' } }, isActive: true, priceNet: 10, durationMinutes: 60, vatRatePercent: 25.5, category: 'cleaning', icon: 'Sparkles', sortOrder: 0, isFeatured: false }],
+    agreements: [{ id: 'signed', title: 'Signed history', code: 'signed', status: 'Completed', isActive: true, signerCount: 1, signedCount: 1 }],
+    'agreements/legacy-repairs': { agreements: [], companies: [] },
+    shifts: [],
+    'quality-cycle/templates': [{ id: 'template-a', title: 'Activities checklist', companyId: 'company', branchId: 'branch', isActive: true, items: ['Corridor', 'Gym'] }],
+    'invoices/issuer': issuer,
+    invoices: [{ id: 'invoice', invoiceNumber: 'INV-1', issuer, customer: { name: 'Methehe' }, companyId: 'company', periodFrom: '2026-10-01', periodTo: '2026-10-31', issueDate: '2026-11-01', dueDate: '2026-11-15', status: 'Issued', total: { net: 150, vat: 38.25, gross: 188.25 }, lines: [] }],
+  };
+  for (const [endpoint, json] of Object.entries(responses)) {
+    await page.route(new RegExp(`/api/v1/admin/${endpoint}(?:\\?.*)?$`), route => {
+      expect(['GET', 'OPTIONS']).toContain(route.request().method());
+      return route.fulfill({ headers, json });
+    });
+  }
+}
+
+test('dashboard groups link to workspaces and sidebar brand returns home on phone', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 1000 });
+  await setupPopulatedWorkspace(page);
+  await page.goto('/admin/');
+  const burger = page.getByRole('button', { name: 'Toggle navigation' });
+  for (const [group, destination, heading] of [['Operations', 'shifts', 'Shifts'], ['Customers', 'companies', 'Companies'], ['Business administration', 'services', 'Services']]) {
+    await expect(page.getByRole('heading', { name: group, exact: true })).toBeVisible();
+    const section = page.getByRole('main').locator('section').filter({ has: page.getByRole('heading', { name: group, exact: true }) });
+    await section.locator(`a[href="/admin/${destination}/"]`).click();
+    await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/admin/${destination}/$`));
+    // Undo the legacy helper's sidebar suppression before exercising the real drawer.
+    await page.evaluate(() => document.getElementById('mock-test-style')?.remove());
+    await burger.click(); await expect(burger).toHaveAttribute('aria-expanded', 'true');
+    const brand = page.getByRole('navigation', { name: 'Administration' }).getByRole('link', { name: 'ReadySetSiivous', exact: true });
+    await expect(brand).toHaveAttribute('href', '/admin/'); await brand.click();
+    await expect(page).toHaveURL(/\/admin\/$/);
+    await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+    await expect(burger).toHaveAttribute('aria-expanded', 'false');
+  }
+});
+
+for (const [section, record, actionName] of [
+  ['companies', 'Fixture company Oy', 'Edit'], ['employees', 'Active Cleaner', 'Edit'],
+  ['agreements', 'Signed history', 'Signers'], ['services', 'Service 0', 'Edit'], ['invoices', 'INV-1', 'PDF'],
+]) test(`populated ${section} table keeps actions reachable at 375px`, async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 1000 }); await setupPopulatedWorkspace(page);
+  await page.goto(`/admin/${section}/`);
+  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: record, exact: true }) });
+  await expect(row).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const viewport = page.locator('.mantine-ScrollArea-viewport').filter({ has: row });
+  expect(await viewport.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+  await viewport.evaluate(element => { element.scrollLeft = element.scrollWidth; });
+  const action = row.getByRole('button', { name: actionName, exact: true });
+  await action.scrollIntoViewIfNeeded(); await expect(action).toBeInViewport();
+  await action.click({ trial: true });
+  expect(await viewport.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('populated quality checklist cards keep actions reachable at 375px', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 1000 }); await setupPopulatedWorkspace(page);
+  await page.goto('/admin/quality-cycle/');
+  const card = page.locator('.mantine-Card-root').filter({ has: page.getByText('Activities checklist', { exact: true }) });
+  await expect(card).toBeVisible(); await expect(card.getByText('Corridor', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const edit = card.getByRole('button', { name: 'Edit', exact: true });
+  await edit.scrollIntoViewIfNeeded(); await expect(edit).toBeInViewport(); await edit.click();
+  await expect(page.getByRole('textbox', { name: 'Template Title', exact: true })).toHaveValue('Activities checklist');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
