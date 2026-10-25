@@ -52,6 +52,17 @@ test('all FAQ answers and quote links remain keyboard accessible', async ({ page
     await expect(question).toHaveAttribute('aria-expanded', 'false');
     await expect(page.locator(`#faq-panel-${index}`)).not.toBeVisible();
   }
+  // Opening another answer keeps the accordion limited to one expanded item.
+  await questions.nth(0).click();
+  await expect(page.locator('#faq-panel-0')).toBeVisible();
+  await questions.nth(1).click();
+  await expect(questions.nth(0)).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#faq-panel-0')).not.toBeVisible();
+  await expect(questions.nth(1)).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#faq-panel-1')).toBeVisible();
+  await expect(page.locator('#faq button[aria-expanded="true"]')).toHaveCount(1);
+  await questions.nth(1).click();
+  await expect(page.locator('#faq-panel-1')).not.toBeVisible();
   const emergency = page.locator('a[href*="wa.me"][href*="text="]').first();
   await keyboardFocus(page, emergency);
   await expect(emergency).toHaveAttribute('target', '_blank');
