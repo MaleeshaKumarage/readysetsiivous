@@ -5,7 +5,6 @@ import {
   fetchServices,
   fetchAvailability,
   createBooking,
-  type BookingResult,
   type PublicService,
   type AvailabilitySlot,
 } from '@/lib/api';
@@ -33,8 +32,7 @@ export default function BookingFlow({ lang }: { lang: Language }) {
     city: '',
     notes: '',
   });
-  const [result, setResult] = useState<BookingResult | null>(null);
-  const [copyState, setCopyState] = useState<"idle" | "success" | "failure">("idle");
+  const [result, setResult] = useState<{ bookingNumber: string; customerReference: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(false);
 
@@ -236,24 +234,6 @@ export default function BookingFlow({ lang }: { lang: Language }) {
           <p className="mb-8 text-gray-500 dark:text-gray-400">
             {t(lang, 'varaus.reference')}: <strong>{result.customerReference}</strong>
           </p>
-          <div className="mb-8">
-            <label htmlFor="booking-management-key" className="mb-2 block font-semibold">{t(lang, 'varaus.managementKey')}</label>
-            <textarea id="booking-management-key" readOnly rows={3} value={result.managementKey} aria-describedby="management-key-help" spellCheck={false} className="w-full resize-none break-all rounded-lg border p-3 font-mono text-sm text-gray-900" />
-            <p id="management-key-help" className="my-3 text-sm">{t(lang, 'varaus.managementKeyHelp')}</p>
-            <button type="button" onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(result.managementKey);
-                setCopyState('success');
-              } catch {
-                setCopyState('failure');
-              }
-            }} className="rounded-lg border px-4 py-2 focus-visible:ring-2 focus-visible:ring-brand">
-              {t(lang, 'varaus.copyManagementKey')}
-            </button>
-            <p role="status" aria-live="polite" className="mt-2 text-sm">
-              {copyState === 'success' ? t(lang, 'varaus.managementKeyCopied') : copyState === 'failure' ? t(lang, 'varaus.managementKeyCopyFailed') : ''}
-            </p>
-          </div>
           <a href="/" className="inline-block rounded-full bg-brand px-6 py-3 font-semibold text-accent-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
             {t(lang, 'varaus.backHome')}
           </a>

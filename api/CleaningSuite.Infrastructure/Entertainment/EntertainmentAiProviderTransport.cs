@@ -31,7 +31,7 @@ public sealed class EntertainmentAiProviderTransport(IHttpClientFactory clients,
     private static readonly TimeSpan RequestBudget = TimeSpan.FromSeconds(55);
     private const int MaxErrorBodyBytes = 16 * 1024;
 
-    public async Task<JsonDocument> SendAsync(ProviderKey key, string instruction, string input, object schema, CancellationToken ct, Func<CancellationToken, Task>? reserveRetry = null)
+    public async Task<JsonDocument> SendAsync(ProviderKey key, string instruction, string input, object schema, CancellationToken ct)
     {
         if (!string.Equals(key.Provider, "Gemini", StringComparison.Ordinal))
             throw new InvalidOperationException("The language game supports Gemini requests only.");
@@ -44,9 +44,6 @@ public sealed class EntertainmentAiProviderTransport(IHttpClientFactory clients,
             budget.Token.ThrowIfCancellationRequested();
             try
             {
-                // The coordinator already reserved the first attempt. Each retry is
-                // another provider request and must pass the same shared budget.
-                if (attempt > 0 && reserveRetry is not null) await reserveRetry(budget.Token);
                 return await SendOnceAsync(key, instruction, input, schema, budget.Token);
             }
             catch (ProviderRequestFailure failure) when (attempt == 0 && ShouldRetry(failure))

@@ -2,7 +2,7 @@
 
 import '@mantine/core/styles.css';
 import './admin.css';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -11,32 +11,28 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import {
-  LayoutDashboard, Sparkles, FileSignature, Users, Building2, CalendarClock, CheckSquare, Receipt, LogOut, LogIn, UserRound,
+  LayoutDashboard, Sparkles, FileSignature, Users, Building2, CalendarClock, CheckSquare, Receipt, LogOut, LogIn,
 } from 'lucide-react';
 import { initAuth, isAuthenticated, isAdmin, authTenant, refreshToken, login, logout } from '@/lib/auth';
 import { API_URL } from '@/lib/api';
 import { PwaInstallButton } from '@/components/PwaInstallButton';
 
-const NAV_GROUPS = [
-  { label: 'Workspace', items: [{ href: '', label: 'Dashboard', icon: LayoutDashboard }] },
-  { label: 'Operations', items: [{ href: 'shifts', label: 'Shifts', icon: CalendarClock }, { href: 'quality-cycle', label: 'Quality Cycle', icon: CheckSquare }] },
-  { label: 'Customers', items: [{ href: 'leads', label: 'Leads', icon: Users }, { href: 'companies', label: 'Companies', icon: Building2 }, { href: 'agreements', label: 'Agreements', icon: FileSignature }] },
-  { label: 'People', items: [{ href: 'employees', label: 'Employees', icon: Users }] },
-  { label: 'Finance', items: [{ href: 'invoices', label: 'Invoices', icon: Receipt }] },
-  { label: 'Catalog', items: [{ href: 'services', label: 'Services', icon: Sparkles }] },
-];
+const NAV = [
+  { href: '', label: 'Dashboard', icon: LayoutDashboard },
+  { href: 'services', label: 'Services', icon: Sparkles },
+  { href: 'agreements', label: 'Agreements', icon: FileSignature },
+  { href: 'employees', label: 'Employees', icon: Users },
+  { href: 'leads', label: 'Leads', icon: Users },
+  { href: 'companies', label: 'Companies', icon: Building2 },
+  { href: 'shifts', label: 'Shifts', icon: CalendarClock },
+  { href: 'invoices', label: 'Invoices', icon: Receipt },
+  { href: 'quality-cycle', label: 'Quality Cycle', icon: CheckSquare },
+] as const;
 
 const adminTheme = createTheme({
   primaryColor: 'indigo',
   defaultRadius: 'md',
   fontFamily: 'Inter, system-ui, sans-serif',
-  headings: { fontFamily: 'Inter, system-ui, sans-serif', fontWeight: '650' },
-  components: {
-    Button: Button.extend({ styles: { root: { minHeight: 44 } } }),
-    ActionIcon: ActionIcon.extend({ styles: { root: { minWidth: 44, minHeight: 44 } } }),
-    Paper: Paper.extend({ defaultProps: { radius: 'md' } }),
-    NavLink: NavLink.extend({ styles: { root: { minHeight: 44, borderRadius: 8 } } }),
-  },
 });
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
@@ -45,8 +41,6 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const [access, setAccess] = useState<'pending' | 'allowed' | 'denied' | 'error'>('pending');
   const [hasOwnWorkIdentity, setHasOwnWorkIdentity] = useState(false);
   const verification = useRef(0);
-  // Capture before the child provider's layout effect writes its forced scheme.
-  const previousScheme = useRef(typeof document === 'undefined' ? null : document.documentElement.getAttribute('data-mantine-color-scheme'));
   const [opened, { toggle, close }] = useDisclosure(false);
   const pathname = usePathname() ?? '';
 
@@ -90,15 +84,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     return () => { verification.current++; };
   }, [verifyAccess]);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const root = document.documentElement;
     const previous = root.getAttribute('data-admin-theme');
     root.setAttribute('data-admin-theme', 'light');
     return () => {
       if (previous === null) root.removeAttribute('data-admin-theme');
       else root.setAttribute('data-admin-theme', previous);
-      if (previousScheme.current === null) root.removeAttribute('data-mantine-color-scheme');
-      else root.setAttribute('data-mantine-color-scheme', previousScheme.current);
     };
   }, []);
 
@@ -156,45 +148,101 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
     <MantineProvider theme={adminTheme} forceColorScheme="light">
       <AppShell
-        className="admin-shell"
-        header={{ height: 76 }}
-        navbar={{ width: 256, breakpoint: 'sm', collapsed: { mobile: !opened } }}
-        padding={{ base: 'md', sm: 'xl' }}
+        header={{ height: 60 }}
+        navbar={{
+          width: 260,
+          breakpoint: 'sm',
+          collapsed: { mobile: !opened },
+        }}
+        padding="md"
       >
-        <AppShell.Header className="admin-header">
-          <Group h="100%" justify="space-between" wrap="nowrap" gap="xs">
-            <Group gap="xs" wrap="nowrap" className="admin-context">
-              <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" aria-label="Toggle navigation" aria-expanded={opened} aria-controls="admin-navigation" />
-              <div><Text size="xs" c="dimmed" className="admin-eyebrow">Tenant administration</Text><Text fw={600}>{NAV_GROUPS.flatMap(group => group.items).find(item => item.href ? pathname.startsWith(base + item.href) : pathname === '/admin' || pathname === '/admin/')?.label ?? 'Workspace'}</Text></div>
+        <AppShell.Header p="sm">
+          <Group h="100%" px="xs" justify="space-between" wrap="nowrap">
+            <Group gap="xs">
+              <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" aria-label="Toggle navigation" />
+              <Link href="/admin/" onClick={close} style={{ textDecoration: 'none', color: 'inherit' }}>
+                <Group gap="xs">
+                  <Image src="/brand/readyset-logomark.png" alt="ReadySetSiivous" width={28} height={28} />
+                  <Text fw={700} size="lg" visibleFrom="xs">
+                    ReadySet<Text component="span" c="indigo" fw={700}>Siivous</Text>
+                  </Text>
+                </Group>
+              </Link>
             </Group>
-            <Group gap={4} wrap="nowrap">
+
+            <Group gap="xs" wrap="nowrap">
+              <Button component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="subtle" size="xs">My account</Button>
               {hasOwnWorkIdentity && <Button component={Link} href="/me/shifts/" variant="light" size="xs">My shifts</Button>}
-              <Button component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="subtle" size="xs" visibleFrom="xs">My account</Button>
-              <ActionIcon component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="subtle" hiddenFrom="xs" aria-label="My account"><UserRound size={20} /></ActionIcon>
-              <Tooltip label="Sign out" withArrow><ActionIcon variant="subtle" color="gray" onClick={() => logout()} aria-label="Sign out"><LogOut size={20} /></ActionIcon></Tooltip>
+              <PwaInstallButton variant="light" size="xs" compact />
+              <Tooltip label="Sign out" withArrow>
+                <Button
+                  variant="subtle"
+                  color="gray"
+                  size="xs"
+                  leftSection={<LogOut size={16} />}
+                  onClick={() => logout()}
+                  visibleFrom="xs"
+                >
+                  Sign out
+                </Button>
+              </Tooltip>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size="md"
+                onClick={() => logout()}
+                hiddenFrom="xs"
+                title="Sign out"
+                aria-label="Sign out"
+              >
+                <LogOut size={18} />
+              </ActionIcon>
             </Group>
           </Group>
         </AppShell.Header>
-        <AppShell.Navbar id="admin-navigation" className="admin-sidebar" p="md" aria-label="Administration">
-          <Link href="/admin/" onClick={close} className="admin-brand">
-            <Image src="/brand/readyset-logomark.png" alt="" width={32} height={32} />
-            <Text fw={700}>ReadySet<Text component="span" c="indigo" fw={700}>Siivous</Text></Text>
-          </Link>
-          <AppShell.Section grow className="admin-nav-scroll">
-            <Stack gap="md">
-              {NAV_GROUPS.map(group => <div key={group.label}>
-                <Text className="admin-nav-label" size="xs" fw={700} c="dimmed" mb={6}>{group.label}</Text>
-                <Stack gap={4}>{group.items.map(item => {
-                  const href = item.href ? `${base}${item.href}/` : base;
-                  const active = item.href === '' ? pathname === '/admin' || pathname === '/admin/' : pathname.startsWith(base + item.href);
-                  return <NavLink key={href} component={Link} href={href} label={item.label} leftSection={<item.icon size={18} aria-hidden="true" />} active={active} aria-current={active ? 'page' : undefined} onClick={close} />;
-                })}</Stack>
-              </div>)}
+
+        <AppShell.Navbar p="md">
+          <Group mb="lg" gap="xs">
+            <Image src="/brand/readyset-logomark.png" alt="ReadySetSiivous" width={28} height={28} />
+            <Text fw={700}>ReadySet<Text component="span" c="indigo">Siivous</Text></Text>
+          </Group>
+          <Stack gap={4}>
+            {NAV.map((item) => {
+              const href = item.href ? `${base}${item.href}/` : base;
+              const active = item.href === ''
+                ? pathname === '/admin' || pathname === '/admin/'
+                : pathname.startsWith(base + item.href);
+              return (
+                <NavLink
+                  key={item.href || 'dashboard'}
+                  component={Link}
+                  href={href}
+                  label={item.label}
+                  leftSection={<item.icon size={18} />}
+                  active={active}
+                  onClick={close}
+                />
+              );
+            })}
+          </Stack>
+          <AppShell.Section mt="auto" pt="md">
+            <Stack gap="xs">
+              <PwaInstallButton variant="outline" size="sm" />
+              <Button
+                variant="subtle"
+                color="gray"
+                fullWidth
+                justify="start"
+                leftSection={<LogOut size={16} />}
+                onClick={() => logout()}
+              >
+                Sign out
+              </Button>
             </Stack>
           </AppShell.Section>
-          <AppShell.Section className="admin-sidebar-footer" pt="md"><PwaInstallButton variant="light" size="sm" /></AppShell.Section>
         </AppShell.Navbar>
-        <AppShell.Main><div className="admin-content">{children}</div></AppShell.Main>
+
+        <AppShell.Main>{children}</AppShell.Main>
       </AppShell>
     </MantineProvider>
   );

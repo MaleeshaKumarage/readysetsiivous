@@ -202,29 +202,3 @@ test('assignee cells explain named, unassigned and locked work; Cancel sends no 
   const dialog = page.getByRole('dialog', { name: 'Assign visit', exact: true }); await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(dialog).toHaveCount(0); expect(writes).toBe(0);
 });
-
-
-test('phone occurrence exceptions scroll internally and keep restore actions reachable', async ({ page }) => {
-  await page.setViewportSize({ width: 375, height: 1000 });
-  const state = await setup(page);
-  await page.route(/\/api\/v1\/admin\/shifts\/shift\/occurrences(?:\?.*)?$/, route => route.fulfill({ headers, json: [
-    { exceptionId: 'moved-visit', originalStartUtc: '2026-11-02T06:00:00.000Z', startUtc: '2026-11-02T07:00:00.000Z', endUtc: '2026-11-02T09:00:00.000Z', status: 1, reason: 'Customer requested a later visit', assigneeIds: ['cleaner'], rosterVersion: 'v1' },
-    { exceptionId: 'extra-visit', originalStartUtc: null, startUtc: '2026-11-03T07:00:00.000Z', endUtc: '2026-11-03T09:00:00.000Z', status: 4, reason: 'Requested deep clean', assigneeIds: ['cleaner'], rosterVersion: 'v1' },
-  ] }));
-  await page.getByRole('button', { name: 'Occurrences', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: /Occurrences/ });
-  await expect(dialog.getByRole('cell', { name: 'Customer requested a later visit', exact: true })).toBeVisible();
-  await expect(dialog.getByRole('cell', { name: 'Requested deep clean', exact: true })).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  const viewport = dialog.locator('.mantine-ScrollArea-viewport');
-  expect(await viewport.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
-  await viewport.evaluate(element => { element.scrollLeft = element.scrollWidth; });
-  for (const name of ['Restore', 'Delete extra']) {
-    const action = dialog.getByRole('button', { name, exact: true });
-    await action.scrollIntoViewIfNeeded(); await expect(action).toBeInViewport();
-    await action.click({ trial: true });
-  }
-  expect(await viewport.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  expect(state.writes).toHaveLength(0); expect(state.deletes).toBe(0);
-});

@@ -29,9 +29,6 @@ foreach (var envPath in new[] { ".env", Path.Combine("..", ".env") })
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(options => CleaningSuite.Api.Middleware.TrustedProxyConfiguration.Configure(options, builder.Configuration));
-builder.Services.Configure<CleaningSuite.Api.Middleware.PublicRateLimitOptions>(builder.Configuration.GetSection("PublicRateLimit"));
-
 builder.Services.AddControllers().AddJsonOptions(o =>
 {
     o.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
@@ -142,7 +139,6 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<CleaningSuite.Infr
 builder.Services.AddSingleton<CleaningSuite.Infrastructure.Entertainment.QueuedEntertainmentAiService>();
 builder.Services.AddSingleton<CleaningSuite.Application.Entertainment.IGeminiSentenceService>(sp => sp.GetRequiredService<CleaningSuite.Infrastructure.Entertainment.QueuedEntertainmentAiService>());
 builder.Services.AddSingleton<CleaningSuite.Application.Entertainment.IEntertainmentAnswerEvaluator>(sp => sp.GetRequiredService<CleaningSuite.Infrastructure.Entertainment.QueuedEntertainmentAiService>());
-builder.Services.Configure<CleaningSuite.Api.Hubs.GameSessionOptions>(builder.Configuration.GetSection("Entertainment:Rooms"));
 builder.Services.AddSingleton<CleaningSuite.Api.Hubs.GameSessionManager>();
 
 builder.Services.AddMediatR(cfg =>
@@ -176,8 +172,6 @@ builder.Services.AddExceptionHandler<ValidationExceptionHandler>();
 builder.Services.AddExceptionHandler<DefaultExceptionHandler>();
 
 var app = builder.Build();
-
-app.UseForwardedHeaders();
 
 // Health check: liveness only, no DB dependency.
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok", utc = DateTime.UtcNow, releaseSha = Environment.GetEnvironmentVariable("APP_RELEASE_SHA") }));

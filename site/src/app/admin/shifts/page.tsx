@@ -488,7 +488,7 @@ export default function ShiftsAdminPage() {
           </Group>
           {occurrenceError && <Text role="alert" c="red">{occurrenceError}</Text>}
           {occurrenceLoading ? <Loader /> : occurrences.length === 0 ? <Text c="dimmed">No occurrences in this period.</Text> : (
-            <Table.ScrollContainer minWidth={820}><Table striped withTableBorder>
+            <Table striped withTableBorder>
               <Table.Thead><Table.Tr><Table.Th>Start</Table.Th><Table.Th>End</Table.Th><Table.Th>Status</Table.Th><Table.Th>Assignees</Table.Th><Table.Th>Reason</Table.Th><Table.Th></Table.Th></Table.Tr></Table.Thead>
               <Table.Tbody>{occurrences.map((item) => <Table.Tr key={item.exceptionId ?? item.startUtc}>
                 <Table.Td>{new Date(item.startUtc).toLocaleString(undefined, { timeZone: timeZoneId })}</Table.Td>
@@ -505,7 +505,7 @@ export default function ShiftsAdminPage() {
                   {item.exceptionId && <Button size="xs" variant="subtle" color="red" loading={occurrenceSaving} onClick={() => restoreOccurrence(item)}>{item.status === 4 ? 'Delete extra' : 'Restore'}</Button>}
                 </Group></Table.Td>
               </Table.Tr>)}</Table.Tbody>
-            </Table></Table.ScrollContainer>
+            </Table>
           )}
         </Stack>
       </Modal>

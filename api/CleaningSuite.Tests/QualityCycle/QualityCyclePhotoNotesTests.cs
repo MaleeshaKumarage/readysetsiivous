@@ -61,8 +61,8 @@ public class QualityCyclePhotoNotesTests
         var items = new List<QualityCycleFormItemDto> { new("Gym", true) };
         var photos = new List<QualityCyclePhoto> { new("first", "First note"), new("second", " ") };
         var error = authenticated
-            ? await Assert.ThrowsAsync<ValidationException>(() => new QualityCycleHandlers.EndQualityCycleFormCommandHandler(repository.Object, NoopUploadContentValidator.Instance, WorkAccessFixtures.ActiveShifts(), WorkAccessFixtures.ActiveEmployees(), WorkAccessFixtures.Reservation).Handle(new(form.Id, form.EmployeeId, items, CleanerNotes: "General note", Photos: photos), default))
-            : await Assert.ThrowsAsync<ValidationException>(() => new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(repository.Object, NoopUploadContentValidator.Instance, WorkAccessFixtures.ActiveShifts(), WorkAccessFixtures.ActiveEmployees(), WorkAccessFixtures.Reservation).Handle(new(form.Token, items, CleanerNotes: "General note", Photos: photos), default));
+            ? await Assert.ThrowsAsync<ValidationException>(() => new QualityCycleHandlers.EndQualityCycleFormCommandHandler(repository.Object, NoopUploadContentValidator.Instance).Handle(new(form.Id, form.EmployeeId, items, CleanerNotes: "General note", Photos: photos), default))
+            : await Assert.ThrowsAsync<ValidationException>(() => new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(repository.Object, NoopUploadContentValidator.Instance).Handle(new(form.Token, items, CleanerNotes: "General note", Photos: photos), default));
         Assert.Equal("Photos", Assert.Single(error.Errors).PropertyName);
         repository.Verify(x => x.SaveFormAsync(It.IsAny<QualityCycleForm>(), default), Times.Never);
     }

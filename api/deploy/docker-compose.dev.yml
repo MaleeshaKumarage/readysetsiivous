@@ -8,31 +8,10 @@ services:
       POSTGRES_USER: cleaning
       POSTGRES_PASSWORD: devpassword
       POSTGRES_DB: cleaning
-      DEV_KC_DB_PASSWORD: ${DEV_KC_DB_PASSWORD:?set a separate dev Keycloak database password}
     ports:
       - "127.0.0.1:5436:5432"
     volumes:
       - dev_pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U cleaning -d cleaning"]
-      interval: 5s
-      retries: 15
-
-  keycloak-db-init:
-    image: postgres:16-alpine
-    restart: "no"
-    entrypoint: ["bash", "/init/01-keycloak.sh"]
-    environment:
-      PGHOST: postgres
-      PGPASSWORD: devpassword
-      POSTGRES_USER: cleaning
-      POSTGRES_DB: cleaning
-      DEV_KC_DB_PASSWORD: ${DEV_KC_DB_PASSWORD:?set a separate dev Keycloak database password}
-    volumes:
-      - ../dev/init/01-keycloak.sh:/init/01-keycloak.sh:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
 
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
@@ -41,13 +20,6 @@ services:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USER}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       KC_HOSTNAME_URL: http://130.61.208.211:8081
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak_dev
-      KC_DB_USERNAME: keycloak_dev
-      KC_DB_PASSWORD: ${DEV_KC_DB_PASSWORD:?set a separate dev Keycloak database password}
-    depends_on:
-      keycloak-db-init:
-        condition: service_completed_successfully
     ports:
       - "8081:8080"
     command: start-dev --import-realm
@@ -60,11 +32,6 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
-      # Empty trust lists disable forwarded processing; configure only verified upstream peers.
-      ReverseProxy__KnownProxiesCsv: ${API_TRUSTED_PROXY_IPS:-}
-      ReverseProxy__KnownNetworksCsv: ${API_TRUSTED_PROXY_NETWORKS:-}
-      ReverseProxy__ForwardLimit: ${API_PROXY_FORWARD_LIMIT:-1}
-      PublicRateLimit__Capacity: ${API_PUBLIC_RATE_LIMIT_CAPACITY:-10000}
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=cleaning;Username=cleaning;Password=devpassword
       Marten__AutoCreateSchemaMode: CreateOrUpdate
       Auth__Keycloak__ServerUrl: http://130.61.208.211:8081
@@ -101,10 +68,6 @@ services:
       EmployeeInvites__Smtp__Ssl: ${INVITE_SMTP_SSL:-false}
       App__FrontendBaseUrl: http://130.61.208.211
       Uploads__Path: /app/uploads
-      Entertainment__KeyFilePath: /app/keys/entertainment.key
-    volumes:
-      - dev_uploads:/app/uploads
-      - dev_keys:/app/keys
     ports:
       - "8090:8080"
     depends_on:
@@ -113,5 +76,3 @@ services:
 
 volumes:
   dev_pgdata: {}
-  dev_uploads: {}
-  dev_keys: {}

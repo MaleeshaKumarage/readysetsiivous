@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { Button, Stack, Text, VisuallyHidden } from '@mantine/core';
+import { Button, Stack, Text } from '@mantine/core';
 import { Check, Mail } from 'lucide-react';
 import { agreementEmail } from '@/lib/agreementEmail';
 
@@ -24,21 +24,10 @@ export function AgreementEmailCopyButton({ title, signerName, link }: { title: s
       setError('Could not copy the formatted email. Allow clipboard access and retry in a supported browser.');
     }
   };
-  return (
-    <Stack gap={4} maw={340}>
-      <Button
-        size="xs"
-        variant="light"
-        color={copied ? 'teal' : 'gray'}
-        leftSection={copied ? <Check size={14} /> : <Mail size={14} />}
-        onClick={copy}
-      >
-        {copied ? 'Copied email' : 'Copy email'}
-      </Button>
-      <VisuallyHidden role="status" aria-live="polite">
-        {copied ? `Email message for ${signerName} copied to clipboard.` : ''}
-      </VisuallyHidden>
-      {error && <Text size="xs" c="red" role="alert">{error}</Text>}
-    </Stack>
-  );
+  return <Stack gap={4} maw={340}>
+    <Button size="xs" variant="light" color={copied ? 'teal' : 'gray'} leftSection={copied ? <Check size={14} /> : <Mail size={14} />} onClick={copy}>
+      {copied ? 'Copied email' : 'Copy email'}
+    </Button>
+    {error && <Text size="xs" c="red" role="alert">{error}</Text>}
+  </Stack>;
 }
