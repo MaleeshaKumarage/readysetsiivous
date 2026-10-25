@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Button, Modal, Text, Stack, Group, Tooltip, Badge } from '@mantine/core';
 import { Download, Smartphone, Check, Share } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
+import type { Language } from '@/i18n';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -21,7 +22,22 @@ export function PwaInstallButton({
   size = 'sm',
   compact = false,
 }: PwaInstallButtonProps) {
-  const { lang } = useLanguage();
+  const { lang: contextLang } = useLanguage();
+  const [lang, setLang] = useState<Language>(contextLang);
+
+  useEffect(() => {
+    // Admin routes have no LanguageProvider; reuse the saved site language there.
+    if (/^\/(en|fi|sv)(?:\/|$)/.test(window.location.pathname)) {
+      setLang(contextLang);
+      return;
+    }
+    try {
+      const saved = localStorage.getItem('lang');
+      setLang(saved === 'en' || saved === 'fi' || saved === 'sv' ? saved : contextLang);
+    } catch {
+      setLang(contextLang);
+    }
+  }, [contextLang]);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isStandalone, setIsStandalone] = useState(false);
   const [isIos, setIsIos] = useState(false);
@@ -132,6 +148,10 @@ export function PwaInstallButton({
         opened={iosModalOpen}
         onClose={() => setIosModalOpen(false)}
         title="Install Admin App on iOS"
+        closeButtonProps={{ 'aria-label': lang === 'fi'
+          ? 'Sulje iOS-asennusohjeet'
+          : lang === 'sv' ? 'Stäng installationsanvisningarna för iOS'
+          : 'Close iOS installation instructions' }}
         centered
         radius="md"
       >
