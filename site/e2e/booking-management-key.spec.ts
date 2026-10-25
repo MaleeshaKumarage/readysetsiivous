@@ -33,7 +33,9 @@ for (const [lang, dictionary] of Object.entries({ fi, en, sv })) {
       await page.getByRole('button', { name: '12:00', exact: true }).click();
       await page.locator('#customerName').fill('Synthetic customer');
       await page.locator('#customerPhone').fill('123');
+      await page.locator('#customerEmail').fill('synthetic@example.invalid');
       await page.locator('#street').fill('Synthetic street');
+      await page.locator('#postalCode').fill('00100');
       await page.locator('#city').fill('Helsinki');
       await page.getByRole('button', { name: labels.confirm, exact: true }).click();
       const field = page.getByRole('textbox', { name: labels.managementKey, exact: true });
