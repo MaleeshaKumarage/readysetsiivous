@@ -32,6 +32,11 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
+      # Empty trust lists disable forwarded processing; configure only verified upstream peers.
+      ReverseProxy__KnownProxiesCsv: ${API_TRUSTED_PROXY_IPS:-}
+      ReverseProxy__KnownNetworksCsv: ${API_TRUSTED_PROXY_NETWORKS:-}
+      ReverseProxy__ForwardLimit: ${API_PROXY_FORWARD_LIMIT:-1}
+      PublicRateLimit__Capacity: ${API_PUBLIC_RATE_LIMIT_CAPACITY:-10000}
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=cleaning;Username=cleaning;Password=devpassword
       Marten__AutoCreateSchemaMode: CreateOrUpdate
       Auth__Keycloak__ServerUrl: http://130.61.208.211:8081

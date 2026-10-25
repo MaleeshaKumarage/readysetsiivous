@@ -109,6 +109,72 @@ public sealed class PublicRateLimitTests
         Assert.Throws<InvalidOperationException>(() => TrustedProxyConfiguration.Configure(new ForwardedHeadersOptions(), config));
     }
 
+    [Theory]
+    [InlineData("KnownProxiesCsv", "invalid")]
+    [InlineData("KnownProxiesCsv", "192.0.2.1,")]
+    [InlineData("KnownProxiesCsv", ",192.0.2.1")]
+    [InlineData("KnownProxiesCsv", "192.0.2.1,,192.0.2.2")]
+    [InlineData("KnownProxiesCsv", " ")]
+    [InlineData("KnownNetworksCsv", "invalid")]
+    [InlineData("KnownNetworksCsv", "0.0.0.0/0")]
+    [InlineData("KnownNetworksCsv", "::/0")]
+    [InlineData("KnownNetworksCsv", "192.0.2.0/24,")]
+    public void Invalid_csv_fails_closed(string name, string value)
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["ReverseProxy:" + name] = value }).Build();
+        Assert.Throws<InvalidOperationException>(() => TrustedProxyConfiguration.Configure(new ForwardedHeadersOptions(), config));
+    }
+
+    [Theory]
+    [InlineData("KnownProxies", "192.0.2.1")]
+    [InlineData("KnownNetworks", "192.0.2.0/24")]
+    public void Nonempty_array_and_csv_are_rejected_as_ambiguous(string name, string value)
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
+            ["ReverseProxy:" + name + ":0"] = value, ["ReverseProxy:" + name + "Csv"] = value }).Build();
+        Assert.Throws<InvalidOperationException>(() => TrustedProxyConfiguration.Configure(new ForwardedHeadersOptions(), config));
+    }
+
+    [Fact]
+    public void Compose_environment_csv_binds_explicit_peers_hops_and_capacity()
+    {
+        const string prefix = "CLEANINGSUITE_PROXY_FIXTURE_";
+        var values = new Dictionary<string, string> {
+            ["ReverseProxy__KnownProxiesCsv"] = "192.0.2.1, ::ffff:192.0.2.2",
+            ["ReverseProxy__KnownNetworksCsv"] = "198.51.100.0/24, 2001:db8::/32",
+            ["ReverseProxy__ForwardLimit"] = "2", ["PublicRateLimit__Capacity"] = "123" };
+        try
+        {
+            foreach (var pair in values) Environment.SetEnvironmentVariable(prefix + pair.Key, pair.Value);
+            var config = new ConfigurationBuilder().AddEnvironmentVariables(prefix).Build();
+            var options = new ForwardedHeadersOptions();
+            TrustedProxyConfiguration.Configure(options, config);
+            Assert.Equal(2, options.ForwardLimit);
+            Assert.Equal(new[] { IPAddress.Parse("192.0.2.1"), IPAddress.Parse("192.0.2.2") }, options.KnownProxies);
+            Assert.Equal(2, options.KnownIPNetworks.Count);
+            Assert.Equal(123, config.GetSection("PublicRateLimit").Get<PublicRateLimitOptions>()!.Capacity);
+            Assert.NotEqual(ForwardedHeaders.None, options.ForwardedHeaders);
+        }
+        finally
+        {
+            foreach (var pair in values) Environment.SetEnvironmentVariable(prefix + pair.Key, null);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Empty_csv_disables_forwarding_unless_explicit_array_is_configured(bool array)
+    {
+        var values = new Dictionary<string, string?> { ["ReverseProxy:KnownProxiesCsv"] = "", ["ReverseProxy:KnownNetworksCsv"] = "" };
+        if (array) values["ReverseProxy:KnownProxies:0"] = "192.0.2.1";
+        var options = new ForwardedHeadersOptions();
+        TrustedProxyConfiguration.Configure(options, new ConfigurationBuilder().AddInMemoryCollection(values).Build());
+        Assert.Equal(array ? ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto : ForwardedHeaders.None, options.ForwardedHeaders);
+        Assert.Empty(options.KnownIPNetworks);
+        Assert.Equal(array ? 1 : 0, options.KnownProxies.Count);
+    }
+
     private static ForwardedHeadersOptions ProxyOptions(bool trust)
     {
         var values = new Dictionary<string, string?>();

@@ -1,0 +1,23 @@
+name: proxy-config-tests
+on:
+  pull_request:
+    paths:
+      - api/deploy/docker-compose*.yml
+      - api/CleaningSuite.Api/Middleware/TrustedProxyConfiguration.cs
+      - scripts/tests/test_proxy_compose.py
+      - .github/workflows/proxy-config-tests.yml
+  push:
+    branches: [main]
+    paths:
+      - api/deploy/docker-compose*.yml
+      - api/CleaningSuite.Api/Middleware/TrustedProxyConfiguration.cs
+      - scripts/tests/test_proxy_compose.py
+      - .github/workflows/proxy-config-tests.yml
+permissions:
+  contents: read
+jobs:
+  compose-proxy-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/tests/test_proxy_compose.py
