@@ -1,0 +1,44 @@
+\getenv migrator_password DB_MIGRATOR_PASSWORD
+\getenv runtime_password DB_RUNTIME_PASSWORD
+\getenv keycloak_password KC_DB_PASSWORD
+\getenv setup_keycloak DB_SETUP_KEYCLOAK
+-- format(%L) quotes passwords, including apostrophes; never interpolate shell SQL.
+SELECT 'CREATE ROLE cleaning_owner NOLOGIN' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname='cleaning_owner') \gexec
+SELECT 'CREATE ROLE cleaning_migrator LOGIN NOINHERIT' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname='cleaning_migrator') \gexec
+SELECT 'CREATE ROLE cleaning_runtime LOGIN NOINHERIT' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname='cleaning_runtime') \gexec
+SELECT NOT EXISTS (SELECT FROM pg_database WHERE datdba = 'cleaning_runtime'::regrole)
+  AND NOT EXISTS (SELECT FROM pg_namespace WHERE nspowner = 'cleaning_runtime'::regrole)
+  AND NOT EXISTS (SELECT FROM pg_class WHERE relowner = 'cleaning_runtime'::regrole)
+  AND NOT EXISTS (SELECT FROM pg_proc WHERE proowner = 'cleaning_runtime'::regrole) AS safe_runtime_owner
+\gset
+\if :safe_runtime_owner
+\else
+  \echo 'Runtime owns existing objects; stop for reviewed ownership inventory.'
+  DO $$ BEGIN RAISE EXCEPTION 'Runtime ownership preflight failed'; END $$;
+\endif
+ALTER ROLE cleaning_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+ALTER ROLE cleaning_migrator LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+ALTER ROLE cleaning_runtime LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+SELECT format('ALTER ROLE cleaning_migrator PASSWORD %L', :'migrator_password') \gexec
+SELECT format('ALTER ROLE cleaning_runtime PASSWORD %L', :'runtime_password') \gexec
+SELECT format('REVOKE %I FROM %I', parent.rolname, child.rolname)
+FROM pg_auth_members m JOIN pg_roles parent ON parent.oid=m.roleid JOIN pg_roles child ON child.oid=m.member
+WHERE child.rolname IN ('cleaning_runtime','cleaning_migrator','cleaning_owner') \gexec
+GRANT cleaning_owner TO cleaning_migrator;
+SELECT 'CREATE DATABASE cleaning OWNER cleaning_owner' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='cleaning') \gexec
+-- Dedicated stack: PUBLIC must not grant connections or temporary objects.
+REVOKE ALL ON DATABASE cleaning FROM PUBLIC;
+REVOKE ALL ON DATABASE cleaning FROM cleaning_runtime;
+GRANT CONNECT ON DATABASE cleaning TO cleaning_owner, cleaning_migrator, cleaning_runtime;
+\if :setup_keycloak
+SELECT 'CREATE ROLE keycloak LOGIN NOINHERIT' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname='keycloak') \gexec
+ALTER ROLE keycloak LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+SELECT format('ALTER ROLE keycloak PASSWORD %L', :'keycloak_password') \gexec
+SELECT 'CREATE DATABASE keycloak OWNER keycloak' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='keycloak') \gexec
+REVOKE ALL ON DATABASE keycloak FROM PUBLIC;
+GRANT CONNECT ON DATABASE keycloak TO keycloak;
+\endif
+SELECT format('REVOKE CONNECT ON DATABASE %I FROM PUBLIC', datname)
+FROM pg_database WHERE datallowconn AND datname <> 'cleaning' \gexec
+SELECT format('REVOKE ALL ON DATABASE %I FROM cleaning_runtime', datname)
+FROM pg_database WHERE datallowconn AND datname <> 'cleaning' \gexec
