@@ -40,7 +40,7 @@ race cancellation and conditional My shifts action exactly.
 ## Dashboard
 
 Replace the undifferentiated shortcut grid with grouped, clearly titled workspace
-sections covering all nine existing destinations, including Invoices and Quality
+sections covering all eight administrative destinations, including Invoices and Quality
 Cycle. Keep descriptions useful and links keyboard accessible. Do not fetch extra
 data or display fabricated operational summaries. Existing routes stay unchanged.
 
