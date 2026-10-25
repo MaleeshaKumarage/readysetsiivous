@@ -104,6 +104,7 @@ export function PwaInstallButton({
           variant={variant}
           color="indigo"
           size={size}
+          aria-label="Install ReadySetSiivous Admin App"
           leftSection={deferredPrompt ? <Download size={16} /> : <Smartphone size={16} />}
           onClick={handleInstallClick}
         >
@@ -115,6 +116,7 @@ export function PwaInstallButton({
         opened={iosModalOpen}
         onClose={() => setIosModalOpen(false)}
         title="Install Admin App on iOS"
+        closeButtonProps={{ 'aria-label': 'Close iOS installation instructions' }}
         centered
         radius="md"
       >
