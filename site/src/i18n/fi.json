@@ -358,6 +358,11 @@
     "priceRange": "€€"
   },
   "varaus": {
+    "managementKey": "Varauksen hallinta-avain",
+    "managementKeyHelp": "Säilytä avain turvallisesti. Avaimella ja varausnumerolla voit tarkastella varausta ja perua sen. Avain näytetään vain nyt, ja se katoaa, kun poistut sivulta tai lataat sivun uudelleen.",
+    "copyManagementKey": "Kopioi hallinta-avain",
+    "managementKeyCopied": "Hallinta-avain kopioitu.",
+    "managementKeyCopyFailed": "Avaimen kopiointi epäonnistui. Valitse ja kopioi se itse.",
     "title": "Varaa siivous",
     "loading": "Ladataan palveluita…",
     "unavailableTitle": "Varaus ei ole juuri nyt käytettävissä",

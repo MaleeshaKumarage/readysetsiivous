@@ -33,7 +33,7 @@ public class PublicTenantResolutionTests
         ("GET", "services", null), ("GET", "content", null),
         ("GET", "availability?date=2026-10-14&serviceId=11111111-1111-1111-1111-111111111111", null),
         ("POST", "bookings", "{\"localDate\":\"2026-10-14\",\"startTime\":\"10:00\",\"serviceId\":\"11111111-1111-1111-1111-111111111111\",\"customerName\":\"Test\",\"customerPhone\":\"123\",\"customerEmail\":\"test@example.invalid\",\"street\":\"Street\",\"postalCode\":\"00100\",\"city\":\"Helsinki\"}"),
-        ("GET", "bookings/number?phone=123", null), ("POST", "bookings/number/cancel?phone=123", null),
+        ("POST", "bookings/lookup", "{\"bookingNumber\":\"number\",\"managementKey\":\"key\"}"), ("POST", "bookings/number/cancel", "{\"managementKey\":\"key\"}"),
         ("GET", "quality-cycle/token", null),
         ("POST", "quality-cycle/token/submit", "{\"token\":\"token\",\"items\":[]}"),
         ("GET", "quality-cycle/reports/token/pdf", null),
@@ -57,6 +57,16 @@ public class PublicTenantResolutionTests
             Assert.Equal("tenant-b", host.SeenTenant); Assert.Equal("tenant-b", host.SeenSlug);
             Assert.Equal(realm, host.SeenRealm);
         }
+    }
+
+    [Fact]
+    public async Task Booking_creation_credential_response_is_not_cached()
+    {
+        using var host = new Host();
+        using var response = await host.Send("tenant-b", null, Routes.Single(x => x.Route == "bookings"));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.True(response.Headers.CacheControl!.NoStore);
+        Assert.Contains("managementKey", await response.Content.ReadAsStringAsync());
     }
 
     [Theory]
@@ -148,7 +158,7 @@ public class PublicTenantResolutionTests
             Setup<GetPublicServicesQuery, IReadOnlyList<PublicServiceDto>>(Array.Empty<PublicServiceDto>());
             Setup<GetPublicContentQuery, PublicContentDto?>(null);
             Setup<GetAvailabilityQuery, IReadOnlyList<AvailabilitySlot>>(Array.Empty<AvailabilitySlot>());
-            Setup<CreatePublicBookingCommand, PublicBookingResult>(new(Guid.NewGuid(), "number", "reference"));
+            Setup<CreatePublicBookingCommand, PublicBookingResult>(new(Guid.NewGuid(), "number", "reference", "key"));
             Setup<GetPublicBookingQuery, PublicBookingDto?>(null);
             Setup<CancelPublicBookingCommand, Unit>(Unit.Value);
             Setup<GetQualityCycleFormByTokenQuery, QualityCycleFormDto>(null!);

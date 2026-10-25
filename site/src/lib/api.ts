@@ -41,6 +41,7 @@ export interface BookingResult {
   bookingId: string;
   bookingNumber: string;
   customerReference: string;
+  managementKey: string;
 }
 
 async function getJson<T>(path: string, timeoutMs = 8000): Promise<T | null> {
@@ -75,6 +76,7 @@ export async function createBooking(body: BookingRequest): Promise<BookingResult
   try {
     const response = await fetch(`${API_URL}/api/v1/public/${TENANT_SLUG}/bookings`, {
       method: "POST",
+      cache: "no-store",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(10000),

@@ -358,6 +358,11 @@
     "priceRange": "€€"
   },
   "varaus": {
+    "managementKey": "Booking management key",
+    "managementKeyHelp": "Keep this key safe. Together with your booking number, it allows viewing and cancelling this booking. It is shown only now and is lost when you leave or reload this page.",
+    "copyManagementKey": "Copy management key",
+    "managementKeyCopied": "Management key copied.",
+    "managementKeyCopyFailed": "Could not copy the key. Select and copy it manually.",
     "title": "Book a cleaning",
     "loading": "Loading services…",
     "unavailableTitle": "Booking is not available right now",
