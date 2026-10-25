@@ -65,15 +65,15 @@ builder.Services.AddSingleton(sp =>
 {
     var section = sp.GetRequiredService<IConfiguration>().GetSection("Auth:Keycloak");
     var http = sp.GetRequiredService<IHttpClientFactory>().CreateClient("KeycloakAdmin");
-    return new KeycloakAdminClient(
+    return new PlatformKeycloakClient(new KeycloakAdminClient(
         http,
         section["AdminServerUrl"] ?? section["ServerUrl"] ?? throw new InvalidOperationException("Auth:Keycloak:ServerUrl missing"),
         section["ProvisionerRealm"] ?? "master",
         section["ProvisionerClientId"] ?? "cleaning-provisioner",
-        section["ProvisionerClientSecret"] ?? "",
-        section["AdminUser"],
-        section["AdminPassword"]);
+        section["ProvisionerClientSecret"] ?? ""));
 });
+builder.Services.AddSingleton(sp => new TenantKeycloakClients(
+    sp.GetRequiredService<IHttpClientFactory>().CreateClient("KeycloakAdmin"), sp.GetRequiredService<IConfiguration>()));
 builder.Services.AddSingleton<IKeycloakProvisioner, KeycloakProvisioner>();
 builder.Services.AddSingleton<CleaningSuite.Application.Employees.IEmployeeIdentityProvider, KeycloakEmployeeIdentityProvider>();
 builder.Services.AddSingleton<CleaningSuite.Application.Employees.IEmployeeIdentityLock, EmployeeIdentityLock>();

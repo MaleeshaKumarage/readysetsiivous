@@ -1,0 +1,74 @@
+name: Scoped Keycloak runtime rehearsal
+on:
+  pull_request:
+    paths:
+      - 'api/CleaningSuite.Infrastructure/Keycloak/**'
+      - 'api/deploy/*keycloak*'
+      - '.github/workflows/keycloak-runtime-privileges.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        keycloak: ['24.0.5', '26.1.0']
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: identity_tests
+          POSTGRES_USER: identity_tests
+          POSTGRES_PASSWORD: synthetic_ci_only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U identity_tests -d identity_tests"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Verify setup check and secret output safety
+        run: |
+          python3 -B api/deploy/test_keycloak_employee_setup.py
+          python3 -B api/deploy/test_keycloak_runtime_env.py
+      - name: Start isolated synthetic identity service
+        env:
+          SYNTHETIC_PASSWORD: audience_test_only_2026
+        run: |
+          docker network create scoped-identity
+          docker run -d --name invite-review-mail --network scoped-identity -p 127.0.0.1:12525:8025 axllent/mailpit:v1.27.8
+          docker run -d --name scoped-keycloak --network scoped-identity -p 127.0.0.1:18480:8080 \
+            -e KEYCLOAK_ADMIN=audience-test-admin -e KEYCLOAK_ADMIN_PASSWORD="$SYNTHETIC_PASSWORD" \
+            "quay.io/keycloak/keycloak:${{ matrix.keycloak }}" start-dev
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:18480/realms/master/.well-known/openid-configuration >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+      - name: Prove server-side identity grants and denials
+        env:
+          SYNTHETIC_KEYCLOAK_URL: http://127.0.0.1:18480
+          SYNTHETIC_KEYCLOAK_ADMIN_PASSWORD: audience_test_only_2026
+          SYNTHETIC_KEYCLOAK_ADMIN_USER: audience-test-admin
+        run: python3 api/deploy/test-keycloak-runtime-privileges.py
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.402
+      - name: Native scoped invitations and API audience regression
+        env:
+          INVITE_TEST_DATABASE: Host=localhost;Port=5432;Database=identity_tests;Username=identity_tests;Password=synthetic_ci_only
+          INVITE_TEST_KEYCLOAK_URL: http://127.0.0.1:18480
+          INVITE_TEST_ADMIN_USER: audience-test-admin
+          INVITE_TEST_ADMIN_PASSWORD: audience_test_only_2026
+          INVITE_TEST_MAILBOX_URL: http://127.0.0.1:12525
+          AUDIENCE_TEST_DATABASE: Host=localhost;Port=5432;Database=identity_tests;Username=identity_tests;Password=synthetic_ci_only
+          AUDIENCE_TEST_KEYCLOAK_URL: http://127.0.0.1:18480
+        run: >-
+          dotnet test api/CleaningSuite.Tests/CleaningSuite.Tests.csproj -m:1 -p:BuildInParallel=false
+          --filter 'FullyQualifiedName~NativeSetupEmailBindsIdentityRetriesDeliveryAndSerializesParallelInvites|FullyQualifiedName~ProvisionedRealmIssuesApiAudienceOnLoginAndRefreshButNotIdToken'
+      - name: Remove disposable identity service
+        if: always()
+        run: |
+          docker rm -f scoped-keycloak invite-review-mail
+          docker network rm scoped-identity

@@ -44,7 +44,7 @@ public class KeycloakEmployeeIdentityProviderTests
         var employee = Employee(); var transport = new FakeKeycloak { Verified = true, PendingPassword = false };
         var result = await Provider(transport).EnsureAsync("tenant-a", employee);
         Assert.Equal("user-a", result.UserId); Assert.Equal(employee.Id.ToString(), transport.Owner);
-        Assert.DoesNotContain(transport.Requests, r => r.Body.Contains("credentials"));
+        Assert.DoesNotContain(transport.Requests, r => r.Path.StartsWith("/admin/", StringComparison.Ordinal) && r.Body.Contains("\"credentials\""));
     }
     [Theory]
     [InlineData(false, "employee")] [InlineData(true, "admin")]
@@ -66,9 +66,8 @@ public class KeycloakEmployeeIdentityProviderTests
     public async Task ExistingSmtpPasswordMaskIsNeverSentBackAsNewConfiguration()
     {
         var transport = new FakeKeycloak { FrontendConfigured = false };
-        await Provider(transport).ValidateInvitationAsync("tenant-a", "https://site.invalid/account/?tenant=tenant-a", "employee");
-        var update = Assert.Single(transport.Requests.Where(r => r.Method == "PUT" && r.Path.EndsWith("/realms/tenant-a")));
-        Assert.DoesNotContain("smtpServer", update.Body); Assert.DoesNotContain("********", update.Body);
+        await Assert.ThrowsAsync<EmployeeInviteConfigurationException>(() => Provider(transport).ValidateInvitationAsync("tenant-a", "https://site.invalid/account/?tenant=tenant-a", "employee"));
+        Assert.DoesNotContain(transport.Requests, r => r.Method == "PUT");
     }
     [Fact]
     public async Task MissingMailConfigurationFailsBeforeCreatingUser()
@@ -98,7 +97,7 @@ public class KeycloakEmployeeIdentityProviderTests
         Assert.Contains(transport.Requests, r => r.Method == "DELETE" && r.Body.Contains("admin"));
         Assert.Contains(transport.Requests, r => r.Method == "POST" && r.Path.EndsWith("/logout"));
         Assert.Contains(transport.Requests, r => r.Method == "PUT" && r.Path.EndsWith("/users/user-a") && JsonDocument.Parse(r.Body).RootElement.GetProperty("enabled").ValueKind == JsonValueKind.False);
-        Assert.DoesNotContain(transport.Requests, r => r.Body.Contains("credentials"));
+        Assert.DoesNotContain(transport.Requests, r => r.Path.StartsWith("/admin/", StringComparison.Ordinal) && r.Body.Contains("\"credentials\""));
     }
     [Fact]
     public async Task PreparingOwnershipDoesNotGrantAnUnboundAccountAdminAccess()
@@ -118,8 +117,8 @@ public class KeycloakEmployeeIdentityProviderTests
         Assert.Contains(transport.Requests, r => r.Method == "DELETE" && r.Path.EndsWith("role-mappings/realm") && r.Body.Contains(from));
         Assert.Contains(transport.Requests, r => r.Method == "POST" && r.Path.EndsWith("role-mappings/realm") && r.Body.Contains(to));
         Assert.DoesNotContain(transport.Requests, r => r.Method == "DELETE" && r.Body.Contains("unrelated"));
-        Assert.DoesNotContain(transport.Requests, r => r.Body.Contains("credentials"));
-        if (to == "manager") Assert.Contains(transport.Requests, r => r.Method == "POST" && r.Path.EndsWith("/roles") && r.Body.Contains("manager"));
+        Assert.DoesNotContain(transport.Requests, r => r.Path.StartsWith("/admin/", StringComparison.Ordinal) && r.Body.Contains("\"credentials\""));
+        Assert.DoesNotContain(transport.Requests, r => r.Method == "POST" && r.Path.EndsWith("/roles"));
     }
     [Fact]
     public async Task ExistingManagerRealmRoleConflictIsVerifiedAndDoesNotBreakPromotion()
@@ -130,8 +129,8 @@ public class KeycloakEmployeeIdentityProviderTests
         Assert.Contains(transport.Requests, r => r.Method == "POST" && r.Path.EndsWith("role-mappings/realm") && r.Body.Contains("manager"));
     }
     private static KeycloakEmployeeIdentityProvider Provider(FakeKeycloak transport) {
-        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Auth:Keycloak:ServerUrl"] = "https://auth.invalid" }).Build();
-        return new(new KeycloakAdminClient(new HttpClient(transport), "https://auth.invalid", "master", "provisioner", "", "admin", "test"), config);
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Auth:Keycloak:ServerUrl"] = "https://auth.invalid", ["Auth:Keycloak:TenantAccounts:tenant-a:ClientId"] = "employee-runtime", ["Auth:Keycloak:TenantAccounts:tenant-a:ClientSecret"] = "synthetic-secret" }).Build();
+        return new(new TenantKeycloakClients(new HttpClient(transport), config), config);
     }
     private sealed class FakeKeycloak : HttpMessageHandler
     {

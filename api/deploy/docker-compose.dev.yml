@@ -55,6 +55,9 @@ services:
       - ./keycloak-realm.json:/opt/keycloak/data/import/realm.json
 
   api:
+    # Required protected host file; only this service receives per-tenant credentials.
+    env_file:
+      - ${API_IDENTITY_ENV_FILE:?Set API_IDENTITY_ENV_FILE to the reviewed protected tenant identity environment file}
     image: cleaning-dev-api:dev
     restart: unless-stopped
     environment:
@@ -74,8 +77,9 @@ services:
       Auth__Keycloak__ProvisionerRealm: master
       Auth__Keycloak__ProvisionerClientId: cleaning-provisioner
       Auth__Keycloak__ProvisionerClientSecret: ${PROVISIONER_CLIENT_SECRET:-}
-      Auth__Keycloak__AdminUser: ${KEYCLOAK_ADMIN_USER}
-      Auth__Keycloak__AdminPassword: ${KEYCLOAK_ADMIN_PASSWORD}
+      # Mount explicit per-tenant credentials via a protected configuration file.
+      # No bootstrap admin password is provided to the API container.
+      Auth__Keycloak__ProvisioningSetupReviewed: "false"
       Entertainment__Gemini__ApiKey: ${GAME_GEMINI_API_KEY:-}
       Entertainment__Gemini__Keys__1: ${GEMINI_KEY_1:-}
       Entertainment__Gemini__Keys__2: ${GEMINI_KEY_2:-}

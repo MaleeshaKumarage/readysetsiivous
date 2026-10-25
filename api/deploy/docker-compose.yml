@@ -54,6 +54,9 @@ services:
           memory: 1536m
 
   api:
+    # Required protected host file; only this service receives per-tenant credentials.
+    env_file:
+      - ${API_IDENTITY_ENV_FILE:?Set API_IDENTITY_ENV_FILE to the reviewed protected tenant identity environment file}
     image: ${API_IMAGE:?Verified immutable API_IMAGE is required}
     restart: unless-stopped
     environment:
@@ -72,8 +75,9 @@ services:
       Auth__Keycloak__ProvisionerRealm: master
       Auth__Keycloak__ProvisionerClientId: cleaning-provisioner
       Auth__Keycloak__ProvisionerClientSecret: ${PROVISIONER_CLIENT_SECRET:-}
-      Auth__Keycloak__AdminUser: ${KEYCLOAK_ADMIN_USER}
-      Auth__Keycloak__AdminPassword: ${KEYCLOAK_ADMIN_PASSWORD}
+      # Mount explicit per-tenant credentials via a protected configuration file.
+      # No bootstrap admin password is provided to the API container.
+      Auth__Keycloak__ProvisioningSetupReviewed: "false"
       Cors__AllowedOrigins__0: https://readysetsiivous.fi
       Uploads__Path: /app/uploads
       Entertainment__KeyFilePath: /app/keys/entertainment.key

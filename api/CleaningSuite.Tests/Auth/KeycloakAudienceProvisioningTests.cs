@@ -33,7 +33,7 @@ public class KeycloakAudienceProvisioningTests
             ["Auth:Keycloak:Audience"] = "custom-tenant-api", ["Auth:Keycloak:PlatformAudience"] = "custom-platform-api"
         }).Build();
         var admin = new KeycloakAdminClient(new HttpClient(transport), "https://auth.test", "master", "provisioner", "secret");
-        await new KeycloakProvisioner(admin, NullLogger<KeycloakProvisioner>.Instance, new KeycloakResourceOptions(config))
+        await new KeycloakProvisioner(new PlatformKeycloakClient(admin), NullLogger<KeycloakProvisioner>.Instance, new KeycloakResourceOptions(config))
             .ProvisionAsync("tenant-test", "Test", "owner@example.invalid", "Test", "Owner", new[] { "https://site.test/*" });
         using var client = JsonDocument.Parse(Assert.Single(transport.Clients));
         var mapper = Assert.Single(client.RootElement.GetProperty("protocolMappers").EnumerateArray());

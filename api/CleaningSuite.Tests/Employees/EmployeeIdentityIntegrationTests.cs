@@ -65,18 +65,23 @@ public class EmployeeIdentityIntegrationTests
         var config = Configuration();
         var url = config["Auth:Keycloak:ServerUrl"]!;
         using var http = new HttpClient();
-        var admin = new KeycloakAdminClient(http, url, "master", "cleaning-provisioner", "",
+        var admin = new CleaningSuite.Tests.Auth.SyntheticKeycloakBootstrap(http, url,
             Environment.GetEnvironmentVariable("INVITE_TEST_ADMIN_USER") ?? "invite-test-admin", Environment.GetEnvironmentVariable("INVITE_TEST_ADMIN_PASSWORD") ?? "invite_test_only_2026");
         var realm = "invite-test-" + Guid.NewGuid().ToString("N")[..8];
+        config = new ConfigurationBuilder().AddConfiguration(config).AddInMemoryCollection(new Dictionary<string,string?> {
+            ["Auth:Keycloak:ProvisioningSetupReviewed"]="true",
+            [$"Auth:Keycloak:TenantAccounts:{realm}:ClientId"]="employee-runtime",
+            [$"Auth:Keycloak:TenantAccounts:{realm}:ClientSecret"]="synthetic-runtime-secret"
+        }).Build();
         var frontend = config["App:FrontendBaseUrl"]!;
-        var provisioner = new KeycloakProvisioner(admin, NullLogger<KeycloakProvisioner>.Instance, new CleaningSuite.Infrastructure.Auth.KeycloakResourceOptions(config));
+        var provisioner = new KeycloakProvisioner(new PlatformKeycloakClient(admin), NullLogger<KeycloakProvisioner>.Instance, new CleaningSuite.Infrastructure.Auth.KeycloakResourceOptions(config), config);
         await provisioner.ProvisionAsync(realm, "Invitation review", "owner@" + realm + ".invalid", "Test", "Owner", new[] { frontend + "/*" });
         var ownerId = (await admin.GetUserIdByUsernameAsync(realm, "owner@" + realm + ".invalid"))!;
         await admin.UpdateUserAsync(realm, ownerId, new { emailVerified = true, requiredActions = Array.Empty<string>(), credentials = new[] { new { type = "password", value = "InviteOwnerTestOnly2026", temporary = false } } });
         using (var registry = store.LightweightSession("registry")) { registry.Store(new TenantRegistration { Slug = realm, Status = TenantRegistration.StatusActive }); await registry.SaveChangesAsync(); }
         var employee = new Employee { Email = "cleaner@" + realm + ".invalid", FirstName = "Invite", LastName = "Cleaner", Role = "employee" };
         using (var session = store.LightweightSession(realm)) { session.Store(employee); await session.SaveChangesAsync(); }
-        var identity = new KeycloakEmployeeIdentityProvider(admin, config);
+        var identity = new KeycloakEmployeeIdentityProvider(new TenantKeycloakClients(http, config), config);
         var redirect = frontend + "/account/?tenant=" + realm;
         await identity.ValidateInvitationAsync(realm, redirect, "employee");
         // Force a captured SMTP failure; no real recipient or mail provider is used.
@@ -134,6 +139,8 @@ public class EmployeeIdentityIntegrationTests
                 await session.SaveChangesAsync();
             }
             var otherRealm = realm + "-other";
+            config[$"Auth:Keycloak:TenantAccounts:{otherRealm}:ClientId"] = "employee-runtime";
+            config[$"Auth:Keycloak:TenantAccounts:{otherRealm}:ClientSecret"] = "synthetic-other-runtime-secret";
             await provisioner.ProvisionAsync(otherRealm, "Other isolated tenant", "owner@" + otherRealm + ".invalid", "Other", "Owner", new[] { frontend + "/*" });
             var otherEmployee = new Employee { Role = Employee.RoleManager, Email = "manager@" + otherRealm + ".invalid", FirstName = "Other", LastName = "Manager" };
             var otherUser = await admin.CreateUserAsync(otherRealm, new { username = otherEmployee.Email, email = otherEmployee.Email,

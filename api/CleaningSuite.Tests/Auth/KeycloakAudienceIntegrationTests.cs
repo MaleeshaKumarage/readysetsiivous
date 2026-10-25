@@ -31,11 +31,11 @@ public class KeycloakAudienceIntegrationTests
         var email = "owner@" + realm + ".invalid";
         const string password = "AudienceOwnerTestOnly2026";
         using var http = new HttpClient();
-        var admin = new KeycloakAdminClient(http, url, "master", "outbound-admin", "", "audience-test-admin", "audience_test_only_2026");
+        var admin = new SyntheticKeycloakBootstrap(http, url, "audience-test-admin", "audience_test_only_2026");
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
             ["Auth:Keycloak:Audience"] = "cleaning-suite-api", ["Auth:Keycloak:PlatformAudience"] = "cleaning-suite-platform-api"
         }).Build();
-        await new KeycloakProvisioner(admin, NullLogger<KeycloakProvisioner>.Instance, new KeycloakResourceOptions(config))
+        await new KeycloakProvisioner(new PlatformKeycloakClient(admin), NullLogger<KeycloakProvisioner>.Instance, new KeycloakResourceOptions(config))
             .ProvisionAsync(realm, "Audience review", email, "Audience", "Owner", new[] { frontend + "/*" });
         var id = (await admin.GetUserIdByUsernameAsync(realm, email))!;
         await admin.UpdateUserAsync(realm, id, new { emailVerified = true, requiredActions = Array.Empty<string>(), credentials = new[] { new { type = "password", value = password, temporary = false } } });

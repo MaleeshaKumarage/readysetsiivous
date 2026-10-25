@@ -1,4 +1,5 @@
 using CleaningSuite.Application.Tenants.Commands;
+using CleaningSuite.Application.Tenants;
 using CleaningSuite.Api.Auth;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -23,7 +24,11 @@ public class SystemController : ControllerBase
     public async Task<IActionResult> Provision(ProvisionTenantCommand command, CancellationToken ct)
     {
         HttpContext.Items["PlatformTargetTenant"] = command.Slug;
-        var result = await _mediator.Send(command, ct);
+        ProvisionTenantResult result;
+        try { result = await _mediator.Send(command, ct); }
+        catch (TenantIdentitySetupRequiredException ex) {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { title = "Tenant identity setup required", detail = ex.Message });
+        }
         return result.AlreadyExisted
             ? Conflict(new { slug = result.Slug, title = "Tenant already registered" })
             : StatusCode(StatusCodes.Status201Created, result);

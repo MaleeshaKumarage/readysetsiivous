@@ -5,14 +5,14 @@ using CleaningSuite.Application.Tenants;
 using CleaningSuite.Infrastructure.Keycloak;
 namespace CleaningSuite.Infrastructure.Leads;
 
-public sealed class LeadAdminDirectory(KeycloakAdminClient keycloak,IEmployeeRepository employees,ITenantContext tenant) : ILeadAdminDirectory
+public sealed class LeadAdminDirectory(TenantKeycloakClients keycloak,IEmployeeRepository employees,ITenantContext tenant) : ILeadAdminDirectory
 {
     public async Task<IReadOnlyList<LeadAdminRecipient>> ListAsync(CancellationToken ct)
     {
         try {
             var result=new List<LeadAdminRecipient>();
             for(var first=0;first<10000;first+=100) {
-                var page=await keycloak.GetRealmRoleUsersAsync(tenant.TenantId,"admin",first,100,ct);
+                var page=await keycloak.ForTenant(tenant.TenantId).GetRealmRoleUsersAsync(tenant.TenantId,"admin",first,100,ct);
                 foreach(var user in page.EnumerateArray()) {
                     if(!user.TryGetProperty("enabled",out var enabled) || !enabled.GetBoolean()) continue;
                     var id=user.GetProperty("id").GetString();var email=user.TryGetProperty("email",out var e)?e.GetString():null;

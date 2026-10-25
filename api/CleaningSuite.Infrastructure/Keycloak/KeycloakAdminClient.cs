@@ -6,7 +6,7 @@ namespace CleaningSuite.Infrastructure.Keycloak;
 
 /// <summary>
 /// Thin wrapper over Keycloak Admin REST. Admin token via provisioner client
-/// credentials (master realm), falling back to master admin password grant.
+/// credentials only. Runtime construction never accepts bootstrap passwords.
 /// </summary>
 public class KeycloakAdminClient
 {
@@ -15,8 +15,7 @@ public class KeycloakAdminClient
     private readonly string _provisionerRealm;
     private readonly string _provisionerClientId;
     private readonly string _provisionerClientSecret;
-    private readonly string? _adminUser;
-    private readonly string? _adminPassword;
+    private readonly string? _allowedRealm;
 
     private string? _cachedToken;
     private DateTime _tokenExpiresUtc = DateTime.MinValue;
@@ -27,19 +26,17 @@ public class KeycloakAdminClient
         string provisionerRealm,
         string provisionerClientId,
         string provisionerClientSecret,
-        string? adminUser = null,
-        string? adminPassword = null)
+        string? allowedRealm = null)
     {
         _http = http;
         _serverUrl = serverUrl.TrimEnd('/');
         _provisionerRealm = provisionerRealm;
         _provisionerClientId = provisionerClientId;
         _provisionerClientSecret = provisionerClientSecret;
-        _adminUser = adminUser;
-        _adminPassword = adminPassword;
+        _allowedRealm = allowedRealm;
     }
 
-    public async Task<string> GetAdminTokenAsync(CancellationToken ct = default)
+    public virtual async Task<string> GetAdminTokenAsync(CancellationToken ct = default)
     {
         if (_cachedToken is not null && DateTime.UtcNow < _tokenExpiresUtc.AddMinutes(-5))
             return _cachedToken;
@@ -57,19 +54,9 @@ public class KeycloakAdminClient
                 ["client_secret"] = _provisionerClientSecret,
             });
         }
-        else if (_adminUser is not null)
-        {
-            request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
-            {
-                ["grant_type"] = "password",
-                ["client_id"] = "admin-cli",
-                ["username"] = _adminUser,
-                ["password"] = _adminPassword ?? "",
-            });
-        }
         else
         {
-            throw new InvalidOperationException("Keycloak admin credentials not configured");
+            throw new InvalidOperationException("Keycloak service-account credentials not configured");
         }
 
         using var response = await _http.SendAsync(request, ct);
@@ -167,11 +154,30 @@ public class KeycloakAdminClient
     public Task LogoutUserAsync(string realm, string userId, CancellationToken ct = default) => SendWithoutResultAsync(HttpMethod.Post, $"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/logout", ct);
     public Task SendExecuteActionsEmailAsync(string realm, string userId, string clientId, string redirectUri, int lifespanSeconds, string[] actions, CancellationToken ct = default) =>
         SendWithoutResultAsync(HttpMethod.Put, $"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/execute-actions-email?client_id={Uri.EscapeDataString(clientId)}&redirect_uri={Uri.EscapeDataString(redirectUri)}&lifespan={lifespanSeconds}", ct, actions);
+    public Task<JsonElement> GetServiceAccountAsync(string realm, string clientId, CancellationToken ct = default) =>
+        GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/clients/{Uri.EscapeDataString(clientId)}/service-account-user", ct);
+    public Task<JsonElement> GetClientRoleAsync(string realm, string clientId, string role, CancellationToken ct = default) =>
+        GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/clients/{Uri.EscapeDataString(clientId)}/roles/{Uri.EscapeDataString(role)}", ct);
+    public Task AssignClientRolesAsync(string realm, string userId, string clientId, object[] roles, CancellationToken ct = default) =>
+        SendWithoutResultAsync(HttpMethod.Post, $"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/role-mappings/clients/{Uri.EscapeDataString(clientId)}", ct, roles);
     private async Task<JsonElement> GetJsonAsync(string path, CancellationToken ct) {
         using var response = await SendAsync(HttpMethod.Get, path, ct); return await response.Content.ReadFromJsonAsync<JsonElement>(ct);
     }
     private async Task SendWithoutResultAsync(HttpMethod method, string path, CancellationToken ct, object? body = null) {
         using var response = await SendAsync(method, path, ct, body);
+    }
+
+    private void ValidatePath(HttpMethod method, string path)
+    {
+        if (_allowedRealm is null) return; // Explicit platform provisioner only.
+        var prefix = $"admin/realms/{_allowedRealm}";
+        if (!path.StartsWith(prefix + "/", StringComparison.Ordinal) && path != prefix)
+            throw new KeycloakException("Tenant identity credentials cannot access another realm");
+        var relative = path[prefix.Length..];
+        // Employee runtime owns users and their mappings, never realm/client/profile configuration.
+        if (method != HttpMethod.Get && (!relative.StartsWith("/users", StringComparison.Ordinal)
+            || relative.StartsWith("/users/profile", StringComparison.Ordinal)))
+            throw new KeycloakException("Tenant identity credentials cannot modify realm configuration");
     }
 
     private async Task<HttpResponseMessage> SendAsync(
@@ -181,6 +187,7 @@ public class KeycloakAdminClient
         object? body = null,
         bool expectedNotFoundOk = false)
     {
+        ValidatePath(method, path);
         var token = await GetAdminTokenAsync(ct);
         using var request = new HttpRequestMessage(method, $"{_serverUrl}/{path}");
         request.Headers.Authorization = new("Bearer", token);
@@ -200,6 +207,7 @@ public class KeycloakAdminClient
         CancellationToken ct,
         object body)
     {
+        ValidatePath(method, path);
         var token = await GetAdminTokenAsync(ct);
         using var request = new HttpRequestMessage(method, $"{_serverUrl}/{path}");
         request.Headers.Authorization = new("Bearer", token);
