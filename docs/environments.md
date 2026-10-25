@@ -161,10 +161,8 @@ The API release sequence is:
 1. Merge the reviewed change into `main`.
 2. `docker-build-push.yml` invokes the reusable backend/frontend checks in
    `ci-build-test.yml` for that same commit. Image publishing requires success.
-3. The image is published to GHCR with an immutable `sha-<commit>` tag.
-4. Successful completion triggers `docker-deploy-oracle.yml`, which connects
-   with the `ORACLE_SSH_KEY` Actions secret, updates the host's `IMAGE_TAG`, pulls
-   the image, recreates the production stack, and checks `/healthz`.
+3. The image is published to GHCR with a `sha-<commit>` label; deployment identity must use its immutable digest.
+4. Successful completion triggers `docker-deploy-oracle.yml`, which verifies the exact successful build's release manifest, checks out and hashes its assets, stages them, and deploys its immutable image only after the reviewed compatibility gate permits replacement. See [release integrity and activation requirements](features/release-integrity.md). The default unapproved policy blocks activation safely; production must not be switched without the documented rollout review.
 
 The production stack's secrets live in `/home/ubuntu/cleaning-suite/.env`.
 Its API and Keycloak are bound to host loopback ports `8090` and `8082` and
@@ -173,7 +171,7 @@ persist in the `cleaning_uploads` volume.
 
 The website deploys separately through `deploy.yml` to GitHub Pages on changes
 under `site/**` on `main` or `master`, or manual dispatch. That Pages workflow
-builds the static site but currently does not depend on the API image test gate.
+builds the static site and waits for the matching API release when API-related files changed.
 Feature-branch pushes alone do not deploy production.
 
 ## Verification record

@@ -18,13 +18,16 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
       packages: read
     env:
       RELEASE_SHA: ${{ github.event.workflow_run.head_sha || inputs.release_sha }}
+      BUILD_RUN_ID: ${{ github.event.workflow_run.id }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       REGISTRY_USER: ${{ github.actor }}
       REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GAME_GEMINI_API_KEY: ${{ secrets.GAME_GEMINI_API_KEY || secrets.GEMINI_KEY_1 || secrets.GEMINI_KEY_2 || secrets.GEMINI_KEY || secrets.GEMINI_API_KEY }}
@@ -41,20 +44,35 @@ jobs:
       GAME_GEMINI_RPM: ${{ vars.GAME_GEMINI_RPM || '3' }}
       GAME_GEMINI_RPD: ${{ vars.GAME_GEMINI_RPD || '15' }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
       - name: Validate release SHA
-        run: '[[ "$RELEASE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]'
-      - name: Sync production Compose configuration
+        run: '[[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]'
+      - name: Checkout trusted release controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: control
+          persist-credentials: false
+      - name: Verify successful build provenance
+        run: python3 control/scripts/release_manifest.py resolve --output release.json
+      - name: Checkout selected release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+          path: release
+          persist-credentials: false
+      - name: Verify checkout and stage only authenticated assets
+        run: |
+          test "$(git -C release rev-parse HEAD)" = "$RELEASE_SHA"
+          python3 control/scripts/release_manifest.py bundle --root release --manifest release.json --output bundle
+      - name: Stage selected release assets
         uses: appleboy/scp-action@v1
         with:
           host: 130.61.140.7
           username: ubuntu
           key: ${{ secrets.ORACLE_SSH_KEY }}
-          source: api/deploy/docker-compose.yml
-          target: /home/ubuntu/cleaning-suite
-          strip_components: 2
+          source: bundle
+          target: /home/ubuntu/cleaning-suite/releases/${{ env.RELEASE_SHA }}
+          strip_components: 1
           overwrite: true
       - name: Deploy to Oracle via SSH
         uses: appleboy/ssh-action@v1
@@ -62,6 +80,6 @@ jobs:
           host: 130.61.140.7
           username: ubuntu
           key: ${{ secrets.ORACLE_SSH_KEY }}
-          envs: RELEASE_SHA,REGISTRY_USER,REGISTRY_TOKEN,GAME_GEMINI_API_KEY,GEMINI_KEY_1,GEMINI_KEY_2,GEMINI_KEY_3,GEMINI_KEY_4,GEMINI_KEY_5,GEMINI_KEY_6,GEMINI_KEY_7,GEMINI_KEY_8,GEMINI_KEY_9,GEMINI_KEY_10,GAME_GEMINI_RPM,GAME_GEMINI_RPD
-          script_path: scripts/deploy-api.sh
+          envs: RELEASE_SHA,RELEASE_MANIFEST_HASH,REGISTRY_USER,REGISTRY_TOKEN,GAME_GEMINI_API_KEY,GEMINI_KEY_1,GEMINI_KEY_2,GEMINI_KEY_3,GEMINI_KEY_4,GEMINI_KEY_5,GEMINI_KEY_6,GEMINI_KEY_7,GEMINI_KEY_8,GEMINI_KEY_9,GEMINI_KEY_10,GAME_GEMINI_RPM,GAME_GEMINI_RPD
+          script_path: release/scripts/deploy-api.sh
           command_timeout: 10m
