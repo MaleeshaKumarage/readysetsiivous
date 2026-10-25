@@ -257,6 +257,10 @@ Never publish restored customer data or credentials. Backups must be restored an
 verified before upgrading production, and the previous image must be retained.
 ## Dev identity and file persistence
 
+Development port publishing now defaults to loopback. Follow the
+[private dev ingress and HTTPS/SSH guidance](environments/dev-private-ingress.md)
+and verify the actual host/network before treating exposure concerns as closed.
+
 Before applying the persistent dev database/upload/key configuration to an existing
 stack, follow [the backup, migration and rollback procedure](environments/dev-state-persistence.md).
 Keep the existing Compose project name and preserve the current embedded Keycloak

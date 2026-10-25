@@ -9,7 +9,7 @@ services:
       POSTGRES_DB: cleaning
       DEV_KC_DB_PASSWORD: ${DEV_KC_DB_PASSWORD:?set a separate dev Keycloak database password}
     ports:
-      - "5434:5432"
+      - "127.0.0.1:5434:5432"
     volumes:
       - cleaning_dev_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -40,12 +40,13 @@ services:
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USER:?set in dev/.env}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set in dev/.env}
+      KC_HOSTNAME: ${DEV_PUBLIC_AUTH_URL:-http://localhost:8081}
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak_dev
       KC_DB_USERNAME: keycloak_dev
       KC_DB_PASSWORD: ${DEV_KC_DB_PASSWORD:?set a separate dev Keycloak database password}
     ports:
-      - "8081:8080"
+      - "127.0.0.1:8081:8080"
     depends_on:
       keycloak-db-init:
         condition: service_completed_successfully

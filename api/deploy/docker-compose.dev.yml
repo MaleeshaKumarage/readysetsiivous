@@ -40,7 +40,7 @@ services:
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USER}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
-      KC_HOSTNAME_URL: http://130.61.208.211:8081
+      KC_HOSTNAME_URL: ${DEV_PUBLIC_AUTH_URL:-http://localhost:8081}
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak_dev
       KC_DB_USERNAME: keycloak_dev
@@ -49,7 +49,7 @@ services:
       keycloak-db-init:
         condition: service_completed_successfully
     ports:
-      - "8081:8080"
+      - "127.0.0.1:8081:8080"
     command: start-dev --import-realm
     volumes:
       - ./keycloak-realm.json:/opt/keycloak/data/import/realm.json
@@ -67,7 +67,7 @@ services:
       PublicRateLimit__Capacity: ${API_PUBLIC_RATE_LIMIT_CAPACITY:-10000}
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=cleaning;Username=cleaning;Password=devpassword
       Marten__AutoCreateSchemaMode: CreateOrUpdate
-      Auth__Keycloak__ServerUrl: http://130.61.208.211:8081
+      Auth__Keycloak__ServerUrl: ${DEV_PUBLIC_AUTH_URL:-http://localhost:8081}
       Auth__Keycloak__AdminServerUrl: http://keycloak:8080
       Auth__Keycloak__Audience: cleaning-suite-api
       Auth__Keycloak__PlatformAudience: cleaning-suite-platform-api
@@ -87,7 +87,7 @@ services:
       Entertainment__Gemini__Keys__8: ${GEMINI_KEY_8:-}
       Entertainment__Gemini__Keys__9: ${GEMINI_KEY_9:-}
       Entertainment__Gemini__Keys__10: ${GEMINI_KEY_10:-}
-      Cors__AllowedOrigins__0: "*"
+      Cors__AllowedOrigins__0: ${DEV_FRONTEND_URL:-http://localhost:3000}
       Resend__ApiKey: ${RESEND_API_KEY:-}
       EmployeeInvites__LifespanSeconds: 86400
       EmployeeInvites__Smtp__Host: ${INVITE_SMTP_HOST:-}
@@ -99,14 +99,14 @@ services:
       EmployeeInvites__Smtp__UseResendApiKey: ${INVITE_SMTP_USE_RESEND_API_KEY:-false}
       EmployeeInvites__Smtp__StartTls: ${INVITE_SMTP_STARTTLS:-true}
       EmployeeInvites__Smtp__Ssl: ${INVITE_SMTP_SSL:-false}
-      App__FrontendBaseUrl: http://130.61.208.211
+      App__FrontendBaseUrl: ${DEV_FRONTEND_URL:-http://localhost:3000}
       Uploads__Path: /app/uploads
       Entertainment__KeyFilePath: /app/keys/entertainment.key
     volumes:
       - dev_uploads:/app/uploads
       - dev_keys:/app/keys
     ports:
-      - "8090:8080"
+      - "127.0.0.1:8090:8080"
     depends_on:
       postgres:
         condition: service_started
