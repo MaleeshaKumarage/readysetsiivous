@@ -93,7 +93,7 @@ public sealed class KeycloakSigningKeysResolver
         var verifiedRealm = realm == _platformRealm;
         try
         {
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5), _time);
             if (realm != _platformRealm)
             {
                 using var scope = _scopes.CreateScope();
