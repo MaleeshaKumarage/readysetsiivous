@@ -27,10 +27,6 @@ export function PwaInstallButton({
 
   useEffect(() => {
     // Admin routes have no LanguageProvider; reuse the saved site language there.
-    if (/^\/(en|fi|sv)(?:\/|$)/.test(window.location.pathname)) {
-      setLang(contextLang);
-      return;
-    }
     try {
       const saved = localStorage.getItem('lang');
       setLang(saved === 'en' || saved === 'fi' || saved === 'sv' ? saved : contextLang);
@@ -99,10 +95,40 @@ export function PwaInstallButton({
     }
   };
 
+  const copy = {
+    fi: {
+      install: 'Asenna', installApp: 'Asenna sovellus', installed: 'Asennettu', appInstalled: 'Sovellus asennettu',
+      title: 'Asenna Admin-sovellus iOS-laitteelle',
+      introduction: 'Näin asennat ReadySetSiivous Admin -sovelluksen iPhoneen tai iPadiin:',
+      share: '1. Napauta Safarin navigointipalkin Jaa-painiketta.',
+      home: '2. Vieritä alas ja napauta Lisää Koti-valikkoon.',
+      add: '3. Napauta oikeassa yläkulmassa Lisää.',
+      done: 'Selvä', close: 'Sulje iOS-asennusohjeet',
+    },
+    sv: {
+      install: 'Installera', installApp: 'Installera app', installed: 'Installerad', appInstalled: 'Appen är installerad',
+      title: 'Installera Admin-appen på iOS',
+      introduction: 'Så installerar du ReadySetSiivous Admin på din iPhone eller iPad:',
+      share: '1. Tryck på Dela i Safaris navigeringsfält.',
+      home: '2. Rulla ned och tryck på Lägg till på hemskärmen.',
+      add: '3. Tryck på Lägg till uppe till höger.',
+      done: 'Jag förstår', close: 'Stäng installationsanvisningarna för iOS',
+    },
+    en: {
+      install: 'Install', installApp: 'Install App', installed: 'Installed', appInstalled: 'App Installed',
+      title: 'Install Admin App on iOS',
+      introduction: 'To install ReadySetSiivous Admin on your iPhone or iPad:',
+      share: "1. Tap the Share button in Safari's navigation bar.",
+      home: '2. Scroll down and tap Add to Home Screen.',
+      add: '3. Tap Add in the top right corner.',
+      done: 'Got it', close: 'Close iOS installation instructions',
+    },
+  }[lang];
+
   if (isStandalone || installed) {
     return (
       <Badge color="green" variant="light" size={size} leftSection={<Check size={12} />}>
-        {compact ? 'Installed' : 'App Installed'}
+        {compact ? copy.installed : copy.appInstalled}
       </Badge>
     );
   }
@@ -140,41 +166,38 @@ export function PwaInstallButton({
           onClick={handleInstallClick}
           aria-label={ariaLabel}
         >
-          {compact ? 'Install' : 'Install App'}
+          {compact ? copy.install : copy.installApp}
         </Button>
       </Tooltip>
 
       <Modal
         opened={iosModalOpen}
         onClose={() => setIosModalOpen(false)}
-        title="Install Admin App on iOS"
-        closeButtonProps={{ 'aria-label': lang === 'fi'
-          ? 'Sulje iOS-asennusohjeet'
-          : lang === 'sv' ? 'Stäng installationsanvisningarna för iOS'
-          : 'Close iOS installation instructions' }}
+        title={copy.title}
+        closeButtonProps={{ 'aria-label': copy.close }}
         centered
         radius="md"
       >
         <Stack gap="md">
           <Text size="sm">
-            To install <b>ReadySetSiivous Admin</b> on your iPhone or iPad:
+            {copy.introduction}
           </Text>
           <Stack gap="xs">
             <Group gap="xs" align="center">
               <Share size={18} color="#4f46e5" />
-              <Text size="sm">1. Tap the <b>Share</b> button in Safari's navigation bar.</Text>
+              <Text size="sm">{copy.share}</Text>
             </Group>
             <Group gap="xs" align="center">
               <Smartphone size={18} color="#4f46e5" />
-              <Text size="sm">2. Scroll down and tap <b>Add to Home Screen</b>.</Text>
+              <Text size="sm">{copy.home}</Text>
             </Group>
             <Group gap="xs" align="center">
               <Check size={18} color="#16a34a" />
-              <Text size="sm">3. Tap <b>Add</b> in the top right corner.</Text>
+              <Text size="sm">{copy.add}</Text>
             </Group>
           </Stack>
           <Button fullWidth onClick={() => setIosModalOpen(false)}>
-            Got it
+            {copy.done}
           </Button>
         </Stack>
       </Modal>

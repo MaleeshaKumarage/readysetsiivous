@@ -2,9 +2,9 @@ import { test, expect } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
 
 const languages = [
-  { lang: 'fi', name: 'Asenna ReadySetSiivous-sovellus laitteellesi', tooltip: 'Asenna ReadySetSiivous Sovelluksena', close: 'Sulje iOS-asennusohjeet' },
-  { lang: 'sv', name: 'Installera ReadySetSiivous-appen på din enhet', tooltip: 'Installera ReadySetSiivous som app', close: 'Stäng installationsanvisningarna för iOS' },
-  { lang: 'en', name: 'Install ReadySetSiivous app on your device', tooltip: 'Install ReadySetSiivous as App', close: 'Close iOS installation instructions' },
+  { lang: 'fi', name: 'Asenna ReadySetSiivous-sovellus laitteellesi', tooltip: 'Asenna ReadySetSiivous Sovelluksena', close: 'Sulje iOS-asennusohjeet', title: 'Asenna Admin-sovellus iOS-laitteelle', introduction: 'Näin asennat ReadySetSiivous Admin -sovelluksen iPhoneen tai iPadiin:', steps: ['1. Napauta Safarin navigointipalkin Jaa-painiketta.', '2. Vieritä alas ja napauta Lisää Koti-valikkoon.', '3. Napauta oikeassa yläkulmassa Lisää.'], done: 'Selvä', installed: /^(Sovellus asennettu|Asennettu)$/ },
+  { lang: 'sv', name: 'Installera ReadySetSiivous-appen på din enhet', tooltip: 'Installera ReadySetSiivous som app', close: 'Stäng installationsanvisningarna för iOS', title: 'Installera Admin-appen på iOS', introduction: 'Så installerar du ReadySetSiivous Admin på din iPhone eller iPad:', steps: ['1. Tryck på Dela i Safaris navigeringsfält.', '2. Rulla ned och tryck på Lägg till på hemskärmen.', '3. Tryck på Lägg till uppe till höger.'], done: 'Jag förstår', installed: /^(Appen är installerad|Installerad)$/ },
+  { lang: 'en', name: 'Install ReadySetSiivous app on your device', tooltip: 'Install ReadySetSiivous as App', close: 'Close iOS installation instructions', title: 'Install Admin App on iOS', introduction: 'To install ReadySetSiivous Admin on your iPhone or iPad:', steps: ["1. Tap the Share button in Safari's navigation bar.", '2. Scroll down and tap Add to Home Screen.', '3. Tap Add in the top right corner.'], done: 'Got it', installed: /^(App )?Installed$/ },
 ];
 
 for (const language of languages) {
@@ -27,7 +27,7 @@ for (const language of languages) {
     });
     await install.click();
     await expect.poll(() => page.evaluate(() => (window as unknown as { installPromptCalls: number }).installPromptCalls)).toBe(1);
-    await expect(page.getByText(/^(App )?Installed$/, { exact: true }).filter({ visible: true }).first()).toBeVisible();
+    await expect(page.getByText(language.installed, { exact: true }).filter({ visible: true }).first()).toBeVisible();
   });
 
   test(`${language.lang}: iOS install modal has a localized accessible close button`, async ({ page }) => {
@@ -38,8 +38,11 @@ for (const language of languages) {
     }, language.lang);
     await page.goto('/admin/agreements/');
     await page.getByRole('button', { name: language.name, exact: true }).filter({ visible: true }).first().click();
-    const dialog = page.getByRole('dialog');
+    const dialog = page.getByRole('dialog', { name: language.title, exact: true });
     await expect(dialog).toBeVisible();
+    await expect(dialog.getByText(language.introduction, { exact: true })).toBeVisible();
+    for (const step of language.steps) await expect(dialog.getByText(step, { exact: true })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: language.done, exact: true })).toBeVisible();
     await dialog.getByRole('button', { name: language.close, exact: true }).click();
     await expect(dialog).not.toBeVisible();
   });
