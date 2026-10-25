@@ -33,13 +33,3 @@ See [Gemini rate limits](https://ai.google.dev/gemini-api/docs/rate-limits), [Ge
 `EntertainmentAiQueueTests` covers FIFO behavior, Gemini-only selection, shared cooldown, bounded transient retry, credential-specific key rotation, and the local request budget. `GeminiProviderErrorParserTests` covers structured 429/403 classification and credential redaction. The deployment script tests require Gemini credentials and remove retired OpenAI game secrets. `GeminiAnswerEvaluatorTests` covers alternate answers, grammar corrections with preserved meaning, incorrect answers and invalid provider output. `EntertainmentHubIntegrationTests` exercises real SignalR identity, reconnect, retry, score persistence and idempotent transitions. `site/e2e/entertainment-game.spec.ts` checks the visible score breakdown alongside feedback and retry behavior. PostgreSQL reservation tests cover history uniqueness and concurrency in CI.
 
 The previous sample-catalogue behavior is retired. `game-sample-fallback.md` is superseded by this page.
-
-## Retry quota accounting
-
-Every internal Gemini HTTP retry reserves another request against the same model/project RPM and rolling 24-hour budget as the first attempt. A transient failure or transport error cannot bypass spacing or spend a second request after the daily budget is exhausted. Both question generation and answer evaluation use this path. Budget exhaustion keeps the existing retry-only flow and reports the configured budget reset rather than claiming that the provider returned invalid content. Tests use synthetic HTTP handlers and do not call Gemini.
-
-### In-memory room retention
-
-Game state and player credentials remain in durable storage. The process-local room registry admits at most 1000 rooms atomically across both action leases and connection registration. Active holders, queued acquisitions and connected players keep their room alive. After the last reference leaves, an empty room stays available for a 10-minute reconnect grace period, then the next admission sweeps it. Reconnecting after expiry reloads the existing durable game; it does not create a new round or reset scores.
-
-Configure the grace period with `Entertainment:Rooms:IdleRetention` (for example `00:10:00`, or environment variable `Entertainment__Rooms__IdleRetention`). Nonnegative values are accepted, including zero for immediate idle reclamation. Retained idle rooms count toward the cap until their grace period expires. The existing one-second action wait and player token checks remain in effect. Disconnect/replacement clears that connection's action-rate queue; an obsolete connection cannot recreate a queue.

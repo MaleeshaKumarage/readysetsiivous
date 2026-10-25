@@ -33,10 +33,8 @@ public class Booking : BaseDocument
     /// <summary>Public | Admin</summary>
     public string? Source { get; set; }
 
-    /// <summary>Display reference only; never an authorization credential.</summary>
+    /// <summary>Self-service lookup code shown to the customer.</summary>
     public string? CustomerReference { get; set; }
-
-    public string? ManagementKeyHash { get; set; }
 
     public string? Notes { get; set; }
     public List<StatusEvent> History { get; set; } = [];

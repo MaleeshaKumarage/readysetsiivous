@@ -26,7 +26,7 @@ public class EntertainmentHubIntegrationTests
         public readonly Mock<IEntertainmentAnswerEvaluator> Evaluator=new();
         public readonly WebApplicationFactory<Program> Factory;
         public int GenerationCalls,EvaluationCalls;public bool FailGeneration,FailEvaluation;
-        public Host(GameSessionManager? sessions = null){
+        public Host(){
             Repo.Setup(r=>r.CreateGroupAsync(It.IsAny<EntertainmentGroup>(),It.IsAny<EntertainmentPlayer>(),It.IsAny<CancellationToken>())).Returns<EntertainmentGroup,EntertainmentPlayer,CancellationToken>((g,p,_)=>{Groups[g.Id]=g;Players[p.Id]=p;return Task.CompletedTask;});
             Repo.Setup(r=>r.GetGroupAsync(It.IsAny<Guid>(),It.IsAny<CancellationToken>())).ReturnsAsync((Guid id,CancellationToken _)=>Groups.GetValueOrDefault(id));
             Repo.Setup(r=>r.GetGroupByJoinKeyAsync(It.IsAny<string>(),It.IsAny<CancellationToken>())).ReturnsAsync((string key,CancellationToken _)=>Groups.Values.FirstOrDefault(g=>g.JoinKey==key));
@@ -43,7 +43,7 @@ public class EntertainmentHubIntegrationTests
             Repo.Setup(r=>r.SavePlayerAsync(It.IsAny<EntertainmentPlayer>(),It.IsAny<CancellationToken>())).Returns<EntertainmentPlayer,CancellationToken>((p,_)=>{Players[p.Id]=p;return Task.CompletedTask;});
             Generator.Setup(r=>r.GenerateAsync(It.IsAny<string>(),It.IsAny<CefrLevel>(),It.IsAny<string>(),It.IsAny<IReadOnlyList<string>>(),It.IsAny<CancellationToken>())).ReturnsAsync(()=>{var n=Interlocked.Increment(ref GenerationCalls);if(FailGeneration)throw new EntertainmentAiUnavailableException("Question generation unavailable. Retry.");var text=n==1?"The cat sleeps peacefully.":n==2?"We repair the gym windows.":"She travels abroad tomorrow.";return new GeminiSentence(text,"Kissa nukkuu rauhallisesti.",["kissa","nukkua"]){Hints=[new("cat","kissa"),new("sleep","nukkua")]};});
             Evaluator.Setup(r=>r.EvaluateAsync(It.IsAny<string>(),It.IsAny<string>(),It.IsAny<string>(),It.IsAny<CefrLevel>(),It.IsAny<CancellationToken>())).ReturnsAsync(()=>{Interlocked.Increment(ref EvaluationCalls);if(FailEvaluation)throw new EntertainmentAiUnavailableException("Validation unavailable. Keep your answer and retry.","Gemini key slot 1: rate limit or quota exceeded (HTTP 429).");return new EntertainmentAnswerEvaluation(true,"Kissa nukkuu.","Correct Finnish subject and present-tense verb.",[],7,3);});
-            Factory=new WebApplicationFactory<Program>().WithWebHostBuilder(b=>b.ConfigureTestServices(s=>{foreach(var d in s.Where(d=>d.ImplementationType==typeof(MartenSchemaInitializer)||d.ImplementationType==typeof(QualityCycleWorker)||d.ImplementationType==typeof(CleaningSuite.Api.Services.EntertainmentGroupCleanupService)).ToList())s.Remove(d);if(sessions is not null){s.RemoveAll<GameSessionManager>();s.AddSingleton(sessions);}s.RemoveAll<IEntertainmentRepository>();s.AddSingleton(Repo.Object);s.RemoveAll<IGeminiSentenceService>();s.AddSingleton(Generator.Object);s.RemoveAll<IEntertainmentAnswerEvaluator>();s.AddSingleton(Evaluator.Object);}));
+            Factory=new WebApplicationFactory<Program>().WithWebHostBuilder(b=>b.ConfigureTestServices(s=>{foreach(var d in s.Where(d=>d.ImplementationType==typeof(MartenSchemaInitializer)||d.ImplementationType==typeof(QualityCycleWorker)||d.ImplementationType==typeof(CleaningSuite.Api.Services.EntertainmentGroupCleanupService)).ToList())s.Remove(d);s.RemoveAll<IEntertainmentRepository>();s.AddSingleton(Repo.Object);s.RemoveAll<IGeminiSentenceService>();s.AddSingleton(Generator.Object);s.RemoveAll<IEntertainmentAnswerEvaluator>();s.AddSingleton(Evaluator.Object);}));
         }
         public async Task<CreateEntertainmentGroupResult> Create(){using var client=Factory.CreateClient();var response=await client.PostAsJsonAsync("/api/v1/entertainment/groups",new{Name="Fixture",Description="A topic for owned tests",CreatorName="Host",CreatorLevel="A1"});response.EnsureSuccessStatusCode();return(await response.Content.ReadFromJsonAsync<CreateEntertainmentGroupResult>())!;}
         public async Task<JoinEntertainmentGroupResult> Join(string key){using var client=Factory.CreateClient();var response=await client.PostAsJsonAsync($"/api/v1/entertainment/groups/{key}/join",new{JoinKey=key,PlayerName="Observer",Level="A1"});response.EnsureSuccessStatusCode();return(await response.Content.ReadFromJsonAsync<JoinEntertainmentGroupResult>())!;}
@@ -56,33 +56,6 @@ public class EntertainmentHubIntegrationTests
         public Client(HubConnection c){Connection=c;c.On<EntertainmentRoundDto>("roundStarted",r=>Round.Writer.TryWrite(r));c.On<string>("gameError",e=>Errors.Writer.TryWrite(e));c.On<string>("gameErrorDetail",e=>ErrorDetails.Writer.TryWrite(e));c.On<object>("answerEvaluated",e=>Evaluations.Writer.TryWrite(e));c.On<object>("answerRevealed",_=>Interlocked.Increment(ref AnswerEvents));c.On<object>("hintRevealed",_=>Interlocked.Increment(ref HintEvents));}
         public async Task<EntertainmentRoundDto> Next()=>await Round.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(8));
         public async ValueTask DisposeAsync()=>await Connection.DisposeAsync();
-    }
-    private sealed class RoomClock : TimeProvider
-    {
-        private long _ticks;
-        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
-        public override long GetTimestamp() => _ticks;
-        public void Expire() => _ticks += TimeSpan.FromMinutes(11).Ticks;
-    }
-    [Fact]
-    public async Task ReconnectAfterIdleRoomExpiryRestoresDurableRoundAndCredentials()
-    {
-        var clock = new RoomClock(); var sessions = new GameSessionManager(clock);
-        await using var host = new Host(sessions); var game = await host.Create();
-        Guid roundId;
-        await using (var owner = await host.Connect(game.GroupId, game.CreatorPlayerId, game.PlayerToken))
-        {
-            await owner.Connection.InvokeAsync("StartGame", game.GroupId, game.CreatorPlayerId);
-            roundId = (await owner.Next()).RoundId;
-            await owner.Connection.InvokeAsync("LeaveLobby", game.GroupId, game.CreatorPlayerId);
-        }
-        Assert.False(sessions.IsConnected(game.GroupId, game.CreatorPlayerId));
-        clock.Expire();
-        await using (await sessions.AcquireAsync(Guid.NewGuid())) { }
-        await using var replacement = await host.Connect(game.GroupId, game.CreatorPlayerId, game.PlayerToken);
-        Assert.Equal(roundId, (await replacement.Next()).RoundId);
-        Assert.Equal(1, host.GenerationCalls);
-        Assert.Equal(roundId, host.Groups[game.GroupId].CurrentRoundId);
     }
     [Fact]
     public async Task ExposedPlayerIdCannotClaimHostAndRebindingRemovesOldRoomMembership()

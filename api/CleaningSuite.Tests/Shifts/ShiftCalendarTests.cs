@@ -1,4 +1,3 @@
-using CleaningSuite.Tests.QualityCycle;
 using CleaningSuite.Application.Shifts;
 using CleaningSuite.Application.QualityCycle;
 using CleaningSuite.Domain.QualityCycle;
@@ -29,7 +28,7 @@ public class ShiftCalendarTests
         var shifts = new Mock<IShiftRepository>(); var forms = new Mock<IQualityCycleRepository>();
         shifts.Setup(x => x.GetAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
         shifts.Setup(x => x.ListAssignmentsByEmployeeAsync(employee, It.IsAny<CancellationToken>())).ReturnsAsync(new[] { assignment });
-        var handler = new QualityCycleHandlers.GetMyShiftsQueryHandler(shifts.Object, forms.Object, WorkAccessFixtures.ActiveEmployees(), WorkAccessFixtures.Reservation);
+        var handler = new QualityCycleHandlers.GetMyShiftsQueryHandler(shifts.Object, forms.Object);
         var result = await handler.Handle(new(employee, from, from.AddDays(17)), default);
         Assert.Equal(17, result.Count);
         Assert.Equal(from.AddHours(8), result[0].StartUtc); // no tenant profile in this fixture: UTC
@@ -67,7 +66,7 @@ public class ShiftCalendarTests
             .ReturnsAsync(new Shift { Id = shift, IsActive = lifecycle == "active" });
         var forms = new Mock<IQualityCycleRepository>();
         forms.Setup(x => x.ListFormsAsync(null, from, to, It.IsAny<CancellationToken>(), employee, null, null, null)).ReturnsAsync(new[] { form });
-        var result = await new QualityCycleHandlers.GetMyShiftsQueryHandler(shifts.Object, forms.Object, WorkAccessFixtures.ActiveEmployees(), WorkAccessFixtures.Reservation, clock: new CalendarClock())
+        var result = await new QualityCycleHandlers.GetMyShiftsQueryHandler(shifts.Object, forms.Object, clock: new CalendarClock())
             .Handle(new(employee, from, to), default);
         Assert.Equal(visible ? 1 : 0, result.Count);
     }
@@ -93,7 +92,8 @@ public class ShiftCalendarTests
         form.ShiftDeletedUtc = DateTime.UtcNow;
         var forms = new Mock<IQualityCycleRepository>();
         forms.Setup(x => x.GetFormByTokenAsync(form.Token, It.IsAny<CancellationToken>())).ReturnsAsync(form);
-        var handler = new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(forms.Object, Mock.Of<CleaningSuite.Application.Common.IUploadContentValidator>(), WorkAccessFixtures.ActiveShifts(), WorkAccessFixtures.ActiveEmployees(), WorkAccessFixtures.Reservation);
+        var handler = new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(forms.Object,
+            Mock.Of<CleaningSuite.Application.Common.IUploadContentValidator>());
         await Assert.ThrowsAsync<QualityCycleConflictException>(() => handler.Handle(new(form.Token, [new("Corridor", true)], null, "Note"), default));
         forms.Verify(x => x.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);
         Assert.False(form.IsSubmitted);
@@ -145,7 +145,7 @@ public class ShiftCalendarTests
         var forms = new Mock<IQualityCycleRepository>();
         forms.Setup(x => x.ListFormsAsync(null, from, from.AddDays(1), It.IsAny<CancellationToken>(), employee, null, null, null))
             .ReturnsAsync(new[] { recorded, foreign });
-        var result = await new QualityCycleHandlers.GetMyShiftsQueryHandler(shifts.Object, forms.Object, WorkAccessFixtures.ActiveEmployees(), WorkAccessFixtures.Reservation)
+        var result = await new QualityCycleHandlers.GetMyShiftsQueryHandler(shifts.Object, forms.Object)
             .Handle(new(employee, from, from.AddDays(1)), default);
         if (deleted) Assert.Empty(result);
         else

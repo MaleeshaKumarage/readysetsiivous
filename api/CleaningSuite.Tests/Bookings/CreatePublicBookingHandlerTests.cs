@@ -39,20 +39,6 @@ public class CreatePublicBookingHandlerTests
         new PostgresException("Concurrent reservation", "ERROR", "ERROR", PostgresErrorCodes.SerializationFailure);
 
     [Fact]
-    public async Task Creation_returns_raw_key_once_and_persists_only_its_digest()
-    {
-        var handler = Handler();
-        Booking? saved = null;
-        _bookings.Setup(x => x.SaveAsync(It.IsAny<Booking>(), It.IsAny<CancellationToken>()))
-            .Callback<Booking, CancellationToken>((booking, _) => saved = booking).Returns(Task.CompletedTask);
-        var result = await handler.Handle(Request(), default);
-        Assert.NotNull(saved);
-        Assert.True(BookingManagementKey.Verify(result.ManagementKey, saved.ManagementKeyHash));
-        Assert.DoesNotContain(result.ManagementKey, System.Text.Json.JsonSerializer.Serialize(saved));
-        Assert.Equal(saved.BookingNumber, result.BookingNumber);
-    }
-
-    [Fact]
     public async Task Conflict_restarts_transaction_and_reloads_service_slot_and_counter()
     {
         var handler = Handler();

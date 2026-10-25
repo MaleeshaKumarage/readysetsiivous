@@ -24,7 +24,6 @@ public class PublicBookingsController : ControllerBase
         return Ok(slots);
     }
 
-    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     [HttpPost("bookings")]
     public async Task<IActionResult> Book(CreatePublicBookingCommand command, CancellationToken ct)
     {
@@ -32,26 +31,19 @@ public class PublicBookingsController : ControllerBase
         return StatusCode(StatusCodes.Status201Created, result);
     }
 
-    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-    [HttpPost("bookings/lookup")]
+    [HttpGet("bookings/{bookingNumber}")]
     public async Task<IActionResult> Lookup(
-        [FromBody] GetPublicBookingQuery body, CancellationToken ct)
+        string bookingNumber, [FromQuery] string phone, CancellationToken ct)
     {
-        var booking = await _mediator.Send(body, ct);
+        var booking = await _mediator.Send(new GetPublicBookingQuery(bookingNumber, phone), ct);
         return booking is null ? NotFound() : Ok(booking);
     }
 
-    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     [HttpPost("bookings/{bookingNumber}/cancel")]
     public async Task<IActionResult> Cancel(
-        string bookingNumber, [FromBody] CancelBookingBody body, CancellationToken ct)
+        string bookingNumber, [FromQuery] string phone, CancellationToken ct)
     {
-        await _mediator.Send(new CancelPublicBookingCommand(bookingNumber, body.ManagementKey), ct);
+        await _mediator.Send(new CancelPublicBookingCommand(bookingNumber, phone), ct);
         return NoContent();
     }
-}
-
-public record CancelBookingBody(string? ManagementKey)
-{
-    public override string ToString() => nameof(CancelBookingBody);
 }

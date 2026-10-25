@@ -3,8 +3,6 @@
 import { useEffect, useState } from 'react';
 import { Button, Modal, Text, Stack, Group, Tooltip, Badge } from '@mantine/core';
 import { Download, Smartphone, Check, Share } from 'lucide-react';
-import { useLanguage } from '@/hooks/useLanguage';
-import type { Language } from '@/i18n';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -22,18 +20,6 @@ export function PwaInstallButton({
   size = 'sm',
   compact = false,
 }: PwaInstallButtonProps) {
-  const { lang: contextLang } = useLanguage();
-  const [lang, setLang] = useState<Language>(contextLang);
-
-  useEffect(() => {
-    // Admin routes have no LanguageProvider; reuse the saved site language there.
-    try {
-      const saved = localStorage.getItem('lang');
-      setLang(saved === 'en' || saved === 'fi' || saved === 'sv' ? saved : contextLang);
-    } catch {
-      setLang(contextLang);
-    }
-  }, [contextLang]);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isStandalone, setIsStandalone] = useState(false);
   const [isIos, setIsIos] = useState(false);
@@ -95,40 +81,10 @@ export function PwaInstallButton({
     }
   };
 
-  const copy = {
-    fi: {
-      install: 'Asenna', installApp: 'Asenna sovellus', installed: 'Asennettu', appInstalled: 'Sovellus asennettu',
-      title: 'Asenna Admin-sovellus iOS-laitteelle',
-      introduction: 'Näin asennat ReadySetSiivous Admin -sovelluksen iPhoneen tai iPadiin:',
-      share: '1. Napauta Safarin navigointipalkin Jaa-painiketta.',
-      home: '2. Vieritä alas ja napauta Lisää Koti-valikkoon.',
-      add: '3. Napauta oikeassa yläkulmassa Lisää.',
-      done: 'Selvä', close: 'Sulje iOS-asennusohjeet',
-    },
-    sv: {
-      install: 'Installera', installApp: 'Installera app', installed: 'Installerad', appInstalled: 'Appen är installerad',
-      title: 'Installera Admin-appen på iOS',
-      introduction: 'Så installerar du ReadySetSiivous Admin på din iPhone eller iPad:',
-      share: '1. Tryck på Dela i Safaris navigeringsfält.',
-      home: '2. Rulla ned och tryck på Lägg till på hemskärmen.',
-      add: '3. Tryck på Lägg till uppe till höger.',
-      done: 'Jag förstår', close: 'Stäng installationsanvisningarna för iOS',
-    },
-    en: {
-      install: 'Install', installApp: 'Install App', installed: 'Installed', appInstalled: 'App Installed',
-      title: 'Install Admin App on iOS',
-      introduction: 'To install ReadySetSiivous Admin on your iPhone or iPad:',
-      share: "1. Tap the Share button in Safari's navigation bar.",
-      home: '2. Scroll down and tap Add to Home Screen.',
-      add: '3. Tap Add in the top right corner.',
-      done: 'Got it', close: 'Close iOS installation instructions',
-    },
-  }[lang];
-
   if (isStandalone || installed) {
     return (
       <Badge color="green" variant="light" size={size} leftSection={<Check size={12} />}>
-        {compact ? copy.installed : copy.appInstalled}
+        {compact ? 'Installed' : 'App Installed'}
       </Badge>
     );
   }
@@ -141,63 +97,47 @@ export function PwaInstallButton({
     return null;
   }
 
-  const tooltipLabel =
-    lang === 'fi'
-      ? 'Asenna ReadySetSiivous Sovelluksena'
-      : lang === 'sv'
-      ? 'Installera ReadySetSiivous som app'
-      : 'Install ReadySetSiivous as App';
-
-  const ariaLabel =
-    lang === 'fi'
-      ? 'Asenna ReadySetSiivous-sovellus laitteellesi'
-      : lang === 'sv'
-      ? 'Installera ReadySetSiivous-appen på din enhet'
-      : 'Install ReadySetSiivous app on your device';
-
   return (
     <>
-      <Tooltip label={tooltipLabel} withArrow>
+      <Tooltip label="Install ReadySetSiivous Admin as App" withArrow>
         <Button
           variant={variant}
           color="indigo"
           size={size}
           leftSection={deferredPrompt ? <Download size={16} /> : <Smartphone size={16} />}
           onClick={handleInstallClick}
-          aria-label={ariaLabel}
         >
-          {compact ? copy.install : copy.installApp}
+          {compact ? 'Install' : 'Install App'}
         </Button>
       </Tooltip>
 
       <Modal
         opened={iosModalOpen}
         onClose={() => setIosModalOpen(false)}
-        title={copy.title}
-        closeButtonProps={{ 'aria-label': copy.close }}
+        title="Install Admin App on iOS"
         centered
         radius="md"
       >
         <Stack gap="md">
           <Text size="sm">
-            {copy.introduction}
+            To install <b>ReadySetSiivous Admin</b> on your iPhone or iPad:
           </Text>
           <Stack gap="xs">
             <Group gap="xs" align="center">
               <Share size={18} color="#4f46e5" />
-              <Text size="sm">{copy.share}</Text>
+              <Text size="sm">1. Tap the <b>Share</b> button in Safari's navigation bar.</Text>
             </Group>
             <Group gap="xs" align="center">
               <Smartphone size={18} color="#4f46e5" />
-              <Text size="sm">{copy.home}</Text>
+              <Text size="sm">2. Scroll down and tap <b>Add to Home Screen</b>.</Text>
             </Group>
             <Group gap="xs" align="center">
               <Check size={18} color="#16a34a" />
-              <Text size="sm">{copy.add}</Text>
+              <Text size="sm">3. Tap <b>Add</b> in the top right corner.</Text>
             </Group>
           </Stack>
           <Button fullWidth onClick={() => setIosModalOpen(false)}>
-            {copy.done}
+            Got it
           </Button>
         </Stack>
       </Modal>

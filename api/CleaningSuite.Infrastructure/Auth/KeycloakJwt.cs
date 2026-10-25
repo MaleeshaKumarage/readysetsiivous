@@ -1,69 +1,145 @@
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 
 namespace CleaningSuite.Infrastructure.Auth;
 
+/// <summary>
+/// Multi-realm Keycloak JWT validation. Issuer is {server}/realms/{realm};
+/// signing keys are fetched per-realm from the OIDC certs endpoint and cached,
+/// so new tenant realms work without an API restart.
+/// </summary>
 public static class KeycloakJwt
 {
-    private static readonly Regex RealmFormat = new("\\A[a-z0-9][a-z0-9-]{2,62}\\z", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex RealmFormat = new(
+        @"^[a-z0-9][a-z0-9-]{2,62}$", RegexOptions.Compiled);
 
-    public static IServiceCollection AddKeycloakAuth(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddKeycloakAuth(
+        this IServiceCollection services,
+        IConfiguration configuration)
     {
-        _ = ServerUri(configuration["Auth:Keycloak:ServerUrl"]);
+        _ = configuration["Auth:Keycloak:ServerUrl"]
+            ?? throw new InvalidOperationException("Auth:Keycloak:ServerUrl missing");
         _ = new KeycloakResourceOptions(configuration);
+
         services.AddSingleton(sp => new KeycloakResourceOptions(sp.GetRequiredService<IConfiguration>()));
-        services.AddHttpContextAccessor();
-        services.AddHttpClient("KeycloakSigningKeys", client => client.Timeout = TimeSpan.FromSeconds(5))
-            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+        services.AddHttpClient("KeycloakSigningKeys");
         services.AddSingleton<KeycloakSigningKeysResolver>();
-        services.AddSingleton<KeycloakTokenHandler>();
-        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
+
+        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer();
+
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
-            .Configure<KeycloakTokenHandler, IConfiguration>((options, handler, config) =>
+            .Configure<KeycloakSigningKeysResolver, IConfiguration>((options, resolver, effectiveConfiguration) =>
             {
-                var serverUrl = config["Auth:Keycloak:ServerUrl"]!;
-                var resources = new KeycloakResourceOptions(config);
+                var serverUrl = effectiveConfiguration["Auth:Keycloak:ServerUrl"]!.TrimEnd('/');
+                var resources = new KeycloakResourceOptions(effectiveConfiguration);
+                // Keep raw claim names ("iss", "realm_access") for issuer/realm parsing.
                 options.MapInboundClaims = false;
-                options.TokenHandlers.Clear();
-                options.TokenHandlers.Add(handler);
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
-                    ValidateIssuer = true, ValidateAudience = true, ValidateLifetime = true,
-                    ValidateIssuerSigningKey = true, RequireSignedTokens = true,
-                    ValidAlgorithms = [SecurityAlgorithms.RsaSha256, SecurityAlgorithms.RsaSha384, SecurityAlgorithms.RsaSha512],
-                    IssuerValidator = (issuer, _, _) => { RealmFromIssuer(issuer, serverUrl); return issuer; },
-                    AudienceValidator = (audiences, token, _) => audiences?.Contains(
-                        RealmFromIssuer(token.Issuer, serverUrl) == resources.ProvisionerRealm
-                            ? resources.PlatformAudience : resources.TenantAudience, StringComparer.Ordinal) == true
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    AudienceValidator = (audiences, token, _) =>
+                    {
+                        var realm = RealmFromIssuer(token.Issuer, serverUrl);
+                        var expected = realm == resources.ProvisionerRealm
+                            ? resources.PlatformAudience : resources.TenantAudience;
+                        return audiences?.Any(a => string.Equals(a, expected, StringComparison.Ordinal)) == true;
+                    },
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    IssuerValidator = (issuer, securityToken, validationParameters) =>
+                        ValidateIssuer(issuer, serverUrl),
+                    IssuerSigningKeyResolver = (token, securityToken, kid, validationParameters) =>
+                        resolver.Resolve(token, kid),
                 };
             });
+
         return services;
     }
 
-    internal static Uri ServerUri(string? value)
+    /// <summary>
+    /// Issuer must be {server}/realms/{realm} with a realm-shaped last segment.
+    /// Scheme http/https both accepted: behind a TLS-terminating tunnel Keycloak
+    /// may advertise the http issuer.
+    /// </summary>
+    private static string ValidateIssuer(string issuer, string serverUrl)
     {
-        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || uri.Scheme is not ("https" or "http")
-            || !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
-            throw new InvalidOperationException("A valid Keycloak HTTP(S) server URL is required");
-        return uri;
+        var realm = RealmFromIssuer(issuer, serverUrl);
+        if (!RealmFormat.IsMatch(realm))
+            throw new SecurityTokenInvalidIssuerException($"Invalid realm name in issuer: {realm}");
+
+        return issuer;
     }
 
+    /// <summary>Extracts the realm from a token's issuer claim, tolerating http/https scheme difference.</summary>
     public static string RealmFromIssuer(string issuer, string serverUrl)
     {
-        var server = ServerUri(serverUrl);
-        if (!Uri.TryCreate(issuer, UriKind.Absolute, out var parsed) || parsed.Scheme != server.Scheme
-            || !string.Equals(parsed.Authority, server.Authority, StringComparison.OrdinalIgnoreCase)
-            || !string.IsNullOrEmpty(parsed.UserInfo) || !string.IsNullOrEmpty(parsed.Query) || !string.IsNullOrEmpty(parsed.Fragment))
-            throw new SecurityTokenInvalidIssuerException("Invalid Keycloak issuer");
-        // Compare original strings too: URI normalization must not admit escaped or dot segments.
-        var prefix = server.GetLeftPart(UriPartial.Authority) + server.AbsolutePath.TrimEnd('/') + "/realms/";
-        if (!issuer.StartsWith(prefix, StringComparison.Ordinal))
-            throw new SecurityTokenInvalidIssuerException("Invalid Keycloak issuer");
-        var realm = issuer[prefix.Length..];
-        if (!RealmFormat.IsMatch(realm)) throw new SecurityTokenInvalidIssuerException("Invalid Keycloak realm");
-        return realm;
+        var serverWithoutScheme = StripScheme(serverUrl);
+        var issuerWithoutScheme = StripScheme(issuer);
+
+        var prefix = $"{serverWithoutScheme}/realms/";
+        if (!issuerWithoutScheme.StartsWith(prefix, StringComparison.Ordinal))
+            throw new SecurityTokenInvalidIssuerException(
+                $"Issuer {issuer} is outside configured Keycloak server {serverUrl}");
+
+        return issuerWithoutScheme[prefix.Length..];
+    }
+
+    private static string StripScheme(string url)
+    {
+        if (url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            return url["https://".Length..];
+        if (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            return url["http://".Length..];
+        return url;
+    }
+}
+
+/// <summary>Fetches and caches per-realm signing keys from Keycloak JWKS endpoints.</summary>
+public class KeycloakSigningKeysResolver
+{
+    private readonly HttpClient _http;
+    private readonly MemoryCache _cache = new(new MemoryCacheOptions());
+    private readonly string _serverUrl;
+    private readonly string _transportUrl;
+
+    public KeycloakSigningKeysResolver(IConfiguration configuration, IHttpClientFactory clients)
+    {
+        _http = clients.CreateClient("KeycloakSigningKeys");
+        _serverUrl = configuration["Auth:Keycloak:ServerUrl"]!.TrimEnd('/');
+        _transportUrl = (configuration["Auth:Keycloak:AdminServerUrl"] ?? _serverUrl).TrimEnd('/');
+    }
+
+    public IEnumerable<SecurityKey> Resolve(string token, string kid)
+    {
+        var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+        var jwt = handler.ReadJwtToken(token);
+        var issuer = jwt.Issuer;
+        var realm = KeycloakJwt.RealmFromIssuer(issuer, _serverUrl);
+
+        if (_cache.TryGetValue<JsonWebKeySet>(realm, out var cached) && cached is not null)
+            return cached.GetSigningKeys();
+
+        try
+        {
+            using var response = _http.GetAsync(
+                $"{_transportUrl}/realms/{Uri.EscapeDataString(realm)}/protocol/openid-connect/certs").GetAwaiter().GetResult();
+            response.EnsureSuccessStatusCode();
+            var json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            var keys = new JsonWebKeySet(json);
+            _cache.Set(realm, keys, TimeSpan.FromMinutes(15));
+            return keys.GetSigningKeys();
+        }
+        catch
+        {
+            // Keycloak may be briefly down; fail the request rather than accept a bad key.
+            throw new SecurityTokenInvalidSigningKeyException(
+                $"Could not fetch signing keys for realm {realm}");
+        }
     }
 }

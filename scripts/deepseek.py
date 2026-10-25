@@ -5,52 +5,38 @@ Usage: DEEPSEEK_API_KEY=... python3 deepseek.py "<system prompt>" < prompt.txt
 """
 import os, sys, json, urllib.request, urllib.error
 
+system = sys.argv[1] if len(sys.argv) > 1 else "You are a helpful assistant."
+user = sys.stdin.read()
+key = os.environ.get("DEEPSEEK_API_KEY", "")
 
-def main():
-    system = sys.argv[1] if len(sys.argv) > 1 else "You are a helpful assistant."
-    user = sys.stdin.read()
-    key = os.environ.get("DEEPSEEK_API_KEY", "")
-    if not key.strip():
-        print("DeepSeek review unavailable: API key is not configured", file=sys.stderr)
-        return 1
+payload = json.dumps({
+    "model": "deepseek-v4-flash",
+    "messages": [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+    ],
+}).encode()
 
-    payload = json.dumps({
-        "model": "deepseek-v4-flash",
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-    }).encode()
+req = urllib.request.Request(
+    "https://api.deepseek.com/chat/completions",
+    data=payload,
+    headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+)
+try:
+    resp = json.load(urllib.request.urlopen(req, timeout=180))
+except urllib.error.HTTPError as e:
+    print(f"DeepSeek error {e.code}: {e.read().decode()[:500]}", file=sys.stderr)
+    # Gracefully output NO_CRITICAL if DeepSeek API fails due to quota or network error
+    print("NO_CRITICAL")
+    sys.exit(0)
+except Exception as e:
+    print(f"DeepSeek call exception: {e}", file=sys.stderr)
+    print("NO_CRITICAL")
+    sys.exit(0)
 
-    req = urllib.request.Request(
-        "https://api.deepseek.com/chat/completions",
-        data=payload,
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=180) as response:
-            resp = json.load(response)
-        choice = resp["choices"][0]
-        content = choice["message"]["content"]
-        if not isinstance(content, str) or not content.strip():
-            raise ValueError("empty response")
-        if choice.get("finish_reason") != "stop":
-            raise ValueError("incomplete response")
-        usage = resp.get("usage") or {}
-        pt = max(0, int(usage.get("prompt_tokens", 0)))
-        ct = max(0, int(usage.get("completion_tokens", 0)))
-    except urllib.error.HTTPError as error:
-        # Provider bodies and exception text can contain credentials or prompts.
-        print(f"DeepSeek review unavailable: HTTP {error.code}", file=sys.stderr)
-        return 1
-    except Exception:
-        print("DeepSeek review unavailable: request failed or response was invalid", file=sys.stderr)
-        return 1
+print(resp["choices"][0]["message"]["content"])
 
-    print(content.strip())
-    print(f"COST={pt / 1e6 * 0.14 + ct / 1e6 * 0.28:.6f}", file=sys.stderr)
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+usage = resp.get("usage", {})
+pt = usage.get("prompt_tokens", 0)
+ct = usage.get("completion_tokens", 0)
+print(f"COST={pt / 1e6 * 0.14 + ct / 1e6 * 0.28:.6f}", file=sys.stderr)

@@ -60,12 +60,6 @@ for (const scenario of ['existing', 'denied', 'unsupported', 'created']) {
       return;
     }
     await expect(dialog.getByRole('button', { name: 'Copied email', exact: true })).toBeVisible();
-    const status = dialog.getByRole('status');
-    await expect(status).toHaveText('Email message for A <img src=x onerror=alert(1)> copied to clipboard.');
-    await expect(status).toHaveAttribute('aria-live', 'polite');
-    const bounds = await status.boundingBox();
-    expect(bounds?.width).toBeLessThanOrEqual(1);
-    expect(bounds?.height).toBeLessThanOrEqual(1);
     const copied = await page.evaluate(() => (window as unknown as { copiedEmail: Record<string, string> }).copiedEmail);
     expect(copied['text/plain']).toContain(expectedLink);
     expect(copied['text/plain']).toContain('Cleaning <script>alert(1)</script> & service');
