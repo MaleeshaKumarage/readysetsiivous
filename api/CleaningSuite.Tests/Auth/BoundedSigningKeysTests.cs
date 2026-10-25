@@ -186,15 +186,29 @@ public sealed class BoundedSigningKeysTests
     public async Task SlowDiscoveryTimesOutAndReleasesAdmission()
     {
         using var fixture = new Fixture();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationToken observedToken = default;
         fixture.Respond = async ct =>
         {
+            observedToken = ct;
+            entered.SetResult();
             try { await Task.Delay(Timeout.InfiniteTimeSpan, ct); }
             finally { if (ct.IsCancellationRequested) cancelled.TrySetResult(); }
             return fixture.Keys();
         };
-        Assert.False((await fixture.Validate(fixture.Token()).WaitAsync(TimeSpan.FromSeconds(8))).IsValid);
-        await cancelled.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        var validation = fixture.Validate(fixture.Token());
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(8));
+        Assert.Equal(1, fixture.Clock.ActiveTimers);
+        fixture.Clock.Advance(TimeSpan.FromMilliseconds(4999));
+        Assert.False(observedToken.IsCancellationRequested);
+        Assert.False(validation.IsCompleted);
+        Assert.False(cancelled.Task.IsCompleted);
+        fixture.Clock.Advance(TimeSpan.FromMilliseconds(1));
+        Assert.True(observedToken.IsCancellationRequested);
+        Assert.False((await validation.WaitAsync(TimeSpan.FromSeconds(8))).IsValid);
+        await cancelled.Task.WaitAsync(TimeSpan.FromSeconds(8));
+        Assert.Equal(0, fixture.Clock.ActiveTimers);
         fixture.Clock.Advance(TimeSpan.FromSeconds(6));
         fixture.Respond = _ => Task.FromResult(fixture.Keys());
         Assert.True((await fixture.Validate(fixture.Token())).IsValid);
@@ -255,7 +269,7 @@ public sealed class BoundedSigningKeysTests
             .ReturnsAsync((string realm, CancellationToken _) => new TenantRegistration { Slug = realm });
         Assert.True((await fixture.Validate(fixture.Token())).IsValid);
         fixture.Clock.Advance(TimeSpan.FromSeconds(31));
-        // Prepare JSON work before holding the five-second discovery budget open.
+        // Virtual time controls discovery deadlines independently of a busy CI test scheduler.
         using var refreshResponse = fixture.Keys();
         using var otherResponse = fixture.Keys();
         var pendingResponse = new TaskCompletionSource<HttpResponseMessage>();
@@ -268,8 +282,8 @@ public sealed class BoundedSigningKeysTests
             return pendingResponse.Task.WaitAsync(ct);
         };
         var refresh = fixture.Resolver.ResolveAsync(Fixture.Issuer, "new-key", CancellationToken.None);
-        // Eight seconds exceeds the production fetch deadline, so this proves completion without
-        // imposing a separate two-second scheduler SLA on a heavily parallel full-suite runner.
+        // This is only a deadlock guard. The five-second discovery timer uses fixture.Clock,
+        // which is deliberately not advanced while this fake provider response is held open.
         var completionBudget = TimeSpan.FromSeconds(8);
         try
         {
@@ -356,14 +370,65 @@ public sealed class BoundedSigningKeysTests
     }
     public sealed class ManualTime : TimeProvider
     {
+        private readonly object _gate = new();
+        private readonly List<ManualTimer> _timers = [];
         private DateTimeOffset _now = DateTimeOffset.UtcNow;
         public bool ThrowNextRead { get; set; }
+        public int ActiveTimers { get { lock (_gate) return _timers.Count; } }
         public override DateTimeOffset GetUtcNow()
         {
-            if (ThrowNextRead) { ThrowNextRead = false; throw new InvalidOperationException("Synthetic clock failure"); }
-            return _now;
+            lock (_gate)
+            {
+                if (ThrowNextRead) { ThrowNextRead = false; throw new InvalidOperationException("Synthetic clock failure"); }
+                return _now;
+            }
         }
-        public void Advance(TimeSpan value) => _now += value;
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            lock (_gate)
+            {
+                var timer = new ManualTimer(this, callback, state);
+                _timers.Add(timer);
+                timer.Change(dueTime, period);
+                return timer;
+            }
+        }
+        public void Advance(TimeSpan value)
+        {
+            List<ManualTimer> due;
+            lock (_gate)
+            {
+                _now += value;
+                due = _timers.Where(timer => timer.Due <= _now).ToList();
+                foreach (var timer in due)
+                    timer.Due = timer.Period > TimeSpan.Zero ? _now + timer.Period : DateTimeOffset.MaxValue;
+            }
+            // Cancellation callbacks may dispose a timer; invoke them outside the clock lock.
+            foreach (var timer in due) timer.Callback(timer.State);
+        }
+        private sealed class ManualTimer(ManualTime owner, TimerCallback callback, object? state) : ITimer
+        {
+            public TimerCallback Callback { get; } = callback;
+            public object? State { get; } = state;
+            public DateTimeOffset Due { get; set; }
+            public TimeSpan Period { get; private set; }
+            private bool _disposed;
+            public bool Change(TimeSpan dueTime, TimeSpan period)
+            {
+                lock (owner._gate)
+                {
+                    if (_disposed) return false;
+                    Due = dueTime == Timeout.InfiniteTimeSpan ? DateTimeOffset.MaxValue : owner._now + dueTime;
+                    Period = period;
+                    return true;
+                }
+            }
+            public void Dispose()
+            {
+                lock (owner._gate) { _disposed = true; owner._timers.Remove(this); }
+            }
+            public ValueTask DisposeAsync() { Dispose(); return ValueTask.CompletedTask; }
+        }
     }
     private sealed class Stub(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond) : HttpMessageHandler
     {
