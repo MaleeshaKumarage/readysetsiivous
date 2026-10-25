@@ -14,8 +14,10 @@ This does not remediate the API database or identity privileges tracked separate
 `api/dev/init/01-keycloak.sh` uses PostgreSQL16 psql environment/literal quoting,
 including passwords with quotes, and retains an existing role's password rather
 than silently rotating it. An existing role with elevated privileges or database
-with a different owner fails validation. Initialization files only run on an empty
-PostgreSQL volume. Do not remove an existing volume to make initialization run.
+with a different owner fails validation. A one-shot `keycloak-db-init` service runs after PostgreSQL is healthy and must
+succeed before Keycloak starts, including with existing PostgreSQL volumes.
+The script uses a subshell so sourcing cannot alter its caller's shell options.
+Do not remove an existing volume to make initialization run.
 
 ## Existing dev installation: preserve before switching
 
@@ -43,10 +45,10 @@ No production stack or production records are involved.
    the previous effective setting and preserve that exact key. Do not generate a
    replacement: prior encrypted values require the original key.
 5. Set the new dev DB password. Start only PostgreSQL using the same project name.
-   For an existing database volume run the mounted initialization script explicitly:
+   Run the one-shot initialization before importing the saved realms:
 
    ```sh
-   docker compose -p EXISTING_PROJECT -f api/deploy/docker-compose.dev.yml exec -T postgres bash /docker-entrypoint-initdb.d/01-keycloak.sh
+   docker compose -p EXISTING_PROJECT -f api/deploy/docker-compose.dev.yml run --rm keycloak-db-init
    ```
 
    For local dev use `-f api/dev/docker-compose.yml`. Check the command succeeds;
@@ -88,10 +90,12 @@ them and reuse their bytes. Do not store real keys in source control.
 `api/dev/tests/dev-persistence-recreate.py` exercises fresh disposable projects
 for both checked-in Compose configurations, creates a dummy realm/user, writes
 synthetic upload/key bytes, removes/recreates containers and checks identity IDs,
-database role restrictions and byte retention. It never starts the API or calls AI.
-It also seeds an unsafe existing superuser role and a database with the wrong
+database role restrictions and byte retention. Before normal startup it creates
+a PostgreSQL-only existing volume without a Keycloak database, proving ordinary
+startup provisions the missing role/database without resetting the volume. It never starts the API or calls AI.
+It also seeds unsafe existing superuser, BYPASSRLS and REPLICATION roles and a database with the wrong
 owner on separate fresh projects for each configuration. Both must produce a
-nonzero PostgreSQL initialization exit and prevent Keycloak from starting.
+nonzero one-shot initialization exit and prevent Keycloak from starting.
 The preview API volumes are tested with a disposable helper container because
 the API image/build belongs to other verification lanes. A real API encrypted-data
 smoke test remains required before migrating an existing installation.

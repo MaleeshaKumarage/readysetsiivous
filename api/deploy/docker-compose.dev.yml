@@ -13,11 +13,26 @@ services:
       - "127.0.0.1:5436:5432"
     volumes:
       - dev_pgdata:/var/lib/postgresql/data
-      - ../dev/init/01-keycloak.sh:/docker-entrypoint-initdb.d/01-keycloak.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U cleaning -d cleaning"]
       interval: 5s
       retries: 15
+
+  keycloak-db-init:
+    image: postgres:16-alpine
+    restart: "no"
+    entrypoint: ["bash", "/init/01-keycloak.sh"]
+    environment:
+      PGHOST: postgres
+      PGPASSWORD: devpassword
+      POSTGRES_USER: cleaning
+      POSTGRES_DB: cleaning
+      DEV_KC_DB_PASSWORD: ${DEV_KC_DB_PASSWORD:?set a separate dev Keycloak database password}
+    volumes:
+      - ../dev/init/01-keycloak.sh:/init/01-keycloak.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
@@ -31,8 +46,8 @@ services:
       KC_DB_USERNAME: keycloak_dev
       KC_DB_PASSWORD: ${DEV_KC_DB_PASSWORD:?set a separate dev Keycloak database password}
     depends_on:
-      postgres:
-        condition: service_healthy
+      keycloak-db-init:
+        condition: service_completed_successfully
     ports:
       - "8081:8080"
     command: start-dev --import-realm

@@ -47,10 +47,12 @@ def rehearse(relative, unsafe=None):
     with tempfile.TemporaryDirectory(prefix=project) as directory:
         if unsafe:
             # First-boot seed precedes the actual mounted initialization script.
-            # PostgreSQL must fail that script; healthy dependency must keep KC down.
+            # One-shot initialization must fail; completed dependency keeps KC down.
             seed = Path(directory) / "00-unsafe-fixture.sql"
             seeds = {
                 "role": "CREATE ROLE keycloak_dev LOGIN SUPERUSER;",
+                "bypassrls": "CREATE ROLE keycloak_dev LOGIN BYPASSRLS;",
+                "replication": "CREATE ROLE keycloak_dev LOGIN REPLICATION;",
                 "owner": "CREATE ROLE keycloak_dev LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE; CREATE DATABASE keycloak_dev OWNER cleaning;",
             }
             seed.write_text(seeds[unsafe], encoding="utf-8")
@@ -82,20 +84,25 @@ def rehearse(relative, unsafe=None):
             if unsafe:
                 failure = dc("up", "-d", "keycloak", check=False)
                 assert failure.returncode != 0, "Unsafe initialization must fail Compose startup"
-                pg_id = dc("ps", "-a", "-q", "postgres").stdout.strip()
-                assert pg_id, "PostgreSQL fixture container missing"
+                pg_id = dc("ps", "-a", "-q", "keycloak-db-init").stdout.strip()
+                assert pg_id, "Initialization fixture container missing"
                 state = json.loads(run(["docker", "inspect", "--format", "{{json .State}}", pg_id]).stdout)
                 assert state["Status"] == "exited" and state["ExitCode"] != 0
-                logs = dc("logs", "--no-color", "postgres").stdout
-                marker = "unexpected privileges" if unsafe == "role" else "unexpected owner"
+                logs = dc("logs", "--no-color", "keycloak-db-init").stdout
+                marker = "unexpected privileges" if unsafe != "owner" else "unexpected owner"
                 assert marker in logs, "Expected SQL validation failure was not reached"
                 assert dc("ps", "--status", "running", "-q", "keycloak").stdout.strip() == ""
                 print(f"PASS {relative}: unsafe {unsafe} fails nonzero before Keycloak starts")
                 return
+            # Pre-existing PostgreSQL volume has no Keycloak role/database. This
+            # must work through normal up, without a manual exec or volume reset.
+            dc("up", "-d", "--wait", "postgres")
+            assert dc("exec", "-T", "postgres", "psql", "-U", "cleaning", "-d", "cleaning", "-Atc",
+                      "SELECT count(*) FROM pg_database WHERE datname='keycloak_dev'").stdout.strip() == "0"
             dc("up", "-d")
             login()
             # Re-running init on an existing volume must not reset identity data.
-            dc("exec", "-T", "postgres", "bash", "/docker-entrypoint-initdb.d/01-keycloak.sh")
+            dc("run", "--rm", "keycloak-db-init")
             admin("create", "realms", "-s", "realm=persistence-fixture", "-s", "enabled=true")
             admin("create", "users", "-r", "persistence-fixture", "-s", "username=fixture-user", "-s", "enabled=true")
             before = json.loads(admin("get", "users", "-r", "persistence-fixture",
@@ -112,7 +119,7 @@ def rehearse(relative, unsafe=None):
                                      "-q", "username=fixture-user", "-q", "exact=true").stdout)
             assert len(after) == 1 and before[0]["id"] == after[0]["id"]
             role = dc("exec", "-T", "postgres", "psql", "-U", "cleaning", "-d", "cleaning", "-Atc",
-                      "SELECT NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole FROM pg_roles WHERE rolname='keycloak_dev'").stdout.strip()
+                      "SELECT NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolbypassrls AND NOT rolreplication FROM pg_roles WHERE rolname='keycloak_dev'").stdout.strip()
             assert role == "t"
             if api:
                 assert dc("exec", "-T", "state-helper", "cat", "/app/uploads/persistence.txt").stdout == "synthetic-upload"
@@ -125,6 +132,6 @@ def rehearse(relative, unsafe=None):
 
 if __name__ == "__main__":
     for filename in ("api/dev/docker-compose.yml", "api/deploy/docker-compose.dev.yml"):
-        for unsafe in ("role", "owner"):
+        for unsafe in ("role", "owner", "bypassrls", "replication"):
             rehearse(filename, unsafe)
         rehearse(filename)

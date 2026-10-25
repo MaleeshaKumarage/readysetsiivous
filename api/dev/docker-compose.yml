@@ -12,11 +12,26 @@ services:
       - "5434:5432"
     volumes:
       - cleaning_dev_pgdata:/var/lib/postgresql/data
-      - ./init/01-keycloak.sh:/docker-entrypoint-initdb.d/01-keycloak.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U cleaning -d cleaning"]
       interval: 5s
       retries: 15
+
+  keycloak-db-init:
+    image: postgres:16-alpine
+    restart: "no"
+    entrypoint: ["bash", "/init/01-keycloak.sh"]
+    environment:
+      PGHOST: postgres
+      PGPASSWORD: cleaning_dev
+      POSTGRES_USER: cleaning
+      POSTGRES_DB: cleaning
+      DEV_KC_DB_PASSWORD: ${DEV_KC_DB_PASSWORD:?set a separate dev Keycloak database password}
+    volumes:
+      - ./init/01-keycloak.sh:/init/01-keycloak.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.1
@@ -32,8 +47,8 @@ services:
     ports:
       - "8081:8080"
     depends_on:
-      postgres:
-        condition: service_healthy
+      keycloak-db-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/8080"]
       interval: 10s

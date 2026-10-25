@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Dev only. Runs automatically on first boot; explicit existing-volume use is
-# documented in docs/environments/dev-state-persistence.md. Never reset a volume.
+# Dev only. One-shot Compose initialization handles new and existing volumes.
+# Migration is documented in docs/environments/dev-state-persistence.md. Never reset a volume.
+(
 set -euo pipefail
 : "${DEV_KC_DB_PASSWORD:?Set DEV_KC_DB_PASSWORD}"
 : "${POSTGRES_USER:?Set POSTGRES_USER}"
@@ -16,7 +17,8 @@ WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'keycloak_dev')
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'keycloak_dev'
-      AND NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole AND rolcanlogin) THEN
+      AND NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole
+      AND NOT rolbypassrls AND NOT rolreplication AND rolcanlogin) THEN
     RAISE EXCEPTION 'Existing keycloak_dev role has unexpected privileges; review manually.';
   END IF;
 END $$;
@@ -31,3 +33,4 @@ BEGIN
   END IF;
 END $$;
 SQL
+)
