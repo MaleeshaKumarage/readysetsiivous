@@ -138,6 +138,16 @@ public sealed class KeycloakSigningKeysResolver
                     if (verifiedRealm)
                     {
                         _negative.Remove(realm);
+                        // A failed rotation lookup must not erase still-valid known keys. Keep
+                        // their original expiry; only retry backoff changes. Never retain keys
+                        // when current registry verification failed or their original TTL elapsed.
+                        if (keys.Length == 0 && _known.TryGetValue(realm, out var previous)
+                            && previous.Keys.Length != 0 && previous.Expires > now)
+                        {
+                            entry.Keys = previous.Keys;
+                            entry.Expires = previous.Expires;
+                            entry.RefreshAfter = now.AddSeconds(30);
+                        }
                         if (_known.ContainsKey(realm) || MakeRoom(_known, _maximumKnownRealms))
                             _known[realm] = entry;
                         // If every cached realm is refreshing, return these verified keys without caching.

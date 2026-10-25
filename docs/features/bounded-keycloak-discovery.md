@@ -11,6 +11,6 @@ Limits per API process:
 - Registry and JWKS discovery combined: 8 concurrent operations, with immediate refusal at capacity rather than an unbounded wait queue.
 - Shared discovery timeout: 5 seconds. An individual request cancellation stops waiting without cancelling another request's shared fetch.
 - JWKS: 64 KiB response body, at most 32 signing keys. Redirects are disabled.
-- Positive entries: 15 minutes; negative entries: 5 seconds. An unknown key identifier may refresh once after a 30-second cooldown, with concurrent requests sharing one refresh.
+- Positive entries: 15 minutes; negative entries: 5 seconds. An unknown key identifier may refresh once after a 30-second cooldown, with concurrent requests sharing one refresh. If discovery fails after successful current registry verification, already cached keys remain usable until their original expiry; a failed refresh never extends that expiry. A missing/rebound tenant or failed registry verification invalidates the cache entry.
 
 Temporary failures deny authentication; provider bodies and bearer values are not added to authentication errors. A newly rotated key may require retry after the cooldown. Capacity and discovery limits intentionally fail closed. This cache does not replace upstream request limiting.

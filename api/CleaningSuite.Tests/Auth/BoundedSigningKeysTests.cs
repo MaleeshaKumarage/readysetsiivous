@@ -137,6 +137,41 @@ public sealed class BoundedSigningKeysTests
     }
 
     [Fact]
+    public async Task FailedUnknownKidRefreshRetainsKnownKeysWithoutExtendingTheirOriginalExpiry()
+    {
+        using var fixture = new Fixture();
+        using var unknownRsa = RSA.Create(2048);
+        var unknownToken = fixture.Token(key: new RsaSecurityKey(unknownRsa) { KeyId = "unknown-key" });
+        Assert.True((await fixture.Validate(fixture.Token())).IsValid);
+        fixture.Clock.Advance(TimeSpan.FromSeconds(31));
+        fixture.Respond = _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+        Assert.False((await fixture.Validate(unknownToken)).IsValid);
+        Assert.True((await fixture.Validate(fixture.Token())).IsValid);
+        Assert.Equal(2, fixture.Requests);
+        // Unknown-key retries stay on cooldown; valid cached keys remain usable.
+        Assert.False((await fixture.Validate(unknownToken)).IsValid);
+        Assert.Equal(2, fixture.Requests);
+        // Fifteen minutes from the ORIGINAL fetch, not from the failed refresh.
+        fixture.Clock.Advance(TimeSpan.FromMinutes(14) + TimeSpan.FromSeconds(30));
+        Assert.False((await fixture.Validate(fixture.Token())).IsValid);
+        Assert.Equal(3, fixture.Requests);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("different-realm")]
+    public async Task ExplicitRegistryRejectionDuringRefreshInvalidatesPreviouslyKnownKeys(string? currentRealm)
+    {
+        using var fixture = new Fixture();
+        Assert.True((await fixture.Validate(fixture.Token())).IsValid);
+        fixture.Clock.Advance(TimeSpan.FromSeconds(31));
+        fixture.Registration = currentRealm is null ? null : new TenantRegistration { Slug = "tenant-a", KeycloakRealm = currentRealm };
+        Assert.Empty(await fixture.Resolver.ResolveAsync(Fixture.Issuer, "unknown-key", CancellationToken.None));
+        Assert.False((await fixture.Validate(fixture.Token())).IsValid);
+        Assert.Equal(2, fixture.Lookups); Assert.Equal(1, fixture.Requests);
+    }
+
+    [Fact]
     public async Task BodyLimitAppliesWithoutContentLengthAndOversizedResponsesAreCachedFailures()
     {
         using var fixture = new Fixture();
@@ -220,22 +255,38 @@ public sealed class BoundedSigningKeysTests
             .ReturnsAsync((string realm, CancellationToken _) => new TenantRegistration { Slug = realm });
         Assert.True((await fixture.Validate(fixture.Token())).IsValid);
         fixture.Clock.Advance(TimeSpan.FromSeconds(31));
+        // Prepare JSON work before holding the five-second discovery budget open.
+        using var refreshResponse = fixture.Keys();
+        using var otherResponse = fixture.Keys();
+        var pendingResponse = new TaskCompletionSource<HttpResponseMessage>();
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var call = 0;
-        fixture.Respond = async ct =>
+        fixture.Respond = ct =>
         {
-            if (Interlocked.Increment(ref call) == 1) { entered.SetResult(); await release.Task.WaitAsync(ct); }
-            return fixture.Keys();
+            if (Interlocked.Increment(ref call) != 1) return Task.FromResult(otherResponse);
+            entered.SetResult();
+            return pendingResponse.Task.WaitAsync(ct);
         };
         var refresh = fixture.Resolver.ResolveAsync(Fixture.Issuer, "new-key", CancellationToken.None);
-        await entered.Task.WaitAsync(TimeSpan.FromSeconds(2));
-        Assert.True((await fixture.Validate(fixture.Token("https://auth.test/realms/tenant-b")).WaitAsync(TimeSpan.FromSeconds(2))).IsValid);
-        var joined = fixture.Resolver.ResolveAsync(Fixture.Issuer, "new-key", CancellationToken.None);
-        Assert.False(joined.IsCompleted);
-        Assert.Equal(3, fixture.Requests); // warm tenant-a, its shared refresh, and tenant-b
-        release.SetResult();
-        Assert.NotEmpty(await refresh.WaitAsync(TimeSpan.FromSeconds(2))); Assert.NotEmpty(await joined.WaitAsync(TimeSpan.FromSeconds(2)));
+        // Eight seconds exceeds the production fetch deadline, so this proves completion without
+        // imposing a separate two-second scheduler SLA on a heavily parallel full-suite runner.
+        var completionBudget = TimeSpan.FromSeconds(8);
+        try
+        {
+            await entered.Task.WaitAsync(completionBudget);
+            Assert.NotEmpty(await fixture.Resolver.ResolveAsync("https://auth.test/realms/tenant-b", "key-one", CancellationToken.None).WaitAsync(completionBudget));
+            var joined = fixture.Resolver.ResolveAsync(Fixture.Issuer, "new-key", CancellationToken.None);
+            Assert.False(joined.IsCompleted);
+            Assert.Equal(3, fixture.Requests); // warm tenant-a, its shared refresh, and tenant-b
+            pendingResponse.SetResult(refreshResponse);
+            Assert.NotEmpty(await refresh.WaitAsync(completionBudget));
+            Assert.NotEmpty(await joined.WaitAsync(completionBudget));
+        }
+        finally
+        {
+            // An assertion failure must not leave a fake provider operation pending in the test host.
+            pendingResponse.TrySetResult(refreshResponse);
+        }
         Assert.Equal(3, fixture.Requests);
     }
 
