@@ -55,21 +55,22 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
   });
 
   test('sign out button returns user to unauthenticated login view', async ({ page, isMobile }) => {
+    if (isMobile) await page.setViewportSize({ width: 375, height: 1000 });
     await setupAdminMocks(page, { authenticated: true });
     await page.goto('/admin/');
 
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
-    if (!isMobile) {
-      await page.evaluate(() => { (window as any).__MOCK_AUTHED__ = false; });
-      await page.getByRole('button', { name: 'Sign out' }).first().click();
-    } else {
-      await page.evaluate(() => {
-        (window as any).__MOCK_AUTHED__ = false;
-        sessionStorage.setItem('__MOCK_LOGGED_OUT__', 'true');
-        window.location.reload();
-      });
-    }
+    const signOut = page.getByRole('banner').getByRole('button', { name: 'Sign out', exact: true });
+    await expect(signOut).toBeVisible();
+    await expect(signOut).toBeInViewport();
+    await signOut.click();
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('__MOCK_LOGGED_OUT__'))).toBe('true');
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __MOCK_AUTHED__: boolean }).__MOCK_AUTHED__)).toBe(false);
     await expect(page.getByText('Sign in with your ReadySetSiivous admin account.')).toBeVisible();
+    await page.reload();
+    await expect(page.getByText('Sign in with your ReadySetSiivous admin account.')).toBeVisible();
+    expect(await page.evaluate(() => sessionStorage.getItem('__MOCK_LOGGED_OUT__'))).toBe('true');
+    expect(await page.evaluate(() => (window as unknown as { __MOCK_AUTHED__: boolean }).__MOCK_AUTHED__)).toBe(false);
   });
 });
 
