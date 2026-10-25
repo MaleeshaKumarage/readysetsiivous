@@ -12,10 +12,15 @@ namespace CleaningSuite.Infrastructure.Auth;
 public sealed class KeycloakSigningKeysResolver
 {
     public const int MaximumRealms = 256;
+    public const int MaximumNegativeRealms = 256;
     public const int MaximumConcurrentFetches = 8;
     public const int MaximumJwksBytes = 65536;
     private readonly object _gate = new();
-    private readonly Dictionary<string, Entry> _entries = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Entry> _known = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Entry> _negative = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Task<SecurityKey[]>> _flights = new(StringComparer.Ordinal);
+    private readonly int _maximumKnownRealms;
+    private long _accessSequence;
     private readonly SemaphoreSlim _admission = new(MaximumConcurrentFetches);
     private readonly IServiceScopeFactory _scopes;
     private readonly HttpClient _http;
@@ -28,7 +33,7 @@ public sealed class KeycloakSigningKeysResolver
         public SecurityKey[] Keys = [];
         public DateTimeOffset Expires;
         public DateTimeOffset RefreshAfter;
-        public Task<SecurityKey[]>? Flight;
+        public long LastAccess;
     }
 
     public KeycloakSigningKeysResolver(IConfiguration configuration, IHttpClientFactory clients,
@@ -39,6 +44,10 @@ public sealed class KeycloakSigningKeysResolver
         _transportUrl = KeycloakJwt.ServerUri(configuration["Auth:Keycloak:AdminServerUrl"] ?? _serverUrl).AbsoluteUri.TrimEnd('/');
         _platformRealm = resources.ProvisionerRealm;
         _time = timeProvider ?? TimeProvider.System;
+        var maximum = configuration["Auth:Keycloak:SigningKeys:MaximumKnownRealms"];
+        if (maximum is not null && (!int.TryParse(maximum, out var parsed) || parsed is < 1 or > 4096))
+            throw new InvalidOperationException("MaximumKnownRealms must be between 1 and 4096");
+        _maximumKnownRealms = maximum is null ? MaximumRealms : int.Parse(maximum);
     }
 
     public async Task<SecurityKey[]> ResolveAsync(string issuer, string kid, CancellationToken cancellationToken)
@@ -49,32 +58,39 @@ public sealed class KeycloakSigningKeysResolver
         lock (_gate)
         {
             var now = _time.GetUtcNow();
-            if (!_entries.TryGetValue(realm, out var entry))
+            if (_known.TryGetValue(realm, out var entry))
             {
-                foreach (var stale in _entries.Where(x => x.Value.Flight is null && x.Value.Expires <= now).Select(x => x.Key).ToArray())
-                    _entries.Remove(stale);
-                if (_entries.Count >= MaximumRealms) throw Unavailable();
-                _entries.Add(realm, entry = new Entry());
+                entry.LastAccess = ++_accessSequence;
+                if (entry.Expires > now && (entry.Keys.Any(k => k.KeyId == kid) || entry.RefreshAfter > now))
+                    return entry.Keys;
             }
-            if (entry.Flight is not null) flight = entry.Flight;
-            else if (entry.Expires > now && (entry.Keys.Any(k => k.KeyId == kid) || entry.RefreshAfter > now))
-                return entry.Keys;
+            if (_negative.TryGetValue(realm, out var rejected))
+            {
+                if (rejected.Expires > now)
+                {
+                    rejected.LastAccess = ++_accessSequence;
+                    return [];
+                }
+                _negative.Remove(realm);
+            }
+            if (_flights.TryGetValue(realm, out var existing)) flight = existing;
             else
             {
                 // Never queue arbitrary realm lookups behind a semaphore. Admission bounds registry AND HTTP work.
                 if (!_admission.Wait(0)) throw Unavailable();
                 var completion = new TaskCompletionSource<SecurityKey[]>(TaskCreationOptions.RunContinuationsAsynchronously);
-                entry.Flight = flight = completion.Task;
-                _ = FetchAsync(realm, entry, completion);
+                _flights.Add(realm, flight = completion.Task);
+                _ = FetchAsync(realm, completion);
             }
         }
         // One disconnected request must not cancel the shared fetch needed by other requests.
         return await flight.WaitAsync(cancellationToken);
     }
 
-    private async Task FetchAsync(string realm, Entry entry, TaskCompletionSource<SecurityKey[]> completion)
+    private async Task FetchAsync(string realm, TaskCompletionSource<SecurityKey[]> completion)
     {
         SecurityKey[] keys = [];
+        var verifiedRealm = realm == _platformRealm;
         try
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -84,6 +100,7 @@ public sealed class KeycloakSigningKeysResolver
                 var tenant = await scope.ServiceProvider.GetRequiredService<ITenantRegistry>().GetBySlugAsync(realm, timeout.Token);
                 if (tenant is null || tenant.Slug != realm || (!string.IsNullOrEmpty(tenant.KeycloakRealm) && tenant.KeycloakRealm != realm))
                     throw Unavailable();
+                verifiedRealm = true;
             }
             using var response = await _http.GetAsync($"{_transportUrl}/realms/{realm}/protocol/openid-connect/certs", HttpCompletionOption.ResponseHeadersRead, timeout.Token);
             response.EnsureSuccessStatusCode();
@@ -104,18 +121,63 @@ public sealed class KeycloakSigningKeysResolver
         catch (Exception) { /* Negative cache; never disclose provider responses or token data. */ }
         finally
         {
-            lock (_gate)
+            try
             {
-                entry.Keys = keys;
-                var now = _time.GetUtcNow();
-                entry.Expires = now.Add(keys.Length == 0 ? TimeSpan.FromSeconds(5) : TimeSpan.FromMinutes(15));
-                entry.RefreshAfter = now.Add(keys.Length == 0 ? TimeSpan.FromSeconds(5) : TimeSpan.FromSeconds(30));
-                entry.Flight = null;
+                lock (_gate)
+                {
+                    var now = _time.GetUtcNow();
+                    var entry = new Entry
+                    {
+                        Keys = keys,
+                        Expires = now.Add(keys.Length == 0 ? TimeSpan.FromSeconds(5) : TimeSpan.FromMinutes(15)),
+                        RefreshAfter = now.Add(keys.Length == 0 ? TimeSpan.FromSeconds(5) : TimeSpan.FromSeconds(30)),
+                        LastAccess = ++_accessSequence
+                    };
+                    // Unverified realm names can never occupy slots reserved for registered tenants.
+                    // Flights live separately, so evicting idle cache entries cannot duplicate a fetch.
+                    if (verifiedRealm)
+                    {
+                        _negative.Remove(realm);
+                        if (_known.ContainsKey(realm) || MakeRoom(_known, _maximumKnownRealms))
+                            _known[realm] = entry;
+                        // If every cached realm is refreshing, return these verified keys without caching.
+                        // Cache capacity is an optimization, never a reason to reject a successful fetch.
+                    }
+                    else
+                    {
+                        _known.Remove(realm);
+                        if (MakeRoom(_negative, MaximumNegativeRealms)) _negative[realm] = entry;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // A cache bookkeeping failure must not strand shared callers or consume a permit forever.
+                keys = [];
+                lock (_gate)
+                {
+                    _known.Remove(realm);
+                    _negative.Remove(realm);
+                }
+            }
+            finally
+            {
+                lock (_gate) _flights.Remove(realm);
+                _admission.Release();
                 completion.TrySetResult(keys);
             }
-            _admission.Release();
         }
     }
+    // Called only under _gate. Do not evict a realm with an outstanding shared fetch.
+    private bool MakeRoom(Dictionary<string, Entry> entries, int maximum)
+    {
+        if (entries.Count < maximum) return true;
+        var idle = entries.Where(x => !_flights.ContainsKey(x.Key)).OrderBy(x => x.Value.LastAccess).FirstOrDefault();
+        if (idle.Key is null) return false;
+        entries.Remove(idle.Key);
+        return true;
+    }
+
     private static SecurityTokenInvalidSigningKeyException Unavailable() => new("Signing keys unavailable");
 }
 

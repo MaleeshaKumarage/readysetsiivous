@@ -182,16 +182,76 @@ public sealed class BoundedSigningKeysTests
     }
 
     [Fact]
-    public async Task HardCacheCapacityIncludesNegativeEntries()
+    public async Task NegativeCacheEvictsIdleUnverifiedEntriesWithoutBlockingKnownRealms()
     {
         using var fixture = new Fixture(); fixture.Registration = null;
         for (var i = 0; i < KeycloakSigningKeysResolver.MaximumRealms; i++)
             await fixture.Resolver.ResolveAsync("https://auth.test/realms/unknown-" + i, "key-one", CancellationToken.None);
-        await Assert.ThrowsAsync<SecurityTokenInvalidSigningKeyException>(() => fixture.Resolver.ResolveAsync("https://auth.test/realms/overflow", "key-one", CancellationToken.None));
-        Assert.Equal(KeycloakSigningKeysResolver.MaximumRealms, fixture.Lookups); Assert.Equal(0, fixture.Requests);
-        fixture.Clock.Advance(TimeSpan.FromSeconds(6));
         await fixture.Resolver.ResolveAsync("https://auth.test/realms/overflow", "key-one", CancellationToken.None);
         Assert.Equal(KeycloakSigningKeysResolver.MaximumRealms + 1, fixture.Lookups);
+        await fixture.Resolver.ResolveAsync("https://auth.test/realms/overflow", "key-one", CancellationToken.None);
+        Assert.Equal(KeycloakSigningKeysResolver.MaximumRealms + 1, fixture.Lookups);
+        await fixture.Resolver.ResolveAsync("https://auth.test/realms/unknown-0", "key-one", CancellationToken.None);
+        Assert.Equal(KeycloakSigningKeysResolver.MaximumRealms + 2, fixture.Lookups);
+        Assert.Equal(0, fixture.Requests);
+        fixture.Registration = new TenantRegistration { Slug = "tenant-a" };
+        Assert.True((await fixture.Validate(fixture.Token())).IsValid);
+    }
+
+    [Fact]
+    public async Task MoreRegisteredRealmsThanConfiguredCacheCapacityContinueToAuthenticate()
+    {
+        using var fixture = new Fixture(maximumKnownRealms: 2);
+        fixture.Registry.Setup(x => x.GetBySlugAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string realm, CancellationToken _) => { Interlocked.Increment(ref fixture.Lookups); return new TenantRegistration { Slug = realm }; });
+        for (var i = 0; i < 5; i++)
+            Assert.True((await fixture.Validate(fixture.Token("https://auth.test/realms/tenant-" + i))).IsValid);
+        Assert.Equal(5, fixture.Lookups); Assert.Equal(5, fixture.Requests);
+        // The first realm was evicted, so it must revalidate and fetch, rather than being denied forever.
+        Assert.True((await fixture.Validate(fixture.Token("https://auth.test/realms/tenant-0"))).IsValid);
+        Assert.Equal(6, fixture.Lookups); Assert.Equal(6, fixture.Requests);
+    }
+
+    [Fact]
+    public async Task CacheEvictionNeverDuplicatesAProtectedRealmRefresh()
+    {
+        using var fixture = new Fixture(maximumKnownRealms: 1);
+        fixture.Registry.Setup(x => x.GetBySlugAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string realm, CancellationToken _) => new TenantRegistration { Slug = realm });
+        Assert.True((await fixture.Validate(fixture.Token())).IsValid);
+        fixture.Clock.Advance(TimeSpan.FromSeconds(31));
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var call = 0;
+        fixture.Respond = async ct =>
+        {
+            if (Interlocked.Increment(ref call) == 1) { entered.SetResult(); await release.Task.WaitAsync(ct); }
+            return fixture.Keys();
+        };
+        var refresh = fixture.Resolver.ResolveAsync(Fixture.Issuer, "new-key", CancellationToken.None);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.True((await fixture.Validate(fixture.Token("https://auth.test/realms/tenant-b")).WaitAsync(TimeSpan.FromSeconds(2))).IsValid);
+        var joined = fixture.Resolver.ResolveAsync(Fixture.Issuer, "new-key", CancellationToken.None);
+        Assert.False(joined.IsCompleted);
+        Assert.Equal(3, fixture.Requests); // warm tenant-a, its shared refresh, and tenant-b
+        release.SetResult();
+        Assert.NotEmpty(await refresh.WaitAsync(TimeSpan.FromSeconds(2))); Assert.NotEmpty(await joined.WaitAsync(TimeSpan.FromSeconds(2)));
+        Assert.Equal(3, fixture.Requests);
+    }
+
+    [Fact]
+    public async Task CachePublicationFailureCompletesWaitersAndReleasesAdmission()
+    {
+        using var fixture = new Fixture();
+        fixture.Respond = _ =>
+        {
+            fixture.Clock.ThrowNextRead = true;
+            return Task.FromResult(fixture.Keys());
+        };
+        Assert.False((await fixture.Validate(fixture.Token()).WaitAsync(TimeSpan.FromSeconds(2))).IsValid);
+        fixture.Respond = _ => Task.FromResult(fixture.Keys());
+        Assert.True((await fixture.Validate(fixture.Token()).WaitAsync(TimeSpan.FromSeconds(2))).IsValid);
+        Assert.Equal(2, fixture.Requests);
     }
 
     private sealed class Fixture : IDisposable
@@ -209,11 +269,12 @@ public sealed class BoundedSigningKeysTests
         public int Requests;
         public Func<CancellationToken, Task<HttpResponseMessage>> Respond;
         public KeycloakSigningKeysResolver Resolver { get; }
-        public Fixture()
+        public Fixture(int? maximumKnownRealms = null)
         {
             var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
                 ["Auth:Keycloak:ServerUrl"] = "https://auth.test", ["Auth:Keycloak:AdminServerUrl"] = "http://internal.test",
-                ["Auth:Keycloak:Audience"] = "tenant-api", ["Auth:Keycloak:PlatformAudience"] = "platform-api" }).Build();
+                ["Auth:Keycloak:Audience"] = "tenant-api", ["Auth:Keycloak:PlatformAudience"] = "platform-api",
+                ["Auth:Keycloak:SigningKeys:MaximumKnownRealms"] = maximumKnownRealms?.ToString() }).Build();
             Registry.Setup(x => x.GetBySlugAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync((string _, CancellationToken _) => { Interlocked.Increment(ref Lookups); return Registration; });
             _services = new ServiceCollection().AddSingleton(Registry.Object).BuildServiceProvider();
@@ -245,7 +306,12 @@ public sealed class BoundedSigningKeysTests
     public sealed class ManualTime : TimeProvider
     {
         private DateTimeOffset _now = DateTimeOffset.UtcNow;
-        public override DateTimeOffset GetUtcNow() => _now;
+        public bool ThrowNextRead { get; set; }
+        public override DateTimeOffset GetUtcNow()
+        {
+            if (ThrowNextRead) { ThrowNextRead = false; throw new InvalidOperationException("Synthetic clock failure"); }
+            return _now;
+        }
         public void Advance(TimeSpan value) => _now += value;
     }
     private sealed class Stub(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond) : HttpMessageHandler

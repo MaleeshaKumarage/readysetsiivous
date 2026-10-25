@@ -7,7 +7,7 @@ Discovery only accepts canonical lowercase realm names under that issuer. Tenant
 Limits per API process:
 
 - Bearer tokens: 16,384 characters; key identifiers: 256 characters.
-- Discovery state: 256 realms, including failed lookups and in-flight work. Expired idle entries are removed on admission; full capacity fails closed.
+- Discovery state: separate bounded caches for verified realms (256 by default) and unverified failures (256). Only a successful registry check or the explicit platform realm can allocate a verified slot. Least-recently-used idle entries are evicted; negative floods cannot consume verified slots, and cache capacity never rejects a successfully verified fetch. Configure `Auth:Keycloak:SigningKeys:MaximumKnownRealms` between 1 and 4096 when scaling. Shared in-flight fetches have their own global bound of 8 and are protected from cache eviction.
 - Registry and JWKS discovery combined: 8 concurrent operations, with immediate refusal at capacity rather than an unbounded wait queue.
 - Shared discovery timeout: 5 seconds. An individual request cancellation stops waiting without cancelling another request's shared fetch.
 - JWKS: 64 KiB response body, at most 32 signing keys. Redirects are disabled.
