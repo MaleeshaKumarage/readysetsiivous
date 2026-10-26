@@ -8,6 +8,29 @@ import { serviceIcon } from '@/lib/icons';
 // Entrance animation removed from this section: cards must stay visible even
 // when JS chunks are stale (Pages deploy replaces _next assets).
 
+// Static style configurations and lookup tables defined at module scope to avoid
+// object/array re-allocation and reduce GC pressure on component re-renders.
+const GRADIENTS = [
+  'from-brand-500 to-brand-600',
+  'from-accent-500 to-accent-600',
+  'from-violet-500 to-purple-600',
+  'from-amber-500 to-orange-600',
+];
+
+const BGS = [
+  'bg-brand-50 dark:bg-brand-500/10',
+  'bg-accent-50 dark:bg-accent-500/10',
+  'bg-violet-50 dark:bg-violet-500/10',
+  'bg-amber-50 dark:bg-amber-500/10',
+];
+
+const FALLBACK_IMAGES: Record<string, string> = {
+  'home-cleaning': 'service-home.webp',
+  'deep-cleaning': 'service-deep.webp',
+  'move-out-cleaning': 'service-moveout.webp',
+  'office-cleaning': 'service-office.webp',
+};
+
 // i18n key → API slug mapping. Static export keeps the hardcoded cards as
 // fallback when the API is unreachable; API data wins when it answers.
 const KEY_TO_SLUG: Record<string, string> = {
@@ -68,15 +91,6 @@ export default function Services() {
       }
     });
   }, [lang]);
-
-  const GRADIENTS = ['from-brand-500 to-brand-600', 'from-accent-500 to-accent-600', 'from-violet-500 to-purple-600', 'from-amber-500 to-orange-600'];
-  const BGS = ['bg-brand-50 dark:bg-brand-500/10', 'bg-accent-50 dark:bg-accent-500/10', 'bg-violet-50 dark:bg-violet-500/10', 'bg-amber-50 dark:bg-amber-500/10'];
-  const FALLBACK_IMAGES: Record<string, string> = {
-    'home-cleaning': 'service-home.webp',
-    'deep-cleaning': 'service-deep.webp',
-    'move-out-cleaning': 'service-moveout.webp',
-    'office-cleaning': 'service-office.webp',
-  };
 
   return (
     <section id="services" className="bg-gray-50 dark:bg-gray-900 section-padding">
