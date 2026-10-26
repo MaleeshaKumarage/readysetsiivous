@@ -2,6 +2,7 @@
 import copy
 import hashlib
 import io
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -163,6 +164,33 @@ class WorkflowTests(unittest.TestCase):
         compose = (SCRIPTS.parent / 'api/deploy/docker-compose.yml').read_text()
         self.assertIn('${API_IMAGE:?', compose)
         self.assertNotIn('${IMAGE_TAG:-latest}', compose)
+
+
+    def test_companion_uses_verified_image_and_only_api_consumes_protected_identity_file(self):
+        compose = (SCRIPTS.parent / 'api/deploy/docker-compose.yml').read_text()
+        api = compose.split('  api:', 1)[1].split('  pdf-worker:', 1)[0]
+        worker = compose.split('  pdf-worker:', 1)[1].split('\nnetworks:', 1)[0]
+        self.assertIn('image: &api_image ${API_IMAGE:?', api)
+        self.assertIn('image: *api_image', worker)
+        self.assertIn('env_file:', api)
+        self.assertIn('${API_IDENTITY_ENV_FILE:?', api)
+        for provisioner in ('Auth__Keycloak__ProvisionerRealm: master', 'Auth__Keycloak__ProvisionerClientId: cleaning-provisioner', 'Auth__Keycloak__ProvisionerClientSecret: ${PROVISIONER_CLIENT_SECRET:-}'):
+            self.assertIn(provisioner, api)
+        for forbidden in ('AdminUser:', 'AdminPassword:'):
+            self.assertNotIn(forbidden, api)
+        for forbidden in ('env_file:', 'volumes:', 'ports:', 'ConnectionStrings', 'Auth__Keycloak'):
+            self.assertNotIn(forbidden, worker)
+        self.assertIn('networks: [pdf-private]', worker)
+
+
+    def test_tenant_identity_file_cannot_supply_platform_credentials(self):
+        path = SCRIPTS.parent / 'api/deploy/check-keycloak-runtime-env.py'
+        spec = importlib.util.spec_from_file_location('identity_checker', path)
+        checker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(checker)
+        for key in ('ProvisionerRealm', 'ProvisionerClientId', 'ProvisionerClientSecret', 'AdminUser', 'AdminPassword'):
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                checker.validate_content('Auth__Keycloak__' + key + '=synthetic-value')
 
 
 if __name__ == '__main__':

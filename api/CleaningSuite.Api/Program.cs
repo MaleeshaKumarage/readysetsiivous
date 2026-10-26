@@ -21,6 +21,10 @@ if (args.Length == 1 && args[0] == "--pdf-worker-host")
 {
     await CleaningSuite.Api.PdfWorkerMode.RunHostAsync(); return;
 }
+if (args.Length == 2 && args[0] == "--pdf-worker-check")
+{
+    Environment.ExitCode = await CleaningSuite.Api.PdfWorkerMode.CheckAsync(args[1]); return;
+}
 if (args.Length == 2 && args[0] == "--pdf-worker-task")
 {
     Environment.ExitCode = await CleaningSuite.Api.PdfWorkerMode.RunTaskAsync(args[1]); return;

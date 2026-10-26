@@ -63,7 +63,8 @@ def ready(port):
 
 def main():
     tag="pdf-security-rehearsal:"+uuid.uuid4().hex; name="pdf-security-"+uuid.uuid4().hex; network=name+"-private"; probe=name+"-client"
-    docker("build", "-f", "api/docker/Dockerfile", "-t", tag, "api")
+    release="a"*40
+    docker("build", "-f", "api/docker/Dockerfile", "--build-arg", "RELEASE_SHA="+release, "-t", tag, "api")
     docker("pull", "python:3.13-alpine")
     docker("network", "create", "--internal", network)
     try:
@@ -76,6 +77,10 @@ def main():
             "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
             "python:3.13-alpine", "sleep", "1800")
         port=(probe,name); ready(port)
+        assert json.loads(http(port,"healthz")[1]) == {"status":"ok", "releaseSha":release}
+        docker("exec",name,"dotnet","/app/CleaningSuite.Api.dll","--pdf-worker-check",release)
+        bad=subprocess.run(["docker","exec",name,"dotnet","/app/CleaningSuite.Api.dll","--pdf-worker-check","b"*40],capture_output=True)
+        assert bad.returncode != 0
         info=json.loads(docker("inspect",name))[0]
         assert info["HostConfig"]["Memory"]==1024**3 and info["HostConfig"]["MemorySwap"]==1024**3
         assert info["HostConfig"]["ReadonlyRootfs"] and json.loads(docker("network","inspect",network))[0]["Internal"]

@@ -98,6 +98,57 @@ class Deployment:
         actual = self.inspect('container', container)
         require(actual['Image'] == image_id and actual['State']['Running'] is True, 'API stopped or changed after health')
 
+    def worker_container(self):
+        value = self.command('docker', 'ps', '-a', '-q', '--filter', 'label=com.docker.compose.project=' + self.project,
+                             '--filter', 'label=com.docker.compose.service=pdf-worker')
+        require('\n' not in value, 'Worker container ambiguous')
+        return value
+
+    def worker_identity(self, container, image, image_id, running=True):
+        actual = self.inspect('container', container)
+        labels = actual.get('Config', {}).get('Labels', {})
+        require(labels.get('com.docker.compose.project') == self.project and labels.get('com.docker.compose.service') == 'pdf-worker', 'Worker ownership mismatch')
+        require(actual['Config']['Image'] == image and actual['Image'] == image_id and (not running or actual['State']['Running'] is True), 'Worker image/running state mismatch')
+        return actual
+
+    def verify_worker(self, image, image_id, release):
+        container = self.worker_container()
+        require(container, 'Worker container missing')
+        actual = self.worker_identity(container, image, image_id)
+        host, config = actual['HostConfig'], actual['Config']
+        require(config.get('User') == '1654:1654' and config.get('Cmd') == ['--pdf-worker-host']
+                and host.get('ReadonlyRootfs') is True and host.get('Memory') == 1024 ** 3
+                and host.get('MemorySwap') == 1024 ** 3 and host.get('NanoCpus') == 1000000000
+                and host.get('PidsLimit') == 64 and 'ALL' in host.get('CapDrop', [])
+                and not host.get('Privileged') and not host.get('CapAdd')
+                and 'no-new-privileges:true' in host.get('SecurityOpt', [])
+                and not host.get('PortBindings') and not host.get('Binds')
+                and set(host.get('Tmpfs', {})) == {'/tmp'}
+                and all(m.get('Type') == 'tmpfs' and m.get('Destination') == '/tmp' for m in actual.get('Mounts', [])), 'Worker containment mismatch')
+        require({'rw', 'noexec', 'nosuid', 'size=384m', 'uid=1654', 'gid=1654', 'mode=700'} <= set(host['Tmpfs']['/tmp'].split(',')), 'Worker temporary storage mismatch')
+        networks = actual.get('NetworkSettings', {}).get('Networks', {})
+        require(len(networks) == 1, 'Worker network isolation mismatch')
+        network = next(iter(networks))
+        metadata = json.loads(self.command('docker', 'network', 'inspect', network))
+        require(len(metadata) == 1 and metadata[0].get('Internal') is True
+                and metadata[0].get('Labels', {}).get('com.docker.compose.project') == self.project
+                and metadata[0].get('Labels', {}).get('com.docker.compose.network') == 'pdf-private', 'Worker private network mismatch')
+        image_env = self.inspect('image', image)['Config'].get('Env', [])
+        allowed = set(image_env) | {'ASPNETCORE_URLS=http://+:8080', 'DOTNET_EnableDiagnostics=0'}
+        require(set(config.get('Env', [])) <= allowed, 'Worker unexpected environment')
+        # Native signing and generated inspection run inside this worker's bounded cgroup.
+        for attempt in range(3):
+            try:
+                self.command('docker', 'exec', container, 'dotnet', '/app/CleaningSuite.Api.dll', '--pdf-worker-check', release)
+                break
+            except (RuntimeError, subprocess.TimeoutExpired):
+                if attempt == 2:
+                    raise RuntimeError('Worker native readiness verification failed') from None
+                self.command('sleep', '2')
+        require(self.worker_container() == container, 'Worker changed during readiness check')
+        self.worker_identity(container, image, image_id)
+        return container
+
     def new_env(self, previous, image):
         names = ['GAME_GEMINI_API_KEY', 'GAME_GEMINI_RPM', 'GAME_GEMINI_RPD'] + [f'GEMINI_KEY_{i}' for i in range(1, 11)]
         retired = ['OPENAI_API_KEY', 'GAME_OPENAI_MODEL', 'GAME_OPENAI_RPM', 'GAME_OPENAI_RPD', 'IMAGE_TAG'] + [f'OPENAI_API_KEY_{i}' for i in range(1, 11)]
@@ -145,11 +196,23 @@ class Deployment:
         old_release = next((s.split('=', 1)[1] for s in previous['Config']['Env'] if s.startswith('APP_RELEASE_SHA=')), '')
         require(SHA.fullmatch(old_release) and old_release in policy['rollback_compatible_from'], 'Previous release not approved for application rollback')
         require(previous['State']['Running'] is True, 'Previous API is not running')
+        old_worker = None
         old_id = previous['Image']
         old_metadata = self.inspect('image', old_id)
         old_image = next((s for s in old_metadata.get('RepoDigests', []) if IMMUTABLE.fullmatch(s)), '')
         require(old_metadata.get('Id') == old_id and old_image and self.inspect('image', old_image).get('Id') == old_id, 'Previous immutable image unavailable')
         self.health(old_release, attempts=1)
+        worker = self.worker_container()
+        if worker:
+            info = self.inspect('container', worker)
+            worker_id = info['Image']
+            metadata = self.inspect('image', worker_id)
+            worker_image = next((value for value in metadata.get('RepoDigests', []) if IMMUTABLE.fullmatch(value)), '')
+            require(metadata.get('Id') == worker_id and worker_image and self.inspect('image', worker_image).get('Id') == worker_id, 'Previous worker immutable image unavailable')
+            require('APP_RELEASE_SHA=' + old_release in metadata['Config'].get('Env', []), 'Previous worker release differs from API')
+            self.verify_worker(worker_image, worker_id, old_release)
+            old_worker = {'image': worker_image, 'image_id': worker_id, 'container': worker}
+
 
         # Backups contain credentials: private, host-only, retained for operator recovery.
         backups = self.root / '.deploy-backups'
@@ -158,15 +221,21 @@ class Deployment:
         backup = Path(tempfile.mkdtemp(prefix=release[:12] + '-', dir=backups))
         atomic(backup / '.env', old_env)
         atomic(backup / 'docker-compose.yml', old_config)
-        atomic(backup / 'image.json', json.dumps({'services': {'api': {'image': old_image}}}).encode())
-        atomic(backup / 'previous.json', json.dumps({'release_sha': old_release, 'image': old_image, 'image_id': old_id, 'project': self.project}).encode())
+        rollback_services = {'api': {'image': old_image}}
+        if old_worker:
+            rollback_services['pdf-worker'] = {'image': old_worker['image']}
+        atomic(backup / 'image.json', json.dumps({'services': rollback_services}).encode())
+        atomic(backup / 'previous.json', json.dumps({'release_sha': old_release, 'image': old_image, 'image_id': old_id, 'project': self.project, 'pdf_worker': old_worker}).encode())
         os.chmod(self.stage, 0o700)
         atomic(self.stage / 'candidate.env', self.new_env(old_env, image))
         candidate = self.stage / 'api/deploy/docker-compose.yml'
         config = json.loads(self.compose(candidate, self.stage / 'candidate.env', 'config', '--format', 'json'))
-        require(config.get('services', {}).get('api', {}).get('image') == image, 'Resolved image differs from immutable release')
+        require(all(config.get('services', {}).get(service, {}).get('image') == image for service in ('api', 'pdf-worker')), 'Resolved image differs from immutable release')
         require(self.input.get('REGISTRY_USER') and self.input.get('REGISTRY_TOKEN'), 'Registry authentication required')
         replaced = False
+        worker_touched = False
+        api_touched = False
+        restored_worker = old_worker['container'] if old_worker else None
         with tempfile.TemporaryDirectory(prefix='.deploy-auth-', dir=self.root) as auth:
             self.env['DOCKER_CONFIG'] = auth
             try:
@@ -179,21 +248,41 @@ class Deployment:
                 replaced = True
                 atomic(active_env, (self.stage / 'candidate.env').read_bytes())
                 atomic(active_config, candidate.read_bytes())
+                worker_touched = True
+                self.compose(active_config, active_env, 'up', '-d', '--no-deps', '--pull', 'never', 'pdf-worker')
+                candidate_worker = self.verify_worker(image, new_id, release)
+                api_touched = True
                 self.compose(active_config, active_env, 'up', '-d', '--no-deps', '--pull', 'never', 'api')
                 self.verify(image, new_id, release)
+                require(self.worker_container() == candidate_worker, 'Worker changed during API verification')
+                self.worker_identity(candidate_worker, image, new_id)
             except BaseException:
                 if replaced:
                     try:
                         atomic(active_env, old_env)
                         atomic(active_config, old_config)
-                        self.compose(active_config, active_env, 'up', '-d', '--no-deps', '--pull', 'never', 'api', override=backup / 'image.json')
+                        if worker_touched:
+                            if old_worker:
+                                self.compose(active_config, active_env, 'up', '-d', '--no-deps', '--pull', 'never', 'pdf-worker', override=backup / 'image.json')
+                                restored_worker = self.verify_worker(old_worker['image'], old_worker['image_id'], old_release)
+                            else:
+                                worker = self.worker_container()
+                                if worker:
+                                    self.worker_identity(worker, image, new_id, running=False)
+                                    self.command('docker', 'rm', '-f', worker)
+                                require(not self.worker_container(), 'Candidate worker cleanup failed')
+                        if api_touched:
+                            self.compose(active_config, active_env, 'up', '-d', '--no-deps', '--pull', 'never', 'api', override=backup / 'image.json')
                         restored_container = self.compose(active_config, active_env, 'ps', '-q', 'api', override=backup / 'image.json')
                         actual = self.inspect('container', restored_container)
-                        require(actual['Image'] == old_id and actual['Config']['Image'] == old_image and actual['State']['Running'] is True, 'Rollback image mismatch')
+                        require(actual['Image'] == old_id and actual['Config']['Image'] == (old_image if api_touched else previous['Config']['Image']) and actual['State']['Running'] is True, 'Rollback image mismatch')
                         self.health(old_release)
                         require(self.compose(active_config, active_env, 'ps', '-q', 'api', override=backup / 'image.json') == restored_container, 'Rollback container changed')
                         final = self.inspect('container', restored_container)
                         require(final['Image'] == old_id and final['State']['Running'] is True, 'Rollback stopped after health')
+                        if old_worker:
+                            require(self.worker_container() == restored_worker, 'Rollback worker changed')
+                            self.worker_identity(restored_worker, old_worker['image'], old_worker['image_id'])
                         print('Deployment failed; previous API image and configuration restored and verified.', file=sys.stderr)
                     except BaseException:
                         raise RuntimeError('Deployment and rollback failed; private recovery inputs retained at ' + str(backup)) from None

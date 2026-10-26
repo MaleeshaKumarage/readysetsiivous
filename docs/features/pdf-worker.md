@@ -13,3 +13,12 @@ The API serializes document worker calls with immediate rejection when occupied 
 Activation requires the Linux published-container integration job and synthetic signing rehearsal. A green unit suite does not prove container resource containment. Production records must not be used as test fixtures.
 
 Operators may lower raster limits using PDF_RASTER_DPI, PDF_RASTER_MAX_DIMENSION, PDF_RASTER_PAGE_PIXELS, PDF_RASTER_TOTAL_PIXELS and PDF_RASTER_ENCODED_BYTES. Values are clamped to positive values at or below the reviewed ceilings and explicitly allowlisted into the child environment. Raising ceilings requires a reviewed code change.
+
+
+The release controller starts and verifies the companion before replacing API and
+restores the prior companion (or its absence) during rollback. Both services use
+the manifest-bound immutable image. `/healthz` includes `status` and `releaseSha`;
+`--pdf-worker-check <SHA>` runs only an internal synthetic signing/reinspection
+probe before normal application configuration. Activation still requires reviewed
+release compatibility and a separate approved policy commit; the default policy
+remains disabled.

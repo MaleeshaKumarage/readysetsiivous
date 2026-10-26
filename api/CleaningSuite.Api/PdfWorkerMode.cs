@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using CleaningSuite.Application.Common;
 using CleaningSuite.Domain.Agreements;
@@ -9,6 +11,34 @@ namespace CleaningSuite.Api;
 public static class PdfWorkerMode
 {
     private const int MaximumRequest = 190 * 1024 * 1024;
+    // Executed inside the credential-free worker cgroup, through its real HTTP/native path.
+    public static async Task<int> CheckAsync(string expectedRelease)
+    {
+        try
+        {
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(50));
+            using var client = new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false });
+            var health = await client.GetFromJsonAsync<JsonElement>("http://127.0.0.1:8080/healthz", deadline.Token);
+            if (health.GetProperty("status").GetString() != "ok" || health.GetProperty("releaseSha").GetString() != expectedRelease) return 1;
+            // A complete synthetic one-page PDF, with byte-accurate xref offsets.
+            var text = new StringBuilder("%PDF-1.4\n"); var offsets = new List<int>();
+            foreach (var body in new[] { "<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Count 1 /Kids [3 0 R] >>", "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << >> >>" })
+            { offsets.Add(text.Length); text.Append($"{offsets.Count} 0 obj\n{body}\nendobj\n"); }
+            var xref = text.Length;
+            text.Append("xref\n0 4\n0000000000 65535 f \n");
+            foreach (var offset in offsets) text.Append($"{offset:D10} 00000 n \n");
+            text.Append($"trailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n");
+            var request = new PdfWorkerRequest("sign", Encoding.ASCII.GetBytes(text.ToString()), [new("Synthetic readiness", "Synthetic readiness", DateTime.UnixEpoch, null)]);
+            using var signed = await client.PostAsJsonAsync("http://127.0.0.1:8080/process", request, deadline.Token);
+            if (!signed.IsSuccessStatusCode) return 1;
+            var bytes = await signed.Content.ReadAsByteArrayAsync(deadline.Token);
+            PdfWorkerClient.CheckEnvelope(bytes, 100 * 1024 * 1024);
+            using var inspected = await client.PostAsJsonAsync("http://127.0.0.1:8080/process", new PdfWorkerRequest("inspect-generated", bytes, []), deadline.Token);
+            return inspected.StatusCode == System.Net.HttpStatusCode.NoContent ? 0 : 1;
+        }
+        catch { return 1; }
+    }
+
     public static async Task<int> RunTaskAsync(string directory)
     {
         // Parent passes only its private job directory. No configuration or .env load.
@@ -55,7 +85,7 @@ public static class PdfWorkerMode
         builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = MaximumRequest);
         var app = builder.Build();
         var admission = new SemaphoreSlim(1, 1);
-        app.MapGet("/healthz", () => Results.Ok());
+        app.MapGet("/healthz", () => Results.Ok(new { status = "ok", releaseSha = Environment.GetEnvironmentVariable("APP_RELEASE_SHA") }));
         app.MapPost("/process", async (HttpContext context) =>
         {
             if (!await admission.WaitAsync(0, context.RequestAborted)) { context.Response.StatusCode = 429; return; }
