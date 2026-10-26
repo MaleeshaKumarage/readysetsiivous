@@ -54,7 +54,7 @@ services:
           memory: 1536m
 
   api:
-    image: ghcr.io/maleeshakumarage/readysetsiivous-api:${IMAGE_TAG:-latest}
+    image: ${API_IMAGE:?Verified immutable API_IMAGE is required}
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: Production

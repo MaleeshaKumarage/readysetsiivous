@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
     paths:
+      - 'scripts/deploy-api.sh'
+      - 'scripts/release_*.py'
+      - '.github/workflows/docker-deploy-oracle.yml'
       - 'global.json'
       - 'api/**'
       - '.github/workflows/docker-build-push.yml'
@@ -49,6 +52,7 @@ jobs:
             type=raw,value=latest
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: ./api
@@ -59,3 +63,16 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Create release manifest
+        env:
+          BUILD_DIGEST: ${{ steps.build.outputs.digest }}
+        run: python3 scripts/release_manifest.py create --output release.json
+
+      - name: Preserve immutable release manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-release-${{ github.sha }}-${{ github.run_attempt }}
+          path: release.json
+          if-no-files-found: error
+          retention-days: 90
