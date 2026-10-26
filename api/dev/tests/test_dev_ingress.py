@@ -62,7 +62,9 @@ def validate(config):
 def compose_config(filename, overrides=None):
     # Synthetic credentials; never use real secret inputs or print effective config.
     env = {**os.environ, "DEV_KC_DB_PASSWORD": "synthetic-db", "KEYCLOAK_ADMIN_USER": "synthetic-admin",
-           "KEYCLOAK_ADMIN_PASSWORD": "synthetic-password"}
+           "KEYCLOAK_ADMIN_PASSWORD": "synthetic-password",
+           "DB_MIGRATOR_PASSWORD": "synthetic-migrator", "DB_RUNTIME_PASSWORD": "synthetic-runtime",
+           "DEV_IMAGE_TAG": "synthetic-unused"}
     for name in ("DEV_PUBLIC_AUTH_URL", "DEV_FRONTEND_URL"):
         env.pop(name, None)
     env.update(overrides or {})

@@ -9,7 +9,10 @@ Compose project name: changing it selects new, empty volumes.
 Set `DEV_KC_DB_PASSWORD` in the stack's private environment file. It must be a
 separate development credential. The PostgreSQL bootstrap identity is used only
 by the dev database initialization script; Keycloak uses its dedicated identity.
-This does not remediate the API database or identity privileges tracked separately.
+The API database role split is documented in
+[database privilege rollout](../operations/database-privilege-rollout.md).
+That migration is a separate reviewed operation, including on existing dev
+volumes; this Keycloak persistence migration does not transfer API ownership.
 
 `api/dev/init/01-keycloak.sh` uses PostgreSQL16 psql environment/literal quoting,
 including passwords with quotes, and retains an existing role's password rather
