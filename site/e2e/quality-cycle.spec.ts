@@ -205,8 +205,13 @@ test.describe('Admin Panel - Quality Cycle Page', () => {
     await expect(page.getByText('Sanitize door handles')).toBeVisible();
 
     // Edit template
-    await page.getByRole('button', { name: 'Edit' }).click({ force: true });
+    const templateCard = page.locator('.mantine-Card-root').filter({ has: page.getByText('Daily Office Checklist', { exact: true }) });
+    await templateCard.getByRole('button', { name: 'Edit', exact: true }).click();
     await expect(page.getByText('Edit Template', { exact: true })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Template Title', exact: true })).toHaveValue('Daily Office Checklist');
+    await expect(page.getByRole('textbox', { name: 'Description', exact: true })).toHaveValue('Standard office cleaning routines');
+    await expect(itemInputs.nth(0)).toHaveValue('Vacuum carpets');
+    await expect(itemInputs.nth(3)).toHaveValue('Sanitize door handles');
     await page.getByPlaceholder('e.g. Daily Office Cleaning Checklist').fill('Updated Office Checklist');
     await page.getByRole('button', { name: 'Update Template' }).click();
 
