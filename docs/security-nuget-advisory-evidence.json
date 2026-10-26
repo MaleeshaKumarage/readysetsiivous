@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "parameters": "--vulnerable --include-transitive",
+  "sources": [
+    "https://api.nuget.org/v3/index.json",
+    "local SDK package cache (path normalized)"
+  ],
+  "projects": [
+    {
+      "path": "api/CleaningSuite.Api/CleaningSuite.Api.csproj"
+    },
+    {
+      "path": "api/CleaningSuite.Domain/CleaningSuite.Domain.csproj"
+    },
+    {
+      "path": "api/CleaningSuite.Application/CleaningSuite.Application.csproj"
+    },
+    {
+      "path": "api/CleaningSuite.Infrastructure/CleaningSuite.Infrastructure.csproj"
+    },
+    {
+      "path": "api/CleaningSuite.Tests/CleaningSuite.Tests.csproj"
+    }
+  ],
+  "evidence_note": "NuGet CLI exited 0; no vulnerable package entries reported. Paths normalized only. Includes transitive packages; does not cover native OS libraries, advisories missing from the feed, or application reachability."
+}
