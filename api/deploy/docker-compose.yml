@@ -58,7 +58,7 @@ services:
 
   migrate:
     profiles: [migration]
-    image: ghcr.io/maleeshakumarage/readysetsiivous-api:${IMAGE_TAG:?set exact reviewed release}
+    image: ${API_IMAGE:?Verified immutable API_IMAGE is required}
     command: ["--migrate-schema"]
     restart: "no"
     environment:
