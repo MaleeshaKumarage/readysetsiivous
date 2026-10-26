@@ -2,6 +2,8 @@
 
 Checked 2026-10-24 against main a57c6bd and the unchanged lockfile on fix/game-retry-quota. This is a targeted disposition of the original feed hints, not a complete current dependency audit.
 
+Refresh note, 2026-10-26: PR205 merged as d1a65ad with compatible frontend tooling dependency updates. The tables and JSON below preserve the original query evidence; they are not a post-update scan. Complete exact-version advisory disposition and dev/build/runtime reachability remain open under VERIFY-02. Immutable Actions/container pinning (HARD-03) and narrow Docker context/locked restore (HARD-04) also remain unfinished.
+
 | Hint | Exact source evidence | Disposition |
 |---|---|---|
 | Next typed-array cache RCE | next14.2.35 in lockfile. Primary advisory GHSA-673q-mjm6-r5xr affects16.0.0–16.4.0 and requires cache-component behavior. | This specific advisory does not apply to the installed version. The feed bundled several Next issues under one broad range; do not treat that combined range as proof. |
