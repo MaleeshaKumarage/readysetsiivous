@@ -12,9 +12,9 @@ public sealed class KeycloakEmployeeGroupClientTests
         await client.GetEffectiveUserRealmRolesAsync("tenant-a", "user-a");
         await client.AddUserToGroupAsync("tenant-a", "user-a", "employee-group");
         await client.RemoveUserFromGroupAsync("tenant-a", "user-a", "admin-group");
-        Assert.Contains("GET /admin/realms/tenant-a/users/user-a/role-mappings/realm/composite", handler.Paths);
-        Assert.Contains("PUT /admin/realms/tenant-a/users/user-a/groups/employee-group", handler.Paths);
-        Assert.Contains("DELETE /admin/realms/tenant-a/users/user-a/groups/admin-group", handler.Paths);
+        Assert.Contains("GET /realms/tenant-a/cleaning-identity/v1/users/user-a/role-mappings/realm/composite", handler.Paths);
+        Assert.Contains("PUT /realms/tenant-a/cleaning-identity/v1/users/user-a/groups/employee-group", handler.Paths);
+        Assert.Contains("DELETE /realms/tenant-a/cleaning-identity/v1/users/user-a/groups/admin-group", handler.Paths);
     }
     [Fact]
     public async Task TenantClientCannotConfigureGroupsOrPermissionsOrCrossRealms()

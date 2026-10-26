@@ -38,12 +38,12 @@ public class LeadAdminDirectoryGroupTests
             else if (path.EndsWith("/groups" ) && !path.Contains("/users/")) body = new[] { Group("managed-users"), Group("app-employee"), Group("app-manager"), Group("app-admin") };
             else if (path.EndsWith("/role-mappings")) body = new { realmMappings = Array.Empty<object>() };
             else if (path.EndsWith("/realm/composite")) {
-                var name = path.Split('/')[5];
+                var name = path.Split("/groups/", 2)[1].Split('/')[0];
                 body = name == "managed-users" ? Array.Empty<object>() : new object[] { new { id = name, name = name[4..], composite = false } };
             }
             else if (path.EndsWith("/members")) body = new[] { "owner", "service", "protected", "inactive", "pending", "employee" }.Select(id => new { id, email = id + "@example.invalid", enabled = true, serviceAccountClientId = id == "service" ? "runtime" : "" }).ToArray();
             else if (path.Contains("/users/") && path.EndsWith("/groups")) {
-                var id = path.Split('/')[5];
+                var id = path.Split("/users/", 2)[1].Split('/')[0];
                 body = id == "protected" ? new[] { Group("managed-users"), Group("app-admin"), Group("protected") }
                     : id == "employee" ? new[] { Group("managed-users"), Group("app-employee") } : new[] { Group("managed-users"), Group("app-admin") };
             }

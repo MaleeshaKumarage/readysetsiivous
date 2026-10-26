@@ -1,5 +1,60 @@
 # Scoped identity runtime rollout (INF03 — not approved for production rollout)
 
+## Current development-only extension contract (2026-10-26)
+
+The approved development identity boundary is the version-pinned server extension
+described in [the extension design](superpowers/specs/2026-10-26-dev-identity-extension-design.md).
+The earlier coarse-role and FGAP contracts retained below are historical evidence;
+they are not instructions to grant those rights to the new runtime client.
+Production configuration, images and the release hold remain unchanged.
+
+The current runtime client has **zero realm-management roles, zero FGAP grants and
+no group memberships**. Realm `adminPermissionsEnabled` must be false. It uses
+client credentials with a dedicated access-token-only `cleaning-identity-runtime`
+audience and `fullScopeAllowed=false`. The realm attribute
+`cleaning_identity_runtime_client_id` binds the extension to the client's immutable
+internal UUID, not merely its display/client name. The application calls only
+`/realms/<tenant>/cleaning-identity/v1`; it never falls back to Admin REST when the
+extension is missing or denies a request. Platform provisioning remains separate.
+
+Explicit setup is `api/deploy/keycloak-employee-setup.py`. Check is read-only by
+default (a client-credentials exchange is the only non-GET proof). Exact serverinfo
+version 26.8.1 is required, and apply requires `--apply --development` for the
+isolated fixture. Existing secrets must authenticate before any setup mutation;
+they are never rotated. Missing prerequisite/profile/group changes are reported as
+NEEDS with exit 2; ready checks exit 0. API runtime cannot repair prerequisites.
+After apply, and on an unchanged check, setup obtains a fresh audience-bearing
+token and verifies the authenticated extension response for the exact realm.
+A stock server or denied extension cannot be reported ready merely because
+client-credentials token issuance succeeded.
+
+Migration of an earlier reviewed FGAP fixture additionally requires
+`--migrate-fgap --development`. Setup validates the exact known policy subject,
+group bindings, scopes and policy relationships, then deletes only those owned
+permissions/policy and direct `query-users`/`view-realm` grants. It verifies their
+absence and disables the FGAP path before installing the dedicated audience and
+activating the extension binding last. Foreign policies, broader or inherited
+administration roles, malformed/incomplete inventories, group-derived runtime
+privileges and existing binding/mapper drift require manual reconciliation.
+The migration flag never authorizes arbitrary privilege revocation or secret rotation.
+
+Both fresh setup and migration retain the four plain fixed root groups, flat
+application roles and administrator-only `cleaning_employee_id` profile field.
+No existing person is automatically enrolled or adopted. Unrelated realm/profile
+settings remain intact. Existing SMTP passwords are never copied into a response
+or blindly written back from masked values.
+
+Required evidence includes native invitation delivery and login, direct Admin REST
+denials, forbidden creation input with no partial user, protected/drifted account
+denials, directory filtering, malformed input and role/composite inheritance.
+Concurrency and post-invitation promotion remain explicit production adoption
+gates until independently demonstrated; ordinary transaction use is not proof
+that operator role-graph changes are serialized.
+
+---
+
+## Historical boundary and rollout evidence
+
 This branch removes the API bootstrap-password fallback and splits platform provisioning
 from employee/lead identity clients. Each tenant uses its own realm token endpoint and
 explicit confidential service account. Missing configuration fails closed. Runtime
@@ -33,8 +88,9 @@ back into an update. Secrets come from environment or protected configuration on
 
 ## Required synthetic gate before merge/rollout
 
-Run `.github/workflows/keycloak-runtime-privileges.yml` against disposable Keycloak 24.0.5 and 26.1.0 services (or deliberately align supported
-versions following compatibility evidence). Exercise user creation, email lookup,
+The earlier rehearsal targeted disposable Keycloak 24.0.5 and 26.1.0 services;
+the current extension workflow targets only the reviewed pinned 26.8.1 image.
+Exercise user creation, email lookup,
 owner linking, role changes, invite/actions email, enable/disable, logout and lead admin
 directory. Assert tenant A credentials receive denial for tenant B and master, realm/SMTP/
 client/profile changes, and mapping administration roles not granted to the account.
@@ -190,7 +246,7 @@ server-enforced per-user or endpoint restrictions needs a separately reviewed de
 No preview feature, new intermediary, or version upgrade is enabled by this change.
 
 
-## Approved development FGAP V2 contract (2026-10-26)
+## Superseded development FGAP V2 contract (2026-10-26)
 
 Production rollout, image changes and held PRs remain unapproved. Explicit setup now
 requires serverinfo version 26.8.1; `--apply` additionally requires `--development`.

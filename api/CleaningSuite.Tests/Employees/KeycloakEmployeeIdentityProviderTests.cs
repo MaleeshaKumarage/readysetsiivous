@@ -261,7 +261,7 @@ public class KeycloakEmployeeIdentityProviderTests
             if (path.Contains("/users/user-a/groups/") && request.Method == HttpMethod.Delete) Role = "";
             if (request.Method != HttpMethod.Get) return new(HttpStatusCode.NoContent);
             if (path.EndsWith("/users/profile")) return Json(new { attributes = new[] { new { name = "cleaning_employee_id", permissions = new { view = new[] { "admin" }, edit = new[] { OwnershipUserEditable ? "user" : "admin" } } } } });
-            if (path.EndsWith("/realms/tenant-a")) return Json(new { enabled = true,
+            if (path.EndsWith("/realms/tenant-a/cleaning-identity/v1")) return Json(new { enabled = true,
                 attributes = FrontendConfigured ? new Dictionary<string, string> { ["frontendUrl"] = "https://auth.invalid" } : new(),
                 smtpServer = HasSmtp ? new Dictionary<string, string> { ["host"] = "smtp.invalid", ["from"] = "noreply@example.invalid", ["password"] = "********" } : new() });
             if (request.RequestUri.AbsolutePath.EndsWith("openid-connect/auth")) {
@@ -280,7 +280,7 @@ public class KeycloakEmployeeIdentityProviderTests
             }
             if (path.Contains("/users/user-a/groups?")) return Json(new[] {new {id=Unmanaged ? "foreign" : "managed",path=Unmanaged ? "/foreign" : "/managed-users"},new {id=Role,path="/app-"+Role}}.Where(g=>g.id != "").ToArray());
             if (path.Contains("/groups/") && path.EndsWith("/role-mappings")) return Json(new { clientMappings = new {} });
-            if (path.Contains("/groups/") && path.EndsWith("/role-mappings/realm/composite")) { var group = path.Split('/')[5]; return Json(group == "managed" ? Array.Empty<object>() : new object[] {new { id=group, name=group, composite=CompositeGroupRole }}); }
+            if (path.Contains("/groups/") && path.EndsWith("/role-mappings/realm/composite")) { var group = path.Split("/groups/", 2)[1].Split('/')[0]; return Json(group == "managed" ? Array.Empty<object>() : new object[] {new { id=group, name=group, composite=CompositeGroupRole }}); }
             if (path.EndsWith("/role-mappings/realm/composite")) return Json(new[] { new { id = Role, name = Role }, new { id = UnexpectedInheritedAdmin ? "admin" : "", name = UnexpectedInheritedAdmin ? "admin" : "" } }.Where(r=>r.id != "").ToArray());
             if (path.EndsWith("/role-mappings/realm")) return Json(new[] { new { id = LegacyDirectRole ? Role : "unrelated", name = LegacyDirectRole ? Role : "unrelated" } });
             if (path.Contains("/roles/")) return Json(new { id = path.Split('/').Last(), name = path.Split('/').Last() });

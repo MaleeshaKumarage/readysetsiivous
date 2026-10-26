@@ -16,8 +16,9 @@ setup = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(setup)
 ARGS = ['setup','--server','https://auth.invalid','--tenant','tenant-a','--public-url','https://auth.invalid',
         '--redirect-uri','https://site.invalid/account/?tenant=tenant-a']
-ALLOWED = ['query-users','view-realm']
+ALLOWED = []
 MANAGEMENT_ID = '11111111-1111-1111-1111-111111111111'
+RUNTIME_ID = '22222222-2222-2222-2222-222222222222'
 
 
 class Response:
@@ -50,9 +51,10 @@ class FakeTransport:
         if path == '/users/profile': return Response({'attributes': [] if self.needs_setup else [{
             'name':'cleaning_employee_id','multivalued':False,'permissions':{'view':['admin'],'edit':['admin']}}]})
         if path == '/clients?clientId=employee-runtime': return Response([] if self.needs_setup else [{
-            'id':'runtime','clientId':'employee-runtime','enabled':True,'serviceAccountsEnabled':True,'publicClient':False}])
+            'id':RUNTIME_ID,'clientId':'employee-runtime','enabled':True,'serviceAccountsEnabled':True,'publicClient':False}])
         if path == '/clients?clientId=realm-management': return Response([{'id':MANAGEMENT_ID,'clientId':'realm-management'}])
-        if path == '/clients/runtime/service-account-user': return Response({'id':'runtime-user'})
+        if path == '/clients/' + RUNTIME_ID + '/service-account-user': return Response({'id':'runtime-user'})
+        if path == '/clients/' + RUNTIME_ID + '/protocol-mappers/models': return Response([])
         if path == '/users/runtime-user/groups?first=0&max=1': return Response([{'id':'unexpected-group'}] if self.group else [])
         if path == '/users/runtime-user/role-mappings/realm/composite': return Response([{'name':'default-roles-tenant-a'}])
         if path == '/clients?first=0&max=1000': return Response([{'id':MANAGEMENT_ID,'clientId':'realm-management'},{'id':'account','clientId':'account'}])
@@ -61,7 +63,7 @@ class FakeTransport:
         if path.endswith('/role-mappings/clients/account/composite'): return Response([])
         if path == '/users/runtime-user/role-mappings/clients/' + MANAGEMENT_ID: return Response([{'name':name} for name in ALLOWED])
         if '/roles/' in path: return Response({'id':'role','name':path.rsplit('/',1)[1]})
-        if not path: return Response({'enabled':True,'attributes':{} if self.needs_setup else {'frontendUrl':'https://auth.invalid'},
+        if not path: return Response({'realm':'tenant-a','enabled':True,'attributes':{} if self.needs_setup else {'frontendUrl':'https://auth.invalid'},
             'smtpServer':{} if self.needs_setup else {'host':'smtp.invalid','from':'test@example.invalid'}})
         raise AssertionError('Unexpected test route ' + path)
 
@@ -86,6 +88,28 @@ class SetupCheckTests(unittest.TestCase):
 
     def test_complete_configuration_is_read_only_and_clean(self):
         self.assertEqual(2,self.run_check(FakeTransport()))
+
+    def test_configured_realm_requires_authenticated_extension_readiness(self):
+        class Ready(FakeTransport):
+            def __call__(self, request, timeout):
+                if request.full_url.endswith('/realms/tenant-a/cleaning-identity/v1'):
+                    self.requests.append(request)
+                    assert request.get_header('Authorization') == 'Bearer synthetic-runtime-token'
+                    return Response({'realm': 'tenant-a', 'enabled': True})
+                return super().__call__(request, timeout)
+        with patch.object(setup, 'configure', return_value={}):
+            self.assertEqual(0, self.run_check(Ready()))
+
+    def test_missing_extension_cannot_report_setup_ready(self):
+        class Missing(FakeTransport):
+            def __call__(self, request, timeout):
+                if request.full_url.endswith('/realms/tenant-a/cleaning-identity/v1'):
+                    self.requests.append(request)
+                    raise HTTPError(request.full_url, 404, 'not found', {}, None)
+                return super().__call__(request, timeout)
+        with patch.object(setup, 'configure', return_value={}):
+            with self.assertRaisesRegex(RuntimeError, 'extension is missing or denied'):
+                self.run_check(Missing())
 
     def test_mismatched_existing_secret_fails_check_and_apply_without_mutations(self):
         for apply in (False, True):
@@ -114,7 +138,7 @@ class SetupCheckTests(unittest.TestCase):
         self.assertEqual(2,self.run_check(FakeTransport(web=[{'clientId':'cleaning-suite-web','enabled':True,'publicClient':True,'standardFlowEnabled':True,'redirectUris':['https://site.invalid/account/?tenant=tenant-a']}])))
 
     def test_effective_composite_privilege_is_rejected_even_if_direct_roles_are_safe(self):
-        with self.assertRaisesRegex(RuntimeError, 'effective client/composite'):
+        with self.assertRaisesRegex(RuntimeError, 'inherited effective administration'):
             self.run_check(FakeTransport(extra_effective='manage-realm'))
 
     def test_group_derived_privileges_are_rejected(self):

@@ -83,6 +83,16 @@ public class EmployeeIdentityIntegrationTests
         var employee = new Employee { Email = "cleaner@" + realm + ".invalid", FirstName = "Invite", LastName = "Cleaner", Role = "employee" };
         using (var session = store.LightweightSession(realm)) { session.Store(employee); await session.SaveChangesAsync(); }
         var identity = new KeycloakEmployeeIdentityProvider(new TenantKeycloakClients(http, config), config);
+        var runtimeClient = new TenantKeycloakClients(http, config).ForTenant(realm);
+        var runtimeToken = await runtimeClient.GetAdminTokenAsync();
+        var runtimeJwt = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().ReadJwtToken(runtimeToken);
+        Assert.Contains(KeycloakAdminClient.RuntimeAudience, runtimeJwt.Audiences);
+        Assert.DoesNotContain(runtimeJwt.Claims, c => c.Type == "resource_access" && c.Value.Contains("realm-management"));
+        using (var forbidden = new HttpRequestMessage(HttpMethod.Get, url + "/admin/realms/" + realm + "/users")) {
+            forbidden.Headers.Authorization = new("Bearer", runtimeToken);
+            using var denied = await http.SendAsync(forbidden);
+            Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        }
         var redirect = frontend + "/account/?tenant=" + realm;
         await identity.ValidateInvitationAsync(realm, redirect, "employee");
         // Force a captured SMTP failure; no real recipient or mail provider is used.
@@ -146,6 +156,21 @@ public class EmployeeIdentityIntegrationTests
         var admins = await directory.ListAsync(default);
         Assert.Contains(admins, recipient => recipient.Id == ownerId);
         Assert.DoesNotContain(admins, recipient => recipient.Id == transition.UserId);
+        // This account was legitimately enrolled before an operator later gave
+        // it Keycloak administration privileges. Native server-side checks must
+        // reject it even though Admin REST role responses can hide those roles.
+        var driftEmployee = new Employee { Email = "drift@" + realm + ".invalid", FirstName = "Drift", LastName = "Canary", Role = "admin" };
+        var driftUser = await identity.EnsureAsync(realm, driftEmployee);
+        await identity.AssignRoleAsync(realm, driftEmployee.Id, driftUser.UserId, "admin");
+        var managementClient = (await admin.GetClientsAsync(realm, "realm-management"))[0].GetProperty("id").GetString()!;
+        var managementRole = await admin.GetClientRoleAsync(realm, managementClient, "manage-users");
+        await admin.AssignClientRolesAsync(realm, driftUser.UserId, managementClient, new object[] { managementRole });
+        var deniedDrift = await Assert.ThrowsAsync<KeycloakException>(() => runtimeClient.GetUserAsync(realm, driftUser.UserId));
+        Assert.Equal(HttpStatusCode.Forbidden, deniedDrift.StatusCode);
+        await Assert.ThrowsAsync<EmployeeIdentityProviderException>(() => identity.SynchronizeAccessAsync(realm, driftEmployee.Id, driftUser.UserId, "employee", false));
+        Assert.True((await admin.GetUserAsync(realm, driftUser.UserId))!.Value.GetProperty("enabled").GetBoolean());
+        Assert.Empty((await runtimeClient.FindUsersByEmailAsync(realm, driftEmployee.Email)).EnumerateArray());
+        Assert.DoesNotContain(await directory.ListAsync(default), recipient => recipient.Id == driftUser.UserId);
         // Allow a later completed-account reinvite in the live browser fixture without sleeping60seconds.
         using (var session = store.LightweightSession(realm)) { var saved = (await session.LoadAsync<Employee>(employee.Id))!; saved.InviteLastSentUtc = DateTime.UtcNow.AddMinutes(-2); session.Store(saved); await session.SaveChangesAsync(); }
         var artifactPath = Environment.GetEnvironmentVariable("INVITE_TEST_CONTEXT_PATH");

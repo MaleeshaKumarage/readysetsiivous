@@ -81,16 +81,18 @@ public class KeycloakAudienceProvisioningTests
         Assert.Equal((ssl ?? false) ? "true" : "false", smtp.GetProperty("ssl").GetString());
         Assert.Equal(auth ?? true, smtp.TryGetProperty("password", out _));
         Assert.Equal(1, transport.RuntimeProofs);
-        Assert.Equal(new[] { "query-users", "view-realm" }, transport.RuntimeRoles.OrderBy(x => x));
-        Assert.Contains(transport.RealmUpdates, update => update.Contains("\"adminPermissionsEnabled\":true"));
-        using var policy = JsonDocument.Parse(Assert.Single(transport.Policies));
-        Assert.Equal("service-user", Assert.Single(policy.RootElement.GetProperty("users").EnumerateArray()).GetString());
-        Assert.Equal(2, transport.Permissions.Count);
-        using var main = JsonDocument.Parse(transport.Permissions.Single(p => p.Contains("managed-members")));
-        Assert.Equal("Groups", main.RootElement.GetProperty("resourceType").GetString());
-        Assert.Equal(5, main.RootElement.GetProperty("scopes").GetArrayLength());
-        using var rolePermission = JsonDocument.Parse(transport.Permissions.Single(p => p.Contains("fixed-application-role-groups")));
-        Assert.Equal(new[] { "view", "manage-membership" }, rolePermission.RootElement.GetProperty("scopes").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal(1, transport.ExtensionProofs);
+        Assert.Empty(transport.RuntimeRoles);
+        Assert.Empty(transport.Policies);
+        Assert.Empty(transport.Permissions);
+        Assert.DoesNotContain(transport.RealmUpdates, update => update.Contains("adminPermissionsEnabled"));
+        Assert.Equal("client-id", realm.RootElement.GetProperty("attributes").GetProperty(KeycloakAdminClient.RuntimeClientAttribute).GetString());
+        using var runtimeClient = JsonDocument.Parse(Assert.Single(transport.Clients.Where(body => body.Contains("\"clientId\":\"tenant-runtime\""))));
+        Assert.False(runtimeClient.RootElement.GetProperty("fullScopeAllowed").GetBoolean());
+        var runtimeMapper = Assert.Single(runtimeClient.RootElement.GetProperty("protocolMappers").EnumerateArray());
+        Assert.Equal("cleaning-identity-runtime", runtimeMapper.GetProperty("config").GetProperty("included.custom.audience").GetString());
+        Assert.Equal("true", runtimeMapper.GetProperty("config").GetProperty("access.token.claim").GetString());
+        Assert.Equal("false", runtimeMapper.GetProperty("config").GetProperty("id.token.claim").GetString());
         using var owner = JsonDocument.Parse(Assert.Single(transport.Owners));
         Assert.Equal(new[] { "/managed-users", "/app-admin" }, owner.RootElement.GetProperty("groups").EnumerateArray().Select(x => x.GetString()));
         Assert.False(owner.RootElement.TryGetProperty("attributes", out _));
@@ -112,6 +114,24 @@ public class KeycloakAudienceProvisioningTests
         Assert.Equal(1, transport.RuntimeProofs); Assert.Equal(1, transport.RealmDeletes); Assert.Equal(0, transport.OwnerCreates);
     }
 
+    [Fact]
+    public async Task MissingExtensionRollsBackNewRealmEvenWhenRuntimeTokenWorks()
+    {
+        var transport = new KeycloakTransport { ExtensionMissing = true };
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
+            ["Auth:Keycloak:Audience"] = "cleaning-suite-api", ["Auth:Keycloak:PlatformAudience"] = "cleaning-suite-platform-api",
+            ["Auth:Keycloak:ProvisioningSetupReviewed"] = "true", ["Auth:Keycloak:ServerUrl"] = "https://auth.test",
+            ["Auth:Keycloak:TenantAccounts:tenant-test:ClientId"] = "tenant-runtime", ["Auth:Keycloak:TenantAccounts:tenant-test:ClientSecret"] = "synthetic-runtime-secret",
+            ["EmployeeInvites:Smtp:Host"] = "smtp.invalid", ["EmployeeInvites:Smtp:From"] = "sender@example.invalid", ["EmployeeInvites:Smtp:Auth"] = "false"
+        }).Build();
+        var admin = new KeycloakAdminClient(new HttpClient(transport), "https://auth.test", "master", "provisioner", "secret");
+        var error = await Assert.ThrowsAsync<KeycloakException>(() => new KeycloakProvisioner(new PlatformKeycloakClient(admin), NullLogger<KeycloakProvisioner>.Instance,
+            new KeycloakResourceOptions(config), config).ProvisionAsync("tenant-test", "Test", "owner@example.invalid", "Test", "Owner", ["https://site.test/*"]));
+        Assert.Equal(HttpStatusCode.NotFound, error.StatusCode);
+        Assert.Equal(1, transport.RuntimeProofs); Assert.Equal(1, transport.ExtensionProofs);
+        Assert.Equal(1, transport.RealmDeletes); Assert.Equal(0, transport.OwnerCreates);
+    }
+
     private sealed class KeycloakTransport : HttpMessageHandler
     {
         public List<string> Clients { get; } = new();
@@ -121,7 +141,8 @@ public class KeycloakAudienceProvisioningTests
         public List<string> Owners { get; } = new();
         public List<string> RealmUpdates { get; } = new();
         public bool RejectRuntimeCredentials;
-        public int RuntimeProofs, RealmDeletes, OwnerCreates;
+        public bool ExtensionMissing;
+        public int RuntimeProofs, ExtensionProofs, RealmDeletes, OwnerCreates;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             var path = request.RequestUri!.AbsolutePath;
@@ -133,6 +154,10 @@ public class KeycloakAudienceProvisioningTests
                 if (RejectRuntimeCredentials) return new(HttpStatusCode.Unauthorized);
             }
             if (path.EndsWith("/token")) return Json(new { access_token = "test-token", expires_in = 3600 });
+            if (request.Method == HttpMethod.Get && path == "/realms/tenant-test/cleaning-identity/v1") {
+                ExtensionProofs++;
+                return ExtensionMissing ? new(HttpStatusCode.NotFound) : Json(new { enabled = true });
+            }
             if (request.Method == HttpMethod.Delete && path == "/admin/realms/tenant-test") RealmDeletes++;
             if (request.Method == HttpMethod.Post && path.EndsWith("/users")) { OwnerCreates++; Owners.Add(await request.Content!.ReadAsStringAsync(ct)); }
             if (request.Method == HttpMethod.Post && path.EndsWith("/policy/user")) Policies.Add(await request.Content!.ReadAsStringAsync(ct));

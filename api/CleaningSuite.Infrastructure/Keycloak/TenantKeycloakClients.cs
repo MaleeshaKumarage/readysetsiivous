@@ -4,7 +4,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace CleaningSuite.Infrastructure.Keycloak;
 
-/// <summary>Explicit per-realm credentials. Never falls back to a platform or master account.</summary>
+/// <summary>Explicit per-realm employee-extension credentials. Never falls back to platform/master Admin REST.</summary>
 public sealed class TenantKeycloakClients(HttpClient http, IConfiguration configuration)
 {
     private readonly ConcurrentDictionary<string, KeycloakAdminClient> _clients = new(StringComparer.Ordinal);

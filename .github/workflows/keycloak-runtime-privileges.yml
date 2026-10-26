@@ -4,6 +4,10 @@ on:
     paths:
       - 'api/CleaningSuite.Infrastructure/Keycloak/**'
       - 'api/deploy/*keycloak*'
+      - 'api/deploy/keycloak_fgap.py'
+      - 'api/deploy/keycloak_identity_extension.py'
+      - 'api/keycloak-identity-extension/**'
+      - 'api/CleaningSuite.Tests/**'
       - '.github/workflows/keycloak-runtime-privileges.yml'
   workflow_dispatch:
 permissions:
@@ -11,10 +15,6 @@ permissions:
 jobs:
   synthetic:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        keycloak: ['24.0.5', '26.1.0']
     services:
       postgres:
         image: postgres:16-alpine
@@ -32,6 +32,10 @@ jobs:
         run: |
           python3 -B api/deploy/test_keycloak_employee_setup.py
           python3 -B api/deploy/test_keycloak_runtime_env.py
+          python3 -B api/deploy/test_keycloak_fgap.py
+          python3 -B api/deploy/test_keycloak_identity_extension.py
+      - name: Build reviewed development identity extension
+        run: docker build -t cleaning-identity-rehearsal:ci api/keycloak-identity-extension
       - name: Start isolated synthetic identity service
         env:
           SYNTHETIC_PASSWORD: audience_test_only_2026
@@ -39,14 +43,14 @@ jobs:
           docker network create scoped-identity
           docker run -d --name invite-review-mail --network scoped-identity -p 127.0.0.1:12525:8025 axllent/mailpit:v1.27.8
           docker run -d --name scoped-keycloak --network scoped-identity -p 127.0.0.1:18480:8080 \
-            -e KEYCLOAK_ADMIN=audience-test-admin -e KEYCLOAK_ADMIN_PASSWORD="$SYNTHETIC_PASSWORD" \
-            "quay.io/keycloak/keycloak:${{ matrix.keycloak }}" start-dev
+            -e KC_BOOTSTRAP_ADMIN_USERNAME=audience-test-admin -e KC_BOOTSTRAP_ADMIN_PASSWORD="$SYNTHETIC_PASSWORD" \
+            cleaning-identity-rehearsal:ci start-dev
           for attempt in $(seq 1 90); do
             if curl --fail --silent http://127.0.0.1:18480/realms/master/.well-known/openid-configuration >/dev/null; then exit 0; fi
             sleep 2
           done
           exit 1
-      - name: Prove server-side identity grants and denials
+      - name: Prove extension grants, denials and privileged-account drift protection
         env:
           SYNTHETIC_KEYCLOAK_URL: http://127.0.0.1:18480
           SYNTHETIC_KEYCLOAK_ADMIN_PASSWORD: audience_test_only_2026

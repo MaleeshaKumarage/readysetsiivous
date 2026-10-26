@@ -1,0 +1,27 @@
+{
+  "scope": "isolated development only",
+  "production_changed": false,
+  "keycloak_version": "26.8.1",
+  "image_index_digest": "sha256:a3e2b782197dc37e0ac870be1cf6684984abd1c22c7597ae00bb5f70a63e6927",
+  "resource_source_sha256": "5dd3eb0c754ef6a5e586565332107d1ec94f14add186e3d6ecbf270827c5d350",
+  "java_compile": "passed Java 21 against pinned 26.8.1 dependencies",
+  "backend": {"passed": 1009, "skipped": 34, "failed": 0},
+  "native_backend_final_image": {"executed": 2, "passed": 2, "skipped": 0, "failed": 0},
+  "python": {"passed": 37, "skipped": 2, "failed": 0},
+  "native_security_canaries_final_image": {"executed": 38, "passed": 38, "failed": 0},
+  "native_migration": {
+    "without_opt_in_no_writes": "passed",
+    "exact_legacy_grant_and_policy_removal": "passed",
+    "extension_200_direct_admin_rest_403": "passed",
+    "helper_and_cli_check_apply_idempotency": "passed",
+    "exact_owned_realm_cleanup": "passed"
+  },
+  "independent_static_review": "no verified P1/P2; final CLI readiness changes reviewed",
+  "cleanup": {"owned_containers_removed": 3, "owned_network_removed": true, "owned_tunnel_stopped": true, "preexisting_services_running": 6},
+  "production_ready": false,
+  "production_gates": [
+    "Concurrent operator role/group/composite promotion protocol is not proven atomic",
+    "Promotion after invitation issuance requires an explicit redemption/revocation policy",
+    "Production installation, rollout and rollback remain separately gated"
+  ]
+}

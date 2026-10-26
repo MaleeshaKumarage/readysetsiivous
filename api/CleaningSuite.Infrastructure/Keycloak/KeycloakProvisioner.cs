@@ -76,9 +76,9 @@ public class KeycloakProvisioner : IKeycloakProvisioner
                 protocolMappers = new[] { AudienceMapper(_resources.TenantAudience) },
             }, ct);
 
-            var groups = await CreateEmployeeGroupsAsync(slug, ct);
+            await CreateEmployeeGroupsAsync(slug, ct);
             if (runtime is not null)
-                await ConfigureRuntimeAccountAsync(slug, runtime["ClientId"]!, runtime["ClientSecret"]!, groups, ct);
+                await ConfigureRuntimeAccountAsync(slug, runtime["ClientId"]!, runtime["ClientSecret"]!, ct);
 
             var userId = await _admin.CreateUserAsync(slug, new
             {
@@ -128,42 +128,24 @@ public class KeycloakProvisioner : IKeycloakProvisioner
         return groups;
     }
 
-    private async Task ConfigureRuntimeAccountAsync(string realm, string clientId, string secret, Dictionary<string, string> groups, CancellationToken ct)
+    private async Task ConfigureRuntimeAccountAsync(string realm, string clientId, string secret, CancellationToken ct)
     {
         // Explicit platform provisioning owns this configuration. Employee runtime cannot perform it.
         await _admin.CreateClientAsync(realm, new { clientId, enabled = true, publicClient = false,
             serviceAccountsEnabled = true, standardFlowEnabled = false, directAccessGrantsEnabled = false,
-            fullScopeAllowed = true, secret }, ct);
+            fullScopeAllowed = false, secret,
+            protocolMappers = new[] { new {
+                name = "cleaning-identity-runtime-audience", protocol = "openid-connect",
+                protocolMapper = "oidc-audience-mapper", consentRequired = false,
+                config = new Dictionary<string, string> {
+                    ["included.custom.audience"] = KeycloakAdminClient.RuntimeAudience,
+                    ["access.token.claim"] = "true", ["id.token.claim"] = "false"
+                }
+            } } }, ct);
         var client = (await _admin.GetClientsAsync(realm, clientId, ct))[0];
-        var account = await _admin.GetServiceAccountAsync(realm, client.GetProperty("id").GetString()!, ct);
-        var management = (await _admin.GetClientsAsync(realm, "realm-management", ct))[0];
-        var managementId = management.GetProperty("id").GetString()!;
-        var roles = new List<object>();
-        foreach (var name in new[] { "query-users", "view-realm" })
-            roles.Add(await _admin.GetClientRoleAsync(realm, managementId, name, ct));
-        await _admin.AssignClientRolesAsync(realm, account.GetProperty("id").GetString()!, managementId, roles.ToArray(), ct);
-        using (var proof = CancellationTokenSource.CreateLinkedTokenSource(ct))
-        {
-            proof.CancelAfter(TimeSpan.FromSeconds(10));
-            await _admin.VerifyServiceAccountAsync(realm, clientId, secret, proof.Token);
-        }
-        await _admin.UpdateRealmAsync(realm, new { adminPermissionsEnabled = true }, ct);
-        var authorizationClients = await _admin.GetClientsAsync(realm, "admin-permissions", ct);
-        if (authorizationClients.GetArrayLength() != 1)
-            throw new KeycloakException("FGAP V2 authorization client is missing or ambiguous");
-        var authorizationId = authorizationClients[0].GetProperty("id").GetString()!;
-        await _admin.CreateAuthorizationUserPolicyAsync(realm, authorizationId, new {
-            name = "runtime-subject", logic = "POSITIVE", users = new[] { account.GetProperty("id").GetString()! }
-        }, ct);
-        await _admin.CreateAuthorizationScopePermissionAsync(realm, authorizationId, new {
-            name = "managed-members", resourceType = "Groups", resources = new[] { groups["managed-users"] },
-            scopes = new[] { "view", "view-members", "manage-members", "manage-membership", "manage-membership-of-members" },
-            policies = new[] { "runtime-subject" }, decisionStrategy = "UNANIMOUS"
-        }, ct);
-        await _admin.CreateAuthorizationScopePermissionAsync(realm, authorizationId, new {
-            name = "fixed-application-role-groups", resourceType = "Groups", resources = groups.Where(p => p.Key != "managed-users").Select(p => p.Value).ToArray(),
-            scopes = new[] { "view", "manage-membership" }, policies = new[] { "runtime-subject" }, decisionStrategy = "UNANIMOUS"
-        }, ct);
+        // No realm-management roles or FGAP policies: the dedicated extension is
+        // the only application-facing identity boundary. Token proof does not
+        // assert that a stock Keycloak installation supports this extension.
         var profile = await _admin.GetUserProfileAsync(realm, ct);
         var fields = profile.EnumerateObject().ToDictionary(p => p.Name, p => (object)p.Value.Clone());
         var attributes = profile.GetProperty("attributes").EnumerateArray().Select(a => a.Clone()).ToList();
@@ -186,7 +168,11 @@ public class KeycloakProvisioner : IKeycloakProvisioner
         var realmAttributes = current.TryGetProperty("attributes", out var existingAttributes) && existingAttributes.ValueKind == JsonValueKind.Object
             ? existingAttributes.EnumerateObject().ToDictionary(p => p.Name, p => (object)p.Value.Clone()) : new Dictionary<string, object>();
         realmAttributes["frontendUrl"] = _configuration["Auth:Keycloak:ServerUrl"]!.TrimEnd('/');
+        realmAttributes[KeycloakAdminClient.RuntimeClientAttribute] = client.GetProperty("id").GetString()!;
         await _admin.UpdateRealmAsync(realm, new { attributes = realmAttributes, smtpServer = smtp }, ct);
+        using var proof = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        proof.CancelAfter(TimeSpan.FromSeconds(10));
+        await _admin.VerifyEmployeeExtensionAsync(realm, clientId, secret, proof.Token);
     }
 
     public Task<bool> RealmExistsAsync(string realm, CancellationToken ct = default) =>

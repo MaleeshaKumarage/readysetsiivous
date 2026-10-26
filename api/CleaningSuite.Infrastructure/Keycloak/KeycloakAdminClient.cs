@@ -5,11 +5,13 @@ using System.Text.Json;
 namespace CleaningSuite.Infrastructure.Keycloak;
 
 /// <summary>
-/// Thin wrapper over Keycloak Admin REST. Admin token via provisioner client
-/// credentials only. Runtime construction never accepts bootstrap passwords.
+/// Explicit platform Admin REST client or tenant employee-extension client.
+/// Runtime construction never accepts bootstrap passwords or falls back to Admin REST.
 /// </summary>
 public class KeycloakAdminClient
 {
+    public const string RuntimeAudience = "cleaning-identity-runtime";
+    public const string RuntimeClientAttribute = "cleaning_identity_runtime_client_id";
     private readonly HttpClient _http;
     private readonly string _serverUrl;
     private readonly string _provisionerRealm;
@@ -93,6 +95,20 @@ public class KeycloakAdminClient
         await verifier.GetAdminTokenAsync(ct);
     }
 
+    // New realm readiness includes the actual server-side employee boundary;
+    // successful client-credentials exchange alone also works on stock Keycloak.
+    public async Task VerifyEmployeeExtensionAsync(string realm, string clientId, string secret, CancellationToken ct = default)
+    {
+        if (!System.Text.RegularExpressions.Regex.IsMatch(realm, "^[a-z0-9][a-z0-9-]{2,62}$")
+            || (_allowedRealm is not null && realm != _allowedRealm))
+            throw new KeycloakException("Invalid employee-extension verification realm");
+        var verifier = new KeycloakAdminClient(_http, _serverUrl, realm, clientId, secret, realm);
+        var representation = await verifier.GetRealmAsync(realm, ct);
+        if (representation.ValueKind != JsonValueKind.Object || !representation.TryGetProperty("enabled", out var enabled)
+            || enabled.ValueKind != JsonValueKind.True)
+            throw new KeycloakException("Employee identity extension readiness could not be verified");
+    }
+
     public Task CreateRealmAsync(string realm, CancellationToken ct = default) =>
         SendAsync(HttpMethod.Post, "admin/realms", ct, new
         {
@@ -131,6 +147,13 @@ public class KeycloakAdminClient
 
     public async Task UpdateUserAsync(string realm, string userId, object changes, CancellationToken ct = default)
     {
+        if (_allowedRealm is not null) {
+            // The extension accepts a narrow patch, not an Admin REST representation.
+            // In particular, do not echo id/email/verification/requiredActions fields
+            // from reads into a write that must never control those fields.
+            await SendWithoutResultAsync(HttpMethod.Put, $"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}", ct, changes);
+            return;
+        }
         // Keycloak user-profile updates can clear omitted fields (including email).
         // Merge changes onto the current representation while leaving credentials and
         // requiredActions untouched unless this operation explicitly supplies them.
@@ -222,7 +245,8 @@ public class KeycloakAdminClient
         if (!path.StartsWith(prefix + "/", StringComparison.Ordinal) && path != prefix)
             throw new KeycloakException("Tenant identity credentials cannot access another realm");
         var relative = path[prefix.Length..];
-        // Employee runtime owns users and their mappings, never realm/client/profile configuration.
+        // Local guard rejects configuration writes before network access. The
+        // extension independently enforces its narrower operation/target allowlist.
         if (method != HttpMethod.Get && (!(relative == "/users" || relative.StartsWith("/users/", StringComparison.Ordinal))
             || relative.StartsWith("/users/profile", StringComparison.Ordinal)))
             throw new KeycloakException("Tenant identity credentials cannot modify realm configuration");
@@ -236,6 +260,7 @@ public class KeycloakAdminClient
         bool expectedNotFoundOk = false)
     {
         ValidatePath(method, path);
+        path = TransportPath(path);
         var token = await GetAdminTokenAsync(ct);
         using var request = new HttpRequestMessage(method, $"{_serverUrl}/{path}");
         request.Headers.Authorization = new("Bearer", token);
@@ -256,6 +281,7 @@ public class KeycloakAdminClient
         object body)
     {
         ValidatePath(method, path);
+        path = TransportPath(path);
         var token = await GetAdminTokenAsync(ct);
         using var request = new HttpRequestMessage(method, $"{_serverUrl}/{path}");
         request.Headers.Authorization = new("Bearer", token);
@@ -268,6 +294,15 @@ public class KeycloakAdminClient
         var location = response.Headers.Location?.ToString()
             ?? throw new KeycloakException("Location header missing");
         return location.Split('/')[^1];
+    }
+
+    private string TransportPath(string path)
+    {
+        if (_allowedRealm is null) return path;
+        // ValidatePath has already checked the exact realm and canonical segments.
+        // A missing/denied extension is an error, never a reason to retry Admin REST.
+        var prefix = $"admin/realms/{_allowedRealm}";
+        return $"realms/{_allowedRealm}/cleaning-identity/v1" + path[prefix.Length..];
     }
 }
 
