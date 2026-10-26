@@ -26,7 +26,8 @@ class ProxyComposeTests(unittest.TestCase):
             values = dict(POSTGRES_PASSWORD='synthetic-unusable-db', KC_DB_PASSWORD='synthetic-unusable-kc', DEV_KC_DB_PASSWORD='synthetic-unusable-dev-kc',
                 KEYCLOAK_ADMIN_USER='synthetic-admin', KEYCLOAK_ADMIN_PASSWORD='synthetic-unusable-password',
                 API_IDENTITY_ENV_FILE=identity.as_posix(), API_IMAGE='example.invalid/synthetic@sha256:' + 'a' * 64,
-                POSTGRES_RUNTIME_PASSWORD='synthetic-runtime-db')
+                POSTGRES_RUNTIME_PASSWORD='synthetic-runtime-db', DB_MIGRATOR_PASSWORD='synthetic-migrator-db',
+                DB_RUNTIME_PASSWORD='synthetic-runtime-db', DEV_IMAGE_TAG='synthetic-unused', IMAGE_TAG='synthetic-unused')
             values.update(settings)
             env_file = folder / '.env'
             env_file.write_text(''.join(name + '=' + value + '\n' for name, value in values.items()))
