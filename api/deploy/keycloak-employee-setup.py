@@ -56,7 +56,7 @@ def main():
     if not realm.get('enabled'):
         raise RuntimeError('Realm disabled; enablement requires a separate explicit operation')
     web_clients = api('GET', '/clients?clientId=cleaning-suite-web')
-    if len(web_clients) != 1 or web_clients[0].get('clientId') != 'cleaning-suite-web' or not web_clients[0].get('enabled'):
+    if len(web_clients) != 1 or web_clients[0].get('clientId') != 'cleaning-suite-web' or not web_clients[0].get('enabled') or web_clients[0].get('publicClient') is not True or web_clients[0].get('standardFlowEnabled') is not True:
         raise RuntimeError('The enabled cleaning-suite-web client must exist before identity setup')
     registered = web_clients[0].get('redirectUris', [])
     for actual in args.redirect_uri:
@@ -118,7 +118,7 @@ def main():
         management_id = quote(management[0]['id'], safe='')
         mappings = '/users/' + quote(user['id'], safe='') + '/role-mappings/clients/' + management_id
         existing = api('GET', mappings)
-        allowed = {'manage-users', 'query-users', 'view-users', 'view-realm', 'view-clients'}
+        allowed = {'manage-users', 'query-users', 'view-users', 'view-realm'}
         if any(role.get('name') not in allowed for role in existing):
             raise RuntimeError('Runtime has unexpected administration roles; review manually, no silent revocation')
         user_base = '/users/' + quote(user['id'], safe='')

@@ -130,7 +130,7 @@ public class KeycloakEmployeeIdentityProviderTests
     }
     private static KeycloakEmployeeIdentityProvider Provider(FakeKeycloak transport) {
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Auth:Keycloak:ServerUrl"] = "https://auth.invalid", ["Auth:Keycloak:TenantAccounts:tenant-a:ClientId"] = "employee-runtime", ["Auth:Keycloak:TenantAccounts:tenant-a:ClientSecret"] = "synthetic-secret" }).Build();
-        return new(new TenantKeycloakClients(new HttpClient(transport), config), config);
+        return new(new TenantKeycloakClients(new HttpClient(transport), config), config, new KeycloakInvitationPreflight(new HttpClient(transport)));
     }
     private sealed class FakeKeycloak : HttpMessageHandler
     {
@@ -159,7 +159,15 @@ public class KeycloakEmployeeIdentityProviderTests
             if (path.EndsWith("/realms/tenant-a")) return Json(new { enabled = true,
                 attributes = FrontendConfigured ? new Dictionary<string, string> { ["frontendUrl"] = "https://auth.invalid" } : new(),
                 smtpServer = HasSmtp ? new Dictionary<string, string> { ["host"] = "smtp.invalid", ["from"] = "noreply@example.invalid", ["password"] = "********" } : new() });
-            if (path.Contains("/clients?")) return Json(new[] { new { clientId = "cleaning-suite-web", enabled = true, redirectUris = new[] { "https://site.invalid/*" } } });
+            if (request.RequestUri.AbsolutePath.EndsWith("openid-connect/auth")) {
+                Assert.Null(request.Headers.Authorization);
+                var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(request.RequestUri.Query);
+                var redirect = query["redirect_uri"].ToString();
+                if (!redirect.StartsWith("https://site.invalid/", StringComparison.Ordinal)) return new(HttpStatusCode.BadRequest);
+                var response = new HttpResponseMessage(HttpStatusCode.Redirect);
+                response.Headers.Location = new Uri(redirect + "&error=login_required&state=" + query["state"]);
+                return response;
+            }
             if (path.EndsWith("/role-mappings/realm")) return Json(new[] { new { id = Role, name = Role }, new { id = "unrelated", name = "unrelated" } });
             if (path.Contains("/roles/")) return Json(new { id = path.Split('/').Last(), name = path.Split('/').Last() });
             object user = new { id = "user-a", email = "cleaner@example.invalid", enabled = true, emailVerified = Verified,

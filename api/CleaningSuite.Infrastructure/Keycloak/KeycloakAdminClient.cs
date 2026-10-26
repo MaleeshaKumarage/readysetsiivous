@@ -90,6 +90,9 @@ public class KeycloakAdminClient
     public Task CreateRoleAsync(string realm, string roleName, CancellationToken ct = default) =>
         SendAsync(HttpMethod.Post, $"admin/realms/{realm}/roles", ct, new { name = roleName });
 
+    public Task DeleteRealmAsync(string realm, CancellationToken ct = default) =>
+        SendWithoutResultAsync(HttpMethod.Delete, $"admin/realms/{Uri.EscapeDataString(realm)}", ct);
+
     public Task CreateClientAsync(string realm, object client, CancellationToken ct = default) =>
         SendAsync(HttpMethod.Post, $"admin/realms/{realm}/clients", ct, client);
 

@@ -55,48 +55,60 @@ public class KeycloakProvisioner : IKeycloakProvisioner
         var temporaryPassword = GenerateTemporaryPassword();
 
         await _admin.CreateRealmAsync(slug, ct);
-        await WaitForRealmAsync(slug, ct);
-
-        await _admin.CreateRoleAsync(slug, "admin", ct);
-        await _admin.CreateRoleAsync(slug, "employee", ct);
-        await _admin.CreateRoleAsync(slug, "manager", ct);
-
-        await _admin.CreateClientAsync(slug, new
+        try
         {
-            clientId = ClientId,
-            name = $"{companyName} web",
-            enabled = true,
-            publicClient = true,
-            standardFlowEnabled = true,
-            directAccessGrantsEnabled = true,
-            redirectUris,
-            webOrigins = new[] { "+" },
-            protocolMappers = new[] { AudienceMapper(_resources.TenantAudience) },
-        }, ct);
+            await WaitForRealmAsync(slug, ct);
 
-        if (runtime is not null)
-            await ConfigureRuntimeAccountAsync(slug, runtime["ClientId"]!, runtime["ClientSecret"]!, ct);
+            await _admin.CreateRoleAsync(slug, "admin", ct);
+            await _admin.CreateRoleAsync(slug, "employee", ct);
+            await _admin.CreateRoleAsync(slug, "manager", ct);
 
-        var userId = await _admin.CreateUserAsync(slug, new
-        {
-            username = ownerEmail,
-            email = ownerEmail,
-            firstName = ownerFirstName,
-            lastName = ownerLastName,
-            enabled = true,
-            credentials = new[]
+            await _admin.CreateClientAsync(slug, new
             {
-                new { type = "password", value = temporaryPassword, temporary = true },
-            },
-            requiredActions = new[] { "UPDATE_PASSWORD" },
-        }, ct);
+                clientId = ClientId,
+                name = $"{companyName} web",
+                enabled = true,
+                publicClient = true,
+                standardFlowEnabled = true,
+                directAccessGrantsEnabled = true,
+                redirectUris,
+                webOrigins = new[] { "+" },
+                protocolMappers = new[] { AudienceMapper(_resources.TenantAudience) },
+            }, ct);
 
-        var adminRole = await _admin.GetRoleAsync(slug, "admin", ct);
-        await _admin.AssignRealmRoleAsync(slug, userId, new object[] { adminRole }, ct);
+            if (runtime is not null)
+                await ConfigureRuntimeAccountAsync(slug, runtime["ClientId"]!, runtime["ClientSecret"]!, ct);
 
-        _logger.LogInformation("Provisioned tenant realm {Realm} for {Company}", slug, companyName);
+            var userId = await _admin.CreateUserAsync(slug, new
+            {
+                username = ownerEmail,
+                email = ownerEmail,
+                firstName = ownerFirstName,
+                lastName = ownerLastName,
+                enabled = true,
+                credentials = new[]
+                {
+                    new { type = "password", value = temporaryPassword, temporary = true },
+                },
+                requiredActions = new[] { "UPDATE_PASSWORD" },
+            }, ct);
 
-        return new ProvisionedTenant(slug, slug, ClientId, ownerEmail, temporaryPassword);
+            var adminRole = await _admin.GetRoleAsync(slug, "admin", ct);
+            await _admin.AssignRealmRoleAsync(slug, userId, new object[] { adminRole }, ct);
+
+            _logger.LogInformation("Provisioned tenant realm {Realm} for {Company}", slug, companyName);
+
+            return new ProvisionedTenant(slug, slug, ClientId, ownerEmail, temporaryPassword);
+        }
+        catch
+        {
+            // CreateRealm succeeded in this attempt. A conflict/failed create never reaches
+            // this cleanup, so an existing tenant can never be deleted on a retry.
+            using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            try { await _admin.DeleteRealmAsync(slug, cleanup.Token); }
+            catch { _logger.LogError("Failed to remove incomplete newly created realm {Realm}; explicit reconciliation required", slug); }
+            throw;
+        }
     }
 
     private async Task ConfigureRuntimeAccountAsync(string realm, string clientId, string secret, CancellationToken ct)
@@ -110,7 +122,7 @@ public class KeycloakProvisioner : IKeycloakProvisioner
         var management = (await _admin.GetClientsAsync(realm, "realm-management", ct))[0];
         var managementId = management.GetProperty("id").GetString()!;
         var roles = new List<object>();
-        foreach (var name in new[] { "manage-users", "query-users", "view-users", "view-realm", "view-clients" })
+        foreach (var name in new[] { "manage-users", "query-users", "view-users", "view-realm" })
             roles.Add(await _admin.GetClientRoleAsync(realm, managementId, name, ct));
         await _admin.AssignClientRolesAsync(realm, account.GetProperty("id").GetString()!, managementId, roles.ToArray(), ct);
         var profile = await _admin.GetUserProfileAsync(realm, ct);
@@ -131,8 +143,11 @@ public class KeycloakProvisioner : IKeycloakProvisioner
             if (string.IsNullOrWhiteSpace(smtp["user"]) || string.IsNullOrWhiteSpace(smtp["password"]))
                 throw new KeycloakException("Invitation SMTP authentication configuration is incomplete");
         }
-        await _admin.UpdateRealmAsync(realm, new { attributes = new Dictionary<string,string> {
-            ["frontendUrl"] = _configuration["Auth:Keycloak:ServerUrl"]!.TrimEnd('/') }, smtpServer = smtp }, ct);
+        var current = await _admin.GetRealmAsync(realm, ct);
+        var realmAttributes = current.TryGetProperty("attributes", out var existingAttributes) && existingAttributes.ValueKind == JsonValueKind.Object
+            ? existingAttributes.EnumerateObject().ToDictionary(p => p.Name, p => (object)p.Value.Clone()) : new Dictionary<string, object>();
+        realmAttributes["frontendUrl"] = _configuration["Auth:Keycloak:ServerUrl"]!.TrimEnd('/');
+        await _admin.UpdateRealmAsync(realm, new { attributes = realmAttributes, smtpServer = smtp }, ct);
     }
 
     public Task<bool> RealmExistsAsync(string realm, CancellationToken ct = default) =>

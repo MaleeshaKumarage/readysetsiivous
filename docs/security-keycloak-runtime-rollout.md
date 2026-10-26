@@ -127,3 +127,37 @@ manual review. No broad or inherited privilege is silently revoked or accepted.
 The Python rehearsal also probes cross-realm reads, forbidden configuration writes and
 forbidden administrative role mapping directly with the scoped token. Its disposable
 realm deletion is confined to generated `scoped-a-*`/`scoped-b-*` names on loopback CI.
+
+
+### Confidential client isolation and public invitation preflight
+
+Tenant runtime receives only `manage-users`, `query-users`, `view-users`, and
+`view-realm`. Never grant `view-clients`: Keycloak's confidential client-secret
+endpoint accepts client view permission. Existing accounts with this grant require
+explicit operator review/removal; setup refuses unexpected grants rather than
+silently revoking them. No preview fine-grained authorization feature is enabled.
+
+Invitation validation retains live realm enabled/frontend/SMTP, role and ownership
+profile checks. It validates the web client and exact landing URI through a public
+OIDC code-flow authorization request with PKCE and `prompt=none`. A dedicated
+HTTP client sends no administrative token or cookies and never follows redirects.
+Within ten seconds it must receive a login/interaction-required error redirect to
+the exact landing path and original query, with matching random state and the
+configured public issuer when present. Extra code/token or unexpected fields fail
+closed. Internal transport uses `AdminServerUrl`; issuer comparison uses `ServerUrl`.
+The response body is not buffered. Setup still inspects the full public web-client
+configuration with its separate administration credentials.
+The public probe establishes current authorization and redirect acceptance; it does
+not establish that the client is public. Setup separately requires `publicClient`
+and `standardFlowEnabled` to be true before reporting clean prerequisites.
+
+The exact-version synthetic matrix must also deny runtime access to its own and a
+canary confidential client's secret, verify that realm reads mask the SMTP password,
+and reject disabled/missing clients and unregistered redirects. Existing native
+invitation delivery remains a required compatibility gate.
+
+After a successful new-realm create, a subsequent provisioning failure attempts
+cleanup with an independent ten-second deadline. A create conflict never triggers
+deletion. If cleanup fails, retain the realm for explicit reconciliation; a retry
+must not adopt or delete the existing realm. Provisioning merges owned frontend
+attributes into the current realm attributes before updating SMTP.

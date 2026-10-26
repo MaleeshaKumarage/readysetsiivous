@@ -74,6 +74,7 @@ public class KeycloakAudienceProvisioningTests
             new KeycloakResourceOptions(config), config)
             .ProvisionAsync("tenant-test", "Test", "owner@example.invalid", "Test", "Owner", new[] { "https://site.test/*" });
         using var realm = JsonDocument.Parse(Assert.Single(transport.RealmUpdates));
+        Assert.Equal("preserved", realm.RootElement.GetProperty("attributes").GetProperty("unrelated").GetString());
         var smtp = realm.RootElement.GetProperty("smtpServer");
         Assert.Equal((auth ?? true) ? "true" : "false", smtp.GetProperty("auth").GetString());
         Assert.Equal((startTls ?? true) ? "true" : "false", smtp.GetProperty("starttls").GetString());
@@ -91,6 +92,7 @@ public class KeycloakAudienceProvisioningTests
             if (path.EndsWith("/token")) return Json(new { access_token = "test-token", expires_in = 3600 });
             if (request.Method == HttpMethod.Put && path == "/admin/realms/tenant-test")
                 RealmUpdates.Add(await request.Content!.ReadAsStringAsync(ct));
+            if (request.Method == HttpMethod.Get && path == "/admin/realms/tenant-test") return Json(new { attributes = new { unrelated = "preserved" } });
             if (request.Method == HttpMethod.Get && path.EndsWith("/clients")) return Json(new[] { new { id = "client-id" } });
             if (request.Method == HttpMethod.Get && path.EndsWith("/service-account-user")) return Json(new { id = "service-user" });
             if (request.Method == HttpMethod.Get && path.EndsWith("/users/profile")) return Json(new { attributes = Array.Empty<object>() });

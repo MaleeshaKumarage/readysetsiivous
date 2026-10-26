@@ -5,7 +5,7 @@ using CleaningSuite.Domain.Employees;
 using Microsoft.Extensions.Configuration;
 
 namespace CleaningSuite.Infrastructure.Keycloak;
-public sealed class KeycloakEmployeeIdentityProvider(TenantKeycloakClients identityClients, IConfiguration configuration) : IEmployeeIdentityProvider
+public sealed class KeycloakEmployeeIdentityProvider(TenantKeycloakClients identityClients, IConfiguration configuration, KeycloakInvitationPreflight? preflight = null) : IEmployeeIdentityProvider
 {
     private const string ClientId = "cleaning-suite-web";
     private const string OwnerAttribute = "cleaning_employee_id";
@@ -16,12 +16,7 @@ public sealed class KeycloakEmployeeIdentityProvider(TenantKeycloakClients ident
             if (!Boolean(realm, "enabled")) throw new EmployeeInviteConfigurationException("The tenant's login realm is disabled.");
             if (role == Employee.RoleManager) await identityClients.ForTenant(tenantId).GetRoleAsync(tenantId, Employee.RoleManager, ct);
             foreach (var requiredRole in new[] { Employee.RoleAdmin, Employee.RoleEmployee }) await identityClients.ForTenant(tenantId).GetRoleAsync(tenantId, requiredRole, ct);
-            var clients = await identityClients.ForTenant(tenantId).GetClientsAsync(tenantId, ClientId, ct);
-            var client = clients.EnumerateArray().FirstOrDefault(c => String(c, "clientId") == ClientId);
-            if (client.ValueKind == JsonValueKind.Undefined || !Boolean(client, "enabled")
-                || !client.TryGetProperty("redirectUris", out var redirects)
-                || !redirects.EnumerateArray().Any(uri => RedirectAllowed(uri.GetString(), redirectUri)))
-                throw new EmployeeInviteConfigurationException("The account landing URL is not registered for the Keycloak web client.");
+            await (preflight ?? new KeycloakInvitationPreflight()).ValidateAsync(configuration, tenantId, redirectUri, ct);
             var attributes = realm.TryGetProperty("attributes", out var existing) && existing.ValueKind == JsonValueKind.Object
                 ? JsonSerializer.Deserialize<Dictionary<string, string>>(existing.GetRawText())! : new();
             var publicUrl = configuration["Auth:Keycloak:ServerUrl"]!.TrimEnd('/');
@@ -149,8 +144,6 @@ public sealed class KeycloakEmployeeIdentityProvider(TenantKeycloakClients ident
         if (unwanted.Length > 0) await identityClients.ForTenant(tenantId).RemoveRealmRolesAsync(tenantId, userId, unwanted, ct);
         if (!existing.EnumerateArray().Any(r => String(r, "name") == role)) await identityClients.ForTenant(tenantId).AssignRealmRoleAsync(tenantId, userId, new object[] { wanted }, ct);
     }
-    private static bool RedirectAllowed(string? registered, string actual) => registered is not null &&
-        (registered == actual || (registered.EndsWith("/*", StringComparison.Ordinal) && actual.StartsWith(registered[..^1], StringComparison.Ordinal)));
     private static string String(JsonElement element, string name) => element.TryGetProperty(name, out var property) && property.ValueKind == JsonValueKind.String ? property.GetString() ?? "" : "";
     private static bool Boolean(JsonElement element, string name) => element.TryGetProperty(name, out var property) && property.ValueKind == JsonValueKind.True;
 }

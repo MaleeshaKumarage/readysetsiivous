@@ -14,7 +14,7 @@ setup = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(setup)
 ARGS = ['setup','--server','https://auth.invalid','--tenant','tenant-a','--public-url','https://auth.invalid',
         '--redirect-uri','https://site.invalid/account/?tenant=tenant-a']
-ALLOWED = ['manage-users','query-users','view-users','view-realm','view-clients']
+ALLOWED = ['manage-users','query-users','view-users','view-realm']
 
 
 class Response:
@@ -27,7 +27,7 @@ class Response:
 class FakeTransport:
     def __init__(self, web=None, needs_setup=False, extra_effective=None, group=False):
         self.requests = []
-        self.web = web if web is not None else [{'id':'web','clientId':'cleaning-suite-web','enabled':True,'redirectUris':['https://site.invalid/*']}]
+        self.web = web if web is not None else [{'id':'web','clientId':'cleaning-suite-web','enabled':True,'publicClient':True,'standardFlowEnabled':True,'redirectUris':['https://site.invalid/*']}]
         self.needs_setup = needs_setup
         self.extra_effective = extra_effective
         self.group = group
@@ -80,12 +80,16 @@ class SetupCheckTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'enabled cleaning-suite-web'):
             self.run_check(FakeTransport(web=[{'clientId':'cleaning-suite-web','enabled':False,'redirectUris':['https://site.invalid/*']}]))
 
+    def test_confidential_web_client_is_rejected(self):
+        with self.assertRaisesRegex(RuntimeError, 'enabled cleaning-suite-web'):
+            self.run_check(FakeTransport(web=[{'clientId':'cleaning-suite-web','enabled':True,'publicClient':False,'standardFlowEnabled':True,'redirectUris':['https://site.invalid/*']}]))
+
     def test_unregistered_redirect_fails_before_clean_result(self):
         with self.assertRaisesRegex(RuntimeError, 'landing URI is not registered'):
-            self.run_check(FakeTransport(web=[{'clientId':'cleaning-suite-web','enabled':True,'redirectUris':['https://other.invalid/*']}]))
+            self.run_check(FakeTransport(web=[{'clientId':'cleaning-suite-web','enabled':True,'publicClient':True,'standardFlowEnabled':True,'redirectUris':['https://other.invalid/*']}]))
 
     def test_exact_redirect_is_supported(self):
-        self.assertEqual(0,self.run_check(FakeTransport(web=[{'clientId':'cleaning-suite-web','enabled':True,'redirectUris':['https://site.invalid/account/?tenant=tenant-a']}])))
+        self.assertEqual(0,self.run_check(FakeTransport(web=[{'clientId':'cleaning-suite-web','enabled':True,'publicClient':True,'standardFlowEnabled':True,'redirectUris':['https://site.invalid/account/?tenant=tenant-a']}])))
 
     def test_effective_composite_privilege_is_rejected_even_if_direct_roles_are_safe(self):
         with self.assertRaisesRegex(RuntimeError, 'effective client/composite'):
