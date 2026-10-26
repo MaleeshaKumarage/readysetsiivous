@@ -122,8 +122,9 @@ public class KeycloakProvisioner : IKeycloakProvisioner
         await _admin.UpdateUserProfileAsync(realm, fields, ct);
         var smtpSection = _configuration!.GetSection("EmployeeInvites:Smtp");
         var smtp = new Dictionary<string, string> { ["host"] = smtpSection["Host"]!, ["from"] = smtpSection["From"]!,
-            ["port"] = smtpSection["Port"] ?? "587", ["auth"] = smtpSection["Auth"] ?? "true",
-            ["starttls"] = smtpSection["StartTls"] ?? "true", ["ssl"] = smtpSection["Ssl"] ?? "false" };
+            ["port"] = smtpSection["Port"] ?? "587", ["auth"] = smtpSection.GetValue("Auth", true).ToString().ToLowerInvariant(),
+            ["starttls"] = smtpSection.GetValue("StartTls", true).ToString().ToLowerInvariant(),
+            ["ssl"] = smtpSection.GetValue("Ssl", false).ToString().ToLowerInvariant() };
         if (smtp["auth"].Equals("true", StringComparison.OrdinalIgnoreCase)) {
             smtp["user"] = smtpSection["User"] ?? "";
             smtp["password"] = smtpSection.GetValue<bool>("UseResendApiKey") ? _configuration["Resend:ApiKey"] ?? "" : smtpSection["Password"] ?? "";
