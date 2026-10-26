@@ -75,14 +75,21 @@ public class UploadContentValidatorTests
     }
 
     [Fact]
-    public void Agreement_pdf_rejects_corrupt_and_oversized_content()
+    public async Task Agreement_pdf_rejects_corrupt_and_oversized_content()
     {
         QuestPDF.Settings.License = LicenseType.Community;
         var validPdf = Document.Create(c => c.Page(p => p.Content().Text("Valid agreement"))).GeneratePdf();
-        _validator.ValidateAgreementPdf(validPdf);
-        _validator.ValidateGeneratedAgreementPdf(validPdf);
-        Assert.Throws<ValidationException>(() => _validator.ValidateAgreementPdf("not a pdf"u8.ToArray()));
-        Assert.Throws<UploadPayloadTooLargeException>(() => _validator.ValidateAgreementPdf(new byte[20 * 1024 * 1024 + 1]));
+        await new UploadContentValidator(new InspectionWorker()).ValidateAgreementPdfAsync(validPdf);
+        await new UploadContentValidator(new InspectionWorker()).ValidateGeneratedAgreementPdfAsync(validPdf);
+        await Assert.ThrowsAsync<ValidationException>(() => _validator.ValidateAgreementPdfAsync("not a pdf"u8.ToArray()));
+        await Assert.ThrowsAsync<UploadPayloadTooLargeException>(() => _validator.ValidateAgreementPdfAsync(new byte[20 * 1024 * 1024 + 1]));
+    }
+
+    private sealed class InspectionWorker : CleaningSuite.Infrastructure.Agreements.IPdfWorkerClient
+    {
+        public Task InspectAsync(ReadOnlyMemory<byte> content, bool generated, CancellationToken ct)
+        { CleaningSuite.Infrastructure.Agreements.PdfRasterBudget.Inspect(content.ToArray()); return Task.CompletedTask; }
+        public Task SignAsync(string original, IReadOnlyList<CleaningSuite.Domain.Agreements.Signer> signers, string output, CancellationToken ct) => throw new NotImplementedException();
     }
 
     private static byte[] Image(SKEncodedImageFormat format, int width, int height)

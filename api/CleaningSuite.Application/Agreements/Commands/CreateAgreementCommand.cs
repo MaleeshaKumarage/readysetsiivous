@@ -49,7 +49,7 @@ public class CreateAgreementHandler : IRequestHandler<CreateAgreementCommand, Ag
         _ = await _companies.GetAsync(request.CompanyId, ct)
             ?? throw new NotFoundException("Company", request.CompanyId);
         var pdfBytes = await BoundedStreamReader.ReadAsync(request.Pdf, 20 * 1024 * 1024, "Agreement PDF", ct);
-        _uploads.ValidateAgreementPdf(pdfBytes);
+        await _uploads.ValidateAgreementPdfAsync(pdfBytes, ct);
         var tenantId = _context.TenantId;
         var agreement = new Agreement
         {

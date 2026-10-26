@@ -2,14 +2,13 @@ using CleaningSuite.Application.Common;
 using CleaningSuite.Domain.QualityCycle;
 using FluentValidation;
 using FluentValidation.Results;
-using PDFtoImage;
 using SkiaSharp;
 using System.Diagnostics.CodeAnalysis;
 using System.Buffers.Binary;
 
 namespace CleaningSuite.Infrastructure.Uploads;
 
-public sealed class UploadContentValidator : IUploadContentValidator
+public sealed class UploadContentValidator(CleaningSuite.Infrastructure.Agreements.IPdfWorkerClient? pdfWorker = null) : IUploadContentValidator
 {
     private const int MaxPdfBytes = 20 * 1024 * 1024;
     private const int MaxPdfPages = 500;
@@ -26,33 +25,16 @@ public sealed class UploadContentValidator : IUploadContentValidator
 
     private static readonly byte[] PngMagic = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 
-    public void ValidateAgreementPdf(ReadOnlyMemory<byte> content)
-        => ValidatePdf(content, MaxPdfBytes, "Agreement PDF");
-
-    public void ValidateGeneratedAgreementPdf(ReadOnlyMemory<byte> content)
-        => ValidatePdf(content, 100 * 1024 * 1024, "Signed PDF");
-
-    private static void ValidatePdf(ReadOnlyMemory<byte> content, int maxBytes, string label)
+    public Task ValidateAgreementPdfAsync(ReadOnlyMemory<byte> content, CancellationToken ct = default)
     {
-        if (content.Length > maxBytes)
-            throw new UploadPayloadTooLargeException($"{label} exceeds the supported size limit.");
-        if (content.Length == 0)
-            Invalid("Pdf", $"Choose a non-empty {label.ToLowerInvariant()} document.");
+        CleaningSuite.Infrastructure.Agreements.PdfWorkerClient.CheckEnvelope(content.Span, MaxPdfBytes);
+        return (pdfWorker ?? throw new InvalidOperationException("PDF worker is required.")).InspectAsync(content, false, ct);
+    }
 
-        try
-        {
-            var bytes = content.ToArray();
-            if (bytes.Length < 5 || !bytes.AsSpan(0, 5).SequenceEqual("%PDF-"u8))
-                Invalid("Pdf", $"The {label.ToLowerInvariant()} is not a valid PDF document.");
-            var pageCount = Conversion.GetPageCount(bytes, password: null);
-            if (pageCount is < 1 or > MaxPdfPages)
-                Invalid("Pdf", $"PDF documents must contain between 1 and {MaxPdfPages} pages.");
-        }
-        catch (ValidationException) { throw; }
-        catch (Exception)
-        {
-            Invalid("Pdf", $"The {label.ToLowerInvariant()} is corrupt, encrypted, or unsupported.");
-        }
+    public Task ValidateGeneratedAgreementPdfAsync(ReadOnlyMemory<byte> content, CancellationToken ct = default)
+    {
+        CleaningSuite.Infrastructure.Agreements.PdfWorkerClient.CheckEnvelope(content.Span, 100 * 1024 * 1024);
+        return (pdfWorker ?? throw new InvalidOperationException("PDF worker is required.")).InspectAsync(content, true, ct);
     }
 
     public void ValidateSignaturePng(ReadOnlyMemory<byte> content)

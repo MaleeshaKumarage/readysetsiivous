@@ -1,0 +1,15 @@
+name: PDF worker containment
+on:
+  pull_request:
+    paths: ['api/**', 'scripts/test-pdf-worker-container.py', '.github/workflows/pdf-worker-security.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-containment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Published Linux native worker and resource controls
+        run: python3 scripts/test-pdf-worker-container.py

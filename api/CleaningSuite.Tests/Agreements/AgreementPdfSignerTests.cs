@@ -23,7 +23,7 @@ public class AgreementPdfSignerTests
                 new() { Name = "Alice", TypedName = "Alice", SignedAtUtc = DateTime.UtcNow, SignatureImagePath = signaturePath },
             };
 
-            var gen = new AgreementPdfSigner();
+            var gen = new NativeAgreementPdfSigner();
             await gen.GenerateSignedPdfAsync(original, signers, outPath, CancellationToken.None);
 
             // Page count is preserved.

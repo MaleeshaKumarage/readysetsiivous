@@ -25,3 +25,30 @@ Preserve the backup's `image.json` override when performing an operator recovery
 `python3 scripts/tests/test_deploy_api.py` exercises production deployment logic with synthetic Docker/curl command responses, including partial replacement, immutable rollback, wrong release health, failed rollback, secret redaction and migration gates. On Linux it additionally executes the real shell wrapper and external fake commands. `python3 scripts/tests/test_release_manifest.py` covers build/artifact provenance, ZIP bytes, asset hashes and workflow trust order. `deployment-tests.yml` runs both suites and shell syntax checks without production access.
 
 API references: [build action outputs](https://github.com/docker/build-push-action#outputs), [workflow runs](https://docs.github.com/en/rest/actions/workflow-runs), [artifacts](https://docs.github.com/en/rest/actions/artifacts), [Compose project/file/env options](https://docs.docker.com/reference/cli/docker/compose/), [Compose up](https://docs.docker.com/reference/cli/docker/compose/up/).
+
+
+## PDF companion lifecycle
+
+The selected Compose binds API and `pdf-worker` to the same immutable `API_IMAGE`.
+The controller snapshots the previous companion's presence, image ID and digest;
+it verifies existing native readiness before changing either service. Candidate
+worker startup and native readiness precede API replacement. Readiness executes a
+credential-free `--pdf-worker-check` in the worker cgroup: it checks release-aware
+HTTP health, signs a synthetic one-page PDF and reinspects the result. No published
+worker port or additional probe image is needed. Container checks also enforce the
+reviewed UID, limits, filesystem, environment and private-network boundary.
+
+Failure restores the previous worker before restoring API. If no previous worker
+existed, cleanup removes only the candidate container after checking Compose
+ownership and immutable identity; unrelated containers and networks are untouched.
+Worker-only startup failures do not recreate the still-running API. Recovery is
+reported verified only when both previous components (or previous worker absence)
+and the old API release have been checked. Private backups record companion state.
+
+Compatibility approval includes the PDF HTTP protocol and persisted output format:
+the previous API may briefly use the candidate worker before API replacement, and
+vice versa during recovery. Keep `approved: false` until both directions have been
+reviewed and rehearsed with the actual release pair. The protected tenant identity
+file is consumed only by API; the PDF companion never receives it. PR202 runtime
+identity support and PR203 database-role migration remain separate activation
+prerequisites. Merging deployment code does not authorize those production changes.

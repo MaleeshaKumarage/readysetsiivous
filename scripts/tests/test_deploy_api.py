@@ -27,11 +27,13 @@ OLD_ID = 'sha256:' + 'f' * 64
 
 
 class Commands:
-    def __init__(self, root, mode):
+    def __init__(self, root, mode, worker=False):
         self.root, self.mode, self.calls = root, mode, []
         self.current = 'old'
         self.recovering = False
         self.health_count = 0
+        self.worker_current = 'old' if worker else None
+        self.worker_recovering = False
 
     def __call__(self, args, **kwargs):
         args = list(args)
@@ -58,6 +60,19 @@ class Commands:
                                      'releaseSha': OLD if self.current == 'old' or self.mode == 'wrong_release' else SHA})
         elif args[0] == 'sleep':
             assert args == ['sleep', '2']
+        elif args[:2] == ['docker', 'ps']:
+            assert args[2:] == ['-a', '-q', '--filter', 'label=com.docker.compose.project=cleaning-suite', '--filter', 'label=com.docker.compose.service=pdf-worker']
+            result = 'worker-' + self.worker_current if self.worker_current else ''
+        elif args[:3] == ['docker', 'network', 'inspect']:
+            result = json.dumps([{'Internal': self.mode != 'worker_network', 'Labels': {'com.docker.compose.project': 'cleaning-suite', 'com.docker.compose.network': 'pdf-private'}}])
+        elif args[:2] == ['docker', 'exec']:
+            assert args[3:6] == ['dotnet', '/app/CleaningSuite.Api.dll', '--pdf-worker-check']
+            assert args[6] == (OLD if self.worker_current == 'old' else SHA)
+            if self.worker_current == 'new' and self.mode in ('worker_ready', 'worker_rollback_ready') or self.worker_recovering and self.mode == 'worker_rollback_ready': code = 1
+        elif args[:2] == ['docker', 'rm']:
+            assert args[2:] == ['-f', 'worker-new']
+            if self.mode == 'worker_cleanup': code = 1
+            else: self.worker_current = None
         elif args[:2] == ['docker', 'compose']:
             assert args[2:4] == ['--project-directory', str(self.root)]
             assert '--env-file' in args and '-f' in args
@@ -68,11 +83,17 @@ class Commands:
             elif op == 'config':
                 assert args[-3:] == ['config', '--format', 'json']
                 if self.mode == 'config': code = 2
-                result = json.dumps({'services': {'api': {'image': 'wrong' if self.mode == 'resolved_image' else IMAGE}}})
+                result = json.dumps({'services': {'api': {'image': 'wrong' if self.mode == 'resolved_image' else IMAGE}, 'pdf-worker': {'image': 'wrong' if self.mode == 'resolved_worker' else IMAGE}}})
             else:
-                assert args[-6:] == ['up', '-d', '--no-deps', '--pull', 'never', 'api']
+                assert args[-6:-1] == ['up', '-d', '--no-deps', '--pull', 'never']
+                assert args[-1] in ('api', 'pdf-worker')
                 assert args[args.index('-p') + 1] == 'cleaning-suite'
                 rollback = any(x.endswith('image.json') for x in args)
+                if args[-1] == 'pdf-worker':
+                    self.worker_current = 'old' if rollback else 'new'
+                    self.worker_recovering = rollback
+                    if not rollback and self.mode == 'worker_up': code = 5
+                    return SimpleNamespace(returncode=code, stdout=result, stderr='synthetic worker failure')
                 if rollback:
                     self.current, self.recovering = 'old', True
                     if self.mode == 'rollback_up': code = 6
@@ -91,6 +112,16 @@ class Commands:
             result = json.dumps([{'Id': OLD_ID if old else NEW_ID,
                                   'RepoDigests': [] if self.mode == 'no_previous_digest' and old else [OLD_IMAGE if old else IMAGE],
                                   'Config': {'Env': ['APP_RELEASE_SHA=' + (OLD if old or self.mode == 'wrong_image_release' else SHA)]}}])
+        elif args[:2] == ['docker', 'inspect'] and args[-1].startswith('worker-'):
+            old = args[-1] == 'worker-old'
+            result = json.dumps([{'Image': OLD_ID if old else ('wrong' if self.mode == 'worker_image_id' else NEW_ID),
+                'Config': {'Image': OLD_IMAGE if old else IMAGE, 'User': '1654:1654', 'Cmd': ['--pdf-worker-host'],
+                    'Env': ['APP_RELEASE_SHA=' + (OLD if old else SHA)] + (['SECRET=unexpected'] if not old and self.mode == 'worker_env' else []),
+                    'Labels': {'com.docker.compose.project': 'cleaning-suite', 'com.docker.compose.service': 'pdf-worker'}},
+                'State': {'Running': not (not old and self.mode == 'worker_stopped')},
+                'HostConfig': {'ReadonlyRootfs': True, 'Memory': 0 if self.mode == 'worker_memory' else 1024 ** 3, 'MemorySwap': 1024 ** 3,
+                    'NanoCpus': 1000000000, 'PidsLimit': 64, 'CapDrop': ['ALL'], 'SecurityOpt': ['no-new-privileges:true'], 'Tmpfs': {'/tmp': 'rw,noexec,nosuid,size=384m,uid=1654,gid=1654,mode=700'}},
+                'Mounts': [], 'NetworkSettings': {'Networks': {'cleaning-suite_pdf-private': {}}}}])
         elif args[:2] == ['docker', 'inspect']:
             old = args[-1] == 'old-container'
             result = json.dumps([{'Image': OLD_ID if old else ('wrong' if self.mode == 'image_id' else NEW_ID),
@@ -104,11 +135,11 @@ class Commands:
 
 
 class DeploymentTests(unittest.TestCase):
-    def run_deploy(self, mode='success', approved=True, compatible=True, key='new-owner-ai-secret'):
+    def run_deploy(self, mode='success', approved=True, compatible=True, key='new-owner-ai-secret', worker=False):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             old_env = b"API_IDENTITY_ENV_FILE=/protected/tenant-runtime.env\nIMAGE_TAG=sha-old\nDATABASE_PASSWORD=private-value\nGAME_GEMINI_API_KEY='old-owner-secret'\n"
-            old_config = b'services:\n  api:\n    image: old-tag\n'
+            old_config = b'services:\n  api:\n    image: old-tag\n' + (b'  pdf-worker:\n    image: old-worker-tag\n' if worker else b'')
             docker_home = root / '.docker'
             docker_home.mkdir()
             (docker_home / 'config.json').write_text(json.dumps({'currentContext': 'remote-production'}))
@@ -123,7 +154,7 @@ class DeploymentTests(unittest.TestCase):
             env = dict(PATH=os.environ.get('PATH', ''), HOME=tmp, GAME_GEMINI_API_KEY=key,
                        REGISTRY_USER='test-user', REGISTRY_TOKEN='test-secret', API_IMAGE='ambient-override',
                        DOCKER_CONTEXT='hostile-context', DOCKER_HOST='tcp://unrelated-host:2375')
-            commands = Commands(root, mode)
+            commands = Commands(root, mode, worker=worker)
             output, errors = io.StringIO(), io.StringIO()
             failed = None
             with patch.object(deploy.subprocess, 'run', commands), contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
@@ -200,6 +231,70 @@ class DeploymentTests(unittest.TestCase):
         failure, commands, _ = self.run_deploy(key='')
         self.assertIsNotNone(failure)
         self.assertFalse(any('pull' in c or 'up' in c for c in commands.calls))
+
+
+    def test_worker_starts_and_passes_native_readiness_before_api(self):
+        for previous in (False, True):
+            failure, commands, _ = self.run_deploy(worker=previous)
+            self.assertIsNone(failure)
+            self.assertEqual('new', commands.worker_current)
+            worker_up = next(i for i, c in enumerate(commands.calls) if 'up' in c and c[-1] == 'pdf-worker')
+            native = next(i for i, c in enumerate(commands.calls) if '--pdf-worker-check' in c and c[-1] == SHA)
+            api_up = next(i for i, c in enumerate(commands.calls) if 'up' in c and c[-1] == 'api')
+            self.assertLess(worker_up, native); self.assertLess(native, api_up)
+
+    def test_worker_failure_preserves_api_and_restores_previous_worker_or_absence(self):
+        for previous in (False, True):
+            for mode in ('worker_up', 'worker_ready', 'worker_stopped', 'worker_env'):
+                with self.subTest(previous=previous, mode=mode):
+                    failure, commands, errors = self.run_deploy(mode, worker=previous)
+                    self.assertIsNotNone(failure)
+                    self.assertEqual('old', commands.current)
+                    self.assertEqual('old' if previous else None, commands.worker_current)
+                    self.assertFalse(any('up' in c and c[-1] == 'api' for c in commands.calls))
+                    self.assertIn('restored and verified', errors)
+
+    def test_api_failure_recovers_both_services_or_cleans_new_worker(self):
+        for previous in (False, True):
+            failure, commands, errors = self.run_deploy('wrong_release', worker=previous)
+            self.assertIsNotNone(failure)
+            self.assertEqual('old', commands.current)
+            self.assertEqual('old' if previous else None, commands.worker_current)
+            self.assertIn('restored and verified', errors)
+
+    def test_partial_input_replacement_restores_files_without_recreating_services(self):
+        original = deploy.atomic
+        failed = False
+        def fail_candidate_config(path, raw):
+            nonlocal failed
+            if path.name == 'docker-compose.yml' and path.parent.name.startswith('tmp') and not failed:
+                failed = True
+                raise OSError('synthetic interrupted configuration replacement')
+            return original(path, raw)
+        with patch.object(deploy, 'atomic', side_effect=fail_candidate_config):
+            failure, commands, errors = self.run_deploy(worker=True)
+        self.assertIsNotNone(failure)
+        self.assertEqual('old', commands.current)
+        self.assertEqual('old', commands.worker_current)
+        self.assertFalse(any('up' in call for call in commands.calls))
+        self.assertIn('restored and verified', errors)
+
+    def test_worker_recovery_failure_keeps_private_recovery_inputs(self):
+        for mode, previous in [('worker_rollback_ready', True), ('worker_cleanup', False)]:
+            # A failed API replacement also exercises worker recovery/cleanup.
+            if mode == 'worker_cleanup':
+                with patch.object(deploy.Deployment, 'verify', side_effect=RuntimeError('synthetic API failure')):
+                    failure, _, errors = self.run_deploy(mode, worker=previous)
+            else:
+                failure, _, errors = self.run_deploy(mode, worker=previous)
+            self.assertIn('Deployment and rollback failed', str(failure))
+            self.assertNotIn('restored and verified', errors)
+
+    def test_wrong_worker_config_or_containment_fails_closed(self):
+        for mode in ('resolved_worker', 'worker_image_id', 'worker_memory', 'worker_network'):
+            failure, commands, _ = self.run_deploy(mode)
+            self.assertIsNotNone(failure)
+            self.assertFalse(any('up' in c and c[-1] == 'api' for c in commands.calls))
 
 
 
