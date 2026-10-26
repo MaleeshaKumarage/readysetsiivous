@@ -9,7 +9,7 @@ server = os.environ['SYNTHETIC_KEYCLOAK_URL'].rstrip('/')
 assert server.startswith(('http://127.0.0.1:', 'http://localhost:'))
 
 
-def request(method, path, body=None, token=None, form=False, allowed=(200,201,204)):
+def request(method, path, body=None, token=None, form=False, allowed=(200,201,204), observe=False):
     headers = {}
     if token: headers['Authorization'] = 'Bearer ' + token
     if body is not None: headers['Content-Type'] = 'application/x-www-form-urlencoded' if form else 'application/json'
@@ -21,7 +21,8 @@ def request(method, path, body=None, token=None, form=False, allowed=(200,201,20
     except HTTPError as error:
         status, raw, location = error.code, b'', None
     assert status in allowed, f'{method} {path.split("?")[0]} unexpected HTTP {status}'
-    return json.loads(raw) if raw else location
+    value=json.loads(raw) if raw else location
+    return (status,value) if observe else value
 
 
 def token(realm, client, secret):
@@ -114,8 +115,28 @@ def main():
     request('POST',root+'/users/'+user+'/logout',token=scoped)
     request('PUT',root+'/users/'+user,{'enabled':True},scoped)
     request('GET',root+'/roles/admin/users?first=0&max=100',token=scoped)
+    # Capability probes deliberately report allowed operations as security blockers.
+    # These are synthetic-only canaries; no production identity is touched.
+    canary_user_location=request('POST',root+'/users',{'username':'synthetic-administration-canary','enabled':True},admin)
+    canary_user=canary_user_location.rsplit('/',1)[1]
+    request('POST',root+'/users/'+canary_user+'/role-mappings/clients/'+management['id'],[forbidden],admin)
+    reset_status,_=request('PUT',root+'/users/'+canary_user+'/reset-password',
+        {'type':'password','value':'SyntheticResetCanaryOnly2026','temporary':False},scoped,allowed=(204,403),observe=True)
+    print('OBSERVED runtime reset-password on same-realm administrative canary: HTTP '+str(reset_status))
+    group_location=request('POST',root+'/groups',{'name':'synthetic-admin-role-carrier'},admin)
+    group=group_location.rsplit('/',1)[1]
+    request('POST',root+'/groups/'+group+'/role-mappings/clients/'+management['id'],[forbidden],admin)
+    join_status,_=request('PUT',root+'/users/'+service['id']+'/groups/'+group,token=scoped,allowed=(204,403),observe=True)
+    print('OBSERVED runtime joins administrative-role group: HTTP '+str(join_status))
+    escalated=False
+    if join_status==204:
+        refreshed=token(tenant,'employee-runtime',secret)
+        elevated_status,_=request('PUT',root,{'displayName':'Synthetic escalation canary'},refreshed,allowed=(204,403),observe=True)
+        escalated=elevated_status==204
+        print('OBSERVED refreshed group-derived runtime token realm mutation: HTTP '+str(elevated_status))
     # Explicit deletion confined to these synthetic realms, no external targets.
     for realm in (tenant,other): request('DELETE','/admin/realms/'+realm,token=admin)
+    assert reset_status==403 and join_status==403 and not escalated, 'SECURITY BLOCKER: built-in manage-users permits password reset or group-derived administration; architecture review required'
     print('PASS synthetic tenant identity operations and cross-realm/configuration/admin-role denials')
 
 

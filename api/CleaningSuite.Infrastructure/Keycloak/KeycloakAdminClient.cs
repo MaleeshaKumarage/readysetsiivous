@@ -64,8 +64,9 @@ public class KeycloakAdminClient
             throw new KeycloakException($"Admin token failed: {(int)response.StatusCode}");
 
         var payload = await response.Content.ReadFromJsonAsync<JsonElement>(ct);
-        _cachedToken = payload.GetProperty("access_token").GetString()
-            ?? throw new KeycloakException("access_token missing");
+        var accessToken = payload.GetProperty("access_token").GetString();
+        if (string.IsNullOrWhiteSpace(accessToken)) throw new KeycloakException("access_token missing");
+        _cachedToken = accessToken;
         var expiresIn = payload.GetProperty("expires_in").GetInt32();
         _tokenExpiresUtc = DateTime.UtcNow.AddSeconds(expiresIn);
 
@@ -76,6 +77,17 @@ public class KeycloakAdminClient
     {
         var response = await SendAsync(HttpMethod.Get, $"admin/realms/{realm}", ct, expectedNotFoundOk: true);
         return response.IsSuccessStatusCode;
+    }
+
+    // Prove the exact delivered credential against its realm token endpoint, without
+    // using the platform token cache or reading a masked client-secret representation.
+    public async Task VerifyServiceAccountAsync(string realm, string clientId, string secret, CancellationToken ct = default)
+    {
+        if (!System.Text.RegularExpressions.Regex.IsMatch(realm, "^[a-z0-9][a-z0-9-]{2,62}$")
+            || (_allowedRealm is not null && realm != _allowedRealm))
+            throw new KeycloakException("Invalid service-account verification realm");
+        var verifier = new KeycloakAdminClient(_http, _serverUrl, realm, clientId, secret, realm);
+        await verifier.GetAdminTokenAsync(ct);
     }
 
     public Task CreateRealmAsync(string realm, CancellationToken ct = default) =>
@@ -173,12 +185,23 @@ public class KeycloakAdminClient
     private void ValidatePath(HttpMethod method, string path)
     {
         if (_allowedRealm is null) return; // Explicit platform provisioner only.
+        // Reject segments which URI/proxy normalization could turn into another
+        // endpoint. Query values may legitimately contain encoded email/redirects.
+        var pathOnly = path.Split('?', 2)[0];
+        if (pathOnly.Contains('\\') || pathOnly.Contains('#') || pathOnly.StartsWith('/')
+            || pathOnly.Split('/').Any(segment => {
+                var decoded = Uri.UnescapeDataString(segment);
+                return decoded is "" or "." or ".." || decoded.Contains('/') || decoded.Contains('\\')
+                    || decoded.Contains('%') || decoded.Contains('?') || decoded.Contains('#')
+                    || decoded.Any(char.IsControl);
+            }))
+            throw new KeycloakException("Tenant identity request path is not canonical");
         var prefix = $"admin/realms/{_allowedRealm}";
         if (!path.StartsWith(prefix + "/", StringComparison.Ordinal) && path != prefix)
             throw new KeycloakException("Tenant identity credentials cannot access another realm");
         var relative = path[prefix.Length..];
         // Employee runtime owns users and their mappings, never realm/client/profile configuration.
-        if (method != HttpMethod.Get && (!relative.StartsWith("/users", StringComparison.Ordinal)
+        if (method != HttpMethod.Get && (!(relative == "/users" || relative.StartsWith("/users/", StringComparison.Ordinal))
             || relative.StartsWith("/users/profile", StringComparison.Ordinal)))
             throw new KeycloakException("Tenant identity credentials cannot modify realm configuration");
     }

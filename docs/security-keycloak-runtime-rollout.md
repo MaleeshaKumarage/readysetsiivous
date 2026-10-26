@@ -161,3 +161,30 @@ cleanup with an independent ten-second deadline. A create conflict never trigger
 deletion. If cleanup fails, retain the realm for explicit reconciliation; a retry
 must not adopt or delete the existing realm. Provisioning merges owned frontend
 attributes into the current realm attributes before updating SMTP.
+
+### Credential proof and remaining coarse-role blocker
+
+Check/apply must authenticate the supplied runtime client secret against its named
+realm token endpoint. For an existing client this proof precedes setup mutations;
+an incorrect delivered secret fails without rotating the existing credential.
+A missing client checked without apply remains incomplete. After explicit creation,
+apply verifies the newly delivered credential. A check token exchange changes no
+realm configuration; tokens and secrets must never appear in output. Provisioning
+also proves the new runtime credential with a fresh token exchange and ten-second
+deadline before reporting the tenant ready; failure enters new-realm cleanup.
+
+The built-in `manage-users` role is coarse: it permits password resets on same-realm
+administrative users and group membership changes. A group carrying a Keycloak
+administration role can therefore escalate a stolen runtime credential. Removing
+`view-clients` does not remove this separate capability. The synthetic gate now
+reports the actual reset/group/escalated-mutation statuses and fails if these
+operations succeed. Do not interpret previous direct-role-mapping denials as
+proof against indirect group escalation. A green gate and approved architecture
+decision are required before merge or rollout.
+
+Keeping public Keycloak administration REST inaccessible, with an explicit private
+`AdminServerUrl`, reduces exposure of stolen credentials outside the service network;
+it does not narrow the same-realm rights available from that network. Achieving
+server-enforced per-user or endpoint restrictions needs a separately reviewed design
+(for example a restricted administration boundary or supported fine-grained model).
+No preview feature, new intermediary, or version upgrade is enabled by this change.

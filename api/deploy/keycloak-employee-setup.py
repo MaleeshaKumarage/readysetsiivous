@@ -5,7 +5,7 @@ import json
 import os
 import re
 from urllib.error import HTTPError
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, urlsplit, urlencode
 from urllib.request import Request, urlopen
 
 
@@ -52,6 +52,36 @@ def main():
         if args.apply:
             api(method, path, body)
 
+    client_id = os.environ.get('KEYCLOAK_TENANT_RUNTIME_CLIENT_ID', 'employee-runtime')
+    if not re.fullmatch(r'[a-z0-9][a-z0-9-]{2,62}', client_id):
+        raise RuntimeError('Invalid explicit runtime client name')
+    secret = os.environ.get('KEYCLOAK_TENANT_RUNTIME_CLIENT_SECRET')
+    clients = api('GET', '/clients?clientId=' + quote(client_id, safe=''))
+    if len(clients) > 1:
+        raise RuntimeError('Ambiguous runtime client')
+
+    def verify_runtime_credentials():
+        if not secret:
+            raise RuntimeError('Supply the protected runtime client secret to verify delivered credentials')
+        # Never rotate an existing secret to make verification pass. No admin bearer
+        # is sent to the realm-scoped client-credentials endpoint.
+        req = Request(args.server.rstrip('/') + '/realms/' + quote(args.tenant, safe='') + '/protocol/openid-connect/token',
+            data=urlencode({'grant_type':'client_credentials','client_id':client_id,'client_secret':secret}).encode(),
+            headers={'Content-Type':'application/x-www-form-urlencoded'}, method='POST')
+        try:
+            with urlopen(req, timeout=10) as response:
+                raw=response.read(65537)
+                if len(raw)>65536:
+                    raise RuntimeError('Runtime credential verification failed')
+                payload=json.loads(raw)
+                if not isinstance(payload,dict) or not isinstance(payload.get('access_token'),str) or not payload['access_token'].strip():
+                    raise RuntimeError('Runtime credential verification failed')
+        except HTTPError:
+            raise RuntimeError('Runtime credential verification failed; delivered secret must match existing account') from None
+
+    if clients:
+        verify_runtime_credentials()  # Fail before any --apply mutation for an existing account.
+
     realm = api('GET')
     if not realm.get('enabled'):
         raise RuntimeError('Realm disabled; enablement requires a separate explicit operation')
@@ -90,14 +120,7 @@ def main():
         else:
             attributes.append(desired)
         change('administrator-only ownership profile', 'PUT', '/users/profile', profile)
-    client_id = os.environ.get('KEYCLOAK_TENANT_RUNTIME_CLIENT_ID', 'employee-runtime')
-    if not re.fullmatch(r'[a-z0-9][a-z0-9-]{2,62}', client_id):
-        raise RuntimeError('Invalid explicit runtime client name')
-    clients = api('GET', '/clients?clientId=' + quote(client_id, safe=''))
-    if len(clients) > 1:
-        raise RuntimeError('Ambiguous runtime client')
     if not clients:
-        secret = os.environ.get('KEYCLOAK_TENANT_RUNTIME_CLIENT_SECRET')
         if args.apply and not secret:
             raise RuntimeError('Set KEYCLOAK_TENANT_RUNTIME_CLIENT_SECRET through protected environment')
         desired = {'clientId':client_id, 'enabled':True, 'publicClient':False,
@@ -106,6 +129,8 @@ def main():
         if args.apply: desired['secret'] = secret
         change('missing scoped runtime service account', 'POST', '/clients', desired)
         clients = api('GET', '/clients?clientId=' + quote(client_id, safe='')) if args.apply else []
+        if clients:
+            verify_runtime_credentials()
     if clients:
         client = clients[0]
         if (not client.get('enabled') or client.get('publicClient') or not client.get('serviceAccountsEnabled')

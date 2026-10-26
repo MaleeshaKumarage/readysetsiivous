@@ -8,6 +8,8 @@ import sys
 import unittest
 from unittest.mock import patch
 from contextlib import redirect_stdout, redirect_stderr
+from urllib.error import HTTPError
+from urllib.parse import parse_qs
 
 spec = importlib.util.spec_from_file_location('identity_setup', Path(__file__).with_name('keycloak-employee-setup.py'))
 setup = importlib.util.module_from_spec(spec)
@@ -21,18 +23,24 @@ class Response:
     def __init__(self, value): self.value = value
     def __enter__(self): return self
     def __exit__(self, *args): pass
-    def read(self): return json.dumps(self.value).encode()
+    def read(self, size=None): return json.dumps(self.value).encode()
 
 
 class FakeTransport:
-    def __init__(self, web=None, needs_setup=False, extra_effective=None, group=False):
+    def __init__(self, web=None, needs_setup=False, extra_effective=None, group=False, wrong_secret=False):
         self.requests = []
         self.web = web if web is not None else [{'id':'web','clientId':'cleaning-suite-web','enabled':True,'publicClient':True,'standardFlowEnabled':True,'redirectUris':['https://site.invalid/*']}]
         self.needs_setup = needs_setup
         self.extra_effective = extra_effective
         self.group = group
+        self.wrong_secret = wrong_secret
     def __call__(self, request, timeout):
         self.requests.append(request)
+        if request.full_url.endswith('/realms/tenant-a/protocol/openid-connect/token'):
+            assert request.get_header('Authorization') is None
+            assert parse_qs(request.data.decode()) == {'grant_type':['client_credentials'],'client_id':['employee-runtime'],'client_secret':['synthetic-runtime-secret']}
+            if self.wrong_secret: raise HTTPError(request.full_url,401,'unauthorized',{},None)
+            return Response({'access_token':'synthetic-runtime-token'})
         path = request.full_url.partition('/admin/realms/tenant-a')[2]
         if path == '/clients?clientId=cleaning-suite-web': return Response(self.web)
         if path == '/users/profile': return Response({'attributes': [] if self.needs_setup else [{
@@ -55,15 +63,18 @@ class FakeTransport:
 
 
 class SetupCheckTests(unittest.TestCase):
-    def run_check(self, transport):
+    def run_check(self, transport, apply=False):
         env = {'KEYCLOAK_MIGRATION_ADMIN_TOKEN':'synthetic-bearer-never-print',
+               'KEYCLOAK_TENANT_RUNTIME_CLIENT_SECRET':'synthetic-runtime-secret',
                'KEYCLOAK_TENANT_SMTP_JSON':json.dumps({'host':'smtp.invalid','from':'test@example.invalid','password':'synthetic-smtp-secret'})}
         output = io.StringIO()
-        with patch.dict(os.environ,env), patch.object(sys,'argv',ARGS), patch.object(setup,'urlopen',transport), redirect_stdout(output):
+        with patch.dict(os.environ,env), patch.object(sys,'argv',ARGS + (['--apply'] if apply else [])), patch.object(setup,'urlopen',transport), redirect_stdout(output):
             result = setup.main()
-        self.assertTrue(all(request.method == 'GET' for request in transport.requests))
+        self.assertTrue(all(request.method == 'GET' or request.full_url.endswith('/protocol/openid-connect/token') for request in transport.requests))
         self.assertNotIn('synthetic-bearer',output.getvalue())
         self.assertNotIn('synthetic-smtp-secret',output.getvalue())
+        self.assertNotIn('synthetic-runtime-secret',output.getvalue())
+        self.assertNotIn('synthetic-runtime-token',output.getvalue())
         return result
 
     def test_default_check_is_read_only_and_does_not_echo_credentials(self):
@@ -71,6 +82,13 @@ class SetupCheckTests(unittest.TestCase):
 
     def test_complete_configuration_is_read_only_and_clean(self):
         self.assertEqual(0,self.run_check(FakeTransport()))
+
+    def test_mismatched_existing_secret_fails_check_and_apply_without_mutations(self):
+        for apply in (False, True):
+            transport=FakeTransport(wrong_secret=True)
+            with self.assertRaisesRegex(RuntimeError, 'delivered secret must match'):
+                self.run_check(transport,apply=apply)
+            self.assertTrue(all(r.method=='GET' or r.full_url.endswith('/protocol/openid-connect/token') for r in transport.requests))
 
     def test_missing_web_client_fails_before_clean_result(self):
         with self.assertRaisesRegex(RuntimeError, 'enabled cleaning-suite-web'):

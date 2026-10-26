@@ -80,16 +80,44 @@ public class KeycloakAudienceProvisioningTests
         Assert.Equal((startTls ?? true) ? "true" : "false", smtp.GetProperty("starttls").GetString());
         Assert.Equal((ssl ?? false) ? "true" : "false", smtp.GetProperty("ssl").GetString());
         Assert.Equal(auth ?? true, smtp.TryGetProperty("password", out _));
+        Assert.Equal(1, transport.RuntimeProofs);
+    }
+
+    [Fact]
+    public async Task FailedRuntimeCredentialProofRollsBackNewRealmBeforeOwnerIsCreated()
+    {
+        var transport = new KeycloakTransport { RejectRuntimeCredentials = true };
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
+            ["Auth:Keycloak:Audience"] = "cleaning-suite-api", ["Auth:Keycloak:PlatformAudience"] = "cleaning-suite-platform-api",
+            ["Auth:Keycloak:ProvisioningSetupReviewed"] = "true", ["Auth:Keycloak:ServerUrl"] = "https://auth.test",
+            ["Auth:Keycloak:TenantAccounts:tenant-test:ClientId"] = "tenant-runtime", ["Auth:Keycloak:TenantAccounts:tenant-test:ClientSecret"] = "synthetic-runtime-secret",
+            ["EmployeeInvites:Smtp:Host"] = "smtp.invalid", ["EmployeeInvites:Smtp:From"] = "sender@example.invalid", ["EmployeeInvites:Smtp:Auth"] = "false"
+        }).Build();
+        var admin = new KeycloakAdminClient(new HttpClient(transport), "https://auth.test", "master", "provisioner", "secret");
+        await Assert.ThrowsAsync<KeycloakException>(() => new KeycloakProvisioner(new PlatformKeycloakClient(admin), NullLogger<KeycloakProvisioner>.Instance,
+            new KeycloakResourceOptions(config), config).ProvisionAsync("tenant-test", "Test", "owner@example.invalid", "Test", "Owner", ["https://site.test/*"]));
+        Assert.Equal(1, transport.RuntimeProofs); Assert.Equal(1, transport.RealmDeletes); Assert.Equal(0, transport.OwnerCreates);
     }
 
     private sealed class KeycloakTransport : HttpMessageHandler
     {
         public List<string> Clients { get; } = new();
         public List<string> RealmUpdates { get; } = new();
+        public bool RejectRuntimeCredentials;
+        public int RuntimeProofs, RealmDeletes, OwnerCreates;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             var path = request.RequestUri!.AbsolutePath;
+            if (path == "/realms/tenant-test/protocol/openid-connect/token") {
+                Assert.Null(request.Headers.Authorization);
+                var body = await request.Content!.ReadAsStringAsync(ct);
+                Assert.Contains("client_id=tenant-runtime", body); Assert.Contains("client_secret=synthetic-runtime-secret", body);
+                RuntimeProofs++;
+                if (RejectRuntimeCredentials) return new(HttpStatusCode.Unauthorized);
+            }
             if (path.EndsWith("/token")) return Json(new { access_token = "test-token", expires_in = 3600 });
+            if (request.Method == HttpMethod.Delete && path == "/admin/realms/tenant-test") RealmDeletes++;
+            if (request.Method == HttpMethod.Post && path.EndsWith("/users")) OwnerCreates++;
             if (request.Method == HttpMethod.Put && path == "/admin/realms/tenant-test")
                 RealmUpdates.Add(await request.Content!.ReadAsStringAsync(ct));
             if (request.Method == HttpMethod.Get && path == "/admin/realms/tenant-test") return Json(new { attributes = new { unrelated = "preserved" } });

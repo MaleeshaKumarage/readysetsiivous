@@ -39,6 +39,20 @@ public class TenantKeycloakClientsTests
         Assert.DoesNotContain(handler.Bodies, body => body.Contains("grant_type=password"));
     }
     [Theory]
+    [InlineData("../master")][InlineData("%2e%2e")][InlineData("..%2f..%2fmaster")]
+    [InlineData("%252e%252e%252fmaster")][InlineData("..\\..\\master")][InlineData(".")]
+    public async Task TraversalSegmentsAreRejectedBeforeTokenOrHttp(string segment)
+    {
+        var handler = new RecordingHandler();
+        var client = new TenantKeycloakClients(new HttpClient(handler), Config()).ForTenant("tenant-a");
+        // Older public methods interpolate these identifiers; the shared guard must
+        // inspect the path before System.Uri can collapse or decode it.
+        await Assert.ThrowsAsync<KeycloakException>(() => client.GetRoleAsync("tenant-a", segment));
+        await Assert.ThrowsAsync<KeycloakException>(() => client.AssignRealmRoleAsync("tenant-a", segment, []));
+        await Assert.ThrowsAsync<KeycloakException>(() => client.SetRealmEnabledAsync("tenant-a/../master", false));
+        Assert.Empty(handler.Paths);
+    }
+    [Theory]
     [InlineData(false)] [InlineData(true)]
     public async Task ProvisioningWithoutReviewedSetupOrCredentialsCreatesNoRealm(bool reviewed)
     {

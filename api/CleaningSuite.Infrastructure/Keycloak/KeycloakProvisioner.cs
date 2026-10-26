@@ -125,6 +125,11 @@ public class KeycloakProvisioner : IKeycloakProvisioner
         foreach (var name in new[] { "manage-users", "query-users", "view-users", "view-realm" })
             roles.Add(await _admin.GetClientRoleAsync(realm, managementId, name, ct));
         await _admin.AssignClientRolesAsync(realm, account.GetProperty("id").GetString()!, managementId, roles.ToArray(), ct);
+        using (var proof = CancellationTokenSource.CreateLinkedTokenSource(ct))
+        {
+            proof.CancelAfter(TimeSpan.FromSeconds(10));
+            await _admin.VerifyServiceAccountAsync(realm, clientId, secret, proof.Token);
+        }
         var profile = await _admin.GetUserProfileAsync(realm, ct);
         var fields = profile.EnumerateObject().ToDictionary(p => p.Name, p => (object)p.Value.Clone());
         var attributes = profile.GetProperty("attributes").EnumerateArray().Select(a => a.Clone()).ToList();
