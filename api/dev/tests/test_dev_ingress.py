@@ -1,16 +1,23 @@
 #!/usr/bin/env python3
 """Validate actual Compose interpolation without starting services or contacting hosts."""
+import importlib.util
 import ipaddress
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import unittest
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[3]
 FILES = ("api/dev/docker-compose.yml", "api/deploy/docker-compose.dev.yml")
+
+
+fixture_spec = importlib.util.spec_from_file_location('persistence_fixture', Path(__file__).with_name('dev-persistence-recreate.py'))
+fixture = importlib.util.module_from_spec(fixture_spec)
+fixture_spec.loader.exec_module(fixture)
 
 
 def safe_origin(value):
@@ -59,9 +66,11 @@ def compose_config(filename, overrides=None):
     for name in ("DEV_PUBLIC_AUTH_URL", "DEV_FRONTEND_URL"):
         env.pop(name, None)
     env.update(overrides or {})
-    result = subprocess.run(["docker", "compose", "-p", "dev-ingress-config", "-f", str(ROOT / filename),
-                             "config", "--format", "json"], env=env, check=True, capture_output=True, text=True, timeout=30)
-    return json.loads(result.stdout)
+    with tempfile.TemporaryDirectory(prefix="dev-ingress-config-") as directory:
+        env["API_IDENTITY_ENV_FILE"] = str(fixture.fixture_identity(directory))
+        result = subprocess.run(["docker", "compose", "-p", "dev-ingress-config", "-f", str(ROOT / filename),
+                                 "config", "--format", "json"], env=env, check=True, capture_output=True, text=True, timeout=30)
+        return json.loads(result.stdout)
 
 
 class DevIngressTests(unittest.TestCase):
