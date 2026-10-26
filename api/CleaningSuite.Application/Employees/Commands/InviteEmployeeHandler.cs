@@ -38,7 +38,7 @@ public class InviteEmployeeHandler(IEmployeeRepository employees, ITenantContext
         if (other is not null && other.Id != employee.Id) throw new EmployeeIdentityConflictException("This login is already linked to another employee.");
         var now = clock.GetUtcNow().UtcDateTime;
         if (employee.InviteLastSentUtc > now.AddSeconds(-60) && employee.KeycloakUserId == identity.UserId) {
-            await identities.AssignRoleAsync(tenant.TenantId, identity.UserId, employee.Role, ct);
+            await identities.AssignRoleAsync(tenant.TenantId, employee.Id, identity.UserId, employee.Role, ct);
             return new(employee.Email, identity.UserId, "AlreadySent", employee.InviteLastSentUtc);
         }
         employee.KeycloakUserId = identity.UserId;
@@ -48,8 +48,8 @@ public class InviteEmployeeHandler(IEmployeeRepository employees, ITenantContext
         try {
             // Grant access only after the local binding exists, so database failure
             // cannot create an unlinked account with tenant-owner compatibility access.
-            await identities.AssignRoleAsync(tenant.TenantId, identity.UserId, employee.Role, ct);
-            await identities.SendSetupEmailAsync(tenant.TenantId, identity.UserId, redirect, lifespan, ct);
+            await identities.AssignRoleAsync(tenant.TenantId, employee.Id, identity.UserId, employee.Role, ct);
+            await identities.SendSetupEmailAsync(tenant.TenantId, employee.Id, identity.UserId, redirect, lifespan, ct);
         } catch (EmployeeIdentityProviderException) {
             employee.InviteError = "Login setup or email failed; retry invitation";
             await employees.SaveAsync(employee, ct); throw;

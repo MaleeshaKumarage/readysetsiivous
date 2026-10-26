@@ -39,6 +39,11 @@ class IdentityEnvTests(unittest.TestCase):
             with self.subTest(value=value[:12]), self.assertRaises(ValueError):
                 checker.validate_content(value,'platform-realm')
 
+    def test_group_path_or_id_override_is_rejected(self):
+        for field in ('ManagedGroupId','ManagedGroupPath','EmployeeGroupId'):
+            with self.assertRaises(ValueError):
+                checker.validate_content(VALID + 'Auth__Keycloak__TenantAccounts__tenant-a__' + field + '=/untrusted\n')
+
     def test_compose_delivers_required_file_only_to_api(self):
         for filename in ['docker-compose.yml','docker-compose.dev.yml']:
             source = Path(__file__).with_name(filename).read_text()

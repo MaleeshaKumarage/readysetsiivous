@@ -93,7 +93,7 @@ public class QualityCycleWorkAccessDatabaseTests
             var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var finish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var identities = new Mock<IEmployeeIdentityProvider>();
-            identities.Setup(x => x.SynchronizeAccessAsync(context.TenantId, employee.KeycloakUserId, employee.Role, false, It.IsAny<CancellationToken>()))
+            identities.Setup(x => x.SynchronizeAccessAsync(context.TenantId, employee.Id, employee.KeycloakUserId, employee.Role, false, It.IsAny<CancellationToken>()))
                 .Returns(async () => { entered.SetResult(); await finish.Task; });
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             var identityLock = new EmployeeIdentityLock(configuration);

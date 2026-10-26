@@ -93,6 +93,7 @@ public class KeycloakProvisioningRecoveryTests
             }
             if (request.Method == HttpMethod.Get) return Json(new { id = "role-id", name = "admin" });
             var response = new HttpResponseMessage(HttpStatusCode.Created);
+            if (path.EndsWith("/groups")) response.Headers.Location = new Uri("https://auth.test/admin/realms/tenant-test/groups/" + Guid.NewGuid());
             if (path.EndsWith("/users")) response.Headers.Location = new Uri("https://auth.test/admin/realms/tenant-test/users/owner");
             return Task.FromResult(response);
         }

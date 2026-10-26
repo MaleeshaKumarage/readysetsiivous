@@ -18,7 +18,7 @@ public class KeycloakAdminClient
     private readonly string? _allowedRealm;
 
     private string? _cachedToken;
-    private DateTime _tokenExpiresUtc = DateTime.MinValue;
+    private DateTime _tokenRefreshUtc = DateTime.MinValue;
 
     public KeycloakAdminClient(
         HttpClient http,
@@ -38,7 +38,7 @@ public class KeycloakAdminClient
 
     public virtual async Task<string> GetAdminTokenAsync(CancellationToken ct = default)
     {
-        if (_cachedToken is not null && DateTime.UtcNow < _tokenExpiresUtc.AddMinutes(-5))
+        if (_cachedToken is not null && DateTime.UtcNow < _tokenRefreshUtc)
             return _cachedToken;
 
         using var request = new HttpRequestMessage(
@@ -68,7 +68,10 @@ public class KeycloakAdminClient
         if (string.IsNullOrWhiteSpace(accessToken)) throw new KeycloakException("access_token missing");
         _cachedToken = accessToken;
         var expiresIn = payload.GetProperty("expires_in").GetInt32();
-        _tokenExpiresUtc = DateTime.UtcNow.AddSeconds(expiresIn);
+        // A fixed five-minute skew made five-minute (and shorter) tokens miss
+        // the cache on every request. Keep a proportional, bounded safety margin.
+        var lifetime = Math.Max(0, expiresIn);
+        _tokenRefreshUtc = DateTime.UtcNow.AddSeconds(lifetime - Math.Min(30, lifetime * 0.1));
 
         return _cachedToken;
     }
@@ -165,6 +168,25 @@ public class KeycloakAdminClient
         GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/roles/{Uri.EscapeDataString(role)}/users?first={first}&max={max}", ct);
     public Task<JsonElement> FindUsersByEmailAsync(string realm, string email, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/users?email={Uri.EscapeDataString(email)}&exact=true", ct);
     public Task<JsonElement> GetUserRealmRolesAsync(string realm, string userId, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/role-mappings/realm", ct);
+    // Keycloak 26.8.1 UserResource /groups and RoleMapperResource /realm/composite.
+    public Task<JsonElement> GetEffectiveUserRealmRolesAsync(string realm, string userId, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/role-mappings/realm/composite", ct);
+    public Task<JsonElement> GetEmployeeGroupAsync(string realm, string fixedName, CancellationToken ct = default)
+    {
+        if (fixedName is not ("managed-users" or "app-employee" or "app-manager" or "app-admin"))
+            throw new KeycloakException("Only fixed employee group names may be resolved");
+        return GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/group-by-path/{fixedName}", ct);
+    }
+    public Task<JsonElement> GetGroupsAsync(string realm, int first, int max, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/groups?first={first}&max={max}&briefRepresentation=false", ct);
+    public Task<JsonElement> GetUserGroupsAsync(string realm, string userId, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/groups?first=0&max=101&briefRepresentation=false", ct);
+    public Task<JsonElement> GetGroupMembersAsync(string realm, string groupId, int first, int max, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/groups/{Uri.EscapeDataString(groupId)}/members?first={first}&max={max}", ct);
+    public Task<JsonElement> GetGroupRoleMappingsAsync(string realm, string groupId, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/groups/{Uri.EscapeDataString(groupId)}/role-mappings", ct);
+    public Task<JsonElement> GetEffectiveGroupRealmRolesAsync(string realm, string groupId, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/groups/{Uri.EscapeDataString(groupId)}/role-mappings/realm/composite", ct);
+    public Task<string> CreateGroupAsync(string realm, object group, CancellationToken ct = default) => SendForLocationAsync(HttpMethod.Post, $"admin/realms/{Uri.EscapeDataString(realm)}/groups", ct, group);
+    public Task AssignGroupRealmRolesAsync(string realm, string groupId, object[] roles, CancellationToken ct = default) => SendWithoutResultAsync(HttpMethod.Post, $"admin/realms/{Uri.EscapeDataString(realm)}/groups/{Uri.EscapeDataString(groupId)}/role-mappings/realm", ct, roles);
+    public Task CreateAuthorizationUserPolicyAsync(string realm, string authorizationClientId, object policy, CancellationToken ct = default) => SendWithoutResultAsync(HttpMethod.Post, $"admin/realms/{Uri.EscapeDataString(realm)}/clients/{Uri.EscapeDataString(authorizationClientId)}/authz/resource-server/policy/user", ct, policy);
+    public Task CreateAuthorizationScopePermissionAsync(string realm, string authorizationClientId, object permission, CancellationToken ct = default) => SendWithoutResultAsync(HttpMethod.Post, $"admin/realms/{Uri.EscapeDataString(realm)}/clients/{Uri.EscapeDataString(authorizationClientId)}/authz/resource-server/permission/scope", ct, permission);
+    public Task AddUserToGroupAsync(string realm, string userId, string groupId, CancellationToken ct = default) => SendWithoutResultAsync(HttpMethod.Put, $"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/groups/{Uri.EscapeDataString(groupId)}", ct);
+    public Task RemoveUserFromGroupAsync(string realm, string userId, string groupId, CancellationToken ct = default) => SendWithoutResultAsync(HttpMethod.Delete, $"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/groups/{Uri.EscapeDataString(groupId)}", ct);
     public Task RemoveRealmRolesAsync(string realm, string userId, object[] roles, CancellationToken ct = default) => SendWithoutResultAsync(HttpMethod.Delete, $"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/role-mappings/realm", ct, roles);
     public Task LogoutUserAsync(string realm, string userId, CancellationToken ct = default) => SendWithoutResultAsync(HttpMethod.Post, $"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/logout", ct);
     public Task SendExecuteActionsEmailAsync(string realm, string userId, string clientId, string redirectUri, int lifespanSeconds, string[] actions, CancellationToken ct = default) =>

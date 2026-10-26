@@ -131,8 +131,8 @@ realm deletion is confined to generated `scoped-a-*`/`scoped-b-*` names on loopb
 
 ### Confidential client isolation and public invitation preflight
 
-Tenant runtime receives only `manage-users`, `query-users`, `view-users`, and
-`view-realm`. Never grant `view-clients`: Keycloak's confidential client-secret
+The historical coarse setup is superseded for isolated development by the contract below.
+Tenant runtime receives only `query-users` and `view-realm`. Never grant `view-clients`: Keycloak's confidential client-secret
 endpoint accepts client view permission. Existing accounts with this grant require
 explicit operator review/removal; setup refuses unexpected grants rather than
 silently revoking them. No preview fine-grained authorization feature is enabled.
@@ -188,3 +188,74 @@ it does not narrow the same-realm rights available from that network. Achieving
 server-enforced per-user or endpoint restrictions needs a separately reviewed design
 (for example a restricted administration boundary or supported fine-grained model).
 No preview feature, new intermediary, or version upgrade is enabled by this change.
+
+
+## Approved development FGAP V2 contract (2026-10-26)
+
+Production rollout, image changes and held PRs remain unapproved. Explicit setup now
+requires serverinfo version 26.8.1; `--apply` additionally requires `--development`.
+Use only the isolated candidate fixture pinned in the approved development design.
+The runtime's only realm-management grants are `query-users` and `view-realm`.
+Existing `manage-users`, `view-users`, `view-clients` or other broad grants fail
+manual review; setup never silently revokes them or rotates an existing secret.
+Delivered-secret proof precedes every existing-client mutation.
+
+Setup owns exactly `/managed-users`, `/app-employee`, `/app-manager`, `/app-admin`.
+These are plain roots without parents, children or client roles. Application groups
+map exactly their corresponding flat realm role; the main group has no roles.
+Unexpected mappings/composites, service accounts and protected administrators in
+managed groups fail validation. Missing groups/mappings are additive setup only;
+existing users are never enrolled, adopted or reconciled automatically.
+
+FGAP V2 uses realm `adminPermissionsEnabled=true`, the `admin-permissions` client's
+`authz/resource-server/policy/user` policy `runtime-subject` with POSITIVE logic
+and exactly the runtime service-account user ID. Two scope permissions use
+`resourceType=Groups`, `decisionStrategy=UNANIMOUS` and that policy only:
+`managed-members` targets only the managed group with `view`, `view-members`,
+`manage-members`, `manage-membership`, `manage-membership-of-members`;
+`fixed-application-role-groups` targets the three role groups with only `view`
+and `manage-membership`. No user/role mapping permission exists. Unexpected
+policies or permissions require manual review; setup never resets authorization.
+
+Default check emits NEEDS and exits 2 for missing prerequisites without administrative
+writes. A token exchange is the only non-GET credential proof. Explicit apply is
+additive and idempotent. The Python helper returns exact server group IDs for the
+fixed paths; requests and environment cannot override these paths.
+
+The known hidden privileged-group create response HTTP500 remains a failed
+upstream expected403 gate. Application fail-closed behavior and deliberate retry
+must be verified separately; neither a handled error nor fake-HTTP tests waive the
+required native invitation, browser login, protected-state and stolen-token matrix.
+Earlier coarse/version gates above remain historical production blockers, not an
+instruction to grant broad rights or change production. Runtime setup must pass
+real 26.8.1 validation before any adoption approval.
+
+Keycloak 26.8.1 scope-permission GET is sparse. Setup validates bindings using
+`/policy/{id}/resources`, `/scopes`, and `/associatedPolicies`, comparing exact
+group IDs, scope names and a single known runtime user-policy ID. It does not
+assume POST fields round-trip through permission GET. Null or malformed
+relationship responses fail before additive changes.
+
+### Protected-account drift remains an adoption blocker
+
+The authority boundary is membership of the setup-owned managed groups. Before
+granting a person any Keycloak administration privilege, an operator must remove
+that person from every managed/application-role group. Re-run privileged setup
+validation after administrative changes. Setup's privileged inspection rejects
+direct and composite administration roles on managed members.
+
+Do not claim the runtime independently detects every violation of this rule.
+Keycloak filters user role-mapping responses by the caller's role visibility:
+an administrative role can therefore be omitted from an HTTP200 empty list.
+The pinned Roles permission schema has no `view` scope; a disposable experiment
+to grant it returned400 and was fully cleaned up. Broader client visibility has
+not been granted, because client view can expose secrets. The diagnostic realm
+attribute `cleaning_runtime_management_client_id` records setup's verified client
+ID; it does not prove that a filtered role response is complete.
+
+An experimental runtime drift check failed its native test and was removed,
+including its misleading mock-only passing test. The failed result is retained
+in local audit evidence. A separately reviewed administration boundary or another
+proven policy model is required if protection must survive an operator leaving
+an administrative account inside the managed group. This development branch is
+not approved for adoption or production rollout under that stronger requirement.

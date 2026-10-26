@@ -73,7 +73,7 @@ public class KeycloakAudienceProvisioningTests
         await new KeycloakProvisioner(new PlatformKeycloakClient(admin), NullLogger<KeycloakProvisioner>.Instance,
             new KeycloakResourceOptions(config), config)
             .ProvisionAsync("tenant-test", "Test", "owner@example.invalid", "Test", "Owner", new[] { "https://site.test/*" });
-        using var realm = JsonDocument.Parse(Assert.Single(transport.RealmUpdates));
+        using var realm = JsonDocument.Parse(transport.RealmUpdates.Single(update => update.Contains("smtpServer")));
         Assert.Equal("preserved", realm.RootElement.GetProperty("attributes").GetProperty("unrelated").GetString());
         var smtp = realm.RootElement.GetProperty("smtpServer");
         Assert.Equal((auth ?? true) ? "true" : "false", smtp.GetProperty("auth").GetString());
@@ -81,6 +81,19 @@ public class KeycloakAudienceProvisioningTests
         Assert.Equal((ssl ?? false) ? "true" : "false", smtp.GetProperty("ssl").GetString());
         Assert.Equal(auth ?? true, smtp.TryGetProperty("password", out _));
         Assert.Equal(1, transport.RuntimeProofs);
+        Assert.Equal(new[] { "query-users", "view-realm" }, transport.RuntimeRoles.OrderBy(x => x));
+        Assert.Contains(transport.RealmUpdates, update => update.Contains("\"adminPermissionsEnabled\":true"));
+        using var policy = JsonDocument.Parse(Assert.Single(transport.Policies));
+        Assert.Equal("service-user", Assert.Single(policy.RootElement.GetProperty("users").EnumerateArray()).GetString());
+        Assert.Equal(2, transport.Permissions.Count);
+        using var main = JsonDocument.Parse(transport.Permissions.Single(p => p.Contains("managed-members")));
+        Assert.Equal("Groups", main.RootElement.GetProperty("resourceType").GetString());
+        Assert.Equal(5, main.RootElement.GetProperty("scopes").GetArrayLength());
+        using var rolePermission = JsonDocument.Parse(transport.Permissions.Single(p => p.Contains("fixed-application-role-groups")));
+        Assert.Equal(new[] { "view", "manage-membership" }, rolePermission.RootElement.GetProperty("scopes").EnumerateArray().Select(x => x.GetString()));
+        using var owner = JsonDocument.Parse(Assert.Single(transport.Owners));
+        Assert.Equal(new[] { "/managed-users", "/app-admin" }, owner.RootElement.GetProperty("groups").EnumerateArray().Select(x => x.GetString()));
+        Assert.False(owner.RootElement.TryGetProperty("attributes", out _));
     }
 
     [Fact]
@@ -102,6 +115,10 @@ public class KeycloakAudienceProvisioningTests
     private sealed class KeycloakTransport : HttpMessageHandler
     {
         public List<string> Clients { get; } = new();
+        public List<string> RuntimeRoles { get; } = new();
+        public List<string> Policies { get; } = new();
+        public List<string> Permissions { get; } = new();
+        public List<string> Owners { get; } = new();
         public List<string> RealmUpdates { get; } = new();
         public bool RejectRuntimeCredentials;
         public int RuntimeProofs, RealmDeletes, OwnerCreates;
@@ -117,7 +134,13 @@ public class KeycloakAudienceProvisioningTests
             }
             if (path.EndsWith("/token")) return Json(new { access_token = "test-token", expires_in = 3600 });
             if (request.Method == HttpMethod.Delete && path == "/admin/realms/tenant-test") RealmDeletes++;
-            if (request.Method == HttpMethod.Post && path.EndsWith("/users")) OwnerCreates++;
+            if (request.Method == HttpMethod.Post && path.EndsWith("/users")) { OwnerCreates++; Owners.Add(await request.Content!.ReadAsStringAsync(ct)); }
+            if (request.Method == HttpMethod.Post && path.EndsWith("/policy/user")) Policies.Add(await request.Content!.ReadAsStringAsync(ct));
+            if (request.Method == HttpMethod.Post && path.EndsWith("/permission/scope")) Permissions.Add(await request.Content!.ReadAsStringAsync(ct));
+            if (request.Method == HttpMethod.Post && path.Contains("/users/service-user/role-mappings/clients/")) {
+                using var mappings = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(ct));
+                RuntimeRoles.AddRange(mappings.RootElement.EnumerateArray().Select(x => x.GetProperty("name").GetString()!));
+            }
             if (request.Method == HttpMethod.Put && path == "/admin/realms/tenant-test")
                 RealmUpdates.Add(await request.Content!.ReadAsStringAsync(ct));
             if (request.Method == HttpMethod.Get && path == "/admin/realms/tenant-test") return Json(new { attributes = new { unrelated = "preserved" } });
@@ -126,8 +149,9 @@ public class KeycloakAudienceProvisioningTests
             if (request.Method == HttpMethod.Get && path.EndsWith("/users/profile")) return Json(new { attributes = Array.Empty<object>() });
             if (request.Method == HttpMethod.Get && path.Contains("/clients/client-id/roles/")) return Json(new { id = "client-role", name = path.Split('/').Last() });
             if (request.Method == HttpMethod.Post && path.EndsWith("/clients")) Clients.Add(await request.Content!.ReadAsStringAsync(ct));
-            if (request.Method == HttpMethod.Get && path.EndsWith("/roles/admin")) return Json(new { id = "admin-role", name = "admin" });
+            if (request.Method == HttpMethod.Get && path.Contains("/roles/")) return Json(new { id = "app-role", name = path.Split('/').Last(), composite = false });
             var response = new HttpResponseMessage(HttpStatusCode.Created);
+            if (path.EndsWith("/groups")) response.Headers.Location = new Uri("https://auth.test/admin/realms/tenant-test/groups/" + Guid.NewGuid());
             if (path.EndsWith("/users")) response.Headers.Location = new Uri("https://auth.test/admin/realms/tenant-test/users/user-1");
             return response;
         }

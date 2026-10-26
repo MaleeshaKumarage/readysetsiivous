@@ -15,6 +15,7 @@ using CleaningSuite.Infrastructure.Keycloak;
 using CleaningSuite.Infrastructure.Persistence;
 using Marten;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
@@ -35,7 +36,7 @@ public class EmployeeIdentityIntegrationTests
     [EmployeeIdentityDatabaseFact]
     public async Task IdentityKeyIsUniqueWithinTenantWhileUnboundEmployeesAndOtherTenantsAreAllowed()
     {
-        using var store = Store(); await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
+        using var resources = Store(); var store = resources.GetRequiredService<IDocumentStore>(); await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
         var tenant = "identity-" + Guid.NewGuid().ToString("N");
         using (var session = store.LightweightSession(tenant)) {
             session.Store(new Employee { Email = "MixedCase@Example.invalid" }, new Employee { Email = "Other@Example.invalid" }); await session.SaveChangesAsync();
@@ -61,10 +62,10 @@ public class EmployeeIdentityIntegrationTests
     [EmployeeIdentityKeycloakFact]
     public async Task NativeSetupEmailBindsIdentityRetriesDeliveryAndSerializesParallelInvites()
     {
-        using var store = Store(); await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
+        using var resources = Store(); var store = resources.GetRequiredService<IDocumentStore>(); await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
         var config = Configuration();
         var url = config["Auth:Keycloak:ServerUrl"]!;
-        using var http = new HttpClient();
+        using var http = new HttpClient(new NativeDiagnosticHandler());
         var admin = new CleaningSuite.Tests.Auth.SyntheticKeycloakBootstrap(http, url,
             Environment.GetEnvironmentVariable("INVITE_TEST_ADMIN_USER") ?? "invite-test-admin", Environment.GetEnvironmentVariable("INVITE_TEST_ADMIN_PASSWORD") ?? "invite_test_only_2026");
         var realm = "invite-test-" + Guid.NewGuid().ToString("N")[..8];
@@ -98,7 +99,7 @@ public class EmployeeIdentityIntegrationTests
         Assert.All(results, result => Assert.Equal(boundId, result.KeycloakUserId));
         var user = (await admin.GetUserAsync(realm, boundId))!.Value;
         Assert.Equal(employee.Id.ToString(), user.GetProperty("attributes").GetProperty("cleaning_employee_id")[0].GetString());
-        var roles = (await admin.GetUserRealmRolesAsync(realm, boundId)).EnumerateArray().Select(r => r.GetProperty("name").GetString()).ToList();
+        var roles = (await admin.GetEffectiveUserRealmRolesAsync(realm, boundId)).EnumerateArray().Select(r => r.GetProperty("name").GetString()).ToList();
         Assert.Contains("employee", roles); Assert.DoesNotContain("admin", roles);
         var mailboxUrl = Environment.GetEnvironmentVariable("INVITE_TEST_MAILBOX_URL") ?? "http://127.0.0.1:12525";
         var messages = await http.GetStringAsync(mailboxUrl + "/api/v1/messages");
@@ -114,6 +115,37 @@ public class EmployeeIdentityIntegrationTests
         var token = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(setupUrl).Query)["key"].ToString();
         var action = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().ReadJwtToken(token);
         Assert.Equal(boundId, action.Subject); Assert.InRange(action.ValidTo, DateTime.UtcNow.AddHours(23.9), DateTime.UtcNow.AddHours(24.1));
+        // Native role transitions use inherited group roles and preserve the existing password.
+        var transitionEmployee = new Employee { Email = "transition@" + realm + ".invalid", FirstName = "Role", LastName = "Transition", Role = "employee" };
+        var transition = await identity.EnsureAsync(realm, transitionEmployee);
+        await admin.UpdateUserAsync(realm, transition.UserId, new { emailVerified = true, requiredActions = Array.Empty<string>(),
+            credentials = new[] { new { type = "password", value = "TransitionTestOnly2026", temporary = false } } });
+        foreach (var role in new[] { "employee", "manager", "admin", "employee" }) {
+            await identity.AssignRoleAsync(realm, transitionEmployee.Id, transition.UserId, role);
+            using var tokenResponse = await http.PostAsync(url + "/realms/" + realm + "/protocol/openid-connect/token", new FormUrlEncodedContent(new Dictionary<string,string> {
+                ["grant_type"] = "password", ["client_id"] = "cleaning-suite-web", ["username"] = transitionEmployee.Email, ["password"] = "TransitionTestOnly2026" }));
+            Assert.Equal(HttpStatusCode.OK, tokenResponse.StatusCode);
+            using var login = JsonDocument.Parse(await tokenResponse.Content.ReadAsStringAsync());
+            var jwt = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().ReadJwtToken(login.RootElement.GetProperty("access_token").GetString());
+            using var realmAccess = JsonDocument.Parse(jwt.Claims.Single(c => c.Type == "realm_access").Value);
+            var jwtRoles = realmAccess.RootElement.GetProperty("roles").EnumerateArray().Select(r => r.GetString()).Where(r => r is "employee" or "manager" or "admin").ToArray();
+            Assert.Equal(new[] { role }, jwtRoles);
+            Assert.DoesNotContain(jwt.Claims, c => c.Type == "resource_access" && c.Value.Contains("realm-management"));
+        }
+        await Assert.ThrowsAsync<EmployeeIdentityConflictException>(() => identity.AssignRoleAsync(realm, Guid.NewGuid(), transition.UserId, "admin"));
+        await Assert.ThrowsAsync<EmployeeIdentityConflictException>(() => identity.AssignRoleAsync(realm, transitionEmployee.Id, ownerId, "employee"));
+        await Assert.ThrowsAsync<EmployeeIdentityConflictException>(() => identity.EnsureAsync(realm,
+            new Employee { Email = "owner@" + realm + ".invalid", FirstName = "Unrelated", Role = "employee" }));
+        await Assert.ThrowsAsync<EmployeeIdentityConflictException>(() => identity.EnsureAsync(realm,
+            new Employee { KeycloakUserId = transition.UserId, Email = transitionEmployee.Email, FirstName = "Conflicting", Role = "employee" }));
+        await identity.SynchronizeAccessAsync(realm, transitionEmployee.Id, transition.UserId, "employee", false);
+        Assert.False((await admin.GetUserAsync(realm, transition.UserId))!.Value.GetProperty("enabled").GetBoolean());
+        await identity.SynchronizeAccessAsync(realm, transitionEmployee.Id, transition.UserId, "employee", true);
+        var directoryTenant = new Mock<ITenantContext>(); directoryTenant.SetupGet(t => t.TenantId).Returns(realm);
+        var directory = new CleaningSuite.Infrastructure.Leads.LeadAdminDirectory(new TenantKeycloakClients(http, config), new Mock<IEmployeeRepository>().Object, directoryTenant.Object);
+        var admins = await directory.ListAsync(default);
+        Assert.Contains(admins, recipient => recipient.Id == ownerId);
+        Assert.DoesNotContain(admins, recipient => recipient.Id == transition.UserId);
         // Allow a later completed-account reinvite in the live browser fixture without sleeping60seconds.
         using (var session = store.LightweightSession(realm)) { var saved = (await session.LoadAsync<Employee>(employee.Id))!; saved.InviteLastSentUtc = DateTime.UtcNow.AddMinutes(-2); session.Store(saved); await session.SaveChangesAsync(); }
         var artifactPath = Environment.GetEnvironmentVariable("INVITE_TEST_CONTEXT_PATH");
@@ -147,7 +179,9 @@ public class EmployeeIdentityIntegrationTests
                 firstName = otherEmployee.FirstName, lastName = otherEmployee.LastName, requiredActions = Array.Empty<string>(),
                 enabled = true, emailVerified = true, credentials = new[] { new { type = "password", value = "InviteOtherManagerTestOnly2026", temporary = false } },
                 attributes = new Dictionary<string, string[]> { ["cleaning_employee_id"] = new[] { otherEmployee.Id.ToString() } } });
-            await admin.AssignRealmRoleAsync(otherRealm, otherUser, new object[] { await admin.GetRoleAsync(otherRealm, "manager") });
+            var otherGroups = await KeycloakEmployeeGroups.ResolveAsync(admin, otherRealm);
+            await admin.AddUserToGroupAsync(otherRealm, otherUser, otherGroups.ManagedId);
+            await admin.AddUserToGroupAsync(otherRealm, otherUser, otherGroups.RoleIds["manager"]);
             otherEmployee.KeycloakUserId = otherUser;
             var otherCompany = Company.Create("OTHER-LIVE-" + realm, "Other private company"); var otherBranch = Branch.Create(otherCompany.Id, "Other private branch");
             var otherShift = Shift.Create(otherCompany.Id, otherBranch.Id, "Other private shift", secondShift.Schedule, null, null, null);
@@ -156,6 +190,16 @@ public class EmployeeIdentityIntegrationTests
             await File.WriteAllTextAsync(artifactPath, JsonSerializer.Serialize(new { realm, employeeId = employee.Id, userId = boundId, email = employee.Email, setupUrl, frontend, keycloakUrl = url, mailboxUrl, ownerEmail = "owner@" + realm + ".invalid", shiftId = shift.Id, branchId = branch.Id, companyId = company.Id, secondBranchId = secondBranch.Id,
                 otherRealm, otherManagerEmail = otherEmployee.Email, otherShiftId = otherShift.Id,
                 bookingId = booking.Id, otherBookingId = otherBooking.Id, workDate = booking.StartLocalDate }));
+        }
+    }
+    private sealed class NativeDiagnosticHandler : DelegatingHandler
+    {
+        public NativeDiagnosticHandler() : base(new HttpClientHandler()) { }
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var response = await base.SendAsync(request, ct);
+            if (!response.IsSuccessStatusCode) Console.WriteLine($"Synthetic identity endpoint {request.Method} {request.RequestUri!.AbsolutePath}: {(int)response.StatusCode}");
+            return response;
         }
     }
     private static async Task<EmployeeInviteResult> Invite(string realm, Guid id, IDocumentStore store, IConfiguration config, IEmployeeIdentityProvider identity) {
@@ -173,11 +217,25 @@ public class EmployeeIdentityIntegrationTests
         ["EmployeeInvites:Smtp:Host"] = "invite-review-mail", ["EmployeeInvites:Smtp:Port"] = "1025",
         ["EmployeeInvites:Smtp:From"] = "no-reply@example.invalid", ["EmployeeInvites:Smtp:Auth"] = "false", ["EmployeeInvites:Smtp:StartTls"] = "false"
     }).Build();
-    private static DocumentStore Store() {
+    private static ServiceProvider Store() {
         var options = new StoreOptions(); options.RestoreV8Defaults(); options.UseNewtonsoftForSerialization();
-        options.DatabaseSchemaName = "fixture_" + Guid.NewGuid().ToString("N"); options.Connection(Environment.GetEnvironmentVariable("INVITE_TEST_DATABASE")!);
+        var connection = Environment.GetEnvironmentVariable("INVITE_TEST_DATABASE")!;
+        var apiFixture = Environment.GetEnvironmentVariable("INVITE_TEST_API_FIXTURE") == "true";
+        if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("INVITE_TEST_CONTEXT_PATH")) && !apiFixture)
+            throw new InvalidOperationException("Browser context requires explicit INVITE_TEST_API_FIXTURE=true so the API reads the seeded schema.");
+        if (apiFixture && new Npgsql.NpgsqlConnectionStringBuilder(connection).Database != "identity_tests")
+            throw new InvalidOperationException("API fixture schema requires the isolated identity_tests database.");
+        if (apiFixture) {
+            var services = new ServiceCollection(); services.AddLogging();
+            services.AddCleaningMarten(connection, databaseSchemaName: "public");
+            return services.BuildServiceProvider();
+        }
+        options.DatabaseSchemaName = "fixture_" + Guid.NewGuid().ToString("N"); options.Connection(connection);
+        options.Schema.For<TenantRegistration>(); options.Schema.For<Company>(); options.Schema.For<Branch>();
+        options.Schema.For<QualityCycleTemplate>(); options.Schema.For<Shift>(); options.Schema.For<ShiftAssignment>(); options.Schema.For<Booking>();
         options.Policies.AllDocumentsAreMultiTenanted(); options.Schema.For<Employee>().Index(x => x.KeycloakUserId).UniqueIndex(Marten.Schema.UniqueIndexType.Computed, "mt_doc_employee_uidx_keycloak_identity_key", Marten.Schema.Indexing.Unique.TenancyScope.PerTenant, x => x.KeycloakIdentityKey!);
-        return new DocumentStore(options);
+        var fixtureServices = new ServiceCollection(); fixtureServices.AddSingleton<IDocumentStore>(_ => new DocumentStore(options));
+        return fixtureServices.BuildServiceProvider();
     }
     private static bool Duplicate(Exception error) => error is Npgsql.PostgresException { SqlState: "23505" } || error.InnerException is not null && Duplicate(error.InnerException);
 }

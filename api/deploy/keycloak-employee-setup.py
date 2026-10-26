@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Explicit tenant identity setup. Read-only by default; never prints secrets."""
 import argparse
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from keycloak_fgap import configure, RUNTIME_ROLES
 import json
 import os
 import re
@@ -16,6 +20,7 @@ def main():
     parser.add_argument('--public-url', required=True)
     parser.add_argument('--redirect-uri', action='append', required=True, help='Expected account landing URI; repeat for each allowed frontend')
     parser.add_argument('--apply', action='store_true')
+    parser.add_argument('--development', action='store_true', help='Explicitly authorize development-only pinned FGAP setup')
     args = parser.parse_args()
     if not re.fullmatch(r'[a-z0-9][a-z0-9-]{2,62}', args.tenant) or args.tenant == 'master':
         parser.error('Specify one canonical tenant realm, never master')
@@ -32,15 +37,20 @@ def main():
         parser.error('Set KEYCLOAK_MIGRATION_ADMIN_TOKEN via protected environment')
     base = args.server.rstrip('/') + '/admin/realms/' + quote(args.tenant, safe='')
     changes = []
+    queued = []
 
     def api(method, path='', body=None, missing=False):
-        req = Request(base + path, method=method,
+        target = args.server.rstrip('/') + '/admin/serverinfo' if path == '@serverinfo' else base + path
+        req = Request(target, method=method,
                       data=None if body is None else json.dumps(body).encode(),
                       headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})
         try:
             with urlopen(req, timeout=30) as response:
                 raw = response.read()
-                return json.loads(raw) if raw else None
+                result = json.loads(raw) if raw else None
+                if method == 'GET' and not isinstance(result, (dict, list)):
+                    raise RuntimeError('Malformed Keycloak setup response')
+                return result
         except HTTPError as error:
             if missing and error.code == 404:
                 return None
@@ -50,7 +60,7 @@ def main():
         changes.append(label)
         print(('APPLY ' if args.apply else 'NEEDS ') + label)
         if args.apply:
-            api(method, path, body)
+            queued.append((method, path, body))
 
     client_id = os.environ.get('KEYCLOAK_TENANT_RUNTIME_CLIENT_ID', 'employee-runtime')
     if not re.fullmatch(r'[a-z0-9][a-z0-9-]{2,62}', client_id):
@@ -82,6 +92,11 @@ def main():
     if clients:
         verify_runtime_credentials()  # Fail before any --apply mutation for an existing account.
 
+    if args.apply and not args.development:
+        raise RuntimeError('FGAP apply is development-only; supply --development for an isolated fixture')
+    info = api('GET', '@serverinfo')
+    if info.get('systemInfo', {}).get('version') != '26.8.1':
+        raise RuntimeError('Development FGAP requires pinned Keycloak 26.8.1')
     realm = api('GET')
     if not realm.get('enabled'):
         raise RuntimeError('Realm disabled; enablement requires a separate explicit operation')
@@ -96,6 +111,7 @@ def main():
     public = args.public_url.rstrip('/')
     if attributes.get('frontendUrl', '').rstrip('/') != public:
         attributes['frontendUrl'] = public
+        realm['attributes'] = attributes
         change('realm frontend URL', 'PUT', '', {'attributes': attributes})
     smtp = realm.get('smtpServer') or {}
     if not smtp.get('host') or not smtp.get('from'):
@@ -121,6 +137,7 @@ def main():
             attributes.append(desired)
         change('administrator-only ownership profile', 'PUT', '/users/profile', profile)
     if not clients:
+        configure(api, lambda *a: None, realm, 'missing-runtime-subject', apply=False)
         if args.apply and not secret:
             raise RuntimeError('Set KEYCLOAK_TENANT_RUNTIME_CLIENT_SECRET through protected environment')
         desired = {'clientId':client_id, 'enabled':True, 'publicClient':False,
@@ -128,6 +145,9 @@ def main():
                    'directAccessGrantsEnabled':False, 'fullScopeAllowed':True}
         if args.apply: desired['secret'] = secret
         change('missing scoped runtime service account', 'POST', '/clients', desired)
+        if args.apply:
+            for method, path, body in queued: api(method, path, body)
+            queued.clear()
         clients = api('GET', '/clients?clientId=' + quote(client_id, safe='')) if args.apply else []
         if clients:
             verify_runtime_credentials()
@@ -143,7 +163,7 @@ def main():
         management_id = quote(management[0]['id'], safe='')
         mappings = '/users/' + quote(user['id'], safe='') + '/role-mappings/clients/' + management_id
         existing = api('GET', mappings)
-        allowed = {'manage-users', 'query-users', 'view-users', 'view-realm'}
+        allowed = RUNTIME_ROLES
         if any(role.get('name') not in allowed for role in existing):
             raise RuntimeError('Runtime has unexpected administration roles; review manually, no silent revocation')
         user_base = '/users/' + quote(user['id'], safe='')
@@ -168,6 +188,17 @@ def main():
         missing = [api('GET', '/clients/' + management_id + '/roles/' + name) for name in sorted(allowed - names)]
         if missing:
             change('missing scoped identity grants', 'POST', mappings, missing)
+        # Validate the entire FGAP contract before applying queued prerequisite writes.
+        if args.apply:
+            configure(api, lambda *a: None, realm, user['id'], apply=False)
+        if args.apply:
+            for method, path, body in queued: api(method, path, body)
+            queued.clear()
+        def fgap_change(label, method, path, body):
+            changes.append(label)
+            print(('APPLY ' if args.apply else 'NEEDS ') + label)
+            if args.apply: api(method, path, body)
+        configure(api, fgap_change, realm, user['id'], apply=args.apply)
     print('CHECK complete; validate exact-version real-service denials before rollout')
     return 2 if changes and not args.apply else 0
 

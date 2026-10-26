@@ -76,8 +76,9 @@ public class KeycloakProvisioner : IKeycloakProvisioner
                 protocolMappers = new[] { AudienceMapper(_resources.TenantAudience) },
             }, ct);
 
+            var groups = await CreateEmployeeGroupsAsync(slug, ct);
             if (runtime is not null)
-                await ConfigureRuntimeAccountAsync(slug, runtime["ClientId"]!, runtime["ClientSecret"]!, ct);
+                await ConfigureRuntimeAccountAsync(slug, runtime["ClientId"]!, runtime["ClientSecret"]!, groups, ct);
 
             var userId = await _admin.CreateUserAsync(slug, new
             {
@@ -91,10 +92,11 @@ public class KeycloakProvisioner : IKeycloakProvisioner
                     new { type = "password", value = temporaryPassword, temporary = true },
                 },
                 requiredActions = new[] { "UPDATE_PASSWORD" },
+                groups = new[] { KeycloakEmployeeGroups.ManagedPath, KeycloakEmployeeGroups.RolePaths["admin"] },
             }, ct);
 
-            var adminRole = await _admin.GetRoleAsync(slug, "admin", ct);
-            await _admin.AssignRealmRoleAsync(slug, userId, new object[] { adminRole }, ct);
+            // Ordinary tenant owner is intentionally unbound until reviewed employee reconciliation.
+            // Its application role is inherited; no employee ownership is invented here.
 
             _logger.LogInformation("Provisioned tenant realm {Realm} for {Company}", slug, companyName);
 
@@ -111,7 +113,22 @@ public class KeycloakProvisioner : IKeycloakProvisioner
         }
     }
 
-    private async Task ConfigureRuntimeAccountAsync(string realm, string clientId, string secret, CancellationToken ct)
+    private async Task<Dictionary<string, string>> CreateEmployeeGroupsAsync(string realm, CancellationToken ct)
+    {
+        var groups = new Dictionary<string, string>();
+        groups["managed-users"] = await _admin.CreateGroupAsync(realm, new { name = "managed-users" }, ct);
+        foreach (var role in KeycloakEmployeeGroups.RolePaths) {
+            var representation = await _admin.GetRoleAsync(realm, role.Key, ct);
+            if (representation.TryGetProperty("composite", out var composite) && composite.ValueKind == JsonValueKind.True)
+                throw new KeycloakException("Application roles must be flat before employee setup");
+            var name = role.Value[1..];
+            groups[name] = await _admin.CreateGroupAsync(realm, new { name }, ct);
+            await _admin.AssignGroupRealmRolesAsync(realm, groups[name], new object[] { representation }, ct);
+        }
+        return groups;
+    }
+
+    private async Task ConfigureRuntimeAccountAsync(string realm, string clientId, string secret, Dictionary<string, string> groups, CancellationToken ct)
     {
         // Explicit platform provisioning owns this configuration. Employee runtime cannot perform it.
         await _admin.CreateClientAsync(realm, new { clientId, enabled = true, publicClient = false,
@@ -122,7 +139,7 @@ public class KeycloakProvisioner : IKeycloakProvisioner
         var management = (await _admin.GetClientsAsync(realm, "realm-management", ct))[0];
         var managementId = management.GetProperty("id").GetString()!;
         var roles = new List<object>();
-        foreach (var name in new[] { "manage-users", "query-users", "view-users", "view-realm" })
+        foreach (var name in new[] { "query-users", "view-realm" })
             roles.Add(await _admin.GetClientRoleAsync(realm, managementId, name, ct));
         await _admin.AssignClientRolesAsync(realm, account.GetProperty("id").GetString()!, managementId, roles.ToArray(), ct);
         using (var proof = CancellationTokenSource.CreateLinkedTokenSource(ct))
@@ -130,6 +147,23 @@ public class KeycloakProvisioner : IKeycloakProvisioner
             proof.CancelAfter(TimeSpan.FromSeconds(10));
             await _admin.VerifyServiceAccountAsync(realm, clientId, secret, proof.Token);
         }
+        await _admin.UpdateRealmAsync(realm, new { adminPermissionsEnabled = true }, ct);
+        var authorizationClients = await _admin.GetClientsAsync(realm, "admin-permissions", ct);
+        if (authorizationClients.GetArrayLength() != 1)
+            throw new KeycloakException("FGAP V2 authorization client is missing or ambiguous");
+        var authorizationId = authorizationClients[0].GetProperty("id").GetString()!;
+        await _admin.CreateAuthorizationUserPolicyAsync(realm, authorizationId, new {
+            name = "runtime-subject", logic = "POSITIVE", users = new[] { account.GetProperty("id").GetString()! }
+        }, ct);
+        await _admin.CreateAuthorizationScopePermissionAsync(realm, authorizationId, new {
+            name = "managed-members", resourceType = "Groups", resources = new[] { groups["managed-users"] },
+            scopes = new[] { "view", "view-members", "manage-members", "manage-membership", "manage-membership-of-members" },
+            policies = new[] { "runtime-subject" }, decisionStrategy = "UNANIMOUS"
+        }, ct);
+        await _admin.CreateAuthorizationScopePermissionAsync(realm, authorizationId, new {
+            name = "fixed-application-role-groups", resourceType = "Groups", resources = groups.Where(p => p.Key != "managed-users").Select(p => p.Value).ToArray(),
+            scopes = new[] { "view", "manage-membership" }, policies = new[] { "runtime-subject" }, decisionStrategy = "UNANIMOUS"
+        }, ct);
         var profile = await _admin.GetUserProfileAsync(realm, ct);
         var fields = profile.EnumerateObject().ToDictionary(p => p.Name, p => (object)p.Value.Clone());
         var attributes = profile.GetProperty("attributes").EnumerateArray().Select(a => a.Clone()).ToList();
