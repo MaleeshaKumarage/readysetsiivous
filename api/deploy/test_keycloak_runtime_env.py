@@ -11,7 +11,22 @@ spec.loader.exec_module(checker)
 VALID = 'Auth__Keycloak__TenantAccounts__tenant-a__ClientId=employee-runtime\nAuth__Keycloak__TenantAccounts__tenant-a__ClientSecret=synthetic-only-secret-123\n'
 
 
+fixture_spec = importlib.util.spec_from_file_location('persistence_fixture', Path(__file__).resolve().parents[1] / 'dev/tests/dev-persistence-recreate.py')
+fixture = importlib.util.module_from_spec(fixture_spec)
+fixture_spec.loader.exec_module(fixture)
+
+
 class IdentityEnvTests(unittest.TestCase):
+    def test_persistence_fixture_identity_is_complete_and_protected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = fixture.fixture_identity(directory)
+            self.assertEqual(1, checker.validate_content(path.read_text()))
+            self.assertEqual({'Auth__Keycloak__TenantAccounts__fixture-tenant__ClientId',
+                              'Auth__Keycloak__TenantAccounts__fixture-tenant__ClientSecret'},
+                             {line.split('=', 1)[0] for line in path.read_text().splitlines()})
+            if os.name == 'posix':
+                self.assertEqual(0o600, path.stat().st_mode & 0o777)
+
     def test_tenant_pairs_supported(self):
         self.assertEqual(1,checker.validate_content(VALID))
         self.assertEqual(2,checker.validate_content(VALID + VALID.replace('tenant-a','tenant-b')))
