@@ -74,8 +74,6 @@ services:
     image: &api_image ${API_IMAGE:?Verified immutable API_IMAGE is required}
     restart: unless-stopped
     networks: [default, pdf-private]
-    env_file:
-      - ${API_IDENTITY_ENV_FILE:?Protected tenant identity file is required}
     environment:
       PdfWorker__Url: http://pdf-worker:8080/process
       ASPNETCORE_ENVIRONMENT: Production
