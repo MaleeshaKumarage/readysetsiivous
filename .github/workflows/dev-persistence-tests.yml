@@ -6,8 +6,7 @@ on:
       - api/dev/docker-compose.yml
       - api/deploy/docker-compose.dev.yml
       - api/dev/init/**
-      - api/dev/tests/dev-persistence-recreate.py
-      - api/dev/tests/test_dev_ingress.py
+      - api/dev/tests/**
       - .github/workflows/dev-persistence-tests.yml
   push:
     branches: [main]
@@ -15,8 +14,7 @@ on:
       - api/dev/docker-compose.yml
       - api/deploy/docker-compose.dev.yml
       - api/dev/init/**
-      - api/dev/tests/dev-persistence-recreate.py
-      - api/dev/tests/test_dev_ingress.py
+      - api/dev/tests/**
       - .github/workflows/dev-persistence-tests.yml
 permissions:
   contents: read
@@ -36,5 +34,7 @@ jobs:
           bash -c 'psql() { cat >/dev/null; }; export DEV_KC_DB_PASSWORD=fixture POSTGRES_USER=fixture POSTGRES_DB=fixture; before=$(set +o); source api/dev/init/01-keycloak.sh; after=$(set +o); test "$before" = "$after" || exit 1; test -z "${UNSET_PARENT_VARIABLE}"'
       - name: Validate loopback binds and dev public origins without starting services
         run: python3 api/dev/tests/test_dev_ingress.py
+      - name: Validate state-only rehearsal fixture
+        run: python3 api/dev/tests/test_dev_persistence_fixture.py
       - name: Recreate disposable dev stacks with synthetic state
         run: python3 api/dev/tests/dev-persistence-recreate.py

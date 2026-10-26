@@ -29,6 +29,28 @@ def fixture_identity(directory):
     return path
 
 
+def prepare_state_services(config):
+    api = config["services"].pop("api", None)
+    # Native PDF containment has its own rehearsal; never pull/run app images here.
+    config["services"].pop("pdf-worker", None)
+    migration = config["services"].pop("migrate", None)
+    if migration is not None:
+        assert migration.get("profiles") == ["migration"] and migration.get("command") == ["--migrate-schema"], "Unexpected migration service in state-only rehearsal"
+    for service in config["services"].values():
+        service.pop("ports", None)  # No shared/fixed host ports in the rehearsal.
+        service.pop("restart", None)
+    # Do not import the repository's sample realm; fixture creates its own.
+    kc = config["services"]["keycloak"]
+    kc["command"] = ["start-dev"]
+    kc["volumes"] = []
+    if api:
+        config["services"]["state-helper"] = {
+            "image": "postgres:16-alpine", "entrypoint": ["sleep", "infinity"],
+            "volumes": api["volumes"]}
+    assert set(config["services"]) <= {"postgres", "keycloak-db-init", "keycloak", "state-helper"}, "Unexpected service in state-only rehearsal"
+    return api
+
+
 def rehearse(relative, unsafe=None):
     project = "devpersist-" + uuid.uuid4().hex[:16]
     assert project.startswith("devpersist-") and len(project) == 27
@@ -41,19 +63,7 @@ def rehearse(relative, unsafe=None):
         source = ROOT / relative
         config = json.loads(run(["docker", "compose", "-p", project, "-f", str(source),
                                  "config", "--format", "json"], env).stdout)
-        api = config["services"].pop("api", None)
-        config["services"].pop("migrate", None)  # This fixture tests persistence, not API migrations.
-        for service in config["services"].values():
-            service.pop("ports", None)  # No shared/fixed host ports in the rehearsal.
-            service.pop("restart", None)
-        # Do not import the repository's sample realm; fixture creates its own.
-        kc = config["services"]["keycloak"]
-        kc["command"] = ["start-dev"]
-        kc["volumes"] = []
-        if api:
-            config["services"]["state-helper"] = {
-                "image": "postgres:16-alpine", "entrypoint": ["sleep", "infinity"],
-                "volumes": api["volumes"]}
+        api = prepare_state_services(config)
         # A malformed Compose config must not make cleanup target an existing project.
         config["name"] = project
         for volume in config.get("volumes", {}).values():
