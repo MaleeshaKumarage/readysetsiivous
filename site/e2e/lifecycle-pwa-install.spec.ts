@@ -1,19 +1,42 @@
 import { test, expect } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
 
-const languages = [
-  { lang: 'fi', compact: 'Asenna', full: 'Asenna sovellus', name: 'Asenna ReadySetSiivous-sovellus laitteellesi', tooltip: 'Asenna ReadySetSiivous Sovelluksena', close: 'Sulje iOS-asennusohjeet', title: 'Asenna Admin-sovellus iOS-laitteelle', introduction: 'Näin asennat ReadySetSiivous Admin -sovelluksen iPhoneen tai iPadiin:', steps: ['1. Napauta Safarin navigointipalkin Jaa-painiketta.', '2. Vieritä alas ja napauta Lisää Koti-valikkoon.', '3. Napauta oikeassa yläkulmassa Lisää.'], done: 'Selvä', installed: /^(Sovellus asennettu|Asennettu)$/ },
-  { lang: 'sv', compact: 'Installera', full: 'Installera app', name: 'Installera ReadySetSiivous-appen på din enhet', tooltip: 'Installera ReadySetSiivous som app', close: 'Stäng installationsanvisningarna för iOS', title: 'Installera Admin-appen på iOS', introduction: 'Så installerar du ReadySetSiivous Admin på din iPhone eller iPad:', steps: ['1. Tryck på Dela i Safaris navigeringsfält.', '2. Rulla ned och tryck på Lägg till på hemskärmen.', '3. Tryck på Lägg till uppe till höger.'], done: 'Jag förstår', installed: /^(Appen är installerad|Installerad)$/ },
-  { lang: 'en', compact: 'Install', full: 'Install App', name: 'Install ReadySetSiivous app on your device', tooltip: 'Install ReadySetSiivous as App', close: 'Close iOS installation instructions', title: 'Install Admin App on iOS', introduction: 'To install ReadySetSiivous Admin on your iPhone or iPad:', steps: ["1. Tap the Share button in Safari's navigation bar.", '2. Scroll down and tap Add to Home Screen.', '3. Tap Add in the top right corner.'], done: 'Got it', installed: /^(App )?Installed$/ },
-];
+const language = {
+  full: 'Install App', name: 'Install ReadySetSiivous app on your device', tooltip: 'Install ReadySetSiivous as App',
+  close: 'Close iOS installation instructions', title: 'Install Admin App on iOS',
+  introduction: 'To install ReadySetSiivous Admin on your iPhone or iPad:',
+  steps: ["1. Tap the Share button in Safari's navigation bar.", '2. Scroll down and tap Add to Home Screen.', '3. Tap Add in the top right corner.'],
+  done: 'Got it', installed: 'App Installed',
+};
 
-for (const language of languages) {
-  test(`${language.lang}: installation uses saved language and invokes native prompt`, async ({ page }) => {
+for (const savedLanguage of ['fi', 'sv', 'en']) {
+  test(`${savedLanguage}: installed admin badge stays English without changing saved language`, async ({ page }) => {
+    await setupAdminMocks(page);
+    await page.addInitScript(lang => {
+      localStorage.setItem('lang', lang);
+      const original = window.matchMedia.bind(window);
+      window.matchMedia = query => {
+        const media = original(query);
+        if (query === '(display-mode: standalone)') Object.defineProperty(media, 'matches', { value: true });
+        return media;
+      };
+    }, savedLanguage);
+    await page.goto('/admin/');
+    await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+    await page.locator('#mock-test-style').evaluate(element => element.remove());
+    const burger = page.getByRole('button', { name: 'Toggle navigation' });
+    if (await burger.isVisible()) await burger.click();
+    await expect(page.getByText(language.installed, { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: language.name, exact: true, includeHidden: true })).toHaveCount(0);
+    expect(await page.evaluate(() => localStorage.getItem('lang'))).toBe(savedLanguage);
+  });
+
+  test(`${savedLanguage}: admin installation stays English and invokes native prompt`, async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 1000 });
     await setupAdminMocks(page);
     await page.route('**/api/v1/admin/companies**', route => route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' }, json: { items: [], total: 0 } }));
     await page.route('**/api/v1/admin/agreements**', route => route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' }, json: new URL(route.request().url()).pathname.endsWith('/legacy-repairs') ? { agreements: [] } : [] }));
-    await page.addInitScript(lang => localStorage.setItem('lang', lang), language.lang);
+    await page.addInitScript(lang => localStorage.setItem('lang', lang), savedLanguage);
     await page.goto('/admin/agreements/');
     await expect(page.getByRole('heading', { name: 'Agreements', exact: true })).toBeVisible();
     await page.locator('#mock-test-style').evaluate(element => element.remove());
@@ -41,16 +64,17 @@ for (const language of languages) {
     await install.click();
     await expect.poll(() => page.evaluate(() => (window as unknown as { installPromptCalls: number }).installPromptCalls)).toBe(1);
     await expect(page.getByText(language.installed, { exact: true }).filter({ visible: true }).first()).toBeVisible();
+    expect(await page.evaluate(() => localStorage.getItem('lang'))).toBe(savedLanguage);
   });
 
-  test(`${language.lang}: iOS install modal has a localized accessible close button`, async ({ page }) => {
+  test(`${savedLanguage}: admin iOS instructions and accessible close stay English`, async ({ page }) => {
     await setupAdminMocks(page);
     await page.route('**/api/v1/admin/companies**', route => route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' }, json: { items: [], total: 0 } }));
     await page.route('**/api/v1/admin/agreements**', route => route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' }, json: new URL(route.request().url()).pathname.endsWith('/legacy-repairs') ? { agreements: [] } : [] }));
     await page.addInitScript(lang => {
       localStorage.setItem('lang', lang);
       Object.defineProperty(navigator, 'userAgent', { configurable: true, value: 'iPhone' });
-    }, language.lang);
+    }, savedLanguage);
     await page.goto('/admin/agreements/');
     await expect(page.getByRole('heading', { name: 'Agreements', exact: true })).toBeVisible();
     await page.locator('#mock-test-style').evaluate(element => element.remove());
@@ -67,5 +91,6 @@ for (const language of languages) {
     await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: language.close, exact: true }).click();
     await expect(dialog).not.toBeVisible();
+    expect(await page.evaluate(() => localStorage.getItem('lang'))).toBe(savedLanguage);
   });
 }

@@ -192,7 +192,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               </div>)}
             </Stack>
           </AppShell.Section>
-          <AppShell.Section className="admin-sidebar-footer" pt="md"><PwaInstallButton variant="light" size="sm" /></AppShell.Section>
+          <AppShell.Section className="admin-sidebar-footer" pt="md"><PwaInstallButton variant="light" size="sm" language="en" /></AppShell.Section>
         </AppShell.Navbar>
         <AppShell.Main><div className="admin-content">{children}</div></AppShell.Main>
       </AppShell>

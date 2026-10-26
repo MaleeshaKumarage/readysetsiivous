@@ -15,25 +15,30 @@ interface PwaInstallButtonProps {
   variant?: 'subtle' | 'outline' | 'filled' | 'light';
   size?: 'xs' | 'sm' | 'md';
   compact?: boolean;
+  language?: Language;
 }
 
 export function PwaInstallButton({
   variant = 'light',
   size = 'sm',
   compact = false,
+  language,
 }: PwaInstallButtonProps) {
   const { lang: contextLang } = useLanguage();
-  const [lang, setLang] = useState<Language>(contextLang);
+  const [siteLang, setSiteLang] = useState<Language>(contextLang);
+  const lang = language ?? siteLang;
 
   useEffect(() => {
-    // Admin routes have no LanguageProvider; reuse the saved site language there.
+    // An explicit workspace language takes precedence from the first render.
+    if (language) return;
+    // Callers without an override retain the saved site/context language.
     try {
       const saved = localStorage.getItem('lang');
-      setLang(saved === 'en' || saved === 'fi' || saved === 'sv' ? saved : contextLang);
+      setSiteLang(saved === 'en' || saved === 'fi' || saved === 'sv' ? saved : contextLang);
     } catch {
-      setLang(contextLang);
+      setSiteLang(contextLang);
     }
-  }, [contextLang]);
+  }, [contextLang, language]);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isStandalone, setIsStandalone] = useState(false);
   const [isIos, setIsIos] = useState(false);
