@@ -1,5 +1,14 @@
 # Development identity implementation outcome
 
+This is the original FGAP checkpoint, not the current completion report. Its
+results and limitations below describe that earlier implementation and are
+retained as historical evidence. Later work introduced the server extension and
+[guarded invitations](../specs/2026-10-26-guarded-invitations-design.md); see the
+[later development verification](../../security/2026-10-27-guarded-invitations-verification.json)
+for the replacement boundary, supported candidate and tests. The separately
+approved [production master-operator account-only setup](../../security/2026-10-27-master-operator-setup-outcome.md)
+occurred afterward and does not approve application/provider production rollout.
+
 Implemented on `feat/dev-fgap-identity`, based on6d080a9. No production rollout,
 main merge, or release-policy approval has occurred. Existing shared development
 services were preserved; verification used separately named synthetic services on
@@ -49,7 +58,7 @@ existing shared development and audit services remained running. Test context
 and diagnostic files remain local under ignored/untracked temporary directories;
 native action tokens and raw test transcripts are not part of this checkpoint.
 
-## Unresolved adoption gates
+## Adoption gates at this original FGAP checkpoint (historical)
 
 1. Keycloak's hidden privileged-group creation returns500 instead of403. The
    disposable probe verified rollback/no partial account. The application uses

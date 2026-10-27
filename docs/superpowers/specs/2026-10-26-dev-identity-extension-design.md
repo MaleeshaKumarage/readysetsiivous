@@ -1,8 +1,13 @@
 # Development-only employee identity extension
 
-Status: design approved in chat; implementation and native verification pending.
+Status: implemented and natively verified on the isolated development candidate.
+The [guarded-invitation follow-up](2026-10-26-guarded-invitations-design.md) and its
+[verification record](../../security/2026-10-27-guarded-invitations-verification.json)
+record the later invitation and privilege-edge safeguards beyond this initial design.
 Supersedes the application-facing FGAP grants in the earlier development design.
-Production deployment and the release hold remain unchanged.
+Production application/provider deployment and the release hold remain unchanged.
+The later, explicitly approved master-operator account/SMTP setup was an
+[account-only exception](../../security/2026-10-27-master-operator-setup-outcome.md).
 
 ## Outcome
 

@@ -34,9 +34,10 @@ the separate administrator model preserves real employee and owner workflows.
 
 Add native HTTP/browser regressions with synthetic identities; compare credentials
 and email verification after rejection. Verify explicit master-only operator
-preflight without altering tenant employees. Real development first-login setup
-depends on the pending HTTPS environment choice and protected SMTP setup;
-email delivery itself is approved. Production remains untouched.
+preflight without altering tenant employees. The user subsequently selected
+existing production HTTPS for dedicated master-operator account and SMTP setup
+only. That scoped setup and first-login completion were verified separately;
+production application/provider deployment remains held.
 
 ## Phase 3: Review, push and CI
 
@@ -53,6 +54,26 @@ Implementation and independent source review are complete with no outstanding
 P1/P2 findings in the reviewed change. Normal-image native regressions, separate
 credential-rollback fault tests, setup tests and the backend suite passed.
 See [the sanitized verification record](../../security/2026-10-27-guarded-invitations-verification.json)
-for exact artifacts, counts, cleanup and limits. The operator tool is ready;
-no real administrator was created and no setup email was sent. The HTTPS
-environment choice and production deployment remain separate gates.
+for exact artifacts, counts, cleanup and limits. That test record predates real
+operator setup and correctly records that no real administrator or setup email
+existed at that checkpoint. It is retained unchanged as historical evidence.
+
+## Completed account-only follow-up (2026-10-27)
+
+After explicit production-HTTPS target approval, the reviewed operator helper
+configured master SMTP with the existing provider and created the separate master
+operator. Native setup-email delivery was accepted; the user confirmed completion.
+Read-only verification then found enabled/master-admin status, verified email,
+configured password and OTP, and no remaining required actions. No application or
+provider image was deployed. See the [sanitized account-only outcome](../../security/2026-10-27-master-operator-setup-outcome.md).
+Production application/provider adoption, multi-node behavior and the release hold
+remain separate gates.
+
+## PostgreSQL persistence follow-up (2026-10-27)
+
+The exact reviewed normal and separate fault images passed 40 API canaries,
+139 invitation/MFA checks and 10 native credential-rollback checks on PostgreSQL
+16.15. All owned containers/network were removed; six existing development
+services remained running. [Sanitized evidence](../../security/2026-10-27-postgresql-identity-verification.json)
+records the database proof and limits. The regular security workflow now uses a
+separate PostgreSQL database for Keycloak; no provider source was changed.

@@ -6,7 +6,9 @@ The approved development identity boundary is the version-pinned server extensio
 described in [the extension design](superpowers/specs/2026-10-26-dev-identity-extension-design.md).
 The earlier coarse-role and FGAP contracts retained below are historical evidence;
 they are not instructions to grant those rights to the new runtime client.
-Production configuration, images and the release hold remain unchanged.
+Production application/provider deployment and the release hold remain unchanged.
+The separately approved master-operator account and mail setup is recorded below;
+it is not application or identity-provider rollout approval.
 
 The current runtime client has **zero realm-management roles, zero FGAP grants and
 no group memberships**. Realm `adminPermissionsEnabled` must be false. It uses
@@ -63,12 +65,23 @@ authenticated operations. Creation and delivery require both `--apply` and
 `--send-setup-email`, protected operator email/admin-token configuration, and
 working SMTP. New accounts require email verification, password setup and TOTP.
 It never changes an existing employee or silently rotates an existing password.
-The real setup invitation has not been sent: the development login currently
-uses public HTTP, so the HTTPS environment choice remains pending.
+The user explicitly selected existing production HTTPS for account setup only.
+The dedicated production master operator and master SMTP were configured using
+the existing email provider, and the native setup email was accepted. After the
+user confirmed completion, read-only verification found the account enabled with
+verified email, password and OTP configured, master administration access, and no
+remaining required actions. The real email and provider credentials remain private.
+See the [dated account-only outcome](security/2026-10-27-master-operator-setup-outcome.md).
 
-Production rollout remains unapproved. Multi-node cache behavior, external user
-stores and production-specific adoption need separate validation. Native rollback
-proof uses Keycloak's owned H2 start-dev fixture, not a PostgreSQL deployment.
+The subsequent [PostgreSQL verification](security/2026-10-27-postgresql-identity-verification.json)
+passed the same 40 API, 139 invitation/MFA and 10 native rollback checks on the
+exact reviewed images using PostgreSQL 16.15. The earlier H2 record is retained
+unchanged as historical evidence. CI now configures a separate PostgreSQL Keycloak
+database for normal and test-only fault images, with a persisted master-row check.
+
+Production application/provider rollout remains unapproved. Multi-node cache
+behavior, external user stores and production-specific adoption need separate
+validation; this PostgreSQL run remains a single-node start-dev fixture.
 
 ---
 

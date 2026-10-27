@@ -1,5 +1,12 @@
 # Development identity extension outcome
 
+This is the original extension checkpoint. Its remaining gates below describe
+that date, not the current guarded-invitation outcome. The later
+[guarded-invitation verification](../../security/2026-10-27-guarded-invitations-verification.json)
+records completed revocation, stale-form and privilege-edge checks. The
+[master-operator supplement](../../security/2026-10-27-master-operator-setup-outcome.md)
+records the subsequent account-only setup; application/provider rollout remains held.
+
 The application-facing identity boundary now uses a narrow Keycloak extension,
 not visibility-filtered Admin REST permissions. Runtime clients have no
 realm-management roles or FGAP grants. Tenant transport has no fallback to Admin
@@ -37,7 +44,7 @@ All three owned test containers, their empty network and the SSH tunnel were
 removed. The six pre-existing development/audit services were verified running.
 Shared development configuration and production were not changed.
 
-## Remaining production gates
+## Production gates at this original checkpoint (historical)
 
 This is not production-ready. Complete per-request model reads solve the proven
 steady-state drift defect, but do not establish serialization against concurrent

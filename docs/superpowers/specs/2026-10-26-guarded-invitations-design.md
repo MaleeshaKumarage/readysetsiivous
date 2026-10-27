@@ -1,7 +1,10 @@
 # Guarded invitations and separate operator identities
 
 Status: user approved the proposed separate-operator and guarded-invitation
-approach and instructed implementation. Development first; no production changes.
+approach and instructed implementation. Application/provider changes remain
+development-only. On 2026-10-27 the user separately approved production HTTPS
+for master-operator account and SMTP setup only; that scoped setup is complete.
+It does not approve production application/provider deployment or release.
 The selected real operator email is kept only in private operator configuration.
 
 ## Supported administration model
@@ -96,14 +99,21 @@ email in public code/tests. Check for an exact, unique existing master account
 before creation. Do not change a matching tenant employee identity. Never rotate
 an existing password or remove another administrator automatically.
 
-First-login delivery is an external prerequisite. The current development master
-realm has no SMTP and no matching operator account. Email-based setup requires the
-approved email delivery, working protected mail configuration, and the pending
-HTTPS environment choice. The development login currently uses public HTTP;
-production account setup is not inferred from generic instructions to continue. Do not
-send mail or claim an active administrator until this is resolved. Require MFA
-enrollment for the new infrastructure administrator, with no password in chat,
-source, workflow output or private decision notes.
+First-login delivery requires explicit target approval, working protected mail
+configuration and a verified public HTTPS frontend through both public and
+private transports. Require MFA enrollment for a new infrastructure administrator,
+with no password in chat, source, workflow output or private decision notes.
+
+The user explicitly selected existing production HTTPS for the account-only
+exception. The reviewed setup helper created a dedicated production master
+operator, configured master SMTP using the existing email provider with its
+credential retained remotely, and sent the native first-login invitation.
+SMTP accepted delivery. After the user confirmed completion, read-only account
+checks verified enabled status, verified email, password and OTP configuration,
+master administration access and no pending required actions. No tenant employee
+identity was used. Production application/provider images and the release hold
+remain unchanged. The [dated outcome](../../security/2026-10-27-master-operator-setup-outcome.md)
+supplements the earlier development verification record without rewriting it.
 
 ## Verification
 

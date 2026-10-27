@@ -80,3 +80,18 @@ listener is included in the normal provider JAR/image.
 These are single-node deployment tests. They do not prove multi-node cache
 atomicity or global serialization against unrestricted infrastructure operators
 who can disable or replace the security boundary itself.
+
+## PostgreSQL persistence coverage
+
+The security CI job connects its existing synthetic PostgreSQL service to the
+owned identity network and creates a separate `keycloak_identity` database.
+Both the normal image and the later fault image explicitly select the PostgreSQL
+driver and that database; startup checks the persisted master-realm row. The
+application tests retain their independent `identity_tests` database. Cleanup
+disconnects the PostgreSQL service before removing the test network.
+
+The [dated PostgreSQL evidence](../../../docs/security/2026-10-27-postgresql-identity-verification.json)
+records 40 API canaries, 139 guarded-invitation/MFA checks and 10 credential-rollback
+checks against PostgreSQL 16.15 using the reviewed normal and separate fault
+images. This extends the earlier H2 fixture evidence without claiming clustered
+cache correctness or production-mode deployment verification.
