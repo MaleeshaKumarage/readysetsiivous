@@ -24,6 +24,10 @@ export default function EntertainmentClient() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
+  const [copyState, setCopyState] = useState<'key' | 'link' | 'error' | null>(null);
+  const [copyError, setCopyError] = useState<string>('');
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => () => clearTimeout(copyTimerRef.current), []);
   const connectionRef = useRef<HubConnection | null>(null);
   const roundIdRef = useRef<string | null>(null);
   const roundRef = useRef<RoundStarted | null>(null);
@@ -100,8 +104,37 @@ export default function EntertainmentClient() {
       {!connected && <Button onClick={() => setSession(session ? { ...session } : null)}>Reconnect</Button>}</div>}
     {busy && <p role="status">Working…</p>}
     {view === 'lobby' && session && <Card padding="lg" className="space-y-4"><h2>{lobby?.groupName || 'Lobby'}</h2>
-      {session.joinKey && <><p className="text-3xl">{session.joinKey}</p><Button onClick={() => void navigator.clipboard.writeText(session.joinKey!)}>Copy key</Button>
-        <Button onClick={() => void navigator.clipboard.writeText(`${window.location.origin}/entertainment/?join=${encodeURIComponent(session.joinKey!)}`)}>Copy join link</Button></>}
+      {session.joinKey && <div className="space-y-2"><p className="text-3xl font-mono font-bold tracking-wider">{session.joinKey}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button onClick={async () => {
+            clearTimeout(copyTimerRef.current);
+            try {
+              await navigator.clipboard.writeText(session.joinKey!);
+              setCopyState('key'); setCopyError('');
+              copyTimerRef.current = setTimeout(() => setCopyState(null), 2500);
+            } catch {
+              setCopyState('error'); setCopyError('Could not copy join key.');
+              copyTimerRef.current = setTimeout(() => setCopyState(null), 4000);
+            }
+          }}>{copyState === 'key' ? '✓ Key copied' : 'Copy key'}</Button>
+          <Button onClick={async () => {
+            clearTimeout(copyTimerRef.current);
+            try {
+              await navigator.clipboard.writeText(`${window.location.origin}/entertainment/?join=${encodeURIComponent(session.joinKey!)}`);
+              setCopyState('link'); setCopyError('');
+              copyTimerRef.current = setTimeout(() => setCopyState(null), 2500);
+            } catch {
+              setCopyState('error'); setCopyError('Could not copy join link.');
+              copyTimerRef.current = setTimeout(() => setCopyState(null), 4000);
+            }
+          }}>{copyState === 'link' ? '✓ Link copied' : 'Copy join link'}</Button>
+        </div>
+        <p role="status" aria-live="polite" className="text-sm font-medium">
+          {copyState === 'key' && <span className="text-emerald-600 dark:text-emerald-400">Join key copied to clipboard.</span>}
+          {copyState === 'link' && <span className="text-emerald-600 dark:text-emerald-400">Join link copied to clipboard.</span>}
+          {copyState === 'error' && <span role="alert" className="text-red-600 dark:text-red-400">{copyError}</span>}
+        </p>
+      </div>}
       {!lobby?.players.length && <p>Waiting for players to join...</p>}
       <ul>{lobby?.players.map(p => <li key={p.playerId}>{p.name} {p.level} {p.isCreator && <span>Host</span>}</li>)}</ul>
       {session.isCreator && <Button disabled={disabled} onClick={() => void send('StartGame', session.groupId, session.playerId)}>Start game</Button>}
