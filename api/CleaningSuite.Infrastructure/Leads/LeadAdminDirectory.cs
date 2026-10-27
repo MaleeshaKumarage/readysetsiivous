@@ -7,16 +7,27 @@ namespace CleaningSuite.Infrastructure.Leads;
 
 public sealed class LeadAdminDirectory(TenantKeycloakClients keycloak,IEmployeeRepository employees,ITenantContext tenant) : ILeadAdminDirectory
 {
+    private static string GroupText(System.Text.Json.JsonElement value, string key) => value.TryGetProperty(key, out var property) ? property.GetString() ?? "" : "";
     public async Task<IReadOnlyList<LeadAdminRecipient>> ListAsync(CancellationToken ct)
     {
         try {
+            var client = keycloak.ForTenant(tenant.TenantId);
+            var groups = await KeycloakEmployeeGroups.ResolveAsync(client, tenant.TenantId, ct);
             var result=new List<LeadAdminRecipient>();
             for(var first=0;first<10000;first+=100) {
-                var page=await keycloak.ForTenant(tenant.TenantId).GetRealmRoleUsersAsync(tenant.TenantId,"admin",first,100,ct);
+                var page=await client.GetGroupMembersAsync(tenant.TenantId, groups.ManagedId, first, 100, ct);
                 foreach(var user in page.EnumerateArray()) {
                     if(!user.TryGetProperty("enabled",out var enabled) || !enabled.GetBoolean()) continue;
                     var id=user.GetProperty("id").GetString();var email=user.TryGetProperty("email",out var e)?e.GetString():null;
                     if(string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(email) || email.Length>254 || !new EmailAddressAttribute().IsValid(email)) continue;
+                    if (user.TryGetProperty("serviceAccountClientId", out var service) && !string.IsNullOrWhiteSpace(service.GetString())) continue;
+                    var memberships = await client.GetUserGroupsAsync(tenant.TenantId, id, ct);
+                    if (memberships.ValueKind != System.Text.Json.JsonValueKind.Array || memberships.GetArrayLength() > 100)
+                        throw new LeadConflictException("Administrator group membership could not be verified.");
+                    var memberGroups = memberships.EnumerateArray().ToArray();
+                    if (!memberGroups.Any(g => GroupText(g, "id") == groups.ManagedId && GroupText(g, "path") == KeycloakEmployeeGroups.ManagedPath)
+                        || !memberGroups.Any(g => GroupText(g, "id") == groups.RoleIds["admin"] && GroupText(g, "path") == KeycloakEmployeeGroups.RolePaths["admin"])
+                        || memberGroups.Any(g => GroupText(g, "id") != groups.ManagedId && !groups.RoleIds.Any(r => r.Value == GroupText(g, "id") && KeycloakEmployeeGroups.RolePaths[r.Key] == GroupText(g, "path")))) continue;
                     var employee=await employees.GetByKeycloakUserIdAsync(id,ct);
                     if(employee is not null && (!employee.IsActive || employee.IdentitySyncPending || employee.Role!="admin")) continue;
                     var name=string.Join(" ",new[]{user.TryGetProperty("firstName",out var f)?f.GetString():null,user.TryGetProperty("lastName",out var l)?l.GetString():null}.Where(x=>!string.IsNullOrWhiteSpace(x)));

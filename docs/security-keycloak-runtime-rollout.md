@@ -1,5 +1,92 @@
 # Scoped identity runtime rollout (INF03 — not approved for production rollout)
 
+## Current development-only extension contract (2026-10-27)
+
+The approved development identity boundary is the version-pinned server extension
+described in [the extension design](superpowers/specs/2026-10-26-dev-identity-extension-design.md).
+The earlier coarse-role and FGAP contracts retained below are historical evidence;
+they are not instructions to grant those rights to the new runtime client.
+Production application/provider deployment and the release hold remain unchanged.
+The separately approved master-operator account and mail setup is recorded below;
+it is not application or identity-provider rollout approval.
+
+The current runtime client has **zero realm-management roles, zero FGAP grants and
+no group memberships**. Realm `adminPermissionsEnabled` must be false. It uses
+client credentials with a dedicated access-token-only `cleaning-identity-runtime`
+audience and `fullScopeAllowed=false`. The realm attribute
+`cleaning_identity_runtime_client_id` binds the extension to the client's immutable
+internal UUID, not merely its display/client name. The application calls only
+`/realms/<tenant>/cleaning-identity/v1`; it never falls back to Admin REST when the
+extension is missing or denies a request. Platform provisioning remains separate.
+
+Explicit setup is `api/deploy/keycloak-employee-setup.py`. Check is read-only by
+default (a client-credentials exchange is the only non-GET proof). Exact serverinfo
+version 26.8.1 is required, and apply requires `--apply --development` for the
+isolated fixture. Existing secrets must authenticate before any setup mutation;
+they are never rotated. Missing prerequisite/profile/group changes are reported as
+NEEDS with exit 2; ready checks exit 0. API runtime cannot repair prerequisites.
+After apply, and on an unchanged check, setup obtains a fresh audience-bearing
+token and verifies the authenticated extension response for the exact realm.
+A stock server or denied extension cannot be reported ready merely because
+client-credentials token issuance succeeded.
+
+Migration of an earlier reviewed FGAP fixture additionally requires
+`--migrate-fgap --development`. Setup validates the exact known policy subject,
+group bindings, scopes and policy relationships, then deletes only those owned
+permissions/policy and direct `query-users`/`view-realm` grants. It verifies their
+absence and disables the FGAP path before installing the dedicated audience and
+activating the extension binding last. Foreign policies, broader or inherited
+administration roles, malformed/incomplete inventories, group-derived runtime
+privileges and existing binding/mapper drift require manual reconciliation.
+The migration flag never authorizes arbitrary privilege revocation or secret rotation.
+
+Both fresh setup and migration retain the four plain fixed root groups, flat
+application roles and administrator-only `cleaning_employee_id` and
+`cleaning_invitation_ticket` single-value profile fields.
+No existing person is automatically enrolled or adopted. Unrelated realm/profile
+settings remain intact. Existing SMTP passwords are never copied into a response
+or blindly written back from masked values.
+
+Required evidence includes native invitation delivery and login, direct Admin REST
+denials, forbidden creation input with no partial user, protected/drifted account
+denials, directory filtering, malformed input and role/composite inheritance.
+The guarded-invitation follow-up now covers signed single-use tickets, stale
+forms, native legacy links, revocation across account/role cycles, and native
+prepare-stage privilege-edge vetoes, including concurrent benign-role assignment
+and forbidden composite creation. Native persisted-state checks passed on the
+recorded development image; ordinary transactions are not claimed globally
+serializable. See the [guarded design](superpowers/specs/2026-10-26-guarded-invitations-design.md)
+and [verification record](security/2026-10-27-guarded-invitations-verification.json).
+
+Infrastructure administrators use separate master-realm accounts. The explicit
+`api/deploy/keycloak-operator-setup.py` defaults to read-only and checks both
+private and public discovery against the exact public HTTPS issuer before
+authenticated operations. Creation and delivery require both `--apply` and
+`--send-setup-email`, protected operator email/admin-token configuration, and
+working SMTP. New accounts require email verification, password setup and TOTP.
+It never changes an existing employee or silently rotates an existing password.
+The user explicitly selected existing production HTTPS for account setup only.
+The dedicated production master operator and master SMTP were configured using
+the existing email provider, and the native setup email was accepted. After the
+user confirmed completion, read-only verification found the account enabled with
+verified email, password and OTP configured, master administration access, and no
+remaining required actions. The real email and provider credentials remain private.
+See the [dated account-only outcome](security/2026-10-27-master-operator-setup-outcome.md).
+
+The subsequent [PostgreSQL verification](security/2026-10-27-postgresql-identity-verification.json)
+passed the same 40 API, 139 invitation/MFA and 10 native rollback checks on the
+exact reviewed images using PostgreSQL 16.15. The earlier H2 record is retained
+unchanged as historical evidence. CI now configures a separate PostgreSQL Keycloak
+database for normal and test-only fault images, with a persisted master-row check.
+
+Production application/provider rollout remains unapproved. Multi-node cache
+behavior, external user stores and production-specific adoption need separate
+validation; this PostgreSQL run remains a single-node start-dev fixture.
+
+---
+
+## Historical boundary and rollout evidence
+
 This branch removes the API bootstrap-password fallback and splits platform provisioning
 from employee/lead identity clients. Each tenant uses its own realm token endpoint and
 explicit confidential service account. Missing configuration fails closed. Runtime
@@ -33,8 +120,9 @@ back into an update. Secrets come from environment or protected configuration on
 
 ## Required synthetic gate before merge/rollout
 
-Run `.github/workflows/keycloak-runtime-privileges.yml` against disposable Keycloak 24.0.5 and 26.1.0 services (or deliberately align supported
-versions following compatibility evidence). Exercise user creation, email lookup,
+The earlier rehearsal targeted disposable Keycloak 24.0.5 and 26.1.0 services;
+the current extension workflow targets only the reviewed pinned 26.8.1 image.
+Exercise user creation, email lookup,
 owner linking, role changes, invite/actions email, enable/disable, logout and lead admin
 directory. Assert tenant A credentials receive denial for tenant B and master, realm/SMTP/
 client/profile changes, and mapping administration roles not granted to the account.
@@ -131,8 +219,8 @@ realm deletion is confined to generated `scoped-a-*`/`scoped-b-*` names on loopb
 
 ### Confidential client isolation and public invitation preflight
 
-Tenant runtime receives only `manage-users`, `query-users`, `view-users`, and
-`view-realm`. Never grant `view-clients`: Keycloak's confidential client-secret
+The historical coarse setup is superseded for isolated development by the contract below.
+Tenant runtime receives only `query-users` and `view-realm`. Never grant `view-clients`: Keycloak's confidential client-secret
 endpoint accepts client view permission. Existing accounts with this grant require
 explicit operator review/removal; setup refuses unexpected grants rather than
 silently revoking them. No preview fine-grained authorization feature is enabled.
@@ -188,3 +276,74 @@ it does not narrow the same-realm rights available from that network. Achieving
 server-enforced per-user or endpoint restrictions needs a separately reviewed design
 (for example a restricted administration boundary or supported fine-grained model).
 No preview feature, new intermediary, or version upgrade is enabled by this change.
+
+
+## Superseded development FGAP V2 contract (2026-10-26)
+
+Production rollout, image changes and held PRs remain unapproved. Explicit setup now
+requires serverinfo version 26.8.1; `--apply` additionally requires `--development`.
+Use only the isolated candidate fixture pinned in the approved development design.
+The runtime's only realm-management grants are `query-users` and `view-realm`.
+Existing `manage-users`, `view-users`, `view-clients` or other broad grants fail
+manual review; setup never silently revokes them or rotates an existing secret.
+Delivered-secret proof precedes every existing-client mutation.
+
+Setup owns exactly `/managed-users`, `/app-employee`, `/app-manager`, `/app-admin`.
+These are plain roots without parents, children or client roles. Application groups
+map exactly their corresponding flat realm role; the main group has no roles.
+Unexpected mappings/composites, service accounts and protected administrators in
+managed groups fail validation. Missing groups/mappings are additive setup only;
+existing users are never enrolled, adopted or reconciled automatically.
+
+FGAP V2 uses realm `adminPermissionsEnabled=true`, the `admin-permissions` client's
+`authz/resource-server/policy/user` policy `runtime-subject` with POSITIVE logic
+and exactly the runtime service-account user ID. Two scope permissions use
+`resourceType=Groups`, `decisionStrategy=UNANIMOUS` and that policy only:
+`managed-members` targets only the managed group with `view`, `view-members`,
+`manage-members`, `manage-membership`, `manage-membership-of-members`;
+`fixed-application-role-groups` targets the three role groups with only `view`
+and `manage-membership`. No user/role mapping permission exists. Unexpected
+policies or permissions require manual review; setup never resets authorization.
+
+Default check emits NEEDS and exits 2 for missing prerequisites without administrative
+writes. A token exchange is the only non-GET credential proof. Explicit apply is
+additive and idempotent. The Python helper returns exact server group IDs for the
+fixed paths; requests and environment cannot override these paths.
+
+The known hidden privileged-group create response HTTP500 remains a failed
+upstream expected403 gate. Application fail-closed behavior and deliberate retry
+must be verified separately; neither a handled error nor fake-HTTP tests waive the
+required native invitation, browser login, protected-state and stolen-token matrix.
+Earlier coarse/version gates above remain historical production blockers, not an
+instruction to grant broad rights or change production. Runtime setup must pass
+real 26.8.1 validation before any adoption approval.
+
+Keycloak 26.8.1 scope-permission GET is sparse. Setup validates bindings using
+`/policy/{id}/resources`, `/scopes`, and `/associatedPolicies`, comparing exact
+group IDs, scope names and a single known runtime user-policy ID. It does not
+assume POST fields round-trip through permission GET. Null or malformed
+relationship responses fail before additive changes.
+
+### Protected-account drift remains an adoption blocker
+
+The authority boundary is membership of the setup-owned managed groups. Before
+granting a person any Keycloak administration privilege, an operator must remove
+that person from every managed/application-role group. Re-run privileged setup
+validation after administrative changes. Setup's privileged inspection rejects
+direct and composite administration roles on managed members.
+
+Do not claim the runtime independently detects every violation of this rule.
+Keycloak filters user role-mapping responses by the caller's role visibility:
+an administrative role can therefore be omitted from an HTTP200 empty list.
+The pinned Roles permission schema has no `view` scope; a disposable experiment
+to grant it returned400 and was fully cleaned up. Broader client visibility has
+not been granted, because client view can expose secrets. The diagnostic realm
+attribute `cleaning_runtime_management_client_id` records setup's verified client
+ID; it does not prove that a filtered role response is complete.
+
+An experimental runtime drift check failed its native test and was removed,
+including its misleading mock-only passing test. The failed result is retained
+in local audit evidence. A separately reviewed administration boundary or another
+proven policy model is required if protection must survive an operator leaving
+an administrative account inside the managed group. This development branch is
+not approved for adoption or production rollout under that stronger requirement.

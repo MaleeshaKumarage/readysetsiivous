@@ -1,0 +1,62 @@
+{
+  "date": "2026-10-27",
+  "scope": "owned synthetic development fixture only",
+  "keycloak_version": "26.8.1",
+  "database": {
+    "vendor": "PostgreSQL",
+    "version": "16.15",
+    "image": "postgres:16-alpine",
+    "architecture": "aarch64",
+    "storage": "bounded tmpfs; removed after verification",
+    "proof": [
+      "KC_DB=postgres and explicit JDBC URL for both images",
+      "native realm table with exactly one master realm before and after tests",
+      "four active PostgreSQL client sessions observed"
+    ]
+  },
+  "artifacts": {
+    "normal_image_sha256": "8523fc048089e840643f3797aed372ecc974b88532dffb98a3331924d7319c02",
+    "fault_image_sha256": "d8d9d8156b86667934693f452bdb099249783bc9d63221dbd47e4bd9edd279bb",
+    "normal_provider_jar_sha256": "f07466da6858f6185cb00422eb8759facbe32099925322de39a5a8551066ca3d",
+    "normal_contains_fault_provider": false
+  },
+  "results": {
+    "api_security_canaries": {
+      "passed": 40,
+      "failed": 0
+    },
+    "native_guarded_invitations_and_mfa": {
+      "passed": 139,
+      "failed": 0
+    },
+    "native_post_consumption_credential_rollback": {
+      "passed": 10,
+      "failed": 0
+    }
+  },
+  "rollback_assertions": [
+    "native password storage reached, then prepare transaction failed",
+    "old password preserved and proposed new passwords rejected",
+    "database ticket pointer rolled back",
+    "consumed cache ticket and open form stayed unusable",
+    "fresh invitation worked after disarming test-only fault"
+  ],
+  "cleanup": {
+    "synthetic_realms": "complete",
+    "owned_containers_removed": 3,
+    "owned_network_removed": true,
+    "existing_services_running": 6,
+    "exit_status": 0
+  },
+  "review": {
+    "new_workflow_and_operator_documentation": "independent source review found no P1/P2 or workflow correctness blocker",
+    "test_execution": "coordinator executed existing native scripts; reviewer did not rerun them"
+  },
+  "ci_followup": "Workflow now uses a separate PostgreSQL Keycloak database in its existing synthetic PostgreSQL service for both normal and fault images; exact new-head CI must run after push.",
+  "limits": [
+    "Single-node fixture, not clustered cache proof.",
+    "Keycloak start-dev mode; not a production TLS/proxy deployment rehearsal.",
+    "Does not prove all external user-storage providers.",
+    "Production application/provider rollout remains held."
+  ]
+}

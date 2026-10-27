@@ -6,9 +6,9 @@ public interface IEmployeeIdentityProvider
 {
     Task ValidateInvitationAsync(string tenantId, string redirectUri, string role, CancellationToken ct = default);
     Task<EmployeeIdentity> EnsureAsync(string tenantId, Employee employee, CancellationToken ct = default);
-    Task AssignRoleAsync(string tenantId, string userId, string role, CancellationToken ct = default);
-    Task SendSetupEmailAsync(string tenantId, string userId, string redirectUri, int lifespanSeconds, CancellationToken ct = default);
-    Task SynchronizeAccessAsync(string tenantId, string userId, string role, bool enabled, CancellationToken ct = default);
+    Task AssignRoleAsync(string tenantId, Guid employeeId, string userId, string role, CancellationToken ct = default);
+    Task SendSetupEmailAsync(string tenantId, Guid employeeId, string userId, string redirectUri, int lifespanSeconds, CancellationToken ct = default);
+    Task SynchronizeAccessAsync(string tenantId, Guid employeeId, string userId, string role, bool enabled, CancellationToken ct = default);
 }
 public interface IEmployeeIdentityLock
 {

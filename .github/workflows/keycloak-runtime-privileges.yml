@@ -4,6 +4,10 @@ on:
     paths:
       - 'api/CleaningSuite.Infrastructure/Keycloak/**'
       - 'api/deploy/*keycloak*'
+      - 'api/deploy/keycloak_fgap.py'
+      - 'api/deploy/keycloak_identity_extension.py'
+      - 'api/keycloak-identity-extension/**'
+      - 'api/CleaningSuite.Tests/**'
       - '.github/workflows/keycloak-runtime-privileges.yml'
   workflow_dispatch:
 permissions:
@@ -11,10 +15,6 @@ permissions:
 jobs:
   synthetic:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        keycloak: ['24.0.5', '26.1.0']
     services:
       postgres:
         image: postgres:16-alpine
@@ -32,26 +32,46 @@ jobs:
         run: |
           python3 -B api/deploy/test_keycloak_employee_setup.py
           python3 -B api/deploy/test_keycloak_runtime_env.py
+          python3 -B api/deploy/test_keycloak_fgap.py
+          python3 -B api/deploy/test_keycloak_identity_extension.py
+          python3 -B api/deploy/test_keycloak_operator_setup.py
+      - name: Build reviewed development identity extension
+        run: docker build -t cleaning-identity-rehearsal:ci api/keycloak-identity-extension
       - name: Start isolated synthetic identity service
         env:
           SYNTHETIC_PASSWORD: audience_test_only_2026
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
         run: |
           docker network create scoped-identity
+          docker network connect --alias identity-postgres scoped-identity "$POSTGRES_CONTAINER"
+          docker exec "$POSTGRES_CONTAINER" psql -U identity_tests -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE keycloak_identity'
           docker run -d --name invite-review-mail --network scoped-identity -p 127.0.0.1:12525:8025 axllent/mailpit:v1.27.8
           docker run -d --name scoped-keycloak --network scoped-identity -p 127.0.0.1:18480:8080 \
-            -e KEYCLOAK_ADMIN=audience-test-admin -e KEYCLOAK_ADMIN_PASSWORD="$SYNTHETIC_PASSWORD" \
-            "quay.io/keycloak/keycloak:${{ matrix.keycloak }}" start-dev
+            -e KC_BOOTSTRAP_ADMIN_USERNAME=audience-test-admin -e KC_BOOTSTRAP_ADMIN_PASSWORD="$SYNTHETIC_PASSWORD" \
+            -e KC_DB=postgres -e KC_DB_URL=jdbc:postgresql://identity-postgres:5432/keycloak_identity \
+            -e KC_DB_USERNAME=identity_tests -e KC_DB_PASSWORD=synthetic_ci_only \
+            cleaning-identity-rehearsal:ci start-dev
           for attempt in $(seq 1 90); do
-            if curl --fail --silent http://127.0.0.1:18480/realms/master/.well-known/openid-configuration >/dev/null; then exit 0; fi
+            if curl --fail --silent http://127.0.0.1:18480/realms/master/.well-known/openid-configuration >/dev/null; then
+              test "$(docker exec "$POSTGRES_CONTAINER" psql -U identity_tests -d keycloak_identity -Atc "select count(*) from realm where name='master'")" = 1
+              exit 0
+            fi
             sleep 2
           done
           exit 1
-      - name: Prove server-side identity grants and denials
+      - name: Prove extension grants, denials and privileged-account drift protection
         env:
           SYNTHETIC_KEYCLOAK_URL: http://127.0.0.1:18480
           SYNTHETIC_KEYCLOAK_ADMIN_PASSWORD: audience_test_only_2026
           SYNTHETIC_KEYCLOAK_ADMIN_USER: audience-test-admin
         run: python3 api/deploy/test-keycloak-runtime-privileges.py
+      - name: Native guarded invitation and stale password form regressions
+        env:
+          SYNTHETIC_KEYCLOAK_URL: http://127.0.0.1:18480
+          SYNTHETIC_MAILBOX_URL: http://127.0.0.1:12525
+          SYNTHETIC_KEYCLOAK_ADMIN_PASSWORD: audience_test_only_2026
+          SYNTHETIC_KEYCLOAK_ADMIN_USER: audience-test-admin
+        run: python3 -B api/keycloak-identity-extension/tests/guarded_invitations.py
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.402
@@ -67,8 +87,40 @@ jobs:
         run: >-
           dotnet test api/CleaningSuite.Tests/CleaningSuite.Tests.csproj -m:1 -p:BuildInParallel=false
           --filter 'FullyQualifiedName~NativeSetupEmailBindsIdentityRetriesDeliveryAndSerializesParallelInvites|FullyQualifiedName~ProvisionedRealmIssuesApiAudienceOnLoginAndRefreshButNotIdToken'
+      - name: Build separate synthetic credential-rollback test image
+        run: >-
+          docker build --build-arg IDENTITY_BASE=cleaning-identity-rehearsal:ci
+          -f api/keycloak-identity-extension/tests/fault-provider/Dockerfile
+          -t cleaning-identity-rehearsal-fault:ci api/keycloak-identity-extension
+      - name: Prove consumed invitation stays revoked after native credential rollback
+        env:
+          SYNTHETIC_KEYCLOAK_URL: http://127.0.0.1:18480
+          SYNTHETIC_MAILBOX_URL: http://127.0.0.1:12525
+          SYNTHETIC_KEYCLOAK_ADMIN_PASSWORD: audience_test_only_2026
+          SYNTHETIC_KEYCLOAK_ADMIN_USER: audience-test-admin
+        run: |
+          docker rm -f scoped-keycloak
+          docker run -d --name scoped-keycloak --network scoped-identity -p 127.0.0.1:18480:8080 \
+            -e KC_BOOTSTRAP_ADMIN_USERNAME="$SYNTHETIC_KEYCLOAK_ADMIN_USER" \
+            -e KC_BOOTSTRAP_ADMIN_PASSWORD="$SYNTHETIC_KEYCLOAK_ADMIN_PASSWORD" \
+            -e KC_DB=postgres -e KC_DB_URL=jdbc:postgresql://identity-postgres:5432/keycloak_identity \
+            -e KC_DB_USERNAME=identity_tests -e KC_DB_PASSWORD=synthetic_ci_only \
+            cleaning-identity-rehearsal-fault:ci start-dev
+          ready=0
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent "$SYNTHETIC_KEYCLOAK_URL/realms/master/.well-known/openid-configuration" >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = 1
+          python3 -B api/keycloak-identity-extension/tests/credential_rollback.py
       - name: Remove disposable identity service
         if: always()
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
         run: |
           docker rm -f scoped-keycloak invite-review-mail
+          docker network disconnect scoped-identity "$POSTGRES_CONTAINER"
           docker network rm scoped-identity

@@ -1,0 +1,3 @@
+fi.readysetsiivous.identity.GuardedInvitationHandler
+fi.readysetsiivous.identity.GuardedLegacyActionsHandler
+fi.readysetsiivous.identity.GuardedVerifyEmailHandler

@@ -36,6 +36,7 @@ public class TenantKeycloakClientsTests
         Assert.Empty(handler.Paths);
         await client.FindUsersByEmailAsync("tenant-a", "synthetic@example.invalid");
         Assert.Equal("/realms/tenant-a/protocol/openid-connect/token", handler.Paths[0]);
+        Assert.Equal("/realms/tenant-a/cleaning-identity/v1/users", handler.Paths[1]);
         Assert.DoesNotContain(handler.Bodies, body => body.Contains("grant_type=password"));
     }
     [Theory]
@@ -74,9 +75,9 @@ public class TenantKeycloakClientsTests
         var tenant = new Mock<ITenantContext>(); tenant.SetupGet(x => x.TenantId).Returns("tenant-a");
         var directory = new LeadAdminDirectory(new TenantKeycloakClients(new HttpClient(handler), Config()),
             new Mock<IEmployeeRepository>().Object, tenant.Object);
-        Assert.Empty(await directory.ListAsync(CancellationToken.None));
+        await Assert.ThrowsAsync<CleaningSuite.Application.Leads.LeadConflictException>(() => directory.ListAsync(CancellationToken.None));
         Assert.Contains("/realms/tenant-a/protocol/openid-connect/token", handler.Paths);
-        Assert.Contains("/admin/realms/tenant-a/roles/admin/users", handler.Paths);
+        Assert.Contains("/realms/tenant-a/cleaning-identity/v1/group-by-path/managed-users", handler.Paths);
         Assert.DoesNotContain(handler.Paths, path => path.Contains("/master/"));
     }
     private static IConfiguration Config() => new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?> {

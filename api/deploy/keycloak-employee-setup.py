@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Explicit tenant identity setup. Read-only by default; never prints secrets."""
 import argparse
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from keycloak_identity_extension import configure, validate_defaults, validate_tenant_admins
 import json
 import os
 import re
@@ -16,6 +20,8 @@ def main():
     parser.add_argument('--public-url', required=True)
     parser.add_argument('--redirect-uri', action='append', required=True, help='Expected account landing URI; repeat for each allowed frontend')
     parser.add_argument('--apply', action='store_true')
+    parser.add_argument('--development', action='store_true', help='Explicitly authorize development-only pinned identity extension setup')
+    parser.add_argument('--migrate-fgap', action='store_true', help='Remove only reviewed legacy FGAP access in an isolated development fixture')
     args = parser.parse_args()
     if not re.fullmatch(r'[a-z0-9][a-z0-9-]{2,62}', args.tenant) or args.tenant == 'master':
         parser.error('Specify one canonical tenant realm, never master')
@@ -32,15 +38,20 @@ def main():
         parser.error('Set KEYCLOAK_MIGRATION_ADMIN_TOKEN via protected environment')
     base = args.server.rstrip('/') + '/admin/realms/' + quote(args.tenant, safe='')
     changes = []
+    queued = []
 
     def api(method, path='', body=None, missing=False):
-        req = Request(base + path, method=method,
+        target = args.server.rstrip('/') + '/admin/serverinfo' if path == '@serverinfo' else base + path
+        req = Request(target, method=method,
                       data=None if body is None else json.dumps(body).encode(),
                       headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})
         try:
             with urlopen(req, timeout=30) as response:
                 raw = response.read()
-                return json.loads(raw) if raw else None
+                result = json.loads(raw) if raw else None
+                if method == 'GET' and not isinstance(result, (dict, list)):
+                    raise RuntimeError('Malformed Keycloak setup response')
+                return result
         except HTTPError as error:
             if missing and error.code == 404:
                 return None
@@ -50,7 +61,7 @@ def main():
         changes.append(label)
         print(('APPLY ' if args.apply else 'NEEDS ') + label)
         if args.apply:
-            api(method, path, body)
+            queued.append((method, path, body))
 
     client_id = os.environ.get('KEYCLOAK_TENANT_RUNTIME_CLIENT_ID', 'employee-runtime')
     if not re.fullmatch(r'[a-z0-9][a-z0-9-]{2,62}', client_id):
@@ -78,13 +89,37 @@ def main():
                     raise RuntimeError('Runtime credential verification failed')
         except HTTPError:
             raise RuntimeError('Runtime credential verification failed; delivered secret must match existing account') from None
+        return payload['access_token']
+
+    def verify_extension():
+        # Fetch a fresh token after setup so the new audience mapper is included.
+        runtime_token = verify_runtime_credentials()
+        req = Request(args.server.rstrip('/') + '/realms/' + quote(args.tenant, safe='') + '/cleaning-identity/v1',
+                      headers={'Authorization': 'Bearer ' + runtime_token}, method='GET')
+        try:
+            with urlopen(req, timeout=10) as response:
+                raw = response.read(65537)
+                if len(raw) > 65536:
+                    raise RuntimeError('Identity extension readiness verification failed')
+                result = json.loads(raw)
+                if not isinstance(result, dict) or result.get('realm') != args.tenant or result.get('enabled') is not True:
+                    raise RuntimeError('Identity extension readiness verification failed')
+        except HTTPError:
+            raise RuntimeError('Identity extension is missing or denied; setup is not ready') from None
 
     if clients:
         verify_runtime_credentials()  # Fail before any --apply mutation for an existing account.
 
+    if (args.apply or args.migrate_fgap) and not args.development:
+        raise RuntimeError('Identity extension apply/migration is development-only; supply --development for an isolated fixture')
+    info = api('GET', '@serverinfo')
+    if info.get('systemInfo', {}).get('version') != '26.8.1':
+        raise RuntimeError('Development identity extension requires pinned Keycloak 26.8.1')
     realm = api('GET')
     if not realm.get('enabled'):
         raise RuntimeError('Realm disabled; enablement requires a separate explicit operation')
+    runtime_user = api('GET', '/clients/' + quote(clients[0]['id'], safe='') + '/service-account-user') if clients else None
+    validate_tenant_admins(api, realm, runtime_user.get('id') if runtime_user else None, migrate_fgap=args.migrate_fgap)
     web_clients = api('GET', '/clients?clientId=cleaning-suite-web')
     if len(web_clients) != 1 or web_clients[0].get('clientId') != 'cleaning-suite-web' or not web_clients[0].get('enabled') or web_clients[0].get('publicClient') is not True or web_clients[0].get('standardFlowEnabled') is not True:
         raise RuntimeError('The enabled cleaning-suite-web client must exist before identity setup')
@@ -96,6 +131,7 @@ def main():
     public = args.public_url.rstrip('/')
     if attributes.get('frontendUrl', '').rstrip('/') != public:
         attributes['frontendUrl'] = public
+        realm['attributes'] = attributes
         change('realm frontend URL', 'PUT', '', {'attributes': attributes})
     smtp = realm.get('smtpServer') or {}
     if not smtp.get('host') or not smtp.get('from'):
@@ -109,25 +145,35 @@ def main():
             change('missing application role ' + role, 'POST', '/roles', {'name': role})
     profile = api('GET', '/users/profile')
     attributes = profile.setdefault('attributes', [])
-    owners = [a for a in attributes if a.get('name') == 'cleaning_employee_id']
-    if len(owners) > 1:
-        raise RuntimeError('Ambiguous ownership profile; manual review required')
-    desired = {'name': 'cleaning_employee_id', 'displayName': 'Employee ownership', 'multivalued': False,
-               'permissions': {'view': ['admin'], 'edit': ['admin']}}
-    if not owners or any(owners[0].get(k) != desired[k] for k in ('multivalued', 'permissions')):
-        if owners:
-            owners[0].update(desired)
-        else:
-            attributes.append(desired)
-        change('administrator-only ownership profile', 'PUT', '/users/profile', profile)
+    profile_changed = False
+    for name, display in (('cleaning_employee_id', 'Employee ownership'), ('cleaning_invitation_ticket', 'Invitation ticket')):
+        matches = [a for a in attributes if a.get('name') == name]
+        if len(matches) > 1:
+            raise RuntimeError('Ambiguous server-owned profile attribute; manual review required')
+        desired = {'name': name, 'displayName': display, 'multivalued': False,
+                   'permissions': {'view': ['admin'], 'edit': ['admin']}}
+        if not matches or any(matches[0].get(k) != desired[k] for k in ('multivalued', 'permissions')):
+            if matches:
+                matches[0].update(desired)
+            else:
+                attributes.append(desired)
+            profile_changed = True
+    if profile_changed:
+        change('administrator-only ownership and invitation ticket profile', 'PUT', '/users/profile', profile)
     if not clients:
+        from keycloak_fgap import configure as validate_legacy_contract
+        validate_legacy_contract(api, lambda *a: None, realm, 'missing-runtime-subject', apply=False)
+        validate_defaults(api, realm)
         if args.apply and not secret:
             raise RuntimeError('Set KEYCLOAK_TENANT_RUNTIME_CLIENT_SECRET through protected environment')
         desired = {'clientId':client_id, 'enabled':True, 'publicClient':False,
                    'serviceAccountsEnabled':True, 'standardFlowEnabled':False,
-                   'directAccessGrantsEnabled':False, 'fullScopeAllowed':True}
+                   'directAccessGrantsEnabled':False, 'fullScopeAllowed':False}
         if args.apply: desired['secret'] = secret
-        change('missing scoped runtime service account', 'POST', '/clients', desired)
+        change('missing isolated runtime service account', 'POST', '/clients', desired)
+        if args.apply:
+            for method, path, body in queued: api(method, path, body)
+            queued.clear()
         clients = api('GET', '/clients?clientId=' + quote(client_id, safe='')) if args.apply else []
         if clients:
             verify_runtime_credentials()
@@ -137,37 +183,18 @@ def main():
                 or client.get('standardFlowEnabled') or client.get('directAccessGrantsEnabled')):
             raise RuntimeError('Existing runtime client configuration conflicts; review manually')
         user = api('GET', '/clients/' + quote(client['id'], safe='') + '/service-account-user')
-        management = api('GET', '/clients?clientId=realm-management')
-        if len(management) != 1:
-            raise RuntimeError('Realm management client missing or ambiguous')
-        management_id = quote(management[0]['id'], safe='')
-        mappings = '/users/' + quote(user['id'], safe='') + '/role-mappings/clients/' + management_id
-        existing = api('GET', mappings)
-        allowed = {'manage-users', 'query-users', 'view-users', 'view-realm'}
-        if any(role.get('name') not in allowed for role in existing):
-            raise RuntimeError('Runtime has unexpected administration roles; review manually, no silent revocation')
-        user_base = '/users/' + quote(user['id'], safe='')
-        if api('GET', user_base + '/groups?first=0&max=1'):
-            raise RuntimeError('Runtime service account has group-derived privileges; review manually')
-        realm_roles = api('GET', user_base + '/role-mappings/realm/composite')
-        allowed_realm = {'default-roles-' + args.tenant, 'offline_access', 'uma_authorization'}
-        if any(role.get('name') not in allowed_realm for role in realm_roles):
-            raise RuntimeError('Runtime has unexpected effective realm/composite roles; review manually')
-        # Inspect every realm client, including roles inherited through realm composites.
-        # Direct role mappings alone cannot establish least privilege.
-        all_clients = api('GET', '/clients?first=0&max=1000')
-        if len(all_clients) >= 1000:
-            raise RuntimeError('Realm client inventory exceeds the bounded complete privilege check; review manually')
-        for entry in all_clients:
-            effective = api('GET', user_base + '/role-mappings/clients/' + quote(entry['id'], safe='') + '/composite')
-            permitted = allowed if entry.get('clientId') == 'realm-management' else (
-                {'manage-account', 'manage-account-links', 'view-profile'} if entry.get('clientId') == 'account' else set())
-            if any(role.get('name') not in permitted for role in effective):
-                raise RuntimeError('Runtime has unexpected effective client/composite privileges; review manually')
-        names = {role['name'] for role in existing}
-        missing = [api('GET', '/clients/' + management_id + '/roles/' + name) for name in sorted(allowed - names)]
-        if missing:
-            change('missing scoped identity grants', 'POST', mappings, missing)
+        # Full validation precedes queued prerequisites or extension activation.
+        configure(api, lambda *a: None, realm, client, user['id'], apply=False, migrate_fgap=args.migrate_fgap)
+        if args.apply:
+            for method, path, body in queued: api(method, path, body)
+            queued.clear()
+        def extension_change(label, method, path, body):
+            changes.append(label)
+            print(('APPLY ' if args.apply else 'NEEDS ') + label)
+            if args.apply: api(method, path, body)
+        configure(api, extension_change, realm, client, user['id'], apply=args.apply, migrate_fgap=args.migrate_fgap)
+        if args.apply or not changes:
+            verify_extension()
     print('CHECK complete; validate exact-version real-service denials before rollout')
     return 2 if changes and not args.apply else 0
 

@@ -5,11 +5,13 @@ using System.Text.Json;
 namespace CleaningSuite.Infrastructure.Keycloak;
 
 /// <summary>
-/// Thin wrapper over Keycloak Admin REST. Admin token via provisioner client
-/// credentials only. Runtime construction never accepts bootstrap passwords.
+/// Explicit platform Admin REST client or tenant employee-extension client.
+/// Runtime construction never accepts bootstrap passwords or falls back to Admin REST.
 /// </summary>
 public class KeycloakAdminClient
 {
+    public const string RuntimeAudience = "cleaning-identity-runtime";
+    public const string RuntimeClientAttribute = "cleaning_identity_runtime_client_id";
     private readonly HttpClient _http;
     private readonly string _serverUrl;
     private readonly string _provisionerRealm;
@@ -18,7 +20,7 @@ public class KeycloakAdminClient
     private readonly string? _allowedRealm;
 
     private string? _cachedToken;
-    private DateTime _tokenExpiresUtc = DateTime.MinValue;
+    private DateTime _tokenRefreshUtc = DateTime.MinValue;
 
     public KeycloakAdminClient(
         HttpClient http,
@@ -38,7 +40,7 @@ public class KeycloakAdminClient
 
     public virtual async Task<string> GetAdminTokenAsync(CancellationToken ct = default)
     {
-        if (_cachedToken is not null && DateTime.UtcNow < _tokenExpiresUtc.AddMinutes(-5))
+        if (_cachedToken is not null && DateTime.UtcNow < _tokenRefreshUtc)
             return _cachedToken;
 
         using var request = new HttpRequestMessage(
@@ -68,7 +70,10 @@ public class KeycloakAdminClient
         if (string.IsNullOrWhiteSpace(accessToken)) throw new KeycloakException("access_token missing");
         _cachedToken = accessToken;
         var expiresIn = payload.GetProperty("expires_in").GetInt32();
-        _tokenExpiresUtc = DateTime.UtcNow.AddSeconds(expiresIn);
+        // A fixed five-minute skew made five-minute (and shorter) tokens miss
+        // the cache on every request. Keep a proportional, bounded safety margin.
+        var lifetime = Math.Max(0, expiresIn);
+        _tokenRefreshUtc = DateTime.UtcNow.AddSeconds(lifetime - Math.Min(30, lifetime * 0.1));
 
         return _cachedToken;
     }
@@ -88,6 +93,20 @@ public class KeycloakAdminClient
             throw new KeycloakException("Invalid service-account verification realm");
         var verifier = new KeycloakAdminClient(_http, _serverUrl, realm, clientId, secret, realm);
         await verifier.GetAdminTokenAsync(ct);
+    }
+
+    // New realm readiness includes the actual server-side employee boundary;
+    // successful client-credentials exchange alone also works on stock Keycloak.
+    public async Task VerifyEmployeeExtensionAsync(string realm, string clientId, string secret, CancellationToken ct = default)
+    {
+        if (!System.Text.RegularExpressions.Regex.IsMatch(realm, "^[a-z0-9][a-z0-9-]{2,62}$")
+            || (_allowedRealm is not null && realm != _allowedRealm))
+            throw new KeycloakException("Invalid employee-extension verification realm");
+        var verifier = new KeycloakAdminClient(_http, _serverUrl, realm, clientId, secret, realm);
+        var representation = await verifier.GetRealmAsync(realm, ct);
+        if (representation.ValueKind != JsonValueKind.Object || !representation.TryGetProperty("enabled", out var enabled)
+            || enabled.ValueKind != JsonValueKind.True)
+            throw new KeycloakException("Employee identity extension readiness could not be verified");
     }
 
     public Task CreateRealmAsync(string realm, CancellationToken ct = default) =>
@@ -128,6 +147,13 @@ public class KeycloakAdminClient
 
     public async Task UpdateUserAsync(string realm, string userId, object changes, CancellationToken ct = default)
     {
+        if (_allowedRealm is not null) {
+            // The extension accepts a narrow patch, not an Admin REST representation.
+            // In particular, do not echo id/email/verification/requiredActions fields
+            // from reads into a write that must never control those fields.
+            await SendWithoutResultAsync(HttpMethod.Put, $"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}", ct, changes);
+            return;
+        }
         // Keycloak user-profile updates can clear omitted fields (including email).
         // Merge changes onto the current representation while leaving credentials and
         // requiredActions untouched unless this operation explicitly supplies them.
@@ -165,6 +191,25 @@ public class KeycloakAdminClient
         GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/roles/{Uri.EscapeDataString(role)}/users?first={first}&max={max}", ct);
     public Task<JsonElement> FindUsersByEmailAsync(string realm, string email, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/users?email={Uri.EscapeDataString(email)}&exact=true", ct);
     public Task<JsonElement> GetUserRealmRolesAsync(string realm, string userId, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/role-mappings/realm", ct);
+    // Keycloak 26.8.1 UserResource /groups and RoleMapperResource /realm/composite.
+    public Task<JsonElement> GetEffectiveUserRealmRolesAsync(string realm, string userId, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/role-mappings/realm/composite", ct);
+    public Task<JsonElement> GetEmployeeGroupAsync(string realm, string fixedName, CancellationToken ct = default)
+    {
+        if (fixedName is not ("managed-users" or "app-employee" or "app-manager" or "app-admin"))
+            throw new KeycloakException("Only fixed employee group names may be resolved");
+        return GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/group-by-path/{fixedName}", ct);
+    }
+    public Task<JsonElement> GetGroupsAsync(string realm, int first, int max, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/groups?first={first}&max={max}&briefRepresentation=false", ct);
+    public Task<JsonElement> GetUserGroupsAsync(string realm, string userId, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/groups?first=0&max=101&briefRepresentation=false", ct);
+    public Task<JsonElement> GetGroupMembersAsync(string realm, string groupId, int first, int max, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/groups/{Uri.EscapeDataString(groupId)}/members?first={first}&max={max}", ct);
+    public Task<JsonElement> GetGroupRoleMappingsAsync(string realm, string groupId, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/groups/{Uri.EscapeDataString(groupId)}/role-mappings", ct);
+    public Task<JsonElement> GetEffectiveGroupRealmRolesAsync(string realm, string groupId, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/groups/{Uri.EscapeDataString(groupId)}/role-mappings/realm/composite", ct);
+    public Task<string> CreateGroupAsync(string realm, object group, CancellationToken ct = default) => SendForLocationAsync(HttpMethod.Post, $"admin/realms/{Uri.EscapeDataString(realm)}/groups", ct, group);
+    public Task AssignGroupRealmRolesAsync(string realm, string groupId, object[] roles, CancellationToken ct = default) => SendWithoutResultAsync(HttpMethod.Post, $"admin/realms/{Uri.EscapeDataString(realm)}/groups/{Uri.EscapeDataString(groupId)}/role-mappings/realm", ct, roles);
+    public Task CreateAuthorizationUserPolicyAsync(string realm, string authorizationClientId, object policy, CancellationToken ct = default) => SendWithoutResultAsync(HttpMethod.Post, $"admin/realms/{Uri.EscapeDataString(realm)}/clients/{Uri.EscapeDataString(authorizationClientId)}/authz/resource-server/policy/user", ct, policy);
+    public Task CreateAuthorizationScopePermissionAsync(string realm, string authorizationClientId, object permission, CancellationToken ct = default) => SendWithoutResultAsync(HttpMethod.Post, $"admin/realms/{Uri.EscapeDataString(realm)}/clients/{Uri.EscapeDataString(authorizationClientId)}/authz/resource-server/permission/scope", ct, permission);
+    public Task AddUserToGroupAsync(string realm, string userId, string groupId, CancellationToken ct = default) => SendWithoutResultAsync(HttpMethod.Put, $"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/groups/{Uri.EscapeDataString(groupId)}", ct);
+    public Task RemoveUserFromGroupAsync(string realm, string userId, string groupId, CancellationToken ct = default) => SendWithoutResultAsync(HttpMethod.Delete, $"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/groups/{Uri.EscapeDataString(groupId)}", ct);
     public Task RemoveRealmRolesAsync(string realm, string userId, object[] roles, CancellationToken ct = default) => SendWithoutResultAsync(HttpMethod.Delete, $"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/role-mappings/realm", ct, roles);
     public Task LogoutUserAsync(string realm, string userId, CancellationToken ct = default) => SendWithoutResultAsync(HttpMethod.Post, $"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/logout", ct);
     public Task SendExecuteActionsEmailAsync(string realm, string userId, string clientId, string redirectUri, int lifespanSeconds, string[] actions, CancellationToken ct = default) =>
@@ -200,7 +245,8 @@ public class KeycloakAdminClient
         if (!path.StartsWith(prefix + "/", StringComparison.Ordinal) && path != prefix)
             throw new KeycloakException("Tenant identity credentials cannot access another realm");
         var relative = path[prefix.Length..];
-        // Employee runtime owns users and their mappings, never realm/client/profile configuration.
+        // Local guard rejects configuration writes before network access. The
+        // extension independently enforces its narrower operation/target allowlist.
         if (method != HttpMethod.Get && (!(relative == "/users" || relative.StartsWith("/users/", StringComparison.Ordinal))
             || relative.StartsWith("/users/profile", StringComparison.Ordinal)))
             throw new KeycloakException("Tenant identity credentials cannot modify realm configuration");
@@ -214,6 +260,7 @@ public class KeycloakAdminClient
         bool expectedNotFoundOk = false)
     {
         ValidatePath(method, path);
+        path = TransportPath(path);
         var token = await GetAdminTokenAsync(ct);
         using var request = new HttpRequestMessage(method, $"{_serverUrl}/{path}");
         request.Headers.Authorization = new("Bearer", token);
@@ -234,6 +281,7 @@ public class KeycloakAdminClient
         object body)
     {
         ValidatePath(method, path);
+        path = TransportPath(path);
         var token = await GetAdminTokenAsync(ct);
         using var request = new HttpRequestMessage(method, $"{_serverUrl}/{path}");
         request.Headers.Authorization = new("Bearer", token);
@@ -246,6 +294,15 @@ public class KeycloakAdminClient
         var location = response.Headers.Location?.ToString()
             ?? throw new KeycloakException("Location header missing");
         return location.Split('/')[^1];
+    }
+
+    private string TransportPath(string path)
+    {
+        if (_allowedRealm is null) return path;
+        // ValidatePath has already checked the exact realm and canonical segments.
+        // A missing/denied extension is an error, never a reason to retry Admin REST.
+        var prefix = $"admin/realms/{_allowedRealm}";
+        return $"realms/{_allowedRealm}/cleaning-identity/v1" + path[prefix.Length..];
     }
 }
 

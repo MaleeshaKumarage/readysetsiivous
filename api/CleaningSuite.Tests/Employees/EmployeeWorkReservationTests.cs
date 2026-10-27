@@ -37,7 +37,7 @@ public class EmployeeWorkReservationTests
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var finish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var identity = new Mock<IEmployeeIdentityProvider>();
-        identity.Setup(x => x.SynchronizeAccessAsync("synthetic", employee.KeycloakUserId, Employee.RoleEmployee, false, default))
+        identity.Setup(x => x.SynchronizeAccessAsync("synthetic", employee.Id, employee.KeycloakUserId, Employee.RoleEmployee, false, default))
             .Returns(async () =>
             {
                 Assert.True(identityHeld); Assert.False(reservation.Held);

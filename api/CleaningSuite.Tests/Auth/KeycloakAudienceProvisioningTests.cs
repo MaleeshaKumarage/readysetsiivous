@@ -51,7 +51,11 @@ public class KeycloakAudienceProvisioningTests
     [InlineData(null, null, null)]
     public async Task ProvisioningNormalizesSmtpBooleanSettingsAndDefaults(bool? auth, bool? startTls, bool? ssl)
     {
-        var transport = new KeycloakTransport();
+        var transport = new KeycloakTransport { ProfileAttributes = [
+            new { name = "unrelated", displayName = "Keep this field", multivalued = true },
+            new { name = "cleaning_employee_id", multivalued = true, annotations = new { preserved = "owner-metadata" }, permissions = new { view = new[] { "user" }, edit = new[] { "user" } } },
+            new { name = "cleaning_invitation_ticket", multivalued = true, annotations = new { preserved = "ticket-metadata" }, permissions = new { view = new[] { "user" }, edit = new[] { "user" } } }
+        ] };
         var flags = new Dictionary<string, bool>();
         if (auth.HasValue) flags["Auth"] = auth.Value;
         if (startTls.HasValue) flags["StartTls"] = startTls.Value;
@@ -73,7 +77,7 @@ public class KeycloakAudienceProvisioningTests
         await new KeycloakProvisioner(new PlatformKeycloakClient(admin), NullLogger<KeycloakProvisioner>.Instance,
             new KeycloakResourceOptions(config), config)
             .ProvisionAsync("tenant-test", "Test", "owner@example.invalid", "Test", "Owner", new[] { "https://site.test/*" });
-        using var realm = JsonDocument.Parse(Assert.Single(transport.RealmUpdates));
+        using var realm = JsonDocument.Parse(transport.RealmUpdates.Single(update => update.Contains("smtpServer")));
         Assert.Equal("preserved", realm.RootElement.GetProperty("attributes").GetProperty("unrelated").GetString());
         var smtp = realm.RootElement.GetProperty("smtpServer");
         Assert.Equal((auth ?? true) ? "true" : "false", smtp.GetProperty("auth").GetString());
@@ -81,6 +85,33 @@ public class KeycloakAudienceProvisioningTests
         Assert.Equal((ssl ?? false) ? "true" : "false", smtp.GetProperty("ssl").GetString());
         Assert.Equal(auth ?? true, smtp.TryGetProperty("password", out _));
         Assert.Equal(1, transport.RuntimeProofs);
+        Assert.Equal(1, transport.ExtensionProofs);
+        Assert.Empty(transport.RuntimeRoles);
+        Assert.Empty(transport.Policies);
+        Assert.Empty(transport.Permissions);
+        Assert.DoesNotContain(transport.RealmUpdates, update => update.Contains("adminPermissionsEnabled"));
+        Assert.Equal("client-id", realm.RootElement.GetProperty("attributes").GetProperty(KeycloakAdminClient.RuntimeClientAttribute).GetString());
+        using var runtimeClient = JsonDocument.Parse(Assert.Single(transport.Clients.Where(body => body.Contains("\"clientId\":\"tenant-runtime\""))));
+        Assert.False(runtimeClient.RootElement.GetProperty("fullScopeAllowed").GetBoolean());
+        var runtimeMapper = Assert.Single(runtimeClient.RootElement.GetProperty("protocolMappers").EnumerateArray());
+        Assert.Equal("cleaning-identity-runtime", runtimeMapper.GetProperty("config").GetProperty("included.custom.audience").GetString());
+        Assert.Equal("true", runtimeMapper.GetProperty("config").GetProperty("access.token.claim").GetString());
+        Assert.Equal("false", runtimeMapper.GetProperty("config").GetProperty("id.token.claim").GetString());
+        using var owner = JsonDocument.Parse(Assert.Single(transport.Owners));
+        Assert.Equal(new[] { "/managed-users", "/app-admin" }, owner.RootElement.GetProperty("groups").EnumerateArray().Select(x => x.GetString()));
+        Assert.False(owner.RootElement.TryGetProperty("attributes", out _));
+        using var profile = JsonDocument.Parse(Assert.Single(transport.ProfileUpdates));
+        Assert.Equal("preserved-policy", profile.RootElement.GetProperty("unmanagedAttributePolicy").GetString());
+        var profileAttributes = profile.RootElement.GetProperty("attributes").EnumerateArray().ToArray();
+        Assert.Equal(3, profileAttributes.Length);
+        Assert.Equal("Keep this field", profileAttributes.Single(a => a.GetProperty("name").GetString() == "unrelated").GetProperty("displayName").GetString());
+        foreach (var name in new[] { "cleaning_employee_id", "cleaning_invitation_ticket" }) {
+            var attribute = Assert.Single(profileAttributes.Where(a => a.GetProperty("name").GetString() == name));
+            Assert.False(attribute.GetProperty("multivalued").GetBoolean());
+            Assert.Equal(new[] { "admin" }, attribute.GetProperty("permissions").GetProperty("view").EnumerateArray().Select(v => v.GetString()));
+            Assert.Equal(new[] { "admin" }, attribute.GetProperty("permissions").GetProperty("edit").EnumerateArray().Select(v => v.GetString()));
+            Assert.True(attribute.GetProperty("annotations").TryGetProperty("preserved", out _));
+        }
     }
 
     [Fact]
@@ -99,12 +130,37 @@ public class KeycloakAudienceProvisioningTests
         Assert.Equal(1, transport.RuntimeProofs); Assert.Equal(1, transport.RealmDeletes); Assert.Equal(0, transport.OwnerCreates);
     }
 
+    [Fact]
+    public async Task MissingExtensionRollsBackNewRealmEvenWhenRuntimeTokenWorks()
+    {
+        var transport = new KeycloakTransport { ExtensionMissing = true };
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
+            ["Auth:Keycloak:Audience"] = "cleaning-suite-api", ["Auth:Keycloak:PlatformAudience"] = "cleaning-suite-platform-api",
+            ["Auth:Keycloak:ProvisioningSetupReviewed"] = "true", ["Auth:Keycloak:ServerUrl"] = "https://auth.test",
+            ["Auth:Keycloak:TenantAccounts:tenant-test:ClientId"] = "tenant-runtime", ["Auth:Keycloak:TenantAccounts:tenant-test:ClientSecret"] = "synthetic-runtime-secret",
+            ["EmployeeInvites:Smtp:Host"] = "smtp.invalid", ["EmployeeInvites:Smtp:From"] = "sender@example.invalid", ["EmployeeInvites:Smtp:Auth"] = "false"
+        }).Build();
+        var admin = new KeycloakAdminClient(new HttpClient(transport), "https://auth.test", "master", "provisioner", "secret");
+        var error = await Assert.ThrowsAsync<KeycloakException>(() => new KeycloakProvisioner(new PlatformKeycloakClient(admin), NullLogger<KeycloakProvisioner>.Instance,
+            new KeycloakResourceOptions(config), config).ProvisionAsync("tenant-test", "Test", "owner@example.invalid", "Test", "Owner", ["https://site.test/*"]));
+        Assert.Equal(HttpStatusCode.NotFound, error.StatusCode);
+        Assert.Equal(1, transport.RuntimeProofs); Assert.Equal(1, transport.ExtensionProofs);
+        Assert.Equal(1, transport.RealmDeletes); Assert.Equal(0, transport.OwnerCreates);
+    }
+
     private sealed class KeycloakTransport : HttpMessageHandler
     {
         public List<string> Clients { get; } = new();
+        public List<string> RuntimeRoles { get; } = new();
+        public List<string> Policies { get; } = new();
+        public List<string> Permissions { get; } = new();
+        public List<string> Owners { get; } = new();
         public List<string> RealmUpdates { get; } = new();
+        public List<string> ProfileUpdates { get; } = new();
+        public object[] ProfileAttributes { get; init; } = [];
         public bool RejectRuntimeCredentials;
-        public int RuntimeProofs, RealmDeletes, OwnerCreates;
+        public bool ExtensionMissing;
+        public int RuntimeProofs, ExtensionProofs, RealmDeletes, OwnerCreates;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             var path = request.RequestUri!.AbsolutePath;
@@ -116,18 +172,31 @@ public class KeycloakAudienceProvisioningTests
                 if (RejectRuntimeCredentials) return new(HttpStatusCode.Unauthorized);
             }
             if (path.EndsWith("/token")) return Json(new { access_token = "test-token", expires_in = 3600 });
+            if (request.Method == HttpMethod.Get && path == "/realms/tenant-test/cleaning-identity/v1") {
+                ExtensionProofs++;
+                return ExtensionMissing ? new(HttpStatusCode.NotFound) : Json(new { enabled = true });
+            }
             if (request.Method == HttpMethod.Delete && path == "/admin/realms/tenant-test") RealmDeletes++;
-            if (request.Method == HttpMethod.Post && path.EndsWith("/users")) OwnerCreates++;
+            if (request.Method == HttpMethod.Post && path.EndsWith("/users")) { OwnerCreates++; Owners.Add(await request.Content!.ReadAsStringAsync(ct)); }
+            if (request.Method == HttpMethod.Post && path.EndsWith("/policy/user")) Policies.Add(await request.Content!.ReadAsStringAsync(ct));
+            if (request.Method == HttpMethod.Post && path.EndsWith("/permission/scope")) Permissions.Add(await request.Content!.ReadAsStringAsync(ct));
+            if (request.Method == HttpMethod.Post && path.Contains("/users/service-user/role-mappings/clients/")) {
+                using var mappings = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(ct));
+                RuntimeRoles.AddRange(mappings.RootElement.EnumerateArray().Select(x => x.GetProperty("name").GetString()!));
+            }
             if (request.Method == HttpMethod.Put && path == "/admin/realms/tenant-test")
                 RealmUpdates.Add(await request.Content!.ReadAsStringAsync(ct));
+            if (request.Method == HttpMethod.Put && path.EndsWith("/users/profile"))
+                ProfileUpdates.Add(await request.Content!.ReadAsStringAsync(ct));
             if (request.Method == HttpMethod.Get && path == "/admin/realms/tenant-test") return Json(new { attributes = new { unrelated = "preserved" } });
             if (request.Method == HttpMethod.Get && path.EndsWith("/clients")) return Json(new[] { new { id = "client-id" } });
             if (request.Method == HttpMethod.Get && path.EndsWith("/service-account-user")) return Json(new { id = "service-user" });
-            if (request.Method == HttpMethod.Get && path.EndsWith("/users/profile")) return Json(new { attributes = Array.Empty<object>() });
+            if (request.Method == HttpMethod.Get && path.EndsWith("/users/profile")) return Json(new { attributes = ProfileAttributes, unmanagedAttributePolicy = "preserved-policy" });
             if (request.Method == HttpMethod.Get && path.Contains("/clients/client-id/roles/")) return Json(new { id = "client-role", name = path.Split('/').Last() });
             if (request.Method == HttpMethod.Post && path.EndsWith("/clients")) Clients.Add(await request.Content!.ReadAsStringAsync(ct));
-            if (request.Method == HttpMethod.Get && path.EndsWith("/roles/admin")) return Json(new { id = "admin-role", name = "admin" });
+            if (request.Method == HttpMethod.Get && path.Contains("/roles/")) return Json(new { id = "app-role", name = path.Split('/').Last(), composite = false });
             var response = new HttpResponseMessage(HttpStatusCode.Created);
+            if (path.EndsWith("/groups")) response.Headers.Location = new Uri("https://auth.test/admin/realms/tenant-test/groups/" + Guid.NewGuid());
             if (path.EndsWith("/users")) response.Headers.Location = new Uri("https://auth.test/admin/realms/tenant-test/users/user-1");
             return response;
         }
