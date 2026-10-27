@@ -9,6 +9,53 @@ CLIENT_ATTRIBUTE = 'cleaning_identity_runtime_client_id'
 MAPPER_NAME = 'cleaning-identity-runtime-audience'
 
 
+def validate_tenant_admins(api, realm, runtime_subject=None, migrate_fgap=False, max_users=10000):
+    """Privileged, complete preflight for the master-only operator model.
+
+    Effective role reads include direct, group and composite grants. Do not use
+    role-member lists, which are not proof that inherited grants are absent.
+    This is setup-time reconciliation evidence, not a concurrent writer lock.
+    """
+    clients = api('GET', '/clients?clientId=realm-management')
+    if not isinstance(clients, list) or len(clients) != 1 or not isinstance(clients[0], dict) or not clients[0].get('id'):
+        raise RuntimeError('Realm management client missing or ambiguous')
+    management = quote(clients[0]['id'], safe='')
+    seen = set()
+    first = 0
+    while first <= max_users:
+        size = min(100, max_users - first + 1)
+        users = api('GET', '/users?first=' + str(first) + '&max=' + str(size) + '&briefRepresentation=false')
+        if not isinstance(users, list) or len(users) > size:
+            raise RuntimeError('Malformed tenant administration inventory')
+        for user in users:
+            if (not isinstance(user, dict) or not isinstance(user.get('id'), str) or not user['id']
+                    or user['id'] in seen):
+                raise RuntimeError('Malformed or repeated tenant administration identity')
+            seen.add(user['id'])
+            if len(seen) > max_users:
+                raise RuntimeError('Tenant administration inventory exceeds reviewed limit; manual review required')
+            path = '/users/' + quote(user['id'], safe='') + '/role-mappings/clients/' + management
+            effective = api('GET', path + '/composite')
+            if not isinstance(effective, list) or any(not isinstance(r, dict) or not r.get('name') for r in effective):
+                raise RuntimeError('Malformed tenant administration privilege inventory')
+            if not effective:
+                continue
+            # Sole migration exception is the already reviewed runtime identity,
+            # never a similarly named person or another service account.
+            names = {r['name'] for r in effective}
+            if user['id'] == runtime_subject and migrate_fgap and names <= RUNTIME_ROLES:
+                direct = api('GET', path)
+                if (isinstance(direct, list) and all(isinstance(r, dict) for r in direct)
+                        and {r.get('name') for r in direct} == names
+                        and not any(r.get('composite') for r in direct)):
+                    continue
+            raise RuntimeError('Unexpected tenant-local administration roles; use a separate master operator and reconcile manually')
+        if len(users) < size:
+            return
+        first += size
+    raise RuntimeError('Tenant administration inventory incomplete; manual review required')
+
+
 def validate_defaults(api, realm):
     """Do not create an enabled service account into unsafe default role grants."""
     inventory = api('GET', '/clients?first=0&max=1000')

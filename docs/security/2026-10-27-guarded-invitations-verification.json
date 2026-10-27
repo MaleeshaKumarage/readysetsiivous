@@ -1,0 +1,74 @@
+{
+  "date": "2026-10-27",
+  "scope": "isolated development only; production unchanged",
+  "keycloak_version": "26.8.1",
+  "java_version": 21,
+  "normal_image": {
+    "index_sha256": "8523fc048089e840643f3797aed372ecc974b88532dffb98a3331924d7319c02",
+    "config_sha256": "097805b4fc8d1a42a6f3f45b303cb008e0f854dc83934d81413cc7d7a7253c78",
+    "platform_manifest_sha256": "ebe84e66aa7241fd56d83cc1dc8771aeb4306045725c9e5ae2e779fdc6ce4214",
+    "provider_jar_sha256": "f07466da6858f6185cb00422eb8759facbe32099925322de39a5a8551066ca3d",
+    "fault_provider_present": false
+  },
+  "separate_fault_image": {
+    "index_sha256": "d8d9d8156b86667934693f452bdb099249783bc9d63221dbd47e4bd9edd279bb",
+    "config_sha256": "6fda9800be5987b51f058fd54ae6a6ee2e0bb215ea2aca6a88b756c77bec249c",
+    "base": "exact normal image above",
+    "fault": "synthetic UPDATE_PASSWORD listener enlists failing prepare after native credential storage"
+  },
+  "results": {
+    "backend": {
+      "passed": 1009,
+      "skipped": 34,
+      "failed": 0
+    },
+    "native_backend_against_normal_image": {
+      "passed": 2,
+      "skipped": 0,
+      "failed": 0
+    },
+    "guarded_native_checks": {
+      "passed": 139,
+      "failed": 0
+    },
+    "api_security_canaries": {
+      "passed": 40,
+      "failed": 0
+    },
+    "native_credential_rollback": {
+      "passed": 10,
+      "failed": 0
+    },
+    "python_setup_suites_on_windows": {
+      "passed": 60,
+      "skipped": 2,
+      "failed": 0
+    }
+  },
+  "review": {
+    "method": "independent source/diff inspection across revisions; reviewer did not independently rerun native suites",
+    "outstanding_p1_p2": 0
+  },
+  "cleanup": {
+    "synthetic_realms_and_accounts": "complete",
+    "owned_containers_removed": 3,
+    "owned_network_removed": true,
+    "existing_development_services_still_running": 6,
+    "owned_ssh_tunnel": "confirmed no longer running"
+  },
+  "operator_setup": {
+    "implemented_and_unit_tested": true,
+    "real_account_created": false,
+    "real_setup_email_sent": false,
+    "pending": "choose existing production HTTPS for account setup only, or configure development HTTPS first"
+  },
+  "limits": [
+    "Single-node native cache proof, not multi-node proof.",
+    "Native Keycloak credential rollback used H2 start-dev; application backend tests used PostgreSQL.",
+    "Fixture-only HTTP Secure-cookie accommodation is restricted to exact loopback origins; no public HTTPS/browser SameSite claim.",
+    "Full infrastructure operators can remove/disable the extension or bypass covered model paths.",
+    "SMTP is an external side effect. Acceptance is not inbox delivery.",
+    "Backend dependency advisory refresh emitted NU1900; this checkpoint is not a clean dependency audit.",
+    "Production application/provider deployment remains held."
+  ]
+}

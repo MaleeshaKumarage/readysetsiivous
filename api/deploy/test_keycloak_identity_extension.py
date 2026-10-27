@@ -2,7 +2,7 @@
 import copy
 import unittest
 
-from keycloak_identity_extension import configure, validate_defaults, AUDIENCE, CLIENT_ATTRIBUTE, MAPPER_NAME
+from keycloak_identity_extension import configure, validate_defaults, validate_tenant_admins, AUDIENCE, CLIENT_ATTRIBUTE, MAPPER_NAME
 from test_keycloak_fgap import Server
 
 CLIENT_ID = '22222222-2222-2222-2222-222222222222'
@@ -74,6 +74,55 @@ class ExtensionServer(Server):
 
 
 class ExtensionSetupTests(unittest.TestCase):
+    def admin_inventory(self, users, roles, direct=None):
+        reads = []
+        def api(method, path, body=None, missing=False):
+            self.assertEqual('GET', method)
+            reads.append(path)
+            if path == '/clients?clientId=realm-management':
+                return [{'id': MANAGEMENT_ID, 'clientId': 'realm-management'}]
+            if path.startswith('/users?first='):
+                from urllib.parse import parse_qs
+                query = parse_qs(path.partition('?')[2])
+                start, size = int(query['first'][0]), int(query['max'][0])
+                return users[start:start + size]
+            uid = path.split('/')[2]
+            if path.endswith('/composite'):
+                return roles.get(uid, [])
+            return direct.get(uid, []) if direct else []
+        return api, reads
+
+    def test_tenant_admin_preflight_pages_complete_human_inventory(self):
+        users = [{'id': 'person-' + str(n)} for n in range(101)]
+        api, reads = self.admin_inventory(users, {})
+        validate_tenant_admins(api, {'realm': 'tenant-a'})
+        self.assertIn('/users?first=100&max=100&briefRepresentation=false', reads)
+        self.assertEqual(101, sum(p.endswith('/composite') for p in reads))
+
+    def test_human_effective_admin_grants_require_manual_reconciliation(self):
+        api, reads = self.admin_inventory([{'id': 'person'}], {'person': [{'name': 'manage-users'}]})
+        with self.assertRaisesRegex(RuntimeError, 'tenant-local administration roles'):
+            validate_tenant_admins(api, {'realm': 'tenant-a'}, runtime_subject='runtime', migrate_fgap=True)
+        self.assertTrue(all(p.endswith('/composite') for p in reads if '/role-mappings/' in p))
+
+    def test_only_exact_runtime_direct_legacy_grants_have_migration_exception(self):
+        legacy = [{'name': 'query-users'}, {'name': 'view-realm'}]
+        for who, migrate, direct_roles, permitted in (
+                ('runtime', True, legacy, True), ('runtime', False, legacy, False),
+                ('other-person', True, legacy, False), ('runtime', True, [], False)):
+            with self.subTest(who=who, migrate=migrate, direct=bool(direct_roles)):
+                api, _ = self.admin_inventory([{'id': who}], {who: legacy}, {who: direct_roles})
+                if permitted:
+                    validate_tenant_admins(api, {'realm': 'tenant-a'}, runtime_subject='runtime', migrate_fgap=migrate)
+                else:
+                    with self.assertRaisesRegex(RuntimeError, 'tenant-local administration roles'):
+                        validate_tenant_admins(api, {'realm': 'tenant-a'}, runtime_subject='runtime', migrate_fgap=migrate)
+
+    def test_tenant_admin_inventory_refuses_truncation(self):
+        api, _ = self.admin_inventory([{'id': str(n)} for n in range(3)], {})
+        with self.assertRaisesRegex(RuntimeError, 'exceeds reviewed limit'):
+            validate_tenant_admins(api, {'realm': 'tenant-a'}, max_users=2)
+
     def test_default_role_graph_rejects_indirect_administration_before_creation(self):
         writes = []
         def api(method, path, body=None, missing=False):

@@ -9,7 +9,6 @@ import java.net.URI;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
-import org.keycloak.authentication.actiontoken.execactions.ExecuteActionsActionToken;
 import org.keycloak.authorization.fgap.AdminPermissionsSchema;
 import org.keycloak.common.util.Time;
 import org.keycloak.email.EmailException;
@@ -40,7 +39,7 @@ public final class IdentityResource {
     private final KeycloakSession session;
     private final RealmModel realm;
     private final Map<String,GroupModel> groups;
-    private final ClientModel management;
+    private final CompleteIdentityPolicy policy;
     private final AuthenticationManager.AuthResult principal;
 
     IdentityResource(KeycloakSession session) {
@@ -60,9 +59,9 @@ public final class IdentityResource {
         this.principal = auth;
         UserModel service = complete(() -> session.users().getServiceAccount(expected));
         if (service == null || !service.getId().equals(auth.user().getId())) throw forbidden();
-        this.management = realm.getClientByClientId("realm-management");
-        if (management == null || complete(() -> administrative(service) || service.getGroupsStream().findAny().isPresent())) throw forbidden();
-        this.groups = complete(this::validatedGroups);
+        this.policy = new CompleteIdentityPolicy(session,realm);
+        if (complete(() -> policy.administrative(service) || service.getGroupsStream().findAny().isPresent())) throw forbidden();
+        this.groups = policy.groups;
     }
 
     private <T> T complete(Supplier<T> work) { return AdminPermissionsSchema.runWithoutAuthorization(session, work); }
@@ -73,37 +72,7 @@ public final class IdentityResource {
         try { return value != null && UUID.fromString(value).toString().equals(value) && !new UUID(0,0).toString().equals(value); }
         catch (IllegalArgumentException e) { return false; }
     }
-    private boolean administrative(UserModel user) { return management.getRolesStream().anyMatch(user::hasRole); }
-    private Map<String,GroupModel> validatedGroups() {
-        Map<String,GroupModel> found = new HashMap<>();
-        List<GroupModel> roots = realm.getTopLevelGroupsStream().limit(10001).toList();
-        if (roots.size() > 10000) throw forbidden();
-        for (var desired : GROUP_ROLES.entrySet()) {
-            List<GroupModel> matches = roots.stream().filter(g -> desired.getKey().equals(g.getName())).toList();
-            if (matches.size() != 1) throw forbidden();
-            GroupModel group = matches.getFirst();
-            if (group.getParentId() != null || group.getSubGroupsStream().findAny().isPresent()
-                    || group.getRoleMappingsStream().anyMatch(r -> r.isClientRole() || r.isComposite()
-                       || desired.getValue().isEmpty() || !desired.getValue().equals(r.getName()))) throw forbidden();
-            List<RoleModel> roleMappings = group.getRealmRoleMappingsStream().toList();
-            if (roleMappings.size() != (desired.getValue().isEmpty() ? 0 : 1)) throw forbidden();
-            if (!desired.getValue().isEmpty()) {
-                RoleModel role = realm.getRole(desired.getValue());
-                if (role == null || role.isComposite() || !role.getId().equals(roleMappings.getFirst().getId())) throw forbidden();
-            }
-            found.put(desired.getKey(), group);
-        }
-        return found;
-    }
-    private boolean authorized(UserModel user, boolean ownerRequired) {
-        if (user == null || user.getServiceAccountClientLink() != null || administrative(user)) return false;
-        List<GroupModel> memberships = user.getGroupsStream().limit(102).toList();
-        if (memberships.size() > 100 || memberships.stream().noneMatch(g -> g.getId().equals(groups.get("managed-users").getId()))
-                || memberships.stream().anyMatch(g -> groups.values().stream().noneMatch(allowed -> allowed.getId().equals(g.getId())))) return false;
-        List<String> owner = user.getAttributeStream(OWNER).toList();
-        if (owner.isEmpty()) return !ownerRequired;
-        return owner.size() == 1 && canonicalUuid(owner.getFirst());
-    }
+    private boolean authorized(UserModel user, boolean ownerRequired) { return policy.authorized(user,ownerRequired,false); }
     private UserModel target(String id, boolean mutation) {
         UserModel user = session.users().getUserById(realm, id);
         if (user == null) throw new NotFoundException("Identity not found");
@@ -257,7 +226,10 @@ public final class IdentityResource {
             try {
                 UserProfile profile = session.getProvider(UserProfileProvider.class).create(UserProfileContext.USER_API, attributes, user);
                 profile.validate(); profile.update(false);
-                if (body.has("enabled")) user.setEnabled(body.get("enabled").asBoolean());
+                if (body.has("enabled")) {
+                    if (!body.get("enabled").asBoolean()) InvitationTickets.revoke(session,realm,user);
+                    user.setEnabled(body.get("enabled").asBoolean());
+                }
                 if (!authorized(user,true)) { session.getTransactionManager().setRollbackOnly(); throw forbidden(); }
                 audit(OperationType.UPDATE,user.getId());
                 return Response.noContent().build();
@@ -268,7 +240,10 @@ public final class IdentityResource {
         return complete(() -> {
             UserModel user = target(id,true); GroupModel group = group(groupId);
             if (group.getId().equals(groups.get("managed-users").getId())) throw forbidden();
-            if (add) user.joinGroup(group); else user.leaveGroup(group);
+            if (user.isMemberOf(group) != add) {
+                InvitationTickets.revoke(session,realm,user);
+                if (add) user.joinGroup(group); else user.leaveGroup(group);
+            }
             if (!authorized(user,true)) { session.getTransactionManager().setRollbackOnly(); throw forbidden(); }
             audit(OperationType.UPDATE,user.getId());
             return Response.noContent().build();
@@ -279,6 +254,7 @@ public final class IdentityResource {
     @POST @Path("users/{id}/logout") public Response logout(@PathParam("id") String id) {
         completeWrite(() -> {
             UserModel user = target(id,true);
+            InvitationTickets.revoke(session,realm,user);
             session.users().setNotBeforeForUser(realm,user,Time.currentTime());
             session.sessions().getUserSessionsStream(realm,user).toList().forEach(s -> AuthenticationManager.backchannelLogout(session,realm,s,
                     session.getContext().getUri(), session.getContext().getConnection(), session.getContext().getRequestHeaders(),true));
@@ -296,15 +272,19 @@ public final class IdentityResource {
             UserModel user = target(id,true);
             UserResource.SendEmailParams checked = UserResource.verifySendEmailParams(session,realm,user,redirect,clientId,lifespan);
             int expiration = Time.currentTime() + checked.getLifespan();
-            ExecuteActionsActionToken token = new ExecuteActionsActionToken(user.getId(),user.getEmail(),expiration,actions,checked.getRedirectUri(),checked.getClientId());
+            InvitationTickets tickets=new InvitationTickets(session,realm);
+            var data=tickets.newTicket(user,checked.getClientId(),expiration);
+            GuardedInvitationToken token = new GuardedInvitationToken(user.getId(),user.getEmail(),expiration,actions,checked.getRedirectUri(),checked.getClientId(),data.get("owner"),data.get("ticket"),data.get("epoch"));
             String link = LoginActionsService.actionTokenProcessor(session.getContext().getUri())
                     .queryParam("key",token.serialize(session,realm,session.getContext().getUri())).build(realm.getName()).toString();
             try {
                 session.getProvider(EmailTemplateProvider.class).setAttribute(Constants.TEMPLATE_ATTR_REQUIRED_ACTIONS,token.getRequiredActions())
                         .setRealm(realm).setUser(user).sendExecuteActions(link,TimeUnit.SECONDS.toMinutes(checked.getLifespan()));
+                tickets.installAfterDelivery(user,data);
                 audit(OperationType.ACTION,user.getId());
                 return Response.noContent().build();
-            } catch (EmailException e) { throw new ServiceUnavailableException("Setup email delivery failed"); }
+            } catch (EmailException e) { session.getTransactionManager().setRollbackOnly(); throw new ServiceUnavailableException("Setup email delivery failed"); }
+              catch (RuntimeException e) { session.getTransactionManager().setRollbackOnly(); throw e; }
         });
     }
 }

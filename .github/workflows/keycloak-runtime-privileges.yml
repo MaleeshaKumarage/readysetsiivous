@@ -34,6 +34,7 @@ jobs:
           python3 -B api/deploy/test_keycloak_runtime_env.py
           python3 -B api/deploy/test_keycloak_fgap.py
           python3 -B api/deploy/test_keycloak_identity_extension.py
+          python3 -B api/deploy/test_keycloak_operator_setup.py
       - name: Build reviewed development identity extension
         run: docker build -t cleaning-identity-rehearsal:ci api/keycloak-identity-extension
       - name: Start isolated synthetic identity service
@@ -56,6 +57,13 @@ jobs:
           SYNTHETIC_KEYCLOAK_ADMIN_PASSWORD: audience_test_only_2026
           SYNTHETIC_KEYCLOAK_ADMIN_USER: audience-test-admin
         run: python3 api/deploy/test-keycloak-runtime-privileges.py
+      - name: Native guarded invitation and stale password form regressions
+        env:
+          SYNTHETIC_KEYCLOAK_URL: http://127.0.0.1:18480
+          SYNTHETIC_MAILBOX_URL: http://127.0.0.1:12525
+          SYNTHETIC_KEYCLOAK_ADMIN_PASSWORD: audience_test_only_2026
+          SYNTHETIC_KEYCLOAK_ADMIN_USER: audience-test-admin
+        run: python3 -B api/keycloak-identity-extension/tests/guarded_invitations.py
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.402
@@ -71,6 +79,33 @@ jobs:
         run: >-
           dotnet test api/CleaningSuite.Tests/CleaningSuite.Tests.csproj -m:1 -p:BuildInParallel=false
           --filter 'FullyQualifiedName~NativeSetupEmailBindsIdentityRetriesDeliveryAndSerializesParallelInvites|FullyQualifiedName~ProvisionedRealmIssuesApiAudienceOnLoginAndRefreshButNotIdToken'
+      - name: Build separate synthetic credential-rollback test image
+        run: >-
+          docker build --build-arg IDENTITY_BASE=cleaning-identity-rehearsal:ci
+          -f api/keycloak-identity-extension/tests/fault-provider/Dockerfile
+          -t cleaning-identity-rehearsal-fault:ci api/keycloak-identity-extension
+      - name: Prove consumed invitation stays revoked after native credential rollback
+        env:
+          SYNTHETIC_KEYCLOAK_URL: http://127.0.0.1:18480
+          SYNTHETIC_MAILBOX_URL: http://127.0.0.1:12525
+          SYNTHETIC_KEYCLOAK_ADMIN_PASSWORD: audience_test_only_2026
+          SYNTHETIC_KEYCLOAK_ADMIN_USER: audience-test-admin
+        run: |
+          docker rm -f scoped-keycloak
+          docker run -d --name scoped-keycloak --network scoped-identity -p 127.0.0.1:18480:8080 \
+            -e KC_BOOTSTRAP_ADMIN_USERNAME="$SYNTHETIC_KEYCLOAK_ADMIN_USER" \
+            -e KC_BOOTSTRAP_ADMIN_PASSWORD="$SYNTHETIC_KEYCLOAK_ADMIN_PASSWORD" \
+            cleaning-identity-rehearsal-fault:ci start-dev
+          ready=0
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent "$SYNTHETIC_KEYCLOAK_URL/realms/master/.well-known/openid-configuration" >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = 1
+          python3 -B api/keycloak-identity-extension/tests/credential_rollback.py
       - name: Remove disposable identity service
         if: always()
         run: |

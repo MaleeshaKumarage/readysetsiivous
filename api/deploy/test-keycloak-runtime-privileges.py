@@ -240,10 +240,17 @@ def main():
             observe('join-' + group, 'PUT', path, expected=(204,))
             observe('leave-' + group, 'DELETE', path, expected=(204,))
         privileged = request('GET', admin_root + '/clients/' + management + '/roles/manage-users', token=admin)
+        guarded_attrs = api('GET', '').get('attributes', {})
+        unguarded_attrs = dict(guarded_attrs)
+        unguarded_attrs.pop('cleaning_identity_runtime_client_id', None)
+        # Unsafe legacy canaries are deliberately seeded with the boundary OFF;
+        # the live native administration surface must never create these grants.
+        api('PUT', '', {'attributes': unguarded_attrs})
         protected = request('POST', admin_root + '/users', {'username': 'protected-admin', 'enabled': True}, admin).rsplit('/', 1)[1]
         request('POST', admin_root + '/users/' + protected + '/role-mappings/clients/' + management, [privileged], admin)
         hidden = request('POST', admin_root + '/groups', {'name': 'protected-role-carrier'}, admin).rsplit('/', 1)[1]
         request('POST', admin_root + '/groups/' + hidden + '/role-mappings/clients/' + management, [privileged], admin)
+        api('PUT', '', {'attributes': guarded_attrs})
         for label, uid in (('protected-admin', protected), ('service-account', subject)):
             target = root + '/users/' + uid
             observe(label + '-update-denied', 'PUT', target, {'firstName': 'Forbidden'})
@@ -264,9 +271,22 @@ def main():
         observe('realm-change-denied', 'PUT', root, {'displayName': 'Forbidden'}, expected=(404, 405))
         for target in (other, 'master'):
             observe('cross-realm-' + target, 'GET', '/admin/realms/' + target, expected=(403, 404))
-        # Bootstrap simulates later operator drift. Runtime visibility-filtered
-        # roles must never be used to decide whether this canary is privileged.
-        request('POST', admin_root + '/users/' + worker + '/role-mappings/clients/' + management, [privileged], admin)
+        # Remove all unsafe carriers before exercising native write validation.
+        api('DELETE', '/users/' + protected + '/role-mappings/clients/' + management, [privileged])
+        api('DELETE', '/groups/' + hidden + '/role-mappings/clients/' + management, [privileged])
+        observe('native-administration-promotion-vetoed', 'POST', admin_root + '/users/' + worker + '/role-mappings/clients/' + management,
+                [privileged], expected=(400, 403, 409, 500), bearer=admin)
+        effective = api('GET', '/users/' + worker + '/role-mappings/clients/' + management + '/composite')
+        if effective:
+            failures.append('native-promotion-persisted-despite-veto')
+        # Retain defense against unsafe pre-existing state without weakening the
+        # native veto. Complete role reads remain inside the privileged fixture.
+        guarded_attrs = api('GET', '').get('attributes', {})
+        unguarded_attrs = dict(guarded_attrs)
+        unguarded_attrs.pop('cleaning_identity_runtime_client_id', None)
+        api('PUT', '', {'attributes': unguarded_attrs})
+        api('POST', '/users/' + worker + '/role-mappings/clients/' + management, [privileged])
+        api('PUT', '', {'attributes': guarded_attrs})
         observe('drifted-admin-read-denied', 'GET', prefix)
         observe('drifted-admin-update-denied', 'PUT', prefix, {'firstName': 'ForbiddenAfterPromotion'})
         observe('drifted-admin-reset-denied', 'PUT', prefix + '/reset-password',
@@ -279,11 +299,22 @@ def main():
         # than a direct client mapping. A direct-mappings-only check misses it.
         api('DELETE', '/users/' + worker + '/role-mappings/clients/' + management, [privileged])
         api('POST', '/roles', {'name': 'synthetic-administration-composite', 'composite': True})
-        api('POST', '/roles/synthetic-administration-composite/composites', [privileged])
+        observe('unassigned-administration-carrier-vetoed', 'POST', admin_root + '/roles/synthetic-administration-composite/composites',
+                [privileged], expected=(400, 403, 409, 500), bearer=admin)
+        if api('GET', '/roles/synthetic-administration-composite/composites'):
+            failures.append('native-unassigned-administration-carrier-persisted')
         composite = api('GET', '/roles/synthetic-administration-composite')
+        guarded_attrs = api('GET', '').get('attributes', {})
+        unguarded_attrs = dict(guarded_attrs)
+        unguarded_attrs.pop('cleaning_identity_runtime_client_id', None)
+        api('PUT', '', {'attributes': unguarded_attrs})
+        api('POST', '/roles/synthetic-administration-composite/composites', [privileged])
         api('POST', '/users/' + worker + '/role-mappings/realm', [composite])
+        api('PUT', '', {'attributes': guarded_attrs})
         observe('composite-admin-read-denied', 'GET', prefix)
         observe('composite-admin-update-denied', 'PUT', prefix, {'firstName': 'ForbiddenComposite'})
+        api('DELETE', '/users/' + worker + '/role-mappings/realm', [composite])
+        api('DELETE', '/roles/synthetic-administration-composite/composites', [privileged])
     finally:
         # Only realms successfully created in this run; never prefix-enumerate.
         cleanup_failures = []

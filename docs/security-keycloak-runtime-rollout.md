@@ -1,6 +1,6 @@
 # Scoped identity runtime rollout (INF03 — not approved for production rollout)
 
-## Current development-only extension contract (2026-10-26)
+## Current development-only extension contract (2026-10-27)
 
 The approved development identity boundary is the version-pinned server extension
 described in [the extension design](superpowers/specs/2026-10-26-dev-identity-extension-design.md).
@@ -39,7 +39,8 @@ privileges and existing binding/mapper drift require manual reconciliation.
 The migration flag never authorizes arbitrary privilege revocation or secret rotation.
 
 Both fresh setup and migration retain the four plain fixed root groups, flat
-application roles and administrator-only `cleaning_employee_id` profile field.
+application roles and administrator-only `cleaning_employee_id` and
+`cleaning_invitation_ticket` single-value profile fields.
 No existing person is automatically enrolled or adopted. Unrelated realm/profile
 settings remain intact. Existing SMTP passwords are never copied into a response
 or blindly written back from masked values.
@@ -47,9 +48,27 @@ or blindly written back from masked values.
 Required evidence includes native invitation delivery and login, direct Admin REST
 denials, forbidden creation input with no partial user, protected/drifted account
 denials, directory filtering, malformed input and role/composite inheritance.
-Concurrency and post-invitation promotion remain explicit production adoption
-gates until independently demonstrated; ordinary transaction use is not proof
-that operator role-graph changes are serialized.
+The guarded-invitation follow-up now covers signed single-use tickets, stale
+forms, native legacy links, revocation across account/role cycles, and native
+prepare-stage privilege-edge vetoes, including concurrent benign-role assignment
+and forbidden composite creation. Native persisted-state checks passed on the
+recorded development image; ordinary transactions are not claimed globally
+serializable. See the [guarded design](superpowers/specs/2026-10-26-guarded-invitations-design.md)
+and [verification record](security/2026-10-27-guarded-invitations-verification.json).
+
+Infrastructure administrators use separate master-realm accounts. The explicit
+`api/deploy/keycloak-operator-setup.py` defaults to read-only and checks both
+private and public discovery against the exact public HTTPS issuer before
+authenticated operations. Creation and delivery require both `--apply` and
+`--send-setup-email`, protected operator email/admin-token configuration, and
+working SMTP. New accounts require email verification, password setup and TOTP.
+It never changes an existing employee or silently rotates an existing password.
+The real setup invitation has not been sent: the development login currently
+uses public HTTP, so the HTTPS environment choice remains pending.
+
+Production rollout remains unapproved. Multi-node cache behavior, external user
+stores and production-specific adoption need separate validation. Native rollback
+proof uses Keycloak's owned H2 start-dev fixture, not a PostgreSQL deployment.
 
 ---
 

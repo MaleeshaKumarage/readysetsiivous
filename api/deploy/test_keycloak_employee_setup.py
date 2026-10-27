@@ -48,8 +48,10 @@ class FakeTransport:
         if path.startswith('/groups?search='): return Response([])
         if path == '/clients?clientId=admin-permissions': return Response([])
         if path == '/clients?clientId=cleaning-suite-web': return Response(self.web)
+        if path.startswith('/users?first='): return Response([])
         if path == '/users/profile': return Response({'attributes': [] if self.needs_setup else [{
-            'name':'cleaning_employee_id','multivalued':False,'permissions':{'view':['admin'],'edit':['admin']}}]})
+            'name':name,'multivalued':False,'permissions':{'view':['admin'],'edit':['admin']}}
+            for name in ('cleaning_employee_id', 'cleaning_invitation_ticket')]})
         if path == '/clients?clientId=employee-runtime': return Response([] if self.needs_setup else [{
             'id':RUNTIME_ID,'clientId':'employee-runtime','enabled':True,'serviceAccountsEnabled':True,'publicClient':False}])
         if path == '/clients?clientId=realm-management': return Response([{'id':MANAGEMENT_ID,'clientId':'realm-management'}])
@@ -111,6 +113,39 @@ class SetupCheckTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'extension is missing or denied'):
                 self.run_check(Missing())
 
+    def test_ticket_profile_apply_preserves_unrelated_fields_without_editing_user_tickets(self):
+        original = {'attributes': [
+            {'name': 'unrelated', 'annotations': {'keep': 'yes'}},
+            {'name': 'cleaning_employee_id', 'multivalued': False, 'permissions': {'view': ['admin'], 'edit': ['admin']}},
+            {'name': 'cleaning_invitation_ticket', 'multivalued': True, 'annotations': {'keep': 'ticket-config'},
+             'permissions': {'view': ['user'], 'edit': ['user']}}
+        ], 'unmanagedAttributePolicy': 'preserve-this'}
+        class Profile(FakeTransport):
+            def __call__(self, request, timeout):
+                if request.full_url.endswith('/users/profile'):
+                    self.requests.append(request)
+                    return Response(original if request.method == 'GET' else None)
+                if request.full_url.endswith('/realms/tenant-a/cleaning-identity/v1'):
+                    self.requests.append(request)
+                    return Response({'realm': 'tenant-a', 'enabled': True})
+                return super().__call__(request, timeout)
+        transport = Profile()
+        env = {'KEYCLOAK_MIGRATION_ADMIN_TOKEN': 'synthetic-bearer-never-print',
+               'KEYCLOAK_TENANT_RUNTIME_CLIENT_SECRET': 'synthetic-runtime-secret'}
+        with patch.dict(os.environ, env), patch.object(sys, 'argv', ARGS + ['--apply', '--development']), \
+                patch.object(setup, 'urlopen', transport), patch.object(setup, 'configure', return_value={}), redirect_stdout(io.StringIO()):
+            self.assertEqual(0, setup.main())
+        writes = [r for r in transport.requests if r.method not in ('GET',) and not r.full_url.endswith('/token')]
+        self.assertEqual(1, len(writes))
+        self.assertTrue(writes[0].full_url.endswith('/users/profile'))
+        result = json.loads(writes[0].data)
+        self.assertEqual('preserve-this', result['unmanagedAttributePolicy'])
+        self.assertEqual(original['attributes'][0], result['attributes'][0])
+        ticket = next(a for a in result['attributes'] if a['name'] == 'cleaning_invitation_ticket')
+        self.assertFalse(ticket['multivalued'])
+        self.assertEqual({'view': ['admin'], 'edit': ['admin']}, ticket['permissions'])
+        self.assertEqual({'keep': 'ticket-config'}, ticket['annotations'])
+
     def test_mismatched_existing_secret_fails_check_and_apply_without_mutations(self):
         for apply in (False, True):
             transport=FakeTransport(wrong_secret=True)
@@ -144,6 +179,21 @@ class SetupCheckTests(unittest.TestCase):
     def test_group_derived_privileges_are_rejected(self):
         with self.assertRaisesRegex(RuntimeError, 'group-derived'):
             self.run_check(FakeTransport(group=True))
+
+    def test_tenant_local_human_admin_blocks_setup_before_any_writes(self):
+        class HumanAdmin(FakeTransport):
+            def __call__(self, request, timeout):
+                if '/users?first=' in request.full_url:
+                    self.requests.append(request)
+                    return Response([{'id': 'human-admin', 'email': 'private-person@example.invalid'}])
+                if '/users/human-admin/role-mappings/clients/' in request.full_url:
+                    self.requests.append(request)
+                    return Response([{'name': 'manage-users'}])
+                return super().__call__(request, timeout)
+        transport = HumanAdmin(needs_setup=True)
+        with self.assertRaisesRegex(RuntimeError, 'separate master operator'):
+            self.run_check(transport)
+        self.assertTrue(all(r.method == 'GET' for r in transport.requests))
 
     def test_legacy_broad_roles_require_manual_review_without_revocation(self):
         class Broad(FakeTransport):

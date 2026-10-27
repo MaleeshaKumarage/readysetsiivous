@@ -4,7 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from keycloak_identity_extension import configure, validate_defaults
+from keycloak_identity_extension import configure, validate_defaults, validate_tenant_admins
 import json
 import os
 import re
@@ -118,6 +118,8 @@ def main():
     realm = api('GET')
     if not realm.get('enabled'):
         raise RuntimeError('Realm disabled; enablement requires a separate explicit operation')
+    runtime_user = api('GET', '/clients/' + quote(clients[0]['id'], safe='') + '/service-account-user') if clients else None
+    validate_tenant_admins(api, realm, runtime_user.get('id') if runtime_user else None, migrate_fgap=args.migrate_fgap)
     web_clients = api('GET', '/clients?clientId=cleaning-suite-web')
     if len(web_clients) != 1 or web_clients[0].get('clientId') != 'cleaning-suite-web' or not web_clients[0].get('enabled') or web_clients[0].get('publicClient') is not True or web_clients[0].get('standardFlowEnabled') is not True:
         raise RuntimeError('The enabled cleaning-suite-web client must exist before identity setup')
@@ -143,17 +145,21 @@ def main():
             change('missing application role ' + role, 'POST', '/roles', {'name': role})
     profile = api('GET', '/users/profile')
     attributes = profile.setdefault('attributes', [])
-    owners = [a for a in attributes if a.get('name') == 'cleaning_employee_id']
-    if len(owners) > 1:
-        raise RuntimeError('Ambiguous ownership profile; manual review required')
-    desired = {'name': 'cleaning_employee_id', 'displayName': 'Employee ownership', 'multivalued': False,
-               'permissions': {'view': ['admin'], 'edit': ['admin']}}
-    if not owners or any(owners[0].get(k) != desired[k] for k in ('multivalued', 'permissions')):
-        if owners:
-            owners[0].update(desired)
-        else:
-            attributes.append(desired)
-        change('administrator-only ownership profile', 'PUT', '/users/profile', profile)
+    profile_changed = False
+    for name, display in (('cleaning_employee_id', 'Employee ownership'), ('cleaning_invitation_ticket', 'Invitation ticket')):
+        matches = [a for a in attributes if a.get('name') == name]
+        if len(matches) > 1:
+            raise RuntimeError('Ambiguous server-owned profile attribute; manual review required')
+        desired = {'name': name, 'displayName': display, 'multivalued': False,
+                   'permissions': {'view': ['admin'], 'edit': ['admin']}}
+        if not matches or any(matches[0].get(k) != desired[k] for k in ('multivalued', 'permissions')):
+            if matches:
+                matches[0].update(desired)
+            else:
+                attributes.append(desired)
+            profile_changed = True
+    if profile_changed:
+        change('administrator-only ownership and invitation ticket profile', 'PUT', '/users/profile', profile)
     if not clients:
         from keycloak_fgap import configure as validate_legacy_contract
         validate_legacy_contract(api, lambda *a: None, realm, 'missing-runtime-subject', apply=False)

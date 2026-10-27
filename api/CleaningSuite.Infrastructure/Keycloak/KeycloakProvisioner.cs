@@ -149,8 +149,19 @@ public class KeycloakProvisioner : IKeycloakProvisioner
         var profile = await _admin.GetUserProfileAsync(realm, ct);
         var fields = profile.EnumerateObject().ToDictionary(p => p.Name, p => (object)p.Value.Clone());
         var attributes = profile.GetProperty("attributes").EnumerateArray().Select(a => a.Clone()).ToList();
-        attributes.Add(JsonSerializer.SerializeToElement(new { name = "cleaning_employee_id", displayName = "Employee ownership",
-            multivalued = false, permissions = new { view = new[] { "admin" }, edit = new[] { "admin" } } }));
+        foreach (var (name, displayName) in new[] { ("cleaning_employee_id", "Employee ownership"), ("cleaning_invitation_ticket", "Invitation ticket") }) {
+            var matches = attributes.Select((value, index) => (value, index))
+                .Where(entry => entry.value.TryGetProperty("name", out var fieldName) && fieldName.GetString() == name).ToArray();
+            if (matches.Length > 1) throw new KeycloakException("Server-owned profile attribute is ambiguous; explicit reconciliation required");
+            var attribute = matches.Length == 1
+                ? matches[0].value.EnumerateObject().ToDictionary(p => p.Name, p => (object)p.Value.Clone())
+                : new Dictionary<string, object>();
+            attribute["name"] = name; attribute["displayName"] = displayName; attribute["multivalued"] = false;
+            attribute["permissions"] = new { view = new[] { "admin" }, edit = new[] { "admin" } };
+            var representation = JsonSerializer.SerializeToElement(attribute);
+            if (matches.Length == 1) attributes[matches[0].index] = representation;
+            else attributes.Add(representation);
+        }
         fields["attributes"] = attributes;
         await _admin.UpdateUserProfileAsync(realm, fields, ct);
         var smtpSection = _configuration!.GetSection("EmployeeInvites:Smtp");

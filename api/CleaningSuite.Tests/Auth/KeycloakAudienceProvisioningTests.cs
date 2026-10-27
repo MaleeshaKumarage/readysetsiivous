@@ -51,7 +51,11 @@ public class KeycloakAudienceProvisioningTests
     [InlineData(null, null, null)]
     public async Task ProvisioningNormalizesSmtpBooleanSettingsAndDefaults(bool? auth, bool? startTls, bool? ssl)
     {
-        var transport = new KeycloakTransport();
+        var transport = new KeycloakTransport { ProfileAttributes = [
+            new { name = "unrelated", displayName = "Keep this field", multivalued = true },
+            new { name = "cleaning_employee_id", multivalued = true, annotations = new { preserved = "owner-metadata" }, permissions = new { view = new[] { "user" }, edit = new[] { "user" } } },
+            new { name = "cleaning_invitation_ticket", multivalued = true, annotations = new { preserved = "ticket-metadata" }, permissions = new { view = new[] { "user" }, edit = new[] { "user" } } }
+        ] };
         var flags = new Dictionary<string, bool>();
         if (auth.HasValue) flags["Auth"] = auth.Value;
         if (startTls.HasValue) flags["StartTls"] = startTls.Value;
@@ -96,6 +100,18 @@ public class KeycloakAudienceProvisioningTests
         using var owner = JsonDocument.Parse(Assert.Single(transport.Owners));
         Assert.Equal(new[] { "/managed-users", "/app-admin" }, owner.RootElement.GetProperty("groups").EnumerateArray().Select(x => x.GetString()));
         Assert.False(owner.RootElement.TryGetProperty("attributes", out _));
+        using var profile = JsonDocument.Parse(Assert.Single(transport.ProfileUpdates));
+        Assert.Equal("preserved-policy", profile.RootElement.GetProperty("unmanagedAttributePolicy").GetString());
+        var profileAttributes = profile.RootElement.GetProperty("attributes").EnumerateArray().ToArray();
+        Assert.Equal(3, profileAttributes.Length);
+        Assert.Equal("Keep this field", profileAttributes.Single(a => a.GetProperty("name").GetString() == "unrelated").GetProperty("displayName").GetString());
+        foreach (var name in new[] { "cleaning_employee_id", "cleaning_invitation_ticket" }) {
+            var attribute = Assert.Single(profileAttributes.Where(a => a.GetProperty("name").GetString() == name));
+            Assert.False(attribute.GetProperty("multivalued").GetBoolean());
+            Assert.Equal(new[] { "admin" }, attribute.GetProperty("permissions").GetProperty("view").EnumerateArray().Select(v => v.GetString()));
+            Assert.Equal(new[] { "admin" }, attribute.GetProperty("permissions").GetProperty("edit").EnumerateArray().Select(v => v.GetString()));
+            Assert.True(attribute.GetProperty("annotations").TryGetProperty("preserved", out _));
+        }
     }
 
     [Fact]
@@ -140,6 +156,8 @@ public class KeycloakAudienceProvisioningTests
         public List<string> Permissions { get; } = new();
         public List<string> Owners { get; } = new();
         public List<string> RealmUpdates { get; } = new();
+        public List<string> ProfileUpdates { get; } = new();
+        public object[] ProfileAttributes { get; init; } = [];
         public bool RejectRuntimeCredentials;
         public bool ExtensionMissing;
         public int RuntimeProofs, ExtensionProofs, RealmDeletes, OwnerCreates;
@@ -168,10 +186,12 @@ public class KeycloakAudienceProvisioningTests
             }
             if (request.Method == HttpMethod.Put && path == "/admin/realms/tenant-test")
                 RealmUpdates.Add(await request.Content!.ReadAsStringAsync(ct));
+            if (request.Method == HttpMethod.Put && path.EndsWith("/users/profile"))
+                ProfileUpdates.Add(await request.Content!.ReadAsStringAsync(ct));
             if (request.Method == HttpMethod.Get && path == "/admin/realms/tenant-test") return Json(new { attributes = new { unrelated = "preserved" } });
             if (request.Method == HttpMethod.Get && path.EndsWith("/clients")) return Json(new[] { new { id = "client-id" } });
             if (request.Method == HttpMethod.Get && path.EndsWith("/service-account-user")) return Json(new { id = "service-user" });
-            if (request.Method == HttpMethod.Get && path.EndsWith("/users/profile")) return Json(new { attributes = Array.Empty<object>() });
+            if (request.Method == HttpMethod.Get && path.EndsWith("/users/profile")) return Json(new { attributes = ProfileAttributes, unmanagedAttributePolicy = "preserved-policy" });
             if (request.Method == HttpMethod.Get && path.Contains("/clients/client-id/roles/")) return Json(new { id = "client-role", name = path.Split('/').Last() });
             if (request.Method == HttpMethod.Post && path.EndsWith("/clients")) Clients.Add(await request.Content!.ReadAsStringAsync(ct));
             if (request.Method == HttpMethod.Get && path.Contains("/roles/")) return Json(new { id = "app-role", name = path.Split('/').Last(), composite = false });

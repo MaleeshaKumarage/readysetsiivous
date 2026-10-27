@@ -156,21 +156,45 @@ public class EmployeeIdentityIntegrationTests
         var admins = await directory.ListAsync(default);
         Assert.Contains(admins, recipient => recipient.Id == ownerId);
         Assert.DoesNotContain(admins, recipient => recipient.Id == transition.UserId);
-        // This account was legitimately enrolled before an operator later gave
-        // it Keycloak administration privileges. Native server-side checks must
-        // reject it even though Admin REST role responses can hide those roles.
+        // Native administration must veto promotion of an employee into an
+        // infrastructure administrator, including the actual persisted grant.
         var driftEmployee = new Employee { Email = "drift@" + realm + ".invalid", FirstName = "Drift", LastName = "Canary", Role = "admin" };
         var driftUser = await identity.EnsureAsync(realm, driftEmployee);
         await identity.AssignRoleAsync(realm, driftEmployee.Id, driftUser.UserId, "admin");
         var managementClient = (await admin.GetClientsAsync(realm, "realm-management"))[0].GetProperty("id").GetString()!;
         var managementRole = await admin.GetClientRoleAsync(realm, managementClient, "manage-users");
-        await admin.AssignClientRolesAsync(realm, driftUser.UserId, managementClient, new object[] { managementRole });
-        var deniedDrift = await Assert.ThrowsAsync<KeycloakException>(() => runtimeClient.GetUserAsync(realm, driftUser.UserId));
-        Assert.Equal(HttpStatusCode.Forbidden, deniedDrift.StatusCode);
-        await Assert.ThrowsAsync<EmployeeIdentityProviderException>(() => identity.SynchronizeAccessAsync(realm, driftEmployee.Id, driftUser.UserId, "employee", false));
-        Assert.True((await admin.GetUserAsync(realm, driftUser.UserId))!.Value.GetProperty("enabled").GetBoolean());
-        Assert.Empty((await runtimeClient.FindUsersByEmailAsync(realm, driftEmployee.Email)).EnumerateArray());
-        Assert.DoesNotContain(await directory.ListAsync(default), recipient => recipient.Id == driftUser.UserId);
+        var promotionError = await Assert.ThrowsAsync<KeycloakException>(() => admin.AssignClientRolesAsync(realm, driftUser.UserId, managementClient, new object[] { managementRole }));
+        Assert.Contains(promotionError.StatusCode, new HttpStatusCode?[] { HttpStatusCode.BadRequest, HttpStatusCode.Forbidden, HttpStatusCode.Conflict, HttpStatusCode.InternalServerError });
+        var mappingPath = url + "/admin/realms/" + realm + "/users/" + driftUser.UserId + "/role-mappings/clients/" + managementClient;
+        using (var effective = new HttpRequestMessage(HttpMethod.Get, mappingPath + "/composite")) {
+            effective.Headers.Authorization = new("Bearer", await admin.GetAdminTokenAsync());
+            using var response = await http.SendAsync(effective); response.EnsureSuccessStatusCode();
+            using var rolesAfterVeto = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Empty(rolesAfterVeto.RootElement.EnumerateArray());
+        }
+        // Retain defense-in-depth coverage for pre-existing unsafe legacy state.
+        // Seed it only with the boundary explicitly disabled, restore protection,
+        // then remove the exact unsafe grant before any subsequent native writes.
+        var realmDetails = await admin.GetRealmAsync(realm);
+        var guardedAttributes = realmDetails.GetProperty("attributes").EnumerateObject().ToDictionary(p => p.Name, p => (object)p.Value.Clone());
+        var unguardedAttributes = new Dictionary<string, object>(guardedAttributes);
+        unguardedAttributes.Remove(KeycloakAdminClient.RuntimeClientAttribute);
+        await admin.UpdateRealmAsync(realm, new { attributes = unguardedAttributes });
+        try { await admin.AssignClientRolesAsync(realm, driftUser.UserId, managementClient, new object[] { managementRole }); }
+        finally { await admin.UpdateRealmAsync(realm, new { attributes = guardedAttributes }); }
+        try {
+            var deniedDrift = await Assert.ThrowsAsync<KeycloakException>(() => runtimeClient.GetUserAsync(realm, driftUser.UserId));
+            Assert.Equal(HttpStatusCode.Forbidden, deniedDrift.StatusCode);
+            await Assert.ThrowsAsync<EmployeeIdentityProviderException>(() => identity.SynchronizeAccessAsync(realm, driftEmployee.Id, driftUser.UserId, "employee", false));
+            Assert.True((await admin.GetUserAsync(realm, driftUser.UserId))!.Value.GetProperty("enabled").GetBoolean());
+            Assert.Empty((await runtimeClient.FindUsersByEmailAsync(realm, driftEmployee.Email)).EnumerateArray());
+            Assert.DoesNotContain(await directory.ListAsync(default), recipient => recipient.Id == driftUser.UserId);
+        } finally {
+            using var remove = new HttpRequestMessage(HttpMethod.Delete, mappingPath) {
+                Content = new StringContent(JsonSerializer.Serialize(new[] { managementRole }), System.Text.Encoding.UTF8, "application/json") };
+            remove.Headers.Authorization = new("Bearer", await admin.GetAdminTokenAsync());
+            using var removed = await http.SendAsync(remove); removed.EnsureSuccessStatusCode();
+        }
         // Allow a later completed-account reinvite in the live browser fixture without sleeping60seconds.
         using (var session = store.LightweightSession(realm)) { var saved = (await session.LoadAsync<Employee>(employee.Id))!; saved.InviteLastSentUtc = DateTime.UtcNow.AddMinutes(-2); session.Store(saved); await session.SaveChangesAsync(); }
         var artifactPath = Environment.GetEnvironmentVariable("INVITE_TEST_CONTEXT_PATH");
