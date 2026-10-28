@@ -78,6 +78,7 @@ class Commands:
             op = next(x for x in ['ps', 'config', 'up'] if x in args)
             if op == 'ps':
                 result = self.current + '-container'
+                if self.current == 'old' and not self.recovering and self.mode == 'previous_stopped' and '--all' not in args: result = ''
                 if self.current == 'new' and self.mode == 'changed' and self.health_count > 1: result = 'other-container'
             elif op == 'config':
                 assert args[-3:] == ['config', '--format', 'json']

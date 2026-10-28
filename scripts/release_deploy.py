@@ -161,7 +161,7 @@ class Deployment:
         # Checker bytes are an authenticated release asset; it enforces permissions,
         # canonical host path, outside-checkout location and complete tenant account pairs.
         self.command('python3', str(identity_checker), '--file', identity_paths[0])
-        container = self.compose(active_config, active_env, 'ps', '-q', 'api')
+        container = self.compose(active_config, active_env, 'ps', '--all', '-q', 'api')
         require(container and '\n' not in container, 'Existing API required for verified rollback')
         previous = self.inspect('container', container)
         self.project = previous.get('Config', {}).get('Labels', {}).get('com.docker.compose.project', '')
