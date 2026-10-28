@@ -27,4 +27,7 @@ Still requires factual/legal evidence: registered name/address, actual retention
 
 ## Release compatibility
 
-The previous identity promotion is already deployed as cb33068. This additive booking/website release uses that compatible baseline and returns to the normal release policy: it does not upgrade or migrate Keycloak. Rollback does not point to the legacy 74559 identity model. New JSON response fields and snapshot currency are additive; existing records default to EUR. Apply normal authenticated release/build checks before deployment.
+The previous identity promotion is deployed as cb33068. The owner explicitly approved using cb33068 as the only rollback baseline while retaining the closed-ingress maintenance guard and updating its test. This additive booking/website change does not upgrade or migrate Keycloak. New JSON response fields and snapshot currency are additive; existing records default to EUR. Deployment still requires an authenticated release and a coordinated closed-ingress window. Do not use the legacy 74559 identity model as rollback.
+
+
+Owner selected the nationwide headline: Cleaning Services for Homes and Businesses Across Finland. FI/EN/SV marketing, footer and structured-data coverage are updated consistently to Finland, based on the owner's confirmed service scope.

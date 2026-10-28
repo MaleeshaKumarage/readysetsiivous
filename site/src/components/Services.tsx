@@ -114,7 +114,7 @@ export default function Services() {
                       {[s.description, s.additionalInfo].filter(Boolean).join(' ')}
                     </p>
                     <p className="mt-4 text-sm font-bold text-brand-600 dark:text-brand-400">
-                      {t('services.from')} {s.priceNet.toFixed(0)} €
+                      {money(gross(s), lang, s.currency ?? 'EUR')} — {publicUx(lang).price}
                     </p>
                     <a className="mt-4 inline-flex min-h-11 items-center underline" href={baseUrl(`/${lang}/varaus/`)}>{publicUx(lang).book}</a>
                     <div className={`absolute -inset-0.5 rounded-2xl -z-10 opacity-0 group-hover:opacity-100 transition-opacity blur-sm ${bg}`} />

@@ -21,9 +21,9 @@ export const viewport: Viewport = {
 
 const SITE_NAME = 'ReadySetSiivous';
 const SITE_URL = 'https://readysetsiivous.fi';
-const SITE_TITLE = 'ReadySetSiivous — Professional Cleaning Services | Helsinki, Espoo, Vantaa';
+const SITE_TITLE = 'ReadySetSiivous — Cleaning Services Across Finland';
 const SITE_DESCRIPTION =
-  'Professional home cleaning, deep cleaning, move-out cleaning, and office cleaning in Helsinki, Espoo & Vantaa. Contact us to discuss your cleaning needs.';
+  'Professional home cleaning, deep cleaning, move-out cleaning, and office cleaning across Finland. Contact us to discuss your cleaning needs.';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

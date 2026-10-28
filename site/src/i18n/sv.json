@@ -1,7 +1,7 @@
 {
   "site": {
-    "title": "ReadySetSiivous — Professionella städtjänster | Helsingfors, Esbo, Vanda",
-    "description": "Hem-, kontors-, grundlig och flyttstädning i Helsingfors, Esbo och Vanda. Kontakta ReadySetSiivous om dina städbehov.",
+    "title": "Städtjänster i hela Finland | ReadySetSiivous",
+    "description": "Hem-, kontors-, flytt- och grundlig städning i hela Finland. Berätta för ReadySetSiivous var du finns och vad du behöver för en anpassad offert.",
     "locale": "sv_FI"
   },
   "nav": {
@@ -16,13 +16,14 @@
     "login": "Logga in"
   },
   "hero": {
-    "headline": "Professionell hemstädning i Helsingfors, Esbo & Vanda",
-    "subheadline": "Hem-, kontors-, grundlig och flyttstädning. Berätta vad du behöver så bekräftar vi omfattning, tillgänglighet och pris tillsammans.",
+    "headline": "Städtjänster för hem och företag i hela Finland",
+    "subheadline": "Hem-, kontors-, flytt- och grundlig städning i hela Finland. Berätta för ReadySetSiivous var du finns och vad du behöver för en anpassad offert.",
     "cta": "Få offert via WhatsApp",
     "secondaryCta": "Se våra tjänster",
     "callUs": "Ring +358 46 804 4231",
     "sameDay": "Fråga oss om lediga städtider",
-    "localKeywords": "Hemstädning Esbo — Storstädning Helsingfors — Flyttstädning Vanda — Kontorsstädning huvudstadsregionen"
+    "localKeywords": "Städtjänster för hem och företag i hela Finland",
+    "coverage": "Vi betjänar hem och företag i hela Finland"
   },
   "trustBadges": {
     "insured": "Försäkrad",
@@ -55,7 +56,7 @@
     "sizeRooms7": "7+ rum",
     "sizeSliderLabel": "Ungefär kvadratmeter: {size} m²",
     "city": "Plats / Stad",
-    "cityPlaceholder": "t.ex. Helsingfors, Esbo, Vanda…",
+    "cityPlaceholder": "Din stad eller kommun",
     "date": "Önskat städdatum",
     "datePlaceholder": "Välj ett datum",
     "submit": "Skicka via WhatsApp",
@@ -77,25 +78,25 @@
   },
   "services": {
     "title": "Våra städtjänster",
-    "subtitle": "Från regelbunden hemstädning till djupgående kontorsstädning — vi gör allt i huvudstadsregionen.",
+    "subtitle": "Städning för hem och företag i hela Finland. Omfattning, tillgänglighet och pris bekräftas tillsammans med dig.",
     "home": {
       "title": "Hemstädning",
-      "description": "Regelbunden vecko- eller varannan vecka hemstädning i Esbo, Helsingfors & Vanda. Dammtorkning, dammsugning, golvtvätt, badrum och kök grundligt avtorkade.",
+      "description": "Hemstädning i hela Finland. Diskutera dammtorkning, dammsugning, golv, badrum och köksuppgifter med oss.",
       "price": "Från 35 €/h"
     },
     "deep": {
       "title": "Storstädning",
-      "description": "Grundlig storstädning i Helsingfors. Golvlister, bakom vitvaror, insida av skåp, fönsterbrädor och mycket mer.",
+      "description": "Grundlig städning av områden som behöver extra uppmärksamhet, till exempel lister, skåp och runt vitvaror. Kom överens om omfattningen före besöket.",
       "price": "Från 45 €/h"
     },
     "moveOut": {
       "title": "Flyttstädning",
-      "description": "Fullständig flyttstädning i Vanda & Esbo. Vitvaror, väggar, golv, fönster — allt för att säkra din deposition.",
+      "description": "Städning vid inflyttning eller utflyttning. Kom överens om ytor, vitvaror och fönsterputsning före besöket.",
       "price": "Från 50 €/h"
     },
     "office": {
       "title": "Kontorsstädning",
-      "description": "Daglig eller veckovis kontorsstädning. Skrivbord, papperskorgar, golv, pentryn och desinfektion av högkontaktytor.",
+      "description": "Städning av kontor och affärslokaler i hela Finland. Kontakta oss för att avtala om områden, uppgifter och tidtabell.",
       "price": "Från 30 €/h"
     },
     "window": {
@@ -186,7 +187,7 @@
   },
   "about": {
     "title": "Varför välja ReadySetSiivous?",
-    "subtitle": "Hem-, kontors-, grundlig och flyttstädning i Helsingfors, Esbo och Vanda. Kontakta ReadySetSiivous om dina städbehov.",
+    "subtitle": "Hem-, kontors-, flytt- och grundlig städning i hela Finland. Berätta för ReadySetSiivous var du finns och vad du behöver för en anpassad offert.",
     "points": {
       "staff": {
         "title": "Städning efter dina behov",
@@ -205,7 +206,7 @@
         "description": "Berätta om produktönskemål och känslighet före besöket."
       },
       "local": {
-        "title": "Helsingfors, Esbo och Vanda",
+        "title": "I hela Finland",
         "description": "Kontakta oss för att kontrollera tillgänglighet på din adress."
       },
       "simple": {
@@ -243,7 +244,7 @@
   },
   "emergencyCta": {
     "title": "Behöver du städning direkt?",
-    "description": "Kontakta oss om tillgänglighet med kort varsel. En städtid gäller först efter vår bekräftelse.",
+    "description": "Kontakta oss om tillgänglighet med kort varsel i hela Finland. En städtid gäller först efter vår bekräftelse.",
     "button": "Fråga om tillgänglighet samma dag"
   },
   "responsibleEmployer": {
@@ -258,12 +259,7 @@
   "footer": {
     "areasServed": "Områden vi betjänar",
     "areas": [
-      "Helsingfors",
-      "Esbo",
-      "Vanda",
-      "Grankulla",
-      "Kyrkslätt",
-      "Tusby"
+      "Hela Finland"
     ],
     "contact": "Kontakt",
     "hours": "Öppettider",
@@ -342,7 +338,7 @@
   },
   "schema": {
     "name": "ReadySetSiivous",
-    "description": "Professionella städtjänster för hem och företag i Helsingforsregionen.",
+    "description": "Hem-, kontors-, flytt- och grundlig städning i hela Finland. Berätta för ReadySetSiivous var du finns och vad du behöver för en anpassad offert.",
     "priceRange": "€€"
   },
   "varaus": {

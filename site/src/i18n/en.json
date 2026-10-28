@@ -1,7 +1,7 @@
 {
   "site": {
-    "title": "ReadySetSiivous — Professional Cleaning Services | Helsinki, Espoo, Vantaa",
-    "description": "Home, office, deep and move-out cleaning in Helsinki, Espoo and Vantaa. Contact ReadySetSiivous to discuss your cleaning needs.",
+    "title": "Cleaning Services Across Finland | ReadySetSiivous",
+    "description": "Home, office, move-out and deep cleaning across Finland. Tell ReadySetSiivous your location and cleaning needs for a tailored quote.",
     "locale": "en_FI"
   },
   "nav": {
@@ -16,13 +16,14 @@
     "login": "Log in"
   },
   "hero": {
-    "headline": "Professional Home Cleaning in Helsinki, Espoo & Vantaa",
-    "subheadline": "Home, office, deep and move-out cleaning. Tell us what you need and we will confirm the scope, availability and price with you.",
+    "headline": "Cleaning Services for Homes and Businesses Across Finland",
+    "subheadline": "Home, office, move-out and deep cleaning across Finland. Tell ReadySetSiivous your location and cleaning needs for a tailored quote.",
     "cta": "Chat on WhatsApp",
     "secondaryCta": "View Our Services",
     "callUs": "Call +358 46 804 4231",
     "sameDay": "Ask us about available cleaning times",
-    "localKeywords": "Kotisiivous Espoo — Syväsiivous Helsinki — Muutosiivous Vantaa"
+    "localKeywords": "Cleaning Services for Homes and Businesses Across Finland",
+    "coverage": "Serving homes and businesses across Finland"
   },
   "trustBadges": {
     "insured": "Insured & Bonded",
@@ -55,7 +56,7 @@
     "sizeRooms7": "7+ rooms",
     "sizeSliderLabel": "Approx. square metres: {size} m²",
     "city": "Location / City",
-    "cityPlaceholder": "e.g. Helsinki, Espoo, Vantaa…",
+    "cityPlaceholder": "Your city or municipality",
     "date": "Preferred Cleaning Date",
     "datePlaceholder": "Select a date",
     "submit": "Submit via WhatsApp",
@@ -77,25 +78,25 @@
   },
   "services": {
     "title": "Our Cleaning Services",
-    "subtitle": "From regular home upkeep to deep commercial cleans — we do it all across the Helsinki metropolitan area.",
+    "subtitle": "Cleaning for homes and businesses throughout Finland. Scope, availability and price are confirmed with you.",
     "home": {
       "title": "Home Cleaning",
-      "description": "Regular weekly or bi-weekly home cleaning in Espoo, Helsinki & Vantaa. Dusting, vacuuming, mopping, bathroom & kitchen deep wipe-down.",
+      "description": "Home cleaning across Finland. Discuss dusting, vacuuming, floors, bathrooms and kitchen tasks with us.",
       "price": "From €35/h"
     },
     "deep": {
       "title": "Deep Cleaning",
-      "description": "Thorough top-to-bottom deep clean in Helsinki. Baseboards, behind appliances, cabinet interiors, windowsills, and more.",
+      "description": "Detailed cleaning for areas that need extra attention, such as skirting boards, cabinets and appliance surrounds. Agree the scope before the visit.",
       "price": "From €45/h"
     },
     "moveOut": {
       "title": "Move-out Cleaning",
-      "description": "Full end-of-tenancy move-out cleaning in Vantaa & Espoo. Appliances, walls, floors, windows — everything to secure your deposit.",
+      "description": "Cleaning when moving in or out. Agree surfaces, appliances and window cleaning with us before the visit.",
       "price": "From €50/h"
     },
     "office": {
       "title": "Office Cleaning",
-      "description": "Daily or weekly commercial office cleaning. Desks, bins, floors, kitchenettes, and sanitisation of high-touch points.",
+      "description": "Cleaning for offices and commercial spaces across Finland. Contact us to agree the areas, tasks and schedule.",
       "price": "From €30/h"
     },
     "window": {
@@ -186,7 +187,7 @@
   },
   "about": {
     "title": "Why Choose ReadySetSiivous?",
-    "subtitle": "Home, office, deep and move-out cleaning in Helsinki, Espoo and Vantaa. Contact ReadySetSiivous to discuss your cleaning needs.",
+    "subtitle": "Home, office, move-out and deep cleaning across Finland. Tell ReadySetSiivous your location and cleaning needs for a tailored quote.",
     "points": {
       "staff": {
         "title": "Cleaning to your needs",
@@ -205,7 +206,7 @@
         "description": "Tell us about product preferences or sensitivities before the visit."
       },
       "local": {
-        "title": "Helsinki, Espoo and Vantaa",
+        "title": "Across Finland",
         "description": "Contact us to check availability at your address."
       },
       "simple": {
@@ -243,7 +244,7 @@
   },
   "emergencyCta": {
     "title": "Need Cleaning Right Now?",
-    "description": "Contact us to check short-notice availability. A cleaning time is available only after we confirm it.",
+    "description": "Contact us to check short-notice availability anywhere in Finland. A cleaning time is available only after we confirm it.",
     "button": "Ask for Same-Day Availability"
   },
   "responsibleEmployer": {
@@ -258,12 +259,7 @@
   "footer": {
     "areasServed": "Areas We Serve",
     "areas": [
-      "Helsinki",
-      "Espoo",
-      "Vantaa",
-      "Kauniainen",
-      "Kirkkonummi",
-      "Tuusula"
+      "All of Finland"
     ],
     "contact": "Contact",
     "hours": "Operating Hours",
@@ -342,7 +338,7 @@
   },
   "schema": {
     "name": "ReadySetSiivous",
-    "description": "Professional residential and commercial cleaning services in the Helsinki metropolitan area.",
+    "description": "Home, office, move-out and deep cleaning across Finland. Tell ReadySetSiivous your location and cleaning needs for a tailored quote.",
     "priceRange": "€€"
   },
   "varaus": {

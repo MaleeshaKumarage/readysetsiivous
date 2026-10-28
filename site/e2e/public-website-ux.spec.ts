@@ -145,3 +145,24 @@ test('essential text remains visible when JavaScript is disabled',async ({browse
   await expect(page.locator('footer a[href="mailto:info@readysetsiivous.fi"]')).toBeVisible();
   await context.close();
 });
+
+test('homepage service card uses gross price and its action opens booking',async ({page})=>{
+  await page.route('**/api/v1/public/*/services?*',r=>r.fulfill({headers,json:[service]}));
+  await page.goto('/en/');
+  const services=page.locator('#services');
+  await expect(services).toContainText('€62.75');
+  await expect(services).not.toContainText('€50');
+  await services.getByRole('link',{name:publicUx('en').book,exact:true}).click();
+  await expect(page).toHaveURL(/\/en\/varaus\/$/);
+});
+
+test('hero and offline service actions reach the quote form',async ({page})=>{
+  await page.route('**/api/v1/public/*/services?*',r=>r.fulfill({headers,status:503,json:{}}));
+  await page.goto('/en/');
+  await page.locator('.public-hero a[href="#quote"]').click();
+  await expect(page).toHaveURL(/#quote$/);
+  await expect(page.locator('#quote')).toBeInViewport();
+  await page.locator('#services a[href="/en/#quote"]').first().click();
+  await expect(page).toHaveURL(/\/en\/#quote$/);
+  await expect(page.locator('#quote')).toBeInViewport();
+});

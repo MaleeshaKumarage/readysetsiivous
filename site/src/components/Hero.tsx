@@ -107,7 +107,7 @@ export default function Hero() {
             {/* Trust badges — plain wrapper: a variant fade here would mask the
                 StaggerGroup's own entrance (its IO fires at mount, above the fold). */}
             <div data-motion-reveal className="mt-10">
-              <p className="text-sm text-accent-100">Helsinki · Espoo · Vantaa</p>
+              <p className="text-sm text-accent-100">{t('hero.coverage')}</p>
             </div>
           </div>
 

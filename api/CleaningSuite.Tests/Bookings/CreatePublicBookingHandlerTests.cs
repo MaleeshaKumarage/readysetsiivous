@@ -39,13 +39,16 @@ public class CreatePublicBookingHandlerTests
         new PostgresException("Concurrent reservation", "ERROR", "ERROR", PostgresErrorCodes.SerializationFailure);
 
     [Fact]
-    public async Task Changed_price_rejects_before_reservation_or_save()
+    public async Task Changed_price_reads_snapshot_once_but_never_reserves_slot_or_saves()
     {
         _service.VatRatePercent = 25.5m;
         var handler = Handler();
         await Assert.ThrowsAsync<SlotConflictException>(() => handler.Handle(Request() with { ExpectedPriceGross = 50m }, default));
         _bookings.Verify(x => x.SaveAsync(It.IsAny<Booking>(), It.IsAny<CancellationToken>()), Times.Never);
         _bookings.Verify(x => x.NextCounterAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _bookings.Verify(x => x.BeginReservationAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _services.Verify(x => x.GetByIdAsync(_service.Id, It.IsAny<CancellationToken>()), Times.Once);
+        _bookings.Verify(x => x.FindOverlappingAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), null, It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

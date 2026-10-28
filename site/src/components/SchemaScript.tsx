@@ -22,28 +22,7 @@ export default function SchemaScript({ lang, dict }: SchemaProps) {
     },
     image: 'https://readysetsiivous.fi/brand/readyset-primary-logo.png',
     telephone: '+358468044231',
-    areaServed: [
-      {
-        '@type': 'City',
-        name: 'Helsinki',
-        sameAs: 'https://en.wikipedia.org/wiki/Helsinki',
-      },
-      {
-        '@type': 'City',
-        name: 'Espoo',
-        sameAs: 'https://en.wikipedia.org/wiki/Espoo',
-      },
-      {
-        '@type': 'City',
-        name: 'Vantaa',
-        sameAs: 'https://en.wikipedia.org/wiki/Vantaa',
-      },
-      {
-        '@type': 'City',
-        name: 'Kauniainen',
-        sameAs: 'https://en.wikipedia.org/wiki/Kauniainen',
-      },
-    ],
+    areaServed: { '@type': 'Country', name: 'Finland' },
     priceRange: dict.schema.priceRange,
     openingHoursSpecification: [
       {
