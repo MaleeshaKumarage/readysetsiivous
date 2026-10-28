@@ -161,9 +161,17 @@ class Deployment:
         # Checker bytes are an authenticated release asset; it enforces permissions,
         # canonical host path, outside-checkout location and complete tenant account pairs.
         self.command('python3', str(identity_checker), '--file', identity_paths[0])
-        container = self.compose(active_config, active_env, 'ps', '--all', '-q', 'api')
-        require(container and '\n' not in container, 'Existing API required for verified rollback')
-        previous = self.inspect('container', container)
+        containers = self.compose(active_config, active_env, 'ps', '--all', '-q', 'api').splitlines()
+        baselines = []
+        for container in containers:
+            item = self.inspect('container', container)
+            labels = item.get('Config', {}).get('Labels', {})
+            if str(labels.get('com.docker.compose.oneoff', '')).lower() == 'true':
+                continue
+            require(labels.get('com.docker.compose.service') == 'api', 'Unexpected baseline service')
+            baselines.append(item)
+        require(len(baselines) == 1, 'Exactly one existing API required for verified rollback')
+        previous = baselines[0]
         self.project = previous.get('Config', {}).get('Labels', {}).get('com.docker.compose.project', '')
         require(re.fullmatch('[a-z0-9][a-z0-9_-]{0,62}', self.project), 'Stable Compose project identity required')
         old_release = next((s.split('=', 1)[1] for s in previous['Config']['Env'] if s.startswith('APP_RELEASE_SHA=')), '')
