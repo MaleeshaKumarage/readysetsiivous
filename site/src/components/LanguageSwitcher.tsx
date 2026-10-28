@@ -1,8 +1,11 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useLanguage } from '@/hooks/useLanguage';
+
+// Keep this transient interaction across the localized layout remount.
+let pendingFocusPath: string | null = null;
 
 export default function LanguageSwitcher() {
   const { lang, setLang, languages } = useLanguage();
@@ -10,6 +13,14 @@ export default function LanguageSwitcher() {
   const ref = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const router = useRouter();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (pendingFocusPath === pathname) {
+      pendingFocusPath = null;
+      buttonRef.current?.focus();
+    }
+  }, [pathname]);
 
   const current = languages.find((l) => l.code === lang) ?? languages[0];
 
@@ -43,6 +54,7 @@ export default function LanguageSwitcher() {
       // Client-side navigation to the new language URL path (no full reload).
       const newPath = window.location.pathname.replace(/^\/(en|fi|sv)\//, `/${code}/`);
       if (newPath !== window.location.pathname) {
+        pendingFocusPath = newPath;
         router.push(newPath + window.location.search + window.location.hash);
       }
     },

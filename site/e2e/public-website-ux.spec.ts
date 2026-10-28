@@ -89,6 +89,7 @@ test('320px public navigation, truthful content, local assets and legal-page anc
   await expect(page.locator('footer')).toContainText('3404861-9');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(await page.evaluate(() => localStorage.getItem('lang'))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem('theme'))).toBeNull();
   await page.goto('/en/privacy/'); await expect(page.locator('footer a[href="/en/#services"]').first()).toBeVisible();
 });
 
@@ -132,6 +133,7 @@ test('theme contrast and quote overlay clearance',async ({page},info) => {
   await page.getByRole('heading',{level:1}).scrollIntoViewIfNeeded();
   await page.screenshot({path:info.outputPath('public-home-light.png'),fullPage:true});
   await page.getByRole('button',{name:'Switch to dark mode',exact:true}).click();
+  expect(await page.evaluate(()=>localStorage.getItem('theme'))).toBe('dark');
   expect(await contrast()).toBeGreaterThanOrEqual(4.5);
   await page.screenshot({path:info.outputPath('public-home-dark.png'),fullPage:true});
   await page.locator('#quote').scrollIntoViewIfNeeded();
@@ -191,3 +193,22 @@ for (const kind of ['notFound','unavailable'] as const) {
     expect(page.url()).not.toContain(key);
   });
 }
+
+test('booking header and localized footer open the management journey',async ({page})=>{
+  await page.route('**/api/v1/public/*/services?*',r=>r.fulfill({headers,json:[]}));
+  await page.goto('/en/varaus/');
+  await page.getByRole('link',{name:publicUx('en').manage,exact:true}).first().click();
+  await expect(page).toHaveURL(/\/en\/booking\/$/);
+  await page.goto('/sv/');
+  await page.locator('footer').getByRole('link',{name:publicUx('sv').manage,exact:true}).click();
+  await expect(page).toHaveURL(/\/sv\/booking\/$/);
+});
+
+test('language disclosure preserves equivalent route and returns keyboard focus',async ({page})=>{
+  await page.goto('/en/privacy/');
+  await page.getByRole('button',{name:'Switch language',exact:true}).click();
+  await page.getByRole('button',{name:/Suomi/}).click();
+  await expect(page).toHaveURL(/\/fi\/privacy\/$/);
+  await expect(page.getByRole('button',{name:'Vaihda kieltä',exact:true})).toBeFocused();
+  expect(await page.evaluate(()=>localStorage.getItem('lang'))).toBe('fi');
+});
