@@ -39,7 +39,7 @@ export default function BookingManagement({ params }: { params: { lang: string }
   const serviceName = booking && (lang === 'en' ? booking.serviceNameEn : lang === 'sv' ? booking.serviceNameSv : booking.serviceNameFi) || booking?.serviceNameFi;
   const status = booking?.status.toLowerCase();
   const statusLabel = status === 'cancelled' ? u.cancelled : status === 'completed' ? u.completed : status === 'confirmed' ? u.confirmed : u.pending;
-  return <><Navbar lang={lang}/><main id="main-content" className="container-page max-w-2xl py-12">
+  return <><Navbar lang={lang}/><main tabIndex={-1} id="main-content" className="container-page max-w-2xl py-12">
     <h1 className="heading-lg mb-6">{u.manage}</h1><p className="mb-4">{u.keep}</p>
     <form onSubmit={lookup} className="grid gap-4">
       <fieldset disabled={busy} className="grid gap-4">

@@ -166,3 +166,28 @@ test('hero and offline service actions reach the quote form',async ({page})=>{
   await expect(page).toHaveURL(/\/en\/#quote$/);
   await expect(page.locator('#quote')).toBeInViewport();
 });
+
+test('keyboard skip link reaches the main landmark on homepage and legal pages',async ({page})=>{
+  for (const path of ['/en/','/fi/privacy/','/sv/terms/']) {
+    await page.goto(path);
+    await page.keyboard.press('Tab');
+    const skip=page.locator('.skip-link');
+    await expect(skip).toBeFocused(); await expect(skip).toBeInViewport();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#main-content')).toBeFocused();
+  }
+});
+
+for (const kind of ['notFound','unavailable'] as const) {
+  test(`management lookup ${kind} clears results and focuses recovery field`,async ({page})=>{
+    await page.route('**/api/v1/public/*/bookings/lookup',r=>kind==='notFound'
+      ? r.fulfill({headers,status:404,json:{}}) : r.abort('failed'));
+    await page.goto('/en/booking/');
+    await page.locator('#manage-number').fill('RSS-2030-000001'); await page.locator('#manage-key').fill(key);
+    await page.getByRole('button',{name:'View booking',exact:true}).click();
+    await expect(page.getByRole('alert').filter({hasText:publicUx('en')[kind]})).toBeVisible();
+    await expect(page.locator(kind==='notFound'?'#manage-key':'#manage-number')).toBeFocused();
+    await expect(page.getByRole('button',{name:'Cancel this booking',exact:true})).toHaveCount(0);
+    expect(page.url()).not.toContain(key);
+  });
+}

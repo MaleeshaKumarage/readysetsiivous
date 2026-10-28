@@ -32,7 +32,7 @@ export default function LangPage({
   return (
     <>
       <Navbar lang={lang} />
-      <main id="main-content">
+      <main tabIndex={-1} id="main-content">
         <Hero />
 
 
