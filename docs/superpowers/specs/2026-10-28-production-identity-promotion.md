@@ -47,7 +47,9 @@ Create only the four fixed groups, owner/ticket profile protection and a dedicat
 runtime client with no Admin REST/FGAP grants. Add the intended group memberships
 before removing only the planned direct application roles. Verify effective role
 and enablement, then activate the extension binding last using fresh realm attrs.
-No setup emails or password resets are part of migration.
+No setup emails or password resets are part of migration. The user will manually
+resend fresh invitations on request to accounts not yet activated; rejected legacy
+links are not a reason to send bulk mail. Activated passwords and MFA remain.
 
 ## Cutover and recovery
 

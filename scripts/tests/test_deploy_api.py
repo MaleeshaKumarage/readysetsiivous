@@ -27,13 +27,14 @@ OLD_ID = 'sha256:' + 'f' * 64
 
 
 class Commands:
-    def __init__(self, root, mode, maintenance_states=None):
+    def __init__(self, root, mode, maintenance_states=None, maintenance_load_states=None):
         modes = {'maintenance_up': 'up', 'maintenance_stopped': 'previous_stopped'}
         self.root, self.mode, self.calls = root, modes.get(mode, mode), []
         self.current = 'old'
         self.recovering = False
         self.health_count = 0
         self.maintenance_states = maintenance_states or (['active'] if mode == 'maintenance_active' else ['inactive'])
+        self.maintenance_load_states = maintenance_load_states or (['not-found'] if mode == 'maintenance_missing' else ['loaded'])
         self.maintenance_checks = 0
         self.maintenance_snapshots = []
 
@@ -47,11 +48,13 @@ class Commands:
         assert 'API_IMAGE' not in kwargs['env']
         code, result = 0, ''
         if args[0] == 'systemctl':
-            assert args == ['systemctl', 'show', '--property=ActiveState', '--value', 'cloudflared.service']
+            assert args == ['systemctl', 'show', '--property=ActiveState', '--property=LoadState', 'cloudflared.service']
             self.maintenance_snapshots.append({'backups': (self.root / '.deploy-backups').exists(),
                                                'candidate_env': bool(list(self.root.glob('releases/*/candidate.env'))),
                                                'current': self.current})
-            result = self.maintenance_states[min(self.maintenance_checks, len(self.maintenance_states) - 1)]
+            active = self.maintenance_states[min(self.maintenance_checks, len(self.maintenance_states) - 1)]
+            loaded = self.maintenance_load_states[min(self.maintenance_checks, len(self.maintenance_load_states) - 1)]
+            result = 'ActiveState=' + active + '\nLoadState=' + loaded
             self.maintenance_checks += 1
         elif args[0] == 'python3':
             assert args[1].endswith('/api/deploy/check-keycloak-runtime-env.py') or args[1].endswith('\\api\\deploy\\check-keycloak-runtime-env.py')
@@ -117,7 +120,7 @@ class Commands:
 
 class DeploymentTests(unittest.TestCase):
     def run_deploy(self, mode='success', approved=True, compatible=True, key='new-owner-ai-secret',
-                   maintenance_policy=None, maintenance_states=None, expect_preserved_candidate=False):
+                   maintenance_policy=None, maintenance_states=None, maintenance_load_states=None, expect_preserved_candidate=False):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             old_env = b"API_IDENTITY_ENV_FILE=/protected/tenant-runtime.env\nIMAGE_TAG=sha-old\nDATABASE_PASSWORD=private-value\nGAME_GEMINI_API_KEY='old-owner-secret'\n"
@@ -139,7 +142,7 @@ class DeploymentTests(unittest.TestCase):
             env = dict(PATH=os.environ.get('PATH', ''), HOME=tmp, GAME_GEMINI_API_KEY=key,
                        REGISTRY_USER='test-user', REGISTRY_TOKEN='test-secret', API_IMAGE='ambient-override',
                        DOCKER_CONTEXT='hostile-context', DOCKER_HOST='tcp://unrelated-host:2375')
-            commands = Commands(root, mode, maintenance_states)
+            commands = Commands(root, mode, maintenance_states, maintenance_load_states)
             output, errors = io.StringIO(), io.StringIO()
             failed = None
             with patch.object(deploy.subprocess, 'run', commands), contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
@@ -186,7 +189,16 @@ class DeploymentTests(unittest.TestCase):
                 failure, commands, _ = self.run_deploy(maintenance_policy={'maintenance_service': 'cloudflared.service'},
                                                        maintenance_states=[state])
                 self.assertIn('Maintenance ingress must remain inactive', str(failure))
-                self.assertEqual([['systemctl', 'show', '--property=ActiveState', '--value', 'cloudflared.service']], commands.calls)
+                self.assertEqual([['systemctl', 'show', '--property=ActiveState', '--property=LoadState', 'cloudflared.service']], commands.calls)
+                self.assertEqual([{'backups': False, 'candidate_env': False, 'current': 'old'}], commands.maintenance_snapshots)
+
+    def test_inactive_but_missing_or_unloaded_maintenance_unit_blocks_before_mutations(self):
+        for load_state in ['not-found', 'error', 'masked', 'unloaded', '', 'loaded\nLoadState=loaded']:
+            with self.subTest(load_state=load_state):
+                failure, commands, _ = self.run_deploy(maintenance_policy={'maintenance_service': 'cloudflared.service'},
+                                                       maintenance_states=['inactive'], maintenance_load_states=[load_state])
+                self.assertIn('loaded unit', str(failure))
+                self.assertEqual([['systemctl', 'show', '--property=ActiveState', '--property=LoadState', 'cloudflared.service']], commands.calls)
                 self.assertEqual([{'backups': False, 'candidate_env': False, 'current': 'old'}], commands.maintenance_snapshots)
 
     def test_unknown_maintenance_unit_is_rejected_before_all_commands(self):
@@ -310,7 +322,7 @@ class RealShellDeploymentTests(unittest.TestCase):
     @unittest.skipUnless(os.name == 'posix', 'real shell/command harness runs on Linux CI')
     def test_real_wrapper_and_external_fake_commands(self):
         for mode in ['success', 'up', 'wrong_release', 'pull', 'invalid_identity',
-                     'maintenance_active', 'maintenance_inactive', 'maintenance_up', 'maintenance_unknown', 'maintenance_stopped']:
+                     'maintenance_active', 'maintenance_inactive', 'maintenance_up', 'maintenance_unknown', 'maintenance_stopped', 'maintenance_missing']:
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory(prefix='release-identity-', dir=Path.home()) as identity:
                 root = Path(tmp)
                 identity_file = Path(identity).resolve() / 'tenant-runtime.env'
@@ -365,7 +377,7 @@ raise SystemExit(result.returncode)
                 self.assertEqual(success, result.returncode == 0, result.stderr)
                 self.assertEqual('new' if success else 'old', state['current'])
                 self.assertEqual(mode in ['up', 'wrong_release', 'maintenance_up'], state['recovering'])
-                if mode in ['maintenance_active', 'maintenance_unknown']:
+                if mode in ['maintenance_active', 'maintenance_unknown', 'maintenance_missing']:
                     self.assertFalse((root / '.deploy-backups').exists())
                     self.assertFalse((stage / 'candidate.env').exists())
                 if mode == 'maintenance_inactive':

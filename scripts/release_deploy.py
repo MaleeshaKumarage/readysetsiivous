@@ -96,8 +96,13 @@ class Deployment:
     def maintenance_gate(self):
         if self.maintenance_service is not None:
             require(self.maintenance_service == MAINTENANCE_SERVICE, 'Unsupported maintenance service in release policy')
-            require(self.command('systemctl', 'show', '--property=ActiveState', '--value', self.maintenance_service) == 'inactive',
-                    'Maintenance ingress must remain inactive; external coordination is required')
+            raw = self.command('systemctl', 'show', '--property=ActiveState', '--property=LoadState', self.maintenance_service)
+            lines = raw.splitlines()
+            # Missing units can report ActiveState=inactive. Require an actual
+            # loaded unit as well; reject missing, duplicate or unexpected fields.
+            details = dict(line.split('=', 1) for line in lines) if all('=' in line for line in lines) else {}
+            require(len(lines) == 2 and details == {'ActiveState': 'inactive', 'LoadState': 'loaded'},
+                    'Maintenance ingress must remain inactive with a loaded unit; external coordination is required')
 
     def verify(self, image, image_id, release):
         container = self.compose(self.root / 'docker-compose.yml', self.root / '.env', 'ps', '-q', 'api')

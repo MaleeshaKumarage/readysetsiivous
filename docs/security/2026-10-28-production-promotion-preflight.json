@@ -5,7 +5,7 @@
   "previous_api_release": "74559f2849821d7ffd5f5b8f1f9fbd2e4d31a25b",
   "verification": {
     "linux_controller_tests": {
-      "passed": 20,
+      "passed": 21,
       "failed": 0,
       "skipped": 0
     },
@@ -32,7 +32,7 @@
     "owned_network_removed": true,
     "existing_development_services_running": 6
   },
-  "review": "independent source review found no remaining P1/P2 after stopped-baseline correction",
+  "review": "independent source review plus AI review; missing-unit maintenance guard corrected and real Linux harness rerun",
   "limits": [
     "No production service cutover performed at this checkpoint.",
     "Final fresh backups and coherent identity/API rollback remain maintenance responsibilities.",
