@@ -5,6 +5,8 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { baseUrl } from '@/lib/whatsapp';
 import { API_URL, fetchServices, type PublicService } from '@/lib/api';
 import { serviceIcon } from '@/lib/icons';
+import { gross, money } from '@/lib/publicFormatting';
+import { publicUx } from '@/i18n/publicUx';
 // Entrance animation removed from this section: cards must stay visible even
 // when JS chunks are stale (Pages deploy replaces _next assets).
 
@@ -58,15 +60,12 @@ const SERVICE_CARDS = [
 
 export default function Services() {
   const { t, lang } = useLanguage();
-  const [apiServices, setApiServices] = useState<PublicService[]>([]);
+  const [apiServices, setApiServices] = useState<PublicService[] | null>(null);
 
   useEffect(() => {
-    fetchServices(lang).then((services) => {
-      if (services && services.length > 0) {
-        // First four active services, admin-controlled order.
-        setApiServices([...services].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)).slice(0, 4));
-      }
-    });
+    let active = true;
+    fetchServices(lang).then(services => { if (active) setApiServices(services ? [...services].sort((a,b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)).slice(0,4) : null); });
+    return () => { active = false; };
   }, [lang]);
 
   const GRADIENTS = ['from-brand-500 to-brand-600', 'from-accent-500 to-accent-600', 'from-violet-500 to-purple-600', 'from-amber-500 to-orange-600'];
@@ -87,7 +86,8 @@ export default function Services() {
         </div>
 
         <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {apiServices.length > 0
+          {apiServices?.length === 0 && <p className="col-span-full">{publicUx(lang).noServices}</p>}
+          {apiServices !== null
             ? apiServices.map((s, i) => {
                 const IconCmp = serviceIcon(s.icon);
                 const gradient = GRADIENTS[i % GRADIENTS.length];
@@ -116,6 +116,7 @@ export default function Services() {
                     <p className="mt-4 text-sm font-bold text-brand-600 dark:text-brand-400">
                       {t('services.from')} {s.priceNet.toFixed(0)} €
                     </p>
+                    <a className="mt-4 inline-flex min-h-11 items-center underline" href={baseUrl(`/${lang}/varaus/`)}>{publicUx(lang).book}</a>
                     <div className={`absolute -inset-0.5 rounded-2xl -z-10 opacity-0 group-hover:opacity-100 transition-opacity blur-sm ${bg}`} />
                   </div>
                 );
@@ -141,7 +142,8 @@ export default function Services() {
                   </div>
                   <h3 className="mt-4 text-lg font-bold text-gray-900 dark:text-gray-100">{t(`${key}.title`)}</h3>
                   <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 leading-relaxed flex-1">{t(`${key}.description`)}</p>
-                  <p className="mt-4 text-sm font-bold text-brand-600 dark:text-brand-400">{t(`${key}.price`)}</p>
+                  <p className="mt-4 text-sm font-bold text-brand-600 dark:text-brand-400">{publicUx(lang).quote}</p>
+                  <a className="mt-4 inline-flex min-h-11 items-center underline" href={baseUrl(`/${lang}/#quote`)}>{publicUx(lang).quote}</a>
                   <div className={`absolute -inset-0.5 rounded-2xl -z-10 opacity-0 group-hover:opacity-100 transition-opacity blur-sm ${bg}`} />
                 </div>
               ))}

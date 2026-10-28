@@ -266,3 +266,24 @@
     opacity: 1;
   }
 }
+
+/* Public-site review fixes; authenticated screens keep their own design rules. */
+.public-site :is(a, button, input, select, textarea):focus-visible { outline: 3px solid #9c7c26; outline-offset: 3px; box-shadow: 0 0 0 3px #fff; }
+.dark .public-site :is(a, button, input, select, textarea):focus-visible { outline-color: #e0be6e; box-shadow: 0 0 0 3px #070b1a; }
+.public-site button, .public-site select { min-height: 44px; }
+.public-site section[id], .public-site main[id] { scroll-margin-top: 90px; }
+.public-site .bg-whatsapp { color: #071b10 !important; }
+.public-site .bg-whatsapp:hover { color: #fff !important; background-color: #075e54 !important; }
+.public-site footer :is(.text-gray-400, .text-gray-500, .text-gray-600) { color: #b8c0d4 !important; }
+.public-site footer a { display: inline-flex; align-items: center; min-height: 32px; }
+.public-site footer .text-xs { font-size: .875rem; }
+.public-site .skip-link { position: fixed; left: 1rem; top: -10rem; padding: .75rem; background: #fff; color: #14214d; z-index: 100; }
+.public-site .skip-link:focus { top: .5rem; }
+.public-site [data-motion-reveal] { opacity: 1 !important; }
+.public-site .public-hero .text-brand-600 { color: #e0be6e; }
+.public-site .text-brand-600 { color: #7d6220; }
+.dark .public-site .text-brand-600 { color: #e0be6e; }
+.public-site :is(input, textarea, select) { font-size: 1rem; }
+.public-site :is(.text-gray-400, .text-gray-500) { color: #5a6383; }
+.dark .public-site :is(.text-gray-400, .text-gray-500) { color: #a9b0c8; }
+.public-site [aria-invalid="true"] { border-color: #b91c1c; outline: 2px solid #b91c1c; outline-offset: 2px; }

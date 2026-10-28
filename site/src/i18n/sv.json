@@ -1,7 +1,7 @@
 {
   "site": {
     "title": "ReadySetSiivous — Professionella städtjänster | Helsingfors, Esbo, Vanda",
-    "description": "Professionell hemstädning, storstädning, flyttstädning och kontorsstädning i Helsingfors, Esbo & Vanda. Försäkrat, bakgrundskontrollerad personal. Boka via WhatsApp på sekunder.",
+    "description": "Hem-, kontors-, grundlig och flyttstädning i Helsingfors, Esbo och Vanda. Kontakta ReadySetSiivous om dina städbehov.",
     "locale": "sv_FI"
   },
   "nav": {
@@ -17,11 +17,11 @@
   },
   "hero": {
     "headline": "Professionell hemstädning i Helsingfors, Esbo & Vanda",
-    "subheadline": "Försäkrade, bakgrundskontrollerade och pålitliga städare. Hemstädning, storstädning, flyttstädning och kontorsstädning. Få din offert direkt och boka på under 60 sekunder — inga samtal, inget krångel.",
+    "subheadline": "Hem-, kontors-, grundlig och flyttstädning. Berätta vad du behöver så bekräftar vi omfattning, tillgänglighet och pris tillsammans.",
     "cta": "Få offert via WhatsApp",
     "secondaryCta": "Se våra tjänster",
     "callUs": "Ring +358 46 804 4231",
-    "sameDay": "⚡ Samma dag-tider tillgängliga",
+    "sameDay": "Fråga oss om lediga städtider",
     "localKeywords": "Hemstädning Esbo — Storstädning Helsingfors — Flyttstädning Vanda — Kontorsstädning huvudstadsregionen"
   },
   "trustBadges": {
@@ -31,8 +31,8 @@
     "eco": "Miljövänliga Produkter"
   },
   "quoteForm": {
-    "title": "Få din offert direkt",
-    "subtitle": "Fyll i uppgifterna och få en personlig offert via WhatsApp på ditt språk.",
+    "title": "Begär en städoffert",
+    "subtitle": "Skicka dina önskemål via WhatsApp. Vi diskuterar omfattningen och bekräftar en offert med dig.",
     "serviceType": "Typ av tjänst",
     "selectService": "Välj en tjänst…",
     "selectSize": "Välj en storlek…",
@@ -153,7 +153,7 @@
     "questions": {
       "supplies": {
         "q": "Tar ni med egna städprodukter?",
-        "a": "Ja! Våra städare kommer fullt utrustade med professionella, miljövänliga produkter och utrustning. Om du föredrar att vi använder dina egna produkter, meddela oss bara i WhatsApp-meddelandet."
+        "a": "Kom överens om rengöringsmedel och utrustning före besöket. Berätta om du föredrar egna produkter."
       },
       "keys": {
         "q": "Hur fungerar nyckelöverlämning?",
@@ -161,11 +161,11 @@
       },
       "cancellation": {
         "q": "Vad är er avbokningspolicy?",
-        "a": "Vi erbjuder gratis avbokning upp till 24 timmar före din bokade städning. Avbokningar inom 24 timmar kan medföra en mindre avgift. Ombokning är alltid gratis — skicka bara ett meddelande på WhatsApp!"
+        "a": "Kontakta oss snarast för att avboka eller ändra tiden. Se boknings- och avbokningsvillkoren. Dina lagstadgade konsumenträttigheter gäller."
       },
       "pets": {
         "q": "Är era rengöringsprodukter säkra för husdjur?",
-        "a": "Absolut. Vi använder giftfria, biologiskt nedbrytbara produkter som är säkra för katter, hundar och alla husdjur. Nämn eventuella allergier vid bokning."
+        "a": "Diskutera husdjur och produktbegränsningar före besöket. Lämpligheten beror på produkten och omständigheterna."
       },
       "duration": {
         "q": "Hur lång tid tar en städning?",
@@ -173,7 +173,7 @@
       },
       "frequency": {
         "q": "Kan jag boka återkommande städningar?",
-        "a": "Ja! De flesta av våra kunder bokar veckovis eller varannan vecka. Stamkunder får prioriterad schemaläggning och rabatterade priser. Fråga bara på WhatsApp så ordnar vi det."
+        "a": "Kontakta oss om återkommande städning. Omfattning, intervall och pris avtalas separat."
       }
     }
   },
@@ -186,31 +186,31 @@
   },
   "about": {
     "title": "Varför välja ReadySetSiivous?",
-    "subtitle": "Vi är inte bara ännu ett städföretag — vi är din pålitliga lokala partner för ett renare och hälsosammare utrymme i Helsingfors, Esbo och Vanda.",
+    "subtitle": "Hem-, kontors-, grundlig och flyttstädning i Helsingfors, Esbo och Vanda. Kontakta ReadySetSiivous om dina städbehov.",
     "points": {
       "staff": {
-        "title": "Bakgrundskontrollerad personal",
-        "description": "Varje städare genomgår en grundlig bakgrundskontroll och personlig intervju innan de bär vår uniform."
+        "title": "Städning efter dina behov",
+        "description": "Diskutera rum, uppgifter och prioriteringar innan tjänsten avtalas."
       },
       "insured": {
-        "title": "Fullt försäkrad",
-        "description": "Din egendom och dina tillhörigheter är skyddade. Städa med förtroende och veta att du är trygg."
+        "title": "Tydliga arrangemang",
+        "description": "Bekräfta omfattning, pris och tillträde med oss i förväg."
       },
       "satisfaction": {
-        "title": "100% nöjdhetsgaranti",
-        "description": "Inte nöjd? Vi städar om inom 24 timmar utan kostnad. Inga frågor ställda."
+        "title": "Frågor efter städningen?",
+        "description": "Kontakta oss så att vi kan utreda saken och komma överens om nästa steg."
       },
       "eco": {
-        "title": "Miljövänliga produkter",
-        "description": "Vi använder biologiskt nedbrytbara, giftfria rengöringsprodukter som är säkra för barn, husdjur och planeten."
+        "title": "Produkter och önskemål",
+        "description": "Berätta om produktönskemål och känslighet före besöket."
       },
       "local": {
-        "title": "Lokal och pålitlig",
-        "description": "Vi betjänar Helsingfors, Esbo och Vanda med stolthet. Samma dag och helgtider tillgängliga."
+        "title": "Helsingfors, Esbo och Vanda",
+        "description": "Kontakta oss för att kontrollera tillgänglighet på din adress."
       },
       "simple": {
-        "title": "Boka på 60 sekunder",
-        "description": "Inga telefonköer, inga e-postmeddelanden fram och tillbaka. Fyll bara i ett snabbt formulär och bekräfta på WhatsApp."
+        "title": "Begär offert",
+        "description": "Använd formuläret, WhatsApp, telefon eller e-post. Vi bekräftar arrangemangen med dig."
       }
     }
   },
@@ -225,10 +225,10 @@
   "keySecurity": {
     "title": "Nyckelhantering & Säkerhet",
     "subtitle": "Din hemsäkerhet är vår prioritet.",
-    "insurance": "Nyckelförsäkring (Avainturva) ingår",
-    "tracking": "Digital nyckelspårning — du vet alltid vem som har tillgång",
-    "handover": "Flexibla alternativ: personlig överlämning, nyckelskåp eller betrodd person",
-    "certified": "All personal bakgrundskontrollerad och identitetsverifierad"
+    "insurance": "Kom överens om tillträdet före besöket",
+    "tracking": "Diskutera överlämning och återlämning av nycklar",
+    "handover": "Dela inte dörrkoder i offentliga meddelanden",
+    "certified": "Kontakta oss direkt om tillträdesarrangemang"
   },
   "ecoPetBadges": {
     "title": "Säkert för din familj och dina husdjur",
@@ -243,7 +243,7 @@
   },
   "emergencyCta": {
     "title": "Behöver du städning direkt?",
-    "description": "Vi erbjuder städning samma dag i Helsingfors, Esbo och Vanda. Skicka ett meddelande på WhatsApp så hittar vi en tid som passar — ofta inom några timmar.",
+    "description": "Kontakta oss om tillgänglighet med kort varsel. En städtid gäller först efter vår bekräftelse.",
     "button": "Fråga om tillgänglighet samma dag"
   },
   "responsibleEmployer": {
@@ -278,77 +278,65 @@
   "testimonials": {
     "title": "Vad våra kunder säger",
     "subtitle": "Riktiga omdömen från hem i huvudstadsregionen.",
-    "items": [
-      {
-        "name": "Liisa M.",
-        "area": "Esbo",
-        "text": "Storstädningen var fantastisk — golvlister och skåp jag inte rört på åratal ser helt nya ut. Vänligt och punktligt team."
-      },
-      {
-        "name": "Markku V.",
-        "area": "Helsingfors",
-        "text": "Vi använder städningen varannan vecka. Pålitligt och noggrant, och bokning via WhatsApp kunde inte vara enklare. Varm rekommendation."
-      },
-      {
-        "name": "Sofia J.",
-        "area": "Vanda",
-        "text": "Beställde flyttstädning och fick hela depositionen tillbaka. Tydlig kommunikation och lägenheten glänste."
-      }
-    ]
+    "items": []
   },
   "privacy": {
     "title": "Integritetspolicy",
-    "updated": "Senast uppdaterad: augusti 2026",
+    "updated": "Uppdaterad: 28.10.2026",
     "sections": [
       {
-        "h": "Personuppgiftsansvarig",
-        "p": "ReadySetSiivous erbjuder städtjänster i Helsingforsregionen. Du når oss på info@readysetsiivous.fi."
+        "h": "Vem behandlar uppgifterna",
+        "p": "ReadySetSiivous, FO-nummer 3404861-9. För dataskyddsfrågor och begäranden: info@readysetsiivous.fi eller +358 46 804 4231."
       },
       {
-        "h": "Vilka uppgifter vi samlar in",
-        "p": "Vi behandlar endast de uppgifter du väljer att skicka till oss via WhatsApp eller e-post — vanligtvis namn, telefonnummer, stad, önskat datum och innehållet i dina meddelanden. Denna webbplats lagrar inga personuppgifter på servrar."
+        "h": "Uppgifter och ändamål",
+        "p": "Offertförfrågningar, bokningar och kundservice kan innehålla namn, kontaktuppgifter, städadress, tjänst, datum och meddelanden. Bokningar sparas i våra tjänstesystem. Vi använder uppgifterna för förfrågningar, planering och leverans av tjänster samt administration. Ange inte dörrkoder, hälsouppgifter eller andra känsliga uppgifter i fritextfält."
       },
       {
-        "h": "Lokala inställningar",
-        "p": "Dina språk- och temainställningar sparas endast i din egen webbläsare (localStorage) och lämnar aldrig din enhet. Inga annons- eller analyskakor används."
+        "h": "Rättsliga grunder",
+        "p": "Nödvändiga uppgifter för din förfrågan eller tjänst behandlas för åtgärder före avtal eller fullgörande av avtal. Lagstadgade register behandlas för rättsliga förpliktelser. Nödvändig säkerhet och tvistlösning kan stödjas på berättigade intressen. Eventuell marknadsföring kräver en separat lämplig grund; bokning innebär inte marknadsföringssamtycke."
       },
       {
-        "h": "Hur vi använder dina uppgifter",
-        "p": "Dina uppgifter används enbart för att skapa offerter, schemalägga städningar och leverera tjänster. Vi säljer eller delar aldrig dina uppgifter med tredje part, utom när lagen kräver det."
+        "h": "Leverantörer och externa tjänster",
+        "p": "Leverantörer av drift, lagring, autentisering och e-post kan behandla uppgifter som behövs för tjänsten. WhatsApp är en extern tjänst: formuläret öppnar ett utkast och du väljer om det ska skickas. Kontakta oss om mottagare och arrangemang för internationella överföringar."
       },
       {
-        "h": "Dina rättigheter",
-        "p": "Enligt EU:s dataskyddsförordning (GDPR) kan du när som helst begära tillgång till, rättelse av eller radering av dina personuppgifter via e-post: info@readysetsiivous.fi."
+        "h": "Lagring och dina rättigheter",
+        "p": "Uppgifter behålls medan de behövs för förfrågan, tjänsten, lagstadgad dokumentation eller rättsliga anspråk; onödiga uppgifter bör raderas eller anonymiseras. Du kan begära tillgång, rättelse, radering, begränsning eller överföring och invända när det är tillämpligt via info@readysetsiivous.fi. Vi svarar normalt inom en månad. Radering omfattas av lagstadgade undantag. Du kan klaga hos Dataombudsmannens byrå (tietosuoja.fi)."
+      },
+      {
+        "h": "Kakor och webbläsarlagring",
+        "p": "Den offentliga webbplatsens kod innehåller inga reklam- eller analysverktyg. Språk eller tema som du uttryckligen väljer kan sparas i webbläsaren. Autentisering och säkerhet kan använda lagring som är nödvändig för den begärda tjänsten. Typsnitt och kontakt-QR-bilder finns på webbplatsen. Externa tjänster har egna rutiner."
       }
     ]
   },
   "terms": {
     "title": "Användarvillkor",
-    "updated": "Senast uppdaterad: augusti 2026",
+    "updated": "Uppdaterad: 28.10.2026",
     "sections": [
       {
-        "h": "Våra tjänster",
-        "p": "ReadySetSiivous erbjuder hem-, stor-, flytt-, kontors- och andra städtjänster i Helsingforsregionen enligt beskrivningen på denna webbplats."
+        "h": "Tjänsteleverantör",
+        "p": "ReadySetSiivous, FO-nummer 3404861-9. Offerter, bokningar, avbokningar och reklamationer: info@readysetsiivous.fi eller +358 46 804 4231."
       },
       {
-        "h": "Offerter och bokning",
-        "p": "Offerter som skickas via WhatsApp är uppskattningar baserade på de uppgifter du anger. Slutpriset kan variera om det faktiska skicket eller storleken avviker från beskrivningen."
+        "h": "Förfrågningar och avtal",
+        "p": "Webbformuläret skickar en bokningsförfrågan som väntar på bekräftelse. Vi kontaktar dig för att avtala om omfattning, pris, tid och tillträde. Ett WhatsApp-utkast skickas först när du skickar det i WhatsApp. Extra arbete och avgifter måste avtalas i förväg."
       },
       {
-        "h": "Avbokning",
-        "p": "Du kan avboka kostnadsfritt upp till 24 timmar före planerad städning. Senare avbokningar kan medföra en mindre avgift. Ombokning är alltid kostnadsfri."
+        "h": "Priser och betalning",
+        "p": "Konsumentpriser för onlinetjänster inkluderar moms och gäller per vald tjänst, inte automatiskt per timme. Avtalad omfattning och längd avgör vad som ingår. Betalningsarrangemang och extra avgifter bekräftas före ett bindande avtal. Tvingande konsumentskydd har företräde."
       },
       {
-        "h": "Betalning",
-        "p": "Betalning sker efter utförd tjänst via de metoder som anges på webbplatsen. Vi tillhandahåller de dokument som behövs för hushållsavdraget (kotitalousvähennys)."
+        "h": "Avbokning och ändring",
+        "p": "Kontakta oss så snart som möjligt för att avboka eller ändra tiden. Använd hanteringssidan med bokningsnummer och privat nyckel eller kontakta oss via e-post eller telefon. Avtalsvillkor ersätter inte lagstadgad ångerrätt. En eventuell avgift måste ha laglig och tidigare meddelad grund."
       },
       {
-        "h": "Ansvar",
-        "p": "Vår personal är utbildad, bakgrundskontrollerad och försäkrad. Meddela oss i förväg om ömtåliga eller värdefulla föremål. Vårt ansvar är begränsat i den utsträckning finsk lag tillåter."
+        "h": "Konsumentens ångerrätt och återbetalning",
+        "p": "För konsumenters distansavtal om tjänster börjar en lagstadgad ångerfrist på 14 dagar normalt när avtalet ingås. Om du uttryckligen begär utförande under perioden kan proportionell betalning för utfört arbete krävas. Förlust av ångerrätten efter fullgjord tjänst kräver lagstadgad begäran och bekräftelse. Återbetalning vid ånger ska normalt ske inom 14 dagar efter meddelandet, med lagliga avdrag. Kontakta oss eller använd bokningshanteringen och behåll kvittensen."
       },
       {
-        "h": "Tillämplig lag",
-        "p": "Dessa villkor regleras av finsk lag. Tvister avgörs i finska domstolar."
+        "h": "Fel och tvister",
+        "p": "Meddela oss snarast om fel eller problem med bokningsuppgifter. Lagstadgade rättsmedel gäller; villkoren utesluter inte tvingande ansvar. Konsumenter kan kontakta konsumentrådgivningen (kkv.fi) och Konsumenttvistenämnden (kuluttajariita.fi). Finsk lag tillämpas utan att begränsa tvingande konsumentskydd."
       }
     ]
   },

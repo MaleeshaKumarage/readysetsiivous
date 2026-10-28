@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '@/hooks/useLanguage';
 import { buildWhatsAppMessage, openWhatsApp } from '@/lib/whatsapp';
 import { Reveal } from './motion';
+import { publicUx } from '@/i18n/publicUx';
 
 /** Animated inline form error — slides open/closed, announced to assistive tech. */
 function ErrorText({ id, msg }: { id?: string; msg?: string }) {
@@ -269,7 +270,7 @@ export default function QuoteForm() {
 
             {/* GDPR / compliance note */}
             <p className="mt-4 text-center text-xs text-gray-400 dark:text-gray-500 leading-relaxed px-2">
-              {t('quoteForm.gdprNote')}
+              {publicUx(lang).handoff}<br/><a className="underline" href={`/${lang}/privacy/`}>{publicUx(lang).privacy}</a>
             </p>
           </form>
         </div>

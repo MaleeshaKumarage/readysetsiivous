@@ -13,7 +13,7 @@ export default function EmergencyCTA() {
         <Reveal className="flex flex-col sm:flex-row items-center justify-between gap-6 max-w-4xl mx-auto">
           <div className="text-center sm:text-left">
             <h3 className="text-xl sm:text-2xl font-extrabold text-amber-800 dark:text-amber-300">
-              ⚡ {t('emergencyCta.title')}
+              {t('emergencyCta.title')}
             </h3>
             <p className="mt-2 text-sm text-amber-700 dark:text-amber-400 max-w-lg">
               {t('emergencyCta.description')}

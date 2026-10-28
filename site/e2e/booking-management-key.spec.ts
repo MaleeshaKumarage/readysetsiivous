@@ -37,6 +37,7 @@ for (const [lang, dictionary] of Object.entries({ fi, en, sv })) {
       await page.locator('#street').fill('Synthetic street');
       await page.locator('#postalCode').fill('00100');
       await page.locator('#city').fill('Helsinki');
+      await page.locator('#accepted').check();
       await page.getByRole('button', { name: labels.confirm, exact: true }).click();
       const field = page.getByRole('textbox', { name: labels.managementKey, exact: true });
       await expect(field).toHaveValue(key);

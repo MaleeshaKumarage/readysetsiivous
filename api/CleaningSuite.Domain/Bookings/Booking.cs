@@ -59,6 +59,7 @@ public class ServiceSnapshot
     public int DurationMinutes { get; set; }
     public decimal PriceNet { get; set; }
     public decimal VatRatePercent { get; set; }
+    public string Currency { get; set; } = "EUR";
 }
 
 /// <summary>Audit trail entry.</summary>

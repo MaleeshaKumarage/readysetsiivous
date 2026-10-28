@@ -1,7 +1,7 @@
 {
   "site": {
     "title": "ReadySetSiivous — Professional Cleaning Services | Helsinki, Espoo, Vantaa",
-    "description": "Professional home cleaning, deep cleaning, move-out cleaning, and office cleaning in Helsinki, Espoo & Vantaa. Insured, vetted staff. Book via WhatsApp in seconds.",
+    "description": "Home, office, deep and move-out cleaning in Helsinki, Espoo and Vantaa. Contact ReadySetSiivous to discuss your cleaning needs.",
     "locale": "en_FI"
   },
   "nav": {
@@ -17,11 +17,11 @@
   },
   "hero": {
     "headline": "Professional Home Cleaning in Helsinki, Espoo & Vantaa",
-    "subheadline": "Insured, vetted, and trusted cleaners. Home cleaning, deep cleaning, move-out cleaning, and office cleaning. Get your instant quote and book in under 60 seconds — no calls, no hassle.",
+    "subheadline": "Home, office, deep and move-out cleaning. Tell us what you need and we will confirm the scope, availability and price with you.",
     "cta": "Chat on WhatsApp",
     "secondaryCta": "View Our Services",
     "callUs": "Call +358 46 804 4231",
-    "sameDay": "⚡ Same-day slots available",
+    "sameDay": "Ask us about available cleaning times",
     "localKeywords": "Kotisiivous Espoo — Syväsiivous Helsinki — Muutosiivous Vantaa"
   },
   "trustBadges": {
@@ -31,8 +31,8 @@
     "eco": "Eco-Friendly Products"
   },
   "quoteForm": {
-    "title": "Get Your Instant Quote",
-    "subtitle": "Fill in the details and receive a personalised quote via WhatsApp in your language.",
+    "title": "Request a cleaning quote",
+    "subtitle": "Send your requirements to us in WhatsApp. We will discuss the scope and confirm a quote with you.",
     "serviceType": "Service Type",
     "selectService": "Select a service…",
     "selectSize": "Select a size…",
@@ -153,7 +153,7 @@
     "questions": {
       "supplies": {
         "q": "Do you bring your own cleaning supplies?",
-        "a": "Yes! Our cleaners arrive fully equipped with professional-grade, eco-friendly cleaning products and equipment. If you prefer we use your own products, just let us know in the WhatsApp message."
+        "a": "Agree cleaning products and equipment with us before the visit. Tell us if you prefer your own products."
       },
       "keys": {
         "q": "How does key handover work?",
@@ -161,11 +161,11 @@
       },
       "cancellation": {
         "q": "What is your cancellation policy?",
-        "a": "We offer free cancellation up to 24 hours before your scheduled cleaning. Cancellations within 24 hours may incur a small fee. Rescheduling is always free — just message us on WhatsApp!"
+        "a": "Contact us promptly to cancel or reschedule. See our booking and cancellation terms. Your statutory consumer rights are not affected."
       },
       "pets": {
         "q": "Are your cleaning products pet-safe?",
-        "a": "Absolutely. We use non-toxic, biodegradable products that are safe for cats, dogs, and all household pets. Just mention any allergies when booking."
+        "a": "Please discuss pets and any product restrictions before the visit. Product suitability depends on the specific product and circumstances."
       },
       "duration": {
         "q": "How long does a cleaning take?",
@@ -173,7 +173,7 @@
       },
       "frequency": {
         "q": "Can I book recurring cleanings?",
-        "a": "Yes! Most of our clients book weekly or bi-weekly. Regular clients get priority scheduling and discounted rates. Just ask on WhatsApp and we'll set it up."
+        "a": "Contact us to discuss recurring cleaning and available dates. The scope, frequency and price are agreed separately."
       }
     }
   },
@@ -186,31 +186,31 @@
   },
   "about": {
     "title": "Why Choose ReadySetSiivous?",
-    "subtitle": "We're not just another cleaning company — we're your trusted local partner for a cleaner, healthier space in Helsinki, Espoo, and Vantaa.",
+    "subtitle": "Home, office, deep and move-out cleaning in Helsinki, Espoo and Vantaa. Contact ReadySetSiivous to discuss your cleaning needs.",
     "points": {
       "staff": {
-        "title": "Background-Checked Staff",
-        "description": "Every cleaner undergoes a thorough background check and in-person interview before they wear our uniform."
+        "title": "Cleaning to your needs",
+        "description": "Discuss rooms, tasks and priorities before we agree the service."
       },
       "insured": {
-        "title": "Fully Insured & Bonded",
-        "description": "Your property and belongings are covered. Clean with confidence knowing you're protected."
+        "title": "Clear arrangements",
+        "description": "Confirm the scope, price and access arrangements with us in advance."
       },
       "satisfaction": {
-        "title": "100% Satisfaction Guarantee",
-        "description": "Not happy? We'll re-clean within 24 hours at no charge. No questions asked."
+        "title": "Questions after cleaning?",
+        "description": "Contact us with details so we can review any concern and agree the appropriate next step."
       },
       "eco": {
-        "title": "Eco-Friendly Products",
-        "description": "We use biodegradable, non-toxic cleaning products safe for kids, pets, and the planet."
+        "title": "Products and preferences",
+        "description": "Tell us about product preferences or sensitivities before the visit."
       },
       "local": {
-        "title": "Local & Reliable",
-        "description": "Serving Helsinki, Espoo, and Vantaa with pride. Same-day and weekend slots available."
+        "title": "Helsinki, Espoo and Vantaa",
+        "description": "Contact us to check availability at your address."
       },
       "simple": {
-        "title": "Book in 60 Seconds",
-        "description": "No phone tag, no back-and-forth emails. Just fill in a quick form and confirm on WhatsApp."
+        "title": "Request a quote",
+        "description": "Use the form, WhatsApp, phone or email. We will confirm the arrangements with you."
       }
     }
   },
@@ -225,10 +225,10 @@
   "keySecurity": {
     "title": "Key Handling & Security",
     "subtitle": "Your home security is our priority.",
-    "insurance": "Key insurance (Avainturva) included",
-    "tracking": "Digital key tracking — you always know who has access",
-    "handover": "Flexible options: personal handover, lockbox, or trusted key holder",
-    "certified": "All staff background-checked & identity verified"
+    "insurance": "Agree access before the visit",
+    "tracking": "Discuss how keys will be handed over and returned",
+    "handover": "Do not share door codes in public messages",
+    "certified": "Contact us directly about access arrangements"
   },
   "ecoPetBadges": {
     "title": "Safe for Your Family & Pets",
@@ -243,7 +243,7 @@
   },
   "emergencyCta": {
     "title": "Need Cleaning Right Now?",
-    "description": "We offer same-day cleaning slots across Helsinki, Espoo & Vantaa. Message us on WhatsApp and we'll find a time that works — often within a few hours.",
+    "description": "Contact us to check short-notice availability. A cleaning time is available only after we confirm it.",
     "button": "Ask for Same-Day Availability"
   },
   "responsibleEmployer": {
@@ -278,77 +278,65 @@
   "testimonials": {
     "title": "What Our Customers Say",
     "subtitle": "Real reviews from homes across the Helsinki area.",
-    "items": [
-      {
-        "name": "Liisa M.",
-        "area": "Espoo",
-        "text": "The deep clean was amazing — baseboards and cabinets I hadn't touched in years look brand new. Friendly and punctual team."
-      },
-      {
-        "name": "Markku V.",
-        "area": "Helsinki",
-        "text": "We use the bi-weekly service. Reliable, thorough, and booking via WhatsApp could not be easier. Highly recommended."
-      },
-      {
-        "name": "Sofia J.",
-        "area": "Vantaa",
-        "text": "Booked a move-out cleaning and got our full deposit back. Clear communication and the apartment sparkled."
-      }
-    ]
+    "items": []
   },
   "privacy": {
     "title": "Privacy Policy",
-    "updated": "Last updated: August 2026",
+    "updated": "Updated: 28 October 2026",
     "sections": [
       {
-        "h": "Who we are",
-        "p": "ReadySetSiivous provides cleaning services in the Helsinki metropolitan area. You can reach us at info@readysetsiivous.fi."
+        "h": "Who processes your information",
+        "p": "ReadySetSiivous, business ID 3404861-9. For privacy enquiries and requests, email info@readysetsiivous.fi or call +358 46 804 4231."
       },
       {
-        "h": "What data we collect",
-        "p": "We only process the information you choose to send us via WhatsApp or email — typically your name, phone number, city, preferred date, and any details in your messages. This website itself does not store personal data on servers."
+        "h": "Information and purposes",
+        "p": "Quote enquiries, bookings and customer service may include your name, contact details, cleaning address, service, dates and messages. Bookings are saved in our service systems. We use these details to respond to enquiries, arrange and deliver services and handle related administration. Avoid including access codes, health details or other sensitive information in free-text fields."
       },
       {
-        "h": "Local preferences",
-        "p": "Your language and theme preferences are saved only in your own browser (localStorage) and never leave your device. No advertising or analytics cookies are used."
+        "h": "Legal bases",
+        "p": "Information needed to respond to your request or provide a service is processed for pre-contractual steps or performance of a contract. Statutory records are processed to meet legal obligations. Necessary security and dispute handling may rely on legitimate interests. Optional marketing, if offered, requires a separate appropriate basis; booking is not consent to marketing."
       },
       {
-        "h": "How we use your data",
-        "p": "Your details are used solely to prepare quotes, schedule cleanings, and provide services. We never sell or share your data with third parties, except where required by law."
+        "h": "Service providers and external services",
+        "p": "Our hosting, storage, authentication and email providers may process information needed to run the service. WhatsApp is an external service: a quote form opens a draft and you choose whether to send it there. Contact us for information about applicable recipients and international-transfer arrangements."
       },
       {
-        "h": "Your rights",
-        "p": "Under the EU GDPR you may request access to, correction of, or deletion of your personal data at any time by emailing info@readysetsiivous.fi."
+        "h": "Retention and your rights",
+        "p": "Information is retained while needed for the enquiry, service, legal record-keeping or establishment, exercise or defence of legal claims; unnecessary information should be erased or anonymised. You may request access, correction, erasure, restriction or portability and object where applicable by contacting info@readysetsiivous.fi. We normally respond within one month. Erasure is subject to applicable retention obligations and other legal exceptions. You may complain to the Finnish Data Protection Ombudsman (tietosuoja.fi)."
+      },
+      {
+        "h": "Cookies and browser storage",
+        "p": "No advertising or analytics tools are included in this public website code. Your explicitly selected language or theme may be saved in your browser. Authentication and security functions may use storage necessary to provide the requested service. The public fonts and contact QR images are hosted with this site. External links are governed by the external service provider’s practices."
       }
     ]
   },
   "terms": {
     "title": "Terms of Service",
-    "updated": "Last updated: August 2026",
+    "updated": "Updated: 28 October 2026",
     "sections": [
       {
-        "h": "Our services",
-        "p": "ReadySetSiivous provides home, deep, move-out, office and related cleaning services in the Helsinki metropolitan area as described on this website."
+        "h": "Service provider",
+        "p": "ReadySetSiivous, business ID 3404861-9. Contact info@readysetsiivous.fi or +358 46 804 4231 about quotes, bookings, cancellations or complaints."
       },
       {
-        "h": "Quotes and booking",
-        "p": "Quotes sent via WhatsApp are estimates based on the information you provide. The final price may vary if the actual condition or size differs from what was described."
+        "h": "Requests and agreement",
+        "p": "Submitting this website’s booking form sends a request pending confirmation. We contact you to agree the service scope, price, time and access arrangements. A WhatsApp draft is not sent until you send it in WhatsApp. Any additional work or charges must be agreed before proceeding."
       },
       {
-        "h": "Cancellation",
-        "p": "You may cancel free of charge up to 24 hours before the scheduled cleaning. Later cancellations may incur a small fee. Rescheduling is always free."
+        "h": "Prices and payment",
+        "p": "Consumer prices shown for online service requests include VAT and apply per selected service, not automatically per hour. The agreed service scope and duration determine what is included. We confirm payment arrangements and any separately agreed additional charges before a binding service agreement. Statutory consumer rights take precedence."
       },
       {
-        "h": "Payment",
-        "p": "Payment is made after the service via the methods listed on the site. We provide the documents needed for the Finnish household-expenses tax credit (kotitalousvähennys)."
+        "h": "Cancellation and rescheduling",
+        "p": "Contact us as soon as possible to cancel or reschedule. You may use the booking management page with your booking number and private key, or contact us by email or phone. A contractual cancellation policy does not replace statutory withdrawal rights. Any applicable charge must have a lawful and previously disclosed basis."
       },
       {
-        "h": "Liability",
-        "p": "Our staff are trained, background-checked, and insured. Please inform us in advance of fragile or high-value items. Our liability is limited to the extent permitted by Finnish law."
+        "h": "Consumer withdrawal and refunds",
+        "p": "For consumer distance service contracts, a statutory 14-day withdrawal period generally starts when the contract is concluded. If you expressly request performance during that period, proportionate payment may be due for work already performed. Loss of the withdrawal right after full performance requires the legally required request and acknowledgment. Where withdrawal requires a refund, it is generally due within 14 days of notice, subject to lawful deductions. Contact us or use booking management; keep your cancellation acknowledgement."
       },
       {
-        "h": "Governing law",
-        "p": "These terms are governed by Finnish law. Disputes are resolved in the courts of Finland."
+        "h": "Service concerns and disputes",
+        "p": "Tell us promptly about any defect or concern, with the booking details. Applicable statutory remedies remain available; these terms do not exclude mandatory liability. Consumers may contact Finnish Consumer Advisory Services (kkv.fi) and the Consumer Disputes Board (kuluttajariita.fi). Finnish law applies without removing mandatory consumer protection."
       }
     ]
   },

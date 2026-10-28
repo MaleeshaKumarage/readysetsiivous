@@ -4,10 +4,12 @@ import Image from 'next/image';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getWhatsAppChatUrl, baseUrl } from '@/lib/whatsapp';
 import { Reveal } from './motion';
+import { publicUx } from '@/i18n/publicUx';
 
 export default function Footer() {
   const { t, ta, lang } = useLanguage();
   const areas = ta('footer.areas');
+  const u = publicUx(lang);
 
   return (
     // pb-28 sm:pb-24 keeps the floating WhatsApp button clear of the footer links.
@@ -16,7 +18,7 @@ export default function Footer() {
         <Reveal className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10">
           {/* Brand */}
           <div className="sm:col-span-2 lg:col-span-1">
-            <a href="#" className="inline-flex items-center gap-2">
+            <a href={baseUrl(`/${lang}/`)} className="inline-flex items-center gap-2">
               <Image
                 src="/brand/readyset-logomark.png"
                 alt="ReadySetSiivous"
@@ -29,7 +31,7 @@ export default function Footer() {
               </span>
             </a>
             <p className="mt-4 text-sm text-gray-400 dark:text-gray-500 leading-relaxed">
-              {t('site.description')}
+              {t('site.description')}<br/>{u.business}: 3404861-9
             </p>
             <a
               href={getWhatsAppChatUrl()}
@@ -95,15 +97,15 @@ export default function Footer() {
               {t('nav.services')}
             </h4>
             <ul className="mt-4 space-y-2">
-              <li><a href="#services" className="text-sm text-gray-400 dark:text-gray-500 hover:text-brand-400 transition-colors">{t('services.home.title')}</a></li>
-              <li><a href="#services" className="text-sm text-gray-400 dark:text-gray-500 hover:text-brand-400 transition-colors">{t('services.deep.title')}</a></li>
-              <li><a href="#services" className="text-sm text-gray-400 dark:text-gray-500 hover:text-brand-400 transition-colors">{t('services.moveOut.title')}</a></li>
-              <li><a href="#services" className="text-sm text-gray-400 dark:text-gray-500 hover:text-brand-400 transition-colors">{t('services.office.title')}</a></li>
-              <li><a href="#checklist" className="text-sm text-gray-400 dark:text-gray-500 hover:text-brand-400 transition-colors">{t('nav.checklist')}</a></li>
+              <li><a href={baseUrl(`/${lang}/#services`)} className="text-sm text-gray-400 dark:text-gray-500 hover:text-brand-400 transition-colors">{t('services.home.title')}</a></li>
+              <li><a href={baseUrl(`/${lang}/#services`)} className="text-sm text-gray-400 dark:text-gray-500 hover:text-brand-400 transition-colors">{t('services.deep.title')}</a></li>
+              <li><a href={baseUrl(`/${lang}/#services`)} className="text-sm text-gray-400 dark:text-gray-500 hover:text-brand-400 transition-colors">{t('services.moveOut.title')}</a></li>
+              <li><a href={baseUrl(`/${lang}/#services`)} className="text-sm text-gray-400 dark:text-gray-500 hover:text-brand-400 transition-colors">{t('services.office.title')}</a></li>
             </ul>
           </div>
         </Reveal>
 
+        <a className="mt-6 inline-block underline" href={baseUrl(`/${lang}/booking/`)}>{u.manage}</a>
         {/* Bottom bar */}
         <div className="mt-12 pt-8 border-t border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-gray-500 dark:text-gray-600">{t('footer.copyright')}</p>

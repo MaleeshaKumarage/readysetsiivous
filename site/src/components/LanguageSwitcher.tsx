@@ -39,6 +39,7 @@ export default function LanguageSwitcher() {
     (code: 'en' | 'fi' | 'sv') => {
       setLang(code);
       setOpen(false);
+      buttonRef.current?.focus();
       // Client-side navigation to the new language URL path (no full reload).
       const newPath = window.location.pathname.replace(/^\/(en|fi|sv)\//, `/${code}/`);
       if (newPath !== window.location.pathname) {
@@ -60,10 +61,10 @@ export default function LanguageSwitcher() {
         onClick={() => setOpen(!open)}
         className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-200 hover:border-brand-400 dark:hover:border-brand-500 hover:text-brand-700 dark:hover:text-brand-400 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus:outline-none transition-colors"
         aria-label={ariaLabel}
-        aria-haspopup="true"
+        aria-controls="language-options"
         aria-expanded={open}
       >
-        <span className="text-base">{current.flag}</span>
+        <span className="font-semibold">{current.code.toUpperCase()}</span>
         <span className="hidden sm:inline">{current.label}</span>
         <svg
           className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`}
@@ -77,14 +78,14 @@ export default function LanguageSwitcher() {
 
       {open && (
         <div
-          role="menu"
+          id="language-options"
           aria-label={menuLabel}
           className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-lg dark:shadow-gray-950/50 overflow-hidden z-50 animate-fade-in-up"
         >
           {languages.map((l) => (
             <button
               key={l.code}
-              role="menuitem"
+
               aria-current={l.code === lang ? 'true' : undefined}
               onClick={() => switchTo(l.code)}
               className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left transition-colors hover:bg-brand-50 dark:hover:bg-brand-500/10 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset focus:outline-none ${
@@ -93,7 +94,7 @@ export default function LanguageSwitcher() {
                   : 'text-gray-700 dark:text-gray-200'
               }`}
             >
-              <span className="text-base">{l.flag}</span>
+              <span aria-hidden="true">{l.code.toUpperCase()}</span>
               <span>{l.label}</span>
               {l.code === lang && (
                 <svg className="w-4 h-4 ml-auto text-brand-500 dark:text-brand-400" fill="currentColor" viewBox="0 0 20 20">

@@ -11,6 +11,7 @@ export default function SchemaScript({ lang, dict }: SchemaProps) {
     '@context': 'https://schema.org',
     '@type': 'CleaningService',
     name: dict.schema.name,
+    taxID: '3404861-9',
     description: dict.schema.description,
     url: `https://readysetsiivous.fi/${lang}/`,
     logo: {

@@ -33,7 +33,12 @@ public record PublicBookingDto(
     string StartLocalDate,
     string StartLocalTime,
     string ServiceNameFi,
-    string CustomerName);
+    string CustomerName,
+    string ServiceNameEn,
+    string ServiceNameSv,
+    int DurationMinutes,
+    decimal PriceGross,
+    string Currency);
 
 public class GetPublicBookingHandler : IRequestHandler<GetPublicBookingQuery, PublicBookingDto?>
 {
@@ -54,7 +59,12 @@ public class GetPublicBookingHandler : IRequestHandler<GetPublicBookingQuery, Pu
             booking.StartLocalDate,
             booking.StartLocalTime,
             booking.Service.NameFi,
-            booking.Customer.Name);
+            booking.Customer.Name,
+            booking.Service.NameEn,
+            booking.Service.NameSv,
+            booking.Service.DurationMinutes,
+            booking.Total.Gross,
+            booking.Service.Currency);
     }
 }
 

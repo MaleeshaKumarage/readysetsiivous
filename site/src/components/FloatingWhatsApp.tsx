@@ -8,6 +8,15 @@ import { getWhatsAppChatUrl } from '@/lib/whatsapp';
 export default function FloatingWhatsApp() {
   const { t, lang } = useLanguage();
   const [showTooltip, setShowTooltip] = useState(true);
+  const [overForm, setOverForm] = useState(false);
+
+  useEffect(() => {
+    const form = document.getElementById('quote');
+    if (!form || !('IntersectionObserver' in window)) return;
+    const observer = new IntersectionObserver(entries => setOverForm(entries[0].isIntersecting));
+    observer.observe(form);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowTooltip(false), 5000);
@@ -18,7 +27,7 @@ export default function FloatingWhatsApp() {
     lang === 'fi' ? 'Sulje vihje' : lang === 'sv' ? 'Stäng tips' : 'Dismiss tooltip';
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2">
+    <div className={`${overForm ? 'hidden' : 'flex'} fixed bottom-6 right-6 z-50 flex-col items-end gap-2`}>
       <AnimatePresence>
         {showTooltip && (
           <motion.div

@@ -8,6 +8,7 @@ import LanguageSwitcher from './LanguageSwitcher';
 import ThemeToggle from './ThemeToggle';
 import { getWhatsAppChatUrl, baseUrl } from '@/lib/whatsapp';
 import type { Language } from '@/i18n';
+import { publicUx } from '@/i18n/publicUx';
 
 interface NavbarProps {
   lang: Language;
@@ -47,7 +48,8 @@ export default function Navbar({ lang }: NavbarProps) {
   }, [mobileOpen]);
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/90 dark:bg-accent-950/90 backdrop-blur-md border-b border-gray-100 dark:border-accent-900 shadow-sm">
+    <nav aria-label={lang === 'fi' ? 'Päävalikko' : lang === 'sv' ? 'Huvudmeny' : 'Main navigation'} className="sticky top-0 z-50 bg-white/90 dark:bg-accent-950/90 backdrop-blur-md border-b border-gray-100 dark:border-accent-900 shadow-sm">
+      <a className="skip-link" href="#main-content">{publicUx(lang).skip}</a>
       <div className="container-page">
         <div className="flex items-center justify-between h-16 lg:h-18">
           {/* Logo */}
@@ -60,7 +62,7 @@ export default function Navbar({ lang }: NavbarProps) {
               priority
               className="w-10 h-10 rounded-full bg-white p-1 ring-1 ring-gray-200 dark:ring-gray-700"
             />
-            <span translate="no" className="text-lg sm:text-xl font-extrabold text-gray-900 dark:text-gray-50 tracking-tight">
+            <span translate="no" className="hidden sm:inline text-lg sm:text-xl font-extrabold text-gray-900 dark:text-gray-50 tracking-tight">
               ReadySet<span className="text-brand-600 dark:text-brand-400">Siivous</span>
             </span>
           </a>
@@ -120,7 +122,7 @@ export default function Navbar({ lang }: NavbarProps) {
             <button
               ref={toggleRef}
               onClick={toggleMenu}
-              className="lg:hidden p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus:outline-none transition-colors"
+              className="lg:hidden min-h-11 min-w-11 p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus:outline-none transition-colors"
               aria-label={
                 lang === 'fi'
                   ? mobileOpen

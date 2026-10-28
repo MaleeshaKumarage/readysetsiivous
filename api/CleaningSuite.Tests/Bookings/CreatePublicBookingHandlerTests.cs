@@ -39,6 +39,25 @@ public class CreatePublicBookingHandlerTests
         new PostgresException("Concurrent reservation", "ERROR", "ERROR", PostgresErrorCodes.SerializationFailure);
 
     [Fact]
+    public async Task Changed_price_rejects_before_reservation_or_save()
+    {
+        _service.VatRatePercent = 25.5m;
+        var handler = Handler();
+        await Assert.ThrowsAsync<SlotConflictException>(() => handler.Handle(Request() with { ExpectedPriceGross = 50m }, default));
+        _bookings.Verify(x => x.SaveAsync(It.IsAny<Booking>(), It.IsAny<CancellationToken>()), Times.Never);
+        _bookings.Verify(x => x.NextCounterAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Accepted_price_returns_server_calculated_vat_inclusive_amount()
+    {
+        _service.VatRatePercent = 25.5m;
+        var result = await Handler().Handle(Request() with { ExpectedPriceGross = 62.75m }, default);
+        Assert.Equal(62.75m, result.PriceGross);
+        Assert.Equal("EUR", result.Currency);
+    }
+
+    [Fact]
     public async Task Creation_returns_raw_key_once_and_persists_only_its_digest()
     {
         var handler = Handler();
