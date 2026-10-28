@@ -1,5 +1,10 @@
 """Release-bound API replacement; application rollback never reverses database changes.
 
+A maintenance-gated identity release additionally requires external coordination
+of Keycloak database/image recovery. Restoring an API artifact is not proof that
+its identity-role model is compatible with the currently migrated Keycloak data.
+The external coordinator owns ingress stop/start and identity backup/restore.
+
 Compose project/file/env and no-dependency contracts:
 https://docs.docker.com/reference/cli/docker/compose/
 https://docs.docker.com/reference/cli/docker/compose/up/
@@ -19,6 +24,7 @@ import time
 IMAGE = 'ghcr.io/maleeshakumarage/readysetsiivous-api'
 SHA = re.compile('[0-9a-f]{40}')
 IMMUTABLE = re.compile(re.escape(IMAGE) + '@sha256:[0-9a-f]{64}')
+MAINTENANCE_SERVICE = 'cloudflared.service'
 
 
 def require(value, message):
@@ -48,6 +54,7 @@ class Deployment:
         self.env = {'PATH': environment.get('PATH', os.defpath), 'HOME': environment.get('HOME', str(Path.home()))}
         self.project = None
         self.timeout = 30
+        self.maintenance_service = None
 
     def command(self, *args, stdin=None):
         if args[0] == 'docker':
@@ -85,6 +92,12 @@ class Deployment:
         result = json.loads(self.command(*args))
         require(isinstance(result, list) and len(result) == 1, 'Docker inspection failed')
         return result[0]
+
+    def maintenance_gate(self):
+        if self.maintenance_service is not None:
+            require(self.maintenance_service == MAINTENANCE_SERVICE, 'Unsupported maintenance service in release policy')
+            require(self.command('systemctl', 'show', '--property=ActiveState', '--value', self.maintenance_service) == 'inactive',
+                    'Maintenance ingress must remain inactive; external coordination is required')
 
     def verify(self, image, image_id, release):
         container = self.compose(self.root / 'docker-compose.yml', self.root / '.env', 'ps', '-q', 'api')
@@ -125,6 +138,12 @@ class Deployment:
                 and type(policy.get('rollback_compatible_from')) is list
                 and all(isinstance(s, str) and SHA.fullmatch(s) for s in policy['rollback_compatible_from']),
                 'Release compatibility approval required before deployment')
+        if 'maintenance_service' in policy:
+            require(policy['maintenance_service'] == MAINTENANCE_SERVICE, 'Unsupported maintenance service in release policy')
+            self.maintenance_service = MAINTENANCE_SERVICE
+        # Read-only systemd proof precedes host file creation, chmod, login, pull,
+        # or Compose mutation. No value can select an arbitrary unit/command.
+        self.maintenance_gate()
         active_config, active_env = self.root / 'docker-compose.yml', self.root / '.env'
         require(active_config.is_file() and not active_config.is_symlink() and active_env.is_file() and not active_env.is_symlink(), 'Existing deployment inputs required')
         old_config, old_env = active_config.read_bytes(), active_env.read_bytes()
@@ -144,12 +163,20 @@ class Deployment:
         require(re.fullmatch('[a-z0-9][a-z0-9_-]{0,62}', self.project), 'Stable Compose project identity required')
         old_release = next((s.split('=', 1)[1] for s in previous['Config']['Env'] if s.startswith('APP_RELEASE_SHA=')), '')
         require(SHA.fullmatch(old_release) and old_release in policy['rollback_compatible_from'], 'Previous release not approved for application rollback')
-        require(previous['State']['Running'] is True, 'Previous API is not running')
+        previous_running = previous['State']['Running']
+        require(previous_running is True or (self.maintenance_service == MAINTENANCE_SERVICE and previous_running is False),
+                'Previous API is not running')
         old_id = previous['Image']
         old_metadata = self.inspect('image', old_id)
         old_image = next((s for s in old_metadata.get('RepoDigests', []) if IMMUTABLE.fullmatch(s)), '')
         require(old_metadata.get('Id') == old_id and old_image and self.inspect('image', old_image).get('Id') == old_id, 'Previous immutable image unavailable')
-        self.health(old_release, attempts=1)
+        # The coordinated identity migration stops this exact old API before
+        # converting role data. Do not restart it merely to prove health against
+        # the converted model: the coordinator proved old health before stopping.
+        # Only the explicit closed-ingress policy allows this stopped baseline;
+        # its exact release, image ID and immutable digest still remain required.
+        if previous_running:
+            self.health(old_release, attempts=1)
 
         # Backups contain credentials: private, host-only, retained for operator recovery.
         backups = self.root / '.deploy-backups'
@@ -175,15 +202,21 @@ class Deployment:
                 new_metadata = self.inspect('image', image)
                 new_id = new_metadata['Id']
                 require('APP_RELEASE_SHA=' + release in new_metadata['Config']['Env'], 'Pulled image release differs from manifest')
+                self.maintenance_gate()
                 # This flag precedes both file replacement and compose up; even a partial up is recovered.
                 replaced = True
                 atomic(active_env, (self.stage / 'candidate.env').read_bytes())
                 atomic(active_config, candidate.read_bytes())
                 self.compose(active_config, active_env, 'up', '-d', '--no-deps', '--pull', 'never', 'api')
                 self.verify(image, new_id, release)
+                self.maintenance_gate()
             except BaseException:
                 if replaced:
                     try:
+                        # Do not expose the old API against converted identity
+                        # data if ingress reopened. The coordinator must restore
+                        # identity state before it reopens public traffic.
+                        self.maintenance_gate()
                         atomic(active_env, old_env)
                         atomic(active_config, old_config)
                         self.compose(active_config, active_env, 'up', '-d', '--no-deps', '--pull', 'never', 'api', override=backup / 'image.json')
@@ -194,7 +227,11 @@ class Deployment:
                         require(self.compose(active_config, active_env, 'ps', '-q', 'api', override=backup / 'image.json') == restored_container, 'Rollback container changed')
                         final = self.inspect('container', restored_container)
                         require(final['Image'] == old_id and final['State']['Running'] is True, 'Rollback stopped after health')
-                        print('Deployment failed; previous API image and configuration restored and verified.', file=sys.stderr)
+                        self.maintenance_gate()
+                        message = 'Deployment failed; previous API image and configuration restored and verified.'
+                        if self.maintenance_service:
+                            message += ' Identity recovery remains external; maintenance ingress must stay inactive.'
+                        print(message, file=sys.stderr)
                     except BaseException:
                         raise RuntimeError('Deployment and rollback failed; private recovery inputs retained at ' + str(backup)) from None
                 raise
