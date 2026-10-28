@@ -212,3 +212,42 @@ test('language disclosure preserves equivalent route and returns keyboard focus'
   await expect(page.getByRole('button',{name:'Vaihda kieltä',exact:true})).toBeFocused();
   expect(await page.evaluate(()=>localStorage.getItem('lang'))).toBe('fi');
 });
+
+test('uncertain cancellation prevents a duplicate write and preserves booking status',async ({page})=>{
+  await page.route('**/api/v1/public/*/bookings/lookup',r=>r.fulfill({headers,json:{bookingNumber:'RSS-2030-000001',status:'New',startLocalDate:'2030-01-15',startLocalTime:'12:00',serviceNameFi:'Siivous',serviceNameEn:'Cleaning',priceGross:62.75,durationMinutes:120}}));
+  let calls=0;
+  await page.route('**/api/v1/public/*/bookings/*/cancel',r=>{calls++;return r.abort('failed');});
+  await page.goto('/en/booking/');await page.locator('#manage-number').fill('RSS-2030-000001');await page.locator('#manage-key').fill(key);
+  await page.getByRole('button',{name:publicUx('en').lookup,exact:true}).click();
+  await page.getByRole('button',{name:publicUx('en').cancel,exact:true}).click();
+  const confirm=page.getByRole('button',{name:publicUx('en').cancelConfirm,exact:true});await confirm.click();
+  await expect(page.getByRole('alert').filter({hasText:publicUx('en').uncertain})).toBeVisible();
+  await expect(confirm).toBeDisabled();expect(calls).toBe(1);
+  await expect(page.getByText(publicUx('en').cancelDone,{exact:true})).toHaveCount(0);
+  await expect(page.getByText(`${publicUx('en').status}: ${publicUx('en').pending}`,{exact:true})).toBeVisible();expect(page.url()).not.toContain(key);
+});
+
+test('client validation blocks writes and back navigation preserves details',async ({page})=>{
+  let calls=0;await page.route('**/api/v1/public/*/bookings',r=>{calls++;return r.abort();});
+  await details(page);
+  const submit=page.getByRole('button',{name:'Confirm booking',exact:true});
+  for(const id of ['customerName','customerPhone','street','city']) await page.locator(`#${id}`).fill('');
+  await submit.click();await expect(page.locator('#customerName')).toBeFocused();
+  for(const id of ['customerName','customerPhone','street','city']) await expect(page.locator(`#${id}`)).toHaveAttribute('aria-invalid','true');
+  for(const [id,value] of Object.entries({customerName:'Test customer',customerPhone:'123',street:'Test street',city:'Helsinki'}))await page.locator(`#${id}`).fill(value);
+  await page.locator('#customerEmail').fill('invalid');await submit.click();
+  await expect(page.locator('#customerEmail-error')).toHaveText(publicUx('en').emailInvalid);
+  await expect(page.locator('#customerEmail')).toBeFocused();await page.locator('#customerEmail').fill('');
+  await page.locator('#accepted').uncheck();await submit.click();await expect(page.locator('#accepted')).toHaveAttribute('aria-invalid','true');await expect(page.locator('#accepted')).toBeFocused();expect(calls).toBe(0);
+  await page.getByRole('button',{name:/←.*Back/}).click();await expect(page.locator('#booking-date')).toBeVisible();
+  await page.getByRole('button',{name:/←.*Back/}).click();await page.getByRole('button',{name:/Synthetic cleaning/}).click();
+  await page.getByRole('button',{name:'12:00',exact:true}).click();await expect(page.locator('#customerName')).toHaveValue('Test customer');
+});
+
+test('empty service catalog provides a contact recovery path',async ({page})=>{
+  await page.route('**/api/v1/public/*/services?*',r=>r.fulfill({headers,json:[]}));
+  await page.goto('/en/');await expect(page.locator('#services')).toContainText(publicUx('en').noServices);
+  await page.goto('/en/varaus/');await expect(page.getByText(publicUx('en').noServices,{exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:getDictionary('en').varaus.contactViaWhatsApp,exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:/Synthetic cleaning/})).toHaveCount(0);
+});
