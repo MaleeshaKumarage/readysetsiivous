@@ -35,6 +35,7 @@ jobs:
           python3 -B api/deploy/test_keycloak_fgap.py
           python3 -B api/deploy/test_keycloak_identity_extension.py
           python3 -B api/deploy/test_keycloak_operator_setup.py
+          python3 -B api/deploy/test_keycloak_production_identity_setup.py
       - name: Build reviewed development identity extension
         run: docker build -t cleaning-identity-rehearsal:ci api/keycloak-identity-extension
       - name: Start isolated synthetic identity service
@@ -72,6 +73,19 @@ jobs:
           SYNTHETIC_KEYCLOAK_ADMIN_PASSWORD: audience_test_only_2026
           SYNTHETIC_KEYCLOAK_ADMIN_USER: audience-test-admin
         run: python3 -B api/keycloak-identity-extension/tests/guarded_invitations.py
+      - name: Native production enrollment and credential-preservation rehearsal
+        env:
+          SYNTHETIC_KEYCLOAK_URL: http://127.0.0.1:18480
+          SYNTHETIC_KEYCLOAK_ADMIN_PASSWORD: audience_test_only_2026
+          SYNTHETIC_KEYCLOAK_ADMIN_USER: audience-test-admin
+          SYNTHETIC_STOPPED_API_CONTAINER: identity-production-ci-api
+          SYNTHETIC_FIXTURE_PURPOSE: identity-production-ci
+        run: |
+          docker create --name identity-production-ci-api \
+            --label purpose=identity-production-ci \
+            --label com.docker.compose.service=api \
+            --label com.docker.compose.project=identity-production-ci postgres:16-alpine
+          python3 -B api/keycloak-identity-extension/tests/production_identity_setup.py
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.402
@@ -121,6 +135,12 @@ jobs:
         env:
           POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
         run: |
-          docker rm -f scoped-keycloak invite-review-mail
-          docker network disconnect scoped-identity "$POSTGRES_CONTAINER"
-          docker network rm scoped-identity
+          for name in scoped-keycloak invite-review-mail identity-production-ci-api; do
+            if docker container inspect "$name" >/dev/null 2>&1; then docker rm -fv "$name"; fi
+          done
+          if docker network inspect scoped-identity >/dev/null 2>&1; then
+            if test "$(docker inspect --format '{{if index .NetworkSettings.Networks "scoped-identity"}}connected{{end}}' "$POSTGRES_CONTAINER")" = connected; then
+              docker network disconnect scoped-identity "$POSTGRES_CONTAINER"
+            fi
+            docker network rm scoped-identity
+          fi

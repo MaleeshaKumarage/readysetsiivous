@@ -1,0 +1,42 @@
+{
+  "date": "2026-10-28",
+  "status": "preflight verified; cutover not yet performed",
+  "provider_image_sha256": "8523fc048089e840643f3797aed372ecc974b88532dffb98a3331924d7319c02",
+  "previous_api_release": "74559f2849821d7ffd5f5b8f1f9fbd2e4d31a25b",
+  "verification": {
+    "linux_controller_tests": {
+      "passed": 21,
+      "failed": 0,
+      "skipped": 0
+    },
+    "release_manifest_tests": {
+      "passed": 10,
+      "failed": 0
+    },
+    "production_helper_tests": {
+      "passed": 15,
+      "failed": 0
+    },
+    "native_production_helper_checks": {
+      "passed": 24,
+      "failed": 0
+    },
+    "private_production_backup_restore_check": {
+      "keycloak": "passed",
+      "application": "passed",
+      "temporary_databases_removed": true
+    }
+  },
+  "cleanup": {
+    "owned_native_containers_removed": 3,
+    "owned_network_removed": true,
+    "existing_development_services_running": 6
+  },
+  "review": "independent source review plus AI review; missing-unit maintenance guard corrected and real Linux harness rerun",
+  "limits": [
+    "No production service cutover performed at this checkpoint.",
+    "Final fresh backups and coherent identity/API rollback remain maintenance responsibilities.",
+    "Native helper rehearsal uses injected labelled-fixture maintenance assertion; real systemd/container maintenance checks have separate focused coverage.",
+    "Provider is single-node, not a clustered-cache claim."
+  ]
+}

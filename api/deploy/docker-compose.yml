@@ -1,4 +1,4 @@
-# Production stack for Mac mini (/opt/cleaning-suite). All host bindings loopback-only;
+# Production stack. All host bindings loopback-only;
 # Cloudflare Tunnel is the only public path.
 services:
   postgres:
@@ -24,7 +24,9 @@ services:
           memory: 512m
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.1
+    # Exact reviewed ARM64 provider image, staged from the verified build before activation.
+    image: sha256:8523fc048089e840643f3797aed372ecc974b88532dffb98a3331924d7319c02
+    pull_policy: never
     restart: unless-stopped
     command: start
     environment:
@@ -34,11 +36,11 @@ services:
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: keycloak
       KC_DB_PASSWORD: ${KC_DB_PASSWORD:?}
-      KC_HOSTNAME: auth.readysetsiivous.fi
+      KC_HOSTNAME: https://auth.readysetsiivous.fi
       KC_PROXY_HEADERS: xforwarded
       KC_HTTP_ENABLED: "true"
       KC_HEALTH_ENABLED: "true"
-      KC_JAVA_OPTS: "-Xms256m -Xmx768m -XX:MetaspaceSize=96m"
+      JAVA_OPTS_KC_HEAP: "-Xms256m -Xmx768m"
     ports:
       - "127.0.0.1:8082:8080"
     depends_on:
@@ -70,6 +72,7 @@ services:
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=cleaning;Username=cleaning;Password=${POSTGRES_PASSWORD}
       Marten__AutoCreateSchemaMode: CreateOrUpdate
       Auth__Keycloak__ServerUrl: https://auth.readysetsiivous.fi
+      Auth__Keycloak__AdminServerUrl: http://keycloak:8080
       Auth__Keycloak__Audience: cleaning-suite-api
       Auth__Keycloak__PlatformAudience: cleaning-suite-platform-api
       Auth__Keycloak__ProvisionerRealm: master

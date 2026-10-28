@@ -27,11 +27,16 @@ OLD_ID = 'sha256:' + 'f' * 64
 
 
 class Commands:
-    def __init__(self, root, mode):
-        self.root, self.mode, self.calls = root, mode, []
+    def __init__(self, root, mode, maintenance_states=None, maintenance_load_states=None):
+        modes = {'maintenance_up': 'up', 'maintenance_stopped': 'previous_stopped'}
+        self.root, self.mode, self.calls = root, modes.get(mode, mode), []
         self.current = 'old'
         self.recovering = False
         self.health_count = 0
+        self.maintenance_states = maintenance_states or (['active'] if mode == 'maintenance_active' else ['inactive'])
+        self.maintenance_load_states = maintenance_load_states or (['not-found'] if mode == 'maintenance_missing' else ['loaded'])
+        self.maintenance_checks = 0
+        self.maintenance_snapshots = []
 
     def __call__(self, args, **kwargs):
         args = list(args)
@@ -42,7 +47,16 @@ class Commands:
         assert 'GAME_GEMINI_API_KEY' not in kwargs['env']
         assert 'API_IMAGE' not in kwargs['env']
         code, result = 0, ''
-        if args[0] == 'python3':
+        if args[0] == 'systemctl':
+            assert args == ['systemctl', 'show', '--property=ActiveState', '--property=LoadState', 'cloudflared.service']
+            self.maintenance_snapshots.append({'backups': (self.root / '.deploy-backups').exists(),
+                                               'candidate_env': bool(list(self.root.glob('releases/*/candidate.env'))),
+                                               'current': self.current})
+            active = self.maintenance_states[min(self.maintenance_checks, len(self.maintenance_states) - 1)]
+            loaded = self.maintenance_load_states[min(self.maintenance_checks, len(self.maintenance_load_states) - 1)]
+            result = 'ActiveState=' + active + '\nLoadState=' + loaded
+            self.maintenance_checks += 1
+        elif args[0] == 'python3':
             assert args[1].endswith('/api/deploy/check-keycloak-runtime-env.py') or args[1].endswith('\\api\\deploy\\check-keycloak-runtime-env.py')
             assert args[2:] == ['--file', '/protected/tenant-runtime.env']
             if self.mode == 'identity': code = 7
@@ -97,14 +111,16 @@ class Commands:
                                   'Config': {'Image': OLD_IMAGE if self.recovering and old else ('old-tag' if old else IMAGE),
                                              'Env': ['APP_RELEASE_SHA=' + (OLD if old else SHA)],
                                              'Labels': {'com.docker.compose.project': 'cleaning-suite'}},
-                                  'State': {'Running': not (not old and self.mode == 'stopped')}}])
+                                  'State': {'Running': not ((not old and self.mode == 'stopped')
+                                                           or (old and not self.recovering and self.mode == 'previous_stopped'))}}])
         else:
             raise AssertionError(args)
         return SimpleNamespace(returncode=code, stdout=result, stderr='synthetic command failure')
 
 
 class DeploymentTests(unittest.TestCase):
-    def run_deploy(self, mode='success', approved=True, compatible=True, key='new-owner-ai-secret'):
+    def run_deploy(self, mode='success', approved=True, compatible=True, key='new-owner-ai-secret',
+                   maintenance_policy=None, maintenance_states=None, maintenance_load_states=None, expect_preserved_candidate=False):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             old_env = b"API_IDENTITY_ENV_FILE=/protected/tenant-runtime.env\nIMAGE_TAG=sha-old\nDATABASE_PASSWORD=private-value\nGAME_GEMINI_API_KEY='old-owner-secret'\n"
@@ -117,13 +133,16 @@ class DeploymentTests(unittest.TestCase):
             stage = root / 'releases' / SHA
             (stage / 'api/deploy').mkdir(parents=True)
             (stage / 'release.json').write_text(json.dumps({'release_sha': SHA, 'image': IMAGE}))
-            (stage / 'api/deploy/release-policy.json').write_text(json.dumps({'schema': 1, 'approved': approved,
-                'schema_changes': 'backward-compatible-reviewed', 'rollback_compatible_from': [OLD] if compatible else []}))
+            policy = {'schema': 1, 'approved': approved,
+                      'schema_changes': 'backward-compatible-reviewed', 'rollback_compatible_from': [OLD] if compatible else []}
+            if maintenance_policy is not None:
+                policy.update(maintenance_policy)
+            (stage / 'api/deploy/release-policy.json').write_text(json.dumps(policy))
             (stage / 'api/deploy/docker-compose.yml').write_bytes((SCRIPTS.parent / 'api/deploy/docker-compose.yml').read_bytes())
             env = dict(PATH=os.environ.get('PATH', ''), HOME=tmp, GAME_GEMINI_API_KEY=key,
                        REGISTRY_USER='test-user', REGISTRY_TOKEN='test-secret', API_IMAGE='ambient-override',
                        DOCKER_CONTEXT='hostile-context', DOCKER_HOST='tcp://unrelated-host:2375')
-            commands = Commands(root, mode)
+            commands = Commands(root, mode, maintenance_states, maintenance_load_states)
             output, errors = io.StringIO(), io.StringIO()
             failed = None
             with patch.object(deploy.subprocess, 'run', commands), contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
@@ -138,12 +157,13 @@ class DeploymentTests(unittest.TestCase):
             self.assertNotIn('prune', calls)
             self.assertNotIn('down', calls)
             self.assertFalse(list(root.glob('.deploy-auth-*')))
-            if failed:
+            if failed and not expect_preserved_candidate:
                 self.assertEqual(old_env, (root / '.env').read_bytes())
                 self.assertEqual(old_config, (root / 'docker-compose.yml').read_bytes())
             else:
                 self.assertIn(IMAGE, (root / '.env').read_text())
-                self.assertIn('Deployment verified:', output.getvalue())
+                if not failed:
+                    self.assertIn('Deployment verified:', output.getvalue())
             return failed, commands, errors.getvalue()
 
     def test_all_docker_calls_pin_one_local_daemon_despite_existing_remote_context(self):
@@ -162,6 +182,101 @@ class DeploymentTests(unittest.TestCase):
         failure, commands, _ = self.run_deploy()
         self.assertIsNone(failure)
         self.assertEqual('new', commands.current)
+
+    def test_active_maintenance_ingress_blocks_before_any_host_mutation(self):
+        for state in ['active', 'activating', 'failed', 'unknown', '']:
+            with self.subTest(state=state):
+                failure, commands, _ = self.run_deploy(maintenance_policy={'maintenance_service': 'cloudflared.service'},
+                                                       maintenance_states=[state])
+                self.assertIn('Maintenance ingress must remain inactive', str(failure))
+                self.assertEqual([['systemctl', 'show', '--property=ActiveState', '--property=LoadState', 'cloudflared.service']], commands.calls)
+                self.assertEqual([{'backups': False, 'candidate_env': False, 'current': 'old'}], commands.maintenance_snapshots)
+
+    def test_inactive_but_missing_or_unloaded_maintenance_unit_blocks_before_mutations(self):
+        for load_state in ['not-found', 'error', 'masked', 'unloaded', '', 'loaded\nLoadState=loaded']:
+            with self.subTest(load_state=load_state):
+                failure, commands, _ = self.run_deploy(maintenance_policy={'maintenance_service': 'cloudflared.service'},
+                                                       maintenance_states=['inactive'], maintenance_load_states=[load_state])
+                self.assertIn('loaded unit', str(failure))
+                self.assertEqual([['systemctl', 'show', '--property=ActiveState', '--property=LoadState', 'cloudflared.service']], commands.calls)
+                self.assertEqual([{'backups': False, 'candidate_env': False, 'current': 'old'}], commands.maintenance_snapshots)
+
+    def test_unknown_maintenance_unit_is_rejected_before_all_commands(self):
+        for value in ['other.service', 'cloudflared.service --no-pager', None, False, ['cloudflared.service']]:
+            with self.subTest(value=value):
+                failure, commands, _ = self.run_deploy(maintenance_policy={'maintenance_service': value})
+                self.assertIn('Unsupported maintenance service', str(failure))
+                self.assertEqual([], commands.calls)
+
+    def test_closed_maintenance_gate_is_checked_before_swap_and_after_verification(self):
+        failure, commands, _ = self.run_deploy(maintenance_policy={'maintenance_service': 'cloudflared.service'})
+        self.assertIsNone(failure)
+        self.assertEqual(3, commands.maintenance_checks)
+        self.assertEqual(['old', 'old', 'new'], [s['current'] for s in commands.maintenance_snapshots])
+        second = [i for i, call in enumerate(commands.calls) if call[0] == 'systemctl'][1]
+        first_up = next(i for i, call in enumerate(commands.calls) if 'up' in call)
+        self.assertLess(second, first_up)
+        self.assertFalse(any('start' in call or 'stop' in call or 'restart' in call for call in commands.calls))
+
+    def test_gate_reopened_before_swap_preserves_previous_api_without_rollback(self):
+        failure, commands, _ = self.run_deploy(maintenance_policy={'maintenance_service': 'cloudflared.service'},
+                                               maintenance_states=['inactive', 'active'])
+        self.assertIn('Maintenance ingress', str(failure))
+        self.assertEqual('old', commands.current)
+        self.assertFalse(any('up' in call for call in commands.calls))
+
+    def test_gate_reopened_after_candidate_verification_prevents_unsafe_artifact_rollback(self):
+        failure, commands, errors = self.run_deploy(maintenance_policy={'maintenance_service': 'cloudflared.service'},
+                                                   maintenance_states=['inactive', 'inactive', 'active'],
+                                                   expect_preserved_candidate=True)
+        self.assertIn('Deployment and rollback failed', str(failure))
+        self.assertEqual('new', commands.current)
+        self.assertFalse(commands.recovering)
+        self.assertNotIn('restored and verified', errors)
+
+    def test_closed_gate_rollback_does_not_claim_external_identity_recovery(self):
+        failure, commands, errors = self.run_deploy('up', maintenance_policy={'maintenance_service': 'cloudflared.service'})
+        self.assertIsNotNone(failure)
+        self.assertEqual(4, commands.maintenance_checks)
+        self.assertTrue(commands.recovering)
+        self.assertIn('Identity recovery remains external', errors)
+        self.assertIn('maintenance ingress must stay inactive', errors)
+
+    def test_reopened_gate_after_rollback_fails_instead_of_reporting_recovery_success(self):
+        failure, commands, errors = self.run_deploy('up', maintenance_policy={'maintenance_service': 'cloudflared.service'},
+                                                   maintenance_states=['inactive', 'inactive', 'inactive', 'active'])
+        self.assertIn('Deployment and rollback failed', str(failure))
+        self.assertEqual('old', commands.current)
+        self.assertNotIn('restored and verified', errors)
+
+    def test_policies_without_maintenance_key_retain_existing_behavior(self):
+        failure, commands, _ = self.run_deploy()
+        self.assertIsNone(failure)
+        self.assertEqual(0, commands.maintenance_checks)
+
+    def test_normal_deployment_rejects_a_stopped_previous_api(self):
+        failure, commands, _ = self.run_deploy('previous_stopped')
+        self.assertIn('Previous API is not running', str(failure))
+        self.assertEqual(0, commands.health_count)
+        self.assertFalse(any('pull' in call or 'up' in call for call in commands.calls))
+
+    def test_closed_maintenance_accepts_exact_stopped_baseline_without_old_health(self):
+        failure, commands, _ = self.run_deploy('previous_stopped', maintenance_policy={'maintenance_service': 'cloudflared.service'})
+        self.assertIsNone(failure)
+        self.assertEqual('new', commands.current)
+        self.assertEqual(1, commands.health_count)
+        self.assertEqual(3, commands.maintenance_checks)
+        # Stopping does not skip the old immutable identity checks.
+        inspected = [call[-1] for call in commands.calls if 'inspect' in call]
+        self.assertIn(OLD_ID, inspected)
+        self.assertIn(OLD_IMAGE, inspected)
+
+    def test_active_maintenance_rejects_stopped_baseline_before_host_mutations(self):
+        failure, commands, _ = self.run_deploy('previous_stopped', maintenance_policy={'maintenance_service': 'cloudflared.service'},
+                                               maintenance_states=['active'])
+        self.assertIn('Maintenance ingress', str(failure))
+        self.assertEqual(1, len(commands.calls))
+        self.assertEqual([{'backups': False, 'candidate_env': False, 'current': 'old'}], commands.maintenance_snapshots)
 
     def test_compatibility_gate_precedes_all_commands(self):
         failure, commands, _ = self.run_deploy(approved=False)
@@ -206,7 +321,8 @@ class DeploymentTests(unittest.TestCase):
 class RealShellDeploymentTests(unittest.TestCase):
     @unittest.skipUnless(os.name == 'posix', 'real shell/command harness runs on Linux CI')
     def test_real_wrapper_and_external_fake_commands(self):
-        for mode in ['success', 'up', 'wrong_release', 'pull', 'invalid_identity']:
+        for mode in ['success', 'up', 'wrong_release', 'pull', 'invalid_identity',
+                     'maintenance_active', 'maintenance_inactive', 'maintenance_up', 'maintenance_unknown', 'maintenance_stopped', 'maintenance_missing']:
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory(prefix='release-identity-', dir=Path.home()) as identity:
                 root = Path(tmp)
                 identity_file = Path(identity).resolve() / 'tenant-runtime.env'
@@ -220,8 +336,11 @@ class RealShellDeploymentTests(unittest.TestCase):
                     destination = stage / name
                     destination.parent.mkdir(parents=True, exist_ok=True)
                     destination.write_bytes((SCRIPTS.parent / name).read_bytes())
-                (stage / 'api/deploy/release-policy.json').write_text(json.dumps({'schema': 1, 'approved': True,
-                    'schema_changes': 'backward-compatible-reviewed', 'rollback_compatible_from': [OLD]}))
+                policy = {'schema': 1, 'approved': True,
+                          'schema_changes': 'backward-compatible-reviewed', 'rollback_compatible_from': [OLD]}
+                if mode.startswith('maintenance_'):
+                    policy['maintenance_service'] = 'unreviewed.service' if mode == 'maintenance_unknown' else 'cloudflared.service'
+                (stage / 'api/deploy/release-policy.json').write_text(json.dumps(policy))
                 value = manifest.create(stage, dict(GITHUB_REPOSITORY='owner/repo', GITHUB_SHA=SHA,
                     GITHUB_RUN_ID='10', GITHUB_RUN_ATTEMPT='1', BUILD_DIGEST='sha256:' + 'c' * 64))
                 raw = json.dumps(value).encode()
@@ -243,7 +362,7 @@ state_path.write_text(json.dumps({k: v for k, v in fake.__dict__.items() if k !=
 sys.stdout.write(result.stdout)
 raise SystemExit(result.returncode)
 '''.replace('REPLACE_PATH', repr(str(SCRIPTS / 'tests')))
-                for name in ['docker', 'curl', 'sleep']:
+                for name in ['docker', 'curl', 'sleep', 'systemctl']:
                     path = binary / name
                     path.write_text(fake)
                     path.chmod(0o755)
@@ -254,9 +373,21 @@ raise SystemExit(result.returncode)
                 result = subprocess.run(['sh', str(stage / 'scripts/deploy-api.sh')], env=env, text=True, capture_output=True, timeout=60)
                 state_file = root / 'command-state.json'
                 state = json.loads(state_file.read_text()) if state_file.exists() else {'current': 'old', 'recovering': False}
-                self.assertEqual(mode == 'success', result.returncode == 0, result.stderr)
-                self.assertEqual('new' if mode == 'success' else 'old', state['current'])
-                self.assertEqual(mode in ['up', 'wrong_release'], state['recovering'])
+                success = mode in ['success', 'maintenance_inactive', 'maintenance_stopped']
+                self.assertEqual(success, result.returncode == 0, result.stderr)
+                self.assertEqual('new' if success else 'old', state['current'])
+                self.assertEqual(mode in ['up', 'wrong_release', 'maintenance_up'], state['recovering'])
+                if mode in ['maintenance_active', 'maintenance_unknown', 'maintenance_missing']:
+                    self.assertFalse((root / '.deploy-backups').exists())
+                    self.assertFalse((stage / 'candidate.env').exists())
+                if mode == 'maintenance_inactive':
+                    self.assertEqual(3, state['maintenance_checks'])
+                if mode == 'maintenance_stopped':
+                    self.assertEqual(3, state['maintenance_checks'])
+                    self.assertEqual(1, state['health_count'])
+                if mode == 'maintenance_up':
+                    self.assertEqual(4, state['maintenance_checks'])
+                    self.assertIn('Identity recovery remains external', result.stderr)
                 for secret in ['test-secret', 'new-owner-ai-secret', 'private-value']:
                     self.assertNotIn(secret, result.stdout + result.stderr)
 
