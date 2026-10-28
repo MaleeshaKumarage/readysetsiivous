@@ -19,32 +19,43 @@ def run(args, env=None, check=True):
     return result
 
 
+def fixture_identity(directory):
+    path = Path(directory) / "tenant-runtime.env"
+    # Synthetic per-tenant pair only; mode applies atomically on POSIX.
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as output:
+        output.write("Auth__Keycloak__TenantAccounts__fixture-tenant__ClientId=fixture-runtime\n"
+                     "Auth__Keycloak__TenantAccounts__fixture-tenant__ClientSecret=synthetic-unusable-secret-123\n")
+    return path
+
+
 def rehearse(relative, unsafe=None):
     project = "devpersist-" + uuid.uuid4().hex[:16]
     assert project.startswith("devpersist-") and len(project) == 27
     env = {**os.environ, "DEV_KC_DB_PASSWORD": "synthetic'quoted-password",
            "KEYCLOAK_ADMIN_USER": "fixture-admin", "KEYCLOAK_ADMIN_PASSWORD": "fixture-password"}
-    source = ROOT / relative
-    config = json.loads(run(["docker", "compose", "-p", project, "-f", str(source),
-                             "config", "--format", "json"], env).stdout)
-    api = config["services"].pop("api", None)
-    for service in config["services"].values():
-        service.pop("ports", None)  # No shared/fixed host ports in the rehearsal.
-        service.pop("restart", None)
-    # Do not import the repository's sample realm; fixture creates its own.
-    kc = config["services"]["keycloak"]
-    kc["command"] = ["start-dev"]
-    kc["volumes"] = []
-    if api:
-        config["services"]["state-helper"] = {
-            "image": "postgres:16-alpine", "entrypoint": ["sleep", "infinity"],
-            "volumes": api["volumes"]}
-    # A malformed Compose config must not make cleanup target an existing project.
-    config["name"] = project
-    for volume in config.get("volumes", {}).values():
-        assert not volume.get("external"), "No external volumes permitted"
-        assert volume.get("name", "").startswith(project + "_"), "Unowned volume"
     with tempfile.TemporaryDirectory(prefix=project) as directory:
+        env["API_IDENTITY_ENV_FILE"] = str(fixture_identity(directory))
+        source = ROOT / relative
+        config = json.loads(run(["docker", "compose", "-p", project, "-f", str(source),
+                                 "config", "--format", "json"], env).stdout)
+        api = config["services"].pop("api", None)
+        for service in config["services"].values():
+            service.pop("ports", None)  # No shared/fixed host ports in the rehearsal.
+            service.pop("restart", None)
+        # Do not import the repository's sample realm; fixture creates its own.
+        kc = config["services"]["keycloak"]
+        kc["command"] = ["start-dev"]
+        kc["volumes"] = []
+        if api:
+            config["services"]["state-helper"] = {
+                "image": "postgres:16-alpine", "entrypoint": ["sleep", "infinity"],
+                "volumes": api["volumes"]}
+        # A malformed Compose config must not make cleanup target an existing project.
+        config["name"] = project
+        for volume in config.get("volumes", {}).values():
+            assert not volume.get("external"), "No external volumes permitted"
+            assert volume.get("name", "").startswith(project + "_"), "Unowned volume"
         if unsafe:
             # First-boot seed precedes the actual mounted initialization script.
             # One-shot initialization must fail; completed dependency keeps KC down.

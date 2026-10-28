@@ -27,3 +27,5 @@ public interface IKeycloakProvisioner
 
     Task SetRealmEnabledAsync(string realm, bool enabled, CancellationToken ct = default);
 }
+
+public sealed class TenantIdentitySetupRequiredException(string message) : Exception(message);

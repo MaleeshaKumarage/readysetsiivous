@@ -170,7 +170,7 @@ public class ReactivateEmployeeHandler : IRequestHandler<ReactivateEmployeeComma
         await _employees.SaveAsync(employee, ct);
         if (employee.IdentitySyncPending)
         {
-            await _identities.SynchronizeAccessAsync(_tenant.TenantId, employee.KeycloakUserId, employee.Role, true, ct);
+            await _identities.SynchronizeAccessAsync(_tenant.TenantId, employee.Id, employee.KeycloakUserId, employee.Role, true, ct);
             employee.IdentitySyncPending = false;
             await _employees.SaveAsync(employee, ct);
         }
@@ -220,7 +220,7 @@ internal static class EmployeeAccessSynchronization
         var userId = employee.KeycloakUserId;
         var role = employee.Role;
         var active = employee.IsActive;
-        await identities.SynchronizeAccessAsync(tenantId, userId, role, active, ct);
+        await identities.SynchronizeAccessAsync(tenantId, employee.Id, userId, role, active, ct);
         // Provider I/O can be slow. Reload after it so clearing the flag cannot replay stale profile fields.
         // IVersioned also rejects a write racing this fresh read; failed saves leave the stored flag pending.
         var current = await employees.ReloadAsync(id, ct) ?? throw new NotFoundException("Employee", id);

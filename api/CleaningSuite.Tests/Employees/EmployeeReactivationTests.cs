@@ -41,7 +41,7 @@ public class EmployeeReactivationTests
     {
         _employee.KeycloakUserId = login;
         var before = JsonSerializer.SerializeToNode(_employee)!;
-        if (login.Length > 0) _identity.Setup(x => x.SynchronizeAccessAsync("tenant-a", login, Employee.RoleManager, true, default))
+        if (login.Length > 0) _identity.Setup(x => x.SynchronizeAccessAsync("tenant-a", _employee.Id, login, Employee.RoleManager, true, default))
             .Callback(() => {
                 Assert.True(_employee.IdentitySyncPending);
                 _employees.Verify(x => x.SaveAsync(_employee, default), Times.Once);
@@ -60,14 +60,14 @@ public class EmployeeReactivationTests
     public async Task FailedSyncPersistsPendingAndAlreadyActiveRetryHealsIt()
     {
         _employee.KeycloakUserId = "linked-user";
-        _identity.SetupSequence(x => x.SynchronizeAccessAsync("tenant-a", "linked-user", Employee.RoleManager, true, default))
+        _identity.SetupSequence(x => x.SynchronizeAccessAsync("tenant-a", _employee.Id, "linked-user", Employee.RoleManager, true, default))
             .ThrowsAsync(new EmployeeIdentityProviderException("Unavailable")).Returns(Task.CompletedTask);
         await Assert.ThrowsAsync<EmployeeIdentityProviderException>(() => Handler().Handle(new(_employee.Id), default));
         Assert.True(_employee.IsActive); Assert.True(_employee.IdentitySyncPending);
         _employees.Verify(x => x.SaveAsync(_employee, default), Times.Once);
         await Handler().Handle(new(_employee.Id), default);
         Assert.False(_employee.IdentitySyncPending);
-        _identity.Verify(x => x.SynchronizeAccessAsync("tenant-a", "linked-user", Employee.RoleManager, true, default), Times.Exactly(2));
+        _identity.Verify(x => x.SynchronizeAccessAsync("tenant-a", _employee.Id, "linked-user", Employee.RoleManager, true, default), Times.Exactly(2));
     }
 
     [Theory]

@@ -32,7 +32,7 @@ public class EmployeeInviteTests
     [Fact]
     public async Task InvitationBindsBeforeNativeEmailAndHasCorrectTenantLanding()
     {
-        _identity.Setup(x => x.SendSetupEmailAsync("tenant-a", "user-a", "https://dev.example.invalid/account/?tenant=tenant-a", 86400, default))
+        _identity.Setup(x => x.SendSetupEmailAsync("tenant-a", _employee.Id, "user-a", "https://dev.example.invalid/account/?tenant=tenant-a", 86400, default))
             .Callback(() => { Assert.Equal("user-a", _employee.KeycloakUserId); _employees.Verify(x => x.SaveAsync(_employee, default), Times.Once); }).Returns(Task.CompletedTask);
         var result = await Handler().Handle(new(_employee.Id), default);
         Assert.Equal("Sent", result.Status); Assert.Equal(Now, result.SentUtc);
@@ -60,7 +60,7 @@ public class EmployeeInviteTests
     }
     [Fact]
     public async Task FailedDeliveryRetainsBindingAndRetryClearsError() {
-        _identity.SetupSequence(x => x.SendSetupEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), default))
+        _identity.SetupSequence(x => x.SendSetupEmailAsync(It.IsAny<string>(), _employee.Id, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), default))
             .ThrowsAsync(new EmployeeIdentityProviderException("Mail failed")).Returns(Task.CompletedTask);
         await Assert.ThrowsAsync<EmployeeIdentityProviderException>(() => Handler().Handle(new(_employee.Id), default));
         Assert.Equal("user-a", _employee.KeycloakUserId); Assert.NotNull(_employee.InviteError); Assert.Null(_employee.InviteLastSentUtc);
@@ -72,7 +72,7 @@ public class EmployeeInviteTests
         _employee.KeycloakUserId = "user-a"; _employee.InviteLastSentUtc = Now.AddSeconds(-10);
         var result = await Handler().Handle(new(_employee.Id), default);
         Assert.Equal("AlreadySent", result.Status);
-        _identity.Verify(x => x.SendSetupEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), default), Times.Never);
+        _identity.Verify(x => x.SendSetupEmailAsync(It.IsAny<string>(), _employee.Id, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), default), Times.Never);
     }
     [Fact]
     public async Task IdentityAlreadyLinkedElsewhereIsNotSent() {
@@ -84,23 +84,23 @@ public class EmployeeInviteTests
     public async Task DatabaseBindingFailureCannotSendAnUntrackedInvitation() {
         _employees.Setup(x => x.SaveAsync(_employee, default)).ThrowsAsync(new JasperFx.ConcurrencyException("test"));
         await Assert.ThrowsAsync<JasperFx.ConcurrencyException>(() => Handler().Handle(new(_employee.Id), default));
-        _identity.Verify(x => x.SendSetupEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), default), Times.Never);
-        _identity.Verify(x => x.AssignRoleAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default), Times.Never);
+        _identity.Verify(x => x.SendSetupEmailAsync(It.IsAny<string>(), _employee.Id, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), default), Times.Never);
+        _identity.Verify(x => x.AssignRoleAsync(It.IsAny<string>(), _employee.Id, It.IsAny<string>(), It.IsAny<string>(), default), Times.Never);
     }
     [Fact]
     public async Task DeactivationSavesLocalGuardBeforeDisablingIdentity() {
         _employee.KeycloakUserId = "user-a";
-        _identity.Setup(x => x.SynchronizeAccessAsync("tenant-a", "user-a", "employee", false, default)).Callback(() => {
+        _identity.Setup(x => x.SynchronizeAccessAsync("tenant-a", _employee.Id, "user-a", "employee", false, default)).Callback(() => {
             Assert.False(_employee.IsActive); _employees.Verify(x => x.SaveAsync(_employee, default), Times.Once);
         }).Returns(Task.CompletedTask);
         await new DeactivateEmployeeHandler(_employees.Object, _identity.Object, _tenant.Object, _locks.Object, WorkAccessFixtures.Reservation).Handle(new(_employee.Id), default);
-        _identity.Verify(x => x.SynchronizeAccessAsync("tenant-a", "user-a", "employee", false, default), Times.Once);
+        _identity.Verify(x => x.SynchronizeAccessAsync("tenant-a", _employee.Id, "user-a", "employee", false, default), Times.Once);
     }
     [Fact]
     public async Task FailedRoleSynchronizationRemainsPendingAndSameUpdateCanRecover()
     {
         _employee.KeycloakUserId = "user-a";
-        _identity.SetupSequence(x => x.SynchronizeAccessAsync("tenant-a", "user-a", "admin", true, default))
+        _identity.SetupSequence(x => x.SynchronizeAccessAsync("tenant-a", _employee.Id, "user-a", "admin", true, default))
             .ThrowsAsync(new EmployeeIdentityProviderException("Provider failed")).Returns(Task.CompletedTask);
         var handler = new UpdateEmployeeHandler(_employees.Object, _identity.Object, _tenant.Object, _locks.Object, WorkAccessFixtures.Reservation);
         var command = new UpdateEmployeeCommand(_employee.Id, Fields("admin"), true);
@@ -108,14 +108,14 @@ public class EmployeeInviteTests
         Assert.Equal("admin", _employee.Role); Assert.True(_employee.IdentitySyncPending);
         await handler.Handle(command, default);
         Assert.False(_employee.IdentitySyncPending);
-        _identity.Verify(x => x.SynchronizeAccessAsync("tenant-a", "user-a", "admin", true, default), Times.Exactly(2));
+        _identity.Verify(x => x.SynchronizeAccessAsync("tenant-a", _employee.Id, "user-a", "admin", true, default), Times.Exactly(2));
     }
     [Fact]
     public async Task UnrelatedProfileEditsDoNotChangeSessionsOrPasswords()
     {
         _employee.KeycloakUserId = "user-a";
         await new UpdateEmployeeHandler(_employees.Object, _identity.Object, _tenant.Object, _locks.Object, WorkAccessFixtures.Reservation).Handle(new(_employee.Id, Fields("employee"), true), default);
-        _identity.Verify(x => x.SynchronizeAccessAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), default), Times.Never);
+        _identity.Verify(x => x.SynchronizeAccessAsync(It.IsAny<string>(), _employee.Id, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), default), Times.Never);
     }
     [Fact]
     public async Task BoundEmailCannotBeSilentlyChanged()
@@ -130,12 +130,12 @@ public class EmployeeInviteTests
     public async Task RoleIsGrantedOnlyAfterBindingIsPersisted()
     {
         _employee.Role = "admin";
-        _identity.Setup(x => x.AssignRoleAsync("tenant-a", "user-a", "admin", default)).Callback(() => {
+        _identity.Setup(x => x.AssignRoleAsync("tenant-a", _employee.Id, "user-a", "admin", default)).Callback(() => {
             _employees.Verify(x => x.SaveAsync(_employee, default), Times.Once);
             Assert.Equal("user-a", _employee.KeycloakUserId);
         }).Returns(Task.CompletedTask);
         await Handler().Handle(new(_employee.Id), default);
-        _identity.Verify(x => x.AssignRoleAsync("tenant-a", "user-a", "admin", default), Times.Once);
+        _identity.Verify(x => x.AssignRoleAsync("tenant-a", _employee.Id, "user-a", "admin", default), Times.Once);
     }
     [Fact]
     public async Task DuplicateEmployeeEmailCannotClaimAnExistingLogin()

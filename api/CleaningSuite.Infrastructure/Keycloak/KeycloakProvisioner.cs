@@ -1,7 +1,10 @@
 using System.Security.Cryptography;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using CleaningSuite.Application.Tenants;
 using CleaningSuite.Infrastructure.Auth;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 
 namespace CleaningSuite.Infrastructure.Keycloak;
 
@@ -11,12 +14,14 @@ public class KeycloakProvisioner : IKeycloakProvisioner
     private readonly KeycloakAdminClient _admin;
     private readonly ILogger<KeycloakProvisioner> _logger;
     private readonly KeycloakResourceOptions _resources;
+    private readonly IConfiguration? _configuration;
 
-    public KeycloakProvisioner(KeycloakAdminClient admin, ILogger<KeycloakProvisioner> logger, KeycloakResourceOptions resources)
+    public KeycloakProvisioner(PlatformKeycloakClient admin, ILogger<KeycloakProvisioner> logger, KeycloakResourceOptions resources, IConfiguration? configuration = null)
     {
-        _admin = admin;
+        _admin = admin.Client;
         _logger = logger;
         _resources = resources;
+        _configuration = configuration;
     }
 
     public async Task<ProvisionedTenant> ProvisionAsync(
@@ -28,48 +33,157 @@ public class KeycloakProvisioner : IKeycloakProvisioner
         string[] redirectUris,
         CancellationToken ct = default)
     {
+        if (!Regex.IsMatch(slug, "^[a-z0-9][a-z0-9-]{2,62}$") || slug == "master"
+            || slug == _configuration?["Auth:Keycloak:ProvisionerRealm"])
+            throw new TenantIdentitySetupRequiredException("Invalid tenant identity realm");
+        if (_configuration is not null && !_configuration.GetValue<bool>("Auth:Keycloak:ProvisioningSetupReviewed"))
+            throw new TenantIdentitySetupRequiredException("New tenant provisioning is paused until scoped identity account setup and secret delivery have been reviewed. No realm was created.");
+        var runtime = _configuration?.GetSection($"Auth:Keycloak:TenantAccounts:{slug}");
+        if (_configuration is not null && (string.IsNullOrWhiteSpace(runtime?["ClientId"]) || string.IsNullOrWhiteSpace(runtime?["ClientSecret"])))
+            throw new TenantIdentitySetupRequiredException("Prepare the new tenant's scoped service-account secret in protected API configuration before provisioning. No realm was created.");
+        if (_configuration is not null && (string.IsNullOrWhiteSpace(_configuration["EmployeeInvites:Smtp:Host"])
+            || string.IsNullOrWhiteSpace(_configuration["EmployeeInvites:Smtp:From"]) || string.IsNullOrWhiteSpace(_configuration["Auth:Keycloak:ServerUrl"])))
+            throw new TenantIdentitySetupRequiredException("Prepare invitation SMTP and public identity URL before provisioning. No realm was created.");
+        if (runtime is not null && (!Regex.IsMatch(runtime["ClientId"]!, "^[a-z0-9][a-z0-9-]{2,62}$")
+            || runtime["ClientId"] is "realm-management" or "cleaning-suite-web" or "account" or "admin-cli"))
+            throw new TenantIdentitySetupRequiredException("Use a dedicated confidential tenant identity client. No realm was created.");
+        if (_configuration is not null && _configuration.GetValue("EmployeeInvites:Smtp:Auth", true)
+            && (string.IsNullOrWhiteSpace(_configuration["EmployeeInvites:Smtp:User"])
+                || string.IsNullOrWhiteSpace(_configuration.GetValue<bool>("EmployeeInvites:Smtp:UseResendApiKey")
+                    ? _configuration["Resend:ApiKey"] : _configuration["EmployeeInvites:Smtp:Password"])))
+            throw new TenantIdentitySetupRequiredException("Prepare invitation SMTP authentication before provisioning. No realm was created.");
         var temporaryPassword = GenerateTemporaryPassword();
 
         await _admin.CreateRealmAsync(slug, ct);
-        await WaitForRealmAsync(slug, ct);
-
-        await _admin.CreateRoleAsync(slug, "admin", ct);
-        await _admin.CreateRoleAsync(slug, "employee", ct);
-        await _admin.CreateRoleAsync(slug, "manager", ct);
-
-        await _admin.CreateClientAsync(slug, new
+        try
         {
-            clientId = ClientId,
-            name = $"{companyName} web",
-            enabled = true,
-            publicClient = true,
-            standardFlowEnabled = true,
-            directAccessGrantsEnabled = true,
-            redirectUris,
-            webOrigins = new[] { "+" },
-            protocolMappers = new[] { AudienceMapper(_resources.TenantAudience) },
-        }, ct);
+            await WaitForRealmAsync(slug, ct);
 
-        var userId = await _admin.CreateUserAsync(slug, new
-        {
-            username = ownerEmail,
-            email = ownerEmail,
-            firstName = ownerFirstName,
-            lastName = ownerLastName,
-            enabled = true,
-            credentials = new[]
+            await _admin.CreateRoleAsync(slug, "admin", ct);
+            await _admin.CreateRoleAsync(slug, "employee", ct);
+            await _admin.CreateRoleAsync(slug, "manager", ct);
+
+            await _admin.CreateClientAsync(slug, new
             {
-                new { type = "password", value = temporaryPassword, temporary = true },
-            },
-            requiredActions = new[] { "UPDATE_PASSWORD" },
-        }, ct);
+                clientId = ClientId,
+                name = $"{companyName} web",
+                enabled = true,
+                publicClient = true,
+                standardFlowEnabled = true,
+                directAccessGrantsEnabled = true,
+                redirectUris,
+                webOrigins = new[] { "+" },
+                protocolMappers = new[] { AudienceMapper(_resources.TenantAudience) },
+            }, ct);
 
-        var adminRole = await _admin.GetRoleAsync(slug, "admin", ct);
-        await _admin.AssignRealmRoleAsync(slug, userId, new object[] { adminRole }, ct);
+            await CreateEmployeeGroupsAsync(slug, ct);
+            if (runtime is not null)
+                await ConfigureRuntimeAccountAsync(slug, runtime["ClientId"]!, runtime["ClientSecret"]!, ct);
 
-        _logger.LogInformation("Provisioned tenant realm {Realm} for {Company}", slug, companyName);
+            var userId = await _admin.CreateUserAsync(slug, new
+            {
+                username = ownerEmail,
+                email = ownerEmail,
+                firstName = ownerFirstName,
+                lastName = ownerLastName,
+                enabled = true,
+                credentials = new[]
+                {
+                    new { type = "password", value = temporaryPassword, temporary = true },
+                },
+                requiredActions = new[] { "UPDATE_PASSWORD" },
+                groups = new[] { KeycloakEmployeeGroups.ManagedPath, KeycloakEmployeeGroups.RolePaths["admin"] },
+            }, ct);
 
-        return new ProvisionedTenant(slug, slug, ClientId, ownerEmail, temporaryPassword);
+            // Ordinary tenant owner is intentionally unbound until reviewed employee reconciliation.
+            // Its application role is inherited; no employee ownership is invented here.
+
+            _logger.LogInformation("Provisioned tenant realm {Realm} for {Company}", slug, companyName);
+
+            return new ProvisionedTenant(slug, slug, ClientId, ownerEmail, temporaryPassword);
+        }
+        catch
+        {
+            // CreateRealm succeeded in this attempt. A conflict/failed create never reaches
+            // this cleanup, so an existing tenant can never be deleted on a retry.
+            using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            try { await _admin.DeleteRealmAsync(slug, cleanup.Token); }
+            catch { _logger.LogError("Failed to remove incomplete newly created realm {Realm}; explicit reconciliation required", slug); }
+            throw;
+        }
+    }
+
+    private async Task<Dictionary<string, string>> CreateEmployeeGroupsAsync(string realm, CancellationToken ct)
+    {
+        var groups = new Dictionary<string, string>();
+        groups["managed-users"] = await _admin.CreateGroupAsync(realm, new { name = "managed-users" }, ct);
+        foreach (var role in KeycloakEmployeeGroups.RolePaths) {
+            var representation = await _admin.GetRoleAsync(realm, role.Key, ct);
+            if (representation.TryGetProperty("composite", out var composite) && composite.ValueKind == JsonValueKind.True)
+                throw new KeycloakException("Application roles must be flat before employee setup");
+            var name = role.Value[1..];
+            groups[name] = await _admin.CreateGroupAsync(realm, new { name }, ct);
+            await _admin.AssignGroupRealmRolesAsync(realm, groups[name], new object[] { representation }, ct);
+        }
+        return groups;
+    }
+
+    private async Task ConfigureRuntimeAccountAsync(string realm, string clientId, string secret, CancellationToken ct)
+    {
+        // Explicit platform provisioning owns this configuration. Employee runtime cannot perform it.
+        await _admin.CreateClientAsync(realm, new { clientId, enabled = true, publicClient = false,
+            serviceAccountsEnabled = true, standardFlowEnabled = false, directAccessGrantsEnabled = false,
+            fullScopeAllowed = false, secret,
+            protocolMappers = new[] { new {
+                name = "cleaning-identity-runtime-audience", protocol = "openid-connect",
+                protocolMapper = "oidc-audience-mapper", consentRequired = false,
+                config = new Dictionary<string, string> {
+                    ["included.custom.audience"] = KeycloakAdminClient.RuntimeAudience,
+                    ["access.token.claim"] = "true", ["id.token.claim"] = "false"
+                }
+            } } }, ct);
+        var client = (await _admin.GetClientsAsync(realm, clientId, ct))[0];
+        // No realm-management roles or FGAP policies: the dedicated extension is
+        // the only application-facing identity boundary. Token proof does not
+        // assert that a stock Keycloak installation supports this extension.
+        var profile = await _admin.GetUserProfileAsync(realm, ct);
+        var fields = profile.EnumerateObject().ToDictionary(p => p.Name, p => (object)p.Value.Clone());
+        var attributes = profile.GetProperty("attributes").EnumerateArray().Select(a => a.Clone()).ToList();
+        foreach (var (name, displayName) in new[] { ("cleaning_employee_id", "Employee ownership"), ("cleaning_invitation_ticket", "Invitation ticket") }) {
+            var matches = attributes.Select((value, index) => (value, index))
+                .Where(entry => entry.value.TryGetProperty("name", out var fieldName) && fieldName.GetString() == name).ToArray();
+            if (matches.Length > 1) throw new KeycloakException("Server-owned profile attribute is ambiguous; explicit reconciliation required");
+            var attribute = matches.Length == 1
+                ? matches[0].value.EnumerateObject().ToDictionary(p => p.Name, p => (object)p.Value.Clone())
+                : new Dictionary<string, object>();
+            attribute["name"] = name; attribute["displayName"] = displayName; attribute["multivalued"] = false;
+            attribute["permissions"] = new { view = new[] { "admin" }, edit = new[] { "admin" } };
+            var representation = JsonSerializer.SerializeToElement(attribute);
+            if (matches.Length == 1) attributes[matches[0].index] = representation;
+            else attributes.Add(representation);
+        }
+        fields["attributes"] = attributes;
+        await _admin.UpdateUserProfileAsync(realm, fields, ct);
+        var smtpSection = _configuration!.GetSection("EmployeeInvites:Smtp");
+        var smtp = new Dictionary<string, string> { ["host"] = smtpSection["Host"]!, ["from"] = smtpSection["From"]!,
+            ["port"] = smtpSection["Port"] ?? "587", ["auth"] = smtpSection.GetValue("Auth", true).ToString().ToLowerInvariant(),
+            ["starttls"] = smtpSection.GetValue("StartTls", true).ToString().ToLowerInvariant(),
+            ["ssl"] = smtpSection.GetValue("Ssl", false).ToString().ToLowerInvariant() };
+        if (smtp["auth"].Equals("true", StringComparison.OrdinalIgnoreCase)) {
+            smtp["user"] = smtpSection["User"] ?? "";
+            smtp["password"] = smtpSection.GetValue<bool>("UseResendApiKey") ? _configuration["Resend:ApiKey"] ?? "" : smtpSection["Password"] ?? "";
+            if (string.IsNullOrWhiteSpace(smtp["user"]) || string.IsNullOrWhiteSpace(smtp["password"]))
+                throw new KeycloakException("Invitation SMTP authentication configuration is incomplete");
+        }
+        var current = await _admin.GetRealmAsync(realm, ct);
+        var realmAttributes = current.TryGetProperty("attributes", out var existingAttributes) && existingAttributes.ValueKind == JsonValueKind.Object
+            ? existingAttributes.EnumerateObject().ToDictionary(p => p.Name, p => (object)p.Value.Clone()) : new Dictionary<string, object>();
+        realmAttributes["frontendUrl"] = _configuration["Auth:Keycloak:ServerUrl"]!.TrimEnd('/');
+        realmAttributes[KeycloakAdminClient.RuntimeClientAttribute] = client.GetProperty("id").GetString()!;
+        await _admin.UpdateRealmAsync(realm, new { attributes = realmAttributes, smtpServer = smtp }, ct);
+        using var proof = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        proof.CancelAfter(TimeSpan.FromSeconds(10));
+        await _admin.VerifyEmployeeExtensionAsync(realm, clientId, secret, proof.Token);
     }
 
     public Task<bool> RealmExistsAsync(string realm, CancellationToken ct = default) =>
