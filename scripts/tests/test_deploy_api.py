@@ -78,6 +78,10 @@ class Commands:
             op = next(x for x in ['ps', 'config', 'up'] if x in args)
             if op == 'ps':
                 result = self.current + '-container'
+                if self.current == 'old' and not self.recovering and self.mode == 'previous_stopped' and '--all' not in args: result = ''
+                if self.current == 'old' and self.mode == 'oneoff': result += '\noneoff-container'
+                if self.current == 'old' and self.mode == 'only_oneoff': result = 'oneoff-container'
+                if self.current == 'old' and self.mode == 'replicas': result += '\nreplica-container'
                 if self.current == 'new' and self.mode == 'changed' and self.health_count > 1: result = 'other-container'
             elif op == 'config':
                 assert args[-3:] == ['config', '--format', 'json']
@@ -110,7 +114,9 @@ class Commands:
             result = json.dumps([{'Image': OLD_ID if old else ('wrong' if self.mode == 'image_id' else NEW_ID),
                                   'Config': {'Image': OLD_IMAGE if self.recovering and old else ('old-tag' if old else IMAGE),
                                              'Env': ['APP_RELEASE_SHA=' + (OLD if old else SHA)],
-                                             'Labels': {'com.docker.compose.project': 'cleaning-suite'}},
+                                             'Labels': {'com.docker.compose.project': 'cleaning-suite',
+                                                        'com.docker.compose.service': 'api',
+                                                        'com.docker.compose.oneoff': 'True' if args[-1] == 'oneoff-container' else 'False'}},
                                   'State': {'Running': not ((not old and self.mode == 'stopped')
                                                            or (old and not self.recovering and self.mode == 'previous_stopped'))}}])
         else:
@@ -270,6 +276,13 @@ class DeploymentTests(unittest.TestCase):
         inspected = [call[-1] for call in commands.calls if 'inspect' in call]
         self.assertIn(OLD_ID, inspected)
         self.assertIn(OLD_IMAGE, inspected)
+
+    def test_oneoff_containers_are_never_rollback_baselines(self):
+        self.assertIsNone(self.run_deploy('oneoff')[0])
+        for mode in ('only_oneoff', 'replicas'):
+            failure, commands, _ = self.run_deploy(mode)
+            self.assertIsNotNone(failure)
+            self.assertFalse(any('pull' in call or 'up' in call for call in commands.calls))
 
     def test_active_maintenance_rejects_stopped_baseline_before_host_mutations(self):
         failure, commands, _ = self.run_deploy('previous_stopped', maintenance_policy={'maintenance_service': 'cloudflared.service'},
