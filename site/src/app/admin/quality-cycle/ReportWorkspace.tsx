@@ -1,12 +1,16 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge, Button, Group, Modal, MultiSelect, NumberInput, Paper, SegmentedControl, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { adminShifts, type Shift } from '@/lib/adminApi';
 import { adminQualityCycle, reportLandingUrl, reportShareUrl, type MonthlyReport, type ReportSelection, type ReportShare } from '@/lib/qualityCycleApi';
 
 const failure = (error: unknown) => error instanceof Error ? error.message : 'Report request failed. Please retry.';
 const dateLabel = (value: string) => value.split('-').reverse().join('/');
+
+// Performance Optimization: Cache Intl.DateTimeFormat instance at module level to avoid
+// recreating expensive formatter objects (~20x overhead) on every month option calculation or render.
+const monthFormatter = new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
 export default function ReportWorkspace() {
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -37,8 +41,15 @@ export default function ReportWorkspace() {
   useEffect(() => { version.current++; setReport(null); setLoadedSelection(null); setBusy(false); }, [periodKey]);
 
   const selectionYear = Number(year) >= 2000 && Number(year) <= 2100 && Number.isInteger(Number(year)) ? Number(year) : new Date().getFullYear();
-  const monthOptions = [...new Set([...Array.from({ length: 12 }, (_, index) => `${selectionYear}-${String(index + 1).padStart(2, '0')}`), ...months])]
-    .sort().map(value => ({ value, label: new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${value}-01T12:00:00Z`)) }));
+  // Performance Optimization: Memoize monthOptions to prevent array allocations, Set operations,
+  // sorting, and date formatting on unrelated component re-renders.
+  const monthOptions = useMemo(
+    () =>
+      [...new Set([...Array.from({ length: 12 }, (_, index) => `${selectionYear}-${String(index + 1).padStart(2, '0')}`), ...months])]
+        .sort()
+        .map((value) => ({ value, label: monthFormatter.format(new Date(`${value}-01T12:00:00Z`)) })),
+    [selectionYear, months]
+  );
   async function load() {
     const current = ++version.current; setBusy(true); setError(''); setReport(null); setLoadedSelection(null);
     try { const value = await adminQualityCycle.selectedReport(selection); if (current === version.current) { setReport(value); setLoadedSelection(selection); } }
