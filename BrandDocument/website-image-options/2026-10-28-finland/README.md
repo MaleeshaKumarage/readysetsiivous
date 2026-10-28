@@ -1,6 +1,6 @@
 # Finland-specific cleaning images
 
-Generated 28 October 2026 using the built-in image-generation tool at the owner's request. These are new illustrative options, not images of actual customers or staff. The existing website photos were retained and no new option is referenced by the website yet. Original generated PNGs are preserved here; select a replacement and optimize it for the web before publishing.
+Generated 28 October 2026 using the built-in image-generation tool at the owner's request. These are new illustrative options, not images of actual customers or staff. Owner approved using all three options on 28 October 2026. Optimized WebP derivatives are used in the hero/home-cleaning card (home), About section (stairwell), and deep-cleaning card (sauna). Original generated PNGs and previous website assets are preserved. Business-uploaded service imagery continues to take precedence over fallback cards.
 
 ## Prompts used
 

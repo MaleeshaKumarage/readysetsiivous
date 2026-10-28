@@ -425,5 +425,9 @@
       "create": "Skapa skift",
       "deactivate": "Avaktivera"
     }
+  },
+  "images": {
+    "homeAlt": "Illustration av en städare som torkar en köksbänk i ett finländskt hem",
+    "stairwellAlt": "Illustration av trappstädning i ett finländskt flerbostadshus"
   }
 }

@@ -128,8 +128,8 @@ export default function Hero() {
               <div className="absolute inset-0 bg-white dark:bg-gray-800 rounded-3xl shadow-2xl dark:shadow-gray-950/50 overflow-hidden">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={baseUrl('/images/hero.webp')}
-                  alt={t('hero.headline')}
+                  src={baseUrl('/images/finnish-home-v1.webp')}
+                  alt={t('images.homeAlt')}
                   className="w-full h-full object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-gray-900/70 via-gray-900/10 to-transparent" />

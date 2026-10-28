@@ -425,5 +425,9 @@
       "create": "Create shift",
       "deactivate": "Deactivate"
     }
+  },
+  "images": {
+    "homeAlt": "Illustration of a cleaner wiping a kitchen worktop in a Finnish home",
+    "stairwellAlt": "Illustration of cleaning an apartment-building stairwell in Finland"
   }
 }

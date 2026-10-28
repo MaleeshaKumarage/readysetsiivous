@@ -17,7 +17,7 @@ This change implements the code-addressable UI/UX findings while retaining the c
 | UX11 readability | Larger legal links and semantic muted colours, accessible contrast/focus states | Computed contrast for key actions; manual full-page visual QA remains. |
 | UX12 resilience | Essential content visible by default; entrance opacity cannot hide content when chunks fail; no-JS fallback retained | JavaScript-disabled essential content test. |
 | UX13 mobile | Compact header, larger controls/input text, spacing, no floating button over booking; quote overlay clearance | Desktop/mobile and 320px reflow tests; 200% zoom/assistive tech remain manual. |
-| UX14 assets | Licensed local fonts, local QR SVGs, consistent navigation icons, explicit-only preference writes | Same-origin asset assertions. Original photos and business-uploaded service imagery retained. Owner confirms the original website images were generated via Codex; no unlicensed-use finding established. |
+| UX14 assets | Licensed local fonts, local QR SVGs, consistent navigation icons, explicit-only preference writes | Same-origin asset assertions. Owner-approved Finland-specific generated images now illustrate the hero, home/deep-cleaning cards and About section; prior assets are preserved and business-uploaded service imagery retains precedence. Owner confirms the original website images were generated via Codex; no unlicensed-use finding established. |
 
 ## Legal checklist closure
 

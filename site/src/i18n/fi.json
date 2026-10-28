@@ -425,5 +425,9 @@
       "create": "Luo vuoro",
       "deactivate": "Poista käytöstä"
     }
+  },
+  "images": {
+    "homeAlt": "Kuvitus siivoojasta pyyhkimässä keittiön työtasoa suomalaisessa kodissa",
+    "stairwellAlt": "Kuvitus suomalaisen kerrostalon porraskäytävän siivouksesta"
   }
 }

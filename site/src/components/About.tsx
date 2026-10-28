@@ -58,8 +58,8 @@ export default function About() {
           <Reveal className="hidden lg:block">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={baseUrl('/images/about.webp')}
-              alt={t('about.title')}
+              src={baseUrl('/images/finnish-stairwell-v1.webp')}
+              alt={t('images.stairwellAlt')}
               className="w-full h-full min-h-[440px] object-cover rounded-2xl shadow-md dark:shadow-gray-950/50"
               loading="lazy"
             />
