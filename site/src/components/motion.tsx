@@ -27,7 +27,7 @@ export function Reveal({
     <motion.div
       className={className}
       data-motion-reveal
-      initial={{ opacity: 0, y }}
+      initial={false}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-60px' }}
       transition={{ duration: 0.6, ease: 'easeOut', delay }}
@@ -53,7 +53,7 @@ export function StaggerGroup({
     <motion.div
       className={className}
       data-motion-reveal
-      initial="hidden"
+      initial={false}
       whileInView="show"
       viewport={{ once: true, margin: '-60px' }}
       variants={{

@@ -18,7 +18,7 @@ export default function TermsPage({
   return (
     <>
       <Navbar lang={lang} />
-      <main className="bg-white dark:bg-gray-950">
+      <main tabIndex={-1} id="main-content" className="bg-white dark:bg-gray-950">
         <div className="container-page max-w-3xl section-padding">
           <h1 className="heading-xl text-gray-900 dark:text-gray-50">{dict.terms.title}</h1>
           <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">{dict.terms.updated}</p>

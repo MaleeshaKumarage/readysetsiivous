@@ -40,15 +40,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     } else {
       root.classList.remove('dark');
     }
-    try {
-      localStorage.setItem('theme', theme);
-    } catch {
-      // ignore
-    }
   }, [theme, mounted]);
 
   const toggle = useCallback(() => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+    setTheme(prev => { const next = prev === 'dark' ? 'light' : 'dark'; try { localStorage.setItem('theme', next); } catch {} return next; });
   }, []);
 
   return (

@@ -1,1 +1,1 @@
-{"schema":1,"approved":true,"rollback_compatible_from":["74559f2849821d7ffd5f5b8f1f9fbd2e4d31a25b"],"schema_changes":"backward-compatible-reviewed","maintenance_service":"cloudflared.service"}
+{"schema":1,"approved":true,"rollback_compatible_from":["cb33068a6fe04c5ff093f7a088ad8fee84b42866"],"schema_changes":"backward-compatible-reviewed","maintenance_service":"cloudflared.service"}

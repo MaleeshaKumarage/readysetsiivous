@@ -24,13 +24,16 @@ public record CreatePublicBookingCommand(
     string Street,
     string PostalCode,
     string City,
-    string? Notes) : IRequest<PublicBookingResult>;
+    string? Notes,
+    decimal? ExpectedPriceGross = null) : IRequest<PublicBookingResult>;
 
 public record PublicBookingResult(
     Guid BookingId,
     string BookingNumber,
     string CustomerReference,
-    string ManagementKey)
+    string ManagementKey,
+    decimal PriceGross = 0,
+    string Currency = "EUR")
 {
     public override string ToString() => nameof(PublicBookingResult);
 }
@@ -46,6 +49,9 @@ public class CreatePublicBookingValidator : AbstractValidator<CreatePublicBookin
         RuleFor(x => x.CustomerEmail).EmailAddress().When(x => !string.IsNullOrEmpty(x.CustomerEmail));
         RuleFor(x => x.Street).NotEmpty().MaximumLength(200);
         RuleFor(x => x.City).NotEmpty().MaximumLength(100);
+        RuleFor(x => x.CustomerEmail).MaximumLength(254);
+        RuleFor(x => x.PostalCode).MaximumLength(20);
+        RuleFor(x => x.Notes).MaximumLength(2000);
     }
 }
 
@@ -79,6 +85,8 @@ public class CreatePublicBookingHandler : IRequestHandler<CreatePublicBookingCom
                 await _bookings.BeginReservationAsync(ct);
                 var service = await _services.GetByIdAsync(request.ServiceId, ct)
                     ?? throw new NotFoundException("Service", request.ServiceId);
+                if (request.ExpectedPriceGross is { } expected && expected != Money.FromNet(service.PriceNet, service.VatRatePercent).Gross)
+                    throw new SlotConflictException("Service price changed. Review the current service price before submitting again.");
                 var (startUtc, endUtc) = await _availability.ReserveAsync(
                     _context.TenantId, request.LocalDate, request.StartTime, service, ct: ct);
                 var number = await _bookings.NextCounterAsync($"booking-{startUtc.Year}", ct);
@@ -108,6 +116,7 @@ public class CreatePublicBookingHandler : IRequestHandler<CreatePublicBookingCom
                         DurationMinutes = service.DurationMinutes,
                         PriceNet = service.PriceNet,
                         VatRatePercent = service.VatRatePercent,
+                        Currency = service.Currency,
                     },
                     StartUtc = startUtc,
                     EndUtc = endUtc,
@@ -123,7 +132,7 @@ public class CreatePublicBookingHandler : IRequestHandler<CreatePublicBookingCom
                 };
 
                 await _bookings.SaveAsync(booking, ct);
-                return new PublicBookingResult(booking.Id, booking.BookingNumber, booking.CustomerReference!, managementKey);
+                return new PublicBookingResult(booking.Id, booking.BookingNumber, booking.CustomerReference!, managementKey, booking.Total.Gross, service.Currency);
             }
             catch (Exception ex) when (IsReservationConflict(ex))
             {

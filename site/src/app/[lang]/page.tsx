@@ -8,10 +8,10 @@ import Services from '@/components/Services';
 // import PricingTransparency from '@/components/PricingTransparency'; // HIDDEN 2026-08-25: "What's Included in Our Prices"
 // import Checklist from '@/components/Checklist'; // HIDDEN 2026-08-25: "What's Included?"
 import KeySecurity from '@/components/KeySecurity';
-import EcoPetBadges from '@/components/EcoPetBadges';
+
 import FAQ from '@/components/FAQ';
 import About from '@/components/About';
-import Testimonials from '@/components/Testimonials';
+import HowItWorks from '@/components/HowItWorks';
 // import ResponsibleEmployer from '@/components/ResponsibleEmployer'; // HIDDEN 2026-08-25: "Cleaning You Can Feel Good About"
 import QRSection from '@/components/QRSection';
 import PaymentBanner from '@/components/PaymentBanner';
@@ -32,19 +32,22 @@ export default function LangPage({
   return (
     <>
       <Navbar lang={lang} />
-      <main>
+      <main tabIndex={-1} id="main-content">
         <Hero />
-        <EmergencyCTA />
-        <QuoteForm />
+
+
         {/* <Kotitalousvahennys /> */} {/* HIDDEN 2026-08-25: "Our Prices" */}
         <Services />
+        <HowItWorks />
         {/* <PricingTransparency /> */} {/* HIDDEN 2026-08-25: "What's Included in Our Prices" */}
         {/* <Checklist /> */} {/* HIDDEN 2026-08-25: "What's Included?" */}
         <KeySecurity />
-        <EcoPetBadges />
+
+        <QuoteForm />
         <FAQ />
+        <EmergencyCTA />
         <About />
-        <Testimonials />
+
         {/* <ResponsibleEmployer /> */} {/* HIDDEN 2026-08-25: "Cleaning You Can Feel Good About" */}
         <QRSection />
         <PaymentBanner />

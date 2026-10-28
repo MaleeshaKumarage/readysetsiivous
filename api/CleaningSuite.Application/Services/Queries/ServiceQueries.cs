@@ -1,4 +1,5 @@
 using CleaningSuite.Domain.Services;
+using CleaningSuite.Domain.Common;
 using MediatR;
 
 namespace CleaningSuite.Application.Services.Queries;
@@ -29,7 +30,9 @@ public record PublicServiceDto(
     int SortOrder,
     decimal PriceNet,
     decimal VatRatePercent,
-    string Currency);
+    string Currency,
+    int DurationMinutes,
+    decimal PriceGross);
 
 public class GetPublicServicesHandler : IRequestHandler<GetPublicServicesQuery, IReadOnlyList<PublicServiceDto>>
 {
@@ -53,7 +56,9 @@ public class GetPublicServicesHandler : IRequestHandler<GetPublicServicesQuery, 
                 s.SortOrder,
                 s.PriceNet,
                 s.VatRatePercent,
-                s.Currency))
+                s.Currency,
+                s.DurationMinutes,
+                Money.FromNet(s.PriceNet, s.VatRatePercent).Gross))
             .ToList();
     }
 }

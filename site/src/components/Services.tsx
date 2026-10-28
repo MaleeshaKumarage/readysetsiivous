@@ -5,6 +5,8 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { baseUrl } from '@/lib/whatsapp';
 import { API_URL, fetchServices, type PublicService } from '@/lib/api';
 import { serviceIcon } from '@/lib/icons';
+import { gross, money } from '@/lib/publicFormatting';
+import { publicUx } from '@/i18n/publicUx';
 // Entrance animation removed from this section: cards must stay visible even
 // when JS chunks are stale (Pages deploy replaces _next assets).
 
@@ -20,7 +22,7 @@ const KEY_TO_SLUG: Record<string, string> = {
 const SERVICE_CARDS = [
   {
     key: 'services.home',
-    image: 'service-home.webp',
+    image: 'finnish-home-v1.webp',
     icon: (
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
     ),
@@ -29,7 +31,7 @@ const SERVICE_CARDS = [
   },
   {
     key: 'services.deep',
-    image: 'service-deep.webp',
+    image: 'finnish-sauna-v1.webp',
     icon: (
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
     ),
@@ -58,22 +60,19 @@ const SERVICE_CARDS = [
 
 export default function Services() {
   const { t, lang } = useLanguage();
-  const [apiServices, setApiServices] = useState<PublicService[]>([]);
+  const [apiServices, setApiServices] = useState<PublicService[] | null>(null);
 
   useEffect(() => {
-    fetchServices(lang).then((services) => {
-      if (services && services.length > 0) {
-        // First four active services, admin-controlled order.
-        setApiServices([...services].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)).slice(0, 4));
-      }
-    });
+    let active = true;
+    fetchServices(lang).then(services => { if (active) setApiServices(services ? [...services].sort((a,b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)).slice(0,4) : null); });
+    return () => { active = false; };
   }, [lang]);
 
   const GRADIENTS = ['from-brand-500 to-brand-600', 'from-accent-500 to-accent-600', 'from-violet-500 to-purple-600', 'from-amber-500 to-orange-600'];
   const BGS = ['bg-brand-50 dark:bg-brand-500/10', 'bg-accent-50 dark:bg-accent-500/10', 'bg-violet-50 dark:bg-violet-500/10', 'bg-amber-50 dark:bg-amber-500/10'];
   const FALLBACK_IMAGES: Record<string, string> = {
-    'home-cleaning': 'service-home.webp',
-    'deep-cleaning': 'service-deep.webp',
+    'home-cleaning': 'finnish-home-v1.webp',
+    'deep-cleaning': 'finnish-sauna-v1.webp',
     'move-out-cleaning': 'service-moveout.webp',
     'office-cleaning': 'service-office.webp',
   };
@@ -87,7 +86,8 @@ export default function Services() {
         </div>
 
         <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {apiServices.length > 0
+          {apiServices?.length === 0 && <p className="col-span-full">{publicUx(lang).noServices}</p>}
+          {apiServices !== null
             ? apiServices.map((s, i) => {
                 const IconCmp = serviceIcon(s.icon);
                 const gradient = GRADIENTS[i % GRADIENTS.length];
@@ -100,7 +100,7 @@ export default function Services() {
                     <div className="h-36 -mx-6 -mt-6 mb-4 overflow-hidden rounded-t-2xl bg-gray-100 dark:bg-gray-700">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={s.imageUrl ? `${API_URL}${s.imageUrl}` : baseUrl(`/images/${FALLBACK_IMAGES[s.slug] ?? 'service-home.webp'}`)}
+                        src={s.imageUrl ? `${API_URL}${s.imageUrl}` : baseUrl(`/images/${FALLBACK_IMAGES[s.slug] ?? 'finnish-home-v1.webp'}`)}
                         alt={s.name}
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                         loading="lazy"
@@ -114,8 +114,9 @@ export default function Services() {
                       {[s.description, s.additionalInfo].filter(Boolean).join(' ')}
                     </p>
                     <p className="mt-4 text-sm font-bold text-brand-600 dark:text-brand-400">
-                      {t('services.from')} {s.priceNet.toFixed(0)} €
+                      {money(gross(s), lang, s.currency ?? 'EUR')} — {publicUx(lang).price}
                     </p>
+                    <a className="mt-4 inline-flex min-h-11 items-center underline" href={baseUrl(`/${lang}/varaus/`)}>{publicUx(lang).book}</a>
                     <div className={`absolute -inset-0.5 rounded-2xl -z-10 opacity-0 group-hover:opacity-100 transition-opacity blur-sm ${bg}`} />
                   </div>
                 );
@@ -141,7 +142,8 @@ export default function Services() {
                   </div>
                   <h3 className="mt-4 text-lg font-bold text-gray-900 dark:text-gray-100">{t(`${key}.title`)}</h3>
                   <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 leading-relaxed flex-1">{t(`${key}.description`)}</p>
-                  <p className="mt-4 text-sm font-bold text-brand-600 dark:text-brand-400">{t(`${key}.price`)}</p>
+                  <p className="mt-4 text-sm font-bold text-brand-600 dark:text-brand-400">{publicUx(lang).quote}</p>
+                  <a className="mt-4 inline-flex min-h-11 items-center underline" href={baseUrl(`/${lang}/#quote`)}>{publicUx(lang).quote}</a>
                   <div className={`absolute -inset-0.5 rounded-2xl -z-10 opacity-0 group-hover:opacity-100 transition-opacity blur-sm ${bg}`} />
                 </div>
               ))}

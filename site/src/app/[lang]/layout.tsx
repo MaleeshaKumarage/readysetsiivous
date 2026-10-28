@@ -62,9 +62,9 @@ export async function generateMetadata({
       'cleaning',
       'siivous',
       'städning',
-      'Helsinki',
-      'Espoo',
-      'Vantaa',
+      'Finland',
+      'Suomi',
+      'koko Suomi',
       'home cleaning',
       'office cleaning',
       'move-out cleaning',
@@ -92,7 +92,7 @@ export default function LangLayout({
   const dict = getDictionary(lang);
 
   return (
-    <div className="public-site flex flex-col flex-1">
+    <div lang={lang} className="public-site flex flex-col flex-1">
       <SchemaScript lang={lang} dict={dict} />
       <LanguageProvider initialLang={lang}>{children}</LanguageProvider>
     </div>

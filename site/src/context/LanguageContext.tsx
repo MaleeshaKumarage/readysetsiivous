@@ -32,15 +32,12 @@ export function LanguageProvider({
 
   useEffect(() => {
     document.documentElement.lang = lang;
-    try {
-      localStorage.setItem('lang', lang);
-    } catch {
-      // ignore
-    }
+
   }, [lang]);
 
   const setLang = useCallback((next: Language) => {
     setLangState(next);
+    try { localStorage.setItem('lang', next); } catch {}
   }, []);
 
   // Sync with URL path — if we're on a different language path than what's in state, update

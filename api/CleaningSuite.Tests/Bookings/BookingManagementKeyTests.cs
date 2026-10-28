@@ -11,6 +11,15 @@ namespace CleaningSuite.Tests.Bookings;
 public class BookingManagementKeyTests
 {
     [Fact]
+    public void Legacy_json_booking_snapshot_defaults_to_eur_without_a_column_migration()
+    {
+        // MartenConfig uses Newtonsoft document serialization, not EF columns.
+        var booking = Newtonsoft.Json.JsonConvert.DeserializeObject<Booking>("""{"Service":{"NameFi":"Siivous","PriceNet":50,"VatRatePercent":25.5}}""");
+        Assert.Equal("EUR", booking!.Service.Currency);
+        Assert.Equal(50m, booking.Service.PriceNet);
+    }
+
+    [Fact]
     public void Generated_keys_are_distinct_canonical_and_only_match_their_hash()
     {
         var keys = Enumerable.Range(0, 100).Select(_ => BookingManagementKey.Generate()).ToArray();

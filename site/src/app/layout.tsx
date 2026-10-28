@@ -21,9 +21,9 @@ export const viewport: Viewport = {
 
 const SITE_NAME = 'ReadySetSiivous';
 const SITE_URL = 'https://readysetsiivous.fi';
-const SITE_TITLE = 'ReadySetSiivous — Professional Cleaning Services | Helsinki, Espoo, Vantaa';
+const SITE_TITLE = 'ReadySetSiivous — Cleaning Services Across Finland';
 const SITE_DESCRIPTION =
-  'Professional home cleaning, deep cleaning, move-out cleaning, and office cleaning in Helsinki, Espoo & Vantaa. Insured, vetted staff. Book via WhatsApp in seconds.';
+  'Professional home cleaning, deep cleaning, move-out cleaning, and office cleaning across Finland. Contact us to discuss your cleaning needs.';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -78,9 +78,7 @@ export default function RootLayout({
   return (
     <html lang="fi" suppressHydrationWarning translate="no" className="notranslate">
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Work+Sans:wght@400;500&display=swap" rel="stylesheet" />
+        <link href="/fonts/public-fonts.css" rel="stylesheet" />
       </head>
       <body className="min-h-screen flex flex-col bg-white dark:bg-accent-950 text-gray-900 dark:text-gray-100 transition-colors">
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />

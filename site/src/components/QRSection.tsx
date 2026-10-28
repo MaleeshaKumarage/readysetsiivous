@@ -9,7 +9,7 @@ export default function QRSection() {
   const { t, lang } = useLanguage();
 
   const cardUrl = `https://readysetsiivous.fi/${lang}/card/`;
-  const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(cardUrl)}&bgcolor=ffffff&color=0d1428&format=png`;
+  const qrSrc = baseUrl(`/images/contact-qr-${lang}.svg`);
 
   const labels: Record<Language, { title: string; desc: string; step1: string; step2: string }> = {
     fi: {
@@ -35,7 +35,7 @@ export default function QRSection() {
   const L = labels[lang];
 
   return (
-    <section className="bg-gray-50 dark:bg-gray-900 section-padding">
+    <section className="bg-gray-50 dark:bg-gray-900 py-8">
       <div className="container-page">
         <Reveal className="max-w-sm mx-auto text-center">
           <h2 className="text-xl font-extrabold text-gray-900 dark:text-gray-50">
@@ -50,7 +50,7 @@ export default function QRSection() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={qrSrc}
-              alt={`QR Code for ReadySetSiivous contact card — ${cardUrl}`}
+              alt={`${L.title} — ReadySetSiivous`}
               width={200}
               height={200}
               className="w-48 h-48 sm:w-52 sm:h-52 mx-auto"
