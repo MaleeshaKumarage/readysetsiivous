@@ -157,7 +157,10 @@ public sealed class KeycloakEmployeeIdentityProvider(TenantKeycloakClients ident
             var actual = effective.EnumerateArray().Where(r => KeycloakEmployeeGroups.RolePaths.ContainsKey(String(r, "name"))).Select(r => String(r, "name")).ToArray();
             if (actual.Length != 1 || actual[0] != role)
                 throw new EmployeeIdentityConflictException("Login role membership did not yield the intended access. Retry after verifying explicit identity setup.");
-            await client.LogoutUserAsync(tenantId, userId, ct);
+            // A verified no-op must preserve the invitation already delivered:
+            // extension logout also revokes its ticket. Actual access changes
+            // still invalidate sessions, including the partial-failure path.
+            if (mutationAttempted) await client.LogoutUserAsync(tenantId, userId, ct);
         } catch {
             if (mutationAttempted) {
                 // Revocation must survive caller cancellation and must not mask the original failure.

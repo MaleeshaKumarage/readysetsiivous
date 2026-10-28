@@ -2,6 +2,7 @@ using Marten.Newtonsoft;
 using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Match = System.Text.RegularExpressions.Match;
 using CleaningSuite.Application.Employees;
 using CleaningSuite.Application.Employees.Commands;
 using CleaningSuite.Application.Tenants;
@@ -125,6 +126,27 @@ public class EmployeeIdentityIntegrationTests
         var token = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(setupUrl).Query)["key"].ToString();
         var action = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().ReadJwtToken(token);
         Assert.Equal(boundId, action.Subject); Assert.InRange(action.ValidTo, DateTime.UtcNow.AddHours(23.9), DateTime.UtcNow.AddHours(24.1));
+        // Delivery count and token decoding alone cannot prove that AlreadySent
+        // preserved the server-owned ticket. Exercise the actual native form.
+        Assert.True(user.GetProperty("attributes").TryGetProperty("cleaning_invitation_ticket", out var invitationTicket),
+            "Parallel AlreadySent responses must preserve the delivered invitation ticket.");
+        var cookies = new CookieContainer();
+        using (var browser = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, CookieContainer = cookies })) {
+            var passwordForm = await OpenSetupPasswordFormAsync(browser, cookies, new Uri(setupUrl));
+            var repeated = await Invite(realm, employee.Id, store, config, identity);
+            Assert.Equal("AlreadySent", repeated.Status);
+            var afterRetry = (await admin.GetUserAsync(realm, boundId))!.Value;
+            Assert.Equal(invitationTicket.GetRawText(), afterRetry.GetProperty("attributes").GetProperty("cleaning_invitation_ticket").GetRawText());
+            // Submit the already-open form with an invalid password. It must
+            // remain a retryable password form, rather than a revoked-session page.
+            var form = Regex.Matches(passwordForm.Html, "<form\\b[^>]*>.*?</form>", RegexOptions.Singleline | RegexOptions.IgnoreCase)
+                .Cast<Match>().Single(m => m.Value.Contains("password-new", StringComparison.Ordinal));
+            var formAction = Regex.Match(form.Value, """\baction=["']([^"']+)["']""", RegexOptions.IgnoreCase);
+            Assert.True(formAction.Success, "Native password form must have an action.");
+            var retryPage = await NativeSetupPageAsync(browser, cookies, new Uri(passwordForm.Url, WebUtility.HtmlDecode(formAction.Groups[1].Value)),
+                new Dictionary<string, string> { ["password-new"] = "", ["password-confirm"] = "" });
+            Assert.Contains("password-new", retryPage.Html);
+        }
         // Native role transitions use inherited group roles and preserve the existing password.
         var transitionEmployee = new Employee { Email = "transition@" + realm + ".invalid", FirstName = "Role", LastName = "Transition", Role = "employee" };
         var transition = await identity.EnsureAsync(realm, transitionEmployee);
@@ -240,6 +262,40 @@ public class EmployeeIdentityIntegrationTests
                 otherRealm, otherManagerEmail = otherEmployee.Email, otherShiftId = otherShift.Id,
                 bookingId = booking.Id, otherBookingId = otherBooking.Id, workDate = booking.StartLocalDate }));
         }
+    }
+    private static async Task<(Uri Url, string Html)> OpenSetupPasswordFormAsync(HttpClient browser, CookieContainer cookies, Uri link)
+    {
+        var page = await NativeSetupPageAsync(browser, cookies, link);
+        for (var attempt = 0; attempt < 4; attempt++) {
+            if (page.Html.Contains("password-new", StringComparison.Ordinal)) return page;
+            // Same native confirmation/proceed flow as guarded_invitations.py.
+            var proceed = Regex.Matches(page.Html, """<a\b[^>]*href=["']([^"']+)["'][^>]*>(.*?)</a>""", RegexOptions.Singleline | RegexOptions.IgnoreCase)
+                .Cast<Match>().FirstOrDefault(m => m.Groups[2].Value.Contains("proceed", StringComparison.OrdinalIgnoreCase));
+            Assert.NotNull(proceed);
+            page = await NativeSetupPageAsync(browser, cookies, new Uri(page.Url, WebUtility.HtmlDecode(proceed.Groups[1].Value)));
+        }
+        throw new InvalidOperationException("Native invitation did not reach its password form.");
+    }
+    private static async Task<(Uri Url, string Html)> NativeSetupPageAsync(HttpClient browser, CookieContainer cookies, Uri target,
+        Dictionary<string, string>? fields = null)
+    {
+        var origin = target.GetLeftPart(UriPartial.Authority);
+        for (var attempt = 0; attempt < 8; attempt++) {
+            // Match the existing synthetic Python browser's loopback-only Secure
+            // cookie exception. Never relax cookies for public HTTP endpoints.
+            Assert.True(target.IsLoopback, "Native browser checks require an isolated loopback fixture.");
+            Assert.Equal(origin, target.GetLeftPart(UriPartial.Authority));
+            using var request = new HttpRequestMessage(fields is null ? HttpMethod.Get : HttpMethod.Post, target);
+            if (fields is not null) request.Content = new FormUrlEncodedContent(fields);
+            using var response = await browser.SendAsync(request);
+            if (target.Scheme == "http") foreach (Cookie cookie in cookies.GetAllCookies()) cookie.Secure = false;
+            if ((int)response.StatusCode is >= 300 and < 400 && response.Headers.Location is { } location) {
+                target = new Uri(target, location); fields = null; continue;
+            }
+            Assert.True(response.IsSuccessStatusCode, "Native setup request failed.");
+            return (target, await response.Content.ReadAsStringAsync());
+        }
+        throw new InvalidOperationException("Too many native setup redirects.");
     }
     private sealed class NativeDiagnosticHandler : DelegatingHandler
     {

@@ -9,6 +9,30 @@ namespace CleaningSuite.Tests.Employees;
 public class KeycloakEmployeeIdentityProviderTests
 {
     [Fact]
+    public async Task UnchangedRoleIsVerifiedWithoutRevokingSessionsOrInvitation()
+    {
+        var transport = new FakeKeycloak { Role = "employee" };
+        await Provider(transport).AssignRoleAsync("tenant-a", Guid.Parse(transport.Owner!), "user-a", "employee");
+        Assert.Contains(transport.Requests, r => r.Method == "GET" && r.Path.EndsWith("/role-mappings/realm/composite"));
+        Assert.DoesNotContain(transport.Requests, r => r.Path.EndsWith("/logout") || r.Method is "PUT" or "DELETE");
+    }
+    [Fact]
+    public async Task ChangedRoleStillRevokesSessionsAndInvitation()
+    {
+        var transport = new FakeKeycloak { Role = "admin" };
+        await Provider(transport).AssignRoleAsync("tenant-a", Guid.Parse(transport.Owner!), "user-a", "employee");
+        Assert.Equal("employee", transport.Role);
+        Assert.Single(transport.Requests.Where(r => r.Method == "POST" && r.Path.EndsWith("/logout")));
+    }
+    [Fact]
+    public async Task ExplicitAccessSynchronizationStillRevokesWithUnchangedRole()
+    {
+        var transport = new FakeKeycloak { Role = "employee" };
+        await Provider(transport).SynchronizeAccessAsync("tenant-a", Guid.Parse(transport.Owner!), "user-a", "employee", true);
+        Assert.Contains(transport.Requests, r => r.Method == "PUT" && r.Path.EndsWith("/users/user-a"));
+        Assert.Single(transport.Requests.Where(r => r.Method == "POST" && r.Path.EndsWith("/logout")));
+    }
+    [Fact]
     public async Task CompletedAccountReinviteUsesEmptyNativeActionsWithoutChangingCredentials()
     {
         var transport = new FakeKeycloak { Verified = true, PendingPassword = false };
