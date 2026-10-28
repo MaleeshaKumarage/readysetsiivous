@@ -58,6 +58,14 @@ old images, Compose/env and private database backups. Stop old Keycloak nodes
 before26.8.1schema migration; never start26.1against an upgraded schema. Backups
 must restore successfully, and final maintenance snapshots must be fresh.
 
+Pause `cleaning-suite-watchdog.timer` and its service before stopping the API:
+the watchdog otherwise restarts it every two minutes, violating maintenance.
+Restore the timer after successful verification or coherent baseline recovery.
+Verify all three flat application roles (`admin`, `manager`, `employee`) exist
+before enrollment; a missing role definition must not grant users new access.
+The deployment baseline lookup includes stopped containers, excludes Compose
+one-off containers, and rejects multiple service replicas as ambiguous.
+
 With ingress closed, upgrade Keycloak, run the reviewed explicit migration,
 verify scoped runtime success/denials and private issuer/JWKS transport, then use
 the authenticated release controller to swap API. Verify release identity and
