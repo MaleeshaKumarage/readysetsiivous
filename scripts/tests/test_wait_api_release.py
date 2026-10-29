@@ -32,8 +32,9 @@ class ReleaseGateTests(unittest.TestCase):
 
     def test_api_change_waits_for_healthy_expected_release(self):
         payload = io.BytesIO(json.dumps({"status": "ok", "releaseSha": SHA}).encode())
-        with patch.dict(os.environ, {"GITHUB_SHA": SHA, "BEFORE_SHA": "b" * 40}), patch.object(gate.subprocess, "check_output", return_value="api/Program.cs\n"), patch.object(gate.urllib.request, "urlopen", return_value=payload):
+        with patch.dict(os.environ, {"GITHUB_SHA": SHA, "BEFORE_SHA": "b" * 40}), patch.object(gate.subprocess, "check_output", return_value="api/Program.cs\n"), patch.object(gate.urllib.request, "urlopen", return_value=payload) as request:
             gate.main()
+            self.assertEqual("ReadySetSiivous-ReleaseCheck/1.0", request.call_args.args[0].get_header("User-agent"))
 
     def test_timeout_fails_without_publishing(self):
         with patch.dict(os.environ, {"GITHUB_SHA": SHA, "BEFORE_SHA": "b" * 40}), patch.object(gate.subprocess, "check_output", return_value="api/Program.cs\n"), patch.object(gate.time, "monotonic", side_effect=[0, 3000]):

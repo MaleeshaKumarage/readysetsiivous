@@ -33,7 +33,7 @@ def main():
     deadline = time.monotonic() + 45 * 60
     while time.monotonic() < deadline:
         try:
-            request = urllib.request.Request("https://api.readysetsiivous.fi/healthz", headers={"Cache-Control": "no-cache"})
+            request = urllib.request.Request("https://api.readysetsiivous.fi/healthz", headers={"Cache-Control": "no-cache", "User-Agent": "ReadySetSiivous-ReleaseCheck/1.0"})
             with urllib.request.urlopen(request, timeout=10) as response:
                 payload = json.load(response)
             if payload.get("status") == "ok" and contains_release(expected, payload.get("releaseSha")):
