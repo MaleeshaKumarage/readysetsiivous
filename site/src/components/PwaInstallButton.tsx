@@ -44,6 +44,7 @@ export function PwaInstallButton({
   const [isIos, setIsIos] = useState(false);
   const [iosModalOpen, setIosModalOpen] = useState(false);
   const [installed, setInstalled] = useState(false);
+  const [isInstalling, setIsInstalling] = useState(false);
 
   useEffect(() => {
     // Register service worker
@@ -89,12 +90,17 @@ export function PwaInstallButton({
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const choiceResult = await deferredPrompt.userChoice;
-      if (choiceResult.outcome === 'accepted') {
-        setInstalled(true);
+      setIsInstalling(true);
+      try {
+        deferredPrompt.prompt();
+        const choiceResult = await deferredPrompt.userChoice;
+        if (choiceResult.outcome === 'accepted') {
+          setInstalled(true);
+        }
+      } finally {
+        setDeferredPrompt(null);
+        setIsInstalling(false);
       }
-      setDeferredPrompt(null);
     } else if (isIos) {
       setIosModalOpen(true);
     }
@@ -167,6 +173,8 @@ export function PwaInstallButton({
           variant={variant}
           color="indigo"
           size={size}
+          loading={isInstalling}
+          disabled={isInstalling}
           leftSection={deferredPrompt ? <Download size={16} /> : <Smartphone size={16} />}
           onClick={handleInstallClick}
           aria-label={ariaLabel}
