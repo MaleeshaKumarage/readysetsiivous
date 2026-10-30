@@ -12,6 +12,7 @@ export default function LanguageSwitcher() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -36,6 +37,12 @@ export default function LanguageSwitcher() {
 
   useEffect(() => {
     if (!open) return;
+
+    // Move focus to currently selected language or first option when menu opens
+    const currentIdx = languages.findIndex((l) => l.code === lang);
+    const targetIdx = currentIdx >= 0 ? currentIdx : 0;
+    optionRefs.current[targetIdx]?.focus();
+
     function handleKey(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         setOpen(false);
@@ -44,7 +51,24 @@ export default function LanguageSwitcher() {
     }
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
-  }, [open]);
+  }, [open, languages, lang]);
+
+  const handleOptionKeyDown = (e: React.KeyboardEvent, index: number) => {
+    const total = languages.length;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      optionRefs.current[(index + 1) % total]?.focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      optionRefs.current[(index - 1 + total) % total]?.focus();
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      optionRefs.current[0]?.focus();
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      optionRefs.current[total - 1]?.focus();
+    }
+  };
 
   const switchTo = useCallback(
     (code: 'en' | 'fi' | 'sv') => {
@@ -73,6 +97,7 @@ export default function LanguageSwitcher() {
         onClick={() => setOpen(!open)}
         className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-200 hover:border-brand-400 dark:hover:border-brand-500 hover:text-brand-700 dark:hover:text-brand-400 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus:outline-none transition-colors"
         aria-label={ariaLabel}
+        aria-haspopup="menu"
         aria-controls="language-options"
         aria-expanded={open}
       >
@@ -91,15 +116,19 @@ export default function LanguageSwitcher() {
       {open && (
         <div
           id="language-options"
+          role="menu"
+          aria-orientation="vertical"
           aria-label={menuLabel}
           className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-lg dark:shadow-gray-950/50 overflow-hidden z-50 animate-fade-in-up"
         >
-          {languages.map((l) => (
+          {languages.map((l, index) => (
             <button
               key={l.code}
-
-              aria-current={l.code === lang ? 'true' : undefined}
+              ref={(el) => { optionRefs.current[index] = el; }}
+              role="menuitemradio"
+              aria-checked={l.code === lang}
               onClick={() => switchTo(l.code)}
+              onKeyDown={(e) => handleOptionKeyDown(e, index)}
               className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left transition-colors hover:bg-brand-50 dark:hover:bg-brand-500/10 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset focus:outline-none ${
                 l.code === lang
                   ? 'bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-400 font-semibold'
