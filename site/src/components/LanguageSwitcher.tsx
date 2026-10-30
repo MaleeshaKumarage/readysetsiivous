@@ -125,8 +125,7 @@ export default function LanguageSwitcher() {
             <button
               key={l.code}
               ref={(el) => { optionRefs.current[index] = el; }}
-              role="menuitemradio"
-              aria-checked={l.code === lang}
+              aria-current={l.code === lang ? 'true' : undefined}
               onClick={() => switchTo(l.code)}
               onKeyDown={(e) => handleOptionKeyDown(e, index)}
               className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left transition-colors hover:bg-brand-50 dark:hover:bg-brand-500/10 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset focus:outline-none ${
