@@ -1,4 +1,5 @@
 using CleaningSuite.Application.Common;
+using CleaningSuite.Application.Companies;
 using CleaningSuite.Application.Bookings;
 using CleaningSuite.Application.QualityCycle;
 using CleaningSuite.Application.Shifts;
@@ -25,7 +26,8 @@ public record EmployeeFields(
     List<string>? ServiceAreas,
     decimal? PayRate,
     List<CertificationInput>? Certifications,
-    string? Notes);
+    string? Notes,
+    Guid? PartnerCompanyId = null);
 
 public record CreateEmployeeCommand(EmployeeFields Fields) : IRequest<Guid>;
 
@@ -51,7 +53,9 @@ public class EmployeeFieldsValidator : AbstractValidator<EmployeeFields>
         RuleFor(x => x.Email).EmailAddress();
         RuleFor(x => x.FirstName).NotEmpty().MaximumLength(100);
         RuleFor(x => x.LastName).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.Role).Must(r => r is Employee.RoleAdmin or Employee.RoleEmployee or Employee.RoleManager);
+        RuleFor(x => x.Role).Must(r => r is Employee.RoleAdmin or Employee.RoleEmployee or Employee.RoleManager or Employee.RolePartner);
+        RuleFor(x => x.PartnerCompanyId).Must(id => id.HasValue && id != Guid.Empty).When(x => x.Role == Employee.RolePartner).WithMessage("Choose a partner-enabled company.");
+        RuleFor(x => x.PartnerCompanyId).Null().When(x => x.Role != Employee.RolePartner);
         RuleFor(x => x.PayRate).GreaterThanOrEqualTo(0).When(x => x.PayRate.HasValue);
         RuleForEach(x => x.Certifications).ChildRules(c =>
         {
@@ -73,14 +77,16 @@ public class UpdateEmployeeValidator : AbstractValidator<UpdateEmployeeCommand>
 public class CreateEmployeeHandler : IRequestHandler<CreateEmployeeCommand, Guid>
 {
     private readonly IEmployeeRepository _employees;
+    private readonly ICompanyRepository? _companies;
 
-    public CreateEmployeeHandler(IEmployeeRepository employees) => _employees = employees;
+    public CreateEmployeeHandler(IEmployeeRepository employees, ICompanyRepository? companies = null) { _employees = employees; _companies = companies; }
 
     public async Task<Guid> Handle(CreateEmployeeCommand request, CancellationToken ct)
     {
         if (await _employees.GetByEmailAsync(request.Fields.Email.Trim(), ct) is { } existing)
             throw DuplicateEmail(existing);
 
+        await PartnerCompanyAccess.ValidateAsync(request.Fields.Role, request.Fields.PartnerCompanyId, _companies, ct);
         var employee = new Employee();
         Apply(employee, request.Fields);
         await _employees.SaveAsync(employee, ct);
@@ -98,6 +104,7 @@ public class CreateEmployeeHandler : IRequestHandler<CreateEmployeeCommand, Guid
         employee.LastName = fields.LastName;
         employee.Phone = fields.Phone;
         employee.Role = fields.Role;
+        employee.PartnerCompanyId = fields.Role == Employee.RolePartner ? fields.PartnerCompanyId : null;
         employee.ColorHex = fields.ColorHex;
         employee.DefaultHours = fields.DefaultHours;
         employee.Skills = fields.Skills ?? new List<string>();
@@ -117,8 +124,11 @@ public class UpdateEmployeeHandler : IRequestHandler<UpdateEmployeeCommand, Unit
     private readonly ITenantContext _tenant;
     private readonly IEmployeeIdentityLock _locks;
     private readonly IShiftWorkReservation _reservation;
-    public UpdateEmployeeHandler(IEmployeeRepository employees, IEmployeeIdentityProvider identities, ITenantContext tenant, IEmployeeIdentityLock locks, IShiftWorkReservation reservation)
-    { _employees = employees; _identities = identities; _tenant = tenant; _locks = locks; _reservation = reservation; }
+    private readonly ICompanyRepository? _companies;
+    private readonly PartnerWorkforceTransitionGuard? _partnerTransitions;
+    public UpdateEmployeeHandler(IEmployeeRepository employees, IEmployeeIdentityProvider identities, ITenantContext tenant, IEmployeeIdentityLock locks, IShiftWorkReservation reservation, ICompanyRepository? companies = null,
+        PartnerWorkforceTransitionGuard? partnerTransitions = null)
+    { _employees = employees; _identities = identities; _tenant = tenant; _locks = locks; _reservation = reservation; _companies = companies; _partnerTransitions = partnerTransitions; }
 
     public async Task<Unit> Handle(UpdateEmployeeCommand request, CancellationToken ct)
     {
@@ -134,6 +144,12 @@ public class UpdateEmployeeHandler : IRequestHandler<UpdateEmployeeCommand, Unit
                 throw new EmployeeIdentityConflictException("Changing a linked login email requires an identity reconciliation flow.");
             if (await _employees.GetByEmailAsync(request.Fields.Email.Trim(), ct) is { } existing && existing.Id != employee.Id)
                 throw CreateEmployeeHandler.DuplicateEmail(existing);
+            await PartnerCompanyAccess.ValidateAsync(request.Fields.Role, request.Fields.PartnerCompanyId, _companies, ct);
+            if (Employee.IsWorkRole(employee.Role) && request.Fields.Role == Employee.RolePartner)
+            {
+                if (_partnerTransitions is null) throw new EmployeeIdentityConflictException("Partner role changes require workforce eligibility verification.");
+                await _partnerTransitions.EnsureNoOutstandingWorkAsync(employee.Id, ct);
+            }
             var accessChanged = employee.Role != request.Fields.Role || employee.IsActive != request.IsActive;
             CreateEmployeeHandler.Apply(employee, request.Fields);
             employee.IsActive = request.IsActive;
@@ -154,8 +170,9 @@ public class ReactivateEmployeeHandler : IRequestHandler<ReactivateEmployeeComma
     private readonly ITenantContext _tenant;
     private readonly IEmployeeIdentityLock _locks;
 
-    public ReactivateEmployeeHandler(IEmployeeRepository employees, IEmployeeIdentityProvider identities, ITenantContext tenant, IEmployeeIdentityLock locks)
-    { _employees = employees; _identities = identities; _tenant = tenant; _locks = locks; }
+    private readonly ICompanyRepository? _companies;
+    public ReactivateEmployeeHandler(IEmployeeRepository employees, IEmployeeIdentityProvider identities, ITenantContext tenant, IEmployeeIdentityLock locks, ICompanyRepository? companies = null)
+    { _employees = employees; _identities = identities; _tenant = tenant; _locks = locks; _companies = companies; }
 
     public async Task<Unit> Handle(ReactivateEmployeeCommand request, CancellationToken ct)
     {
@@ -163,6 +180,7 @@ public class ReactivateEmployeeHandler : IRequestHandler<ReactivateEmployeeComma
             ?? throw new NotFoundException("Employee", request.Id);
         await using var lease = await _locks.AcquireAsync(_tenant.TenantId, employee.Email, ct);
         employee = await _employees.ReloadAsync(request.Id, ct) ?? throw new NotFoundException("Employee", request.Id);
+        await PartnerCompanyAccess.ValidateAsync(employee.Role, employee.PartnerCompanyId, _companies, ct);
         var accessChanged = !employee.IsActive;
         employee.IsActive = true;
         employee.IdentitySyncPending = !string.IsNullOrWhiteSpace(employee.KeycloakUserId) && (accessChanged || employee.IdentitySyncPending);

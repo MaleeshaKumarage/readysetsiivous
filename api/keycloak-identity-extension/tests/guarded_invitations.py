@@ -204,7 +204,7 @@ class Fixture:
             'passwordPolicy': 'length(12)', 'smtpServer': {'host': 'invite-review-mail', 'port': '1025',
                 'from': 'synthetic@example.invalid', 'auth': 'false', 'starttls': 'false', 'ssl': 'false'}}, admin_token())
         self.created = True
-        for role in ('employee', 'manager', 'admin'):
+        for role in ('employee', 'manager', 'admin', 'partner'):
             self.admin('POST', '/roles', {'name': role})
         profile = self.admin('GET', '/users/profile')
         profile['attributes'].append({'name': OWNER, 'multivalued': False,

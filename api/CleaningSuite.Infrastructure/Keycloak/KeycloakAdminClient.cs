@@ -195,7 +195,7 @@ public class KeycloakAdminClient
     public Task<JsonElement> GetEffectiveUserRealmRolesAsync(string realm, string userId, CancellationToken ct = default) => GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/users/{Uri.EscapeDataString(userId)}/role-mappings/realm/composite", ct);
     public Task<JsonElement> GetEmployeeGroupAsync(string realm, string fixedName, CancellationToken ct = default)
     {
-        if (fixedName is not ("managed-users" or "app-employee" or "app-manager" or "app-admin"))
+        if (fixedName is not ("managed-users" or "app-employee" or "app-manager" or "app-admin" or "app-partner"))
             throw new KeycloakException("Only fixed employee group names may be resolved");
         return GetJsonAsync($"admin/realms/{Uri.EscapeDataString(realm)}/group-by-path/{fixedName}", ct);
     }

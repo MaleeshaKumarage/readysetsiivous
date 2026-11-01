@@ -32,6 +32,7 @@ public sealed class SetVisitAssigneesHandler(IShiftRepository shifts, IEmployeeR
         if (request.OriginalStartUtc.HasValue == request.ExtraExceptionId.HasValue)
             throw new ValidationException("Choose one scheduled occurrence or extra visit.");
         var shift = await shifts.GetAsync(request.ShiftId, ct) ?? throw new NotFoundException("Shift", request.ShiftId);
+        CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
         if (!shift.IsActive) throw new ShiftConflictException("Activate the shift before assigning visits.");
         var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
         var now = (clock ?? TimeProvider.System).GetUtcNow().UtcDateTime;
@@ -59,7 +60,7 @@ public sealed class SetVisitAssigneesHandler(IShiftRepository shifts, IEmployeeR
         foreach (var id in selected)
         {
             var employee = await employees.GetByIdAsync(id, ct) ?? throw new NotFoundException("Employee", id);
-            if (!employee.IsActive) throw new ShiftConflictException("Choose active employees only.");
+            if (!employee.IsActive || !CleaningSuite.Domain.Employees.Employee.IsWorkRole(employee.Role)) throw new ShiftConflictException("Choose active employees only.");
         }
         var boundary = TenantTimeZone.StartOfLocalDay(day, zone);
         var saved = await forms.ListFormsAsync(shift.Id, request.FromThisDate ? boundary : null, null, ct) ?? [];

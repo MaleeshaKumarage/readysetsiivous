@@ -8,7 +8,7 @@ public sealed record KeycloakEmployeeGroups(string ManagedId, IReadOnlyDictionar
 {
     public const string ManagedPath = "/managed-users";
     public static readonly IReadOnlyDictionary<string, string> RolePaths = new Dictionary<string, string>
-    { ["employee"] = "/app-employee", ["manager"] = "/app-manager", ["admin"] = "/app-admin" };
+    { ["employee"] = "/app-employee", ["manager"] = "/app-manager", ["admin"] = "/app-admin", ["partner"] = "/app-partner" };
 
     public static async Task<KeycloakEmployeeGroups> ResolveAsync(KeycloakAdminClient client, string realm, CancellationToken ct = default)
     {
@@ -23,7 +23,7 @@ public sealed record KeycloakEmployeeGroups(string ManagedId, IReadOnlyDictionar
         var managed = await Resolve(ManagedPath);
         var roles = new Dictionary<string, string>();
         foreach (var role in RolePaths) roles.Add(role.Key, await Resolve(role.Value));
-        if (roles.Values.Append(managed).Distinct(StringComparer.Ordinal).Count() != 4)
+        if (roles.Values.Append(managed).Distinct(StringComparer.Ordinal).Count() != RolePaths.Count + 1)
             throw new KeycloakException("Employee group identities are ambiguous");
         foreach (var entry in roles.Append(new KeyValuePair<string, string>("", managed))) {
             var allMappings = await client.GetGroupRoleMappingsAsync(realm, entry.Value, ct);
@@ -63,7 +63,7 @@ public sealed record KeycloakEmployeeGroups(string ManagedId, IReadOnlyDictionar
         var effective = await client.GetEffectiveUserRealmRolesAsync(realm, userId, ct);
         if (effective.ValueKind != JsonValueKind.Array)
             throw new KeycloakException("Effective login privileges could not be verified");
-        if (effective.EnumerateArray().Any(r => Text(r, "name") is "realm-admin" or "admin" or "manager" or "employee"
+        if (effective.EnumerateArray().Any(r => Text(r, "name") is "realm-admin" or "admin" or "manager" or "employee" or "partner"
             && !RoleIds.Any(p => p.Key == Text(r, "name") && result.Any(g => Text(g, "id") == p.Value))))
             throw new EmployeeIdentityConflictException("Unexpected inherited login privileges require administrator reconciliation.");
         return result;

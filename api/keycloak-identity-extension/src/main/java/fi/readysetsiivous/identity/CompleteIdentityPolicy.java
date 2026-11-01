@@ -10,7 +10,7 @@ import org.keycloak.models.*;
 final class CompleteIdentityPolicy {
     static final String OWNER = "cleaning_employee_id";
     static final String RUNTIME = "cleaning_identity_runtime_client_id";
-    static final Map<String,String> GROUP_ROLES = Map.of("managed-users", "", "app-employee", "employee", "app-manager", "manager", "app-admin", "admin");
+    static final Map<String,String> GROUP_ROLES = Map.of("managed-users", "", "app-employee", "employee", "app-manager", "manager", "app-admin", "admin", "app-partner", "partner");
     final KeycloakSession session;
     final RealmModel realm;
     final ClientModel management;

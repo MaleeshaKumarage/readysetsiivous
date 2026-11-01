@@ -124,6 +124,12 @@ export function isManager(): boolean {
   return getKeycloak().hasRealmRole('manager');
 }
 
+export function isPartner(): boolean {
+  if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__ !== undefined)
+    return isAuthenticated() && Boolean((window as any).__MOCK_ROLES__?.includes('partner'));
+  return getKeycloak().hasRealmRole('partner');
+}
+
 export async function refreshToken(): Promise<string | undefined> {
   if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__) {
     return 'mock-jwt-token';

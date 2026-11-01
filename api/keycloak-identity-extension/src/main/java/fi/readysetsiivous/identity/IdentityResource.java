@@ -35,7 +35,7 @@ import org.keycloak.userprofile.*;
 public final class IdentityResource {
     private static final String OWNER = "cleaning_employee_id";
     private static final Set<String> ACTIONS = Set.of("VERIFY_EMAIL", "UPDATE_PASSWORD");
-    private static final Map<String,String> GROUP_ROLES = Map.of("managed-users", "", "app-employee", "employee", "app-manager", "manager", "app-admin", "admin");
+    private static final Map<String,String> GROUP_ROLES = Map.of("managed-users", "", "app-employee", "employee", "app-manager", "manager", "app-admin", "admin", "app-partner", "partner");
     private final KeycloakSession session;
     private final RealmModel realm;
     private final Map<String,GroupModel> groups;
@@ -135,7 +135,7 @@ public final class IdentityResource {
         return Map.of("realm", realm.getName(), "enabled", realm.isEnabled(), "attributes", attrs, "smtpServer", smtp);
     }
     @GET @Path("roles/{name}") public Object role(@PathParam("name") String name) {
-        if (!Set.of("employee", "manager", "admin").contains(name)) throw forbidden();
+        if (!Set.of("employee", "manager", "admin", "partner").contains(name)) throw forbidden();
         return complete(() -> roleDto(realm.getRole(name)));
     }
     @GET @Path("group-by-path/{name}") public Object fixedGroup(@PathParam("name") String name) {

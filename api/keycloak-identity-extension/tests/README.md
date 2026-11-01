@@ -50,6 +50,27 @@ Results print sanitized check names and booleans only. Action links, signed JWTs
 ticket values, cookies, credentials, recipients and HTML bodies stay in memory.
 A nonzero exit is a failure; there is no skip or insecure-status acceptance mode.
 
+## Partner role canaries
+
+Against that same explicitly owned fixture and environment, run:
+
+```bash
+python3 -B api/keycloak-identity-extension/tests/partner_identity.py
+```
+
+This exercises the fixed partner group through the real extension, a captured
+setup invitation, native password form and credential login, replay rejection,
+role transitions revoking an already-open setup form, disable/reactivate and
+ownership-rebinding denial. It also checks that the runtime client still cannot
+read Admin REST. Company binding and application mixed-role denial are separate
+API/database tests; native group tests do not substitute for those checks.
+
+Build the current source before testing. An older cached extension image cannot
+verify the new group. Deploy the matching extension and reconcile fixed groups
+before sending partner invitations. Deploy the API before the frontend because
+the updated My Shifts screen uses the partner-offer API. Rehearse this ordering
+in development; these tests do not authorize production rollout.
+
 ## Separate credential-rollback fault test
 
 The normal extension Dockerfile copies only `src/` and includes no test fault

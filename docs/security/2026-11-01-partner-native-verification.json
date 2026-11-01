@@ -1,0 +1,34 @@
+{
+  "scope": "owned isolated development fixture only",
+  "production_changed": false,
+  "keycloak_version": "26.8.1",
+  "postgresql_major_version": 16,
+  "current_source_build": "passed pinned Maven/Java 21 build",
+  "source_fingerprint_algorithm": "SHA256 over sorted src relative UTF-8 path, NUL, then raw file bytes",
+  "source_files": 16,
+  "source_tree_sha256": "dc78eb9f3ba66e99daf94beae6f6201a2dba149dc8761770440a4a427a3d97dd",
+  "image_index_digest": "sha256:ec2484e749c4f33b989e3cc3de2ced15366d10e8090f68a08020cc67ceb370eb",
+  "provider_jar_sha256": "6048faa4ca396feb0bef0894ef55be4b73c1e05659540a9a23f2034222849c1e",
+  "native_partner_canaries": { "passed": 12, "failed": 0, "skipped": 0 },
+  "native_runtime_boundary_canaries": { "passed": 42, "failed": 0, "skipped": 0 },
+  "native_guarded_invitation_canaries": { "passed": 139, "failed": 0, "skipped": 0 },
+  "native_backend_integration": { "passed": 2, "failed": 0, "skipped": 0, "duration_seconds": 63 },
+  "synthetic_only": true,
+  "email_transport": "owned SMTP capture; no real recipients",
+  "cleanup": {
+    "synthetic_realms_removed_by_harnesses": true,
+    "owned_containers_removed": 3,
+    "owned_network_removed": true,
+    "owned_tunnel_stopped": true,
+    "preexisting_development_services_running": 6
+  },
+  "rollout_order": [
+    "Rehearse the matching extension and fixed-group setup in development before partner invitations",
+    "Deploy API before frontend; My Shifts uses the new partner-offer endpoint",
+    "Do not infer production authorization from development verification"
+  ],
+  "limits": [
+    "Single-node synthetic development fixture; not clustered cache verification",
+    "Application company binding and mixed-role authorization are separately verified by API/database tests"
+  ]
+}

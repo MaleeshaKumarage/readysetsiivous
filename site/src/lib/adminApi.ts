@@ -36,6 +36,7 @@ export interface Employee {
   lastName: string;
   phone: string;
   role: string;
+  partnerCompanyId?: string | null;
   isActive: boolean;
   colorHex?: string | null;
   skills: string[];
@@ -198,6 +199,7 @@ export interface EmployeeFields {
   lastName: string;
   phone: string;
   role: string;
+  partnerCompanyId?: string | null;
   colorHex?: string | null;
   defaultHours: Record<string, { start?: string | null; end?: string | null }>;
   skills?: string[];
@@ -352,6 +354,7 @@ export async function downloadInvoicePdf(id: string): Promise<void> {
 
 // ---------- Companies and Branches ----------
 export interface Company {
+  isPartnerEnabled?: boolean;
   id: string;
   businessId: string;
   name: string;
@@ -363,6 +366,14 @@ export interface Company {
 }
 
 export interface Branch {
+  roomCount?: number | null;
+  bedCount?: number | null;
+  priceNet?: number | null;
+  vatRatePercent?: number | null;
+  estimatedDurationMinutes?: number | null;
+  pricingVersion?: number;
+  pricingReady?: boolean;
+  quoteRequestedUtc?: string | null;
   id: string;
   companyId: string;
   name: string;
@@ -584,6 +595,7 @@ export const adminCompanies = {
   },
   get: (id: string) => adminGet<CompanyDetail>(`/api/v1/admin/companies/${id}`),
   create: (body: {
+    isPartnerEnabled?: boolean;
     businessId: string;
     name: string;
     contactName?: string;
@@ -594,6 +606,7 @@ export const adminCompanies = {
   update: (
     id: string,
     body: {
+      isPartnerEnabled?: boolean;
       businessId: string;
       name: string;
       contactName?: string;
@@ -618,6 +631,7 @@ export const adminBranches = {
       country?: string;
       contactPhone?: string;
       contactEmail?: string;
+      roomCount?: number | null; bedCount?: number | null; priceNet?: number | null; vatRatePercent?: number | null; estimatedDurationMinutes?: number | null;
     }
   ) => companyRequest<Branch>(`/api/v1/admin/companies/${companyId}/branches`, 'POST', { companyId, ...body }),
   update: (
@@ -630,6 +644,7 @@ export const adminBranches = {
       country?: string;
       contactPhone?: string;
       contactEmail?: string;
+      roomCount?: number | null; bedCount?: number | null; priceNet?: number | null; vatRatePercent?: number | null; estimatedDurationMinutes?: number | null;
       isActive: boolean;
     }
   ) => adminSendJson<Branch>(`/api/v1/admin/companies/branches/${id}`, 'PUT', { id, ...body }),

@@ -1,6 +1,7 @@
 using System.Net.Mail;
 using System.Text.RegularExpressions;
 using CleaningSuite.Application.Common;
+using CleaningSuite.Application.Companies;
 using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Employees;
 using MediatR;
@@ -8,7 +9,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace CleaningSuite.Application.Employees.Commands;
 public class InviteEmployeeHandler(IEmployeeRepository employees, ITenantContext tenant,
-    IEmployeeIdentityProvider identities, IEmployeeIdentityLock locks, IConfiguration configuration, TimeProvider clock)
+    IEmployeeIdentityProvider identities, IEmployeeIdentityLock locks, IConfiguration configuration, TimeProvider clock, ICompanyRepository? companies = null)
     : IRequestHandler<InviteEmployeeCommand, EmployeeInviteResult>
 {
     public async Task<EmployeeInviteResult> Handle(InviteEmployeeCommand request, CancellationToken ct)
@@ -21,7 +22,8 @@ public class InviteEmployeeHandler(IEmployeeRepository employees, ITenantContext
             throw new EmployeeIdentityConflictException("Employee email changed while inviting. Retry with the current record.");
         if (employee.IdentitySyncPending) throw new EmployeeIdentityConflictException("Finish the pending login synchronization before sending another invitation.");
         if (!employee.IsActive) throw new EmployeeIdentityConflictException("Inactive employees cannot be invited.");
-        if (employee.Role is not (Employee.RoleAdmin or Employee.RoleEmployee or Employee.RoleManager)) throw new EmployeeIdentityConflictException("Unsupported employee role.");
+        if (employee.Role is not (Employee.RoleAdmin or Employee.RoleEmployee or Employee.RoleManager or Employee.RolePartner)) throw new EmployeeIdentityConflictException("Unsupported employee role.");
+        await PartnerCompanyAccess.ValidateAsync(employee.Role, employee.PartnerCompanyId, companies, ct);
         if (!MailAddress.TryCreate(employee.Email, out var address) || address.Address != employee.Email.Trim())
             throw new EmployeeIdentityConflictException("The employee's email address is invalid.");
         var emailOwner = await employees.GetByEmailAsync(employee.Email, ct);

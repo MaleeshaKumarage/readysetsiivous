@@ -41,7 +41,7 @@ def legacy_diagnostic():
         request('POST', '/admin/realms', {'realm':realm,'enabled':True}, admin)
     root = '/admin/realms/' + tenant
     secret = uuid.uuid4().hex
-    for role in ('admin','manager','employee'):
+    for role in ('admin','manager','employee','partner'):
         request('POST', root+'/roles', {'name':role}, admin)
     request('POST', root+'/clients', {'clientId':'employee-runtime','enabled':True,'publicClient':False,
         'serviceAccountsEnabled':True,'standardFlowEnabled':False,'directAccessGrantsEnabled':False,
@@ -106,7 +106,7 @@ def legacy_diagnostic():
     location=request('POST',root+'/users',{'username':'synthetic-worker','email':'worker@example.invalid','enabled':True},scoped)
     user=location.rsplit('/',1)[1]
     request('GET',root+'/users?email=worker%40example.invalid&exact=true',token=scoped)
-    for name in ('employee','manager','admin'):
+    for name in ('employee','manager','admin','partner'):
         role=request('GET',root+'/roles/'+name,token=scoped)
         request('POST',root+'/users/'+user+'/role-mappings/realm',[role],scoped)
         request('DELETE',root+'/users/'+user+'/role-mappings/realm',[role],scoped)
@@ -172,7 +172,7 @@ def main():
             created.append(realm)
         admin_root = root = '/admin/realms/' + tenant
         secret = uuid.uuid4().hex
-        for name in ('employee', 'manager', 'admin'):
+        for name in ('employee', 'manager', 'admin', 'partner'):
             request('POST', root + '/roles', {'name': name}, admin)
         request('POST', root + '/clients', {'clientId': 'employee-runtime', 'enabled': True,
                 'publicClient': False, 'serviceAccountsEnabled': True, 'standardFlowEnabled': False,
@@ -235,7 +235,7 @@ def main():
                 {'attributes': {'cleaning_employee_id': [str(uuid.uuid4())]}})
         observe('credential-injection-denied', 'PUT', prefix,
                 {'credentials': [{'type': 'password', 'value': 'SyntheticForbiddenOnly2026!'}]})
-        for group in ('app-employee', 'app-manager', 'app-admin'):
+        for group in ('app-employee', 'app-manager', 'app-admin', 'app-partner'):
             path = prefix + '/groups/' + groups[group]
             observe('join-' + group, 'PUT', path, expected=(204,))
             observe('leave-' + group, 'DELETE', path, expected=(204,))

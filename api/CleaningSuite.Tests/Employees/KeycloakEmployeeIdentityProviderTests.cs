@@ -215,12 +215,12 @@ public class KeycloakEmployeeIdentityProviderTests
         transport.Owner = employee.Id.ToString();
         await Provider(transport).EnsureAsync("tenant-a", employee);
         var lookups = transport.Requests.Where(r => r.Path.Contains("/group-by-path/")).Select(r => r.Path.Split('/').Last()).ToArray();
-        Assert.Equal(new[] { "managed-users", "app-employee", "app-manager", "app-admin" }, lookups);
+        Assert.Equal(new[] { "managed-users", "app-employee", "app-manager", "app-admin", "app-partner" }, lookups);
         Assert.DoesNotContain(transport.Requests, r => r.Path.Contains("/groups?") && !r.Path.Contains("/users/"));
     }
     private static Employee Employee() => new() { Email = "cleaner@example.invalid", FirstName = "Test", LastName = "Cleaner" };
     [Theory]
-    [InlineData("admin", "manager")] [InlineData("manager", "employee")] [InlineData("manager", "admin")]
+    [InlineData("admin", "manager")] [InlineData("manager", "employee")] [InlineData("manager", "admin")] [InlineData("employee", "partner")] [InlineData("partner", "employee")] [InlineData("partner", "admin")]
     public async Task ManagerRoleTransitionsRemoveOtherManagedRolesAndPreserveUnrelatedAccess(string from, string to)
     {
         var transport = new FakeKeycloak { Role = from };

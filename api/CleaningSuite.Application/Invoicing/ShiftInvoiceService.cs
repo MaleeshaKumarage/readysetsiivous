@@ -8,18 +8,20 @@ using CleaningSuite.Application.Shifts;
 using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Common;
 using CleaningSuite.Domain.Invoicing;
+using CleaningSuite.Domain.Partners;
+using CleaningSuite.Domain.Shifts;
 using static CleaningSuite.Application.Invoicing.ShiftBillingSettingsService;
 
 namespace CleaningSuite.Application.Invoicing;
 
 public record ShiftInvoiceRequest(Guid CompanyId, IReadOnlyList<Guid> ShiftIds, DateOnly From, DateOnly To,
     Address? BillingAddress = null, string Language = "fi", IReadOnlyList<MonthlyInvoiceOverride>? MonthlyOverrides = null,
-    string? PreviewToken = null);
+    string? PreviewToken = null, bool PartnerMonth = false);
 public record ShiftInvoicePreview(Invoice Invoice, string PreviewToken);
 
 public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepository billing, IInvoiceRepository invoices,
     ICompanyRepository companies, IBranchRepository branches, IQualityCycleRepository forms,
-    ITenantProfileRepository profiles, ITenantContext tenant, IShiftWorkReservation reservation, TimeProvider clock)
+    ITenantProfileRepository profiles, ITenantContext tenant, IShiftWorkReservation reservation, TimeProvider clock, IPartnerInvoiceSource? partnerSource = null)
 {
     public async Task<ShiftInvoicePreview> PreviewAsync(ShiftInvoiceRequest request, CancellationToken ct) => await BuildAsync(request, ct);
 
@@ -54,13 +56,15 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
     }
     private async Task<ShiftInvoicePreview> BuildAsync(ShiftInvoiceRequest request, CancellationToken ct)
     {
-        if (request.CompanyId == Guid.Empty || request.ShiftIds is null || request.ShiftIds.Count is < 1 or > 50 || request.ShiftIds.Any(id => id == Guid.Empty))
+        if (request.CompanyId == Guid.Empty || request.ShiftIds is null || (!request.PartnerMonth && request.ShiftIds.Count is < 1 or > 50) || request.ShiftIds.Any(id => id == Guid.Empty))
             Invalid("Select a company and between 1 and 50 shifts.");
         if (request.From.Year < 2000 || request.To.Year > 2100 || request.To < request.From || request.To.DayNumber - request.From.DayNumber >= 366)
             Invalid("Choose an inclusive billing period of at most 366 days between 2000 and 2100.");
         if (request.Language is not ("en" or "fi" or "sv")) Invalid("Choose English, Finnish or Swedish for the invoice.");
         if (request.BillingAddress is { } address && new[] { address.Street, address.PostalCode, address.City, address.Country }.Any(s => s?.Length > 250))
             Invalid("Billing address fields must be at most 250 characters.");
+        if (request.PartnerMonth && (request.ShiftIds!.Count != 0 || request.From.Day != 1 || request.To != request.From.AddMonths(1).AddDays(-1)
+            || request.MonthlyOverrides?.Count > 0)) Invalid("Partner invoicing requires a full calendar month and no manual shift selection or monthly overrides.");
         var ids = request.ShiftIds!.Distinct().Order().ToArray();
         var adjustments = request.MonthlyOverrides?.ToArray() ?? [];
         if (adjustments.Length > 600 || adjustments.GroupBy(o => (o.ShiftId, o.Month)).Any(g => g.Count() > 1)) Invalid("Only one override per shift and month is allowed.");
@@ -77,15 +81,33 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
         var zone = TenantTimeZone.Resolve(profile.TimeZoneId);
         var from = TenantTimeZone.StartOfLocalDay(request.From.ToDateTime(TimeOnly.MinValue), zone);
         var to = TenantTimeZone.StartOfLocalDay(request.To.AddDays(1).ToDateTime(TimeOnly.MinValue), zone);
-        var selected = await shifts.ListByIdsAsync(ids, ct);
-        if (selected.Count != ids.Length || selected.Any(s => s.CompanyId != request.CompanyId)) Invalid("One or more selected shifts are missing or belong to another company. Refresh the selection.");
+        var partnerRequests = partnerSource is null ? [] : await partnerSource.ListCompanyAsync(request.CompanyId, ct);
         var existing = await invoices.ListAsync(null, null, ct);
+        if (request.PartnerMonth)
+        {
+            if (partnerSource is null) Invalid("Partner invoice selection is unavailable.");
+            ids = partnerRequests.Where(r => r.Status != "Cancelled" && r.FirstAcceptedAtUtc.HasValue
+                && r.PlannedStartUtc >= from && r.PlannedStartUtc < to && r.LinkedShiftId.HasValue
+                && !existing.Any(i => Billed(i, r.LinkedShiftId.Value))).Select(r => r.LinkedShiftId!.Value).Distinct().Order().ToArray();
+        }
+        var selected = new List<Shift>();
+        foreach (var batch in ids.Chunk(50)) selected.AddRange(await shifts.ListByIdsAsync(batch, ct));
+        if (selected.Count != ids.Length || selected.Any(s => s.CompanyId != request.CompanyId)) Invalid("One or more selected shifts are missing or belong to another company. Refresh the selection.");
         if (existing.Any(i => ids.Any(id => Billed(i, id)) && i.PeriodFrom <= request.To && i.PeriodTo >= request.From))
             throw new ShiftConflictException("A selected shift already has an invoice covering these dates. Select an unbilled period or void the existing invoice first.");
         var lines = new List<InvoiceLine>(); var fingerprints = new List<string>();
         foreach (var shift in selected.OrderBy(s => s.Id))
         {
             var pricing = await billing.GetAsync(shift.Id, ct) ?? new ShiftBillingProfile { Id = shift.Id, ShiftId = shift.Id };
+            PartnerCleaningRequest? partnerRequest = null;
+            if (shift.PartnerRequestId.HasValue)
+            {
+                partnerRequest = partnerRequests.SingleOrDefault(r => r.Id == shift.PartnerRequestId && r.LinkedShiftId == shift.Id);
+                if (partnerRequest is null || partnerRequest.Status == "Cancelled" || !partnerRequest.FirstAcceptedAtUtc.HasValue)
+                    Invalid("A partner visit is missing its accepted request or has been cancelled.");
+                pricing = new() { Id = shift.Id, ShiftId = shift.Id, CreatedUtc = partnerRequest!.CreatedUtc, UpdatedUtc = partnerRequest.CreatedUtc, Plans = [new("PerOccurrence", partnerRequest.PriceNet, partnerRequest.VatRatePercent, new(2000, 1, 1))] };
+            }
+            else if (request.PartnerMonth) Invalid("Partner month selection contains an unrelated shift.");
             var schedule = ShiftContractSchedule.Snapshot(shift, zone);
             var resolved = await QualityCycleOccurrences.ResolvedInWindowAsync(shifts, schedule, from, to, zone, ct, true);
             if (resolved.Count > 10000) Invalid("Too many scheduled visits in this period. Select a shorter range.");
@@ -104,9 +126,11 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
                 names[branchId] = branch!.Name;
             }
             lines.AddRange(ShiftInvoiceCalculator.Calculate(schedule, pricing, visits, request.From, request.To, zone, names, adjustments));
-            fingerprints.Add(JsonSerializer.Serialize(new { Shift = shift, Pricing = pricing, Visits = visits,
+            fingerprints.Add(JsonSerializer.Serialize(new { Shift = shift, Pricing = pricing, PartnerRequest = partnerRequest, Visits = visits,
                 Completion = submitted.OrderBy(f => f.Id).Select(f => new { f.Id, f.EmployeeId, f.IsSubmitted, f.ShiftOccurrenceUtc, f.StartedAtUtc, f.EndedAtUtc, f.ShiftDeletedUtc }) }));
         }
+        if (lines.Count == 0 && request.PartnerMonth && !string.IsNullOrWhiteSpace(request.PreviewToken))
+            throw new ShiftConflictException("Partner work eligibility changed. Load a new preview before issuing.");
         if (lines.Count == 0) Invalid("No billable shift work was found in this period. On-call visits must be completed before invoicing.");
         var issueDate = TenantTimeZone.LocalDate(clock.GetUtcNow().UtcDateTime, zone);
         var invoice = new Invoice { Id = Guid.Empty, CreatedUtc = issueDate, UpdatedUtc = issueDate, CompanyId = company.Id,
@@ -116,7 +140,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
                 Email = profile.Email, Phone = profile.Phone, BankAccountIBAN = profile.BankAccountIBAN, BankBic = profile.BankBic },
             IssuerIsSample = profile.InvoiceIssuerIsSample, Lines = lines, Total = new() { Net = lines.Sum(l => l.NetAmount!.Value), Vat = lines.Sum(l => l.VatAmount) },
             Currency = "EUR", IssueDate = issueDate, DueDate = issueDate.AddDays(profile.PaymentTermsDays), Status = Invoice.StatusDraft };
-        var tokenPayload = JsonSerializer.Serialize(new { Invoice = invoice, Inputs = adjustments.OrderBy(a => a.ShiftId).ThenBy(a => a.Month), Sources = fingerprints });
+        var tokenPayload = JsonSerializer.Serialize(new { Invoice = invoice, PartnerMonth = request.PartnerMonth, Inputs = adjustments.OrderBy(a => a.ShiftId).ThenBy(a => a.Month), Sources = fingerprints });
         return new(invoice, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(tokenPayload))));
     }
 }

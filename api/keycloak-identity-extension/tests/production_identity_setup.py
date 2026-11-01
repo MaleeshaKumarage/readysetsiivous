@@ -66,7 +66,7 @@ try:
                     'smtpServer': {'host': 'smtp.invalid', 'from': 'fixture@example.invalid'}}, token=transport.admin_token)
     created = True
     transport.discovery(module.PUBLIC_ORIGIN + '/realms/' + realm)
-    for name in ('admin', 'manager', 'employee', 'legacy-retained'):
+    for name in ('admin', 'manager', 'employee', 'partner', 'legacy-retained'):
         api('POST', '/roles', {'name': name})
     profile = api('GET', '/users/profile')
     profile['attributes'].append({'name': module.OWNER, 'multivalued': False, 'permissions': {'view': ['admin'], 'edit': ['admin']}})

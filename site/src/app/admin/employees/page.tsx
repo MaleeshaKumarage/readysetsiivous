@@ -4,19 +4,21 @@ import { useEffect, useState } from 'react';
 import { Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge } from '@mantine/core';
 import { isAdmin } from '@/lib/auth';
 import { Plus } from 'lucide-react';
-import { adminEmployees, type Employee } from '@/lib/adminApi';
+import { adminEmployees, adminCompanies, type Company, type Employee } from '@/lib/adminApi';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
 
-const ROLES = ['admin', 'manager', 'employee'];
+const ROLES = ['admin', 'manager', 'employee', 'partner'];
 
 export default function EmployeesAdminPage() {
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [companyError, setCompanyError] = useState('');
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [lifecycle, setLifecycle] = useState<LifecycleStatus>('active');
   const visibleEmployees = employees.filter(employee => inLifecycle(employee, lifecycle));
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
-  const [form, setForm] = useState({ email: '', firstName: '', lastName: '', phone: '', role: 'employee' });
+  const [form, setForm] = useState({ email: '', firstName: '', lastName: '', phone: '', role: 'employee', partnerCompanyId: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [retryEmployee, setRetryEmployee] = useState<Employee | null>(null);
@@ -26,13 +28,14 @@ export default function EmployeesAdminPage() {
   const [inviteFailure, setInviteFailure] = useState('');
 
   const load = () => adminEmployees.list(true).then((r) => { if (r) setEmployees(r); setLoading(false); });
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); adminCompanies.listAll().then(records => { if (records) setCompanies(records); else setCompanyError('Company selection could not be loaded. Refresh before creating a partner.'); }); }, []);
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const submit = async () => {
     if (!form.email.trim() || !form.firstName.trim() || !form.lastName.trim()) { setError('Email, first and last name are required.'); return; }
+    if (form.role === 'partner' && !companies.some(c => c.id === form.partnerCompanyId && c.isActive && c.isPartnerEnabled)) { setError('Select an active company with partner access enabled.'); return; }
     setSaving(true); setError('');
     try {
     const fields = {
@@ -41,6 +44,7 @@ export default function EmployeesAdminPage() {
       lastName: form.lastName.trim(),
       phone: form.phone.trim(),
       role: form.role,
+      partnerCompanyId: form.role === 'partner' ? form.partnerCompanyId : null,
       skills: editingEmployee?.skills ?? [],
       serviceAreas: editingEmployee?.serviceAreas ?? [],
       colorHex: editingEmployee?.colorHex ?? null,
@@ -58,7 +62,7 @@ export default function EmployeesAdminPage() {
     setSaving(false);
     if (!created) { setError('Failed to create employee.'); return; }
     setLifecycle('active');
-    setForm({ email: '', firstName: '', lastName: '', phone: '', role: 'employee' });
+    setForm({ email: '', firstName: '', lastName: '', phone: '', role: 'employee', partnerCompanyId: '' });
     setModalOpen(false); await load();
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not create employee. Please retry.'); }
     finally { setSaving(false); }
@@ -66,7 +70,7 @@ export default function EmployeesAdminPage() {
 
   const openEdit = (employee: Employee) => {
     setEditingEmployee(employee);
-    setForm({ email: employee.email, firstName: employee.firstName, lastName: employee.lastName, phone: employee.phone ?? '', role: employee.role });
+    setForm({ email: employee.email, firstName: employee.firstName, lastName: employee.lastName, phone: employee.phone ?? '', role: employee.role, partnerCompanyId: employee.partnerCompanyId ?? '' });
     setError(''); setModalOpen(true);
   };
 
@@ -110,7 +114,7 @@ export default function EmployeesAdminPage() {
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
         <Title order={2}>Employees</Title>
-        {isAdmin() && <Button leftSection={<Plus size={16} />} onClick={() => { setEditingEmployee(null); setForm({ email: '', firstName: '', lastName: '', phone: '', role: 'employee' }); setError(''); setModalOpen(true); }}>Add employee</Button>}
+        {isAdmin() && <Button leftSection={<Plus size={16} />} onClick={() => { setEditingEmployee(null); setForm({ email: '', firstName: '', lastName: '', phone: '', role: 'employee', partnerCompanyId: '' }); setError(''); setModalOpen(true); }}>Add employee</Button>}
       </Group>
 
       {inviteMessage && <Text role="status" c="green" mb="sm">{inviteMessage}</Text>}
@@ -127,14 +131,14 @@ export default function EmployeesAdminPage() {
         <Table.ScrollContainer minWidth={550}>
           <Table striped highlightOnHover withTableBorder>
             <Table.Thead>
-              <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Email</Table.Th><Table.Th>Role</Table.Th><Table.Th>Status</Table.Th><Table.Th>Registration</Table.Th><Table.Th w={120}></Table.Th></Table.Tr>
+              <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Email</Table.Th><Table.Th>Role / company</Table.Th><Table.Th>Status</Table.Th><Table.Th>Registration</Table.Th><Table.Th w={120}></Table.Th></Table.Tr>
             </Table.Thead>
             <Table.Tbody>
               {visibleEmployees.map((e) => (
                 <Table.Tr key={e.id}>
                   <Table.Td fw={500}>{e.firstName} {e.lastName}</Table.Td>
                   <Table.Td>{e.email}</Table.Td>
-                  <Table.Td>{e.role}</Table.Td>
+                  <Table.Td>{e.role}{e.role === 'partner' && <Text size="xs">{companies.find(c => c.id === e.partnerCompanyId)?.name ?? 'Company unavailable'}</Text>}</Table.Td>
                   <Table.Td>{e.isActive ? <Badge color="green">Active</Badge> : <Badge color="gray">Inactive</Badge>}</Table.Td>
                   <Table.Td>{e.keycloakUserId ? <Badge color="green">Invited</Badge> : <Badge color="gray">Not invited</Badge>}</Table.Td>
                   <Table.Td><Group gap="xs" wrap="wrap">
@@ -162,6 +166,7 @@ export default function EmployeesAdminPage() {
           </Group>
           <TextInput label="Phone" value={form.phone} onChange={set('phone')} />
           <Select label="Role" data={ROLES} value={form.role} onChange={(v) => setForm((f) => ({ ...f, role: v ?? 'employee' }))} />
+          {form.role === 'partner' && <><Select label="Partner company" required searchable data={companies.filter(c => c.isActive && c.isPartnerEnabled).map(c => ({ value: c.id, label: c.name }))} value={form.partnerCompanyId || null} onChange={value => setForm(current => ({ ...current, partnerCompanyId: value ?? '' }))} description="Only companies with partner access enabled are available." />{companyError && <Text role="alert" c="red">{companyError}</Text>}</>}
           {error && <Text role="alert" size="sm" c="red">{error}</Text>}
           <Group justify="flex-end" mt="xs">
             <Button variant="default" onClick={() => setModalOpen(false)}>Cancel</Button>
