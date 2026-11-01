@@ -4,7 +4,6 @@ using CleaningSuite.Api.Auth;
 using CleaningSuite.Application;
 using CleaningSuite.Application.Companies;
 using CleaningSuite.Application.Employees;
-using CleaningSuite.Application.Partners;
 using CleaningSuite.Application.QualityCycle;
 using CleaningSuite.Application.Shifts;
 using CleaningSuite.Application.Tenants;
@@ -105,7 +104,8 @@ public class ShiftCalendarAdminController(IShiftRepository shifts, IEmployeeRepo
         var shift = await shifts.GetAsync(body.ShiftId, ct);
         var employee = await employees.GetByIdAsync(body.EmployeeId, ct);
         if (shift?.IsActive != true || employee?.IsActive != true) return BadRequest(new { detail = "Choose an active shift and employee." });
-        PartnerShiftGuard.EnsureOrdinary(shift);
+        if (shift.PartnerRequestId.HasValue)
+            return Conflict(new { detail = "Partner visits are read-only here. Manage their work through Partner requests." });
         if (!Employee.IsWorkRole(employee.Role)) return BadRequest(new { detail = "Choose an employee with a work role." });
         var visits = await shifts.ResolveRosterAsync(shift, TenantTimeZone.StartOfLocalDay(day, zone), TenantTimeZone.StartOfLocalDay(day.AddDays(1), zone), zone, ct, includeCancelled: true);
         var matching = visits.Where(v => v.Occurrence.StartUtc == scheduled).ToList();
@@ -128,6 +128,9 @@ public class ShiftCalendarAdminController(IShiftRepository shifts, IEmployeeRepo
             form.CompanyId = shift.CompanyId; form.BranchId = shift.BranchId;
         }
         form.WorkTimeCorrections.Add(new(User.FindFirstValue("sub")!, now, body.Reason.Trim(), form.StartedAtUtc, form.EndedAtUtc, actualStart, actualEnd));
+        // This operation explicitly records BOTH start and end, completing a past
+        // visit even when the cleaner previously started it. It is not a start-only
+        // timer correction. Retain all existing checklist answers and evidence.
         form.StartedAtUtc = actualStart; form.EndedAtUtc = actualEnd; form.IsSubmitted = true;
         form.SubmittedUtc ??= now; form.UpdatedUtc = now;
         if (isNew) await forms.CreateStartedFormAsync(form, ct); else await forms.SaveFormAsync(form, ct);

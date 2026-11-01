@@ -88,7 +88,7 @@ export default function ShiftCalendarPage() {
     <Modal opened={!!editing} onClose={() => { if (!saving) setEditing(null); }} title={editing?.person.actualStartUtc ? 'Correct work times' : 'Record work'} closeButtonProps={{ 'aria-label': 'Close work times' }} closeOnClickOutside={!saving} closeOnEscape={!saving}>
       <Stack><Text fw={600}>{editing?.person.name} · {editing?.visit.shiftName}</Text>
         {saveError && <div ref={errorSummary} role="alert" tabIndex={-1}><Text c="red">{saveError}</Text></div>}
-        <Text size="sm">Confirm actual times in {data?.timeZoneId}. Scheduled times are prefilled for new records. Checklist evidence is preserved.</Text>
+        <Text size="sm">Confirm actual times in {data?.timeZoneId}. Scheduled times are prefilled for new records. Saving records this past visit as completed. Checklist evidence is preserved.</Text>
         <TextInput label="Actual start" type="datetime-local" value={start} onChange={event => setStart(event.target.value)} required disabled={saving} />
         <TextInput label="Actual end" type="datetime-local" value={end} onChange={event => setEnd(event.target.value)} required disabled={saving} />
         {duration !== null && <Text size="sm">Work duration: {duration.toFixed(2)} hours</Text>}

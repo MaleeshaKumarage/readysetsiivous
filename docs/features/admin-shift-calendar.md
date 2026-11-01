@@ -20,7 +20,7 @@ Work recording is available only when the scheduled start date precedes today's 
 
 Writes resolve the visit and assignees again, reject cancelled/deactivated/deleted visits, validate record versions, and use the same tenant scheduling reservation as employee start/end operations. Existing records remain correctable after roster changes. Unassigned visits require assignment through existing shift management first.
 
-Work uses the existing Quality Cycle record and deterministic task identity, so personal calendars and work-hour projections read the same timestamps. New records become recorded with checklist items unchecked; corrections preserve answers, photos and notes. Audit entries on the form retain actor subject, real change time, reason and previous/new work times. Issued invoices are not regenerated.
+Work uses the existing Quality Cycle record and deterministic task identity, so personal calendars and work-hour projections read the same timestamps. Entering both actual times intentionally completes unfinished past work, including visits previously started by the cleaner; the dialog states this before saving. New records become recorded with checklist items unchecked; corrections preserve answers, photos and notes without marking unchecked activities as checked. Audit entries on the form retain actor subject, real change time, reason and previous/new work times. Issued invoices are not regenerated.
 
 The existing work-record identity cannot distinguish two visits on the same shift with the same start timestamp. Such cards remain visible but recording is disabled until the overlapping schedule is corrected.
 

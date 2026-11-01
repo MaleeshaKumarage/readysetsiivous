@@ -5,13 +5,13 @@ const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Meth
 async function setup(page: Page, allowed = true) {
   await setupAdminMocks(page);
   await page.route(/\/api\/v1\/me$/, route => route.fulfill({ headers, json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: ['admin'] })], canUseShiftCalendar: allowed, employee: null } }));
-  const state = { saved: null as any, fail: false, saveFailure: 0, specialStates: false, hold: null as Promise<void> | null };
+  const state = { saved: null as any, fail: false, saveFailure: 0, specialStates: false, partialWork: false, hold: null as Promise<void> | null };
   await page.route(/\/api\/v1\/admin\/shifts\/calendar(?:\?|\/|$)/, async route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
     if (!allowed) return route.fulfill({ headers, status: 403, json: {} });
     if (route.request().method() === 'PUT') {
       if (state.saveFailure) return route.fulfill({ headers, status: state.saveFailure, json: { detail: state.saveFailure === 409 ? 'Work times changed. Reload the calendar before saving.' : 'Could not save times. Please retry.' } });
-      state.saved = route.request().postDataJSON(); return route.fulfill({ headers, json: { id: 'work' } });
+      state.saved = route.request().postDataJSON(); state.partialWork = false; return route.fulfill({ headers, json: { id: 'work' } });
     }
     if (state.fail) return route.fulfill({ headers, status: 503, json: { detail: 'Calendar unavailable' } });
     const date = new URL(route.request().url()).searchParams.get('date') || '2026-10-30';
@@ -24,8 +24,8 @@ async function setup(page: Page, allowed = true) {
     return route.fulfill({ headers, json: { date, today: '2026-11-01', timeZoneId: 'Europe/Helsinki', occurrences: date > '2026-11-01' ? [] : [{
       shiftId: 'shift', shiftName: `Cleaning ${date}`, companyName: 'Test company', branchName: 'Helsinki branch',
       startUtc: `${date}T08:00:00Z`, endUtc: `${date}T10:00:00Z`, exceptionId: null, cancelled: false, ambiguous: false,
-      assignees: [{ employeeId: 'alice', name: 'Alice Cleaner', status: state.saved ? 'Recorded' : 'Not started', actualStartUtc: state.saved ? `${date}T08:15:00Z` : null,
-        actualEndUtc: state.saved ? `${date}T10:15:00Z` : null, hours: state.saved ? 2 : null, version: state.saved ? '11111111-1111-1111-1111-111111111111' : null, canRecord: date < '2026-11-01' },
+      assignees: [{ employeeId: 'alice', name: 'Alice Cleaner', status: state.partialWork ? 'Started' : state.saved ? 'Recorded' : 'Not started', actualStartUtc: state.saved ? `${date}T08:15:00Z` : null,
+        actualEndUtc: state.saved && !state.partialWork ? `${date}T10:15:00Z` : null, hours: state.saved && !state.partialWork ? 2 : null, version: state.saved ? '11111111-1111-1111-1111-111111111111' : null, canRecord: date < '2026-11-01' },
         { employeeId: 'bob', name: 'Bob Cleaner', status: 'Not started', actualStartUtc: null, actualEndUtc: null, hours: null, version: null, canRecord: date < '2026-11-01' }],
     }, ...(state.specialStates ? [specialVisit('Cancelled clean', true, false, true), specialVisit('Overlapping clean', false, true, true), specialVisit('Unassigned clean', false, false, false)] : [])] } });
   });
@@ -185,4 +185,38 @@ test('returning to Employees reloads grants changed by another admin', async ({ 
   await page.getByRole('link', { name: 'Employees', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Disable shift calendar' })).toBeVisible();
   expect(reads).toBeGreaterThan(initialReads);
+});
+
+test('a started visit prefills its actual start and scheduled end before admin completion', async ({ page }) => {
+  const state = await setup(page); state.saved = {}; state.partialWork = true;
+  await page.goto('/admin/shifts/calendar/');
+  await expect(page.getByText('Started', { exact: true })).toBeVisible();
+  await expect(page.getByText(/Actual:.*Not ended/)).toBeVisible();
+  await page.getByRole('button', { name: 'Correct times for Alice Cleaner' }).click();
+  await expect(page.getByLabel('Actual start')).toHaveValue('2026-10-30T10:15');
+  await expect(page.getByLabel('Actual end')).toHaveValue('2026-10-30T12:00');
+  await expect(page.getByText(/Saving records this past visit as completed/)).toBeVisible();
+  await page.getByRole('textbox', { name: 'Reason', exact: true }).fill('Complete past work from timesheet');
+  await page.getByRole('button', { name: 'Save work times' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByText('Recorded · 2.00 hours', { exact: true })).toBeVisible();
+});
+
+test('failed permission changes retain the toggle and show a retryable error', async ({ page }) => {
+  await setup(page);
+  await page.route(/\/api\/v1\/admin\/companies(?:\?.*)?$/, route => route.fulfill({ headers, json: { items: [], total: 0 } }));
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, route => route.fulfill({ headers, json: [{ id: 'admin-one', firstName: 'Admin', lastName: 'One', email: 'admin@example.invalid', role: 'admin', isActive: true, shiftCalendarEnabled: false }] }));
+  let failing = true;
+  await page.route(/\/api\/v1\/admin\/employees\/admin-one\/shift-calendar-access$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
+    return route.fulfill({ headers, status: failing ? 500 : 200, json: failing ? {} : { enabled: true } });
+  });
+  await page.goto('/admin/employees/');
+  await page.getByRole('button', { name: 'Enable shift calendar' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Could not change calendar access' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Enable shift calendar' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Disable shift calendar' })).toHaveCount(0);
+  failing = false;
+  await page.getByRole('button', { name: 'Enable shift calendar' }).click();
+  await expect(page.getByRole('button', { name: 'Disable shift calendar' })).toBeVisible();
 });

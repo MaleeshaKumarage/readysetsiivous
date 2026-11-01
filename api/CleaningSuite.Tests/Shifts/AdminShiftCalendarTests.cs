@@ -110,6 +110,8 @@ public class AdminShiftCalendarTests
         Assert.IsType<ConflictObjectResult>(await f.Controller.Record(f.Body(), default));
         Assert.IsType<OkObjectResult>(await f.Controller.Record(f.Body(form.Version), default));
         Assert.True(form.Items[0].IsChecked); Assert.Single(form.Photos); Assert.Equal("Original note", form.CleanerNotes);
+        // Entering both actual times intentionally ends this previously started visit.
+        Assert.True(form.IsSubmitted); Assert.Equal(f.Start.AddHours(2), form.EndedAtUtc);
         Assert.Equal(f.Start.AddMinutes(5), Assert.Single(form.WorkTimeCorrections).PreviousStartUtc);
     }
 
@@ -123,6 +125,15 @@ public class AdminShiftCalendarTests
         Assert.IsType<ConflictObjectResult>(await f.Controller.Record(f.Body(), default));
         Assert.True(f.Admin.CanUseShiftCalendar);
         f.Forms.Verify(r => r.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Partner_visit_is_an_explicit_readonly_conflict()
+    {
+        var f = new Fixture(); f.Shift.PartnerRequestId = Guid.NewGuid();
+        Assert.IsType<ConflictObjectResult>(await f.Controller.Record(f.Body(), default));
+        f.Forms.Verify(r => r.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);
+        f.Forms.Verify(r => r.CreateStartedFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
