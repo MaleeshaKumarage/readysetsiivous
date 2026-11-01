@@ -1,6 +1,6 @@
 'use client';
 import { Suspense, useCallback, useEffect, useState, type FormEvent } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { adminCompanies, adminEmployees, type Branch } from '@/lib/adminApi';
 import { managerApi } from '@/lib/managerApi';
 import { staffPartnerApi, type CleaningRequest, type PartnerChange } from '@/lib/partnerApi';
@@ -14,6 +14,7 @@ export function PartnerOperations({ role }: { role: 'admin' | 'manager' }) {
 }
 function PartnerOperationsContent({ role }: { role: 'admin' | 'manager' }) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const quoteRequests = useQuoteRequests();
   const [requests, setRequests] = useState<CleaningRequest[]>([]), [quotes, setQuotes] = useState<Branch[]>([]), [changes, setChanges] = useState<PartnerChange[]>([]), [branches, setBranches] = useState<Branch[]>([]);
   const [people, setPeople] = useState<Person[]>([]), [companies, setCompanies] = useState<{ id: string; name: string; isActive: boolean }[]>([]);
@@ -34,6 +35,12 @@ function PartnerOperationsContent({ role }: { role: 'admin' | 'manager' }) {
   }, [role]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { if (searchParams.get('tab') === 'quotes') setTab('Quote requests'); }, [searchParams]);
+  function selectTab(name: string) {
+    setTab(name);
+    const query = new URLSearchParams(searchParams.toString());
+    if (name === 'Quote requests') query.set('tab', 'quotes'); else query.delete('tab');
+    router.replace(window.location.pathname + (query.size ? '?' + query.toString() : ''), { scroll: false });
+  }
   async function act(work: () => Promise<unknown>, success: string) {
     if (busy) return; setBusy(true); setError(''); setNotice('');
     try { await work(); setNotice(success); await load(); await quoteRequests?.refresh(); } catch (e) { setError(e instanceof Error ? e.message : 'Change could not be confirmed. Refresh before retrying.'); } finally { setBusy(false); }
@@ -48,7 +55,7 @@ function PartnerOperationsContent({ role }: { role: 'admin' | 'manager' }) {
   return <section aria-busy={busy || loading} className="space-y-5 text-gray-900 [&_button]:min-h-11 [&_input]:min-h-11 [&_select]:min-h-11"><header className="flex flex-wrap justify-between gap-4"><h1 className="text-2xl font-bold">Partner operations</h1><button disabled={busy || loading} className="underline" onClick={() => void load()}>Refresh partner operations</button></header>
     <p>Price properties, arrange one-time cleaning and handle owner change requests. Times entered below use the tenant time zone.</p>
     {busy && <p role="status">Saving changes…</p>}{error && <p role="alert" className="text-red-700">{error}</p>}{notice && <p role="status">{notice}</p>}{loading && <p role="status">Loading partner operations…</p>}
-    <div className="flex flex-wrap gap-3" role="tablist" aria-label="Partner operations sections">{['Requests', 'Quote requests', 'Changes', 'Properties'].map(name => <button role="tab" key={name} aria-selected={tab === name} className={tab === name ? button : 'border rounded px-4 py-2'} onClick={() => setTab(name)}>{name}</button>)}</div>
+    <div className="flex flex-wrap gap-3" role="tablist" aria-label="Partner operations sections">{['Requests', 'Quote requests', 'Changes', 'Properties'].map(name => <button role="tab" key={name} aria-selected={tab === name} className={tab === name ? button : 'border rounded px-4 py-2'} onClick={() => selectTab(name)}>{name}</button>)}</div>
     {!loading && tab === 'Requests' && <div className="space-y-3">{!requests.length && <p>No partner cleaning requests.</p>}{requests.map(request => <article className="border rounded bg-white p-4 space-y-2" key={request.id} aria-label={`${request.branchName} request`}><h2 className="font-semibold">{request.branchName} · {request.status}</h2><p>{request.fromDate} – {request.toDate}{request.exactStartLocalTime && ` at ${request.exactStartLocalTime}`}</p><p>€{request.priceNet.toFixed(2)} excl. VAT ({request.vatRatePercent}%) · {request.estimatedDurationMinutes} minutes</p><p>Cleaner: {request.acceptedCleanerName ?? 'Not accepted'}</p>{request.notes && <p className="whitespace-pre-wrap">{request.notes}</p>}{!['Completed', 'InProgress', 'Cancelled'].includes(request.status) && <div className="flex gap-4"><button className={button} disabled={busy} onClick={() => { setOffer(request); setEmployee(request.offeredEmployeeId ?? ''); setStart(''); }}>Arrange cleaner / time</button><button className="underline" disabled={busy} onClick={() => setEditing(request)}>Edit / reschedule request</button><button className="underline" disabled={busy} onClick={() => { const reason = prompt('Reason for cancellation'); if (reason?.trim()) void act(() => staffPartnerApi(role).cancel(request, reason), 'Request cancelled.'); }}>Cancel request</button></div>}</article>)}</div>}
     {!loading && tab === 'Quote requests' && <div className="space-y-3">{!quotes.length && <p>No quotes awaiting pricing.</p>}{quotes.map(branch => <article className="border bg-white rounded p-4" key={branch.id}><h2 className="font-semibold">{branch.name}</h2><QuoteRequestedBadge branch={branch} /><p>{companies.find(company => company.id === branch.companyId)?.name ?? branch.companyId} · {branch.city}</p><p>Rooms: {branch.roomCount ?? 'Not set'} · Beds: {branch.bedCount ?? 'Not set'}</p><button className={button} disabled={busy} onClick={() => openPrice(branch)}>Set cleaning price</button></article>)}</div>}
     {!loading && tab === 'Changes' && <div className="space-y-3">{!changes.length && <p>No change requests.</p>}{changes.map(change => <article className="border bg-white rounded p-4 space-y-2" key={change.id}><h2 className="font-semibold">{change.kind} · {companies.find(company => company.id === change.companyId)?.name ?? change.companyId}</h2><p>{branches.find(branch => branch.id === change.branchId)?.name ?? ''}</p><p className="whitespace-pre-wrap">{change.message}</p><p>{change.resolvedUtc ? `Resolved: ${change.resolution}` : 'Awaiting staff response'}</p>{!change.resolvedUtc && <button className={button} disabled={busy} onClick={() => { setResolution(change); setText(''); }}>Resolve change request</button>}</article>)}</div>}

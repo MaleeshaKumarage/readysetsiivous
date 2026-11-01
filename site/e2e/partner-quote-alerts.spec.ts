@@ -76,6 +76,11 @@ test('quote banner switches tabs on the current operations page without losing a
   await page.getByRole('status', { name: 'Pending quote requests' }).getByRole('link', { name: 'Review quotes' }).click();
   await expect(page.getByRole('tab', { name: 'Quote requests', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByLabel('Property name', { exact: true })).toHaveValue('Preserve my draft');
+  await page.getByRole('tab', { name: 'Properties', exact: true }).click();
+  await expect(page).not.toHaveURL(/tab=quotes/);
+  await page.getByRole('status', { name: 'Pending quote requests' }).getByRole('link', { name: 'Review quotes' }).click();
+  await expect(page.getByRole('tab', { name: 'Quote requests', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByLabel('Property name', { exact: true })).toHaveValue('Preserve my draft');
 });
 
 test('visible polling and focus discover new quotes, errors retain count and retry clears resolved quotes', async ({ page }) => {
