@@ -10,7 +10,7 @@ ID cannot change the scope. Partners do not enter the workforce roster. A staff-
 role change is rejected while assigned work or an offer remains outstanding; completed
 history is retained.
 
-The English light-mode `/partner/` workspace shows that company's properties, cleaning
+The Finnish/English light-mode `/partner/` workspace shows that company's properties, cleaning
 requests, read-only shifts and change-request history, including staff resolutions.
 A partner can add a property without a price and request a quote. Admins and managers use
 `/admin/partner-requests/` or `/manager/partner-requests/` to manage quotes, properties,
@@ -249,3 +249,27 @@ pending. The query parameter matches the existing timestamp mapping without
 changing UTC values or schema; all 26 selected partner backend cases passed
 against an owned isolated PostgreSQL database with zero skips. Its temporary
 database, role, local credential file and SSH tunnel were removed afterward.
+
+## Partner design system and language coverage
+
+The partner workspace reuses the shared navy/gold tokens and Button, Card, Field,
+Input, Textarea and Badge components. Styling is scoped to the partner portal and
+keeps white surfaces/readable fields even when the global page has a saved dark
+theme. Desktop uses two property columns; mobile uses one, including 320px forms.
+The four-section navigation supports arrow keys and Home/End with visible focus.
+
+FI/EN is specific to this portal. Selection is remembered under
+`readyset:partner-language`; without a saved choice, a Finnish browser starts in
+Finnish and others in English. Switching language preserves open forms and entered
+values. Navigation, actions, statuses, confirmations, validation, known API errors,
+success/empty states and price/time formatting are localized. Company/property/
+person names, instructions and staff-written messages retain their entered text.
+The main region carries its language; other portals keep their current copy and
+theme preferences. Unknown server errors receive a localized retry message.
+
+The combined partner suites passed 58 desktop/mobile checks, including Finnish
+create/cancel/property/quote/change flows, language persistence, account-page
+isolation, draft preservation and global-dark/320px checks. Four lifecycle checks
+also passed after replacing an ancestor-dependent branch selector with its named
+accessible group. Screenshots cover Finnish desktop/mobile and narrow request
+forms. Earlier PostgreSQL notification regressions remain separately recorded.

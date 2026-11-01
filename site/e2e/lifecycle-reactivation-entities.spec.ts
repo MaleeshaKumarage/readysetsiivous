@@ -25,7 +25,7 @@ test('company and branch reactivation preserves metadata and independent lifecyc
   await page.getByRole('button', { name: 'Branches', exact: true }).click();
   const branchTabs = page.getByRole('tablist', { name: 'Branch activity' });
   await branchTabs.getByRole('tab', { name: 'Inactive (1)', exact: true }).click();
-  await page.getByText('Archived office', { exact: false }).locator('..').getByRole('button', { name: 'Reactivate' }).click();
+  await page.getByRole('group', { name: 'Branch Archived office', exact: true }).getByRole('button', { name: 'Reactivate' }).click();
   await expect(branchTabs.getByRole('tab', { name: 'Inactive (0)', exact: true })).toBeVisible();
   expect(company.isActive).toBe(false); expect(branch.street).toBe('Keep street');
   await page.getByRole('row').filter({ has: page.getByText('Archived client', { exact: true }) }).first().getByRole('button', { name: 'Reactivate', exact: true }).click();

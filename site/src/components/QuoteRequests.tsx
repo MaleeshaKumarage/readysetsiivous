@@ -51,10 +51,10 @@ export function QuoteRequestBanner() {
   </section>;
 }
 
-export function QuoteRequestedBadge({ branch }: { branch: Branch }) {
+export function QuoteRequestedBadge({ branch, label = 'Quote requested' }: { branch: Branch; label?: string }) {
   const queue = useQuoteRequests();
   const pending = branch.isActive && !branch.pricingReady
     && (queue?.loaded ? queue.branches.some(item => item.id === branch.id) : Boolean(branch.quoteRequestedUtc));
   if (!pending) return null;
-  return <span className="inline-flex w-fit items-center rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-800">Quote requested</span>;
+  return <span className="inline-flex w-fit items-center rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-800">{label}</span>;
 }

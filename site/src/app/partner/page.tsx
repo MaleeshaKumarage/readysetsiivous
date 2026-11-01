@@ -1,28 +1,60 @@
 'use client';
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { Building2, CalendarClock, MessageSquare, RefreshCw, Plus, ArrowRight, UserRound, LogOut } from 'lucide-react';
+import { Badge, Button, buttonClasses, Card, Field, Input, Textarea, fontFamily, palette } from '@/ds';
 import { authTenant, initAuth, isAuthenticated, isPartner, isAdmin, isManager, login, logout } from '@/lib/auth';
 import { partnerApi, type CleaningRequest, type PartnerIdentity, type PartnerShift, type PartnerChange } from '@/lib/partnerApi';
+import { partnerCopy, partnerLanguageKey, partnerMessage, partnerStatus, type PartnerLanguage } from '@/lib/partnerLocale';
 import type { Branch } from '@/lib/adminApi';
 import { QuoteRequestedBadge } from '@/components/QuoteRequests';
+import './partner.css';
 
-const input = 'block w-full border border-gray-300 rounded px-3 py-2 bg-white text-gray-900';
-const button = 'rounded bg-gray-900 text-white px-4 py-2 disabled:opacity-50';
+const sections = [
+  { key: 'Properties', label: 'properties', icon: Building2 },
+  { key: 'Cleaning requests', label: 'requests', icon: CalendarClock },
+  { key: 'Company shifts', label: 'shifts', icon: CalendarClock },
+  { key: 'Change requests', label: 'changes', icon: MessageSquare },
+] as const;
+type Section = typeof sections[number]['key'];
+const theme = {
+  '--partner-ink': palette.navy.logo, '--partner-muted': palette.navy[600],
+  '--partner-background': palette.navy[50], '--partner-border': palette.navy[100],
+  '--partner-gold': palette.gold[500], '--partner-gold-light': palette.gold[50],
+  '--partner-focus': palette.gold[700],
+  fontFamily: fontFamily.sans,
+} as CSSProperties;
+const base = partnerCopy.en;
+
 export default function PartnerPage() {
+  const [language, setLanguage] = useState<PartnerLanguage>('en');
+  const t = partnerCopy[language];
   const [identity, setIdentity] = useState<PartnerIdentity | null>(null), [branches, setBranches] = useState<Branch[]>([]), [requests, setRequests] = useState<CleaningRequest[]>([]), [shifts, setShifts] = useState<PartnerShift[]>([]);
   const [changes, setChanges] = useState<PartnerChange[]>([]);
   const [access, setAccess] = useState('pending'), [error, setError] = useState(''), [busy, setBusy] = useState(false), [notice, setNotice] = useState('');
-  const [tab, setTab] = useState('Properties'), [adding, setAdding] = useState(false), [target, setTarget] = useState<Branch | null>(null), [editing, setEditing] = useState<CleaningRequest | null>(null);
+  const [tab, setTab] = useState<Section>('Properties'), [adding, setAdding] = useState(false), [target, setTarget] = useState<Branch | null>(null), [editing, setEditing] = useState<CleaningRequest | null>(null);
   const [from, setFrom] = useState(''), [to, setTo] = useState(''), [exact, setExact] = useState(false), [time, setTime] = useState(''), [notes, setNotes] = useState('');
   const [change, setChange] = useState<{ kind: 'branch' | 'request'; id: string } | null>(null), [message, setMessage] = useState('');
   const generation = useRef(0), requestKey = useRef('');
-  const requestFormRef = useRef<HTMLElement | null>(null);
+  const requestFormRef = useRef<HTMLElement | null>(null), propertyFormRef = useRef<HTMLElement | null>(null), changeFormRef = useRef<HTMLElement | null>(null);
+  const tabsRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
-    if (!target) return;
-    requestFormRef.current?.focus({ preventScroll: true });
-    requestFormRef.current?.scrollIntoView({ block: 'start' });
-  }, [target]);
+    let selected: PartnerLanguage = navigator.language.toLowerCase().startsWith('fi') ? 'fi' : 'en';
+    try { const saved = localStorage.getItem(partnerLanguageKey); if (saved === 'fi' || saved === 'en') selected = saved; } catch { /* Storage is optional. */ }
+    setLanguage(selected);
+  }, []);
+  function chooseLanguage(next: PartnerLanguage) {
+    setLanguage(next);
+    try { localStorage.setItem(partnerLanguageKey, next); } catch { /* The current page still switches. */ }
+  }
+  useEffect(() => {
+    const panel = target ? requestFormRef.current : adding ? propertyFormRef.current : change ? changeFormRef.current : null;
+    panel?.focus({ preventScroll: true });
+    panel?.scrollIntoView({ block: 'start', behavior: 'instant' });
+  }, [target, adding, change]);
   const refresh = useCallback(async () => {
     const attempt = ++generation.current; setError('');
     try {
@@ -34,17 +66,19 @@ export default function PartnerPage() {
       const [properties, work, scheduled, changeHistory] = await Promise.all([partnerApi.branches(), partnerApi.requests(), partnerApi.shifts(), partnerApi.changes()]);
       if (attempt !== generation.current) return;
       setIdentity(person); setBranches(properties); setRequests(work); setShifts(scheduled); setChanges(changeHistory); setAccess('allowed');
-    } catch (e) { if (attempt === generation.current) { setError(e instanceof Error ? e.message : 'Could not load your company.'); setAccess('error'); } }
+    } catch (e) { if (attempt === generation.current) { setError(e instanceof Error ? e.message : base.loadFailure); setAccess('error'); } }
   }, []);
   useEffect(() => { void refresh(); return () => { generation.current++; }; }, [refresh]);
   async function act(action: () => Promise<unknown>, success: string) {
     if (busy) return; setBusy(true); setError(''); setNotice('');
     try { await action(); setNotice(success); await refresh(); }
-    catch (e) { setError(e instanceof Error ? e.message : 'Your change could not be confirmed. Refresh before retrying.'); }
+    catch (e) { setError(e instanceof Error ? e.message : base.operationFailed); }
     finally { setBusy(false); }
   }
   function openRequest(branch: Branch, request?: CleaningRequest) {
-    setTarget({ ...branch }); setEditing(request ?? null); setFrom(request?.fromDate ?? ''); setTo(request?.toDate ?? ''); setExact(Boolean(request?.exactStartLocalTime)); setTime(request?.exactStartLocalTime?.slice(0, 5) ?? ''); setNotes(request?.notes ?? ''); requestKey.current = crypto.randomUUID(); setError('');
+    setTarget({ ...branch }); setEditing(request ?? null); setFrom(request?.fromDate ?? ''); setTo(request?.toDate ?? '');
+    setExact(Boolean(request?.exactStartLocalTime)); setTime(request?.exactStartLocalTime?.slice(0, 5) ?? '');
+    setNotes(request?.notes ?? ''); requestKey.current = crypto.randomUUID(); setError('');
   }
   async function submitRequest(e: FormEvent) {
     e.preventDefault(); if (!target) return;
@@ -53,25 +87,149 @@ export default function PartnerPage() {
       if (editing) await partnerApi.updateRequest(editing.id, { ...body, version: editing.version });
       else await partnerApi.createRequest({ ...body, branchId: target.id, clientRequestId: requestKey.current });
       setTarget(null); setEditing(null); setTab('Cleaning requests');
-    }, 'Cleaning request saved. Staff will arrange a cleaner.');
+    }, base.requestSaved);
   }
-  const stamp = (value: string | null) => value ? new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: identity?.timeZoneId }).format(new Date(value)) : 'Not recorded';
-  return <main className="min-h-screen bg-gray-50 text-gray-900 p-4 sm:p-8"><div className="max-w-5xl mx-auto space-y-5 [&_button]:min-h-11 [&_input]:min-h-11">
-    <header className="flex flex-wrap justify-between gap-4"><div className="flex min-w-0 items-center gap-3"><Image src="/brand/readyset-primary-logo.png" alt="ReadySetSiivous" width={64} height={64} priority /><div><h1 className="text-2xl font-bold">Partner portal</h1>{identity && <p>{identity.company.name} · Times in {identity.timeZoneId}</p>}</div></div><nav className="flex gap-4"><Link className="underline" href="/account/">Account</Link>{access !== 'anonymous' && <button onClick={() => logout()}>Sign out</button>}</nav></header>
-    {access === 'pending' && <p role="status">Checking access…</p>}
-    {access === 'anonymous' && <button className={button} onClick={() => login()}>Sign in</button>}
-    {access === 'denied' && <p role="alert">Access denied. An active partner account linked to an enabled company is required.</p>}
-    {busy && <p role="status">Saving changes…</p>}{error && (!target || access !== 'allowed') && <p role="alert" className="text-red-700">{error}</p>}{notice && <p role="status">{notice}</p>}
-    {['allowed', 'error'].includes(access) && <button disabled={busy} className="underline" onClick={() => void refresh()}>Refresh partner data</button>}
-    {access === 'allowed' && <>
-      <div role="tablist" aria-label="Partner sections" className="flex flex-wrap gap-3">{['Properties', 'Cleaning requests', 'Company shifts', 'Change requests'].map(name => <button key={name} role="tab" aria-selected={tab === name} className={tab === name ? button : 'px-4 py-2 border rounded'} onClick={() => setTab(name)}>{name}</button>)}</div>
-      {tab === 'Properties' && <section className="space-y-4"><button className={button} disabled={busy} onClick={() => setAdding(true)}>Add property</button>{!branches.length && <p>No properties yet. Add a property and request a quote.</p>}{branches.map(branch => <article aria-label={branch.name} key={branch.id} className="bg-white border rounded-lg p-5 space-y-3"><h2 className="font-semibold text-lg">{branch.name}</h2><QuoteRequestedBadge branch={branch} /><p>{[branch.street, branch.postalCode, branch.city].filter(Boolean).join(', ')}</p><p>Rooms: {branch.roomCount ?? 'Not set'} · Beds: {branch.bedCount ?? 'Not set'}</p><p>{branch.pricingReady ? `€${branch.priceNet?.toFixed(2)} excl. VAT (${branch.vatRatePercent}%) · Estimated ${branch.estimatedDurationMinutes} minutes` : branch.quoteRequestedUtc ? 'Quote requested — awaiting staff pricing' : 'Pricing required before requesting cleaning'}</p><div className="flex flex-wrap gap-4"><button className={button} disabled={busy || !branch.isActive || !branch.pricingReady} onClick={() => openRequest(branch)}>Request cleaning</button>{!branch.pricingReady && <button disabled={busy || !branch.isActive || Boolean(branch.quoteRequestedUtc)} className="underline" onClick={() => act(() => partnerApi.quote(branch.id), 'Quote requested.')}>Request quote</button>}<button className="underline" onClick={() => { setChange({ kind: 'branch', id: branch.id }); setMessage(''); }}>Request property changes</button></div></article>)}</section>}
-      {tab === 'Cleaning requests' && <section className="space-y-4">{!requests.length && <p>No cleaning requests yet.</p>}{requests.map(request => <article key={request.id} aria-label={`${request.branchName} ${request.fromDate}`} className="bg-white border rounded-lg p-5 space-y-2"><h2 className="font-semibold">{request.branchName} · {request.status}</h2><p>{request.fromDate} – {request.toDate}{request.exactStartLocalTime && ` at ${request.exactStartLocalTime.slice(0, 5)}`}</p><p>Agreed price €{request.priceNet.toFixed(2)} excl. VAT ({request.vatRatePercent}%)</p><p>Cleaner: {request.acceptedCleanerName ?? 'Awaiting acceptance'}</p><p>Planned: {stamp(request.plannedStartUtc)} – {stamp(request.plannedEndUtc)}</p><p>Actual start: {stamp(request.actualStartUtc)} · Actual end: {stamp(request.actualEndUtc)}</p>{request.notes && <p className="whitespace-pre-wrap">{request.notes}</p>}<div className="flex gap-4 flex-wrap">{!request.firstAcceptedAtUtc && request.status !== 'Cancelled' ? <><button disabled={busy} className="underline" onClick={() => { const branch = branches.find(b => b.id === request.branchId); if (branch) openRequest(branch, request); }}>Edit request</button><button disabled={busy} className="underline text-red-700" onClick={() => { if (confirm('Cancel this cleaning request?')) void act(() => partnerApi.cancel(request), 'Request cancelled.'); }}>Cancel request</button></> : request.status !== 'Cancelled' && <button className="underline" onClick={() => { setChange({ kind: 'request', id: request.id }); setMessage(''); }}>Request a change or cancellation</button>}</div></article>)}</section>}
-      {tab === 'Change requests' && <section aria-label="Change request history" className="space-y-3">{!changes.length && <p>No change requests yet.</p>}{changes.map(item => <article key={item.id} className="bg-white border rounded p-4 space-y-2"><h2 className="font-semibold">{branches.find(branch => branch.id === item.branchId)?.name ?? 'Property'} · {item.kind}</h2><p>{item.resolvedUtc ? 'Resolved' : 'Awaiting staff response'}</p><p className="whitespace-pre-wrap">{item.message}</p>{item.resolvedUtc && <div><h3 className="font-semibold">Staff response</h3><p className="whitespace-pre-wrap">{item.resolution}</p></div>}</article>)}</section>}
-      {tab === 'Company shifts' && <section className="space-y-3"><p>Existing company shifts are shown for reference. Contact staff to change them.</p>{!shifts.length && <p>No company shifts.</p>}{shifts.map(shift => <article key={shift.id} className="bg-white border rounded p-4"><h2 className="font-semibold">{shift.name}</h2><p>{shift.branchName} · {shift.isActive ? 'Active' : 'Inactive'} · {shift.validFrom ?? 'No start date'} – {shift.validUntil ?? 'Ongoing'}</p></article>)}</section>}
-      {adding && <section aria-label="Add property" className="bg-white border rounded p-5"><h2 className="text-lg font-semibold">Add property</h2><form className="grid sm:grid-cols-2 gap-3" onSubmit={e => { e.preventDefault(); const data = new FormData(e.currentTarget); const body = Object.fromEntries(data); void act(async () => { await partnerApi.createBranch({ ...body, roomCount: body.roomCount === '' ? null : Number(body.roomCount), bedCount: body.bedCount === '' ? null : Number(body.bedCount) }); setAdding(false); }, 'Property created. Request a quote to enable cleaning requests.'); }}>{['name', 'street', 'postalCode', 'city', 'country', 'contactPhone', 'contactEmail', 'roomCount', 'bedCount'].map(field => <label key={field}>{({ name: 'Property name', postalCode: 'Postal code', contactPhone: 'Contact phone', contactEmail: 'Contact email', roomCount: 'Rooms (optional)', bedCount: 'Beds (optional)' } as Record<string, string>)[field] ?? field.charAt(0).toUpperCase() + field.slice(1)}<input className={input} name={field} required={field === 'name'} type={field.endsWith('Count') ? 'number' : field === 'contactEmail' ? 'email' : 'text'} min={0} step={1} /></label>)}<div className="flex gap-4"><button className={button} disabled={busy}>Save property</button><button type="button" disabled={busy} onClick={() => setAdding(false)}>Cancel</button></div></form></section>}
-      {target && <section ref={requestFormRef} tabIndex={-1} aria-label="Cleaning request form" className="bg-white border rounded p-5"><h2 className="text-lg font-semibold">{editing ? 'Edit' : 'New'} cleaning request · {target.name}</h2>{error && <p role="alert" className="text-red-700">{error}</p>}<p>One cleaning visit within your chosen dates. Times use {identity?.timeZoneId}.</p><form onSubmit={submitRequest} className="space-y-3"><label>From date<input className={input} type="date" required value={from} onChange={e => setFrom(e.target.value)} /></label><label className="flex gap-2"><input type="checkbox" checked={exact} onChange={e => setExact(e.target.checked)} />Fixed appointment on this date</label>{exact ? <label>Exact start time<input className={input} type="time" required value={time} onChange={e => setTime(e.target.value)} /></label> : <label>To date<input className={input} type="date" min={from} required value={to} onChange={e => setTo(e.target.value)} /></label>}<label>Cleaning instructions<textarea className={input} value={notes} maxLength={4000} onChange={e => setNotes(e.target.value)} /></label><div className="flex gap-4"><button className={button} disabled={busy}>Save cleaning request</button><button type="button" disabled={busy} onClick={() => setTarget(null)}>Cancel</button></div></form></section>}
-      {change && <section aria-label="Request staff changes" className="bg-white border rounded p-5"><form onSubmit={e => { e.preventDefault(); void act(async () => { if (change.kind === 'branch') await partnerApi.branchChange(change.id, message); else await partnerApi.requestChange(change.id, message); setChange(null); }, 'Change request sent to staff.'); }}><label>Describe the requested change<textarea className={input} required maxLength={2000} value={message} onChange={e => setMessage(e.target.value)} /></label><div className="flex gap-4 mt-3"><button className={button} disabled={busy || !message.trim()}>Send change request</button><button type="button" disabled={busy} onClick={() => setChange(null)}>Cancel</button></div></form></section>}
-    </>}
-  </div></main>;
+  function invalid(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const field = e.target as HTMLInputElement | HTMLTextAreaElement;
+    setError(field.validity.rangeOverflow ? base.countRange : field.validity.rangeUnderflow ? (field.type === 'date' ? base.dateRange : base.nonNegative)
+      : field.validity.typeMismatch ? base.invalidEmail : field.validity.stepMismatch ? base.invalidNumber : base.requiredFields);
+    if (e.currentTarget.querySelector(':invalid') === field) field.focus();
+  }
+  function navigateTab(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    const next = event.key === 'ArrowRight' ? (index + 1) % sections.length : event.key === 'ArrowLeft' ? (index + sections.length - 1) % sections.length : event.key === 'Home' ? 0 : event.key === 'End' ? sections.length - 1 : null;
+    if (next === null) return;
+    event.preventDefault(); setTab(sections[next].key);
+    tabsRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+  }
+  const locale = language === 'fi' ? 'fi-FI' : 'en-GB';
+  const moneyFormatter = useMemo(() => new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR' }), [locale]);
+  const numberFormatter = useMemo(() => new Intl.NumberFormat(locale), [locale]);
+  const dateFormatter = useMemo(() => new Intl.DateTimeFormat(locale, { timeZone: 'UTC' }), [locale]);
+  const stampFormatter = useMemo(() => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone: identity?.timeZoneId }), [locale, identity?.timeZoneId]);
+  const money = (value?: number | null) => value == null ? t.notSet : moneyFormatter.format(value);
+  const number = (value: number) => numberFormatter.format(value);
+  const date = (value: string) => language === 'fi' ? dateFormatter.format(new Date(value + 'T12:00:00Z')) : value;
+  const stamp = (value: string | null) => value && !Number.isNaN(Date.parse(value))
+    ? stampFormatter.format(new Date(value)) : t.notRecorded;
+  const selectedIndex = sections.findIndex(section => section.key === tab);
+  const counts = [branches.length, requests.length, shifts.length, changes.length];
+  const alert = error ? <p role="alert" className="partner-alert partner-alert-error">{partnerMessage(error, language)}</p> : null;
+
+  return <main lang={language} className="partner-portal" style={theme}>
+    <header className="partner-header"><div className="partner-shell partner-header-inner">
+      <div className="partner-brand"><Image src="/brand/readyset-primary-logo.png" alt="ReadySetSiivous" width={56} height={56} priority /><div><h1>{t.portal}</h1><p>{identity?.company.name ?? t.intro}</p></div></div>
+      <div className="partner-header-actions">
+        <div className="partner-language" role="group" aria-label={t.language}>
+          <button type="button" lang="fi" aria-label="Suomi" aria-pressed={language === 'fi'} onClick={() => chooseLanguage('fi')}>FI</button>
+          <button type="button" lang="en" aria-label="English" aria-pressed={language === 'en'} onClick={() => chooseLanguage('en')}>EN</button>
+        </div>
+        <nav className="partner-account"><Link className={buttonClasses('ghost', 'sm') + ' partner-quiet'} href="/account/"><UserRound size={17} aria-hidden="true" />{t.account}</Link>
+          {access !== 'anonymous' && <Button variant="ghost" size="sm" className="partner-quiet" onClick={() => logout()}><LogOut size={17} aria-hidden="true" />{t.signOut}</Button>}
+        </nav>
+      </div>
+    </div></header>
+    <div className="partner-shell partner-main">
+      {access === 'pending' && <p role="status" className="partner-alert">{t.checking}</p>}
+      {access === 'anonymous' && <Card className="partner-surface partner-welcome"><h2>{t.portal}</h2><p>{t.intro}</p><Button onClick={() => login()}>{t.signIn}<ArrowRight size={17} aria-hidden="true" /></Button></Card>}
+      {access === 'denied' && <p role="alert" className="partner-alert partner-alert-error">{t.denied}</p>}
+      {busy && <p role="status" className="partner-alert">{t.saving}</p>}
+      {(!target || access !== 'allowed') && alert}
+      {notice && <p role="status" className="partner-alert partner-alert-success">{partnerMessage(notice, language)}</p>}
+      {['allowed', 'error'].includes(access) && <div className="partner-toolbar"><p>{t.timeZone} <strong>{identity?.timeZoneId ?? 'Europe/Helsinki'}</strong></p><Button variant="ghost" size="sm" className="partner-quiet" disabled={busy} onClick={() => void refresh()}><RefreshCw size={16} aria-hidden="true" />{t.refresh}</Button></div>}
+      {access === 'allowed' && <>
+        <div ref={tabsRef} role="tablist" aria-label={t.sections} className="partner-tabs">
+          {sections.map((section, index) => <button key={section.key} id={'partner-tab-' + index} type="button" role="tab" aria-label={t[section.label]} aria-selected={tab === section.key} aria-controls="partner-section" tabIndex={tab === section.key ? 0 : -1} onKeyDown={event => navigateTab(event, index)} onClick={() => setTab(section.key)}>
+            <section.icon size={18} aria-hidden="true" /><span>{t[section.label]}</span><span className="partner-count" aria-hidden="true">{counts[index]}</span>
+          </button>)}
+        </div>
+        <div role="tabpanel" id="partner-section" aria-labelledby={'partner-tab-' + selectedIndex}>
+          {tab === 'Properties' && <section className="partner-section">
+            <div className="partner-section-heading"><div><h2>{t.properties}</h2><p>{t.propertiesHint}</p></div><Button variant="gold" disabled={busy} onClick={() => setAdding(true)}><Plus size={18} aria-hidden="true" />{t.addProperty}</Button></div>
+            {!branches.length && <Card className="partner-surface partner-empty">{t.noProperties}</Card>}
+            <div className="partner-grid">{branches.map(branch => <article aria-label={branch.name} key={branch.id}>
+              <Card className="partner-surface partner-property">
+                <div className="partner-card-heading"><h3>{branch.name}</h3>{!branch.isActive ? <Badge variant="outline" className="partner-badge">{t.inactive}</Badge> : branch.pricingReady ? <Badge variant="subtle" className="partner-badge">{t.ready}</Badge> : null}</div>
+                <QuoteRequestedBadge branch={branch} label={t.quoteRequested} />
+                <p className="partner-muted">{[branch.street, branch.postalCode, branch.city].filter(Boolean).join(', ')}</p>
+                <dl className="partner-property-facts"><div><dt>{t.rooms}</dt><dd>{branch.roomCount ?? t.notSet}</dd></div><div><dt>{t.beds}</dt><dd>{branch.bedCount ?? t.notSet}</dd></div></dl>
+                <div className="partner-price">{branch.pricingReady ? <><p><strong>{money(branch.priceNet)}</strong> {t.exclVat} ({t.vat} {number(branch.vatRatePercent ?? 0)}%)</p><p className="partner-muted">{t.estimated} {branch.estimatedDurationMinutes} {t.minutes}</p></> : <p>{branch.quoteRequestedUtc ? t.quoteWaiting : t.pricingRequired}</p>}</div>
+                <div className="partner-card-actions"><Button disabled={busy || !branch.isActive || !branch.pricingReady} onClick={() => openRequest(branch)}>{t.requestCleaning}<ArrowRight size={16} aria-hidden="true" /></Button>
+                  {!branch.pricingReady && <Button variant="outline" className="partner-secondary" disabled={busy || !branch.isActive || Boolean(branch.quoteRequestedUtc)} onClick={() => act(() => partnerApi.quote(branch.id), base.quoteSaved)}>{t.requestQuote}</Button>}
+                  <Button variant="ghost" size="sm" className="partner-quiet" onClick={() => { setChange({ kind: 'branch', id: branch.id }); setMessage(''); }}>{t.propertyChanges}</Button>
+                </div>
+              </Card>
+            </article>)}</div>
+          </section>}
+          {tab === 'Cleaning requests' && <section className="partner-section">
+            <div className="partner-section-heading"><div><h2>{t.requests}</h2><p>{t.requestsHint}</p></div></div>
+            {!requests.length && <Card className="partner-surface partner-empty">{t.noRequests}</Card>}
+            <div className="partner-grid">{requests.map(request => <article key={request.id} aria-label={request.branchName + ' ' + request.fromDate}>
+              <Card className="partner-surface partner-request">
+                <div className="partner-card-heading"><h3>{request.branchName}<span className="sr-only"> · {partnerStatus(request.status, language)}</span></h3>
+                  <Badge variant={request.status === 'Completed' ? 'subtle' : 'outline'} className="partner-badge">{partnerStatus(request.status, language)}</Badge>
+                </div>
+                <p>{date(request.fromDate)} – {date(request.toDate)}{request.exactStartLocalTime && ' ' + t.at + ' ' + request.exactStartLocalTime.slice(0, 5)}</p>
+                <p className="partner-price">{t.agreedPrice} <strong>{money(request.priceNet)}</strong> {t.exclVat} ({t.vat} {number(request.vatRatePercent)}%)</p>
+                <div className="partner-request-details"><p>{t.cleaner}: {request.acceptedCleanerName ?? t.awaitingAcceptance}</p><p>{t.planned}: {stamp(request.plannedStartUtc)} – {stamp(request.plannedEndUtc)}</p><p>{t.actualStart}: {stamp(request.actualStartUtc)} · {t.actualEnd}: {stamp(request.actualEndUtc)}</p></div>
+                {request.notes && <p className="partner-entered">{request.notes}</p>}
+                <div className="partner-card-actions">{!request.firstAcceptedAtUtc && request.status !== 'Cancelled' ? <>
+                  <Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => { const branch = branches.find(item => item.id === request.branchId); if (branch) openRequest(branch, request); }}>{t.editRequest}</Button>
+                  <Button variant="ghost" className="partner-danger" disabled={busy} onClick={() => { if (confirm(t.cancelConfirm)) void act(() => partnerApi.cancel(request), base.requestCancelled); }}>{t.cancelRequest}</Button>
+                </> : request.status !== 'Cancelled' && <Button variant="outline" className="partner-secondary" onClick={() => { setChange({ kind: 'request', id: request.id }); setMessage(''); }}>{t.changeOrCancel}</Button>}</div>
+              </Card>
+            </article>)}</div>
+          </section>}
+          {tab === 'Change requests' && <section aria-label={t.history} className="partner-section">
+            <div className="partner-section-heading"><div><h2>{t.changes}</h2><p>{t.changesHint}</p></div></div>
+            {!changes.length && <Card className="partner-surface partner-empty">{t.noChanges}</Card>}
+            <div className="partner-grid">{changes.map(item => <article key={item.id}><Card className="partner-surface">
+              <h3>{branches.find(branch => branch.id === item.branchId)?.name ?? t.property} · {item.kind === 'Property' ? t.kindProperty : item.kind === 'Request' || item.kind === 'CleaningRequest' ? t.kindRequest : t.kindChange}</h3>
+              <Badge variant="subtle" className="partner-badge">{item.resolvedUtc ? t.resolved : t.awaitingStaff}</Badge>
+              <p className="partner-entered">{item.message}</p>
+              {item.resolvedUtc && <div className="partner-staff-response"><h4>{t.staffResponse}</h4><p className="partner-entered">{item.resolution}</p></div>}
+            </Card></article>)}</div>
+          </section>}
+          {tab === 'Company shifts' && <section className="partner-section">
+            <div className="partner-section-heading"><div><h2>{t.shifts}</h2><p>{t.shiftsHint}</p></div></div>
+            {!shifts.length && <Card className="partner-surface partner-empty">{t.noShifts}</Card>}
+            <div className="partner-grid">{shifts.map(shift => <article key={shift.id}><Card className="partner-surface"><h3>{shift.name}</h3><p>{shift.branchName}</p><Badge variant="outline" className="partner-badge">{shift.isActive ? t.active : t.inactive}</Badge><p>{shift.validFrom ? date(shift.validFrom) : t.noStart} – {shift.validUntil ? date(shift.validUntil) : t.ongoing}</p></Card></article>)}</div>
+          </section>}
+        </div>
+        {adding && <section ref={propertyFormRef} tabIndex={-1} aria-label={t.addProperty} className="partner-form-panel">
+          <Card className="partner-surface"><h2>{t.addProperty}</h2>
+            <form className="partner-form-grid" onInvalid={invalid} onSubmit={event => {
+              event.preventDefault(); const fields = Object.fromEntries(new FormData(event.currentTarget));
+              void act(async () => { await partnerApi.createBranch({ ...fields, roomCount: fields.roomCount === '' ? null : Number(fields.roomCount), bedCount: fields.bedCount === '' ? null : Number(fields.bedCount) }); setAdding(false); }, base.propertyCreated);
+            }}>
+              {([
+                ['name', t.propertyName], ['street', t.street], ['postalCode', t.postalCode], ['city', t.city], ['country', t.country],
+                ['contactPhone', t.phone], ['contactEmail', t.email], ['roomCount', t.optionalRooms], ['bedCount', t.optionalBeds],
+              ] as const).map(([name, label]) => <Field key={name} label={label}><Input className="partner-field" name={name} required={name === 'name'} maxLength={name === 'name' ? 200 : undefined} type={name.endsWith('Count') ? 'number' : name === 'contactEmail' ? 'email' : 'text'} min={0} max={name.endsWith('Count') ? 10000 : undefined} step={1} /></Field>)}
+              <div className="partner-form-actions"><Button type="submit" disabled={busy}>{t.saveProperty}</Button><Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => setAdding(false)}>{t.cancel}</Button></div>
+            </form>
+          </Card>
+        </section>}
+        {target && <section ref={requestFormRef} tabIndex={-1} aria-label={t.requestForm} className="partner-form-panel">
+          <Card className="partner-surface"><h2>{editing ? t.editCleaning : t.newCleaning} · {target.name}</h2>{alert}<p className="partner-muted">{t.oneVisit} {t.timesUse} {identity?.timeZoneId}.</p>
+            <form onSubmit={submitRequest} onInvalid={invalid} className="partner-form-grid">
+              <Field label={t.fromDate}><Input className="partner-field" name="fromDate" type="date" required value={from} onChange={event => setFrom(event.target.value)} /></Field>
+              {exact ? <Field label={t.exactTime}><Input className="partner-field" name="exactTime" type="time" required value={time} onChange={event => setTime(event.target.value)} /></Field> : <Field label={t.toDate}><Input className="partner-field" name="toDate" type="date" min={from} required value={to} onChange={event => setTo(event.target.value)} /></Field>}
+              <label className="partner-check"><input type="checkbox" checked={exact} onChange={event => setExact(event.target.checked)} />{t.fixedAppointment}</label>
+              <Field label={t.instructions} className="partner-form-wide"><Textarea className="partner-field" value={notes} maxLength={4000} onChange={event => setNotes(event.target.value)} /></Field>
+              <div className="partner-form-actions"><Button type="submit" disabled={busy}>{t.saveRequest}</Button><Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => setTarget(null)}>{t.cancel}</Button></div>
+            </form>
+          </Card>
+        </section>}
+        {change && <section ref={changeFormRef} tabIndex={-1} aria-label={t.staffChanges} className="partner-form-panel">
+          <Card className="partner-surface"><h2>{t.staffChanges}</h2><form onInvalid={invalid} className="partner-form-grid" onSubmit={event => {
+            event.preventDefault(); void act(async () => { if (change.kind === 'branch') await partnerApi.branchChange(change.id, message); else await partnerApi.requestChange(change.id, message); setChange(null); }, base.changeSent);
+          }}>
+            <Field label={t.describeChange} className="partner-form-wide"><Textarea className="partner-field" required maxLength={2000} value={message} onChange={event => setMessage(event.target.value)} /></Field>
+            <div className="partner-form-actions"><Button type="submit" disabled={busy || !message.trim()}>{t.sendChange}</Button><Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => setChange(null)}>{t.cancel}</Button></div>
+          </form></Card>
+        </section>}
+      </>}
+    </div>
+  </main>;
 }

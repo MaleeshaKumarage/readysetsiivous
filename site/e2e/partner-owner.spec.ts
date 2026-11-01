@@ -68,6 +68,108 @@ test('Request cleaning visibly opens and focuses the form even below a long prop
   await expect(form).toBeFocused();
 });
 
+test('FI/EN switching preserves a draft, creates and cancels a Finnish request and stays local to the portal', async ({ page }) => {
+  const state = await owner(page); await page.goto('/partner/');
+  await page.getByRole('button', { name: 'Suomi', exact: true }).click();
+  await expect(page.getByRole('main')).toHaveAttribute('lang', 'fi');
+  await expect(page.getByRole('heading', { name: 'Kumppaniportaali', exact: true })).toBeVisible();
+  await expect(page.getByText(/70,00\s*€/).first()).toBeVisible();
+  await page.getByRole('button', { name: 'Pyydä siivous', exact: true }).click();
+  let form = page.getByRole('region', { name: 'Siivouspyynnön lomake', exact: true });
+  await form.getByLabel('Alkupäivä', { exact: true }).fill('2026-12-10');
+  await form.getByLabel('Loppupäivä', { exact: true }).fill('2026-12-11');
+  await form.getByLabel('Siivouksen ohjeet').fill('Keep this entered text unchanged.');
+  await page.getByRole('button', { name: 'English', exact: true }).click();
+  const english = page.getByRole('region', { name: 'Cleaning request form', exact: true });
+  await expect(english.getByLabel('From date', { exact: true })).toHaveValue('2026-12-10');
+  await expect(english.getByLabel('Cleaning instructions')).toHaveValue('Keep this entered text unchanged.');
+  await page.getByRole('button', { name: 'Suomi', exact: true }).click();
+  form = page.getByRole('region', { name: 'Siivouspyynnön lomake', exact: true });
+  await form.getByRole('button', { name: 'Tallenna siivouspyyntö', exact: true }).click();
+  await expect(page.getByText('Siivouspyyntö tallennettu. Henkilökunta järjestää siivoojan.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Lake apartment · Pyydetty', exact: true })).toBeVisible();
+  await expect(page.getByText('Keep this entered text unchanged.', { exact: true })).toBeVisible();
+  let confirmation = '';
+  page.once('dialog', async dialog => { confirmation = dialog.message(); await dialog.accept(); });
+  await page.getByRole('button', { name: 'Peruuta pyyntö', exact: true }).click();
+  expect(confirmation).toBe('Haluatko peruuttaa tämän siivouspyynnön?');
+  await expect(page.getByRole('heading', { name: 'Lake apartment · Peruttu', exact: true })).toBeVisible();
+  expect(state.writes.filter(write => write.path === '/requests')).toHaveLength(1);
+  await page.reload();
+  await expect(page.getByRole('main')).toHaveAttribute('lang', 'fi');
+  await expect(page.getByRole('button', { name: 'Suomi', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('link', { name: 'Tili', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Account ready', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Open partner portal', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Kumppaniportaali', exact: true })).toBeVisible();
+});
+
+test('Finnish property, quote, change and validation messages preserve entered content', async ({ page }) => {
+  const state = await owner(page);
+  await page.route(/\/api\/v1\/partner\/requests$/, route => route.request().method() === 'POST'
+    ? route.fulfill({ status: 409, headers, json: { detail: 'Request a quote before booking this property.' } }) : route.fallback());
+  await page.goto('/partner/'); await page.getByRole('button', { name: 'Suomi', exact: true }).click();
+  await page.getByRole('button', { name: 'Lisää kohde', exact: true }).click();
+  const propertyForm = page.getByRole('region', { name: 'Lisää kohde', exact: true });
+  await propertyForm.getByLabel('Kohteen nimi', { exact: true }).fill('Mökki Oulussa');
+  await propertyForm.getByLabel('Kaupunki', { exact: true }).fill('Oulu');
+  await propertyForm.getByLabel('Huoneita (valinnainen)', { exact: true }).fill('3');
+  await propertyForm.getByRole('button', { name: 'Tallenna kohde', exact: true }).click();
+  const property = page.getByRole('article', { name: 'Mökki Oulussa', exact: true });
+  await property.getByRole('button', { name: 'Pyydä tarjous', exact: true }).click();
+  await expect(property.getByText('Tarjous pyydetty', { exact: true })).toHaveClass(/text-red-800/);
+  await property.getByRole('button', { name: 'Pyydä kohteen muutosta', exact: true }).click();
+  await page.getByLabel('Kuvaile toivottu muutos').fill('Add one sofa bed, please.');
+  await page.getByRole('button', { name: 'Lähetä muutospyyntö', exact: true }).click();
+  await expect(page.getByText('Muutospyyntö lähetetty henkilökunnalle.', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Muutospyynnöt', exact: true }).click();
+  await expect(page.getByText('Add one sofa bed, please.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Odottaa henkilökunnan vastausta', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Kohteet', exact: true }).click();
+  await page.getByRole('article', { name: priced.name, exact: true }).getByRole('button', { name: 'Pyydä siivous', exact: true }).click();
+  const cleaning = page.getByRole('region', { name: 'Siivouspyynnön lomake', exact: true });
+  await cleaning.getByRole('button', { name: 'Tallenna siivouspyyntö', exact: true }).click();
+  await expect(cleaning.getByRole('alert')).toHaveText('Täytä pakolliset kentät ennen tallentamista.');
+  await cleaning.getByLabel('Alkupäivä', { exact: true }).fill('2026-12-10');
+  await cleaning.getByLabel('Loppupäivä', { exact: true }).fill('2026-12-09');
+  await cleaning.getByRole('button', { name: 'Tallenna siivouspyyntö', exact: true }).click();
+  await expect(cleaning.getByRole('alert')).toHaveText('Loppupäivän on oltava sama tai myöhempi kuin alkupäivä.');
+  await cleaning.getByLabel('Loppupäivä', { exact: true }).fill('2026-12-11');
+  await cleaning.getByRole('button', { name: 'Tallenna siivouspyyntö', exact: true }).click();
+  await expect(cleaning.getByRole('alert')).toHaveText('Pyydä tarjous ennen siivouksen tilaamista tähän kohteeseen.');
+  await expect(cleaning.getByLabel('Alkupäivä', { exact: true })).toHaveValue('2026-12-10');
+  expect(state.writes.find(write => write.path === '/branches')?.body).toMatchObject({ name: 'Mökki Oulussa', city: 'Oulu', roomCount: 3 });
+});
+
+test.describe('Finnish browser defaults', () => {
+  test.use({ locale: 'fi-FI' });
+  test('portal defaults to Finnish, honours a saved choice and remains light and keyboard-friendly at 320px', async ({ page }, testInfo) => {
+    await owner(page); await page.goto('/partner/');
+    await expect(page.getByRole('main')).toHaveAttribute('lang', 'fi');
+    await page.getByRole('button', { name: 'English', exact: true }).click();
+    await page.reload(); await expect(page.getByRole('main')).toHaveAttribute('lang', 'en');
+    await page.getByRole('button', { name: 'Suomi', exact: true }).click();
+    await page.evaluate(() => document.documentElement.classList.add('dark'));
+    const property = page.getByRole('article', { name: priced.name, exact: true }).locator('.partner-surface');
+    await expect(property).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    await expect(page.getByRole('img', { name: 'ReadySetSiivous', exact: true })).toBeVisible();
+    const properties = page.getByRole('tab', { name: 'Kohteet', exact: true });
+    await properties.focus(); await properties.press('ArrowRight');
+    await expect(page.getByRole('tab', { name: 'Siivouspyynnöt', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await page.getByRole('tab', { name: 'Siivouspyynnöt', exact: true }).press('Home');
+    await expect(properties).toHaveAttribute('aria-selected', 'true');
+    await page.screenshot({ path: testInfo.outputPath('partner-portal-fi.png'), fullPage: true });
+    await page.setViewportSize({ width: 320, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath('partner-portal-fi-320.png'), fullPage: true });
+    await page.getByRole('button', { name: 'Pyydä siivous', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Siivouspyynnön lomake', exact: true })).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath('partner-request-fi-320.png'), fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.classList.contains('dark'))).toBe(true);
+  });
+});
+
 test('portal shows its real logo and a failed cleaning save preserves fields and retry identity', async ({ page }, testInfo) => {
   const state = await owner(page);
   const attempts: Record<string, unknown>[] = [];
