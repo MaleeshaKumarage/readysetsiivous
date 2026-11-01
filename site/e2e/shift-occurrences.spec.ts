@@ -24,7 +24,7 @@ async function setup(page: Page) {
       return route.fulfill({ status: 200, headers, json: occurrences });
     }
     const json = path.endsWith('/shifts') ? [{ id: 'shift', name: 'Morning clean', companyId: 'company', branchId: 'branch', isActive: true, schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' } }]
-      : path.endsWith('/employees') ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', isActive: true }, { id: 'second', firstName: 'Second', lastName: 'Cleaner', isActive: true }]
+      : path.endsWith('/employees') ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true }, { id: 'second', firstName: 'Second', lastName: 'Cleaner', role: 'employee', isActive: true }, { id: 'partner-owner', firstName: 'Active', lastName: 'Partner', role: 'partner', isActive: true }]
       : path.endsWith('/companies') ? { items: [], total: 0 }
       : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [];
     return route.fulfill({ status: 200, headers, json });
@@ -48,6 +48,24 @@ test('admin moves one occurrence in tenant local time and can restore it', async
   expect(state.writes[0]).toMatchObject({ originalStartUtc: '2026-11-02T06:00:00.000Z', startUtc: '2026-11-02T07:00:00.000Z', endUtc: '2026-11-02T09:00:00.000Z', status: 1 });
   await list.getByRole('button', { name: 'Restore' }).click();
   await expect(list.getByText('Scheduled')).toBeVisible();
+});
+
+test('visit override choices exclude active partners and save only selected working staff', async ({ page }) => {
+  await setup(page); const writes: { employeeIds: string[]; preview: boolean; mode: number }[] = []; let saved = false;
+  await page.route(/\/visit-assignees$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    const body = route.request().postDataJSON() as { employeeIds: string[]; preview: boolean; mode: number }; writes.push(body);
+    if (!body.preview) saved = true;
+    return route.fulfill({ headers, json: { employeeIds: body.employeeIds, preview: body.preview, message: 'Only this visit changes.' } });
+  });
+  await page.route(/\/occurrences(?:\?.*)?$/, route => route.fulfill({ headers, json: [{ startUtc: '2026-11-02T06:00:00.000Z', endUtc: '2026-11-02T08:00:00.000Z', assigneeIds: saved ? ['cleaner'] : [], rosterVersion: saved ? 'v2' : 'v1' }] }));
+  await page.getByRole('button', { name: 'Occurrences', exact: true }).click(); const list = page.getByRole('dialog', { name: /Occurrences/ });
+  await list.getByRole('button', { name: 'Assign', exact: true }).click(); const editor = page.getByRole('dialog', { name: 'Assign visit', exact: true });
+  await editor.getByRole('textbox', { name: /^Employees/ }).click(); await expect(page.getByRole('option', { name: 'Test Cleaner', exact: true })).toBeVisible(); await expect(page.getByRole('option', { name: 'Active Partner', exact: true })).toHaveCount(0);
+  await page.getByRole('option', { name: 'Test Cleaner', exact: true }).click(); await page.keyboard.press('Escape'); await editor.getByLabel('Assignment reason').fill('Staff coverage for this visit');
+  await editor.getByRole('button', { name: 'Preview assignment', exact: true }).click(); await expect(editor.getByText('Selected visit: Test Cleaner', { exact: true })).toBeVisible();
+  await editor.getByRole('button', { name: 'Save assignment', exact: true }).click(); await expect(editor).toHaveCount(0); await expect(list.getByRole('cell').filter({ hasText: 'Test Cleaner' })).toBeVisible();
+  expect(writes.map(({ employeeIds, preview, mode }) => ({ employeeIds, preview, mode }))).toEqual([{ employeeIds: ['cleaner'], preview: true, mode: 1 }, { employeeIds: ['cleaner'], preview: false, mode: 1 }]);
 });
 
 test('admin cancellation requires a reason', async ({ page }) => {

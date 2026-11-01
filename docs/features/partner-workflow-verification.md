@@ -82,7 +82,8 @@ their counts must not be added to produce a unique total.
 | Final notification delivery-lock regressions | 14 passed, 0 failed, 0 skipped, including 7 real PostgreSQL cases and a slow-provider scheduling test |
 | Final workforce-transition and core workflow PostgreSQL regressions | 14 passed, 0 failed, 0 skipped |
 | Employee identity regression checkpoint | 160 passed, 0 failed, 3 native-service tests skipped in that run; later native evidence is separate |
-| Final partner Playwright coverage, desktop and mobile | 42 cases verified against mocked API contracts; the full run passed 41 and exposed a mobile navigation fixture timing issue, then the corrected navigation case passed on both projects (2 passed) |
+| Final partner Playwright coverage, desktop and mobile | 44 passed within the clean 100-case affected browser run; final invoice-mode and role-transition assertions also passed in a targeted 4-case desktop/mobile run |
+| Legacy shift assignment and occurrence regressions, desktop and mobile | 56 passed within the same 100-case run, including active-partner exclusion from open workforce selectors and successful staff assignment |
 | Existing invitation/company/My Shifts desktop browser regressions | 34 passed |
 | Independent UI review follow-up, desktop and mobile | 4 passed, including editor target switching and staff-resolution visibility |
 | TypeScript | Passed after the final UI review changes |
@@ -126,7 +127,28 @@ Read-error recovery and stale preplanned-offer acceptance verify explicit refres
 automatic mutation retries. The admin entry test opens the real mobile drawer after
 hydration; it removes only the shared test helper's drawer-hiding style. This final change
 is test-only, so the prior production-export and related browser regression evidence is
-unchanged. These are 42 unique cases, not the sum of overlapping full and targeted runs.
+unchanged.
+
+The final review follow-up adds active-partner negative cases for legacy shift and visit
+override selectors, and verifies reusable pricing through the Properties tab. Conditional
+state coverage also checks invoice preview invalidation, manual/month mode switching,
+February month bounds, and clearing the company binding when a partner becomes staff.
+All 100 affected browser cases passed in one run. The final two expanded cases then passed
+on both projects (4 cases); these targeted results overlap the 100-case run and must not
+be added to it. No production code changed in this coverage follow-up.
+
+### UI action coverage map
+
+| Changed interface | Actions and conditional states | Playwright specs |
+| --- | --- | --- |
+| Partner portal | Property creation, quote/change requests, flexible/fixed cleaning, versioned edit/cancel, accepted lock, history and load recovery | [partner-owner](../../site/e2e/partner-owner.spec.ts), [partner](../../site/e2e/partner.spec.ts) |
+| Account entry | Enabled partner link/navigation; disabled company denial without company-data reads | [partner-owner](../../site/e2e/partner-owner.spec.ts) |
+| Company and branch administration | Partner enablement create/edit; rooms, beds, fixed price, VAT and duration round trip | [partner-administration](../../site/e2e/partner-administration.spec.ts) |
+| Employee administration | Required enabled-company selection; edit/rebind prepopulation; changing to staff hides and clears binding | [partner-administration](../../site/e2e/partner-administration.spec.ts) |
+| Staff partner operations | Admin/mobile and manager entry; manager-only API routes; quote/Properties pricing, offers, property create/edit, changes, cancel and recovery | [partner](../../site/e2e/partner.spec.ts), [partner-operations](../../site/e2e/partner-operations.spec.ts), [partner-owner](../../site/e2e/partner-owner.spec.ts) |
+| Cleaner offers | Flexible/preplanned acceptance, decline, stale revisions and explicit refresh without automatic mutation retries | [partner](../../site/e2e/partner.spec.ts), [partner-owner](../../site/e2e/partner-owner.spec.ts), [partner-operations](../../site/e2e/partner-operations.spec.ts) |
+| Invoice creation | Company/month payload, full-month bounds, preview/issue, preview invalidation and manual/month mode switching | [partner-operations](../../site/e2e/partner-operations.spec.ts) |
+| Legacy shift and visit assignments | Open choices exclude active partners, preserve working staff and submit selected staff; preview/save and existing roster regressions | [shift-assignment](../../site/e2e/shift-assignment.spec.ts), [shift-occurrences](../../site/e2e/shift-occurrences.spec.ts) |
 
 Primary repeatable checks (configure test connection variables privately):
 
@@ -135,6 +157,7 @@ dotnet test api/CleaningSuite.Tests/CleaningSuite.Tests.csproj --no-restore
 cd site
 npx tsc --noEmit
 npx playwright test e2e/partner.spec.ts e2e/partner-administration.spec.ts e2e/partner-operations.spec.ts e2e/partner-owner.spec.ts
+npx playwright test e2e/shift-assignment.spec.ts e2e/shift-occurrences.spec.ts
 npx playwright test e2e/employee-invite.spec.ts e2e/company-integrity.spec.ts e2e/my-shifts.spec.ts --project=chromium-desktop
 npm run build
 ```

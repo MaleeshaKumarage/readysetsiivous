@@ -79,4 +79,7 @@ test('partner employee requires one active partner-enabled company and can be re
   await dialog.getByLabel(/^Partner company/).click(); await page.getByRole('option', { name: 'Second property owner', exact: true }).click(); await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(dialog).not.toBeVisible(); expect(writes).toHaveLength(2); expect(writes[1]).toMatchObject({ fields: { role: 'partner', partnerCompanyId: 'second-owner' }, isActive: true });
   await expect(row).toContainText('Second property owner'); await row.getByRole('button', { name: 'Edit', exact: true }).click(); await expect(dialog.getByLabel(/^Partner company/)).toHaveValue('Second property owner');
+  await dialog.getByLabel('Role', { exact: true }).click(); await page.getByRole('option', { name: 'employee', exact: true }).click(); await expect(dialog.getByLabel(/^Partner company/)).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Save changes', exact: true }).click(); await expect(dialog).not.toBeVisible(); expect(writes).toHaveLength(3); expect(writes[2]).toMatchObject({ fields: { role: 'employee', partnerCompanyId: null }, isActive: true });
+  await expect(row).not.toContainText('Second property owner'); await row.getByRole('button', { name: 'Edit', exact: true }).click(); await expect(dialog.getByLabel('Role', { exact: true })).toHaveValue('employee'); await expect(dialog.getByLabel(/^Partner company/)).toHaveCount(0);
 });
