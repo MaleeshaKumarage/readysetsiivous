@@ -114,6 +114,18 @@ public class AdminShiftCalendarTests
     }
 
     [Fact]
+    public async Task Removed_work_record_is_a_visit_conflict_not_a_calendar_access_denial()
+    {
+        var f = new Fixture();
+        var form = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Cleaner One", Guid.Empty, "Activities", f.Start, new());
+        form.ShiftDeletedUtc = DateTime.UtcNow;
+        f.Forms.Setup(r => r.GetFormByShiftOccurrenceAsync(f.Shift.Id, f.Person.Id, f.Start, It.IsAny<CancellationToken>())).ReturnsAsync(form);
+        Assert.IsType<ConflictObjectResult>(await f.Controller.Record(f.Body(), default));
+        Assert.True(f.Admin.CanUseShiftCalendar);
+        f.Forms.Verify(r => r.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Rejects_today_missing_reason_and_inverted_times()
     {
         var f = new Fixture();

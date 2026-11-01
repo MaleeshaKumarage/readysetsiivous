@@ -85,6 +85,18 @@ test('cancelled, overlapping, and unassigned visits show their distinct states',
   await expect(page.getByRole('button', { name: 'Record work for Assigned Cleaner' })).toHaveCount(0);
 });
 
+test('revoked permission during save closes work entry and hides calendar data', async ({ page }) => {
+  const state = await setup(page); state.saveFailure = 403;
+  await page.goto('/admin/shifts/calendar/');
+  await page.getByRole('button', { name: 'Record work for Alice Cleaner' }).click();
+  await page.getByRole('textbox', { name: 'Reason', exact: true }).fill('Pending entry');
+  await page.getByRole('button', { name: 'Save work times' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('alert').filter({ hasText: 'not enabled' })).toBeVisible();
+  await expect(page.getByLabel('Calendar date')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Cleaning 2026-10-30' })).toHaveCount(0);
+});
+
 test('today and future have no work actions; empty days and retry work', async ({ page }) => {
   const state = await setup(page); await page.goto('/admin/shifts/calendar/');
   await page.getByLabel('Calendar date').fill('2026-11-01');

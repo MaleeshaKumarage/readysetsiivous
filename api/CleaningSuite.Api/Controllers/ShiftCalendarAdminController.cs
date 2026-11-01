@@ -113,7 +113,8 @@ public class ShiftCalendarAdminController(IShiftRepository shifts, IEmployeeRepo
             return Conflict(new { detail = "This visit changed or has an ambiguous work-record identity. Reload the calendar." });
         var visit = matching[0];
         var form = await forms.GetFormByShiftOccurrenceAsync(shift.Id, employee.Id, scheduled, ct);
-        if (form?.ShiftDeletedUtc is not null || (!visit.EmployeeIds.Contains(employee.Id) && form is null)) return Forbid();
+        if (form?.ShiftDeletedUtc is not null || (!visit.EmployeeIds.Contains(employee.Id) && form is null))
+            return Conflict(new { detail = "This visit was removed or no longer includes this employee. Reload the calendar before saving." });
         if (form?.Version != body.Version) return Conflict(new { detail = "Work times changed. Reload the calendar before saving." });
         var isNew = form is null;
         if (form is null)
