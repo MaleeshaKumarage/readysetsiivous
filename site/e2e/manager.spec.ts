@@ -88,6 +88,30 @@ test('tenant manager sees both branches and creates, edits, assigns, removes and
   expect(state.adminRequests).toBe(0);
 });
 
+test('manager navigation and shift form fit the viewport without covering save or cancel', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await setup(page); await page.goto('/manager/');
+  await page.getByRole('button', { name: 'Add shift' }).click();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const form = page.getByRole('form', { name: 'Create shift' });
+  const dates = form.locator('input[type="date"]');
+  const save = form.getByRole('button', { name: 'Save shift', exact: true });
+  const cancel = form.getByRole('button', { name: 'Cancel', exact: true });
+  for (const action of [save, cancel]) {
+    await action.scrollIntoViewIfNeeded();
+    const bounds = await action.boundingBox(); expect(bounds).not.toBeNull();
+    for (const date of await dates.all()) {
+      const field = await date.boundingBox(); expect(field).not.toBeNull();
+      expect(field!.y + field!.height).toBeLessThanOrEqual(bounds!.y);
+    }
+    await action.click({ trial: true });
+  }
+  await cancel.click();
+  await expect(form).toHaveCount(0);
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+});
+
 for (const role of ['employee', 'staff', '']) test(`${role || 'no-role'} cannot mount manager operations`, async ({ page }) => {
   const state = await setup(page, { role }); await page.goto('/manager/');
   await expect(page.getByRole('main').getByRole('alert')).toContainText('Access denied'); expect(state.requests).toBe(0);

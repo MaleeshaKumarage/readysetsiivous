@@ -12,6 +12,7 @@ async function setupWork(page: Page, options: { empty?: boolean; failStart?: boo
   await page.route(/\/api\/v1\/me$/, route => route.fulfill({ status: 200, headers,
     json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: [role] })],
       employee: { id: 'employee-a', firstName: 'Test', lastName: 'Staff', role, isActive: true } } }));
+  await page.route(/\/api\/v1\/me\/partner-offers(?:\?.*)?$/, route => route.fulfill({ status: 200, headers, json: [] }));
   const now = await page.evaluate(() => Date.now());
   const start = new Date(now - 3600000).toISOString();
   const scheduledStart = options.startAt ? Date.parse(options.startAt) : options.future ? now + 86400000 : Date.parse(start);
@@ -196,7 +197,7 @@ test('shift cannot end while a selected photo is still being read', async ({ pag
   await page.getByRole('button', { name: 'Record activities & end' }).click();
   await page.getByRole('textbox', { name: 'Shift note' }).fill('Photo evidence of corridor cleaning.');
   await page.getByLabel('Add shift photos').setInputFiles(evidencePhoto);
-  await expect(page.getByRole('status')).toHaveText('Reading photos...');
+  await expect(page.getByRole('status').filter({ hasText: 'Reading photos...' })).toHaveText('Reading photos...');
   await expect(page.getByRole('button', { name: 'End shift', exact: true })).toBeDisabled(); expect(work.endCalls).toBe(0);
   await expect(page.getByRole('button', { name: 'Remove photo' })).toHaveCount(1);
   await page.getByRole('textbox', { name: 'Photo 1 note' }).fill('Corridor photo');
