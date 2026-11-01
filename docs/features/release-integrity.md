@@ -12,7 +12,17 @@ The candidate is pulled by digest and checked for its build-time `APP_RELEASE_SH
 
 ## Activation requires a separate concrete rollout review
 
-`api/deploy/release-policy.json` intentionally defaults to `approved: false`. This blocks replacement; merging this implementation alone does not activate production deployment. Existing production continues running, while an automatic deployment of this default policy fails safely. Pages that require the new API retain the prior release if their API wait times out.
+Normal API deployments do not require stopping public ingress. Following the
+verified partner identity cutover on 1 November 2026, the release policy omits
+`maintenance_service` and names deployed `f178cb8a1f9ac4583111cddfe2889bbea03ef629`
+as its exact application rollback baseline. Build provenance, immutable image and
+asset checks, exact deployed API version checks and verified rollback remain.
+The controller's optional maintenance mode is reserved for an explicitly
+coordinated identity/database migration; it is not an API-version check.
+
+An unreviewed release policy must use `approved: false`. This blocks replacement;
+the current reviewed policy is approved for the explicit baseline above. Pages
+that require a new API retain the prior release if their API wait times out.
 
 Before activation, review the exact candidate SHA/digest/assets and current deployed SHA/digest, confirm the current on-disk Compose/env matches the running API, and rehearse candidate plus application rollback on a disposable stack with synthetic data. Inspect all schema changes: runtime Marten `CreateOrUpdate` still exists and can make old code incompatible. The company business-ID index migration is an existing example where reverting old schema definitions is unsafe. Never undo schema/data changes automatically.
 
