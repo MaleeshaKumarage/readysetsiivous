@@ -6,7 +6,9 @@ The admin navigation includes **Shift calendar** for enabled admin employees. It
 
 Admins manage the permission from **Employees**, using **Enable shift calendar** or **Disable shift calendar** beside an active, synchronized admin. Managers and employees cannot receive access. Calendar read and write endpoints independently enforce permission using the authenticated subject's linked, verified employee identity.
 
-`Employee.ShiftCalendarEnabled` is nullable for existing documents. Its initial effective default is enabled only for the active admin employee whose email is `maleesha@hiava.fi` (case insensitive). All others default to disabled. Saving an explicit false revokes even the initial account; saving true enables another admin. Inactive, demoted, or synchronization-pending employees cannot use it. An unlinked tenant-owner login must first be linked to an employee profile; email claims alone do not grant access. No live account or deployment is modified by adding this default.
+`Employee.ShiftCalendarEnabled` is nullable for existing documents and defaults to disabled for everyone. Initial rollout access is an explicit data grant from Employees or the rollout script below, never an email-dependent authorization default. Every grant/revocation stores the acting admin subject and timestamp. Inactive, demoted, or synchronization-pending employees cannot use it. An unlinked tenant-owner login must first be linked to an employee profile; email claims alone do not grant access.
+
+For a one-account rollout, set `CALENDAR_ADMIN_TOKEN` to an authorized admin session token and run `python scripts/grant-shift-calendar.py --api-url https://your-api --email selected-admin@example.invalid`. The script requires exactly one active, synchronized, linked admin and refuses a rollout if any other employee already has access. It grants through the audited admin endpoint and verifies the result. The target email and token are runtime inputs, never embedded in application authorization.
 
 ## API and work recording
 
@@ -21,6 +23,8 @@ Writes resolve the visit and assignees again, reject cancelled/deactivated/delet
 Work uses the existing Quality Cycle record and deterministic task identity, so personal calendars and work-hour projections read the same timestamps. New records become recorded with checklist items unchecked; corrections preserve answers, photos and notes. Audit entries on the form retain actor subject, real change time, reason and previous/new work times. Issued invoices are not regenerated.
 
 The existing work-record identity cannot distinguish two visits on the same shift with the same start timestamp. Such cards remain visible but recording is disabled until the overlapping schedule is corrected.
+
+Partner-request visits stay visible but are read-only here; their existing acceptance workflow remains authoritative.
 
 ## Verification
 

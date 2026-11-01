@@ -29,6 +29,7 @@ public class EmployeesAdminController : ControllerBase
             return BadRequest(new { detail = "Calendar access can only be changed for active, synchronized admins." });
         employee.ShiftCalendarEnabled = body.Enabled;
         employee.UpdatedUtc = DateTime.UtcNow;
+        employee.ShiftCalendarAccessChanges.Add(new(User.FindFirst("sub")?.Value ?? throw new UnauthorizedAccessException(), employee.UpdatedUtc, body.Enabled));
         await employees.SaveAsync(employee, ct);
         return Ok(new { enabled = employee.CanUseShiftCalendar });
     }

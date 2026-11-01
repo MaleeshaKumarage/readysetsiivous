@@ -85,6 +85,8 @@ test('late responses cannot replace a newly selected day', async ({ page }) => {
 
 test('employee page grants and revokes calendar access for admins only', async ({ page }) => {
   await setup(page);
+  let ownAccess = false;
+  await page.route(/\/api\/v1\/me$/, route => route.fulfill({ headers, json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: ['admin'] })], canUseShiftCalendar: ownAccess, employee: null } }));
   await page.route(/\/api\/v1\/admin\/companies(?:\?.*)?$/, route => route.fulfill({ headers, json: { items: [], total: 0 } }));
   const people = [{ id: 'admin-one', firstName: 'Admin', lastName: 'One', email: 'admin@example.invalid', role: 'admin', isActive: true, shiftCalendarEnabled: false },
     { id: 'cleaner', firstName: 'Cleaner', lastName: 'One', email: 'cleaner@example.invalid', role: 'employee', isActive: true }];
@@ -93,12 +95,28 @@ test('employee page grants and revokes calendar access for admins only', async (
   await page.route(/\/api\/v1\/admin\/employees\/admin-one\/shift-calendar-access$/, route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
     const { enabled } = route.request().postDataJSON(); updates.push(enabled);
+    ownAccess = enabled;
     return route.fulfill({ headers, json: { enabled } });
   });
   await page.goto('/admin/employees/');
+  const calendarLink = page.locator('a[href="/admin/shifts/calendar/"]');
+  await expect(calendarLink).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Enable shift calendar' })).toHaveCount(1);
   await page.getByRole('button', { name: 'Enable shift calendar' }).click();
+  await expect(calendarLink).toHaveCount(1);
   await page.getByRole('button', { name: 'Disable shift calendar' }).click();
+  await expect(calendarLink).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Enable shift calendar' })).toBeVisible();
   expect(updates).toEqual([true, false]);
+});
+
+test('enabled calendar navigation opens the daily calendar', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await setup(page);
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/admin\/companies(?:\?.*)?$/, route => route.fulfill({ headers, json: { items: [], total: 0 } }));
+  await page.goto('/admin/employees/');
+  await page.getByRole('link', { name: 'Shift calendar', exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/shifts\/calendar\/$/);
+  await expect(page.getByRole('heading', { name: 'Cleaning 2026-10-30' })).toBeVisible();
 });

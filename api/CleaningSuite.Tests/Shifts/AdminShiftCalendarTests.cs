@@ -18,14 +18,14 @@ namespace CleaningSuite.Tests.Shifts;
 public class AdminShiftCalendarTests
 {
     [Theory]
-    [InlineData("maleesha@hiava.fi", "admin", null, true)]
-    [InlineData("MALEESHA@HIAVA.FI", "admin", null, true)]
-    [InlineData("maleesha@hiava.fi", "admin", false, false)]
+    [InlineData("initial@example.invalid", "admin", null, false)]
+    [InlineData("INITIAL@EXAMPLE.INVALID", "admin", null, false)]
+    [InlineData("initial@example.invalid", "admin", false, false)]
     [InlineData("other@hiava.fi", "admin", null, false)]
     [InlineData("other@hiava.fi", "admin", true, true)]
-    [InlineData("maleesha@hiava.fi", "employee", true, false)]
+    [InlineData("initial@example.invalid", "employee", true, false)]
     [InlineData("other@hiava.fi", "manager", true, false)]
-    public void Permission_is_opt_in_for_admins_and_initial_account_can_be_revoked(string email, string role, bool? enabled, bool expected)
+    public void Permission_is_explicit_opt_in_for_admins_and_can_be_revoked(string email, string role, bool? enabled, bool expected)
     {
         var employee = new Employee { Email = email, Role = role, ShiftCalendarEnabled = enabled };
         Assert.Equal(expected, employee.CanUseShiftCalendar);
@@ -52,7 +52,7 @@ public class AdminShiftCalendarTests
         public Mock<IQualityCycleRepository> Forms = new();
         public Mock<IShiftRepository> Shifts = new();
         public Employee Person = new() { FirstName = "Cleaner", LastName = "One" };
-        public Employee Admin = new() { Email = "maleesha@hiava.fi", Role = Employee.RoleAdmin, KeycloakUserId = "admin-subject" };
+        public Employee Admin = new() { Email = "admin@example.invalid", Role = Employee.RoleAdmin, KeycloakUserId = "admin-subject", ShiftCalendarEnabled = true };
         public Shift Shift;
         public DateTime Start = DateTime.UtcNow.Date.AddDays(-3).AddHours(8);
         public ShiftCalendarAdminController Controller;
@@ -155,6 +155,7 @@ public class AdminShiftCalendarTests
         var person = new Employee { Role = Employee.RoleAdmin, Email = "other@hiava.fi" };
         employees.Setup(e => e.GetByIdAsync(person.Id, It.IsAny<CancellationToken>())).ReturnsAsync(person);
         var controller = new EmployeesAdminController(null!);
+        controller.ControllerContext = new() { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim("sub", "granting-admin") }, "test")) } };
         Assert.IsType<OkObjectResult>(await controller.CalendarAccess(person.Id, new(true), employees.Object, default));
         Assert.True(person.CanUseShiftCalendar);
         Assert.IsType<OkObjectResult>(await controller.CalendarAccess(person.Id, new(false), employees.Object, default));
@@ -162,5 +163,7 @@ public class AdminShiftCalendarTests
         person.Role = Employee.RoleManager;
         Assert.IsType<BadRequestObjectResult>(await controller.CalendarAccess(person.Id, new(true), employees.Object, default));
         employees.Verify(e => e.SaveAsync(person, It.IsAny<CancellationToken>()), Times.Exactly(2));
+        Assert.Equal(new[] { true, false }, person.ShiftCalendarAccessChanges.Select(change => change.Enabled));
+        Assert.All(person.ShiftCalendarAccessChanges, change => Assert.Equal("granting-admin", change.AdminSubject));
     }
 }
