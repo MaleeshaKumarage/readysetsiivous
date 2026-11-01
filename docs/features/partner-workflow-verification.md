@@ -82,7 +82,7 @@ their counts must not be added to produce a unique total.
 | Real-service .NET identity integration | 2 passed, 0 failed, 0 skipped |
 | Final broader backend suite | 1,096 passed, 0 failed, 4 environment-specific skips; 1,100 total, 1 minute 40 seconds |
 | Separately configured manager database regression | 1 passed, 0 failed, 0 skipped |
-| GitHub CI | Not yet dispatched for this branch |
+| GitHub CI | Backend, frontend E2E, review and synthetic checks dispatched for [PR #230](https://github.com/MaleeshaKumarage/readysetsiivous/pull/230); results pending at this checkpoint |
 
 The four skips in the broader run were `IdentityKeyIsUniqueWithinTenantWhileUnboundEmployeesAndOtherTenantsAreAllowed`,
 `NativeSetupEmailBindsIdentityRetriesDeliveryAndSerializesParallelInvites`,

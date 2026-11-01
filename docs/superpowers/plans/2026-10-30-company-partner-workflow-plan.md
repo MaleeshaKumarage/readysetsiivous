@@ -61,7 +61,7 @@ Approved design: `../specs/2026-10-30-company-partner-workflow-design.md`.
 
 - [x] Independent authorization/concurrency review with source-backed findings and fixes.
 - [x] Run focused suites and the broader backend/frontend checks; run native development identity probes before any production rollout. GitHub CI follows PR creation.
-- [ ] Commit/push only verified changes, create and attach a reviewable PR with exact test evidence and known native/deployment gaps.
+- [x] Commit/push only verified changes, create and attach a reviewable PR with exact test evidence and known native/deployment gaps: [PR #230](https://github.com/MaleeshaKumarage/readysetsiivous/pull/230).
 - [x] Update documentation/contract and release compatibility; do not deploy or claim production readiness before the development identity gate passes.
 
 ## Verification checkpoint — 1 November 2026
@@ -71,8 +71,10 @@ and corrected reservation races, staff-to-partner work retention, per-recipient 
 failure handling, cross-record form state and owner visibility of staff resolutions.
 The latest frontend production export passed all 46 pages. The broader backend run
 passed 1,096 tests with four environment-specific skips; separately configured native and
-manager checks are recorded with exact scope. GitHub delivery remains pending at this
-checkpoint; completion is recorded in the
+manager checks are recorded with exact scope. Implementation commit `f662a1a` was pushed
+and [PR #230](https://github.com/MaleeshaKumarage/readysetsiivous/pull/230) was created.
+GitHub backend, frontend E2E, review and synthetic checks were dispatched and are pending
+at this checkpoint; detailed evidence is recorded in the
 [verification and rollout record](../../features/partner-workflow-verification.md).
 
 Production has not changed. Native development evidence is recorded separately in
