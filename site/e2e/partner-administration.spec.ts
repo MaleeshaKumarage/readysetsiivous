@@ -52,14 +52,16 @@ test('branch property counts and fixed pricing round trip through create and edi
   await expect(page.getByText('€120.00 excl. VAT', { exact: false })).toBeVisible();
 });
 
-test('partner employee requires one active partner-enabled company before creation', async ({ page }) => {
+test('partner employee requires one active partner-enabled company and can be rebound through edit', async ({ page }) => {
   await setupAdminMocks(page); const writes: any[] = []; const employees: any[] = [];
-  const companies = [{ ...initialCompany, isPartnerEnabled: true }, { ...initialCompany, id: 'disabled-partner', name: 'Partner disabled', isPartnerEnabled: false }, { ...initialCompany, id: 'inactive-partner', name: 'Inactive partner', isActive: false, isPartnerEnabled: true }];
+  const companies = [{ ...initialCompany, isPartnerEnabled: true }, { ...initialCompany, id: 'second-owner', name: 'Second property owner', isPartnerEnabled: true }, { ...initialCompany, id: 'disabled-partner', name: 'Partner disabled', isPartnerEnabled: false }, { ...initialCompany, id: 'inactive-partner', name: 'Inactive partner', isActive: false, isPartnerEnabled: true }];
   await page.route(/\/api\/v1\/admin\/companies(?:\?.*)?$/, route => route.fulfill({ headers, json: { items: companies, total: companies.length } }));
-  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, route => {
+  await page.route(/\/api\/v1\/admin\/employees(?:\/new-partner)?(?:\?.*)?$/, route => {
     const req = route.request(); if (req.method() === 'OPTIONS') return route.fulfill({ headers });
     if (req.method() === 'GET') return route.fulfill({ headers, json: employees });
-    const body = req.postDataJSON(); writes.push(body); employees.push({ id: 'new-partner', ...body.fields, isActive: true }); return route.fulfill({ headers, json: 'new-partner' });
+    const body = req.postDataJSON(); writes.push(body);
+    if (req.method() === 'PUT') { employees[0] = { ...employees[0], ...body.fields, isActive: body.isActive }; return route.fulfill({ status: 204, headers }); }
+    employees.push({ id: 'new-partner', ...body.fields, isActive: true }); return route.fulfill({ headers, json: 'new-partner' });
   });
   await page.goto('/admin/employees/'); await page.getByRole('button', { name: 'Add employee', exact: true }).click(); const dialog = page.getByRole('dialog');
   await dialog.getByLabel(/^Email/).fill('owner@example.invalid'); await dialog.getByLabel('First name').fill('Property'); await dialog.getByLabel('Last name').fill('Owner');
@@ -72,4 +74,9 @@ test('partner employee requires one active partner-enabled company before creati
   await page.getByRole('option', { name: initialCompany.name, exact: true }).click(); await dialog.getByRole('button', { name: 'Create employee' }).click();
   await expect(dialog).not.toBeVisible(); expect(writes).toHaveLength(1); expect(writes[0].fields).toMatchObject({ role: 'partner', partnerCompanyId: initialCompany.id });
   await expect(page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Property Owner', exact: true }) })).toContainText(initialCompany.name);
+  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Property Owner', exact: true }) });
+  await row.getByRole('button', { name: 'Edit', exact: true }).click(); await expect(dialog.getByLabel(/^Partner company/)).toHaveValue(initialCompany.name);
+  await dialog.getByLabel(/^Partner company/).click(); await page.getByRole('option', { name: 'Second property owner', exact: true }).click(); await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(dialog).not.toBeVisible(); expect(writes).toHaveLength(2); expect(writes[1]).toMatchObject({ fields: { role: 'partner', partnerCompanyId: 'second-owner' }, isActive: true });
+  await expect(row).toContainText('Second property owner'); await row.getByRole('button', { name: 'Edit', exact: true }).click(); await expect(dialog.getByLabel(/^Partner company/)).toHaveValue('Second property owner');
 });

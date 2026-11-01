@@ -76,7 +76,13 @@ test('administrator prices a quote and offers work only to staff', async ({ page
     if (req.method() === 'GET') return route.fulfill({ headers, json: path === '/requests' ? [request] : path === '/change-requests' ? [] : [branch] });
     writes.push({ path, body: req.postDataJSON() }); return route.fulfill({ headers, json: path.includes('pricing') ? branch : request });
   });
-  await page.goto('/admin/partner-requests/'); await page.getByRole('tab', { name: 'Quote requests', exact: true }).click(); await page.getByRole('button', { name: 'Set cleaning price' }).click();
+  await page.goto('/admin/');
+  // This navigation test uses the real mobile drawer; the shared helper normally
+  // hides that drawer so unrelated form tests cannot be obscured by it.
+  await page.evaluate(() => document.getElementById('mock-test-style')?.remove());
+  const navigationToggle = page.getByRole('button', { name: 'Toggle navigation', exact: true });
+  if ((page.viewportSize()?.width ?? 1280) < 768) await navigationToggle.click();
+  await page.getByRole('link', { name: 'Partner requests', exact: true }).click(); await page.getByRole('tab', { name: 'Quote requests', exact: true }).click(); await page.getByRole('button', { name: 'Set cleaning price' }).click();
   await page.getByLabel('Fixed cleaning price excl. VAT (€)').fill('85'); await page.getByLabel('Estimated duration (minutes)').fill('90'); await page.getByRole('button', { name: 'Save pricing' }).click(); await expect(page.getByText('Pricing saved.')).toBeVisible();
   expect(writes[0].body).toEqual({ priceNet: 85, vatRatePercent: 25.5, estimatedDurationMinutes: 90 });
   await page.getByRole('tab', { name: 'Requests', exact: true }).click(); await page.getByRole('button', { name: 'Arrange cleaner / time' }).click();
