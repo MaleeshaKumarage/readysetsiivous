@@ -156,12 +156,12 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("'scripts/deploy-api.sh'", source)
         self.assertIn('if-no-files-found: error', source)
 
-    def test_partner_release_retains_closed_ingress_and_current_production_baseline(self):
+    def test_normal_release_uses_current_baseline_without_manual_ingress_requirement(self):
         policy = json.loads((SCRIPTS.parent / 'api/deploy/release-policy.json').read_text())
         self.assertIs(policy['approved'], True)
         self.assertEqual('backward-compatible-reviewed', policy['schema_changes'])
-        self.assertEqual(['2c9f6f2198b680e8b2b0b790e693409839f30584'], policy['rollback_compatible_from'])
-        self.assertEqual('cloudflared.service', policy['maintenance_service'])
+        self.assertEqual(['f178cb8a1f9ac4583111cddfe2889bbea03ef629'], policy['rollback_compatible_from'])
+        self.assertNotIn('maintenance_service', policy)
         compose = (SCRIPTS.parent / 'api/deploy/docker-compose.yml').read_text()
         self.assertIn('${API_IMAGE:?', compose)
         self.assertNotIn('${IMAGE_TAG:-latest}', compose)

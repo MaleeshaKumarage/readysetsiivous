@@ -50,3 +50,6 @@ api/verify-phase*.sh
 
 # Superpowers scratch
 .superpowers/
+
+# Machine-local infrastructure inventory and operational scripts (never publish).
+.local/operations/
