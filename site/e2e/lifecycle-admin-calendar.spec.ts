@@ -168,3 +168,21 @@ test('enabled calendar navigation opens the daily calendar', async ({ page }) =>
   await expect(page).toHaveURL(/\/admin\/shifts\/calendar\/$/);
   await expect(page.getByRole('heading', { name: 'Cleaning 2026-10-30' })).toBeVisible();
 });
+
+test('returning to Employees reloads grants changed by another admin', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await setup(page);
+  const person = { id: 'admin-one', firstName: 'Admin', lastName: 'One', email: 'admin@example.invalid', role: 'admin', isActive: true, shiftCalendarEnabled: false };
+  let reads = 0;
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, route => { reads++; return route.fulfill({ headers, json: [person] }); });
+  await page.route(/\/api\/v1\/admin\/companies(?:\?.*)?$/, route => route.fulfill({ headers, json: { items: [], total: 0 } }));
+  await page.goto('/admin/employees/');
+  await expect(page.getByRole('button', { name: 'Enable shift calendar' })).toBeVisible();
+  const initialReads = reads;
+  await page.getByRole('link', { name: 'Shift calendar', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Cleaning 2026-10-30' })).toBeVisible();
+  person.shiftCalendarEnabled = true;
+  await page.getByRole('link', { name: 'Employees', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Disable shift calendar' })).toBeVisible();
+  expect(reads).toBeGreaterThan(initialReads);
+});

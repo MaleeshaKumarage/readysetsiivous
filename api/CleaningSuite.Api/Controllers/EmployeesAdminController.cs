@@ -36,7 +36,8 @@ public class EmployeesAdminController : ControllerBase
     public record CalendarAccessBody(bool Enabled);
 
     [HttpGet]
-    [OutputCache(Duration = 30)]
+    [OutputCache(NoStore = true)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<IActionResult> List([FromQuery] bool includeInactive, CancellationToken ct)
     {
         var employees = await _mediator.Send(new ListEmployeesQuery(includeInactive), ct);
