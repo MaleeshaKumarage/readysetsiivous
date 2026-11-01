@@ -8,10 +8,10 @@ const companyId = '11111111-1111-4111-8111-111111111111';
 const priced: Branch = { id: '22222222-2222-4222-8222-222222222222', companyId, name: 'Lake apartment', street: 'Lake road 1', postalCode: '33100', city: 'Tampere', country: 'FI', isActive: true, roomCount: 2, bedCount: 3, priceNet: 70, vatRatePercent: 25.5, estimatedDurationMinutes: 120, pricingReady: true };
 const pending: CleaningRequest = { id: '33333333-3333-4333-8333-333333333333', version: 5, companyId, branchId: priced.id, branchName: priced.name, fromDate: '2026-12-01', toDate: '2026-12-02', exactStartLocalTime: null, notes: 'Original cleaning instructions', priceNet: 70, vatRatePercent: 25.5, estimatedDurationMinutes: 120, status: 'Requested', firstAcceptedAtUtc: null, linkedShiftId: null, plannedStartUtc: null, plannedEndUtc: null, acceptedCleanerName: null, actualStartUtc: null, actualEndUtc: null };
 interface Write { path: string; method: string; body: Record<string, unknown> | null }
-async function owner(page: Page, options: { enabled?: boolean; pending?: boolean } = {}) {
+async function owner(page: Page, options: { enabled?: boolean; pending?: boolean; branches?: Branch[] } = {}) {
   await setupAdminMocks(page); await page.addInitScript(() => { (window as unknown as { __MOCK_ROLES__: string[] }).__MOCK_ROLES__ = ['partner']; });
   const identity: PartnerIdentity = { realm: 'readysetsiivous', person: { id: 'owner-profile', firstName: 'Test', lastName: 'Owner', role: 'partner', isActive: true }, company: { id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: options.enabled ?? true }, timeZoneId: 'Europe/Helsinki' };
-  let branches: Branch[] = [priced], requests: CleaningRequest[] = options.pending ? [pending] : [], changes: PartnerChange[] = [];
+  let branches: Branch[] = options.branches ?? [priced], requests: CleaningRequest[] = options.pending ? [pending] : [], changes: PartnerChange[] = [];
   const writes: Write[] = [], reads: string[] = [];
   await page.route(/\/api\/v1\/partner\//, route => {
     const req = route.request(), path = new URL(req.url()).pathname.split('/partner')[1];
@@ -59,6 +59,66 @@ test('owner creates a fixed appointment with one date and immutable pricing supp
   expect(state.writes[0].body?.clientRequestId).toMatch(/^[a-f0-9-]{36}$/); expect(state.writes[0].body).not.toHaveProperty('companyId'); expect(state.writes[0].body).not.toHaveProperty('priceNet');
 });
 
+test('Request cleaning visibly opens and focuses the form even below a long property list', async ({ page }) => {
+  await owner(page, { branches: [priced, ...Array.from({ length: 20 }, (_, index) => ({ ...priced, id: `other-${index}`, name: `Other apartment ${index}` }))] });
+  await page.goto('/partner/');
+  await page.getByRole('article', { name: priced.name, exact: true }).getByRole('button', { name: 'Request cleaning', exact: true }).click();
+  const form = page.getByRole('region', { name: 'Cleaning request form', exact: true });
+  await expect(form).toBeInViewport();
+  await expect(form).toBeFocused();
+});
+
+test('portal shows its real logo and a failed cleaning save preserves fields and retry identity', async ({ page }, testInfo) => {
+  const state = await owner(page);
+  const attempts: Record<string, unknown>[] = [];
+  await page.route(/\/api\/v1\/partner\/requests$/, route => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    attempts.push(route.request().postDataJSON());
+    if (attempts.length === 1) return route.fulfill({ status: 503, headers, json: { detail: 'Cleaning could not be saved. Please retry.' } });
+    return route.fallback();
+  });
+  await page.goto('/partner/');
+  const logo = page.getByRole('img', { name: 'ReadySetSiivous', exact: true });
+  await expect(logo).toBeVisible();
+  await expect.poll(() => logo.evaluate(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('partner-portal-logo.png'), fullPage: true });
+  await page.getByRole('button', { name: 'Request cleaning', exact: true }).click();
+  const form = page.getByRole('region', { name: 'Cleaning request form' });
+  await form.getByLabel('From date', { exact: true }).fill('2026-12-10');
+  await form.getByLabel('To date', { exact: true }).fill('2026-12-11');
+  await form.getByLabel('Cleaning instructions').fill('Please keep these instructions.');
+  await form.getByRole('button', { name: 'Save cleaning request', exact: true }).click();
+  await expect(form.getByRole('alert')).toHaveText('Cleaning could not be saved. Please retry.');
+  await expect(form.getByLabel('From date', { exact: true })).toHaveValue('2026-12-10');
+  await expect(form.getByLabel('To date', { exact: true })).toHaveValue('2026-12-11');
+  await expect(form.getByLabel('Cleaning instructions')).toHaveValue('Please keep these instructions.');
+  await form.getByRole('button', { name: 'Save cleaning request', exact: true }).click();
+  await expect(form).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: 'Cleaning requests', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByText('2026-12-10 – 2026-12-11', { exact: true })).toBeVisible();
+  expect(attempts).toHaveLength(2);
+  expect(attempts[0].clientRequestId).toBe(attempts[1].clientRequestId);
+  expect(state.writes.filter(write => write.path === '/requests')).toHaveLength(1);
+});
+
+test('unpriced or inactive properties cannot request cleaning and invalid dates never submit', async ({ page }) => {
+  const state = await owner(page, { branches: [priced, { ...priced, id: 'unpriced', name: 'Unpriced apartment', pricingReady: false }, { ...priced, id: 'inactive', name: 'Inactive apartment', isActive: false }] });
+  await page.goto('/partner/');
+  for (const name of ['Unpriced apartment', 'Inactive apartment'])
+    await expect(page.getByRole('article', { name, exact: true }).getByRole('button', { name: 'Request cleaning', exact: true })).toBeDisabled();
+  await page.getByRole('article', { name: priced.name, exact: true }).getByRole('button', { name: 'Request cleaning', exact: true }).click();
+  const form = page.getByRole('region', { name: 'Cleaning request form' });
+  await form.getByRole('button', { name: 'Save cleaning request' }).click();
+  expect(state.writes).toEqual([]);
+  await form.getByLabel('From date', { exact: true }).fill('2026-12-10');
+  await form.getByLabel('To date', { exact: true }).fill('2026-12-09');
+  await form.getByRole('button', { name: 'Save cleaning request' }).click();
+  expect(await form.getByLabel('To date', { exact: true }).evaluate(input => (input as HTMLInputElement).validity.rangeUnderflow)).toBe(true);
+  expect(state.writes).toEqual([]);
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(form).toHaveCount(0);
+});
+
 test('owner edits a pending request with its revision and cancels the refreshed revision only after confirmation', async ({ page }) => {
   const state = await owner(page, { pending: true }); await page.goto('/partner/'); await page.getByRole('tab', { name: 'Cleaning requests', exact: true }).click();
   await page.getByRole('button', { name: 'Edit request', exact: true }).click(); const form = page.getByRole('region', { name: 'Cleaning request form' });
@@ -87,22 +147,27 @@ test('manager navigation loads partner operations through manager routes only an
   await setupAdminMocks(page); await page.addInitScript(() => { (window as unknown as { __MOCK_ROLES__: string[] }).__MOCK_ROLES__ = ['manager']; });
   await page.route(/\/api\/v1\/me$/, route => route.fulfill({ headers, json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: ['manager'] })], employee: { id: 'manager', firstName: 'Tenant', lastName: 'Manager', role: 'manager', isActive: true } } }));
   const adminCalls: string[] = [], managerReads: string[] = [], writes: Write[] = []; let requestLoads = 0;
+  let quotedBranch: Branch = { ...priced, pricingReady: false, quoteRequestedUtc: '2026-11-01T10:00:00Z' };
   await page.route(/\/api\/v1\/admin\//, route => { adminCalls.push(route.request().url()); return route.fulfill({ status: 403, headers }); });
   await page.route(/\/api\/v1\/manager\//, route => {
     const req = route.request(), path = new URL(req.url()).pathname.split('/manager')[1]; if (req.method() === 'OPTIONS') return route.fulfill({ headers });
     if (req.method() === 'GET') {
       managerReads.push(path);
       if (path === '/partner/requests' && ++requestLoads === 1) return route.fulfill({ status: 503, headers, json: { detail: 'Partner requests temporarily unavailable.' } });
-      const json = path === '/companies' ? { items: [{ id: companyId, name: 'Owner company', isActive: true }], total: 1 } : path === '/employees' ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', isActive: true }] : path === '/time-zone' ? { timeZoneId: 'Europe/Helsinki' } : path === '/shifts' ? [] : path === '/partner/requests' ? [pending] : path === '/partner/branches' || path === '/partner/quotes' ? [{ ...priced, pricingReady: false }] : [];
+      const json = path === '/companies' ? { items: [{ id: companyId, name: 'Owner company', isActive: true }], total: 1 } : path === '/employees' ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', isActive: true }] : path === '/time-zone' ? { timeZoneId: 'Europe/Helsinki' } : path === '/shifts' ? [] : path === '/partner/requests' ? [pending] : path === '/partner/branches' ? [quotedBranch] : path === '/partner/quotes' ? (quotedBranch.pricingReady ? [] : [quotedBranch]) : [];
       return route.fulfill({ headers, json });
     }
-    writes.push({ path, method: req.method(), body: req.postDataJSON() as Record<string, unknown> }); return route.fulfill({ headers, json: priced });
+    const body = req.postDataJSON() as Record<string, unknown>; writes.push({ path, method: req.method(), body }); quotedBranch = { ...quotedBranch, ...body, pricingReady: true }; return route.fulfill({ headers, json: quotedBranch });
   });
   await page.goto('/manager/'); const link = page.getByRole('link', { name: 'Partner requests', exact: true }); await expect(link).toHaveAttribute('href', '/manager/partner-requests/'); await link.click();
   await expect(page.getByText('Partner requests temporarily unavailable.', { exact: true })).toBeVisible(); await page.getByRole('button', { name: 'Refresh partner operations', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Partner operations', exact: true })).toBeVisible(); await expect(page.getByRole('heading', { name: 'Lake apartment · Requested', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Properties', exact: true }).click();
+  await expect(page.getByText('Quote requested', { exact: true })).toHaveClass(/text-red-800/);
   await page.getByRole('tab', { name: 'Quote requests', exact: true }).click(); await page.getByRole('button', { name: 'Set cleaning price', exact: true }).click(); await page.getByLabel('Fixed cleaning price excl. VAT (€)').fill('95'); await page.getByRole('button', { name: 'Save pricing', exact: true }).click(); await expect(page.getByText('Pricing saved.', { exact: true })).toBeVisible();
   expect(writes).toEqual([{ path: `/partner/branches/${priced.id}/pricing`, method: 'PUT', body: { priceNet: 95, vatRatePercent: 25.5, estimatedDurationMinutes: 120 } }]);
+  await page.getByRole('tab', { name: 'Properties', exact: true }).click();
+  await expect(page.getByText('Quote requested', { exact: true })).toHaveCount(0);
   for (const path of ['/employees', '/companies', '/partner/requests', '/partner/quotes', '/partner/branches', '/partner/change-requests']) expect(managerReads).toContain(path);
   expect(adminCalls).toEqual([]);
 });

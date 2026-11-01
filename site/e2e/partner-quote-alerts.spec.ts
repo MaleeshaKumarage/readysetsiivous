@@ -75,6 +75,7 @@ test('hidden tabs stop quote polling and returning to visibility refreshes witho
   await page.clock.install();
   await page.goto('/admin/partner-requests/');
   await page.getByRole('tab', { name: 'Properties', exact: true }).click();
+  await expect(page.getByText('Quote requested', { exact: true })).toHaveClass(/text-red-800/);
   await page.getByRole('button', { name: 'Edit property', exact: true }).click();
   await page.getByLabel('Property name', { exact: true }).fill('Unsaved name');
   await page.evaluate(() => Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }));
@@ -84,6 +85,7 @@ test('hidden tabs stop quote polling and returning to visibility refreshes witho
   state.branches = [];
   await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' }); document.dispatchEvent(new Event('visibilitychange')); });
   await expect(page.getByRole('status', { name: 'Pending quote requests' })).toHaveCount(0);
+  await expect(page.getByText('Quote requested', { exact: true })).toHaveCount(0);
   await expect(page.getByLabel('Property name', { exact: true })).toHaveValue('Unsaved name');
   expect(state.writes).toEqual([]);
 });

@@ -225,3 +225,27 @@ including inactive/priced exclusions, errors, hidden polling and both pricing
 entry points. The owner suite checks the red badge after requesting a quote;
 the admin-scope suite checks that denied users issue no administrative reads.
 Local verification: 10 new cases and 50 related partner/admin cases passed.
+
+## Partner portal repair regressions
+
+The original Request cleaning action rendered its inline form below every
+property without scrolling/focusing it. A 21-property regression reproduced an
+entirely off-screen form on both desktop and mobile. Opening now scrolls to and
+focuses the request region. Save failures appear inside that form, preserving
+dates, instructions and the same idempotency key for a user-initiated retry.
+The portal header uses the existing ReadySetSiivous primary logo.
+
+`partner-owner.spec.ts` additionally verifies the real logo loads, request form
+visibility, required/reversed dates, disabled unpriced/inactive properties and
+error/retry persistence. `partner-cancellation.spec.ts` covers owner/staff draft
+cancellation with no writes and sign-in/account/sign-out/reload behaviour.
+The selected portal/quote/cancellation suites passed 52 desktop/mobile checks.
+
+Production diagnostics also exposed a notification-worker UTC query failure.
+The real PostgreSQL regression calls the polling entry point rather than only
+per-ID dispatch. It failed with the observed InvalidUtcDateTimeUsageException
+before the fix and now verifies due notifications send while future ones remain
+pending. The query parameter matches the existing timestamp mapping without
+changing UTC values or schema; all 26 selected partner backend cases passed
+against an owned isolated PostgreSQL database with zero skips. Its temporary
+database, role, local credential file and SSH tunnel were removed afterward.
