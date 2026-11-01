@@ -82,7 +82,7 @@ their counts must not be added to produce a unique total.
 | Final notification delivery-lock regressions | 14 passed, 0 failed, 0 skipped, including 7 real PostgreSQL cases and a slow-provider scheduling test |
 | Final workforce-transition and core workflow PostgreSQL regressions | 14 passed, 0 failed, 0 skipped |
 | Employee identity regression checkpoint | 160 passed, 0 failed, 3 native-service tests skipped in that run; later native evidence is separate |
-| Final partner Playwright coverage, desktop and mobile | 44 passed within the clean 100-case affected browser run; final invoice-mode and role-transition assertions also passed in a targeted 4-case desktop/mobile run |
+| Final partner Playwright coverage, desktop and mobile | 44 passed within the clean 100-case affected browser run; final conditional and alternate-entry assertions also passed in two overlapping targeted 4-case desktop/mobile runs |
 | Legacy shift assignment and occurrence regressions, desktop and mobile | 56 passed within the same 100-case run, including active-partner exclusion from open workforce selectors and successful staff assignment |
 | Existing invitation/company/My Shifts desktop browser regressions | 34 passed |
 | Independent UI review follow-up, desktop and mobile | 4 passed, including editor target switching and staff-resolution visibility |
@@ -136,6 +136,11 @@ February month bounds, and clearing the company binding when a partner becomes s
 All 100 affected browser cases passed in one run. The final two expanded cases then passed
 on both projects (4 cases); these targeted results overlap the 100-case run and must not
 be added to it. No production code changed in this coverage follow-up.
+
+A further targeted desktop/mobile run passed 4 checks after adding active-partner exclusion
+to the replacement-employee picker and staff-entered planned start to the offer flow. The
+second offer uses the refreshed request revision and sends the chosen local datetime.
+These checks overlap the same 100 unique cases and do not increase that total.
 
 ### UI action coverage map
 

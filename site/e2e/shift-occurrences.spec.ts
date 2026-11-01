@@ -102,6 +102,7 @@ test('admin adds an extra visit with a replacement employee and deletes it', asy
   await editor.getByLabel(/Start/).fill('2026-11-03T09:00');
   await editor.getByLabel(/End/).fill('2026-11-03T11:00');
   await editor.getByLabel('Replacement employee (optional)').click();
+  await expect(page.getByRole('option', { name: 'Active Partner', exact: true })).toHaveCount(0);
   await page.getByRole('option', { name: 'Test Cleaner' }).click();
   await editor.getByLabel('Reason').fill('Requested deep clean');
   await editor.getByRole('button', { name: 'Save occurrence' }).click();

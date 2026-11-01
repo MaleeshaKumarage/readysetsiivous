@@ -69,12 +69,15 @@ test('cleaner must choose a time before accepting an unscheduled offer; acceptan
 
 test('administrator prices a quote and offers work only to staff', async ({ page }) => {
   await setupAdminMocks(page); const writes: any[] = [];
+  let currentRequest = { ...request, offeredEmployeeId: null as string | null };
   await page.route(/\/api\/v1\/admin\/employees$/, route => route.fulfill({ headers, json: [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true }, { id: 'owner', firstName: 'Property', lastName: 'Owner', role: 'partner', isActive: true }] }));
   await page.route(/\/api\/v1\/admin\/companies(?:\?.*)?$/, route => route.fulfill({ headers, json: { items: [{ id: branch.companyId, name: 'Owner company', isActive: true }], total: 1 } }));
   await page.route(/\/api\/v1\/admin\/partner\//, route => {
     const req = route.request(), path = new URL(req.url()).pathname.split('/partner')[1]; if (req.method() === 'OPTIONS') return route.fulfill({ headers });
-    if (req.method() === 'GET') return route.fulfill({ headers, json: path === '/requests' ? [request] : path === '/change-requests' ? [] : [branch] });
-    writes.push({ path, body: req.postDataJSON() }); return route.fulfill({ headers, json: path.includes('pricing') ? branch : request });
+    if (req.method() === 'GET') return route.fulfill({ headers, json: path === '/requests' ? [currentRequest] : path === '/change-requests' ? [] : [branch] });
+    const body = req.postDataJSON(); writes.push({ path, body });
+    if (path.endsWith('/offer')) currentRequest = { ...currentRequest, version: currentRequest.version + 1, status: 'Offered', offeredEmployeeId: body.employeeId };
+    return route.fulfill({ headers, json: path.includes('pricing') ? branch : currentRequest });
   });
   await page.goto('/admin/');
   // This navigation test uses the real mobile drawer; the shared helper normally
@@ -88,6 +91,9 @@ test('administrator prices a quote and offers work only to staff', async ({ page
   await page.getByRole('tab', { name: 'Requests', exact: true }).click(); await page.getByRole('button', { name: 'Arrange cleaner / time' }).click();
   await expect(page.getByRole('option', { name: 'Property Owner' })).toHaveCount(0); await page.getByLabel('Cleaner', { exact: true }).selectOption('cleaner'); await page.getByRole('button', { name: 'Send cleaning offer' }).click(); await expect(page.getByText('Offer sent. Waiting for cleaner acceptance.')).toBeVisible();
   expect(writes[1].body).toEqual({ version: 1, employeeId: 'cleaner', plannedStartLocal: null });
+  await page.getByRole('button', { name: 'Arrange cleaner / time', exact: true }).click(); await expect(page.getByLabel('Cleaner', { exact: true })).toHaveValue('cleaner');
+  await page.getByLabel('Planned start (tenant local time, optional)').fill('2026-12-01T10:00'); await page.getByRole('button', { name: 'Send cleaning offer', exact: true }).click(); await expect(page.getByText('Offer sent. Waiting for cleaner acceptance.', { exact: true })).toBeVisible();
+  expect(writes[2]).toEqual({ path: `/requests/${request.id}/offer`, body: { version: 2, employeeId: 'cleaner', plannedStartLocal: '2026-12-01T10:00' } });
 });
 
 test('switching inline staff editors resets fields to the newly selected record', async ({ page }) => {
