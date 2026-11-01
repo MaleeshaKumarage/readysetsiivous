@@ -203,3 +203,25 @@ API details and exact wire fields are in the [partner API contract](partner-api-
 The [approved design](../superpowers/specs/2026-10-30-company-partner-workflow-design.md)
 and [implementation plan](../superpowers/plans/2026-10-30-company-partner-workflow-plan.md)
 record scope and release gates.
+
+## Quote request visibility
+
+Authorized admins see a persistent pending-quote count and Review quotes link on
+every admin page. The link opens Partner operations directly on Quote requests.
+Pending branches have a red, text-labelled `Quote requested` badge in Companies,
+Partner properties, the quote queue and the owner portal. Active state and pricing
+readiness determine whether a request is pending; a retained historical request
+timestamp does not keep a priced branch marked pending.
+
+The admin queue refreshes on navigation, focus, visibility return and every
+30 seconds while visible. Background refresh does not reset inline form drafts.
+Saving pricing through either Partner operations or Companies refreshes it
+immediately. Failed reads retain the last successful queue and show Retry rather
+than claiming there are no requests. Admin identity verification still gates all
+queue reads; denied/anonymous visitors do not mount the provider.
+
+`site/e2e/partner-quote-alerts.spec.ts` covers these cases on desktop/mobile,
+including inactive/priced exclusions, errors, hidden polling and both pricing
+entry points. The owner suite checks the red badge after requesting a quote;
+the admin-scope suite checks that denied users issue no administrative reads.
+Local verification: 10 new cases and 50 related partner/admin cases passed.

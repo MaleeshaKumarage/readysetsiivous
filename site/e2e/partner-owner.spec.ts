@@ -43,6 +43,7 @@ test('owner creates a property, requests its quote and sends property changes wi
   await expect(property.getByRole('button', { name: 'Request cleaning', exact: true })).toBeDisabled();
   await property.getByRole('button', { name: 'Request quote', exact: true }).click(); await expect(property.getByText('Quote requested — awaiting staff pricing')).toBeVisible(); await expect(property.getByRole('button', { name: 'Request quote', exact: true })).toBeDisabled();
   expect(state.writes[1]).toEqual({ path: '/branches/new-property/quote-request', method: 'POST', body: null });
+  await expect(property.getByText('Quote requested', { exact: true })).toHaveClass(/text-red-800/);
   await property.getByRole('button', { name: 'Request property changes', exact: true }).click(); await page.getByLabel('Describe the requested change').fill('Please add one sofa bed.'); await page.getByRole('button', { name: 'Send change request', exact: true }).click();
   await expect(page.getByText('Change request sent to staff.', { exact: true })).toBeVisible(); expect(state.writes[2]).toEqual({ path: '/branches/new-property/change-requests', method: 'POST', body: { message: 'Please add one sofa bed.' } });
   await page.getByRole('tab', { name: 'Change requests', exact: true }).click(); await expect(page.getByText('Please add one sofa bed.', { exact: true })).toBeVisible(); await expect(page.getByText('Awaiting staff response', { exact: true })).toBeVisible();
