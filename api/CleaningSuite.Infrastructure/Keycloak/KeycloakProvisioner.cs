@@ -62,6 +62,7 @@ public class KeycloakProvisioner : IKeycloakProvisioner
             await _admin.CreateRoleAsync(slug, "admin", ct);
             await _admin.CreateRoleAsync(slug, "employee", ct);
             await _admin.CreateRoleAsync(slug, "manager", ct);
+            await _admin.CreateRoleAsync(slug, "partner", ct);
 
             await _admin.CreateClientAsync(slug, new
             {

@@ -11,6 +11,7 @@ public class Company : BaseDocument
     public string? ContactPhone { get; set; }
     public string? Notes { get; set; }
     public bool IsActive { get; set; }
+    public bool IsPartnerEnabled { get; set; }
 
     public static Company Create(
         string businessId,

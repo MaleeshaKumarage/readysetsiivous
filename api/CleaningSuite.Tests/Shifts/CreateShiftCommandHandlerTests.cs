@@ -314,6 +314,7 @@ public class CreateShiftCommandHandlerTests
         var shiftId = Guid.NewGuid();
         var empId = Guid.NewGuid();
         var assignment = ShiftAssignment.Create(shiftId, empId, null);
+        _shiftRepoMock.Setup(r => r.GetAsync(shiftId, It.IsAny<CancellationToken>())).ReturnsAsync(new Shift { Id = shiftId });
 
         _shiftRepoMock.Setup(r => r.GetAssignmentAsync(shiftId, empId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(assignment);
@@ -328,12 +329,21 @@ public class CreateShiftCommandHandlerTests
     [Fact]
     public async Task RemoveEmployeeFromShift_DoesNothing_WhenAssignmentNotFound()
     {
+        _shiftRepoMock.Setup(r => r.GetAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(new Shift());
         _shiftRepoMock.Setup(r => r.GetAssignmentAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((ShiftAssignment?)null);
 
         var handler = new ShiftHandlers.RemoveEmployeeFromShiftCommandHandler(_shiftRepoMock.Object);
         await handler.Handle(new RemoveEmployeeFromShiftCommand(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None);
 
+        _shiftRepoMock.Verify(r => r.SaveAssignmentAsync(It.IsAny<ShiftAssignment>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RemoveEmployeeFromShift_RejectsMissingShift()
+    {
+        var handler = new ShiftHandlers.RemoveEmployeeFromShiftCommandHandler(_shiftRepoMock.Object);
+        await Assert.ThrowsAsync<NotFoundException>(() => handler.Handle(new RemoveEmployeeFromShiftCommand(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None));
         _shiftRepoMock.Verify(r => r.SaveAssignmentAsync(It.IsAny<ShiftAssignment>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 

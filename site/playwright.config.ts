@@ -2,7 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: ['**/lifecycle-*.spec.ts', '**/company-integrity.spec.ts', '**/public-accessibility.spec.ts', '**/public-website-ux.spec.ts', '**/admin.spec.ts', '**/admin-scope.spec.ts', '**/manager.spec.ts', '**/shift-reactivation.spec.ts', '**/shift-assignment.spec.ts', '**/shift-occurrences.spec.ts', '**/shift-dates.spec.ts', '**/quality-cycle.spec.ts', '**/my-shifts*.spec.ts', '**/booking-availability.spec.ts', '**/booking-management-key.spec.ts', '**/employee-invite.spec.ts', '**/entertainment*.spec.ts'],
+  // Partner tests are explicitly included below alongside the existing workflow suites.
+  testMatch: ['**/partner*.spec.ts', '**/lifecycle-*.spec.ts', '**/company-integrity.spec.ts', '**/public-accessibility.spec.ts', '**/public-website-ux.spec.ts', '**/admin.spec.ts', '**/admin-scope.spec.ts', '**/manager.spec.ts', '**/shift-reactivation.spec.ts', '**/shift-assignment.spec.ts', '**/shift-occurrences.spec.ts', '**/shift-dates.spec.ts', '**/quality-cycle.spec.ts', '**/my-shifts*.spec.ts', '**/booking-availability.spec.ts', '**/booking-management-key.spec.ts', '**/employee-invite.spec.ts', '**/entertainment*.spec.ts'],
   timeout: 30000,
   use: {
     baseURL: 'http://localhost:3000',

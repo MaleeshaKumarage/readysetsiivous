@@ -160,7 +160,7 @@ export default function ShiftsAdminPage() {
 
   useEffect(() => {
     adminCompanies.list('', 0, 100).then((r) => { if (r) setCompanies(r.items); });
-    adminEmployees.list().then((e) => { if (e) setEmployees(e); });
+    adminEmployees.list().then((e) => { if (e) setEmployees(e.filter(person => person.role !== 'partner')); });
     adminQualityCycle.listTemplates().then((t) => { if (t) setTemplates(t.filter((x) => x.isActive)); });
   }, []);
 

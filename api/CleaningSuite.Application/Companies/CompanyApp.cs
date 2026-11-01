@@ -1,4 +1,7 @@
 using CleaningSuite.Application.Common;
+using CleaningSuite.Application.Partners;
+using CleaningSuite.Domain.Partners;
+using Marten;
 using CleaningSuite.Application.Agreements;
 using CleaningSuite.Application.QualityCycle;
 using CleaningSuite.Application.Shifts;
@@ -6,6 +9,7 @@ using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Companies;
 using FluentValidation;
 using MediatR;
+using System.Text.Json.Serialization;
 
 namespace CleaningSuite.Application.Companies;
 
@@ -17,7 +21,8 @@ public record CompanyDto(
     string? ContactEmail,
     string? ContactPhone,
     string? Notes,
-    bool IsActive);
+    bool IsActive,
+    bool IsPartnerEnabled = false);
 
 public record BranchDto(
     Guid Id,
@@ -29,7 +34,10 @@ public record BranchDto(
     string? Country,
     string? ContactPhone,
     bool IsActive,
-    string? ContactEmail = null);
+    string? ContactEmail = null,
+    int? RoomCount = null, int? BedCount = null, decimal? PriceNet = null,
+    decimal? VatRatePercent = null, int? EstimatedDurationMinutes = null,
+    int PricingVersion = 0, bool PricingReady = false, DateTime? QuoteRequestedUtc = null);
 
 public record CompanyDetailDto(CompanyDto Company, IReadOnlyList<BranchDto> Branches);
 
@@ -56,7 +64,8 @@ public record CreateCompanyCommand(
     string? ContactName = null,
     string? ContactEmail = null,
     string? ContactPhone = null,
-    string? Notes = null) : IRequest<CompanyDto>;
+    string? Notes = null,
+    bool IsPartnerEnabled = false) : IRequest<CompanyDto>;
 
 public record UpdateCompanyCommand(
     Guid Id,
@@ -66,7 +75,8 @@ public record UpdateCompanyCommand(
     string? ContactEmail = null,
     string? ContactPhone = null,
     string? Notes = null,
-    bool IsActive = true) : IRequest<CompanyDto>;
+    bool IsActive = true,
+    bool? IsPartnerEnabled = null) : IRequest<CompanyDto>;
 
 public record DeactivateCompanyCommand(Guid Id) : IRequest;
 public record ReactivateCompanyCommand(Guid Id) : IRequest;
@@ -84,7 +94,9 @@ public record CreateBranchCommand(
     string? City = null,
     string? Country = null,
     string? ContactPhone = null,
-    string? ContactEmail = null) : IRequest<BranchDto>;
+    string? ContactEmail = null,
+    int? RoomCount = null, int? BedCount = null, decimal? PriceNet = null,
+    decimal? VatRatePercent = null, int? EstimatedDurationMinutes = null) : IRequest<BranchDto>;
 
 public record UpdateBranchCommand(
     Guid Id,
@@ -95,7 +107,22 @@ public record UpdateBranchCommand(
     string? Country = null,
     string? ContactPhone = null,
     bool IsActive = true,
-    string? ContactEmail = null) : IRequest<BranchDto>;
+    string? ContactEmail = null,
+    int? RoomCount = null, int? BedCount = null, decimal? PriceNet = null,
+    decimal? VatRatePercent = null, int? EstimatedDurationMinutes = null) : IRequest<BranchDto>
+{
+    // JSON must distinguish an old client's omitted field from an explicit null
+    // clearing an optional count. Keep the positional constructor for existing callers.
+    [JsonConstructor]
+    public UpdateBranchCommand() : this(Guid.Empty, "") { }
+
+    private int? _roomCount = RoomCount;
+    private int? _bedCount = BedCount;
+    [JsonIgnore] public bool HasRoomCount { get; private init; } = RoomCount.HasValue;
+    [JsonIgnore] public bool HasBedCount { get; private init; } = BedCount.HasValue;
+    public int? RoomCount { get => _roomCount; init { _roomCount = value; HasRoomCount = true; } }
+    public int? BedCount { get => _bedCount; init { _bedCount = value; HasBedCount = true; } }
+}
 
 public record DeactivateBranchCommand(Guid Id) : IRequest;
 public record ReactivateBranchCommand(Guid Id) : IRequest;
@@ -122,6 +149,7 @@ public class CompanyHandlers
                 request.ContactPhone,
                 request.Notes);
 
+            company.IsPartnerEnabled = request.IsPartnerEnabled;
             await _repository.SaveAsync(company, ct);
             return MapCompany(company);
         }
@@ -131,13 +159,16 @@ public class CompanyHandlers
     {
         private readonly ICompanyRepository _repository;
 
-        public UpdateCompanyCommandHandler(ICompanyRepository repository)
+        private readonly IShiftWorkReservation? _reservation;
+
+            public UpdateCompanyCommandHandler(ICompanyRepository repository, IShiftWorkReservation? reservation = null)
         {
-            _repository = repository;
+            _repository = repository; _reservation = reservation;
         }
 
         public async Task<CompanyDto> Handle(UpdateCompanyCommand request, CancellationToken ct)
         {
+            await using var lease = _reservation is null ? null : await _reservation.AcquireAsync(ct);
             var company = await _repository.GetAsync(request.Id, ct)
                 ?? throw new NotFoundException("Company", request.Id);
             company.Update(
@@ -149,6 +180,7 @@ public class CompanyHandlers
                 request.Notes,
                 request.IsActive);
 
+            if (request.IsPartnerEnabled.HasValue) company.IsPartnerEnabled = request.IsPartnerEnabled.Value;
             await _repository.SaveAsync(company, ct);
             return MapCompany(company);
         }
@@ -158,13 +190,16 @@ public class CompanyHandlers
     {
         private readonly ICompanyRepository _repository;
 
-        public DeactivateCompanyCommandHandler(ICompanyRepository repository)
+        private readonly IShiftWorkReservation? _reservation;
+
+            public DeactivateCompanyCommandHandler(ICompanyRepository repository, IShiftWorkReservation? reservation = null)
         {
-            _repository = repository;
+            _repository = repository; _reservation = reservation;
         }
 
         public async Task Handle(DeactivateCompanyCommand request, CancellationToken ct)
         {
+            await using var lease = _reservation is null ? null : await _reservation.AcquireAsync(ct);
             var company = await _repository.GetAsync(request.Id, ct)
                 ?? throw new NotFoundException("Company", request.Id);
             company.Deactivate();
@@ -185,10 +220,15 @@ public class CompanyHandlers
 
     public sealed class DeleteCompanyCommandHandler(ICompanyRepository companies, IBranchRepository branches,
         IShiftRepository shifts, IAgreementRepository agreements, IQualityCycleRepository forms,
-        ITenantContext tenant) : IRequestHandler<DeleteCompanyCommand>
+        ITenantContext tenant, IPartnerStore? partnerStore = null, IShiftWorkReservation? reservation = null) : IRequestHandler<DeleteCompanyCommand>
     {
         public async Task Handle(DeleteCompanyCommand request, CancellationToken ct)
         {
+            await using var lease = reservation is null ? null : await reservation.AcquireAsync(ct);
+            if (partnerStore is not null && (await partnerStore.Session.Query<PartnerCleaningRequest>().AnyAsync(x => x.CompanyId == request.Id, ct)
+                || await partnerStore.Session.Query<PartnerChangeRequest>().AnyAsync(x => x.CompanyId == request.Id, ct)
+                || await partnerStore.Session.Query<CleaningSuite.Domain.Employees.Employee>().AnyAsync(x => x.PartnerCompanyId == request.Id, ct)))
+                throw new InactiveRecordDeleteConflictException("This company has partner request history and must be retained.");
             var company = await companies.GetAsync(request.Id, ct) ?? throw new NotFoundException("Company", request.Id);
             if (company.IsActive) throw new InactiveRecordDeleteConflictException("Deactivate the company before deleting it.");
             if ((await branches.ListByCompanyAsync(company.Id, true, ct)).Count > 0)
@@ -266,6 +306,7 @@ public class CompanyHandlers
                     request.Country,
                     request.ContactPhone);
                 branch.ContactEmail = request.ContactEmail?.Trim();
+                ApplyProperty(branch, request.RoomCount, request.BedCount, request.PriceNet, request.VatRatePercent, request.EstimatedDurationMinutes);
                 await _repository.SaveAsync(branch, ct);
                 return MapBranch(branch);
             }
@@ -275,13 +316,16 @@ public class CompanyHandlers
         {
             private readonly IBranchRepository _repository;
 
-            public UpdateBranchCommandHandler(IBranchRepository repository)
+            private readonly IShiftWorkReservation? _reservation;
+
+            public UpdateBranchCommandHandler(IBranchRepository repository, IShiftWorkReservation? reservation = null)
             {
-                _repository = repository;
+                _repository = repository; _reservation = reservation;
             }
 
             public async Task<BranchDto> Handle(UpdateBranchCommand request, CancellationToken ct)
             {
+            await using var lease = _reservation is null ? null : await _reservation.AcquireAsync(ct);
                 var branch = await _repository.GetAsync(request.Id, ct)
                     ?? throw new NotFoundException("Branch", request.Id);
                 branch.Update(
@@ -293,6 +337,10 @@ public class CompanyHandlers
                     request.ContactPhone,
                     request.IsActive);
                 branch.ContactEmail = request.ContactEmail?.Trim();
+                ApplyProperty(branch,
+                    request.HasRoomCount ? request.RoomCount : branch.RoomCount,
+                    request.HasBedCount ? request.BedCount : branch.BedCount,
+                    request.PriceNet, request.VatRatePercent, request.EstimatedDurationMinutes);
                 await _repository.SaveAsync(branch, ct);
                 return MapBranch(branch);
             }
@@ -314,13 +362,16 @@ public class CompanyHandlers
         {
             private readonly IBranchRepository _repository;
 
-            public DeactivateBranchCommandHandler(IBranchRepository repository)
+            private readonly IShiftWorkReservation? _reservation;
+
+            public DeactivateBranchCommandHandler(IBranchRepository repository, IShiftWorkReservation? reservation = null)
             {
-                _repository = repository;
+                _repository = repository; _reservation = reservation;
             }
 
             public async Task Handle(DeactivateBranchCommand request, CancellationToken ct)
             {
+                await using var lease = _reservation is null ? null : await _reservation.AcquireAsync(ct);
                 var branch = await _repository.GetAsync(request.Id, ct)
                     ?? throw new NotFoundException("Branch", request.Id);
                 branch.Deactivate();
@@ -329,10 +380,15 @@ public class CompanyHandlers
         }
 
         public sealed class DeleteBranchCommandHandler(IBranchRepository branches, IShiftRepository shifts,
-            IQualityCycleRepository forms) : IRequestHandler<DeleteBranchCommand>
+            IQualityCycleRepository forms, IPartnerStore? partnerStore = null, IShiftWorkReservation? reservation = null) : IRequestHandler<DeleteBranchCommand>
         {
             public async Task Handle(DeleteBranchCommand request, CancellationToken ct)
             {
+                await using var lease = reservation is null ? null : await reservation.AcquireAsync(ct);
+                if (partnerStore is not null && (await partnerStore.Session.Query<PartnerCleaningRequest>().AnyAsync(x => x.BranchId == request.Id, ct)
+                    || await partnerStore.Session.Query<PartnerChangeRequest>().AnyAsync(x => x.BranchId == request.Id, ct)
+                    || await partnerStore.Session.Query<PartnerNotification>().AnyAsync(x => x.BranchId == request.Id, ct)))
+                    throw new InactiveRecordDeleteConflictException("This property has partner request history and must be retained.");
                 var branch = await branches.GetAsync(request.Id, ct) ?? throw new NotFoundException("Branch", request.Id);
                 if (branch.IsActive) throw new InactiveRecordDeleteConflictException("Deactivate the branch before deleting it.");
                 if ((await shifts.ListForReportingAsync(ct)).Any(s => s.BranchId == branch.Id)
@@ -343,7 +399,7 @@ public class CompanyHandlers
         }
     }
 
-    private static CompanyDto MapCompany(Company company) =>
+    public static CompanyDto MapCompany(Company company) =>
         new(
             company.Id,
             company.BusinessId,
@@ -352,9 +408,9 @@ public class CompanyHandlers
             company.ContactEmail,
             company.ContactPhone,
             company.Notes,
-            company.IsActive);
+            company.IsActive, company.IsPartnerEnabled);
 
-    private static BranchDto MapBranch(Branch branch) =>
+    public static BranchDto MapBranch(Branch branch) =>
         new(
             branch.Id,
             branch.CompanyId,
@@ -365,7 +421,21 @@ public class CompanyHandlers
             branch.Country,
             branch.ContactPhone,
             branch.IsActive,
-            branch.ContactEmail);
+            branch.ContactEmail, branch.RoomCount, branch.BedCount, branch.PriceNet, branch.VatRatePercent,
+            branch.EstimatedDurationMinutes, branch.PricingVersion, branch.PricingReady, branch.QuoteRequestedUtc);
+    private static void ApplyProperty(Branch branch, int? rooms, int? beds, decimal? price, decimal? vat, int? duration)
+    {
+        try
+        {
+            branch.SetPropertyCounts(rooms, beds);
+            if (price.HasValue || vat.HasValue || duration.HasValue)
+            {
+                if (!price.HasValue || !vat.HasValue || !duration.HasValue) throw new ValidationException("Net price, VAT and estimated duration must be supplied together.");
+                branch.SetPricing(price.Value, vat.Value, duration.Value);
+            }
+        }
+        catch (ArgumentException ex) { throw new ValidationException(ex.Message); }
+    }
 }
 
 public class CompanyValidators

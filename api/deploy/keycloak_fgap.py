@@ -2,7 +2,7 @@
 from urllib.parse import quote
 from uuid import UUID
 
-GROUPS = {'managed-users': None, 'app-employee': 'employee', 'app-manager': 'manager', 'app-admin': 'admin'}
+GROUPS = {'managed-users': None, 'app-employee': 'employee', 'app-manager': 'manager', 'app-admin': 'admin', 'app-partner': 'partner'}
 MAIN_SCOPES = ['view', 'view-members', 'manage-members', 'manage-membership', 'manage-membership-of-members']
 RUNTIME_ROLES = {'query-users', 'view-realm'}
 
@@ -44,7 +44,7 @@ def configure(api, change, realm, subject, apply=False):
         return value
     if not isinstance(realm, dict) or not isinstance(subject, str) or not subject:
         raise RuntimeError('Malformed FGAP setup input')
-    for role in ('employee', 'manager', 'admin'):
+    for role in ('employee', 'manager', 'admin', 'partner'):
 
         representation = api('GET', '/roles/' + role, missing=True)
         if representation and representation.get('composite'):

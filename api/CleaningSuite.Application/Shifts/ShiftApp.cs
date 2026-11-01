@@ -201,6 +201,7 @@ public class ShiftHandlers
         {
             var shift = await _repository.GetAsync(request.Id, ct)
                 ?? throw new NotFoundException("Shift", request.Id);
+            CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
             if (_companies is not null) _ = await _companies.GetAsync(request.CompanyId, ct) ?? throw new NotFoundException("Company", request.CompanyId);
             if (_branches is not null) {
                 var branch = await _branches.GetAsync(request.BranchId, ct) ?? throw new NotFoundException("Branch", request.BranchId);
@@ -239,6 +240,7 @@ public class ShiftHandlers
         {
             var shift = await _repository.GetAsync(request.Id, ct)
                 ?? throw new NotFoundException("Shift", request.Id);
+            CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
             shift.EnsureQualityCycleHistory();
             shift.Deactivate();
             shift.RecordQualityCyclePlan(DateTime.UtcNow);
@@ -271,6 +273,7 @@ public class ShiftHandlers
         public async Task<ShiftDto> Handle(ReactivateShiftCommand request, CancellationToken ct)
         {
             var shift = await repository.GetAsync(request.Id, ct) ?? throw new NotFoundException("Shift", request.Id);
+            CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
             var company = await companies.GetAsync(shift.CompanyId, ct) ?? throw new NotFoundException("Company", shift.CompanyId);
             var branch = await branches.GetAsync(shift.BranchId, ct) ?? throw new NotFoundException("Branch", shift.BranchId);
             if (branch.CompanyId != company.Id) throw new NotFoundException("Branch", shift.BranchId);
@@ -292,6 +295,7 @@ public class ShiftHandlers
         public async Task Handle(DeleteShiftCommand request, CancellationToken ct)
         {
             var shift = await shifts.GetAsync(request.Id, ct) ?? throw new NotFoundException("Shift", request.Id);
+            CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
             if (shift.IsActive) throw new InactiveRecordDeleteConflictException("Deactivate the shift before deleting it.");
             await shifts.DeleteAsync(shift.Id, ct);
         }
@@ -381,6 +385,7 @@ public class ShiftHandlers
         {
             var shift = await shifts.GetAsync(request.ShiftId, ct)
                 ?? throw new NotFoundException("Shift", request.ShiftId);
+            CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
             if (!shift.IsActive) throw new ShiftConflictException("Activate the shift before changing its occurrences.");
 
             var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
@@ -398,7 +403,7 @@ public class ShiftHandlers
             {
                 var employee = await employees.GetByIdAsync(request.EmployeeId.Value, ct)
                     ?? throw new NotFoundException("Employee", request.EmployeeId.Value);
-                if (!employee.IsActive) throw new ShiftConflictException("Choose an active employee.");
+                if (!employee.IsActive || !CleaningSuite.Domain.Employees.Employee.IsWorkRole(employee.Role)) throw new ShiftConflictException("Choose an active employee.");
             }
 
             ShiftOccurrenceException? item = null;
@@ -436,6 +441,7 @@ public class ShiftHandlers
         public async Task Handle(DeleteShiftOccurrenceExceptionCommand request, CancellationToken ct)
         {
             var shift = await shifts.GetAsync(request.ShiftId, ct) ?? throw new NotFoundException("Shift", request.ShiftId);
+            CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
             var item = await shifts.GetOccurrenceExceptionAsync(request.Id, ct);
             if (item is null || item.ShiftId != request.ShiftId) throw new NotFoundException("ShiftOccurrenceException", request.Id);
             if (item.OriginalStartUtc.HasValue)
@@ -501,13 +507,14 @@ public class ShiftHandlers
         {
             var shift = await _repository.GetAsync(request.ShiftId, ct)
                 ?? throw new NotFoundException("Shift", request.ShiftId);
+            CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
 
             // Resolve the employee before doing anything else, so a typo or stale id fails fast
             // instead of persisting a ShiftAssignment that points at a non-existent employee.
             var employee = await _employeeRepository.GetByIdAsync(request.EmployeeId, ct)
                 ?? throw new NotFoundException("Employee", request.EmployeeId);
 
-            if (!shift.IsActive || !employee.IsActive)
+            if (!shift.IsActive || !employee.IsActive || !CleaningSuite.Domain.Employees.Employee.IsWorkRole(employee.Role))
                 throw new ShiftConflictException("Only active shifts and employees can be assigned.");
             // Capture "now" inside Handle (not in a field initializer) so it stays correct
             // regardless of handler lifetime and is anchored to UTC rather than server-local time.
@@ -601,6 +608,8 @@ public class ShiftHandlers
 
         public async Task Handle(RemoveEmployeeFromShiftCommand request, CancellationToken ct)
         {
+            var shift = await _repository.GetAsync(request.ShiftId, ct) ?? throw new NotFoundException("Shift", request.ShiftId);
+            CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
             var assignment = await _repository.GetAssignmentAsync(request.ShiftId, request.EmployeeId, ct);
             if (assignment is null)
                 return;

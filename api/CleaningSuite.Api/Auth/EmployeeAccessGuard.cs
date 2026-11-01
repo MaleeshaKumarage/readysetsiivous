@@ -1,26 +1,30 @@
 using System.Security.Claims;
 using System.Text.Json;
 using CleaningSuite.Application.Employees;
+using CleaningSuite.Application.Companies;
 using CleaningSuite.Domain.Employees;
 
 namespace CleaningSuite.Api.Auth;
 /// <summary>Database access policy for linked employees; old JWTs cannot bypass lifecycle changes.</summary>
-public sealed class EmployeeAccessGuard(IEmployeeRepository employees)
+public sealed class EmployeeAccessGuard(IEmployeeRepository employees, ICompanyRepository? companies = null)
 {
     public async Task<bool> AllowAsync(HttpContext context)
     {
         var path = context.Request.Path.Value ?? "";
         if (!path.StartsWith("/api/v1/admin/", StringComparison.OrdinalIgnoreCase)
             && !path.StartsWith("/api/v1/manager", StringComparison.OrdinalIgnoreCase)
+            && !path.StartsWith("/api/v1/partner", StringComparison.OrdinalIgnoreCase)
             && !path.StartsWith("/api/v1/me", StringComparison.OrdinalIgnoreCase)) return true;
         if (context.User.Identity?.IsAuthenticated != true) return true;
         var sub = context.User.FindFirstValue("sub");
         if (string.IsNullOrWhiteSpace(sub)) return await DenyAsync(context, "The login identity has no subject.");
         var employee = await employees.GetByKeycloakUserIdAsync(sub, context.RequestAborted);
         var roles = RealmRoles(context.User);
+        if (roles.Contains(Employee.RolePartner) && roles.Any(Employee.IsWorkRole))
+            return await DenyAsync(context, "Partner and staff permissions cannot be combined. Contact your tenant administrator.");
         if (employee is null) {
             // Provisioned tenant owners predate employee documents. Employee logins must be linked.
-            return (roles.Contains(Employee.RoleEmployee) || roles.Contains(Employee.RoleManager)) && !roles.Contains(Employee.RoleAdmin)
+            return (roles.Contains(Employee.RolePartner) || roles.Contains(Employee.RoleEmployee) || roles.Contains(Employee.RoleManager)) && !roles.Contains(Employee.RoleAdmin)
                 ? await DenyAsync(context, "This login is not linked to an employee. Contact your tenant administrator.") : true;
         }
         if (employee.IdentitySyncPending) return await DenyAsync(context, "Employee login synchronization is pending. Contact your tenant administrator.");
@@ -29,8 +33,17 @@ public sealed class EmployeeAccessGuard(IEmployeeRepository employees)
             return await DenyAsync(context, "Complete email verification before using this account.");
         var matches = employee.Role == Employee.RoleAdmin ? roles.Contains(Employee.RoleAdmin)
             : employee.Role == Employee.RoleManager ? roles.Contains(Employee.RoleManager) && !roles.Contains(Employee.RoleAdmin) && !roles.Contains(Employee.RoleEmployee)
+            : employee.Role == Employee.RolePartner ? roles.Contains(Employee.RolePartner) && !roles.Any(Employee.IsWorkRole)
             : employee.Role == Employee.RoleEmployee && roles.Contains(Employee.RoleEmployee) && !roles.Contains(Employee.RoleAdmin) && !roles.Contains(Employee.RoleManager);
         if (!matches) return await DenyAsync(context, "Account permissions changed. Sign in again or contact your tenant administrator.");
+        if (employee.Role == Employee.RolePartner)
+        {
+            if (!employee.PartnerCompanyId.HasValue || employee.PartnerCompanyId == Guid.Empty || companies is null)
+                return await DenyAsync(context, "This partner has no company access. Contact your tenant administrator.");
+            var company = await companies.GetAsync(employee.PartnerCompanyId.Value, context.RequestAborted);
+            if (company is null || !company.IsActive || !company.IsPartnerEnabled)
+                return await DenyAsync(context, "Partner access for this company is disabled.");
+        }
         context.Items["Employee"] = employee;
         return true;
     }

@@ -14,7 +14,7 @@ public sealed class KeycloakEmployeeIdentityProvider(TenantKeycloakClients ident
         try {
             var realm = await identityClients.ForTenant(tenantId).GetRealmAsync(tenantId, ct);
             if (!Boolean(realm, "enabled")) throw new EmployeeInviteConfigurationException("The tenant's login realm is disabled.");
-            if (role == Employee.RoleManager) await identityClients.ForTenant(tenantId).GetRoleAsync(tenantId, Employee.RoleManager, ct);
+            if (role is Employee.RoleManager or Employee.RolePartner) await identityClients.ForTenant(tenantId).GetRoleAsync(tenantId, role, ct);
             foreach (var requiredRole in new[] { Employee.RoleAdmin, Employee.RoleEmployee }) await identityClients.ForTenant(tenantId).GetRoleAsync(tenantId, requiredRole, ct);
             await (preflight ?? new KeycloakInvitationPreflight()).ValidateAsync(configuration, tenantId, redirectUri, ct);
             var attributes = realm.TryGetProperty("attributes", out var existing) && existing.ValueKind == JsonValueKind.Object
@@ -37,7 +37,7 @@ public sealed class KeycloakEmployeeIdentityProvider(TenantKeycloakClients ident
     }
     public async Task<EmployeeIdentity> EnsureAsync(string tenantId, Employee employee, CancellationToken ct = default)
     {
-        if (employee.Role is not (Employee.RoleAdmin or Employee.RoleEmployee or Employee.RoleManager)) throw new EmployeeIdentityConflictException("Unsupported employee role.");
+        if (employee.Role is not (Employee.RoleAdmin or Employee.RoleEmployee or Employee.RoleManager or Employee.RolePartner)) throw new EmployeeIdentityConflictException("Unsupported employee role.");
         try {
             var groups = await KeycloakEmployeeGroups.ResolveAsync(identityClients.ForTenant(tenantId), tenantId, ct);
             JsonElement? user;
@@ -136,7 +136,7 @@ public sealed class KeycloakEmployeeIdentityProvider(TenantKeycloakClients ident
         return matches.Count == 0 ? null : matches[0];
     }
     private async Task SetRoleAsync(string tenantId, Guid employeeId, string userId, string role, CancellationToken ct) {
-        if (role is not (Employee.RoleAdmin or Employee.RoleEmployee or Employee.RoleManager)) throw new EmployeeIdentityConflictException("Unsupported employee role.");
+        if (role is not (Employee.RoleAdmin or Employee.RoleEmployee or Employee.RoleManager or Employee.RolePartner)) throw new EmployeeIdentityConflictException("Unsupported employee role.");
         var client = identityClients.ForTenant(tenantId);
         var groups = await KeycloakEmployeeGroups.ResolveAsync(client, tenantId, ct);
         var user = await client.GetUserAsync(tenantId, userId, ct) ?? throw new EmployeeIdentityConflictException("The linked login no longer exists.");

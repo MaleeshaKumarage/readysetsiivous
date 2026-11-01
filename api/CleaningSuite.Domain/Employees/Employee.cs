@@ -8,6 +8,8 @@ public class Employee : BaseDocument
     public const string RoleAdmin = "admin";
     public const string RoleEmployee = "employee";
     public const string RoleManager = "manager";
+    public const string RolePartner = "partner";
+    public static bool IsWorkRole(string role) => role is RoleAdmin or RoleEmployee or RoleManager;
 
     public string KeycloakUserId { get; set; } = "";
     public string? KeycloakIdentityKey => string.IsNullOrWhiteSpace(KeycloakUserId) ? null : KeycloakUserId;
@@ -21,6 +23,7 @@ public class Employee : BaseDocument
     public string LastName { get; set; } = "";
     public string Phone { get; set; } = "";
     public string Role { get; set; } = RoleEmployee;
+    public Guid? PartnerCompanyId { get; set; }
     public bool IsActive { get; set; } = true;
     public string? ColorHex { get; set; }
     public List<string> Skills { get; set; } = new();

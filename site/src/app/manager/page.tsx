@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { managerApi, type ManagerShift, type ManagerEmployee, type ManagerCompany, type ManagerBranch, type ManagerAssignment, type ManagerSchedule } from '@/lib/managerApi';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const input = 'block w-full rounded border border-gray-300 bg-white p-2 mt-1 text-gray-900';
+const input = 'block w-full min-w-0 rounded border border-gray-300 bg-white p-2 mt-1 text-gray-900';
 const button = 'rounded border border-gray-300 bg-white px-3 py-2 disabled:opacity-50';
 const daily = (): ManagerSchedule => ({ type: 0, dailyStart: '08:00', dailyEnd: '10:00' });
 
@@ -108,7 +108,7 @@ export default function ManagerPage() {
       </div>}
     </article>)}
     </LifecycleTabs>
-    {editing && <form onSubmit={save} className="rounded-xl border bg-white p-5 space-y-4" aria-label={editing === 'new' ? 'Create shift' : 'Edit shift'}>
+    {editing && <form onSubmit={save} className="min-w-0 rounded-xl border bg-white p-5 space-y-4 [&_label]:block [&_label]:min-w-0" aria-label={editing === 'new' ? 'Create shift' : 'Edit shift'}>
       <h2 className="text-xl font-semibold">{editing === 'new' ? 'Create shift' : 'Edit shift'}</h2>
       <label>Shift name<input className={input} value={name} disabled={busy} onChange={e => setName(e.target.value)} required /></label>
       <label>Company<select aria-label="Company" className={input} value={company} disabled={busy || editing !== 'new'} onChange={e => { setCompany(e.target.value); setBranch(''); }} required><option value="">Choose company</option>{companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
@@ -120,7 +120,7 @@ export default function ManagerPage() {
       {type === 3 && <><label>Week parity<select aria-label="Week parity" className={input} disabled={busy} value={schedule.biWeeklyWeekParity ?? 1} onChange={e => setSchedule({ ...schedule, biWeeklyWeekParity: Number(e.target.value) })}><option value={1}>Odd weeks</option><option value={2}>Even weeks</option></select></label><label>Day<select aria-label="Day" className={input} disabled={busy} value={schedule.biWeeklyDay ?? 1} onChange={e => setSchedule({ ...schedule, biWeeklyDay: Number(e.target.value) })}>{DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}</select></label></>}
       {type === 5 && <label>Day of month<input className={input} type="number" min={1} max={31} disabled={busy} value={schedule.monthlyDay ?? 1} onChange={e => setSchedule({ ...schedule, monthlyDay: Number(e.target.value) })} required /></label>}
       {type === 1 && <fieldset className="space-y-3"><legend>Daily times</legend>{DAYS.map((d, i) => { const range = schedule.dailyTimes?.[d] ?? schedule.dailyTimes?.[String(i)]; return <div key={d} className="flex flex-wrap gap-3 items-center"><label><input type="checkbox" checked={!!range} disabled={busy} onChange={e => { const ranges = { ...schedule.dailyTimes }; delete ranges[String(i)]; if (e.target.checked) ranges[d] = { start: '08:00', end: '10:00' }; else delete ranges[d]; setSchedule({ ...schedule, dailyTimes: ranges }); }} /> {d}</label>{range && ['start', 'end'].map(k => <label key={k}>{d} {k}<input className={input} type="time" value={range[k as 'start' | 'end'].slice(0, 5)} disabled={busy} onChange={e => { const ranges = { ...schedule.dailyTimes }; delete ranges[String(i)]; ranges[d] = { ...range, [k]: e.target.value }; setSchedule({ ...schedule, dailyTimes: ranges }); }} required /></label>)}</div>; })}</fieldset>}
-      <div className="grid sm:grid-cols-2 gap-4"><label>Start date<input className={input} type="date" required={editing === 'new' || Boolean(editing?.validFrom)} disabled={busy} value={validFrom} onChange={e => setValidFrom(e.target.value)} /></label><label>End date (optional)<input className={input} type="date" min={validFrom || undefined} disabled={busy} value={validUntil} onChange={e => setValidUntil(e.target.value)} /></label></div>
+      <div className="grid min-w-0 grid-cols-1 sm:grid-cols-2 gap-4"><label>Start date<input className={input} type="date" required={editing === 'new' || Boolean(editing?.validFrom)} disabled={busy} value={validFrom} onChange={e => setValidFrom(e.target.value)} /></label><label>End date (optional)<input className={input} type="date" min={validFrom || undefined} disabled={busy} value={validUntil} onChange={e => setValidUntil(e.target.value)} /></label></div>
       <div className="flex gap-3"><button className={button} disabled={busy} type="submit">Save shift</button><button className={button} disabled={busy} type="button" onClick={() => setEditing(null)}>Cancel</button></div>
     </form>}
   </section>;

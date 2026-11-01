@@ -123,6 +123,15 @@ builder.Services.AddScoped<CleaningSuite.Application.Companies.ICompanyRepositor
 builder.Services.AddScoped<CleaningSuite.Application.Companies.IBranchRepository, CleaningSuite.Infrastructure.Persistence.BranchRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.Shifts.IShiftRepository, CleaningSuite.Infrastructure.Persistence.ShiftRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.Shifts.IShiftWorkReservation, CleaningSuite.Infrastructure.Persistence.ShiftWorkReservation>();
+builder.Services.AddScoped<CleaningSuite.Application.Partners.IPartnerStore, CleaningSuite.Infrastructure.Persistence.PartnerStore>();
+builder.Services.AddScoped<CleaningSuite.Application.Partners.PartnerService>();
+builder.Services.AddScoped<CleaningSuite.Application.Employees.PartnerWorkforceTransitionGuard>();
+builder.Services.AddScoped<CleaningSuite.Application.Invoicing.IPartnerInvoiceSource, CleaningSuite.Infrastructure.Partners.PartnerInvoiceSource>();
+builder.Services.AddHttpClient<CleaningSuite.Application.Partners.IPartnerNotificationTransport, CleaningSuite.Infrastructure.Partners.PartnerNotificationTransport>();
+builder.Services.AddScoped<CleaningSuite.Application.Partners.PartnerNotificationDispatcher>();
+builder.Services.AddScoped<CleaningSuite.Application.Partners.IPartnerNotificationReservation, CleaningSuite.Infrastructure.Persistence.PartnerNotificationReservation>();
+if (builder.Configuration.GetValue("BackgroundWorkers:Enabled", true))
+    builder.Services.AddHostedService<CleaningSuite.Api.PartnerNotificationWorker>();
 builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCycleRepository, CleaningSuite.Infrastructure.Persistence.QualityCycleRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCyclePdfGenerator, CleaningSuite.Infrastructure.QualityCycle.QualityCyclePdfGenerator>();
 builder.Services.AddScoped<CleaningSuite.Application.QualityCycle.IQualityCycleDispatcher, CleaningSuite.Application.QualityCycle.QualityCycleDispatcher>();
@@ -155,7 +164,7 @@ builder.Services.AddValidatorsFromAssembly(typeof(AssemblyMarker).Assembly);
 
 builder.Services.AddAuthorization(options =>
 {
-    options.AddRealmRolePolicies("admin", "employee", "manager");
+    options.AddRealmRolePolicies("admin", "employee", "manager", "partner");
     options.AddRealmRoleAnyPolicy("staff", "admin", "employee", "manager");
     options.AddRealmRoleAnyPolicy("operations", "admin", "manager");
     options.AddPlatformPolicy(builder.Configuration);

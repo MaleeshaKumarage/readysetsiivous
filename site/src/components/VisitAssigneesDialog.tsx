@@ -42,7 +42,7 @@ export function VisitAssigneesDialog({ shiftId, visit, employees, timeZone, onCl
       <Select label="Assignment action" value={mode} disabled={busy} onChange={value => { setMode(value ?? '1'); changed(); }}
         data={[{ value: '1', label: 'Replace regular assignees' }, { value: '2', label: 'Add extra employees' }, ...(scope === 'visit' ? [{ value: '0', label: 'Restore recurring assignment' }] : [])]} />
       {mode !== '0' && <MultiSelect label="Employees" searchable required disabled={busy}
-        data={employees.filter(x => x.isActive).map(x => ({ value: x.id, label: name(x.id) }))}
+        data={employees.filter(x => x.isActive && x.role !== 'partner').map(x => ({ value: x.id, label: name(x.id) }))}
         value={selected} onChange={value => { setSelected(value); changed(); }} />}
       <Textarea label="Assignment reason" required maxLength={500} disabled={busy} value={reason} onChange={event => { setReason(event.currentTarget.value); changed(); }} />
       {scope === 'future' && <Text size="sm">Starts at midnight on this date in the tenant timezone. Replace also removes later recurring handovers. Individual visit overrides remain in place.</Text>}

@@ -53,7 +53,7 @@ public sealed class ManagerOperations(IShiftRepository shifts, IEmployeeReposito
     { var (id, _) = await TenantTimeZone.LoadAsync(profiles, tenant, ct); return id; }
 
     public async Task<IReadOnlyList<ManagerEmployeeResponse>> Roster(CancellationToken ct) =>
-        (await employees.ListAsync(false, ct)).Where(e => e.IsActive).Select(ManagerResponses.Employee).ToArray();
+        (await employees.ListAsync(false, ct)).Where(e => e.IsActive && CleaningSuite.Domain.Employees.Employee.IsWorkRole(e.Role)).Select(ManagerResponses.Employee).ToArray();
 
     public async Task<Paged<ManagerCompanyResponse>> Companies(int skip, int take, CancellationToken ct)
     {

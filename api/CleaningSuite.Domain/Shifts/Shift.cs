@@ -6,6 +6,7 @@ public class Shift : BaseDocument
 {
     public Guid CompanyId { get; set; }
     public Guid BranchId { get; set; }
+    public Guid? PartnerRequestId { get; set; }
     public string Name { get; set; } = string.Empty;
     public ShiftSchedule Schedule { get; set; } = new();
     public string? Notes { get; set; }

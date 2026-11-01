@@ -18,7 +18,7 @@ from keycloak_fgap import configure as inspect_groups, GROUPS
 VERSION = '26.8.1'
 PUBLIC_ORIGIN = 'https://auth.readysetsiivous.fi'
 OWNER = 'cleaning_employee_id'
-APP_ROLES = {'admin', 'manager', 'employee'}
+APP_ROLES = {'admin', 'manager', 'employee', 'partner'}
 
 
 def fail(message):

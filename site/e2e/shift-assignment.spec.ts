@@ -5,6 +5,7 @@ const people = [
   { id: 'alice', firstName: 'Alice', lastName: 'Cleaner', isActive: true },
   { id: 'bob', firstName: 'Bob', lastName: 'Cleaner', isActive: true },
   { id: 'inactive', firstName: 'Inactive', lastName: 'Cleaner', isActive: false },
+  { id: 'partner-owner', firstName: 'Active', lastName: 'Partner', role: 'partner', isActive: true },
 ];
 type Failure = 'conflict' | 'server' | 'html' | 'network' | 'saved-network';
 async function setup(page: Page, options: { failure?: Failure; partial?: boolean; assigned?: boolean; loadFailure?: boolean; removeFailure?: boolean; refreshFailure?: boolean; managementPeople?: boolean } = {}) {
@@ -55,6 +56,16 @@ async function select(page: Page, name: string) {
   await page.getByRole('option', { name, exact: true }).click();
   await page.getByRole('textbox', { name: 'Assign employees', exact: true }).press('Escape');
 }
+test('legacy shift roster excludes active partners while allowing staff assignment', async ({ page }) => {
+  const state = await setup(page);
+  await page.getByRole('textbox', { name: 'Assign employees', exact: true }).click();
+  await expect(page.getByRole('option', { name: 'Alice Cleaner', exact: true })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'Active Partner', exact: true })).toHaveCount(0);
+  await page.getByRole('option', { name: 'Alice Cleaner', exact: true }).click(); await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Assign', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Unassign Alice Cleaner', exact: true })).toBeVisible();
+  expect(state.writes).toEqual(['alice']);
+});
 const alert = (page: Page) => page.getByRole('alert', { name: 'Assignment error' });
 
 test('overlap error names employee and keeps selection for a successful retry', async ({ page }) => {
