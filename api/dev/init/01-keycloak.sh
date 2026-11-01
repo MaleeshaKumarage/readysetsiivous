@@ -32,5 +32,6 @@ BEGIN
     RAISE EXCEPTION 'Existing keycloak_dev database has unexpected owner; review manually.';
   END IF;
 END $$;
+REVOKE ALL ON DATABASE keycloak_dev FROM PUBLIC;
 SQL
 )

@@ -8,11 +8,16 @@ services:
       POSTGRES_USER: cleaning
       POSTGRES_PASSWORD: devpassword
       POSTGRES_DB: cleaning
+      DB_SETUP_KEYCLOAK: "false"
+      DB_MIGRATOR_PASSWORD: ${DB_MIGRATOR_PASSWORD:?set separate dev migration password}
+      DB_RUNTIME_PASSWORD: ${DB_RUNTIME_PASSWORD:?set separate dev runtime password}
       DEV_KC_DB_PASSWORD: ${DEV_KC_DB_PASSWORD:?set a separate dev Keycloak database password}
     ports:
       - "127.0.0.1:5436:5432"
     volumes:
       - dev_pgdata:/var/lib/postgresql/data
+      - ./database:/database:ro
+      - ./database/02-application.sh:/docker-entrypoint-initdb.d/02-application.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U cleaning -d cleaning"]
       interval: 5s
@@ -30,6 +35,17 @@ services:
       DEV_KC_DB_PASSWORD: ${DEV_KC_DB_PASSWORD:?set a separate dev Keycloak database password}
     volumes:
       - ../dev/init/01-keycloak.sh:/init/01-keycloak.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  migrate:
+    profiles: [migration]
+    image: cleaning-dev-api:${DEV_IMAGE_TAG:?set reviewed dev image tag}
+    command: ["--migrate-schema"]
+    restart: "no"
+    environment:
+      ConnectionStrings__MigrationConnection: Host=postgres;Port=5432;Database=cleaning;Username=cleaning_migrator;Password=${DB_MIGRATOR_PASSWORD:?}
     depends_on:
       postgres:
         condition: service_healthy
@@ -58,7 +74,7 @@ services:
     # Required protected host file; only this service receives per-tenant credentials.
     env_file:
       - ${API_IDENTITY_ENV_FILE:?Set API_IDENTITY_ENV_FILE to the reviewed protected tenant identity environment file}
-    image: cleaning-dev-api:dev
+    image: cleaning-dev-api:${DEV_IMAGE_TAG:?set reviewed dev image tag}
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: Development
@@ -68,8 +84,8 @@ services:
       ReverseProxy__KnownNetworksCsv: ${API_TRUSTED_PROXY_NETWORKS:-}
       ReverseProxy__ForwardLimit: ${API_PROXY_FORWARD_LIMIT:-1}
       PublicRateLimit__Capacity: ${API_PUBLIC_RATE_LIMIT_CAPACITY:-10000}
-      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=cleaning;Username=cleaning;Password=devpassword
-      Marten__AutoCreateSchemaMode: CreateOrUpdate
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=cleaning;Username=cleaning_runtime;Password=${DB_RUNTIME_PASSWORD:?}
+      Marten__AutoCreateSchemaMode: None
       Auth__Keycloak__ServerUrl: ${DEV_PUBLIC_AUTH_URL:-http://localhost:8081}
       Auth__Keycloak__AdminServerUrl: http://keycloak:8080
       Auth__Keycloak__Audience: cleaning-suite-api

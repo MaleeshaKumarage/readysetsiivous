@@ -7,11 +7,16 @@ services:
       POSTGRES_USER: cleaning
       POSTGRES_PASSWORD: cleaning_dev
       POSTGRES_DB: cleaning
+      DB_SETUP_KEYCLOAK: "false"
+      DB_MIGRATOR_PASSWORD: ${DB_MIGRATOR_PASSWORD:?set separate dev migration password}
+      DB_RUNTIME_PASSWORD: ${DB_RUNTIME_PASSWORD:?set separate dev runtime password}
       DEV_KC_DB_PASSWORD: ${DEV_KC_DB_PASSWORD:?set a separate dev Keycloak database password}
     ports:
       - "127.0.0.1:5434:5432"
     volumes:
       - cleaning_dev_pgdata:/var/lib/postgresql/data
+      - ../deploy/database:/database:ro
+      - ../deploy/database/02-application.sh:/docker-entrypoint-initdb.d/02-application.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U cleaning -d cleaning"]
       interval: 5s
@@ -29,6 +34,17 @@ services:
       DEV_KC_DB_PASSWORD: ${DEV_KC_DB_PASSWORD:?set a separate dev Keycloak database password}
     volumes:
       - ./init/01-keycloak.sh:/init/01-keycloak.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  migrate:
+    profiles: [migration]
+    image: cleaning-dev-api:${DEV_IMAGE_TAG:?set reviewed dev image tag}
+    command: ["--migrate-schema"]
+    restart: "no"
+    environment:
+      ConnectionStrings__MigrationConnection: Host=postgres;Port=5432;Database=cleaning;Username=cleaning_migrator;Password=${DB_MIGRATOR_PASSWORD:?}
     depends_on:
       postgres:
         condition: service_healthy

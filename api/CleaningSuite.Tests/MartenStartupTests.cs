@@ -7,6 +7,16 @@ namespace CleaningSuite.Tests;
 public class MartenStartupTests
 {
     [Fact]
+    public void Runtime_schema_creation_configuration_is_rejected()
+    {
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+            builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
+                new Dictionary<string, string?> { ["Marten:AutoCreateSchemaMode"] = "CreateOrUpdate" })));
+        var failure = Assert.ThrowsAny<Exception>(() => factory.CreateClient());
+        Assert.Contains("Runtime schema creation is disabled", failure.ToString());
+    }
+
+    [Fact]
     public void Unreachable_database_prevents_healthy_api_startup()
     {
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>

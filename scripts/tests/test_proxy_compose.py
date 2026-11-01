@@ -26,14 +26,15 @@ class ProxyComposeTests(unittest.TestCase):
             values = dict(POSTGRES_PASSWORD='synthetic-unusable-db', KC_DB_PASSWORD='synthetic-unusable-kc', DEV_KC_DB_PASSWORD='synthetic-unusable-dev-kc',
                 KEYCLOAK_ADMIN_USER='synthetic-admin', KEYCLOAK_ADMIN_PASSWORD='synthetic-unusable-password',
                 API_IDENTITY_ENV_FILE=identity.as_posix(), API_IMAGE='example.invalid/synthetic@sha256:' + 'a' * 64,
-                POSTGRES_RUNTIME_PASSWORD='synthetic-runtime-db')
+                POSTGRES_RUNTIME_PASSWORD='synthetic-runtime-db', DB_MIGRATOR_PASSWORD='synthetic-migrator-db',
+                DB_RUNTIME_PASSWORD='synthetic-runtime-db', DEV_IMAGE_TAG='synthetic-unused')
             values.update(settings)
             env_file = folder / '.env'
             env_file.write_text(''.join(name + '=' + value + '\n' for name, value in values.items()))
             environment = {name: value for name, value in os.environ.items() if name.upper() in
                 ('PATH', 'SYSTEMROOT', 'WINDIR', 'PROGRAMFILES', 'PROGRAMFILES(X86)', 'HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA')}
             result = subprocess.run(['docker', 'compose', '--env-file', str(env_file), '-f', str(ROOT / filename),
-                'config', '--format', 'json'], env=environment, text=True, capture_output=True, timeout=30)
+                '--profile', 'migration', 'config', '--format', 'json'], env=environment, text=True, capture_output=True, timeout=30)
             self.assertEqual(0, result.returncode, 'Compose normalization failed (fixture values only): ' + result.stderr)
             return json.loads(result.stdout)
 
@@ -45,6 +46,13 @@ class ProxyComposeTests(unittest.TestCase):
                     self.assertEqual(default, services['api']['environment'][key] or '')
                     for name, service in services.items():
                         if name != 'api': self.assertNotIn(key, service.get('environment', {}))
+
+    def test_production_migrator_uses_exact_runtime_release(self):
+        services = self.normalized('api/deploy/docker-compose.yml', {})['services']
+        self.assertEqual(services['api']['image'], services['migrate']['image'])
+        self.assertIn('@sha256:', services['migrate']['image'])
+        self.assertEqual(['migration'], services['migrate']['profiles'])
+        self.assertEqual(['--migrate-schema'], services['migrate']['command'])
 
     def test_host_env_settings_reach_api_as_scalar_configuration(self):
         settings = dict(API_TRUSTED_PROXY_IPS='192.0.2.10,192.0.2.11', API_TRUSTED_PROXY_NETWORKS='198.51.100.0/24',

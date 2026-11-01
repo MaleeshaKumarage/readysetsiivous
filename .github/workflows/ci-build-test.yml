@@ -53,10 +53,29 @@ jobs:
           fi
       - run: dotnet restore CleaningSuite.Backend.sln
       - run: dotnet build CleaningSuite.Backend.sln --no-restore -c Release
+      - name: Provision isolated database privilege rehearsal
+        # Exercise official entrypoint sourcing, not just direct setup invocation.
+        # Separate containers have synthetic credentials and no published ports.
+        run: python3 deploy/database/test-first-boot.py
+      - name: Provision synthetic runtime and migration identities
+        run: |
+          bash deploy/database/setup.sh
+          bash deploy/database/setup.sh
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGPASSWORD: synthetic_ci_only
+          POSTGRES_USER: security_tests
+          POSTGRES_DB: security_tests
+          KC_DB_PASSWORD: synthetic_keycloak_only
+          DB_MIGRATOR_PASSWORD: synthetic_migrator_only
+          DB_RUNTIME_PASSWORD: synthetic_runtime_only
       - run: dotnet test CleaningSuite.Backend.sln --no-build -c Release --verbosity minimal
         env:
           QC_TEST_CONNECTION_STRING: Host=localhost;Port=5432;Database=security_tests;Username=security_tests;Password=synthetic_ci_only
           INVITE_TEST_DATABASE: Host=localhost;Port=5432;Database=security_tests;Username=security_tests;Password=synthetic_ci_only
+          DB_PRIVILEGE_MIGRATION_CONNECTION: Host=localhost;Port=5432;Database=cleaning;Username=cleaning_migrator;Password=synthetic_migrator_only
+          DB_PRIVILEGE_RUNTIME_CONNECTION: Host=localhost;Port=5432;Database=cleaning;Username=cleaning_runtime;Password=synthetic_runtime_only
 
   frontend-e2e-test:
     runs-on: ubuntu-latest

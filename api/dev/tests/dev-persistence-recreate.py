@@ -33,13 +33,16 @@ def rehearse(relative, unsafe=None):
     project = "devpersist-" + uuid.uuid4().hex[:16]
     assert project.startswith("devpersist-") and len(project) == 27
     env = {**os.environ, "DEV_KC_DB_PASSWORD": "synthetic'quoted-password",
-           "KEYCLOAK_ADMIN_USER": "fixture-admin", "KEYCLOAK_ADMIN_PASSWORD": "fixture-password"}
+           "KEYCLOAK_ADMIN_USER": "fixture-admin", "KEYCLOAK_ADMIN_PASSWORD": "fixture-password",
+           "DB_MIGRATOR_PASSWORD": "fixture-migrator", "DB_RUNTIME_PASSWORD": "fixture-runtime",
+           "DEV_IMAGE_TAG": "fixture-unused"}
     with tempfile.TemporaryDirectory(prefix=project) as directory:
         env["API_IDENTITY_ENV_FILE"] = str(fixture_identity(directory))
         source = ROOT / relative
         config = json.loads(run(["docker", "compose", "-p", project, "-f", str(source),
                                  "config", "--format", "json"], env).stdout)
         api = config["services"].pop("api", None)
+        config["services"].pop("migrate", None)  # This fixture tests persistence, not API migrations.
         for service in config["services"].values():
             service.pop("ports", None)  # No shared/fixed host ports in the rehearsal.
             service.pop("restart", None)

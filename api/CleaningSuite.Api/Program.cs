@@ -27,7 +27,18 @@ foreach (var envPath in new[] { ".env", Path.Combine("..", ".env") })
     }
 }
 
-var builder = WebApplication.CreateBuilder(args);
+var migrateSchema = args.Contains("--migrate-schema", StringComparer.Ordinal);
+var builder = WebApplication.CreateBuilder(args.Where(x => x != "--migrate-schema").ToArray());
+
+// A one-shot, explicitly selected migration process uses exactly the application's
+// mappings, without starting HTTP, identity clients or background workers.
+if (migrateSchema)
+{
+    await CleaningSuite.Infrastructure.Persistence.SchemaMigration.RunAsync(
+        builder.Configuration.GetConnectionString("MigrationConnection")
+            ?? throw new InvalidOperationException("ConnectionStrings__MigrationConnection missing"));
+    return;
+}
 
 builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(options => CleaningSuite.Api.Middleware.TrustedProxyConfiguration.Configure(options, builder.Configuration));
 builder.Services.Configure<CleaningSuite.Api.Middleware.PublicRateLimitOptions>(builder.Configuration.GetSection("PublicRateLimit"));
@@ -49,10 +60,7 @@ builder.Services.AddSwaggerGen(c =>
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("ConnectionStrings__DefaultConnection missing");
 
-var autoCreate = builder.Configuration.GetValue<AutoCreate?>("Marten:AutoCreateSchemaMode")
-    ?? AutoCreate.CreateOrUpdate;
-
-builder.Services.AddCleaningMarten(connectionString, autoCreate);
+builder.Services.AddCleaningMarten(connectionString, AutoCreate.None);
 builder.Services.AddHostedService<MartenSchemaInitializer>();
 if (builder.Configuration.GetValue("BackgroundWorkers:Enabled", true))
     builder.Services.AddHostedService<CleaningSuite.Api.Services.EntertainmentGroupCleanupService>();
@@ -212,24 +220,26 @@ app.MapHub<CleaningSuite.Api.Hubs.EntertainmentHub>("/hubs/entertainment");
 
 app.Run();
 
-/// <summary>Builds the Marten schema at startup so newly-added document types (e.g. ShiftAssignment) get their tables created.</summary>
+/// <summary>Fails startup on schema drift. Only the separate migration process may apply DDL.</summary>
 public class MartenSchemaInitializer : Microsoft.Extensions.Hosting.IHostedService
 {
     private readonly Marten.IDocumentStore _store;
     private readonly ILogger<MartenSchemaInitializer> _logger;
+    private readonly IConfiguration _configuration;
 
-    public MartenSchemaInitializer(Marten.IDocumentStore store, ILogger<MartenSchemaInitializer> logger)
+    public MartenSchemaInitializer(Marten.IDocumentStore store, ILogger<MartenSchemaInitializer> logger, IConfiguration configuration)
     {
         _store = store;
         _logger = logger;
+        _configuration = configuration;
     }
 
     public async Task StartAsync(CancellationToken ct)
     {
         try
         {
-            _ = _store.Storage.ToDatabaseScript();
-            await _store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
+            if ((_configuration.GetValue<AutoCreate?>("Marten:AutoCreateSchemaMode") ?? AutoCreate.None) != AutoCreate.None)
+                throw new InvalidOperationException("Runtime schema creation is disabled. Run the reviewed --migrate-schema process first.");
             await _store.Storage.Database.AssertDatabaseMatchesConfigurationAsync(ct);
         }
         catch (Exception ex)
