@@ -9,6 +9,7 @@ using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Companies;
 using FluentValidation;
 using MediatR;
+using System.Text.Json.Serialization;
 
 namespace CleaningSuite.Application.Companies;
 
@@ -75,7 +76,7 @@ public record UpdateCompanyCommand(
     string? ContactPhone = null,
     string? Notes = null,
     bool IsActive = true,
-    bool IsPartnerEnabled = false) : IRequest<CompanyDto>;
+    bool? IsPartnerEnabled = null) : IRequest<CompanyDto>;
 
 public record DeactivateCompanyCommand(Guid Id) : IRequest;
 public record ReactivateCompanyCommand(Guid Id) : IRequest;
@@ -108,7 +109,20 @@ public record UpdateBranchCommand(
     bool IsActive = true,
     string? ContactEmail = null,
     int? RoomCount = null, int? BedCount = null, decimal? PriceNet = null,
-    decimal? VatRatePercent = null, int? EstimatedDurationMinutes = null) : IRequest<BranchDto>;
+    decimal? VatRatePercent = null, int? EstimatedDurationMinutes = null) : IRequest<BranchDto>
+{
+    // JSON must distinguish an old client's omitted field from an explicit null
+    // clearing an optional count. Keep the positional constructor for existing callers.
+    [JsonConstructor]
+    public UpdateBranchCommand() : this(Guid.Empty, "") { }
+
+    private int? _roomCount = RoomCount;
+    private int? _bedCount = BedCount;
+    [JsonIgnore] public bool HasRoomCount { get; private init; } = RoomCount.HasValue;
+    [JsonIgnore] public bool HasBedCount { get; private init; } = BedCount.HasValue;
+    public int? RoomCount { get => _roomCount; init { _roomCount = value; HasRoomCount = true; } }
+    public int? BedCount { get => _bedCount; init { _bedCount = value; HasBedCount = true; } }
+}
 
 public record DeactivateBranchCommand(Guid Id) : IRequest;
 public record ReactivateBranchCommand(Guid Id) : IRequest;
@@ -166,7 +180,7 @@ public class CompanyHandlers
                 request.Notes,
                 request.IsActive);
 
-            company.IsPartnerEnabled = request.IsPartnerEnabled;
+            if (request.IsPartnerEnabled.HasValue) company.IsPartnerEnabled = request.IsPartnerEnabled.Value;
             await _repository.SaveAsync(company, ct);
             return MapCompany(company);
         }
@@ -323,7 +337,10 @@ public class CompanyHandlers
                     request.ContactPhone,
                     request.IsActive);
                 branch.ContactEmail = request.ContactEmail?.Trim();
-                ApplyProperty(branch, request.RoomCount, request.BedCount, request.PriceNet, request.VatRatePercent, request.EstimatedDurationMinutes);
+                ApplyProperty(branch,
+                    request.HasRoomCount ? request.RoomCount : branch.RoomCount,
+                    request.HasBedCount ? request.BedCount : branch.BedCount,
+                    request.PriceNet, request.VatRatePercent, request.EstimatedDurationMinutes);
                 await _repository.SaveAsync(branch, ct);
                 return MapBranch(branch);
             }

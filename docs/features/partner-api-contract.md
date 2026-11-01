@@ -18,6 +18,19 @@ the returned tenant time zone. Versions are integer request revisions.
 - Cleaner offer: `{id,requestId,version,branchName,street,postalCode,city,fromDate,toDate,exactStartLocalTime,plannedStartUtc,estimatedDurationMinutes,notes,timeZoneId}`. No customer price or staff-private data.
 - Safe company shift: `{id,branchId,branchName,name,isActive,schedule,validFrom,validUntil}`. Internal shift notes are omitted.
 
+### Updates from existing clients
+
+Company updates that omit `isPartnerEnabled` (or send null) retain the current flag;
+an explicit `false` disables partner access. Branch updates preserve omitted room/bed
+counts, while an explicit null clears the selected optional count. Omitting all pricing
+fields, or sending all three as null, retains current pricing; changing pricing requires
+net price, VAT and estimated duration together. Existing request price snapshots are unchanged.
+
+Partner company membership is application database state, not a Keycloak/JWT permission.
+Rebinding an active partner to another enabled company therefore keeps the same identity
+role and checks the new current company on every request; it does not require an identity
+role synchronization or grant access to the previous company through a cached token claim.
+
 ## Partner `/api/v1/partner`
 
 - `GET /me`, `GET /branches` => identity, Branch[].

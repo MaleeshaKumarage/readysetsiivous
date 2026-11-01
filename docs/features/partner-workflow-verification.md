@@ -59,6 +59,16 @@ start/completion notifications are reconciled idempotently from existing work re
 
 ## Verification evidence
 
+The PR compatibility review found that an older company update could disable partner
+access and an older branch update could clear optional property counts. Updates now
+preserve omitted partner fields, while explicit `false` still disables company access
+and explicit null still clears a selected room/bed count. Existing pricing was already
+retained when all pricing fields were omitted or null; that behavior has regression coverage.
+Company rebinding deliberately remains database-only: no company permission is stored in
+the JWT, and the current binding and company state are checked on each request. A regression
+verifies that rebinding requires no identity-role mutation and that disabling the new company
+immediately denies the same login.
+
 Independent final review found no remaining confirmed P1/P2 findings in this bounded change.
 
 Evidence below is scoped to this development implementation. Focused test runs overlap;
@@ -66,6 +76,7 @@ their counts must not be added to produce a unique total.
 
 | Check | Result at this checkpoint |
 | --- | --- |
+| PR compatibility and current-binding regressions | 23 passed, 0 failed, 0 skipped, including 10 new compatibility cases |
 | Focused backend core, invoicing and existing shift regressions | 66 passed, 0 failed, 0 skipped, including real PostgreSQL concurrency tests |
 | Follow-up notification and company/branch locking regressions | 13 passed, 0 failed, 0 skipped |
 | Final notification delivery-lock regressions | 14 passed, 0 failed, 0 skipped, including 7 real PostgreSQL cases and a slow-provider scheduling test |
