@@ -2,6 +2,7 @@
 
 import '@mantine/core/styles.css';
 import './admin.css';
+import { adminTheme } from '@/lib/adminTheme';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -16,7 +17,7 @@ import {
 import { initAuth, isAuthenticated, isAdmin, authTenant, refreshToken, login, logout } from '@/lib/auth';
 import { API_URL } from '@/lib/api';
 import { PwaInstallButton } from '@/components/PwaInstallButton';
-import { QuoteRequestBanner, QuoteRequestProvider } from '@/components/QuoteRequests';
+import { QuoteRequestBanner, QuoteRequestProvider, PartnerPendingBadge } from '@/components/QuoteRequests';
 
 const NAV_GROUPS = [
   { label: 'Workspace', items: [{ href: '', label: 'Dashboard', icon: LayoutDashboard }] },
@@ -27,18 +28,7 @@ const NAV_GROUPS = [
   { label: 'Catalog', items: [{ href: 'services', label: 'Services', icon: Sparkles }] },
 ];
 
-const adminTheme = createTheme({
-  primaryColor: 'indigo',
-  defaultRadius: 'md',
-  fontFamily: 'Inter, system-ui, sans-serif',
-  headings: { fontFamily: 'Inter, system-ui, sans-serif', fontWeight: '650' },
-  components: {
-    Button: Button.extend({ styles: { root: { minHeight: 44 } } }),
-    ActionIcon: ActionIcon.extend({ styles: { root: { minWidth: 44, minHeight: 44 } } }),
-    Paper: Paper.extend({ defaultProps: { radius: 'md' } }),
-    NavLink: NavLink.extend({ styles: { root: { minHeight: 44, borderRadius: 8 } } }),
-  },
-});
+
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -156,7 +146,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   return (
     <MantineProvider theme={adminTheme} forceColorScheme="light">
-      <AppShell
+      <QuoteRequestProvider pathname={pathname}><AppShell
         className="admin-shell"
         header={{ height: 76 }}
         navbar={{ width: 256, breakpoint: 'sm', collapsed: { mobile: !opened } }}
@@ -188,15 +178,15 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                 <Stack gap={4}>{group.items.map(item => {
                   const href = item.href ? `${base}${item.href}/` : base;
                   const active = item.href === '' ? pathname === '/admin' || pathname === '/admin/' : pathname.startsWith(base + item.href);
-                  return <NavLink key={href} component={Link} href={href} label={item.label} leftSection={<item.icon size={18} aria-hidden="true" />} active={active} aria-current={active ? 'page' : undefined} onClick={close} />;
+                  return <NavLink key={href} component={Link} href={href} label={item.label} aria-label={item.label} rightSection={item.href === 'partner-requests' ? <PartnerPendingBadge /> : undefined} leftSection={<item.icon size={18} aria-hidden="true" />} active={active} aria-current={active ? 'page' : undefined} onClick={close} />;
                 })}</Stack>
               </div>)}
             </Stack>
           </AppShell.Section>
           <AppShell.Section className="admin-sidebar-footer" pt="md"><PwaInstallButton variant="light" size="sm" language="en" /></AppShell.Section>
         </AppShell.Navbar>
-        <AppShell.Main><div className="admin-content"><QuoteRequestProvider pathname={pathname}><QuoteRequestBanner />{children}</QuoteRequestProvider></div></AppShell.Main>
-      </AppShell>
+        <AppShell.Main><div className="admin-content"><QuoteRequestBanner />{children}</div></AppShell.Main>
+      </AppShell></QuoteRequestProvider>
     </MantineProvider>
   );
 }

@@ -1,5 +1,8 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
+import { Card } from '@/ds/Card';
+import { Button } from '@/ds/Button';
+import { Field, Input } from '@/ds/Input';
 import { offerApi, type CleanerOffer } from '@/lib/partnerApi';
 
 export function PartnerOffers({ onAccepted }: { onAccepted: () => void }) {
@@ -15,5 +18,32 @@ export function PartnerOffers({ onAccepted }: { onAccepted: () => void }) {
     catch (e) { setError(e instanceof Error ? e.message : 'Your decision could not be confirmed. Refresh offers before retrying.'); }
     finally { setBusy(false); }
   }
-  return <section aria-busy={busy || loading} aria-label="Cleaning offers" className="bg-white border rounded-lg p-4 space-y-3 text-gray-900 [&_button]:min-h-11 [&_input]:min-h-11"><h2 className="text-lg font-semibold">Cleaning offers awaiting your acceptance</h2>{loading && <p role="status">Loading offers…</p>}{busy && <p role="status">Saving your decision…</p>}{error && <p role="alert" className="text-red-700">{error}</p>}<button disabled={busy || loading} className="underline" onClick={() => void load()}>Refresh offers</button>{!loading && !offers.length && !error && <p>No pending cleaning offers.</p>}{offers.map(offer => <article aria-label={`${offer.branchName} offer`} className="border rounded p-4 space-y-2" key={offer.id}><h3 className="font-semibold">{offer.branchName}</h3><p>{[offer.street, offer.postalCode, offer.city].filter(Boolean).join(', ')}</p><p>{offer.fromDate} – {offer.toDate} · Estimated {offer.estimatedDurationMinutes} minutes · {offer.timeZoneId}</p>{offer.notes && <p className="whitespace-pre-wrap">{offer.notes}</p>}{offer.plannedStartUtc ? <p>Planned start: {new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: offer.timeZoneId }).format(new Date(offer.plannedStartUtc))}</p> : <label>Planned start ({offer.timeZoneId})<input className="block border rounded p-2 bg-white" aria-label={`Planned start for ${offer.branchName}`} type="datetime-local" min={`${offer.fromDate}T00:00`} max={`${offer.toDate}T23:59`} value={times[offer.id] ?? ''} onChange={e => setTimes(current => ({ ...current, [offer.id]: e.target.value }))} /></label>}<label>Decline reason (optional)<input className="block border rounded p-2 bg-white" value={reasons[offer.id] ?? ''} onChange={e => setReasons(current => ({ ...current, [offer.id]: e.target.value }))} /></label><div className="flex gap-4"><button disabled={busy} className="rounded bg-gray-900 text-white px-4 py-2 disabled:opacity-50" onClick={() => void decide(offer, true)}>Accept cleaning</button><button disabled={busy} className="underline" onClick={() => void decide(offer, false)}>Decline cleaning</button></div></article>)}</section>;
+  return <section aria-busy={busy || loading} aria-label="Cleaning offers" className="space-y-4 text-gray-900 dark:text-gray-100">
+    <Card className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold">Cleaning offers awaiting your acceptance</h2>
+        <Button variant="ghost" size="sm" disabled={busy || loading} onClick={() => void load()}>Refresh offers</Button>
+      </div>
+      {loading && <p role="status" className="text-sm text-gray-600 dark:text-gray-300">Loading offers…</p>}
+      {busy && <p role="status" className="text-sm text-gray-600 dark:text-gray-300">Saving your decision…</p>}
+      {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-200">{error}</p>}
+      {!loading && !offers.length && !error && <p className="text-sm text-gray-600 dark:text-gray-300">No pending cleaning offers.</p>}
+    </Card>
+    {offers.map(offer => <article aria-label={`${offer.branchName} offer`} key={offer.id}>
+      <Card className="space-y-4">
+        <h3 className="text-lg font-semibold break-words">{offer.branchName}</h3>
+        <p className="text-sm text-gray-600 dark:text-gray-300 break-words">{[offer.street, offer.postalCode, offer.city].filter(Boolean).join(', ')}</p>
+        <p className="text-sm text-gray-600 dark:text-gray-300">{offer.fromDate} – {offer.toDate} · Estimated {offer.estimatedDurationMinutes} minutes · {offer.timeZoneId}</p>
+        {offer.notes && <p className="whitespace-pre-wrap break-words">{offer.notes}</p>}
+        {offer.plannedStartUtc
+          ? <p>Planned start: {new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: offer.timeZoneId }).format(new Date(offer.plannedStartUtc))}</p>
+          : <Field label={`Planned start (${offer.timeZoneId})`}><Input aria-label={`Planned start for ${offer.branchName}`} type="datetime-local" min={`${offer.fromDate}T00:00`} max={`${offer.toDate}T23:59`} value={times[offer.id] ?? ''} onChange={e => setTimes(current => ({ ...current, [offer.id]: e.target.value }))} /></Field>}
+        <Field label="Decline reason (optional)"><Input value={reasons[offer.id] ?? ''} onChange={e => setReasons(current => ({ ...current, [offer.id]: e.target.value }))} /></Field>
+        <div className="flex flex-wrap gap-3">
+          <Button disabled={busy} onClick={() => void decide(offer, true)}>Accept cleaning</Button>
+          <Button variant="outline" disabled={busy} onClick={() => void decide(offer, false)}>Decline cleaning</Button>
+        </div>
+      </Card>
+    </article>)}
+  </section>;
 }

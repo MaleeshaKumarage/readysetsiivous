@@ -7,7 +7,7 @@ export type OccurrencePrice = { occurrenceStartUtc: string; rateNet: number; rea
 export type ShiftPricing = { plans: PricingPlan[]; overrides: OccurrencePrice[] };
 export type MonthlyOverride = { shiftId: string; month: string; amountNet: number; reason: string };
 export type ShiftInvoiceInput = { partnerMonth?: boolean; companyId: string; shiftIds: string[]; from: string; to: string; billingAddress: BillingAddress; language: string; monthlyOverrides: MonthlyOverride[] };
-export type ShiftInvoiceLine = { lineKey: string; description: string; shiftId?: string; shiftName?: string; branchName?: string; hours?: number; occurrences?: number; pricingMode?: string; periodFrom?: string; periodTo?: string; month?: string; quantity: number; unitPriceNet: number; netAmount: number; vatRatePercent: number; vatAmount: number; total: number; overrideReason?: string };
+export type ShiftInvoiceLine = { lineKey: string; description: string; shiftId?: string; shiftName?: string; branchName?: string; branchId?: string; completedOn?: string; hours?: number; occurrences?: number; pricingMode?: string; periodFrom?: string; periodTo?: string; month?: string; quantity: number; unitPriceNet: number; netAmount: number; vatRatePercent: number; vatAmount: number; total: number; overrideReason?: string };
 export type ShiftInvoice = { id: string; invoiceNumber: string; customer: { name: string }; issuer: InvoiceIssuer; lines: ShiftInvoiceLine[]; total: { net: number; vat: number; gross: number }; issueDate: string; dueDate: string; status: string; companyId?: string; periodFrom?: string; periodTo?: string; language?: string; previewToken?: string; issuerIsSample?: boolean };
 
 async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {

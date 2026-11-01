@@ -51,7 +51,7 @@ test('staff role cannot enter partner portal', async ({ page }) => {
   const state = await partnerSetup(page, { role: 'manager' }); await page.goto('/partner/'); await expect(page.getByText('Access denied.', { exact: false })).toBeVisible(); expect(state.companyReads).toBe(0);
 });
 
-test('cleaner must choose a time before accepting an unscheduled offer; acceptance reloads work', async ({ page }) => {
+test('cleaner must choose a time before accepting an unscheduled offer; acceptance reloads work', async ({ page }, testInfo) => {
   await setupAdminMocks(page); await page.addInitScript(() => { (window as any).__MOCK_ROLES__ = ['employee']; });
   let offer: any = { id: 'offer-one', requestId: request.id, version: 4, branchName: branch.name, street: branch.street, city: branch.city, fromDate: request.fromDate, toDate: request.toDate, plannedStartUtc: null, exactStartLocalTime: null, estimatedDurationMinutes: 120, notes: 'After checkout', timeZoneId: 'Europe/Helsinki' };
   const decisions: any[] = []; let loads = 0;
@@ -61,7 +61,14 @@ test('cleaner must choose a time before accepting an unscheduled offer; acceptan
     if (route.request().method() === 'GET') return route.fulfill({ headers, json: offer ? [offer] : [] });
     decisions.push(route.request().postDataJSON()); offer = null; return route.fulfill({ headers, json: { ...request, status: 'Accepted' } });
   });
-  await page.goto('/me/shifts/'); await page.getByRole('button', { name: 'Accept cleaning' }).click();
+  await page.goto('/me/shifts/');
+  const offerCard = page.getByRole('article', { name: 'Lake apartment offer', exact: true }).locator('.rounded-2xl');
+  await expect(offerCard).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await page.evaluate(() => document.documentElement.classList.add('dark'));
+  await expect(offerCard).toHaveCSS('background-color', 'rgb(31, 41, 55)');
+  await expect(page.getByLabel('Planned start for Lake apartment', { exact: true })).toHaveCSS('color', 'rgb(243, 244, 246)');
+  await page.screenshot({ path: testInfo.outputPath('cleaner-acceptance-dark.png'), fullPage: true });
+  await page.getByRole('button', { name: 'Accept cleaning' }).click();
   await expect(page.getByText('Choose a planned start time in the requested window.')).toBeVisible(); expect(decisions).toHaveLength(0);
   await page.getByLabel('Planned start for Lake apartment', { exact: true }).fill('2026-12-01T10:00'); await page.getByRole('button', { name: 'Accept cleaning' }).click();
   await expect(page.getByText('No pending cleaning offers.')).toBeVisible(); expect(decisions).toEqual([{ version: 4, plannedStartLocal: '2026-12-01T10:00' }]); expect(loads).toBeGreaterThan(1);
