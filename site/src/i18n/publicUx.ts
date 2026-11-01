@@ -71,4 +71,8 @@ const sv: typeof en = {
   howTitle: 'Så fungerar det', howSteps: ['Välj en tjänst eller begär en offert.', 'Vi bekräftar omfattning, tid och pris tillsammans med dig.', 'Städningen utförs enligt överenskommelse. Kontakta oss om något behöver åtgärdas.'],
   business: 'FO-nummer', contact: 'Kontakt', checkTime: 'Välj dagens datum i Helsingfors eller ett senare datum.',
 };
-export const publicUx = (lang: Language) => ({ en, fi, sv })[lang];
+// Pre-allocated dictionary map to prevent dynamic object literal creation on every function call.
+// Avoids garbage collection churn and property allocation during render cycles.
+const PUBLIC_UX_MAP: Record<Language, typeof en> = { en, fi, sv };
+
+export const publicUx = (lang: Language): typeof en => PUBLIC_UX_MAP[lang] ?? PUBLIC_UX_MAP.fi;
