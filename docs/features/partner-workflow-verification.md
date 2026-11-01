@@ -273,3 +273,5 @@ isolation, draft preservation and global-dark/320px checks. Four lifecycle check
 also passed after replacing an ancestor-dependent branch selector with its named
 accessible group. Screenshots cover Finnish desktop/mobile and narrow request
 forms. Earlier PostgreSQL notification regressions remain separately recorded.
+
+Review follow-up: quote-banner navigation uses client-side links and reactive query parameters, preserving open property drafts when switching the current operations page to quotes. Six desktop/mobile checks passed for same-page navigation, cross-page pricing, and populated/empty company-shifts views in both languages (dates, statuses and unchanged entered names).

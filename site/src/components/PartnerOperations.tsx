@@ -1,5 +1,6 @@
 'use client';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { Suspense, useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { adminCompanies, adminEmployees, type Branch } from '@/lib/adminApi';
 import { managerApi } from '@/lib/managerApi';
 import { staffPartnerApi, type CleaningRequest, type PartnerChange } from '@/lib/partnerApi';
@@ -9,6 +10,10 @@ const input = 'block w-full rounded border border-gray-300 bg-white text-gray-90
 const button = 'rounded bg-gray-900 text-white px-4 py-2 disabled:opacity-50';
 interface Person { id: string; firstName: string; lastName: string; isActive: boolean; role?: string }
 export function PartnerOperations({ role }: { role: 'admin' | 'manager' }) {
+  return <Suspense fallback={<p role="status">Loading partner operations…</p>}><PartnerOperationsContent role={role} /></Suspense>;
+}
+function PartnerOperationsContent({ role }: { role: 'admin' | 'manager' }) {
+  const searchParams = useSearchParams();
   const quoteRequests = useQuoteRequests();
   const [requests, setRequests] = useState<CleaningRequest[]>([]), [quotes, setQuotes] = useState<Branch[]>([]), [changes, setChanges] = useState<PartnerChange[]>([]), [branches, setBranches] = useState<Branch[]>([]);
   const [people, setPeople] = useState<Person[]>([]), [companies, setCompanies] = useState<{ id: string; name: string; isActive: boolean }[]>([]);
@@ -28,7 +33,7 @@ export function PartnerOperations({ role }: { role: 'admin' | 'manager' }) {
     finally { setLoading(false); }
   }, [role]);
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => { if (new URLSearchParams(window.location.search).get('tab') === 'quotes') setTab('Quote requests'); }, []);
+  useEffect(() => { if (searchParams.get('tab') === 'quotes') setTab('Quote requests'); }, [searchParams]);
   async function act(work: () => Promise<unknown>, success: string) {
     if (busy) return; setBusy(true); setError(''); setNotice('');
     try { await work(); setNotice(success); await load(); await quoteRequests?.refresh(); } catch (e) { setError(e instanceof Error ? e.message : 'Change could not be confirmed. Refresh before retrying.'); } finally { setBusy(false); }

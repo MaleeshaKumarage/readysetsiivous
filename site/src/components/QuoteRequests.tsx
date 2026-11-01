@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import type { Branch } from '@/lib/adminApi';
 import { staffPartnerApi } from '@/lib/partnerApi';
 
@@ -45,7 +46,7 @@ export function QuoteRequestBanner() {
   const count = queue.branches.length;
   return <section aria-label="Pending quote requests" role="status" className="mb-5 rounded-lg border border-red-200 bg-red-50 p-4 text-red-900">
     <div className="flex flex-wrap items-center justify-between gap-3">
-      {count > 0 && <><p className="font-semibold">{count} {count === 1 ? 'branch awaiting a quote' : 'branches awaiting quotes'}</p><a className="inline-flex min-h-11 items-center font-semibold underline" href="/admin/partner-requests/?tab=quotes">Review quotes</a></>}
+      {count > 0 && <><p className="font-semibold">{count} {count === 1 ? 'branch awaiting a quote' : 'branches awaiting quotes'}</p><Link className="inline-flex min-h-11 items-center font-semibold underline" href="/admin/partner-requests/?tab=quotes">Review quotes</Link></>}
       {queue.error && <div className="flex flex-wrap items-center gap-3"><p>Quote requests could not be checked. {queue.loaded && 'Showing the last checked requests.'}</p><button type="button" className="min-h-11 font-semibold underline" onClick={() => void queue.refresh()}>Retry quote requests</button></div>}
     </div>
   </section>;

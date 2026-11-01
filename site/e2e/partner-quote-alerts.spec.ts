@@ -51,6 +51,17 @@ test('admin sees banner and red branch tag, reviews quotes directly and pricing 
   expect(state.writes).toContainEqual({ path: '/api/v1/admin/partner/branches/quote-branch/pricing', body: { priceNet: 90, vatRatePercent: 25.5, estimatedDurationMinutes: 120 } });
 });
 
+test('quote banner switches tabs on the current operations page without losing a property draft', async ({ page }) => {
+  await fixture(page);
+  await page.goto('/admin/partner-requests/');
+  await page.getByRole('tab', { name: 'Properties', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit property', exact: true }).click();
+  await page.getByLabel('Property name', { exact: true }).fill('Preserve my draft');
+  await page.getByRole('status', { name: 'Pending quote requests' }).getByRole('link', { name: 'Review quotes' }).click();
+  await expect(page.getByRole('tab', { name: 'Quote requests', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByLabel('Property name', { exact: true })).toHaveValue('Preserve my draft');
+});
+
 test('visible polling and focus discover new quotes, errors retain count and retry clears resolved quotes', async ({ page }) => {
   const state = await fixture(page, []);
   await page.clock.install();

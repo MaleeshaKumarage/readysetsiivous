@@ -1,14 +1,14 @@
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
 import type { Branch } from '../src/lib/adminApi';
-import type { CleanerOffer, CleaningRequest, PartnerChange, PartnerIdentity } from '../src/lib/partnerApi';
+import type { CleanerOffer, CleaningRequest, PartnerChange, PartnerIdentity, PartnerShift } from '../src/lib/partnerApi';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const companyId = '11111111-1111-4111-8111-111111111111';
 const priced: Branch = { id: '22222222-2222-4222-8222-222222222222', companyId, name: 'Lake apartment', street: 'Lake road 1', postalCode: '33100', city: 'Tampere', country: 'FI', isActive: true, roomCount: 2, bedCount: 3, priceNet: 70, vatRatePercent: 25.5, estimatedDurationMinutes: 120, pricingReady: true };
 const pending: CleaningRequest = { id: '33333333-3333-4333-8333-333333333333', version: 5, companyId, branchId: priced.id, branchName: priced.name, fromDate: '2026-12-01', toDate: '2026-12-02', exactStartLocalTime: null, notes: 'Original cleaning instructions', priceNet: 70, vatRatePercent: 25.5, estimatedDurationMinutes: 120, status: 'Requested', firstAcceptedAtUtc: null, linkedShiftId: null, plannedStartUtc: null, plannedEndUtc: null, acceptedCleanerName: null, actualStartUtc: null, actualEndUtc: null };
 interface Write { path: string; method: string; body: Record<string, unknown> | null }
-async function owner(page: Page, options: { enabled?: boolean; pending?: boolean; branches?: Branch[] } = {}) {
+async function owner(page: Page, options: { enabled?: boolean; pending?: boolean; branches?: Branch[]; shifts?: PartnerShift[] } = {}) {
   await setupAdminMocks(page); await page.addInitScript(() => { (window as unknown as { __MOCK_ROLES__: string[] }).__MOCK_ROLES__ = ['partner']; });
   const identity: PartnerIdentity = { realm: 'readysetsiivous', person: { id: 'owner-profile', firstName: 'Test', lastName: 'Owner', role: 'partner', isActive: true }, company: { id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: options.enabled ?? true }, timeZoneId: 'Europe/Helsinki' };
   let branches: Branch[] = options.branches ?? [priced], requests: CleaningRequest[] = options.pending ? [pending] : [], changes: PartnerChange[] = [];
@@ -16,7 +16,7 @@ async function owner(page: Page, options: { enabled?: boolean; pending?: boolean
   await page.route(/\/api\/v1\/partner\//, route => {
     const req = route.request(), path = new URL(req.url()).pathname.split('/partner')[1];
     if (req.method() === 'OPTIONS') return route.fulfill({ headers });
-    if (req.method() === 'GET') { reads.push(path); return route.fulfill({ headers, json: path === '/me' ? identity : path === '/branches' ? branches : path === '/requests' ? requests : path === '/change-requests' ? changes : [] }); }
+    if (req.method() === 'GET') { reads.push(path); return route.fulfill({ headers, json: path === '/me' ? identity : path === '/branches' ? branches : path === '/requests' ? requests : path === '/change-requests' ? changes : path === '/shifts' ? options.shifts ?? [] : [] }); }
     const body = req.postData() ? req.postDataJSON() as Record<string, unknown> : null; writes.push({ path, method: req.method(), body });
     if (path === '/branches' && body) { const added: Branch = { id: 'new-property', companyId, isActive: true, name: String(body.name), street: String(body.street), postalCode: String(body.postalCode), city: String(body.city), country: String(body.country), contactEmail: String(body.contactEmail), contactPhone: String(body.contactPhone), roomCount: body.roomCount === null ? null : Number(body.roomCount), bedCount: body.bedCount === null ? null : Number(body.bedCount), priceNet: null, pricingReady: false }; branches = [...branches, added]; return route.fulfill({ headers, json: added }); }
     if (path.endsWith('/quote-request')) { const id = path.split('/')[2]; branches = branches.map(branch => branch.id === id ? { ...branch, quoteRequestedUtc: '2026-11-01T10:00:00Z' } : branch); return route.fulfill({ headers, json: branches.find(branch => branch.id === id) }); }
@@ -28,6 +28,33 @@ async function owner(page: Page, options: { enabled?: boolean; pending?: boolean
   });
   return { writes, reads };
 }
+
+test('company shifts show localized empty state, dates and statuses while preserving entered names', async ({ page }) => {
+  await owner(page);
+  await page.goto('/partner/');
+  await page.getByRole('tab', { name: 'Company shifts', exact: true }).click();
+  await expect(page.getByText('No company shifts.', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Suomi', exact: true }).click();
+  await expect(page.getByText('Yrityksellä ei ole vuoroja.', { exact: true })).toBeVisible();
+  await owner(page, { shifts: [
+    { id: 'active-shift', branchId: priced.id, branchName: priced.name, name: 'Guest checkout clean', isActive: true, schedule: { type: 0 }, validFrom: '2026-12-01', validUntil: '2026-12-15' },
+    { id: 'inactive-shift', branchId: priced.id, branchName: priced.name, name: 'Archived apartment clean', isActive: false, schedule: { type: 0 }, validFrom: null, validUntil: null },
+  ] });
+  await page.reload();
+  await page.getByRole('tab', { name: 'Yrityksen vuorot', exact: true }).click();
+  const active = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Guest checkout clean', exact: true }) });
+  const inactive = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Archived apartment clean', exact: true }) });
+  await expect(active).toContainText(priced.name);
+  await expect(active).toContainText('Aktiivinen');
+  await expect(active).toContainText('1.12.2026 – 15.12.2026');
+  await expect(inactive).toContainText('Ei aktiivinen');
+  await expect(inactive).toContainText('Ei aloituspäivää – Toistaiseksi');
+  await page.getByRole('button', { name: 'English', exact: true }).click();
+  await expect(active).toContainText('Active');
+  await expect(active).toContainText('2026-12-01 – 2026-12-15');
+  await expect(inactive).toContainText('Inactive');
+  await expect(inactive).toContainText('No start date – Ongoing');
+});
 
 test('owner creates a property, requests its quote and sends property changes without setting company or prices', async ({ page }) => {
   const state = await owner(page); await page.goto('/partner/');
