@@ -1,0 +1,75 @@
+import { test, expect } from '@playwright/test';
+import { setupAdminMocks } from './admin-helpers';
+
+const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization' };
+const initialCompany = { id: 'company-owner', name: 'Property owner', businessId: '1234567-8', isActive: true, isPartnerEnabled: false };
+
+test('company partner access persists through create and edit', async ({ page }) => {
+  await setupAdminMocks(page);
+  let company: any = null; const writes: any[] = [];
+  await page.route(/\/api\/v1\/admin\/companies(?:\/[^/?]+)?(?:\?.*)?$/, route => {
+    const req = route.request();
+    if (req.method() === 'OPTIONS') return route.fulfill({ headers });
+    if (req.method() === 'GET') return route.fulfill({ headers, json: { items: company ? [company] : [], total: company ? 1 : 0 } });
+    const body = req.postDataJSON(); writes.push({ method: req.method(), body });
+    company = { ...initialCompany, ...body }; return route.fulfill({ headers, json: company });
+  });
+  await page.goto('/admin/companies/'); await page.getByRole('button', { name: 'Add company', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Enable partner access')).not.toBeChecked();
+  await dialog.getByLabel('Business ID').fill(initialCompany.businessId); await dialog.getByLabel(/^Name/).fill(initialCompany.name);
+  await dialog.getByLabel('Enable partner access').check(); await dialog.getByRole('button', { name: 'Create company' }).click();
+  await expect(dialog).not.toBeVisible(); expect(writes[0]).toMatchObject({ method: 'POST', body: { isPartnerEnabled: true } });
+  await page.getByRole('row').filter({ has: page.getByRole('cell', { name: initialCompany.name, exact: true }) }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(dialog.getByLabel('Enable partner access')).toBeChecked();
+  await dialog.getByLabel('Enable partner access').uncheck(); await dialog.getByRole('button', { name: 'Save changes' }).click();
+  await expect(dialog).not.toBeVisible(); expect(writes[1]).toMatchObject({ method: 'PUT', body: { id: initialCompany.id, isPartnerEnabled: false } });
+  await page.getByRole('button', { name: 'Edit', exact: true }).click(); await expect(dialog.getByLabel('Enable partner access')).not.toBeChecked();
+});
+
+test('branch property counts and fixed pricing round trip through create and edit', async ({ page }) => {
+  await setupAdminMocks(page); const writes: any[] = []; let branch: any = null;
+  await page.route(/\/api\/v1\/admin\/companies(?:\/[^?]+)?(?:\?.*)?$/, route => {
+    const req = route.request(), path = new URL(req.url()).pathname;
+    if (req.method() === 'OPTIONS') return route.fulfill({ headers });
+    if (req.method() === 'GET') return route.fulfill({ headers, json: path.endsWith(initialCompany.id) ? { company: initialCompany, branches: branch ? [branch] : [] } : { items: [initialCompany], total: 1 } });
+    const body = req.postDataJSON(); writes.push({ path, body });
+    branch = { ...branch, id: 'branch-apartment', companyId: initialCompany.id, isActive: true, pricingReady: true, ...body };
+    return route.fulfill({ headers, json: branch });
+  });
+  await page.goto('/admin/companies/'); await page.getByRole('button', { name: 'Branches', exact: true }).click();
+  await page.getByRole('button', { name: 'Add branch', exact: true }).click(); const dialog = page.getByRole('dialog');
+  await dialog.getByLabel(/^Name/).fill('City apartment');
+  for (const [label, value] of [['Rooms (optional)', '2'], ['Beds (optional)', '3'], ['Fixed cleaning price, excl. VAT (€)', '85.5'], ['VAT (%)', '25.5'], ['Estimated cleaning duration (minutes)', '90']]) await dialog.getByLabel(label, { exact: true }).fill(value);
+  await dialog.getByRole('button', { name: 'Add branch', exact: true }).click(); await expect(dialog).not.toBeVisible();
+  expect(writes[0]).toMatchObject({ path: `/api/v1/admin/companies/${initialCompany.id}/branches`, body: { roomCount: 2, bedCount: 3, priceNet: 85.5, vatRatePercent: 25.5, estimatedDurationMinutes: 90 } });
+  await expect(page.getByText('€85.50 excl. VAT', { exact: false })).toBeVisible(); await expect(page.getByText('Partner booking ready')).toBeVisible();
+  await page.getByRole('button', { name: 'Edit', exact: true }).last().click();
+  for (const [label, value] of [['Rooms (optional)', '2'], ['Beds (optional)', '3'], ['Fixed cleaning price, excl. VAT (€)', '85.5'], ['VAT (%)', '25.5'], ['Estimated cleaning duration (minutes)', '90']]) await expect(dialog.getByLabel(label, { exact: true })).toHaveValue(value);
+  for (const [label, value] of [['Rooms (optional)', '4'], ['Beds (optional)', '5'], ['Fixed cleaning price, excl. VAT (€)', '120'], ['VAT (%)', '14'], ['Estimated cleaning duration (minutes)', '150']]) await dialog.getByLabel(label, { exact: true }).fill(value);
+  await dialog.getByRole('button', { name: 'Save changes' }).click(); await expect(dialog).not.toBeVisible();
+  expect(writes[1]).toMatchObject({ path: '/api/v1/admin/companies/branches/branch-apartment', body: { roomCount: 4, bedCount: 5, priceNet: 120, vatRatePercent: 14, estimatedDurationMinutes: 150 } });
+  await expect(page.getByText('€120.00 excl. VAT', { exact: false })).toBeVisible();
+});
+
+test('partner employee requires one active partner-enabled company before creation', async ({ page }) => {
+  await setupAdminMocks(page); const writes: any[] = []; const employees: any[] = [];
+  const companies = [{ ...initialCompany, isPartnerEnabled: true }, { ...initialCompany, id: 'disabled-partner', name: 'Partner disabled', isPartnerEnabled: false }, { ...initialCompany, id: 'inactive-partner', name: 'Inactive partner', isActive: false, isPartnerEnabled: true }];
+  await page.route(/\/api\/v1\/admin\/companies(?:\?.*)?$/, route => route.fulfill({ headers, json: { items: companies, total: companies.length } }));
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, route => {
+    const req = route.request(); if (req.method() === 'OPTIONS') return route.fulfill({ headers });
+    if (req.method() === 'GET') return route.fulfill({ headers, json: employees });
+    const body = req.postDataJSON(); writes.push(body); employees.push({ id: 'new-partner', ...body.fields, isActive: true }); return route.fulfill({ headers, json: 'new-partner' });
+  });
+  await page.goto('/admin/employees/'); await page.getByRole('button', { name: 'Add employee', exact: true }).click(); const dialog = page.getByRole('dialog');
+  await dialog.getByLabel(/^Email/).fill('owner@example.invalid'); await dialog.getByLabel('First name').fill('Property'); await dialog.getByLabel('Last name').fill('Owner');
+  await expect(dialog.getByLabel(/^Partner company/)).toHaveCount(0);
+  await dialog.getByLabel('Role', { exact: true }).click(); await page.getByRole('option', { name: 'partner', exact: true }).click();
+  await expect(dialog.getByLabel(/^Partner company/)).toHaveAttribute('required', '');
+  await dialog.getByRole('button', { name: 'Create employee' }).click(); await expect(dialog.getByRole('alert')).toContainText('Select an active company with partner access enabled'); expect(writes).toHaveLength(0);
+  await dialog.getByLabel(/^Partner company/).click();
+  await expect(page.getByRole('option', { name: initialCompany.name, exact: true })).toBeVisible(); await expect(page.getByRole('option', { name: 'Partner disabled', exact: true })).toHaveCount(0); await expect(page.getByRole('option', { name: 'Inactive partner', exact: true })).toHaveCount(0);
+  await page.getByRole('option', { name: initialCompany.name, exact: true }).click(); await dialog.getByRole('button', { name: 'Create employee' }).click();
+  await expect(dialog).not.toBeVisible(); expect(writes).toHaveLength(1); expect(writes[0].fields).toMatchObject({ role: 'partner', partnerCompanyId: initialCompany.id });
+  await expect(page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Property Owner', exact: true }) })).toContainText(initialCompany.name);
+});

@@ -71,7 +71,7 @@ their counts must not be added to produce a unique total.
 | Final notification delivery-lock regressions | 14 passed, 0 failed, 0 skipped, including 7 real PostgreSQL cases and a slow-provider scheduling test |
 | Final workforce-transition and core workflow PostgreSQL regressions | 14 passed, 0 failed, 0 skipped |
 | Employee identity regression checkpoint | 160 passed, 0 failed, 3 native-service tests skipped in that run; later native evidence is separate |
-| Final partner Playwright suite, desktop and mobile | 14 passed against mocked API contracts, including editor target switching and owner change history |
+| Final partner Playwright suite, desktop and mobile | 26 passed against mocked API contracts, including company enablement, employee company binding, branch counts/pricing, monthly invoice preview/issue, cleaner decline, staff changes/property creation/cancellation, editor target switching and owner change history |
 | Existing invitation/company/My Shifts desktop browser regressions | 34 passed |
 | Independent UI review follow-up, desktop and mobile | 4 passed, including editor target switching and staff-resolution visibility |
 | TypeScript | Passed after the final UI review changes |
@@ -103,13 +103,18 @@ Exact source/image/JAR hashes and limitations are in the
 This is single-node evidence, not a claim about clustered cache behavior. Browser mocks
 verify UI contracts; they are not substituted for real-service identity/database tests.
 
+PR review follow-up added the missing administration, invoicing and lifecycle browser
+coverage. The company enablement round-trip test exposed a deferred React event access:
+the checkbox handler now snapshots its checked value before updating form state. The
+real pointer-driven create/edit test passes on desktop and mobile after that fix.
+
 Primary repeatable checks (configure test connection variables privately):
 
 ```powershell
 dotnet test api/CleaningSuite.Tests/CleaningSuite.Tests.csproj --no-restore
 cd site
 npx tsc --noEmit
-npx playwright test e2e/partner.spec.ts
+npx playwright test e2e/partner.spec.ts e2e/partner-administration.spec.ts e2e/partner-operations.spec.ts
 npx playwright test e2e/employee-invite.spec.ts e2e/company-integrity.spec.ts e2e/my-shifts.spec.ts --project=chromium-desktop
 npm run build
 ```

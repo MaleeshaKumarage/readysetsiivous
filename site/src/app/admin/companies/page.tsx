@@ -257,7 +257,7 @@ export default function CompaniesAdminPage() {
 
       <Modal opened={modalOpen} onClose={() => { setModalOpen(false); setEditingCompany(null); }} title={editingCompany ? 'Edit company' : 'Add company'} radius="md">
         <Stack gap="sm">
-          <Checkbox label="Enable partner access" checked={form.isPartnerEnabled} onChange={event => setForm(current => ({ ...current, isPartnerEnabled: event.currentTarget.checked }))} description="Partners linked to this company can access its properties and request cleanings. Disabling this removes their portal access." />
+          <Checkbox label="Enable partner access" checked={form.isPartnerEnabled} onChange={event => { const checked = event.currentTarget.checked; setForm(current => ({ ...current, isPartnerEnabled: checked })); }} description="Partners linked to this company can access its properties and request cleanings. Disabling this removes their portal access." />
           <TextInput label="Business ID" required value={form.businessId} onChange={set('businessId')} />
           <TextInput label="Name" required value={form.name} onChange={set('name')} />
           <TextInput label="Contact name" value={form.contactName} onChange={set('contactName')} />
