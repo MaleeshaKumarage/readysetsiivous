@@ -124,12 +124,15 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             // Completion-month billing must resolve the original visit even when scheduled
             // outside the invoice month. Never select it by its scheduled month.
             var visitFrom = request.PartnerMonth ? partnerRequest!.PlannedStartUtc!.Value : from;
-            var visitTo = request.PartnerMonth ? visitFrom.AddTicks(1) : to;
+            // PostgreSQL timestamps have microsecond precision: a one-tick window
+            // can collapse to zero width when its upper bound is persisted/bound.
+            var visitTo = request.PartnerMonth ? visitFrom.AddSeconds(1) : to;
             var resolved = await QualityCycleOccurrences.ResolvedInWindowAsync(shifts, schedule, visitFrom, visitTo, zone, ct, true);
             if (resolved.Count > 10000) Invalid("Too many scheduled visits in this period. Select a shorter range.");
             var submitted = request.PartnerMonth ? monthEvidence[shift.Id] : await forms.ListFormsAsync(shift.Id, from, to, ct);
             var completionTimes = new Dictionary<DateTime, DateTime>();
-            var visits = resolved.Where(v => v.Plan.CompanyId == request.CompanyId).Select(v =>
+            var visits = resolved.Where(v => v.Plan.CompanyId == request.CompanyId
+                && (!request.PartnerMonth || v.Occurrence.StartUtc == visitFrom)).Select(v =>
             {
                 var evidence = submitted.Where(f => f.ShiftOccurrenceUtc == v.Occurrence.StartUtc && f.IsSubmitted && !f.ShiftDeletedUtc.HasValue
                     && (!request.PartnerMonth || (f.EndedAtUtc ?? f.SubmittedUtc).HasValue)

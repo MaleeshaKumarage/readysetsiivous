@@ -37,3 +37,5 @@ legacy evidence, unassigned evidence, exclusions and multilingual PDF grouping.
 Validation: 102 selected desktop/mobile partner and invoice browser checks passed; 54 invoice/calculation/PDF checks and 27 barcode checks passed without skips. After narrowing initial completion candidates, 27 invoice-service checks passed again. EN/FI/SV PDFs and admin/cleaner screenshots were visually reviewed. Release tests passed: 10 manifest tests, 21 deployment tests (one Linux-only skip on Windows).
 
 Final production build passed with all 46 pages, lint and type checks.
+
+Full-CI follow-up: widened the exact-visit database lookup to one second with an explicit exact-start filter because PostgreSQL microsecond precision collapses a one-tick bound. Real PostgreSQL-backed invoice concurrency, partner invoice and signing-key timeout checks passed: 10 tests, zero skips. Owned test DB/role, credential file and tunnel were cleaned. Shared admin test fixtures now mock requests/change counts as well as quotes so unrelated page tests do not call unmocked APIs.
