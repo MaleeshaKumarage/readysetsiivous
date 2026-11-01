@@ -17,6 +17,21 @@ namespace CleaningSuite.Tests.Partners;
 public class PartnerNotificationDatabaseTests
 {
     [QualityCycleDatabaseFact]
+    public async Task Worker_poll_with_UTC_clock_dispatches_due_notifications_but_not_future_notifications()
+    {
+        using var f = await Fixture.Create(); using var session = f.Session();
+        var future = new PartnerNotification { CompanyId = f.Company.Id, Audience = "Company", Kind = "OfferAccepted", NextAttemptUtc = f.Now.UtcDateTime.AddHours(1) };
+        using (var seed = f.Store.LightweightSession(f.TenantId)) { seed.Store(future); await seed.SaveChangesAsync(); }
+        f.Transport.Setup(t => t.SendAsync(It.IsAny<PartnerNotificationDelivery>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        // Exercise the worker's actual poll, not just the per-ID dispatch overload.
+        await f.Dispatcher(session).DispatchAsync(CancellationToken.None);
+        using var query = f.Store.QuerySession(f.TenantId);
+        Assert.Equal("Sent", (await query.LoadAsync<PartnerNotification>(f.Notification.Id))!.State);
+        Assert.Equal("Pending", (await query.LoadAsync<PartnerNotification>(future.Id))!.State);
+        f.Transport.Verify(t => t.SendAsync(It.IsAny<PartnerNotificationDelivery>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [QualityCycleDatabaseFact]
     public async Task Slow_provider_does_not_reserve_tenant_scheduling_or_allow_duplicate_dispatch()
     {
         using var f = await Fixture.Create(); using var sender = f.Session(); using var duplicate = f.Session(); using var scheduler = f.Session();

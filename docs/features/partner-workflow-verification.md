@@ -10,7 +10,7 @@ ID cannot change the scope. Partners do not enter the workforce roster. A staff-
 role change is rejected while assigned work or an offer remains outstanding; completed
 history is retained.
 
-The English light-mode `/partner/` workspace shows that company's properties, cleaning
+The Finnish/English light-mode `/partner/` workspace shows that company's properties, cleaning
 requests, read-only shifts and change-request history, including staff resolutions.
 A partner can add a property without a price and request a quote. Admins and managers use
 `/admin/partner-requests/` or `/manager/partner-requests/` to manage quotes, properties,
@@ -203,3 +203,79 @@ API details and exact wire fields are in the [partner API contract](partner-api-
 The [approved design](../superpowers/specs/2026-10-30-company-partner-workflow-design.md)
 and [implementation plan](../superpowers/plans/2026-10-30-company-partner-workflow-plan.md)
 record scope and release gates.
+
+## Quote request visibility
+
+Authorized admins see a persistent pending-quote count and Review quotes link on
+every admin page. The link opens Partner operations directly on Quote requests.
+Pending branches have a red, text-labelled `Quote requested` badge in Companies,
+Partner properties, the quote queue and the owner portal. Active state and pricing
+readiness determine whether a request is pending; a retained historical request
+timestamp does not keep a priced branch marked pending.
+
+The admin queue refreshes on navigation, focus, visibility return and every
+30 seconds while visible. Background refresh does not reset inline form drafts.
+Saving pricing through either Partner operations or Companies refreshes it
+immediately. Failed reads retain the last successful queue and show Retry rather
+than claiming there are no requests. Admin identity verification still gates all
+queue reads; denied/anonymous visitors do not mount the provider.
+
+`site/e2e/partner-quote-alerts.spec.ts` covers these cases on desktop/mobile,
+including inactive/priced exclusions, errors, hidden polling and both pricing
+entry points. The owner suite checks the red badge after requesting a quote;
+the admin-scope suite checks that denied users issue no administrative reads.
+Local verification: 10 new cases and 50 related partner/admin cases passed.
+
+## Partner portal repair regressions
+
+The original Request cleaning action rendered its inline form below every
+property without scrolling/focusing it. A 21-property regression reproduced an
+entirely off-screen form on both desktop and mobile. Opening now scrolls to and
+focuses the request region. Save failures appear inside that form, preserving
+dates, instructions and the same idempotency key for a user-initiated retry.
+The portal header uses the existing ReadySetSiivous primary logo.
+
+`partner-owner.spec.ts` additionally verifies the real logo loads, request form
+visibility, required/reversed dates, disabled unpriced/inactive properties and
+error/retry persistence. `partner-cancellation.spec.ts` covers owner/staff draft
+cancellation with no writes and sign-in/account/sign-out/reload behaviour.
+The selected portal/quote/cancellation suites passed 52 desktop/mobile checks.
+
+Production diagnostics also exposed a notification-worker UTC query failure.
+The real PostgreSQL regression calls the polling entry point rather than only
+per-ID dispatch. It failed with the observed InvalidUtcDateTimeUsageException
+before the fix and now verifies due notifications send while future ones remain
+pending. The query parameter matches the existing timestamp mapping without
+changing UTC values or schema; all 26 selected partner backend cases passed
+against an owned isolated PostgreSQL database with zero skips. Its temporary
+database, role, local credential file and SSH tunnel were removed afterward.
+
+## Partner design system and language coverage
+
+The partner workspace reuses the shared navy/gold tokens and Button, Card, Field,
+Input, Textarea and Badge components. Styling is scoped to the partner portal and
+keeps white surfaces/readable fields even when the global page has a saved dark
+theme. Desktop uses two property columns; mobile uses one, including 320px forms.
+The four-section navigation supports arrow keys and Home/End with visible focus.
+
+FI/EN is specific to this portal. Selection is remembered under
+`readyset:partner-language`; without a saved choice, a Finnish browser starts in
+Finnish and others in English. Switching language preserves open forms and entered
+values. Navigation, actions, statuses, confirmations, validation, known API errors,
+success/empty states and price/time formatting are localized. Company/property/
+person names, instructions and staff-written messages retain their entered text.
+The main region carries its language; other portals keep their current copy and
+theme preferences. Unknown server errors receive a localized retry message.
+
+The combined partner suites passed 58 desktop/mobile checks, including Finnish
+create/cancel/property/quote/change flows, language persistence, account-page
+isolation, draft preservation and global-dark/320px checks. Four lifecycle checks
+also passed after replacing an ancestor-dependent branch selector with its named
+accessible group. Screenshots cover Finnish desktop/mobile and narrow request
+forms. Earlier PostgreSQL notification regressions remain separately recorded.
+
+Review follow-up: quote-banner navigation uses client-side links and reactive query parameters, preserving open property drafts when switching the current operations page to quotes. Six desktop/mobile checks passed for same-page navigation, cross-page pricing, and populated/empty company-shifts views in both languages (dates, statuses and unchanged entered names).
+
+Six further desktop/mobile checks passed: anonymous and denied admin navigation triggers zero quote reads or polls (including a simulated minute and focus return), and tab navigation covers ArrowRight, ArrowLeft, Home and End with focus assertions.
+
+Repeated quote-banner navigation: changing operations tabs clears the quote query parameter, so subsequent Review quotes clicks remain effective and preserve drafts. All 16 desktop/mobile quote-alert cases passed after this fix.

@@ -8,10 +8,12 @@ import { Plus, ChevronDown, Pencil } from 'lucide-react';
 import { adminCompanies, adminBranches, type Company, type Branch } from '@/lib/adminApi';
 import { companyLifecycle, branchLifecycle } from '@/lib/reactivationApi';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
+import { QuoteRequestedBadge, useQuoteRequests } from '@/components/QuoteRequests';
 
 const emptyForm = { businessId: '', name: '', contactName: '', contactEmail: '', contactPhone: '', notes: '', isPartnerEnabled: false };
 
 export default function CompaniesAdminPage() {
+  const quoteRequests = useQuoteRequests();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [status, setStatus] = useState<LifecycleStatus>('active');
   const [branchStatus, setBranchStatus] = useState<LifecycleStatus>('active');
@@ -123,6 +125,7 @@ export default function CompaniesAdminPage() {
       setBranchModal(false);
       if (!editingBranch) setBranchStatus('active');
       await loadBranches(expanded);
+      await quoteRequests?.refresh();
     } catch (failure) {
       setBranchError(failure instanceof Error ? failure.message : 'Could not create branch. Please retry.');
     } finally { setBranchSaving(false); }
@@ -229,8 +232,8 @@ export default function CompaniesAdminPage() {
                           ) : (
                             <Stack gap={4}>
                               {visibleBranches.map((b) => (
-                                <Group key={b.id} justify="space-between" wrap="wrap" gap="xs">
-                                  <Text size="sm">{b.name}{b.city ? ` · ${b.city}` : ''}{b.priceNet != null && <Text component="span" size="xs"> · €{b.priceNet.toFixed(2)} excl. VAT</Text>}{b.pricingReady && <Badge size="xs" ml="xs">Partner booking ready</Badge>}</Text>
+                                <Group key={b.id} role="group" aria-label={'Branch ' + b.name} justify="space-between" wrap="wrap" gap="xs">
+                                  <Stack gap={4}><Text size="sm">{b.name}{b.city ? ` · ${b.city}` : ''}{b.priceNet != null && <Text component="span" size="xs"> · €{b.priceNet.toFixed(2)} excl. VAT</Text>}{b.pricingReady && <Badge size="xs" ml="xs">Partner booking ready</Badge>}</Text><QuoteRequestedBadge branch={b} /></Stack>
                                   <Group gap="xs">{!b.isActive && <Badge color="gray" size="xs">Inactive</Badge>}
                                     <Button size="xs" variant="subtle" leftSection={<Pencil size={13} />} onClick={() => openBranchEdit(b)}>Edit</Button>
                                     <Button size="xs" variant="light" color={b.isActive ? 'red' : undefined}

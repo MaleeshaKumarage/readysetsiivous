@@ -26,7 +26,11 @@ public sealed class PartnerNotificationDispatcher(IPartnerStore store, IShiftWor
     {
         if (!await TenantActive(ct)) return;
         await ReconcileWorkAsync(ct);
-        var ids = await Db.Query<PartnerNotification>().Where(n => n.State == "Pending" && n.NextAttemptUtc <= Now)
+        // Existing Marten JSON DateTime comparisons use timestamp without time
+        // zone. Keep UTC clock ticks, matching that mapping only at the query
+        // boundary; the persisted notification and retry times remain UTC.
+        var dueBefore = DateTime.SpecifyKind(Now, DateTimeKind.Unspecified);
+        var ids = await Db.Query<PartnerNotification>().Where(n => n.State == "Pending" && n.NextAttemptUtc <= dueBefore)
             .OrderBy(n => n.NextAttemptUtc).Take(100).Select(n => n.Id).ToListAsync(ct);
         foreach (var id in ids)
         {

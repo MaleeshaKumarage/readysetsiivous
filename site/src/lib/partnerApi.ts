@@ -6,8 +6,8 @@ export interface PartnerChange { id: string; companyId: string; branchId: string
 export interface CleanerOffer { id: string; requestId: string; version: number; branchName: string; street: string | null; postalCode: string | null; city: string | null; fromDate: string; toDate: string; exactStartLocalTime: string | null; plannedStartUtc: string | null; estimatedDurationMinutes: number; notes: string | null; timeZoneId: string }
 export interface PartnerShift { id: string; branchId: string; branchName: string; name: string; isActive: boolean; schedule: ShiftSchedule; validFrom: string | null; validUntil: string | null }
 export interface RequestInput { clientRequestId?: string; version?: number; branchId?: string; fromDate: string; toDate: string; exactStartLocalTime: string | null; notes: string }
-export async function partnerSend<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
-  const response = await authorizedFetch(`/api/v1/${path}`, { method, cache: 'no-store', ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+export async function partnerSend<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
+  const response = await authorizedFetch(`/api/v1/${path}`, { method, cache: 'no-store', signal, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   if (!response.ok) {
     const problem = await response.json().catch(() => ({}));
     const errors = Object.values(problem.errors ?? {}).flat().join(' ');
@@ -37,7 +37,7 @@ export const offerApi = {
 export function staffPartnerApi(role: 'admin' | 'manager') {
   const base = `${role}/partner`;
   return {
-    requests: () => partnerSend<CleaningRequest[]>(`${base}/requests`), quotes: () => partnerSend<Branch[]>(`${base}/quotes`), changes: () => partnerSend<PartnerChange[]>(`${base}/change-requests`),
+    requests: () => partnerSend<CleaningRequest[]>(`${base}/requests`), quotes: (signal?: AbortSignal) => partnerSend<Branch[]>(`${base}/quotes`, 'GET', undefined, signal), changes: () => partnerSend<PartnerChange[]>(`${base}/change-requests`),
     branches: () => partnerSend<Branch[]>(`${base}/branches`),
     createBranch: (body: unknown) => partnerSend<Branch>(`${base}/branches`, 'POST', body),
     updateBranch: (id: string, body: unknown) => partnerSend<Branch>(`${base}/branches/${id}`, 'PUT', body),

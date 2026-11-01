@@ -16,6 +16,7 @@ import {
 import { initAuth, isAuthenticated, isAdmin, authTenant, refreshToken, login, logout } from '@/lib/auth';
 import { API_URL } from '@/lib/api';
 import { PwaInstallButton } from '@/components/PwaInstallButton';
+import { QuoteRequestBanner, QuoteRequestProvider } from '@/components/QuoteRequests';
 
 const NAV_GROUPS = [
   { label: 'Workspace', items: [{ href: '', label: 'Dashboard', icon: LayoutDashboard }] },
@@ -194,7 +195,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           </AppShell.Section>
           <AppShell.Section className="admin-sidebar-footer" pt="md"><PwaInstallButton variant="light" size="sm" language="en" /></AppShell.Section>
         </AppShell.Navbar>
-        <AppShell.Main><div className="admin-content">{children}</div></AppShell.Main>
+        <AppShell.Main><div className="admin-content"><QuoteRequestProvider pathname={pathname}><QuoteRequestBanner />{children}</QuoteRequestProvider></div></AppShell.Main>
       </AppShell>
     </MantineProvider>
   );
