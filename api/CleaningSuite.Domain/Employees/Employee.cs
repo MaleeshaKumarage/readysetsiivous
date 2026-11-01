@@ -25,6 +25,10 @@ public class Employee : BaseDocument
     public string Role { get; set; } = RoleEmployee;
     public Guid? PartnerCompanyId { get; set; }
     public bool IsActive { get; set; } = true;
+    // Null is the initial rollout default; an explicit false always revokes access.
+    public bool? ShiftCalendarEnabled { get; set; }
+    public bool CanUseShiftCalendar => IsActive && !IdentitySyncPending && Role == RoleAdmin
+        && (ShiftCalendarEnabled ?? Email.Trim().Equals("maleesha@hiava.fi", StringComparison.OrdinalIgnoreCase));
     public string? ColorHex { get; set; }
     public List<string> Skills { get; set; } = new();
     public List<string> ServiceAreas { get; set; } = new();

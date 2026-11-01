@@ -19,6 +19,21 @@ public class EmployeesAdminController : ControllerBase
 
     public EmployeesAdminController(IMediator mediator) => _mediator = mediator;
 
+    [HttpPut("{id:guid}/shift-calendar-access")]
+    public async Task<IActionResult> CalendarAccess(Guid id, CalendarAccessBody body,
+        [FromServices] CleaningSuite.Application.Employees.IEmployeeRepository employees, CancellationToken ct)
+    {
+        var employee = await employees.GetByIdAsync(id, ct);
+        if (employee is null) return NotFound();
+        if (employee.Role != CleaningSuite.Domain.Employees.Employee.RoleAdmin || !employee.IsActive || employee.IdentitySyncPending)
+            return BadRequest(new { detail = "Calendar access can only be changed for active, synchronized admins." });
+        employee.ShiftCalendarEnabled = body.Enabled;
+        employee.UpdatedUtc = DateTime.UtcNow;
+        await employees.SaveAsync(employee, ct);
+        return Ok(new { enabled = employee.CanUseShiftCalendar });
+    }
+    public record CalendarAccessBody(bool Enabled);
+
     [HttpGet]
     [OutputCache(Duration = 30)]
     public async Task<IActionResult> List([FromQuery] bool includeInactive, CancellationToken ct)

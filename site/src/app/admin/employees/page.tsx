@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge } from '@mantine/core';
 import { isAdmin } from '@/lib/auth';
 import { Plus } from 'lucide-react';
-import { adminEmployees, adminCompanies, type Company, type Employee } from '@/lib/adminApi';
+import { adminEmployees, adminCompanies, authorizedFetch, invalidateAdminCache, type Company, type Employee } from '@/lib/adminApi';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
 
 const ROLES = ['admin', 'manager', 'employee', 'partner'];
@@ -26,6 +26,22 @@ export default function EmployeesAdminPage() {
   const [inviteBusy, setInviteBusy] = useState<string | null>(null);
   const [inviteMessage, setInviteMessage] = useState('');
   const [inviteFailure, setInviteFailure] = useState('');
+  const [calendarBusy, setCalendarBusy] = useState<string | null>(null);
+  const changeCalendarAccess = async (employee: Employee) => {
+    setCalendarBusy(employee.id); setInviteFailure('');
+    try {
+      const response = await authorizedFetch(`/api/v1/admin/employees/${employee.id}/shift-calendar-access`, {
+        method: 'PUT', body: JSON.stringify({ enabled: !employee.shiftCalendarEnabled }), cache: 'no-store',
+      });
+      if (!response.ok) throw new Error('Could not change calendar access. Reload and retry.');
+      const result = await response.json();
+      invalidateAdminCache();
+      window.dispatchEvent(new Event('admin-calendar-access-changed'));
+      setEmployees(current => current.map(item => item.id === employee.id ? { ...item, shiftCalendarEnabled: result.enabled } : item));
+      setInviteMessage(`Shift calendar access ${result.enabled ? 'enabled' : 'disabled'} for ${employee.firstName} ${employee.lastName}.`);
+    } catch (failure) { setInviteFailure(failure instanceof Error ? failure.message : 'Could not change calendar access.'); }
+    finally { setCalendarBusy(null); }
+  };
 
   const load = () => adminEmployees.list(true).then((r) => { if (r) setEmployees(r); setLoading(false); });
   useEffect(() => { load(); adminCompanies.listAll().then(records => { if (records) setCompanies(records); else setCompanyError('Company selection could not be loaded. Refresh before creating a partner.'); }); }, []);
@@ -142,6 +158,7 @@ export default function EmployeesAdminPage() {
                   <Table.Td>{e.isActive ? <Badge color="green">Active</Badge> : <Badge color="gray">Inactive</Badge>}</Table.Td>
                   <Table.Td>{e.keycloakUserId ? <Badge color="green">Invited</Badge> : <Badge color="gray">Not invited</Badge>}</Table.Td>
                   <Table.Td><Group gap="xs" wrap="wrap">
+                    {isAdmin() && e.role === 'admin' && e.isActive && !e.identitySyncPending && <Button size="xs" variant="light" loading={calendarBusy === e.id} disabled={!!calendarBusy} onClick={() => changeCalendarAccess(e)}>{e.shiftCalendarEnabled ? 'Disable shift calendar' : 'Enable shift calendar'}</Button>}
                     {isAdmin() && <Button size="xs" variant="light" onClick={() => openEdit(e)}>Edit</Button>}
                     {isAdmin() && e.isActive && <Button size="xs" variant="light" loading={inviteBusy === e.id} disabled={Boolean(inviteBusy && inviteBusy !== e.id)} onClick={() => invite(e)}>{e.keycloakUserId ? 'Resend setup email' : 'Invite'}</Button>}
                     {isAdmin() && e.isActive && e.identitySyncPending && <Button size="xs" loading={restoring === e.id} disabled={!!restoring} onClick={() => reactivate(e)}>Retry reactivation</Button>}

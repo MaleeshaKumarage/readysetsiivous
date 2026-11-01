@@ -37,7 +37,7 @@ public class MeController : ControllerBase
             .ToList();
 
         var employee = HttpContext.Items["Employee"] as Employee;
-        return Ok(new { realm, roles, sub = User.FindFirstValue("sub"), employee = employee is null ? null : new { employee.Id, employee.FirstName, employee.LastName, employee.Role, employee.IsActive } });
+        return Ok(new { realm, roles, sub = User.FindFirstValue("sub"), canUseShiftCalendar = employee?.CanUseShiftCalendar == true, employee = employee is null ? null : new { employee.Id, employee.FirstName, employee.LastName, employee.Role, employee.IsActive } });
     }
 
     [HttpGet("profile")]

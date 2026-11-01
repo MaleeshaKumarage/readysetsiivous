@@ -26,6 +26,7 @@ export interface Invoice {
 }
 
 export interface Employee {
+  shiftCalendarEnabled?: boolean;
   id: string;
   email: string;
   keycloakUserId?: string;
