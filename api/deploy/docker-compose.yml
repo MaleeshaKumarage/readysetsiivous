@@ -25,7 +25,7 @@ services:
 
   keycloak:
     # Exact reviewed ARM64 provider image, staged from the verified build before activation.
-    image: sha256:8523fc048089e840643f3797aed372ecc974b88532dffb98a3331924d7319c02
+    image: sha256:ec2484e749c4f33b989e3cc3de2ced15366d10e8090f68a08020cc67ceb370eb
     pull_policy: never
     restart: unless-stopped
     command: start
