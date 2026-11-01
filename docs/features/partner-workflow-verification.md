@@ -275,3 +275,5 @@ accessible group. Screenshots cover Finnish desktop/mobile and narrow request
 forms. Earlier PostgreSQL notification regressions remain separately recorded.
 
 Review follow-up: quote-banner navigation uses client-side links and reactive query parameters, preserving open property drafts when switching the current operations page to quotes. Six desktop/mobile checks passed for same-page navigation, cross-page pricing, and populated/empty company-shifts views in both languages (dates, statuses and unchanged entered names).
+
+Six further desktop/mobile checks passed: anonymous and denied admin navigation triggers zero quote reads or polls (including a simulated minute and focus return), and tab navigation covers ArrowRight, ArrowLeft, Home and End with focus assertions.

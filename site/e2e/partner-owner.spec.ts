@@ -185,6 +185,15 @@ test.describe('Finnish browser defaults', () => {
     await expect(page.getByRole('tab', { name: 'Siivouspyynnöt', exact: true })).toHaveAttribute('aria-selected', 'true');
     await page.getByRole('tab', { name: 'Siivouspyynnöt', exact: true }).press('Home');
     await expect(properties).toHaveAttribute('aria-selected', 'true');
+    await properties.press('End');
+    const changesTab = page.getByRole('tab', { name: 'Muutospyynnöt', exact: true });
+    await expect(changesTab).toHaveAttribute('aria-selected', 'true');
+    await expect(changesTab).toBeFocused();
+    await changesTab.press('ArrowLeft');
+    const shiftsTab = page.getByRole('tab', { name: 'Yrityksen vuorot', exact: true });
+    await expect(shiftsTab).toHaveAttribute('aria-selected', 'true');
+    await expect(shiftsTab).toBeFocused();
+    await shiftsTab.press('Home');
     await page.screenshot({ path: testInfo.outputPath('partner-portal-fi.png'), fullPage: true });
     await page.setViewportSize({ width: 320, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

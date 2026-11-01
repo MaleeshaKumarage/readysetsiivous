@@ -5,6 +5,22 @@ import type { Branch } from '../src/lib/adminApi';
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const company = { id: 'quote-company', name: 'Apartment owner', businessId: '1234567-8', isActive: true, isPartnerEnabled: true };
 const requested: Branch = { id: 'quote-branch', companyId: company.id, name: 'Lake apartment', city: 'Tampere', isActive: true, pricingReady: false, quoteRequestedUtc: '2026-11-01T10:00:00Z' };
+for (const access of ['anonymous', 'denied'] as const) {
+  test(`${access} admin navigation never reads or polls quotes`, async ({ page }) => {
+    await setupAdminMocks(page, { authenticated: access !== 'anonymous' });
+    if (access === 'denied') await page.addInitScript(() => { (window as unknown as { __MOCK_ROLES__: string[] }).__MOCK_ROLES__ = ['employee']; });
+    let quoteReads = 0;
+    await page.route(/\/api\/v1\/admin\/partner\/quotes$/, route => { quoteReads++; return route.fulfill({ headers, json: [requested] }); });
+    await page.clock.install();
+    await page.goto('/admin/partner-requests/');
+    if (access === 'denied') await expect(page.getByRole('heading', { name: 'Admin access required' })).toBeVisible();
+    else await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+    await page.clock.fastForward(60_000);
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(page.getByRole('status', { name: 'Pending quote requests' })).toHaveCount(0);
+    expect(quoteReads).toBe(0);
+  });
+}
 async function fixture(page: Page, initial: Branch[] = [requested]) {
   await setupAdminMocks(page);
   const state = { branches: initial, fail: false, quoteReads: 0, writes: [] as unknown[] };
