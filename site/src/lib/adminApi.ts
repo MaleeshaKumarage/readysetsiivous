@@ -26,6 +26,7 @@ export interface Invoice {
 }
 
 export interface Employee {
+  shiftCalendarEnabled?: boolean;
   id: string;
   email: string;
   keycloakUserId?: string;
@@ -85,13 +86,13 @@ export function invalidateAdminCache() {
   _cache.clear();
 }
 
-export async function adminGet<T>(path: string): Promise<T | null> {
-  const hit = _cache.get(path);
+export async function adminGet<T>(path: string, useCache = true): Promise<T | null> {
+  const hit = useCache ? _cache.get(path) : undefined;
   if (hit && Date.now() - hit.ts < _CACHE_TTL) return hit.data as T;
-  const response = await authorizedFetch(path);
+  const response = await authorizedFetch(path, useCache ? {} : { cache: 'no-store' });
   if (!response.ok) return null;
   const data = (await response.json()) as T;
-  _cache.set(path, { data, ts: Date.now() });
+  if (useCache) _cache.set(path, { data, ts: Date.now() });
   return data;
 }
 
@@ -219,7 +220,7 @@ async function employeeMutation(path: string, body?: unknown): Promise<boolean> 
 }
 
 export const adminEmployees = {
-  list: (includeInactive = false) => adminGet<Employee[]>(`/api/v1/admin/employees${includeInactive ? '?includeInactive=true' : ''}`),
+  list: (includeInactive = false) => adminGet<Employee[]>(`/api/v1/admin/employees${includeInactive ? '?includeInactive=true' : ''}`, false),
   create: (fields: EmployeeFields) => employeeMutation('/api/v1/admin/employees', { fields }),
   reactivate: (id: string) => employeeMutation(`/api/v1/admin/employees/${id}/reactivate`),
   update: (id: string, fields: EmployeeFields, isActive: boolean) =>
