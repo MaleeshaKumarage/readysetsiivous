@@ -30,9 +30,12 @@ public sealed class PushSubscriptions(ITenantSession tenant, IShiftWorkReservati
         var id = PushValidation.Id(input.Endpoint);
         var device = await tenant.Session.LoadAsync<PushDevice>(id, ct);
         if (device is not null && (device.EmployeeId != actor.EmployeeId || device.Subject != actor.Subject)) throw new PushSubscriptionException("ownership_conflict");
+        var obsolete = await tenant.Session.Query<PushDevice>().Where(d => d.EmployeeId == actor.EmployeeId && d.Subject == actor.Subject && d.Enabled && d.VapidKeyId != settings.KeyId).ToListAsync(ct);
+        foreach (var previous in obsolete)
+        { previous.Enabled = false; previous.UpdatedUtc = Now; tenant.Session.Store(previous); }
         if (device is null || !device.Enabled)
         {
-            var count = await tenant.Session.Query<PushDevice>().CountAsync(d => d.EmployeeId == actor.EmployeeId && d.Enabled, ct);
+            var count = await tenant.Session.Query<PushDevice>().CountAsync(d => d.EmployeeId == actor.EmployeeId && d.Enabled && d.VapidKeyId == settings.KeyId, ct);
             if (count >= 10) throw new PushSubscriptionException("device_limit");
         }
         device ??= new PushDevice { Id = id, EmployeeId = actor.EmployeeId, Subject = actor.Subject, CreatedUtc = Now, OptedInUtc = Now };
