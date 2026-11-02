@@ -45,6 +45,10 @@ public static class MartenConfig
         options.Policies.ForAllDocuments(doc =>
             doc.UseOptimisticConcurrency = true);
 
+        options.Schema.For<CleaningSuite.Domain.Notifications.PushDevice>().Index(x => x.EmployeeId);
+        options.Schema.For<CleaningSuite.Domain.Notifications.PushIntent>().Index(x => x.DueUtc).Index(x => x.EmployeeId);
+        options.Schema.For<CleaningSuite.Domain.Notifications.PushDelivery>().Index(x => x.NextAttemptUtc).Index(x => x.State);
+
         options.Schema.For<Booking>()
             .Index(x => x.StartUtc)
             .Index(x => x.EmployeeId)

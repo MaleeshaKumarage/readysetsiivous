@@ -199,7 +199,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               </div>)}
             </Stack>
           </AppShell.Section>
-          <AppShell.Section className="admin-sidebar-footer" pt="md"><PwaInstallButton variant="light" size="sm" language="en" /></AppShell.Section>
+          <AppShell.Section className="admin-sidebar-footer" pt="md"><Stack gap="xs"><Button component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}#notifications`} variant="subtle">Notifications</Button><PwaInstallButton variant="light" size="sm" language="en" /></Stack></AppShell.Section>
         </AppShell.Navbar>
         <AppShell.Main><div className="admin-content"><QuoteRequestBanner />{children}</div></AppShell.Main>
       </AppShell></QuoteRequestProvider>

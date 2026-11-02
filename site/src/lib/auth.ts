@@ -44,6 +44,10 @@ function isMockAllowed(): boolean {
 }
 
 export function initAuth(): Promise<boolean> {
+  if (typeof window !== 'undefined' && ['/me/shifts/', '/me/shifts', '/admin/partner-requests/', '/admin/partner-requests'].includes(window.location.pathname)) {
+    const tenant = new URLSearchParams(window.location.search).get('tenant');
+    if (tenant && /^[a-z0-9][a-z0-9-]{2,62}$/.test(tenant)) selectAuthTenant(tenant);
+  }
   if (isMockAllowed() && typeof window !== 'undefined' && sessionStorage.getItem('__MOCK_LOGGED_OUT__') === 'true') {
     return Promise.resolve(false);
   }
@@ -78,6 +82,12 @@ export async function login(): Promise<void> {
 }
 
 export async function logout(): Promise<void> {
+  try {
+    const { removePushDevice } = await import('./pushNotifications');
+    await removePushDevice();
+  } catch (error) {
+    if (typeof window === 'undefined' || !window.confirm('Notification cleanup failed. This device may still receive generic alerts. Sign out anyway?')) throw error;
+  }
   if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__ !== undefined) {
     (window as any).__MOCK_AUTHED__ = false;
     sessionStorage.setItem('__MOCK_LOGGED_OUT__', 'true');

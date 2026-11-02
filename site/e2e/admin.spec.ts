@@ -64,6 +64,7 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
     await expect(signOut).toBeVisible();
     await expect(signOut).toBeInViewport();
     await signOut.click();
+    await expect(page.getByText('Sign in with your ReadySetSiivous admin account.')).toBeVisible();
     await expect.poll(() => page.evaluate(() => sessionStorage.getItem('__MOCK_LOGGED_OUT__'))).toBe('true');
     await expect.poll(() => page.evaluate(() => (window as unknown as { __MOCK_AUTHED__: boolean }).__MOCK_AUTHED__)).toBe(false);
     await expect(page.getByText('Sign in with your ReadySetSiivous admin account.')).toBeVisible();

@@ -16,6 +16,8 @@ import {
 import { initAuth, isAuthenticated, authTenant, login, logout } from '@/lib/auth';
 import { meApi, MyShiftOccurrence, QualityCycleFormItem, type ShiftCalendarView } from '@/lib/meApi';
 import ShiftCalendar from './ShiftCalendar';
+import { NotificationsPanel } from '@/components/NotificationsPanel';
+import { PwaInstallButton } from '@/components/PwaInstallButton';
 import { PartnerOffers } from '@/components/PartnerOffers';
 import { Logo } from '@/ds/Logo';
 import { Button } from '@/ds/Button';
@@ -412,6 +414,8 @@ export default function MyShiftsPage() {
           </nav>
         </div>
 
+        <PwaInstallButton audience="employee" language="en" />
+        <NotificationsPanel />
         {(autoAcceptWork === null || preferenceError) && <div className="space-y-2">{preferenceError ? <><p role="alert">{preferenceError}</p><Button onClick={() => void loadPreference()}>Retry work preferences</Button></> : <p role="status">Checking cleaning offer preferences...</p>}</div>}
         {autoAcceptWork === false && <PartnerOffers onAccepted={() => void loadShifts()} />}
         {error && (
