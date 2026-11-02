@@ -23,7 +23,7 @@ for (const access of ['anonymous', 'denied'] as const) {
 }
 async function fixture(page: Page, initial: Branch[] = [requested]) {
   await setupAdminMocks(page);
-  const state = { branches: initial, fail: false, quoteReads: 0, writes: [] as unknown[] };
+  const state = { branches: initial, fail: false, quoteReads: 0, writes: [] as unknown[], work: [] as Record<string, unknown>[], changes: [] as Record<string, unknown>[] };
   await page.route(/\/api\/v1\/admin\//, route => {
     const req = route.request(), path = new URL(req.url()).pathname;
     if (req.method() === 'OPTIONS') return route.fulfill({ headers });
@@ -37,6 +37,8 @@ async function fixture(page: Page, initial: Branch[] = [requested]) {
       return route.fulfill({ headers, json: state.branches[0] });
     }
     const json = path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' }
+      : path.endsWith('/partner/requests') ? state.work
+      : path.endsWith('/partner/change-requests') ? state.changes
       : path.endsWith('/partner/branches') ? state.branches
       : path.endsWith('/companies/' + company.id) ? { company, branches: state.branches }
       : path.endsWith('/companies') ? { items: [company], total: 1 } : [];
@@ -147,4 +149,43 @@ test('pricing through Companies clears the shared banner and branch badge immedi
   await expect(page.getByRole('status', { name: 'Pending quote requests' })).toHaveCount(0);
   await expect(page.getByText('Quote requested', { exact: true })).toHaveCount(0);
   expect(state.writes).toHaveLength(1);
+});
+
+
+test('pending action badges exclude cancelled and already arranged work, then refresh after resolution', async ({ page }, testInfo) => {
+  const state = await fixture(page);
+  const request = { id: 'pending-clean', companyId: company.id, branchId: requested.id, branchName: 'Pending apartment', version: 1, status: 'Requested', fromDate: '2026-12-01', toDate: '2026-12-02', priceNet: 70, vatRatePercent: 25.5, estimatedDurationMinutes: 120 };
+  state.work = [request, { ...request, id: 'cancelled', branchName: 'Cancelled apartment', status: 'Cancelled' }, { ...request, id: 'arranged', branchName: 'Arranged apartment', status: 'Offered' }];
+  state.changes = [{ id: 'open-change', companyId: company.id, kind: 'Property', message: 'Please update access instructions', resolvedUtc: null }, { id: 'resolved-change', resolvedUtc: '2026-11-01T10:00:00Z' }];
+  await page.goto('/admin/partner-requests/');
+  await expect(page.getByLabel('3 pending partner actions', { exact: true })).toHaveText('3');
+  for (const name of ['Requests', 'Quote requests', 'Changes']) await expect(page.getByRole('tab', { name, exact: true }).getByLabel('1 pending', { exact: true })).toHaveText('1');
+  await expect(page.getByRole('article', { name: 'Cancelled apartment request', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('article', { name: 'Arranged apartment request', exact: true })).toBeVisible();
+  const action = page.getByRole('button', { name: 'Arrange cleaner / time', exact: true }).first();
+  await expect(action).toHaveClass(/mantine-Button-root/);
+  await page.screenshot({ path: testInfo.outputPath('admin-partner-requests.png'), fullPage: true });
+  state.work = [request, { ...request, id: 'second-pending' }];
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.getByRole('tab', { name: 'Requests', exact: true }).getByLabel('2 pending', { exact: true })).toHaveText('2');
+  state.work = [{ ...request, status: 'Offered' }]; state.changes = []; state.branches = [];
+  await page.getByRole('button', { name: 'Refresh partner operations', exact: true }).click();
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.getByLabel(/pending partner actions$/)).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: 'Requests', exact: true }).getByLabel('1 pending', { exact: true })).toHaveCount(0);
+});
+
+
+test('failed cleaning-count reads warn instead of silently reporting an empty queue and retry recovers', async ({ page }) => {
+  await fixture(page, []);
+  let failed = true;
+  await page.route(/\/api\/v1\/admin\/partner\/requests$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    return route.fulfill(failed ? { status: 503, headers, json: {} } : { headers, json: [] });
+  });
+  await page.goto('/admin/companies/');
+  await expect(page.getByRole('status', { name: 'Pending quote requests' }).getByRole('alert')).toContainText('Partner action counts could not be checked.');
+  failed = false;
+  await page.getByRole('button', { name: 'Retry partner counts', exact: true }).click();
+  await expect(page.getByText('Partner action counts could not be checked.', { exact: false })).toHaveCount(0);
 });

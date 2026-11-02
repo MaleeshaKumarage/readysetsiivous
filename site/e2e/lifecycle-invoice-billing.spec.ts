@@ -14,7 +14,7 @@ async function setup(page: Page, options: { failPreview?: boolean; delayPreview?
     if (path.endsWith('/shift-preview')) { calls.previews.push(body); if (options.delayPreview) await new Promise(resolve => setTimeout(resolve, 600)); return route.fulfill({ status: options.failPreview ? 409 : 200, headers, json: options.failPreview ? { detail: 'No pricing is configured for this billing period.' } : invoice }); }
     if (path.endsWith('/invoices/shifts')) { calls.issues.push(body); issued = true; return route.fulfill({ headers, json: invoice }); }
     if (path.endsWith('/pricing')) { if (body) calls.pricing.push(body); return route.fulfill({ headers, json: { plans: body ? [body] : [], overrides: [] } }); }
-    return route.fulfill({ headers, json: path.endsWith('/issuer') ? issuer : path.endsWith('/invoices') ? issued ? [invoice] : [] : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'Methehe', isActive: true }], total: 1 } : path.endsWith('/shifts') ? [shift] : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
+    return route.fulfill({ headers, json: path.endsWith('/issuer') ? issuer : path.endsWith('/invoices') ? issued ? [invoice] : [] : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'Methehe', isActive: true, isPartnerEnabled: false }], total: 1 } : path.endsWith('/shifts') ? [shift] : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
   });
   return calls;
 }
@@ -27,6 +27,10 @@ async function fillInvoice(page: Page) {
 }
 test('admin previews shift charges then issues the exact preview snapshot', async ({ page }) => {
   const calls = await setup(page); await fillInvoice(page);
+  await expect(page.getByLabel('Completed cleaning month', { exact: true })).not.toBeChecked();
+  await expect(page.getByLabel('Completion month', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Invoice shifts', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Invoice from', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Issue invoice', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toBeVisible();
   await expect(page.getByText('Net €150.00 · VAT €38.25 · Total €188.25')).toBeVisible();
@@ -69,7 +73,7 @@ test('company selection loads later pages and retries an initial data failure', 
     const url = new URL(route.request().url()); if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
     attempts++; if (fail) return route.fulfill({ status: 503, headers, json: {} });
     const skip = Number(url.searchParams.get('skip'));
-    return route.fulfill({ headers, json: { total: 101, items: skip === 0 ? Array.from({ length: 100 }, (_, index) => ({ id: `c${index}`, name: `Company ${index}`, isActive: true })) : [{ id: 'company', name: 'Methehe', isActive: true }] } });
+    return route.fulfill({ headers, json: { total: 101, items: skip === 0 ? Array.from({ length: 100 }, (_, index) => ({ id: `c${index}`, name: `Company ${index}`, isActive: true })) : [{ id: 'company', name: 'Methehe', isActive: true, isPartnerEnabled: false }] } });
   });
   await page.goto('/admin/invoices/'); await expect(page.getByRole('button', { name: 'Retry loading invoice data' })).toBeVisible(); fail = false; const priorAttempts = attempts; await page.getByRole('button', { name: 'Retry loading invoice data' }).click();
   await page.getByRole('textbox', { name: 'Company', exact: true }).fill('Methehe'); await expect(page.getByRole('option', { name: 'Methehe', exact: true })).toBeVisible();

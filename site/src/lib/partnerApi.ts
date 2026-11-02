@@ -37,7 +37,7 @@ export const offerApi = {
 export function staffPartnerApi(role: 'admin' | 'manager') {
   const base = `${role}/partner`;
   return {
-    requests: () => partnerSend<CleaningRequest[]>(`${base}/requests`), quotes: (signal?: AbortSignal) => partnerSend<Branch[]>(`${base}/quotes`, 'GET', undefined, signal), changes: () => partnerSend<PartnerChange[]>(`${base}/change-requests`),
+    requests: (signal?: AbortSignal) => partnerSend<CleaningRequest[]>(`${base}/requests`, 'GET', undefined, signal), quotes: (signal?: AbortSignal) => partnerSend<Branch[]>(`${base}/quotes`, 'GET', undefined, signal), changes: (signal?: AbortSignal) => partnerSend<PartnerChange[]>(`${base}/change-requests`, 'GET', undefined, signal),
     branches: () => partnerSend<Branch[]>(`${base}/branches`),
     createBranch: (body: unknown) => partnerSend<Branch>(`${base}/branches`, 'POST', body),
     updateBranch: (id: string, body: unknown) => partnerSend<Branch>(`${base}/branches/${id}`, 'PUT', body),

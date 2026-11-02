@@ -64,7 +64,7 @@ public class ManualInvoiceService(IInvoiceRepository invoices, ICompanyRepositor
         var lines = request.Lines!.Select((row, index) =>
         {
             var net = Round(row.Quantity * row.UnitPriceNet);
-            return new InvoiceLine { LineKey = $"manual-{index + 1}", Description = row.Description,
+            return new InvoiceLine { LineKey = $"manual-{index + 1:D3}", Description = row.Description,
                 Quantity = row.Quantity, UnitPriceNet = row.UnitPriceNet, NetAmount = net,
                 VatRatePercent = profile.DefaultVatRatePercent, VatAmount = Round(net * profile.DefaultVatRatePercent / 100m) };
         }).ToList();

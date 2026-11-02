@@ -5,6 +5,16 @@ namespace CleaningSuite.Tests.Invoicing;
 [Collection("PDF text verification")]
 public class ShiftInvoicePdfTests
 {
+    [Fact]
+    public async Task Manual_rows_retain_entered_order_after_shared_branch_grouping()
+    {
+        var f = new ManualInvoiceServiceTests.Fixture();
+        var preview = await f.Service.PreviewAsync(f.Input with { Lines = Enumerable.Range(1, 12)
+            .Select(i => new CleaningSuite.Application.Invoicing.ManualInvoiceRow($"Agreed row {i:D2}", 1, 50)).ToArray() }, default);
+        var text = Extract(InvoicePdfRenderer.Render(preview.Invoice));
+        Assert.True(text.IndexOf("Agreed row 09", StringComparison.Ordinal) < text.IndexOf("Agreed row 10", StringComparison.Ordinal));
+        Assert.True(text.IndexOf("Agreed row 10", StringComparison.Ordinal) < text.IndexOf("Agreed row 11", StringComparison.Ordinal));
+    }
     [Theory]
     [InlineData("en")] [InlineData("fi")] [InlineData("sv")]
     public void Manual_invoice_uses_existing_layout_without_shift_or_booking_metadata(string language)
@@ -81,6 +91,24 @@ public class ShiftInvoicePdfTests
         var pdf = InvoicePdfRenderer.Render(invoice);
         Assert.Contains(label, Extract(pdf));
         Save("sample-issuer-" + language, pdf);
+    }
+    [Theory]
+    [InlineData("en", "Completed on")]
+    [InlineData("fi", "Valmistumispäivä")]
+    [InlineData("sv", "Slutförd den")]
+    public void Completed_cleaning_rows_are_grouped_under_branches_without_program_labels(string language, string completedLabel)
+    {
+        var invoice = Sample(language); var a = Guid.NewGuid(); var b = Guid.NewGuid();
+        InvoiceLine Line(Guid branch, string name, string shift, int day) => new() { BranchId=branch, BranchName=name,
+            ShiftId=Guid.NewGuid(), ShiftName=shift, PeriodFrom=new(2026,10,day), PeriodTo=new(2026,10,day),
+            CompletedOn=new(2026,11,day), Quantity=1, UnitPriceNet=40, NetAmount=40, VatRatePercent=25.5m, VatAmount=10.2m };
+        invoice.Lines = [Line(b,"BBB","VisitB",1),Line(a,"AAA","VisitA2",2),Line(a,"AAA","VisitA1",1)];
+        invoice.Total = new() { Net=120, Vat=30.6m }; invoice.PeriodFrom=new(2026,11,1); invoice.PeriodTo=new(2026,11,30);
+        var pdf = InvoicePdfRenderer.Render(invoice); var text = Extract(pdf);
+        Assert.True(text.IndexOf("VisitA1", StringComparison.Ordinal) < text.IndexOf("VisitA2", StringComparison.Ordinal));
+        Assert.True(text.IndexOf("VisitA2", StringComparison.Ordinal) < text.IndexOf("VisitB", StringComparison.Ordinal));
+        Assert.Contains(completedLabel, text); Assert.DoesNotContain("partner",text,StringComparison.OrdinalIgnoreCase);
+        Save("completed-cleaning-"+language,pdf);
     }
     private static Invoice Sample(string language) => new()
     {
