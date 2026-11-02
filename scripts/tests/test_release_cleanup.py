@@ -130,6 +130,15 @@ class CleanupTests(unittest.TestCase):
         self.cleanup.record_success(identity(9))
         self.assertEqual([identity(n) for n in (9, 8, 7, 6)], self.cleanup.history()['recent'])
 
+    def test_out_of_band_image_removal_does_not_invalidate_the_next_release_history(self):
+        self.seed()
+        del self.docker.images[identity(5)]
+        self.cleanup.clean()
+        self.assertEqual([identity(n) for n in (8, 7, 6)], self.cleanup.history()['recent'])
+        self.assertNotIn(identity(5), self.cleanup.history()['known'])
+        self.cleanup.clean(require_space=True)
+        self.assertIn(identity(8), self.docker.images)
+
     def test_deployment_from_older_controller_retains_actual_rollback_in_recent_history(self):
         self.seed()
         self.cleanup.retain_rollback(identity(10))

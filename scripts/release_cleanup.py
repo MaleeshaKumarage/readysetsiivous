@@ -150,6 +150,7 @@ class ReleaseCleanup:
             return candidates
         # Persist the conservative bootstrap before mutations. Only successful release
         # verification advances recent history; dangling dev image IDs remain known.
+        history['recent'] = [item for item in history['recent'] if item in by_id]
         history['known'] = sorted(known & by_id.keys())
         self.save(history)
         for item in candidates:
