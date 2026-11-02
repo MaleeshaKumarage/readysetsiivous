@@ -219,7 +219,7 @@ class Deployment:
         if group is not None and old_group:
             require(old_group == group, 'Compatibility group differs; reviewed migration required')
         else:
-            baselines = policy['legacy_rollback_compatible_from'] if group is not None else policy['rollback_compatible_from']
+            baselines = policy.get('legacy_rollback_compatible_from', []) if group is not None else policy['rollback_compatible_from']
             require(old_release in baselines, 'Previous release not approved for application rollback')
         # The coordinated identity migration stops this exact old API before
         # converting role data. Do not restart it merely to prove health against
