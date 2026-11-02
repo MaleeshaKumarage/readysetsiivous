@@ -335,8 +335,8 @@ test.describe('Admin Panel - Agreements Page', () => {
     });
 
     // Fill signers details
-    await page.getByPlaceholder('Name').fill('Matti Meikäläinen');
-    await page.getByPlaceholder('Email').fill('matti@acme.fi');
+    await page.getByPlaceholder('Name', { exact: true }).fill('Matti Meikäläinen');
+    await page.getByPlaceholder('Email', { exact: true }).fill('matti@acme.fi');
 
     // Submit form
     await page.getByRole('button', { name: 'Create' }).click();
@@ -369,13 +369,13 @@ test.describe('Admin Panel - Agreements Page', () => {
 
     // Test adding and removing signer dynamic row
     await page.getByRole('button', { name: 'Add signer' }).click();
-    const nameInputs = page.getByPlaceholder('Name');
+    const nameInputs = page.getByPlaceholder('Name', { exact: true });
     await expect(nameInputs).toHaveCount(2);
 
     // Remove a signer row
     const modal = page.getByRole('dialog', { name: 'New agreement' });
     await modal.locator('.mantine-ActionIcon-root').first().click();
-    await expect(page.getByPlaceholder('Name')).toHaveCount(1);
+    await expect(page.getByPlaceholder('Name', { exact: true })).toHaveCount(1);
   });
 });
 
