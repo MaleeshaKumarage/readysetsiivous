@@ -65,8 +65,24 @@ function tenantDateKey(instant: string | Date, timeZoneId: string) {
 }
 
 export default function MyShiftsPage() {
-  const [ready, setReady] = useState(false);
   const [authed, setAuthed] = useState(false);
+  const [autoAcceptWork, setAutoAcceptWork] = useState<boolean | null>(null);
+  const [preferenceError, setPreferenceError] = useState('');
+  const preferenceVersion = useRef(0);
+  async function loadPreference() {
+    const version = ++preferenceVersion.current;
+    setPreferenceError('');
+    try { const result = await meApi.workPreferences(); if (version === preferenceVersion.current) setAutoAcceptWork(result.autoAcceptWork); }
+    catch (error) { if (version === preferenceVersion.current) setPreferenceError(error instanceof Error ? error.message : 'Could not confirm work preferences.'); }
+  }
+  useEffect(() => {
+    if (!authed) return;
+    void loadPreference();
+    const refresh = () => { if (document.visibilityState === 'visible') void loadPreference(); };
+    window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', refresh);
+    return () => { preferenceVersion.current++; window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
+  }, [authed]);
+  const [ready, setReady] = useState(false);
   const [occurrences, setOccurrences] = useState<MyShiftOccurrence[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -396,7 +412,8 @@ export default function MyShiftsPage() {
           </nav>
         </div>
 
-        <PartnerOffers onAccepted={() => void loadShifts()} />
+        {(autoAcceptWork === null || preferenceError) && <div className="space-y-2">{preferenceError ? <><p role="alert">{preferenceError}</p><Button onClick={() => void loadPreference()}>Retry work preferences</Button></> : <p role="status">Checking cleaning offer preferences...</p>}</div>}
+        {autoAcceptWork === false && <PartnerOffers onAccepted={() => void loadShifts()} />}
         {error && (
           <div role="alert" aria-label="Shift error" className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
             <AlertTriangle className="w-4 h-4 shrink-0" />

@@ -9,6 +9,16 @@ public class AdminResponseContractTests
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     [Fact]
+    public void Employee_preference_is_explicit_operational_metadata_without_manager_HR_fields()
+    {
+        var employee = new CleaningSuite.Domain.Employees.Employee { AutoAcceptWork = true, PayRate = 99m, Notes = "private-HR", KeycloakUserId = "private-login" };
+        Assert.True(AdminResponses.Employee(employee).AutoAcceptWork);
+        Assert.True(ManagerResponses.Employee(employee).AutoAcceptWork);
+        var json = JsonSerializer.Serialize(ManagerResponses.Employee(employee), Json);
+        Assert.Contains("\"autoAcceptWork\":true", json);
+        Assert.DoesNotContain("private", json); Assert.DoesNotContain("payRate", json);
+    }
+    [Fact]
     public void BookingAdminContractPreservesOperationalFinancialAndHistoryFieldsWithoutPersistenceVersion()
     {
         var booking = new Booking { Service = new() { NameFi="FI", NameEn="EN", NameSv="SV", PriceNet=123.4567m, VatRatePercent=25.5m },

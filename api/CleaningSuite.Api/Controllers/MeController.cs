@@ -43,6 +43,24 @@ public class MeController : ControllerBase
     [HttpGet("profile")]
     public IActionResult Profile() => Ok(SelfResponses.Employee(VerifiedEmployee()));
 
+    [HttpGet("work-preferences")]
+    public async Task<IActionResult> WorkPreferences([FromServices] CleaningSuite.Application.Partners.PartnerService service, CancellationToken ct) =>
+        Ok(await service.WorkPreferences(ActorVerifiedEmployee().Id, ct));
+
+    [HttpPut("work-preferences")]
+    public async Task<IActionResult> SetWorkPreferences([FromBody] WorkPreferenceRequest body,
+        [FromServices] CleaningSuite.Application.Partners.PartnerService service, CancellationToken ct) =>
+        Ok(await service.SetWorkPreferences(ActorVerifiedEmployee().Id, body.AutoAcceptWork, ct));
+
+    private Employee ActorVerifiedEmployee()
+    {
+        var employee = HttpContext.Items["Employee"] as Employee;
+        if (employee is null || !employee.IsActive || employee.IdentitySyncPending || !Employee.IsWorkRole(employee.Role)
+            || string.IsNullOrWhiteSpace(employee.KeycloakUserId))
+            throw new UnauthorizedAccessException("An active linked staff account is required.");
+        return employee;
+    }
+
     [HttpGet("work")]
     public async Task<IActionResult> Work([FromQuery] string date, CancellationToken ct) =>
         Ok(await _mediator.Send(new GetOwnWorkQuery(VerifiedEmployee().Id, date), ct));
@@ -118,3 +136,11 @@ public record EndFormRequest(
     List<string>? PhotoUrls = null,
     string? CleanerNotes = null,
     List<CleaningSuite.Domain.QualityCycle.QualityCyclePhoto>? Photos = null);
+
+// Reject unknown properties and require a boolean: this endpoint cannot target another employee.
+[System.Text.Json.Serialization.JsonUnmappedMemberHandling(System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow)]
+public sealed record WorkPreferenceRequest
+{
+    [System.Text.Json.Serialization.JsonRequired]
+    public bool AutoAcceptWork { get; init; }
+}

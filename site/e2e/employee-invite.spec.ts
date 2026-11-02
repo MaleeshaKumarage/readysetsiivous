@@ -77,3 +77,64 @@ test('deactivation failure is visible instead of silently disappearing', async (
   await page.goto('/admin/employees/'); await page.getByRole('button', { name: 'Deactivate', exact: true }).click();
   await expect(page.locator('p[role="alert"]')).toContainText('could not be confirmed');
 });
+
+test('A01 account preference persists, rejects pending offers and retries without optimistic saving', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await page.addInitScript(() => { (window as any).__MOCK_ROLES__ = ['employee']; });
+  await page.route(/\/api\/v1\/me$/, route => route.fulfill({ headers, json: { realm: 'tenant-a', employee: { id: 'employee-a', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true } } }));
+  let stored = false, blocked = true, gets = 0;
+  let finishPending!: () => void;
+  const pendingSave = new Promise<void>(resolve => { finishPending = resolve; });
+  const preferenceHeaders = { ...headers, 'Access-Control-Allow-Methods': 'GET,PUT,OPTIONS' };
+  await page.route(/\/api\/v1\/me\/work-preferences$/, async route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers: preferenceHeaders });
+    if (route.request().method() === 'PUT') {
+      expect(typeof route.request().postDataJSON().autoAcceptWork).toBe('boolean');
+      if (blocked) { await pendingSave; blocked = false; return route.fulfill({ status: 409, headers: preferenceHeaders, json: { detail: 'Accept or decline your pending offers before enabling automatic acceptance.' } }); }
+      stored = route.request().postDataJSON().autoAcceptWork;
+    } else gets++;
+    return route.fulfill({ headers: preferenceHeaders, json: { autoAcceptWork: stored } });
+  });
+  await page.goto('/account/?tenant=tenant-a');
+  const toggle = page.getByRole('checkbox', { name: 'Automatically accept cleaning offers' });
+  await expect(toggle).not.toBeChecked(); await toggle.check();
+  await page.getByRole('button', { name: 'Save work preferences', exact: true }).click();
+  await expect(page.getByText('Saving work preferences...', { exact: true })).toBeVisible();
+  await expect(toggle).toBeDisabled(); await expect(page.getByRole('button', { name: 'Save work preferences', exact: true })).toBeDisabled();
+  finishPending();
+  await expect(page.locator('p[role="alert"]')).toContainText('Accept or decline');
+  expect(stored).toBe(false); await expect(page.getByText('Work preferences saved.', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Retry work preferences', exact: true }).click();
+  await expect(page.getByText('Work preferences saved.', { exact: true })).toBeVisible();
+  await page.reload(); await expect(toggle).toBeChecked(); expect(gets).toBe(2);
+  await toggle.uncheck(); await page.getByRole('button', { name: 'Save work preferences', exact: true }).click();
+  await expect(page.getByText('Work preferences saved.', { exact: true })).toBeVisible();
+  await page.reload(); await expect(toggle).not.toBeChecked(); expect(stored).toBe(false);
+});
+
+for (const profile of [null, { id: 'employee-a', firstName: 'Test', lastName: 'Staff', role: 'partner', isActive: true }, { id: 'employee-a', firstName: 'Test', lastName: 'Staff', role: 'employee', isActive: false }]) {
+  test(`A01 account does not expose preference for unsupported binding ${profile?.role ?? 'unbound'} ${profile?.isActive ?? ''}`, async ({ page }) => {
+    await setupAdminMocks(page, { authenticated: true });
+    let requests = 0;
+    await page.route(/\/api\/v1\/me$/, route => route.fulfill({ headers, json: { realm: 'tenant-a', employee: profile } }));
+    await page.route(/\/api\/v1\/me\/work-preferences$/, route => { requests++; return route.fulfill({ headers, json: { autoAcceptWork: false } }); });
+    await page.goto('/account/?tenant=tenant-a'); await expect(page.getByRole('heading', { name: 'Account ready' })).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: 'Automatically accept cleaning offers' })).toHaveCount(0); expect(requests).toBe(0);
+  });
+}
+
+test('A01 account retries failed preference loading for verified manager and admin profiles', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  let role = 'manager', failed = true;
+  await page.route(/\/api\/v1\/me$/, route => route.fulfill({ headers, json: { realm: 'tenant-a', employee: { id: 'staff', firstName: 'Test', lastName: 'Staff', role, isActive: true } } }));
+  await page.route(/\/api\/v1\/me\/work-preferences$/, route => {
+    if (failed) { failed = false; return route.fulfill({ status: 503, headers, json: { detail: 'Preferences temporarily unavailable.' } }); }
+    return route.fulfill({ headers, json: { autoAcceptWork: false } });
+  });
+  await page.goto('/account/?tenant=tenant-a'); await expect(page.locator('p[role="alert"]')).toContainText('temporarily unavailable');
+  await expect(page.getByRole('checkbox')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Retry work preferences' }).click();
+  await expect(page.getByRole('checkbox', { name: 'Automatically accept cleaning offers' })).not.toBeChecked();
+  role = 'admin'; await page.reload();
+  await expect(page.getByRole('checkbox', { name: 'Automatically accept cleaning offers' })).not.toBeChecked();
+});

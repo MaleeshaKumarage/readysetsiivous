@@ -13,6 +13,7 @@ async function setupWork(page: Page, options: { empty?: boolean; failStart?: boo
     json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: [role] })],
       employee: { id: 'employee-a', firstName: 'Test', lastName: 'Staff', role, isActive: true } } }));
   await page.route(/\/api\/v1\/me\/partner-offers(?:\?.*)?$/, route => route.fulfill({ status: 200, headers, json: [] }));
+  await page.route(/\/api\/v1\/me\/work-preferences$/, route => route.fulfill({ headers, json: { autoAcceptWork: false } }));
   const now = await page.evaluate(() => Date.now());
   const start = new Date(now - 3600000).toISOString();
   const scheduledStart = options.startAt ? Date.parse(options.startAt) : options.future ? now + 86400000 : Date.parse(start);
@@ -356,4 +357,54 @@ test('a past visit can be started and ended with actual times recorded today', a
   await expect(page.getByText(/^Actual start:.*Oct 17, 2026/)).toBeVisible();
   await expect(page.getByText(/^Actual end:.*Oct 17, 2026/)).toBeVisible();
   expect(work.startCalls).toBe(1); expect(work.endCalls).toBe(1);
+});
+
+test('A01 verified automatic preference hides approval section while assigned work starts and ends normally', async ({ page }) => {
+  const work = await setupWork(page, { empty: true });
+  let automatic = true, fail = true, offerRequests = 0;
+  await page.route(/\/api\/v1\/me\/work-preferences$/, route => {
+    if (fail) { fail = false; return route.fulfill({ status: 503, headers, json: { detail: 'Could not verify work preferences.' } }); }
+    return route.fulfill({ headers, json: { autoAcceptWork: automatic } });
+  });
+  await page.route(/\/api\/v1\/me\/partner-offers$/, route => { if (route.request().method() !== 'OPTIONS') offerRequests++; return route.fulfill({ headers, json: [] }); });
+  await page.goto('/me/shifts/');
+  await expect(page.locator('p[role="alert"]')).toContainText('Could not verify work preferences');
+  await expect(page.getByRole('region', { name: 'Cleaning offers' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Retry work preferences' }).click();
+  await expect(page.getByRole('button', { name: 'Retry work preferences' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Cleaning offers' })).toHaveCount(0); expect(offerRequests).toBe(0);
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await page.getByRole('button', { name: 'Record activities & end', exact: true }).click();
+  await page.getByRole('button', { name: 'End shift', exact: true }).click();
+  await expect(page.getByText('Done', { exact: true })).toBeVisible(); expect(work.endCalls).toBe(1);
+  automatic = false; await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.getByRole('heading', { name: 'Cleaning offers awaiting your acceptance' })).toBeVisible();
+  expect(offerRequests).toBeGreaterThan(0);
+});
+
+test('A01 preference focus refresh preserves manual offer drafts and an in-flight decision', async ({ page }) => {
+  await setupWork(page);
+  let reads = 0, decided = false, release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  await page.route(/\/api\/v1\/me\/work-preferences$/, route => { reads++; return route.fulfill({ headers, json: { autoAcceptWork: false } }); });
+  await page.route(/\/api\/v1\/me\/partner-offers(?:\/.*)?$/, async route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    if (route.request().method() === 'POST') { await pending; decided = true; return route.fulfill({ headers, json: {} }); }
+    return route.fulfill({ headers, json: decided ? [] : [{ id: 'offer-a', version: 1, branchName: 'Manual apartment', fromDate: '2026-12-01', toDate: '2026-12-02', estimatedDurationMinutes: 60, timeZoneId: 'Europe/Helsinki', plannedStartUtc: null }] });
+  });
+  await page.goto('/me/shifts/');
+  await page.getByLabel('Planned start for Manual apartment').fill('2026-12-01T10:00');
+  await page.getByLabel('Decline reason (optional)').fill('Keep this draft');
+  const before = reads; await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect.poll(() => reads).toBeGreaterThan(before);
+  await expect(page.getByLabel('Planned start for Manual apartment')).toHaveValue('2026-12-01T10:00');
+  await expect(page.getByLabel('Decline reason (optional)')).toHaveValue('Keep this draft');
+  await page.getByRole('button', { name: 'Accept cleaning', exact: true }).click();
+  await expect(page.getByText('Saving your decision…', { exact: true })).toBeVisible();
+  const inFlight = reads; await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect.poll(() => reads).toBeGreaterThan(inFlight);
+  await expect(page.getByRole('button', { name: 'Accept cleaning', exact: true })).toBeDisabled();
+  await expect(page.getByLabel('Decline reason (optional)')).toHaveValue('Keep this draft');
+  release(); await expect(page.getByText('No pending cleaning offers.', { exact: true })).toBeVisible();
 });

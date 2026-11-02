@@ -8,6 +8,6 @@ public static class PartnerShiftGuard
     public static void EnsureOrdinary(Shift shift)
     {
         if (shift.PartnerRequestId.HasValue)
-            throw new ShiftConflictException("Manage this visit through Partner requests so that the cleaner accepts every assignment or time change.");
+            throw new ShiftConflictException("Manage this visit through Partner requests so that assignment and time changes follow the employee work acceptance preference.");
     }
 }

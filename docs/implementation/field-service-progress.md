@@ -5,22 +5,24 @@ Reusable implementation checklist: [plan](../superpowers/plans/2026-11-02-field-
 
 ## Current checkpoint
 
-- Baseline: main `b4f7b6260797b3784c0b3de295464d1373fee5fd`.
-- Implementation branch: `feat/field-service-workflows`.
+- Baseline: C01 merged main `d849678054a5cd7c7089cfe17c08f9b1a78e1c2f`.
+- Implementation branch: `feat/employee-auto-accept` (A01 implemented and locally verified; publication/CI pending; C01 is merged and deployed).
+- Merge gate: merge only after every CI check for the latest PR head has completed successfully and all actionable review comments are resolved. Then save the handoff and use fresh context for the next chunk.
 - Scope authorised: approved six-stream plan, delivered as **small sequential PRs**, focused Playwright tests in each, review/fix/merge, then saved handoff and context compaction before next chunk.
 - First chunk: C01 — server-search company selectors in Agreements/Shifts, preserving selected context and removing the first100 cutoff.
-- C01 implemented and verified locally: shared paged server-search company selector in Agreements/Shifts; selected context survives searches and page changes, stale responses are ignored, and shift branches reset when the company changes. PR review, merge and deployment remain separate checkpoints.
-- Autoaccept A01 is the next separate chunk after C01. User confirmed exact admin-planned start is required. Employee-owned preference defaults Manual; hide approvals only after confirmed enabling, which is blocked while any pending offers remain. Disabling is future-only. Use atomic Offer/acceptance and the same preference/work-reservation locking; notifications are informational, not approval prompts.
+- C01 implemented and verified locally: shared paged server-search company selector in Agreements/Shifts; selected context survives searches and page changes, stale responses are ignored, and shift branches reset when the company changes. PR #240 merged; Pages verified for the merged SHA as recorded below.
+- Autoaccept A01 is implemented and locally verified after C01; PR CI, merge and deployment remain pending. User confirmed exact admin-planned start is required. Employee-owned preference defaults Manual; hide approvals only after confirmed enabling, which is blocked while any pending offers remain. Disabling is future-only. Use atomic Offer/acceptance and the same preference/work-reservation locking; notifications are informational, not approval prompts.
 
 ## Per-PR ledger
 
 | Chunk | Branch / PR | Implemented | Verified | Merged | Deployed | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
-| C01 | feat/field-service-workflows / [PR #240](https://github.com/MaleeshaKumarage/readysetsiivous/pull/240) | yes | yes (local checks below) | no | no | checkpoint below |
+| C01 | feat/field-service-workflows / [PR #240](https://github.com/MaleeshaKumarage/readysetsiivous/pull/240) | yes | yes (local checks below) | yes (`d849678`) | yes (Pages run `41435068885`) | checkpoint below |
+| A01 | feat/employee-auto-accept / publication pending | yes | local backend/browser/type/build checks passed; isolated DB and latest-head CI pending | no | no | active checkpoint below |
 
 ## Handoff template
 
-Append one checkpoint after every reviewed chunk, before compacting context:
+Append one checkpoint after every reviewed chunk, before compacting context. Earlier pending statuses below are historical; the current checkpoint and latest chunk checkpoint take precedence:
 
 - Date; chunk IDs and exact shipped behaviour.
 - Branch, commit SHA, PR URL and reviewed head.
@@ -52,3 +54,25 @@ Never store credentials, customer personal data, production exports or private h
 ### Next planned chunk
 
 A01 (employee-owned work autoaccept) follows C01. Start-time question resolved: user confirmed an admin must set the exact planned start. Enabling is blocked while any existing pending offers remain, with an explanation to resolve them first; no silent hiding. Disabling affects future offers only. Use self-owned work-preference endpoints, one atomic server Offer/acceptance commit and the same work-reservation locking for Offer and preference changes. Only informational notifications are sent, not approval-prompt email. These boundaries are authorised for implementation. This documentation update does not implement app behaviour.
+
+### C01 merge / A01 start checkpoint - 2026-11-02
+
+- C01 PR #240 merged to main as `d849678054a5cd7c7089cfe17c08f9b1a78e1c2f`; CI all green and three review threads resolved. Local evidence is 62 UI cases with the 44 prior regression-case caveat above, TypeScript and production build. GitHub Pages run `41435068885` succeeded for this exact merged SHA; public `/admin/shifts/` and `/admin/agreements/` routes returned 200. This proves availability only; authenticated live workflow was not tested.
+- A01 implementation in progress on `feat/employee-auto-accept`, based on that merged main. Scope is employee-owned consent, exact admin-planned start, shared work reservation and atomic acceptance, and informational notifications. Existing unrelated untracked files are preserved.
+
+### A01 backend local verification - 2026-11-02 (in progress)
+
+- Implemented default-false consent, strict own GET/PUT work preferences, explicit admin/manager operational metadata, reservation-serialized preference/Offer decisions, exact-time automatic acceptance through one lock-held materialization routine and informational employee notifications guarded by current acceptance/revision. Generic employee fields cannot modify consent.
+- Focused .NET command: `<DOTNET_10> test api/CleaningSuite.Tests --no-restore --filter 'FullyQualifiedName~PartnerWorkflowTests|FullyQualifiedName~SelfWorkTests|FullyQualifiedName~AdminResponseContractTests|FullyQualifiedName~PartnerNotificationTests|FullyQualifiedName~ManagerOperationsTests|FullyQualifiedName~EmployeeWorkPreferenceTests' --verbosity minimal`. `<DOTNET_10>` denotes a portable .NET SDK executable matching `global.json`. The final completed run passed 64, failed 0, skipped 12 (76 total); build succeeded with existing warnings and the final scoped diff check passed.
+- `QC_TEST_CONNECTION_STRING` is absent locally. Documentation (`docs/environments.md`, `docs/quality-cycle-rollout.md`) requires an isolated synthetic PostgreSQL database; no production connection was used. The 12 skipped persistence tests include five new A01 atomicity/preference-race scenarios and seven existing workflow regressions. CI's disposable PostgreSQL16 must execute these before merge; local skips are not database verification.
+- Backend verification completed locally; final review and browser evidence are recorded in the checkpoint below. This entry does not establish real-database verification or merge/deployment.
+
+### A01 implementation / publication checkpoint — 2026-11-02
+
+- A01 is implemented and locally verified: Manual remains the historical/new default; only the authenticated active linked work identity owns GET/PUT work preferences. Staff operational metadata exposes consent through explicit allowlists without expanding HR access. Account saves confirmed preference state; My shifts retains pending approvals until successful enabling, and staff Offer UI explains exact timing and automatic outcomes.
+- Offer and preference writes share the work-reservation lock; enabling is blocked by pending offers. Automatic acceptance requires an exact admin-planned or staff-confirmed fixed appointment and uses the same lock-held atomic materialization as manual acceptance. Informational notifications replace approval prompts only for automatic acceptance. Disabling affects future offers only.
+- Final local backend result: 64 passed, 12 skipped, 0 failed. Five new and seven existing persistence cases skipped because `QC_TEST_CONNECTION_STRING` is absent. CI must execute these against its isolated disposable PostgreSQL 16 before merge; no local database verification is claimed.
+- Final browser result: 102 passed across desktop/mobile, including focused draft/focus and in-flight preference-save regression coverage. Browser APIs are mocked; these checks do not prove live backend integration. TypeScript passed (exit 0); production build passed (47 pages).
+- Independent backend/security review passed; final independent UI review passed after scoped findings were fixed, including retained draft/focus and in-flight save handling. No Keycloak, deployment configuration or rate changes are included.
+- Branch: `feat/employee-auto-accept`, based on merged C01 `d849678`. Publication and latest-head CI are pending; A01 is not merged or deployed. Merge only after every latest-head CI check succeeds and all actionable comments are resolved. Preserve unrelated untracked workspace files.
+- C01 remains merged/deployed as separately recorded above; its public-route checks establish availability only. All other roadmap chunks remain planned. After A01 completes its gates, save its handoff and use fresh context for the next dependency-ready chunk.
