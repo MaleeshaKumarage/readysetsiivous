@@ -136,7 +136,11 @@ public class PushReminderDatabaseTests
     {
         using var f = await Fixture.Create();
         var oldEmployee = Guid.NewGuid(); var newEmployee = Guid.NewGuid();
-        var start = DateTime.UtcNow.AddDays(1);
+        f.Shift.Schedule = new() { Type = ShiftScheduleType.DailySameTime, DailyStart = TimeSpan.FromHours(10), DailyEnd = TimeSpan.FromHours(11) };
+        var day = f.Now.UtcDateTime.Date.AddDays(1);
+        // Use a real scheduled key at whole-second precision, as PostgreSQL timestamp
+        // comparisons cannot preserve arbitrary DateTime.UtcNow sub-microsecond ticks.
+        var start = Assert.Single(ShiftScheduleCalculator.GenerateOccurrences(f.Shift, day, day, TenantTimeZone.Resolve(null))).StartUtc;
         var exception = ShiftOccurrenceException.Create(f.Shift.Id, start, start.AddHours(1), start.AddHours(2), ShiftOccurrenceExceptionStatus.Moved, "move", oldEmployee);
         using (var db = f.Store.LightweightSession(f.Tenant)) { db.Store(f.Shift); db.Store(exception); await db.SaveChangesAsync(); }
         using var session = f.Session(); var outbox = new Mock<IPushOutbox>();
@@ -144,7 +148,8 @@ public class PushReminderDatabaseTests
         outbox.Setup(x => x.StageScheduleChangeAsync(It.IsAny<IDocumentSession>(), f.Shift.Id, It.IsAny<IEnumerable<Guid>>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .Callback<IDocumentSession, Guid, IEnumerable<Guid>, DateTimeOffset, CancellationToken>((_, _, ids, _, _) => recipients = ids.ToArray()).Returns(Task.CompletedTask);
         var repository = new ShiftRepository(session, outbox.Object);
-        var tracked = (await repository.GetOccurrenceExceptionByOriginalAsync(f.Shift.Id, start))!;
+        var tracked = await repository.GetOccurrenceExceptionByOriginalAsync(f.Shift.Id, start);
+        Assert.NotNull(tracked);
         tracked.EmployeeId = newEmployee;
         await repository.SaveOccurrenceExceptionAsync(tracked);
         Assert.Contains(oldEmployee, recipients); Assert.Contains(newEmployee, recipients);
