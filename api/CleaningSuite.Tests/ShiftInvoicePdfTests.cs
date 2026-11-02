@@ -5,6 +5,42 @@ namespace CleaningSuite.Tests.Invoicing;
 [Collection("PDF text verification")]
 public class ShiftInvoicePdfTests
 {
+    [Fact]
+    public async Task Manual_rows_retain_entered_order_after_shared_branch_grouping()
+    {
+        var f = new ManualInvoiceServiceTests.Fixture();
+        var preview = await f.Service.PreviewAsync(f.Input with { Lines = Enumerable.Range(1, 12)
+            .Select(i => new CleaningSuite.Application.Invoicing.ManualInvoiceRow($"Agreed row {i:D2}", 1, 50)).ToArray() }, default);
+        var text = Extract(InvoicePdfRenderer.Render(preview.Invoice));
+        Assert.True(text.IndexOf("Agreed row 09", StringComparison.Ordinal) < text.IndexOf("Agreed row 10", StringComparison.Ordinal));
+        Assert.True(text.IndexOf("Agreed row 10", StringComparison.Ordinal) < text.IndexOf("Agreed row 11", StringComparison.Ordinal));
+    }
+    [Theory]
+    [InlineData("en")] [InlineData("fi")] [InlineData("sv")]
+    public void Manual_invoice_uses_existing_layout_without_shift_or_booking_metadata(string language)
+    {
+        var invoice = Sample(language); invoice.PeriodFrom = null; invoice.PeriodTo = null;
+        invoice.Lines = [new() { Description = "Separately agreed service", Quantity = 1.5m, UnitPriceNet = 100,
+            NetAmount = 150, VatRatePercent = 25.5m, VatAmount = 38.25m }];
+        invoice.Total = new() { Net = 150, Vat = 38.25m };
+        var text = Extract(InvoicePdfRenderer.Render(invoice));
+        Assert.Contains("Separately agreed service", text); Assert.Contains("Methehe Oy", text);
+        Assert.Contains(language == "en" ? "188.25" : "188,25", text);
+        Assert.DoesNotContain("DO-NOT-SHOW-BOOKING", text); Assert.DoesNotContain("Biweekly cleaning", text);
+        Assert.DoesNotContain("Scheduled hours", text); Assert.DoesNotContain("Billing period", text);
+    }
+
+    [Fact]
+    public void Manual_invoice_with_one_hundred_rows_keeps_final_description_on_multiple_pages()
+    {
+        var invoice = Sample("en"); invoice.PeriodFrom = null; invoice.PeriodTo = null;
+        invoice.Lines = Enumerable.Range(1, 100).Select(i => new InvoiceLine { Description = $"Agreed material ROW-{i:D3}",
+            Quantity = 2, UnitPriceNet = 50, NetAmount = 100, VatRatePercent = 25.5m, VatAmount = 25.5m }).ToList();
+        invoice.Total = new() { Net = 10000, Vat = 2550 };
+        var pdf = InvoicePdfRenderer.Render(invoice);
+        using var doc = PdfDocument.Open(pdf); Assert.True(doc.NumberOfPages > 1);
+        Assert.Contains("ROW-100", Extract(pdf));
+    }
     [Theory]
     [InlineData("en", "Voided")] [InlineData("fi", "Mitätöity")] [InlineData("sv", "Makulerad")]
     public void Voided_invoice_pdf_clearly_retains_its_cancelled_status(string language, string status)
