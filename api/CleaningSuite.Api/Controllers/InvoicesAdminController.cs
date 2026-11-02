@@ -49,6 +49,19 @@ public class InvoicesAdminController : ControllerBase
         return Ok(invoices.Select(AdminResponses.Invoice).ToArray());
     }
 
+    [HttpPost("manual-preview")]
+    public async Task<IActionResult> PreviewManual([FromBody] ManualInvoiceRequest request,
+        [FromServices] ManualInvoiceService service, CancellationToken ct)
+    {
+        var preview = await service.PreviewAsync(request, ct);
+        return Ok(AdminResponses.Invoice(preview.Invoice) with { PreviewToken = preview.PreviewToken });
+    }
+
+    [HttpPost("manual")]
+    public async Task<IActionResult> IssueManual([FromBody] ManualInvoiceRequest request,
+        [FromServices] ManualInvoiceService service, CancellationToken ct) =>
+        StatusCode(StatusCodes.Status201Created, AdminResponses.Invoice(await service.IssueAsync(request, ct)));
+
     [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateInvoiceBody body, CancellationToken ct)

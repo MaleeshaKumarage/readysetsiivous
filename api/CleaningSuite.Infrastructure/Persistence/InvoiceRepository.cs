@@ -27,6 +27,9 @@ public class InvoiceRepository : IInvoiceRepository
     public Task<Invoice?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
         _tenantSession.Session.LoadAsync<Invoice>(id, ct);
 
+    public Task<Invoice?> GetByManualSubmissionIdAsync(Guid submissionId, CancellationToken ct = default) =>
+        _tenantSession.Session.Query<Invoice>().SingleOrDefaultAsync(i => i.ManualSubmissionId == submissionId, ct);
+
     public async Task<IReadOnlyList<Invoice>> FindOpenForBookingAsync(Guid bookingId, CancellationToken ct = default)
     {
         var results = await _tenantSession.Session.Query<Invoice>()

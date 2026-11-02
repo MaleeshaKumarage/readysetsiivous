@@ -6,6 +6,7 @@ public interface IInvoiceRepository
 {
     Task<IReadOnlyList<Invoice>> ListAsync(string? status, DateTime? fromUtc, CancellationToken ct = default);
     Task<Invoice?> GetByIdAsync(Guid id, CancellationToken ct = default);
+    Task<Invoice?> GetByManualSubmissionIdAsync(Guid submissionId, CancellationToken ct = default);
     Task<IReadOnlyList<Invoice>> FindOpenForBookingAsync(Guid bookingId, CancellationToken ct = default);
     Task SaveAsync(Invoice invoice, CancellationToken ct = default);
 
