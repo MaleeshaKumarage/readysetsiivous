@@ -17,7 +17,9 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0.13 AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ARG RELEASE_SHA=development
+ARG COMPATIBILITY_GROUP=development
 ENV APP_RELEASE_SHA=$RELEASE_SHA
+ENV APP_COMPATIBILITY_GROUP=$COMPATIBILITY_GROUP
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080
 COPY --from=build /app/publish .

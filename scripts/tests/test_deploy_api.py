@@ -31,6 +31,8 @@ class Commands:
         modes = {'maintenance_up': 'up', 'maintenance_stopped': 'previous_stopped'}
         self.root, self.mode, self.calls = root, modes.get(mode, mode), []
         self.current = 'old'
+        self.old_group = None
+        self.new_group = None
         self.recovering = False
         self.health_count = 0
         self.maintenance_states = maintenance_states or (['active'] if mode == 'maintenance_active' else ['inactive'])
@@ -72,6 +74,19 @@ class Commands:
                                      'releaseSha': OLD if self.current == 'old' or self.mode == 'wrong_release' else SHA})
         elif args[0] == 'sleep':
             assert args == ['sleep', '2']
+        elif args[:2] == ['docker', 'ps']:
+            result = self.current + '-container'
+        elif args[:3] == ['docker', 'container', 'inspect']:
+            return self(['docker', '--host', 'unix:///var/run/docker.sock', 'inspect', args[-1]], **kwargs)
+        elif args[:3] == ['docker', 'image', 'ls']:
+            result = OLD_ID + ('\n' + NEW_ID if self.current == 'new' else '')
+        elif args[:3] == ['docker', 'builder', 'prune']:
+            if self.mode == 'cleanup_interrupted' and '--help' not in args:
+                raise deploy.DeploymentInterrupted('Deployment interrupted')
+            result = '--max-used-space --builder' if '--help' in args else ''
+        elif args[:2] == ['docker', 'info']:
+            result = str(self.root)
+            if self.mode == 'cleanup_post_failure' and self.current == 'new': code = 2
         elif args[:2] == ['docker', 'compose']:
             assert args[2:4] == ['--project-directory', str(self.root)]
             assert '--env-file' in args and '-f' in args
@@ -96,6 +111,7 @@ class Commands:
                     if self.mode == 'rollback_up': code = 6
                 else:
                     self.current = 'new'
+                    if self.mode == 'up_interrupted': raise deploy.DeploymentInterrupted('Deployment interrupted')
                     if self.mode in ['up', 'rollback_up', 'rollback_health']: code = 5
         elif args[:2] == ['docker', 'login']:
             assert kwargs['input'] == 'test-secret'
@@ -106,7 +122,7 @@ class Commands:
         elif args[:3] == ['docker', 'image', 'inspect']:
             value = args[-1]
             old = value in [OLD_ID, OLD_IMAGE]
-            result = json.dumps([{'Id': OLD_ID if old else NEW_ID,
+            result = json.dumps([{'Id': OLD_ID if old else NEW_ID, 'Created': '2020-01-01T00:00:00Z', 'RepoTags': [],
                                   'RepoDigests': [] if self.mode == 'no_previous_digest' and old else [OLD_IMAGE if old else IMAGE],
                                   'Config': {'Env': ['APP_RELEASE_SHA=' + (OLD if old or self.mode == 'wrong_image_release' else SHA)]}}])
         elif args[:2] == ['docker', 'inspect']:
@@ -121,12 +137,22 @@ class Commands:
                                                            or (old and not self.recovering and self.mode == 'previous_stopped'))}}])
         else:
             raise AssertionError(args)
+        if args[:3] == ['docker', 'image', 'inspect'] or args[:2] == ['docker', 'inspect']:
+            data = json.loads(result)
+            old = args[-1] in [OLD_ID, OLD_IMAGE, 'old-container']
+            group = self.old_group if old else self.new_group
+            if group is not None:
+                if self.mode == 'runtime_group' and not old and args[1] == 'inspect': group = 'other'
+                data[0]['Config']['Env'].append('APP_COMPATIBILITY_GROUP=' + group)
+            if self.mode == 'duplicate_marker':
+                data[0]['Config']['Env'].append(data[0]['Config']['Env'][0])
+            result = json.dumps(data)
         return SimpleNamespace(returncode=code, stdout=result, stderr='synthetic command failure')
 
 
 class DeploymentTests(unittest.TestCase):
     def run_deploy(self, mode='success', approved=True, compatible=True, key='new-owner-ai-secret',
-                   maintenance_policy=None, maintenance_states=None, maintenance_load_states=None, expect_preserved_candidate=False):
+                   maintenance_policy=None, maintenance_states=None, maintenance_load_states=None, expect_preserved_candidate=False, group_policy=False, old_group=None, new_group=None):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             old_env = b"API_IDENTITY_ENV_FILE=/protected/tenant-runtime.env\nIMAGE_TAG=sha-old\nDATABASE_PASSWORD=private-value\nGAME_GEMINI_API_KEY='old-owner-secret'\n"
@@ -141,6 +167,9 @@ class DeploymentTests(unittest.TestCase):
             (stage / 'release.json').write_text(json.dumps({'release_sha': SHA, 'image': IMAGE}))
             policy = {'schema': 1, 'approved': approved,
                       'schema_changes': 'backward-compatible-reviewed', 'rollback_compatible_from': [OLD] if compatible else []}
+            if group_policy:
+                policy = dict(schema=2, approved=approved, schema_changes='backward-compatible-reviewed',
+                              compatibility_group='readyset-api-v1', legacy_rollback_compatible_from=[OLD] if compatible else [])
             if maintenance_policy is not None:
                 policy.update(maintenance_policy)
             (stage / 'api/deploy/release-policy.json').write_text(json.dumps(policy))
@@ -149,9 +178,14 @@ class DeploymentTests(unittest.TestCase):
                        REGISTRY_USER='test-user', REGISTRY_TOKEN='test-secret', API_IMAGE='ambient-override',
                        DOCKER_CONTEXT='hostile-context', DOCKER_HOST='tcp://unrelated-host:2375')
             commands = Commands(root, mode, maintenance_states, maintenance_load_states)
+            commands.old_group, commands.new_group = old_group, new_group
             output, errors = io.StringIO(), io.StringIO()
             failed = None
-            with patch.object(deploy.subprocess, 'run', commands), contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+            free = 1 if mode == 'cleanup_low_space' else 20 * 1024**3
+            with patch.object(deploy.subprocess, 'run', commands), \
+                    patch.object(deploy.ReleaseCleanup, 'lock', lambda _: contextlib.nullcontext()), \
+                    patch('release_cleanup.shutil.disk_usage', lambda _: SimpleNamespace(free=free)), \
+                    contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
                 try:
                     deploy.Deployment(root, stage, env).run()
                 except BaseException as error:
@@ -160,7 +194,10 @@ class DeploymentTests(unittest.TestCase):
             for secret in ['private-value', key, 'test-secret', 'old-owner-secret']:
                 if secret:
                     self.assertNotIn(secret, output.getvalue() + errors.getvalue() + calls)
-            self.assertNotIn('prune', calls)
+            for call in commands.calls:
+                if 'prune' in call:
+                    self.assertIn('builder', call)
+                    self.assertTrue('--help' in call or ('until=168h' in call and '4GB' in call))
             self.assertNotIn('down', calls)
             self.assertFalse(list(root.glob('.deploy-auth-*')))
             if failed and not expect_preserved_candidate:
@@ -171,6 +208,59 @@ class DeploymentTests(unittest.TestCase):
                 if not failed:
                     self.assertIn('Deployment verified:', output.getvalue())
             return failed, commands, errors.getvalue()
+
+    def test_compatibility_group_and_legacy_bootstrap(self):
+        for old_group, compatible in [(None, True), ('readyset-api-v1', False)]:
+            failure, commands, _ = self.run_deploy(group_policy=True, old_group=old_group,
+                new_group='readyset-api-v1', compatible=compatible)
+            self.assertIsNone(failure)
+            self.assertEqual('new', commands.current)
+        for old_group, new_group, compatible in [(None, 'readyset-api-v1', False),
+                ('other', 'readyset-api-v1', True), ('readyset-api-v1', None, True),
+                ('readyset-api-v1', 'other', True)]:
+            failure, commands, _ = self.run_deploy(group_policy=True, old_group=old_group,
+                new_group=new_group, compatible=compatible)
+            self.assertIsNotNone(failure)
+            self.assertEqual('old', commands.current)
+            self.assertFalse(commands.recovering)
+
+    def test_runtime_group_mismatch_and_interruption_restore_old_api(self):
+        for mode in ['runtime_group', 'up_interrupted']:
+            failure, commands, errors = self.run_deploy(mode, group_policy=True,
+                old_group='readyset-api-v1', new_group='readyset-api-v1')
+            self.assertIsNotNone(failure)
+            self.assertTrue(commands.recovering)
+            self.assertEqual('old', commands.current)
+            self.assertIn('restored and verified', errors)
+
+    def test_duplicate_marker_fails_before_replacement(self):
+        failure, commands, _ = self.run_deploy('duplicate_marker')
+        self.assertIn('duplicate image marker', str(failure))
+        self.assertEqual('old', commands.current)
+
+    def test_cleanup_precedes_pull_and_low_space_preserves_live_release(self):
+        failure, commands, _ = self.run_deploy('cleanup_low_space')
+        self.assertIn('Insufficient Docker storage', str(failure))
+        self.assertEqual('old', commands.current)
+        self.assertFalse(any('pull' in call or 'up' in call for call in commands.calls))
+        failure, commands, _ = self.run_deploy()
+        self.assertIsNone(failure)
+        prune = next(i for i, call in enumerate(commands.calls) if 'prune' in call and '--help' not in call)
+        pull = next(i for i, call in enumerate(commands.calls) if 'pull' in call and 'up' not in call)
+        self.assertLess(prune, pull)
+
+    def test_post_success_cleanup_failure_does_not_rollback_healthy_release(self):
+        failure, commands, errors = self.run_deploy('cleanup_post_failure')
+        self.assertIsNone(failure)
+        self.assertEqual('new', commands.current)
+        self.assertFalse(commands.recovering)
+        self.assertIn('post-release cleanup incomplete', errors)
+
+    def test_operator_interruption_is_not_swallowed_by_cleanup(self):
+        failure, commands, _ = self.run_deploy('cleanup_interrupted')
+        self.assertIsInstance(failure, deploy.DeploymentInterrupted)
+        self.assertEqual('old', commands.current)
+        self.assertFalse(any('pull' in call or 'up' in call for call in commands.calls))
 
     def test_all_docker_calls_pin_one_local_daemon_despite_existing_remote_context(self):
         failure, commands, _ = self.run_deploy()
@@ -334,7 +424,7 @@ class DeploymentTests(unittest.TestCase):
 class RealShellDeploymentTests(unittest.TestCase):
     @unittest.skipUnless(os.name == 'posix', 'real shell/command harness runs on Linux CI')
     def test_real_wrapper_and_external_fake_commands(self):
-        for mode in ['success', 'up', 'wrong_release', 'pull', 'invalid_identity',
+        for mode in ['success', 'up', 'swap_signal', 'wrong_release', 'pull', 'invalid_identity',
                      'maintenance_active', 'maintenance_inactive', 'maintenance_up', 'maintenance_unknown', 'maintenance_stopped', 'maintenance_missing']:
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory(prefix='release-identity-', dir=Path.home()) as identity:
                 root = Path(tmp)
@@ -361,7 +451,7 @@ class RealShellDeploymentTests(unittest.TestCase):
                 binary = root / 'bin'
                 binary.mkdir()
                 fake = '''#!/usr/bin/env python3
-import json, os, pathlib, sys
+import json, os, pathlib, sys, signal
 sys.path.insert(0, REPLACE_PATH)
 from test_deploy_api import Commands
 root = pathlib.Path.cwd()
@@ -372,6 +462,8 @@ if state_path.exists():
 args = [pathlib.Path(sys.argv[0]).name] + sys.argv[1:]
 result = fake(args, env=dict(os.environ), input=sys.stdin.read() if 'login' in args else None)
 state_path.write_text(json.dumps({k: v for k, v in fake.__dict__.items() if k != 'root'}))
+if fake.mode == 'swap_signal' and 'up' in args and fake.current == 'new':
+    os.kill(os.getppid(), signal.SIGTERM)
 sys.stdout.write(result.stdout)
 raise SystemExit(result.returncode)
 '''.replace('REPLACE_PATH', repr(str(SCRIPTS / 'tests')))
@@ -379,7 +471,7 @@ raise SystemExit(result.returncode)
                     path = binary / name
                     path.write_text(fake)
                     path.chmod(0o755)
-                env = dict(os.environ, DEPLOY_DIR=str(root), RELEASE_SHA=SHA,
+                env = dict(os.environ, DEPLOY_DIR=str(root), RELEASE_SHA=SHA, RELEASE_MIN_FREE_GIB='1',
                     RELEASE_MANIFEST_HASH=hashlib.sha256(raw).hexdigest(),
                     REGISTRY_USER='test-user', REGISTRY_TOKEN='test-secret', GAME_GEMINI_API_KEY='new-owner-ai-secret',
                     PATH=str(binary) + os.pathsep + os.environ['PATH'])
@@ -389,7 +481,7 @@ raise SystemExit(result.returncode)
                 success = mode in ['success', 'maintenance_inactive', 'maintenance_stopped']
                 self.assertEqual(success, result.returncode == 0, result.stderr)
                 self.assertEqual('new' if success else 'old', state['current'])
-                self.assertEqual(mode in ['up', 'wrong_release', 'maintenance_up'], state['recovering'])
+                self.assertEqual(mode in ['up', 'swap_signal', 'wrong_release', 'maintenance_up'], state['recovering'])
                 if mode in ['maintenance_active', 'maintenance_unknown', 'maintenance_missing']:
                     self.assertFalse((root / '.deploy-backups').exists())
                     self.assertFalse((stage / 'candidate.env').exists())

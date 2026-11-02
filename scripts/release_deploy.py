@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import re
+import runpy
 import shutil
 import signal
 import subprocess
@@ -24,12 +25,32 @@ import time
 IMAGE = 'ghcr.io/maleeshakumarage/readysetsiivous-api'
 SHA = re.compile('[0-9a-f]{40}')
 IMMUTABLE = re.compile(re.escape(IMAGE) + '@sha256:[0-9a-f]{64}')
+# Execute the authenticated helper source directly, rather than accepting an
+# unbound cached bytecode file or a helper from another Python search directory.
+ReleaseCleanup = runpy.run_path(str(Path(__file__).resolve().with_name('release_cleanup.py')))['ReleaseCleanup']
+validate_policy = runpy.run_path(str(Path(__file__).resolve().with_name('release_policy.py')))['validate_policy']
+
 MAINTENANCE_SERVICE = 'cloudflared.service'
+
+
+class DeploymentInterrupted(BaseException):
+    """Cancellation must not be downgraded to a best-effort cleanup warning."""
 
 
 def require(value, message):
     if not value:
         raise RuntimeError(message)
+
+
+def marker(metadata, name, required=True):
+    values = [value.split('=', 1)[1] for value in metadata.get('Config', {}).get('Env', [])
+              if value.startswith(name + '=')]
+    require(len(values) <= 1 and (not required or len(values) == 1), 'Missing or duplicate image marker: ' + name)
+    if not values:
+        return ''
+    pattern = SHA if name == 'APP_RELEASE_SHA' else re.compile(r'[a-z0-9][a-z0-9._-]{0,63}')
+    require(pattern.fullmatch(values[0]), 'Invalid image marker: ' + name)
+    return values[0]
 
 
 def atomic(path, raw):
@@ -104,17 +125,23 @@ class Deployment:
             require(len(lines) == 2 and details == {'ActiveState': 'inactive', 'LoadState': 'loaded'},
                     'Maintenance ingress must remain inactive with a loaded unit; external coordination is required')
 
-    def verify(self, image, image_id, release):
+    def verify(self, image, image_id, release, group=None):
         container = self.compose(self.root / 'docker-compose.yml', self.root / '.env', 'ps', '-q', 'api')
         require(container and '\n' not in container, 'API container missing or ambiguous')
         actual = self.inspect('container', container)
         require(actual['Config']['Image'] == image and actual['Image'] == image_id
                 and actual['State']['Running'] is True, 'API image identity/running state mismatch')
+        if group is not None:
+            require(marker(actual, 'APP_COMPATIBILITY_GROUP', required=False) == group,
+                    'API compatibility group mismatch')
         self.health(release)
         require(self.compose(self.root / 'docker-compose.yml', self.root / '.env', 'ps', '-q', 'api') == container,
                 'API container changed during verification')
         actual = self.inspect('container', container)
         require(actual['Image'] == image_id and actual['State']['Running'] is True, 'API stopped or changed after health')
+        if group is not None:
+            require(marker(actual, 'APP_COMPATIBILITY_GROUP', required=False) == group,
+                    'API compatibility group changed after health')
 
     def new_env(self, previous, image):
         names = ['GAME_GEMINI_API_KEY', 'GAME_GEMINI_RPM', 'GAME_GEMINI_RPD'] + [f'GEMINI_KEY_{i}' for i in range(1, 11)]
@@ -138,17 +165,19 @@ class Deployment:
         release, image = manifest.get('release_sha', ''), manifest.get('image', '')
         require(SHA.fullmatch(release) and IMMUTABLE.fullmatch(image), 'Invalid release image')
         policy = json.loads((self.stage / 'api/deploy/release-policy.json').read_bytes())
-        require(policy.get('schema') == 1 and policy.get('approved') is True
-                and policy.get('schema_changes') == 'backward-compatible-reviewed'
-                and type(policy.get('rollback_compatible_from')) is list
-                and all(isinstance(s, str) and SHA.fullmatch(s) for s in policy['rollback_compatible_from']),
-                'Release compatibility approval required before deployment')
+        validate_policy(policy, allow_legacy=True)
         if 'maintenance_service' in policy:
             require(policy['maintenance_service'] == MAINTENANCE_SERVICE, 'Unsupported maintenance service in release policy')
             self.maintenance_service = MAINTENANCE_SERVICE
         # Read-only systemd proof precedes host file creation, chmod, login, pull,
         # or Compose mutation. No value can select an arbitrary unit/command.
         self.maintenance_gate()
+        cleanup = ReleaseCleanup(self.root, lambda *args: self.command('docker', *args))
+        with cleanup.lock():
+            self.run_locked(manifest, policy, cleanup)
+
+    def run_locked(self, manifest, policy, cleanup):
+        release, image = manifest['release_sha'], manifest['image']
         active_config, active_env = self.root / 'docker-compose.yml', self.root / '.env'
         require(active_config.is_file() and not active_config.is_symlink() and active_env.is_file() and not active_env.is_symlink(), 'Existing deployment inputs required')
         old_config, old_env = active_config.read_bytes(), active_env.read_bytes()
@@ -174,8 +203,7 @@ class Deployment:
         previous = baselines[0]
         self.project = previous.get('Config', {}).get('Labels', {}).get('com.docker.compose.project', '')
         require(re.fullmatch('[a-z0-9][a-z0-9_-]{0,62}', self.project), 'Stable Compose project identity required')
-        old_release = next((s.split('=', 1)[1] for s in previous['Config']['Env'] if s.startswith('APP_RELEASE_SHA=')), '')
-        require(SHA.fullmatch(old_release) and old_release in policy['rollback_compatible_from'], 'Previous release not approved for application rollback')
+        old_release = marker(previous, 'APP_RELEASE_SHA')
         previous_running = previous['State']['Running']
         require(previous_running is True or (self.maintenance_service == MAINTENANCE_SERVICE and previous_running is False),
                 'Previous API is not running')
@@ -183,6 +211,16 @@ class Deployment:
         old_metadata = self.inspect('image', old_id)
         old_image = next((s for s in old_metadata.get('RepoDigests', []) if IMMUTABLE.fullmatch(s)), '')
         require(old_metadata.get('Id') == old_id and old_image and self.inspect('image', old_image).get('Id') == old_id, 'Previous immutable image unavailable')
+        require(marker(old_metadata, 'APP_RELEASE_SHA') == old_release, 'Previous image release marker mismatch')
+        group = policy.get('compatibility_group') if policy['schema'] == 2 else None
+        old_group = marker(old_metadata, 'APP_COMPATIBILITY_GROUP', required=False)
+        require(marker(previous, 'APP_COMPATIBILITY_GROUP', required=False) == old_group,
+                'Previous container compatibility marker differs from immutable image')
+        if group is not None and old_group:
+            require(old_group == group, 'Compatibility group differs; reviewed migration required')
+        else:
+            baselines = policy['legacy_rollback_compatible_from'] if group is not None else policy['rollback_compatible_from']
+            require(old_release in baselines, 'Previous release not approved for application rollback')
         # The coordinated identity migration stops this exact old API before
         # converting role data. Do not restart it merely to prove health against
         # the converted model: the coordinator proved old health before stopping.
@@ -206,6 +244,16 @@ class Deployment:
         config = json.loads(self.compose(candidate, self.stage / 'candidate.env', 'config', '--format', 'json'))
         require(config.get('services', {}).get('api', {}).get('image') == image, 'Resolved image differs from immutable release')
         require(self.input.get('REGISTRY_USER') and self.input.get('REGISTRY_TOKEN'), 'Registry authentication required')
+        minimum_gib = self.input.get('RELEASE_MIN_FREE_GIB', '6')
+        require(str(minimum_gib).isdigit() and 1 <= int(minimum_gib) <= 1024, 'Invalid release storage headroom')
+        protected_images = [old_id]
+        try:
+            cached = self.inspect('image', image)
+            protected_images.append(cached['Id'])
+        except RuntimeError:
+            pass  # The candidate may not have been pulled yet.
+        cleanup.clean(protected_images, require_space=True, minimum_free=int(minimum_gib) * 1024**3)
+        cleanup.retain_rollback(old_id)
         replaced = False
         with tempfile.TemporaryDirectory(prefix='.deploy-auth-', dir=self.root) as auth:
             self.env['DOCKER_CONFIG'] = auth
@@ -214,14 +262,16 @@ class Deployment:
                 self.command('docker', 'pull', image)
                 new_metadata = self.inspect('image', image)
                 new_id = new_metadata['Id']
-                require('APP_RELEASE_SHA=' + release in new_metadata['Config']['Env'], 'Pulled image release differs from manifest')
+                require(marker(new_metadata, 'APP_RELEASE_SHA') == release, 'Pulled image release differs from manifest')
+                if group is not None:
+                    require(marker(new_metadata, 'APP_COMPATIBILITY_GROUP') == group, 'Pulled image compatibility group differs from policy')
                 self.maintenance_gate()
                 # This flag precedes both file replacement and compose up; even a partial up is recovered.
                 replaced = True
                 atomic(active_env, (self.stage / 'candidate.env').read_bytes())
                 atomic(active_config, candidate.read_bytes())
                 self.compose(active_config, active_env, 'up', '-d', '--no-deps', '--pull', 'never', 'api')
-                self.verify(image, new_id, release)
+                self.verify(image, new_id, release, group)
                 self.maintenance_gate()
             except BaseException:
                 if replaced:
@@ -240,6 +290,9 @@ class Deployment:
                         require(self.compose(active_config, active_env, 'ps', '-q', 'api', override=backup / 'image.json') == restored_container, 'Rollback container changed')
                         final = self.inspect('container', restored_container)
                         require(final['Image'] == old_id and final['State']['Running'] is True, 'Rollback stopped after health')
+                        require(marker(final, 'APP_RELEASE_SHA') == old_release
+                                and marker(final, 'APP_COMPATIBILITY_GROUP', required=False) == old_group,
+                                'Rollback identity markers changed')
                         self.maintenance_gate()
                         message = 'Deployment failed; previous API image and configuration restored and verified.'
                         if self.maintenance_service:
@@ -250,19 +303,24 @@ class Deployment:
                 raise
             finally:
                 self.env.pop('DOCKER_CONFIG', None)
+        try:
+            cleanup.record_success(new_id)
+            cleanup.clean([old_id, new_id])
+        except Exception:
+            print('Warning: post-release cleanup incomplete; verified API retained', file=sys.stderr)
         print('Deployment verified: ' + image)
 
 
 def main():
     for name in ('SIGTERM', 'SIGHUP'):
         if hasattr(signal, name):
-            signal.signal(getattr(signal, name), lambda *_: (_ for _ in ()).throw(RuntimeError('Deployment interrupted')))
+            signal.signal(getattr(signal, name), lambda *_: (_ for _ in ()).throw(DeploymentInterrupted('Deployment interrupted')))
     try:
         root = Path(os.environ.get('DEPLOY_DIR', '/home/ubuntu/cleaning-suite')).resolve()
         Deployment(root, Path(os.environ['RELEASE_STAGE']), os.environ).run()
     except BaseException as error:
         # Never print command output, resolved configuration, credentials or a traceback.
-        message = str(error) if isinstance(error, RuntimeError) else 'Deployment failed; inspect private recovery state.'
+        message = str(error) if isinstance(error, (RuntimeError, DeploymentInterrupted)) else 'Deployment failed; inspect private recovery state.'
         print(message, file=sys.stderr)
         return 1
     return 0

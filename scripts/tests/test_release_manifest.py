@@ -66,6 +66,22 @@ class Fixture:
 
 
 class ManifestTests(unittest.TestCase):
+    def test_build_policy_rejects_unreviewed_or_legacy_groups(self):
+        from release_policy import validate_policy
+        good = dict(schema=2, approved=True, schema_changes='backward-compatible-reviewed',
+                    compatibility_group='readyset-api-v1', legacy_rollback_compatible_from=[])
+        self.assertEqual(good, validate_policy(good))
+        for field, value in [('schema', 1), ('approved', False),
+                ('compatibility_group', 'development'), ('compatibility_group', 'bad\nvalue'),
+                ('legacy_rollback_compatible_from', ['bad'])]:
+            with self.subTest(field=field, value=value), self.assertRaises(RuntimeError):
+                validate_policy(dict(good, **{field: value}))
+        source = (SCRIPTS.parent / '.github/workflows/docker-build-push.yml').read_text()
+        self.assertLess(source.index('Read reviewed compatibility group'), source.index('name: Build and push'))
+        self.assertIn('COMPATIBILITY_GROUP=${{ steps.compatibility.outputs.group }}', source)
+        self.assertIn('ENV APP_COMPATIBILITY_GROUP=$COMPATIBILITY_GROUP',
+                      (SCRIPTS.parent / 'api/docker/Dockerfile').read_text())
+
     def test_required_identity_checker_is_an_exact_release_asset(self):
         fixture = Fixture()
         name = 'api/deploy/check-keycloak-runtime-env.py'
@@ -159,8 +175,10 @@ class WorkflowTests(unittest.TestCase):
     def test_normal_release_uses_current_baseline_without_manual_ingress_requirement(self):
         policy = json.loads((SCRIPTS.parent / 'api/deploy/release-policy.json').read_text())
         self.assertIs(policy['approved'], True)
+        self.assertEqual(2, policy['schema'])
+        self.assertEqual('readyset-api-v1', policy['compatibility_group'])
         self.assertEqual('backward-compatible-reviewed', policy['schema_changes'])
-        self.assertEqual(['0c80fae197c1b4734188ffb6e3b84db5157c67e1'], policy['rollback_compatible_from'])
+        self.assertEqual(['7ea8a064a95836e6cf3f62b65c70f76eec6a9fc7'], policy['legacy_rollback_compatible_from'])
         self.assertNotIn('maintenance_service', policy)
         compose = (SCRIPTS.parent / 'api/deploy/docker-compose.yml').read_text()
         self.assertIn('${API_IMAGE:?', compose)

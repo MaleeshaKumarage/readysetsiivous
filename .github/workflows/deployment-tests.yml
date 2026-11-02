@@ -10,6 +10,9 @@ on:
       - .github/workflows/docker-build-push.yml
       - scripts/deploy-api.sh
       - scripts/tests/test_deploy_api.py
+      - scripts/tests/test_release_cleanup.py
+      - scripts/tests/test_dev_release_cleanup.py
+      - scripts/dev_release_cleanup.py
       - .github/workflows/docker-deploy-oracle.yml
       - .github/workflows/deployment-tests.yml
   push:
@@ -23,6 +26,9 @@ on:
       - .github/workflows/docker-build-push.yml
       - scripts/deploy-api.sh
       - scripts/tests/test_deploy_api.py
+      - scripts/tests/test_release_cleanup.py
+      - scripts/tests/test_dev_release_cleanup.py
+      - scripts/dev_release_cleanup.py
       - .github/workflows/docker-deploy-oracle.yml
       - .github/workflows/deployment-tests.yml
 permissions:
@@ -36,3 +42,5 @@ jobs:
       - run: python3 scripts/tests/test_deploy_api.py
 
       - run: python3 scripts/tests/test_release_manifest.py
+      - run: python3 scripts/tests/test_release_cleanup.py
+      - run: python3 scripts/tests/test_dev_release_cleanup.py

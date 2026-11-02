@@ -51,13 +51,19 @@ jobs:
             type=sha,format=long,prefix=sha-
             type=raw,value=latest
 
+      - name: Read reviewed compatibility group
+        id: compatibility
+        run: python3 scripts/release_manifest.py compatibility --output "$GITHUB_OUTPUT"
+
       - name: Build and push
         id: build
         uses: docker/build-push-action@v6
         with:
           context: ./api
           file: api/docker/Dockerfile
-          build-args: RELEASE_SHA=${{ github.sha }}
+          build-args: |
+            RELEASE_SHA=${{ github.sha }}
+            COMPATIBILITY_GROUP=${{ steps.compatibility.outputs.group }}
           push: true
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}

@@ -53,3 +53,8 @@ api/verify-phase*.sh
 
 # Machine-local infrastructure inventory and operational scripts (never publish).
 .local/operations/
+
+# Host-local release retention metadata
+.release-image-retention.json
+.release-image-cleanup.lock
+.image-retention-*
