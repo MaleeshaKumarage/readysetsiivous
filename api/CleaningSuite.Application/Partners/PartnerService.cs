@@ -273,6 +273,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         Db.Store(request); NotifyRequest(request, "OfferCreated", "Employee", employee.Id);
         if (previousEmployee.HasValue && previousEmployee != employee.Id) NotifyRequest(request, "OfferWithdrawn", "Employee", previousEmployee);
         NotifyRequest(request, "AwaitingAcceptance", "Company");
+        if (push is not null) await push.StagePartnerOfferAsync(Db, request.Id, request.Revision, request.OfferId.Value, employee.Id, DateTimeOffset.UtcNow, ct);
         await Db.SaveChangesAsync(ct);
         return await Map(request, true, ct);
     }

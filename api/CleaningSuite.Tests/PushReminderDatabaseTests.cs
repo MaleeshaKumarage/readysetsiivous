@@ -178,6 +178,39 @@ public class PushReminderDatabaseTests
     }
 
     [QualityCycleDatabaseFact]
+    public async Task Staff_offer_commits_push_intent_for_the_offered_employee_and_current_offer()
+    {
+        using var f = await Fixture.Create();
+        var admin = new Employee { Role = Employee.RoleAdmin, KeycloakUserId = "admin" };
+        var company = new Company { IsActive = true, IsPartnerEnabled = true };
+        var branch = new Branch { CompanyId = company.Id, IsActive = true };
+        var request = new CleaningSuite.Domain.Partners.PartnerCleaningRequest
+        {
+            CompanyId = company.Id, BranchId = branch.Id,
+            FromDate = new(2026, 11, 3), ToDate = new(2026, 11, 3), EstimatedDurationMinutes = 60
+        };
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        { db.Store(admin); db.Store(company); db.Store(branch); db.Store(request); await db.SaveChangesAsync(); }
+        using var session = f.Session();
+        var service = new PartnerService(new PartnerStore(session), new ShiftWorkReservation(f.Config, session), f.Shifts.Object,
+            Mock.Of<ITenantProfileRepository>(), f.Context, new PushOutbox());
+
+        await service.Offer(admin.Id, request.Id, new PartnerOffer(request.Revision, f.Employee.Id), default);
+
+        using var query = f.Store.QuerySession(f.Tenant);
+        var committed = await query.LoadAsync<CleaningSuite.Domain.Partners.PartnerCleaningRequest>(request.Id);
+        Assert.NotNull(committed);
+        Assert.Equal("Offered", committed.Status);
+        var intent = Assert.Single(await query.Query<PushIntent>().ToListAsync());
+        Assert.Equal("PartnerOffer", intent.Kind);
+        Assert.Equal(f.Employee.Id, intent.EmployeeId);
+        Assert.Equal(request.Id, intent.PartnerRequestId);
+        Assert.Equal(committed.Revision, intent.RequestRevision);
+        Assert.Equal(committed.OfferId, intent.OfferId);
+        Assert.False(intent.AdminAudience);
+    }
+
+    [QualityCycleDatabaseFact]
     public async Task Direct_partner_offer_is_generic_idempotent_and_ineligible_after_response()
     {
         using var f = await Fixture.Create();
