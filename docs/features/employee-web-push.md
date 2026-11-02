@@ -10,3 +10,4 @@ Employees and linked administrators opt in individually from My shifts or their 
 
 Rollout verification requires a physical iPhone Home Screen installation and compatible Android browser: opt in by tap, lock screen receipt, click/login navigation, test acceptance, and disable per device. These checks cannot be inferred from automated tests. Existing partner emails are independent.
 
+Direct branch routing also queues a generic approval alert for the selected opted-in cleaner, linking to Account. It checks the request is still offered to that employee before every attempt. Requests routed directly to a cleaner do not send the administrator new-request alert; fallback routing retains it.

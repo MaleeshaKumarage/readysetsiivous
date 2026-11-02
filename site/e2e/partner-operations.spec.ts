@@ -12,6 +12,55 @@ async function companies(page: Page) {
   await page.route(/\/api\/v1\/admin\/companies(?:\?.*)?$/, route => route.fulfill({ headers, json: { items: [{ id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }], total: 1 } }));
 }
 
+test('Partner Operations excludes ordinary properties and reveals editors below a long property list', async ({ page }) => {
+  await setupAdminMocks(page);
+  await page.route(/\/api\/v1\/admin\/companies(?:\?.*)?$/, route => route.fulfill({ headers, json: { items: [
+    { id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true },
+    { id: 'regular-company', name: 'Ordinary customer', isActive: true, isPartnerEnabled: false },
+    { id: 'former-partner', name: 'Former partner', isActive: true, isPartnerEnabled: false },
+  ], total: 3 } }));
+  await page.route(/\/api\/v1\/admin\/employees$/, route => route.fulfill({ headers, json: [] }));
+  const partnerProperties: Branch[] = Array.from({ length: 25 }, (_, index) => ({ ...branch, id: `property-${index}`, name: `Partner property ${index}`, postalCode: String(index).padStart(5, '0') }));
+  const ordinary = { ...branch, id: 'ordinary', companyId: 'regular-company', name: 'Ordinary property' };
+  const former = { ...branch, id: 'former', companyId: 'former-partner', name: 'Former partner property' };
+  const writes: { path: string; body: Record<string, unknown> }[] = [];
+  await page.route(/\/api\/v1\/admin\/partner\//, route => {
+    const req = route.request(), path = new URL(req.url()).pathname.split('/partner')[1];
+    if (req.method() === 'OPTIONS') return route.fulfill({ headers });
+    if (req.method() === 'GET') return route.fulfill({ headers, json: path === '/branches' ? [...partnerProperties, ordinary, former] : path === '/quotes' ? [ordinary, former] : [] });
+    const body = req.postDataJSON() as Record<string, unknown>; writes.push({ path, body });
+    Object.assign(partnerProperties[0], body);
+    return route.fulfill({ headers, json: partnerProperties[0] });
+  });
+  await page.goto('/admin/partner-requests/');
+  await page.getByRole('tab', { name: 'Properties', exact: true }).click();
+  await expect(page.getByRole('article')).toHaveCount(25);
+  await expect(page.getByText('Ordinary property', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Former partner property', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Edit property', exact: true }).first().click();
+  const editor = page.getByRole('region', { name: 'Property editor', exact: true });
+  await expect(editor).toBeInViewport(); await expect(editor).toBeFocused();
+  await page.getByRole('button', { name: 'Edit property', exact: true }).first().click();
+  await expect(editor).toBeInViewport(); await expect(editor).toBeFocused();
+  await editor.getByLabel('Rooms (optional)').fill('6');
+  await editor.getByRole('button', { name: 'Save property', exact: true }).click();
+  await expect(page.getByText('Property saved.', { exact: true })).toBeVisible();
+  expect(writes[0]).toMatchObject({ path: '/branches/property-0', body: { roomCount: 6 } });
+  await page.getByRole('button', { name: 'Set cleaning price', exact: true }).first().click();
+  const pricing = page.getByRole('region', { name: 'Property pricing', exact: true });
+  await expect(pricing).toBeInViewport(); await expect(pricing).toBeFocused();
+  await page.getByRole('button', { name: 'Set cleaning price', exact: true }).first().click();
+  await expect(pricing).toBeInViewport(); await expect(pricing).toBeFocused();
+  await pricing.getByLabel('Fixed cleaning price excl. VAT (€)').fill('95');
+  await pricing.getByRole('button', { name: 'Save pricing', exact: true }).click();
+  await expect(page.getByText('Pricing saved.', { exact: true })).toBeVisible();
+  expect(writes[1]).toMatchObject({ path: '/branches/property-0/pricing', body: { priceNet: 95 } });
+  await page.getByRole('button', { name: 'Add property', exact: true }).click();
+  await expect(page.getByLabel('Company', { exact: true }).locator('option')).toHaveText(['Select company', 'Owner company']);
+  await page.getByRole('tab', { name: 'Quote requests', exact: true }).click();
+  await expect(page.getByText('No quotes awaiting pricing.', { exact: true })).toBeVisible();
+});
+
 test('partner month previews all company visits and issues the exact approved payload', async ({ page }, testInfo) => {
   await setupAdminMocks(page); await companies(page);
   const issuer: InvoiceIssuer = { companyName: 'ReadySetSiivous', businessId: '3404861-9', companyAddress: { street: 'Issuer road 1', postalCode: '00100', city: 'Helsinki', country: 'FI' }, email: 'office@example.test', phone: '', bankAccountIBAN: 'FI2112345600000785', bankBic: 'NDEAFIHH', paymentTermsDays: 14, defaultVatRatePercent: 25.5 };
@@ -103,10 +152,10 @@ test('staff resolves owner changes, creates a property and cancels a versioned r
   await expect(page.getByText('Resolved: Spare towels added to cleaning instructions.', { exact: true })).toBeVisible();
   expect(writes[0]).toEqual({ path: '/change-requests/change-one/resolve', method: 'POST', body: { resolution: 'Spare towels added to cleaning instructions.' } });
   await page.getByRole('tab', { name: 'Properties', exact: true }).click(); await page.getByRole('button', { name: 'Add property', exact: true }).click();
-  await page.getByRole('combobox').selectOption(companyId); await page.getByLabel('Property name', { exact: true }).fill('Forest apartment'); await page.getByLabel('street', { exact: true }).fill('Forest road 8'); await page.getByLabel('city', { exact: true }).fill('Oulu'); await page.getByLabel('Rooms (optional)').fill('3'); await page.getByLabel('Beds (optional)').fill('4');
+  await page.getByLabel('Company', { exact: true }).selectOption(companyId); await page.getByLabel('street', { exact: true }).fill('Forest road 8'); await page.getByLabel('city', { exact: true }).fill('Oulu'); await page.getByLabel('Rooms (optional)').fill('3'); await page.getByLabel('Beds (optional)').fill('4');
   await page.getByRole('button', { name: 'Save property', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Forest apartment · Owner company', exact: true })).toBeVisible();
-  expect(writes[1]).toMatchObject({ path: '/branches', method: 'POST', body: { companyId, name: 'Forest apartment', street: 'Forest road 8', city: 'Oulu', roomCount: 3, bedCount: 4, priceNet: null, isActive: true } });
+  await expect(page.getByRole('heading', { name: 'Forest road 8, Oulu · Owner company', exact: true })).toBeVisible();
+  expect(writes[1]).toMatchObject({ path: '/branches', method: 'POST', body: { companyId, name: 'Forest road 8, Oulu', street: 'Forest road 8', city: 'Oulu', roomCount: 3, bedCount: 4, priceNet: null, isActive: true } });
   await page.getByRole('tab', { name: 'Requests', exact: true }).click();
   page.once('dialog', dialog => dialog.accept('Owner cancelled travel.'));
   await page.getByRole('button', { name: 'Cancel request', exact: true }).click();

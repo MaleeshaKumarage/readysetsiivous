@@ -61,12 +61,12 @@ test('owner creates a property, requests its quote and sends property changes wi
   await page.getByRole('button', { name: 'Add property', exact: true }).click();
   const form = page.getByRole('region', { name: 'Add property', exact: true });
   await form.getByRole('button', { name: 'Save property', exact: true }).click(); expect(state.writes).toHaveLength(0);
-  await form.getByLabel('Property name', { exact: true }).fill('Abandoned draft'); await form.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(form).toHaveCount(0); expect(state.writes).toHaveLength(0);
+  await form.getByLabel('Street', { exact: true }).fill('Abandoned draft'); await form.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(form).toHaveCount(0); expect(state.writes).toHaveLength(0);
   await page.getByRole('button', { name: 'Add property', exact: true }).click();
-  for (const [label, value] of [['Property name', 'Forest apartment'], ['Street', 'Forest road 9'], ['Postal code', '90100'], ['City', 'Oulu'], ['Country', 'FI'], ['Contact phone', '+358401234567'], ['Contact email', 'property@example.invalid'], ['Rooms (optional)', '3'], ['Beds (optional)', '4']]) await form.getByLabel(label, { exact: true }).fill(value);
+  for (const [label, value] of [['Street', 'Forest road 9'], ['Postal code', '90100'], ['City', 'Oulu'], ['Country', 'FI'], ['Contact phone', '+358401234567'], ['Contact email', 'property@example.invalid'], ['Rooms (optional)', '3'], ['Beds (optional)', '4']]) await form.getByLabel(label, { exact: true }).fill(value);
   await form.getByRole('button', { name: 'Save property', exact: true }).click();
-  const property = page.getByRole('article', { name: 'Forest apartment', exact: true }); await expect(property).toBeVisible();
-  expect(state.writes[0]).toEqual({ path: '/branches', method: 'POST', body: { name: 'Forest apartment', street: 'Forest road 9', postalCode: '90100', city: 'Oulu', country: 'FI', contactPhone: '+358401234567', contactEmail: 'property@example.invalid', roomCount: 3, bedCount: 4 } });
+  const property = page.getByRole('article', { name: 'Forest road 9, 90100 Oulu', exact: true }); await expect(property).toBeVisible();
+  expect(state.writes[0]).toEqual({ path: '/branches', method: 'POST', body: { name: 'Forest road 9, 90100 Oulu', street: 'Forest road 9', postalCode: '90100', city: 'Oulu', country: 'FI', contactPhone: '+358401234567', contactEmail: 'property@example.invalid', roomCount: 3, bedCount: 4, sizeSquareMeters: null } });
   await expect(property.getByRole('button', { name: 'Request cleaning', exact: true })).toBeDisabled();
   await property.getByRole('button', { name: 'Request quote', exact: true }).click(); await expect(property.getByText('Quote requested — awaiting staff pricing')).toBeVisible(); await expect(property.getByRole('button', { name: 'Request quote', exact: true })).toBeDisabled();
   expect(state.writes[1]).toEqual({ path: '/branches/new-property/quote-request', method: 'POST', body: null });
@@ -113,7 +113,7 @@ test('FI/EN switching preserves a draft, creates and cancels a Finnish request a
   await page.getByRole('button', { name: 'Suomi', exact: true }).click();
   form = page.getByRole('region', { name: 'Siivouspyynnön lomake', exact: true });
   await form.getByRole('button', { name: 'Tallenna siivouspyyntö', exact: true }).click();
-  await expect(page.getByText('Siivouspyyntö tallennettu. Henkilökunta järjestää siivoojan.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Siivouspyyntö tallennettu. Tarkista sen tila alta.', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Lake apartment · Pyydetty', exact: true })).toBeVisible();
   await expect(page.getByText('Keep this entered text unchanged.', { exact: true })).toBeVisible();
   let confirmation = '';
@@ -138,11 +138,12 @@ test('Finnish property, quote, change and validation messages preserve entered c
   await page.goto('/partner/'); await page.getByRole('button', { name: 'Suomi', exact: true }).click();
   await page.getByRole('button', { name: 'Lisää kohde', exact: true }).click();
   const propertyForm = page.getByRole('region', { name: 'Lisää kohde', exact: true });
-  await propertyForm.getByLabel('Kohteen nimi', { exact: true }).fill('Mökki Oulussa');
+  await propertyForm.getByLabel('Katuosoite', { exact: true }).fill('Mökkitie 8');
+  await propertyForm.getByLabel('Postinumero', { exact: true }).fill('90100');
   await propertyForm.getByLabel('Kaupunki', { exact: true }).fill('Oulu');
   await propertyForm.getByLabel('Huoneita (valinnainen)', { exact: true }).fill('3');
   await propertyForm.getByRole('button', { name: 'Tallenna kohde', exact: true }).click();
-  const property = page.getByRole('article', { name: 'Mökki Oulussa', exact: true });
+  const property = page.getByRole('article', { name: 'Mökkitie 8, 90100 Oulu', exact: true });
   await property.getByRole('button', { name: 'Pyydä tarjous', exact: true }).click();
   await expect(property.getByText('Tarjous pyydetty', { exact: true })).toHaveClass(/text-red-800/);
   await property.getByRole('button', { name: 'Pyydä kohteen muutosta', exact: true }).click();
@@ -165,7 +166,7 @@ test('Finnish property, quote, change and validation messages preserve entered c
   await cleaning.getByRole('button', { name: 'Tallenna siivouspyyntö', exact: true }).click();
   await expect(cleaning.getByRole('alert')).toHaveText('Pyydä tarjous ennen siivouksen tilaamista tähän kohteeseen.');
   await expect(cleaning.getByLabel('Alkupäivä', { exact: true })).toHaveValue('2026-12-10');
-  expect(state.writes.find(write => write.path === '/branches')?.body).toMatchObject({ name: 'Mökki Oulussa', city: 'Oulu', roomCount: 3 });
+  expect(state.writes.find(write => write.path === '/branches')?.body).toMatchObject({ name: 'Mökkitie 8, 90100 Oulu', city: 'Oulu', roomCount: 3 });
 });
 
 test.describe('Finnish browser defaults', () => {
@@ -292,7 +293,7 @@ test('manager navigation loads partner operations through manager routes only an
     if (req.method() === 'GET') {
       managerReads.push(path);
       if (path === '/partner/requests' && ++requestLoads === 1) return route.fulfill({ status: 503, headers, json: { detail: 'Partner requests temporarily unavailable.' } });
-      const json = path === '/companies' ? { items: [{ id: companyId, name: 'Owner company', isActive: true }], total: 1 } : path === '/employees' ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', isActive: true }] : path === '/time-zone' ? { timeZoneId: 'Europe/Helsinki' } : path === '/shifts' ? [] : path === '/partner/requests' ? [pending] : path === '/partner/branches' ? [quotedBranch] : path === '/partner/quotes' ? (quotedBranch.pricingReady ? [] : [quotedBranch]) : [];
+      const json = path === '/companies' ? { items: [{ id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }], total: 1 } : path === '/employees' ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', isActive: true }] : path === '/time-zone' ? { timeZoneId: 'Europe/Helsinki' } : path === '/shifts' ? [] : path === '/partner/requests' ? [pending] : path === '/partner/branches' ? [quotedBranch] : path === '/partner/quotes' ? (quotedBranch.pricingReady ? [] : [quotedBranch]) : [];
       return route.fulfill({ headers, json });
     }
     const body = req.postDataJSON() as Record<string, unknown>; writes.push({ path, method: req.method(), body }); quotedBranch = { ...quotedBranch, ...body, pricingReady: true }; return route.fulfill({ headers, json: quotedBranch });

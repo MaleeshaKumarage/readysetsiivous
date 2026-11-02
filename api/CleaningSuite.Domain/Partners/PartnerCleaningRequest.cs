@@ -20,6 +20,7 @@ public sealed class PartnerCleaningRequest : BaseDocument
     public decimal VatRatePercent { get; set; }
     public int EstimatedDurationMinutes { get; set; }
     public int PricingVersion { get; set; }
+    public bool DirectlyRouted { get; set; }
     public string Status { get; set; } = "Requested";
     public DateTime? FirstAcceptedAtUtc { get; set; }
     public Guid? LinkedShiftId { get; set; }

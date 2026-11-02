@@ -21,7 +21,7 @@ async function fixture(page: Page, role: 'partner' | 'admin' = 'partner') {
     reads.push(path);
     const suffix = path.split('/partner')[1];
     const json = path === '/api/v1/partner/me' ? identity : path.endsWith('/employees') ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true }]
-      : path.endsWith('/companies') ? { items: [{ id: companyId, name: 'Owner company', isActive: true }], total: 1 }
+      : path.endsWith('/companies') ? { items: [{ id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }], total: 1 }
       : suffix === '/branches' || suffix === '/quotes' ? [branch]
       : suffix === '/requests' ? [pending, accepted]
       : suffix === '/change-requests' ? [change]
@@ -38,7 +38,7 @@ async function cancel(editor: Locator, writes: Write[]) {
 test('owner cancels valid property, cleaning and staff-change drafts without any writes', async ({ page }) => {
   const state = await fixture(page); await page.goto('/partner/');
   await page.getByRole('button', { name: 'Add property', exact: true }).click();
-  const property = page.getByRole('region', { name: 'Add property', exact: true }); await property.getByLabel('Property name', { exact: true }).fill('Unsaved property'); await cancel(property, state.writes); await expect(page.getByRole('article', { name: 'Unsaved property', exact: true })).toHaveCount(0);
+  const property = page.getByRole('region', { name: 'Add property', exact: true }); await property.getByLabel('Street', { exact: true }).fill('Unsaved property'); await cancel(property, state.writes); await expect(page.getByRole('article', { name: 'Unsaved property', exact: true })).toHaveCount(0);
   const branchCard = page.getByRole('article', { name: branch.name, exact: true });
   await branchCard.getByRole('button', { name: 'Request cleaning', exact: true }).click();
   const cleaning = page.getByRole('region', { name: 'Cleaning request form', exact: true });
@@ -66,8 +66,8 @@ test('staff cancels valid offer, pricing, resolution, reschedule and property dr
   await page.getByRole('tab', { name: 'Changes', exact: true }).click(); await page.getByRole('button', { name: 'Resolve change request', exact: true }).click();
   const resolution = page.locator('form').filter({ has: page.getByRole('button', { name: 'Save resolution', exact: true }) }); await resolution.getByLabel('Resolution', { exact: true }).fill('Unsaved resolution'); await cancel(resolution, state.writes); await expect(page.getByText('Awaiting staff response', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Properties', exact: true }).click(); await page.getByRole('button', { name: 'Add property', exact: true }).click();
-  const add = page.getByRole('heading', { name: 'Add property', exact: true }).locator('..'); await add.getByRole('combobox').selectOption(companyId); await add.getByLabel('Property name', { exact: true }).fill('Unsaved staff property'); await cancel(add, state.writes);
-  await page.getByRole('button', { name: 'Edit property', exact: true }).click(); const property = page.getByRole('heading', { name: 'Edit property', exact: true }).locator('..'); await property.getByLabel('Property name', { exact: true }).fill('Unsaved edited property'); await property.getByLabel('street', { exact: true }).fill('Unsaved address'); await cancel(property, state.writes);
+  const add = page.getByRole('heading', { name: 'Add property', exact: true }).locator('..'); await add.getByLabel('Company', { exact: true }).selectOption(companyId); await add.getByLabel('street', { exact: true }).fill('Unsaved staff property'); await expect(add.getByLabel('Property name', { exact: true })).toHaveValue('Unsaved staff property'); await cancel(add, state.writes);
+  await page.getByRole('button', { name: 'Edit property', exact: true }).click(); const property = page.getByRole('heading', { name: 'Edit property', exact: true }).locator('..'); await property.getByLabel('street', { exact: true }).fill('Unsaved address'); await cancel(property, state.writes);
   await expect(page.getByRole('heading', { name: 'Lake apartment · Owner company', exact: true })).toBeVisible(); await expect(page.getByText('€70.00 excl. VAT · 120 minutes', { exact: true })).toBeVisible(); expect(state.writes).toEqual([]);
 });
 

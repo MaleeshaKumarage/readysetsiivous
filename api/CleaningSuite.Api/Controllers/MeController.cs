@@ -43,6 +43,26 @@ public class MeController : ControllerBase
     [HttpGet("profile")]
     public IActionResult Profile() => Ok(SelfResponses.Employee(VerifiedEmployee()));
 
+    [HttpGet("partner-request-preferences")]
+    public IActionResult PartnerRequestPreferences() => Ok(new PartnerRequestPreferences(VerifiedEmployee().AutoAcceptPartnerRequests));
+
+    [HttpPut("partner-request-preferences")]
+    public async Task<IActionResult> SetPartnerRequestPreferences([FromBody] PartnerRequestPreferences body,
+        [FromServices] CleaningSuite.Application.Employees.IEmployeeRepository employees,
+        [FromServices] IShiftWorkReservation reservation, CancellationToken ct)
+    {
+        var id = VerifiedEmployee().Id;
+        await using var lease = await reservation.AcquireAsync(ct);
+        var employee = await employees.ReloadAsync(id, ct) ?? throw new NotFoundException("Employee", id);
+        if (!employee.IsActive || employee.IdentitySyncPending || !Employee.IsWorkRole(employee.Role)
+            || string.IsNullOrWhiteSpace(employee.KeycloakUserId)
+            || !string.Equals(employee.KeycloakUserId, User.FindFirstValue("sub"), StringComparison.Ordinal)) throw new UnauthorizedAccessException("An active linked staff account is required.");
+        employee.AutoAcceptPartnerRequests = body.AutoAcceptPartnerRequests;
+        employee.UpdatedUtc = DateTime.UtcNow;
+        await employees.SaveAsync(employee, ct);
+        return Ok(new PartnerRequestPreferences(employee.AutoAcceptPartnerRequests));
+    }
+
     [HttpGet("work")]
     public async Task<IActionResult> Work([FromQuery] string date, CancellationToken ct) =>
         Ok(await _mediator.Send(new GetOwnWorkQuery(VerifiedEmployee().Id, date), ct));
@@ -118,3 +138,5 @@ public record EndFormRequest(
     List<string>? PhotoUrls = null,
     string? CleanerNotes = null,
     List<CleaningSuite.Domain.QualityCycle.QualityCyclePhoto>? Photos = null);
+
+public record PartnerRequestPreferences(bool AutoAcceptPartnerRequests);

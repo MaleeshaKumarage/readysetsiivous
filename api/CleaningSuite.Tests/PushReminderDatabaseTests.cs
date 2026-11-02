@@ -93,6 +93,35 @@ public class PushReminderDatabaseTests
     }
 
     [QualityCycleDatabaseFact]
+    public async Task Cancelled_reminder_revival_requires_changed_time_and_current_device()
+    {
+        foreach (var mode in new[] { "unchanged", "moved", "disabled", "rotated", "inactive", "late" })
+        {
+            using var f = await Fixture.Create();
+            var start = f.Now.UtcDateTime.AddMinutes(30);
+            var visit = f.AddExtra(start, start.AddHours(1));
+            await f.Scheduler().ScheduleAsync();
+            Guid deliveryId;
+            using (var db = f.Store.LightweightSession(f.Tenant))
+            {
+                var intent = await db.Query<PushIntent>().SingleAsync(); intent.Materialized = true; db.Store(intent);
+                var delivery = new PushDelivery { IntentId = intent.Id, DeviceId = f.Device.Id, State = "Cancelled", FailureCode = "ineligible_or_expired" };
+                deliveryId = delivery.Id; db.Store(delivery);
+                f.Device.VapidKeyId = mode == "rotated" ? "old-key" : "key";
+                f.Device.Enabled = mode != "disabled";
+                if (mode == "late") f.Device.OptedInUtc = f.Now.UtcDateTime.AddHours(1);
+                f.Employee.IsActive = mode != "inactive";
+                db.Store(f.Device); db.Store(f.Employee); await db.SaveChangesAsync();
+            }
+            if (mode != "unchanged") { visit.StartUtc = start.AddDays(1); visit.EndUtc = visit.StartUtc.AddHours(1); f.Now = f.Now.AddDays(1); }
+            await f.Scheduler().ScheduleAsync();
+            await f.Scheduler().ScheduleAsync();
+            using var query = f.Store.QuerySession(f.Tenant);
+            Assert.Equal(mode == "moved" ? "Pending" : "Cancelled", (await query.LoadAsync<PushDelivery>(deliveryId))!.State);
+        }
+    }
+
+    [QualityCycleDatabaseFact]
     public async Task Removed_and_cancelled_visits_create_no_reminders()
     {
         using var f = await Fixture.Create();
@@ -133,10 +162,17 @@ public class PushReminderDatabaseTests
 
     [QualityCycleDatabaseFact]
     public async Task Original_key_reassignment_notifies_previous_exception_only_assignee()
+    { await VerifyExceptionReassignment(false); await VerifyExceptionReassignment(true); }
+
+    private async Task VerifyExceptionReassignment(bool loadByList)
     {
         using var f = await Fixture.Create();
         var oldEmployee = Guid.NewGuid(); var newEmployee = Guid.NewGuid();
-        var start = DateTime.UtcNow.AddDays(1);
+        f.Shift.Schedule = new() { Type = ShiftScheduleType.DailySameTime, DailyStart = TimeSpan.FromHours(10), DailyEnd = TimeSpan.FromHours(11) };
+        var day = f.Now.UtcDateTime.Date.AddDays(1);
+        // Use a real scheduled key at whole-second precision, as PostgreSQL timestamp
+        // comparisons cannot preserve arbitrary DateTime.UtcNow sub-microsecond ticks.
+        var start = Assert.Single(ShiftScheduleCalculator.GenerateOccurrences(f.Shift, day, day, TenantTimeZone.Resolve(null))).StartUtc;
         var exception = ShiftOccurrenceException.Create(f.Shift.Id, start, start.AddHours(1), start.AddHours(2), ShiftOccurrenceExceptionStatus.Moved, "move", oldEmployee);
         using (var db = f.Store.LightweightSession(f.Tenant)) { db.Store(f.Shift); db.Store(exception); await db.SaveChangesAsync(); }
         using var session = f.Session(); var outbox = new Mock<IPushOutbox>();
@@ -144,7 +180,10 @@ public class PushReminderDatabaseTests
         outbox.Setup(x => x.StageScheduleChangeAsync(It.IsAny<IDocumentSession>(), f.Shift.Id, It.IsAny<IEnumerable<Guid>>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .Callback<IDocumentSession, Guid, IEnumerable<Guid>, DateTimeOffset, CancellationToken>((_, _, ids, _, _) => recipients = ids.ToArray()).Returns(Task.CompletedTask);
         var repository = new ShiftRepository(session, outbox.Object);
-        var tracked = (await repository.GetOccurrenceExceptionByOriginalAsync(f.Shift.Id, start))!;
+        var tracked = loadByList
+            ? (await repository.ListOccurrenceExceptionsAsync(f.Shift.Id, start.AddDays(-1), start.AddDays(2))).Single()
+            : await repository.GetOccurrenceExceptionByOriginalAsync(f.Shift.Id, start);
+        Assert.NotNull(tracked);
         tracked.EmployeeId = newEmployee;
         await repository.SaveOccurrenceExceptionAsync(tracked);
         Assert.Contains(oldEmployee, recipients); Assert.Contains(newEmployee, recipients);
@@ -170,6 +209,39 @@ public class PushReminderDatabaseTests
         await repository.SaveOccurrenceAssignmentAsync(tracked);
         Assert.Equal(new[] { oldEmployee, newEmployee }.Order(), recipients.Order());
         Assert.DoesNotContain(unrelated, recipients); Assert.DoesNotContain(f.Employee.Id, recipients);
+    }
+
+    [QualityCycleDatabaseFact]
+    public async Task Staff_offer_commits_push_intent_for_the_offered_employee_and_current_offer()
+    {
+        using var f = await Fixture.Create();
+        var admin = new Employee { Role = Employee.RoleAdmin, KeycloakUserId = "admin" };
+        var company = new Company { IsActive = true, IsPartnerEnabled = true };
+        var branch = new Branch { CompanyId = company.Id, IsActive = true };
+        var request = new CleaningSuite.Domain.Partners.PartnerCleaningRequest
+        {
+            CompanyId = company.Id, BranchId = branch.Id,
+            FromDate = new(2026, 11, 3), ToDate = new(2026, 11, 3), EstimatedDurationMinutes = 60
+        };
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        { db.Store(admin); db.Store(company); db.Store(branch); db.Store(request); await db.SaveChangesAsync(); }
+        using var session = f.Session();
+        var service = new PartnerService(new PartnerStore(session), new ShiftWorkReservation(f.Config, session), f.Shifts.Object,
+            Mock.Of<ITenantProfileRepository>(), f.Context, new PushOutbox());
+
+        await service.Offer(admin.Id, request.Id, new PartnerOffer(request.Revision, f.Employee.Id), default);
+
+        using var query = f.Store.QuerySession(f.Tenant);
+        var committed = await query.LoadAsync<CleaningSuite.Domain.Partners.PartnerCleaningRequest>(request.Id);
+        Assert.NotNull(committed);
+        Assert.Equal("Offered", committed.Status);
+        var intent = Assert.Single(await query.Query<PushIntent>().ToListAsync());
+        Assert.Equal("PartnerOffer", intent.Kind);
+        Assert.Equal(f.Employee.Id, intent.EmployeeId);
+        Assert.Equal(request.Id, intent.PartnerRequestId);
+        Assert.Equal(committed.Revision, intent.RequestRevision);
+        Assert.Equal(committed.OfferId, intent.OfferId);
+        Assert.False(intent.AdminAudience);
     }
 
     [QualityCycleDatabaseFact]
@@ -278,7 +350,8 @@ public class PushReminderDatabaseTests
             forms.Setup(x => x.GetFormByShiftOccurrenceAsync(Shift.Id, Employee.Id, It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync(() => Evidence);
             var clock = new Mock<TimeProvider>(); clock.Setup(x => x.GetUtcNow()).Returns(() => Now);
             return new(new PartnerStore(session), Shifts.Object, forms.Object, Mock.Of<ITenantProfileRepository>(), Context,
-                new PushOutbox(), new ShiftWorkReservation(Config, session), clock.Object);
+                new PushOutbox(), new ShiftWorkReservation(Config, session), clock.Object,
+                Mock.Of<IPushSettings>(x => x.Available == true && x.KeyId == "key"));
         }
         public void Dispose() => Provider.Dispose();
     }

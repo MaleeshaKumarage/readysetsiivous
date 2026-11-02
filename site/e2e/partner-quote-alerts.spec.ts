@@ -4,7 +4,7 @@ import type { Branch } from '../src/lib/adminApi';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const company = { id: 'quote-company', name: 'Apartment owner', businessId: '1234567-8', isActive: true, isPartnerEnabled: true };
-const requested: Branch = { id: 'quote-branch', companyId: company.id, name: 'Lake apartment', city: 'Tampere', isActive: true, pricingReady: false, quoteRequestedUtc: '2026-11-01T10:00:00Z' };
+const requested: Branch = { id: 'quote-branch', companyId: company.id, name: 'Lake apartment', street: 'Lake road 1', postalCode: '33100', city: 'Tampere', isActive: true, pricingReady: false, quoteRequestedUtc: '2026-11-01T10:00:00Z' };
 for (const access of ['anonymous', 'denied'] as const) {
   test(`${access} admin navigation never reads or polls quotes`, async ({ page }) => {
     await setupAdminMocks(page, { authenticated: access !== 'anonymous' });
@@ -74,15 +74,15 @@ test('quote banner switches tabs on the current operations page without losing a
   await page.goto('/admin/partner-requests/');
   await page.getByRole('tab', { name: 'Properties', exact: true }).click();
   await page.getByRole('button', { name: 'Edit property', exact: true }).click();
-  await page.getByLabel('Property name', { exact: true }).fill('Preserve my draft');
+  await page.getByLabel('street', { exact: true }).fill('Preserve my draft');
   await page.getByRole('status', { name: 'Pending quote requests' }).getByRole('link', { name: 'Review quotes' }).click();
   await expect(page.getByRole('tab', { name: 'Quote requests', exact: true })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByLabel('Property name', { exact: true })).toHaveValue('Preserve my draft');
+  await expect(page.getByLabel('street', { exact: true })).toHaveValue('Preserve my draft');
   await page.getByRole('tab', { name: 'Properties', exact: true }).click();
   await expect(page).not.toHaveURL(/tab=quotes/);
   await page.getByRole('status', { name: 'Pending quote requests' }).getByRole('link', { name: 'Review quotes' }).click();
   await expect(page.getByRole('tab', { name: 'Quote requests', exact: true })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByLabel('Property name', { exact: true })).toHaveValue('Preserve my draft');
+  await expect(page.getByLabel('street', { exact: true })).toHaveValue('Preserve my draft');
 });
 
 test('visible polling and focus discover new quotes, errors retain count and retry clears resolved quotes', async ({ page }) => {
@@ -111,7 +111,7 @@ test('hidden tabs stop quote polling and returning to visibility refreshes witho
   await page.getByRole('tab', { name: 'Properties', exact: true }).click();
   await expect(page.getByText('Quote requested', { exact: true })).toHaveClass(/text-red-800/);
   await page.getByRole('button', { name: 'Edit property', exact: true }).click();
-  await page.getByLabel('Property name', { exact: true }).fill('Unsaved name');
+  await page.getByLabel('street', { exact: true }).fill('Unsaved name');
   await page.evaluate(() => Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }));
   const reads = state.quoteReads;
   await page.clock.fastForward(60_000);
@@ -120,7 +120,7 @@ test('hidden tabs stop quote polling and returning to visibility refreshes witho
   await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' }); document.dispatchEvent(new Event('visibilitychange')); });
   await expect(page.getByRole('status', { name: 'Pending quote requests' })).toHaveCount(0);
   await expect(page.getByText('Quote requested', { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel('Property name', { exact: true })).toHaveValue('Unsaved name');
+  await expect(page.getByLabel('street', { exact: true })).toHaveValue('Unsaved name');
   expect(state.writes).toEqual([]);
 });
 

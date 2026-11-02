@@ -11,7 +11,7 @@ the returned tenant time zone. Versions are integer request revisions.
 - Company appends `isPartnerEnabled: boolean`.
 - Branch appends nullable `roomCount`, `bedCount`, `priceNet`, `vatRatePercent`,
   `estimatedDurationMinutes`, plus `pricingVersion: number`, `pricingReady: boolean`,
-  `quoteRequestedUtc: string|null`. Existing branch address/contact fields remain.
+  `quoteRequestedUtc: string|null`, `sizeSquareMeters: number|null`, and `preferredCleanerEmployeeId: string|null`. Existing branch address/contact fields remain.
 - Partner identity: `{realm, person:{id,firstName,lastName,role,isActive}, company:{id,name,isActive,isPartnerEnabled}, timeZoneId}`.
 - Cleaning request: `{id,version,companyId,branchId,branchName,fromDate,toDate,exactStartLocalTime,notes,priceNet,vatRatePercent,estimatedDurationMinutes,status,firstAcceptedAtUtc,linkedShiftId,plannedStartUtc,plannedEndUtc,acceptedCleanerName,actualStartUtc,actualEndUtc}`.
 - Change request: `{id,companyId,branchId,requestId,kind,message,createdUtc,resolvedUtc,resolution}`.
@@ -34,7 +34,7 @@ role synchronization or grant access to the previous company through a cached to
 ## Partner `/api/v1/partner`
 
 - `GET /me`, `GET /branches` => identity, Branch[].
-- `POST /branches` body `{name,street?,postalCode?,city?,country?,contactPhone?,contactEmail?,roomCount?,bedCount?}` => Branch.
+- `POST /branches` body `{name?,street?,postalCode?,city?,country?,contactPhone?,contactEmail?,roomCount?,bedCount?,sizeSquareMeters?}` => Branch. The property name is generated from the address (`Street, PostalCode City`); provide at least a street, postal code or city. The server ignores a submitted name for partner properties.
 - `POST /branches/{id}/quote-request` => Branch (idempotent until priced).
 - `POST /branches/{id}/change-requests` body `{message}` => change request.
 - `GET /requests` => cleaning request[]. `POST /requests` body `{clientRequestId,branchId,fromDate,toDate,exactStartLocalTime?,notes?}` => cleaning request.
@@ -92,3 +92,15 @@ uncertain deliveries stop after 20 hours or 12 attempts for review. Changed reci
 rather than retargeting a previously attempted idempotency key. Actual work start/completion is
 reconciled into deterministic intents from existing work forms; this never changes actual times.
 All email links require sign-in; access instructions and cleaner notes are excluded.
+
+## Branch routing and cleaner approval (2026-11-02)
+
+Admin/manager branch create/update and branch responses include `sizeSquareMeters` (positive decimal, maximum 1000000, two decimal places) and optional `preferredCleanerEmployeeId`. Updates preserve omitted fields; explicit JSON null clears them. Preferred cleaners must be active, synchronized work-role employees with a linked login in the current tenant. Partner-created properties accept size but cannot choose cleaner, company or price.
+
+For partner-enabled companies, new/edited branch names are generated from `Street, PostalCode City`; ordinary company branches retain manual names. Existing branches are not bulk-renamed. Branch/property lists sort by postal code then name.
+
+`GET /api/v1/me/partner-request-preferences` and `PUT` at the same route read/update `{ "autoAcceptPartnerRequests": false }` for the verified current staff member. Existing employees require approval by default; administrative employee updates cannot set this preference.
+
+New partner requests for a valid configured cleaner become ordinary `Offered` requests, with the existing cleaner offer/accept/decline endpoints and revision checks. The cleaner receives email and an optional generic push; administrators receive no initial broadcast. Explicit cleaner opt-in permits automatic acceptance only for an exact future appointment using the existing scheduling checks. Date ranges/flexible requests remain actionable offers even when automatic acceptance is enabled. Scheduling conflict leaves an offer for approval; it never fabricates a time or accepted visit. Missing/inactive/unlinked cleaners return the request to staff routing; decline returns to staff for reassignment. Existing accepted/history requests and frozen financial terms remain unchanged.
+
+The branch-specific automatic approval preference applies only to future exact-time requests. Existing pending offers remain visible and manually actionable, including flexible/date-range offers. This does not implement the planned global approval-mode behavior (A01). Manager company responses include `isPartnerEnabled` so partner-property title generation matches the administrative flow.

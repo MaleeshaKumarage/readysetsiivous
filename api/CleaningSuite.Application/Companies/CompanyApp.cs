@@ -1,3 +1,5 @@
+using CleaningSuite.Application.Employees;
+using CleaningSuite.Domain.Employees;
 using CleaningSuite.Application.Common;
 using CleaningSuite.Application.Partners;
 using CleaningSuite.Domain.Partners;
@@ -37,7 +39,8 @@ public record BranchDto(
     string? ContactEmail = null,
     int? RoomCount = null, int? BedCount = null, decimal? PriceNet = null,
     decimal? VatRatePercent = null, int? EstimatedDurationMinutes = null,
-    int PricingVersion = 0, bool PricingReady = false, DateTime? QuoteRequestedUtc = null);
+    int PricingVersion = 0, bool PricingReady = false, DateTime? QuoteRequestedUtc = null,
+    decimal? SizeSquareMeters = null, Guid? PreferredCleanerEmployeeId = null);
 
 public record CompanyDetailDto(CompanyDto Company, IReadOnlyList<BranchDto> Branches);
 
@@ -96,7 +99,8 @@ public record CreateBranchCommand(
     string? ContactPhone = null,
     string? ContactEmail = null,
     int? RoomCount = null, int? BedCount = null, decimal? PriceNet = null,
-    decimal? VatRatePercent = null, int? EstimatedDurationMinutes = null) : IRequest<BranchDto>;
+    decimal? VatRatePercent = null, int? EstimatedDurationMinutes = null, decimal? SizeSquareMeters = null,
+    Guid? PreferredCleanerEmployeeId = null) : IRequest<BranchDto>;
 
 public record UpdateBranchCommand(
     Guid Id,
@@ -109,13 +113,20 @@ public record UpdateBranchCommand(
     bool IsActive = true,
     string? ContactEmail = null,
     int? RoomCount = null, int? BedCount = null, decimal? PriceNet = null,
-    decimal? VatRatePercent = null, int? EstimatedDurationMinutes = null) : IRequest<BranchDto>
+    decimal? VatRatePercent = null, int? EstimatedDurationMinutes = null, decimal? SizeSquareMeters = null,
+    Guid? PreferredCleanerEmployeeId = null) : IRequest<BranchDto>
 {
     // JSON must distinguish an old client's omitted field from an explicit null
     // clearing an optional count. Keep the positional constructor for existing callers.
     [JsonConstructor]
     public UpdateBranchCommand() : this(Guid.Empty, "") { }
 
+    private decimal? _sizeSquareMeters = SizeSquareMeters;
+    private Guid? _preferredCleanerEmployeeId = PreferredCleanerEmployeeId;
+    [JsonIgnore] public bool HasSizeSquareMeters { get; private init; } = SizeSquareMeters.HasValue;
+    [JsonIgnore] public bool HasPreferredCleanerEmployeeId { get; private init; } = PreferredCleanerEmployeeId.HasValue;
+    public decimal? SizeSquareMeters { get => _sizeSquareMeters; init { _sizeSquareMeters = value; HasSizeSquareMeters = true; } }
+    public Guid? PreferredCleanerEmployeeId { get => _preferredCleanerEmployeeId; init { _preferredCleanerEmployeeId = value; HasPreferredCleanerEmployeeId = true; } }
     private int? _roomCount = RoomCount;
     private int? _bedCount = BedCount;
     [JsonIgnore] public bool HasRoomCount { get; private init; } = RoomCount.HasValue;
@@ -286,25 +297,28 @@ public class CompanyHandlers
         {
             private readonly IBranchRepository _repository;
             private readonly ICompanyRepository _companies;
+            private readonly IEmployeeRepository? _employees;
 
-            public CreateBranchCommandHandler(IBranchRepository repository, ICompanyRepository companies)
+            public CreateBranchCommandHandler(IBranchRepository repository, ICompanyRepository companies, IEmployeeRepository? employees = null)
             {
                 _repository = repository;
-                _companies = companies;
+                _companies = companies; _employees = employees;
             }
 
             public async Task<BranchDto> Handle(CreateBranchCommand request, CancellationToken ct)
             {
-                _ = await _companies.GetAsync(request.CompanyId, ct)
+                var company = await _companies.GetAsync(request.CompanyId, ct)
                     ?? throw new NotFoundException("Company", request.CompanyId);
+                var name = BranchName(company.IsPartnerEnabled, request.Name, request.Street, request.PostalCode, request.City);
                 var branch = Branch.Create(
                     request.CompanyId,
-                    request.Name,
+                    name,
                     request.Street,
                     request.PostalCode,
                     request.City,
                     request.Country,
                     request.ContactPhone);
+                await ApplyBranchSettings(branch, request.SizeSquareMeters, request.PreferredCleanerEmployeeId, _employees, ct);
                 branch.ContactEmail = request.ContactEmail?.Trim();
                 ApplyProperty(branch, request.RoomCount, request.BedCount, request.PriceNet, request.VatRatePercent, request.EstimatedDurationMinutes);
                 await _repository.SaveAsync(branch, ct);
@@ -318,9 +332,11 @@ public class CompanyHandlers
 
             private readonly IShiftWorkReservation? _reservation;
 
-            public UpdateBranchCommandHandler(IBranchRepository repository, IShiftWorkReservation? reservation = null)
+            private readonly IEmployeeRepository? _employees;
+            private readonly ICompanyRepository? _companies;
+            public UpdateBranchCommandHandler(IBranchRepository repository, IShiftWorkReservation? reservation = null, IEmployeeRepository? employees = null, ICompanyRepository? companies = null)
             {
-                _repository = repository; _reservation = reservation;
+                _repository = repository; _reservation = reservation; _employees = employees; _companies = companies;
             }
 
             public async Task<BranchDto> Handle(UpdateBranchCommand request, CancellationToken ct)
@@ -328,14 +344,20 @@ public class CompanyHandlers
             await using var lease = _reservation is null ? null : await _reservation.AcquireAsync(ct);
                 var branch = await _repository.GetAsync(request.Id, ct)
                     ?? throw new NotFoundException("Branch", request.Id);
+                var company = _companies is null ? null : await _companies.GetAsync(branch.CompanyId, ct);
+                var name = BranchName(company?.IsPartnerEnabled == true, request.Name, request.Street, request.PostalCode, request.City);
                 branch.Update(
-                    request.Name,
+                    name,
                     request.Street,
                     request.PostalCode,
                     request.City,
                     request.Country,
                     request.ContactPhone,
                     request.IsActive);
+                await ApplyBranchSettings(branch,
+                    request.HasSizeSquareMeters ? request.SizeSquareMeters : branch.SizeSquareMeters,
+                    request.HasPreferredCleanerEmployeeId ? request.PreferredCleanerEmployeeId : branch.PreferredCleanerEmployeeId,
+                    _employees, ct, request.HasPreferredCleanerEmployeeId && request.PreferredCleanerEmployeeId != branch.PreferredCleanerEmployeeId);
                 branch.ContactEmail = request.ContactEmail?.Trim();
                 ApplyProperty(branch,
                     request.HasRoomCount ? request.RoomCount : branch.RoomCount,
@@ -422,7 +444,31 @@ public class CompanyHandlers
             branch.ContactPhone,
             branch.IsActive,
             branch.ContactEmail, branch.RoomCount, branch.BedCount, branch.PriceNet, branch.VatRatePercent,
-            branch.EstimatedDurationMinutes, branch.PricingVersion, branch.PricingReady, branch.QuoteRequestedUtc);
+            branch.EstimatedDurationMinutes, branch.PricingVersion, branch.PricingReady, branch.QuoteRequestedUtc, branch.SizeSquareMeters, branch.PreferredCleanerEmployeeId);
+    private static string BranchName(bool partner, string name, string? street, string? postalCode, string? city)
+    {
+        try
+        {
+            if (!partner && string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Branch name is mandatory.");
+            return partner ? Branch.PartnerPropertyName(street, postalCode, city) : name;
+        }
+        catch (ArgumentException ex) { throw new ValidationException(ex.Message); }
+    }
+
+    private static async Task ApplyBranchSettings(Branch branch, decimal? size, Guid? preferred, IEmployeeRepository? employees, CancellationToken ct, bool validatePreferred = true)
+    {
+        if (validatePreferred && preferred.HasValue)
+        {
+            var employee = employees is null ? null : await employees.GetByIdAsync(preferred.Value, ct);
+            if (employee is not { IsActive: true, IdentitySyncPending: false } || !Employee.IsWorkRole(employee.Role)
+                || string.IsNullOrWhiteSpace(employee.KeycloakUserId))
+                throw new ValidationException("Select an active, synchronized cleaner with a linked login.");
+        }
+        try { branch.SetSize(size); }
+        catch (ArgumentException ex) { throw new ValidationException(ex.Message); }
+        branch.PreferredCleanerEmployeeId = preferred;
+    }
+
     private static void ApplyProperty(Branch branch, int? rooms, int? beds, decimal? price, decimal? vat, int? duration)
     {
         try
@@ -465,7 +511,7 @@ public class CompanyValidators
         {
             RuleFor(x => x.ContactEmail).EmailAddress().MaximumLength(254).When(x => !string.IsNullOrWhiteSpace(x.ContactEmail));
             RuleFor(x => x.CompanyId).NotEqual(Guid.Empty);
-            RuleFor(x => x.Name).NotEmpty().WithMessage("Branch name is mandatory.");
+
         }
     }
 
@@ -475,7 +521,7 @@ public class CompanyValidators
         {
             RuleFor(x => x.ContactEmail).EmailAddress().MaximumLength(254).When(x => !string.IsNullOrWhiteSpace(x.ContactEmail));
             RuleFor(x => x.Id).NotEqual(Guid.Empty);
-            RuleFor(x => x.Name).NotEmpty().WithMessage("Branch name is mandatory.");
+
         }
     }
 }

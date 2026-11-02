@@ -7,7 +7,7 @@ public interface IPartnerStore { IDocumentSession Session { get; } }
 
 public record CreatePartnerBranch(string Name, string? Street = null, string? PostalCode = null,
     string? City = null, string? Country = null, string? ContactPhone = null, string? ContactEmail = null,
-    int? RoomCount = null, int? BedCount = null);
+    int? RoomCount = null, int? BedCount = null, decimal? SizeSquareMeters = null);
 public record CreatePartnerRequest(Guid ClientRequestId, Guid BranchId, DateOnly FromDate, DateOnly ToDate,
     string? ExactStartLocalTime = null, string? Notes = null);
 public record EditPartnerRequest(int Version, DateOnly FromDate, DateOnly ToDate,

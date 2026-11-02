@@ -31,6 +31,36 @@ public class PushDeliveryDatabaseTests
         Assert.Equal(101, await query.Query<PushDevice>().CountAsync(d => !d.Enabled && d.Endpoint != ""));
     }
     [QualityCycleDatabaseFact]
+    public async Task Key_rotation_releases_all_old_device_slots_for_a_new_browser_endpoint()
+    {
+        using var f = await Fixture.Create();
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            // The fixture already owns one old-key device; fill the remaining slots.
+            for (var n = 1; n < 10; n++)
+                db.Store(new PushDevice { EmployeeId = f.Employee.Id, Subject = "subject", VapidKeyId = "key", UpdatedUtc = f.Now.UtcDateTime.AddDays(-1) });
+            await db.SaveChangesAsync();
+        }
+        using var session = f.Session();
+        var settings = Mock.Of<IPushSettings>(x => x.Available == true && x.KeyId == "rotated");
+        var clock = new Mock<TimeProvider>(); clock.Setup(x => x.GetUtcNow()).Returns(f.Now);
+        var subscriptions = new PushSubscriptions(session, new ShiftWorkReservation(f.Config, session), settings, f.Transport.Object, clock.Object);
+        var keys = WebPush.VapidHelper.GenerateVapidKeys();
+        var auth = Convert.ToBase64String(new byte[16]).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        var input = new PushSubscriptionInput("https://fcm.googleapis.com/fcm/send/new-after-rotation", new(keys.PublicKey, auth));
+
+        var enrolled = await subscriptions.EnrollAsync(new(f.Employee.Id, "subject"), input);
+
+        Assert.True(enrolled.Enabled);
+        using var query = f.Store.QuerySession(f.Tenant);
+        var devices = await query.Query<PushDevice>().ToListAsync();
+        Assert.Equal(11, devices.Count);
+        var current = Assert.Single(devices.Where(x => x.Enabled));
+        Assert.Equal(enrolled.Id, current.Id); Assert.Equal("rotated", current.VapidKeyId);
+        Assert.All(devices.Where(x => x.Id != current.Id), x => { Assert.False(x.Enabled); Assert.Equal(f.Now.UtcDateTime, x.UpdatedUtc); });
+    }
+
+    [QualityCycleDatabaseFact]
     public async Task Subscription_ownership_limits_rate_limit_rotation_and_tenant_isolation()
     {
         using var f = await Fixture.Create(); using var session = f.Session();

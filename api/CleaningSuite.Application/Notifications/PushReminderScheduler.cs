@@ -13,7 +13,7 @@ namespace CleaningSuite.Application.Notifications;
 /// <summary>Uses live effective rosters, never the personal-history projection.</summary>
 public sealed class PushReminderScheduler(IPartnerStore store, IShiftRepository shifts,
     IQualityCycleRepository forms, ITenantProfileRepository profiles, ITenantContext tenant,
-    IPushOutbox outbox, IShiftWorkReservation reservation, TimeProvider clock) : IPushDeliveryEligibility
+    IPushOutbox outbox, IShiftWorkReservation reservation, TimeProvider clock, IPushSettings? settings = null) : IPushDeliveryEligibility
 {
     public async Task ScheduleAsync(CancellationToken ct = default)
     {
@@ -43,6 +43,7 @@ public sealed class PushReminderScheduler(IPartnerStore store, IShiftRepository 
                     if (existing?.Cancelled == true) continue;
                     var intent = existing ?? new PushIntent { Id = id, EventKey = key, Kind = kind,
                         EmployeeId = employee, ShiftId = shift.Id, OccurredUtc = due };
+                    var timingChanged = existing is not null && (intent.OccurrenceStartUtc != visit.Occurrence.StartUtc || intent.OccurrenceEndUtc != visit.Occurrence.EndUtc);
                     intent.OriginalStartUtc = visit.OriginalStartUtc; intent.ExtraExceptionId = visit.ExtraExceptionId;
                     intent.OccurrenceStartUtc = visit.Occurrence.StartUtc; intent.OccurrenceEndUtc = visit.Occurrence.EndUtc;
                     intent.DueUtc = due; intent.ExpiresUtc = expiry;
@@ -53,8 +54,17 @@ public sealed class PushReminderScheduler(IPartnerStore store, IShiftRepository 
                         {
                             store.Session.Store(intent);
                             var deliveries = await store.Session.Query<PushDelivery>().Where(x => x.IntentId == intent.Id && x.State == "Cancelled").ToListAsync(ct);
-                            foreach (var delivery in deliveries.Where(x => x.FailureCode == "ineligible_or_expired" && x.Attempts < 5))
-                            { delivery.State = "Pending"; delivery.NextAttemptUtc = due; store.Session.Store(delivery); }
+                            foreach (var delivery in deliveries.Where(x => timingChanged && x.FailureCode == "ineligible_or_expired" && x.Attempts < 5))
+                            {
+                                var device = await store.Session.LoadAsync<PushDevice>(delivery.DeviceId, ct);
+                                var person = device is null ? null : await store.Session.LoadAsync<CleaningSuite.Domain.Employees.Employee>(device.EmployeeId, ct);
+                                if (settings is not { Available: true } || device is not { Enabled: true } || device.VapidKeyId != settings.KeyId
+                                    || device.EmployeeId != intent.EmployeeId || device.OptedInUtc > intent.OccurredUtc
+                                    || person is not { IsActive: true, IdentitySyncPending: false }
+                                    || !CleaningSuite.Domain.Employees.Employee.IsWorkRole(person.Role)
+                                    || string.IsNullOrEmpty(device.Subject) || person.KeycloakUserId != device.Subject) continue;
+                                delivery.State = "Pending"; delivery.NextAttemptUtc = due; store.Session.Store(delivery);
+                            }
                         }
                     }
                 }

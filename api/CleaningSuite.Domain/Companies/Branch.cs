@@ -15,6 +15,8 @@ public class Branch : BaseDocument
     public bool IsActive { get; set; }
     public int? RoomCount { get; set; }
     public int? BedCount { get; set; }
+    public decimal? SizeSquareMeters { get; set; }
+    public Guid? PreferredCleanerEmployeeId { get; set; }
     public decimal? PriceNet { get; set; }
     public decimal? VatRatePercent { get; set; }
     public int? EstimatedDurationMinutes { get; set; }
@@ -27,6 +29,22 @@ public class Branch : BaseDocument
         if (rooms is < 0 or > 10000 || beds is < 0 or > 10000)
             throw new ArgumentException("Rooms and beds must be between zero and 10000, or empty.");
         RoomCount = rooms; BedCount = beds;
+    }
+
+    public static string PartnerPropertyName(string? street, string? postalCode, string? city)
+    {
+        var address = string.Join(" ", new[] { postalCode?.Trim(), city?.Trim() }.Where(x => !string.IsNullOrWhiteSpace(x)));
+        var name = string.Join(", ", new[] { street?.Trim(), address }.Where(x => !string.IsNullOrWhiteSpace(x)));
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Enter a property street, postal code or city to generate its name.");
+        if (name.Length > 200) throw new ArgumentException("The generated property name must be at most 200 characters.");
+        return name;
+    }
+
+    public void SetSize(decimal? size)
+    {
+        if (size is <= 0 or > 1000000 || size.HasValue && decimal.Round(size.Value, 2) != size.Value)
+            throw new ArgumentException("Property size must be positive, at most 1000000 square meters and have at most two decimal places.");
+        SizeSquareMeters = size;
     }
 
     public void SetPricing(decimal priceNet, decimal vatRatePercent, int durationMinutes)

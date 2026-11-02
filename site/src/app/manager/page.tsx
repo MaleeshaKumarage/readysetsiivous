@@ -1,4 +1,5 @@
 'use client';
+import { compareBranchesByPostalCode } from '@/lib/branchOrder';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { managerApi, type ManagerShift, type ManagerEmployee, type ManagerCompany, type ManagerBranch, type ManagerAssignment, type ManagerSchedule } from '@/lib/managerApi';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
@@ -112,7 +113,7 @@ export default function ManagerPage() {
       <h2 className="text-xl font-semibold">{editing === 'new' ? 'Create shift' : 'Edit shift'}</h2>
       <label>Shift name<input className={input} value={name} disabled={busy} onChange={e => setName(e.target.value)} required /></label>
       <label>Company<select aria-label="Company" className={input} value={company} disabled={busy || editing !== 'new'} onChange={e => { setCompany(e.target.value); setBranch(''); }} required><option value="">Choose company</option>{companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
-      <label>Branch<select aria-label="Branch" className={input} value={branch} disabled={busy || editing !== 'new'} onChange={e => setBranch(e.target.value)} required><option value="">Choose branch</option>{branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
+      <label>Branch<select aria-label="Branch" className={input} value={branch} disabled={busy || editing !== 'new'} onChange={e => setBranch(e.target.value)} required><option value="">Choose branch</option>{[...branches].sort(compareBranchesByPostalCode).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
       <label>Schedule<select aria-label="Schedule" className={input} value={type} disabled={busy} onChange={e => changeType(Number(e.target.value))}>{['Daily', 'Different times per day', 'Weekly', 'Biweekly', 'Flexible', 'Monthly'].map((v, i) => <option key={i} value={i}>{v}</option>)}</select></label>
       <p className="text-sm text-gray-600">Schedule times use the tenant time zone: {timeZoneId}.</p>
       {type !== 1 && type !== 4 && <div className="grid sm:grid-cols-2 gap-4">{timeKeys.map((key, i) => <label key={key}>{i ? 'End time' : 'Start time'}<input className={input} type="time" disabled={busy} value={(schedule[key as keyof ManagerSchedule] as string | undefined)?.slice(0, 5) ?? ''} onChange={e => setSchedule({ ...schedule, [key]: e.target.value })} required /></label>)}</div>}

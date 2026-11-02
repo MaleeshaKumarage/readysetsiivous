@@ -14,7 +14,7 @@ namespace CleaningSuite.Application.Access;
 public record ManagerEmployeeResponse(Guid Id, string FirstName, string LastName, string Phone,
     bool IsActive, string? ColorHex, IReadOnlyList<string> Skills, IReadOnlyList<string> ServiceAreas,
     IReadOnlyDictionary<string, HoursResponse> DefaultHours);
-public record ManagerCompanyResponse(Guid Id, string Name, bool IsActive);
+public record ManagerCompanyResponse(Guid Id, string Name, bool IsActive, bool IsPartnerEnabled = false);
 public record ManagerBranchResponse(Guid Id, Guid CompanyId, string Name, bool IsActive,
     string? Street, string? PostalCode, string? City, string? Country, string? ContactPhone);
 public record ScheduleRangeResponse(TimeSpan Start, TimeSpan End);
@@ -59,7 +59,7 @@ public sealed class ManagerOperations(IShiftRepository shifts, IEmployeeReposito
     {
         if (skip < 0 || take is < 1 or > 100) throw new ValidationException("Use a page size between 1 and 100.");
         var page = await companies.ListAsync(null, skip, take, ct);
-        return new(page.Items.Where(c => c.IsActive).Select(c => new ManagerCompanyResponse(c.Id, c.Name, c.IsActive)).ToArray(), page.Total);
+        return new(page.Items.Where(c => c.IsActive).Select(c => new ManagerCompanyResponse(c.Id, c.Name, c.IsActive, c.IsPartnerEnabled)).ToArray(), page.Total);
     }
 
     public async Task<IReadOnlyList<ManagerBranchResponse>> Branches(Guid companyId, CancellationToken ct)

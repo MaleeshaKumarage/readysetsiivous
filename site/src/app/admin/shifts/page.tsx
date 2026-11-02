@@ -1,4 +1,5 @@
 'use client';
+import { compareBranchesByPostalCode } from '@/lib/branchOrder';
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -107,6 +108,7 @@ export default function ShiftsAdminPage() {
   const [loading, setLoading] = useState(true);
   const [lifecycle, setLifecycle] = useState<LifecycleStatus>('active');
   const [listError, setListError] = useState('');
+  const [shiftNotice, setShiftNotice] = useState('');
   const [timeZoneId, setTimeZoneId] = useState('Europe/Helsinki');
   const [schedulingReady, setSchedulingReady] = useState(false);
   const [restoring, setRestoring] = useState<string | null>(null);
@@ -273,6 +275,10 @@ export default function ShiftsAdminPage() {
     if (!created) { setError(editingShift ? 'Failed to update shift. Check that the company and branch are valid, then retry.' : 'Failed to create shift.'); return; }
     const wasEditing = Boolean(editingShift);
     closeModal(); if (!wasEditing) changeLifecycle('active'); await load();
+    if (!wasEditing && created.schedule.type === 4) {
+      void openOccurrences(created, 'On-call shift saved. Schedule a dated visit below to show it on the calendars. Cancelling keeps the shift without a scheduled visit.');
+      openOccurrenceEditor(undefined, '4');
+    }
   };
 
   const deactivate = async (id: string) => { await adminShifts.deactivate(id); if (assignOpen === id) closeAssignments(); await load(); };
@@ -366,12 +372,12 @@ export default function ShiftsAdminPage() {
     return e ? `${e.firstName} ${e.lastName}` : id.slice(0, 8);
   };
 
-  const loadOccurrences = async (shift = occurrenceShift) => {
+  const loadOccurrences = async (shift = occurrenceShift, fromDate = occurrenceFrom, toDate = occurrenceTo) => {
     if (!shift) return;
     setOccurrenceLoading(true); setOccurrenceError('');
     try {
-      const fromUtc = tenantLocalToUtc(`${occurrenceFrom}T00:00`, timeZoneId);
-      const nextDayUtc = tenantLocalToUtc(`${addCalendarDays(occurrenceTo, 1)}T00:00`, timeZoneId);
+      const fromUtc = tenantLocalToUtc(`${fromDate}T00:00`, timeZoneId);
+      const nextDayUtc = tenantLocalToUtc(`${addCalendarDays(toDate, 1)}T00:00`, timeZoneId);
       const toUtc = new Date(Date.parse(nextDayUtc) - 1).toISOString();
       const result = await adminShifts.occurrences(shift.id, fromUtc, toUtc);
       if (!result) throw new Error('Could not load occurrences.');
@@ -380,7 +386,8 @@ export default function ShiftsAdminPage() {
     finally { setOccurrenceLoading(false); }
   };
 
-  const openOccurrences = async (shift: Shift) => {
+  const openOccurrences = async (shift: Shift, notice = '') => {
+    setShiftNotice(notice);
     setOccurrenceShift(shift); setOccurrences([]); setOccurrenceError('');
     await loadOccurrences(shift);
   };
@@ -406,7 +413,14 @@ export default function ShiftsAdminPage() {
         startUtc: tenantLocalToUtc(occurrenceStart, timeZoneId), endUtc: tenantLocalToUtc(occurrenceEnd, timeZoneId),
         status, reason: occurrenceReason.trim(), employeeId: occurrenceEmployee,
       });
-      setEditingOccurrence(null); await loadOccurrences();
+      setEditingOccurrence(null);
+      setShiftNotice(status === 4 ? 'One-time visit scheduled. It appears in the shift calendar; assigned cleaners see it in My shifts.' : 'Visit updated.');
+      // Keep a newly scheduled date visible even when it is outside the old list window.
+      const savedDay = occurrenceStart.slice(0, 10);
+      if (savedDay < occurrenceFrom || savedDay > occurrenceTo) {
+        setOccurrenceFrom(savedDay); setOccurrenceTo(savedDay);
+        await loadOccurrences(occurrenceShift, savedDay, savedDay);
+      } else await loadOccurrences();
     } catch (failure) { setOccurrenceEditError(failure instanceof Error ? failure.message : 'Could not update this occurrence.'); }
     finally { setOccurrenceSaving(false); }
   };
@@ -460,6 +474,7 @@ export default function ShiftsAdminPage() {
                         {isAdmin() && <Button size="xs" variant="light" leftSection={<Pencil size={13} />} onClick={() => openEdit(s)}>Edit</Button>}
                         {s.isActive && <Button size="xs" variant="light" disabled={assignBusy} onClick={() => openAssign(s.id)}>Employees</Button>}
                         {s.isActive && <Button size="xs" variant="light" onClick={() => openOccurrences(s)}>Occurrences</Button>}
+                        {s.isActive && s.schedule.type === 4 && <Button size="xs" variant="light" onClick={() => { void openOccurrences(s); openOccurrenceEditor(undefined, '4'); }}>Schedule one-time visit</Button>}
                         {isAdmin() && s.isActive && <Button size="xs" variant="light" onClick={() => { setTemplateShift(s); setAssignedTemplate(s.qualityCycleTemplateId ?? null); setTemplateError(''); }}>Checklist template</Button>}
                         {s.isActive && <Button size="xs" variant="subtle" color="red" disabled={assignBusy} onClick={() => deactivate(s.id)}>Deactivate</Button>}
                         {!s.isActive && <Button size="xs" loading={restoring === s.id} disabled={!!restoring} onClick={() => reactivate(s.id)}>Reactivate</Button>}
@@ -522,6 +537,8 @@ export default function ShiftsAdminPage() {
       <Modal opened={Boolean(occurrenceShift)} onClose={() => { setOccurrenceShift(null); setEditingOccurrence(null); }} title={`Occurrences${occurrenceShift ? ` — ${occurrenceShift.name}` : ''}`} size="xl">
         <Stack>
           <Text size="sm" c="dimmed">Times use the tenant time zone: {timeZoneId}. Changes apply only to the selected visit.</Text>
+          {occurrenceShift?.schedule.type === 4 && <Text size="sm">On-call shifts have no automatic visits. Schedule each visit with a date and time. Choose a cleaner below or assign employees to this shift.</Text>}
+          {shiftNotice && <Text role="status">{shiftNotice}</Text>}
           <Group align="flex-end" wrap="wrap">
             <TextInput label="From" type="date" value={occurrenceFrom} onChange={e => setOccurrenceFrom(e.target.value)} />
             <TextInput label="To" type="date" value={occurrenceTo} onChange={e => setOccurrenceTo(e.target.value)} />
@@ -591,13 +608,14 @@ export default function ShiftsAdminPage() {
         <Stack gap="sm">
           <Text size="sm" c="dimmed">Schedule times use the tenant time zone: {timeZoneId}.</Text>
           <CompanyPicker allowInactive={false} allowedInactiveCompanyId={editingShift?.companyId} value={companyId} onChange={(v) => { setBranches([]); setCompanyId(v); setBranchId(null); setQualityCycleTemplateId(null); }} />
-          <Select label="Branch" data={branches.filter(b => b.isActive !== false || b.id === editingShift?.branchId).map((b) => ({ value: b.id, label: `${b.name}${b.isActive === false ? ' (inactive)' : ''}` }))} value={branchId} onChange={v => { setBranchId(v); setQualityCycleTemplateId(null); }} searchable disabled={!companyId} />
+          <Select label="Branch" data={branches.filter(b => b.isActive !== false || b.id === editingShift?.branchId).sort(compareBranchesByPostalCode).map((b) => ({ value: b.id, label: `${b.name}${b.isActive === false ? ' (inactive)' : ''}` }))} value={branchId} onChange={v => { setBranchId(v); setQualityCycleTemplateId(null); }} searchable disabled={!companyId} />
           <TextInput label="Name" required value={name} onChange={(e) => setName(e.target.value)} />
           <Group grow>
             <TextInput label="Start date" type="date" required={!editingShift || Boolean(editingShift.validFrom)} value={validFrom} onChange={e => setValidFrom(e.target.value)} />
             <TextInput label="End date (optional)" type="date" min={validFrom || undefined} value={validUntil} onChange={e => setValidUntil(e.target.value)} />
           </Group>
           <Select label="Schedule" data={SCHEDULE_TYPES} value={scheduleType} onChange={(v) => setScheduleType(v ?? '0')} />
+          {scheduleType === '4' && <Text size="sm">On-call is a reusable shift without scheduled dates. After creating it, enter the date, time and cleaner for a one-time visit. Only dated visits appear on calendars.</Text>}
 
           {scheduleType === '2' && (
             <MultiSelect

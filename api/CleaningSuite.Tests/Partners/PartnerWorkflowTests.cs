@@ -137,6 +137,46 @@ public class PartnerWorkflowTests
     }
 
     [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Staff_property_and_quote_lists_exclude_non_partner_companies_and_orphan_branches()
+    {
+        using var fixture = await Fixture.Create();
+        var regular = Company.Create("REGULAR", "Ordinary cleaning customer");
+        var disabled = Company.Create("DISABLED", "Former partner");
+        var inactivePartner = Company.Create("INACTIVE", "Inactive partner");
+        inactivePartner.IsPartnerEnabled = true; inactivePartner.IsActive = false;
+        var regularBranch = Branch.Create(regular.Id, "Ordinary property");
+        var disabledBranch = Branch.Create(disabled.Id, "Former partner property");
+        var inactiveBranch = Branch.Create(inactivePartner.Id, "Inactive partner history");
+        var orphan = Branch.Create(Guid.NewGuid(), "Orphan property");
+        using (var writer = fixture.Store.LightweightSession(fixture.Tenant))
+        {
+            writer.Store(regular, disabled, inactivePartner);
+            var quote = Branch.Create(fixture.Company.Id, "Partner quote");
+            foreach (var branch in new[] { regularBranch, disabledBranch, inactiveBranch, orphan, quote })
+            { branch.QuoteRequestedUtc = DateTime.UtcNow; writer.Store(branch); }
+            await writer.SaveChangesAsync();
+        }
+        using (var session = fixture.Session())
+        {
+            var service = fixture.Service(session);
+            var branches = await service.Branches(fixture.Admin.Id, true, null, default);
+            Assert.Contains(branches, x => x.Id == fixture.Branch.Id);
+            Assert.Contains(branches, x => x.Id == inactiveBranch.Id);
+            Assert.DoesNotContain(branches, x => x.Id == regularBranch.Id || x.Id == disabledBranch.Id || x.Id == orphan.Id);
+            Assert.Empty(await service.Branches(fixture.Admin.Id, true, regular.Id, default));
+            var quotes = await service.Quotes(fixture.Admin.Id, default);
+            Assert.Equal("Partner quote", Assert.Single(quotes).Name);
+        }
+        using (var writer = fixture.Store.DirtyTrackedSession(fixture.Tenant))
+        { var company = await writer.LoadAsync<Company>(fixture.Company.Id); company!.IsPartnerEnabled = false; await writer.SaveChangesAsync(); }
+        using (var session = fixture.Session())
+        {
+            Assert.DoesNotContain(await fixture.Service(session).Branches(fixture.Admin.Id, true, null, default), x => x.CompanyId == fixture.Company.Id);
+            Assert.Empty(await fixture.Service(session).Quotes(fixture.Admin.Id, default));
+        }
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
     public async Task Reassignment_uses_same_shift_and_price_and_started_work_cannot_be_changed()
     {
         using var fixture = await Fixture.Create(); var offer = await fixture.SubmitOffer();
@@ -219,6 +259,118 @@ public class PartnerWorkflowTests
         else { Assert.Equal("Accepted", request.Status); Assert.True(Assert.Single(shifts).IsActive); }
     }
 
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Preferred_cleaner_receives_direct_offer_without_staff_broadcast_and_decline_falls_back()
+    {
+        using var fixture = await Fixture.Create(); await fixture.ConfigureCleaner(false);
+        var clientId = Guid.NewGuid(); PartnerRequestDto created;
+        using (var session = fixture.Session())
+        {
+            var service = fixture.Service(session);
+            created = await service.Create(fixture.Partner.Id, new(clientId, fixture.Branch.Id, Fixture.Day, Fixture.Day, "08:00"), default);
+            var retry = await service.Create(fixture.Partner.Id, new(clientId, fixture.Branch.Id, Fixture.Day, Fixture.Day, "08:00"), default);
+            Assert.Equal(created.Id, retry.Id); Assert.Equal("Offered", retry.Status);
+        }
+        using (var reader = fixture.Store.QuerySession(fixture.Tenant))
+        {
+            var notices = await reader.Query<PartnerNotification>().ToListAsync();
+            Assert.DoesNotContain(notices, x => x.Audience == "Staff");
+            Assert.Contains(notices, x => x.Kind == "OfferCreated" && x.RecipientEmployeeId == fixture.Cleaner.Id);
+        }
+        using (var session = fixture.Session())
+        {
+            var service = fixture.Service(session); var offer = Assert.Single(await service.Offers(fixture.Cleaner.Id, default));
+            await service.Decline(fixture.Cleaner.Id, offer.Id, new(offer.Version), default);
+        }
+        using var after = fixture.Store.QuerySession(fixture.Tenant);
+        Assert.Equal("Requested", (await after.LoadAsync<PartnerCleaningRequest>(created.Id))!.Status);
+        Assert.Contains(await after.Query<PartnerNotification>().ToListAsync(), x => x.Kind == "OfferDeclined" && x.Audience == "Staff");
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Opted_in_cleaner_auto_accepts_exact_time_but_flexible_and_conflicting_requests_remain_offers()
+    {
+        using var fixture = await Fixture.Create(); await fixture.ConfigureCleaner(true);
+        using (var session = fixture.Session())
+        {
+            var exact = await fixture.Service(session).Create(fixture.Partner.Id, new(Guid.NewGuid(), fixture.Branch.Id, Fixture.Day, Fixture.Day, "08:00"), default);
+            Assert.Equal("Accepted", exact.Status); Assert.NotNull(exact.LinkedShiftId);
+        }
+        using (var session = fixture.Session())
+        {
+            var conflict = await fixture.Service(session).Create(fixture.Partner.Id, new(Guid.NewGuid(), fixture.Branch.Id, Fixture.Day, Fixture.Day, "09:00"), default);
+            Assert.Equal("Offered", conflict.Status); Assert.Null(conflict.LinkedShiftId);
+        }
+        using (var session = fixture.Session())
+        {
+            var flexible = await fixture.Service(session).Create(fixture.Partner.Id, new(Guid.NewGuid(), fixture.Branch.Id, Fixture.Day.AddDays(1), Fixture.Day.AddDays(2)), default);
+            Assert.Equal("Offered", flexible.Status); Assert.Null(flexible.LinkedShiftId);
+        }
+        using var reader = fixture.Store.QuerySession(fixture.Tenant);
+        Assert.Single(await reader.Query<Shift>().ToListAsync());
+        Assert.DoesNotContain(await reader.Query<PartnerNotification>().ToListAsync(), x => x.Audience == "Staff");
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Direct_cleaner_manual_approval_and_partner_cancellation_keep_staff_bypassed_after_branch_config_changes()
+    {
+        using var fixture = await Fixture.Create(); await fixture.ConfigureCleaner(false);
+        PartnerRequestDto created;
+        using (var session = fixture.Session()) created = await fixture.Service(session).Create(fixture.Partner.Id,
+            new(Guid.NewGuid(), fixture.Branch.Id, Fixture.Day, Fixture.Day, "08:00"), default);
+        using (var session = fixture.Session())
+        {
+            var service = fixture.Service(session);
+            var cancelled = await service.Create(fixture.Partner.Id, new(Guid.NewGuid(), fixture.Branch.Id, Fixture.Day.AddDays(1), Fixture.Day.AddDays(1)), default);
+            await service.Cancel(fixture.Partner.Id, cancelled.Id, cancelled.Version, false, null, default);
+        }
+        using (var writer = fixture.Store.DirtyTrackedSession(fixture.Tenant))
+        { var branch = await writer.LoadAsync<Branch>(fixture.Branch.Id); branch!.PreferredCleanerEmployeeId = null; await writer.SaveChangesAsync(); }
+        PartnerRequestDto accepted;
+        using (var session = fixture.Session())
+        {
+            var service = fixture.Service(session); var offer = Assert.Single(await service.Offers(fixture.Cleaner.Id, default));
+            accepted = await service.Accept(fixture.Cleaner.Id, offer.Id, new(offer.Version), default);
+        }
+        using (var session = fixture.Session())
+            await fixture.Service(session).Cancel(fixture.Admin.Id, created.Id, accepted.Version, true, "Staff cancellation", default);
+        using var reader = fixture.Store.QuerySession(fixture.Tenant);
+        Assert.DoesNotContain(await reader.Query<PartnerNotification>().ToListAsync(), x => x.Audience == "Staff");
+        Assert.True((await reader.LoadAsync<PartnerCleaningRequest>(created.Id))!.DirectlyRouted);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Concurrent_direct_auto_accept_create_is_idempotent()
+    {
+        using var fixture = await Fixture.Create(); await fixture.ConfigureCleaner(true);
+        var body = new CreatePartnerRequest(Guid.NewGuid(), fixture.Branch.Id, Fixture.Day, Fixture.Day, "08:00");
+        using var first = fixture.Session(); using var second = fixture.Session();
+        var results = await Task.WhenAll(fixture.Service(first).Create(fixture.Partner.Id, body, default), fixture.Service(second).Create(fixture.Partner.Id, body, default));
+        Assert.All(results, x => Assert.Equal("Accepted", x.Status));
+        Assert.Equal(results[0].LinkedShiftId, results[1].LinkedShiftId);
+        using var reader = fixture.Store.QuerySession(fixture.Tenant);
+        Assert.Single(await reader.Query<PartnerCleaningRequest>().ToListAsync());
+        Assert.Single(await reader.Query<Shift>().ToListAsync());
+        Assert.Single(await reader.Query<ShiftAssignment>().ToListAsync());
+        Assert.Single(await reader.Query<PartnerNotification>().Where(x => x.Kind == "RequestAccepted" && x.Audience == "Company").ToListAsync());
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Invalid_preferred_cleaner_falls_back_without_changing_saved_branch_or_historical_requests()
+    {
+        using var fixture = await Fixture.Create(); await fixture.ConfigureCleaner(false);
+        using (var writer = fixture.Store.DirtyTrackedSession(fixture.Tenant))
+        { var cleaner = await writer.LoadAsync<Employee>(fixture.Cleaner.Id); cleaner!.IdentitySyncPending = true; await writer.SaveChangesAsync(); }
+        using (var session = fixture.Session())
+        {
+            var request = await fixture.Service(session).Create(fixture.Partner.Id, new(Guid.NewGuid(), fixture.Branch.Id, Fixture.Day, Fixture.Day, "08:00"), default);
+            Assert.Equal("Requested", request.Status);
+        }
+        using var reader = fixture.Store.QuerySession(fixture.Tenant);
+        Assert.Contains(await reader.Query<PartnerNotification>().ToListAsync(), x => x.Kind == "PreferredCleanerUnavailable" && x.Audience == "Staff");
+        Assert.Equal(fixture.Cleaner.Id, (await reader.LoadAsync<Branch>(fixture.Branch.Id))!.PreferredCleanerEmployeeId);
+    }
+
     private sealed class Fixture : IDisposable
     {
         public static DateOnly Day => new(2026, 11, 10);
@@ -252,6 +404,14 @@ public class PartnerWorkflowTests
             { ["ConnectionStrings:DefaultConnection"] = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING") }).Build();
             return new(new PartnerStore(session), new ShiftWorkReservation(config, session), new ShiftRepository(session),
                 new TenantProfileRepository(Store), Context(session.TenantId));
+        }
+        public async Task ConfigureCleaner(bool autoAccept)
+        {
+            using var writer = Store.DirtyTrackedSession(Tenant);
+            var branch = await writer.LoadAsync<Branch>(Branch.Id); branch!.PreferredCleanerEmployeeId = Cleaner.Id;
+            var cleaner = await writer.LoadAsync<Employee>(Cleaner.Id); cleaner!.KeycloakUserId = "cleaner-linked-login";
+            cleaner.AutoAcceptPartnerRequests = autoAccept;
+            await writer.SaveChangesAsync();
         }
         public async Task<PartnerRequestDto> SubmitOffer()
         {

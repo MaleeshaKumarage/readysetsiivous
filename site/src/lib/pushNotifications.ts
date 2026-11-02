@@ -22,7 +22,10 @@ export async function pushRequest<T>(path = '', method = 'GET', body?: unknown):
   if (!jwt) throw new Error('Please sign in again.');
   const response = await fetch(`${API_URL}/api/v1/me/notifications${path}`, { method, cache: 'no-store', headers: { Authorization: `Bearer ${jwt}`, ...(body ? { 'Content-Type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
   if (!response.ok) {
-    const error = new Error(response.status === 403 ? 'Notifications require an active employee profile linked to your login. Ask your administrator to link your profile.' : response.status === 429 ? 'Too many requests. Wait a minute and try again.' : response.status === 503 ? 'Notifications are unavailable. Please try again later.' : 'Could not update notifications. Please try again.') as Error & { status: number };
+    const details = await response.json().catch(() => null) as { code?: string } | null;
+    const code = typeof details?.code === 'string' ? details.code : undefined;
+    const error = new Error(code === 'device_limit' ? 'The notification device limit has been reached. Disable notifications on another device before adding this one.' : response.status === 403 ? 'Notifications require an active employee profile linked to your login. Ask your administrator to link your profile.' : response.status === 429 ? 'Too many requests. Wait a minute and try again.' : response.status === 503 ? 'Notifications are unavailable. Please try again later.' : 'Could not update notifications. Please try again.') as Error & { status: number; code?: string };
+    error.code = code;
     error.status = response.status; throw error;
   }
   return response.status === 204 ? undefined as T : response.json();

@@ -24,6 +24,7 @@ public class Employee : BaseDocument
     public string Phone { get; set; } = "";
     public string Role { get; set; } = RoleEmployee;
     public Guid? PartnerCompanyId { get; set; }
+    public bool AutoAcceptPartnerRequests { get; set; }
     public bool IsActive { get; set; } = true;
     // Existing documents default to denied. Rollout access is an explicit data grant.
     public bool? ShiftCalendarEnabled { get; set; }
