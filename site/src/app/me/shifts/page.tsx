@@ -16,6 +16,8 @@ import {
 import { initAuth, isAuthenticated, authTenant, login, logout } from '@/lib/auth';
 import { meApi, MyShiftOccurrence, QualityCycleFormItem, type ShiftCalendarView } from '@/lib/meApi';
 import ShiftCalendar from './ShiftCalendar';
+import { NotificationsPanel } from '@/components/NotificationsPanel';
+import { PwaInstallButton } from '@/components/PwaInstallButton';
 import { PartnerOffers } from '@/components/PartnerOffers';
 import { Logo } from '@/ds/Logo';
 import { Button } from '@/ds/Button';
@@ -396,6 +398,8 @@ export default function MyShiftsPage() {
           </nav>
         </div>
 
+        <PwaInstallButton audience="employee" language="en" />
+        <NotificationsPanel />
         <PartnerOffers onAccepted={() => void loadShifts()} />
         {error && (
           <div role="alert" aria-label="Shift error" className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">

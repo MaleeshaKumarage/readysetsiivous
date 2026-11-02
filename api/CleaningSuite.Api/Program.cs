@@ -126,6 +126,19 @@ builder.Services.AddScoped<CleaningSuite.Application.Shifts.IShiftRepository, Cl
 builder.Services.AddScoped<CleaningSuite.Application.Shifts.IShiftWorkReservation, CleaningSuite.Infrastructure.Persistence.ShiftWorkReservation>();
 builder.Services.AddScoped<CleaningSuite.Application.Partners.IPartnerStore, CleaningSuite.Infrastructure.Persistence.PartnerStore>();
 builder.Services.AddScoped<CleaningSuite.Application.Partners.PartnerService>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<CleaningSuite.Infrastructure.Notifications.PushSettings>();
+builder.Services.AddSingleton<CleaningSuite.Application.Notifications.IPushSettings>(sp => sp.GetRequiredService<CleaningSuite.Infrastructure.Notifications.PushSettings>());
+builder.Services.AddSingleton<CleaningSuite.Application.Notifications.IPushTransport, CleaningSuite.Infrastructure.Notifications.WebPushTransport>();
+builder.Services.AddScoped<CleaningSuite.Application.Notifications.IPushSubscriptions, CleaningSuite.Infrastructure.Notifications.PushSubscriptions>();
+builder.Services.AddScoped<CleaningSuite.Application.Notifications.IPushOutbox, CleaningSuite.Infrastructure.Notifications.PushOutbox>();
+builder.Services.AddScoped<CleaningSuite.Application.Notifications.IPushDeliveryService, CleaningSuite.Infrastructure.Notifications.PushDeliveryService>();
+builder.Services.AddScoped<CleaningSuite.Application.Notifications.IPushDeliveryReservation, CleaningSuite.Infrastructure.Notifications.PushDeliveryReservation>();
+builder.Services.AddScoped<CleaningSuite.Application.Notifications.PushReminderScheduler>();
+builder.Services.AddScoped<CleaningSuite.Application.Notifications.IPushDeliveryEligibility>(sp => sp.GetRequiredService<CleaningSuite.Application.Notifications.PushReminderScheduler>());
+if (builder.Configuration.GetValue<bool>("PushNotifications:Enabled"))
+    builder.Services.AddHostedService<CleaningSuite.Api.PushNotificationWorker>();
+
 builder.Services.AddScoped<CleaningSuite.Application.Employees.PartnerWorkforceTransitionGuard>();
 builder.Services.AddScoped<CleaningSuite.Application.Invoicing.IPartnerInvoiceSource, CleaningSuite.Infrastructure.Partners.PartnerInvoiceSource>();
 builder.Services.AddHttpClient<CleaningSuite.Application.Partners.IPartnerNotificationTransport, CleaningSuite.Infrastructure.Partners.PartnerNotificationTransport>();
