@@ -15,7 +15,7 @@ raw = (stage / 'release.json').read_bytes()
 if len(raw) > 16384 or hashlib.sha256(raw).hexdigest() != expected:
     raise SystemExit('Staged manifest mismatch')
 manifest = json.loads(raw)
-paths = ('api/deploy/docker-compose.yml', 'api/deploy/release-policy.json', 'api/deploy/check-keycloak-runtime-env.py', 'scripts/deploy-api.sh', 'scripts/release_deploy.py', 'scripts/release_cleanup.py')
+paths = ('api/deploy/docker-compose.yml', 'api/deploy/release-policy.json', 'api/deploy/check-keycloak-runtime-env.py', 'scripts/deploy-api.sh', 'scripts/release_deploy.py', 'scripts/release_cleanup.py', 'scripts/release_policy.py')
 if manifest.get('release_sha') != os.environ['RELEASE_SHA'] or set(manifest.get('assets', {})) != set(paths):
     raise SystemExit('Staged release binding mismatch')
 for name in paths:

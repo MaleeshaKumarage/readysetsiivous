@@ -1,1 +1,1 @@
-{"schema":1,"approved":true,"rollback_compatible_from":["7ea8a064a95836e6cf3f62b65c70f76eec6a9fc7"],"schema_changes":"backward-compatible-reviewed"}
+{"schema":2,"approved":true,"compatibility_group":"readyset-api-v1","legacy_rollback_compatible_from":["7ea8a064a95836e6cf3f62b65c70f76eec6a9fc7"],"schema_changes":"backward-compatible-reviewed"}

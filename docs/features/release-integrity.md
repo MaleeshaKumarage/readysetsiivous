@@ -10,25 +10,27 @@ Before replacement the script preserves the original raw Compose and env file, p
 
 The candidate is pulled by digest and checked for its build-time `APP_RELEASE_SHA`. Verification checks container identity/running state, exact health `releaseSha`, and stable container identity after health. Failure after replacement restores the old raw configuration and env, recreates API with a saved immutable-image override, and verifies the previous image ID/release health. A successful rollback still reports the deployment as failed. Rollback failure keeps private recovery inputs and reports that recovery was not verified. Health is currently liveness, not database readiness.
 
-## Activation requires a separate concrete rollout review
+## Reviewed compatibility groups
 
-Normal API deployments do not require stopping public ingress. Following the
-verified partner identity cutover on 1 November 2026, the release policy omits
-`maintenance_service` and names verified deployed
-`7ea8a064a95836e6cf3f62b65c70f76eec6a9fc7` as its exact application rollback
-baseline. The storage-retention release changes no application schema or identity
-permissions. Build provenance, immutable image and
-asset checks, exact deployed API version checks and verified rollback remain.
-The controller's optional maintenance mode is reserved for an explicitly
-coordinated identity/database migration; it is not an API-version check.
+Normal releases use schema 2 in `api/deploy/release-policy.json`. The reviewed
+`readyset-api-v1` group is baked into each immutable image as
+`APP_COMPATIBILITY_GROUP`. The controller verifies the running container markers
+against its immutable image and permits replacement only within the same group.
+The candidate image and running container must match the authenticated policy.
+No environment variable can override the group.
 
-An unreviewed release policy must use `approved: false`. This blocks replacement;
-the current reviewed policy is approved for the explicit baseline above. Pages
-that require a new API retain the prior release if their API wait times out.
+The unmarked deployed `7ea8a064a95836e6cf3f62b65c70f76eec6a9fc7` is the
+one-time legacy bootstrap baseline. Subsequent compatible releases do not need
+SHA-list updates. A marked image in a different group cannot use this exception.
+Breaking database or identity changes require a new group and a separately
+reviewed migration/cutover that establishes its baseline. Never undo data or
+schema changes automatically. Historical schema-1 artifacts retain their exact
+SHA approval checks; new builds require schema 2.
 
-Before activation, review the exact candidate SHA/digest/assets and current deployed SHA/digest, confirm the current on-disk Compose/env matches the running API, and rehearse candidate plus application rollback on a disposable stack with synthetic data. Inspect all schema changes: runtime Marten `CreateOrUpdate` still exists and can make old code incompatible. The company business-ID index migration is an existing example where reverting old schema definitions is unsafe. Never undo schema/data changes automatically.
-
-Only after that review, commit a policy with `approved: true`, `schema_changes: "backward-compatible-reviewed"`, and an explicit `rollback_compatible_from` list containing the actual prior release SHA. Rebuild that policy commit so its bytes are bound in the new manifest. Recheck the previous deployed SHA immediately before replacement. No wildcard compatibility or unsafe bypass is supported. First deployment requires an existing healthy versioned API and its locally available repository digest; do not bootstrap through this rollback path.
+Normal releases do not stop public ingress. Optional closed-ingress maintenance
+mode remains available only for explicitly coordinated identity/database changes.
+Build provenance, asset hashes, image digests, release health and verified rollback
+remain mandatory. Failed API deployment leaves the current website in place.
 
 Preserve the backup's `image.json` override when performing an operator recovery: run Compose with its saved raw configuration/env, the stable project directory/name and that override. Raw old configuration may still contain a historical tag; the override is what pins the recovery image. Never prune the current or rollback images as part of deployment. Review private backup retention separately; backups contain secrets and must not become Actions artifacts.
 

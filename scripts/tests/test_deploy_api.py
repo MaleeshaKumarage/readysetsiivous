@@ -31,6 +31,8 @@ class Commands:
         modes = {'maintenance_up': 'up', 'maintenance_stopped': 'previous_stopped'}
         self.root, self.mode, self.calls = root, modes.get(mode, mode), []
         self.current = 'old'
+        self.old_group = None
+        self.new_group = None
         self.recovering = False
         self.health_count = 0
         self.maintenance_states = maintenance_states or (['active'] if mode == 'maintenance_active' else ['inactive'])
@@ -109,6 +111,7 @@ class Commands:
                     if self.mode == 'rollback_up': code = 6
                 else:
                     self.current = 'new'
+                    if self.mode == 'up_interrupted': raise deploy.DeploymentInterrupted('Deployment interrupted')
                     if self.mode in ['up', 'rollback_up', 'rollback_health']: code = 5
         elif args[:2] == ['docker', 'login']:
             assert kwargs['input'] == 'test-secret'
@@ -134,12 +137,22 @@ class Commands:
                                                            or (old and not self.recovering and self.mode == 'previous_stopped'))}}])
         else:
             raise AssertionError(args)
+        if args[:3] == ['docker', 'image', 'inspect'] or args[:2] == ['docker', 'inspect']:
+            data = json.loads(result)
+            old = args[-1] in [OLD_ID, OLD_IMAGE, 'old-container']
+            group = self.old_group if old else self.new_group
+            if group is not None:
+                if self.mode == 'runtime_group' and not old and args[1] == 'inspect': group = 'other'
+                data[0]['Config']['Env'].append('APP_COMPATIBILITY_GROUP=' + group)
+            if self.mode == 'duplicate_marker':
+                data[0]['Config']['Env'].append(data[0]['Config']['Env'][0])
+            result = json.dumps(data)
         return SimpleNamespace(returncode=code, stdout=result, stderr='synthetic command failure')
 
 
 class DeploymentTests(unittest.TestCase):
     def run_deploy(self, mode='success', approved=True, compatible=True, key='new-owner-ai-secret',
-                   maintenance_policy=None, maintenance_states=None, maintenance_load_states=None, expect_preserved_candidate=False):
+                   maintenance_policy=None, maintenance_states=None, maintenance_load_states=None, expect_preserved_candidate=False, group_policy=False, old_group=None, new_group=None):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             old_env = b"API_IDENTITY_ENV_FILE=/protected/tenant-runtime.env\nIMAGE_TAG=sha-old\nDATABASE_PASSWORD=private-value\nGAME_GEMINI_API_KEY='old-owner-secret'\n"
@@ -154,6 +167,9 @@ class DeploymentTests(unittest.TestCase):
             (stage / 'release.json').write_text(json.dumps({'release_sha': SHA, 'image': IMAGE}))
             policy = {'schema': 1, 'approved': approved,
                       'schema_changes': 'backward-compatible-reviewed', 'rollback_compatible_from': [OLD] if compatible else []}
+            if group_policy:
+                policy = dict(schema=2, approved=approved, schema_changes='backward-compatible-reviewed',
+                              compatibility_group='readyset-api-v1', legacy_rollback_compatible_from=[OLD] if compatible else [])
             if maintenance_policy is not None:
                 policy.update(maintenance_policy)
             (stage / 'api/deploy/release-policy.json').write_text(json.dumps(policy))
@@ -162,6 +178,7 @@ class DeploymentTests(unittest.TestCase):
                        REGISTRY_USER='test-user', REGISTRY_TOKEN='test-secret', API_IMAGE='ambient-override',
                        DOCKER_CONTEXT='hostile-context', DOCKER_HOST='tcp://unrelated-host:2375')
             commands = Commands(root, mode, maintenance_states, maintenance_load_states)
+            commands.old_group, commands.new_group = old_group, new_group
             output, errors = io.StringIO(), io.StringIO()
             failed = None
             free = 1 if mode == 'cleanup_low_space' else 20 * 1024**3
@@ -191,6 +208,35 @@ class DeploymentTests(unittest.TestCase):
                 if not failed:
                     self.assertIn('Deployment verified:', output.getvalue())
             return failed, commands, errors.getvalue()
+
+    def test_compatibility_group_and_legacy_bootstrap(self):
+        for old_group, compatible in [(None, True), ('readyset-api-v1', False)]:
+            failure, commands, _ = self.run_deploy(group_policy=True, old_group=old_group,
+                new_group='readyset-api-v1', compatible=compatible)
+            self.assertIsNone(failure)
+            self.assertEqual('new', commands.current)
+        for old_group, new_group, compatible in [(None, 'readyset-api-v1', False),
+                ('other', 'readyset-api-v1', True), ('readyset-api-v1', None, True),
+                ('readyset-api-v1', 'other', True)]:
+            failure, commands, _ = self.run_deploy(group_policy=True, old_group=old_group,
+                new_group=new_group, compatible=compatible)
+            self.assertIsNotNone(failure)
+            self.assertEqual('old', commands.current)
+            self.assertFalse(commands.recovering)
+
+    def test_runtime_group_mismatch_and_interruption_restore_old_api(self):
+        for mode in ['runtime_group', 'up_interrupted']:
+            failure, commands, errors = self.run_deploy(mode, group_policy=True,
+                old_group='readyset-api-v1', new_group='readyset-api-v1')
+            self.assertIsNotNone(failure)
+            self.assertTrue(commands.recovering)
+            self.assertEqual('old', commands.current)
+            self.assertIn('restored and verified', errors)
+
+    def test_duplicate_marker_fails_before_replacement(self):
+        failure, commands, _ = self.run_deploy('duplicate_marker')
+        self.assertIn('duplicate image marker', str(failure))
+        self.assertEqual('old', commands.current)
 
     def test_cleanup_precedes_pull_and_low_space_preserves_live_release(self):
         failure, commands, _ = self.run_deploy('cleanup_low_space')
@@ -378,7 +424,7 @@ class DeploymentTests(unittest.TestCase):
 class RealShellDeploymentTests(unittest.TestCase):
     @unittest.skipUnless(os.name == 'posix', 'real shell/command harness runs on Linux CI')
     def test_real_wrapper_and_external_fake_commands(self):
-        for mode in ['success', 'up', 'wrong_release', 'pull', 'invalid_identity',
+        for mode in ['success', 'up', 'swap_signal', 'wrong_release', 'pull', 'invalid_identity',
                      'maintenance_active', 'maintenance_inactive', 'maintenance_up', 'maintenance_unknown', 'maintenance_stopped', 'maintenance_missing']:
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory(prefix='release-identity-', dir=Path.home()) as identity:
                 root = Path(tmp)
@@ -405,7 +451,7 @@ class RealShellDeploymentTests(unittest.TestCase):
                 binary = root / 'bin'
                 binary.mkdir()
                 fake = '''#!/usr/bin/env python3
-import json, os, pathlib, sys
+import json, os, pathlib, sys, signal
 sys.path.insert(0, REPLACE_PATH)
 from test_deploy_api import Commands
 root = pathlib.Path.cwd()
@@ -416,6 +462,8 @@ if state_path.exists():
 args = [pathlib.Path(sys.argv[0]).name] + sys.argv[1:]
 result = fake(args, env=dict(os.environ), input=sys.stdin.read() if 'login' in args else None)
 state_path.write_text(json.dumps({k: v for k, v in fake.__dict__.items() if k != 'root'}))
+if fake.mode == 'swap_signal' and 'up' in args and fake.current == 'new':
+    os.kill(os.getppid(), signal.SIGTERM)
 sys.stdout.write(result.stdout)
 raise SystemExit(result.returncode)
 '''.replace('REPLACE_PATH', repr(str(SCRIPTS / 'tests')))
@@ -433,7 +481,7 @@ raise SystemExit(result.returncode)
                 success = mode in ['success', 'maintenance_inactive', 'maintenance_stopped']
                 self.assertEqual(success, result.returncode == 0, result.stderr)
                 self.assertEqual('new' if success else 'old', state['current'])
-                self.assertEqual(mode in ['up', 'wrong_release', 'maintenance_up'], state['recovering'])
+                self.assertEqual(mode in ['up', 'swap_signal', 'wrong_release', 'maintenance_up'], state['recovering'])
                 if mode in ['maintenance_active', 'maintenance_unknown', 'maintenance_missing']:
                     self.assertFalse((root / '.deploy-backups').exists())
                     self.assertFalse((stage / 'candidate.env').exists())

@@ -15,11 +15,12 @@ import shutil
 import zipfile
 
 from agent_artifact import Client, Transport, parse_json, storage_url
+from release_policy import validate_policy
 
 IMAGE = 'ghcr.io/maleeshakumarage/readysetsiivous-api'
 ASSETS = ('api/deploy/docker-compose.yml', 'api/deploy/release-policy.json',
           'api/deploy/check-keycloak-runtime-env.py',
-          'scripts/deploy-api.sh', 'scripts/release_deploy.py', 'scripts/release_cleanup.py')
+          'scripts/deploy-api.sh', 'scripts/release_deploy.py', 'scripts/release_cleanup.py', 'scripts/release_policy.py')
 WORKFLOW = '.github/workflows/docker-build-push.yml'
 LIMIT = 65536
 
@@ -102,12 +103,18 @@ def resolve(repository, release_sha, run_id, client, transport):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('mode', choices=['create', 'resolve', 'bundle'])
+    parser.add_argument('mode', choices=['create', 'resolve', 'bundle', 'compatibility'])
     parser.add_argument('--output', required=True)
     parser.add_argument('--root')
     parser.add_argument('--manifest')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
+    if args.mode == 'compatibility':
+        policy_root = Path(args.root).resolve() if args.root else root
+        policy = validate_policy(json.loads((policy_root / 'api/deploy/release-policy.json').read_text()))
+        with open(args.output, 'a', encoding='utf-8') as output:
+            output.write('group=' + policy['compatibility_group'] + '\n')
+        return
     if args.mode == 'create':
         result = create(root, os.environ)
     elif args.mode == 'resolve':
@@ -141,5 +148,5 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-    except (ValueError, OSError, KeyError, zipfile.BadZipFile):
+    except (RuntimeError, ValueError, OSError, KeyError, zipfile.BadZipFile):
         raise SystemExit('Release provenance validation failed; no deployment performed.') from None
