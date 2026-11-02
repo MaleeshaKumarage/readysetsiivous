@@ -7,6 +7,7 @@ import { setupAdminMocks } from './admin-helpers';
 async function setup(page: Page, mode = 'normal') {
   await setupAdminMocks(page);
   await page.route(/\/api\/v1\/me$/, r => r.fulfill({ json: { realm: 'readysetsiivous', employee: { id: 'e', firstName: 'Test', lastName: 'Staff', role: 'employee', isActive: true } } }));
+  await page.route(/\/api\/v1\/me\/partner-request-preferences$/, r => r.fulfill({ json: { autoAcceptPartnerRequests: false } }));
   const methods: string[] = [];
   await page.route(/\/api\/v1\/me\/notifications.*/, r => {
     methods.push(r.request().method());
@@ -42,7 +43,7 @@ test('permission is opt-in, test feedback is honest, disabling affects this devi
 for (const mode of ['denied', 'unavailable', 'ios']) test(`notification guidance: ${mode}`, async ({ page }) => {
   await setup(page, mode);
   await expect(page.getByRole('button', { name: 'Enable notifications' })).toBeDisabled();
-  await expect(page.getByRole('status')).toContainText(mode === 'denied' ? 'blocked' : mode === 'ios' ? 'Add to Home Screen' : 'unavailable');
+  await expect(page.getByRole('region', { name: 'Notifications', exact: true }).getByRole('status')).toContainText(mode === 'denied' ? 'blocked' : mode === 'ios' ? 'Add to Home Screen' : 'unavailable');
 });
 test('employee and admin manifests stay distinct', async ({ request }) => {
   const employee = await (await request.get('/employee-manifest.json')).json();
@@ -93,14 +94,14 @@ test('account change invalidates previous browser subscription before opt-in', a
 });
 test('registration failure is visible and never requests permission', async ({ page }) => {
   await setup(page, 'registration-failure');
-  await expect(page.getByRole('status')).toContainText('Registration failed');
+  await expect(page.getByRole('region', { name: 'Notifications', exact: true }).getByRole('status')).toContainText('Registration failed');
   expect(await page.evaluate(() => (window as any).__permissionCalls)).toBe(0);
 });
 test('provider rejection never claims the test was accepted', async ({ page }) => {
   await setup(page, 'test-rejected');
   await page.getByRole('button', { name: 'Enable notifications' }).click();
   await page.getByRole('button', { name: 'Send test notification' }).click();
-  await expect(page.getByRole('status')).toContainText('was not accepted');
+  await expect(page.getByRole('region', { name: 'Notifications', exact: true }).getByRole('status')).toContainText('was not accepted');
 });
 test('My shifts renders employee installation and manifest without an admin provider', async ({ page }) => {
   await setup(page);
@@ -111,4 +112,14 @@ test('My shifts renders employee installation and manifest without an admin prov
   await expect(page.getByRole('button', { name: 'Install My shifts', exact: true })).toBeVisible();
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/employee-manifest.json');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('admin Notifications navigation opens account notification settings', async ({page,isMobile}) => {
+ await setup(page);await page.route(/\/api\/v1\/me$/,r=>r.fulfill({json:{realm:'readysetsiivous',roles:[JSON.stringify({roles:['admin']})],employee:null}}));await page.goto('/admin/');if(isMobile){await page.evaluate(()=>document.getElementById('mock-test-style')?.remove());await page.getByRole('button',{name:'Toggle navigation',exact:true}).click();}await page.getByRole('link',{name:'Notifications',exact:true}).click();await expect(page).toHaveURL(/\/account\/\?tenant=readysetsiivous#notifications$/);await expect(page.getByRole('region',{name:'Notifications',exact:true})).toBeVisible();
+});
+for(const installMode of ['ios','desktop','installed'])test(`My shifts install action: ${installMode}`,async({page})=>{
+ await setup(page);await page.addInitScript(mode=>{if(mode==='ios')Object.defineProperty(navigator,'userAgent',{configurable:true,value:'iPhone OS 17_0'});if(mode==='desktop')Object.defineProperty(navigator,'userAgent',{configurable:true,value:'Desktop Chrome'});if(mode==='installed')Object.defineProperty(navigator,'standalone',{configurable:true,value:true});},installMode);
+ await page.route(/\/api\/v1\/me\/shifts(?:\?.*)?$/,r=>r.fulfill({json:[]}));await page.route(/\/api\/v1\/me\/partner-offers(?:\?.*)?$/,r=>r.fulfill({json:[]}));await page.goto('/me/shifts/');
+ if(installMode==='installed'){await expect(page.getByText('My shifts app installed',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Install My shifts',exact:true})).toHaveCount(0);return;}
+ await page.getByRole('button',{name:'Install My shifts',exact:true}).click();await expect(page.getByText(installMode==='ios'?'In Safari, tap Share, then Add to Home Screen and Add. Open My shifts from your Home Screen.':'Use your browser’s Install app or Add to Home Screen menu to install My shifts.',{exact:true})).toBeVisible();
 });
