@@ -62,6 +62,11 @@ services:
     image: ${API_IMAGE:?Verified immutable API_IMAGE is required}
     restart: unless-stopped
     environment:
+      # Persistent VAPID values come only from protected deployment environment.
+      PushNotifications__Enabled: ${PUSH_NOTIFICATIONS_ENABLED:-false}
+      PushNotifications__VapidSubject: ${PUSH_NOTIFICATIONS_VAPID_SUBJECT:-}
+      PushNotifications__VapidPublicKey: ${PUSH_NOTIFICATIONS_VAPID_PUBLIC_KEY:-}
+      PushNotifications__VapidPrivateKey: ${PUSH_NOTIFICATIONS_VAPID_PRIVATE_KEY:-}
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
       # Empty trust lists disable forwarded processing; configure only verified upstream peers.

@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { NotificationsPanel } from '@/components/NotificationsPanel';
 import { initAuth, isAuthenticated, isAdmin, isManager, isPartner, login, logout, refreshToken, selectAuthTenant } from '@/lib/auth';
 import { API_URL, TENANT_SLUG } from '@/lib/api';
 
@@ -54,6 +55,7 @@ export default function AccountClient() {
           <p>{account.person ? `${account.person.firstName} ${account.person.lastName}` : account.employee ? `${account.employee.firstName} ${account.employee.lastName}` : 'Tenant administrator'} · {account.realm}</p>
           {account.person?.role === 'partner' && <><p>{account.company?.name}</p><Link className="block rounded bg-gray-900 text-white px-4 py-2 text-center" href="/partner/">Open partner portal</Link></>}
           {account.employee?.isActive && !isPartner() && <Link className="block rounded bg-gray-900 text-white px-4 py-2 text-center" href="/me/shifts/">My shifts</Link>}
+          {!isPartner() && <><a className="block underline" href="#notifications">Notification settings</a><NotificationsPanel /></>}
           {!account.employee && isAdmin() && <p>To receive shifts, add an Administrator profile in Employees using your verified login email, then use Invite to link that profile to your existing account.</p>}
           {account.employee?.role === 'manager' && isManager() && <Link className="block underline" href="/manager/">Manage tenant operations</Link>}
           {isPartner() ? <p>Open your partner portal to manage properties and request cleaning.</p> : isAdmin() ? <Link className="underline" href="/admin/">Continue to administration</Link>

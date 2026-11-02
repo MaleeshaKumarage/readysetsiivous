@@ -6,7 +6,7 @@ Extend the existing employee PWA on iPhone and Android with opt-in Web Push. Reu
 
 Recommended initial alerts: a new assignment; a schedule/assignment change or cancellation affecting the employee; a reminder 30 minutes before a scheduled shift; and a reminder 30 minutes after scheduled end when that employee has started but has not ended/submitted the task. The timings are defaults included in this design for user review. Do not alert on unaccepted partner offers: only accepted assigned work participates. Send one assignment/change alert per employee per committed change, rather than one alert for every recurrence.
 
-This four-alert scope and reminder timing remain a proposal until the user confirms them. Several committed changes awaiting the same worker cycle may be coalesced into one combined schedule-update alert; do not promise a separate visible alert for every rapid edit.
+The user approved this four-alert scope and 30-minute reminder timing on 2026-11-02. Several committed changes awaiting the same worker cycle may be coalesced into one combined schedule-update alert; do not promise a separate visible alert for every rapid edit.
 
 Use standards-based Web Push directly from the existing backend. This keeps account ownership and scheduling in the same system. A hosted push platform is an alternative but adds another service and processor without removing iPhone installation/permission requirements; do not introduce one in this increment.
 
@@ -67,3 +67,11 @@ Browser tests on desktop/mobile: no automatic permission prompt; enable/denied/u
 Repository: site/public/sw.js and manifest.json; root layout metadata; PwaInstallButton; My shifts and AccountClient; MeController verified identity; ShiftRepository and direct PartnerService writes; SchedulingWriteBehavior and VisitAssignments; QualityCycleApp effective roster/history behavior; PartnerNotificationWorker/Dispatcher and tenant-session reservation patterns.
 
 Platform: https://developer.apple.com/documentation/usernotifications/sending-web-push-notifications-in-web-apps-and-browsers and https://webkit.org/blog/13878/ (Home Screen requirement and user-gesture permission); https://web.dev/articles/push-notifications-overview (subscription/server/service-worker flow); https://github.com/web-push-libs/web-push-csharp (C# transport API, VAPID and encryption).
+
+## Approved additional administrator alert
+
+The user additionally requested opted-in administrators receive a generic push for each new partner cleaning request. Target only active, identity-synchronized employees with the admin work role and an existing opted-in device, independent of shift-calendar permission. Link to /admin/partner-requests/ and include no partner/customer information. Stage this intent atomically with request creation; idempotent retries and enabling notifications must not backfill requests. New work assignment notifications remain part of the approved employee alert scope.
+
+## Approved branch direct-routing exception
+
+The later branch-routing request supersedes the earlier exclusion of unaccepted offers for requests sent directly to the branch's selected cleaner. Queue one generic approval push to that opted-in cleaner and link to Account; recheck that the request remains offered to the same employee before delivery. Direct routing bypasses the initial administrator alert. Existing general offers are outside this exception.

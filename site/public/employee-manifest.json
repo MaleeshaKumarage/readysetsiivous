@@ -1,0 +1,31 @@
+{
+  "name": "ReadySetSiivous My shifts",
+  "short_name": "My shifts",
+  "description": "Your ReadySetSiivous work schedule",
+  "start_url": "/me/shifts/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0d1428",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "/brand/readyset-logo-badge.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/brand/readyset-logo-badge.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/brand/readyset-logo-badge.png",
+      "sizes": "1024x1024",
+      "type": "image/png"
+    }
+  ],
+  "id": "/me/"
+}

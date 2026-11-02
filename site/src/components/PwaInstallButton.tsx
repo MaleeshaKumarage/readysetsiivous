@@ -12,6 +12,7 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 interface PwaInstallButtonProps {
+  audience?: 'admin' | 'employee';
   variant?: 'subtle' | 'outline' | 'filled' | 'light';
   size?: 'xs' | 'sm' | 'md';
   compact?: boolean;
@@ -19,6 +20,7 @@ interface PwaInstallButtonProps {
 }
 
 export function PwaInstallButton({
+  audience = 'admin',
   variant = 'light',
   size = 'sm',
   compact = false,
@@ -129,6 +131,14 @@ export function PwaInstallButton({
       done: 'Got it', close: 'Close iOS installation instructions',
     },
   }[lang];
+
+  if (audience === 'employee') {
+    if (isStandalone || installed) return <p className="text-sm">My shifts app installed</p>;
+    return <div className="space-y-2"><button className="min-h-11 rounded border border-gray-400 px-4 py-2 text-sm font-medium" onClick={() => void handleInstallClick()}>Install My shifts</button>
+      {iosModalOpen && <p role="status" className="text-sm">In Safari, tap Share, then Add to Home Screen and Add. Open My shifts from your Home Screen.</p>}
+      {!isIos && !deferredPrompt && <p className="text-sm">Use your browser’s Install app or Add to Home Screen menu to install My shifts.</p>}
+    </div>;
+  }
 
   if (isStandalone || installed) {
     return (
