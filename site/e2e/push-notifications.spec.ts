@@ -18,7 +18,7 @@ async function setup(page: Page, mode = 'normal') {
     (window as any).__permissionCalls = 0;
     let subscription: any = mode === 'switched' ? { unsubscribe: async () => { (window as any).__oldUnsubscribed = true; return true; } } : null;
     if (mode === 'switched') localStorage.setItem('readyset-push-device-v1', JSON.stringify({ identity: 'other-tenant:other-person', id: 'old-device' }));
-    const manager = { getSubscription: async () => subscription, subscribe: async () => subscription = { options: {}, toJSON: () => ({ endpoint: 'https://fcm.googleapis.com/test', keys: { p256dh: 'key', auth: 'secret' } }), unsubscribe: async () => { subscription = null; return true; } } };
+    const manager = { getSubscription: async () => subscription, subscribe: async () => subscription = { options: {}, toJSON: () => ({ endpoint: 'https://fcm.googleapis.com/test', keys: { p256dh: 'key', auth: 'secret' } }), unsubscribe: async () => { (window as any).__unsubscribeCalls = ((window as any).__unsubscribeCalls || 0) + 1; subscription = null; return true; } } };
     const sw = { pushManager: manager };
     Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: { register: async () => { if (mode === 'registration-failure') throw new Error('Registration failed. Reload to retry.'); return sw; }, ready: Promise.resolve(sw), getRegistration: async () => sw } });
     (window as any).PushManager = function () {};
@@ -70,10 +70,10 @@ test('service worker uses visible malformed fallback and rejects external clicks
   handlers.notificationclick({ notification: { close() {}, data: { url: '/account/?tenant=another-tenant&evil=1' } }, waitUntil: (p: Promise<any>) => wait = p }); await wait;
   expect(opened[2]).toBe('https://example.test/account/?tenant=another-tenant');
 });
-test('notification deep link selects tenant and still requires login', async ({ page }) => {
+for (const destination of ['/me/shifts/', '/admin/partner-requests/']) test(`notification deep link selects tenant and still requires login: ${destination}`, async ({ page }) => {
   await setupAdminMocks(page, { authenticated: false });
-  await page.goto('/me/shifts/?tenant=another-tenant');
-  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+  await page.goto(`${destination}?tenant=another-tenant`);
+  await expect(page.getByRole('button', { name: /Sign in/i })).toBeVisible();
   expect(await page.evaluate(() => sessionStorage.getItem('__AUTH_TENANT__'))).toBe('another-tenant');
 });
 test('logout invalidates browser endpoint when server cleanup fails', async ({ page }) => {
@@ -111,7 +111,29 @@ test('My shifts renders employee installation and manifest without an admin prov
   await expect(page.getByRole('heading', { name: 'My Shifts', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Install My shifts', exact: true })).toBeVisible();
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/employee-manifest.json');
+  const panel = page.getByRole('region', { name: 'Notifications', exact: true });
+  await panel.getByRole('button', { name: 'Enable notifications' }).click();
+  await expect(panel.getByRole('status')).toContainText('enabled on this device');
+  await panel.getByRole('button', { name: 'Send test notification' }).click();
+  await expect(panel.getByRole('status')).toContainText('does not confirm delivery');
+  await panel.getByRole('button', { name: 'Disable on this device' }).click();
+  await expect(panel.getByRole('status')).toContainText('Your other devices are unchanged');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+for (const code of ['ownership_conflict', 'device_limit']) test(`enrollment conflict handling: ${code}`, async ({ page }) => {
+  await setup(page);
+  let puts = 0;
+  await page.route(/\/api\/v1\/me\/notifications\/subscription$/, route => {
+    puts++;
+    return puts === 1 ? route.fulfill({ status: 409, json: { code } }) : route.fulfill({ json: { id: 'renewed', enabled: true } });
+  });
+  await page.getByRole('button', { name: 'Enable notifications' }).click();
+  const status = page.getByRole('region', { name: 'Notifications', exact: true }).getByRole('status');
+  await expect(status).toContainText(code === 'ownership_conflict' ? 'enabled on this device' : 'device limit has been reached');
+  expect(puts).toBe(code === 'ownership_conflict' ? 2 : 1);
+  expect(await page.evaluate(() => (window as any).__unsubscribeCalls || 0)).toBe(code === 'ownership_conflict' ? 1 : 0);
+  expect(await page.evaluate(() => localStorage.getItem('readyset-push-device-v1'))).toEqual(code === 'ownership_conflict' ? expect.stringContaining('renewed') : null);
 });
 
 test('admin Notifications navigation opens account notification settings', async ({page,isMobile}) => {

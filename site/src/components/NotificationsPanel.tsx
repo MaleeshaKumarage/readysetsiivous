@@ -57,7 +57,7 @@ export function NotificationsPanel() {
         let enrolled: { id: string };
         try { enrolled = await pushRequest('/subscription', 'PUT', subscription.toJSON()); }
         catch (error) {
-          if ((error as { status?: number }).status !== 409) throw error;
+          if ((error as { status?: number; code?: string }).status !== 409 || (error as { code?: string }).code !== 'ownership_conflict') throw error;
           if (!await subscription.unsubscribe()) throw new Error('Could not renew browser subscription. Please retry.');
           clearPushBinding();
           subscription = await sw.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key as Uint8Array<ArrayBuffer> });

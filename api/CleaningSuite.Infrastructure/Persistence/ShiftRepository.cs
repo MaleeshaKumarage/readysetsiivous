@@ -213,10 +213,12 @@ public class ShiftRepository : IShiftRepository
             || (x.OriginalStartUtc >= fromUtc && x.OriginalStartUtc < toUtc)).ToList();
         var from = DateTime.SpecifyKind(fromUtc, DateTimeKind.Unspecified);
         var to = DateTime.SpecifyKind(toUtc, DateTimeKind.Unspecified);
-        return await Session.Query<ShiftOccurrenceException>()
+        var items = await Session.Query<ShiftOccurrenceException>()
             .Where(x => x.ShiftId == shiftId && ((x.StartUtc >= from && x.StartUtc < to)
                 || (x.OriginalStartUtc != null && x.OriginalStartUtc >= from && x.OriginalStartUtc < to)))
             .ToListAsync(ct);
+        foreach (var item in items) _exceptionRecipients.TryAdd(item.Id, Snapshot(item));
+        return items;
     }
 
     public async Task<IReadOnlyList<ShiftOccurrenceException>> ListOccurrenceExceptionsByEmployeeAsync(Guid employeeId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default)
