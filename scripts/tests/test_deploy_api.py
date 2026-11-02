@@ -72,6 +72,19 @@ class Commands:
                                      'releaseSha': OLD if self.current == 'old' or self.mode == 'wrong_release' else SHA})
         elif args[0] == 'sleep':
             assert args == ['sleep', '2']
+        elif args[:2] == ['docker', 'ps']:
+            result = self.current + '-container'
+        elif args[:3] == ['docker', 'container', 'inspect']:
+            return self(['docker', '--host', 'unix:///var/run/docker.sock', 'inspect', args[-1]], **kwargs)
+        elif args[:3] == ['docker', 'image', 'ls']:
+            result = OLD_ID + ('\n' + NEW_ID if self.current == 'new' else '')
+        elif args[:3] == ['docker', 'builder', 'prune']:
+            if self.mode == 'cleanup_interrupted' and '--help' not in args:
+                raise deploy.DeploymentInterrupted('Deployment interrupted')
+            result = '--max-used-space --builder' if '--help' in args else ''
+        elif args[:2] == ['docker', 'info']:
+            result = str(self.root)
+            if self.mode == 'cleanup_post_failure' and self.current == 'new': code = 2
         elif args[:2] == ['docker', 'compose']:
             assert args[2:4] == ['--project-directory', str(self.root)]
             assert '--env-file' in args and '-f' in args
@@ -106,7 +119,7 @@ class Commands:
         elif args[:3] == ['docker', 'image', 'inspect']:
             value = args[-1]
             old = value in [OLD_ID, OLD_IMAGE]
-            result = json.dumps([{'Id': OLD_ID if old else NEW_ID,
+            result = json.dumps([{'Id': OLD_ID if old else NEW_ID, 'Created': '2020-01-01T00:00:00Z', 'RepoTags': [],
                                   'RepoDigests': [] if self.mode == 'no_previous_digest' and old else [OLD_IMAGE if old else IMAGE],
                                   'Config': {'Env': ['APP_RELEASE_SHA=' + (OLD if old or self.mode == 'wrong_image_release' else SHA)]}}])
         elif args[:2] == ['docker', 'inspect']:
@@ -151,7 +164,11 @@ class DeploymentTests(unittest.TestCase):
             commands = Commands(root, mode, maintenance_states, maintenance_load_states)
             output, errors = io.StringIO(), io.StringIO()
             failed = None
-            with patch.object(deploy.subprocess, 'run', commands), contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+            free = 1 if mode == 'cleanup_low_space' else 20 * 1024**3
+            with patch.object(deploy.subprocess, 'run', commands), \
+                    patch.object(deploy.ReleaseCleanup, 'lock', lambda _: contextlib.nullcontext()), \
+                    patch('release_cleanup.shutil.disk_usage', lambda _: SimpleNamespace(free=free)), \
+                    contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
                 try:
                     deploy.Deployment(root, stage, env).run()
                 except BaseException as error:
@@ -160,7 +177,10 @@ class DeploymentTests(unittest.TestCase):
             for secret in ['private-value', key, 'test-secret', 'old-owner-secret']:
                 if secret:
                     self.assertNotIn(secret, output.getvalue() + errors.getvalue() + calls)
-            self.assertNotIn('prune', calls)
+            for call in commands.calls:
+                if 'prune' in call:
+                    self.assertIn('builder', call)
+                    self.assertTrue('--help' in call or ('until=168h' in call and '4GB' in call))
             self.assertNotIn('down', calls)
             self.assertFalse(list(root.glob('.deploy-auth-*')))
             if failed and not expect_preserved_candidate:
@@ -171,6 +191,30 @@ class DeploymentTests(unittest.TestCase):
                 if not failed:
                     self.assertIn('Deployment verified:', output.getvalue())
             return failed, commands, errors.getvalue()
+
+    def test_cleanup_precedes_pull_and_low_space_preserves_live_release(self):
+        failure, commands, _ = self.run_deploy('cleanup_low_space')
+        self.assertIn('Insufficient Docker storage', str(failure))
+        self.assertEqual('old', commands.current)
+        self.assertFalse(any('pull' in call or 'up' in call for call in commands.calls))
+        failure, commands, _ = self.run_deploy()
+        self.assertIsNone(failure)
+        prune = next(i for i, call in enumerate(commands.calls) if 'prune' in call and '--help' not in call)
+        pull = next(i for i, call in enumerate(commands.calls) if 'pull' in call and 'up' not in call)
+        self.assertLess(prune, pull)
+
+    def test_post_success_cleanup_failure_does_not_rollback_healthy_release(self):
+        failure, commands, errors = self.run_deploy('cleanup_post_failure')
+        self.assertIsNone(failure)
+        self.assertEqual('new', commands.current)
+        self.assertFalse(commands.recovering)
+        self.assertIn('post-release cleanup incomplete', errors)
+
+    def test_operator_interruption_is_not_swallowed_by_cleanup(self):
+        failure, commands, _ = self.run_deploy('cleanup_interrupted')
+        self.assertIsInstance(failure, deploy.DeploymentInterrupted)
+        self.assertEqual('old', commands.current)
+        self.assertFalse(any('pull' in call or 'up' in call for call in commands.calls))
 
     def test_all_docker_calls_pin_one_local_daemon_despite_existing_remote_context(self):
         failure, commands, _ = self.run_deploy()
@@ -379,7 +423,7 @@ raise SystemExit(result.returncode)
                     path = binary / name
                     path.write_text(fake)
                     path.chmod(0o755)
-                env = dict(os.environ, DEPLOY_DIR=str(root), RELEASE_SHA=SHA,
+                env = dict(os.environ, DEPLOY_DIR=str(root), RELEASE_SHA=SHA, RELEASE_MIN_FREE_GIB='1',
                     RELEASE_MANIFEST_HASH=hashlib.sha256(raw).hexdigest(),
                     REGISTRY_USER='test-user', REGISTRY_TOKEN='test-secret', GAME_GEMINI_API_KEY='new-owner-ai-secret',
                     PATH=str(binary) + os.pathsep + os.environ['PATH'])

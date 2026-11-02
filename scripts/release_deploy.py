@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import re
+import runpy
 import shutil
 import signal
 import subprocess
@@ -24,7 +25,15 @@ import time
 IMAGE = 'ghcr.io/maleeshakumarage/readysetsiivous-api'
 SHA = re.compile('[0-9a-f]{40}')
 IMMUTABLE = re.compile(re.escape(IMAGE) + '@sha256:[0-9a-f]{64}')
+# Execute the authenticated helper source directly, rather than accepting an
+# unbound cached bytecode file or a helper from another Python search directory.
+ReleaseCleanup = runpy.run_path(str(Path(__file__).resolve().with_name('release_cleanup.py')))['ReleaseCleanup']
+
 MAINTENANCE_SERVICE = 'cloudflared.service'
+
+
+class DeploymentInterrupted(BaseException):
+    """Cancellation must not be downgraded to a best-effort cleanup warning."""
 
 
 def require(value, message):
@@ -149,6 +158,12 @@ class Deployment:
         # Read-only systemd proof precedes host file creation, chmod, login, pull,
         # or Compose mutation. No value can select an arbitrary unit/command.
         self.maintenance_gate()
+        cleanup = ReleaseCleanup(self.root, lambda *args: self.command('docker', *args))
+        with cleanup.lock():
+            self.run_locked(manifest, policy, cleanup)
+
+    def run_locked(self, manifest, policy, cleanup):
+        release, image = manifest['release_sha'], manifest['image']
         active_config, active_env = self.root / 'docker-compose.yml', self.root / '.env'
         require(active_config.is_file() and not active_config.is_symlink() and active_env.is_file() and not active_env.is_symlink(), 'Existing deployment inputs required')
         old_config, old_env = active_config.read_bytes(), active_env.read_bytes()
@@ -206,6 +221,16 @@ class Deployment:
         config = json.loads(self.compose(candidate, self.stage / 'candidate.env', 'config', '--format', 'json'))
         require(config.get('services', {}).get('api', {}).get('image') == image, 'Resolved image differs from immutable release')
         require(self.input.get('REGISTRY_USER') and self.input.get('REGISTRY_TOKEN'), 'Registry authentication required')
+        minimum_gib = self.input.get('RELEASE_MIN_FREE_GIB', '6')
+        require(str(minimum_gib).isdigit() and 1 <= int(minimum_gib) <= 1024, 'Invalid release storage headroom')
+        protected_images = [old_id]
+        try:
+            cached = self.inspect('image', image)
+            protected_images.append(cached['Id'])
+        except RuntimeError:
+            pass  # The candidate may not have been pulled yet.
+        cleanup.clean(protected_images, require_space=True, minimum_free=int(minimum_gib) * 1024**3)
+        cleanup.retain_rollback(old_id)
         replaced = False
         with tempfile.TemporaryDirectory(prefix='.deploy-auth-', dir=self.root) as auth:
             self.env['DOCKER_CONFIG'] = auth
@@ -250,19 +275,24 @@ class Deployment:
                 raise
             finally:
                 self.env.pop('DOCKER_CONFIG', None)
+        try:
+            cleanup.record_success(new_id)
+            cleanup.clean([old_id, new_id])
+        except Exception:
+            print('Warning: post-release cleanup incomplete; verified API retained', file=sys.stderr)
         print('Deployment verified: ' + image)
 
 
 def main():
     for name in ('SIGTERM', 'SIGHUP'):
         if hasattr(signal, name):
-            signal.signal(getattr(signal, name), lambda *_: (_ for _ in ()).throw(RuntimeError('Deployment interrupted')))
+            signal.signal(getattr(signal, name), lambda *_: (_ for _ in ()).throw(DeploymentInterrupted('Deployment interrupted')))
     try:
         root = Path(os.environ.get('DEPLOY_DIR', '/home/ubuntu/cleaning-suite')).resolve()
         Deployment(root, Path(os.environ['RELEASE_STAGE']), os.environ).run()
     except BaseException as error:
         # Never print command output, resolved configuration, credentials or a traceback.
-        message = str(error) if isinstance(error, RuntimeError) else 'Deployment failed; inspect private recovery state.'
+        message = str(error) if isinstance(error, (RuntimeError, DeploymentInterrupted)) else 'Deployment failed; inspect private recovery state.'
         print(message, file=sys.stderr)
         return 1
     return 0

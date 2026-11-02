@@ -19,7 +19,7 @@ from agent_artifact import Client, Transport, parse_json, storage_url
 IMAGE = 'ghcr.io/maleeshakumarage/readysetsiivous-api'
 ASSETS = ('api/deploy/docker-compose.yml', 'api/deploy/release-policy.json',
           'api/deploy/check-keycloak-runtime-env.py',
-          'scripts/deploy-api.sh', 'scripts/release_deploy.py')
+          'scripts/deploy-api.sh', 'scripts/release_deploy.py', 'scripts/release_cleanup.py')
 WORKFLOW = '.github/workflows/docker-build-push.yml'
 LIMIT = 65536
 

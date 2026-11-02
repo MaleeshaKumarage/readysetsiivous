@@ -160,7 +160,7 @@ class WorkflowTests(unittest.TestCase):
         policy = json.loads((SCRIPTS.parent / 'api/deploy/release-policy.json').read_text())
         self.assertIs(policy['approved'], True)
         self.assertEqual('backward-compatible-reviewed', policy['schema_changes'])
-        self.assertEqual(['0c80fae197c1b4734188ffb6e3b84db5157c67e1'], policy['rollback_compatible_from'])
+        self.assertEqual(['7ea8a064a95836e6cf3f62b65c70f76eec6a9fc7'], policy['rollback_compatible_from'])
         self.assertNotIn('maintenance_service', policy)
         compose = (SCRIPTS.parent / 'api/deploy/docker-compose.yml').read_text()
         self.assertIn('${API_IMAGE:?', compose)
