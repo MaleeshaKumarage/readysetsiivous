@@ -20,7 +20,7 @@ import { QuoteRequestBanner, QuoteRequestProvider } from '@/components/QuoteRequ
 
 const NAV_GROUPS = [
   { label: 'Workspace', items: [{ href: '', label: 'Dashboard', icon: LayoutDashboard }] },
-  { label: 'Operations', items: [{ href: 'shifts', label: 'Shifts', icon: CalendarClock }, { href: 'partner-requests', label: 'Partner requests', icon: Building2 }, { href: 'quality-cycle', label: 'Quality Cycle', icon: CheckSquare }] },
+  { label: 'Operations', items: [{ href: 'shifts', label: 'Shifts', icon: CalendarClock }, { href: 'shifts/calendar', label: 'Shift calendar', icon: CalendarClock }, { href: 'partner-requests', label: 'Partner requests', icon: Building2 }, { href: 'quality-cycle', label: 'Quality Cycle', icon: CheckSquare }] },
   { label: 'Customers', items: [{ href: 'leads', label: 'Leads', icon: Users }, { href: 'companies', label: 'Companies', icon: Building2 }, { href: 'agreements', label: 'Agreements', icon: FileSignature }] },
   { label: 'People', items: [{ href: 'employees', label: 'Employees', icon: Users }] },
   { label: 'Finance', items: [{ href: 'invoices', label: 'Invoices', icon: Receipt }] },
@@ -45,6 +45,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const [authed, setAuthed] = useState(false);
   const [access, setAccess] = useState<'pending' | 'allowed' | 'denied' | 'error'>('pending');
   const [hasOwnWorkIdentity, setHasOwnWorkIdentity] = useState(false);
+  const [canUseShiftCalendar, setCanUseShiftCalendar] = useState(false);
   const verification = useRef(0);
   // Capture before the child provider's layout effect writes its forced scheme.
   const previousScheme = useRef(typeof document === 'undefined' ? null : document.documentElement.getAttribute('data-mantine-color-scheme'));
@@ -71,6 +72,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       if (response.status === 401 || response.status === 403) { setAccess('denied'); return; }
       if (!response.ok) throw new Error('Identity verification unavailable');
       const identity = await response.json();
+      setCanUseShiftCalendar(identity.canUseShiftCalendar === true);
       const hasAdmin = Array.isArray(identity.roles) && identity.roles.some((value: unknown) => {
         if (typeof value !== 'string') return false;
         try { const roles = JSON.parse(value)?.roles; return Array.isArray(roles) && roles.includes('admin'); } catch { return false; }
@@ -90,6 +92,19 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     void verifyAccess();
     return () => { verification.current++; };
   }, [verifyAccess]);
+
+  useEffect(() => {
+    const refreshAccess = async () => {
+      try {
+        const bearer = await refreshToken();
+        if (!bearer) { setCanUseShiftCalendar(false); return; }
+        const response = await fetch(`${API_URL}/api/v1/me`, { headers: { Authorization: `Bearer ${bearer}` }, cache: 'no-store' });
+        setCanUseShiftCalendar(response.ok && (await response.json()).canUseShiftCalendar === true);
+      } catch { setCanUseShiftCalendar(false); }
+    };
+    window.addEventListener('admin-calendar-access-changed', refreshAccess);
+    return () => window.removeEventListener('admin-calendar-access-changed', refreshAccess);
+  }, []);
 
   useLayoutEffect(() => {
     const root = document.documentElement;
@@ -186,8 +201,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               {NAV_GROUPS.map(group => <div key={group.label}>
                 <Text className="admin-nav-label" size="xs" fw={700} c="dimmed" mb={6}>{group.label}</Text>
                 <Stack gap={4}>{group.items.map(item => {
+                  if (item.href === 'shifts/calendar' && !canUseShiftCalendar) return null;
                   const href = item.href ? `${base}${item.href}/` : base;
-                  const active = item.href === '' ? pathname === '/admin' || pathname === '/admin/' : pathname.startsWith(base + item.href);
+                  const active = item.href === '' ? pathname === '/admin' || pathname === '/admin/' : item.href === 'shifts' ? pathname === '/admin/shifts' || pathname === '/admin/shifts/' : pathname.startsWith(base + item.href);
                   return <NavLink key={href} component={Link} href={href} label={item.label} leftSection={<item.icon size={18} aria-hidden="true" />} active={active} aria-current={active ? 'page' : undefined} onClick={close} />;
                 })}</Stack>
               </div>)}

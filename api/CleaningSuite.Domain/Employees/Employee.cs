@@ -25,6 +25,11 @@ public class Employee : BaseDocument
     public string Role { get; set; } = RoleEmployee;
     public Guid? PartnerCompanyId { get; set; }
     public bool IsActive { get; set; } = true;
+    // Existing documents default to denied. Rollout access is an explicit data grant.
+    public bool? ShiftCalendarEnabled { get; set; }
+    public bool CanUseShiftCalendar => IsActive && !IdentitySyncPending && Role == RoleAdmin
+        && ShiftCalendarEnabled == true;
+    public List<ShiftCalendarAccessChange> ShiftCalendarAccessChanges { get; set; } = new();
     public string? ColorHex { get; set; }
     public List<string> Skills { get; set; } = new();
     public List<string> ServiceAreas { get; set; } = new();
@@ -35,6 +40,8 @@ public class Employee : BaseDocument
     /// <summary>Default weekly working hours. Keys: Monday..Sunday. Missing or null End means closed.</summary>
     public Dictionary<string, WorkHours> DefaultHours { get; set; } = new();
 }
+
+public record ShiftCalendarAccessChange(string AdminSubject, DateTime ChangedAtUtc, bool Enabled);
 
 /// <summary>A qualification held by an employee, with an optional expiry for expiry alerts.</summary>
 public class Certification
