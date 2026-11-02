@@ -96,6 +96,7 @@ builder.Services.AddScoped<CleaningSuite.Application.Invoicing.IInvoiceRepositor
 builder.Services.AddScoped<CleaningSuite.Application.Invoicing.IShiftBillingRepository, CleaningSuite.Infrastructure.Persistence.ShiftBillingRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.Invoicing.ShiftBillingSettingsService>();
 builder.Services.AddScoped<CleaningSuite.Application.Invoicing.ShiftInvoiceService>();
+builder.Services.AddScoped<CleaningSuite.Application.Invoicing.ManualInvoiceService>();
 builder.Services.AddScoped<CleaningSuite.Application.Agreements.IAgreementRepository, CleaningSuite.Infrastructure.Persistence.AgreementRepository>();
 builder.Services.AddSingleton<CleaningSuite.Application.Agreements.IAgreementFileStore>(sp =>
     new CleaningSuite.Infrastructure.Agreements.DiskAgreementFileStore(

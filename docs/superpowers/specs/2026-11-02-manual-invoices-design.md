@@ -30,6 +30,8 @@ Use .NET decimal. For each row round quantity × unit price to two decimals, Mid
 
 ## Verification
 
+User clarification: manual invoices must use the company's existing invoice-reference sequence. Reuse the exact shared yearly invoice counter and existing payment-reference check-digit function; never introduce a manual counter or prefix. Cover alternating manual and shift issuance in the database test, including the resulting payment references.
+
 Backend tests cover exact rounding, multiple rows, fractional quantities, zero-priced rows, invalid and oversized input, company lookup/isolation, stale previews after issuer/customer changes, deterministic preview, tenant-local dates, issuer validation, unchanged snapshots, shared numbering and payment references, and same/different-payload submission retries including paid/voided invoices. Verify concurrent same-ID issues produce one invoice with the existing reservation and transactional persistence pattern. Test manual invoices do not block shift billing. Check endpoint admin denial and normal invoice lifecycle.
 
 PDF tests cover manual row descriptions/quantities/prices, VAT totals, existing issuer and customer details, no shift metadata, long/multipage rows, languages and applicable existing payment barcode behavior. Desktop/mobile browser tests cover mode switching, row add/remove, required input, preview and invalidation, stale response handling, issue/list/download, retry/error preservation and existing shift/partner flow regression. Run focused tests, frontend type/build checks, then required repository CI before delivery. Do not issue real production invoices during verification.

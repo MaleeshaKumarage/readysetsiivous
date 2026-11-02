@@ -34,6 +34,8 @@ public class Invoice : BaseDocument
     public string CustomerBusinessId { get; set; } = "";
     public string PaymentReference { get; set; } = "";
     public bool IssuerIsSample { get; set; }
+    public Guid? ManualSubmissionId { get; set; }
+    public string? ManualRequestFingerprint { get; set; }
 }
 
 public class IssuerInfo
