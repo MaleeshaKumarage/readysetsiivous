@@ -69,6 +69,34 @@ test('service worker uses visible malformed fallback and rejects external clicks
   expect(opened[1]).toBe('https://example.test/admin/partner-requests/?tenant=another-tenant');
   handlers.notificationclick({ notification: { close() {}, data: { url: '/account/?tenant=another-tenant&evil=1' } }, waitUntil: (p: Promise<any>) => wait = p }); await wait;
   expect(opened[2]).toBe('https://example.test/account/?tenant=another-tenant');
+  let focused = false;
+  self.clients.matchAll = async () => [{ url: 'https://example.test/account/?tenant=another-tenant', focus: async () => { focused = true; } }] as any;
+  handlers.notificationclick({ notification: { close() {}, data: { url: '/account/?tenant=another-tenant' } }, waitUntil: (p: Promise<any>) => wait = p }); await wait;
+  expect(focused).toBe(true);
+  expect(opened).toHaveLength(3);
+});
+
+test('account notification settings anchor reveals the panel', async ({ page }) => {
+  await setup(page);
+  await page.getByRole('link', { name: 'Notification settings', exact: true }).click();
+  await expect(page).toHaveURL(/\/account\/#notifications$/);
+  await expect(page.getByRole('region', { name: 'Notifications', exact: true })).toBeVisible();
+});
+
+test('My shifts invokes the browser installation prompt', async ({ page }) => {
+  await setup(page);
+  await page.route(/\/api\/v1\/me\/shifts(?:\?.*)?$/, r => r.fulfill({ json: [] }));
+  await page.route(/\/api\/v1\/me\/partner-offers(?:\?.*)?$/, r => r.fulfill({ json: [] }));
+  await page.goto('/me/shifts/');
+  await expect(page.getByRole('button', { name: 'Install My shifts', exact: true })).toBeVisible();
+  await page.evaluate(() => {
+    const event = new Event('beforeinstallprompt', { cancelable: true });
+    Object.assign(event, { prompt: async () => { (window as any).__installPrompted = true; }, userChoice: Promise.resolve({ outcome: 'accepted', platform: 'web' }) });
+    window.dispatchEvent(event);
+  });
+  await page.getByRole('button', { name: 'Install My shifts', exact: true }).click();
+  await expect(page.getByText('My shifts app installed', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => (window as any).__installPrompted)).toBe(true);
 });
 for (const destination of ['/me/shifts/', '/admin/partner-requests/']) test(`notification deep link selects tenant and still requires login: ${destination}`, async ({ page }) => {
   await setupAdminMocks(page, { authenticated: false });
