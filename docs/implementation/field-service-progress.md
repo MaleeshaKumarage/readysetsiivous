@@ -18,7 +18,7 @@ Reusable implementation checklist: [plan](../superpowers/plans/2026-11-02-field-
 | Chunk | Branch / PR | Implemented | Verified | Merged | Deployed | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
 | C01 | feat/field-service-workflows / [PR #240](https://github.com/MaleeshaKumarage/readysetsiivous/pull/240) | yes | yes (local checks below) | yes (`d849678`) | yes (Pages run `41435068885`) | checkpoint below |
-| A01 | feat/employee-auto-accept / publication pending | yes | local backend/browser/type/build checks passed; isolated DB and latest-head CI pending | no | no | active checkpoint below |
+| A01 | feat/employee-auto-accept / [PR #242](https://github.com/MaleeshaKumarage/readysetsiivous/pull/242) | yes | local backend/browser/type/build checks passed; isolated DB and latest-head CI pending | no | no | active checkpoint below |
 
 ## Handoff template
 
@@ -76,3 +76,12 @@ A01 (employee-owned work autoaccept) follows C01. Start-time question resolved: 
 - Independent backend/security review passed; final independent UI review passed after scoped findings were fixed, including retained draft/focus and in-flight save handling. No Keycloak, deployment configuration or rate changes are included.
 - Branch: `feat/employee-auto-accept`, based on merged C01 `d849678`. Publication and latest-head CI are pending; A01 is not merged or deployed. Merge only after every latest-head CI check succeeds and all actionable comments are resolved. Preserve unrelated untracked workspace files.
 - C01 remains merged/deployed as separately recorded above; its public-route checks establish availability only. All other roadmap chunks remain planned. After A01 completes its gates, save its handoff and use fresh context for the next dependency-ready chunk.
+
+### A01 main integration / local checkpoint — 2026-11-02
+
+- PR: [#242](https://github.com/MaleeshaKumarage/readysetsiivous/pull/242), branch `feat/employee-auto-accept`. Local integration head `6e3a4bab54bd71ff2b5075f3d51c0daed63fc0e6` merges main `3e527` (including #241 employee PWA and #239 helper changes); the previously published PR head remains `37c6db8` at this checkpoint. The follow-up changes recorded here are local and have not been pushed.
+- Retained the employee PWA notifications panel and push permission controls independently of automatic-acceptance consent. An automatic recipient receives one current-revision informational `WorkAutoAccepted` push intent; suppress the generic schedule-change intent for that recipient while retaining manual and other-employee notifications. Database coverage checks the actual outbox contains exactly one expected manual or automatic offer intent and retains delivery eligibility coverage.
+- Verified the integrated working tree: backend 109 passed, 32 skipped, 0 failed (141 total); 162 unique combined A01/PWA desktop/mobile browser cases passed. The strengthened notifications-panel case passed a further two desktop/mobile reruns, not two additional unique cases. Browser APIs are mocked and do not prove live backend integration.
+- TypeScript passed (exit 0), production build passed (47 pages), scoped diff checks passed and UTF-8 inspection found no replacement characters. Fresh independent integration review passed after the duplicate-push fix.
+- The 32 database cases skipped locally because the isolated database connection is unavailable. Latest-head CI must execute these against its disposable synthetic PostgreSQL database before merge; no local database verification is claimed. Publication of this integration/follow-up, latest-head CI, review-comment resolution, merge and deployment remain pending. Merge only after every latest-head CI check succeeds and all actionable comments are resolved.
+- Unrelated untracked workspace files are preserved. This checkpoint authorizes no merge or deployment and does not change the remaining roadmap scope.

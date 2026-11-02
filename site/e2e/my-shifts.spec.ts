@@ -374,13 +374,14 @@ test('A01 verified automatic preference hides approval section while assigned wo
   await page.getByRole('button', { name: 'Retry work preferences' }).click();
   await expect(page.getByRole('button', { name: 'Retry work preferences' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Cleaning offers' })).toHaveCount(0); expect(offerRequests).toBe(0);
+  await expect(page.getByRole('region', { name: 'Notifications', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Start', exact: true }).click();
   await page.getByRole('button', { name: 'Record activities & end', exact: true }).click();
   await page.getByRole('button', { name: 'End shift', exact: true }).click();
   await expect(page.getByText('Done', { exact: true })).toBeVisible(); expect(work.endCalls).toBe(1);
   automatic = false; await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect(page.getByRole('heading', { name: 'Cleaning offers awaiting your acceptance' })).toBeVisible();
-  expect(offerRequests).toBeGreaterThan(0);
+  await expect.poll(() => offerRequests).toBeGreaterThan(0);
 });
 
 test('A01 preference focus refresh preserves manual offer drafts and an in-flight decision', async ({ page }) => {

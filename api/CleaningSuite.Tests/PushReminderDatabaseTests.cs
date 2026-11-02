@@ -212,9 +212,15 @@ public class PushReminderDatabaseTests
     }
 
     [QualityCycleDatabaseFact]
-    public async Task Staff_offer_commits_push_intent_for_the_offered_employee_and_current_offer()
+    public Task Manual_offer_commits_one_approval_push() => AssertOfferPush(false);
+
+    [QualityCycleDatabaseFact]
+    public Task Automatic_offer_commits_only_one_informational_push() => AssertOfferPush(true);
+
+    private async Task AssertOfferPush(bool automatic)
     {
         using var f = await Fixture.Create();
+        f.Employee.AutoAcceptWork = automatic;
         var admin = new Employee { Role = Employee.RoleAdmin, KeycloakUserId = "admin" };
         var company = new Company { IsActive = true, IsPartnerEnabled = true };
         var branch = new Branch { CompanyId = company.Id, IsActive = true };
@@ -224,23 +230,23 @@ public class PushReminderDatabaseTests
             FromDate = new(2026, 11, 3), ToDate = new(2026, 11, 3), EstimatedDurationMinutes = 60
         };
         using (var db = f.Store.LightweightSession(f.Tenant))
-        { db.Store(admin); db.Store(company); db.Store(branch); db.Store(request); await db.SaveChangesAsync(); }
+        { db.Store(f.Employee); db.Store(admin); db.Store(company); db.Store(branch); db.Store(request); await db.SaveChangesAsync(); }
         using var session = f.Session();
         var service = new PartnerService(new PartnerStore(session), new ShiftWorkReservation(f.Config, session), f.Shifts.Object,
             Mock.Of<ITenantProfileRepository>(), f.Context, new PushOutbox());
 
-        await service.Offer(admin.Id, request.Id, new PartnerOffer(request.Revision, f.Employee.Id), default);
+        await service.Offer(admin.Id, request.Id, new PartnerOffer(request.Revision, f.Employee.Id, "2026-11-03T10:00"), default);
 
         using var query = f.Store.QuerySession(f.Tenant);
         var committed = await query.LoadAsync<CleaningSuite.Domain.Partners.PartnerCleaningRequest>(request.Id);
         Assert.NotNull(committed);
-        Assert.Equal("Offered", committed.Status);
+        Assert.Equal(automatic ? "Accepted" : "Offered", committed.Status);
         var intent = Assert.Single(await query.Query<PushIntent>().ToListAsync());
-        Assert.Equal("PartnerOffer", intent.Kind);
+        Assert.Equal(automatic ? "WorkAutoAccepted" : "PartnerOffer", intent.Kind);
         Assert.Equal(f.Employee.Id, intent.EmployeeId);
         Assert.Equal(request.Id, intent.PartnerRequestId);
         Assert.Equal(committed.Revision, intent.RequestRevision);
-        Assert.Equal(committed.OfferId, intent.OfferId);
+        if (!automatic) Assert.Equal(committed.OfferId, intent.OfferId);
         Assert.False(intent.AdminAudience);
     }
 

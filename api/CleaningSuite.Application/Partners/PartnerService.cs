@@ -293,7 +293,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         {
             var shift = await Db.LoadAsync<Shift>(request.LinkedShiftId.Value, ct);
             if (shift is not null) { shift.Deactivate(); Db.Store(shift);
-                if (push is not null && request.AcceptedEmployeeId.HasValue) await push.StageScheduleChangeAsync(Db, shift.Id, [request.AcceptedEmployeeId.Value], DateTimeOffset.UtcNow, ct); }
+                if (push is not null && request.AcceptedEmployeeId.HasValue && (!employee.AutoAcceptWork || request.AcceptedEmployeeId != employee.Id)) await push.StageScheduleChangeAsync(Db, shift.Id, [request.AcceptedEmployeeId.Value], DateTimeOffset.UtcNow, ct); }
         }
         var previousEmployee = request.OfferedEmployeeId ?? request.AcceptedEmployeeId;
         request.AcceptedEmployeeId = null; request.PlannedStartUtc = null; request.PlannedEndUtc = null;
@@ -301,7 +301,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         request.OfferedEmployeeId = employee.Id; request.OfferPlannedStartUtc = planned; request.Status = "Offered";
         if (employee.AutoAcceptWork)
         {
-            await MaterializeAcceptance(request, employee.Id, planned!.Value, ct);
+            await MaterializeAcceptance(request, employee.Id, planned!.Value, ct, automatic: true);
             NotifyRequest(request, "WorkAutoAccepted", "Employee", employee.Id);
             if (push is not null)
             {
@@ -369,7 +369,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
     }
 
     // Caller holds the tenant work reservation; all documents and notifications commit together.
-    private async Task MaterializeAcceptance(PartnerCleaningRequest request, Guid actor, DateTime start, CancellationToken ct)
+    private async Task MaterializeAcceptance(PartnerCleaningRequest request, Guid actor, DateTime start, CancellationToken ct, bool automatic = false)
     {
         await Staff(actor, ct);
         await ActiveCompany(request.CompanyId, ct);
@@ -405,7 +405,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         request.FirstAcceptedAtUtc ??= DateTime.UtcNow; request.Status = "Accepted"; Touch(request);
         // A single Marten commit owns every document. Repository methods that commit individually are deliberately avoided.
         Db.Store(shift); Db.Store(occurrence); Db.Store(assignment); Db.Store(billing); Db.Store(request);
-        if (push is not null) await push.StageScheduleChangeAsync(Db, shiftId, assignments.Select(x => x.EmployeeId).Append(actor), DateTimeOffset.UtcNow, ct);
+        if (push is not null) await push.StageScheduleChangeAsync(Db, shiftId, assignments.Select(x => x.EmployeeId).Append(actor).Where(id => !automatic || id != actor), DateTimeOffset.UtcNow, ct);
         NotifyRequest(request, "RequestAccepted", "Company"); NotifyRequest(request, "RequestAccepted", "Staff");
     }
 
