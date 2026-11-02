@@ -3,16 +3,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge, ActionIcon, Tooltip, CopyButton, Paper } from '@mantine/core';
 import { Plus, Trash2, Copy, Mail, Check, Eye } from 'lucide-react';
-import { adminAgreements, adminCompanies, authorizedFetch, invalidateAdminCache, type AgreementListItem, type AgreementDetail, type Company, type LegacyAgreementRepairPreview } from '@/lib/adminApi';
+import { adminAgreements, authorizedFetch, invalidateAdminCache, type AgreementListItem, type AgreementDetail, type LegacyAgreementRepairPreview } from '@/lib/adminApi';
 import { AgreementEmailCopyButton } from '@/components/AgreementEmailCopyButton';
 import { agreementEmail } from '@/lib/agreementEmail';
+import { CompanyPicker } from '@/components/admin/CompanyPicker';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
 
 export default function AgreementsPage() {
   const [items, setItems] = useState<AgreementListItem[] | null>(null);
   const [lifecycle, setLifecycle] = useState<LifecycleStatus>('active');
   const visibleItems = items?.filter(item => inLifecycle(item, lifecycle)) ?? [];
-  const [companies, setCompanies] = useState<Company[]>([]);
   const [lifecycleError, setLifecycleError] = useState('');
   const [lifecycleBusy, setLifecycleBusy] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -49,7 +49,6 @@ export default function AgreementsPage() {
     } finally { setRepairLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { adminCompanies.list('', 0, 100).then((r) => { if (r) setCompanies(r.items); }); }, []);
   useEffect(() => { loadRepairPreview(); }, [loadRepairPreview]);
 
   const repairCompany = async (agreementId: string) => {
@@ -219,7 +218,7 @@ export default function AgreementsPage() {
       {/* New Agreement Modal */}
       <Modal opened={open} onClose={() => setOpen(false)} title="New agreement" size="lg" radius="md">
         <Stack gap="sm">
-          <Select label="Company" required data={companies.map((c) => ({ value: c.id, label: c.name }))} value={companyId} onChange={setCompanyId} searchable />
+          <CompanyPicker required value={companyId} onChange={setCompanyId} />
           <TextInput label="Title" required value={title} onChange={(e) => setTitle(e.target.value)} />
           <div>
             <Text size="sm" fw={500} mb={4}>PDF Document</Text>
