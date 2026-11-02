@@ -9,6 +9,7 @@ using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Common;
 using CleaningSuite.Domain.Invoicing;
 using CleaningSuite.Domain.Partners;
+using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Shifts;
 using static CleaningSuite.Application.Invoicing.ShiftBillingSettingsService;
 
@@ -83,12 +84,23 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
         var to = TenantTimeZone.StartOfLocalDay(request.To.AddDays(1).ToDateTime(TimeOnly.MinValue), zone);
         var partnerRequests = partnerSource is null ? [] : await partnerSource.ListCompanyAsync(request.CompanyId, ct);
         var existing = await invoices.ListAsync(null, null, ct);
+        var monthEvidence = new Dictionary<Guid, IReadOnlyList<QualityCycleForm>>();
         if (request.PartnerMonth)
         {
             if (partnerSource is null) Invalid("Partner invoice selection is unavailable.");
-            ids = partnerRequests.Where(r => r.Status != "Cancelled" && r.FirstAcceptedAtUtc.HasValue
-                && r.PlannedStartUtc >= from && r.PlannedStartUtc < to && r.LinkedShiftId.HasValue
-                && !existing.Any(i => Billed(i, r.LinkedShiftId.Value))).Select(r => r.LinkedShiftId!.Value).Distinct().Order().ToArray();
+            var candidates = partnerRequests.Where(r => r.Status != "Cancelled" && r.FirstAcceptedAtUtc.HasValue
+                && r.PlannedStartUtc.HasValue && r.LinkedShiftId.HasValue
+                && !existing.Any(i => Billed(i, r.LinkedShiftId.Value))).ToArray();
+            foreach (var candidate in candidates)
+            {
+                var id = candidate.LinkedShiftId!.Value;
+                var evidence = await forms.ListFormsAsync(id, null, null, ct);
+                // Only a completion in this month can make a visit eligible. Roster
+                // completeness and the last assigned finish are checked below.
+                if (evidence.Any(f => f.ShiftOccurrenceUtc == candidate.PlannedStartUtc && f.IsSubmitted && !f.ShiftDeletedUtc.HasValue
+                    && (f.EndedAtUtc ?? f.SubmittedUtc) is DateTime ended && ended >= from && ended < to)) monthEvidence[id] = evidence;
+            }
+            ids = monthEvidence.Keys.Order().ToArray();
         }
         var selected = new List<Shift>();
         foreach (var batch in ids.Chunk(50)) selected.AddRange(await shifts.ListByIdsAsync(batch, ct));
@@ -109,15 +121,33 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             }
             else if (request.PartnerMonth) Invalid("Partner month selection contains an unrelated shift.");
             var schedule = ShiftContractSchedule.Snapshot(shift, zone);
-            var resolved = await QualityCycleOccurrences.ResolvedInWindowAsync(shifts, schedule, from, to, zone, ct, true);
+            // Completion-month billing must resolve the original visit even when scheduled
+            // outside the invoice month. Never select it by its scheduled month.
+            var visitFrom = request.PartnerMonth ? partnerRequest!.PlannedStartUtc!.Value : from;
+            // PostgreSQL timestamps have microsecond precision: a one-tick window
+            // can collapse to zero width when its upper bound is persisted/bound.
+            var visitTo = request.PartnerMonth ? visitFrom.AddSeconds(1) : to;
+            var resolved = await QualityCycleOccurrences.ResolvedInWindowAsync(shifts, schedule, visitFrom, visitTo, zone, ct, true);
             if (resolved.Count > 10000) Invalid("Too many scheduled visits in this period. Select a shorter range.");
-            var submitted = await forms.ListFormsAsync(shift.Id, from, to, ct);
-            var visits = resolved.Where(v => v.Plan.CompanyId == request.CompanyId).Select(v =>
+            var submitted = request.PartnerMonth ? monthEvidence[shift.Id] : await forms.ListFormsAsync(shift.Id, from, to, ct);
+            var completionTimes = new Dictionary<DateTime, DateTime>();
+            var visits = resolved.Where(v => v.Plan.CompanyId == request.CompanyId
+                && (!request.PartnerMonth || v.Occurrence.StartUtc == visitFrom)).Select(v =>
             {
-                var done = submitted.Where(f => f.ShiftOccurrenceUtc == v.Occurrence.StartUtc && f.IsSubmitted && !f.ShiftDeletedUtc.HasValue).Select(f => f.EmployeeId).ToHashSet();
+                var evidence = submitted.Where(f => f.ShiftOccurrenceUtc == v.Occurrence.StartUtc && f.IsSubmitted && !f.ShiftDeletedUtc.HasValue
+                    && (!request.PartnerMonth || (f.EndedAtUtc ?? f.SubmittedUtc).HasValue)
+                    && (v.EmployeeIds.Count == 0 || v.EmployeeIds.Contains(f.EmployeeId))).ToArray();
+                var done = evidence.Select(f => f.EmployeeId).ToHashSet();
+                if (request.PartnerMonth && evidence.Length > 0)
+                    completionTimes[v.Occurrence.StartUtc] = evidence.Max(f => (f.EndedAtUtc ?? f.SubmittedUtc)!.Value);
                 return new BillableShiftVisit(v.Occurrence.StartUtc, v.Occurrence.EndUtc, v.Plan.BranchId, v.Plan.ShiftName,
                     v.EmployeeIds.Count > 0 ? v.EmployeeIds.All(done.Contains) : done.Count > 0);
             }).GroupBy(v => v.StartUtc).Select(g => g.First()).ToArray();
+            if (request.PartnerMonth)
+            {
+                visits = visits.Where(v => v.Completed && completionTimes.TryGetValue(v.StartUtc, out var ended) && ended >= from && ended < to).ToArray();
+                if (visits.Length == 0) continue;
+            }
             var names = new Dictionary<Guid, string>();
             foreach (var branchId in visits.Select(v => v.BranchId).Concat(shift.QualityCyclePlans.Where(p => p.CompanyId == request.CompanyId).Select(p => p.BranchId)).Append(shift.BranchId).Distinct())
             {
@@ -125,7 +155,23 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
                 if (branch is null || branch.CompanyId != request.CompanyId) Invalid($"{shift.Name}: an associated branch is missing or belongs to another company.");
                 names[branchId] = branch!.Name;
             }
-            lines.AddRange(ShiftInvoiceCalculator.Calculate(schedule, pricing, visits, request.From, request.To, zone, names, adjustments));
+            var calculationFrom = request.PartnerMonth ? DateOnly.FromDateTime(TenantTimeZone.LocalDate(visits.Min(v => v.StartUtc), zone)) : request.From;
+            var calculationTo = request.PartnerMonth ? DateOnly.FromDateTime(TenantTimeZone.LocalDate(visits.Max(v => v.StartUtc), zone)) : request.To;
+            var calculated = ShiftInvoiceCalculator.Calculate(schedule, pricing, visits, calculationFrom, calculationTo, zone, names, adjustments);
+            if (partnerRequest is not null)
+            {
+                foreach (var line in calculated)
+                {
+                    if (line.ShiftName is "Partner cleaning" or "Accepted partner cleaning") line.ShiftName = "Cleaning";
+                    if (line.Description is "Partner cleaning" or "Accepted partner cleaning") line.Description = "Cleaning";
+                    if (request.PartnerMonth)
+                    {
+                        line.CompletedAtUtc = completionTimes[visits[0].StartUtc];
+                        line.CompletedOn = DateOnly.FromDateTime(TenantTimeZone.LocalDate(line.CompletedAtUtc.Value, zone));
+                    }
+                }
+            }
+            lines.AddRange(calculated);
             fingerprints.Add(JsonSerializer.Serialize(new { Shift = shift, Pricing = pricing, PartnerRequest = partnerRequest, Visits = visits,
                 Completion = submitted.OrderBy(f => f.Id).Select(f => new { f.Id, f.EmployeeId, f.IsSubmitted, f.ShiftOccurrenceUtc, f.StartedAtUtc, f.EndedAtUtc, f.ShiftDeletedUtc }) }));
         }

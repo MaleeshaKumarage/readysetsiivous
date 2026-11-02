@@ -1,0 +1,14 @@
+.partner-staff { color: var(--mantine-color-text); font-family: var(--mantine-font-family); min-width: 0; }
+.partner-staff h2 { font-size: var(--mantine-h3-font-size); font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; }
+.partner-staff p { line-height: 1.6; overflow-wrap: anywhere; }
+.partner-staff .mantine-Button-root { min-height: 44px; height: auto; max-width: 100%; padding-block: 10px; }
+.partner-staff .mantine-Button-label { white-space: normal; }
+.partner-staff .mantine-Input-input { min-height: 44px; color: var(--mantine-color-text); background: white; }
+.partner-staff form label { display: block; font-size: 14px; font-weight: 600; min-width: 0; }
+.partner-staff form .mantine-InputWrapper-root, .partner-staff form .mantine-Input-wrapper { margin-top: 6px; }
+.partner-staff section, .partner-staff form { border-color: #e3e7ef; border-radius: var(--mantine-radius-md); }
+.partner-staff [role="tablist"] { padding: 6px; border: 1px solid #e3e7ef; border-radius: var(--mantine-radius-md); background: white; }
+.partner-staff :focus-visible { outline: 2px solid var(--mantine-color-indigo-6); outline-offset: 3px; }
+.partner-staff .mantine-Paper-root { background: white; border-color: #e3e7ef; }
+
+.partner-staff-count { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; margin-left: 8px; padding: 2px 6px; border-radius: 999px; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; font-size: 12px; }

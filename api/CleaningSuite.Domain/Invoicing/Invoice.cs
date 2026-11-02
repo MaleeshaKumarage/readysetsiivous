@@ -59,6 +59,9 @@ public class InvoiceLine
     public Guid? ShiftId { get; set; }
     public string ShiftName { get; set; } = "";
     public string BranchName { get; set; } = "";
+    public Guid? BranchId { get; set; }
+    public DateTime? CompletedAtUtc { get; set; }
+    public DateOnly? CompletedOn { get; set; }
     public decimal Hours { get; set; }
     public int Occurrences { get; set; }
     public string PricingMode { get; set; } = "";

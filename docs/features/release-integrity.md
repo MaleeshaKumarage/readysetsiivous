@@ -14,7 +14,7 @@ The candidate is pulled by digest and checked for its build-time `APP_RELEASE_SH
 
 Normal API deployments do not require stopping public ingress. Following the
 verified partner identity cutover on 1 November 2026, the release policy omits
-`maintenance_service` and names deployed `7de6adfb2339f8418fd4da180a70dd23f33ba246`
+`maintenance_service` and names deployed `0c80fae197c1b4734188ffb6e3b84db5157c67e1`
 as its exact application rollback baseline. Build provenance, immutable image and
 asset checks, exact deployed API version checks and verified rollback remain.
 The controller's optional maintenance mode is reserved for an explicitly

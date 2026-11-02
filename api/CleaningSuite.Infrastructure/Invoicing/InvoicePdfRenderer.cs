@@ -69,19 +69,25 @@ public static class InvoicePdfRenderer
                     {
                         foreach (var heading in new[] { "Description", "Quantity", "Unit price", "VAT", "Total" }) header.Cell().Element(ReportPdfTheme.Head).Text(T(heading));
                     });
-                    foreach (var line in invoice.Lines)
+                    foreach (var branchGroup in invoice.Lines.GroupBy(line => line.BranchId?.ToString() ?? line.BranchName)
+                        .OrderBy(group => group.First().BranchName).ThenBy(group => group.Key))
                     {
+                        var branchName = branchGroup.First().BranchName;
+                        if (!string.IsNullOrWhiteSpace(branchName))
+                            table.Cell().ColumnSpan(5).Element(ReportPdfTheme.Head).Text(T("Branch") + ": " + branchName);
+                        foreach (var line in branchGroup.OrderBy(line => line.PeriodFrom).ThenBy(line => line.ShiftName).ThenBy(line => line.LineKey))
+                        {
                         table.Cell().Element(Cell).Column(detail =>
                         {
                             detail.Item().Text(string.IsNullOrWhiteSpace(line.ShiftName) ? line.Description : line.ShiftName).SemiBold();
                             if (!string.IsNullOrWhiteSpace(line.ShiftName) && line.Description != line.ShiftName) detail.Item().Text(line.Description);
-                            if (!string.IsNullOrWhiteSpace(line.BranchName)) detail.Item().Text(T("Branch") + ": " + line.BranchName);
+                            if (line.CompletedOn.HasValue) detail.Item().Text(T("Completed on") + ": " + line.CompletedOn.Value.ToString("d", culture));
                             if (line.ShiftId.HasValue)
                             {
                                 detail.Item().Text(T("Scheduled hours") + ": " + Number(line.Hours));
                                 detail.Item().Text(T("Occurrences") + ": " + line.Occurrences);
                                 if (!string.IsNullOrWhiteSpace(line.PricingMode)) detail.Item().Text(T("Pricing") + ": " + T(line.PricingMode));
-                                if (line.PeriodFrom.HasValue) detail.Item().Text(T("Billing period") + ": " + Period(line.PeriodFrom, line.PeriodTo));
+                                if (line.PeriodFrom.HasValue) detail.Item().Text(T(line.CompletedOn.HasValue ? "Scheduled date" : "Billing period") + ": " + Period(line.PeriodFrom, line.PeriodTo));
                             }
                             detail.Item().Text(T("Net amount") + ": " + Amount(line.NetAmount ?? line.Quantity * line.UnitPriceNet));
                             if (!string.IsNullOrWhiteSpace(line.OverrideReason)) detail.Item().Text(T("Adjustment reason") + ": " + line.OverrideReason);
@@ -90,6 +96,7 @@ public static class InvoicePdfRenderer
                         table.Cell().Element(Cell).AlignRight().Text(Amount(line.UnitPriceNet));
                         table.Cell().Element(Cell).AlignRight().Text(Number(line.VatRatePercent) + "%\n" + Amount(line.VatAmount));
                         table.Cell().Element(Cell).AlignRight().Text(Amount(line.Total));
+                        }
                     }
                 });
                 column.Item().EnsureSpace(110).AlignRight().Column(totals =>
@@ -194,6 +201,8 @@ public static class InvoicePdfRenderer
             "Customer" => ("Asiakas", "Kund"), "Description" => ("Kuvaus", "Beskrivning"), "Quantity" => ("Määrä", "Antal"),
             "Unit price" => ("Veroton yksikköhinta", "Enhetspris exkl. moms"), "VAT" => ("ALV", "Moms"), "Total" => ("Yhteensä", "Totalt"),
             "Branch" => ("Toimipiste", "Verksamhetsställe"), "Scheduled hours" => ("Suunnitellut tunnit", "Planerade timmar"),
+            "Scheduled date" => ("Suunniteltu päivä", "Planerat datum"),
+            "Completed on" => ("Valmistumispäivä", "Slutförd den"),
             "Occurrences" => ("Käynnit", "Besök"), "Pricing" => ("Hinnoittelu", "Prissättning"),
             "Adjustment reason" => ("Muutoksen peruste", "Orsak till justering"), "Net amount" => ("Veroton summa", "Belopp exkl. moms"),
             "Amount due" => ("Maksettavaa", "Att betala"), "Payment details" => ("Maksutiedot", "Betalningsuppgifter"),

@@ -58,7 +58,7 @@ public static class ShiftInvoiceCalculator
             // the shift's first/last active day is inside that month. Split price/branch
             // segments proportionally; retain calendar-day proration for partial selections.
             var denominator = wholeMonth ? monthlyDays.Count(d => d.Date.Year == first.Year && d.Date.Month == first.Month) : calendarDays;
-            lines.Add(new() { ShiftId = shift.Id, ShiftName = group.Key.ShiftName, BranchName = Branch(group.Key.BranchId),
+            lines.Add(new() { ShiftId = shift.Id, ShiftName = group.Key.ShiftName, BranchName = Branch(group.Key.BranchId), BranchId = group.Key.BranchId,
                 PricingMode = "Monthly", Month = group.Key.Month, PeriodFrom = first, PeriodTo = last,
                 LineKey = $"{shift.Id:N}:{group.Key.Month}:{group.Key.Price.EffectiveFrom:yyyyMMdd}:{group.Key.BranchId:N}",
                 Description = $"{group.Key.Price.RateNet:0.00} EUR × {days.Count}/{denominator}",
@@ -76,7 +76,7 @@ public static class ShiftInvoiceCalculator
         {
             var hours = group.Sum(v => (decimal)(v.Visit.EndUtc - v.Visit.StartUtc).Ticks / TimeSpan.TicksPerHour);
             var quantity = group.Key.Price.Mode == "Hourly" ? hours : group.Count();
-            lines.Add(new() { ShiftId = shift.Id, ShiftName = group.Key.ShiftName, BranchName = Branch(group.Key.BranchId),
+            lines.Add(new() { ShiftId = shift.Id, ShiftName = group.Key.ShiftName, BranchName = Branch(group.Key.BranchId), BranchId = group.Key.BranchId,
                 PricingMode = group.Key.Price.Mode, PeriodFrom = group.Min(v => v.Date), PeriodTo = group.Max(v => v.Date),
                 LineKey = $"{shift.Id:N}:{group.Key.Price.EffectiveFrom:yyyyMMdd}:{group.Key.BranchId:N}:{lines.Count}",
                 Quantity = quantity, UnitPriceNet = group.Key.Rate, NetAmount = Round(quantity * group.Key.Rate),
