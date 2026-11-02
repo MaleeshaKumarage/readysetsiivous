@@ -18,7 +18,7 @@ Reusable implementation checklist: [plan](../superpowers/plans/2026-11-02-field-
 | Chunk | Branch / PR | Implemented | Verified | Merged | Deployed | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
 | C01 | feat/field-service-workflows / [PR #240](https://github.com/MaleeshaKumarage/readysetsiivous/pull/240) | yes | yes (local checks below) | yes (`d849678`) | yes (Pages run `41435068885`) | checkpoint below |
-| A01 | feat/employee-auto-accept / [PR #242](https://github.com/MaleeshaKumarage/readysetsiivous/pull/242) | yes | local backend/browser/type/build checks passed; isolated DB and latest-head CI pending | no | no | active checkpoint below |
+| A01 | feat/employee-auto-accept / [PR #242](https://github.com/MaleeshaKumarage/readysetsiivous/pull/242) | yes | all 32 A01/PWA database cases passed in CI; backend failed stale roster-contract expectation; focused fix verification below | no | no | active checkpoint below |
 
 ## Handoff template
 
@@ -85,3 +85,10 @@ A01 (employee-owned work autoaccept) follows C01. Start-time question resolved: 
 - TypeScript passed (exit 0), production build passed (47 pages), scoped diff checks passed and UTF-8 inspection found no replacement characters. Fresh independent integration review passed after the duplicate-push fix.
 - The 32 database cases skipped locally because the isolated database connection is unavailable. Latest-head CI must execute these against its disposable synthetic PostgreSQL database before merge; no local database verification is claimed. Publication of this integration/follow-up, latest-head CI, review-comment resolution, merge and deployment remain pending. Merge only after every latest-head CI check succeeds and all actionable comments are resolved.
 - Unrelated untracked workspace files are preserved. This checkpoint authorizes no merge or deployment and does not change the remaining roadmap scope.
+
+### A01 roster-contract CI correction - 2026-11-02
+
+- Published PR #242 head `0a42b907` executed and passed all 32 A01/PWA Quality Cycle database cases against CI's isolated synthetic database. The overall backend job still failed: 1 failed, 1272 passed, 2 configured native skips. The failure was `EmployeeReadScopeTests.SignedManagerGetsOnlyOperationalRosterFields`, whose exact key allowlist omitted the intentional `autoAcceptWork` operational metadata required by the approved A01 spec and existing explicit DTO.
+- Corrected only the test's exact roster allowlist and added an assertion that its JSON metadata defaults to false. Existing HR, pay and identity exclusion assertions remain intact; existing response-contract coverage also verifies enabled metadata. No application code changed.
+- This correction is prepared locally for publication. PR #242 remains unmerged and undeployed; the corrected head must pass the overall backend job and remaining latest-head gates before merge. Earlier local database skips remain local skips; the CI execution above is the database evidence.
+- Focused local verification using portable .NET SDK 10.0.402 and explicit `api/CleaningSuite.Tests/CleaningSuite.Tests.csproj`: EmployeeReadScopeTests, AdminResponseContractTests and ManagerOperationsTests passed 51/51, with 0 failures and 0 skips. No local database connection was used. Existing compiler warnings remain; no frontend or production build was run for this test-only correction.
