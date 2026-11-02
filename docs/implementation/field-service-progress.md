@@ -16,7 +16,7 @@ Reusable implementation checklist: [plan](../superpowers/plans/2026-11-02-field-
 
 | Chunk | Branch / PR | Implemented | Verified | Merged | Deployed | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
-| C01 | feat/field-service-workflows / PR pending | yes | yes (local checks below) | no | no | checkpoint below |
+| C01 | feat/field-service-workflows / [PR #240](https://github.com/MaleeshaKumarage/readysetsiivous/pull/240) | yes | yes (local checks below) | no | no | checkpoint below |
 
 ## Handoff template
 
@@ -40,7 +40,8 @@ Never store credentials, customer personal data, production exports or private h
 - Verification passed: 12 new picker desktop/mobile E2E cases (53.2 seconds); 34 existing lifecycle-agreement-email, lifecycle-agreements-employees, lifecycle-shifts, shift-dates and company-integrity cases; 10 admin Agreement/Shift cases; `npx tsc --noEmit --incremental false`; `npm run build` (47 pages).
 - E2E commands (from `site`, both default desktop/mobile projects): `npx playwright test lifecycle-company-picker.spec.ts --workers=1`; `npx playwright test lifecycle-agreement-email.spec.ts lifecycle-agreements-employees.spec.ts lifecycle-shifts.spec.ts shift-dates.spec.ts company-integrity.spec.ts --workers=1`; `npx playwright test admin.spec.ts --grep 'Admin Panel - (Agreements|Shifts) Page' --workers=1`.
 - Independent code review reported no blockers; specification/documentation review passed. No backend behavior changed in C01.
-- Commit and PR references are pending publication. Merge and deployment have not been performed. Unrelated untracked workspace files are preserved.
+- Published initial implementation commit `8186e49633af56454a01d4677426532ccaeecc84` on [PR #240](https://github.com/MaleeshaKumarage/readysetsiivous/pull/240). Follow-up review adds explicit `aria-disabled` matching the existing inactive-option policy and covers inactive search results for both shift and agreement creation. Independent final-delta review passed.
+- Follow-up verification passed: 16 picker desktop/mobile E2E cases (51.7 seconds), TypeScript check (exit 0), and production build (47 pages). Together with the 44 existing workflow/admin regression cases above, 60 E2E cases passed; those 44 regression cases ran before the final aria-only component delta. PR merge and deployment remain pending. Unrelated untracked workspace files are preserved.
 - Next dependency-ready chunk: A01, with exact admin-planned start required and enabling autoaccept blocked while any pending offers remain; retain the atomic Offer/acceptance and shared work-reservation locking boundaries below.
 ### Next planned chunk
 

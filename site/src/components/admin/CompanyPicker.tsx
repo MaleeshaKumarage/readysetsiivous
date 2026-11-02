@@ -95,7 +95,8 @@ export function CompanyPicker({ value, onChange, required, allowInactive = true 
         <Combobox.Options>
           <ScrollArea.Autosize mah={240} type="auto">
             {rows.map(company => <Combobox.Option key={company.id} value={company.id} aria-label={label(company)}
-              active={value === company.id} disabled={!allowInactive && company.isActive === false && company.id !== value}>
+              active={value === company.id} disabled={!allowInactive && company.isActive === false && company.id !== value}
+              aria-disabled={!allowInactive && company.isActive === false && company.id !== value}>
               <Text size="sm">{label(company)}</Text>{company.businessId && <Text size="xs" c="dimmed">{company.businessId}</Text>}
             </Combobox.Option>)}
             {!loading && !error && !rows.length && <Combobox.Empty>No companies found.</Combobox.Empty>}

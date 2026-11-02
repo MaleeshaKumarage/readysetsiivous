@@ -4,8 +4,9 @@ import { setupAdminMocks } from './admin-helpers';
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const companies = Array.from({ length: 130 }, (_, index) => ({ id: `company-${index + 1}`, name: `Company ${String(index + 1).padStart(3, '0')}`, businessId: `B-${index + 1}`, isActive: true }));
 
-async function setup(page: Page, options: { inactiveEdit?: boolean } = {}) {
+async function setup(page: Page, options: { inactiveEdit?: boolean; inactiveSearch?: boolean } = {}) {
   await setupAdminMocks(page);
+  const searchCompanies = companies.map(company => options.inactiveSearch && company.id === 'company-130' ? { ...company, isActive: false } : company);
   const queries: { search: string; skip: number; take: number }[] = [];
   const writes: any[] = [];
   const state = { fail: false, failMore: false, failSelection: false, slow: false, delayCompany: false, release: () => {}, releaseCompany: () => {} };
@@ -19,7 +20,7 @@ async function setup(page: Page, options: { inactiveEdit?: boolean } = {}) {
       queries.push({ search, skip, take });
       if (search === 'slow' && state.slow) { await slow; return route.fulfill({ headers, json: { items: [{ ...companies[0], name: 'Stale company' }], total: 1 } }); }
       if (state.fail || (state.failMore && skip > 0)) return route.fulfill({ headers, status: 500, json: { title: 'unavailable' } });
-      const matching = companies.filter(company => `${company.name} ${company.businessId}`.toLowerCase().includes(search.toLowerCase()));
+      const matching = searchCompanies.filter(company => `${company.name} ${company.businessId}`.toLowerCase().includes(search.toLowerCase()));
       return route.fulfill({ headers, json: { items: matching.slice(skip, skip + take), total: matching.length } });
     }
     if (/\/companies\/company-\d+$/.test(path)) {
@@ -160,4 +161,50 @@ test('selected-company load failure retains the edit identity and can be retried
   await expect(dialog.getByRole('textbox', { name: 'Company', exact: true })).toHaveValue('Selected company (unavailable)');
   state.failSelection = false; await dialog.getByRole('button', { name: 'Retry selected company', exact: true }).click();
   await expect(dialog.getByRole('textbox', { name: 'Company', exact: true })).toHaveValue('Company 125 (inactive)');
+});
+
+
+test('a new shift cannot select an inactive company returned by server search', async ({ page }) => {
+  const { writes } = await setup(page, { inactiveSearch: true });
+  await page.goto('/admin/shifts/');
+  await page.getByRole('button', { name: 'Add shift', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
+  const company = dialog.getByRole('textbox', { name: 'Company', exact: true });
+  await company.click();
+  await page.getByRole('textbox', { name: 'Search companies' }).fill('Company 130');
+  const inactive = page.getByRole('option', { name: 'Company 130 (inactive)', exact: true });
+  await expect(inactive).toBeVisible();
+  await expect(inactive).toBeDisabled();
+  // Even a direct pointer attempt must leave the selection unchanged.
+  await inactive.click({ force: true });
+  await page.getByRole('textbox', { name: 'Search companies' }).press('ArrowDown');
+  await page.getByRole('textbox', { name: 'Search companies' }).press('Enter');
+  await page.getByRole('textbox', { name: 'Search companies' }).press('Escape');
+  await expect(company).toHaveValue('');
+  await expect(dialog.getByLabel('Branch', { exact: true })).toBeDisabled();
+  await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Blocked inactive assignment');
+  await dialog.getByRole('button', { name: 'Create shift', exact: true }).click();
+  await expect(dialog.getByText('Company, branch and name are required.', { exact: true })).toBeVisible();
+  expect(writes).toHaveLength(0);
+});
+
+test('agreement creation can select an inactive company and shows its inactive label', async ({ page }) => {
+  const { writes } = await setup(page, { inactiveSearch: true });
+  await page.goto('/admin/agreements/');
+  await page.getByRole('button', { name: 'New agreement', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'New agreement', exact: true });
+  const company = dialog.getByRole('textbox', { name: 'Company', exact: true });
+  await company.click();
+  await page.getByRole('textbox', { name: 'Search companies' }).fill('Company 130');
+  const inactive = page.getByRole('option', { name: 'Company 130 (inactive)', exact: true });
+  await expect(inactive).toBeEnabled();
+  await inactive.click();
+  await expect(company).toHaveValue('Company 130 (inactive)');
+  await dialog.getByRole('textbox', { name: 'Title', exact: true }).fill('Historical company agreement');
+  await dialog.locator('input[type=file]').setInputFiles({ name: 'agreement.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 test') });
+  await dialog.getByPlaceholder('Name', { exact: true }).fill('Signer');
+  await dialog.getByPlaceholder('Email', { exact: true }).fill('signer@example.test');
+  await dialog.getByRole('button', { name: 'Create', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(writes[0]).toContain('company-130');
 });
