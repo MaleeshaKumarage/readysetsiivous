@@ -152,7 +152,7 @@ class Commands:
 
 class DeploymentTests(unittest.TestCase):
     def run_deploy(self, mode='success', approved=True, compatible=True, key='new-owner-ai-secret',
-                   maintenance_policy=None, maintenance_states=None, maintenance_load_states=None, expect_preserved_candidate=False, group_policy=False, old_group=None, new_group=None):
+                   maintenance_policy=None, maintenance_states=None, maintenance_load_states=None, expect_preserved_candidate=False, group_policy=False, old_group=None, new_group=None, omit_bootstrap=False):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             old_env = b"API_IDENTITY_ENV_FILE=/protected/tenant-runtime.env\nIMAGE_TAG=sha-old\nDATABASE_PASSWORD=private-value\nGAME_GEMINI_API_KEY='old-owner-secret'\n"
@@ -170,6 +170,8 @@ class DeploymentTests(unittest.TestCase):
             if group_policy:
                 policy = dict(schema=2, approved=approved, schema_changes='backward-compatible-reviewed',
                               compatibility_group='readyset-api-v1', legacy_rollback_compatible_from=[OLD] if compatible else [])
+            if omit_bootstrap:
+                policy.pop('legacy_rollback_compatible_from', None)
             if maintenance_policy is not None:
                 policy.update(maintenance_policy)
             (stage / 'api/deploy/release-policy.json').write_text(json.dumps(policy))
@@ -223,6 +225,13 @@ class DeploymentTests(unittest.TestCase):
             self.assertIsNotNone(failure)
             self.assertEqual('old', commands.current)
             self.assertFalse(commands.recovering)
+
+    def test_missing_optional_bootstrap_fails_with_compatibility_reason(self):
+        failure, commands, _ = self.run_deploy(group_policy=True, omit_bootstrap=True,
+                                              new_group='readyset-api-v1')
+        self.assertIsInstance(failure, RuntimeError)
+        self.assertIn('Previous release not approved', str(failure))
+        self.assertFalse(any('pull' in call or 'up' in call for call in commands.calls))
 
     def test_runtime_group_mismatch_and_interruption_restore_old_api(self):
         for mode in ['runtime_group', 'up_interrupted']:
