@@ -7,12 +7,13 @@ import {
 import { Plus, Trash2, Pencil } from 'lucide-react';
 import {
   adminShifts, adminCompanies, adminEmployees, adminTenant,
-  type Shift, type Company, type Branch, type Employee, type ShiftAssignment, type ShiftOccurrence,
+  type Shift, type Branch, type Employee, type ShiftAssignment, type ShiftOccurrence,
 } from '@/lib/adminApi';
 import { ShiftPricingDialog } from '@/components/ShiftPricingDialog';
 import { VisitAssigneesDialog } from '@/components/VisitAssigneesDialog';
 import { isAdmin } from '@/lib/auth';
 import { adminQualityCycle, type QualityCycleTemplate } from '@/lib/qualityCycleApi';
+import { CompanyPicker } from '@/components/admin/CompanyPicker';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -109,7 +110,6 @@ export default function ShiftsAdminPage() {
   const [timeZoneId, setTimeZoneId] = useState('Europe/Helsinki');
   const [schedulingReady, setSchedulingReady] = useState(false);
   const [restoring, setRestoring] = useState<string | null>(null);
-  const [companies, setCompanies] = useState<Company[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -201,14 +201,15 @@ export default function ShiftsAdminPage() {
   }, [loading, shifts]);
 
   useEffect(() => {
-    adminCompanies.list('', 0, 100).then((r) => { if (r) setCompanies(r.items); });
     adminEmployees.list().then((e) => { if (e) setEmployees(e.filter(person => person.role !== 'partner')); });
     adminQualityCycle.listTemplates().then((t) => { if (t) setTemplates(t.filter((x) => x.isActive)); });
   }, []);
 
   useEffect(() => {
     if (!companyId) { setBranches([]); return; }
-    adminCompanies.get(companyId).then((d) => { if (d) setBranches(d.branches); });
+    let current = true;
+    adminCompanies.get(companyId).then((d) => { if (current && d?.company.id === companyId) setBranches(d.branches); });
+    return () => { current = false; };
   }, [companyId]);
 
   const buildSchedule = () => {
@@ -253,7 +254,6 @@ export default function ShiftsAdminPage() {
     setError('');
     const detail = await adminCompanies.get(shift.companyId);
     if (detail) {
-      setCompanies(current => current.some(company => company.id === detail.company.id) ? current : [...current, detail.company]);
       setBranches(detail.branches);
     }
     setModalOpen(true);
@@ -590,7 +590,7 @@ export default function ShiftsAdminPage() {
       <Modal opened={modalOpen} onClose={closeModal} title={editingShift ? 'Edit shift' : 'Add shift'} size="lg" radius="md">
         <Stack gap="sm">
           <Text size="sm" c="dimmed">Schedule times use the tenant time zone: {timeZoneId}.</Text>
-          <Select label="Company" data={companies.filter(c => c.isActive !== false || c.id === editingShift?.companyId).map((c) => ({ value: c.id, label: `${c.name}${c.isActive === false ? ' (inactive)' : ''}` }))} value={companyId} onChange={(v) => { setBranches([]); setCompanyId(v); setBranchId(null); setQualityCycleTemplateId(null); }} searchable />
+          <CompanyPicker allowInactive={false} value={companyId} onChange={(v) => { setBranches([]); setCompanyId(v); setBranchId(null); setQualityCycleTemplateId(null); }} />
           <Select label="Branch" data={branches.filter(b => b.isActive !== false || b.id === editingShift?.branchId).map((b) => ({ value: b.id, label: `${b.name}${b.isActive === false ? ' (inactive)' : ''}` }))} value={branchId} onChange={v => { setBranchId(v); setQualityCycleTemplateId(null); }} searchable disabled={!companyId} />
           <TextInput label="Name" required value={name} onChange={(e) => setName(e.target.value)} />
           <Group grow>
