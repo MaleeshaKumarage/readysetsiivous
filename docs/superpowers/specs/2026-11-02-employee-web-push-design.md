@@ -6,6 +6,8 @@ Extend the existing employee PWA on iPhone and Android with opt-in Web Push. Reu
 
 Recommended initial alerts: a new assignment; a schedule/assignment change or cancellation affecting the employee; a reminder 30 minutes before a scheduled shift; and a reminder 30 minutes after scheduled end when that employee has started but has not ended/submitted the task. The timings are defaults included in this design for user review. Do not alert on unaccepted partner offers: only accepted assigned work participates. Send one assignment/change alert per employee per committed change, rather than one alert for every recurrence.
 
+This four-alert scope and reminder timing remain a proposal until the user confirms them. Several committed changes awaiting the same worker cycle may be coalesced into one combined schedule-update alert; do not promise a separate visible alert for every rapid edit.
+
 Use standards-based Web Push directly from the existing backend. This keeps account ownership and scheduling in the same system. A hosted push platform is an alternative but adds another service and processor without removing iPhone installation/permission requirements; do not introduce one in this increment.
 
 ## Employee experience and installation
@@ -14,6 +16,8 @@ Add a Notifications panel on My shifts and an account-page link to it. Show Enab
 
 Feature-detect service workers, PushManager and Notification. Show useful states for unsupported browser, blocked permission, unconfigured server, registration failure, enabled, and expired subscription. Denied permission gets settings instructions; do not repeatedly prompt. On iPhone/iPad require iOS/iPadOS 16.4+ and the installed Home Screen app, with installation guidance before enabling notifications. Android supports compatible browsers; offer installation for a consistent employee experience.
 
+Load public configuration and service-worker readiness before enabling the control. Call Notification.requestPermission directly from the Enable click before awaiting other network/setup work, preserving the iOS user gesture.
+
 The current manifest starts the admin app. Add an employee manifest with a stable distinct ID, employee name, existing brand icons, standalone display and /me/shifts/ start URL, selected through /me route metadata. Preserve the admin manifest and admin install behavior. Adapt installation copy for employees rather than labelling their app Admin. Register the existing root /sw.js from the employee flow; retain its existing fetch behavior.
 
 Notifications use short English system text, matching the current employee workspace. Do not include customer names, addresses, employee names, checklist content or photos in lock-screen payloads. Example: ReadySetSiivous — Your work schedule has changed. Open My shifts for the latest details. Upcoming and unfinished messages state their purpose without customer details. Push click focuses/opens /me/shifts/ on the current origin; the normal authenticated API supplies current task details. No arbitrary remote navigation URLs are accepted.
@@ -21,6 +25,8 @@ Notifications use short English system text, matching the current employee works
 ## Subscription ownership and APIs
 
 Create tenant-scoped PushDevice records with ID, verified employee ID and auth subject, endpoint and browser encryption keys, VAPID public-key identifier, created/updated timestamps and enabled state. Endpoint/key values are confidential delivery credentials: no logs, browser analytics, admin employee DTOs or diagnostic dumps contain them. Limit enrollment to ten devices per employee and bound all strings and key lengths.
+
+Enforce endpoint uniqueness within the tenant. Repeated enrollment of the same endpoint by its current employee/subject is an idempotent update returning the same device ID, without consuming another slot. A different employee/subject cannot claim or transfer that record. Count enabled devices for the ten-device limit and prune disabled/expired delivery credentials after 30 days.
 
 Add authenticated self-service routes under /api/v1/me/notifications: GET config/status (supported server configuration and public VAPID key only), PUT subscription, DELETE subscription/{id}, POST subscription/{id}/test. Resolve the actor with the same verified linked active employee rules as MeController, including identity-sync and work-role checks. Admins/managers may opt in only as their own eligible employee identity; partner-only accounts cannot subscribe as employees. Never accept a caller-selected employee/tenant or allow another employee's device to be read, deleted or tested. Return only safe status/device IDs, never another endpoint's credentials. Cross-tenant IDs are inaccessible. Apply no-store and request/rate limits.
 
@@ -38,7 +44,11 @@ A minute-based background worker scans active tenants in fresh tenant-scoped ser
 
 Only opted-in employees participate. Enabling the feature or a device must not backfill historic assignments or overdue alerts. Upcoming reminders may catch up after a short worker outage until scheduled start. Unfinished reminders are eligible for 60 minutes after their due time, once per employee/occurrence; older overdue reminders expire. No alerts are sent merely because an employee installs the PWA. Additional devices enrolled later do not receive previously queued events. Recheck eligibility and the effective visit immediately before delivery; assignment-removal notices use the committed prior-recipient fact and generic payload, not a current-assignment requirement.
 
+Assignment/change messages expire 24 hours after the committed change. Discard superseded pending intents when coalescing. For explicitly moved visits preserve the exception/original occurrence identity when available: an already delivered upcoming reminder is not delivered again for that same identity, while its schedule-change alert still applies. Undelivered moved reminders use the new scheduled due time and cancel the obsolete pending delivery.
+
 Use a cross-replica nonblocking per-delivery reservation with bounded batches so the worker does not monopolize scheduling locks or send duplicates concurrently. Do not hold the tenant scheduling reservation across provider HTTP. Mark provider-accepted deliveries; retry network/429/5xx failures with bounded backoff and Retry-After, at most five attempts within event expiry. Treat 404/410 as expired subscription and disable that device. Permanent provider rejection is a recorded failure; ambiguous network acceptance may be retried with the same tag. Sanitize errors and never persist raw provider bodies or secret URLs. Before retrying, recheck cancellation, employee eligibility, disable state and expiry.
+
+Use the existing PostgreSQL advisory-lock pattern for the dedicated delivery reservation, released when its connection is disposed or the process exits. Persist Sending and attempt time before transport; use a 15-second provider timeout. A Sending record older than two minutes is eligible for crash recovery only after acquiring its delivery lock, with the same message/tag and within the original attempt/expiry bounds. Treat its previous provider acceptance as uncertain rather than claiming no send occurred.
 
 ## Configuration and rollout
 
