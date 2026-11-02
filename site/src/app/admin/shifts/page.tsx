@@ -590,7 +590,7 @@ export default function ShiftsAdminPage() {
       <Modal opened={modalOpen} onClose={closeModal} title={editingShift ? 'Edit shift' : 'Add shift'} size="lg" radius="md">
         <Stack gap="sm">
           <Text size="sm" c="dimmed">Schedule times use the tenant time zone: {timeZoneId}.</Text>
-          <CompanyPicker allowInactive={false} value={companyId} onChange={(v) => { setBranches([]); setCompanyId(v); setBranchId(null); setQualityCycleTemplateId(null); }} />
+          <CompanyPicker allowInactive={false} allowedInactiveCompanyId={editingShift?.companyId} value={companyId} onChange={(v) => { setBranches([]); setCompanyId(v); setBranchId(null); setQualityCycleTemplateId(null); }} />
           <Select label="Branch" data={branches.filter(b => b.isActive !== false || b.id === editingShift?.branchId).map((b) => ({ value: b.id, label: `${b.name}${b.isActive === false ? ' (inactive)' : ''}` }))} value={branchId} onChange={v => { setBranchId(v); setQualityCycleTemplateId(null); }} searchable disabled={!companyId} />
           <TextInput label="Name" required value={name} onChange={(e) => setName(e.target.value)} />
           <Group grow>

@@ -6,7 +6,7 @@ const companies = Array.from({ length: 130 }, (_, index) => ({ id: `company-${in
 
 async function setup(page: Page, options: { inactiveEdit?: boolean; inactiveSearch?: boolean } = {}) {
   await setupAdminMocks(page);
-  const searchCompanies = companies.map(company => options.inactiveSearch && company.id === 'company-130' ? { ...company, isActive: false } : company);
+  const searchCompanies = companies.map(company => (options.inactiveSearch && company.id === 'company-130') || (options.inactiveEdit && company.id === 'company-125') ? { ...company, isActive: false } : company);
   const queries: { search: string; skip: number; take: number }[] = [];
   const writes: any[] = [];
   const state = { fail: false, failMore: false, failSelection: false, slow: false, delayCompany: false, release: () => {}, releaseCompany: () => {} };
@@ -27,18 +27,22 @@ async function setup(page: Page, options: { inactiveEdit?: boolean; inactiveSear
       const id = path.split('/').at(-1)!;
       if (state.failSelection) return route.fulfill({ headers, status: 500, json: {} });
       if (state.delayCompany && id === 'company-1') await companyGate;
-      return route.fulfill({ headers, json: { company: { ...companies.find(company => company.id === id), ...(options.inactiveEdit ? { isActive: false } : {}) }, branches: [{ id: 'branch', companyId: id, name: id === 'company-1' ? 'Property A' : id === 'company-2' ? 'Property B' : 'Property', isActive: !options.inactiveEdit }] } });
+      return route.fulfill({ headers, json: { company: searchCompanies.find(company => company.id === id), branches: [{ id: options.inactiveEdit ? `branch-${id}` : 'branch', companyId: id, name: id === 'company-1' ? 'Property A' : id === 'company-2' ? 'Property B' : 'Property', isActive: !(options.inactiveEdit && id === 'company-125') }] } });
     }
     if (path.endsWith('/shifts') && request.method() === 'POST') {
       const body = request.postDataJSON(); writes.push(body);
       return route.fulfill({ headers, json: { id: 'new-shift', ...body } });
+    }
+    if (path.endsWith('/shifts/old-shift') && request.method() === 'PUT') {
+      const body = request.postDataJSON(); writes.push(body);
+      return route.fulfill({ headers, json: { id: 'old-shift', ...body } });
     }
     if (path.endsWith('/agreements') && request.method() === 'POST') {
       writes.push(request.postData());
       return route.fulfill({ headers, json: { id: 'agreement', title: 'Agreement', signers: [], signerCount: 0, signedCount: 0, code: 'AGR', isActive: true, status: 'Pending' } });
     }
     return route.fulfill({ headers, json: path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' }
-      : path.endsWith('/shifts') && options.inactiveEdit ? [{ id: 'old-shift', name: 'Old shift', companyId: 'company-125', branchId: 'branch', isActive: false, validFrom: '2026-01-01', schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' } }]
+      : path.endsWith('/shifts') && options.inactiveEdit ? [{ id: 'old-shift', name: 'Old shift', companyId: 'company-125', branchId: 'branch-company-125', isActive: false, validFrom: '2026-01-01', schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' } }]
       : path.endsWith('/legacy-repairs') ? { agreements: [], companies: [] } : [] });
   });
   return { state, queries, writes };
@@ -73,10 +77,18 @@ test('agreement company picker reaches later pages and preserves the document an
 });
 
 test('shift company search finds a company beyond 100 and uses it for the new shift', async ({ page }) => {
-  const { queries, writes } = await setup(page);
+  const { state, queries, writes } = await setup(page);
   await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'Add shift', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
   await dialog.getByRole('textbox', { name: 'Company', exact: true }).click();
+  await expect(page.getByText('50 of 130 companies', { exact: true })).toBeVisible();
+  state.failMore = true;
+  await page.getByRole('button', { name: 'Load more companies' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Could not load companies' })).toBeVisible();
+  state.failMore = false;
+  await page.getByRole('button', { name: 'Retry companies' }).click();
+  await expect(page.getByText('100 of 130 companies', { exact: true })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'Company 075', exact: true })).toHaveCount(1);
   await page.getByRole('textbox', { name: 'Search companies' }).fill('B-125');
   await expect(page.getByRole('option', { name: 'Company 125', exact: true })).toBeVisible();
   await page.getByRole('textbox', { name: 'Search companies' }).press('ArrowDown');
@@ -88,6 +100,7 @@ test('shift company search finds a company beyond 100 and uses it for the new sh
   await expect(dialog).toHaveCount(0);
   expect(writes[0].companyId).toBe('company-125');
   expect(queries.some(query => query.search === 'B-125' && query.take === 50)).toBe(true);
+  expect(queries.filter(query => !query.search).map(query => query.skip)).toEqual([0, 50, 50]);
 });
 
 test('search failures retry, empty results are distinct, and stale responses cannot replace the latest query', async ({ page }) => {
@@ -125,6 +138,38 @@ test('editing an inactive shift hydrates its current company outside the first p
   await expect(dialog.getByRole('textbox', { name: 'Company', exact: true })).toHaveValue('Company 125 (inactive)');
   expect(queries).toHaveLength(0);
   await expect(dialog.getByLabel('Branch', { exact: true })).toHaveValue('Property (inactive)');
+});
+
+test('editing a shift can return to its original inactive company after selecting an active company', async ({ page }) => {
+  const { writes } = await setup(page, { inactiveEdit: true });
+  await page.goto('/admin/shifts/'); await page.getByRole('tab', { name: /^Inactive/ }).click();
+  await page.getByRole('row').filter({ hasText: 'Old shift' }).getByRole('button', { name: 'Edit', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Edit shift', exact: true });
+  const company = dialog.getByRole('textbox', { name: 'Company', exact: true });
+  const branch = dialog.getByLabel('Branch', { exact: true });
+  await expect(company).toHaveValue('Company 125 (inactive)');
+  await expect(branch).toHaveValue('Property (inactive)');
+  await company.click();
+  await page.getByRole('textbox', { name: 'Search companies' }).fill('Company 002');
+  await page.getByRole('option', { name: 'Company 002', exact: true }).click();
+  await expect(branch).toHaveValue('');
+  await branch.click();
+  await page.getByRole('option', { name: 'Property B', exact: true }).click();
+  await company.click();
+  await page.getByRole('textbox', { name: 'Search companies' }).fill('Company 125');
+  const original = page.getByRole('option', { name: 'Company 125 (inactive)', exact: true });
+  await expect(original).toBeEnabled();
+  await expect(original).toHaveAttribute('aria-disabled', 'false');
+  await original.click();
+  await expect(company).toHaveValue('Company 125 (inactive)');
+  await expect(branch).toHaveValue('');
+  await branch.click();
+  await expect(page.getByRole('option', { name: 'Property B', exact: true })).toHaveCount(0);
+  await page.getByRole('option', { name: 'Property (inactive)', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(writes).toHaveLength(1);
+  expect(writes[0]).toMatchObject({ companyId: 'company-125', branchId: 'branch-company-125', isActive: false });
 });
 
 

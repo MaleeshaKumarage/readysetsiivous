@@ -8,11 +8,12 @@ const PAGE_SIZE = 50;
 const label = (company: Company) => `${company.name}${company.isActive === false ? ' (inactive)' : ''}`;
 
 /** A bounded, server-searched company selector. Selection is independent of result pages. */
-export function CompanyPicker({ value, onChange, required, allowInactive = true }: {
+export function CompanyPicker({ value, onChange, required, allowInactive = true, allowedInactiveCompanyId }: {
   value: string | null;
   onChange: (value: string | null) => void;
   required?: boolean;
   allowInactive?: boolean;
+  allowedInactiveCompanyId?: string;
 }) {
   const [search, setSearch] = useState('');
   const [rows, setRows] = useState<Company[]>([]);
@@ -78,10 +79,12 @@ export function CompanyPicker({ value, onChange, required, allowInactive = true 
     store.resetSelectedOption();
   };
 
+  const isDisabled = (company: Company) => !allowInactive && company.isActive === false && company.id !== allowedInactiveCompanyId;
+
   return <div>
     <Combobox store={store} withinPortal onOptionSubmit={id => {
       const company = companies.current.get(id);
-      if (!company || (!allowInactive && company.isActive === false && id !== value)) return;
+      if (!company || isDisabled(company)) return;
       setSelected(company); onChange(id); store.closeDropdown();
     }}>
       <Combobox.Target withExpandedAttribute>
@@ -95,8 +98,8 @@ export function CompanyPicker({ value, onChange, required, allowInactive = true 
         <Combobox.Options>
           <ScrollArea.Autosize mah={240} type="auto">
             {rows.map(company => <Combobox.Option key={company.id} value={company.id} aria-label={label(company)}
-              active={value === company.id} disabled={!allowInactive && company.isActive === false && company.id !== value}
-              aria-disabled={!allowInactive && company.isActive === false && company.id !== value}>
+              active={value === company.id} disabled={isDisabled(company)}
+              aria-disabled={isDisabled(company)}>
               <Text size="sm">{label(company)}</Text>{company.businessId && <Text size="xs" c="dimmed">{company.businessId}</Text>}
             </Combobox.Option>)}
             {!loading && !error && !rows.length && <Combobox.Empty>No companies found.</Combobox.Empty>}
