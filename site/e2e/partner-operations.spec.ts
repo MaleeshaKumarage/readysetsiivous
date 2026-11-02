@@ -33,9 +33,14 @@ test('partner month previews all company visits and issues the exact approved pa
     if (path === '/shifts') { issues.push(req.postDataJSON() as ShiftInvoiceInput & { previewToken: string }); records = [{ ...preview, id: 'issued-one', invoiceNumber: 'RSS-2026-001', status: 'Issued' }]; return route.fulfill({ headers, json: records[0] }); }
     return route.fulfill({ status: 404, headers });
   });
-  await page.goto('/admin/invoices/'); await page.getByLabel('Completed cleaning month', { exact: true }).check();
-  await expect(page.getByLabel('Invoice shifts', { exact: true })).toHaveCount(0);
+  await page.goto('/admin/invoices/');
+  await expect(page.getByLabel('Completed cleaning month', { exact: true })).not.toBeChecked();
   await page.getByRole('textbox', { name: 'Company', exact: true }).click(); await page.getByRole('option', { name: 'Owner company', exact: true }).click();
+  await expect(page.getByLabel('Completed cleaning month', { exact: true })).toBeChecked();
+  await expect(page.getByLabel('Completion month', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Invoice shifts', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Invoice from', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Invoice to (inclusive)', { exact: true })).toHaveCount(0);
   await page.getByLabel('Completion month').fill('2026-12');
   await page.getByLabel(/^Billing street/).fill('Customer road 2'); await page.getByLabel(/^Billing postalCode/).fill('33100'); await page.getByLabel(/^Billing city/).fill('Tampere');
   await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
