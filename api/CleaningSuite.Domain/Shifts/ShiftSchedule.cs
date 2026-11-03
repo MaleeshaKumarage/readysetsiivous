@@ -41,6 +41,8 @@ public class ShiftSchedule
     public TimeSpan? OneTimeEnd { get; set; }
     public bool OnCall => Type == ShiftScheduleType.OnCallFlexible;
     public bool IsOneTime => Type == ShiftScheduleType.OneTime;
+    /// <summary>Visits priced per completed occurrence: legacy on-call and one-time shifts.</summary>
+    public bool IsVisitPriced => OnCall || IsOneTime;
 
     /// <summary>
     /// Ensures the schedule is fully populated for its <see cref="Type"/> so that a
