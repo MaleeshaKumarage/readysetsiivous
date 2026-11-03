@@ -56,6 +56,12 @@ public sealed class PartnerNotificationDispatcher(IPartnerStore store, IShiftWor
             { await Finish(item, "NeedsReview", "Safe provider idempotency retry window expired. Check delivery before resending.", ct); return; }
             if (!item.FirstAttemptUtc.HasValue)
             {
+                // Cleaning updates reach people through the app (push). Email is opt-in per deployment.
+                if (!PartnerEmailEnabled)
+                {
+                    await Finish(item, "Skipped", "Partner email is off; the app notification is used instead.", ct);
+                    return;
+                }
                 var company = (await Db.LoadAsync<Company>(item.CompanyId, ct))!;
                 var request = item.RequestId.HasValue ? await Db.LoadAsync<PartnerCleaningRequest>(item.RequestId.Value, ct) : null;
                 var branch = await Db.LoadAsync<Branch>(item.BranchId, ct);
@@ -207,6 +213,8 @@ public sealed class PartnerNotificationDispatcher(IPartnerStore store, IShiftWor
         }
     }
     private async Task<bool> TenantActive(CancellationToken ct) => (await registry.GetBySlugAsync(tenant.TenantId, ct))?.Status == TenantRegistration.StatusActive;
+    private bool PartnerEmailEnabled => bool.TryParse(config["Notifications:PartnerEmail:Enabled"], out var enabled) && enabled;
+
     private async Task Finish(PartnerNotification item, string state, string? error, CancellationToken ct)
     { item.State = state; item.LastError = error; item.UpdatedUtc = Now; Db.Store(item); await Db.SaveChangesAsync(ct); }
 }
