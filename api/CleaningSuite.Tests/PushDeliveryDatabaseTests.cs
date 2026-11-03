@@ -160,6 +160,39 @@ public class PushDeliveryDatabaseTests
         var delivery = await q.Query<PushDelivery>().SingleAsync(); Assert.Equal("Failed", delivery.State); Assert.Equal(2, delivery.Attempts);
     }
 
+    [QualityCycleDatabaseFact]
+    public Task Partner_request_push_is_delivered_to_managers_with_the_manager_link() =>
+        AssertPartnerRequestDelivered(Employee.RoleManager, "/manager/partner-requests/");
+
+    [QualityCycleDatabaseFact]
+    public Task Partner_request_push_is_delivered_to_admins_with_the_admin_link() =>
+        AssertPartnerRequestDelivered(Employee.RoleAdmin, "/admin/partner-requests/");
+
+    private static async Task AssertPartnerRequestDelivered(string role, string expectedPath)
+    {
+        using var f = await Fixture.Create(role);
+        using (var db = f.Store.LightweightSession(f.Tenant)) { await new PushOutbox().StagePartnerRequestAsync(db, Guid.NewGuid(), 1, f.Now); await db.SaveChangesAsync(); }
+        PushMessage? sent = null;
+        f.Transport.Setup(t => t.SendAsync(It.IsAny<PushDevice>(), It.IsAny<PushMessage>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .Callback<PushDevice, PushMessage, DateTime, CancellationToken>((_, message, _, _) => sent = message)
+            .ReturnsAsync(new PushSendResult(true));
+        using var session = f.Session(); await f.Dispatcher(session).ProcessAsync();
+        Assert.NotNull(sent);
+        Assert.StartsWith(expectedPath + "?tenant=", sent!.Url);
+        using var q = f.Store.QuerySession(f.Tenant);
+        Assert.Equal("Accepted", (await q.Query<PushDelivery>().SingleAsync()).State);
+    }
+
+    [QualityCycleDatabaseFact]
+    public async Task Partner_request_push_is_never_staged_for_ordinary_employees()
+    {
+        using var f = await Fixture.Create();
+        using (var db = f.Store.LightweightSession(f.Tenant)) { await new PushOutbox().StagePartnerRequestAsync(db, Guid.NewGuid(), 1, f.Now); await db.SaveChangesAsync(); }
+        using var session = f.Session(); await f.Dispatcher(session).ProcessAsync();
+        f.Transport.Verify(t => t.SendAsync(It.IsAny<PushDevice>(), It.IsAny<PushMessage>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Never);
+        using var q = f.Store.QuerySession(f.Tenant); Assert.Empty(await q.Query<PushIntent>().ToListAsync());
+    }
+
     private sealed class Fixture : IDisposable
     {
         public required ServiceProvider Provider; public required IDocumentStore Store; public required IConfiguration Config;
@@ -167,12 +200,13 @@ public class PushDeliveryDatabaseTests
         public DateTimeOffset Now = new(2026, 11, 2, 12, 0, 0, TimeSpan.Zero);
         public Employee Employee = new() { KeycloakUserId = "subject" };
         public Mock<IPushTransport> Transport = new();
-        public static async Task<Fixture> Create()
+        public static async Task<Fixture> Create(string role = Employee.RoleEmployee)
         {
             var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
             var services = new ServiceCollection(); services.AddLogging(); services.AddCleaningMarten(connection, databaseSchemaName: "push_core_" + Guid.NewGuid().ToString("N"));
             var provider = services.BuildServiceProvider(); var store = provider.GetRequiredService<IDocumentStore>(); await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
             var f = new Fixture { Provider = provider, Store = store, Config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?> { ["ConnectionStrings:DefaultConnection"] = connection }).Build() };
+            f.Employee.Role = role;
             using var db = store.LightweightSession(f.Tenant); db.Store(f.Employee);
             db.Store(new PushDevice { EmployeeId = f.Employee.Id, Subject = "subject", VapidKeyId = "key", OptedInUtc = f.Now.UtcDateTime.AddMinutes(-1), CreatedUtc = f.Now.UtcDateTime.AddMinutes(-1) });
             await db.SaveChangesAsync(); return f;

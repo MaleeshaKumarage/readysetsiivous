@@ -237,7 +237,9 @@ public class PartnerWorkflowTests
         var notices = await reader.Query<PartnerNotification>().Where(x => x.RequestId == accepted.Id).ToListAsync();
         Assert.DoesNotContain(notices, x => x.Kind is "OfferCreated" or "AwaitingAcceptance");
         Assert.Single(notices.Where(x => x.Kind == "WorkAutoAccepted"));
-        Assert.Equal(2, notices.Count(x => x.Kind == "RequestAccepted"));
+        // Staff are alerted by app push, so only the company receives a RequestAccepted email row.
+        Assert.Equal("Company", Assert.Single(notices.Where(x => x.Kind == "RequestAccepted")).Audience);
+        Assert.DoesNotContain(notices, x => x.Audience == "Staff");
     }
 
     [QualityCycle.QualityCycleDatabaseFact]

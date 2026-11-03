@@ -126,4 +126,31 @@ test.describe('partner operations completed work and large lists', () => {
     await page.getByRole('navigation', { name: 'Requests pages' }).getByRole('button', { name: 'Previous', exact: true }).click();
     await expect(page.getByRole('article')).toHaveCount(25);
   });
+
+  test('Completed requests has its own pager that keeps its page separately from Requests', async ({ page }) => {
+    const closed = Array.from({ length: 28 }, (_, index) => requestFor(index + 2, index % 2 ? 'Cancelled' : 'Completed'));
+    await setup(page, [requestFor(0), requestFor(1), ...closed]);
+    await page.goto('/admin/partner-requests/');
+    await expect(page.getByRole('article')).toHaveCount(2);
+    await expect(page.getByRole('navigation', { name: 'Requests pages' })).toHaveCount(0);
+    await page.getByRole('tab', { name: 'Completed requests', exact: true }).click();
+    const pager = page.getByRole('navigation', { name: 'Completed requests pages' });
+    await expect(page.getByRole('article')).toHaveCount(25);
+    await expect(pager.getByText('Showing 1–25 of 28', { exact: true })).toBeVisible();
+    await expect(pager.getByRole('button', { name: 'Previous', exact: true })).toBeDisabled();
+    await pager.getByRole('button', { name: 'Next', exact: true }).click();
+    await expect(page.getByRole('article')).toHaveCount(3);
+    await expect(pager.getByText('Page 2 of 2', { exact: true })).toBeVisible();
+    await expect(pager.getByText('Showing 26–28 of 28', { exact: true })).toBeVisible();
+    await expect(pager.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
+    await expect(page.getByRole('article', { name: 'Property 29 request' })).toBeVisible();
+    // Switching tabs keeps each list's own page.
+    await page.getByRole('tab', { name: 'Requests', exact: true }).click();
+    await expect(page.getByRole('article')).toHaveCount(2);
+    await page.getByRole('tab', { name: 'Completed requests', exact: true }).click();
+    await expect(pager.getByText('Page 2 of 2', { exact: true })).toBeVisible();
+    await pager.getByRole('button', { name: 'Previous', exact: true }).click();
+    await expect(page.getByRole('article')).toHaveCount(25);
+    await expect(pager.getByText('Page 1 of 2', { exact: true })).toBeVisible();
+  });
 });
