@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
 import type { Branch } from '../src/lib/adminApi';
-import type { CleaningRequest } from '../src/lib/partnerApi';
+import type { CleaningRequest, PartnerChange } from '../src/lib/partnerApi';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const companyId = '11111111-1111-4111-8111-111111111111';
@@ -20,7 +20,7 @@ const requestFor = (index: number, status = 'Requested'): CleaningRequest => ({
 type Write = { method: string; path: string; body: Record<string, unknown> };
 
 /** Admin partner operations. Requests are served from `requests`; writes are recorded in `writes`. */
-async function setup(page: Page, requests: CleaningRequest[]) {
+async function setup(page: Page, requests: CleaningRequest[], changes: PartnerChange[] = []) {
   await setupAdminMocks(page);
   await page.route(/\/api\/v1\/admin\/companies(?:\?.*)?$/, route => route.fulfill({ headers, json: { items: [{ id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }], total: 1 } }));
   await page.route(/\/api\/v1\/admin\/employees$/, route => route.fulfill({ headers, json: [
@@ -33,7 +33,7 @@ async function setup(page: Page, requests: CleaningRequest[]) {
   await page.route(/\/api\/v1\/admin\/partner\//, route => {
     const req = route.request(), path = new URL(req.url()).pathname.split('/partner')[1];
     if (req.method() === 'OPTIONS') return route.fulfill({ headers });
-    if (req.method() === 'GET') return route.fulfill({ headers, json: path === '/requests' ? current : path === '/branches' ? branches : [] });
+    if (req.method() === 'GET') return route.fulfill({ headers, json: path === '/requests' ? current : path === '/branches' ? branches : path === '/change-requests' ? changes : [] });
     const body = req.postDataJSON() as Record<string, unknown>;
     writes.push({ method: req.method(), path, body });
     const index = current.findIndex(item => path.startsWith(`/requests/${item.id}`));
@@ -171,4 +171,65 @@ test.describe('partner operations completed work and large lists', () => {
     await expect(dialog).toHaveCount(0);
     expect(writes).toHaveLength(0);
   });
+
+  test('the Changes list pages 25 change requests at a time', async ({ page }) => {
+    const changes: PartnerChange[] = Array.from({ length: 27 }, (_, index) => ({ id: `change-${index}`, companyId, branchId: null, requestId: null, kind: 'Property change',
+      message: `Change message ${index}`, createdUtc: '2026-11-01T10:00:00Z', resolvedUtc: null, resolution: null }));
+    await setup(page, [], changes);
+    await page.goto('/admin/partner-requests/');
+    await page.getByRole('tab', { name: 'Changes', exact: true }).click();
+    const pager = page.getByRole('navigation', { name: 'Changes pages' });
+    await expect(page.getByRole('article')).toHaveCount(25);
+    await expect(pager.getByText('Showing 1–25 of 27', { exact: true })).toBeVisible();
+    await pager.getByRole('button', { name: 'Next', exact: true }).click();
+    await expect(page.getByRole('article')).toHaveCount(2);
+    await expect(page.getByText('Change message 26', { exact: true })).toBeVisible();
+    await pager.getByRole('button', { name: 'Previous', exact: true }).click();
+    await expect(page.getByRole('article')).toHaveCount(25);
+  });
+});
+
+test('a manager opening the partner-request push link uses the same actions through manager routes only', async ({ page }) => {
+  await setupAdminMocks(page);
+  await page.addInitScript(() => { (window as unknown as { __MOCK_ROLES__: string[] }).__MOCK_ROLES__ = ['manager']; });
+  await page.route(/\/api\/v1\/me$/, route => route.fulfill({ headers, json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: ['manager'] })], employee: { id: 'manager', firstName: 'Tenant', lastName: 'Manager', role: 'manager', isActive: true } } }));
+  const adminCalls: string[] = [], writes: Write[] = [];
+  let current = [requestFor(0), requestFor(1), requestFor(2, 'Completed')];
+  await page.route(/\/api\/v1\/admin\//, route => { adminCalls.push(route.request().url()); return route.fulfill({ status: 403, headers }); });
+  await page.route(/\/api\/v1\/manager\//, route => {
+    const req = route.request(), path = new URL(req.url()).pathname.split('/manager')[1];
+    if (req.method() === 'OPTIONS') return route.fulfill({ headers });
+    if (req.method() === 'GET') {
+      const json = path === '/companies' ? { items: [{ id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }], total: 1 }
+        : path === '/employees' ? [{ id: 'manual', firstName: 'Manual', lastName: 'Cleaner', isActive: true, role: 'employee', autoAcceptWork: false }]
+        : path === '/time-zone' ? { timeZoneId: 'Europe/Helsinki' } : path === '/partner/requests' ? current
+        : path === '/partner/branches' ? [branchFor(0), branchFor(1), branchFor(2)] : [];
+      return route.fulfill({ headers, json });
+    }
+    const body = req.postDataJSON() as Record<string, unknown>; writes.push({ method: req.method(), path, body });
+    const index = current.findIndex(item => path.startsWith(`/partner/requests/${item.id}`));
+    if (index < 0) return route.fulfill({ status: 404, headers });
+    const item = current[index];
+    current = current.map((value, at) => at !== index ? value : path.endsWith('/cancel') ? { ...item, version: item.version + 1, status: 'Cancelled' }
+      : { ...item, version: item.version + 1, offeredEmployeeId: 'manual' } as CleaningRequest);
+    return route.fulfill({ headers, json: current[index] });
+  });
+  // The PartnerRequest push for managers opens this path (see PushDeliveryService).
+  await page.goto('/manager/partner-requests/?tenant=readysetsiivous');
+  await page.getByRole('article', { name: 'Property 0 request' }).getByRole('button', { name: 'Arrange cleaner / time', exact: true }).click();
+  const arrange = page.getByRole('dialog', { name: 'Arrange Property 0', exact: true });
+  await arrange.getByRole('combobox', { name: 'Cleaner', exact: true }).selectOption('manual');
+  await arrange.getByRole('button', { name: 'Send cleaning offer', exact: true }).click();
+  await expect(arrange).toHaveCount(0);
+  await page.getByRole('article', { name: 'Property 1 request' }).getByRole('button', { name: 'Cancel request', exact: true }).click();
+  const cancel = page.getByRole('dialog', { name: /^Cancel / });
+  await cancel.getByLabel('Reason for cancellation', { exact: true }).fill('Owner cancelled.');
+  await cancel.getByRole('button', { name: 'Confirm cancellation', exact: true }).click();
+  await expect(page.getByText('Request cancelled.', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Completed requests', exact: true }).click();
+  await expect(page.getByRole('article', { name: 'Property 1 request' })).toBeVisible();
+  await expect(page.getByRole('article', { name: 'Property 2 request' })).toBeVisible();
+  expect(writes.map(write => `${write.method} ${write.path}`)).toEqual([
+    `POST /partner/requests/${requestFor(0).id}/offer`, `POST /partner/requests/${requestFor(1).id}/cancel`]);
+  expect(adminCalls).toEqual([]);
 });
