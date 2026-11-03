@@ -180,7 +180,7 @@ public class CreateShiftCommandHandlerTests
         _shiftRepoMock.Setup(r => r.ListAsync(It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<Shift> { shift1, shift2 });
 
-        var handler = new ShiftHandlers.ListShiftsQueryHandler(_shiftRepoMock.Object);
+        var handler = new ShiftHandlers.ListShiftsQueryHandler(_shiftRepoMock.Object, Mock.Of<CleaningSuite.Application.QualityCycle.IQualityCycleRepository>());
         var result = await handler.Handle(new ListShiftsQuery(null, null), CancellationToken.None);
 
         Assert.Equal(2, result.Count);

@@ -22,7 +22,8 @@ public record ShiftDto(
     bool IsActive,
     DateTime? ValidFrom,
     DateTime? ValidUntil,
-    Guid? QualityCycleTemplateId = null);
+    Guid? QualityCycleTemplateId = null,
+    bool IsCompleted = false);
 
 public record ShiftAssignmentDto(
     Guid Id,
@@ -270,10 +271,13 @@ public class ShiftHandlers
     public class ListShiftsQueryHandler : IRequestHandler<ListShiftsQuery, IReadOnlyList<ShiftDto>>
     {
         private readonly IShiftRepository _repository;
+        private readonly IQualityCycleRepository _forms;
 
-        public ListShiftsQueryHandler(IShiftRepository repository)
+        // Required, so a missing registration fails at resolution instead of silently hiding completed visits.
+        public ListShiftsQueryHandler(IShiftRepository repository, IQualityCycleRepository forms)
         {
             _repository = repository;
+            _forms = forms;
         }
 
         public async Task<IReadOnlyList<ShiftDto>> Handle(ListShiftsQuery request, CancellationToken ct)
@@ -282,7 +286,13 @@ public class ShiftHandlers
                 ? (await _repository.ListIncludingInactiveAsync(ct)).Where(s => (!request.CompanyId.HasValue || s.CompanyId == request.CompanyId)
                     && (!request.BranchId.HasValue || s.BranchId == request.BranchId)).ToList()
                 : await _repository.ListAsync(request.CompanyId, request.BranchId, ct);
-            return shifts.Select(MapShift).ToList();
+            // A one-time visit is completed once its checklist has been submitted. Recurring shifts stay live.
+            // One batched lookup for all one-time shifts, never one query per shift.
+            var oneTimeIds = shifts.Where(s => s.Schedule.IsOneTime).Select(s => s.Id).ToList();
+            IReadOnlySet<Guid> completed = oneTimeIds.Count == 0
+                ? new HashSet<Guid>()
+                : await _forms.ListShiftIdsWithSubmittedFormAsync(oneTimeIds, ct);
+            return shifts.Select(shift => MapShift(shift) with { IsCompleted = completed.Contains(shift.Id) }).ToList();
         }
     }
 
