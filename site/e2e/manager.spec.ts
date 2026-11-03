@@ -93,7 +93,7 @@ test('manager navigation and shift form fit the viewport without covering save o
   await setup(page); await page.goto('/manager/');
   await page.getByRole('button', { name: 'Add shift' }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  const form = page.getByRole('form', { name: 'Create shift' });
+  const form = page.getByRole('dialog', { name: 'Create shift', exact: true });
   const dates = form.locator('input[type="date"]');
   const save = form.getByRole('button', { name: 'Save shift', exact: true });
   const cancel = form.getByRole('button', { name: 'Cancel', exact: true });
