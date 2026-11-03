@@ -79,3 +79,63 @@ test('admin requires a start date, supports an open end date, and edits the rang
   await expect(edit).toHaveCount(0);
   expect(writes[3].validFrom).toBeUndefined(); expect(writes[3].validUntil).toBeUndefined();
 });
+
+test('on-call creation guides scheduling a concrete one-time visit and can keep an unscheduled shift', async ({ page }) => {
+  await setupAdminMocks(page);
+  const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
+  const shiftWrites: any[] = [], visitWrites: any[] = [], occurrenceQueries: URLSearchParams[] = [];
+  let shifts: any[] = [], visits: any[] = [];
+  await page.route(/\/api\/v1\/admin\//, route => {
+    const request = route.request(), path = new URL(request.url()).pathname;
+    if (request.method() === 'OPTIONS') return route.fulfill({ headers });
+    if (path.endsWith('/shifts') && request.method() === 'POST') {
+      const body = request.postDataJSON(); shiftWrites.push(body); shifts = [{ id: 'oncall', ...body }];
+      return route.fulfill({ headers, json: shifts[0] });
+    }
+    if (path.endsWith('/occurrence-exceptions')) {
+      const body = request.postDataJSON(); visitWrites.push(body);
+      visits = [{ ...body, exceptionId: 'visit', assigneeIds: body.employeeId ? [body.employeeId] : [] }];
+      return route.fulfill({ headers, json: visits[0] });
+    }
+    if (path.endsWith('/occurrences')) {
+      occurrenceQueries.push(new URL(request.url()).searchParams);
+      return route.fulfill({ headers, json: visits });
+    }
+    return route.fulfill({ headers, json: path.endsWith('/shifts') ? shifts
+      : path.endsWith('/companies/company') ? { company: { id: 'company', name: 'AAA', isActive: true }, branches: [{ id: 'branch', companyId: 'company', name: 'Property', isActive: true }] }
+      : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'AAA', isActive: true }], total: 1 }
+      : path.endsWith('/employees') ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true }]
+      : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
+  });
+  await page.goto('/admin/shifts/');
+  await page.getByRole('button', { name: 'Add shift', exact: true }).click();
+  const create = page.getByRole('dialog', { name: 'Add shift', exact: true });
+  await create.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'AAA', exact: true }).click();
+  await create.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'Property', exact: true }).click();
+  await create.getByRole('textbox', { name: 'Name', exact: true }).fill('One-time cleaning');
+  await create.getByLabel('Schedule', { exact: true }).click(); await page.getByRole('option', { name: 'On-call / flexible', exact: true }).click();
+  await expect(create.getByText('Only dated visits appear on calendars.', { exact: false })).toBeVisible();
+  await create.getByRole('button', { name: 'Create shift', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: 'Change occurrence', exact: true });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('textbox', { name: /^Start \(Europe\/Helsinki\)/ })).toHaveValue('');
+  expect(shiftWrites[0].schedule).toEqual({ type: 4 }); expect(visitWrites).toHaveLength(0);
+  await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  await expect(list.getByText('Cancelling keeps the shift without a scheduled visit.', { exact: false })).toBeVisible();
+  await expect(list.getByText('No occurrences in this period.')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Schedule one-time visit', exact: true }).click();
+  await editor.getByRole('textbox', { name: /^Start \(Europe\/Helsinki\)/ }).fill('2030-01-10T09:00');
+  await editor.getByRole('textbox', { name: /^End \(Europe\/Helsinki\)/ }).fill('2030-01-10T11:00');
+  await editor.getByLabel('Replacement employee (optional)', { exact: true }).click();
+  await page.getByRole('option', { name: 'Test Cleaner', exact: true }).click();
+  await editor.getByRole('textbox', { name: /^Reason/ }).fill('Agreed one-time cleaning');
+  await editor.getByRole('button', { name: 'Save occurrence', exact: true }).click();
+  await expect(editor).toBeHidden();
+  expect(visitWrites).toEqual([{ originalStartUtc: null, startUtc: '2030-01-10T07:00:00.000Z', endUtc: '2030-01-10T09:00:00.000Z', status: 4, reason: 'Agreed one-time cleaning', employeeId: 'cleaner' }]);
+  await expect(list.getByText('One-time visit scheduled.', { exact: false })).toBeVisible();
+  await expect(list.getByRole('cell', { name: 'Test Cleaner', exact: false })).toBeVisible();
+  await expect(list.getByLabel('From', { exact: true })).toHaveValue('2030-01-10');
+  expect(occurrenceQueries.at(-1)?.get('from')).toBe('2030-01-09T22:00:00.000Z');
+});

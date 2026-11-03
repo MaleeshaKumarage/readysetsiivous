@@ -2,7 +2,7 @@ import { authorizedFetch, type ShiftSchedule } from './adminApi';
 export interface ManagerSchedule extends ShiftSchedule { dailyTimes?: Record<string, { start: string; end: string }> }
 export interface ManagerShift { id: string; companyId: string; branchId: string; name: string; schedule: ManagerSchedule; isActive: boolean; validFrom: string | null; validUntil: string | null }
 export interface ManagerEmployee { autoAcceptWork?: boolean; id: string; firstName: string; lastName: string; phone: string; isActive: boolean }
-export interface ManagerCompany { id: string; name: string; isActive: boolean }
+export interface ManagerCompany { id: string; name: string; isActive: boolean; isPartnerEnabled: boolean }
 export interface ManagerBranch { id: string; companyId: string; name: string; isActive: boolean }
 export interface ManagerAssignment { id: string; shiftId: string; employeeId: string; assignedAtUtc: string; isActive: boolean }
 async function send<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
