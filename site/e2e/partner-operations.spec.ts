@@ -157,8 +157,10 @@ test('staff resolves owner changes, creates a property and cancels a versioned r
   await expect(page.getByRole('heading', { name: 'Forest apartment · Owner company', exact: true })).toBeVisible();
   expect(writes[1]).toMatchObject({ path: '/branches', method: 'POST', body: { companyId, name: 'Forest apartment', street: 'Forest road 8', city: 'Oulu', roomCount: 3, bedCount: 4, priceNet: null, isActive: true } });
   await page.getByRole('tab', { name: 'Requests', exact: true }).click();
-  page.once('dialog', dialog => dialog.accept('Owner cancelled travel.'));
   await page.getByRole('button', { name: 'Cancel request', exact: true }).click();
+  await page.getByLabel('Reason for cancellation', { exact: true }).fill('Owner cancelled travel.');
+  await page.getByRole('button', { name: 'Confirm cancellation', exact: true }).click();
+  await expect(page.getByText('Request cancelled.', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Lake apartment · Cancelled', exact: true })).toHaveCount(0); await expect(page.getByRole('button', { name: 'Cancel request', exact: true })).toHaveCount(0);
   expect(writes[2]).toEqual({ path: `/requests/${cleaning.id}/cancel`, method: 'POST', body: { version: 7, reason: 'Owner cancelled travel.' } });
 });
