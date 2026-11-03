@@ -137,6 +137,8 @@ public sealed class PartnerNotificationDispatcher(IPartnerStore store, IShiftWor
         var request = item.RequestId.HasValue ? await Db.LoadAsync<PartnerCleaningRequest>(item.RequestId.Value, ct) : null;
         if (company is null || !company.IsActive || (item.RequestId.HasValue && request is null))
         { await Finish(item, "Skipped", "Company or request is no longer available.", ct); return null; }
+        if (item.Audience == "Staff")
+        { await Finish(item, "Skipped", "Staff alerts use app notifications, not email.", ct); return null; }
         if (item.Audience == "Employee" && !CurrentForRequest(item, request))
         { await Finish(item, "Skipped", "This cleaner offer is no longer current.", ct); return null; }
         return item;
@@ -195,7 +197,7 @@ public sealed class PartnerNotificationDispatcher(IPartnerStore store, IShiftWor
                 var started = forms.Any(f => f.StartedAtUtc.HasValue);
                 var complete = assignments.Count > 0 && assignments.All(a => forms.Any(f => f.EmployeeId == a.EmployeeId && f.IsSubmitted));
                 foreach (var kind in new[] { started ? "WorkStarted" : null, complete ? "WorkCompleted" : null }.OfType<string>())
-                    foreach (var audience in new[] { "Company", "Staff" })
+                    foreach (var audience in new[] { "Company" })
                     {
                         var eventId = PartnerCleaningRequest.StableId($"partner-work:{request.Id:N}:{kind}:{audience}");
                         if (await Db.LoadAsync<PartnerNotification>(eventId, ct) is null)

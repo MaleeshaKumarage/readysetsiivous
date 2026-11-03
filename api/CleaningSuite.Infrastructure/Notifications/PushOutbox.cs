@@ -18,7 +18,7 @@ public sealed class PushOutbox : IPushOutbox
     }
     public async Task StagePartnerRequestAsync(IDocumentSession session, Guid requestId, int revision, DateTimeOffset occurredAt, CancellationToken ct = default)
     {
-        var admins = await session.Query<Employee>().Where(e => e.IsActive && !e.IdentitySyncPending && e.Role == Employee.RoleAdmin).ToListAsync(ct);
+        var admins = await session.Query<Employee>().Where(e => e.IsActive && !e.IdentitySyncPending && (e.Role == Employee.RoleAdmin || e.Role == Employee.RoleManager)).ToListAsync(ct);
         foreach (var admin in admins)
             await StageAsync(session, new PushIntent { EmployeeId = admin.Id, PartnerRequestId = requestId, RequestRevision = revision, AdminAudience = true, Kind = "PartnerRequest", EventKey = $"partner:{requestId}:{revision}:{admin.Id}", OccurredUtc = occurredAt.UtcDateTime, DueUtc = occurredAt.UtcDateTime, ExpiresUtc = occurredAt.UtcDateTime.AddHours(24) }, ct);
     }

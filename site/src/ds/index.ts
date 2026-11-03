@@ -6,6 +6,7 @@ export { Card, cardPaddings, cardVariants } from './Card';
 export type { CardPadding, CardProps, CardVariant } from './Card';
 export { Container } from './Container';
 export type { ContainerProps } from './Container';
+export { Dialog } from './Dialog';
 export { Eyebrow, Heading } from './Heading';
 export type { EyebrowProps, HeadingLevel, HeadingProps, HeadingSize } from './Heading';
 export { Field, Input, Textarea } from './Input';

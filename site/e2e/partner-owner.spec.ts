@@ -8,10 +8,10 @@ const companyId = '11111111-1111-4111-8111-111111111111';
 const priced: Branch = { id: '22222222-2222-4222-8222-222222222222', companyId, name: 'Lake apartment', street: 'Lake road 1', postalCode: '33100', city: 'Tampere', country: 'FI', isActive: true, roomCount: 2, bedCount: 3, priceNet: 70, vatRatePercent: 25.5, estimatedDurationMinutes: 120, pricingReady: true };
 const pending: CleaningRequest = { id: '33333333-3333-4333-8333-333333333333', version: 5, companyId, branchId: priced.id, branchName: priced.name, fromDate: '2026-12-01', toDate: '2026-12-02', exactStartLocalTime: null, notes: 'Original cleaning instructions', priceNet: 70, vatRatePercent: 25.5, estimatedDurationMinutes: 120, status: 'Requested', firstAcceptedAtUtc: null, linkedShiftId: null, plannedStartUtc: null, plannedEndUtc: null, acceptedCleanerName: null, actualStartUtc: null, actualEndUtc: null };
 interface Write { path: string; method: string; body: Record<string, unknown> | null }
-async function owner(page: Page, options: { enabled?: boolean; pending?: boolean; branches?: Branch[]; shifts?: PartnerShift[] } = {}) {
+async function owner(page: Page, options: { enabled?: boolean; pending?: boolean; requests?: CleaningRequest[]; branches?: Branch[]; shifts?: PartnerShift[] } = {}) {
   await setupAdminMocks(page); await page.addInitScript(() => { (window as unknown as { __MOCK_ROLES__: string[] }).__MOCK_ROLES__ = ['partner']; });
   const identity: PartnerIdentity = { realm: 'readysetsiivous', person: { id: 'owner-profile', firstName: 'Test', lastName: 'Owner', role: 'partner', isActive: true }, company: { id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: options.enabled ?? true }, timeZoneId: 'Europe/Helsinki' };
-  let branches: Branch[] = options.branches ?? [priced], requests: CleaningRequest[] = options.pending ? [pending] : [], changes: PartnerChange[] = [];
+  let branches: Branch[] = options.branches ?? [priced], requests: CleaningRequest[] = options.requests ?? (options.pending ? [pending] : []), changes: PartnerChange[] = [];
   const writes: Write[] = [], reads: string[] = [];
   await page.route(/\/api\/v1\/partner\//, route => {
     const req = route.request(), path = new URL(req.url()).pathname.split('/partner')[1];
@@ -59,7 +59,7 @@ test('company shifts show localized empty state, dates and statuses while preser
 test('owner creates a property, requests its quote and sends property changes without setting company or prices', async ({ page }) => {
   const state = await owner(page); await page.goto('/partner/');
   await page.getByRole('button', { name: 'Add property', exact: true }).click();
-  const form = page.getByRole('region', { name: 'Add property', exact: true });
+  const form = page.getByRole('dialog', { name: 'Add property', exact: true });
   await form.getByRole('button', { name: 'Save property', exact: true }).click(); expect(state.writes).toHaveLength(0);
   await form.getByLabel('Property name', { exact: true }).fill('Abandoned draft'); await form.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(form).toHaveCount(0); expect(state.writes).toHaveLength(0);
   await page.getByRole('button', { name: 'Add property', exact: true }).click();
@@ -78,7 +78,7 @@ test('owner creates a property, requests its quote and sends property changes wi
 
 test('owner creates a fixed appointment with one date and immutable pricing supplied by the server', async ({ page }) => {
   const state = await owner(page); await page.goto('/partner/'); const property = page.getByRole('article', { name: priced.name, exact: true });
-  await property.getByRole('button', { name: 'Request cleaning', exact: true }).click(); const form = page.getByRole('region', { name: 'Cleaning request form' });
+  await property.getByRole('button', { name: 'Request cleaning', exact: true }).click(); const form = page.getByRole('dialog', { name: /cleaning request/i });
   await form.getByLabel('From date', { exact: true }).fill('2026-12-15'); await form.getByLabel('Fixed appointment on this date').check(); await expect(form.getByLabel('To date', { exact: true })).toHaveCount(0);
   await form.getByLabel('Exact start time').fill('10:30'); await form.getByLabel('Cleaning instructions').fill('After guest checkout.'); await form.getByRole('button', { name: 'Save cleaning request', exact: true }).click();
   await expect(page.getByText('2026-12-15 – 2026-12-15 at 10:30', { exact: true })).toBeVisible();
@@ -90,9 +90,9 @@ test('Request cleaning visibly opens and focuses the form even below a long prop
   await owner(page, { branches: [priced, ...Array.from({ length: 20 }, (_, index) => ({ ...priced, id: `other-${index}`, name: `Other apartment ${index}` }))] });
   await page.goto('/partner/');
   await page.getByRole('article', { name: priced.name, exact: true }).getByRole('button', { name: 'Request cleaning', exact: true }).click();
-  const form = page.getByRole('region', { name: 'Cleaning request form', exact: true });
+  const form = page.getByRole('dialog', { name: /cleaning request/i });
   await expect(form).toBeInViewport();
-  await expect(form).toBeFocused();
+  await expect(form.getByLabel("From date", { exact: true })).toBeFocused();
 });
 
 test('FI/EN switching preserves a draft, creates and cancels a Finnish request and stays local to the portal', async ({ page }) => {
@@ -102,16 +102,24 @@ test('FI/EN switching preserves a draft, creates and cancels a Finnish request a
   await expect(page.getByRole('heading', { name: 'Kumppaniportaali', exact: true })).toBeVisible();
   await expect(page.getByText(/70,00\s*€/).first()).toBeVisible();
   await page.getByRole('button', { name: 'Pyydä siivous', exact: true }).click();
-  let form = page.getByRole('region', { name: 'Siivouspyynnön lomake', exact: true });
+  let form = page.getByRole('dialog', { name: /siivouspyyntö/i });
   await form.getByLabel('Alkupäivä', { exact: true }).fill('2026-12-10');
   await form.getByLabel('Loppupäivä', { exact: true }).fill('2026-12-11');
   await form.getByLabel('Siivouksen ohjeet').fill('Keep this entered text unchanged.');
+  // The open dialog covers the header, so the language switch happens after closing it. Its draft is discarded on close.
+  await form.getByRole('button', { name: 'Peruuta', exact: true }).click();
+  await expect(form).toHaveCount(0);
   await page.getByRole('button', { name: 'English', exact: true }).click();
-  const english = page.getByRole('region', { name: 'Cleaning request form', exact: true });
-  await expect(english.getByLabel('From date', { exact: true })).toHaveValue('2026-12-10');
-  await expect(english.getByLabel('Cleaning instructions')).toHaveValue('Keep this entered text unchanged.');
+  await page.getByRole('button', { name: 'Request cleaning', exact: true }).click();
+  const english = page.getByRole('dialog', { name: /cleaning request/i });
+  await expect(english.getByLabel('From date', { exact: true })).toHaveValue('');
+  await english.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('button', { name: 'Suomi', exact: true }).click();
-  form = page.getByRole('region', { name: 'Siivouspyynnön lomake', exact: true });
+  await page.getByRole('button', { name: 'Pyydä siivous', exact: true }).click();
+  form = page.getByRole('dialog', { name: /siivouspyyntö/i });
+  await form.getByLabel('Alkupäivä', { exact: true }).fill('2026-12-10');
+  await form.getByLabel('Loppupäivä', { exact: true }).fill('2026-12-11');
+  await form.getByLabel('Siivouksen ohjeet').fill('Keep this entered text unchanged.');
   await form.getByRole('button', { name: 'Tallenna siivouspyyntö', exact: true }).click();
   await expect(page.getByText('Siivouspyyntö tallennettu. Henkilökunta järjestää siivoojan.', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Lake apartment · Pyydetty', exact: true })).toBeVisible();
@@ -120,6 +128,7 @@ test('FI/EN switching preserves a draft, creates and cancels a Finnish request a
   page.once('dialog', async dialog => { confirmation = dialog.message(); await dialog.accept(); });
   await page.getByRole('button', { name: 'Peruuta pyyntö', exact: true }).click();
   expect(confirmation).toBe('Haluatko peruuttaa tämän siivouspyynnön?');
+  await page.getByRole('tab', { name: /^Valmiit pyynnöt/ }).click();
   await expect(page.getByRole('heading', { name: 'Lake apartment · Peruttu', exact: true })).toBeVisible();
   expect(state.writes.filter(write => write.path === '/requests')).toHaveLength(1);
   await page.reload();
@@ -137,7 +146,7 @@ test('Finnish property, quote, change and validation messages preserve entered c
     ? route.fulfill({ status: 409, headers, json: { detail: 'Request a quote before booking this property.' } }) : route.fallback());
   await page.goto('/partner/'); await page.getByRole('button', { name: 'Suomi', exact: true }).click();
   await page.getByRole('button', { name: 'Lisää kohde', exact: true }).click();
-  const propertyForm = page.getByRole('region', { name: 'Lisää kohde', exact: true });
+  const propertyForm = page.getByRole('dialog', { name: 'Lisää kohde', exact: true });
   await propertyForm.getByLabel('Kohteen nimi', { exact: true }).fill('Mökki Oulussa');
   await propertyForm.getByLabel('Kaupunki', { exact: true }).fill('Oulu');
   await propertyForm.getByLabel('Huoneita (valinnainen)', { exact: true }).fill('3');
@@ -154,7 +163,7 @@ test('Finnish property, quote, change and validation messages preserve entered c
   await expect(page.getByText('Odottaa henkilökunnan vastausta', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Kohteet', exact: true }).click();
   await page.getByRole('article', { name: priced.name, exact: true }).getByRole('button', { name: 'Pyydä siivous', exact: true }).click();
-  const cleaning = page.getByRole('region', { name: 'Siivouspyynnön lomake', exact: true });
+  const cleaning = page.getByRole('dialog', { name: /siivouspyyntö/i });
   await cleaning.getByRole('button', { name: 'Tallenna siivouspyyntö', exact: true }).click();
   await expect(cleaning.getByRole('alert')).toHaveText('Täytä pakolliset kentät ennen tallentamista.');
   await cleaning.getByLabel('Alkupäivä', { exact: true }).fill('2026-12-10');
@@ -199,7 +208,7 @@ test.describe('Finnish browser defaults', () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath('partner-portal-fi-320.png'), fullPage: true });
     await page.getByRole('button', { name: 'Pyydä siivous', exact: true }).click();
-    await expect(page.getByRole('region', { name: 'Siivouspyynnön lomake', exact: true })).toBeInViewport();
+    await expect(page.getByRole('dialog', { name: /siivouspyyntö/i })).toBeInViewport();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath('partner-request-fi-320.png'), fullPage: true });
     expect(await page.evaluate(() => document.documentElement.classList.contains('dark'))).toBe(true);
@@ -221,7 +230,7 @@ test('portal shows its real logo and a failed cleaning save preserves fields and
   await expect.poll(() => logo.evaluate(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('partner-portal-logo.png'), fullPage: true });
   await page.getByRole('button', { name: 'Request cleaning', exact: true }).click();
-  const form = page.getByRole('region', { name: 'Cleaning request form' });
+  const form = page.getByRole('dialog', { name: /cleaning request/i });
   await form.getByLabel('From date', { exact: true }).fill('2026-12-10');
   await form.getByLabel('To date', { exact: true }).fill('2026-12-11');
   await form.getByLabel('Cleaning instructions').fill('Please keep these instructions.');
@@ -245,7 +254,7 @@ test('unpriced or inactive properties cannot request cleaning and invalid dates 
   for (const name of ['Unpriced apartment', 'Inactive apartment'])
     await expect(page.getByRole('article', { name, exact: true }).getByRole('button', { name: 'Request cleaning', exact: true })).toBeDisabled();
   await page.getByRole('article', { name: priced.name, exact: true }).getByRole('button', { name: 'Request cleaning', exact: true }).click();
-  const form = page.getByRole('region', { name: 'Cleaning request form' });
+  const form = page.getByRole('dialog', { name: /cleaning request/i });
   await form.getByRole('button', { name: 'Save cleaning request' }).click();
   expect(state.writes).toEqual([]);
   await form.getByLabel('From date', { exact: true }).fill('2026-12-10');
@@ -259,12 +268,13 @@ test('unpriced or inactive properties cannot request cleaning and invalid dates 
 
 test('owner edits a pending request with its revision and cancels the refreshed revision only after confirmation', async ({ page }) => {
   const state = await owner(page, { pending: true }); await page.goto('/partner/'); await page.getByRole('tab', { name: 'Cleaning requests', exact: true }).click();
-  await page.getByRole('button', { name: 'Edit request', exact: true }).click(); const form = page.getByRole('region', { name: 'Cleaning request form' });
+  await page.getByRole('button', { name: 'Edit request', exact: true }).click(); const form = page.getByRole('dialog', { name: /cleaning request/i });
   await expect(form.getByLabel('From date', { exact: true })).toHaveValue('2026-12-01'); await expect(form.getByLabel('Cleaning instructions')).toHaveValue(pending.notes!);
   await form.getByLabel('From date', { exact: true }).fill('2026-12-05'); await form.getByLabel('To date', { exact: true }).fill('2026-12-06'); await form.getByLabel('Cleaning instructions').fill('Updated checkout instructions.'); await form.getByRole('button', { name: 'Save cleaning request', exact: true }).click();
   await expect(page.getByText('2026-12-05 – 2026-12-06', { exact: true })).toBeVisible(); expect(state.writes[0]).toEqual({ path: `/requests/${pending.id}`, method: 'PUT', body: { version: 5, fromDate: '2026-12-05', toDate: '2026-12-06', exactStartLocalTime: null, notes: 'Updated checkout instructions.' } });
   page.once('dialog', dialog => dialog.dismiss()); await page.getByRole('button', { name: 'Cancel request', exact: true }).click(); expect(state.writes).toHaveLength(1);
   page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Cancel request', exact: true }).click();
+  await page.getByRole('tab', { name: /^Completed requests/ }).click();
   await expect(page.getByRole('heading', { name: 'Lake apartment · Cancelled', exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: 'Edit request', exact: true })).toHaveCount(0);
   expect(state.writes[1]).toEqual({ path: `/requests/${pending.id}/cancel`, method: 'POST', body: { version: 6 } });
 });
@@ -344,4 +354,90 @@ test('cleaner refreshes a failed offer read and a stale preplanned acceptance wi
   await expect(page.getByRole('button', { name: 'Refresh offers', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Accept cleaning', exact: true }).click(); await expect(page.getByText('No pending cleaning offers.', { exact: true })).toBeVisible();
   expect(decisions).toEqual([{ path: '/api/v1/me/partner-offers/planned-offer/accept', method: 'POST', body: { version: 5, plannedStartLocal: null } }, { path: '/api/v1/me/partner-offers/planned-offer/accept', method: 'POST', body: { version: 6, plannedStartLocal: null } }]);
+});
+
+test('partner portal moves finished and cancelled requests to Completed and pages active requests 25 at a time', async ({ page }) => {
+  const active = Array.from({ length: 27 }, (_, index) => ({ ...pending, id: `active-${index}`, branchName: `Apartment ${index}`, status: 'Requested', firstAcceptedAtUtc: null }));
+  const finished = { ...pending, id: 'finished', branchName: 'Finished apartment', status: 'Completed', firstAcceptedAtUtc: '2026-11-01T10:00:00Z' };
+  const cancelled = { ...pending, id: 'cancelled', branchName: 'Cancelled apartment', status: 'Cancelled', firstAcceptedAtUtc: null };
+  await owner(page, { requests: [...active, finished, cancelled] }); await page.goto('/partner/');
+  await page.getByRole('tab', { name: 'Cleaning requests', exact: true }).click();
+  await expect(page.getByRole('tab', { name: /^Active requests \(27\)/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('article')).toHaveCount(25);
+  const pages = page.getByRole('navigation', { name: 'Active requests' });
+  await expect(pages.getByRole('button', { name: 'Previous', exact: true })).toBeDisabled();
+  await pages.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(page.getByRole('article')).toHaveCount(2);
+  await expect(pages.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
+  await expect(page.getByRole('article', { name: /Finished apartment/ })).toHaveCount(0);
+  await pages.getByRole('button', { name: 'Previous', exact: true }).click();
+  await expect(page.getByRole('article')).toHaveCount(25);
+  await expect(page.getByRole('article', { name: /Apartment 0/ })).toBeVisible();
+  await page.getByRole('tab', { name: /^Completed requests \(2\)/ }).click();
+  await expect(page.getByRole('article')).toHaveCount(2);
+  const done = page.getByRole('article', { name: /Finished apartment/ });
+  await expect(done.getByRole('button', { name: 'Edit request', exact: true })).toHaveCount(0);
+  await expect(done.getByRole('button', { name: 'Cancel request', exact: true })).toHaveCount(0);
+});
+
+test('Escape closes the request dialog and returns focus to the button that opened it', async ({ page }) => {
+  await owner(page); await page.goto('/partner/');
+  const opener = page.getByRole('article', { name: priced.name, exact: true }).getByRole('button', { name: 'Request cleaning', exact: true });
+  await opener.click();
+  const form = page.getByRole('dialog', { name: /cleaning request/i });
+  await expect(form).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(form).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});
+
+test('a backdrop click closes the request dialog, a click inside does not, and focus returns to the opener', async ({ page }) => {
+  await owner(page); await page.goto('/partner/');
+  const opener = page.getByRole('article', { name: priced.name, exact: true }).getByRole('button', { name: 'Request cleaning', exact: true });
+  await opener.click();
+  const form = page.getByRole('dialog', { name: /cleaning request/i });
+  await expect(form).toBeVisible();
+  // A click on the dialog's own heading must not close it.
+  await form.getByRole('heading').first().click();
+  await expect(form).toBeVisible();
+  // The overlay fills the viewport; its top-left corner lies outside the panel.
+  await page.mouse.click(4, 4);
+  await expect(form).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});
+
+test('completed requests page 25 at a time, and switching lists resets to the first page', async ({ page }) => {
+  const active = Array.from({ length: 27 }, (_, index) => ({ ...pending, id: `active-${index}`, branchName: `Apartment ${index}`, status: 'Requested', firstAcceptedAtUtc: null }));
+  const done = Array.from({ length: 28 }, (_, index) => ({ ...pending, id: `done-${index}`, branchName: `Done apartment ${index}`, status: index % 2 ? 'Cancelled' : 'Completed', firstAcceptedAtUtc: null }));
+  await owner(page, { requests: [...active, ...done] }); await page.goto('/partner/');
+  await page.getByRole('tab', { name: 'Cleaning requests', exact: true }).click();
+  const activePages = page.getByRole('navigation', { name: 'Active requests' });
+  await activePages.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(activePages.getByText('2 / 2', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: /^Completed requests \(28\)/ }).click();
+  const donePages = page.getByRole('navigation', { name: 'Completed requests' });
+  // Switching lists starts the other list on its first page.
+  await expect(donePages.getByText('1 / 2', { exact: true })).toBeVisible();
+  await expect(page.getByRole('article')).toHaveCount(25);
+  await expect(donePages.getByRole('button', { name: 'Previous', exact: true })).toBeDisabled();
+  await donePages.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(page.getByRole('article')).toHaveCount(3);
+  await expect(donePages.getByText('2 / 2', { exact: true })).toBeVisible();
+  await expect(donePages.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
+  await donePages.getByRole('button', { name: 'Previous', exact: true }).click();
+  await expect(page.getByRole('article')).toHaveCount(25);
+  await page.getByRole('tab', { name: /^Active requests \(27\)/ }).click();
+  await expect(activePages.getByText('1 / 2', { exact: true })).toBeVisible();
+});
+
+test('Tab and Shift+Tab keep focus inside the open request dialog', async ({ page }) => {
+  await owner(page); await page.goto('/partner/');
+  await page.getByRole('article', { name: priced.name, exact: true }).getByRole('button', { name: 'Request cleaning', exact: true }).click();
+  const form = page.getByRole('dialog', { name: /cleaning request/i });
+  await expect(form).toBeVisible();
+  const focusInside = () => page.evaluate(() => !!document.activeElement?.closest('[role=dialog]'));
+  // More presses than the dialog has controls, so focus must wrap at both ends.
+  for (let press = 0; press < 15; press++) { await page.keyboard.press('Tab'); expect(await focusInside()).toBe(true); }
+  for (let press = 0; press < 15; press++) { await page.keyboard.press('Shift+Tab'); expect(await focusInside()).toBe(true); }
+  await expect(form).toBeVisible();
 });

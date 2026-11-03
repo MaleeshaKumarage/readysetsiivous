@@ -134,7 +134,7 @@ public class PushReminderDatabaseTests
     }
 
     [QualityCycleDatabaseFact]
-    public async Task New_partner_request_targets_only_current_opted_in_synced_administrators_and_retry_is_idempotent()
+    public async Task New_partner_request_targets_only_current_opted_in_synced_administrators_and_managers_and_retry_is_idempotent()
     {
         using var f = await Fixture.Create();
         var admin = new Employee { Role = Employee.RoleAdmin, KeycloakUserId = "admin", ShiftCalendarEnabled = false };
@@ -156,8 +156,9 @@ public class PushReminderDatabaseTests
         var body = new CreatePartnerRequest(Guid.NewGuid(), branch.Id, tomorrow, tomorrow);
         await service.Create(partner.Id, body, default); await service.Create(partner.Id, body, default);
         using var q = f.Store.QuerySession(f.Tenant);
-        var intent = Assert.Single(await q.Query<PushIntent>().ToListAsync());
-        Assert.Equal(admin.Id, intent.EmployeeId); Assert.True(intent.AdminAudience); Assert.Equal("PartnerRequest", intent.Kind);
+        var intents = await q.Query<PushIntent>().ToListAsync();
+        Assert.Equal(new[] { admin.Id, manager.Id }.Order(), intents.Select(x => x.EmployeeId).Order());
+        Assert.All(intents, x => { Assert.True(x.AdminAudience); Assert.Equal("PartnerRequest", x.Kind); });
     }
 
     [QualityCycleDatabaseFact]
