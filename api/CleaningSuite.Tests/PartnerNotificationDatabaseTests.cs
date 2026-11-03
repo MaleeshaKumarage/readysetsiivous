@@ -55,32 +55,6 @@ public class PartnerNotificationDatabaseTests
         Assert.Equal("Sent", (await query.LoadAsync<PartnerNotification>(f.Notification.Id))!.State);
     }
 
-    [QualityCycleDatabaseFact]
-    public async Task Recipient_changed_during_another_provider_send_is_rechecked_before_its_attempt()
-    {
-        using var f = await Fixture.Create(); using var sender = f.Session();
-        using (var edit = f.Store.LightweightSession(f.TenantId))
-        {
-            var item = (await edit.LoadAsync<PartnerNotification>(f.Notification.Id))!; item.Audience = "Staff"; edit.Store(item);
-            edit.Store(new Employee { Role = Employee.RoleAdmin, Email = "first@example.test" }, new Employee { Role = Employee.RoleManager, Email = "second@example.test" });
-            await edit.SaveChangesAsync();
-        }
-        f.Transport.Setup(t => t.SendAsync(It.IsAny<PartnerNotificationDelivery>(), It.IsAny<CancellationToken>()))
-            .Returns<PartnerNotificationDelivery, CancellationToken>(async (delivery, ct) =>
-            {
-                using var edit = f.Store.LightweightSession(f.TenantId);
-                var item = (await edit.LoadAsync<PartnerNotification>(f.Notification.Id, ct))!;
-                var other = item.Deliveries.Single(d => d.Id != delivery.Id);
-                var employee = (await edit.LoadAsync<Employee>(other.RecipientEmployeeId, ct))!;
-                employee.IsActive = false; edit.Store(employee); await edit.SaveChangesAsync(ct);
-            });
-        await f.Dispatcher(sender).DispatchAsync(f.Notification.Id, default);
-        using var query = f.Store.QuerySession(f.TenantId);
-        var stored = (await query.LoadAsync<PartnerNotification>(f.Notification.Id))!;
-        Assert.Single(stored.Deliveries, d => d.SentUtc.HasValue);
-        Assert.Single(stored.Deliveries, d => d.SkippedUtc.HasValue);
-        f.Transport.Verify(t => t.SendAsync(It.IsAny<PartnerNotificationDelivery>(), It.IsAny<CancellationToken>()), Times.Once);
-    }
 
     [QualityCycleDatabaseFact]
     public async Task Concurrent_dispatch_sends_one_delivery_and_persists_immutable_payload_before_provider_call()
@@ -125,42 +99,19 @@ public class PartnerNotificationDatabaseTests
         f.Transport.Verify(t=>t.SendAsync(It.IsAny<PartnerNotificationDelivery>(),It.IsAny<CancellationToken>()),Times.Once);
     }
     [QualityCycleDatabaseFact]
-    public async Task Ineligible_or_permanently_rejected_recipient_does_not_block_other_recipients()
+    public async Task Staff_alert_is_skipped_without_email_because_staff_use_app_notifications()
     {
-        using var f=await Fixture.Create();using var session=f.Session();
-        using(var edit=f.Store.LightweightSession(f.TenantId))
+        using var f = await Fixture.Create(); using var session = f.Session();
+        using (var edit = f.Store.LightweightSession(f.TenantId))
         {
-            var item=(await edit.LoadAsync<PartnerNotification>(f.Notification.Id))!;item.Audience="Staff";edit.Store(item);
-            edit.Store(new Employee{Role=Employee.RoleAdmin,Email="first@example.test"},new Employee{Role=Employee.RoleManager,Email="second@example.test"});await edit.SaveChangesAsync();
+            var item = (await edit.LoadAsync<PartnerNotification>(f.Notification.Id))!; item.Audience = "Staff"; edit.Store(item);
+            edit.Store(new Employee { Role = Employee.RoleAdmin, Email = "first@example.test" }, new Employee { Role = Employee.RoleManager, Email = "second@example.test" });
+            await edit.SaveChangesAsync();
         }
-        f.Transport.SetupSequence(t=>t.SendAsync(It.IsAny<PartnerNotificationDelivery>(),It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new PartnerNotificationSendException("Recipient rejected",false)).Returns(Task.CompletedTask);
-        await f.Dispatcher(session).DispatchAsync(f.Notification.Id,default);
-        using var q=f.Store.QuerySession(f.TenantId);var stored=(await q.LoadAsync<PartnerNotification>(f.Notification.Id))!;
-        Assert.Single(stored.Deliveries,d=>d.FailedUtc.HasValue);Assert.Single(stored.Deliveries,d=>d.SentUtc.HasValue);
-        Assert.Equal("Failed",stored.State);f.Transport.Verify(t=>t.SendAsync(It.IsAny<PartnerNotificationDelivery>(),It.IsAny<CancellationToken>()),Times.Exactly(2));
-    }
-    [QualityCycleDatabaseFact]
-    public async Task Revoked_staff_recipient_does_not_block_other_pending_recipients()
-    {
-        using var f=await Fixture.Create();using var session=f.Session();
-        using(var edit=f.Store.LightweightSession(f.TenantId))
-        {
-            var item=(await edit.LoadAsync<PartnerNotification>(f.Notification.Id))!;item.Audience="Staff";edit.Store(item);
-            edit.Store(new Employee{Role=Employee.RoleAdmin,Email="first@example.test"},new Employee{Role=Employee.RoleManager,Email="second@example.test"});await edit.SaveChangesAsync();
-        }
-        f.Transport.SetupSequence(t=>t.SendAsync(It.IsAny<PartnerNotificationDelivery>(),It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new PartnerNotificationSendException("uncertain",true,TimeSpan.FromSeconds(30))).Returns(Task.CompletedTask);
-        var dispatcher=f.Dispatcher(session);await dispatcher.DispatchAsync(f.Notification.Id,default);
-        using(var edit=f.Store.LightweightSession(f.TenantId))
-        {
-            var item=(await edit.LoadAsync<PartnerNotification>(f.Notification.Id))!;
-            var employee=(await edit.LoadAsync<Employee>(item.Deliveries[0].RecipientEmployeeId))!;employee.IsActive=false;edit.Store(employee);await edit.SaveChangesAsync();
-        }
-        f.Now=f.Now.AddMinutes(1);await dispatcher.DispatchAsync(f.Notification.Id,default);
-        using var q=f.Store.QuerySession(f.TenantId);var stored=(await q.LoadAsync<PartnerNotification>(f.Notification.Id))!;
-        Assert.Single(stored.Deliveries,d=>d.SkippedUtc.HasValue);Assert.Single(stored.Deliveries,d=>d.SentUtc.HasValue);
-        Assert.Equal("Sent",stored.State);f.Transport.Verify(t=>t.SendAsync(It.IsAny<PartnerNotificationDelivery>(),It.IsAny<CancellationToken>()),Times.Exactly(2));
+        await f.Dispatcher(session).DispatchAsync(f.Notification.Id, default);
+        using var q = f.Store.QuerySession(f.TenantId); var stored = (await q.LoadAsync<PartnerNotification>(f.Notification.Id))!;
+        Assert.Equal("Skipped", stored.State); Assert.Empty(stored.Deliveries);
+        f.Transport.Verify(t => t.SendAsync(It.IsAny<PartnerNotificationDelivery>(), It.IsAny<CancellationToken>()), Times.Never);
     }
     private sealed class Fixture:IDisposable
     {
