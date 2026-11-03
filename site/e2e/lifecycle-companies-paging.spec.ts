@@ -5,7 +5,7 @@ const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Meth
 const companies = Array.from({ length: 101 }, (_, index) => ({ id: `company-${index}`, name: `Company ${index}`, businessId: `ID-${index}`, contactName: null, isActive: index < 100 }));
 
 /** Serves the companies contract: server status filter, search, skip/take paging, summary counts and detail. */
-async function mockCompanies(page: Page, options: { list?: typeof companies; failAll?: { value: boolean } } = {}) {
+async function mockCompanies(page: Page, options: { list?: typeof companies; failAll?: { value: boolean }; failSummary?: boolean } = {}) {
   const list = options.list ?? companies;
   const requests: URL[] = [];
   await page.route('**/api/v1/admin/companies**', async route => {
@@ -13,6 +13,7 @@ async function mockCompanies(page: Page, options: { list?: typeof companies; fai
     const url = new URL(route.request().url());
     if (options.failAll?.value) return route.fulfill({ status: 503, headers, json: {} });
     if (url.pathname.endsWith('/summary')) {
+      if (options.failSummary) return route.fulfill({ status: 503, headers, json: {} });
       return route.fulfill({ headers, json: { all: list.length, active: list.filter(c => c.isActive).length, inactive: list.filter(c => !c.isActive).length } });
     }
     const detail = url.pathname.match(/\/admin\/companies\/([^/]+)$/);
@@ -76,6 +77,13 @@ test('search filters by name or business ID and resets to page one', async ({ pa
   await expect(page.getByRole('cell', { name: 'Company 0', exact: true })).not.toBeVisible();
   await expect(page).toHaveURL(/q=Company(\+|%20)10/);
   await expect(page).toHaveURL(/page=1/);
+  await page.getByRole('textbox', { name: 'Search companies' }).fill('ID-10');
+  await page.getByRole('textbox', { name: 'Search companies' }).press('Enter');
+  await expect(page.getByRole('cell', { name: 'Company 10', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Company 0', exact: true })).not.toBeVisible();
+  await page.getByRole('textbox', { name: 'Search companies' }).fill('no-such-company');
+  await page.getByRole('textbox', { name: 'Search companies' }).press('Enter');
+  await expect(page.getByText('No companies match this search.', { exact: true })).toBeVisible();
 });
 
 test('Back restores the previous page and status after a filter change', async ({ page }) => {
@@ -117,4 +125,53 @@ test('company detail deep link opens its activity tab and branch list', async ({
   await page.goto('/admin/companies/?company=company-100');
   await expect(page.getByRole('tablist', { name: 'Company activity' }).getByRole('tab', { name: /^Inactive/ })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByText('Active branch', { exact: true })).toBeVisible();
+});
+
+test('empty states distinguish no companies, an empty tab and no search match', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockCompanies(page, { list: [] });
+  await page.goto('/admin/companies/');
+  await expect(page.getByText('No companies yet. Add one to get started.', { exact: true })).toBeVisible();
+});
+
+test('an empty tab names its status while the other status still has companies', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockCompanies(page, { list: companies.filter(c => c.isActive) });
+  await page.goto('/admin/companies/?status=inactive');
+  await expect(page.getByText('No inactive companies.', { exact: true })).toBeVisible();
+  await expect(page.getByText('No companies yet.', { exact: false })).not.toBeVisible();
+});
+
+test('summary failure keeps the list and hides only the tab counts', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockCompanies(page, { failSummary: true });
+  await page.goto('/admin/companies/');
+  await expect(page.getByRole('cell', { name: 'Company 0', exact: true })).toBeVisible();
+  const tabs = page.getByRole('tablist', { name: 'Company activity' });
+  await expect(tabs.getByRole('tab', { name: 'Active', exact: true })).toBeVisible();
+  await expect(tabs.getByRole('tab', { name: /Active \(/ })).not.toBeVisible();
+});
+
+test('changing the status tab from a later page returns to page one', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockCompanies(page);
+  await page.goto('/admin/companies/');
+  await page.getByRole('button', { name: '2', exact: true }).click();
+  await expect(page).toHaveURL(/page=2/);
+  await page.getByRole('tablist', { name: 'Company activity' }).getByRole('tab', { name: /^Inactive/ }).click();
+  await expect(page).toHaveURL(/status=inactive/);
+  await expect(page).toHaveURL(/page=1/);
+});
+
+test('branch tabs stay scoped to the open company across company tab changes', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockCompanies(page);
+  await page.goto('/admin/companies/?company=company-100');
+  const branchTabs = page.getByRole('tablist', { name: 'Branch activity' });
+  await expect(page.getByText('Active branch', { exact: true })).toBeVisible();
+  await branchTabs.getByRole('tab', { name: /^Inactive/ }).click();
+  await expect(page.getByText('Inactive branch', { exact: true })).toBeVisible();
+  await expect(page.getByText('Active branch', { exact: true })).not.toBeVisible();
+  await page.getByRole('tablist', { name: 'Company activity' }).getByRole('tab', { name: /^Active/ }).click();
+  await expect(branchTabs).not.toBeVisible();
 });

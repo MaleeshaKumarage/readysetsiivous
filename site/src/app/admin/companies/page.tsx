@@ -32,7 +32,9 @@ export default function CompaniesAdminPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [total, setTotal] = useState(0);
-  const [counts, setCounts] = useState<{ active: number; inactive: number } | null>(null);
+  const [counts, setCounts] = useState<{ all: number; active: number; inactive: number } | null>(null);
+  // Set before a load-time page correction so the URL is replaced, not pushed; keeps Back from looping.
+  const replaceUrlNext = useRef(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -63,9 +65,9 @@ export default function CompaniesAdminPage() {
     }
     // An empty page after deletions or a shorter result set moves to the last populated page.
     const lastPage = Math.max(1, Math.ceil(pageResult.total / next.pageSize));
-    if (pageResult.items.length === 0 && next.page > lastPage) { setPage(lastPage); setLoading(false); return; }
+    if (pageResult.items.length === 0 && next.page > lastPage) { replaceUrlNext.current = true; setPage(lastPage); setLoading(false); return; }
     setCompanies(pageResult.items); setTotal(pageResult.total);
-    setCounts(summary ? { active: summary.active, inactive: summary.inactive } : null);
+    setCounts(summary ? { all: summary.all, active: summary.active, inactive: summary.inactive } : null);
     setLoading(false);
   };
   const reload = () => load({ status, page, pageSize, query });
@@ -103,7 +105,11 @@ export default function CompaniesAdminPage() {
     const deepLink = current.get('company');
     if (deepLink) next.set('company', deepLink);
     const target = `${window.location.pathname}?${next.toString()}`;
-    if (target !== `${window.location.pathname}${window.location.search}`) window.history.pushState(null, '', target);
+    const replace = replaceUrlNext.current;
+    replaceUrlNext.current = false;
+    if (target === `${window.location.pathname}${window.location.search}`) return;
+    if (replace) window.history.replaceState(null, '', target);
+    else window.history.pushState(null, '', target);
   }, [ready, status, page, pageSize, query]);
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -240,7 +246,7 @@ export default function CompaniesAdminPage() {
       ) : listError ? (
         <Stack><Text role="alert" c="red">{listError}</Text><Button variant="light" onClick={() => void reload()}>Refresh companies</Button></Stack>
       ) : visibleCompanies.length === 0 ? (
-        <Text c="dimmed">{total === 0 && !query ? 'No companies yet. Add one to get started.' : query ? 'No companies match this search.' : `No ${status} companies.`}</Text>
+        <Text c="dimmed">{(counts?.all ?? total) === 0 && !query ? 'No companies yet. Add one to get started.' : query ? 'No companies match this search.' : `No ${status} companies.`}</Text>
       ) : (
         <Table.ScrollContainer minWidth={550}>
           <Table striped highlightOnHover withTableBorder>
