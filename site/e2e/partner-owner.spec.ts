@@ -325,6 +325,7 @@ test('owner load failure is distinct from an empty company and explicit refresh 
 
 test('cleaner refreshes a failed offer read and a stale preplanned acceptance without automatic write retries', async ({ page }) => {
   await setupAdminMocks(page); await page.addInitScript(() => { (window as unknown as { __MOCK_ROLES__: string[] }).__MOCK_ROLES__ = ['employee']; });
+  await page.route(/\/api\/v1\/me\/work-preferences$/, route => route.fulfill({ headers, json: { autoAcceptWork: false } }));
   let loads = 0, accepted = false;
   const decisions: { path: string; method: string; body: Record<string, unknown> }[] = [];
   const offer: CleanerOffer = { id: 'planned-offer', requestId: pending.id, version: 5, branchName: priced.name, street: priced.street ?? null, postalCode: priced.postalCode ?? null, city: priced.city ?? null, fromDate: '2026-12-01', toDate: '2026-12-01', exactStartLocalTime: '10:30', plannedStartUtc: '2026-12-01T08:30:00Z', estimatedDurationMinutes: 120, notes: null, timeZoneId: 'Europe/Helsinki' };
