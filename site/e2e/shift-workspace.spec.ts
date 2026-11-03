@@ -182,6 +182,7 @@ test('row menu action still reaches the existing Employees panel', async ({ page
 });
 
 test('phone-width workspace has no horizontal overflow and its actions stay inside the viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   await setup(page); await page.goto('/admin/shifts/');
   await openShiftWorkspace(page, 'Workspace shift');
   const dialog = page.getByRole('dialog', { name: 'Manage — Workspace shift', exact: true });
