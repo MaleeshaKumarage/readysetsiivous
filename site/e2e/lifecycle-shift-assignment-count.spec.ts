@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
+import { shiftRowAction } from './shift-actions';
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS' };
 const company = { id: 'c-1', name: 'CleanTech Oy', businessId: '1111111-1', isActive: true };
@@ -57,7 +58,7 @@ test('opening Employees replaces the bulk count with the freshly loaded roster, 
   await page.goto('/admin/shifts/');
   const morning = page.getByRole('row').filter({ hasText: 'Morning shift' });
   await expect(morning.getByRole('cell').nth(2)).toHaveText('5');
-  await morning.getByRole('button', { name: 'Employees', exact: true }).click();
+  await shiftRowAction(page, morning, 'Employees');
   await expect(page.getByRole('row').filter({ hasText: 'Morning shift' }).first().getByRole('cell').nth(2)).toHaveText('1');
 });
 
@@ -66,6 +67,6 @@ test('when bulk counts fail, an opened roster still fills that shift count', asy
   await page.goto('/admin/shifts/');
   const morning = page.getByRole('row').filter({ hasText: 'Morning shift' });
   await expect(morning.getByRole('cell').nth(2)).toHaveText('—');
-  await morning.getByRole('button', { name: 'Employees', exact: true }).click();
+  await shiftRowAction(page, morning, 'Employees');
   await expect(page.getByRole('row').filter({ hasText: 'Morning shift' }).first().getByRole('cell').nth(2)).toHaveText('1');
 });

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { shiftAction } from './shift-actions';
 import { setupAdminMocks } from './admin-helpers';
 
 const CORS_HEADERS = {
@@ -474,7 +475,7 @@ test('admin can attach a checklist to an existing shift', async ({ page }) => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
     saved = getBody(route); return route.fulfill({ status: 200, headers: CORS_HEADERS, json: { ...shift, qualityCycleTemplateId: saved.templateId } });
   });
-  await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'Checklist template', exact: true }).click();
+  await page.goto('/admin/shifts/'); await shiftAction(page, 'Existing shift', 'Checklist template');
   await page.getByRole('textbox', { name: 'Checklist template', exact: true }).click();
   await page.getByRole('option', { name: 'Activities checklist' }).click();
   await page.getByRole('button', { name: 'Save template assignment' }).click();

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { shiftAction } from './shift-actions';
 import { setupAdminMocks } from './admin-helpers';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
@@ -48,7 +49,7 @@ test('preview exposes the real billing validation reason', async ({ page }) => {
   await expect(page.getByRole('alert').filter({ hasText: 'No pricing is configured' })).toHaveText('No pricing is configured for this billing period.'); await expect(page.getByRole('button', { name: 'Issue invoice', exact: true })).toHaveCount(0);
 });
 test('admin saves an effective monthly rate before VAT outside quality cycle', async ({ page }) => {
-  const calls = await setup(page); await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'Pricing', exact: true }).click();
+  const calls = await setup(page); await page.goto('/admin/shifts/'); await shiftAction(page, 'Biweekly', 'Pricing');
   await page.getByRole('textbox', { name: 'Rate before VAT (€)', exact: true }).fill('150'); await page.getByRole('textbox', { name: 'Effective from', exact: true }).fill('2026-10-01');
   await page.getByRole('button', { name: 'Save price', exact: true }).click(); await expect(page.getByRole('dialog')).toHaveCount(0);
   expect(calls.pricing).toEqual([{ mode: 'Monthly', rateNet: 150, vatRatePercent: 25.5, effectiveFrom: '2026-10-01' }]);
@@ -142,7 +143,7 @@ test('on-call occurrence price requires a reason and saves only that visit', asy
     if (route.request().method() === 'PUT') { writes.push(route.request().postDataJSON()); return route.fulfill({ headers, json: {} }); }
     return route.fulfill({ headers, json: [visit] });
   });
-  await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'Occurrences', exact: true }).click(); await page.getByRole('button', { name: 'Visit price', exact: true }).click();
+  await page.goto('/admin/shifts/'); await shiftAction(page, 'Biweekly', 'Occurrences'); await page.getByRole('button', { name: 'Visit price', exact: true }).click();
   const dialog = page.getByRole('dialog').filter({ hasText: 'Visit price — Biweekly' });
   await dialog.getByRole('textbox', { name: 'Visit price before VAT (€)', exact: true }).fill('75'); await expect(dialog.getByRole('button', { name: 'Save price', exact: true })).toBeDisabled();
   await dialog.getByRole('textbox', { name: 'Reason for visit price override', exact: true }).fill('Extra cleaning requested'); await dialog.getByRole('button', { name: 'Save price', exact: true }).click(); await expect(dialog).toHaveCount(0);
@@ -156,9 +157,9 @@ test('hourly pricing shows history and saves VAT while cancelling edits sends no
     if (route.request().method() === 'PUT') { const value = route.request().postDataJSON(); calls.pricing.push(value); plans = [...plans, value]; }
     return route.fulfill({ headers, json: { plans, overrides: [] } });
   });
-  await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'Pricing', exact: true }).click(); let dialog = page.getByRole('dialog');
+  await page.goto('/admin/shifts/'); await shiftAction(page, 'Biweekly', 'Pricing'); let dialog = page.getByRole('dialog');
   await expect(dialog.getByRole('cell', { name: '€150.00', exact: true })).toBeVisible(); await dialog.getByRole('textbox', { name: 'Rate before VAT (€)', exact: true }).fill('999'); await dialog.getByRole('button', { name: 'Cancel', exact: true }).click(); expect(calls.pricing).toEqual([]);
-  await page.getByRole('button', { name: 'Pricing', exact: true }).click(); dialog = page.getByRole('dialog'); await expect(dialog.getByRole('textbox', { name: 'Rate before VAT (€)', exact: true })).toHaveValue('150');
+  await shiftAction(page, 'Biweekly', 'Pricing'); dialog = page.getByRole('dialog'); await expect(dialog.getByRole('textbox', { name: 'Rate before VAT (€)', exact: true })).toHaveValue('150');
   await dialog.getByRole('textbox', { name: 'Pricing basis', exact: true }).click(); await page.getByRole('option', { name: 'Per scheduled hour', exact: true }).click(); await dialog.getByRole('textbox', { name: 'Rate before VAT (€)', exact: true }).fill('35'); await dialog.getByRole('textbox', { name: 'VAT (%)', exact: true }).fill('14'); await dialog.getByRole('textbox', { name: 'Effective from', exact: true }).fill('2026-11-01'); await dialog.getByRole('button', { name: 'Save price', exact: true }).click(); await expect(dialog).toHaveCount(0);
-  expect(calls.pricing).toEqual([{ mode: 'Hourly', rateNet: 35, vatRatePercent: 14, effectiveFrom: '2026-11-01' }]); await page.getByRole('button', { name: 'Pricing', exact: true }).click(); await expect(page.getByRole('dialog').getByRole('cell', { name: '€35.00', exact: true })).toBeVisible(); await expect(page.getByRole('dialog').getByRole('cell', { name: '€150.00', exact: true })).toBeVisible();
+  expect(calls.pricing).toEqual([{ mode: 'Hourly', rateNet: 35, vatRatePercent: 14, effectiveFrom: '2026-11-01' }]); await shiftAction(page, 'Biweekly', 'Pricing'); await expect(page.getByRole('dialog').getByRole('cell', { name: '€35.00', exact: true })).toBeVisible(); await expect(page.getByRole('dialog').getByRole('cell', { name: '€150.00', exact: true })).toBeVisible();
 });

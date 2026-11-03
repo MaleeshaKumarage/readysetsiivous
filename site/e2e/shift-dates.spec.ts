@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { shiftAction } from './shift-actions';
 import { setupAdminMocks } from './admin-helpers';
 
 test('admin waits for valid scheduling settings before defaulting a new shift date', async ({ page }) => {
@@ -52,7 +53,7 @@ test('admin requires a start date, supports an open end date, and edits the rang
   await dialog.getByRole('button', { name: 'Create shift' }).click();
   await expect(page.getByRole('cell', { name: 'Dated cleaning', exact: true })).toBeVisible();
   expect(writes[0].validFrom).toBe('2026-11-01'); expect(writes[0].validUntil).toBeUndefined();
-  await page.getByRole('row').filter({ hasText: 'Dated cleaning' }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await shiftAction(page, 'Dated cleaning', 'Edit');
   const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
   await expect(edit.getByRole('textbox', { name: 'Start date', exact: true })).toHaveValue('2026-11-01');
   await edit.getByRole('textbox', { name: 'Start date', exact: true }).fill('');
@@ -63,7 +64,7 @@ test('admin requires a start date, supports an open end date, and edits the rang
   await edit.getByLabel('End date (optional)', { exact: true }).fill('2026-11-30');
   await edit.getByRole('button', { name: 'Save changes' }).click();
   await expect(edit).toHaveCount(0); expect(writes[1].validUntil).toBe('2026-11-30');
-  await page.getByRole('row').filter({ hasText: 'Dated cleaning' }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await shiftAction(page, 'Dated cleaning', 'Edit');
   await expect(edit.getByLabel('End date (optional)', { exact: true })).toHaveValue('2026-11-30');
   await edit.getByLabel('End date (optional)', { exact: true }).fill('');
   await edit.getByRole('button', { name: 'Save changes' }).click();
@@ -71,7 +72,7 @@ test('admin requires a start date, supports an open end date, and edits the rang
   expect(writes[2].validFrom).toBe('2026-11-01'); expect(writes[2].validUntil).toBeUndefined();
   shifts = [{ ...shifts[0], id: 'legacy', name: 'Legacy cleaning', validFrom: null, validUntil: null }];
   await page.reload();
-  await page.getByRole('row').filter({ hasText: 'Legacy cleaning' }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await shiftAction(page, 'Legacy cleaning', 'Edit');
   await expect(edit.getByRole('textbox', { name: 'Start date', exact: true })).toHaveValue('');
   await expect(edit.getByRole('textbox', { name: 'Start date', exact: true })).not.toHaveAttribute('required');
   await edit.getByRole('textbox', { name: 'Name', exact: true }).fill('Legacy cleaning updated');
@@ -131,7 +132,7 @@ test('legacy on-call shifts keep scheduling dated visits while new shifts cannot
   await expect(page.getByRole('cell', { name: 'One-time cleaning', exact: true })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: 'One-time cleaning' })).toContainText('On-call');
   delayNextLoad = true;
-  await page.getByRole('button', { name: 'Schedule one-time visit', exact: true }).click();
+  await shiftAction(page, 'One-time cleaning', 'Schedule one-time visit');
   await expect.poll(() => occurrenceQueries.length).toBe(1);
   const editor = page.getByRole('dialog', { name: 'Change occurrence', exact: true });
   await expect(editor).toBeVisible();
