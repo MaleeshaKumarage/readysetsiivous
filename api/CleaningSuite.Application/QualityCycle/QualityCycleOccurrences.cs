@@ -60,8 +60,11 @@ public static class QualityCycleOccurrences
             {
                 // An assignment/template attached during the shift may still produce its task,
                 // but already-finished occurrences are never retroactively invented.
+                // A one-time visit entered after its date is its own first definition, so the
+                // creation timestamp of that first plan must not hide it. Later plans and recurring shifts keep the rule.
+                var initialOneTime = i == 0 && plan.Schedule.IsOneTime;
                 if (occurrence.StartUtc < fromUtc || occurrence.StartUtc >= toUtc
-                    || occurrence.EndUtc <= plan.EffectiveFromUtc || occurrence.StartUtc >= next) continue;
+                    || (!initialOneTime && occurrence.EndUtc <= plan.EffectiveFromUtc) || occurrence.StartUtc >= next) continue;
                 var localOccurrenceDate = TimeZoneInfo.ConvertTimeFromUtc(occurrence.StartUtc, timeZone).Date;
                 if (plan.ValidFrom.HasValue && localOccurrenceDate < plan.ValidFrom.Value.Date) continue;
                 if (plan.ValidUntil.HasValue && localOccurrenceDate > plan.ValidUntil.Value.Date) continue;
