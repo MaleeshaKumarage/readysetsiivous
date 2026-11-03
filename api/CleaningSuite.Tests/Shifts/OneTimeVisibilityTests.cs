@@ -80,6 +80,21 @@ public class OneTimeVisibilityTests
     }
 
     [Fact]
+    public void Edited_one_time_date_shows_only_the_current_date()
+    {
+        // Entered with 2026-10-01, then moved to 2026-10-05 on 2026-11-03. The superseded snapshot must not stay visible.
+        var shift = Entered(OneTime(new DateTime(2026, 10, 1)));
+        shift.RecordQualityCyclePlan(new DateTime(2026, 11, 3, 10, 0, 0, DateTimeKind.Utc));
+        shift.Update(shift.CompanyId, shift.BranchId, "Visit", OneTime(new DateTime(2026, 10, 5)), null, true, null, null);
+        shift.RecordQualityCyclePlan(new DateTime(2026, 11, 3, 11, 0, 0, DateTimeKind.Utc));
+
+        var visit = Assert.Single(QualityCycleOccurrences.InWindow(shift, new DateTime(2026, 9, 30, 21, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 10, 6, 0, 0, 0, DateTimeKind.Utc), Helsinki, includeWithoutChecklist: true));
+
+        Assert.Equal(new DateTime(2026, 10, 5, 6, 0, 0, DateTimeKind.Utc), visit.Occurrence.StartUtc);
+    }
+
+    [Fact]
     public void Past_one_time_visit_stays_visible_when_its_first_plan_is_recorded_at_entry()
     {
         // Entering a template records plan history at creation time; that first plan must still show the visit once.
