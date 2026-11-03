@@ -121,6 +121,7 @@ if (builder.Configuration.GetValue("BackgroundWorkers:Enabled", true))
 
 // New repositories for Companies and Shifts.
 builder.Services.AddScoped<CleaningSuite.Application.Companies.ICompanyRepository, CleaningSuite.Infrastructure.Persistence.CompanyRepository>();
+builder.Services.AddScoped<CleaningSuite.Application.WorkQueue.IWorkQueueReader, CleaningSuite.Infrastructure.Persistence.WorkQueueReader>();
 builder.Services.AddScoped<CleaningSuite.Application.Companies.IBranchRepository, CleaningSuite.Infrastructure.Persistence.BranchRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.Shifts.IShiftRepository, CleaningSuite.Infrastructure.Persistence.ShiftRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.Shifts.IShiftWorkReservation, CleaningSuite.Infrastructure.Persistence.ShiftWorkReservation>();
