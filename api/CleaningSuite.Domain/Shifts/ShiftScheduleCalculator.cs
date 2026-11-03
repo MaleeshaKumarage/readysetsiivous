@@ -79,6 +79,14 @@ public static class ShiftScheduleCalculator
                         AddOccurrence(result, date, schedule.MonthlyStart.Value, schedule.MonthlyEnd.Value, timeZone);
                 break;
 
+            case ShiftScheduleType.OneTime:
+                // Exactly one occurrence when the single local date falls inside the inclusive range.
+                if (schedule.OneTimeDate is null || schedule.OneTimeStart is null || schedule.OneTimeEnd is null) break;
+                var oneTimeDate = schedule.OneTimeDate.Value.Date;
+                if (oneTimeDate >= from.Date && oneTimeDate <= to.Date)
+                    AddOccurrence(result, oneTimeDate, schedule.OneTimeStart.Value, schedule.OneTimeEnd.Value, timeZone);
+                break;
+
             case ShiftScheduleType.OnCallFlexible:
                 break;
         }
