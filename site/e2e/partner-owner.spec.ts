@@ -429,3 +429,15 @@ test('completed requests page 25 at a time, and switching lists resets to the fi
   await page.getByRole('tab', { name: /^Active requests \(27\)/ }).click();
   await expect(activePages.getByText('1 / 2', { exact: true })).toBeVisible();
 });
+
+test('Tab and Shift+Tab keep focus inside the open request dialog', async ({ page }) => {
+  await owner(page); await page.goto('/partner/');
+  await page.getByRole('article', { name: priced.name, exact: true }).getByRole('button', { name: 'Request cleaning', exact: true }).click();
+  const form = page.getByRole('dialog', { name: /cleaning request/i });
+  await expect(form).toBeVisible();
+  const focusInside = () => page.evaluate(() => !!document.activeElement?.closest('[role=dialog]'));
+  // More presses than the dialog has controls, so focus must wrap at both ends.
+  for (let press = 0; press < 15; press++) { await page.keyboard.press('Tab'); expect(await focusInside()).toBe(true); }
+  for (let press = 0; press < 15; press++) { await page.keyboard.press('Shift+Tab'); expect(await focusInside()).toBe(true); }
+  await expect(form).toBeVisible();
+});

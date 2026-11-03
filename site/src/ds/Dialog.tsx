@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, type ReactNode } from 'react';
 
 /**
  * Modal dialog for portals without a component library. Focus moves into the dialog on open and returns to
- * the opener on close. Escape and a backdrop click close it. Content stays mounted only while open.
+ * the opener on close. Tab and Shift+Tab stay inside the dialog. Escape and a backdrop click close it. Content stays mounted only while open.
  */
 export function Dialog({ open, title, onClose, className, children }: {
   open: boolean;
@@ -23,7 +23,20 @@ export function Dialog({ open, title, onClose, className, children }: {
     const opener = document.activeElement as HTMLElement | null;
     const first = panel.current?.querySelector<HTMLElement>('input, textarea, select, button:not([disabled])');
     (first ?? panel.current)?.focus();
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') close.current(); };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { close.current(); return; }
+      if (event.key !== 'Tab' || !panel.current) return;
+      // aria-modal: keep Tab and Shift+Tab cycling inside the panel so background controls stay unreachable.
+      const focusable = Array.from(panel.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+        .filter(element => element.offsetParent !== null || element === document.activeElement);
+      if (!focusable.length) { event.preventDefault(); panel.current.focus(); return; }
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      const inside = !!active && panel.current.contains(active);
+      if (event.shiftKey && (!inside || active === first || active === panel.current)) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && (!inside || active === last)) { event.preventDefault(); first.focus(); }
+    };
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('keydown', onKey); opener?.focus?.(); };
   }, [open]);
