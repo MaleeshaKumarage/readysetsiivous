@@ -112,8 +112,8 @@ test('A01 account preference persists, rejects pending offers and retries withou
   await page.reload(); await expect(toggle).not.toBeChecked(); expect(stored).toBe(false);
 });
 
-for (const profile of [null, { id: 'employee-a', firstName: 'Test', lastName: 'Staff', role: 'partner', isActive: true }, { id: 'employee-a', firstName: 'Test', lastName: 'Staff', role: 'employee', isActive: false }]) {
-  test(`A01 account does not expose preference for unsupported binding ${profile?.role ?? 'unbound'} ${profile?.isActive ?? ''}`, async ({ page }) => {
+for (const profile of [null, { id: 'employee-a', firstName: 'Test', lastName: 'Staff', role: 'partner', isActive: true }, { id: 'employee-a', firstName: 'Test', lastName: 'Staff', role: 'employee', isActive: false }, { id: 'employee-a', keycloakUserId: 'user-a', firstName: 'Test', lastName: 'Staff', role: 'employee', isActive: true, identitySyncPending: true }]) {
+  test(`A01 account does not expose preference for unsupported binding ${profile?.role ?? 'unbound'} ${profile?.isActive ?? ''} sync pending ${profile?.identitySyncPending ?? false}`, async ({ page }) => {
     await setupAdminMocks(page, { authenticated: true });
     let requests = 0;
     await page.route(/\/api\/v1\/me$/, route => route.fulfill({ headers, json: { realm: 'tenant-a', employee: profile } }));
