@@ -6,6 +6,7 @@ using CleaningSuite.Application.Companies;
 using CleaningSuite.Application.Shifts;
 using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Companies;
+using CleaningSuite.Domain.Tenants;
 using CleaningSuite.Domain.Shifts;
 using FluentValidation;
 using Moq;

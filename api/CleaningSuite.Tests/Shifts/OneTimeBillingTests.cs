@@ -9,6 +9,7 @@ using CleaningSuite.Application.Shifts;
 using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Invoicing;
 using CleaningSuite.Domain.Shifts;
+using CleaningSuite.Domain.Tenants;
 using FluentValidation;
 using Moq;
 using Xunit;
