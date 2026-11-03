@@ -38,13 +38,13 @@ async function cancel(editor: Locator, writes: Write[]) {
 test('owner cancels valid property, cleaning and staff-change drafts without any writes', async ({ page }) => {
   const state = await fixture(page); await page.goto('/partner/');
   await page.getByRole('button', { name: 'Add property', exact: true }).click();
-  const property = page.getByRole('region', { name: 'Add property', exact: true }); await property.getByLabel('Property name', { exact: true }).fill('Unsaved property'); await cancel(property, state.writes); await expect(page.getByRole('article', { name: 'Unsaved property', exact: true })).toHaveCount(0);
+  const property = page.getByRole('dialog', { name: 'Add property', exact: true }); await property.getByLabel('Property name', { exact: true }).fill('Unsaved property'); await cancel(property, state.writes); await expect(page.getByRole('article', { name: 'Unsaved property', exact: true })).toHaveCount(0);
   const branchCard = page.getByRole('article', { name: branch.name, exact: true });
   await branchCard.getByRole('button', { name: 'Request cleaning', exact: true }).click();
-  const cleaning = page.getByRole('region', { name: 'Cleaning request form', exact: true });
+  const cleaning = page.getByRole('dialog', { name: /cleaning request/i });
   await cleaning.getByLabel('From date', { exact: true }).fill('2026-12-10'); await cleaning.getByLabel('To date', { exact: true }).fill('2026-12-11'); await cleaning.getByLabel('Cleaning instructions').fill('Unsaved new cleaning'); await cancel(cleaning, state.writes);
   await branchCard.getByRole('button', { name: 'Request property changes', exact: true }).click();
-  const staffChange = page.getByRole('region', { name: 'Request staff changes', exact: true }); await staffChange.getByLabel('Describe the requested change').fill('Unsaved property change'); await cancel(staffChange, state.writes);
+  const staffChange = page.getByRole('dialog', { name: 'Request staff changes', exact: true }); await staffChange.getByLabel('Describe the requested change').fill('Unsaved property change'); await cancel(staffChange, state.writes);
   await page.getByRole('tab', { name: 'Cleaning requests', exact: true }).click();
   const pendingCard = page.getByRole('article', { name: `${branch.name} ${pending.fromDate}`, exact: true }); await pendingCard.getByRole('button', { name: 'Edit request', exact: true }).click();
   await cleaning.getByLabel('From date', { exact: true }).fill('2026-12-10'); await cleaning.getByLabel('To date', { exact: true }).fill('2026-12-11'); await cleaning.getByLabel('Cleaning instructions').fill('Unsaved edited instructions'); await cancel(cleaning, state.writes);

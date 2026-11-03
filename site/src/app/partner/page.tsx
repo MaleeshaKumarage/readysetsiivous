@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import Link from 'next/link';
 import Image from 'next/image';
 import { Building2, CalendarClock, MessageSquare, RefreshCw, Plus, ArrowRight, UserRound, LogOut } from 'lucide-react';
-import { Badge, Button, buttonClasses, Card, Field, Input, Textarea, fontFamily, palette } from '@/ds';
+import { Badge, Button, buttonClasses, Card, Dialog, Field, Input, Textarea, fontFamily, palette } from '@/ds';
 import { authTenant, initAuth, isAuthenticated, isPartner, isAdmin, isManager, login, logout } from '@/lib/auth';
 import { partnerApi, type CleaningRequest, type PartnerIdentity, type PartnerShift, type PartnerChange } from '@/lib/partnerApi';
 import { partnerCopy, partnerLanguageKey, partnerMessage, partnerStatus, type PartnerLanguage } from '@/lib/partnerLocale';
@@ -34,11 +34,11 @@ export default function PartnerPage() {
   const [identity, setIdentity] = useState<PartnerIdentity | null>(null), [branches, setBranches] = useState<Branch[]>([]), [requests, setRequests] = useState<CleaningRequest[]>([]), [shifts, setShifts] = useState<PartnerShift[]>([]);
   const [changes, setChanges] = useState<PartnerChange[]>([]);
   const [access, setAccess] = useState('pending'), [error, setError] = useState(''), [busy, setBusy] = useState(false), [notice, setNotice] = useState('');
+  const [requestView, setRequestView] = useState<'active' | 'completed'>('active'), [requestPage, setRequestPage] = useState(1);
   const [tab, setTab] = useState<Section>('Properties'), [adding, setAdding] = useState(false), [target, setTarget] = useState<Branch | null>(null), [editing, setEditing] = useState<CleaningRequest | null>(null);
   const [from, setFrom] = useState(''), [to, setTo] = useState(''), [exact, setExact] = useState(false), [time, setTime] = useState(''), [notes, setNotes] = useState('');
   const [change, setChange] = useState<{ kind: 'branch' | 'request'; id: string } | null>(null), [message, setMessage] = useState('');
   const generation = useRef(0), requestKey = useRef('');
-  const requestFormRef = useRef<HTMLElement | null>(null), propertyFormRef = useRef<HTMLElement | null>(null), changeFormRef = useRef<HTMLElement | null>(null);
   const tabsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -50,11 +50,6 @@ export default function PartnerPage() {
     setLanguage(next);
     try { localStorage.setItem(partnerLanguageKey, next); } catch { /* The current page still switches. */ }
   }
-  useEffect(() => {
-    const panel = target ? requestFormRef.current : adding ? propertyFormRef.current : change ? changeFormRef.current : null;
-    panel?.focus({ preventScroll: true });
-    panel?.scrollIntoView({ block: 'start', behavior: 'instant' });
-  }, [target, adding, change]);
   const refresh = useCallback(async () => {
     const attempt = ++generation.current; setError('');
     try {
@@ -114,6 +109,13 @@ export default function PartnerPage() {
     ? stampFormatter.format(new Date(value)) : t.notRecorded;
   const selectedIndex = sections.findIndex(section => section.key === tab);
   const counts = [branches.length, requests.length, shifts.length, changes.length];
+  // Finished and cancelled requests move out of the active list. Both lists page 25 at a time.
+  const activeRequests = requests.filter(request => !['Completed', 'Cancelled'].includes(request.status));
+  const completedRequests = requests.filter(request => ['Completed', 'Cancelled'].includes(request.status));
+  const requestList = requestView === 'active' ? activeRequests : completedRequests;
+  const requestPageCount = Math.max(1, Math.ceil(requestList.length / 25));
+  const currentRequestPage = Math.min(requestPage, requestPageCount);
+  const pagedRequests = requestList.slice((currentRequestPage - 1) * 25, currentRequestPage * 25);
   const alert = error ? <p role="alert" className="partner-alert partner-alert-error">{partnerMessage(error, language)}</p> : null;
 
   return <main lang={language} className="partner-portal" style={theme}>
@@ -163,8 +165,9 @@ export default function PartnerPage() {
           </section>}
           {tab === 'Cleaning requests' && <section className="partner-section">
             <div className="partner-section-heading"><div><h2>{t.requests}</h2><p>{t.requestsHint}</p></div></div>
-            {!requests.length && <Card className="partner-surface partner-empty">{t.noRequests}</Card>}
-            <div className="partner-grid">{requests.map(request => <article key={request.id} aria-label={request.branchName + ' ' + request.fromDate}>
+            <div className="partner-form-actions" role="tablist" aria-label={t.requests}><Button role="tab" aria-selected={requestView === 'active'} variant={requestView === 'active' ? 'primary' : 'outline'} className={requestView === 'active' ? '' : 'partner-secondary'} onClick={() => { setRequestView('active'); setRequestPage(1); }}>{t.activeRequests} ({activeRequests.length})</Button><Button role="tab" aria-selected={requestView === 'completed'} variant={requestView === 'completed' ? 'primary' : 'outline'} className={requestView === 'completed' ? '' : 'partner-secondary'} onClick={() => { setRequestView('completed'); setRequestPage(1); }}>{t.completedRequests} ({completedRequests.length})</Button></div>
+            {!requestList.length && <Card className="partner-surface partner-empty">{t.noRequests}</Card>}
+            <div className="partner-grid">{pagedRequests.map(request => <article key={request.id} aria-label={request.branchName + ' ' + request.fromDate}>
               <Card className="partner-surface partner-request">
                 <div className="partner-card-heading"><h3>{request.branchName}<span className="sr-only"> · {partnerStatus(request.status, language)}</span></h3>
                   <Badge variant={request.status === 'Completed' ? 'subtle' : 'outline'} className="partner-badge">{partnerStatus(request.status, language)}</Badge>
@@ -173,12 +176,13 @@ export default function PartnerPage() {
                 <p className="partner-price">{t.agreedPrice} <strong>{money(request.priceNet)}</strong> {t.exclVat} ({t.vat} {number(request.vatRatePercent)}%)</p>
                 <div className="partner-request-details"><p>{t.cleaner}: {request.acceptedCleanerName ?? t.awaitingAcceptance}</p><p>{t.planned}: {stamp(request.plannedStartUtc)} – {stamp(request.plannedEndUtc)}</p><p>{t.actualStart}: {stamp(request.actualStartUtc)} · {t.actualEnd}: {stamp(request.actualEndUtc)}</p></div>
                 {request.notes && <p className="partner-entered">{request.notes}</p>}
-                <div className="partner-card-actions">{!request.firstAcceptedAtUtc && request.status !== 'Cancelled' ? <>
+                <div className="partner-card-actions">{request.status === 'Completed' ? null : !request.firstAcceptedAtUtc && request.status !== 'Cancelled' ? <>
                   <Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => { const branch = branches.find(item => item.id === request.branchId); if (branch) openRequest(branch, request); }}>{t.editRequest}</Button>
                   <Button variant="ghost" className="partner-danger" disabled={busy} onClick={() => { if (confirm(t.cancelConfirm)) void act(() => partnerApi.cancel(request), base.requestCancelled); }}>{t.cancelRequest}</Button>
                 </> : request.status !== 'Cancelled' && <Button variant="outline" className="partner-secondary" onClick={() => { setChange({ kind: 'request', id: request.id }); setMessage(''); }}>{t.changeOrCancel}</Button>}</div>
               </Card>
             </article>)}</div>
+            <div className="partner-form-actions" role="navigation" aria-label={requestView === 'active' ? t.activeRequests : t.completedRequests}>{requestList.length > 25 && <><Button variant="outline" className="partner-secondary" disabled={currentRequestPage <= 1} onClick={() => setRequestPage(currentRequestPage - 1)}>{t.previousPage}</Button><span className="partner-muted">{currentRequestPage} / {requestPageCount}</span><Button variant="outline" className="partner-secondary" disabled={currentRequestPage >= requestPageCount} onClick={() => setRequestPage(currentRequestPage + 1)}>{t.nextPage}</Button></>}</div>
           </section>}
           {tab === 'Change requests' && <section aria-label={t.history} className="partner-section">
             <div className="partner-section-heading"><div><h2>{t.changes}</h2><p>{t.changesHint}</p></div></div>
@@ -196,8 +200,8 @@ export default function PartnerPage() {
             <div className="partner-grid">{shifts.map(shift => <article key={shift.id}><Card className="partner-surface"><h3>{shift.name}</h3><p>{shift.branchName}</p><Badge variant="outline" className="partner-badge">{shift.isActive ? t.active : t.inactive}</Badge><p>{shift.validFrom ? date(shift.validFrom) : t.noStart} – {shift.validUntil ? date(shift.validUntil) : t.ongoing}</p></Card></article>)}</div>
           </section>}
         </div>
-        {adding && <section ref={propertyFormRef} tabIndex={-1} aria-label={t.addProperty} className="partner-form-panel">
-          <Card className="partner-surface"><h2>{t.addProperty}</h2>
+        <Dialog open={adding} title={t.addProperty} onClose={() => setAdding(false)} className="partner-form-panel">
+          <Card className="partner-surface">
             <form className="partner-form-grid" onInvalid={invalid} onSubmit={event => {
               event.preventDefault(); const fields = Object.fromEntries(new FormData(event.currentTarget));
               void act(async () => { await partnerApi.createBranch({ ...fields, roomCount: fields.roomCount === '' ? null : Number(fields.roomCount), bedCount: fields.bedCount === '' ? null : Number(fields.bedCount) }); setAdding(false); }, base.propertyCreated);
@@ -209,9 +213,9 @@ export default function PartnerPage() {
               <div className="partner-form-actions"><Button type="submit" disabled={busy}>{t.saveProperty}</Button><Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => setAdding(false)}>{t.cancel}</Button></div>
             </form>
           </Card>
-        </section>}
-        {target && <section ref={requestFormRef} tabIndex={-1} aria-label={t.requestForm} className="partner-form-panel">
-          <Card className="partner-surface"><h2>{editing ? t.editCleaning : t.newCleaning} · {target.name}</h2>{alert}<p className="partner-muted">{t.oneVisit} {t.timesUse} {identity?.timeZoneId}.</p>
+        </Dialog>
+        <Dialog open={target !== null} title={`${editing ? t.editCleaning : t.newCleaning} · ${target?.name ?? ""}`} onClose={() => setTarget(null)} className="partner-form-panel">
+          <Card className="partner-surface">{alert}<p className="partner-muted">{t.oneVisit} {t.timesUse} {identity?.timeZoneId}.</p>
             <form onSubmit={submitRequest} onInvalid={invalid} className="partner-form-grid">
               <Field label={t.fromDate}><Input className="partner-field" name="fromDate" type="date" required value={from} onChange={event => setFrom(event.target.value)} /></Field>
               {exact ? <Field label={t.exactTime}><Input className="partner-field" name="exactTime" type="time" required value={time} onChange={event => setTime(event.target.value)} /></Field> : <Field label={t.toDate}><Input className="partner-field" name="toDate" type="date" min={from} required value={to} onChange={event => setTo(event.target.value)} /></Field>}
@@ -220,15 +224,15 @@ export default function PartnerPage() {
               <div className="partner-form-actions"><Button type="submit" disabled={busy}>{t.saveRequest}</Button><Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => setTarget(null)}>{t.cancel}</Button></div>
             </form>
           </Card>
-        </section>}
-        {change && <section ref={changeFormRef} tabIndex={-1} aria-label={t.staffChanges} className="partner-form-panel">
-          <Card className="partner-surface"><h2>{t.staffChanges}</h2><form onInvalid={invalid} className="partner-form-grid" onSubmit={event => {
-            event.preventDefault(); void act(async () => { if (change.kind === 'branch') await partnerApi.branchChange(change.id, message); else await partnerApi.requestChange(change.id, message); setChange(null); }, base.changeSent);
+        </Dialog>
+        <Dialog open={change !== null} title={t.staffChanges} onClose={() => setChange(null)} className="partner-form-panel">
+          <Card className="partner-surface"><form onInvalid={invalid} className="partner-form-grid" onSubmit={event => {
+            event.preventDefault(); void act(async () => { if (change?.kind === 'branch') await partnerApi.branchChange(change?.id ?? "", message); else await partnerApi.requestChange(change?.id ?? "", message); setChange(null); }, base.changeSent);
           }}>
             <Field label={t.describeChange} className="partner-form-wide"><Textarea className="partner-field" required maxLength={2000} value={message} onChange={event => setMessage(event.target.value)} /></Field>
             <div className="partner-form-actions"><Button type="submit" disabled={busy || !message.trim()}>{t.sendChange}</Button><Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => setChange(null)}>{t.cancel}</Button></div>
           </form></Card>
-        </section>}
+        </Dialog>
       </>}
     </div>
   </main>;

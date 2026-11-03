@@ -59,7 +59,7 @@ test('admin sees banner and red branch tag, reviews quotes directly and pricing 
   await expect(page.getByRole('tab', { name: 'Quote requests', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByText('Quote requested', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Set cleaning price', exact: true }).click();
-  const form = page.getByRole('region', { name: 'Property pricing' });
+  const form = page.getByRole('dialog', { name: /^Price / });
   await form.getByLabel('Fixed cleaning price excl. VAT (€)').fill('90');
   await form.getByLabel('Estimated duration (minutes)').fill('120');
   await form.getByRole('button', { name: 'Save pricing', exact: true }).click();
@@ -69,20 +69,22 @@ test('admin sees banner and red branch tag, reviews quotes directly and pricing 
   expect(state.writes).toContainEqual({ path: '/api/v1/admin/partner/branches/quote-branch/pricing', body: { priceNet: 90, vatRatePercent: 25.5, estimatedDurationMinutes: 120 } });
 });
 
-test('quote banner switches tabs on the current operations page without losing a property draft', async ({ page }) => {
+test('quote banner switches tabs on the current operations page; an open property dialog must be closed first', async ({ page }) => {
   await fixture(page);
   await page.goto('/admin/partner-requests/');
   await page.getByRole('tab', { name: 'Properties', exact: true }).click();
   await page.getByRole('button', { name: 'Edit property', exact: true }).click();
   await page.getByLabel('Property name', { exact: true }).fill('Preserve my draft');
+  // The dialog is modal and covers the banner, so close it (discarding the draft) before using the banner.
+  await page.getByRole('dialog', { name: 'Edit property', exact: true }).getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('status', { name: 'Pending quote requests' }).getByRole('link', { name: 'Review quotes' }).click();
   await expect(page.getByRole('tab', { name: 'Quote requests', exact: true })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByLabel('Property name', { exact: true })).toHaveValue('Preserve my draft');
+  await expect(page.getByRole('dialog', { name: 'Edit property', exact: true })).toHaveCount(0);
   await page.getByRole('tab', { name: 'Properties', exact: true }).click();
   await expect(page).not.toHaveURL(/tab=quotes/);
   await page.getByRole('status', { name: 'Pending quote requests' }).getByRole('link', { name: 'Review quotes' }).click();
   await expect(page.getByRole('tab', { name: 'Quote requests', exact: true })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByLabel('Property name', { exact: true })).toHaveValue('Preserve my draft');
+  await expect(page.getByRole('dialog', { name: 'Edit property', exact: true })).toHaveCount(0);
 });
 
 test('visible polling and focus discover new quotes, errors retain count and retry clears resolved quotes', async ({ page }) => {
