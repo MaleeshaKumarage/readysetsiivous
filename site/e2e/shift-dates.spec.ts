@@ -84,8 +84,12 @@ test('on-call creation guides scheduling a concrete one-time visit and can keep 
   await setupAdminMocks(page);
   const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
   const shiftWrites: any[] = [], visitWrites: any[] = [], occurrenceQueries: URLSearchParams[] = [];
-  let shifts: any[] = [], visits: any[] = [];
-  await page.route(/\/api\/v1\/admin\//, route => {
+  let shifts: any[] = [], visits: any[] = [], delayNextLoad = false;
+  let releaseOldLoad!: () => void;
+  const oldLoad = new Promise<void>(resolve => { releaseOldLoad = resolve; });
+  let releaseSave!: () => void;
+  const pendingSave = new Promise<void>(resolve => { releaseSave = resolve; });
+  await page.route(/\/api\/v1\/admin\//, async route => {
     const request = route.request(), path = new URL(request.url()).pathname;
     if (request.method() === 'OPTIONS') return route.fulfill({ headers });
     if (path.endsWith('/shifts') && request.method() === 'POST') {
@@ -95,10 +99,16 @@ test('on-call creation guides scheduling a concrete one-time visit and can keep 
     if (path.endsWith('/occurrence-exceptions')) {
       const body = request.postDataJSON(); visitWrites.push(body);
       visits = [{ ...body, exceptionId: 'visit', assigneeIds: body.employeeId ? [body.employeeId] : [] }];
+      await pendingSave;
       return route.fulfill({ headers, json: visits[0] });
     }
     if (path.endsWith('/occurrences')) {
       occurrenceQueries.push(new URL(request.url()).searchParams);
+      if (delayNextLoad) {
+        delayNextLoad = false;
+        await oldLoad;
+        return route.fulfill({ headers, json: [] });
+      }
       return route.fulfill({ headers, json: visits });
     }
     return route.fulfill({ headers, json: path.endsWith('/shifts') ? shifts
@@ -125,17 +135,34 @@ test('on-call creation guides scheduling a concrete one-time visit and can keep 
   await expect(list.getByText('Cancelling keeps the shift without a scheduled visit.', { exact: false })).toBeVisible();
   await expect(list.getByText('No occurrences in this period.')).toBeVisible();
   await page.keyboard.press('Escape');
+  await page.reload();
+  await expect(page.getByRole('cell', { name: 'One-time cleaning', exact: true })).toBeVisible();
+  delayNextLoad = true;
   await page.getByRole('button', { name: 'Schedule one-time visit', exact: true }).click();
+  await expect.poll(() => occurrenceQueries.length).toBe(2);
   await editor.getByRole('textbox', { name: /^Start \(Europe\/Helsinki\)/ }).fill('2030-01-10T09:00');
   await editor.getByRole('textbox', { name: /^End \(Europe\/Helsinki\)/ }).fill('2030-01-10T11:00');
   await editor.getByLabel('Replacement employee (optional)', { exact: true }).click();
   await page.getByRole('option', { name: 'Test Cleaner', exact: true }).click();
   await editor.getByRole('textbox', { name: /^Reason/ }).fill('Agreed one-time cleaning');
   await editor.getByRole('button', { name: 'Save occurrence', exact: true }).click();
+  await expect.poll(() => visitWrites.length).toBe(1);
+  await expect(editor.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
+  await expect(editor.locator('.mantine-Modal-close')).toBeDisabled();
+  await expect(page.getByRole('dialog', { name: /Occurrences/, includeHidden: true }).locator('.mantine-Modal-close')).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await expect(editor).toBeVisible();
+  releaseSave();
   await expect(editor).toBeHidden();
   expect(visitWrites).toEqual([{ originalStartUtc: null, startUtc: '2030-01-10T07:00:00.000Z', endUtc: '2030-01-10T09:00:00.000Z', status: 4, reason: 'Agreed one-time cleaning', employeeId: 'cleaner' }]);
   await expect(list.getByText('One-time visit scheduled.', { exact: false })).toBeVisible();
   await expect(list.getByRole('cell', { name: 'Test Cleaner', exact: false })).toBeVisible();
   await expect(list.getByLabel('From', { exact: true })).toHaveValue('2030-01-10');
   expect(occurrenceQueries.at(-1)?.get('from')).toBe('2030-01-09T22:00:00.000Z');
+  const staleResponse = page.waitForResponse(response => response.url().includes('/occurrences?') && !response.url().includes('2030-01-09'));
+  releaseOldLoad(); await staleResponse;
+  await page.waitForLoadState('networkidle');
+  await expect(list.getByRole('cell', { name: 'Test Cleaner', exact: false })).toBeVisible();
+  await expect(list.getByText('No occurrences in this period.')).toHaveCount(0);
+  expect(visitWrites).toHaveLength(1);
 });

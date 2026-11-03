@@ -151,6 +151,7 @@ export default function ShiftsAdminPage() {
   const [occurrenceShift, setOccurrenceShift] = useState<Shift | null>(null);
   const [occurrences, setOccurrences] = useState<ShiftOccurrence[]>([]);
   const [occurrenceLoading, setOccurrenceLoading] = useState(false);
+  const occurrenceGeneration = useRef(0);
   const [occurrenceError, setOccurrenceError] = useState('');
   const [occurrenceEditError, setOccurrenceEditError] = useState('');
   const [occurrenceFrom, setOccurrenceFrom] = useState(new Date().toISOString().slice(0, 10));
@@ -373,6 +374,7 @@ export default function ShiftsAdminPage() {
 
   const loadOccurrences = async (shift = occurrenceShift, fromDate = occurrenceFrom, toDate = occurrenceTo) => {
     if (!shift) return;
+    const version = ++occurrenceGeneration.current;
     setOccurrenceLoading(true); setOccurrenceError('');
     try {
       const fromUtc = tenantLocalToUtc(`${fromDate}T00:00`, timeZoneId);
@@ -380,9 +382,9 @@ export default function ShiftsAdminPage() {
       const toUtc = new Date(Date.parse(nextDayUtc) - 1).toISOString();
       const result = await adminShifts.occurrences(shift.id, fromUtc, toUtc);
       if (!result) throw new Error('Could not load occurrences.');
-      setOccurrences(result);
-    } catch (failure) { setOccurrenceError(failure instanceof Error ? failure.message : 'Could not load occurrences.'); }
-    finally { setOccurrenceLoading(false); }
+      if (version === occurrenceGeneration.current) setOccurrences(result);
+    } catch (failure) { if (version === occurrenceGeneration.current) setOccurrenceError(failure instanceof Error ? failure.message : 'Could not load occurrences.'); }
+    finally { if (version === occurrenceGeneration.current) setOccurrenceLoading(false); }
   };
 
   const openOccurrences = async (shift: Shift, notice = '') => {
@@ -533,7 +535,7 @@ export default function ShiftsAdminPage() {
       </LifecycleTabs>
 
       {pricingShift && <ShiftPricingDialog key={`${pricingShift.id}-${pricingOccurrence?.startUtc ?? "plan"}`} shift={pricingShift} occurrence={pricingOccurrence} onClose={() => { setPricingShift(null); setPricingOccurrence(undefined); }} />}
-      <Modal opened={Boolean(occurrenceShift)} onClose={() => { setOccurrenceShift(null); setEditingOccurrence(null); }} title={`Occurrences${occurrenceShift ? ` — ${occurrenceShift.name}` : ''}`} size="xl">
+      <Modal opened={Boolean(occurrenceShift)} onClose={() => { if (occurrenceSaving) return; occurrenceGeneration.current++; setOccurrenceShift(null); setEditingOccurrence(null); }} closeButtonProps={{ disabled: occurrenceSaving }} closeOnEscape={!occurrenceSaving} closeOnClickOutside={!occurrenceSaving} title={`Occurrences${occurrenceShift ? ` — ${occurrenceShift.name}` : ''}`} size="xl">
         <Stack>
           <Text size="sm" c="dimmed">Times use the tenant time zone: {timeZoneId}. Changes apply only to the selected visit.</Text>
           {occurrenceShift?.schedule.type === 4 && <Text size="sm">On-call shifts have no automatic visits. Schedule each visit with a date and time. Choose a cleaner below or assign employees to this shift.</Text>}
@@ -571,7 +573,7 @@ export default function ShiftsAdminPage() {
       {assigningVisit && occurrenceShift && <VisitAssigneesDialog key={`${assigningVisit.exceptionId ?? assigningVisit.startUtc}`}
         shiftId={occurrenceShift.id} visit={assigningVisit} employees={employees} timeZone={timeZoneId}
         onClose={() => setAssigningVisit(null)} onSaved={async () => { await loadOccurrences(); }} />}
-      <Modal opened={Boolean(editingOccurrence)} onClose={() => setEditingOccurrence(null)} title="Change occurrence">
+      <Modal opened={Boolean(editingOccurrence)} onClose={() => { if (!occurrenceSaving) setEditingOccurrence(null); }} closeButtonProps={{ disabled: occurrenceSaving }} closeOnEscape={!occurrenceSaving} closeOnClickOutside={!occurrenceSaving} title="Change occurrence">
         <Stack>
           <Select label="Action" value={occurrenceStatus} onChange={value => setOccurrenceStatus(value ?? '1')} data={OCCURRENCE_STATUSES}
             disabled={Boolean(editingOccurrence?.exceptionId)} />
@@ -581,7 +583,7 @@ export default function ShiftsAdminPage() {
             data={employees.filter(e => e.isActive).map(e => ({ value: e.id, label: `${e.firstName} ${e.lastName}` }))} />
           <TextInput label="Reason" required maxLength={500} value={occurrenceReason} onChange={e => setOccurrenceReason(e.target.value)} />
           {occurrenceEditError && <Text role="alert" c="red">{occurrenceEditError}</Text>}
-          <Group justify="flex-end"><Button variant="default" onClick={() => setEditingOccurrence(null)}>Cancel</Button><Button loading={occurrenceSaving} onClick={saveOccurrence}>Save occurrence</Button></Group>
+          <Group justify="flex-end"><Button variant="default" disabled={occurrenceSaving} onClick={() => setEditingOccurrence(null)}>Cancel</Button><Button loading={occurrenceSaving} onClick={saveOccurrence}>Save occurrence</Button></Group>
         </Stack>
       </Modal>
 
