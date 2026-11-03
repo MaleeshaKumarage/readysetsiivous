@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge, Button, Checkbox, Group, MultiSelect, NumberInput, Paper, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { adminCompanies, adminShifts, type Company, type Shift } from '@/lib/adminApi';
 import { invoiceBillingApi, InvoiceRequestError, type BillingAddress, type InvoiceIssuer, type MonthlyOverride, type ShiftInvoice, type ShiftInvoiceInput, type ManualInvoiceInput } from '@/lib/invoiceBillingApi';
@@ -9,10 +9,19 @@ import ManualInvoiceRows, { newInvoiceRow, type EditableInvoiceRow } from './Man
 const emptyAddress: BillingAddress = { street: '', postalCode: '', city: '', country: 'FI' };
 const money = (value: number) => new Intl.NumberFormat('en', { style: 'currency', currency: 'EUR' }).format(value);
 // Completion month is chosen from fixed YYYY-MM values, so the billing period can never be partial or free text.
-const MONTH_OPTIONS = Array.from({ length: 36 }, (_, index) => {
-  const date = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() - index, 1));
-  return { value: date.toISOString().slice(0, 7), label: new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(date) };
-});
+// The list runs from the current month back to the company's earliest shift start (at least 36 months),
+// so backlogged visits stay invoiceable. It is built at render time so the window never goes stale.
+const monthLabel = new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+const MIN_MONTH_OPTIONS = 36;
+function completionMonthOptions(now: Date, earliest?: string | null) {
+  const year = now.getUTCFullYear(), month = now.getUTCMonth();
+  const match = earliest ? /^(\d{4})-(\d{2})/.exec(earliest) : null;
+  const span = match ? (year - Number(match[1])) * 12 + month - (Number(match[2]) - 1) + 1 : 0;
+  return Array.from({ length: Math.max(MIN_MONTH_OPTIONS, span) }, (_, index) => {
+    const date = new Date(Date.UTC(year, month - index, 1));
+    return { value: date.toISOString().slice(0, 7), label: monthLabel.format(date) };
+  });
+}
 
 export default function InvoicesPage() {
   const [companies, setCompanies] = useState<Company[]>([]); const [shifts, setShifts] = useState<Shift[]>([]);
@@ -38,6 +47,10 @@ export default function InvoicesPage() {
     setMonth(value); setFrom(`${value}-01`);
     setTo(`${value}-${String(new Date(Date.UTC(year, number, 0)).getUTCDate()).padStart(2, '0')}`);
   };
+  const monthOptions = useMemo(() => {
+    const starts = shifts.filter(shift => shift.companyId === companyId && shift.validFrom).map(shift => shift.validFrom as string).sort();
+    return completionMonthOptions(new Date(), starts[0]);
+  }, [shifts, companyId]);
   const loadInvoices = () => invoiceBillingApi.list().then(setInvoices);
   useEffect(() => {
     let active = true; setLoadFailed(false); setError('');
@@ -110,7 +123,7 @@ export default function InvoicesPage() {
       <Select label="Company" searchable data={companies.map(company => ({ value: company.id, label: company.name }))} value={companyId} onChange={value => { invalidate(); setCompanyId(value); setPartnerMonth(Boolean(companies.find(company => company.id === value)?.isPartnerEnabled)); setFrom(''); setTo(''); setMonth(''); setShiftIds([]); setMonthlyOverrides([]); }} />
       {!manual && !partnerMonth && <MultiSelect label="Invoice shifts" searchable value={shiftIds} onChange={value => { invalidate(); setShiftIds(value); setMonthlyOverrides(current => current.filter(item => value.includes(item.shiftId))); }} data={shifts.filter(shift => shift.companyId === companyId).map(shift => ({ value: shift.id, label: `${shift.name}${shift.isActive ? '' : ' (inactive)'}` }))} />}
       {!manual && !partnerMonth && <Group className="admin-invoice-fields" grow preventGrowOverflow={false}><TextInput type="date" label="Invoice from" value={from} onChange={event => { invalidate(); setFrom(event.target.value); }} /><TextInput type="date" label="Invoice to (inclusive)" value={to} onChange={event => { invalidate(); setTo(event.target.value); }} /></Group>}
-      {!manual && partnerMonth && <><Select label="Completion month" placeholder="Choose a month" data={MONTH_OPTIONS} value={month || null} allowDeselect={false} searchable={false} onChange={selectMonth} /><Text size="sm">Includes every completed, unbilled cleaning visit for this company finished during the selected month (actual completion date in the tenant time zone). Preview and issue remain manual; no invoice is emailed automatically.</Text></>}
+      {!manual && partnerMonth && <><Select label="Completion month" placeholder="Choose a month" data={monthOptions} value={month || null} clearable searchable onChange={selectMonth} /><Text size="sm">Includes every completed, unbilled cleaning visit for this company finished during the selected month (actual completion date in the tenant time zone). Preview and issue remain manual; no invoice is emailed automatically.</Text></>}
       <Select label="PDF language" allowDeselect={false} value={language} onChange={value => { invalidate(); setLanguage(value || 'en'); }} data={[{ value: 'en', label: 'English' }, { value: 'fi', label: 'Finnish' }, { value: 'sv', label: 'Swedish' }]} />
       <Text fw={600}>Customer billing address</Text><Group className="admin-invoice-fields" grow preventGrowOverflow={false}>{(['street', 'postalCode', 'city', 'country'] as const).map(key => <TextInput key={key} label={`Billing ${key}`} required value={address[key]} onChange={event => patchAddress(key, event.target.value)} />)}</Group>
       {manual && <ManualInvoiceRows rows={rows} vatRate={savedVat} onChange={value => { invalidate(); setRows(value); }} />}

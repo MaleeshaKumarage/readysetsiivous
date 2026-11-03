@@ -63,6 +63,8 @@ test('Partner Operations excludes ordinary properties and reveals editors below 
 });
 
 test('partner month previews all company visits and issues the exact approved payload', async ({ page }, testInfo) => {
+  // Month options are relative to "now"; freeze it so the labels picked below always exist.
+  await page.clock.setFixedTime(new Date('2026-11-15T12:00:00Z'));
   await setupAdminMocks(page); await companies(page);
   const issuer: InvoiceIssuer = { companyName: 'ReadySetSiivous', businessId: '3404861-9', companyAddress: { street: 'Issuer road 1', postalCode: '00100', city: 'Helsinki', country: 'FI' }, email: 'office@example.test', phone: '', bankAccountIBAN: 'FI2112345600000785', bankBic: 'NDEAFIHH', paymentTermsDays: 14, defaultVatRatePercent: 25.5 };
   const preview: ShiftInvoice = { id: 'preview', invoiceNumber: '', customer: { name: 'Owner company' }, issuer, issueDate: '2026-12-31', dueDate: '2027-01-14', status: 'Preview', periodFrom: '2026-12-01', periodTo: '2026-12-31', previewToken: 'frozen-preview-token', total: { net: 140, vat: 35.7, gross: 175.7 }, lines: [{ lineKey: 'visit-1', description: 'Completed cleaning visits', shiftName: 'Lake apartment cleaning', branchName: branch.name, hours: 4, occurrences: 2, pricingMode: 'PerOccurrence', quantity: 2, unitPriceNet: 70, netAmount: 140, vatRatePercent: 25.5, vatAmount: 35.7, total: 175.7, periodFrom: '2026-12-01', periodTo: '2026-12-31' }] };
@@ -74,7 +76,9 @@ test('partner month previews all company visits and issues the exact approved pa
   ];
   const previews: ShiftInvoiceInput[] = [], issues: (ShiftInvoiceInput & { previewToken: string })[] = [];
   let records: ShiftInvoice[] = [];
-  await page.route(/\/api\/v1\/admin\/shifts(?:\?.*)?$/, route => route.fulfill({ headers, json: [] }));
+  // An old shift for the company extends the month list past the default 36-month window.
+  const oldShift = { id: 'old-shift', companyId, branchId: branch.id, name: 'Old lake cleaning', schedule: {}, isActive: false, validFrom: '2021-03-10' };
+  await page.route(/\/api\/v1\/admin\/shifts(?:\?.*)?$/, route => route.fulfill({ headers, json: [oldShift] }));
   await page.route(/\/api\/v1\/admin\/invoices(?:\/.*)?$/, route => {
     const req = route.request(), path = new URL(req.url()).pathname.split('/invoices')[1];
     if (req.method() === 'OPTIONS') return route.fulfill({ headers });
@@ -88,6 +92,12 @@ test('partner month previews all company visits and issues the exact approved pa
   await page.getByRole('textbox', { name: 'Company', exact: true }).click(); await page.getByRole('option', { name: 'Owner company', exact: true }).click();
   await expect(page.getByLabel('Completed cleaning month', { exact: true })).toBeChecked();
   await expect(page.getByRole('textbox', { name: 'Completion month', exact: true })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Completion month', exact: true }).click();
+  await expect(page.getByRole('option', { name: 'November 2026', exact: true })).toBeAttached();
+  await expect(page.getByRole('option', { name: 'March 2021', exact: true })).toBeAttached();
+  await expect(page.getByRole('option', { name: 'February 2021', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('option', { name: 'December 2026', exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
   await expect(page.getByLabel('Invoice shifts', { exact: true })).toHaveCount(0);
   await expect(page.getByLabel('Invoice from', { exact: true })).toHaveCount(0);
   await expect(page.getByLabel('Invoice to (inclusive)', { exact: true })).toHaveCount(0);
