@@ -119,6 +119,14 @@ test('list failure shows a retryable error and refresh loads the current page', 
   await expect(page.getByRole('cell', { name: 'Company 0', exact: true })).toBeVisible();
 });
 
+test('deep link to a company on a later page still shows its branch list', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockCompanies(page);
+  await page.goto('/admin/companies/?company=company-60');
+  await expect(page.getByRole('cell', { name: 'Company 60', exact: true })).toBeVisible();
+  await expect(page.getByText('Active branch', { exact: true })).toBeVisible();
+});
+
 test('company detail deep link opens its activity tab and branch list', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   await mockCompanies(page);

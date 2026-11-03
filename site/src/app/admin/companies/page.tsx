@@ -163,7 +163,9 @@ export default function CompaniesAdminPage() {
     void (async () => {
       const detail = await adminCompanies.get(requested);
       if (!detail) return;
+      // Search by business ID so the company lands on page one with its branch rows; the search can be cleared afterwards.
       setStatus(detail.company.isActive ? 'active' : 'inactive');
+      setPage(1); setSearchText(detail.company.businessId); setQuery(detail.company.businessId);
       setExpanded(detail.company.id); setBranchStatus('active'); void loadBranches(detail.company.id);
     })();
   }, [ready]);
