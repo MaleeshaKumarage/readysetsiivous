@@ -99,6 +99,12 @@ A01 (employee-owned work autoaccept) follows C01. Start-time question resolved: 
 - Fresh focused verification passed all 14 A01 desktop/mobile cases in `employee-invite.spec.ts` and `partner-operations.spec.ts`; TypeScript, scoped diff and UTF-8 checks passed. Independent review of this test-only delta passed. These cases overlap prior browser evidence and are not additional unique cases. APIs are mocked; no live backend integration is claimed. Unchanged tests were not rerun for this documentation/commit step.
 - No application behavior changed. This follow-up is local and has not been pushed; PR #242 remains unmerged and undeployed. Every latest-head CI check must pass and all actionable review comments must be resolved before merge. Preserve unrelated untracked files.
 
+### A01 failed-run fixture corrections and publication - 2026-11-03
+
+- Run `41532311363` failed on two outdated test assumptions: the manager roster allowlist omitted intentional `autoAcceptWork` metadata (corrected in `f678ad2`), and the cleaner offer-recovery browser fixture omitted the work-preferences GET response now required to render manual offers. Added an explicit `{ autoAcceptWork: false }` fixture response; no production behavior changed.
+- Fresh focused verification passed EmployeeReadScopeTests 40/40 with no skips, the exact cleaner failed-read/stale-acceptance case on desktop and mobile 2/2 with retries disabled, TypeScript `--noEmit`, and `git diff --check`. Browser APIs are mocked. These overlap earlier coverage and are not additional unique cases.
+- Publishing these corrections together with existing review-coverage commit `cbb958f` starts fresh PR #242 CI; latest-head CI is not yet verified. No failed workflow is manually retried, and no merge or deployment is authorized by this checkpoint. Unrelated untracked files remain preserved.
+
 ### A01 cleaner-offer CI fixture correction - 2026-11-03
 
 - Published-head frontend CI passed 794 cases and failed the same cleaner-offer recovery case on desktop and mobile. Its fixture omitted the work-preference response required before My shifts mounts manual offers. Added an explicit `autoAcceptWork: false` response to that scenario; Manual remains the default and no application behavior changed. Existing failed-read, stale-version and exactly two explicit acceptance-write assertions remain intact. Independent review passed.
