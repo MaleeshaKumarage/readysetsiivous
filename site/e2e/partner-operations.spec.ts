@@ -186,7 +186,7 @@ test('staff updates reusable cleaning pricing from Properties and sees the refre
   await page.getByRole('button', { name: 'Set cleaning price', exact: true }).click(); await expect(page.getByLabel('VAT (%)')).toHaveValue('14');
 });
 
-test('A01 staff requires exact time only for automatic cleaner and reports scheduled work', async ({ page }) => {
+test('A01 automatic cleaner can take a flexible visit; a start time is optional for both cleaner types', async ({ page }) => {
   await setupAdminMocks(page); await companies(page);
   await page.route(/\/api\/v1\/admin\/employees$/, route => route.fulfill({ headers, json: [
     { id: 'auto', firstName: 'Auto', lastName: 'Cleaner', isActive: true, role: 'employee', autoAcceptWork: true },
@@ -203,11 +203,11 @@ test('A01 staff requires exact time only for automatic cleaner and reports sched
   await page.goto('/admin/partner-requests/');
   await page.getByRole('button', { name: 'Arrange cleaner / time' }).click();
   await page.getByRole('combobox', { name: 'Cleaner', exact: true }).selectOption('auto');
-  const time = page.getByLabel(/^Planned start/); await expect(time).toHaveAttribute('required', '');
-  await page.getByRole('button', { name: 'Send cleaning offer' }).click(); expect(writes).toHaveLength(0);
-  await time.fill('2026-12-01T10:00'); await page.getByRole('button', { name: 'Send cleaning offer' }).click();
+  const time = page.getByLabel(/^Planned start/); await expect(time).not.toHaveAttribute('required', '');
+  await page.getByRole('button', { name: 'Send cleaning offer' }).click();
   await expect(page.getByText('Work scheduled automatically.', { exact: true })).toBeVisible();
-  expect(writes[0]).toMatchObject({ employeeId: 'auto', plannedStartLocal: '2026-12-01T10:00' });
+  expect(writes[0]).toMatchObject({ employeeId: 'auto', plannedStartLocal: null });
+  await page.getByRole('tab', { name: 'Assigned', exact: true }).click();
   await page.getByRole('button', { name: 'Arrange cleaner / time' }).click();
   await page.getByRole('combobox', { name: 'Cleaner', exact: true }).selectOption('manual');
   await expect(time).not.toHaveAttribute('required', ''); await page.getByRole('button', { name: 'Send cleaning offer' }).click();
@@ -215,11 +215,11 @@ test('A01 staff requires exact time only for automatic cleaner and reports sched
   current = { ...cleaning, exactStartLocalTime: '09:00:00' };
   await page.reload(); await page.getByRole('button', { name: 'Arrange cleaner / time' }).click();
   await page.getByRole('combobox', { name: 'Cleaner', exact: true }).selectOption('auto');
-  await expect(time).toHaveAttribute('required', ''); await expect(time).toHaveValue('');
-  await page.getByRole('button', { name: 'Send cleaning offer' }).click(); expect(writes).toHaveLength(2);
-  await time.fill('2026-12-02T09:00'); await page.getByRole('button', { name: 'Send cleaning offer' }).click();
+  await expect(time).not.toHaveAttribute('required', '');
+  // A fixed appointment supplies its own start, so the optional field may stay blank.
+  await page.getByRole('button', { name: 'Send cleaning offer' }).click();
   await expect(page.getByText('Work scheduled automatically.', { exact: true })).toBeVisible();
-  expect(writes[2]).toMatchObject({ employeeId: 'auto', plannedStartLocal: '2026-12-02T09:00' });
+  expect(writes[2]).toMatchObject({ employeeId: 'auto', plannedStartLocal: null });
   current = { ...cleaning, fromDate: '2026-12-01', toDate: '2026-12-01', exactStartLocalTime: '09:00:00' };
   await page.reload(); await page.getByRole('button', { name: 'Arrange cleaner / time' }).click();
   await page.getByRole('combobox', { name: 'Cleaner', exact: true }).selectOption('auto'); await expect(time).not.toHaveAttribute('required', '');

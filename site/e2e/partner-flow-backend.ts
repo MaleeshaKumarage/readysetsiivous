@@ -10,14 +10,18 @@ export const TENANT_TIME_ZONE = 'Europe/Helsinki';
 // Every date used by these flows is in December, when Helsinki is on UTC+02:00.
 const HELSINKI_WINTER_OFFSET = '+02:00';
 
-export type ActorKey = 'owner' | 'admin' | 'manager' | 'cleaner' | 'autoCleaner';
+export type ActorKey = 'owner' | 'admin' | 'manager' | 'cleaner' | 'autoCleaner' | 'newCleaner' | 'unlinked';
 interface Person { id: string; firstName: string; lastName: string; role: string; isActive: boolean; autoAcceptWork?: boolean; keycloakUserId?: string | null }
-const ROLE_FOR_ACTOR: Record<ActorKey, string[]> = { owner: ['partner'], admin: ['admin'], manager: ['manager'], cleaner: ['employee'], autoCleaner: ['employee'] };
+const ROLE_FOR_ACTOR: Record<ActorKey, string[]> = { owner: ['partner'], admin: ['admin'], manager: ['manager'], cleaner: ['employee'], autoCleaner: ['employee'], newCleaner: ['employee'], unlinked: ['employee'] };
 const PEOPLE: Record<ActorKey, Person> = {
   owner: { id: 'owner', firstName: 'Olivia', lastName: 'Owner', role: 'partner', isActive: true },
   admin: { id: 'admin', firstName: 'Ada', lastName: 'Admin', role: 'admin', isActive: true },
   manager: { id: 'manager', firstName: 'Mika', lastName: 'Manager', role: 'manager', isActive: true },
   cleaner: { id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true, autoAcceptWork: false, keycloakUserId: 'kc-cleaner' },
+  // No stored preference: the server default applies, which is automatic acceptance.
+  newCleaner: { id: 'new-cleaner', firstName: 'Nina', lastName: 'Newstart', role: 'employee', isActive: true, keycloakUserId: 'kc-new' },
+  // Added but not yet signed in: automatic acceptance cannot apply.
+  unlinked: { id: 'unlinked', firstName: 'Ola', lastName: 'Pending', role: 'employee', isActive: true, keycloakUserId: null },
   autoCleaner: { id: 'auto-cleaner', firstName: 'Auto', lastName: 'Cleaner', role: 'employee', isActive: true, autoAcceptWork: true, keycloakUserId: 'kc-auto' },
 };
 
@@ -111,12 +115,12 @@ export class PartnerFlowBackend {
       // Administrators have no employee row; managers and cleaners are employees whose role must match the token role.
       const roles = [JSON.stringify({ roles: ROLE_FOR_ACTOR[actor] })];
       if (actor === 'owner' || actor === 'admin') return { realm: 'readysetsiivous', roles, employee: null };
-      return { realm: 'readysetsiivous', roles, employee: { id: me.id, firstName: me.firstName, lastName: me.lastName, role: me.role, isActive: me.isActive, autoAcceptWork: me.autoAcceptWork ?? false } };
+      return { realm: 'readysetsiivous', roles, employee: { id: me.id, firstName: me.firstName, lastName: me.lastName, role: me.role, isActive: me.isActive, keycloakUserId: me.keycloakUserId ?? null, autoAcceptWork: me.autoAcceptWork ?? true } };
     }
     if (method === 'GET' && path === 'admin/tenant') return { companyName: 'ReadySetSiivous', timeZoneId: TENANT_TIME_ZONE };
-    if (method === 'GET' && path === 'admin/employees') return Object.values(this.people).map(person => ({ ...person, email: `${person.id}@example.invalid`, phone: '' }));
+    if (method === 'GET' && path === 'admin/employees') return Object.values(this.people).map(person => ({ ...person, autoAcceptWork: this.effectiveAutoAccept(person), email: `${person.id}@example.invalid`, phone: '' }));
     if (method === 'GET' && (path === 'admin/companies' || path === 'manager/companies')) return { items: this.companies, total: this.companies.length };
-    if (method === 'GET' && path === 'manager/employees') return Object.values(this.people).map(person => ({ ...person, phone: '' }));
+    if (method === 'GET' && path === 'manager/employees') return Object.values(this.people).map(person => ({ ...person, autoAcceptWork: this.effectiveAutoAccept(person), phone: '' }));
 
     if (path.startsWith('partner/')) return this.partnerRoute(actor, method, path.slice('partner/'.length), body);
     if (path.startsWith('admin/partner/') || path.startsWith('manager/partner/')) return this.staffRoute(actor, method, path.replace(/^(admin|manager)\/partner\//, ''), body);
@@ -241,10 +245,10 @@ export class PartnerFlowBackend {
 
   // ----- cleaner (employee) API -----
   private employeeRoute(actor: ActorKey, method: string, path: string, body: any): unknown {
-    if (actor !== 'cleaner' && actor !== 'autoCleaner') throw new ApiError(403, 'Employee access is required.');
     const me = this.people[actor];
+    if (me.role !== 'employee') throw new ApiError(403, 'Employee access is required.');
     if (method === 'GET' && path === 'shifts/calendar') return { occurrences: [], timeZoneId: TENANT_TIME_ZONE, fromLocalDate: '2026-12-01', toLocalDate: '2026-12-01' };
-    if (method === 'GET' && path === 'work-preferences') return { autoAcceptWork: this.preferences[me.id] ?? me.autoAcceptWork ?? false };
+    if (method === 'GET' && path === 'work-preferences') return { autoAcceptWork: this.preferences[me.id] ?? me.autoAcceptWork ?? true };
     if (method === 'PUT' && path === 'work-preferences') {
       if (body?.autoAcceptWork && this.pendingOffersFor(me.id).length) throw new ApiError(409, 'Accept or decline your pending offers before enabling automatic acceptance.');
       this.preferences[me.id] = Boolean(body?.autoAcceptWork);
@@ -260,11 +264,11 @@ export class PartnerFlowBackend {
       this.checkVersion(request, body?.version);
       if (request.status !== 'Offered') throw new ApiError(409, 'This offer is no longer awaiting acceptance.');
       this.ensureUnstarted(request);
-      let start: string;
+      let start: string | null;
       if (request.offerPlannedStartUtc) {
         start = request.offerPlannedStartUtc;
         if (body?.plannedStartLocal && this.planStart(request, body.plannedStartLocal) !== start) throw new ApiError(400, 'Accept the planned time set by your manager.');
-      } else start = this.planStart(request, body?.plannedStartLocal);
+      } else start = body?.plannedStartLocal ? this.planStart(request, body.plannedStartLocal) : null;
       this.materialize(request, me.id, start);
       return this.dto(request, false);
     }
@@ -286,22 +290,27 @@ export class PartnerFlowBackend {
     if (request.status === 'Cancelled') throw new ApiError(409, 'Cancelled requests cannot be offered.');
     this.ensureUnstarted(request);
     if (!employee || !employee.isActive || !['employee', 'manager', 'admin'].includes(employee.role)) throw new ApiError(400, 'Select an active cleaner, manager or administrator.');
-    if (employee.autoAcceptWork && !employee.keycloakUserId) throw new ApiError(409, 'The employee must have an active linked login before work can be automatically accepted.');
+    const automatic = this.effectiveAutoAccept(employee);
     let planned: string | null = null;
     if (plannedStartLocal) planned = this.planStart(request, plannedStartLocal);
     else if (request.fromDate === request.toDate && request.exactStartLocalTime) planned = this.planStart(request, `${request.fromDate}T${request.exactStartLocalTime}`);
-    if (employee.autoAcceptWork && !planned) throw new ApiError(409, 'Set an exact planned start before offering work to an employee with automatic acceptance enabled.');
     this.dropShift(request);
     request.acceptedEmployeeId = null; request.plannedStartUtc = null; request.plannedEndUtc = null;
     request.version++;
     request.offerId = `offer-${request.id}-${request.version}`;
     request.offeredEmployeeId = employee.id; request.offerPlannedStartUtc = planned; request.status = 'Offered';
-    if (employee.autoAcceptWork) this.materialize(request, employee.id, planned!);
+    if (automatic) this.materialize(request, employee.id, planned);
     return request;
   }
 
-  private materialize(request: RequestRecord, employeeId: string, startUtc: string) {
-    const end = new Date(new Date(startUtc).getTime() + request.estimatedDurationMinutes * 60_000).toISOString();
+  // Automatic acceptance applies only to employees who can sign in; a flexible visit (no start) covers its whole window.
+  private effectiveAutoAccept(person: Person | undefined): boolean {
+    // Server default: automatic unless the employee has chosen otherwise.
+    return Boolean((person?.autoAcceptWork ?? true) && person?.keycloakUserId);
+  }
+
+  private materialize(request: RequestRecord, employeeId: string, startUtc: string | null) {
+    const end = startUtc ? new Date(new Date(startUtc).getTime() + request.estimatedDurationMinutes * 60_000).toISOString() : null;
     request.linkedShiftId ??= this.nextId('shift');
     this.shiftActive[request.linkedShiftId] = true;
     request.acceptedEmployeeId = employeeId; request.plannedStartUtc = startUtc; request.plannedEndUtc = end;

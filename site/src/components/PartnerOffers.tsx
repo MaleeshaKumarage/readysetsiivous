@@ -13,13 +13,14 @@ export function PartnerOffers({ onAccepted }: { onAccepted: () => void }) {
   useEffect(() => { void load(); }, [load]);
   async function decide(offer: CleanerOffer, accept: boolean) {
     if (busy) return;
-    if (accept && !offer.plannedStartUtc && !times[offer.id]) { setError('Choose a planned start time in the requested window.'); return; }
     setBusy(true); setError(''); setNotice('');
     try {
       if (accept) {
         await offerApi.accept(offer, times[offer.id]);
         const planned = offer.plannedStartUtc ? startFormat.format(new Date(offer.plannedStartUtc)) : times[offer.id]?.replace('T', ' ');
-        setNotice(`Cleaning accepted for ${offer.branchName}${planned ? `, starting ${planned}` : ''}.`);
+        setNotice(planned
+          ? `Cleaning accepted for ${offer.branchName}, starting ${planned}.`
+          : `Cleaning accepted for ${offer.branchName}. Choose your start any time from ${offer.fromDate} to ${offer.toDate}.`);
         onAccepted();
       } else {
         await offerApi.decline(offer, reasons[offer.id]);
@@ -50,7 +51,7 @@ export function PartnerOffers({ onAccepted }: { onAccepted: () => void }) {
         {offer.notes && <p className="whitespace-pre-wrap break-words">{offer.notes}</p>}
         {offer.plannedStartUtc
           ? <p>Planned start: {new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: offer.timeZoneId }).format(new Date(offer.plannedStartUtc))}</p>
-          : <><Field label={`Planned start (${offer.timeZoneId})`}><Input aria-label={`Planned start for ${offer.branchName}`} type="datetime-local" min={`${offer.fromDate}T00:00`} max={`${offer.toDate}T23:59`} value={times[offer.id] ?? ''} onChange={e => setTimes(current => ({ ...current, [offer.id]: e.target.value }))} /></Field><p className="text-sm text-gray-600 dark:text-gray-300">The visit takes {offer.estimatedDurationMinutes} minutes and must finish by the end of {offer.toDate}.</p></>}
+          : <><Field label={`Planned start (${offer.timeZoneId}, optional)`}><Input aria-label={`Planned start for ${offer.branchName}`} type="datetime-local" min={`${offer.fromDate}T00:00`} max={`${offer.toDate}T23:59`} value={times[offer.id] ?? ''} onChange={e => setTimes(current => ({ ...current, [offer.id]: e.target.value }))} /></Field><p className="text-sm text-gray-600 dark:text-gray-300">Leave blank to choose your start any time from {offer.fromDate} to {offer.toDate}. The visit takes {offer.estimatedDurationMinutes} minutes and must finish by the end of {offer.toDate}.</p></>}
         <Field label="Decline reason (optional)"><Input value={reasons[offer.id] ?? ''} onChange={e => setReasons(current => ({ ...current, [offer.id]: e.target.value }))} /></Field>
         <div className="flex flex-wrap gap-3">
           <Button disabled={busy} onClick={() => void decide(offer, true)}>Accept cleaning</Button>
