@@ -62,6 +62,38 @@ test('Partner Operations excludes ordinary properties and reveals editors below 
   await expect(page.getByText('No quotes awaiting pricing.', { exact: true })).toBeVisible();
 });
 
+test('completion month offers exactly 36 months without older shifts and can be cleared', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-11-15T12:00:00Z'));
+  await setupAdminMocks(page); await companies(page);
+  const issuer: InvoiceIssuer = { companyName: 'ReadySetSiivous', businessId: '3404861-9', companyAddress: { street: 'Issuer road 1', postalCode: '00100', city: 'Helsinki', country: 'FI' }, email: 'office@example.test', phone: '', bankAccountIBAN: 'FI2112345600000785', bankBic: 'NDEAFIHH', paymentTermsDays: 14, defaultVatRatePercent: 25.5 };
+  const previews: ShiftInvoiceInput[] = [];
+  await page.route(/\/api\/v1\/admin\/shifts(?:\?.*)?$/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/admin\/invoices(?:\/.*)?$/, route => {
+    const req = route.request(), path = new URL(req.url()).pathname.split('/invoices')[1];
+    if (req.method() === 'OPTIONS') return route.fulfill({ headers });
+    if (req.method() === 'GET') return route.fulfill({ headers, json: path === '/issuer' ? issuer : [] });
+    if (path === '/shift-preview') previews.push(req.postDataJSON() as ShiftInvoiceInput);
+    return route.fulfill({ status: 404, headers });
+  });
+  await page.goto('/admin/invoices/');
+  await page.getByRole('textbox', { name: 'Company', exact: true }).click(); await page.getByRole('option', { name: 'Owner company', exact: true }).click();
+  const month = page.getByRole('textbox', { name: 'Completion month', exact: true });
+  await month.click();
+  await expect(page.getByRole('option', { name: 'November 2026', exact: true })).toBeAttached();
+  await expect(page.getByRole('option', { name: 'December 2023', exact: true })).toBeAttached();
+  await expect(page.getByRole('option', { name: 'November 2023', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('option', { name: /^[A-Z][a-z]+ \d{4}$/ })).toHaveCount(36);
+  await page.getByRole('option', { name: 'October 2026', exact: true }).click();
+  await expect(month).toHaveValue('October 2026');
+  const preview = page.getByRole('button', { name: 'Preview invoice', exact: true });
+  await expect(preview).toBeEnabled();
+  // Mantine hides the clear control from assistive tech (aria-hidden), so target it by its label attribute.
+  await page.locator('button[aria-label="Clear completion month"]').click();
+  await expect(month).toHaveValue('');
+  await expect(preview).toBeDisabled();
+  expect(previews).toHaveLength(0);
+});
+
 test('partner month previews all company visits and issues the exact approved payload', async ({ page }, testInfo) => {
   // Month options are relative to "now"; freeze it so the labels picked below always exist.
   await page.clock.setFixedTime(new Date('2026-11-15T12:00:00Z'));
