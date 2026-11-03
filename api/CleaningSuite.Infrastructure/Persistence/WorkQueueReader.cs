@@ -30,7 +30,8 @@ public sealed class WorkQueueReader(ITenantSession tenant) : IWorkQueueReader
         }
 
         var completedFirst = query.View == WorkQueueViews.Completed;
-        var window = query.Skip + query.Take;
+        var skip = Math.Clamp(query.Skip, 0, WorkQueueLimits.MaxSkip);
+        var window = skip + Math.Clamp(query.Take, 1, 100);
         var rows = new List<(DateTime Key, Guid Id, WorkQueueItem Item)>();
 
         if (includeBookings)
@@ -39,7 +40,7 @@ public sealed class WorkQueueReader(ITenantSession tenant) : IWorkQueueReader
             bookings = completedFirst ? bookings.OrderByDescending(b => b.StartUtc).ThenBy(b => b.Id) : bookings.OrderBy(b => b.StartUtc).ThenBy(b => b.Id);
             foreach (var booking in await bookings.Take(window).ToListAsync(ct))
             {
-                rows.Add((booking.StartUtc, booking.Id, new WorkQueueItem(
+                rows.Add((LocalKey(booking.StartLocalDate, booking.StartLocalTime) ?? booking.StartUtc, booking.Id, new WorkQueueItem(
                     "booking", booking.Id, booking.BookingNumber, booking.Customer.Name,
                     booking.StartLocalDate + " " + booking.StartLocalTime, booking.Status,
                     WorkQueueRules.BookingLabel(booking), booking.EmployeeName, "/admin/work-queue/?booking=" + booking.Id)));
@@ -72,9 +73,17 @@ public sealed class WorkQueueReader(ITenantSession tenant) : IWorkQueueReader
         var ordered = completedFirst
             ? rows.OrderByDescending(r => r.Key).ThenBy(r => r.Id)
             : rows.OrderBy(r => r.Key).ThenBy(r => r.Id);
-        var items = ordered.Skip(query.Skip).Take(query.Take).Select(r => r.Item).ToList();
+        var items = ordered.Skip(skip).Take(query.Take).Select(r => r.Item).ToList();
 
         return new WorkQueuePage(query.View, query.Source, items, counts[query.View], counts);
+
+        // Both sources merge on the tenant-local wall clock. Bookings use their stored local start; partner requests
+        // are date windows ordered by their first day (as the database orders them), so they sort at local midnight.
+        // Using UTC for bookings would shift them against partner rows by the tenant's UTC offset.
+        static DateTime? LocalKey(string date, string time) =>
+            DateOnly.TryParseExact(date, "yyyy-MM-dd", out var day)
+                ? day.ToDateTime(TimeOnly.TryParseExact(time, ["HH:mm", "HH:mm:ss"], out var at) ? at : TimeOnly.MinValue)
+                : null;
 
         IQueryable<Booking> BookingsIn(string view)
         {

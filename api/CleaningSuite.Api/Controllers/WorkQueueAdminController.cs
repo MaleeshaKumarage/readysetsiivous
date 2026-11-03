@@ -24,7 +24,8 @@ public class WorkQueueAdminController(IMediator mediator) : ControllerBase
     {
         if (!WorkQueueViews.IsKnown(view)) return BadRequest("View must be needs-action, scheduled, in-progress or completed.");
         if (source is not ("all" or "booking" or "partner")) return BadRequest("Source must be all, booking or partner.");
-        skip = Math.Max(0, skip);
+        // Each source reads skip+take rows before merging, so bound skip to keep that window small and non-negative.
+        skip = Math.Clamp(skip, 0, WorkQueueLimits.MaxSkip);
         take = Math.Clamp(take, 1, 100);
         return Ok(await mediator.Send(new WorkQueueQuery(view, source, q, skip, take), ct));
     }

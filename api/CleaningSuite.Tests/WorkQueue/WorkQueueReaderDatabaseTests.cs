@@ -47,6 +47,34 @@ public class WorkQueueReaderDatabaseTests
         Assert.Equal("Anna Virtanen", Assert.Single(byNumber.Items).CustomerName);
     }
 
+    [QualityCycleDatabaseFact]
+    public async Task All_sources_merge_on_local_time_and_a_huge_skip_returns_an_empty_page()
+    {
+        using var f = await Fixture.Create();
+        var company = new Company { Name = "Merge Oy", BusinessId = "WQ-" + Guid.NewGuid().ToString("N")[..8], IsActive = true, IsPartnerEnabled = true };
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(company);
+            // 01:00 Helsinki on 3 Dec is 23:00 UTC on 2 Dec. A UTC key would wrongly put it before the 3 Dec partner request.
+            db.Store(new Booking { BookingNumber = "BK-EARLY", Customer = new Customer { Name = "Early bird" }, Status = Booking.StatusNew,
+                StartUtc = new DateTime(2026, 12, 2, 23, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-03", StartLocalTime = "01:00" });
+            db.Store(new Booking { BookingNumber = "BK-DAY2", Customer = new Customer { Name = "Day two" }, Status = Booking.StatusNew,
+                StartUtc = new DateTime(2026, 12, 2, 8, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-02", StartLocalTime = "10:00" });
+            db.Store(new PartnerCleaningRequest { ClientRequestId = Guid.NewGuid(), CompanyId = company.Id, BranchId = Guid.NewGuid(),
+                Status = PartnerCleaningRequest.StatusRequested, FromDate = new DateOnly(2026, 12, 3), ToDate = new DateOnly(2026, 12, 3) });
+            await db.SaveChangesAsync();
+        }
+        using var session = f.Session();
+        var reader = new WorkQueueReader(session);
+
+        var page = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.NeedsAction, "all", null, 0, 25));
+        Assert.Equal(["2026-12-02 10:00", "2026-12-03", "2026-12-03 01:00"], page.Items.Select(i => i.ScheduledLocal).ToArray());
+
+        var beyond = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.NeedsAction, "all", null, int.MaxValue, 100));
+        Assert.Empty(beyond.Items);
+        Assert.Equal(3, beyond.Total);
+    }
+
     private sealed class Fixture : IDisposable
     {
         public required ServiceProvider Provider; public required IDocumentStore Store;

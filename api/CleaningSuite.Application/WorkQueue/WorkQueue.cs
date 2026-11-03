@@ -17,6 +17,12 @@ public static class WorkQueueViews
     public static bool IsKnown(string? view) => view is not null && All.Contains(view);
 }
 
+public static class WorkQueueLimits
+{
+    /// <summary>Deepest offset served. Each source reads skip+take rows, so this bounds the merge window.</summary>
+    public const int MaxSkip = 10_000;
+}
+
 /// <summary>Maps stored statuses to queue views. In-progress has no stored state yet, so it is always empty.</summary>
 public static class WorkQueueRules
 {
