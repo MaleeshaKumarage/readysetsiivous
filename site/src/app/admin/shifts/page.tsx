@@ -172,18 +172,15 @@ export default function ShiftsAdminPage() {
   const [assigningVisit, setAssigningVisit] = useState<ShiftOccurrence | null>(null);
   useEffect(() => () => { assignmentGeneration.current++; }, []);
 
-  // The shift list has no assignee data, so the Employees column is filled from each shift's assignments.
-  // Only missing entries are written, so a newer list from Employees actions is never overwritten.
-  const loadAssignmentCounts = async (list: Shift[]) => {
-    const loaded = await Promise.all(list.map(async (s) => [s.id, await adminShifts.assignments(s.id).catch(() => null)] as const));
-    setAssignments(m => {
-      const next = { ...m };
-      for (const [id, rows] of loaded) if (rows && !next[id]) next[id] = rows;
-      return next;
-    });
-  };
+  // The shift list has no assignee data, so the Employees column uses one bulk count request.
+  // A roster loaded from the Employees panel is newer than these counts and takes precedence.
+  const [assignmentCounts, setAssignmentCounts] = useState<Record<string, number> | null>(null);
+  const [countError, setCountError] = useState('');
+  const loadAssignmentCounts = () => adminShifts.assignmentCounts()
+    .then(counts => { setAssignmentCounts(counts); setCountError(''); })
+    .catch((failure: Error) => { setAssignmentCounts(null); setCountError(failure.message); });
   const load = () => adminShifts.list(undefined, undefined, true).then((r) => {
-    if (r) { setShifts(r); void loadAssignmentCounts(r); }
+    if (r) { setShifts(r); void loadAssignmentCounts(); }
     setLoading(false);
   });
   useEffect(() => { load(); adminTenant.get().then(profile => {
@@ -472,6 +469,7 @@ export default function ShiftsAdminPage() {
       </Group>
 
       {listError && <Text role="alert" c="red" mb="md">{listError}</Text>}
+      {countError && <Text role="alert" c="red" mb="md">{countError}</Text>}
 
       <LifecycleTabs value={lifecycle} onChange={changeLifecycle} label="Shift activity" disabled={assignBusy || templateSaving}
         activeCount={activeCount} inactiveCount={inactiveCount}>
@@ -499,7 +497,7 @@ export default function ShiftsAdminPage() {
                       {s.schedule.type === 4 && 'On-call'}
                       {s.schedule.type === 6 && `One-time ${s.schedule.oneTimeDate?.slice(0, 10)} ${s.schedule.oneTimeStart?.slice(0, 5)}–${s.schedule.oneTimeEnd?.slice(0, 5)}`}
                     </Table.Td>
-                    <Table.Td>{(assignments[s.id] ?? []).filter(a => a.isActive).length}</Table.Td>
+                    <Table.Td>{assignments[s.id] ? assignments[s.id].filter(a => a.isActive).length : assignmentCounts ? (assignmentCounts[s.id] ?? 0) : '—'}</Table.Td>
                     <Table.Td>
                       <Group gap={6} wrap="nowrap">
                         {isAdmin() && <Button size="xs" variant="light" onClick={() => { setPricingShift(s); setPricingOccurrence(undefined); }}>Pricing</Button>}

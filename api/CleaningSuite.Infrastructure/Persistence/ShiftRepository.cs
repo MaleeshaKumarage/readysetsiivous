@@ -123,6 +123,14 @@ public class ShiftRepository : IShiftRepository
             .ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyDictionary<Guid, int>> CountActiveAssignmentsByShiftAsync(CancellationToken ct = default)
+    {
+        var active = await Session.Query<ShiftAssignment>()
+            .Where(x => x.IsActive)
+            .ToListAsync(ct);
+        return active.GroupBy(x => x.ShiftId).ToDictionary(g => g.Key, g => g.Count());
+    }
+
     public async Task SaveAssignmentAsync(ShiftAssignment assignment, CancellationToken ct = default)
     {
         await StageChange(assignment.ShiftId, [assignment.EmployeeId], ct);
