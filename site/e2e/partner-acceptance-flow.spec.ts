@@ -1,0 +1,469 @@
+import { test, expect, type Page } from '@playwright/test';
+import { OTHER_COMPANY, PartnerFlowBackend, openActor, prepareRolePage, type WriteRecord } from './partner-flow-backend';
+
+// One visit travels through every role: owner portal → staff partner operations → cleaner offers.
+// Each test owns a fresh fake backend, so the flow test and the edge cases never share state.
+
+const PROPERTY = 'Lake apartment';
+const WINDOW = { fromDate: '2026-12-01', toDate: '2026-12-02' };
+const PLANNED = '2026-12-01T10:00';
+const OVERRUN = '2026-12-02T23:30';
+
+const ownerCard = (page: Page) => page.getByRole('article', { name: `${PROPERTY} ${WINDOW.fromDate}`, exact: true });
+const staffCard = (page: Page) => page.getByRole('article', { name: `${PROPERTY} request`, exact: true });
+const cleanerOffer = (page: Page) => page.getByRole('article', { name: `${PROPERTY} offer`, exact: true });
+
+async function ownerOpenRequests(page: Page) {
+  await page.goto('/partner/');
+  await page.getByRole('tab', { name: 'Cleaning requests', exact: true }).click();
+}
+async function staffOpenRequests(page: Page) {
+  await page.goto('/admin/partner-requests/');
+}
+async function cleanerOpenOffers(page: Page) {
+  await page.goto('/me/shifts/');
+  await expect(page.getByRole('region', { name: 'Cleaning offers' })).toBeVisible();
+}
+async function staffArrange(page: Page, employeeId: string, plannedStartLocal?: string) {
+  await staffCard(page).getByRole('button', { name: 'Arrange cleaner / time', exact: true }).click();
+  await page.getByLabel('Cleaner', { exact: true }).selectOption(employeeId);
+  if (plannedStartLocal) await page.getByLabel(/^Planned start \(tenant local time/).fill(plannedStartLocal);
+  await page.getByRole('button', { name: 'Send cleaning offer', exact: true }).click();
+}
+// Write paths with server-generated identifiers replaced, so sequences can be compared exactly.
+const shape = (writes: WriteRecord[]) => writes.map(write => `${write.actor} ${write.method} ${write.path.replace(/[a-z]+-\d+(-\d+)?/g, '<id>')}`);
+
+// ----- the flow -----
+
+test('one visit from owner request to cleaner acceptance and back to the owner', async ({ page, browser }, testInfo) => {
+  const backend = new PartnerFlowBackend();
+  await prepareRolePage(page, backend, 'owner');
+  const staff = await openActor(browser, testInfo, backend, 'admin');
+  const cleaner = await openActor(browser, testInfo, backend, 'cleaner');
+  try {
+    // 1. Owner adds a property and asks staff for a quote.
+    await page.goto('/partner/');
+    await page.getByRole('button', { name: 'Add property', exact: true }).click();
+    await page.getByLabel('Property name', { exact: true }).fill(PROPERTY);
+    await page.getByLabel('Street', { exact: true }).fill('Lake road 1');
+    await page.getByLabel('Postal code', { exact: true }).fill('33100');
+    await page.getByLabel('City', { exact: true }).fill('Tampere');
+    await page.getByLabel('Rooms (optional)', { exact: true }).fill('2');
+    await page.getByLabel('Beds (optional)', { exact: true }).fill('3');
+    await page.getByRole('button', { name: 'Save property', exact: true }).click();
+    await expect(page.getByText('Property created. Request a quote to enable cleaning requests.', { exact: true })).toBeVisible();
+    const property = page.getByRole('article', { name: PROPERTY, exact: true });
+    await property.getByRole('button', { name: 'Request quote', exact: true }).click();
+    await expect(page.getByText('Quote requested.', { exact: true })).toBeVisible();
+    await expect(property.getByText('Quote requested — awaiting staff pricing', { exact: true })).toBeVisible();
+    await expect(property.getByRole('button', { name: 'Request cleaning', exact: true })).toBeDisabled();
+
+    // 2. Staff sets the fixed price from the quote queue.
+    await staffOpenRequests(staff.page);
+    await staff.page.getByRole('tab', { name: 'Quote requests', exact: true }).click();
+    await expect(staff.page.getByText('Rooms: 2 · Beds: 3')).toBeVisible();
+    await staff.page.getByRole('button', { name: 'Set cleaning price', exact: true }).click();
+    await staff.page.getByLabel('Fixed cleaning price excl. VAT (€)', { exact: true }).fill('85');
+    await staff.page.getByLabel('Estimated duration (minutes)', { exact: true }).fill('90');
+    await staff.page.getByRole('button', { name: 'Save pricing', exact: true }).click();
+    await expect(staff.page.getByText('Pricing saved.', { exact: true })).toBeVisible();
+
+    // 3. Owner sees the price and books one visit inside the date window.
+    await ownerOpenRequests(page);
+    await page.getByRole('tab', { name: 'Properties', exact: true }).click();
+    await expect(property.getByText('€85.00', { exact: false })).toBeVisible();
+    await property.getByRole('button', { name: 'Request cleaning', exact: true }).click();
+    await page.getByLabel('From date', { exact: true }).fill(WINDOW.fromDate);
+    await page.getByLabel('To date', { exact: true }).fill(WINDOW.toDate);
+    await page.getByLabel('Cleaning instructions', { exact: true }).fill('Clean after checkout.');
+    await page.getByRole('button', { name: 'Save cleaning request', exact: true }).click();
+    await expect(page.getByText('Cleaning request saved. Staff will arrange a cleaner.', { exact: true })).toBeVisible();
+    await page.getByRole('tab', { name: 'Cleaning requests', exact: true }).click();
+    await expect(ownerCard(page).getByText('Requested', { exact: true })).toBeVisible();
+    await expect(ownerCard(page).getByText('Cleaner: Awaiting acceptance')).toBeVisible();
+
+    // 4. Staff arranges an offer to a cleaner who chooses the time themselves.
+    await staffOpenRequests(staff.page);
+    await expect(staffCard(staff.page).getByText(`${PROPERTY} · Requested`, { exact: true })).toBeVisible();
+    await expect(staffCard(staff.page).getByText('Cleaner: Not accepted')).toBeVisible();
+    await staffArrange(staff.page, 'cleaner');
+    await expect(staff.page.getByText('Offer sent. Waiting for cleaner acceptance.', { exact: true })).toBeVisible();
+    await expect(staffCard(staff.page).getByText(`${PROPERTY} · Offered`, { exact: true })).toBeVisible();
+
+    // 5. Owner sees the offer is out, but the cleaner is not confirmed yet.
+    await ownerOpenRequests(page);
+    await expect(ownerCard(page).getByText('Offered', { exact: true })).toBeVisible();
+    await expect(ownerCard(page).getByText('Cleaner: Awaiting acceptance')).toBeVisible();
+
+    // 6. Cleaner accepts with a planned start inside the window.
+    await cleanerOpenOffers(cleaner.page);
+    const offer = cleanerOffer(cleaner.page);
+    await expect(offer.getByText('2026-12-01 – 2026-12-02 · Estimated 90 minutes · Europe/Helsinki')).toBeVisible();
+    await offer.getByLabel(`Planned start for ${PROPERTY}`, { exact: true }).fill(PLANNED);
+    await offer.getByRole('button', { name: 'Accept cleaning', exact: true }).click();
+    await expect(cleaner.page.getByText('No pending cleaning offers.', { exact: true })).toBeVisible();
+    expect(backend.writes.at(-1)).toMatchObject({ actor: 'cleaner', method: 'POST', body: { version: 2, plannedStartLocal: PLANNED } });
+
+    // 7. Staff sees the accepted cleaner.
+    await staffOpenRequests(staff.page);
+    await expect(staffCard(staff.page).getByText(`${PROPERTY} · Accepted`, { exact: true })).toBeVisible();
+    await expect(staffCard(staff.page).getByText('Cleaner: Test Cleaner')).toBeVisible();
+
+    // 8. Owner sees the cleaner and planned time, and the request is locked to staff changes.
+    await ownerOpenRequests(page);
+    await expect(ownerCard(page).getByText('Accepted', { exact: true })).toBeVisible();
+    await expect(ownerCard(page).getByText('Cleaner: Test Cleaner')).toBeVisible();
+    await expect(ownerCard(page).getByText(/Planned: .*10:00/)).toBeVisible();
+    await expect(ownerCard(page).getByRole('button', { name: 'Edit request', exact: true })).toHaveCount(0);
+    await expect(ownerCard(page).getByRole('button', { name: 'Cancel request', exact: true })).toHaveCount(0);
+
+    // 9. Owner asks staff for a later visit instead of editing the booking.
+    await ownerCard(page).getByRole('button', { name: 'Request a change or cancellation', exact: true }).click();
+    await page.getByLabel('Describe the requested change', { exact: true }).fill('Please arrange a later visit.');
+    await page.getByRole('button', { name: 'Send change request', exact: true }).click();
+    await expect(page.getByText('Change request sent to staff.', { exact: true })).toBeVisible();
+
+    // 10. Staff resolves the change request.
+    await staffOpenRequests(staff.page);
+    await staff.page.getByRole('tab', { name: 'Changes', exact: true }).click();
+    const change = staff.page.getByRole('article').filter({ hasText: 'Please arrange a later visit.' });
+    await expect(change.getByText('Awaiting staff response')).toBeVisible();
+    await change.getByRole('button', { name: 'Resolve change request', exact: true }).click();
+    await staff.page.getByLabel('Resolution', { exact: true }).fill('Later visit is not available; the cleaner stays booked for 10:00.');
+    await staff.page.getByRole('button', { name: 'Save resolution', exact: true }).click();
+    await expect(staff.page.getByText('Change request resolved.', { exact: true })).toBeVisible();
+
+    // 11. Owner reads the staff response and the company shift created by the acceptance.
+    await ownerOpenRequests(page);
+    await page.getByRole('tab', { name: 'Change requests', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Staff response' })).toBeVisible();
+    await expect(page.getByText('Later visit is not available; the cleaner stays booked for 10:00.', { exact: true })).toBeVisible();
+    await page.getByRole('tab', { name: 'Company shifts', exact: true }).click();
+    await expect(page.getByRole('heading', { name: `Cleaning — ${PROPERTY}` })).toBeVisible();
+
+    // Every write happened exactly once, in order, by the expected actor.
+    expect(shape(backend.writes)).toEqual([
+      'owner POST partner/branches',
+      'owner POST partner/branches/<id>/quote-request',
+      'admin PUT admin/partner/branches/<id>/pricing',
+      'owner POST partner/requests',
+      'admin POST admin/partner/requests/<id>/offer',
+      'cleaner POST me/partner-offers/offer-<id>/accept',
+      'owner POST partner/requests/<id>/change-requests',
+      'admin POST admin/partner/change-requests/<id>/resolve',
+    ]);
+    expect(backend.writes.every(write => write.status === 200)).toBe(true);
+    expect(Object.keys(backend.writes.find(write => write.path === 'partner/requests')!.body).sort())
+      .toEqual(['branchId', 'clientRequestId', 'exactStartLocalTime', 'fromDate', 'notes', 'toDate']);
+    expect(backend.writes.find(write => write.path.endsWith('/offer'))!.body).toEqual({ version: 1, employeeId: 'cleaner', plannedStartLocal: null });
+  } finally {
+    await staff.context.close();
+    await cleaner.context.close();
+  }
+});
+
+// ----- edge cases, each from a seeded state -----
+
+test('a staff offer built on an outdated request is refused and succeeds after reloading', async ({ page, browser }, testInfo) => {
+  const backend = new PartnerFlowBackend({ priced: true });
+  backend.seedRequest(backend.branches[0], { ...WINDOW, notes: 'Before checkout.' });
+  const staff = await openActor(browser, testInfo, backend, 'admin');
+  await staffOpenRequests(staff.page);
+  await expect(staffCard(staff.page).getByText(`${PROPERTY} · Requested`, { exact: true })).toBeVisible();
+
+  // Owner changes the instructions while staff still holds version 1.
+  await prepareRolePage(page, backend, 'owner');
+  await ownerOpenRequests(page);
+  await ownerCard(page).getByRole('button', { name: 'Edit request', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Cleaning instructions', exact: true }).fill('After checkout, from 15:00.');
+  await page.getByRole('button', { name: 'Save cleaning request', exact: true }).click();
+  await expect(page.getByText('Cleaning request saved. Staff will arrange a cleaner.', { exact: true })).toBeVisible();
+
+  await staffArrange(staff.page, 'cleaner');
+  await expect(staff.page.locator('p[role="alert"]')).toContainText('This request changed. Reload it before making another change.');
+  expect(backend.requests[0]).toMatchObject({ status: 'Requested', offeredEmployeeId: null, version: 2 });
+
+  await staffOpenRequests(staff.page);
+  await staffArrange(staff.page, 'cleaner');
+  await expect(staff.page.getByText('Offer sent. Waiting for cleaner acceptance.', { exact: true })).toBeVisible();
+  expect(backend.writes.filter(write => write.path.endsWith('/offer')).map(write => [write.body.version, write.status])).toEqual([[1, 409], [2, 200]]);
+  await staff.context.close();
+});
+
+test('rescheduling an offered visit withdraws the cleaner offer and a stale acceptance is refused', async ({ browser }, testInfo) => {
+  const backend = new PartnerFlowBackend({ priced: true });
+  backend.seedOffer(backend.seedRequest(backend.branches[0], WINDOW), 'cleaner');
+  const cleaner = await openActor(browser, testInfo, backend, 'cleaner');
+  await cleanerOpenOffers(cleaner.page);
+  await expect(cleanerOffer(cleaner.page)).toBeVisible();
+
+  // Staff reschedules while the cleaner still sees the old offer.
+  const staff = await openActor(browser, testInfo, backend, 'admin');
+  await staffOpenRequests(staff.page);
+  await staffCard(staff.page).getByRole('button', { name: 'Edit / reschedule request', exact: true }).click();
+  await staff.page.getByLabel('From date', { exact: true }).fill('2026-12-03');
+  await staff.page.getByLabel('To date', { exact: true }).fill('2026-12-04');
+  await staff.page.getByRole('button', { name: 'Save request changes', exact: true }).click();
+  await expect(staff.page.getByText('Request updated. Arrange a new cleaner offer.', { exact: true })).toBeVisible();
+  expect(backend.request(backend.requests[0].id)).toMatchObject({ status: 'Requested', offeredEmployeeId: null, offerId: null });
+
+  // The stale offer can no longer be accepted.
+  const offer = cleanerOffer(cleaner.page);
+  await offer.getByLabel(`Planned start for ${PROPERTY}`, { exact: true }).fill(PLANNED);
+  await offer.getByRole('button', { name: 'Accept cleaning', exact: true }).click();
+  await expect(cleaner.page.locator('p[role="alert"]')).toBeVisible();
+  expect(backend.requests[0].acceptedEmployeeId).toBeNull();
+  await cleaner.page.getByRole('button', { name: 'Refresh offers', exact: true }).click();
+  await expect(cleaner.page.getByText('No pending cleaning offers.', { exact: true })).toBeVisible();
+
+  await staff.context.close();
+  await cleaner.context.close();
+});
+
+test('cleaner declines with a reason; an over-long reason is refused and the visit returns to staff', async ({ page, browser }, testInfo) => {
+  const backend = new PartnerFlowBackend({ priced: true });
+  backend.seedOffer(backend.seedRequest(backend.branches[0], WINDOW), 'cleaner');
+  const cleaner = await openActor(browser, testInfo, backend, 'cleaner');
+  const staff = await openActor(browser, testInfo, backend, 'admin');
+  await cleanerOpenOffers(cleaner.page);
+
+  await cleanerOffer(cleaner.page).getByLabel('Decline reason (optional)', { exact: true }).fill('x'.repeat(1001));
+  await cleanerOffer(cleaner.page).getByRole('button', { name: 'Decline cleaning', exact: true }).click();
+  await expect(cleaner.page.locator('p[role="alert"]')).toContainText('Use at most 1000 characters for the reason.');
+  await expect(cleanerOffer(cleaner.page)).toBeVisible();
+
+  await cleanerOffer(cleaner.page).getByLabel('Decline reason (optional)', { exact: true }).fill('Already booked that morning.');
+  await cleanerOffer(cleaner.page).getByRole('button', { name: 'Decline cleaning', exact: true }).click();
+  await expect(cleaner.page.getByText('No pending cleaning offers.', { exact: true })).toBeVisible();
+  expect(backend.writes.filter(write => write.path.includes('/decline')).map(write => write.body)).toEqual([
+    { version: 2, reason: 'x'.repeat(1001) },
+    { version: 2, reason: 'Already booked that morning.' },
+  ]);
+
+  await staffOpenRequests(staff.page);
+  await expect(staffCard(staff.page).getByText(`${PROPERTY} · Requested`, { exact: true })).toBeVisible();
+  await expect(staffCard(staff.page).getByRole('button', { name: 'Arrange cleaner / time', exact: true })).toBeVisible();
+  await prepareRolePage(page, backend, 'owner');
+  await ownerOpenRequests(page);
+  await expect(ownerCard(page).getByText('Requested', { exact: true })).toBeVisible();
+  await staff.context.close();
+  await cleaner.context.close();
+});
+
+test('an automatic-acceptance cleaner needs an exact start and the visit is scheduled without an offer', async ({ page, browser }, testInfo) => {
+  const backend = new PartnerFlowBackend({ priced: true });
+  backend.seedRequest(backend.branches[0], WINDOW);
+  const staff = await openActor(browser, testInfo, backend, 'admin');
+  await staffOpenRequests(staff.page);
+  await staffCard(staff.page).getByRole('button', { name: 'Arrange cleaner / time', exact: true }).click();
+  await staff.page.getByLabel('Cleaner', { exact: true }).selectOption('auto-cleaner');
+  const start = staff.page.getByLabel(/^Planned start \(tenant local time — required\)/);
+  await expect(start).toBeVisible();
+  await staff.page.getByRole('button', { name: 'Send cleaning offer', exact: true }).click();
+  expect(await start.evaluate(element => (element as HTMLInputElement).checkValidity())).toBe(false);
+  expect(backend.writes.filter(write => write.path.endsWith('/offer'))).toHaveLength(0);
+
+  await start.fill(PLANNED);
+  await staff.page.getByRole('button', { name: 'Send cleaning offer', exact: true }).click();
+  await expect(staff.page.getByText('Work scheduled automatically.', { exact: true })).toBeVisible();
+  await expect(staffCard(staff.page).getByText(`${PROPERTY} · Accepted`, { exact: true })).toBeVisible();
+  await expect(staffCard(staff.page).getByText('Cleaner: Auto Cleaner')).toBeVisible();
+
+  const autoCleaner = await openActor(browser, testInfo, backend, 'autoCleaner');
+  await autoCleaner.page.goto('/me/shifts/');
+  await autoCleaner.page.waitForLoadState('networkidle');
+  await expect(autoCleaner.page.getByRole('region', { name: 'Cleaning offers' })).toHaveCount(0);
+
+  await prepareRolePage(page, backend, 'owner');
+  await ownerOpenRequests(page);
+  await expect(ownerCard(page).getByText('Accepted', { exact: true })).toBeVisible();
+  await expect(ownerCard(page).getByText(/Planned: .*10:00/)).toBeVisible();
+  await staff.context.close();
+  await autoCleaner.context.close();
+});
+
+test('a visit that runs past the requested dates is refused by staff and by the cleaner', async ({ browser }, testInfo) => {
+  const backend = new PartnerFlowBackend({ priced: true });
+  backend.seedRequest(backend.branches[0], WINDOW);
+  const staff = await openActor(browser, testInfo, backend, 'admin');
+  await staffOpenRequests(staff.page);
+  await staffArrange(staff.page, 'cleaner', OVERRUN);
+  await expect(staff.page.locator('p[role="alert"]')).toContainText('The entire visit must fit within the requested dates.');
+  expect(backend.requests[0].status).toBe('Requested');
+
+  // Staff leaves the start open so the cleaner chooses it.
+  await staff.page.getByLabel(/^Planned start \(tenant local time/).fill('');
+  await staff.page.getByRole('button', { name: 'Send cleaning offer', exact: true }).click();
+  await expect(staff.page.getByText('Offer sent. Waiting for cleaner acceptance.', { exact: true })).toBeVisible();
+
+  const cleaner = await openActor(browser, testInfo, backend, 'cleaner');
+  await cleanerOpenOffers(cleaner.page);
+  await cleanerOffer(cleaner.page).getByLabel(`Planned start for ${PROPERTY}`, { exact: true }).fill(OVERRUN);
+  await cleanerOffer(cleaner.page).getByRole('button', { name: 'Accept cleaning', exact: true }).click();
+  await expect(cleaner.page.locator('p[role="alert"]')).toContainText('The entire visit must fit within the requested dates.');
+  await expect(cleanerOffer(cleaner.page)).toBeVisible();
+  expect(backend.requests[0].status).toBe('Offered');
+
+  await cleanerOffer(cleaner.page).getByLabel(`Planned start for ${PROPERTY}`, { exact: true }).fill('2026-12-01T09:00');
+  await cleanerOffer(cleaner.page).getByRole('button', { name: 'Accept cleaning', exact: true }).click();
+  await expect(cleaner.page.getByText('No pending cleaning offers.', { exact: true })).toBeVisible();
+  expect(backend.requests[0]).toMatchObject({ status: 'Accepted', plannedStartUtc: '2026-12-01T07:00:00.000Z' });
+  await staff.context.close();
+  await cleaner.context.close();
+});
+
+test('owner cancels an unaccepted request only after confirming, and the cleaner loses the offer', async ({ page, browser }, testInfo) => {
+  const backend = new PartnerFlowBackend({ priced: true });
+  backend.seedOffer(backend.seedRequest(backend.branches[0], WINDOW), 'cleaner');
+  const cleaner = await openActor(browser, testInfo, backend, 'cleaner');
+  await cleanerOpenOffers(cleaner.page);
+  await prepareRolePage(page, backend, 'owner');
+  await ownerOpenRequests(page);
+
+  page.once('dialog', dialog => dialog.dismiss());
+  await ownerCard(page).getByRole('button', { name: 'Cancel request', exact: true }).click();
+  await expect(ownerCard(page).getByText('Offered', { exact: true })).toBeVisible();
+  expect(backend.writes.filter(write => write.path.endsWith('/cancel'))).toHaveLength(0);
+
+  page.once('dialog', dialog => dialog.accept());
+  await ownerCard(page).getByRole('button', { name: 'Cancel request', exact: true }).click();
+  await expect(page.getByText('Request cancelled.', { exact: true })).toBeVisible();
+  await expect(ownerCard(page).getByText('Cancelled', { exact: true })).toBeVisible();
+  expect(shape(backend.writes.filter(write => write.path.endsWith('/cancel')))).toEqual(['owner POST partner/requests/<id>/cancel']);
+
+  await cleaner.page.getByRole('button', { name: 'Refresh offers', exact: true }).click();
+  await expect(cleaner.page.getByText('No pending cleaning offers.', { exact: true })).toBeVisible();
+  await cleaner.context.close();
+});
+
+test('staff cancellation of an accepted visit needs a typed reason and releases the cleaner', async ({ page, browser }, testInfo) => {
+  const backend = new PartnerFlowBackend({ priced: true });
+  backend.seedAccepted(backend.seedRequest(backend.branches[0], WINDOW), 'cleaner', PLANNED);
+  const staff = await openActor(browser, testInfo, backend, 'admin');
+  await staffOpenRequests(staff.page);
+  await expect(staffCard(staff.page).getByText('Cleaner: Test Cleaner')).toBeVisible();
+
+  page.once('dialog', dialog => dialog.dismiss());
+  await staffCard(staff.page).getByRole('button', { name: 'Cancel request', exact: true }).click();
+  expect(backend.writes.filter(write => write.path.endsWith('/cancel'))).toHaveLength(0);
+
+  staff.page.once('dialog', dialog => dialog.accept('   '));
+  await staffCard(staff.page).getByRole('button', { name: 'Cancel request', exact: true }).click();
+  expect(backend.writes.filter(write => write.path.endsWith('/cancel'))).toHaveLength(0);
+
+  staff.page.once('dialog', dialog => dialog.accept('Owner closed the property.'));
+  await staffCard(staff.page).getByRole('button', { name: 'Cancel request', exact: true }).click();
+  await expect(staff.page.getByText('No partner cleaning requests.', { exact: true })).toBeVisible();
+  expect(backend.writes.find(write => write.path.endsWith('/cancel'))!.body).toEqual({ version: 3, reason: 'Owner closed the property.' });
+  expect(backend.shiftActive[backend.requests[0].linkedShiftId!]).toBe(false);
+
+  await prepareRolePage(page, backend, 'owner');
+  await ownerOpenRequests(page);
+  await expect(ownerCard(page).getByText('Cancelled', { exact: true })).toBeVisible();
+  await staff.context.close();
+});
+
+test('a failed acceptance is shown, the offer stays open and a single retry books the visit once', async ({ page, browser }, testInfo) => {
+  const backend = new PartnerFlowBackend({ priced: true });
+  backend.seedOffer(backend.seedRequest(backend.branches[0], WINDOW), 'cleaner');
+  backend.failNext('POST', /^me\/partner-offers\/.+\/accept$/, 503, 'Temporarily unavailable. Try again.');
+  const cleaner = await openActor(browser, testInfo, backend, 'cleaner');
+  await cleanerOpenOffers(cleaner.page);
+  await cleanerOffer(cleaner.page).getByLabel(`Planned start for ${PROPERTY}`, { exact: true }).fill(PLANNED);
+  await cleanerOffer(cleaner.page).getByRole('button', { name: 'Accept cleaning', exact: true }).click();
+  await expect(cleaner.page.locator('p[role="alert"]')).toContainText('Temporarily unavailable. Try again.');
+  await expect(cleanerOffer(cleaner.page)).toBeVisible();
+
+  await cleanerOffer(cleaner.page).getByRole('button', { name: 'Accept cleaning', exact: true }).click();
+  await expect(cleaner.page.getByText('No pending cleaning offers.', { exact: true })).toBeVisible();
+  const accepts = backend.writes.filter(write => write.path.endsWith('/accept'));
+  expect(accepts.map(write => write.status)).toEqual([503, 200]);
+  expect(backend.requests[0]).toMatchObject({ status: 'Accepted', version: 3 });
+  await cleaner.context.close();
+});
+
+test('a double click on send offer creates one offer', async ({ browser }, testInfo) => {
+  const backend = new PartnerFlowBackend({ priced: true });
+  backend.seedRequest(backend.branches[0], WINDOW);
+  const staff = await openActor(browser, testInfo, backend, 'admin');
+  await staffOpenRequests(staff.page);
+  await staffCard(staff.page).getByRole('button', { name: 'Arrange cleaner / time', exact: true }).click();
+  await staff.page.getByLabel('Cleaner', { exact: true }).selectOption('cleaner');
+  await staff.page.getByRole('button', { name: 'Send cleaning offer', exact: true }).dblclick();
+  await expect(staff.page.getByText('Offer sent. Waiting for cleaner acceptance.', { exact: true })).toBeVisible();
+  await staff.page.waitForLoadState('networkidle');
+  expect(backend.writes.filter(write => write.path.endsWith('/offer'))).toHaveLength(1);
+  await staff.context.close();
+});
+
+test('a cleaner must pick a start time before accepting and sees the requested window', async ({ browser }, testInfo) => {
+  const backend = new PartnerFlowBackend({ priced: true });
+  backend.seedOffer(backend.seedRequest(backend.branches[0], WINDOW), 'cleaner');
+  const cleaner = await openActor(browser, testInfo, backend, 'cleaner');
+  await cleanerOpenOffers(cleaner.page);
+  await cleanerOffer(cleaner.page).getByRole('button', { name: 'Accept cleaning', exact: true }).click();
+  await expect(cleaner.page.locator('p[role="alert"]')).toContainText('Choose a planned start time in the requested window.');
+  expect(backend.writes.filter(write => write.path.endsWith('/accept'))).toHaveLength(0);
+  await cleaner.context.close();
+});
+
+test('owner keeps the agreed price when staff reprice the property', async ({ page, browser }, testInfo) => {
+  const backend = new PartnerFlowBackend({ priced: true });
+  backend.seedRequest(backend.branches[0], WINDOW);
+  await prepareRolePage(page, backend, 'owner');
+  const staff = await openActor(browser, testInfo, backend, 'admin');
+  await staffOpenRequests(staff.page);
+  await staff.page.getByRole('tab', { name: 'Properties', exact: true }).click();
+  await staff.page.getByRole('article').filter({ has: staff.page.getByRole('heading', { name: `${PROPERTY} · Owner company` }) })
+    .getByRole('button', { name: 'Set cleaning price', exact: true }).click();
+  await staff.page.getByLabel('Fixed cleaning price excl. VAT (€)', { exact: true }).fill('120');
+  await staff.page.getByRole('button', { name: 'Save pricing', exact: true }).click();
+  await expect(staff.page.getByText('Pricing saved.', { exact: true })).toBeVisible();
+
+  await ownerOpenRequests(page);
+  await expect(ownerCard(page).getByText(/Agreed price €85\.00/)).toBeVisible();
+  await page.getByRole('tab', { name: 'Properties', exact: true }).click();
+  await expect(page.getByText('€120.00', { exact: false })).toBeVisible();
+  await staff.context.close();
+});
+
+test('staff never list requests from a company without partner access', async ({ browser }, testInfo) => {
+  const backend = new PartnerFlowBackend({ priced: true });
+  const other = backend.addBranch({ name: 'Harbour flat', companyId: OTHER_COMPANY.id, priceNet: 60, estimatedDurationMinutes: 60 });
+  backend.seedRequest(other, WINDOW);
+  backend.seedRequest(backend.branches[0], WINDOW);
+  const staff = await openActor(browser, testInfo, backend, 'admin');
+  await staffOpenRequests(staff.page);
+  // Wait for the owner-company request so the absence check runs after the list has loaded.
+  await expect(staffCard(staff.page)).toHaveCount(1);
+  await expect(staff.page.getByRole('article', { name: 'Harbour flat request', exact: true })).toHaveCount(0);
+  await staff.context.close();
+});
+
+test('employees and owners cannot reach partner operations pages', async ({ page, browser }, testInfo) => {
+  const backend = new PartnerFlowBackend({ priced: true });
+  backend.seedRequest(backend.branches[0], WINDOW);
+  const cleaner = await openActor(browser, testInfo, backend, 'cleaner');
+  await cleaner.page.goto('/partner/');
+  await expect(cleaner.page.getByText('Access denied.', { exact: false })).toBeVisible();
+  await cleaner.page.goto('/admin/partner-requests/');
+  await expect(cleaner.page.getByRole('heading', { name: 'Admin access required' })).toBeVisible();
+  await expect(cleaner.page.getByRole('article', { name: `${PROPERTY} request`, exact: true })).toHaveCount(0);
+
+  await prepareRolePage(page, backend, 'owner');
+  await page.goto('/admin/partner-requests/');
+  await expect(page.getByRole('heading', { name: 'Admin access required' })).toBeVisible();
+  expect(backend.writes).toHaveLength(0);
+  await cleaner.context.close();
+});
+
+test('manager arranges the same cleaner offer through manager routes', async ({ page, browser }, testInfo) => {
+  const backend = new PartnerFlowBackend({ priced: true });
+  backend.seedRequest(backend.branches[0], WINDOW);
+  const manager = await openActor(browser, testInfo, backend, 'manager');
+  await manager.page.goto('/manager/partner-requests/');
+  await staffArrange(manager.page, 'cleaner');
+  await expect(manager.page.getByText('Offer sent. Waiting for cleaner acceptance.', { exact: true })).toBeVisible();
+  expect(shape(backend.writes)).toEqual(['manager POST manager/partner/requests/<id>/offer']);
+  await manager.context.close();
+});

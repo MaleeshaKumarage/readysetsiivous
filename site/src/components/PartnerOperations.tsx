@@ -48,7 +48,7 @@ function PartnerOperationsContent({ role }: { role: 'admin' | 'manager' }) {
       if (!roster || !clients) throw new Error('Company or employee data could not be loaded.');
       const partnerCompanies = clients.filter(company => company.isPartnerEnabled);
       const partnerCompanyIds = new Set(partnerCompanies.map(company => company.id));
-      setRequests(work); setQuotes(pricingQueue.filter(branch => partnerCompanyIds.has(branch.companyId))); setChanges(changeQueue); setBranches(properties.filter(branch => partnerCompanyIds.has(branch.companyId))); setPeople(roster.filter(person => person.isActive && (!('role' in person) || person.role !== 'partner'))); setCompanies(partnerCompanies.filter(company => company.isActive));
+      setRequests(work.filter(request => partnerCompanyIds.has(request.companyId))); setQuotes(pricingQueue.filter(branch => partnerCompanyIds.has(branch.companyId))); setChanges(changeQueue); setBranches(properties.filter(branch => partnerCompanyIds.has(branch.companyId))); setPeople(roster.filter(person => person.isActive && (!('role' in person) || person.role !== 'partner'))); setCompanies(partnerCompanies.filter(company => company.isActive));
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not load partner operations.'); }
     finally { setLoading(false); }
   }, [role]);
