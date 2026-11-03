@@ -101,6 +101,17 @@ public class QualityCycleRepository : IQualityCycleRepository
         return await query.OrderByDescending(x => x.ShiftOccurrenceUtc).ToListAsync(ct);
     }
 
+    public async Task<IReadOnlySet<Guid>> ListShiftIdsWithSubmittedFormAsync(IReadOnlyCollection<Guid> shiftIds, CancellationToken ct = default)
+    {
+        if (shiftIds.Count == 0) return new HashSet<Guid>();
+        var ids = shiftIds.ToArray();
+        var matches = await _session.Query<QualityCycleForm>()
+            .Where(x => x.IsSubmitted && x.ShiftDeletedUtc == null && ids.Contains(x.ShiftId))
+            .Select(x => x.ShiftId)
+            .ToListAsync(ct);
+        return matches.ToHashSet();
+    }
+
     public async Task SaveFormAsync(QualityCycleForm form, CancellationToken ct = default)
     {
         _session.Store(form);

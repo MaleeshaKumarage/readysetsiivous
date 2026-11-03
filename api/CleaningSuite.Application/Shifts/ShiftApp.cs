@@ -286,10 +286,11 @@ public class ShiftHandlers
                     && (!request.BranchId.HasValue || s.BranchId == request.BranchId)).ToList()
                 : await _repository.ListAsync(request.CompanyId, request.BranchId, ct);
             // A one-time visit is completed once its checklist has been submitted. Recurring shifts stay live.
-            var completed = new HashSet<Guid>();
-            if (_forms is not null)
-                foreach (var shift in shifts.Where(s => s.Schedule.IsOneTime))
-                    if ((await _forms.ListFormsAsync(shift.Id, null, null, ct)).Any(f => f.IsSubmitted && f.ShiftDeletedUtc == null)) completed.Add(shift.Id);
+            // One batched lookup for all one-time shifts, never one query per shift.
+            var oneTimeIds = shifts.Where(s => s.Schedule.IsOneTime).Select(s => s.Id).ToList();
+            IReadOnlySet<Guid> completed = _forms is null || oneTimeIds.Count == 0
+                ? new HashSet<Guid>()
+                : await _forms.ListShiftIdsWithSubmittedFormAsync(oneTimeIds, ct);
             return shifts.Select(shift => MapShift(shift) with { IsCompleted = completed.Contains(shift.Id) }).ToList();
         }
     }

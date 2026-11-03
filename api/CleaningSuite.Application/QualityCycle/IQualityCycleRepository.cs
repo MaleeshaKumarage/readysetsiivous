@@ -25,6 +25,8 @@ public interface IQualityCycleRepository
     Task<IReadOnlyList<QualityCycleForm>> ListFormsAsync(Guid? shiftId, DateTime? fromUtc, DateTime? toUtc, CancellationToken ct = default);
     Task<IReadOnlyList<QualityCycleForm>> ListFormsAsync(Guid? shiftId, DateTime? fromUtc, DateTime? toUtc, CancellationToken ct,
         Guid? employeeId, Guid? templateId, Guid? companyId, Guid? branchId);
+    /// <summary>Of the given shifts, those with at least one submitted checklist on a shift that is not deleted. One query.</summary>
+    Task<IReadOnlySet<Guid>> ListShiftIdsWithSubmittedFormAsync(IReadOnlyCollection<Guid> shiftIds, CancellationToken ct = default);
     Task SaveFormAsync(QualityCycleForm form, CancellationToken ct = default);
     Task<bool> TryCreateFormAsync(QualityCycleForm form, CancellationToken ct = default);
     Task CreateStartedFormAsync(QualityCycleForm form, CancellationToken ct = default);

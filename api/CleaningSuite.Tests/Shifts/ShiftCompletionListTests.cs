@@ -34,10 +34,10 @@ public class ShiftCompletionListTests
         var shifts = new Mock<IShiftRepository>();
         shifts.Setup(r => r.ListAsync(null, null, It.IsAny<CancellationToken>())).ReturnsAsync([done, open, recurring]);
         var forms = new Mock<IQualityCycleRepository>();
-        forms.Setup(r => r.ListFormsAsync(done.Id, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new QualityCycleForm { ShiftId = done.Id, IsSubmitted = true }]);
-        forms.Setup(r => r.ListFormsAsync(open.Id, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new QualityCycleForm { ShiftId = open.Id, IsSubmitted = false }]);
+        IReadOnlyCollection<Guid>? asked = null;
+        forms.Setup(r => r.ListShiftIdsWithSubmittedFormAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+            .Callback<IReadOnlyCollection<Guid>, CancellationToken>((ids, _) => asked = ids)
+            .ReturnsAsync(new HashSet<Guid> { done.Id });
 
         var list = await new ShiftHandlers.ListShiftsQueryHandler(shifts.Object, forms.Object)
             .Handle(new ListShiftsQuery(null, null), default);
@@ -45,18 +45,19 @@ public class ShiftCompletionListTests
         Assert.True(list.Single(s => s.Id == done.Id).IsCompleted);
         Assert.False(list.Single(s => s.Id == open.Id).IsCompleted);
         Assert.False(list.Single(s => s.Id == recurring.Id).IsCompleted);
-        forms.Verify(r => r.ListFormsAsync(recurring.Id, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()), Times.Never);
+        // One batched lookup covering only the one-time shifts, and no per-shift form reads.
+        forms.Verify(r => r.ListShiftIdsWithSubmittedFormAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Equal(new[] { done.Id, open.Id }.Order(), asked!.Order());
+        forms.Verify(r => r.ListFormsAsync(It.IsAny<Guid?>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
-    public async Task DeletedChecklist_DoesNotCompleteVisit()
+    public async Task RecurringOnlyList_DoesNotQueryForms()
     {
-        var shift = Shift.Create(Guid.NewGuid(), Guid.NewGuid(), "Visit", OneTime(), null, null, null);
         var shifts = new Mock<IShiftRepository>();
-        shifts.Setup(r => r.ListAsync(null, null, It.IsAny<CancellationToken>())).ReturnsAsync([shift]);
-        var forms = new Mock<IQualityCycleRepository>();
-        forms.Setup(r => r.ListFormsAsync(shift.Id, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new QualityCycleForm { ShiftId = shift.Id, IsSubmitted = true, ShiftDeletedUtc = DateTime.UtcNow }]);
+        shifts.Setup(r => r.ListAsync(null, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([Shift.Create(Guid.NewGuid(), Guid.NewGuid(), "Weekly", Weekly(), null, null, null)]);
+        var forms = new Mock<IQualityCycleRepository>(MockBehavior.Strict);
 
         var list = await new ShiftHandlers.ListShiftsQueryHandler(shifts.Object, forms.Object).Handle(new ListShiftsQuery(null, null), default);
 

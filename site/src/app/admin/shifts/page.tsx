@@ -485,7 +485,7 @@ export default function ShiftsAdminPage() {
       {countError && <Text role="alert" c="red" mb="md">{countError}</Text>}
 
       <LifecycleTabs value={lifecycle} onChange={changeLifecycle} label="Shift activity" disabled={assignBusy || templateSaving}
-        activeCount={activeCount} completedCount={completedCount} inactiveCount={inactiveCount}>
+        showCompleted activeCount={activeCount} completedCount={completedCount} inactiveCount={inactiveCount}>
       {loading ? <Loader /> : visibleShifts.length === 0 ? (
         <Text c="dimmed">{shifts.length === 0 ? 'No shifts yet.' : `No ${lifecycle} shifts. Check the ${lifecycle === 'active' ? 'Inactive' : 'Active'} tab.`}</Text>
       ) : (<>

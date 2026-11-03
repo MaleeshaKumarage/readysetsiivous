@@ -10,22 +10,24 @@ export function inLifecycle(record: { isActive: boolean }, status: LifecycleStat
 }
 
 /**
- * Active / Inactive tabs. Pass `completedCount` to add a Completed tab between them (used where finished work
- * is kept separate from live records). Arrow keys, Home and End move between the visible tabs.
+ * Active / Inactive tabs. Set `showCompleted` to add a Completed tab between them (used where finished work is
+ * kept separate from live records). Tab presence never depends on the counts, which are undefined while loading.
+ * Arrow keys, Home and End move between the visible tabs.
  */
-export function LifecycleTabs({ value, onChange, label = 'Record activity', activeCount, inactiveCount, completedCount, disabled = false, children }: {
+export function LifecycleTabs({ value, onChange, label = 'Record activity', activeCount, inactiveCount, completedCount, showCompleted = false, disabled = false, children }: {
   value: LifecycleStatus;
   onChange: (value: LifecycleStatus) => void;
   label?: string;
   activeCount?: number;
   inactiveCount?: number;
   completedCount?: number;
+  showCompleted?: boolean;
   disabled?: boolean;
   children: ReactNode;
 }) {
   const id = useId();
   const tabs = useRef<Partial<Record<LifecycleStatus, HTMLButtonElement | null>>>({});
-  const statuses: LifecycleStatus[] = completedCount === undefined ? ['active', 'inactive'] : ['active', 'completed', 'inactive'];
+  const statuses: LifecycleStatus[] = showCompleted ? ['active', 'completed', 'inactive'] : ['active', 'inactive'];
   const keyboard = (event: KeyboardEvent<HTMLButtonElement>) => {
     if (disabled) return;
     const index = statuses.indexOf(value);
