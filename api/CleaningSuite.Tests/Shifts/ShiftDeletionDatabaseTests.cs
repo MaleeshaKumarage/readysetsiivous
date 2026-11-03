@@ -55,7 +55,7 @@ public class ShiftDeletionDatabaseTests
         var branches = new Mock<IBranchRepository>(); branches.Setup(x => x.GetAsync(branch.Id, It.IsAny<CancellationToken>())).ReturnsAsync(branch);
         var profiles = new Mock<ITenantProfileRepository>(); profiles.Setup(x => x.GetAsync(tenant, It.IsAny<CancellationToken>())).ReturnsAsync(new TenantProfile { TimeZoneId = "UTC" });
         var reports = new QualityCycleMonthlyReportService(shifts, forms, companies.Object, branches.Object, profiles.Object, context.Object, TimeProvider.System);
-        var adminList = new ShiftHandlers.ListShiftsQueryHandler(shifts);
+        var adminList = new ShiftHandlers.ListShiftsQueryHandler(shifts, forms);
         var manager = new ManagerOperations(shifts, Mock.Of<IEmployeeRepository>(), companies.Object, branches.Object,
             Mock.Of<IQualityCycleDispatcher>(), Mock.Of<IMediator>(), profiles.Object, context.Object);
         Assert.Equal(shift.Id, Assert.Single(await adminList.Handle(new(null, null, IncludeInactive: true), default)).Id);

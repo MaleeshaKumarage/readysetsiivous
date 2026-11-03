@@ -271,9 +271,10 @@ public class ShiftHandlers
     public class ListShiftsQueryHandler : IRequestHandler<ListShiftsQuery, IReadOnlyList<ShiftDto>>
     {
         private readonly IShiftRepository _repository;
-        private readonly IQualityCycleRepository? _forms;
+        private readonly IQualityCycleRepository _forms;
 
-        public ListShiftsQueryHandler(IShiftRepository repository, IQualityCycleRepository? forms = null)
+        // Required, so a missing registration fails at resolution instead of silently hiding completed visits.
+        public ListShiftsQueryHandler(IShiftRepository repository, IQualityCycleRepository forms)
         {
             _repository = repository;
             _forms = forms;
@@ -288,7 +289,7 @@ public class ShiftHandlers
             // A one-time visit is completed once its checklist has been submitted. Recurring shifts stay live.
             // One batched lookup for all one-time shifts, never one query per shift.
             var oneTimeIds = shifts.Where(s => s.Schedule.IsOneTime).Select(s => s.Id).ToList();
-            IReadOnlySet<Guid> completed = _forms is null || oneTimeIds.Count == 0
+            IReadOnlySet<Guid> completed = oneTimeIds.Count == 0
                 ? new HashSet<Guid>()
                 : await _forms.ListShiftIdsWithSubmittedFormAsync(oneTimeIds, ct);
             return shifts.Select(shift => MapShift(shift) with { IsCompleted = completed.Contains(shift.Id) }).ToList();

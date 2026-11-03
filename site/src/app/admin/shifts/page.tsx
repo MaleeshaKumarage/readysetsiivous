@@ -15,7 +15,7 @@ import { isAdmin } from '@/lib/auth';
 import { adminQualityCycle, type QualityCycleTemplate } from '@/lib/qualityCycleApi';
 import { CompanyPicker } from '@/components/admin/CompanyPicker';
 import { LifecycleTabs, type LifecycleStatus } from '@/components/LifecycleTabs';
-import { ListPager, paginate } from '@/components/ListPager';
+import { ListPager, paginate, PAGE_SIZE } from '@/components/ListPager';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const SCHEDULE_TYPES = [
@@ -216,6 +216,12 @@ export default function ShiftsAdminPage() {
     () => shifts.filter((s) => shiftView(s) === lifecycle),
     [shifts, lifecycle]
   );
+  // Keep the stored page in range when the list shrinks (deactivate, delete, reload), so later growth
+  // does not jump to a stale page.
+  useEffect(() => {
+    const last = Math.max(1, Math.ceil(visibleShifts.length / PAGE_SIZE));
+    if (shiftPage > last) setShiftPage(last);
+  }, [visibleShifts.length, shiftPage]);
 
   const { activeCount, completedCount, inactiveCount } = useMemo(() => {
     if (loading) return { activeCount: undefined, completedCount: undefined, inactiveCount: undefined };

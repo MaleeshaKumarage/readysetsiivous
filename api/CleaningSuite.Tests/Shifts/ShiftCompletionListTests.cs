@@ -2,6 +2,7 @@ using CleaningSuite.Application.QualityCycle;
 using CleaningSuite.Application.Shifts;
 using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Shifts;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
 
 namespace CleaningSuite.Tests.Shifts;
@@ -62,5 +63,23 @@ public class ShiftCompletionListTests
         var list = await new ShiftHandlers.ListShiftsQueryHandler(shifts.Object, forms.Object).Handle(new ListShiftsQuery(null, null), default);
 
         Assert.False(list.Single().IsCompleted);
+    }
+
+    [Fact]
+    public void Api_container_resolves_the_list_handler_with_its_checklist_repository()
+    {
+        using var factory = new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<global::Program>().WithWebHostBuilder(builder =>
+            builder.ConfigureServices(services =>
+            {
+                services.Remove(services.Single(x => x.ImplementationType == typeof(global::MartenSchemaInitializer)));
+                services.Remove(services.Single(x => x.ImplementationType == typeof(CleaningSuite.Api.QualityCycleWorker)));
+                services.Configure<Marten.StoreOptions>(opts => opts.AutoCreateSchemaObjects = JasperFx.AutoCreate.None);
+            }));
+        using var scope = factory.Services.CreateScope();
+
+        // The repository is a required constructor dependency, so this throws if it is ever unregistered.
+        var handler = scope.ServiceProvider.GetRequiredService<MediatR.IRequestHandler<ListShiftsQuery, IReadOnlyList<ShiftDto>>>();
+
+        Assert.IsType<ShiftHandlers.ListShiftsQueryHandler>(handler);
     }
 }

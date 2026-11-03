@@ -105,3 +105,36 @@ test('the Completed tab is present while the shift list is still loading', async
   release();
   await expect(page.getByRole('tab', { name: /^Completed \(1\)/ })).toBeVisible();
 });
+
+test('the shift page is clamped when the list shrinks, so later growth does not jump to a stale page', async ({ page }) => {
+  let shifts = Array.from({ length: 26 }, (_, index) => weekly(`Team ${String(index).padStart(2, '0')}`, `s-${index}`));
+  let deactivations = 0;
+  await setup(page, []);
+  // Registered after setup, so this stateful handler wins for the shift endpoints.
+  await page.route(/\/api\/v1\/admin\/shifts/, route => {
+    const request = route.request(), url = request.url();
+    if (request.method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS });
+    if (url.includes('/assignment-counts')) return route.fulfill({ status: 200, headers: CORS, json: {} });
+    const off = /\/shifts\/([^/]+)\/deactivate/.exec(url);
+    if (off) {
+      deactivations++;
+      shifts = shifts.map(shift => shift.id === off[1] ? { ...shift, isActive: false } : shift);
+      // On the second change another admin has meanwhile added six shifts.
+      if (deactivations === 2) shifts = [...shifts, ...Array.from({ length: 6 }, (_, index) => weekly(`Extra ${index}`, `x-${index}`))];
+      return route.fulfill({ status: 204, headers: CORS });
+    }
+    return route.fulfill({ status: 200, headers: CORS, json: shifts });
+  });
+  await page.goto('/admin/shifts/');
+  const pager = page.getByRole('navigation', { name: 'Shifts pages' });
+  await pager.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(page.getByText('Page 2 of 2', { exact: true })).toBeVisible();
+  // Deactivating the only row on page 2 leaves 25 active shifts: one page, no pager.
+  await page.getByRole('row').filter({ hasText: 'Team 25' }).getByRole('button', { name: 'Deactivate', exact: true }).click();
+  await expect(pager).toHaveCount(0);
+  await expect(page.getByRole('row').filter({ hasText: 'Team' })).toHaveCount(25);
+  // The list grows past one page again; the user stays on page 1 instead of jumping to the old page 2.
+  await page.getByRole('row').filter({ hasText: 'Team 00' }).getByRole('button', { name: 'Deactivate', exact: true }).click();
+  await expect(page.getByText('Showing 1–25 of 30', { exact: true })).toBeVisible();
+  await expect(page.getByText('Page 1 of 2', { exact: true })).toBeVisible();
+});
