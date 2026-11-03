@@ -365,9 +365,14 @@ test('partner portal moves finished and cancelled requests to Completed and page
   await expect(page.getByRole('tab', { name: /^Active requests \(27\)/ })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('article')).toHaveCount(25);
   const pages = page.getByRole('navigation', { name: 'Active requests' });
+  await expect(pages.getByRole('button', { name: 'Previous', exact: true })).toBeDisabled();
   await pages.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(page.getByRole('article')).toHaveCount(2);
+  await expect(pages.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
   await expect(page.getByRole('article', { name: /Finished apartment/ })).toHaveCount(0);
+  await pages.getByRole('button', { name: 'Previous', exact: true }).click();
+  await expect(page.getByRole('article')).toHaveCount(25);
+  await expect(page.getByRole('article', { name: /Apartment 0/ })).toBeVisible();
   await page.getByRole('tab', { name: /^Completed requests \(2\)/ }).click();
   await expect(page.getByRole('article')).toHaveCount(2);
   const done = page.getByRole('article', { name: /Finished apartment/ });
@@ -382,6 +387,21 @@ test('Escape closes the request dialog and returns focus to the button that open
   const form = page.getByRole('dialog', { name: /cleaning request/i });
   await expect(form).toBeVisible();
   await page.keyboard.press('Escape');
+  await expect(form).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});
+
+test('a backdrop click closes the request dialog, a click inside does not, and focus returns to the opener', async ({ page }) => {
+  await owner(page); await page.goto('/partner/');
+  const opener = page.getByRole('article', { name: priced.name, exact: true }).getByRole('button', { name: 'Request cleaning', exact: true });
+  await opener.click();
+  const form = page.getByRole('dialog', { name: /cleaning request/i });
+  await expect(form).toBeVisible();
+  // A click on the dialog's own heading must not close it.
+  await form.getByRole('heading').first().click();
+  await expect(form).toBeVisible();
+  // The overlay fills the viewport; its top-left corner lies outside the panel.
+  await page.mouse.click(4, 4);
   await expect(form).toHaveCount(0);
   await expect(opener).toBeFocused();
 });

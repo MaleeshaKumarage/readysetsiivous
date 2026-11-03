@@ -29,7 +29,10 @@ export function Dialog({ open, title, onClose, className, children }: {
   }, [open]);
 
   if (!open) return null;
-  return <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4" onMouseDown={event => { if (event.target === event.currentTarget) close.current(); }}>
+  return <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4" onMouseDown={event => {
+    // preventDefault stops the browser moving focus to the body after the dialog has returned it to the opener.
+    if (event.target === event.currentTarget) { event.preventDefault(); close.current(); }
+  }}>
     <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className={className}>
       <h2 id={titleId}>{title}</h2>
       {children}
