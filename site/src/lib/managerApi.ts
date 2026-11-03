@@ -3,7 +3,7 @@ export interface ManagerSchedule extends ShiftSchedule { dailyTimes?: Record<str
 export interface ManagerShift { id: string; companyId: string; branchId: string; name: string; schedule: ManagerSchedule; isActive: boolean; validFrom: string | null; validUntil: string | null }
 export interface ManagerEmployee { autoAcceptWork?: boolean; id: string; firstName: string; lastName: string; phone: string; isActive: boolean }
 export interface ManagerCompany { id: string; name: string; isActive: boolean; isPartnerEnabled: boolean }
-export interface ManagerBranch { id: string; companyId: string; name: string; isActive: boolean }
+export interface ManagerBranch { postalCode?: string | null; id: string; companyId: string; name: string; isActive: boolean }
 export interface ManagerAssignment { id: string; shiftId: string; employeeId: string; assignedAtUtc: string; isActive: boolean }
 async function send<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
   const response = await authorizedFetch(`/api/v1/manager${path}`, { method, cache: 'no-store', ...(body === undefined ? {} : { body: JSON.stringify(body) }) });

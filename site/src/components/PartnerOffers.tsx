@@ -1,15 +1,26 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Card } from '@/ds/Card';
 import { Button } from '@/ds/Button';
 import { Field, Input } from '@/ds/Input';
 import { offerApi, type CleanerOffer } from '@/lib/partnerApi';
 
-export function PartnerOffers({ onAccepted }: { onAccepted: () => void }) {
+export function PartnerOffers({ onAccepted, hideWhenEmpty = false }: { onAccepted: () => void; hideWhenEmpty?: boolean }) {
   const [offers, setOffers] = useState<CleanerOffer[]>([]), [error, setError] = useState(''), [loading, setLoading] = useState(true), [busy, setBusy] = useState(false);
   const [times, setTimes] = useState<Record<string, string>>({}), [reasons, setReasons] = useState<Record<string, string>>({});
-  const load = useCallback(async () => { setLoading(true); setError(''); try { setOffers(await offerApi.list()); } catch (e) { setError(e instanceof Error ? e.message : 'Could not load cleaning offers.'); } finally { setLoading(false); } }, []);
-  useEffect(() => { void load(); }, [load]);
+  const loadVersion = useRef(0);
+  const load = useCallback(async () => {
+    const version = ++loadVersion.current; setLoading(true); setError('');
+    try { const result = await offerApi.list(); if (version === loadVersion.current) setOffers(result); }
+    catch (e) { if (version === loadVersion.current) setError(e instanceof Error ? e.message : 'Could not load cleaning offers.'); }
+    finally { if (version === loadVersion.current) setLoading(false); }
+  }, []);
+  useEffect(() => { void load(); return () => { loadVersion.current++; }; }, [load]);
+  useEffect(() => {
+    const refresh = () => { if (!busy && document.visibilityState === 'visible') void load(); };
+    window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', refresh);
+    return () => { window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
+  }, [busy, load]);
   async function decide(offer: CleanerOffer, accept: boolean) {
     if (busy) return;
     if (accept && !offer.plannedStartUtc && !times[offer.id]) { setError('Choose a planned start time in the requested window.'); return; }
@@ -18,6 +29,7 @@ export function PartnerOffers({ onAccepted }: { onAccepted: () => void }) {
     catch (e) { setError(e instanceof Error ? e.message : 'Your decision could not be confirmed. Refresh offers before retrying.'); }
     finally { setBusy(false); }
   }
+  if (hideWhenEmpty && !loading && !busy && !error && !offers.length) return null;
   return <section aria-busy={busy || loading} aria-label="Cleaning offers" className="space-y-4 text-gray-900 dark:text-gray-100">
     <Card className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">

@@ -1,11 +1,12 @@
 'use client';
+import { compareBranchesByPostalCode } from '@/lib/branchOrder';
 
 import { Fragment, useEffect, useRef, useState } from 'react';
 import {
-  Title, Button, Table, Modal, TextInput, Textarea, Group, Stack, Text, Loader, Badge, Checkbox, NumberInput,
+  Title, Button, Table, Modal, TextInput, Textarea, Group, Stack, Text, Loader, Badge, Checkbox, NumberInput, Select,
 } from '@mantine/core';
 import { Plus, ChevronDown, Pencil } from 'lucide-react';
-import { adminCompanies, adminBranches, type Company, type Branch } from '@/lib/adminApi';
+import { adminCompanies, adminBranches, adminEmployees, type Company, type Branch } from '@/lib/adminApi';
 import { companyLifecycle, branchLifecycle } from '@/lib/reactivationApi';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
 import { QuoteRequestedBadge, useQuoteRequests } from '@/components/QuoteRequests';
@@ -34,9 +35,11 @@ export default function CompaniesAdminPage() {
 
   const [expanded, setExpanded] = useState<string | null>(null);
   const [companyBranchesMap, setCompanyBranchesMap] = useState<Record<string, Branch[]>>({});
+  const [cleaners, setCleaners] = useState<{id: string; firstName: string; lastName: string; isActive: boolean; role: string}[]>([]);
+  useEffect(() => { adminEmployees.list().then(rows => setCleaners((rows ?? []).filter(person => person.isActive && person.role !== 'partner'))).catch(() => setBranchError('Cleaner choices could not be loaded. Refresh before assigning a cleaner.')); }, []);
   const [branchModal, setBranchModal] = useState(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
-  const [branchForm, setBranchForm] = useState({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '', contactEmail: '', roomCount: '' as number | string, bedCount: '' as number | string, priceNet: '' as number | string, vatRatePercent: 25.5 as number | string, estimatedDurationMinutes: '' as number | string });
+  const [branchForm, setBranchForm] = useState({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '', contactEmail: '', sizeSquareMeters: '' as number | string, preferredCleanerEmployeeId: '', roomCount: '' as number | string, bedCount: '' as number | string, priceNet: '' as number | string, vatRatePercent: 25.5 as number | string, estimatedDurationMinutes: '' as number | string });
   const [branchSaving, setBranchSaving] = useState(false);
   const [branchError, setBranchError] = useState('');
 
@@ -106,21 +109,26 @@ export default function CompaniesAdminPage() {
     setExpanded(customer.id); setBranchStatus('active'); void loadBranches(customer.id);
   }, [companies]);
 
+  const automaticBranchName = companies.some(company => company.id === expanded && company.isPartnerEnabled);
+  const legacyBranchName = editingBranch && ![editingBranch.street, editingBranch.postalCode, editingBranch.city].some(value => value?.trim()) ? editingBranch.name : '';
+  const effectiveBranchName = automaticBranchName ? ([branchForm.street.trim(), [branchForm.postalCode.trim(), branchForm.city.trim()].filter(Boolean).join(' ')].filter(Boolean).join(', ') || legacyBranchName) : branchForm.name;
   const submitBranch = async () => {
-    if (!expanded || !branchForm.name.trim()) return;
+    if (!expanded) return;
+    if (!effectiveBranchName.trim()) { setBranchError(automaticBranchName ? 'Enter a property street, postal code or city to generate its name.' : 'Branch name is required.'); return; }
+    if (branchForm.sizeSquareMeters !== '' && Number(branchForm.sizeSquareMeters) <= 0) { setBranchError('Size must be greater than zero.'); return; }
     setBranchSaving(true); setBranchError('');
     try {
       const fields = {
-        name: branchForm.name.trim(), street: branchForm.street.trim() || undefined,
+        name: effectiveBranchName.trim(), street: branchForm.street.trim() || undefined,
         postalCode: branchForm.postalCode.trim() || undefined, city: branchForm.city.trim() || undefined,
         country: branchForm.country.trim() || undefined, contactPhone: branchForm.contactPhone.trim() || undefined, contactEmail: branchForm.contactEmail.trim() || undefined,
-        roomCount: branchForm.roomCount === '' ? null : Number(branchForm.roomCount), bedCount: branchForm.bedCount === '' ? null : Number(branchForm.bedCount), priceNet: branchForm.priceNet === '' ? null : Number(branchForm.priceNet), vatRatePercent: branchForm.priceNet === '' ? null : Number(branchForm.vatRatePercent), estimatedDurationMinutes: branchForm.estimatedDurationMinutes === '' ? null : Number(branchForm.estimatedDurationMinutes),
+        sizeSquareMeters: branchForm.sizeSquareMeters === '' ? null : Number(branchForm.sizeSquareMeters), preferredCleanerEmployeeId: branchForm.preferredCleanerEmployeeId || null, roomCount: branchForm.roomCount === '' ? null : Number(branchForm.roomCount), bedCount: branchForm.bedCount === '' ? null : Number(branchForm.bedCount), priceNet: branchForm.priceNet === '' ? null : Number(branchForm.priceNet), vatRatePercent: branchForm.priceNet === '' ? null : Number(branchForm.vatRatePercent), estimatedDurationMinutes: branchForm.estimatedDurationMinutes === '' ? null : Number(branchForm.estimatedDurationMinutes),
       };
       if (editingBranch) {
         const updated = await adminBranches.update(editingBranch.id, { ...fields, isActive: editingBranch.isActive });
         if (!updated) throw new Error('Could not update branch. Please retry.');
       } else await adminBranches.create(expanded, fields);
-      setBranchForm({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '', contactEmail: '', roomCount: '' as number | string, bedCount: '' as number | string, priceNet: '' as number | string, vatRatePercent: 25.5 as number | string, estimatedDurationMinutes: '' as number | string });
+      setBranchForm({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '', contactEmail: '', sizeSquareMeters: '' as number | string, preferredCleanerEmployeeId: '', roomCount: '' as number | string, bedCount: '' as number | string, priceNet: '' as number | string, vatRatePercent: 25.5 as number | string, estimatedDurationMinutes: '' as number | string });
       setEditingBranch(null);
       setBranchModal(false);
       if (!editingBranch) setBranchStatus('active');
@@ -133,7 +141,7 @@ export default function CompaniesAdminPage() {
 
   const openBranchEdit = (branch: Branch) => {
     setEditingBranch(branch);
-    setBranchForm({ name: branch.name, street: branch.street ?? '', postalCode: branch.postalCode ?? '', city: branch.city ?? '', country: branch.country ?? '', contactPhone: branch.contactPhone ?? '', contactEmail: branch.contactEmail ?? '', roomCount: branch.roomCount ?? '', bedCount: branch.bedCount ?? '', priceNet: branch.priceNet ?? '', vatRatePercent: branch.vatRatePercent ?? 25.5, estimatedDurationMinutes: branch.estimatedDurationMinutes ?? '' });
+    setBranchForm({ name: branch.name, street: branch.street ?? '', postalCode: branch.postalCode ?? '', city: branch.city ?? '', country: branch.country ?? '', contactPhone: branch.contactPhone ?? '', contactEmail: branch.contactEmail ?? '', sizeSquareMeters: branch.sizeSquareMeters ?? '', preferredCleanerEmployeeId: branch.preferredCleanerEmployeeId ?? '', roomCount: branch.roomCount ?? '', bedCount: branch.bedCount ?? '', priceNet: branch.priceNet ?? '', vatRatePercent: branch.vatRatePercent ?? 25.5, estimatedDurationMinutes: branch.estimatedDurationMinutes ?? '' });
     setBranchError(''); setBranchModal(true);
   };
 
@@ -197,7 +205,7 @@ export default function CompaniesAdminPage() {
             <Table.Tbody>
               {visibleCompanies.map((c) => {
                 const currentBranches = companyBranchesMap[c.id] ?? [];
-                const visibleBranches = currentBranches.filter(branch => inLifecycle(branch, branchStatus));
+                const visibleBranches = currentBranches.filter(branch => inLifecycle(branch, branchStatus)).sort(compareBranchesByPostalCode);
                 const isExpanded = expanded === c.id;
                 return (
                   <Fragment key={c.id}>
@@ -220,7 +228,7 @@ export default function CompaniesAdminPage() {
                         <Table.Td colSpan={6} p="sm">
                           <Group justify="space-between" align="center" mb="xs" wrap="wrap" gap="xs">
                             <Text size="sm" fw={600}>Branches</Text>
-                            <Button size="xs" variant="light" leftSection={<Plus size={14} />} onClick={() => { setEditingBranch(null); setBranchForm({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '', contactEmail: '', roomCount: '' as number | string, bedCount: '' as number | string, priceNet: '' as number | string, vatRatePercent: 25.5 as number | string, estimatedDurationMinutes: '' as number | string }); setBranchError(''); setBranchModal(true); }}>Add branch</Button>
+                            <Button size="xs" variant="light" leftSection={<Plus size={14} />} onClick={() => { setEditingBranch(null); setBranchForm({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '', contactEmail: '', sizeSquareMeters: '' as number | string, preferredCleanerEmployeeId: '', roomCount: '' as number | string, bedCount: '' as number | string, priceNet: '' as number | string, vatRatePercent: 25.5 as number | string, estimatedDurationMinutes: '' as number | string }); setBranchError(''); setBranchModal(true); }}>Add branch</Button>
                           </Group>
                           <LifecycleTabs value={branchStatus} onChange={setBranchStatus} label="Branch activity"
                             activeCount={branchLoading === c.id || branchLoadError ? undefined : currentBranches.filter(b => b.isActive).length}
@@ -233,7 +241,7 @@ export default function CompaniesAdminPage() {
                             <Stack gap={4}>
                               {visibleBranches.map((b) => (
                                 <Group key={b.id} role="group" aria-label={'Branch ' + b.name} justify="space-between" wrap="wrap" gap="xs">
-                                  <Stack gap={4}><Text size="sm">{b.name}{b.city ? ` · ${b.city}` : ''}{b.priceNet != null && <Text component="span" size="xs"> · €{b.priceNet.toFixed(2)} excl. VAT</Text>}{b.pricingReady && <Badge size="xs" ml="xs">Partner booking ready</Badge>}</Text><QuoteRequestedBadge branch={b} /></Stack>
+                                  <Stack gap={4}><Text size="sm">{b.name}{[b.postalCode, b.city].filter(Boolean).length ? ` · ${[b.postalCode, b.city].filter(Boolean).join(' ')}` : ''}{b.priceNet != null && <Text component="span" size="xs"> · €{b.priceNet.toFixed(2)} excl. VAT</Text>}{b.pricingReady && <Badge size="xs" ml="xs">Partner booking ready</Badge>}</Text><QuoteRequestedBadge branch={b} /><Text size="xs" c="dimmed">Rooms: {b.roomCount ?? 'Not set'} · Beds: {b.bedCount ?? 'Not set'} · Size: {b.sizeSquareMeters == null ? 'Not set' : `${b.sizeSquareMeters} m²`}</Text></Stack>
                                   <Group gap="xs">{!b.isActive && <Badge color="gray" size="xs">Inactive</Badge>}
                                     <Button size="xs" variant="subtle" leftSection={<Pencil size={13} />} onClick={() => openBranchEdit(b)}>Edit</Button>
                                     <Button size="xs" variant="light" color={b.isActive ? 'red' : undefined}
@@ -277,7 +285,7 @@ export default function CompaniesAdminPage() {
 
       <Modal opened={branchModal} onClose={() => { setBranchModal(false); setEditingBranch(null); }} title={editingBranch ? 'Edit branch' : 'Add branch'} radius="md">
         <Stack gap="sm">
-          <TextInput label="Name" required value={branchForm.name} onChange={setB('name')} />
+          <TextInput label={automaticBranchName ? "Property name (from address)" : "Name"} required readOnly={automaticBranchName} value={effectiveBranchName} onChange={setB('name')} />
           {branchError && <Text c="red" role="alert">{branchError}</Text>}
           <TextInput label="Street" value={branchForm.street} onChange={setB('street')} />
           <TextInput label="Postal code" value={branchForm.postalCode} onChange={setB('postalCode')} />
@@ -285,7 +293,7 @@ export default function CompaniesAdminPage() {
           <TextInput label="Country" value={branchForm.country} onChange={setB('country')} />
           <TextInput label="Contact email" type="email" value={branchForm.contactEmail} onChange={setB('contactEmail')} />
           <TextInput label="Phone" value={branchForm.contactPhone} onChange={setB('contactPhone')} />
-          <Group grow><NumberInput label="Rooms (optional)" min={0} allowDecimal={false} value={branchForm.roomCount} onChange={value => setBranchForm(current => ({ ...current, roomCount: value }))} /><NumberInput label="Beds (optional)" min={0} allowDecimal={false} value={branchForm.bedCount} onChange={value => setBranchForm(current => ({ ...current, bedCount: value }))} /></Group>
+          <NumberInput label="Size (m², optional)" min={0.01} decimalScale={2} value={branchForm.sizeSquareMeters} onChange={value => setBranchForm(current => ({ ...current, sizeSquareMeters: value }))} /><Select label="Preferred cleaner (optional)" description="Future requests go directly to this cleaner. Exact appointments can be accepted automatically when they opt in; flexible requests still need their approval." clearable value={branchForm.preferredCleanerEmployeeId || null} onChange={value => setBranchForm(current => ({ ...current, preferredCleanerEmployeeId: value ?? '' }))} data={[...(branchForm.preferredCleanerEmployeeId && !cleaners.some(person => person.id === branchForm.preferredCleanerEmployeeId) ? [{ value: branchForm.preferredCleanerEmployeeId, label: 'Unavailable cleaner — replace or clear', disabled: true }] : []), ...cleaners.map(person => ({ value: person.id, label: `${person.firstName} ${person.lastName}` }))]} /><Group grow><NumberInput label="Rooms (optional)" min={0} allowDecimal={false} value={branchForm.roomCount} onChange={value => setBranchForm(current => ({ ...current, roomCount: value }))} /><NumberInput label="Beds (optional)" min={0} allowDecimal={false} value={branchForm.bedCount} onChange={value => setBranchForm(current => ({ ...current, bedCount: value }))} /></Group>
           <NumberInput label="Fixed cleaning price, excl. VAT (€)" min={0} decimalScale={2} value={branchForm.priceNet} onChange={value => setBranchForm(current => ({ ...current, priceNet: value }))} description="Leave blank until a quote has been agreed. New requests use this price; existing requests keep their agreed price." />
           <Group grow><NumberInput label="VAT (%)" min={0} max={50} decimalScale={2} value={branchForm.vatRatePercent} onChange={value => setBranchForm(current => ({ ...current, vatRatePercent: value }))} /><NumberInput label="Estimated cleaning duration (minutes)" min={1} allowDecimal={false} value={branchForm.estimatedDurationMinutes} onChange={value => setBranchForm(current => ({ ...current, estimatedDurationMinutes: value }))} /></Group>
           <Group justify="flex-end" mt="xs">

@@ -80,7 +80,7 @@ export default function AccountClient() {
             {preferenceBusy && <p role="status">{preference === null ? 'Loading work preferences...' : 'Saving work preferences...'}</p>}
             {preferenceError && <><p role="alert" className="text-red-700">{preferenceError}</p><button className="underline" disabled={preferenceBusy} onClick={() => preference === null ? void loadPreference() : void savePreference()}>Retry work preferences</button></>}
             {preference !== null && <><label className="flex gap-2 items-center"><input type="checkbox" checked={selected} disabled={preferenceBusy} onChange={event => { setSelected(event.target.checked); setSaved(false); }} />Automatically accept cleaning offers</label>
-              <p>Automatically scheduled work appears in My shifts. Resolve pending offers before enabling. Turning this off affects future offers only.</p>
+              <p>Automatically scheduled work appears in My shifts. Branch requests with a flexible date range still need your approval and chosen start time. Resolve pending offers before enabling. Turning this off affects future offers only.</p>
               <button className="rounded bg-gray-900 text-white px-4 py-2" disabled={preferenceBusy || selected === preference} onClick={() => void savePreference()}>Save work preferences</button>
               {saved && <p role="status">Work preferences saved.</p>}</>}
           </section>}

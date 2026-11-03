@@ -1,4 +1,5 @@
 'use client';
+import { compareBranchesByPostalCode } from '@/lib/branchOrder';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from 'react';
 import Link from 'next/link';
@@ -113,6 +114,7 @@ export default function PartnerPage() {
   const stamp = (value: string | null) => value && !Number.isNaN(Date.parse(value))
     ? stampFormatter.format(new Date(value)) : t.notRecorded;
   const selectedIndex = sections.findIndex(section => section.key === tab);
+  const [propertyTitle, setPropertyTitle] = useState('');
   const counts = [branches.length, requests.length, shifts.length, changes.length];
   const alert = error ? <p role="alert" className="partner-alert partner-alert-error">{partnerMessage(error, language)}</p> : null;
 
@@ -145,14 +147,14 @@ export default function PartnerPage() {
         </div>
         <div role="tabpanel" id="partner-section" aria-labelledby={'partner-tab-' + selectedIndex}>
           {tab === 'Properties' && <section className="partner-section">
-            <div className="partner-section-heading"><div><h2>{t.properties}</h2><p>{t.propertiesHint}</p></div><Button variant="gold" disabled={busy} onClick={() => setAdding(true)}><Plus size={18} aria-hidden="true" />{t.addProperty}</Button></div>
+            <div className="partner-section-heading"><div><h2>{t.properties}</h2><p>{t.propertiesHint}</p></div><Button variant="gold" disabled={busy} onClick={() => { setPropertyTitle(''); setAdding(true); }}><Plus size={18} aria-hidden="true" />{t.addProperty}</Button></div>
             {!branches.length && <Card className="partner-surface partner-empty">{t.noProperties}</Card>}
-            <div className="partner-grid">{branches.map(branch => <article aria-label={branch.name} key={branch.id}>
+            <div className="partner-grid">{[...branches].sort(compareBranchesByPostalCode).map(branch => <article aria-label={branch.name} key={branch.id}>
               <Card className="partner-surface partner-property">
                 <div className="partner-card-heading"><h3>{branch.name}</h3>{!branch.isActive ? <Badge variant="outline" className="partner-badge">{t.inactive}</Badge> : branch.pricingReady ? <Badge variant="subtle" className="partner-badge">{t.ready}</Badge> : null}</div>
                 <QuoteRequestedBadge branch={branch} label={t.quoteRequested} />
                 <p className="partner-muted">{[branch.street, branch.postalCode, branch.city].filter(Boolean).join(', ')}</p>
-                <dl className="partner-property-facts"><div><dt>{t.rooms}</dt><dd>{branch.roomCount ?? t.notSet}</dd></div><div><dt>{t.beds}</dt><dd>{branch.bedCount ?? t.notSet}</dd></div></dl>
+                <dl className="partner-property-facts"><div><dt>{t.rooms}</dt><dd>{branch.roomCount ?? t.notSet}</dd></div><div><dt>{t.beds}</dt><dd>{branch.bedCount ?? t.notSet}</dd></div><div><dt>{t.size}</dt><dd>{branch.sizeSquareMeters ?? t.notSet}</dd></div></dl>
                 <div className="partner-price">{branch.pricingReady ? <><p><strong>{money(branch.priceNet)}</strong> {t.exclVat} ({t.vat} {number(branch.vatRatePercent ?? 0)}%)</p><p className="partner-muted">{t.estimated} {branch.estimatedDurationMinutes} {t.minutes}</p></> : <p>{branch.quoteRequestedUtc ? t.quoteWaiting : t.pricingRequired}</p>}</div>
                 <div className="partner-card-actions"><Button disabled={busy || !branch.isActive || !branch.pricingReady} onClick={() => openRequest(branch)}>{t.requestCleaning}<ArrowRight size={16} aria-hidden="true" /></Button>
                   {!branch.pricingReady && <Button variant="outline" className="partner-secondary" disabled={busy || !branch.isActive || Boolean(branch.quoteRequestedUtc)} onClick={() => act(() => partnerApi.quote(branch.id), base.quoteSaved)}>{t.requestQuote}</Button>}
@@ -198,21 +200,22 @@ export default function PartnerPage() {
         </div>
         {adding && <section ref={propertyFormRef} tabIndex={-1} aria-label={t.addProperty} className="partner-form-panel">
           <Card className="partner-surface"><h2>{t.addProperty}</h2>
-            <form className="partner-form-grid" onInvalid={invalid} onSubmit={event => {
+            <form className="partner-form-grid" onChange={event => { const data = new FormData(event.currentTarget); setPropertyTitle([String(data.get('street') ?? '').trim(), [data.get('postalCode'), data.get('city')].filter(Boolean).join(' ').trim()].filter(Boolean).join(', ')); }} onInvalid={invalid} onSubmit={event => {
               event.preventDefault(); const fields = Object.fromEntries(new FormData(event.currentTarget));
-              void act(async () => { await partnerApi.createBranch({ ...fields, roomCount: fields.roomCount === '' ? null : Number(fields.roomCount), bedCount: fields.bedCount === '' ? null : Number(fields.bedCount) }); setAdding(false); }, base.propertyCreated);
+              if (!String(fields.name ?? '').trim()) { setError('Enter a property street, postal code or city to generate its name.'); return; }
+              void act(async () => { await partnerApi.createBranch({ ...fields, roomCount: fields.roomCount === '' ? null : Number(fields.roomCount), bedCount: fields.bedCount === '' ? null : Number(fields.bedCount), sizeSquareMeters: fields.sizeSquareMeters === '' ? null : Number(fields.sizeSquareMeters) }); setAdding(false); }, base.propertyCreated);
             }}>
               {([
                 ['name', t.propertyName], ['street', t.street], ['postalCode', t.postalCode], ['city', t.city], ['country', t.country],
-                ['contactPhone', t.phone], ['contactEmail', t.email], ['roomCount', t.optionalRooms], ['bedCount', t.optionalBeds],
-              ] as const).map(([name, label]) => <Field key={name} label={label}><Input className="partner-field" name={name} required={name === 'name'} maxLength={name === 'name' ? 200 : undefined} type={name.endsWith('Count') ? 'number' : name === 'contactEmail' ? 'email' : 'text'} min={0} max={name.endsWith('Count') ? 10000 : undefined} step={1} /></Field>)}
+                ['contactPhone', t.phone], ['contactEmail', t.email], ['roomCount', t.optionalRooms], ['bedCount', t.optionalBeds], ['sizeSquareMeters', t.optionalSize],
+              ] as const).map(([name, label]) => <Field key={name} label={label}><Input className="partner-field" name={name} readOnly={name === 'name'} value={name === 'name' ? propertyTitle : undefined} required={name === 'name'} maxLength={name === 'name' ? 200 : undefined} type={name.endsWith('Count') || name === 'sizeSquareMeters' ? 'number' : name === 'contactEmail' ? 'email' : 'text'} min={name === 'sizeSquareMeters' ? 0.01 : 0} max={name.endsWith('Count') ? 10000 : undefined} step={name === 'sizeSquareMeters' ? 0.01 : 1} /></Field>)}
               <div className="partner-form-actions"><Button type="submit" disabled={busy}>{t.saveProperty}</Button><Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => setAdding(false)}>{t.cancel}</Button></div>
             </form>
           </Card>
         </section>}
         {target && <section ref={requestFormRef} tabIndex={-1} aria-label={t.requestForm} className="partner-form-panel">
           <Card className="partner-surface"><h2>{editing ? t.editCleaning : t.newCleaning} · {target.name}</h2>{alert}<p className="partner-muted">{t.oneVisit} {t.timesUse} {identity?.timeZoneId}.</p>
-            <form onSubmit={submitRequest} onInvalid={invalid} className="partner-form-grid">
+            <dl className="partner-property-facts"><div><dt>{t.company}</dt><dd>{identity?.company.name}</dd></div><div><dt>{t.property}</dt><dd>{target.name}</dd></div><div><dt>{t.address}</dt><dd>{[target.street, target.postalCode, target.city].filter(Boolean).join(', ') || t.notSet}</dd></div><div><dt>{t.rooms}</dt><dd>{target.roomCount ?? t.notSet}</dd></div><div><dt>{t.beds}</dt><dd>{target.bedCount ?? t.notSet}</dd></div><div><dt>{t.size}</dt><dd>{target.sizeSquareMeters ?? t.notSet}</dd></div><div><dt>{t.priceExclVat}</dt><dd>€{(editing?.priceNet ?? target.priceNet)?.toFixed(2)} ({editing?.vatRatePercent ?? target.vatRatePercent}% VAT)</dd></div></dl><form onSubmit={submitRequest} onInvalid={invalid} className="partner-form-grid">
               <Field label={t.fromDate}><Input className="partner-field" name="fromDate" type="date" required value={from} onChange={event => setFrom(event.target.value)} /></Field>
               {exact ? <Field label={t.exactTime}><Input className="partner-field" name="exactTime" type="time" required value={time} onChange={event => setTime(event.target.value)} /></Field> : <Field label={t.toDate}><Input className="partner-field" name="toDate" type="date" min={from} required value={to} onChange={event => setTo(event.target.value)} /></Field>}
               <label className="partner-check"><input type="checkbox" checked={exact} onChange={event => setExact(event.target.checked)} />{t.fixedAppointment}</label>

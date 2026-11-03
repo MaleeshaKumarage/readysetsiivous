@@ -417,7 +417,7 @@ export default function MyShiftsPage() {
         <PwaInstallButton audience="employee" language="en" />
         <NotificationsPanel />
         {(autoAcceptWork === null || preferenceError) && <div className="space-y-2">{preferenceError ? <><p role="alert">{preferenceError}</p><Button onClick={() => void loadPreference()}>Retry work preferences</Button></> : <p role="status">Checking cleaning offer preferences...</p>}</div>}
-        {autoAcceptWork !== true && <PartnerOffers onAccepted={() => void loadShifts()} />}
+        <PartnerOffers hideWhenEmpty={autoAcceptWork === true} onAccepted={() => void loadShifts()} />
         {error && (
           <div role="alert" aria-label="Shift error" className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
             <AlertTriangle className="w-4 h-4 shrink-0" />

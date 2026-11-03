@@ -114,19 +114,21 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         var query = Db.Query<Branch>().AsQueryable();
         query = query.Where(x => partnerCompanyIds.Contains(x.CompanyId));
         if (companyId.HasValue) query = query.Where(x => x.CompanyId == companyId.Value);
-        return (await query.ToListAsync(ct)).Select(CompanyHandlers.MapBranch).ToArray();
+        return (await query.OrderBy(x => x.PostalCode).ThenBy(x => x.Name).ToListAsync(ct)).Select(CompanyHandlers.MapBranch).ToArray();
     }
 
     public async Task<BranchDto> CreateBranch(Guid actor, CreatePartnerBranch body, CancellationToken ct)
     {
         await using var lease = await reservation.AcquireAsync(ct);
         var (_, company) = await Partner(actor, ct);
-        ValidateText(body.Name, 200, "Property name");
+        string name;
+        try { name = Domain.Companies.Branch.PartnerPropertyName(body.Street, body.PostalCode, body.City); }
+        catch (ArgumentException ex) { throw new ValidationException(ex.Message); }
         if (body.ContactEmail?.Length > 254 || body.ContactEmail is { Length: > 0 } && !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(body.ContactEmail))
             throw new ValidationException("Enter a valid property contact email.");
-        var branch = Domain.Companies.Branch.Create(company.Id, body.Name, body.Street, body.PostalCode,
+        var branch = Domain.Companies.Branch.Create(company.Id, name, body.Street, body.PostalCode,
             body.City, body.Country, body.ContactPhone);
-        try { branch.SetPropertyCounts(body.RoomCount, body.BedCount); }
+        try { branch.SetPropertyCounts(body.RoomCount, body.BedCount); branch.SetSize(body.SizeSquareMeters); }
         catch (ArgumentException ex) { throw new ValidationException(ex.Message); }
         branch.ContactEmail = body.ContactEmail?.Trim();
         Db.Store(branch);
@@ -154,7 +156,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         await RequireManager(actor, ct);
         var partnerCompanyIds = (await Db.Query<Company>().Where(x => x.IsActive && x.IsPartnerEnabled).ToListAsync(ct)).Select(x => x.Id).ToArray();
         var branches = await Db.Query<Branch>().Where(x => x.IsActive && x.QuoteRequestedUtc != null && partnerCompanyIds.Contains(x.CompanyId)).ToListAsync(ct);
-        return branches.Where(x => !x.PricingReady).Select(CompanyHandlers.MapBranch).ToArray();
+        return branches.Where(x => !x.PricingReady).OrderBy(x => x.PostalCode).ThenBy(x => x.Name).Select(CompanyHandlers.MapBranch).ToArray();
     }
 
     public async Task<BranchDto> Price(Guid actor, Guid id, PartnerPricing body, CancellationToken ct)
@@ -190,8 +192,8 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
             PriceNet = branch.PriceNet!.Value, VatRatePercent = branch.VatRatePercent!.Value,
             EstimatedDurationMinutes = branch.EstimatedDurationMinutes!.Value, PricingVersion = branch.PricingVersion };
         await SetWindow(request, body.FromDate, body.ToDate, body.ExactStartLocalTime, body.Notes, ct);
-        Db.Store(request); NotifyRequest(request, "Requested", "Staff");
-        if (push is not null) await push.StagePartnerRequestAsync(Db, request.Id, request.Revision, DateTimeOffset.UtcNow, ct);
+        Db.Store(request);
+        if (!await RoutePreferredCleaner(request, branch, ct)) await NotifyStaffFallback(request, "Requested", branch.PreferredCleanerEmployeeId.HasValue, ct);
         await Db.SaveChangesAsync(ct);
         return await Map(request, false, ct);
     }
@@ -202,12 +204,14 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         var (_, company) = await Partner(actor, ct);
         var request = await Request(id, company.Id, ct);
         CheckVersion(request, body.Version); EnsurePartnerEditable(request);
-        await Branch(request.BranchId, company.Id, ct);
+        var branch = await Branch(request.BranchId, company.Id, ct);
         await SetWindow(request, body.FromDate, body.ToDate, body.ExactStartLocalTime, body.Notes, ct);
         var previous = request.OfferedEmployeeId;
         InvalidateOffer(request); request.Status = "Requested"; Touch(request);
-        Db.Store(request); NotifyRequest(request, "RequestChanged", "Staff");
-        if (previous.HasValue) NotifyRequest(request, "OfferWithdrawn", "Employee", previous);
+        Db.Store(request);
+        if (!await RoutePreferredCleaner(request, branch, ct)) await NotifyStaffFallback(request, "RequestChanged", branch.PreferredCleanerEmployeeId.HasValue, ct);
+        if (previous.HasValue && previous != request.OfferedEmployeeId && previous != request.AcceptedEmployeeId)
+            NotifyRequest(request, "OfferWithdrawn", "Employee", previous);
         await Db.SaveChangesAsync(ct);
         return await Map(request, false, ct);
     }
@@ -240,7 +244,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         }
         var previous = request.OfferedEmployeeId ?? request.AcceptedEmployeeId;
         request.AcceptedEmployeeId = null; request.PlannedStartUtc = null; request.PlannedEndUtc = null;
-        InvalidateOffer(request); request.Status = "Requested"; Touch(request); Db.Store(request);
+        InvalidateOffer(request); request.Status = "Requested"; request.DirectlyRouted = false; Touch(request); Db.Store(request);
         NotifyRequest(request, "RequestChanged", "Company");
         if (previous.HasValue) NotifyRequest(request, "OfferWithdrawn", "Employee", previous);
         await Db.SaveChangesAsync(ct); return await Map(request, true, ct);
@@ -268,7 +272,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         request.Status = "Cancelled"; request.CancellationReason = reason?.Trim();
         var oldEmployee = request.OfferedEmployeeId ?? request.AcceptedEmployeeId;
         InvalidateOffer(request); Touch(request); Db.Store(request);
-        NotifyRequest(request, "RequestCancelled", staff ? "Company" : "Staff");
+        NotifyRequest(request, "RequestCancelled", staff || request.DirectlyRouted ? "Company" : "Staff");
         if (oldEmployee.HasValue) NotifyRequest(request, "RequestCancelled", "Employee", oldEmployee);
         await Db.SaveChangesAsync(ct);
         return await Map(request, staff, ct);
@@ -301,19 +305,13 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         }
         var previousEmployee = request.OfferedEmployeeId ?? request.AcceptedEmployeeId;
         request.AcceptedEmployeeId = null; request.PlannedStartUtc = null; request.PlannedEndUtc = null;
+        request.DirectlyRouted = false;
         Touch(request); request.OfferId = PartnerCleaningRequest.StableId($"offer:{request.Id}:{request.Revision}");
         request.OfferedEmployeeId = employee.Id; request.OfferPlannedStartUtc = planned; request.Status = "Offered";
         if (employee.AutoAcceptWork)
         {
             await MaterializeAcceptance(request, employee.Id, planned!.Value, ct, automatic: true);
-            NotifyRequest(request, "WorkAutoAccepted", "Employee", employee.Id);
-            if (push is not null)
-            {
-                var now = DateTime.UtcNow;
-                await push.StageAsync(Db, new PushIntent { EmployeeId = employee.Id, PartnerRequestId = request.Id,
-                    RequestRevision = request.Revision, Kind = "WorkAutoAccepted", EventKey = $"work-auto-accepted:{request.Id}:{request.Revision}:{employee.Id}",
-                    OccurredUtc = now, DueUtc = now, ExpiresUtc = now.AddHours(24) }, ct);
-            }
+            await NotifyAutomaticAcceptance(request, employee.Id, ct);
         }
         else
         {
@@ -384,17 +382,25 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         var localFrom = TenantTimeZone.LocalDate(start, zone);
         var localUntil = TenantTimeZone.LocalDate(end.AddTicks(-1), zone);
         var shiftId = request.LinkedShiftId ?? PartnerCleaningRequest.StableId($"partner-shift:{request.Id}");
-        var shift = await Db.LoadAsync<Shift>(shiftId, ct) ?? Shift.Create(request.CompanyId, request.BranchId,
-            $"Cleaning — {branch.Name}", new ShiftSchedule { Type = ShiftScheduleType.OnCallFlexible }, request.Notes, localFrom, localUntil);
+        var existingShift = await Db.LoadAsync<Shift>(shiftId, ct);
+        // A failed automatic attempt may be caught and committed as an offer. Validate
+        // detached candidates first: Marten dirty-tracks loaded history even without Store.
+        var candidate = Shift.Create(request.CompanyId, request.BranchId,
+            existingShift?.Name ?? $"Cleaning — {branch.Name}", existingShift?.Schedule ?? new ShiftSchedule { Type = ShiftScheduleType.OnCallFlexible },
+            request.Notes, localFrom, localUntil);
+        candidate.Id = shiftId; candidate.PartnerRequestId = request.Id;
+        var occurrenceId = PartnerCleaningRequest.StableId($"partner-occurrence:{request.Id}");
+        var candidateOccurrence = ShiftOccurrenceException.Create(shiftId, null, start, end,
+            ShiftOccurrenceExceptionStatus.Extra, "Accepted partner cleaning", actor);
+        candidateOccurrence.Id = occurrenceId;
+        var roster = ShiftVisitRoster.Resolve(shiftId, [], [candidateOccurrence], [], []);
+        await VisitAssignmentSafety.CheckConflicts(shifts, candidate, roster, zone, ct);
+
+        var shift = existingShift ?? candidate;
         shift.Id = shiftId; shift.PartnerRequestId = request.Id; shift.IsActive = true;
         shift.ValidFrom = localFrom; shift.ValidUntil = localUntil; shift.Notes = request.Notes;
-        var occurrenceId = PartnerCleaningRequest.StableId($"partner-occurrence:{request.Id}");
-        var occurrence = await Db.LoadAsync<ShiftOccurrenceException>(occurrenceId, ct)
-            ?? ShiftOccurrenceException.Create(shiftId, null, start, end, ShiftOccurrenceExceptionStatus.Extra, "Accepted partner cleaning", actor);
-        occurrence.Id = occurrenceId;
+        var occurrence = await Db.LoadAsync<ShiftOccurrenceException>(occurrenceId, ct) ?? candidateOccurrence;
         occurrence.Update(shiftId, null, start, end, ShiftOccurrenceExceptionStatus.Extra, "Accepted partner cleaning", actor);
-        var roster = ShiftVisitRoster.Resolve(shiftId, [], [occurrence], [], []);
-        await VisitAssignmentSafety.CheckConflicts(shifts, shift, roster, zone, ct);
         var assignments = await Db.Query<ShiftAssignment>().Where(x => x.ShiftId == shiftId).ToListAsync(ct);
         foreach (var previous in assignments) { previous.EndFrom(DateTime.UtcNow, DateTime.UtcNow); Db.Store(previous); }
         var assignment = assignments.FirstOrDefault(x => x.EmployeeId == actor) ?? ShiftAssignment.Create(shiftId, actor, "Accepted partner cleaning");
@@ -410,7 +416,58 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         // A single Marten commit owns every document. Repository methods that commit individually are deliberately avoided.
         Db.Store(shift); Db.Store(occurrence); Db.Store(assignment); Db.Store(billing); Db.Store(request);
         if (push is not null) await push.StageScheduleChangeAsync(Db, shiftId, assignments.Select(x => x.EmployeeId).Append(actor).Where(id => !automatic || id != actor), DateTimeOffset.UtcNow, ct);
-        NotifyRequest(request, "RequestAccepted", "Company"); NotifyRequest(request, "RequestAccepted", "Staff");
+        NotifyRequest(request, "RequestAccepted", "Company");
+        if (!request.DirectlyRouted) NotifyRequest(request, "RequestAccepted", "Staff");
+    }
+
+    private async Task NotifyAutomaticAcceptance(PartnerCleaningRequest request, Guid employeeId, CancellationToken ct)
+    {
+        NotifyRequest(request, "WorkAutoAccepted", "Employee", employeeId);
+        if (push is not null)
+        {
+            var now = DateTime.UtcNow;
+            await push.StageAsync(Db, new PushIntent { EmployeeId = employeeId, PartnerRequestId = request.Id,
+                RequestRevision = request.Revision, Kind = "WorkAutoAccepted", EventKey = $"work-auto-accepted:{request.Id}:{request.Revision}:{employeeId}",
+                OccurredUtc = now, DueUtc = now, ExpiresUtc = now.AddHours(24) }, ct);
+        }
+    }
+
+    private async Task NotifyStaffFallback(PartnerCleaningRequest request, string kind, bool preferredUnavailable, CancellationToken ct)
+    {
+        NotifyRequest(request, preferredUnavailable ? "PreferredCleanerUnavailable" : kind, "Staff");
+        if (push is not null) await push.StagePartnerRequestAsync(Db, request.Id, request.Revision, DateTimeOffset.UtcNow, ct);
+    }
+
+    private async Task<bool> RoutePreferredCleaner(PartnerCleaningRequest request, Branch branch, CancellationToken ct)
+    {
+        request.DirectlyRouted = false;
+        if (!branch.PreferredCleanerEmployeeId.HasValue) return false;
+        var employee = await Db.LoadAsync<Employee>(branch.PreferredCleanerEmployeeId.Value, ct);
+        if (employee is not { IsActive: true, IdentitySyncPending: false } || !Employee.IsWorkRole(employee.Role)
+            || string.IsNullOrWhiteSpace(employee.KeycloakUserId)) return false;
+        request.DirectlyRouted = true;
+        request.OfferId = PartnerCleaningRequest.StableId($"offer:{request.Id}:{request.Revision}");
+        request.OfferedEmployeeId = employee.Id; request.Status = "Offered";
+        if (request.FromDate == request.ToDate && request.ExactStartLocalTime is not null)
+            request.OfferPlannedStartUtc = await Plan(request, $"{request.FromDate:yyyy-MM-dd}T{request.ExactStartLocalTime}", ct);
+        if (employee.AutoAcceptWork && request.OfferPlannedStartUtc is { } start && start > DateTime.UtcNow)
+        {
+            try
+            {
+                await MaterializeAcceptance(request, employee.Id, start, ct, automatic: true);
+                await NotifyAutomaticAcceptance(request, employee.Id, ct);
+            }
+            catch (ValidationException) when (request.Status == "Offered") { }
+            catch (ShiftConflictException) when (request.Status == "Offered") { }
+        }
+        if (request.Status == "Offered")
+        {
+            Db.Store(request); NotifyRequest(request, "OfferCreated", "Employee", employee.Id);
+            NotifyRequest(request, "AwaitingAcceptance", "Company");
+            if (push is not null) await push.StagePartnerOfferAsync(Db, request.Id, request.Revision, request.OfferId!.Value, employee.Id, DateTimeOffset.UtcNow, ct);
+        }
+        Db.Store(request);
+        return true;
     }
 
     public async Task Decline(Guid actor, Guid offerId, PartnerDecline body, CancellationToken ct)
@@ -422,8 +479,8 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         CheckVersion(request, body.Version);
         if (request.Status != "Offered") throw new ShiftConflictException("This offer is no longer awaiting acceptance.");
         if (body.Reason?.Length > 1000) throw new ValidationException("Use at most 1000 characters for the reason.");
-        InvalidateOffer(request); request.Status = "Requested"; Touch(request); Db.Store(request);
-        NotifyRequest(request, "OfferDeclined", "Staff"); NotifyRequest(request, "AwaitingAssignment", "Company");
+        InvalidateOffer(request); request.Status = "Requested"; request.DirectlyRouted = false; Touch(request); Db.Store(request);
+        await NotifyStaffFallback(request, "OfferDeclined", false, ct); NotifyRequest(request, "AwaitingAssignment", "Company");
         await Db.SaveChangesAsync(ct);
     }
 

@@ -56,7 +56,7 @@ test('Partner Operations excludes ordinary properties and reveals editors below 
   await expect(page.getByText('Pricing saved.', { exact: true })).toBeVisible();
   expect(writes[1]).toMatchObject({ path: '/branches/property-0/pricing', body: { priceNet: 95 } });
   await page.getByRole('button', { name: 'Add property', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Property editor', exact: true }).getByRole('combobox').locator('option')).toHaveText(['Select company', 'Owner company']);
+  await expect(page.getByRole('region', { name: 'Property editor', exact: true }).getByLabel('Company', { exact: true }).locator('option')).toHaveText(['Select company', 'Owner company']);
   await page.getByRole('tab', { name: 'Quote requests', exact: true }).click();
   await expect(page.getByText('No quotes awaiting pricing.', { exact: true })).toBeVisible();
 });
@@ -152,10 +152,10 @@ test('staff resolves owner changes, creates a property and cancels a versioned r
   await expect(page.getByText('Resolved: Spare towels added to cleaning instructions.', { exact: true })).toBeVisible();
   expect(writes[0]).toEqual({ path: '/change-requests/change-one/resolve', method: 'POST', body: { resolution: 'Spare towels added to cleaning instructions.' } });
   await page.getByRole('tab', { name: 'Properties', exact: true }).click(); await page.getByRole('button', { name: 'Add property', exact: true }).click();
-  await page.getByRole('combobox').selectOption(companyId); await page.getByLabel('Property name', { exact: true }).fill('Forest apartment'); await page.getByLabel('street', { exact: true }).fill('Forest road 8'); await page.getByLabel('city', { exact: true }).fill('Oulu'); await page.getByLabel('Rooms (optional)').fill('3'); await page.getByLabel('Beds (optional)').fill('4');
+  await page.getByLabel('Company', { exact: true }).selectOption(companyId); await page.getByLabel('street', { exact: true }).fill('Forest road 8'); await page.getByLabel('city', { exact: true }).fill('Oulu'); await page.getByLabel('Rooms (optional)').fill('3'); await page.getByLabel('Beds (optional)').fill('4');
   await page.getByRole('button', { name: 'Save property', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Forest apartment · Owner company', exact: true })).toBeVisible();
-  expect(writes[1]).toMatchObject({ path: '/branches', method: 'POST', body: { companyId, name: 'Forest apartment', street: 'Forest road 8', city: 'Oulu', roomCount: 3, bedCount: 4, priceNet: null, isActive: true } });
+  await expect(page.getByRole('heading', { name: 'Forest road 8, Oulu · Owner company', exact: true })).toBeVisible();
+  expect(writes[1]).toMatchObject({ path: '/branches', method: 'POST', body: { companyId, name: 'Forest road 8, Oulu', street: 'Forest road 8', city: 'Oulu', roomCount: 3, bedCount: 4, priceNet: null, isActive: true } });
   await page.getByRole('tab', { name: 'Requests', exact: true }).click();
   page.once('dialog', dialog => dialog.accept('Owner cancelled travel.'));
   await page.getByRole('button', { name: 'Cancel request', exact: true }).click();

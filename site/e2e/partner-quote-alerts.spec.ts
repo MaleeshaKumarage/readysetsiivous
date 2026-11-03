@@ -74,15 +74,15 @@ test('quote banner switches tabs on the current operations page without losing a
   await page.goto('/admin/partner-requests/');
   await page.getByRole('tab', { name: 'Properties', exact: true }).click();
   await page.getByRole('button', { name: 'Edit property', exact: true }).click();
-  await page.getByLabel('Property name', { exact: true }).fill('Preserve my draft');
+  await page.getByLabel('street', { exact: true }).fill('Preserve my draft');
   await page.getByRole('status', { name: 'Pending quote requests' }).getByRole('link', { name: 'Review quotes' }).click();
   await expect(page.getByRole('tab', { name: 'Quote requests', exact: true })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByLabel('Property name', { exact: true })).toHaveValue('Preserve my draft');
+  await expect(page.getByLabel('street', { exact: true })).toHaveValue('Preserve my draft');
   await page.getByRole('tab', { name: 'Properties', exact: true }).click();
   await expect(page).not.toHaveURL(/tab=quotes/);
   await page.getByRole('status', { name: 'Pending quote requests' }).getByRole('link', { name: 'Review quotes' }).click();
   await expect(page.getByRole('tab', { name: 'Quote requests', exact: true })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByLabel('Property name', { exact: true })).toHaveValue('Preserve my draft');
+  await expect(page.getByLabel('street', { exact: true })).toHaveValue('Preserve my draft');
 });
 
 test('visible polling and focus discover new quotes, errors retain count and retry clears resolved quotes', async ({ page }) => {
@@ -111,7 +111,7 @@ test('hidden tabs stop quote polling and returning to visibility refreshes witho
   await page.getByRole('tab', { name: 'Properties', exact: true }).click();
   await expect(page.getByText('Quote requested', { exact: true })).toHaveClass(/text-red-800/);
   await page.getByRole('button', { name: 'Edit property', exact: true }).click();
-  await page.getByLabel('Property name', { exact: true }).fill('Unsaved name');
+  await page.getByLabel('street', { exact: true }).fill('Unsaved name');
   await page.evaluate(() => Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }));
   const reads = state.quoteReads;
   await page.clock.fastForward(60_000);
@@ -120,7 +120,7 @@ test('hidden tabs stop quote polling and returning to visibility refreshes witho
   await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' }); document.dispatchEvent(new Event('visibilitychange')); });
   await expect(page.getByRole('status', { name: 'Pending quote requests' })).toHaveCount(0);
   await expect(page.getByText('Quote requested', { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel('Property name', { exact: true })).toHaveValue('Unsaved name');
+  await expect(page.getByLabel('street', { exact: true })).toHaveValue('Unsaved name');
   expect(state.writes).toEqual([]);
 });
 
@@ -135,8 +135,8 @@ test('failed initial queue read is visible and can be retried without reporting 
   await expect(banner).toContainText('1 branch awaiting a quote');
 });
 
-test('pricing through Companies clears the shared banner and branch badge immediately', async ({ page }) => {
-  const state = await fixture(page);
+for (const legacy of ['city-only', 'name-only'] as const) test(`pricing a ${legacy} legacy property through Companies clears the shared banner and branch badge immediately`, async ({ page }) => {
+  const state = await fixture(page, [{...requested, city: legacy === 'name-only' ? null : requested.city}]);
   await page.goto('/admin/companies/');
   await page.getByRole('button', { name: 'Branches', exact: true }).click();
   await expect(page.getByText('Quote requested', { exact: true })).toBeVisible();
@@ -149,6 +149,7 @@ test('pricing through Companies clears the shared banner and branch badge immedi
   await expect(page.getByRole('status', { name: 'Pending quote requests' })).toHaveCount(0);
   await expect(page.getByText('Quote requested', { exact: true })).toHaveCount(0);
   expect(state.writes).toHaveLength(1);
+  expect(state.writes[0]).toMatchObject({body:{name:legacy === 'name-only' ? requested.name : 'Tampere',priceNet:90,estimatedDurationMinutes:120}});
 });
 
 

@@ -11,7 +11,7 @@ the returned tenant time zone. Versions are integer request revisions.
 - Company appends `isPartnerEnabled: boolean`.
 - Branch appends nullable `roomCount`, `bedCount`, `priceNet`, `vatRatePercent`,
   `estimatedDurationMinutes`, plus `pricingVersion: number`, `pricingReady: boolean`,
-  `quoteRequestedUtc: string|null`. Existing branch address/contact fields remain.
+  `quoteRequestedUtc: string|null`, `sizeSquareMeters: number|null`, and `preferredCleanerEmployeeId: string|null`. Existing branch address/contact fields remain.
 - Partner identity: `{realm, person:{id,firstName,lastName,role,isActive}, company:{id,name,isActive,isPartnerEnabled}, timeZoneId}`.
 - Cleaning request: `{id,version,companyId,branchId,branchName,fromDate,toDate,exactStartLocalTime,notes,priceNet,vatRatePercent,estimatedDurationMinutes,status,firstAcceptedAtUtc,linkedShiftId,plannedStartUtc,plannedEndUtc,acceptedCleanerName,actualStartUtc,actualEndUtc}`.
 - Change request: `{id,companyId,branchId,requestId,kind,message,createdUtc,resolvedUtc,resolution}`.
@@ -34,7 +34,7 @@ role synchronization or grant access to the previous company through a cached to
 ## Partner `/api/v1/partner`
 
 - `GET /me`, `GET /branches` => identity, Branch[].
-- `POST /branches` body `{name,street?,postalCode?,city?,country?,contactPhone?,contactEmail?,roomCount?,bedCount?}` => Branch.
+- `POST /branches` body `{name?,street?,postalCode?,city?,country?,contactPhone?,contactEmail?,roomCount?,bedCount?,sizeSquareMeters?}` => Branch. Partner property names are generated from `Street, PostalCode City`; at least one address component is required. Submitted names do not override partner-generated titles.
 - `POST /branches/{id}/quote-request` => Branch (idempotent until priced).
 - `POST /branches/{id}/change-requests` body `{message}` => change request.
 - `GET /requests` => cleaning request[]. `POST /requests` body `{clientRequestId,branchId,fromDate,toDate,exactStartLocalTime?,notes?}` => cleaning request.
@@ -92,3 +92,12 @@ uncertain deliveries stop after 20 hours or 12 attempts for review. Changed reci
 rather than retargeting a previously attempted idempotency key. Actual work start/completion is
 reconciled into deterministic intents from existing work forms; this never changes actual times.
 All email links require sign-in; access instructions and cleaner notes are excluded.
+
+
+## Preferred branch cleaner routing
+
+Administrators/managers may set an optional `preferredCleanerEmployeeId` on a branch. The cleaner must be an active, synchronized work-role employee with a linked login in the current tenant. Omitted routing/size update fields preserve existing values; explicit null clears them. An unchanged saved cleaner is preserved even if later inactive; new requests then fall back to administrators. Partner users cannot choose their company, cleaner or pricing. Branch/property lists sort by postal code then name. Partner-enabled companies use address-generated branch titles on new/edited branches; ordinary companies retain manual names and historical records are not bulk-renamed. Existing legacy name-only branches retain their current name while both old and submitted address fields are all blank, allowing pricing/metadata edits. New partner properties still require a nonempty address component; clearing a previously populated address does not enable the legacy fallback.
+
+New requests route directly to a valid preferred cleaner, bypassing initial administrator broadcasts. Existing `AutoAcceptWork` and `/api/v1/me/work-preferences` remain the single self-service preference. Only exact, single-day future appointments may auto-accept through this branch route. Flexible/date-range requests and scheduling conflicts remain actionable cleaner offers, including when automatic acceptance is enabled. Actual pending offers remain visible; a confirmed empty approval panel may be hidden. The existing pending-offer enable guard remains in force.
+
+The routing provenance is persisted so later branch changes do not alter existing request behavior. Manual direct acceptance/cancellation continues to bypass administrator broadcasts. Decline/unavailable-cleaner fallback returns the request to administrators with revision-aware notifications. Financial snapshots and accepted/history requests remain unchanged. Automatic acceptance reuses the existing atomic materialization and single informational notification, avoiding duplicate schedule pushes. No second approval preference or endpoint is added.

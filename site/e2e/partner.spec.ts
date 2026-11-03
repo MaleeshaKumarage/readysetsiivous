@@ -28,7 +28,7 @@ test('owner sees scoped properties, requests one visit and existing read-only sh
   await page.getByRole('article', { name: 'Lake apartment', exact: true }).getByRole('button', { name: 'Request cleaning' }).click();
   await page.getByLabel('From date', { exact: true }).fill('2026-12-01'); await page.getByLabel('To date', { exact: true }).fill('2026-12-02');
   await page.getByLabel('Cleaning instructions').fill('Clean after checkout.'); await page.getByRole('button', { name: 'Save cleaning request' }).click();
-  await expect(page.getByText('Cleaning request saved. Staff will arrange a cleaner.')).toBeVisible();
+  await expect(page.getByText('Cleaning request saved. Check its status below.')).toBeVisible();
   expect(state.writes[0].body).toMatchObject({ branchId: branch.id, fromDate: '2026-12-01', toDate: '2026-12-02', exactStartLocalTime: null });
   await page.getByRole('tab', { name: 'Change requests', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Staff response' })).toBeVisible(); await expect(page.getByText('Fresh towels included.')).toBeVisible();
   expect(state.writes[0].body.clientRequestId).toMatch(/^[a-f0-9-]{36}$/); expect(state.writes[0].body).not.toHaveProperty('companyId'); expect(state.writes[0].body).not.toHaveProperty('priceNet');
@@ -127,11 +127,11 @@ test('switching inline staff editors resets fields to the newly selected record'
   expect(writes[0]).toMatchObject({ path: '/requests/request-two', body: { fromDate: '2026-12-10', notes: 'Forest instructions' } });
   await page.getByRole('tab', { name: 'Properties', exact: true }).click();
   await page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Lake apartment · Owner company' }) }).getByRole('button', { name: 'Edit property' }).click();
-  await page.getByLabel('Property name', { exact: true }).fill('Unsaved lake edit');
+  await page.getByLabel('street', { exact: true }).fill('Unsaved lake street');
   await page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Forest apartment · Owner company' }) }).getByRole('button', { name: 'Edit property' }).click();
-  await expect(page.getByLabel('Property name', { exact: true })).toHaveValue('Forest apartment');
+  await expect(page.getByLabel('Property name', { exact: true })).toHaveValue('Forest road 9, Tampere');
   await expect(page.getByLabel('street', { exact: true })).toHaveValue('Forest road 9');
   await page.getByRole('button', { name: 'Save property', exact: true }).click();
   await expect(page.getByText('Property saved.')).toBeVisible();
-  expect(writes[1]).toMatchObject({ path: '/branches/branch-two', body: { name: 'Forest apartment', street: 'Forest road 9', roomCount: 4 } });
+  expect(writes[1]).toMatchObject({ path: '/branches/branch-two', body: { name: 'Forest road 9, Tampere', street: 'Forest road 9', roomCount: 4 } });
 });

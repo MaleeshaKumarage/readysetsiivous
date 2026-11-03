@@ -25,7 +25,8 @@ public class BranchRepository : IBranchRepository
     {
         return await Session.Query<Branch>()
             .Where(b => b.CompanyId == companyId && b.IsActive)
-            .OrderBy(b => b.Name)
+            .OrderBy(b => b.PostalCode)
+            .ThenBy(b => b.Name)
             .ToListAsync(ct);
     }
 
@@ -39,7 +40,8 @@ public class BranchRepository : IBranchRepository
         }
 
         return await query
-            .OrderBy(b => b.Name)
+            .OrderBy(b => b.PostalCode)
+            .ThenBy(b => b.Name)
             .ToListAsync(ct);
     }
 
