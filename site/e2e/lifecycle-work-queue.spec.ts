@@ -12,24 +12,28 @@ function booking(overrides: Record<string, unknown> = {}) {
   };
 }
 
+type QueueItem = { source: 'booking' | 'partner'; id: string; reference: string; customerName: string; scheduledLocal: string; status: string; stateLabel: string; assigneeName: string | null; href: string };
+const bookingItem: QueueItem = { source: 'booking', id: 'booking-1', reference: 'BK-1001', customerName: 'Anna Virtanen', scheduledLocal: '2026-11-10 09:00', status: 'New', stateLabel: 'New booking', assigneeName: null, href: '/admin/work-queue/?booking=booking-1' };
+
 async function setup(page: Page) {
   await setupAdminMocks(page, { authenticated: true });
   const state = {
-    bookings: { 'booking-1': booking() },
+    bookings: { 'booking-1': booking() } as Record<string, ReturnType<typeof booking>>,
     queries: [] as URLSearchParams[],
     actions: [] as string[],
     listFails: false,
     counts: { 'needs-action': 1, scheduled: 0, 'in-progress': 0, completed: 0 },
+    // Items per view; the mock pages them with skip/take like the server.
+    items: { 'needs-action': [bookingItem] } as Record<string, QueueItem[]>,
   };
   await page.route('**/api/v1/admin/work-queue**', route => {
     const url = new URL(route.request().url());
     state.queries.push(url.searchParams);
     if (state.listFails) return route.fulfill({ headers, status: 503, json: { detail: 'Queue unavailable' } });
-    const view = url.searchParams.get('view');
-    const items = view === 'needs-action'
-      ? [{ source: 'booking', id: 'booking-1', reference: 'BK-1001', customerName: 'Anna Virtanen', scheduledLocal: '2026-11-10 09:00', status: 'New', stateLabel: 'New booking', assigneeName: null, href: '/admin/work-queue/?booking=booking-1' }]
-      : [];
-    return route.fulfill({ headers, json: { view, source: url.searchParams.get('source') ?? 'all', items, total: items.length, counts: state.counts } });
+    const view = url.searchParams.get('view') ?? 'needs-action';
+    const all = state.items[view] ?? [];
+    const skip = Number(url.searchParams.get('skip') ?? 0), take = Number(url.searchParams.get('take') ?? 25);
+    return route.fulfill({ headers, json: { view, source: url.searchParams.get('source') ?? 'all', items: all.slice(skip, skip + take), total: all.length, counts: state.counts } });
   });
   await page.route('**/api/v1/admin/bookings/**', route => {
     const request = route.request();
@@ -41,10 +45,10 @@ async function setup(page: Page) {
     if (action) {
       state.actions.push(action);
       const next = action === 'confirm' ? 'Confirmed' : action === 'complete' ? 'Completed' : 'Cancelled';
-      state.bookings[id as 'booking-1'] = booking({ status: next });
+      state.bookings[id] = booking({ ...state.bookings[id], status: next });
       return route.fulfill({ headers, status: 204 });
     }
-    return route.fulfill({ headers, json: state.bookings[id as 'booking-1'] });
+    return route.fulfill({ headers, json: state.bookings[id] });
   });
   return state;
 }
@@ -85,4 +89,87 @@ test('queue failure shows a retry that recovers the list', async ({ page }) => {
   state.listFails = false;
   await page.getByRole('button', { name: 'Retry' }).click();
   await expect(page.getByRole('listitem').filter({ hasText: 'Anna Virtanen' })).toBeVisible();
+});
+
+test('booking drawer cancels a new booking after the confirmation dialog', async ({ page }) => {
+  const state = await setup(page);
+  await page.goto('/admin/work-queue/');
+  await page.getByRole('button', { name: 'Open booking BK-1001' }).click();
+  const drawer = page.getByRole('dialog', { name: 'Booking BK-1001' });
+  // Dismissing the dialog sends nothing.
+  page.once('dialog', dialog => { expect(dialog.message()).toBe('Cancel booking BK-1001?'); void dialog.dismiss(); });
+  await drawer.getByRole('button', { name: 'Cancel booking', exact: true }).click();
+  await expect(drawer.getByText('Status: New')).toBeVisible();
+  expect(state.actions).toEqual([]);
+  page.once('dialog', dialog => void dialog.accept());
+  await drawer.getByRole('button', { name: 'Cancel booking', exact: true }).click();
+  await expect.poll(() => state.actions).toEqual(['cancel']);
+  await expect(drawer.getByText('Status: Cancelled')).toBeVisible();
+  await expect(drawer.getByRole('button', { name: 'Cancel booking', exact: true })).toHaveCount(0);
+});
+
+test('booking drawer marks a confirmed booking completed', async ({ page }) => {
+  const state = await setup(page);
+  state.bookings['booking-1'] = booking({ status: 'Confirmed' });
+  state.counts = { 'needs-action': 0, scheduled: 1, 'in-progress': 0, completed: 0 };
+  state.items = { scheduled: [{ ...bookingItem, status: 'Confirmed', stateLabel: 'Confirmed' }] };
+  await page.goto('/admin/work-queue/?view=scheduled');
+  await page.getByRole('button', { name: 'Open booking BK-1001' }).click();
+  const drawer = page.getByRole('dialog', { name: 'Booking BK-1001' });
+  await expect(drawer.getByRole('button', { name: 'Confirm', exact: true })).toHaveCount(0);
+  await drawer.getByRole('button', { name: 'Mark completed', exact: true }).click();
+  await expect.poll(() => state.actions).toEqual(['complete']);
+  await expect(drawer.getByText('Status: Completed')).toBeVisible();
+  await expect(drawer.getByRole('button', { name: 'Mark completed', exact: true })).toHaveCount(0);
+});
+
+test('Scheduled and In progress tabs request their view from the server', async ({ page }) => {
+  const state = await setup(page);
+  state.counts = { 'needs-action': 1, scheduled: 3, 'in-progress': 2, completed: 0 };
+  await page.goto('/admin/work-queue/');
+  await page.getByRole('tab', { name: 'Scheduled (3)' }).click();
+  await expect.poll(() => state.queries.at(-1)?.get('view')).toBe('scheduled');
+  await expect(page.getByRole('tab', { name: 'Scheduled (3)' })).toHaveAttribute('aria-selected', 'true');
+  expect(page.url()).toContain('view=scheduled');
+  await page.getByRole('tab', { name: 'In progress (2)' }).click();
+  await expect.poll(() => state.queries.at(-1)?.get('view')).toBe('in-progress');
+  await expect(page.getByRole('tab', { name: 'In progress (2)' })).toHaveAttribute('aria-selected', 'true');
+  expect(page.url()).toContain('view=in-progress');
+});
+
+test('Next and Previous move between pages and re-fetch with the page offset', async ({ page }) => {
+  const state = await setup(page);
+  state.counts = { 'needs-action': 30, scheduled: 0, 'in-progress': 0, completed: 0 };
+  state.items = { 'needs-action': Array.from({ length: 30 }, (_, index) => ({ ...bookingItem, id: `booking-${index + 1}`, reference: `BK-${2001 + index}`, customerName: `Customer ${index + 1}` })) };
+  await page.goto('/admin/work-queue/');
+  await expect(page.getByText('Showing 1–25 of 30')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Previous' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Next' }).click();
+  await expect.poll(() => state.queries.at(-1)?.get('skip')).toBe('25');
+  await expect(page.getByText('Showing 26–30 of 30')).toBeVisible();
+  await expect(page.getByText('Page 2 of 2')).toBeVisible();
+  await expect(page.getByRole('listitem')).toHaveCount(5);
+  expect(new URL(page.url()).searchParams.get('page')).toBe('2');
+  await expect(page.getByRole('button', { name: 'Next' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Previous' }).click();
+  await expect.poll(() => state.queries.at(-1)?.get('skip')).toBe('0');
+  await expect(page.getByText('Showing 1–25 of 30')).toBeVisible();
+  expect(new URL(page.url()).searchParams.get('page')).toBe('1');
+});
+
+test('a page past the end is clamped to the last page', async ({ page }) => {
+  const state = await setup(page);
+  state.items = { 'needs-action': Array.from({ length: 30 }, (_, index) => ({ ...bookingItem, id: `booking-${index + 1}`, reference: `BK-${2001 + index}`, customerName: `Customer ${index + 1}` })) };
+  await page.goto('/admin/work-queue/?page=5');
+  await expect(page.getByText('Page 2 of 2')).toBeVisible();
+  expect(new URL(page.url()).searchParams.get('page')).toBe('2');
+});
+
+test('partner request items open the partner requests page', async ({ page }) => {
+  const state = await setup(page);
+  state.items = { 'needs-action': [{ source: 'partner', id: 'request-1', reference: 'Lake apartment', customerName: 'Owner company', scheduledLocal: '2026-11-12 10:00', status: 'Submitted', stateLabel: 'Awaiting offer', assigneeName: null, href: '/admin/partner-requests/' }] };
+  await page.goto('/admin/work-queue/');
+  await expect(page.getByRole('listitem').filter({ hasText: 'Partner request' })).toBeVisible();
+  await page.getByRole('link', { name: 'Open partner request for Owner company' }).click();
+  await expect(page).toHaveURL(/\/admin\/partner-requests\/?$/);
 });
