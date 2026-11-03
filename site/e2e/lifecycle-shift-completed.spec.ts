@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
+import { shiftRowAction } from './shift-actions';
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS' };
 const oneTime = (name: string, id: string, isCompleted: boolean, isActive = true) => ({
@@ -130,11 +131,11 @@ test('the shift page is clamped when the list shrinks, so later growth does not 
   await pager.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(page.getByText('Page 2 of 2', { exact: true })).toBeVisible();
   // Deactivating the only row on page 2 leaves 25 active shifts: one page, no pager.
-  await page.getByRole('row').filter({ hasText: 'Team 25' }).getByRole('button', { name: 'Deactivate', exact: true }).click();
+  await shiftRowAction(page, page.getByRole('row').filter({ hasText: 'Team 25' }), 'Deactivate');
   await expect(pager).toHaveCount(0);
   await expect(page.getByRole('row').filter({ hasText: 'Team' })).toHaveCount(25);
   // The list grows past one page again; the user stays on page 1 instead of jumping to the old page 2.
-  await page.getByRole('row').filter({ hasText: 'Team 00' }).getByRole('button', { name: 'Deactivate', exact: true }).click();
+  await shiftRowAction(page, page.getByRole('row').filter({ hasText: 'Team 00' }), 'Deactivate');
   await expect(page.getByText('Showing 1–25 of 30', { exact: true })).toBeVisible();
   await expect(page.getByText('Page 1 of 2', { exact: true })).toBeVisible();
 });

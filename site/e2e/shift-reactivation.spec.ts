@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { shiftAction } from './shift-actions';
 import { setupAdminMocks } from './admin-helpers';
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 
@@ -17,18 +18,18 @@ test('inactive shift deletion removes the shift after confirmation without block
       : url.pathname.endsWith('/companies') ? { items: [], total: 0 } : [] });
   });
   page.on('dialog', dialog => { confirmations.push(dialog.message()); return accept ? dialog.accept() : dialog.dismiss(); });
-  await page.goto('/admin/shifts/'); await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
+  await page.goto('/admin/shifts/'); await expect(page.getByRole('button', { name: 'More actions for Shift with recorded QC', exact: true })).toHaveCount(0);
   await page.getByRole('tab', { name: /^Inactive/ }).click();
-  await page.getByRole('button', { name: 'Delete', exact: true }).click();
-  expect(deleteCalls).toBe(0); await expect(page.getByRole('cell', { name: shift.name })).toBeVisible();
-  accept = true; await page.getByRole('button', { name: 'Delete', exact: true }).click();
-  await expect(page.getByRole('cell', { name: shift.name })).toHaveCount(0);
+  await shiftAction(page, shift.name, 'Delete');
+  expect(deleteCalls).toBe(0); await expect(page.getByRole('cell', { name: shift.name, exact: true })).toBeVisible();
+  accept = true; await shiftAction(page, shift.name, 'Delete');
+  await expect(page.getByRole('cell', { name: shift.name, exact: true })).toHaveCount(0);
   expect(deleteCalls).toBe(1);
   expect(confirmations[0]).toContain('Completed checklist records, photos and reports will remain in history.');
   await expect(page.getByRole('tab', { name: 'Inactive (0)', exact: true })).toBeVisible();
   await page.reload();
   await page.getByRole('tab', { name: 'Inactive (0)', exact: true }).click();
-  await expect(page.getByRole('cell', { name: shift.name })).toHaveCount(0);
+  await expect(page.getByRole('cell', { name: shift.name, exact: true })).toHaveCount(0);
 });
 test('admin discovers deactivated shift, sees restore failure and reactivates it', async ({ page }) => {
   await setupAdminMocks(page); let active = false; let restores = 0;
@@ -44,17 +45,17 @@ test('admin discovers deactivated shift, sees restore failure and reactivates it
       : url.pathname.endsWith('/companies') ? { items: [], total: 0 } : [];
     return route.fulfill({ status: 200, headers, json });
   });
-  await page.goto('/admin/shifts/'); await expect(page.getByRole('cell', { name: 'Restorable shift' })).toHaveCount(0);
+  await page.goto('/admin/shifts/'); await expect(page.getByRole('cell', { name: 'Restorable shift', exact: true })).toHaveCount(0);
   await expect(page.getByRole('tab', { name: /^Active/ })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByText('No active shifts. Check the Inactive tab.')).toBeVisible();
   await page.getByRole('tab', { name: /^Inactive/ }).click();
-  await expect(page.getByRole('cell', { name: 'Restorable shift' })).toBeVisible();
-  await page.getByRole('button', { name: 'Reactivate', exact: true }).click();
+  await expect(page.getByRole('cell', { name: 'Restorable shift', exact: true })).toBeVisible();
+  await shiftAction(page, 'Restorable shift', 'Reactivate');
   await expect(page.getByText('Could not reactivate shift. Check that its company and branch are active, then retry.')).toBeVisible();
-  await page.getByRole('button', { name: 'Reactivate', exact: true }).click();
-  await expect(page.getByRole('cell', { name: 'Restorable shift' })).toHaveCount(0);
+  await shiftAction(page, 'Restorable shift', 'Reactivate');
+  await expect(page.getByRole('cell', { name: 'Restorable shift', exact: true })).toHaveCount(0);
   await expect(page.getByText('No inactive shifts. Check the Active tab.')).toBeVisible();
-  await page.getByRole('tab', { name: /^Active/ }).click(); await expect(page.getByRole('cell', { name: 'Restorable shift' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Deactivate', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: /^Active/ }).click(); await expect(page.getByRole('cell', { name: 'Restorable shift', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'More actions for Restorable shift', exact: true }).click(); await expect(page.getByRole('menuitem', { name: 'Deactivate', exact: true })).toBeVisible(); await page.keyboard.press('Escape');
   expect(restores).toBe(2);
 });
