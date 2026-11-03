@@ -85,6 +85,11 @@ public class ShiftsAdminController : ControllerBase
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     { await _mediator.Send(new DeleteShiftCommand(id), ct); return NoContent(); }
 
+    // Not output-cached: counts must reflect assignment changes made moments earlier.
+    [HttpGet("assignment-counts")]
+    public async Task<IActionResult> AssignmentCounts(CancellationToken ct) =>
+        Ok(await _mediator.Send(new ListShiftAssignmentCountsQuery(), ct));
+
     [HttpGet("{id:guid}/assignments")]
     public async Task<IActionResult> GetAssignments(Guid id, CancellationToken ct)
     {

@@ -134,8 +134,43 @@ export async function adminDelete(path: string): Promise<void> {
   invalidateAdminCache();
 }
 
+export type WorkQueueView = 'needs-action' | 'scheduled' | 'in-progress' | 'completed';
+export type WorkQueueSource = 'all' | 'booking' | 'partner';
+
+export interface WorkQueueItem {
+  source: 'booking' | 'partner';
+  id: string;
+  reference: string;
+  customerName: string;
+  scheduledLocal: string;
+  status: string;
+  stateLabel: string;
+  assigneeName: string | null;
+  href: string;
+}
+
+export interface WorkQueuePage {
+  view: WorkQueueView;
+  source: WorkQueueSource;
+  items: WorkQueueItem[];
+  total: number;
+  counts: Record<WorkQueueView, number>;
+}
+
+/** One bounded page of the admin work queue. Null on any failure so callers can offer retry. */
+export const adminWorkQueue = {
+  page: async (params: { view: WorkQueueView; source: WorkQueueSource; q?: string; skip: number; take: number }): Promise<WorkQueuePage | null> => {
+    const qs = new URLSearchParams({ view: params.view, source: params.source, skip: String(params.skip), take: String(params.take) });
+    if (params.q) qs.set('q', params.q);
+    const page = await adminGet<WorkQueuePage>(`/api/v1/admin/work-queue?${qs.toString()}`, false);
+    if (!page || !Array.isArray(page.items) || !Number.isInteger(page.total) || page.total < 0 || !page.counts) return null;
+    return page;
+  },
+};
+
 export const adminBookings = {
   list: (query = '') => adminGet<Booking[]>(`/api/v1/admin/bookings${query}`),
+  detail: (id: string) => adminGet<Booking>(`/api/v1/admin/bookings/${id}`, false),
   confirm: (id: string) => adminSend(`/api/v1/admin/bookings/${id}/confirm`, 'POST', {}),
   cancel: (id: string) => adminSend(`/api/v1/admin/bookings/${id}/cancel`, 'POST', {}),
   complete: (id: string) => adminSend(`/api/v1/admin/bookings/${id}/complete`, 'POST', {}),
@@ -523,6 +558,18 @@ async function shiftAssignmentRequest<T>(path: string, method = 'GET', body?: un
   catch { throw new Error('Could not load assignments. Please retry.'); }
 }
 
+// One request for every shift's active assignment count, so the shift list never fans out per shift.
+async function shiftAssignmentCounts(): Promise<Record<string, number>> {
+  let response: Response;
+  try { response = await authorizedFetch('/api/v1/admin/shifts/assignment-counts', { cache: 'no-store' }); }
+  catch { throw new Error('Could not load employee counts. Refresh the page to retry.'); }
+  if (!response.ok) throw new Error('Could not load employee counts. Refresh the page to retry.');
+  const data = await response.json().catch(() => null);
+  if (!data || typeof data !== 'object' || Array.isArray(data) || Object.values(data).some(value => typeof value !== 'number'))
+    throw new Error('Could not load employee counts. Refresh the page to retry.');
+  return data as Record<string, number>;
+}
+
 export const adminShifts = {
   list: (companyId?: string, branchId?: string, includeInactive = false) => {
     const query = new URLSearchParams();
@@ -540,6 +587,7 @@ export const adminShifts = {
   deactivate: (id: string) => adminSend(`/api/v1/admin/shifts/${id}/deactivate`, 'POST'),
   reactivate: (id: string) => adminSendJson<Shift>(`/api/v1/admin/shifts/${id}/reactivate`, 'POST'),
   deleteInactive: (id: string) => adminDelete(`/api/v1/admin/shifts/${id}`),
+  assignmentCounts: shiftAssignmentCounts,
   assignments: (id: string) =>
     shiftAssignmentRequest<ShiftAssignment[]>(`/api/v1/admin/shifts/${id}/assignments`),
   assign: (id: string, employeeId: string) =>

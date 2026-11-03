@@ -17,6 +17,8 @@ async function setup(page: Page, options: { failure?: Failure; partial?: boolean
   await page.route(/\/api\/v1\/admin\//, async route => {
     const request = route.request(); const path = new URL(request.url()).pathname; const method = request.method();
     if (method === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    // Bulk Employees counts for the shift list, computed from the same roster the mock serves for shift "one".
+    if (path.endsWith('/assignment-counts')) return route.fulfill({ status: 200, headers, json: { one: assigned.filter(a => a.isActive).length } });
     if (path.includes('/assignments')) {
       if (method === 'GET') {
         reads++;
@@ -188,4 +190,18 @@ test('active administrators and tenant managers can be assigned as working staff
   await expect(page.getByRole('button', { name: 'Unassign Working Admin', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Unassign Working Manager', exact: true })).toBeVisible();
   expect(state.writes).toEqual(['working-admin', 'working-manager']);
+});
+
+test('Employees count in the shift row follows assign and unassign', async ({ page }) => {
+  await setup(page);
+  const row = page.getByRole('row').filter({ hasText: 'Shift one' }).first();
+  await expect(row.getByRole('cell').nth(2)).toHaveText('0');
+  await select(page, 'Alice Cleaner'); await select(page, 'Bob Cleaner');
+  await page.getByRole('button', { name: 'Assign', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Unassign Bob Cleaner' })).toBeVisible();
+  await expect(row.getByRole('cell').nth(2)).toHaveText('2');
+  await page.getByRole('button', { name: 'Unassign Alice Cleaner' }).click();
+  await expect(page.getByRole('button', { name: 'Unassign Alice Cleaner' })).toHaveCount(0);
+  await expect(row.getByRole('cell').nth(2)).toHaveText('1');
+  await expect(page.getByRole('alert').filter({ hasText: 'employee counts' })).toHaveCount(0);
 });

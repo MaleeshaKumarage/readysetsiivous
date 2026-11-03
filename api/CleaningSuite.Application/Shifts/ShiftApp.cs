@@ -66,6 +66,7 @@ public interface IShiftRepository
     Task<ShiftAssignment?> GetAssignmentAsync(Guid shiftId, Guid employeeId, CancellationToken ct = default);
     Task<IReadOnlyList<ShiftAssignment>> ListAssignmentsByEmployeeAsync(Guid employeeId, CancellationToken ct = default);
     Task<IReadOnlyList<ShiftAssignment>> ListAssignmentsByShiftAsync(Guid shiftId, CancellationToken ct = default);
+    Task<IReadOnlyDictionary<Guid, int>> CountActiveAssignmentsByShiftAsync(CancellationToken ct = default);
     Task SaveAssignmentAsync(ShiftAssignment assignment, CancellationToken ct = default);
     Task DeleteAssignmentAsync(Guid assignmentId, CancellationToken ct = default);
     Task<IReadOnlyList<Shift>> ListForReportingAsync(CancellationToken ct = default);
@@ -121,6 +122,9 @@ public record ListShiftsQuery(Guid? CompanyId, Guid? BranchId, bool IncludeInact
 public record GetShiftQuery(Guid Id) : IRequest<ShiftDto>;
 
 public record ListShiftAssignmentsQuery(Guid ShiftId) : IRequest<IReadOnlyList<ShiftAssignmentDto>>;
+
+/// <summary>Active assignment count per shift for the tenant, so list views avoid one request per shift.</summary>
+public record ListShiftAssignmentCountsQuery : IRequest<IReadOnlyDictionary<Guid, int>>;
 
 public record GetShiftOccurrencesQuery(Guid ShiftId, DateTime From, DateTime To) : IRequest<IReadOnlyList<ShiftOccurrenceDto>>;
 
@@ -338,6 +342,13 @@ public class ShiftHandlers
             var assignments = await _repository.ListAssignmentsByShiftAsync(request.ShiftId, ct);
             return assignments.Select(MapAssignment).ToList();
         }
+    }
+
+    public sealed class ListShiftAssignmentCountsQueryHandler(IShiftRepository repository)
+        : IRequestHandler<ListShiftAssignmentCountsQuery, IReadOnlyDictionary<Guid, int>>
+    {
+        public Task<IReadOnlyDictionary<Guid, int>> Handle(ListShiftAssignmentCountsQuery request, CancellationToken ct) =>
+            repository.CountActiveAssignmentsByShiftAsync(ct);
     }
 
     public class GetShiftQueryHandler : IRequestHandler<GetShiftQuery, ShiftDto>

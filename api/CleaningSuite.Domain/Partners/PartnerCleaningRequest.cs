@@ -7,6 +7,12 @@ namespace CleaningSuite.Domain.Partners;
 /// <summary>One requested visit, not a recurrence. Financial terms are frozen on submission.</summary>
 public sealed class PartnerCleaningRequest : BaseDocument
 {
+    // Stored lifecycle values. InProgress and Completed are derived at read time from quality forms, never stored.
+    public const string StatusRequested = "Requested";
+    public const string StatusOffered = "Offered";
+    public const string StatusAccepted = "Accepted";
+    public const string StatusCancelled = "Cancelled";
+
     public Guid CompanyId { get; set; }
     public Guid BranchId { get; set; }
     public Guid RequestedByEmployeeId { get; set; }
@@ -20,7 +26,7 @@ public sealed class PartnerCleaningRequest : BaseDocument
     public decimal VatRatePercent { get; set; }
     public int EstimatedDurationMinutes { get; set; }
     public int PricingVersion { get; set; }
-    public string Status { get; set; } = "Requested";
+    public string Status { get; set; } = StatusRequested;
     public DateTime? FirstAcceptedAtUtc { get; set; }
     public Guid? LinkedShiftId { get; set; }
     public DateTime? PlannedStartUtc { get; set; }
