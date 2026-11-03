@@ -190,7 +190,7 @@ test('dashboard groups link to workspaces and sidebar brand returns home on phon
     const section = page.getByRole('main').locator('section').filter({ has: page.getByRole('heading', { name: group, exact: true }) });
     await section.locator(`a[href="/admin/${destination}/"]`).click();
     await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
-    await expect(page).toHaveURL(new RegExp(`/admin/${destination}/$`));
+    await expect(page).toHaveURL(new RegExp(`/admin/${destination}/(?:\\?.*)?$`));
     // Undo the legacy helper's sidebar suppression before exercising the real drawer.
     await page.evaluate(() => document.getElementById('mock-test-style')?.remove());
     await burger.click(); await expect(burger).toHaveAttribute('aria-expanded', 'true');

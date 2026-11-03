@@ -17,6 +17,7 @@ test('company and branch reactivation preserves metadata and independent lifecyc
       else company.isActive = path.endsWith('/reactivate');
       return route.fulfill({ headers, status: 204 });
     }
+    if (path.endsWith('/summary')) return route.fulfill({ headers, json: { all: 1, active: company.isActive ? 1 : 0, inactive: company.isActive ? 0 : 1 } });
     return route.fulfill({ headers, json: path.endsWith('/companies') ? { items: [company], total: 1 } : { company, branches: [branch] } });
   });
   await page.goto('/admin/companies/');

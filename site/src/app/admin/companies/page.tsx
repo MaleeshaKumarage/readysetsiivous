@@ -52,9 +52,10 @@ export default function CompaniesAdminPage() {
     const version = ++loadGeneration.current;
     setLoading(true); setListError('');
     const skip = (next.page - 1) * next.pageSize;
+    // A failed summary only hides the tab counts; the list itself still loads.
     const [pageResult, summary] = await Promise.all([
-      adminCompanies.list(next.query, skip, next.pageSize, next.status === 'inactive' ? 'inactive' : 'active'),
-      adminCompanies.summary(),
+      adminCompanies.list(next.query, skip, next.pageSize, next.status === 'inactive' ? 'inactive' : 'active').catch(() => null),
+      adminCompanies.summary().catch(() => null),
     ]);
     if (version !== loadGeneration.current) return;
     if (!pageResult || !Array.isArray(pageResult.items)) {
