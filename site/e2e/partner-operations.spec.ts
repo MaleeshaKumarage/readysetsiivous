@@ -3,6 +3,7 @@ import { setupAdminMocks } from './admin-helpers';
 import type { Branch } from '../src/lib/adminApi';
 import type { CleanerOffer, CleaningRequest, PartnerChange } from '../src/lib/partnerApi';
 import type { InvoiceIssuer, ShiftInvoice, ShiftInvoiceInput } from '../src/lib/invoiceBillingApi';
+async function pickMonth(page: Page, label: string) { await page.getByRole('textbox', { name: 'Completion month', exact: true }).click(); await page.getByRole('option', { name: label, exact: true }).click(); }
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const companyId = '11111111-1111-4111-8111-111111111111';
@@ -86,11 +87,11 @@ test('partner month previews all company visits and issues the exact approved pa
   await expect(page.getByLabel('Completed cleaning month', { exact: true })).not.toBeChecked();
   await page.getByRole('textbox', { name: 'Company', exact: true }).click(); await page.getByRole('option', { name: 'Owner company', exact: true }).click();
   await expect(page.getByLabel('Completed cleaning month', { exact: true })).toBeChecked();
-  await expect(page.getByLabel('Completion month', { exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Completion month', exact: true })).toBeVisible();
   await expect(page.getByLabel('Invoice shifts', { exact: true })).toHaveCount(0);
   await expect(page.getByLabel('Invoice from', { exact: true })).toHaveCount(0);
   await expect(page.getByLabel('Invoice to (inclusive)', { exact: true })).toHaveCount(0);
-  await page.getByLabel('Completion month').fill('2026-12');
+  await pickMonth(page, 'October 2026');
   await page.getByLabel(/^Billing street/).fill('Customer road 2'); await page.getByLabel(/^Billing postalCode/).fill('33100'); await page.getByLabel(/^Billing city/).fill('Tampere');
   await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Invoice preview', exact: true })).toBeVisible();
@@ -101,13 +102,13 @@ test('partner month previews all company visits and issues the exact approved pa
   await expect(page.getByRole('region', { name: 'Invoice preview', exact: true })).not.toContainText(/partner/i);
   await expect(page.getByText('Net €140.00 · VAT €35.70 · Total €175.70', { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('branch-grouped-invoice-preview.png'), fullPage: true });
-  expect(previews).toEqual([{ companyId, partnerMonth: true, shiftIds: [], from: '2026-12-01', to: '2026-12-31', billingAddress: { street: 'Customer road 2', postalCode: '33100', city: 'Tampere', country: 'FI' }, language: 'en', monthlyOverrides: [] }]);
+  expect(previews).toEqual([{ companyId, partnerMonth: true, shiftIds: [], from: '2026-10-01', to: '2026-10-31', billingAddress: { street: 'Customer road 2', postalCode: '33100', city: 'Tampere', country: 'FI' }, language: 'en', monthlyOverrides: [] }]);
   expect(issues).toHaveLength(0);
-  await page.getByLabel('Completion month').fill('2027-01'); await expect(page.getByRole('heading', { name: 'Invoice preview', exact: true })).toHaveCount(0); await expect(page.getByRole('button', { name: 'Issue invoice', exact: true })).toHaveCount(0);
-  await page.getByLabel('Completed cleaning month', { exact: true }).uncheck(); await expect(page.getByLabel('Completion month')).toHaveCount(0); await expect(page.getByRole('textbox', { name: 'Invoice shifts', exact: true })).toBeVisible(); await expect(page.getByLabel('Invoice from', { exact: true })).toBeVisible(); await expect(page.getByLabel('Invoice to (inclusive)', { exact: true })).toBeVisible();
-  await page.getByLabel('Completed cleaning month', { exact: true }).check(); await expect(page.getByLabel('Completion month')).toHaveValue(''); await expect(page.getByRole('button', { name: 'Preview invoice', exact: true })).toBeDisabled();
-  await page.getByLabel('Completion month').fill('2027-02'); await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Invoice preview', exact: true })).toBeVisible(); await expect(page.getByText('Owner company · 2027-02-01 – 2027-02-28', { exact: true })).toBeVisible();
-  expect(previews[1]).toEqual({ ...previews[0], from: '2027-02-01', to: '2027-02-28' }); expect(issues).toHaveLength(0);
+  await pickMonth(page, 'September 2026'); await expect(page.getByRole('heading', { name: 'Invoice preview', exact: true })).toHaveCount(0); await expect(page.getByRole('button', { name: 'Issue invoice', exact: true })).toHaveCount(0);
+  await page.getByLabel('Completed cleaning month', { exact: true }).uncheck(); await expect(page.getByRole('textbox', { name: 'Completion month', exact: true })).toHaveCount(0); await expect(page.getByRole('textbox', { name: 'Invoice shifts', exact: true })).toBeVisible(); await expect(page.getByLabel('Invoice from', { exact: true })).toBeVisible(); await expect(page.getByLabel('Invoice to (inclusive)', { exact: true })).toBeVisible();
+  await page.getByLabel('Completed cleaning month', { exact: true }).check(); await expect(page.getByRole('textbox', { name: 'Completion month', exact: true })).toHaveValue(''); await expect(page.getByRole('button', { name: 'Preview invoice', exact: true })).toBeDisabled();
+  await pickMonth(page, 'August 2026'); await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Invoice preview', exact: true })).toBeVisible(); await expect(page.getByText('Owner company · 2026-08-01 – 2026-08-31', { exact: true })).toBeVisible();
+  expect(previews[1]).toEqual({ ...previews[0], from: '2026-08-01', to: '2026-08-31' }); expect(issues).toHaveLength(0);
   await page.getByRole('button', { name: 'Issue invoice', exact: true }).click();
   await expect(page.getByText('Invoice RSS-2026-001 issued.', { exact: true })).toBeVisible();
   expect(issues).toEqual([{ ...previews[1], previewToken: 'frozen-preview-token' }]);

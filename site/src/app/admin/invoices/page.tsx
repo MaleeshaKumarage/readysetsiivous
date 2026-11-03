@@ -8,6 +8,11 @@ import ManualInvoiceRows, { newInvoiceRow, type EditableInvoiceRow } from './Man
 
 const emptyAddress: BillingAddress = { street: '', postalCode: '', city: '', country: 'FI' };
 const money = (value: number) => new Intl.NumberFormat('en', { style: 'currency', currency: 'EUR' }).format(value);
+// Completion month is chosen from fixed YYYY-MM values, so the billing period can never be partial or free text.
+const MONTH_OPTIONS = Array.from({ length: 36 }, (_, index) => {
+  const date = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() - index, 1));
+  return { value: date.toISOString().slice(0, 7), label: new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(date) };
+});
 
 export default function InvoicesPage() {
   const [companies, setCompanies] = useState<Company[]>([]); const [shifts, setShifts] = useState<Shift[]>([]);
@@ -26,6 +31,13 @@ export default function InvoicesPage() {
   const [loadAttempt, setLoadAttempt] = useState(0); const [loadFailed, setLoadFailed] = useState(false);
   const version = useRef(0); const pending = useRef(false);
   const invalidate = () => { version.current++; setPreview(null); setPreviewInput(null); setStatus(''); };
+  const selectMonth = (value: string | null) => {
+    invalidate();
+    if (!value) { setMonth(''); setFrom(''); setTo(''); return; }
+    const [year, number] = value.split('-').map(Number);
+    setMonth(value); setFrom(`${value}-01`);
+    setTo(`${value}-${String(new Date(Date.UTC(year, number, 0)).getUTCDate()).padStart(2, '0')}`);
+  };
   const loadInvoices = () => invoiceBillingApi.list().then(setInvoices);
   useEffect(() => {
     let active = true; setLoadFailed(false); setError('');
@@ -98,7 +110,7 @@ export default function InvoicesPage() {
       <Select label="Company" searchable data={companies.map(company => ({ value: company.id, label: company.name }))} value={companyId} onChange={value => { invalidate(); setCompanyId(value); setPartnerMonth(Boolean(companies.find(company => company.id === value)?.isPartnerEnabled)); setFrom(''); setTo(''); setMonth(''); setShiftIds([]); setMonthlyOverrides([]); }} />
       {!manual && !partnerMonth && <MultiSelect label="Invoice shifts" searchable value={shiftIds} onChange={value => { invalidate(); setShiftIds(value); setMonthlyOverrides(current => current.filter(item => value.includes(item.shiftId))); }} data={shifts.filter(shift => shift.companyId === companyId).map(shift => ({ value: shift.id, label: `${shift.name}${shift.isActive ? '' : ' (inactive)'}` }))} />}
       {!manual && !partnerMonth && <Group className="admin-invoice-fields" grow preventGrowOverflow={false}><TextInput type="date" label="Invoice from" value={from} onChange={event => { invalidate(); setFrom(event.target.value); }} /><TextInput type="date" label="Invoice to (inclusive)" value={to} onChange={event => { invalidate(); setTo(event.target.value); }} /></Group>}
-      {!manual && partnerMonth && <><TextInput type="month" label="Completion month" value={month} onChange={event => { const value = event.target.value; invalidate(); setMonth(value); if (!value) { setFrom(''); setTo(''); return; } const [year, number] = value.split('-').map(Number); setFrom(`${value}-01`); setTo(`${value}-${new Date(Date.UTC(year, number, 0)).getUTCDate()}`); }} /><Text size="sm">Includes every completed, unbilled cleaning visit for this company finished during the selected month (actual completion date in the tenant time zone). Preview and issue remain manual; no invoice is emailed automatically.</Text></>}
+      {!manual && partnerMonth && <><Select label="Completion month" placeholder="Choose a month" data={MONTH_OPTIONS} value={month || null} allowDeselect={false} searchable={false} onChange={selectMonth} /><Text size="sm">Includes every completed, unbilled cleaning visit for this company finished during the selected month (actual completion date in the tenant time zone). Preview and issue remain manual; no invoice is emailed automatically.</Text></>}
       <Select label="PDF language" allowDeselect={false} value={language} onChange={value => { invalidate(); setLanguage(value || 'en'); }} data={[{ value: 'en', label: 'English' }, { value: 'fi', label: 'Finnish' }, { value: 'sv', label: 'Swedish' }]} />
       <Text fw={600}>Customer billing address</Text><Group className="admin-invoice-fields" grow preventGrowOverflow={false}>{(['street', 'postalCode', 'city', 'country'] as const).map(key => <TextInput key={key} label={`Billing ${key}`} required value={address[key]} onChange={event => patchAddress(key, event.target.value)} />)}</Group>
       {manual && <ManualInvoiceRows rows={rows} vatRate={savedVat} onChange={value => { invalidate(); setRows(value); }} />}
