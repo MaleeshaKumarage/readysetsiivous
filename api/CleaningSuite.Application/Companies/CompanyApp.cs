@@ -45,6 +45,8 @@ public interface ICompanyRepository
 {
     Task<Company?> GetAsync(Guid id, CancellationToken ct = default);
     Task<(IReadOnlyList<Company> Items, int Total)> ListAsync(string? search, int skip, int take, CancellationToken ct = default);
+    Task<(IReadOnlyList<Company> Items, int Total)> ListByStatusAsync(string? search, string status, int skip, int take, CancellationToken ct = default);
+    Task<CompanyCounts> CountByStatusAsync(CancellationToken ct = default);
     Task SaveAsync(Company company, CancellationToken ct = default);
     Task DeleteAsync(Guid id, CancellationToken ct = default);
 }
@@ -82,7 +84,11 @@ public record DeactivateCompanyCommand(Guid Id) : IRequest;
 public record ReactivateCompanyCommand(Guid Id) : IRequest;
 public record DeleteCompanyCommand(Guid Id) : IRequest;
 
-public record ListCompaniesQuery(string? Search, int Skip, int Take) : IRequest<Paged<CompanyDto>>;
+public record CompanyCounts(int All, int Active, int Inactive);
+
+public record ListCompaniesQuery(string? Search, int Skip, int Take, string Status = "all") : IRequest<Paged<CompanyDto>>;
+
+public record CompanySummaryQuery : IRequest<CompanyCounts>;
 
 public record GetCompanyQuery(Guid Id) : IRequest<CompanyDetailDto>;
 
@@ -253,9 +259,22 @@ public class CompanyHandlers
 
         public async Task<Paged<CompanyDto>> Handle(ListCompaniesQuery request, CancellationToken ct)
         {
-            var (items, total) = await _repository.ListAsync(request.Search, request.Skip, request.Take, ct);
+            var (items, total) = await _repository.ListByStatusAsync(request.Search, request.Status, request.Skip, request.Take, ct);
             return new Paged<CompanyDto>(items.Select(MapCompany).ToList(), total);
         }
+    }
+
+    public class CompanySummaryQueryHandler : IRequestHandler<CompanySummaryQuery, CompanyCounts>
+    {
+        private readonly ICompanyRepository _repository;
+
+        public CompanySummaryQueryHandler(ICompanyRepository repository)
+        {
+            _repository = repository;
+        }
+
+        public Task<CompanyCounts> Handle(CompanySummaryQuery request, CancellationToken ct) =>
+            _repository.CountByStatusAsync(ct);
     }
 
     public class GetCompanyQueryHandler : IRequestHandler<GetCompanyQuery, CompanyDetailDto>

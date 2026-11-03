@@ -44,6 +44,47 @@ public class CompanyRepository : ICompanyRepository
         return (items, total);
     }
 
+    public async Task<(IReadOnlyList<Company> Items, int Total)> ListByStatusAsync(
+        string? search,
+        string status,
+        int skip,
+        int take,
+        CancellationToken ct)
+    {
+        IQueryable<Company> query = Session.Query<Company>();
+
+        if (status == "active")
+        {
+            query = query.Where(c => c.IsActive);
+        }
+        else if (status == "inactive")
+        {
+            query = query.Where(c => !c.IsActive);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query = query.Where(c => c.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
+                                     || c.BusinessId.Contains(search, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderBy(c => c.Name)
+            .ThenBy(c => c.Id)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(ct);
+        return (items, total);
+    }
+
+    public async Task<CompanyCounts> CountByStatusAsync(CancellationToken ct)
+    {
+        var all = await Session.Query<Company>().CountAsync(ct);
+        var active = await Session.Query<Company>().Where(c => c.IsActive).CountAsync(ct);
+        return new CompanyCounts(all, active, all - active);
+    }
+
     public async Task SaveAsync(Company company, CancellationToken ct = default)
     {
         Session.Store(company);

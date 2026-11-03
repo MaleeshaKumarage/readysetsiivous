@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState } from 'react';
 import {
-  Title, Button, Table, Modal, TextInput, Textarea, Group, Stack, Text, Loader, Badge, Checkbox, NumberInput,
+  Title, Button, Table, Modal, TextInput, Textarea, Group, Stack, Text, Loader, Badge, Checkbox, NumberInput, Pagination, Select,
 } from '@mantine/core';
 import { Plus, ChevronDown, Pencil } from 'lucide-react';
 import { adminCompanies, adminBranches, type Company, type Branch } from '@/lib/adminApi';
@@ -26,6 +26,13 @@ export default function CompaniesAdminPage() {
   const [branchLoadError, setBranchLoadError] = useState('');
   const visibleCompanies = companies.filter(company => inLifecycle(company, status));
   const [loading, setLoading] = useState(true);
+  const [ready, setReady] = useState(false);
+  const [query, setQuery] = useState('');
+  const [searchText, setSearchText] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [total, setTotal] = useState(0);
+  const [counts, setCounts] = useState<{ active: number; inactive: number } | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -40,17 +47,63 @@ export default function CompaniesAdminPage() {
   const [branchSaving, setBranchSaving] = useState(false);
   const [branchError, setBranchError] = useState('');
 
-  const load = async () => {
+  type ListState = { status: LifecycleStatus; page: number; pageSize: number; query: string };
+  const load = async (next: ListState) => {
     const version = ++loadGeneration.current;
     setLoading(true); setListError('');
-    const records = await adminCompanies.listAll();
+    const skip = (next.page - 1) * next.pageSize;
+    const [pageResult, summary] = await Promise.all([
+      adminCompanies.list(next.query, skip, next.pageSize, next.status === 'inactive' ? 'inactive' : 'active'),
+      adminCompanies.summary(),
+    ]);
     if (version !== loadGeneration.current) return;
-    if (records) setCompanies(records);
-    else setListError('Companies could not be loaded completely. Refresh to retry.');
+    if (!pageResult || !Array.isArray(pageResult.items)) {
+      setListError('Companies could not be loaded. Refresh to retry.'); setLoading(false); return;
+    }
+    // An empty page after deletions or a shorter result set moves to the last populated page.
+    const lastPage = Math.max(1, Math.ceil(pageResult.total / next.pageSize));
+    if (pageResult.items.length === 0 && next.page > lastPage) { setPage(lastPage); setLoading(false); return; }
+    setCompanies(pageResult.items); setTotal(pageResult.total);
+    setCounts(summary ? { active: summary.active, inactive: summary.inactive } : null);
     setLoading(false);
   };
+  const reload = () => load({ status, page, pageSize, query });
 
-  useEffect(() => { void load(); return () => { loadGeneration.current++; branchGeneration.current++; }; }, []);
+  // Filter, page and size live in the URL so Back restores the list exactly as it was.
+  const applyParams = (params: URLSearchParams) => {
+    setStatus(params.get('status') === 'inactive' ? 'inactive' : 'active');
+    const requestedPage = Number(params.get('page'));
+    setPage(Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1);
+    const requestedSize = Number(params.get('size'));
+    setPageSize([25, 50, 100].includes(requestedSize) ? requestedSize : 25);
+    const requestedQuery = params.get('q') ?? '';
+    setQuery(requestedQuery); setSearchText(requestedQuery);
+  };
+
+  useEffect(() => {
+    applyParams(new URLSearchParams(window.location.search));
+    setReady(true);
+    const onPopState = () => applyParams(new URLSearchParams(window.location.search));
+    window.addEventListener('popstate', onPopState);
+    return () => { window.removeEventListener('popstate', onPopState); loadGeneration.current++; branchGeneration.current++; };
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    void load({ status, page, pageSize, query });
+  }, [ready, status, page, pageSize, query]);
+
+  useEffect(() => {
+    if (!ready) return;
+    const current = new URLSearchParams(window.location.search);
+    const next = new URLSearchParams();
+    next.set('status', status); next.set('page', String(page)); next.set('size', String(pageSize));
+    if (query) next.set('q', query);
+    const deepLink = current.get('company');
+    if (deepLink) next.set('company', deepLink);
+    const target = `${window.location.pathname}?${next.toString()}`;
+    if (target !== `${window.location.pathname}${window.location.search}`) window.history.pushState(null, '', target);
+  }, [ready, status, page, pageSize, query]);
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -68,7 +121,7 @@ export default function CompaniesAdminPage() {
       };
       if (editingCompany) await adminCompanies.update(editingCompany.id, { ...fields, isActive: editingCompany.isActive });
       else await adminCompanies.create(fields);
-      setForm(emptyForm); setEditingCompany(null); setModalOpen(false); if (!editingCompany) setStatus('active'); await load();
+      setForm(emptyForm); setEditingCompany(null); setModalOpen(false); if (!editingCompany) { setStatus('active'); setPage(1); } await reload();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Could not create company. Please retry.');
     } finally { setSaving(false); }
@@ -98,13 +151,15 @@ export default function CompaniesAdminPage() {
   const openedCustomer = useRef<string | null>(null);
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get('company');
-    // listAll loads both active and inactive records; visibleCompanies applies the tab filter separately.
-    const customer = companies.find(company => company.id === requested);
-    if (!customer || openedCustomer.current === requested) return;
+    if (!ready || !requested || openedCustomer.current === requested) return;
     openedCustomer.current = requested;
-    setStatus(customer.isActive ? 'active' : 'inactive');
-    setExpanded(customer.id); setBranchStatus('active'); void loadBranches(customer.id);
-  }, [companies]);
+    void (async () => {
+      const detail = await adminCompanies.get(requested);
+      if (!detail) return;
+      setStatus(detail.company.isActive ? 'active' : 'inactive');
+      setExpanded(detail.company.id); setBranchStatus('active'); void loadBranches(detail.company.id);
+    })();
+  }, [ready]);
 
   const submitBranch = async () => {
     if (!expanded || !branchForm.name.trim()) return;
@@ -143,7 +198,7 @@ export default function CompaniesAdminPage() {
       const api = companyId ? branchLifecycle : companyLifecycle;
       await (active ? api.deactivate(id) : api.reactivate(id));
       if (companyId) await loadBranches(companyId);
-      else { setExpanded(null); await load(); }
+      else { setExpanded(null); await reload(); }
     } catch (failure) {
       setActionError(failure instanceof Error ? failure.message : 'Could not change activity. Please retry.');
     } finally { setActionBusy(null); }
@@ -152,7 +207,7 @@ export default function CompaniesAdminPage() {
   const deleteCompany = async (company: Company) => {
     if (!window.confirm(`Permanently delete inactive company “${company.name}”? Companies with branches or business history are retained.`)) return;
     setActionBusy(company.id); setActionError('');
-    try { await adminCompanies.deleteInactive(company.id); setExpanded(null); await load(); }
+    try { await adminCompanies.deleteInactive(company.id); setExpanded(null); await reload(); }
     catch (failure) { setActionError(failure instanceof Error ? failure.message : 'Could not delete company. Please retry.'); }
     finally { setActionBusy(null); }
   };
@@ -173,15 +228,18 @@ export default function CompaniesAdminPage() {
       </Group>
 
       {actionError && <Text c="red" role="alert" mb="sm">{actionError}</Text>}
-      <LifecycleTabs value={status} onChange={next => { setStatus(next); setExpanded(null); branchGeneration.current++; setBranchLoading(null); setBranchLoadError(''); }} label="Company activity"
-        activeCount={loading || listError ? undefined : companies.filter(c => c.isActive).length}
-        inactiveCount={loading || listError ? undefined : companies.filter(c => !c.isActive).length}>
+      <form role="search" onSubmit={e => { e.preventDefault(); setPage(1); setQuery(searchText.trim()); }} style={{ marginBottom: 12 }}>
+        <TextInput label="Search companies" placeholder="Name or business ID" value={searchText} onChange={e => setSearchText(e.currentTarget.value)} />
+      </form>
+      <LifecycleTabs value={status} onChange={next => { setStatus(next); setPage(1); setExpanded(null); branchGeneration.current++; setBranchLoading(null); setBranchLoadError(''); }} label="Company activity"
+        activeCount={loading || listError ? undefined : counts?.active}
+        inactiveCount={loading || listError ? undefined : counts?.inactive}>
       {loading ? (
         <Loader />
       ) : listError ? (
-        <Stack><Text role="alert" c="red">{listError}</Text><Button variant="light" onClick={() => void load()}>Refresh companies</Button></Stack>
+        <Stack><Text role="alert" c="red">{listError}</Text><Button variant="light" onClick={() => void reload()}>Refresh companies</Button></Stack>
       ) : visibleCompanies.length === 0 ? (
-        <Text c="dimmed">{companies.length === 0 ? 'No companies yet. Add one to get started.' : `No ${status} companies.`}</Text>
+        <Text c="dimmed">{total === 0 && !query ? 'No companies yet. Add one to get started.' : query ? 'No companies match this search.' : `No ${status} companies.`}</Text>
       ) : (
         <Table.ScrollContainer minWidth={550}>
           <Table striped highlightOnHover withTableBorder>
@@ -255,6 +313,13 @@ export default function CompaniesAdminPage() {
             </Table.Tbody>
           </Table>
         </Table.ScrollContainer>
+      )}
+      {!loading && !listError && total > 0 && (
+        <Group justify="space-between" mt="sm" wrap="wrap" gap="sm">
+          <Select aria-label="Companies per page" data={['25', '50', '100']} value={String(pageSize)} allowDeselect={false} w={120}
+            onChange={value => { if (value) { setPageSize(Number(value)); setPage(1); } }} />
+          <Pagination total={Math.max(1, Math.ceil(total / pageSize))} value={page} onChange={setPage} />
+        </Group>
       )}
       </LifecycleTabs>
 
