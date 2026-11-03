@@ -172,7 +172,22 @@ export default function ShiftsAdminPage() {
   const [assigningVisit, setAssigningVisit] = useState<ShiftOccurrence | null>(null);
   useEffect(() => () => { assignmentGeneration.current++; }, []);
 
-  const load = () => adminShifts.list(undefined, undefined, true).then((r) => { if (r) setShifts(r); setLoading(false); });
+  // The shift list has no assignee data, so the Employees column uses one bulk count request.
+  // Every freshly loaded roster also updates that shift's count, so the column always shows the newest
+  // of the two sources: a later bulk reload (after another admin's change) replaces an older roster count.
+  const [assignmentCounts, setAssignmentCounts] = useState<Record<string, number> | null>(null);
+  const [countError, setCountError] = useState('');
+  const storeRoster = (id: string, roster: ShiftAssignment[]) => {
+    setAssignments(m => ({ ...m, [id]: roster }));
+    setAssignmentCounts(c => c && { ...c, [id]: roster.filter(a => a.isActive).length });
+  };
+  const loadAssignmentCounts = () => adminShifts.assignmentCounts()
+    .then(counts => { setAssignmentCounts(counts); setCountError(''); })
+    .catch((failure: Error) => { setAssignmentCounts(null); setCountError(failure.message); });
+  const load = () => adminShifts.list(undefined, undefined, true).then((r) => {
+    if (r) { setShifts(r); void loadAssignmentCounts(); }
+    setLoading(false);
+  });
   useEffect(() => { load(); adminTenant.get().then(profile => {
     if (!profile) throw new Error('Could not load scheduling settings. Refresh the page to retry.');
     const zone = profile.timeZoneId?.trim() || 'Europe/Helsinki';
@@ -323,7 +338,7 @@ export default function ShiftsAdminPage() {
     setAssignOpen(id); setAssignLoading(true);
     try {
       const a = await adminShifts.assignments(id);
-      if (version === assignmentGeneration.current) setAssignments(m => ({ ...m, [id]: a }));
+      if (version === assignmentGeneration.current) storeRoster(id, a);
     } catch (e) {
       if (version === assignmentGeneration.current) {
         setAssignments(m => { const next = { ...m }; delete next[id]; return next; });
@@ -335,7 +350,7 @@ export default function ShiftsAdminPage() {
   const refreshAssignments = async (id: string, version: number) => {
     try {
       const a = await adminShifts.assignments(id);
-      if (version === assignmentGeneration.current) setAssignments(m => ({ ...m, [id]: a }));
+      if (version === assignmentGeneration.current) storeRoster(id, a);
       return a;
     } catch (e) {
       if (version === assignmentGeneration.current) setAssignments(m => { const next = { ...m }; delete next[id]; return next; });
@@ -459,6 +474,7 @@ export default function ShiftsAdminPage() {
       </Group>
 
       {listError && <Text role="alert" c="red" mb="md">{listError}</Text>}
+      {countError && <Text role="alert" c="red" mb="md">{countError}</Text>}
 
       <LifecycleTabs value={lifecycle} onChange={changeLifecycle} label="Shift activity" disabled={assignBusy || templateSaving}
         activeCount={activeCount} inactiveCount={inactiveCount}>
@@ -486,7 +502,7 @@ export default function ShiftsAdminPage() {
                       {s.schedule.type === 4 && 'On-call'}
                       {s.schedule.type === 6 && `One-time ${s.schedule.oneTimeDate?.slice(0, 10)} ${s.schedule.oneTimeStart?.slice(0, 5)}–${s.schedule.oneTimeEnd?.slice(0, 5)}`}
                     </Table.Td>
-                    <Table.Td>{assignments[s.id]?.length ?? 0}</Table.Td>
+                    <Table.Td>{assignmentCounts ? (assignmentCounts[s.id] ?? 0) : assignments[s.id] ? assignments[s.id].filter(a => a.isActive).length : '—'}</Table.Td>
                     <Table.Td>
                       <Group gap={6} wrap="nowrap">
                         {isAdmin() && <Button size="xs" variant="light" onClick={() => { setPricingShift(s); setPricingOccurrence(undefined); }}>Pricing</Button>}

@@ -521,6 +521,18 @@ async function shiftAssignmentRequest<T>(path: string, method = 'GET', body?: un
   catch { throw new Error('Could not load assignments. Please retry.'); }
 }
 
+// One request for every shift's active assignment count, so the shift list never fans out per shift.
+async function shiftAssignmentCounts(): Promise<Record<string, number>> {
+  let response: Response;
+  try { response = await authorizedFetch('/api/v1/admin/shifts/assignment-counts', { cache: 'no-store' }); }
+  catch { throw new Error('Could not load employee counts. Refresh the page to retry.'); }
+  if (!response.ok) throw new Error('Could not load employee counts. Refresh the page to retry.');
+  const data = await response.json().catch(() => null);
+  if (!data || typeof data !== 'object' || Array.isArray(data) || Object.values(data).some(value => typeof value !== 'number'))
+    throw new Error('Could not load employee counts. Refresh the page to retry.');
+  return data as Record<string, number>;
+}
+
 export const adminShifts = {
   list: (companyId?: string, branchId?: string, includeInactive = false) => {
     const query = new URLSearchParams();
@@ -538,6 +550,7 @@ export const adminShifts = {
   deactivate: (id: string) => adminSend(`/api/v1/admin/shifts/${id}/deactivate`, 'POST'),
   reactivate: (id: string) => adminSendJson<Shift>(`/api/v1/admin/shifts/${id}/reactivate`, 'POST'),
   deleteInactive: (id: string) => adminDelete(`/api/v1/admin/shifts/${id}`),
+  assignmentCounts: shiftAssignmentCounts,
   assignments: (id: string) =>
     shiftAssignmentRequest<ShiftAssignment[]>(`/api/v1/admin/shifts/${id}/assignments`),
   assign: (id: string, employeeId: string) =>
