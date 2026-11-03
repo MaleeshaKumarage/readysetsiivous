@@ -369,11 +369,12 @@ test('A01 verified automatic preference hides approval section while assigned wo
   await page.route(/\/api\/v1\/me\/partner-offers$/, route => { if (route.request().method() !== 'OPTIONS') offerRequests++; return route.fulfill({ headers, json: [] }); });
   await page.goto('/me/shifts/');
   await expect(page.locator('p[role="alert"]')).toContainText('Could not verify work preferences');
-  await expect(page.getByRole('region', { name: 'Cleaning offers' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Cleaning offers' })).toBeVisible();
+  await expect.poll(() => offerRequests).toBeGreaterThan(0);
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Retry work preferences' }).click();
   await expect(page.getByRole('button', { name: 'Retry work preferences' })).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'Cleaning offers' })).toHaveCount(0); expect(offerRequests).toBe(0);
+  await expect(page.getByRole('region', { name: 'Cleaning offers' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Notifications', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Start', exact: true }).click();
   await page.getByRole('button', { name: 'Record activities & end', exact: true }).click();
@@ -382,6 +383,27 @@ test('A01 verified automatic preference hides approval section while assigned wo
   automatic = false; await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect(page.getByRole('heading', { name: 'Cleaning offers awaiting your acceptance' })).toBeVisible();
   await expect.poll(() => offerRequests).toBeGreaterThan(0);
+});
+
+test('A01 preference outage preserves a pending manual offer and allows acceptance', async ({ page }) => {
+  await setupWork(page);
+  await page.route(/\/api\/v1\/me\/work-preferences$/, route => route.fulfill({ status: 503, headers, json: { detail: 'Could not verify work preferences.' } }));
+  const decisions: unknown[] = [];
+  await page.route(/\/api\/v1\/me\/partner-offers(?:\/.*)?$/, route => {
+    const request = route.request();
+    if (request.method() === 'OPTIONS') return route.fulfill({ headers });
+    if (request.method() === 'POST') { decisions.push(request.postDataJSON()); return route.fulfill({ headers, json: {} }); }
+    return route.fulfill({ headers, json: decisions.length ? [] : [{ id: 'outage-offer', version: 4, branchName: 'Outage apartment', fromDate: '2026-12-01', toDate: '2026-12-01', estimatedDurationMinutes: 60, timeZoneId: 'Europe/Helsinki', plannedStartUtc: '2026-12-01T08:00:00Z' }] });
+  });
+  await page.goto('/me/shifts/');
+  await expect(page.getByText('Could not verify work preferences.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('article', { name: 'Outage apartment offer' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Retry work preferences' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Decline cleaning', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Accept cleaning', exact: true }).click();
+  await expect(page.getByText('No pending cleaning offers.', { exact: true })).toBeVisible();
+  expect(decisions).toEqual([{ version: 4, plannedStartLocal: null }]);
+  await expect(page.getByRole('button', { name: 'Retry work preferences' })).toBeVisible();
 });
 
 test('A01 preference focus refresh preserves manual offer drafts and an in-flight decision', async ({ page }) => {

@@ -276,6 +276,58 @@ public class PartnerWorkflowTests
     }
 
     [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Automatic_single_day_exact_appointment_rejects_a_different_clock_and_retains_fixed_fallback()
+    {
+        using var fixture = await Fixture.Create();
+        using var session = fixture.Session(); var service = fixture.Service(session);
+        await service.SetWorkPreferences(fixture.Cleaner.Id, true, default);
+        var request = await service.Create(fixture.Partner.Id,
+            new(Guid.NewGuid(), fixture.Branch.Id, Fixture.Day, Fixture.Day, "08:00"), default);
+        await Assert.ThrowsAsync<ValidationException>(() => service.Offer(fixture.Admin.Id, request.Id,
+            new(request.Version, fixture.Cleaner.Id, $"{Fixture.Day:yyyy-MM-dd}T09:00"), default));
+        var accepted = await service.Offer(fixture.Admin.Id, request.Id, new(request.Version, fixture.Cleaner.Id), default);
+        Assert.Equal("Accepted", accepted.Status);
+        Assert.Equal(new DateTime(2026, 11, 10, 6, 0, 0, DateTimeKind.Utc), accepted.PlannedStartUtc);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Legacy_multiday_exact_clock_requires_an_explicit_date_before_automatic_acceptance()
+    {
+        using var fixture = await Fixture.Create();
+        using (var session = fixture.Session()) await fixture.Service(session).SetWorkPreferences(fixture.Cleaner.Id, true, default);
+        // Legacy/imported records may contain a clock time on a flexible date window.
+        var request = new PartnerCleaningRequest
+        {
+            CompanyId = fixture.Company.Id, BranchId = fixture.Branch.Id, RequestedByEmployeeId = fixture.Partner.Id,
+            FromDate = Fixture.Day, ToDate = Fixture.Day.AddDays(1), ExactStartLocalTime = "08:00",
+            EstimatedDurationMinutes = 120, PriceNet = 100, VatRatePercent = 25.5m
+        };
+        using (var writer = fixture.Store.LightweightSession(fixture.Tenant)) { writer.Store(request); await writer.SaveChangesAsync(); }
+        var push = new Mock<CleaningSuite.Application.Notifications.IPushOutbox>(MockBehavior.Strict);
+        using (var session = fixture.Session())
+            await Assert.ThrowsAsync<ShiftConflictException>(() => fixture.Service(session, push.Object).Offer(fixture.Admin.Id, request.Id,
+                new(request.Revision, fixture.Cleaner.Id), default));
+        push.VerifyNoOtherCalls();
+        using (var reader = fixture.Store.QuerySession(fixture.Tenant))
+        {
+            var unchanged = await reader.LoadAsync<PartnerCleaningRequest>(request.Id);
+            Assert.Equal("Requested", unchanged!.Status); Assert.Equal(request.Revision, unchanged.Revision); Assert.Null(unchanged.OfferId);
+            Assert.Empty(await reader.Query<Shift>().ToListAsync());
+            Assert.Empty(await reader.Query<ShiftAssignment>().ToListAsync());
+            Assert.Empty(await reader.Query<ShiftOccurrenceException>().ToListAsync());
+            Assert.Empty(await reader.Query<ShiftBillingProfile>().ToListAsync());
+            Assert.Empty(await reader.Query<PartnerNotification>().ToListAsync());
+        }
+        using (var session = fixture.Session())
+        {
+            var accepted = await fixture.Service(session).Offer(fixture.Admin.Id, request.Id,
+                new(request.Revision, fixture.Cleaner.Id, $"{Fixture.Day.AddDays(1):yyyy-MM-dd}T09:00"), default);
+            Assert.Equal("Accepted", accepted.Status);
+            Assert.Equal(new DateTime(2026, 11, 11, 7, 0, 0, DateTimeKind.Utc), accepted.PlannedStartUtc);
+        }
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
     public async Task Preference_enable_racing_offer_never_hides_a_pending_offer()
     {
         using var fixture = await Fixture.Create();
@@ -333,12 +385,12 @@ public class PartnerWorkflowTests
         }
         public static ITenantContext Context(string tenant) { var mock = new Mock<ITenantContext>(); mock.SetupGet(x => x.TenantId).Returns(tenant); return mock.Object; }
         public TenantSessionFactory Session() => new(Store, Context(Tenant));
-        public PartnerService Service(ITenantSession session)
+        public PartnerService Service(ITenantSession session, CleaningSuite.Application.Notifications.IPushOutbox? push = null)
         {
             var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
             { ["ConnectionStrings:DefaultConnection"] = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING") }).Build();
             return new(new PartnerStore(session), new ShiftWorkReservation(config, session), new ShiftRepository(session),
-                new TenantProfileRepository(Store), Context(session.TenantId));
+                new TenantProfileRepository(Store), Context(session.TenantId), push);
         }
         public async Task<PartnerRequestDto> SubmitOffer()
         {

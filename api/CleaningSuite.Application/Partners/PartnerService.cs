@@ -286,7 +286,8 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
             throw new ShiftConflictException("The employee must have an active linked login before work can be automatically accepted.");
         DateTime? planned = null;
         if (!string.IsNullOrWhiteSpace(body.PlannedStartLocal)) planned = await Plan(request, body.PlannedStartLocal, ct);
-        else if (request.ExactStartLocalTime is not null) planned = await Plan(request, $"{request.FromDate:yyyy-MM-dd}T{request.ExactStartLocalTime}", ct);
+        else if (request.FromDate == request.ToDate && request.ExactStartLocalTime is not null)
+            planned = await Plan(request, $"{request.FromDate:yyyy-MM-dd}T{request.ExactStartLocalTime}", ct);
         if (employee.AutoAcceptWork && !planned.HasValue)
             throw new ShiftConflictException("Set an exact planned start before offering work to an employee with automatic acceptance enabled.");
         if (request.LinkedShiftId.HasValue)
@@ -523,7 +524,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         var upper = TenantTimeZone.StartOfLocalDay(request.ToDate.ToDateTime(TimeOnly.MinValue).AddDays(1), zone);
         if (start < lower || start.AddMinutes(request.EstimatedDurationMinutes) > upper)
             throw new ValidationException("The entire visit must fit within the requested dates.");
-        if (request.ExactStartLocalTime is not null && local != request.FromDate.ToDateTime(TimeOnly.ParseExact(request.ExactStartLocalTime, "HH:mm", CultureInfo.InvariantCulture)))
+        if (request.FromDate == request.ToDate && request.ExactStartLocalTime is not null && local != request.FromDate.ToDateTime(TimeOnly.ParseExact(request.ExactStartLocalTime, "HH:mm", CultureInfo.InvariantCulture)))
             throw new ValidationException("This cleaning has an exact appointment time.");
         return start;
     }
