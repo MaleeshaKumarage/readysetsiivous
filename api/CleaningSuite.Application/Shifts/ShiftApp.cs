@@ -22,7 +22,8 @@ public record ShiftDto(
     bool IsActive,
     DateTime? ValidFrom,
     DateTime? ValidUntil,
-    Guid? QualityCycleTemplateId = null);
+    Guid? QualityCycleTemplateId = null,
+    bool IsCompleted = false);
 
 public record ShiftAssignmentDto(
     Guid Id,
@@ -266,10 +267,12 @@ public class ShiftHandlers
     public class ListShiftsQueryHandler : IRequestHandler<ListShiftsQuery, IReadOnlyList<ShiftDto>>
     {
         private readonly IShiftRepository _repository;
+        private readonly IQualityCycleRepository? _forms;
 
-        public ListShiftsQueryHandler(IShiftRepository repository)
+        public ListShiftsQueryHandler(IShiftRepository repository, IQualityCycleRepository? forms = null)
         {
             _repository = repository;
+            _forms = forms;
         }
 
         public async Task<IReadOnlyList<ShiftDto>> Handle(ListShiftsQuery request, CancellationToken ct)
@@ -278,7 +281,12 @@ public class ShiftHandlers
                 ? (await _repository.ListIncludingInactiveAsync(ct)).Where(s => (!request.CompanyId.HasValue || s.CompanyId == request.CompanyId)
                     && (!request.BranchId.HasValue || s.BranchId == request.BranchId)).ToList()
                 : await _repository.ListAsync(request.CompanyId, request.BranchId, ct);
-            return shifts.Select(MapShift).ToList();
+            // A one-time visit is completed once its checklist has been submitted. Recurring shifts stay live.
+            var completed = new HashSet<Guid>();
+            if (_forms is not null)
+                foreach (var shift in shifts.Where(s => s.Schedule.IsOneTime))
+                    if ((await _forms.ListFormsAsync(shift.Id, null, null, ct)).Any(f => f.IsSubmitted && f.ShiftDeletedUtc == null)) completed.Add(shift.Id);
+            return shifts.Select(shift => MapShift(shift) with { IsCompleted = completed.Contains(shift.Id) }).ToList();
         }
     }
 

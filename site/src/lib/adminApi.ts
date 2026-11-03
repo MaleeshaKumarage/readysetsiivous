@@ -445,6 +445,8 @@ export interface Shift {
   validFrom?: string | null;
   validUntil?: string | null;
   qualityCycleTemplateId?: string | null;
+  /** One-time visit whose checklist has been submitted. */
+  isCompleted?: boolean;
 }
 
 export interface ShiftAssignment {

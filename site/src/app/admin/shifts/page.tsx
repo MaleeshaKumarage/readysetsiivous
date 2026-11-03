@@ -14,7 +14,8 @@ import { VisitAssigneesDialog } from '@/components/VisitAssigneesDialog';
 import { isAdmin } from '@/lib/auth';
 import { adminQualityCycle, type QualityCycleTemplate } from '@/lib/qualityCycleApi';
 import { CompanyPicker } from '@/components/admin/CompanyPicker';
-import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
+import { LifecycleTabs, type LifecycleStatus } from '@/components/LifecycleTabs';
+import { ListPager, paginate } from '@/components/ListPager';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const SCHEDULE_TYPES = [
@@ -102,6 +103,9 @@ const addCalendarDays = (date: string, days: number) => {
   return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
 };
 
+/** Active, Completed (finished one-time visits) or Inactive. Inactive wins over completed. */
+const shiftView = (shift: Shift): LifecycleStatus => (!shift.isActive ? 'inactive' : shift.isCompleted ? 'completed' : 'active');
+
 export default function ShiftsAdminPage() {
   const [pricingShift, setPricingShift] = useState<Shift | null>(null);
   const [pricingOccurrence, setPricingOccurrence] = useState<ShiftOccurrence | undefined>();
@@ -185,27 +189,31 @@ export default function ShiftsAdminPage() {
     setAssignOpen(null); setAssignSel([]); setAssignLoading(false);
     setAssignError(''); setAssignStatus('');
   };
+  const [shiftPage, setShiftPage] = useState(1);
   const changeLifecycle = (status: LifecycleStatus) => {
     if (status === lifecycle) return;
-    closeAssignments(); setTemplateShift(null); setLifecycle(status);
+    closeAssignments(); setTemplateShift(null); setLifecycle(status); setShiftPage(1);
   };
 
   // Performance Optimization: Memoize visible shifts and counts to avoid recalculating
   // filtered arrays on every component render (e.g., input updates in modals or selection state changes).
   const visibleShifts = useMemo(
-    () => shifts.filter((s) => inLifecycle(s, lifecycle)),
+    () => shifts.filter((s) => shiftView(s) === lifecycle),
     [shifts, lifecycle]
   );
 
-  const { activeCount, inactiveCount } = useMemo(() => {
-    if (loading) return { activeCount: undefined, inactiveCount: undefined };
+  const { activeCount, completedCount, inactiveCount } = useMemo(() => {
+    if (loading) return { activeCount: undefined, completedCount: undefined, inactiveCount: undefined };
     let active = 0;
+    let completed = 0;
     let inactive = 0;
     for (const s of shifts) {
-      if (s.isActive) active++;
-      else inactive++;
+      const view = shiftView(s);
+      if (view === 'inactive') inactive++;
+      else if (view === 'completed') completed++;
+      else active++;
     }
-    return { activeCount: active, inactiveCount: inactive };
+    return { activeCount: active, completedCount: completed, inactiveCount: inactive };
   }, [loading, shifts]);
 
   useEffect(() => {
@@ -461,17 +469,17 @@ export default function ShiftsAdminPage() {
       {listError && <Text role="alert" c="red" mb="md">{listError}</Text>}
 
       <LifecycleTabs value={lifecycle} onChange={changeLifecycle} label="Shift activity" disabled={assignBusy || templateSaving}
-        activeCount={activeCount} inactiveCount={inactiveCount}>
+        activeCount={activeCount} completedCount={completedCount} inactiveCount={inactiveCount}>
       {loading ? <Loader /> : visibleShifts.length === 0 ? (
         <Text c="dimmed">{shifts.length === 0 ? 'No shifts yet.' : `No ${lifecycle} shifts. Check the ${lifecycle === 'active' ? 'Inactive' : 'Active'} tab.`}</Text>
-      ) : (
+      ) : (<>
         <Table.ScrollContainer minWidth={600}>
           <Table striped highlightOnHover withTableBorder>
             <Table.Thead>
               <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Schedule</Table.Th><Table.Th>Employees</Table.Th><Table.Th w={180}></Table.Th></Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {visibleShifts.map((s) => (
+              {paginate(visibleShifts, shiftPage).pageItems.map((s) => (
                 <Fragment key={s.id}>
                   <Table.Tr>
                     <Table.Td fw={500}>{s.name}</Table.Td>
@@ -549,6 +557,7 @@ export default function ShiftsAdminPage() {
             </Table.Tbody>
           </Table>
         </Table.ScrollContainer>
+        <ListPager label="Shifts" total={visibleShifts.length} page={paginate(visibleShifts, shiftPage).page} pageCount={paginate(visibleShifts, shiftPage).pageCount} onPage={setShiftPage} /></>
       )}
       </LifecycleTabs>
 
