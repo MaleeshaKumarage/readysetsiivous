@@ -7,6 +7,7 @@ using CleaningSuite.Domain.Employees;
 using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Shifts;
 using FluentValidation;
+using FluentValidation.Results;
 using MediatR;
 
 namespace CleaningSuite.Application.Shifts;
@@ -142,15 +143,21 @@ public class ShiftHandlers
         private readonly IBranchRepository _branchRepository;
         private readonly IQualityCycleRepository? _qualityCycles;
 
+        private readonly ITenantProfileRepository? _profiles;
+        private readonly ITenantContext? _tenant;
+
         public CreateShiftCommandHandler(
             IShiftRepository repository,
             ICompanyRepository companyRepository,
-            IBranchRepository branchRepository, IQualityCycleRepository? qualityCycles = null)
+            IBranchRepository branchRepository, IQualityCycleRepository? qualityCycles = null,
+            ITenantProfileRepository? profiles = null, ITenantContext? tenant = null)
         {
             _repository = repository;
             _companyRepository = companyRepository;
             _branchRepository = branchRepository;
             _qualityCycles = qualityCycles;
+            _profiles = profiles;
+            _tenant = tenant;
         }
 
         public async Task<ShiftDto> Handle(CreateShiftCommand request, CancellationToken ct)
@@ -168,6 +175,8 @@ public class ShiftHandlers
             }
 
             await ValidateTemplateAsync(_qualityCycles, request.QualityCycleTemplateId, request.CompanyId, request.BranchId, ct);
+            var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
+            EnsureOneTimeTimesExist(request.Schedule, zone);
             var shift = Shift.Create(
                 request.CompanyId,
                 request.BranchId,
@@ -191,10 +200,14 @@ public class ShiftHandlers
         private readonly IBranchRepository? _branches;
         private readonly IQualityCycleRepository? _qualityCycles;
         private readonly IQualityCycleDispatcher? _dispatcher;
+        private readonly ITenantProfileRepository? _profiles;
+        private readonly ITenantContext? _tenant;
         public UpdateShiftCommandHandler(IShiftRepository repository, ICompanyRepository? companies = null,
-            IBranchRepository? branches = null, IQualityCycleRepository? qualityCycles = null, IQualityCycleDispatcher? dispatcher = null)
+            IBranchRepository? branches = null, IQualityCycleRepository? qualityCycles = null, IQualityCycleDispatcher? dispatcher = null,
+            ITenantProfileRepository? profiles = null, ITenantContext? tenant = null)
         {
             _repository = repository; _companies = companies; _branches = branches; _qualityCycles = qualityCycles; _dispatcher = dispatcher;
+            _profiles = profiles; _tenant = tenant;
         }
 
         public async Task<ShiftDto> Handle(UpdateShiftCommand request, CancellationToken ct)
@@ -208,6 +221,8 @@ public class ShiftHandlers
                 if (branch.CompanyId != request.CompanyId) throw new NotFoundException("Branch", request.BranchId);
             }
             await ValidateTemplateAsync(_qualityCycles, request.QualityCycleTemplateId, request.CompanyId, request.BranchId, ct);
+            var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
+            EnsureOneTimeTimesExist(request.Schedule, zone);
             shift.EnsureQualityCycleHistory();
             shift.Update(
                 request.CompanyId,
@@ -574,7 +589,8 @@ public class ShiftHandlers
         {
             var today = TenantTimeZone.LocalDate(utcNow, zone);
             var from = shift.ValidFrom?.Date ?? today;
-            if (from < today)
+            // A one-time visit keeps its own date, so overlap checks still see a past visit.
+            if (from < today && !shift.Schedule.IsOneTime)
             {
                 from = today;
             }
@@ -622,6 +638,16 @@ public class ShiftHandlers
         }
     }
 
+    // A local visit time inside the spring-forward gap would be dropped silently by the calculator.
+    // Reject it here, where the tenant time zone is known, so the admin can choose another time.
+    private static void EnsureOneTimeTimesExist(ShiftSchedule schedule, TimeZoneInfo zone)
+    {
+        if (!schedule.IsOneTime || schedule.OneTimeDate is null || schedule.OneTimeStart is null || schedule.OneTimeEnd is null) return;
+        var date = schedule.OneTimeDate.Value.Date;
+        if (zone.IsInvalidTime(date + schedule.OneTimeStart.Value) || zone.IsInvalidTime(date + schedule.OneTimeEnd.Value))
+            throw new ValidationException(new[] { new ValidationFailure("oneTime", "That visit time does not exist in the tenant time zone. Choose another time.") });
+    }
+
     private static ShiftDto MapShift(Shift shift) =>
         new(shift.Id, shift.CompanyId, shift.BranchId, shift.Name, shift.Schedule, shift.Notes, shift.IsActive, shift.ValidFrom, shift.ValidUntil, shift.QualityCycleTemplateId);
 
@@ -649,9 +675,12 @@ public class ShiftValidators
     {
         public CreateShiftCommandValidator()
         {
-            RuleFor(x => x.ValidFrom).NotNull().WithMessage("Shift start date is required.");
+            // One-time visits derive their validity from OneTimeDate, so the recurring date fields are not required.
+            RuleFor(x => x.ValidFrom).NotNull().WithMessage("Shift start date is required.")
+                .When(x => x.Schedule is null || !x.Schedule.IsOneTime);
             RuleFor(x => x.ValidUntil).Must((command, end) => !end.HasValue || !command.ValidFrom.HasValue
-                || end.Value.Date >= command.ValidFrom.Value.Date).WithMessage("End date must be on or after the start date.");
+                || end.Value.Date >= command.ValidFrom.Value.Date).WithMessage("End date must be on or after the start date.")
+                .When(x => x.Schedule is null || !x.Schedule.IsOneTime);
             RuleFor(x => x.CompanyId).NotEqual(Guid.Empty);
             RuleFor(x => x.BranchId).NotEqual(Guid.Empty);
             RuleFor(x => x.Name).NotEmpty().WithMessage("Shift name is mandatory.");

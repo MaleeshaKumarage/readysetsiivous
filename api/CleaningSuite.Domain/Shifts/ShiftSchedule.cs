@@ -7,7 +7,8 @@ public enum ShiftScheduleType
     Weekly = 2,
     BiWeekly = 3,
     OnCallFlexible = 4,
-    Monthly = 5
+    Monthly = 5,
+    OneTime = 6
 }
 
 public class TimeRange
@@ -34,7 +35,14 @@ public class ShiftSchedule
     public int? MonthlyDay { get; set; }
     public TimeSpan? MonthlyStart { get; set; }
     public TimeSpan? MonthlyEnd { get; set; }
+    /// <summary>Local calendar date of a <see cref="ShiftScheduleType.OneTime"/> visit; the time part is ignored.</summary>
+    public DateTime? OneTimeDate { get; set; }
+    public TimeSpan? OneTimeStart { get; set; }
+    public TimeSpan? OneTimeEnd { get; set; }
     public bool OnCall => Type == ShiftScheduleType.OnCallFlexible;
+    public bool IsOneTime => Type == ShiftScheduleType.OneTime;
+    /// <summary>Visits priced per completed occurrence: legacy on-call and one-time shifts.</summary>
+    public bool IsVisitPriced => OnCall || IsOneTime;
 
     /// <summary>
     /// Ensures the schedule is fully populated for its <see cref="Type"/> so that a
@@ -112,6 +120,17 @@ public class ShiftSchedule
                 if (MonthlyEnd <= MonthlyStart)
                     throw new ArgumentException(
                         "MonthlyEnd must be after MonthlyStart.", nameof(MonthlyEnd));
+                break;
+
+            case ShiftScheduleType.OneTime:
+                // Past dates are valid; the visit is a single local date with same-day start and end.
+                if (OneTimeDate is null || OneTimeStart is null || OneTimeEnd is null)
+                    throw new ArgumentException(
+                        "OneTime schedules require OneTimeDate, OneTimeStart and OneTimeEnd.",
+                        nameof(OneTimeDate));
+                if (OneTimeEnd <= OneTimeStart)
+                    throw new ArgumentException(
+                        "OneTimeEnd must be after OneTimeStart.", nameof(OneTimeEnd));
                 break;
 
             default:

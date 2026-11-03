@@ -16,6 +16,18 @@ public class Shift : BaseDocument
     public DateTime? ValidUntil { get; set; }
     public List<CleaningSuite.Domain.QualityCycle.QualityCyclePlan> QualityCyclePlans { get; set; } = new();
 
+    /// <summary>
+    /// A one-time visit is valid only on its selected date. Submitted validity dates are
+    /// replaced so a stale hidden end date cannot cancel the visit.
+    /// </summary>
+    private static (DateTime? From, DateTime? Until) NormalizeValidity(
+        ShiftSchedule schedule, DateTime? validFrom, DateTime? validUntil)
+    {
+        if (!schedule.IsOneTime || schedule.OneTimeDate is null) return (validFrom, validUntil);
+        var date = schedule.OneTimeDate.Value.Date;
+        return (date, date);
+    }
+
     public void RecordQualityCyclePlan(DateTime effectiveUtc)
     {
         QualityCyclePlans.Add(new()
@@ -53,6 +65,7 @@ public class Shift : BaseDocument
         if (schedule is null)
             throw new ArgumentNullException(nameof(schedule));
         schedule.Validate();
+        (validFrom, validUntil) = NormalizeValidity(schedule, validFrom, validUntil);
         if (validFrom.HasValue && validUntil.HasValue && validUntil.Value < validFrom.Value)
             throw new ArgumentException("ValidUntil must be on or after ValidFrom.", nameof(validUntil));
 
@@ -93,6 +106,7 @@ public class Shift : BaseDocument
         if (schedule is null)
             throw new ArgumentNullException(nameof(schedule));
         schedule.Validate();
+        (validFrom, validUntil) = NormalizeValidity(schedule, validFrom, validUntil);
         if (validFrom.HasValue && validUntil.HasValue && validUntil.Value < validFrom.Value)
             throw new ArgumentException("ValidUntil must be on or after ValidFrom.", nameof(validUntil));
 

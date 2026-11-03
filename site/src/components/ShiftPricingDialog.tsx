@@ -5,9 +5,12 @@ import { Button, Group, Loader, Modal, NumberInput, Select, Stack, Table, Text, 
 import { invoiceBillingApi, type PricingPlan, type ShiftPricing } from '@/lib/invoiceBillingApi';
 import type { Shift, ShiftOccurrence } from '@/lib/adminApi';
 
+// Legacy on-call and one-time visits are priced per completed visit.
+const isVisitBased = (shift: Shift) => shift.schedule.type === 4 || shift.schedule.type === 6;
+
 export function ShiftPricingDialog({ shift, occurrence, onClose }: { shift: Shift; occurrence?: ShiftOccurrence; onClose: () => void }) {
   const [pricing, setPricing] = useState<ShiftPricing | null>(null);
-  const [plan, setPlan] = useState<PricingPlan>({ mode: shift.schedule.type === 4 ? 'PerOccurrence' : 'Monthly', rateNet: 0, vatRatePercent: 25.5, effectiveFrom: shift.validFrom?.slice(0, 10) || new Date().toISOString().slice(0, 10) });
+  const [plan, setPlan] = useState<PricingPlan>({ mode: isVisitBased(shift) ? 'PerOccurrence' : 'Monthly', rateNet: 0, vatRatePercent: 25.5, effectiveFrom: shift.validFrom?.slice(0, 10) || new Date().toISOString().slice(0, 10) });
   const [reason, setReason] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   useEffect(() => {
     let active = true;
@@ -33,7 +36,7 @@ export function ShiftPricingDialog({ shift, occurrence, onClose }: { shift: Shif
     <Stack>
       <Text size="sm">Prices are before VAT and appear only on invoices. Hourly billing uses scheduled hours. Monthly fees are prorated for partial months; invoice previews allow an explained override.</Text>
       {!pricing && !error && <Loader size="sm" />}
-      {!occurrence && <><Select label="Pricing basis" value={plan.mode} onChange={value => setPlan({ ...plan, mode: value as PricingPlan['mode'] })} data={[{ value: 'Monthly', label: 'Fixed monthly fee' }, { value: 'Hourly', label: 'Per scheduled hour' }, ...(shift.schedule.type === 4 ? [{ value: 'PerOccurrence', label: 'Per completed visit (on-call)' }] : [])]} allowDeselect={false} />
+      {!occurrence && <><Select label="Pricing basis" value={plan.mode} onChange={value => setPlan({ ...plan, mode: value as PricingPlan['mode'] })} data={[{ value: 'Monthly', label: 'Fixed monthly fee' }, { value: 'Hourly', label: 'Per scheduled hour' }, ...(isVisitBased(shift) ? [{ value: 'PerOccurrence', label: shift.schedule.type === 4 ? 'Per completed visit (on-call)' : 'Per completed visit' }] : [])]} allowDeselect={false} />
         <TextInput label="Effective from" type="date" required value={plan.effectiveFrom} onChange={event => setPlan({ ...plan, effectiveFrom: event.target.value })} />
         <NumberInput label="VAT (%)" min={0} max={50} decimalScale={2} value={plan.vatRatePercent} onChange={value => setPlan({ ...plan, vatRatePercent: Number(value) })} /></>}
       <NumberInput label={occurrence ? 'Visit price before VAT (€)' : 'Rate before VAT (€)'} min={0} decimalScale={2} required value={plan.rateNet} onChange={value => setPlan({ ...plan, rateNet: Number(value) })} />

@@ -25,7 +25,8 @@ public record ManagerScheduleResponse(ShiftScheduleType Type, TimeSpan? DailySta
     IReadOnlyDictionary<DayOfWeek, ScheduleRangeResponse> DailyTimes, DayOfWeek? WeeklyDay,
     IReadOnlyList<DayOfWeek> WeeklyDays, TimeSpan? WeeklyStart, TimeSpan? WeeklyEnd,
     int? BiWeeklyWeekParity, DayOfWeek? BiWeeklyDay, TimeSpan? BiWeeklyStart, TimeSpan? BiWeeklyEnd,
-    int? MonthlyDay, TimeSpan? MonthlyStart, TimeSpan? MonthlyEnd);
+    int? MonthlyDay, TimeSpan? MonthlyStart, TimeSpan? MonthlyEnd,
+    DateTime? OneTimeDate = null, TimeSpan? OneTimeStart = null, TimeSpan? OneTimeEnd = null);
 public record ManagerShiftResponse(Guid Id, Guid CompanyId, Guid BranchId, string Name,
     ManagerScheduleResponse Schedule, bool IsActive, DateTime? ValidFrom, DateTime? ValidUntil,
     string TimeZoneId = "Europe/Helsinki");
@@ -38,7 +39,8 @@ public static class ManagerResponses
     public static ManagerScheduleResponse Schedule(ShiftSchedule s) => new(s.Type, s.DailyStart, s.DailyEnd,
         s.DailyTimes.ToDictionary(x => x.Key, x => new ScheduleRangeResponse(x.Value.Start, x.Value.End)),
         s.WeeklyDay, s.WeeklyDays.ToArray(), s.WeeklyStart, s.WeeklyEnd, s.BiWeeklyWeekParity,
-        s.BiWeeklyDay, s.BiWeeklyStart, s.BiWeeklyEnd, s.MonthlyDay, s.MonthlyStart, s.MonthlyEnd);
+        s.BiWeeklyDay, s.BiWeeklyStart, s.BiWeeklyEnd, s.MonthlyDay, s.MonthlyStart, s.MonthlyEnd,
+        s.OneTimeDate, s.OneTimeStart, s.OneTimeEnd);
     public static ManagerShiftResponse Shift(Shift s, string timeZoneId = "Europe/Helsinki") => new(s.Id, s.CompanyId, s.BranchId, s.Name,
         Schedule(s.Schedule), s.IsActive, s.ValidFrom, s.ValidUntil, timeZoneId);
     public static ManagerAssignmentResponse Assignment(ShiftAssignmentDto a) => new(a.Id, a.ShiftId, a.EmployeeId, a.AssignedAtUtc, a.IsActive);
@@ -179,7 +181,8 @@ public sealed class ManagerOperations(IShiftRepository shifts, IEmployeeReposito
         if (schedule.DailyTimes is null || schedule.WeeklyDays is null) throw new ValidationException("Schedule collections cannot be null.");
         try { schedule.Validate(); } catch (ArgumentException e) { throw new ValidationException(e.Message); }
         var times = new[] { schedule.DailyStart, schedule.DailyEnd, schedule.WeeklyStart, schedule.WeeklyEnd,
-            schedule.BiWeeklyStart, schedule.BiWeeklyEnd, schedule.MonthlyStart, schedule.MonthlyEnd }
+            schedule.BiWeeklyStart, schedule.BiWeeklyEnd, schedule.MonthlyStart, schedule.MonthlyEnd,
+            schedule.OneTimeStart, schedule.OneTimeEnd }
             .Concat(schedule.DailyTimes.Values.SelectMany(r => new TimeSpan?[] { r.Start, r.End }));
         if (times.Any(t => t.HasValue && (t < TimeSpan.Zero || t > TimeSpan.FromDays(1))))
             throw new ValidationException("Shift times must be within one calendar day.");
@@ -187,7 +190,7 @@ public sealed class ManagerOperations(IShiftRepository shifts, IEmployeeReposito
             .Concat(new[] { schedule.WeeklyDay, schedule.BiWeeklyDay }.Where(d => d.HasValue).Select(d => d!.Value));
         if (days.Any(d => !Enum.IsDefined(d))) throw new ValidationException("Choose a valid weekday.");
         if (new[] { from, until }.Any(d => d.HasValue && d.Value.Year is < 2 or > 9998)
-            || (from.HasValue && until.HasValue && until < from))
+            || (!schedule.IsOneTime && from.HasValue && until.HasValue && until < from))
             throw new ValidationException("Choose supported validity dates with ValidUntil on or after ValidFrom.");
     }
 }

@@ -35,7 +35,7 @@ public class ShiftBillingSettingsService(IShiftRepository shifts, IShiftBillingR
         var shift = await shifts.GetAsync(id, ct) ?? throw new NotFoundException("Shift", id);
         if (shift.PartnerRequestId.HasValue) throw new ShiftConflictException("Partner visit pricing is frozen when requested. Update branch pricing for future requests instead.");
         if (plan.Mode is not ("Monthly" or "Hourly" or "PerOccurrence")) Invalid("Choose monthly, hourly or per-occurrence pricing.");
-        if (plan.Mode == "PerOccurrence" && !shift.Schedule.OnCall) Invalid("Per-occurrence pricing is for on-call shifts.");
+        if (plan.Mode == "PerOccurrence" && !shift.Schedule.IsVisitPriced) Invalid("Per-occurrence pricing is for on-call and one-time shifts.");
         Rate(plan.RateNet, plan.VatRatePercent);
         if (plan.EffectiveFrom.Year is < 2000 or > 2100) Invalid("Enter a valid effective date between 2000 and 2100.");
         if ((await invoices.ListAsync(null, null, ct)).Any(i => Billed(i, id) && i.PeriodTo >= plan.EffectiveFrom))
@@ -53,7 +53,7 @@ public class ShiftBillingSettingsService(IShiftRepository shifts, IShiftBillingR
         await using var lease = await reservation.AcquireAsync(ct);
         var shift = await shifts.GetAsync(id, ct) ?? throw new NotFoundException("Shift", id);
         if (shift.PartnerRequestId.HasValue) throw new ShiftConflictException("Partner visit pricing is frozen when requested. Update branch pricing for future requests instead.");
-        if (!shift.Schedule.OnCall) Invalid("Visit price overrides are for on-call shifts.");
+        if (!shift.Schedule.IsVisitPriced) Invalid("Visit price overrides are for on-call and one-time shifts.");
         Rate(price.RateNet, 0);
         if (price.OccurrenceStartUtc.Kind != DateTimeKind.Utc || string.IsNullOrWhiteSpace(price.Reason) || price.Reason.Length > 1000)
             Invalid("Provide a UTC visit start and an override reason of at most 1,000 characters.");
