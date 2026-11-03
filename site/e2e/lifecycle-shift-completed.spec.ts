@@ -138,3 +138,17 @@ test('the shift page is clamped when the list shrinks, so later growth does not 
   await expect(page.getByText('Showing 1–25 of 30', { exact: true })).toBeVisible();
   await expect(page.getByText('Page 1 of 2', { exact: true })).toBeVisible();
 });
+
+test('switching to Completed and back to Active returns the list to page 1', async ({ page }) => {
+  await setup(page, [...Array.from({ length: 30 }, (_, index) => weekly(`Team ${String(index).padStart(2, '0')}`, `s-${index}`)), oneTime('Done visit', 's-done', true)]);
+  await page.goto('/admin/shifts/');
+  await page.getByRole('navigation', { name: 'Shifts pages' }).getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(page.getByText('Page 2 of 2', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: /^Completed \(1\)/ }).click();
+  await expect(page.getByRole('row').filter({ hasText: 'Done visit' })).toBeVisible();
+  await page.getByRole('tab', { name: /^Active \(30\)/ }).click();
+  await expect(page.getByRole('tab', { name: /^Active \(30\)/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByText('Page 1 of 2', { exact: true })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'Team 00' })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'Team' })).toHaveCount(25);
+});
