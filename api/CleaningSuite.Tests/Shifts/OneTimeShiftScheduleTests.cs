@@ -173,7 +173,7 @@ public class OneTimeShiftScheduleTests
     public void Calculate_SpringForwardGap_ProducesNoOccurrence()
     {
         // 2026-03-29 02:00-03:00 local does not exist in Helsinki. The domain drops it silently;
-        // the service layer must reject such a visit before saving (see the one-time service tests).
+        // the service layer must reject such a visit before saving (see OneTimeShiftHandlerTests).
         var date = new DateTime(2026, 3, 29);
         var schedule = OneTime(date, new TimeSpan(3, 30, 0), new TimeSpan(5, 0, 0));
 

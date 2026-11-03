@@ -174,3 +174,48 @@ test('a failed save keeps the draft and a retry creates the visit once', async (
   expect(mock.writes).toHaveLength(1);
   await expect(page.getByRole('row').filter({ hasText: 'Past visit' })).toHaveCount(1);
 });
+
+test('one-time visit price saves only that visit from the occurrences dialog', async ({ page }) => {
+  await mockAdmin(page, [visitShift]);
+  const visit = { startUtc: '2026-10-01T06:00:00.000Z', endUtc: '2026-10-01T08:30:00.000Z', assigneeIds: [] };
+  const priceWrites: any[] = [];
+  await page.route(/\/api\/v1\/admin\/shifts\/visit\/occurrences(?:\?.*)?$/, route => route.fulfill({ headers, json: [visit] }));
+  await page.route(/\/api\/v1\/admin\/shifts\/visit\/pricing$/, route => route.fulfill({ headers, json: { plans: [], overrides: [] } }));
+  await page.route(/\/api\/v1\/admin\/shifts\/visit\/occurrence-price$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    priceWrites.push(route.request().postDataJSON());
+    return route.fulfill({ headers, json: { plans: [], overrides: [] } });
+  });
+  await page.goto('/admin/shifts/');
+  await page.getByRole('row').filter({ hasText: 'Past visit' }).getByRole('button', { name: 'Occurrences', exact: true }).click();
+  await page.getByRole('button', { name: 'Visit price', exact: true }).click();
+  const dialog = page.getByRole('dialog').filter({ hasText: 'Visit price — Past visit' });
+  await dialog.getByRole('textbox', { name: 'Visit price before VAT (€)', exact: true }).fill('75');
+  await dialog.getByRole('textbox', { name: 'Reason for visit price override', exact: true }).fill('Extra cleaning requested');
+  await dialog.getByRole('button', { name: 'Save price', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(priceWrites).toEqual([{ occurrenceStartUtc: visit.startUtc, rateNet: 75, reason: 'Extra cleaning requested' }]);
+});
+
+test('one-time shift can be priced per completed visit from the pricing dialog', async ({ page }) => {
+  await mockAdmin(page, [visitShift]);
+  const planWrites: any[] = [];
+  await page.route(/\/api\/v1\/admin\/shifts\/visit\/pricing$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    if (route.request().method() === 'PUT') {
+      planWrites.push(route.request().postDataJSON());
+      return route.fulfill({ headers, json: { plans: planWrites, overrides: [] } });
+    }
+    return route.fulfill({ headers, json: { plans: [], overrides: [] } });
+  });
+  await page.goto('/admin/shifts/');
+  await page.getByRole('row').filter({ hasText: 'Past visit' }).getByRole('button', { name: 'Pricing', exact: true }).click();
+  const dialog = page.getByRole('dialog').filter({ hasText: 'Shift pricing — Past visit' });
+  await expect(dialog.getByRole('button', { name: 'Save price', exact: true })).toBeEnabled();
+  await dialog.getByLabel('Pricing basis', { exact: true }).click();
+  await page.getByRole('option', { name: 'Per completed visit', exact: true }).click();
+  await dialog.getByRole('textbox', { name: 'Rate before VAT (€)', exact: true }).fill('40');
+  await dialog.getByRole('button', { name: 'Save price', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(planWrites).toEqual([{ mode: 'PerOccurrence', rateNet: 40, vatRatePercent: 25.5, effectiveFrom: '2026-10-01' }]);
+});
