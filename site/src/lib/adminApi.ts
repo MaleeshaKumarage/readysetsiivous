@@ -134,8 +134,43 @@ export async function adminDelete(path: string): Promise<void> {
   invalidateAdminCache();
 }
 
+export type WorkQueueView = 'needs-action' | 'scheduled' | 'in-progress' | 'completed';
+export type WorkQueueSource = 'all' | 'booking' | 'partner';
+
+export interface WorkQueueItem {
+  source: 'booking' | 'partner';
+  id: string;
+  reference: string;
+  customerName: string;
+  scheduledLocal: string;
+  status: string;
+  stateLabel: string;
+  assigneeName: string | null;
+  href: string;
+}
+
+export interface WorkQueuePage {
+  view: WorkQueueView;
+  source: WorkQueueSource;
+  items: WorkQueueItem[];
+  total: number;
+  counts: Record<WorkQueueView, number>;
+}
+
+/** One bounded page of the admin work queue. Null on any failure so callers can offer retry. */
+export const adminWorkQueue = {
+  page: async (params: { view: WorkQueueView; source: WorkQueueSource; q?: string; skip: number; take: number }): Promise<WorkQueuePage | null> => {
+    const qs = new URLSearchParams({ view: params.view, source: params.source, skip: String(params.skip), take: String(params.take) });
+    if (params.q) qs.set('q', params.q);
+    const page = await adminGet<WorkQueuePage>(`/api/v1/admin/work-queue?${qs.toString()}`, false);
+    if (!page || !Array.isArray(page.items) || !Number.isInteger(page.total) || page.total < 0 || !page.counts) return null;
+    return page;
+  },
+};
+
 export const adminBookings = {
   list: (query = '') => adminGet<Booking[]>(`/api/v1/admin/bookings${query}`),
+  detail: (id: string) => adminGet<Booking>(`/api/v1/admin/bookings/${id}`, false),
   confirm: (id: string) => adminSend(`/api/v1/admin/bookings/${id}/confirm`, 'POST', {}),
   cancel: (id: string) => adminSend(`/api/v1/admin/bookings/${id}/cancel`, 'POST', {}),
   complete: (id: string) => adminSend(`/api/v1/admin/bookings/${id}/complete`, 'POST', {}),
