@@ -285,27 +285,28 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         var employee = await Db.LoadAsync<Employee>(body.EmployeeId, ct);
         if (employee is not { IsActive: true, IdentitySyncPending: false } || !Employee.IsWorkRole(employee.Role))
             throw new ValidationException("Select an active cleaner, manager or administrator.");
-        if (employee.AutoAcceptWork && string.IsNullOrWhiteSpace(employee.KeycloakUserId))
-            throw new ShiftConflictException("The employee must have an active linked login before work can be automatically accepted.");
+        // Automatic acceptance only applies to employees who can sign in to accept; others get an ordinary offer.
+        var automatic = employee.AutoAcceptWork && !string.IsNullOrWhiteSpace(employee.KeycloakUserId);
         DateTime? planned = null;
         if (!string.IsNullOrWhiteSpace(body.PlannedStartLocal)) planned = await Plan(request, body.PlannedStartLocal, ct);
         else if (request.FromDate == request.ToDate && request.ExactStartLocalTime is not null)
             planned = await Plan(request, $"{request.FromDate:yyyy-MM-dd}T{request.ExactStartLocalTime}", ct);
-        if (employee.AutoAcceptWork && !planned.HasValue)
-            throw new ShiftConflictException("Set an exact planned start before offering work to an employee with automatic acceptance enabled.");
+        // A stored clock time on a multi-day window needs an explicit date before work is accepted automatically.
+        if (automatic && !planned.HasValue && request.ExactStartLocalTime is not null)
+            throw new ShiftConflictException("Choose the exact date and time before automatic acceptance.");
         if (request.LinkedShiftId.HasValue)
         {
             var shift = await Db.LoadAsync<Shift>(request.LinkedShiftId.Value, ct);
             if (shift is not null) { shift.Deactivate(); Db.Store(shift);
-                if (push is not null && request.AcceptedEmployeeId.HasValue && (!employee.AutoAcceptWork || request.AcceptedEmployeeId != employee.Id)) await push.StageScheduleChangeAsync(Db, shift.Id, [request.AcceptedEmployeeId.Value], DateTimeOffset.UtcNow, ct); }
+                if (push is not null && request.AcceptedEmployeeId.HasValue && (!automatic || request.AcceptedEmployeeId != employee.Id)) await push.StageScheduleChangeAsync(Db, shift.Id, [request.AcceptedEmployeeId.Value], DateTimeOffset.UtcNow, ct); }
         }
         var previousEmployee = request.OfferedEmployeeId ?? request.AcceptedEmployeeId;
         request.AcceptedEmployeeId = null; request.PlannedStartUtc = null; request.PlannedEndUtc = null;
         Touch(request); request.OfferId = PartnerCleaningRequest.StableId($"offer:{request.Id}:{request.Revision}");
         request.OfferedEmployeeId = employee.Id; request.OfferPlannedStartUtc = planned; request.Status = "Offered";
-        if (employee.AutoAcceptWork)
+        if (automatic)
         {
-            await MaterializeAcceptance(request, employee.Id, planned!.Value, ct, automatic: true);
+            await MaterializeAcceptance(request, employee.Id, planned, ct, automatic: true);
             NotifyRequest(request, "WorkAutoAccepted", "Employee", employee.Id);
             if (push is not null)
             {
@@ -359,28 +360,31 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         await ActiveCompany(request.CompanyId, ct);
         await Branch(request.BranchId, request.CompanyId, ct);
         await EnsureUnstartedUnbilled(request, ct);
-        DateTime start;
-        if (request.OfferPlannedStartUtc.HasValue)
+        // No start time means a flexible visit: the cleaner works any time within the requested dates.
+        DateTime? start = request.OfferPlannedStartUtc;
+        if (start.HasValue)
         {
-            start = request.OfferPlannedStartUtc.Value;
-            if (!string.IsNullOrWhiteSpace(body.PlannedStartLocal) && await Plan(request, body.PlannedStartLocal, ct) != start)
+            if (!string.IsNullOrWhiteSpace(body.PlannedStartLocal) && await Plan(request, body.PlannedStartLocal, ct) != start.Value)
                 throw new ValidationException("Accept the planned time set by your manager.");
         }
-        else start = await Plan(request, body.PlannedStartLocal, ct);
+        else if (!string.IsNullOrWhiteSpace(body.PlannedStartLocal)) start = await Plan(request, body.PlannedStartLocal, ct);
         await MaterializeAcceptance(request, actor, start, ct);
         await Db.SaveChangesAsync(ct);
         return await Map(request, false, ct);
     }
 
     // Caller holds the tenant work reservation; all documents and notifications commit together.
-    private async Task MaterializeAcceptance(PartnerCleaningRequest request, Guid actor, DateTime start, CancellationToken ct, bool automatic = false)
+    private async Task MaterializeAcceptance(PartnerCleaningRequest request, Guid actor, DateTime? plannedStart, CancellationToken ct, bool automatic = false)
     {
         await Staff(actor, ct);
         await ActiveCompany(request.CompanyId, ct);
         var branch = await Branch(request.BranchId, request.CompanyId, ct);
         await EnsureUnstartedUnbilled(request, ct);
-        var end = start.AddMinutes(request.EstimatedDurationMinutes);
         var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
+        // A fixed start occupies the visit duration; a flexible visit occupies every day of the requested window.
+        var start = plannedStart ?? TenantTimeZone.StartOfLocalDay(request.FromDate.ToDateTime(TimeOnly.MinValue), zone);
+        var end = plannedStart.HasValue ? start.AddMinutes(request.EstimatedDurationMinutes)
+            : TenantTimeZone.StartOfLocalDay(request.ToDate.ToDateTime(TimeOnly.MinValue).AddDays(1), zone);
         var localFrom = TenantTimeZone.LocalDate(start, zone);
         var localUntil = TenantTimeZone.LocalDate(end.AddTicks(-1), zone);
         var shiftId = request.LinkedShiftId ?? PartnerCleaningRequest.StableId($"partner-shift:{request.Id}");
@@ -405,7 +409,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         billing.Plans = [new("PerOccurrence", request.PriceNet, request.VatRatePercent, DateOnly.FromDateTime(TenantTimeZone.LocalDate(start, zone)))];
         billing.Overrides = [];
         request.LinkedShiftId = shiftId; request.AcceptedEmployeeId = actor;
-        request.PlannedStartUtc = start; request.PlannedEndUtc = end;
+        request.PlannedStartUtc = plannedStart; request.PlannedEndUtc = plannedStart.HasValue ? end : null;
         request.FirstAcceptedAtUtc ??= DateTime.UtcNow; request.Status = "Accepted"; Touch(request);
         // A single Marten commit owns every document. Repository methods that commit individually are deliberately avoided.
         Db.Store(shift); Db.Store(occurrence); Db.Store(assignment); Db.Store(billing); Db.Store(request);

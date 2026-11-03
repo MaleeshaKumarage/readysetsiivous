@@ -24,6 +24,10 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
     ICompanyRepository companies, IBranchRepository branches, IQualityCycleRepository forms,
     ITenantProfileRepository profiles, ITenantContext tenant, IShiftWorkReservation reservation, TimeProvider clock, IPartnerInvoiceSource? partnerSource = null)
 {
+    // A fixed visit is anchored to its planned start; a flexible visit to the first day of its window, where its occurrence begins.
+    private static DateTime VisitAnchor(PartnerCleaningRequest request, TimeZoneInfo zone) =>
+        request.PlannedStartUtc ?? TenantTimeZone.StartOfLocalDay(request.FromDate.ToDateTime(TimeOnly.MinValue), zone);
+
     public async Task<ShiftInvoicePreview> PreviewAsync(ShiftInvoiceRequest request, CancellationToken ct) => await BuildAsync(request, ct);
 
     public async Task<Invoice> IssueAsync(ShiftInvoiceRequest request, CancellationToken ct)
@@ -89,7 +93,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
         {
             if (partnerSource is null) Invalid("Partner invoice selection is unavailable.");
             var candidates = partnerRequests.Where(r => r.Status != "Cancelled" && r.FirstAcceptedAtUtc.HasValue
-                && r.PlannedStartUtc.HasValue && r.LinkedShiftId.HasValue
+                && r.LinkedShiftId.HasValue
                 && !existing.Any(i => Billed(i, r.LinkedShiftId.Value))).ToArray();
             foreach (var candidate in candidates)
             {
@@ -97,7 +101,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
                 var evidence = await forms.ListFormsAsync(id, null, null, ct);
                 // Only a completion in this month can make a visit eligible. Roster
                 // completeness and the last assigned finish are checked below.
-                if (evidence.Any(f => f.ShiftOccurrenceUtc == candidate.PlannedStartUtc && f.IsSubmitted && !f.ShiftDeletedUtc.HasValue
+                if (evidence.Any(f => f.ShiftOccurrenceUtc == VisitAnchor(candidate, zone) && f.IsSubmitted && !f.ShiftDeletedUtc.HasValue
                     && (f.EndedAtUtc ?? f.SubmittedUtc) is DateTime ended && ended >= from && ended < to)) monthEvidence[id] = evidence;
             }
             ids = monthEvidence.Keys.Order().ToArray();
@@ -123,7 +127,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             var schedule = ShiftContractSchedule.Snapshot(shift, zone);
             // Completion-month billing must resolve the original visit even when scheduled
             // outside the invoice month. Never select it by its scheduled month.
-            var visitFrom = request.PartnerMonth ? partnerRequest!.PlannedStartUtc!.Value : from;
+            var visitFrom = request.PartnerMonth ? VisitAnchor(partnerRequest!, zone) : from;
             // PostgreSQL timestamps have microsecond precision: a one-tick window
             // can collapse to zero width when its upper bound is persisted/bound.
             var visitTo = request.PartnerMonth ? visitFrom.AddSeconds(1) : to;
@@ -177,7 +181,9 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
         }
         if (lines.Count == 0 && request.PartnerMonth && !string.IsNullOrWhiteSpace(request.PreviewToken))
             throw new ShiftConflictException("Partner work eligibility changed. Load a new preview before issuing.");
-        if (lines.Count == 0) Invalid("No billable shift work was found in this period. On-call visits must be completed before invoicing.");
+        if (lines.Count == 0) Invalid(request.PartnerMonth
+            ? "No completed partner-booked visits were found for this month. Visits that were not booked through the partner portal must be selected manually under Invoice shifts."
+            : "No billable shift work was found in this period. On-call visits must be completed before invoicing.");
         var issueDate = TenantTimeZone.LocalDate(clock.GetUtcNow().UtcDateTime, zone);
         var invoice = new Invoice { Id = Guid.Empty, CreatedUtc = issueDate, UpdatedUtc = issueDate, CompanyId = company.Id,
             PeriodFrom = request.From, PeriodTo = request.To, Language = request.Language, BillingAddress = request.BillingAddress ?? new(),
