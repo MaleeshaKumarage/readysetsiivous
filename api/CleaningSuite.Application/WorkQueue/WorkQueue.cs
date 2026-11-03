@@ -20,10 +20,6 @@ public static class WorkQueueViews
 /// <summary>Maps stored statuses to queue views. In-progress has no stored state yet, so it is always empty.</summary>
 public static class WorkQueueRules
 {
-    public const string PartnerRequested = "Requested";
-    public const string PartnerAccepted = "Accepted";
-    public const string PartnerCancelled = "Cancelled";
-
     public static Expression<Func<Booking, bool>> BookingIn(string view) => view switch
     {
         WorkQueueViews.NeedsAction => b => b.Status == Booking.StatusNew || (b.Status == Booking.StatusConfirmed && b.EmployeeId == null),
@@ -34,9 +30,10 @@ public static class WorkQueueRules
 
     public static Expression<Func<PartnerCleaningRequest, bool>> PartnerIn(string view) => view switch
     {
-        WorkQueueViews.NeedsAction => r => r.Status == PartnerRequested,
-        WorkQueueViews.Scheduled => r => r.Status == PartnerAccepted,
-        WorkQueueViews.Completed => r => r.Status == PartnerCancelled,
+        // An offered request still waits on a cleaner, so it stays in Needs action until accepted.
+        WorkQueueViews.NeedsAction => r => r.Status == PartnerCleaningRequest.StatusRequested || r.Status == PartnerCleaningRequest.StatusOffered,
+        WorkQueueViews.Scheduled => r => r.Status == PartnerCleaningRequest.StatusAccepted,
+        WorkQueueViews.Completed => r => r.Status == PartnerCleaningRequest.StatusCancelled,
         _ => r => false,
     };
 
@@ -52,10 +49,10 @@ public static class WorkQueueRules
 
     public static string PartnerLabel(PartnerCleaningRequest request) => request.Status switch
     {
-        PartnerRequested when request.OfferedEmployeeId is null => "Unassigned",
-        PartnerRequested => "Awaiting acceptance",
-        PartnerAccepted => "Accepted",
-        PartnerCancelled => "Cancelled",
+        PartnerCleaningRequest.StatusRequested => "Unassigned",
+        PartnerCleaningRequest.StatusOffered => "Awaiting acceptance",
+        PartnerCleaningRequest.StatusAccepted => "Accepted",
+        PartnerCleaningRequest.StatusCancelled => "Cancelled",
         _ => request.Status,
     };
 }

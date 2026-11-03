@@ -23,10 +23,10 @@ public class WorkQueueRulesTests
     }
 
     [Theory]
-    [InlineData("Requested", false, WorkQueueViews.NeedsAction, "Unassigned")]
-    [InlineData("Requested", true, WorkQueueViews.NeedsAction, "Awaiting acceptance")]
-    [InlineData("Accepted", true, WorkQueueViews.Scheduled, "Accepted")]
-    [InlineData("Cancelled", false, WorkQueueViews.Completed, "Cancelled")]
+    [InlineData(PartnerCleaningRequest.StatusRequested, false, WorkQueueViews.NeedsAction, "Unassigned")]
+    [InlineData(PartnerCleaningRequest.StatusOffered, true, WorkQueueViews.NeedsAction, "Awaiting acceptance")]
+    [InlineData(PartnerCleaningRequest.StatusAccepted, true, WorkQueueViews.Scheduled, "Accepted")]
+    [InlineData(PartnerCleaningRequest.StatusCancelled, false, WorkQueueViews.Completed, "Cancelled")]
     public void Partner_ClassifiesIntoExactlyOneView(string status, bool offered, string expectedView, string expectedLabel)
     {
         var request = new PartnerCleaningRequest { Status = status, OfferedEmployeeId = offered ? Guid.NewGuid() : null };
@@ -41,7 +41,7 @@ public class WorkQueueRulesTests
     public void InProgress_IsEmptyUntilStoredStateExists()
     {
         var booking = new Booking { Status = Booking.StatusConfirmed, EmployeeId = "employee-1" };
-        var request = new PartnerCleaningRequest { Status = "Accepted" };
+        var request = new PartnerCleaningRequest { Status = PartnerCleaningRequest.StatusAccepted };
 
         Assert.False(WorkQueueRules.BookingIn(WorkQueueViews.InProgress).Compile()(booking));
         Assert.False(WorkQueueRules.PartnerIn(WorkQueueViews.InProgress).Compile()(request));
@@ -57,4 +57,16 @@ public class WorkQueueRulesTests
     [InlineData(null, false)]
     public void Views_AcceptOnlyKnownValues(string? view, bool expected) =>
         Assert.Equal(expected, WorkQueueViews.IsKnown(view));
+
+    [Fact]
+    public void Every_stored_partner_status_appears_in_exactly_one_view()
+    {
+        string[] stored = [PartnerCleaningRequest.StatusRequested, PartnerCleaningRequest.StatusOffered,
+            PartnerCleaningRequest.StatusAccepted, PartnerCleaningRequest.StatusCancelled];
+        foreach (var status in stored)
+        {
+            var request = new PartnerCleaningRequest { Status = status };
+            Assert.Single(WorkQueueViews.All, view => WorkQueueRules.PartnerIn(view).Compile()(request));
+        }
+    }
 }

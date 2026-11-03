@@ -167,9 +167,31 @@ test('a page past the end is clamped to the last page', async ({ page }) => {
 
 test('partner request items open the partner requests page', async ({ page }) => {
   const state = await setup(page);
-  state.items = { 'needs-action': [{ source: 'partner', id: 'request-1', reference: 'Lake apartment', customerName: 'Owner company', scheduledLocal: '2026-11-12 10:00', status: 'Submitted', stateLabel: 'Awaiting offer', assigneeName: null, href: '/admin/partner-requests/' }] };
+  state.items = { 'needs-action': [{ source: 'partner', id: 'request-1', reference: 'Lake apartment', customerName: 'Owner company', scheduledLocal: '2026-11-12 10:00', status: 'Offered', stateLabel: 'Awaiting acceptance', assigneeName: null, href: '/admin/partner-requests/' }] };
   await page.goto('/admin/work-queue/');
   await expect(page.getByRole('listitem').filter({ hasText: 'Partner request' })).toBeVisible();
   await page.getByRole('link', { name: 'Open partner request for Owner company' }).click();
   await expect(page).toHaveURL(/\/admin\/partner-requests\/?$/);
+});
+
+test('a ?booking= deep link opens that booking drawer on load', async ({ page }) => {
+  await setup(page);
+  await page.goto('/admin/work-queue/?booking=booking-1');
+  const drawer = page.getByRole('dialog', { name: 'Booking BK-1001' });
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByText('Anna Virtanen')).toBeVisible();
+  await expect(drawer.getByRole('button', { name: 'Confirm', exact: true })).toBeVisible();
+});
+
+test('Public bookings source sends source=booking and All sources sends source=all', async ({ page }) => {
+  const state = await setup(page);
+  await page.goto('/admin/work-queue/');
+  await expect(page.getByRole('listitem').filter({ hasText: 'Anna Virtanen' })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Source' }).click();
+  await page.getByRole('option', { name: 'Public bookings' }).click();
+  await expect.poll(() => state.queries.at(-1)?.get('source')).toBe('booking');
+  expect(new URL(page.url()).searchParams.get('source')).toBe('booking');
+  await page.getByRole('textbox', { name: 'Source' }).click();
+  await page.getByRole('option', { name: 'All sources' }).click();
+  await expect.poll(() => state.queries.at(-1)?.get('source')).toBe('all');
 });
