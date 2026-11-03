@@ -399,7 +399,7 @@ export type TimeRange = {
 };
 
 // System.Text.Json serializes enums as numbers by default (no JsonStringEnumConverter),
-// so the wire values are 0..4 matching the server enum's declaration order.
+// so the wire values are 0..6 matching the server enum's declaration order.
 export const ShiftScheduleType = {
   DailySameTime: 0,
   DailyDifferentTime: 1,
@@ -407,6 +407,7 @@ export const ShiftScheduleType = {
   BiWeekly: 3,
   OnCallFlexible: 4,
   Monthly: 5,
+  OneTime: 6,
 } as const;
 
 export type ShiftScheduleType =
@@ -428,6 +429,9 @@ export interface ShiftSchedule {
   monthlyDay?: number | null;
   monthlyStart?: string | null;
   monthlyEnd?: string | null;
+  oneTimeDate?: string | null; // YYYY-MM-DD, tenant local calendar date
+  oneTimeStart?: string | null; // HH:mm
+  oneTimeEnd?: string | null; // HH:mm
 }
 
 export interface Shift {

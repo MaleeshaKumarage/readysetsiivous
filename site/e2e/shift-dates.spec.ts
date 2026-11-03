@@ -80,11 +80,13 @@ test('admin requires a start date, supports an open end date, and edits the rang
   expect(writes[3].validFrom).toBeUndefined(); expect(writes[3].validUntil).toBeUndefined();
 });
 
-test('on-call creation guides scheduling a concrete one-time visit and can keep an unscheduled shift', async ({ page }) => {
+test('legacy on-call shifts keep scheduling dated visits while new shifts cannot choose on-call', async ({ page }) => {
   await setupAdminMocks(page);
   const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
   const shiftWrites: any[] = [], visitWrites: any[] = [], occurrenceQueries: URLSearchParams[] = [];
-  let shifts: any[] = [], visits: any[] = [], delayNextLoad = false;
+  // Existing on-call shifts remain editable and can still receive dated visits; new shifts cannot be on-call.
+  let shifts: any[] = [{ id: 'oncall', companyId: 'company', branchId: 'branch', name: 'One-time cleaning', isActive: true, notes: null, qualityCycleTemplateId: null, validFrom: '2026-11-01T00:00:00', validUntil: null, schedule: { type: 4 } }];
+  let visits: any[] = [], delayNextLoad = false;
   let releaseOldLoad!: () => void;
   const oldLoad = new Promise<void>(resolve => { releaseOldLoad = resolve; });
   let releaseSave!: () => void;
@@ -120,26 +122,22 @@ test('on-call creation guides scheduling a concrete one-time visit and can keep 
   await page.goto('/admin/shifts/');
   await page.getByRole('button', { name: 'Add shift', exact: true }).click();
   const create = page.getByRole('dialog', { name: 'Add shift', exact: true });
-  await create.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'AAA', exact: true }).click();
-  await create.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'Property', exact: true }).click();
-  await create.getByRole('textbox', { name: 'Name', exact: true }).fill('One-time cleaning');
-  await create.getByLabel('Schedule', { exact: true }).click(); await page.getByRole('option', { name: 'On-call / flexible', exact: true }).click();
-  await expect(create.getByText('Only dated visits appear on calendars.', { exact: false })).toBeVisible();
-  await create.getByRole('button', { name: 'Create shift', exact: true }).click();
+  await create.getByLabel('Schedule', { exact: true }).click();
+  await expect(page.getByRole('option', { name: 'One-time', exact: true })).toBeVisible();
+  await expect(page.getByRole('option', { name: /On-call/ })).toHaveCount(0);
+  await page.getByRole('option', { name: 'Daily', exact: true }).click();
+  await create.getByRole('button', { name: 'Cancel', exact: true }).click();
+  expect(shiftWrites).toHaveLength(0);
+  await expect(page.getByRole('cell', { name: 'One-time cleaning', exact: true })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'One-time cleaning' })).toContainText('On-call');
+  delayNextLoad = true;
+  await page.getByRole('button', { name: 'Schedule one-time visit', exact: true }).click();
+  await expect.poll(() => occurrenceQueries.length).toBe(1);
   const editor = page.getByRole('dialog', { name: 'Change occurrence', exact: true });
   await expect(editor).toBeVisible();
   await expect(editor.getByRole('textbox', { name: /^Start \(Europe\/Helsinki\)/ })).toHaveValue('');
-  expect(shiftWrites[0].schedule).toEqual({ type: 4 }); expect(visitWrites).toHaveLength(0);
-  await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+  expect(visitWrites).toHaveLength(0);
   const list = page.getByRole('dialog', { name: /Occurrences/ });
-  await expect(list.getByText('Cancelling keeps the shift without a scheduled visit.', { exact: false })).toBeVisible();
-  await expect(list.getByText('No occurrences in this period.')).toBeVisible();
-  await page.keyboard.press('Escape');
-  await page.reload();
-  await expect(page.getByRole('cell', { name: 'One-time cleaning', exact: true })).toBeVisible();
-  delayNextLoad = true;
-  await page.getByRole('button', { name: 'Schedule one-time visit', exact: true }).click();
-  await expect.poll(() => occurrenceQueries.length).toBe(2);
   await editor.getByRole('textbox', { name: /^Start \(Europe\/Helsinki\)/ }).fill('2030-01-10T09:00');
   await editor.getByRole('textbox', { name: /^End \(Europe\/Helsinki\)/ }).fill('2030-01-10T11:00');
   await editor.getByLabel('Replacement employee (optional)', { exact: true }).click();

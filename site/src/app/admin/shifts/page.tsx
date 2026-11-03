@@ -23,8 +23,10 @@ const SCHEDULE_TYPES = [
   { value: '2', label: 'Specific days' },
   { value: '3', label: 'Bi-weekly' },
   { value: '5', label: 'Monthly' },
-  { value: '4', label: 'On-call / flexible' },
+  { value: '6', label: 'One-time' },
 ];
+// Legacy on-call shifts keep their type on edit; new shifts cannot choose it.
+const LEGACY_ON_CALL = { value: '4', label: 'On-call / flexible (legacy)' };
 
 const OCCURRENCE_STATUSES = [
   { value: '1', label: 'Move / change time' },
@@ -127,6 +129,10 @@ export default function ShiftsAdminPage() {
   const [weekDays, setWeekDays] = useState<string[]>([]);
   const [weekParity, setWeekParity] = useState('1');
   const [monthlyDay, setMonthlyDay] = useState<string | number>(1);
+  const [oneTimeDate, setOneTimeDate] = useState('');
+  const [oneTimeStart, setOneTimeStart] = useState('08:00');
+  const [oneTimeEnd, setOneTimeEnd] = useState('17:00');
+  const submitting = useRef(false);
   const [dailyTimes, setDailyTimes] = useState<Record<string, { start: string; end: string }>>({});
   const [notes, setNotes] = useState('');
   const [qualityCycleTemplateId, setQualityCycleTemplateId] = useState<string | null>(null);
@@ -233,11 +239,12 @@ export default function ShiftsAdminPage() {
       biWeeklyEnd: end,
     };
     if (t === 5) return { type: 5, monthlyDay: Number(monthlyDay), monthlyStart: start, monthlyEnd: end };
+    if (t === 6) return { type: 6, oneTimeDate, oneTimeStart, oneTimeEnd };
     return { type: 4 };
   };
 
   const closeModal = () => {
-    setName(''); setNotes(''); setWeekDays([]); setCompanyId(null); setBranchId(null); setQualityCycleTemplateId(null); setScheduleType('0'); setStart('08:00'); setEnd('17:00'); setWeekParity('1'); setMonthlyDay(1); setDailyTimes({}); setEditingShift(null); setError(''); setModalOpen(false);
+    setName(''); setNotes(''); setWeekDays([]); setCompanyId(null); setBranchId(null); setQualityCycleTemplateId(null); setScheduleType('0'); setStart('08:00'); setEnd('17:00'); setWeekParity('1'); setMonthlyDay(1); setOneTimeDate(''); setOneTimeStart('08:00'); setOneTimeEnd('17:00'); setDailyTimes({}); setEditingShift(null); setError(''); setModalOpen(false);
   };
 
   const openCreate = () => { if (!schedulingReady) return; closeModal(); setValidFrom(localInputValue(new Date().toISOString(), timeZoneId).slice(0, 10)); setValidUntil(''); setModalOpen(true); };
@@ -253,6 +260,7 @@ export default function ShiftsAdminPage() {
     setWeekDays(schedule.type === 2 ? (schedule.weeklyDays?.length ? schedule.weeklyDays : [schedule.weeklyDay ?? 0]).map(String) : schedule.type === 3 ? [String(schedule.biWeeklyDay ?? 0)] : schedule.type === 1 ? Object.keys(schedule.dailyTimes ?? {}).map(day => String(dayIndex(day))).filter(day => Number(day) >= 0) : []);
     setDailyTimes(Object.fromEntries(Object.entries(schedule.dailyTimes ?? {}).map(([day, range]) => [String(dayIndex(day)), { start: range.start?.slice(0, 5) ?? '08:00', end: range.end?.slice(0, 5) ?? '17:00' }])));
     setWeekParity(String(schedule.biWeeklyWeekParity ?? 1)); setMonthlyDay(schedule.monthlyDay ?? 1);
+    setOneTimeDate(schedule.oneTimeDate?.slice(0, 10) ?? ''); setOneTimeStart((schedule.oneTimeStart ?? '08:00').slice(0, 5)); setOneTimeEnd((schedule.oneTimeEnd ?? '17:00').slice(0, 5));
     setError('');
     const detail = await adminCompanies.get(shift.companyId);
     if (detail) {
@@ -262,15 +270,24 @@ export default function ShiftsAdminPage() {
   };
 
   const submit = async () => {
-    if ((!editingShift || editingShift.validFrom) && !validFrom) { setError('Shift start date is required.'); return; }
-    if (validFrom && validUntil && validUntil < validFrom) { setError('End date must be on or after the start date.'); return; }
+    if (submitting.current) return;
+    const oneTime = scheduleType === '6';
+    if (oneTime) {
+      if (!oneTimeDate) { setError('One-time visit date is required.'); return; }
+      if (!oneTimeStart || !oneTimeEnd) { setError('One-time visit start and end times are required.'); return; }
+      if (oneTimeEnd <= oneTimeStart) { setError('End time must be after start time.'); return; }
+    } else {
+      if ((!editingShift || editingShift.validFrom) && !validFrom) { setError('Shift start date is required.'); return; }
+      if (validFrom && validUntil && validUntil < validFrom) { setError('End date must be on or after the start date.'); return; }
+    }
     if (!companyId || !branchId || !name.trim()) { setError('Company, branch and name are required.'); return; }
     if (scheduleType === '2' && weekDays.length === 0) { setError('Select at least one day.'); return; }
     if (scheduleType === '1' && (!weekDays.length || weekDays.some(day => !dailyTimes[day]?.start || !dailyTimes[day]?.end || dailyTimes[day].end <= dailyTimes[day].start))) { setError('Select at least one day and ensure each end time is after its start time.'); return; }
     if (scheduleType === '3' && weekDays.length === 0) { setError('Select a day.'); return; }
-    setSaving(true); setError('');
-    const fields = { companyId, branchId, name: name.trim(), schedule: buildSchedule(), notes: notes.trim() || undefined, isActive: editingShift?.isActive ?? true, validFrom: validFrom || undefined, validUntil: validUntil || undefined, qualityCycleTemplateId: qualityCycleTemplateId || undefined };
-    const created = editingShift ? await adminShifts.update(editingShift.id, fields) : await adminShifts.create(fields);
+    submitting.current = true; setSaving(true); setError('');
+    // A one-time visit is valid only on its date, so the validity dates mirror that date.
+    const fields = { companyId, branchId, name: name.trim(), schedule: buildSchedule(), notes: notes.trim() || undefined, isActive: editingShift?.isActive ?? true, validFrom: oneTime ? oneTimeDate : validFrom || undefined, validUntil: oneTime ? oneTimeDate : validUntil || undefined, qualityCycleTemplateId: qualityCycleTemplateId || undefined };
+    const created = await (editingShift ? adminShifts.update(editingShift.id, fields) : adminShifts.create(fields)).finally(() => { submitting.current = false; });
     setSaving(false);
     if (!created) { setError(editingShift ? 'Failed to update shift. Check that the company and branch are valid, then retry.' : 'Failed to create shift.'); return; }
     const wasEditing = Boolean(editingShift);
@@ -467,6 +484,7 @@ export default function ShiftsAdminPage() {
                       {s.schedule.type === 3 && `Bi-weekly ${DAYS[s.schedule.biWeeklyDay ?? 0]}`}
                       {s.schedule.type === 5 && `Monthly day ${s.schedule.monthlyDay}`}
                       {s.schedule.type === 4 && 'On-call'}
+                      {s.schedule.type === 6 && `One-time ${s.schedule.oneTimeDate?.slice(0, 10)} ${s.schedule.oneTimeStart?.slice(0, 5)}–${s.schedule.oneTimeEnd?.slice(0, 5)}`}
                     </Table.Td>
                     <Table.Td>{assignments[s.id]?.length ?? 0}</Table.Td>
                     <Table.Td>
@@ -558,7 +576,7 @@ export default function ShiftsAdminPage() {
                   <Text size="xs" c="dimmed">{item.assignmentSource ?? 'Recurring'}</Text>{item.assignmentLockReason && <Text size="xs" c="dimmed">{item.assignmentLockReason}</Text>}</Table.Td>
                 <Table.Td>{item.reason ?? '—'}</Table.Td>
                 <Table.Td><Group gap={4} wrap="nowrap">
-                  {isAdmin() && occurrenceShift?.schedule.type === 4 && <Button size="xs" variant="light" onClick={() => { setPricingShift(occurrenceShift); setPricingOccurrence(item); }}>Visit price</Button>}
+                  {isAdmin() && (occurrenceShift?.schedule.type === 4 || occurrenceShift?.schedule.type === 6) && <Button size="xs" variant="light" onClick={() => { setPricingShift(occurrenceShift); setPricingOccurrence(item); }}>Visit price</Button>}
                   <Button size="xs" variant="light" disabled={item.canAssign === false || item.status === 2 || item.status === 3} onClick={() => setAssigningVisit(item)}>Assign</Button>
                   <Button size="xs" variant="subtle" onClick={() => openOccurrenceEditor(item)}>Change</Button>
                   {!item.exceptionId && <Button size="xs" variant="subtle" color="orange" onClick={() => openOccurrenceEditor(item, '2')}>Cancel</Button>}
@@ -611,11 +629,11 @@ export default function ShiftsAdminPage() {
           <CompanyPicker allowInactive={false} allowedInactiveCompanyId={editingShift?.companyId} value={companyId} onChange={(v) => { setBranches([]); setCompanyId(v); setBranchId(null); setQualityCycleTemplateId(null); }} />
           <Select label="Branch" data={branches.filter(b => b.isActive !== false || b.id === editingShift?.branchId).map((b) => ({ value: b.id, label: `${b.name}${b.isActive === false ? ' (inactive)' : ''}` }))} value={branchId} onChange={v => { setBranchId(v); setQualityCycleTemplateId(null); }} searchable disabled={!companyId} />
           <TextInput label="Name" required value={name} onChange={(e) => setName(e.target.value)} />
-          <Group grow>
+          {scheduleType !== '6' && <Group grow>
             <TextInput label="Start date" type="date" required={!editingShift || Boolean(editingShift.validFrom)} value={validFrom} onChange={e => setValidFrom(e.target.value)} />
             <TextInput label="End date (optional)" type="date" min={validFrom || undefined} value={validUntil} onChange={e => setValidUntil(e.target.value)} />
-          </Group>
-          <Select label="Schedule" data={SCHEDULE_TYPES} value={scheduleType} onChange={(v) => setScheduleType(v ?? '0')} />
+          </Group>}
+          <Select label="Schedule" data={scheduleType === '4' ? [...SCHEDULE_TYPES, LEGACY_ON_CALL] : SCHEDULE_TYPES} value={scheduleType} onChange={(v) => setScheduleType(v ?? '0')} />
           {scheduleType === '4' && <Text size="sm">On-call is a reusable shift without scheduled dates. After creating it, enter the date, time and cleaner for a one-time visit. Only dated visits appear on calendars.</Text>}
 
           {scheduleType === '2' && (
@@ -643,7 +661,14 @@ export default function ShiftsAdminPage() {
           {scheduleType === '5' && (
             <NumberInput label="Day of month (1-31)" min={1} max={31} value={monthlyDay} onChange={setMonthlyDay} />
           )}
-          {scheduleType !== '4' && scheduleType !== '1' && (
+          {scheduleType === '6' && (
+            <Group wrap="wrap" grow gap="xs">
+              <TextInput label="Date" type="date" required value={oneTimeDate} onChange={e => setOneTimeDate(e.target.value)} />
+              <TextInput label="Start time" type="time" required value={oneTimeStart} onChange={(e) => setOneTimeStart(e.target.value)} />
+              <TextInput label="End time" type="time" required value={oneTimeEnd} onChange={(e) => setOneTimeEnd(e.target.value)} />
+            </Group>
+          )}
+          {scheduleType !== '4' && scheduleType !== '1' && scheduleType !== '6' && (
             <Group wrap="wrap" grow gap="xs">
               <TextInput label="Start" type="time" value={start} onChange={(e) => setStart(e.target.value)} />
               <TextInput label="End" type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
