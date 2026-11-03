@@ -405,3 +405,27 @@ test('a backdrop click closes the request dialog, a click inside does not, and f
   await expect(form).toHaveCount(0);
   await expect(opener).toBeFocused();
 });
+
+test('completed requests page 25 at a time, and switching lists resets to the first page', async ({ page }) => {
+  const active = Array.from({ length: 27 }, (_, index) => ({ ...pending, id: `active-${index}`, branchName: `Apartment ${index}`, status: 'Requested', firstAcceptedAtUtc: null }));
+  const done = Array.from({ length: 28 }, (_, index) => ({ ...pending, id: `done-${index}`, branchName: `Done apartment ${index}`, status: index % 2 ? 'Cancelled' : 'Completed', firstAcceptedAtUtc: null }));
+  await owner(page, { requests: [...active, ...done] }); await page.goto('/partner/');
+  await page.getByRole('tab', { name: 'Cleaning requests', exact: true }).click();
+  const activePages = page.getByRole('navigation', { name: 'Active requests' });
+  await activePages.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(activePages.getByText('2 / 2', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: /^Completed requests \(28\)/ }).click();
+  const donePages = page.getByRole('navigation', { name: 'Completed requests' });
+  // Switching lists starts the other list on its first page.
+  await expect(donePages.getByText('1 / 2', { exact: true })).toBeVisible();
+  await expect(page.getByRole('article')).toHaveCount(25);
+  await expect(donePages.getByRole('button', { name: 'Previous', exact: true })).toBeDisabled();
+  await donePages.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(page.getByRole('article')).toHaveCount(3);
+  await expect(donePages.getByText('2 / 2', { exact: true })).toBeVisible();
+  await expect(donePages.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
+  await donePages.getByRole('button', { name: 'Previous', exact: true }).click();
+  await expect(page.getByRole('article')).toHaveCount(25);
+  await page.getByRole('tab', { name: /^Active requests \(27\)/ }).click();
+  await expect(activePages.getByText('1 / 2', { exact: true })).toBeVisible();
+});

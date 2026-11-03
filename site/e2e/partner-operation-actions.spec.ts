@@ -153,4 +153,22 @@ test.describe('partner operations completed work and large lists', () => {
     await expect(page.getByRole('article')).toHaveCount(25);
     await expect(pager.getByText('Page 1 of 2', { exact: true })).toBeVisible();
   });
+
+  test('the modal close control and Escape both close Arrange without sending anything', async ({ page }) => {
+    const { writes } = await setup(page, [requestFor(0)]);
+    await page.goto('/admin/partner-requests/');
+    const card = page.getByRole('article', { name: 'Property 0 request' });
+    const opener = card.getByRole('button', { name: 'Arrange cleaner / time', exact: true });
+    const dialog = page.getByRole('dialog', { name: 'Arrange Property 0', exact: true });
+    await opener.click();
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('combobox', { name: 'Cleaner', exact: true }).selectOption('manual');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await opener.click();
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Close dialog', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    expect(writes).toHaveLength(0);
+  });
 });

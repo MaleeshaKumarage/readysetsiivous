@@ -91,7 +91,7 @@ function PartnerOperationsContent({ role }: { role: 'admin' | 'manager' }) {
     {!loading && tab === 'Changes' && <div className="space-y-3">{!changes.length && <p>No change requests.</p>}{changes.map(change => <Paper component="article" withBorder radius="md" p="md" className="border bg-white rounded p-4 space-y-2" key={change.id}><h2 className="font-semibold">{change.kind} · {companies.find(company => company.id === change.companyId)?.name ?? change.companyId}</h2><p>{branches.find(branch => branch.id === change.branchId)?.name ?? ''}</p><p className="whitespace-pre-wrap">{change.message}</p><p>{change.resolvedUtc ? `Resolved: ${change.resolution}` : 'Awaiting staff response'}</p>{!change.resolvedUtc && <StaffButton className={button} disabled={busy} onClick={() => { setResolution(change); setText(''); }}>Resolve change request</StaffButton>}</Paper>)}</div>}
     {!loading && tab === 'Properties' && <div className="space-y-3"><StaffButton className={button} disabled={busy} onClick={() => openProperty('new')}>Add property</StaffButton>{!branches.length && <p>No partner properties.</p>}{branches.map(branch => <Paper component="article" withBorder radius="md" p="md" key={branch.id} className="border rounded bg-white p-4 space-y-2"><h2 className="font-semibold">{branch.name} · {companies.find(company => company.id === branch.companyId)?.name}</h2><QuoteRequestedBadge branch={branch} /><p>{branch.street}, {branch.city} · Rooms: {branch.roomCount ?? 'Not set'} · Beds: {branch.bedCount ?? 'Not set'}</p><p>{branch.pricingReady ? `€${branch.priceNet?.toFixed(2)} excl. VAT · ${branch.estimatedDurationMinutes} minutes` : 'Pricing not ready'}</p><div className="flex flex-wrap gap-3"><StaffButton className="underline" disabled={busy} onClick={() => openProperty(branch)}>Edit property</StaffButton><StaffButton className="underline" disabled={busy} onClick={() => openPrice(branch)}>Set cleaning price</StaffButton></div></Paper>)}</div>}
 
-    <Modal opened={offer !== null} onClose={() => setOffer(null)} title={offer ? `Arrange ${offer.branchName}` : 'Arrange cleaning'} radius="md" size="lg">
+    <Modal closeButtonProps={{ 'aria-label': 'Close dialog' }} opened={offer !== null} onClose={() => setOffer(null)} title={offer ? `Arrange ${offer.branchName}` : 'Arrange cleaning'} radius="md" size="lg">
       {offer && <form className="space-y-3" onSubmit={e => { e.preventDefault(); void act(async () => { const result = await staffPartnerApi(role).offer(offer, employee, start); setOffer(null); return result.status === 'Accepted' ? 'Work scheduled automatically.' : 'Offer sent. Waiting for cleaner acceptance.'; }, 'Offer sent. Waiting for cleaner acceptance.'); }}>
         <p>Window: {offer.fromDate} – {offer.toDate}. {offer.exactStartLocalTime ? `Fixed start ${offer.exactStartLocalTime}.` : automaticCleaner ? 'Set the exact planned start before sending this offer.' : 'Leave time blank to let the cleaner choose when accepting.'}</p>
         <label>Cleaner<NativeSelect aria-label="Cleaner" required className={input} value={employee} onChange={e => setEmployee(e.target.value)}><option value="">Select cleaner</option>{people.map(person => <option key={person.id} value={person.id}>{person.firstName} {person.lastName}{person.autoAcceptWork ? ' · Automatic acceptance' : ''}</option>)}</NativeSelect></label>
@@ -101,7 +101,7 @@ function PartnerOperationsContent({ role }: { role: 'admin' | 'manager' }) {
       </form>}
     </Modal>
 
-    <Modal opened={editing !== null} onClose={() => setEditing(null)} title={editing ? `Edit / reschedule ${editing.branchName}` : 'Edit / reschedule request'} radius="md" size="lg">
+    <Modal closeButtonProps={{ 'aria-label': 'Close dialog' }} opened={editing !== null} onClose={() => setEditing(null)} title={editing ? `Edit / reschedule ${editing.branchName}` : 'Edit / reschedule request'} radius="md" size="lg">
       {editing && <form className="space-y-3" onSubmit={event => { event.preventDefault(); const data = new FormData(event.currentTarget); void act(async () => { await staffPartnerApi(role).update(editing, { fromDate: String(data.get('fromDate')), toDate: String(data.get('toDate')), exactStartLocalTime: String(data.get('exactStartLocalTime')) || null, notes: String(data.get('notes')) }); setEditing(null); }, 'Request updated. Arrange a new cleaner offer.'); }}>
         <p>Changes invalidate outstanding offers and require renewed cleaner acceptance. Started or billed work is protected.</p>
         <label>From date<Input name="fromDate" type="date" className={input} required defaultValue={editing.fromDate} /></label>
@@ -112,7 +112,7 @@ function PartnerOperationsContent({ role }: { role: 'admin' | 'manager' }) {
       </form>}
     </Modal>
 
-    <Modal opened={cancelling !== null} onClose={() => setCancelling(null)} title={cancelling ? `Cancel ${cancelling.branchName}` : 'Cancel request'} radius="md">
+    <Modal closeButtonProps={{ 'aria-label': 'Close dialog' }} opened={cancelling !== null} onClose={() => setCancelling(null)} title={cancelling ? `Cancel ${cancelling.branchName}` : 'Cancel request'} radius="md">
       {cancelling && <form className="space-y-3" onSubmit={event => { event.preventDefault(); const reason = cancelReason.trim(); if (!reason) return; void act(async () => { await staffPartnerApi(role).cancel(cancelling, reason); setCancelling(null); }, 'Request cancelled.'); }}>
         <p>The cleaner offer and any scheduled visit are removed. The owner is notified.</p>
         <label>Reason for cancellation<Textarea className={input} required value={cancelReason} onChange={e => setCancelReason(e.target.value)} /></label>
@@ -120,7 +120,7 @@ function PartnerOperationsContent({ role }: { role: 'admin' | 'manager' }) {
       </form>}
     </Modal>
 
-    <Modal opened={pricing !== null} onClose={() => setPricing(null)} title={pricing ? `Price ${pricing.name}` : 'Property pricing'} radius="md" size="lg">
+    <Modal closeButtonProps={{ 'aria-label': 'Close dialog' }} opened={pricing !== null} onClose={() => setPricing(null)} title={pricing ? `Price ${pricing.name}` : 'Property pricing'} radius="md" size="lg">
       {pricing && <form className="space-y-3" onSubmit={e => { e.preventDefault(); void act(async () => { await staffPartnerApi(role).price(pricing.id, { priceNet: Number(price), vatRatePercent: Number(vat), estimatedDurationMinutes: Number(duration) }); setPricing(null); }, 'Pricing saved.'); }}>
         <p>New requests use the new price. Existing requests retain their agreed price.</p>
         <label>Fixed cleaning price excl. VAT (€)<Input className={input} required type="number" min="0" step="0.01" value={price} onChange={e => setPrice(e.target.value)} /></label>
@@ -130,11 +130,11 @@ function PartnerOperationsContent({ role }: { role: 'admin' | 'manager' }) {
       </form>}
     </Modal>
 
-    <Modal opened={property !== null} onClose={() => setProperty(null)} title={property === 'new' ? 'Add property' : property ? 'Edit property' : 'Property editor'} radius="md" size="lg">
+    <Modal closeButtonProps={{ 'aria-label': 'Close dialog' }} opened={property !== null} onClose={() => setProperty(null)} title={property === 'new' ? 'Add property' : property ? 'Edit property' : 'Property editor'} radius="md" size="lg">
       {property && <form key={property === 'new' ? 'new' : property.id} onSubmit={saveProperty} className="grid sm:grid-cols-2 gap-3">{property === 'new' && <label>Company<NativeSelect name="companyId" className={input} required><option value="">Select company</option>{companies.map(company => <option value={company.id} key={company.id}>{company.name}</option>)}</NativeSelect></label>}{['name', 'street', 'postalCode', 'city', 'country', 'contactPhone', 'contactEmail', 'roomCount', 'bedCount'].map(field => <label key={field}>{({ name: 'Property name', postalCode: 'Postal code', contactPhone: 'Contact phone', contactEmail: 'Contact email', roomCount: 'Rooms (optional)', bedCount: 'Beds (optional)' } as Record<string, string>)[field] ?? field}<Input name={field} className={input} required={field === 'name'} type={field.endsWith('Count') ? 'number' : field === 'contactEmail' ? 'email' : 'text'} min={0} step={1} defaultValue={property === 'new' ? '' : String(property[field as keyof Branch] ?? '')} /></label>)}<div className="flex flex-wrap gap-3"><StaffButton className={button} disabled={busy}>Save property</StaffButton><StaffButton type="button" disabled={busy} onClick={() => setProperty(null)}>Cancel</StaffButton></div></form>}
     </Modal>
 
-    <Modal opened={resolution !== null} onClose={() => setResolution(null)} title="Resolve change request" radius="md">
+    <Modal closeButtonProps={{ 'aria-label': 'Close dialog' }} opened={resolution !== null} onClose={() => setResolution(null)} title="Resolve change request" radius="md">
       {resolution && <form className="space-y-3" onSubmit={e => { e.preventDefault(); void act(async () => { await staffPartnerApi(role).resolve(resolution.id, text); setResolution(null); }, 'Change request resolved.'); }}>
         <label>Resolution<Textarea className={input} required value={text} onChange={e => setText(e.target.value)} /></label>
         <div className="flex flex-wrap gap-3"><StaffButton className={button} disabled={busy || !text.trim()}>Save resolution</StaffButton><StaffButton type="button" disabled={busy} onClick={() => setResolution(null)}>Cancel</StaffButton></div>
