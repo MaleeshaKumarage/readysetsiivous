@@ -110,7 +110,9 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
     public async Task<IReadOnlyList<BranchDto>> Branches(Guid actor, bool staff, Guid? companyId, CancellationToken ct)
     {
         if (staff) await RequireManager(actor, ct); else companyId = (await Partner(actor, ct)).Company.Id;
+        var partnerCompanyIds = (await Db.Query<Company>().Where(x => x.IsPartnerEnabled).ToListAsync(ct)).Select(x => x.Id).ToArray();
         var query = Db.Query<Branch>().AsQueryable();
+        query = query.Where(x => partnerCompanyIds.Contains(x.CompanyId));
         if (companyId.HasValue) query = query.Where(x => x.CompanyId == companyId.Value);
         return (await query.ToListAsync(ct)).Select(CompanyHandlers.MapBranch).ToArray();
     }
@@ -150,7 +152,8 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
     public async Task<IReadOnlyList<BranchDto>> Quotes(Guid actor, CancellationToken ct)
     {
         await RequireManager(actor, ct);
-        var branches = await Db.Query<Branch>().Where(x => x.IsActive && x.QuoteRequestedUtc != null).ToListAsync(ct);
+        var partnerCompanyIds = (await Db.Query<Company>().Where(x => x.IsActive && x.IsPartnerEnabled).ToListAsync(ct)).Select(x => x.Id).ToArray();
+        var branches = await Db.Query<Branch>().Where(x => x.IsActive && x.QuoteRequestedUtc != null && partnerCompanyIds.Contains(x.CompanyId)).ToListAsync(ct);
         return branches.Where(x => !x.PricingReady).Select(CompanyHandlers.MapBranch).ToArray();
     }
 

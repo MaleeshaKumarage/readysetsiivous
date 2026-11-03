@@ -272,7 +272,7 @@ public sealed class BoundedSigningKeysTests
         // Virtual time controls discovery deadlines independently of a busy CI test scheduler.
         using var refreshResponse = fixture.Keys();
         using var otherResponse = fixture.Keys();
-        var pendingResponse = new TaskCompletionSource<HttpResponseMessage>();
+        var pendingResponse = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var call = 0;
         fixture.Respond = ct =>
@@ -282,9 +282,10 @@ public sealed class BoundedSigningKeysTests
             return pendingResponse.Task.WaitAsync(ct);
         };
         var refresh = fixture.Resolver.ResolveAsync(Fixture.Issuer, "new-key", CancellationToken.None);
-        // This is only a deadlock guard. The five-second discovery timer uses fixture.Clock,
+        // Allow a busy full-suite CI scheduler to finish queued continuations. This is
+        // only a deadlock guard; the five-second discovery timer uses fixture.Clock,
         // which is deliberately not advanced while this fake provider response is held open.
-        var completionBudget = TimeSpan.FromSeconds(8);
+        var completionBudget = TimeSpan.FromSeconds(30);
         try
         {
             await entered.Task.WaitAsync(completionBudget);

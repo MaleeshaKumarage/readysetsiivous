@@ -292,7 +292,7 @@ test('manager navigation loads partner operations through manager routes only an
     if (req.method() === 'GET') {
       managerReads.push(path);
       if (path === '/partner/requests' && ++requestLoads === 1) return route.fulfill({ status: 503, headers, json: { detail: 'Partner requests temporarily unavailable.' } });
-      const json = path === '/companies' ? { items: [{ id: companyId, name: 'Owner company', isActive: true }], total: 1 } : path === '/employees' ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', isActive: true }] : path === '/time-zone' ? { timeZoneId: 'Europe/Helsinki' } : path === '/shifts' ? [] : path === '/partner/requests' ? [pending] : path === '/partner/branches' ? [quotedBranch] : path === '/partner/quotes' ? (quotedBranch.pricingReady ? [] : [quotedBranch]) : [];
+      const json = path === '/companies' ? { items: [{ id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }], total: 1 } : path === '/employees' ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', isActive: true }] : path === '/time-zone' ? { timeZoneId: 'Europe/Helsinki' } : path === '/shifts' ? [] : path === '/partner/requests' ? [pending] : path === '/partner/branches' ? [quotedBranch] : path === '/partner/quotes' ? (quotedBranch.pricingReady ? [] : [quotedBranch]) : [];
       return route.fulfill({ headers, json });
     }
     const body = req.postDataJSON() as Record<string, unknown>; writes.push({ path, method: req.method(), body }); quotedBranch = { ...quotedBranch, ...body, pricingReady: true }; return route.fulfill({ headers, json: quotedBranch });

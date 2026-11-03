@@ -358,6 +358,46 @@ public class PartnerWorkflowTests
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => fixture.Service(foreign).SetWorkPreferences(fixture.Cleaner.Id, true, default));
     }
 
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Staff_property_and_quote_lists_exclude_non_partner_companies_and_orphan_branches()
+    {
+        using var fixture = await Fixture.Create();
+        var regular = Company.Create("REGULAR", "Ordinary cleaning customer");
+        var disabled = Company.Create("DISABLED", "Former partner");
+        var inactivePartner = Company.Create("INACTIVE", "Inactive partner");
+        inactivePartner.IsPartnerEnabled = true; inactivePartner.IsActive = false;
+        var regularBranch = Branch.Create(regular.Id, "Ordinary property");
+        var disabledBranch = Branch.Create(disabled.Id, "Former partner property");
+        var inactiveBranch = Branch.Create(inactivePartner.Id, "Inactive partner history");
+        var orphan = Branch.Create(Guid.NewGuid(), "Orphan property");
+        using (var writer = fixture.Store.LightweightSession(fixture.Tenant))
+        {
+            writer.Store(regular, disabled, inactivePartner);
+            var quote = Branch.Create(fixture.Company.Id, "Partner quote");
+            foreach (var branch in new[] { regularBranch, disabledBranch, inactiveBranch, orphan, quote })
+            { branch.QuoteRequestedUtc = DateTime.UtcNow; writer.Store(branch); }
+            await writer.SaveChangesAsync();
+        }
+        using (var session = fixture.Session())
+        {
+            var service = fixture.Service(session);
+            var branches = await service.Branches(fixture.Admin.Id, true, null, default);
+            Assert.Contains(branches, x => x.Id == fixture.Branch.Id);
+            Assert.Contains(branches, x => x.Id == inactiveBranch.Id);
+            Assert.DoesNotContain(branches, x => x.Id == regularBranch.Id || x.Id == disabledBranch.Id || x.Id == orphan.Id);
+            Assert.Empty(await service.Branches(fixture.Admin.Id, true, regular.Id, default));
+            var quotes = await service.Quotes(fixture.Admin.Id, default);
+            Assert.Equal("Partner quote", Assert.Single(quotes).Name);
+        }
+        using (var writer = fixture.Store.DirtyTrackedSession(fixture.Tenant))
+        { var company = await writer.LoadAsync<Company>(fixture.Company.Id); company!.IsPartnerEnabled = false; await writer.SaveChangesAsync(); }
+        using (var session = fixture.Session())
+        {
+            Assert.DoesNotContain(await fixture.Service(session).Branches(fixture.Admin.Id, true, null, default), x => x.CompanyId == fixture.Company.Id);
+            Assert.Empty(await fixture.Service(session).Quotes(fixture.Admin.Id, default));
+        }
+    }
+
     private sealed class Fixture : IDisposable
     {
         public static DateOnly Day => new(2026, 11, 10);

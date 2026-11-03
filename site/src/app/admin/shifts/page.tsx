@@ -107,6 +107,7 @@ export default function ShiftsAdminPage() {
   const [loading, setLoading] = useState(true);
   const [lifecycle, setLifecycle] = useState<LifecycleStatus>('active');
   const [listError, setListError] = useState('');
+  const [shiftNotice, setShiftNotice] = useState('');
   const [timeZoneId, setTimeZoneId] = useState('Europe/Helsinki');
   const [schedulingReady, setSchedulingReady] = useState(false);
   const [restoring, setRestoring] = useState<string | null>(null);
@@ -150,6 +151,7 @@ export default function ShiftsAdminPage() {
   const [occurrenceShift, setOccurrenceShift] = useState<Shift | null>(null);
   const [occurrences, setOccurrences] = useState<ShiftOccurrence[]>([]);
   const [occurrenceLoading, setOccurrenceLoading] = useState(false);
+  const occurrenceGeneration = useRef(0);
   const [occurrenceError, setOccurrenceError] = useState('');
   const [occurrenceEditError, setOccurrenceEditError] = useState('');
   const [occurrenceFrom, setOccurrenceFrom] = useState(new Date().toISOString().slice(0, 10));
@@ -273,6 +275,10 @@ export default function ShiftsAdminPage() {
     if (!created) { setError(editingShift ? 'Failed to update shift. Check that the company and branch are valid, then retry.' : 'Failed to create shift.'); return; }
     const wasEditing = Boolean(editingShift);
     closeModal(); if (!wasEditing) changeLifecycle('active'); await load();
+    if (!wasEditing && created.schedule.type === 4) {
+      void openOccurrences(created, 'On-call shift saved. Schedule a dated visit below to show it on the calendars. Cancelling keeps the shift without a scheduled visit.');
+      openOccurrenceEditor(undefined, '4');
+    }
   };
 
   const deactivate = async (id: string) => { await adminShifts.deactivate(id); if (assignOpen === id) closeAssignments(); await load(); };
@@ -366,21 +372,23 @@ export default function ShiftsAdminPage() {
     return e ? `${e.firstName} ${e.lastName}` : id.slice(0, 8);
   };
 
-  const loadOccurrences = async (shift = occurrenceShift) => {
+  const loadOccurrences = async (shift = occurrenceShift, fromDate = occurrenceFrom, toDate = occurrenceTo) => {
     if (!shift) return;
+    const version = ++occurrenceGeneration.current;
     setOccurrenceLoading(true); setOccurrenceError('');
     try {
-      const fromUtc = tenantLocalToUtc(`${occurrenceFrom}T00:00`, timeZoneId);
-      const nextDayUtc = tenantLocalToUtc(`${addCalendarDays(occurrenceTo, 1)}T00:00`, timeZoneId);
+      const fromUtc = tenantLocalToUtc(`${fromDate}T00:00`, timeZoneId);
+      const nextDayUtc = tenantLocalToUtc(`${addCalendarDays(toDate, 1)}T00:00`, timeZoneId);
       const toUtc = new Date(Date.parse(nextDayUtc) - 1).toISOString();
       const result = await adminShifts.occurrences(shift.id, fromUtc, toUtc);
       if (!result) throw new Error('Could not load occurrences.');
-      setOccurrences(result);
-    } catch (failure) { setOccurrenceError(failure instanceof Error ? failure.message : 'Could not load occurrences.'); }
-    finally { setOccurrenceLoading(false); }
+      if (version === occurrenceGeneration.current) setOccurrences(result);
+    } catch (failure) { if (version === occurrenceGeneration.current) setOccurrenceError(failure instanceof Error ? failure.message : 'Could not load occurrences.'); }
+    finally { if (version === occurrenceGeneration.current) setOccurrenceLoading(false); }
   };
 
-  const openOccurrences = async (shift: Shift) => {
+  const openOccurrences = async (shift: Shift, notice = '') => {
+    setShiftNotice(notice);
     setOccurrenceShift(shift); setOccurrences([]); setOccurrenceError('');
     await loadOccurrences(shift);
   };
@@ -406,7 +414,14 @@ export default function ShiftsAdminPage() {
         startUtc: tenantLocalToUtc(occurrenceStart, timeZoneId), endUtc: tenantLocalToUtc(occurrenceEnd, timeZoneId),
         status, reason: occurrenceReason.trim(), employeeId: occurrenceEmployee,
       });
-      setEditingOccurrence(null); await loadOccurrences();
+      setEditingOccurrence(null);
+      setShiftNotice(status === 4 ? 'One-time visit scheduled. It appears in the shift calendar; assigned cleaners see it in My shifts.' : 'Visit updated.');
+      // Keep a newly scheduled date visible even when it is outside the old list window.
+      const savedDay = occurrenceStart.slice(0, 10);
+      if (savedDay < occurrenceFrom || savedDay > occurrenceTo) {
+        setOccurrenceFrom(savedDay); setOccurrenceTo(savedDay);
+        await loadOccurrences(occurrenceShift, savedDay, savedDay);
+      } else await loadOccurrences();
     } catch (failure) { setOccurrenceEditError(failure instanceof Error ? failure.message : 'Could not update this occurrence.'); }
     finally { setOccurrenceSaving(false); }
   };
@@ -460,6 +475,7 @@ export default function ShiftsAdminPage() {
                         {isAdmin() && <Button size="xs" variant="light" leftSection={<Pencil size={13} />} onClick={() => openEdit(s)}>Edit</Button>}
                         {s.isActive && <Button size="xs" variant="light" disabled={assignBusy} onClick={() => openAssign(s.id)}>Employees</Button>}
                         {s.isActive && <Button size="xs" variant="light" onClick={() => openOccurrences(s)}>Occurrences</Button>}
+                        {s.isActive && s.schedule.type === 4 && <Button size="xs" variant="light" onClick={() => { void openOccurrences(s); openOccurrenceEditor(undefined, '4'); }}>Schedule one-time visit</Button>}
                         {isAdmin() && s.isActive && <Button size="xs" variant="light" onClick={() => { setTemplateShift(s); setAssignedTemplate(s.qualityCycleTemplateId ?? null); setTemplateError(''); }}>Checklist template</Button>}
                         {s.isActive && <Button size="xs" variant="subtle" color="red" disabled={assignBusy} onClick={() => deactivate(s.id)}>Deactivate</Button>}
                         {!s.isActive && <Button size="xs" loading={restoring === s.id} disabled={!!restoring} onClick={() => reactivate(s.id)}>Reactivate</Button>}
@@ -519,9 +535,11 @@ export default function ShiftsAdminPage() {
       </LifecycleTabs>
 
       {pricingShift && <ShiftPricingDialog key={`${pricingShift.id}-${pricingOccurrence?.startUtc ?? "plan"}`} shift={pricingShift} occurrence={pricingOccurrence} onClose={() => { setPricingShift(null); setPricingOccurrence(undefined); }} />}
-      <Modal opened={Boolean(occurrenceShift)} onClose={() => { setOccurrenceShift(null); setEditingOccurrence(null); }} title={`Occurrences${occurrenceShift ? ` — ${occurrenceShift.name}` : ''}`} size="xl">
+      <Modal opened={Boolean(occurrenceShift)} onClose={() => { if (occurrenceSaving) return; occurrenceGeneration.current++; setOccurrenceShift(null); setEditingOccurrence(null); }} closeButtonProps={{ disabled: occurrenceSaving }} closeOnEscape={!occurrenceSaving} closeOnClickOutside={!occurrenceSaving} title={`Occurrences${occurrenceShift ? ` — ${occurrenceShift.name}` : ''}`} size="xl">
         <Stack>
           <Text size="sm" c="dimmed">Times use the tenant time zone: {timeZoneId}. Changes apply only to the selected visit.</Text>
+          {occurrenceShift?.schedule.type === 4 && <Text size="sm">On-call shifts have no automatic visits. Schedule each visit with a date and time. Choose a cleaner below or assign employees to this shift.</Text>}
+          {shiftNotice && <Text role="status">{shiftNotice}</Text>}
           <Group align="flex-end" wrap="wrap">
             <TextInput label="From" type="date" value={occurrenceFrom} onChange={e => setOccurrenceFrom(e.target.value)} />
             <TextInput label="To" type="date" value={occurrenceTo} onChange={e => setOccurrenceTo(e.target.value)} />
@@ -555,7 +573,7 @@ export default function ShiftsAdminPage() {
       {assigningVisit && occurrenceShift && <VisitAssigneesDialog key={`${assigningVisit.exceptionId ?? assigningVisit.startUtc}`}
         shiftId={occurrenceShift.id} visit={assigningVisit} employees={employees} timeZone={timeZoneId}
         onClose={() => setAssigningVisit(null)} onSaved={async () => { await loadOccurrences(); }} />}
-      <Modal opened={Boolean(editingOccurrence)} onClose={() => setEditingOccurrence(null)} title="Change occurrence">
+      <Modal opened={Boolean(editingOccurrence)} onClose={() => { if (!occurrenceSaving) setEditingOccurrence(null); }} closeButtonProps={{ disabled: occurrenceSaving }} closeOnEscape={!occurrenceSaving} closeOnClickOutside={!occurrenceSaving} title="Change occurrence">
         <Stack>
           <Select label="Action" value={occurrenceStatus} onChange={value => setOccurrenceStatus(value ?? '1')} data={OCCURRENCE_STATUSES}
             disabled={Boolean(editingOccurrence?.exceptionId)} />
@@ -565,7 +583,7 @@ export default function ShiftsAdminPage() {
             data={employees.filter(e => e.isActive).map(e => ({ value: e.id, label: `${e.firstName} ${e.lastName}` }))} />
           <TextInput label="Reason" required maxLength={500} value={occurrenceReason} onChange={e => setOccurrenceReason(e.target.value)} />
           {occurrenceEditError && <Text role="alert" c="red">{occurrenceEditError}</Text>}
-          <Group justify="flex-end"><Button variant="default" onClick={() => setEditingOccurrence(null)}>Cancel</Button><Button loading={occurrenceSaving} onClick={saveOccurrence}>Save occurrence</Button></Group>
+          <Group justify="flex-end"><Button variant="default" disabled={occurrenceSaving} onClick={() => setEditingOccurrence(null)}>Cancel</Button><Button loading={occurrenceSaving} onClick={saveOccurrence}>Save occurrence</Button></Group>
         </Stack>
       </Modal>
 
@@ -598,6 +616,7 @@ export default function ShiftsAdminPage() {
             <TextInput label="End date (optional)" type="date" min={validFrom || undefined} value={validUntil} onChange={e => setValidUntil(e.target.value)} />
           </Group>
           <Select label="Schedule" data={SCHEDULE_TYPES} value={scheduleType} onChange={(v) => setScheduleType(v ?? '0')} />
+          {scheduleType === '4' && <Text size="sm">On-call is a reusable shift without scheduled dates. After creating it, enter the date, time and cleaner for a one-time visit. Only dated visits appear on calendars.</Text>}
 
           {scheduleType === '2' && (
             <MultiSelect

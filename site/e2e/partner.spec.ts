@@ -79,7 +79,7 @@ test('administrator prices a quote and offers work only to staff', async ({ page
   await setupAdminMocks(page); const writes: any[] = [];
   let currentRequest = { ...request, offeredEmployeeId: null as string | null };
   await page.route(/\/api\/v1\/admin\/employees$/, route => route.fulfill({ headers, json: [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true }, { id: 'owner', firstName: 'Property', lastName: 'Owner', role: 'partner', isActive: true }] }));
-  await page.route(/\/api\/v1\/admin\/companies(?:\?.*)?$/, route => route.fulfill({ headers, json: { items: [{ id: branch.companyId, name: 'Owner company', isActive: true }], total: 1 } }));
+  await page.route(/\/api\/v1\/admin\/companies(?:\?.*)?$/, route => route.fulfill({ headers, json: { items: [{ id: branch.companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }], total: 1 } }));
   await page.route(/\/api\/v1\/admin\/partner\//, route => {
     const req = route.request(), path = new URL(req.url()).pathname.split('/partner')[1]; if (req.method() === 'OPTIONS') return route.fulfill({ headers });
     if (req.method() === 'GET') return route.fulfill({ headers, json: path === '/requests' ? [currentRequest] : path === '/change-requests' ? [] : [branch] });
@@ -107,7 +107,7 @@ test('administrator prices a quote and offers work only to staff', async ({ page
 test('switching inline staff editors resets fields to the newly selected record', async ({ page }) => {
   await setupAdminMocks(page); const writes: { path: string; body: any }[] = [];
   await page.route(/\/api\/v1\/admin\/employees$/, route => route.fulfill({ headers, json: [] }));
-  await page.route(/\/api\/v1\/admin\/companies(?:\?.*)?$/, route => route.fulfill({ headers, json: { items: [{ id: branch.companyId, name: 'Owner company', isActive: true }], total: 1 } }));
+  await page.route(/\/api\/v1\/admin\/companies(?:\?.*)?$/, route => route.fulfill({ headers, json: { items: [{ id: branch.companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }], total: 1 } }));
   const secondBranch = { ...branch, id: 'branch-two', name: 'Forest apartment', street: 'Forest road 9', roomCount: 4 };
   const secondRequest = { ...request, id: 'request-two', branchId: secondBranch.id, branchName: secondBranch.name, fromDate: '2026-12-10', toDate: '2026-12-11', notes: 'Forest instructions' };
   await page.route(/\/api\/v1\/admin\/partner\//, route => {

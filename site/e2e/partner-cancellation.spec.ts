@@ -21,7 +21,7 @@ async function fixture(page: Page, role: 'partner' | 'admin' = 'partner') {
     reads.push(path);
     const suffix = path.split('/partner')[1];
     const json = path === '/api/v1/partner/me' ? identity : path.endsWith('/employees') ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true }]
-      : path.endsWith('/companies') ? { items: [{ id: companyId, name: 'Owner company', isActive: true }], total: 1 }
+      : path.endsWith('/companies') ? { items: [{ id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }], total: 1 }
       : suffix === '/branches' || suffix === '/quotes' ? [branch]
       : suffix === '/requests' ? [pending, accepted]
       : suffix === '/change-requests' ? [change]

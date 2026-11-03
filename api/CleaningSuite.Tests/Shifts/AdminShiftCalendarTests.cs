@@ -45,6 +45,33 @@ public class AdminShiftCalendarTests
         new DateTime(2026, 10, 1, 5, 0, 0, DateTimeKind.Utc),
         ShiftCalendarAdminController.ParseLocal("2026-10-01T08:00", TenantTimeZone.Resolve("Europe/Helsinki")));
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task One_time_extra_visit_is_visible_without_a_recurring_schedule(bool partner)
+    {
+        var f = new Fixture();
+        f.Shift.Schedule = new ShiftSchedule { Type = ShiftScheduleType.OnCallFlexible };
+        f.Shift.ValidUntil = f.Start.Date;
+        f.Shift.PartnerRequestId = partner ? Guid.NewGuid() : null;
+        var extra = ShiftOccurrenceException.Create(f.Shift.Id, null, f.Start, f.Start.AddHours(2),
+            ShiftOccurrenceExceptionStatus.Extra, "One-time cleaning", f.Person.Id);
+        f.Shifts.Setup(s => s.ListOccurrenceExceptionsAsync(f.Shift.Id, It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { extra });
+        // One-time work can be assigned on the visit itself, without a recurring roster.
+        f.Shifts.Setup(s => s.ListAssignmentHistoryAsync(f.Shift.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<ShiftAssignment>());
+
+        var result = Assert.IsType<OkObjectResult>(await f.Controller.Get(f.Start.ToString("yyyy-MM-dd"), default));
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(result.Value, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        var visit = Assert.Single(json.RootElement.GetProperty("occurrences").EnumerateArray());
+        Assert.Equal(extra.Id, visit.GetProperty("exceptionId").GetGuid());
+        Assert.Equal(f.Start, visit.GetProperty("startUtc").GetDateTime());
+        var person = Assert.Single(visit.GetProperty("assignees").EnumerateArray());
+        Assert.Equal(f.Person.Id, person.GetProperty("employeeId").GetGuid());
+        Assert.Equal(!partner, person.GetProperty("canRecord").GetBoolean());
+    }
+
     private sealed class Lease : IAsyncDisposable { public ValueTask DisposeAsync() => ValueTask.CompletedTask; }
     private sealed class Fixture
     {

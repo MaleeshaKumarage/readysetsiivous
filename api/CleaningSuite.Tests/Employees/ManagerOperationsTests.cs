@@ -14,6 +14,24 @@ using Moq;
 namespace CleaningSuite.Tests.Employees;
 public class ManagerOperationsTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Company_response_exposes_partner_flag_for_property_scope(bool enabled)
+    {
+        var f = new Fixture(); f.Company.IsPartnerEnabled = enabled;
+        f.Companies.Setup(r => r.ListAsync(null, 0, 50, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(((IReadOnlyList<Company>)new[] { f.Company }, 1));
+        var page = await f.Service.Companies(0, 50, default);
+        var company = Assert.Single(page.Items);
+        var body = JsonSerializer.Serialize(company, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        using var json = JsonDocument.Parse(body);
+        Assert.Equal(enabled, json.RootElement.GetProperty("isPartnerEnabled").GetBoolean());
+        Assert.Equal(new[] { "id", "name", "isActive", "isPartnerEnabled" }.Order(),
+            json.RootElement.EnumerateObject().Select(p => p.Name).Order());
+    }
+
+
     [Fact]
     public async Task EditPreservesVersionTemplateNotesParentsAndHistoricalPlan()
     {
