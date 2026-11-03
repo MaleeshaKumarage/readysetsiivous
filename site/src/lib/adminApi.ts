@@ -25,7 +25,7 @@ export interface Invoice {
   dueDate: string;
 }
 
-export interface Employee {
+export interface Employee { autoAcceptWork?: boolean;
   shiftCalendarEnabled?: boolean;
   id: string;
   email: string;

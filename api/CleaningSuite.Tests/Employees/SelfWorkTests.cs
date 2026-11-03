@@ -18,6 +18,13 @@ public class SelfWorkTests
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     [Fact]
+    public void WorkPreferenceResponse_contains_only_the_saved_consent_boolean()
+    {
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(new CleaningSuite.Application.Partners.WorkPreferenceResponse(true), Json));
+        Assert.Equal("autoAcceptWork", Assert.Single(json.RootElement.EnumerateObject()).Name);
+        Assert.True(json.RootElement.GetProperty("autoAcceptWork").GetBoolean());
+    }
+    [Fact]
     public void SelfProfileHasExactAllowlistAndNoPayrollHrOrIdentityInternals()
     {
         var e = new Employee { PayRate = 9876.54m, Notes = "secret-hr-note", KeycloakUserId = "secret-subject",

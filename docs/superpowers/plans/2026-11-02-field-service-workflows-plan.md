@@ -5,7 +5,7 @@ Baseline: main `b4f7b626` (2026-11-02). Progress/handoffs: [delivery ledger](../
 
 ## Delivery contract
 
-One small PR at a time: implement → focused Playwright E2E/backend verification → review/fix → merge → save handoff → compact context → next chunk. A product stream is not a giant PR. Keep planned, implemented, merged and deployed status separate. Preserve unrelated files and normal verified deployment; no production data edits or release-gate shortcuts.
+One small PR at a time: implement → focused Playwright E2E/backend verification → review/fix → merge → save handoff → compact context → next chunk. Merge only after every CI check for the latest PR head has completed successfully and all actionable review comments are resolved; start the next chunk with fresh context after the saved handoff. A product stream is not a giant PR. Keep planned, implemented, merged and deployed status separate. Preserve unrelated files and normal verified deployment; no production data edits or release-gate shortcuts.
 
 Each PR handoff records reviewed head/PR, interfaces, tests/results, review dispositions, deployment state, remaining decisions and next dependency-ready chunk. Never put credentials/customer data in the public handoff. Keep current light-English admin, FI/EN partner UI, roles/tenant boundaries and existing financial snapshots.
 

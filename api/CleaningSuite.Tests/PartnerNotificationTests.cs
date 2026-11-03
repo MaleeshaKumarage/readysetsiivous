@@ -52,6 +52,17 @@ public class PartnerNotificationTests
         request.Status="Requested";message.Kind="OfferWithdrawn";Assert.True(PartnerNotificationDispatcher.CurrentForRequest(message,request));
         request.Status="Offered";Assert.False(PartnerNotificationDispatcher.CurrentForRequest(message,request));
     }
+    [Fact]
+    public void Automatic_acceptance_information_requires_current_accepted_employee_and_revision()
+    {
+        var actor = Guid.NewGuid();
+        var request = new PartnerCleaningRequest { Status = "Accepted", Revision = 4, AcceptedEmployeeId = actor };
+        var notice = new PartnerNotification { Kind = "WorkAutoAccepted", Revision = 4, RecipientEmployeeId = actor };
+        Assert.True(PartnerNotificationDispatcher.CurrentForRequest(notice, request));
+        request.Revision++; Assert.False(PartnerNotificationDispatcher.CurrentForRequest(notice, request));
+        request.Revision--; request.AcceptedEmployeeId = Guid.NewGuid(); Assert.False(PartnerNotificationDispatcher.CurrentForRequest(notice, request));
+        request.AcceptedEmployeeId = actor; request.Status = "Offered"; Assert.False(PartnerNotificationDispatcher.CurrentForRequest(notice, request));
+    }
     private static IConfiguration Configuration()=>new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"Resend:ApiKey","synthetic-key"}}).Build();
     private sealed class CaptureHandler(params HttpStatusCode[] statuses):HttpMessageHandler
     {

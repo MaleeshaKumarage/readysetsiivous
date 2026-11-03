@@ -219,6 +219,145 @@ public class PartnerWorkflowTests
         else { Assert.Equal("Accepted", request.Status); Assert.True(Assert.Single(shifts).IsActive); }
     }
 
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Automatic_offer_is_atomic_and_stale_retry_cannot_duplicate_materialization()
+    {
+        using var fixture = await Fixture.Create();
+        using (var session = fixture.Session()) await fixture.Service(session).SetWorkPreferences(fixture.Cleaner.Id, true, default);
+        var accepted = await fixture.SubmitOffer();
+        Assert.Equal("Accepted", accepted.Status); Assert.NotNull(accepted.LinkedShiftId);
+        using (var session = fixture.Session())
+            await Assert.ThrowsAsync<ShiftConflictException>(() => fixture.Service(session).Offer(fixture.Admin.Id, accepted.Id,
+                new(accepted.Version - 2, fixture.Cleaner.Id), default));
+        using var reader = fixture.Store.QuerySession(fixture.Tenant);
+        Assert.Single(await reader.Query<Shift>().ToListAsync());
+        Assert.Single(await reader.Query<ShiftOccurrenceException>().ToListAsync());
+        Assert.Single(await reader.Query<ShiftAssignment>().Where(x => x.IsActive).ToListAsync());
+        Assert.Single(await reader.Query<ShiftBillingProfile>().ToListAsync());
+        var notices = await reader.Query<PartnerNotification>().Where(x => x.RequestId == accepted.Id).ToListAsync();
+        Assert.DoesNotContain(notices, x => x.Kind is "OfferCreated" or "AwaitingAcceptance");
+        Assert.Single(notices.Where(x => x.Kind == "WorkAutoAccepted"));
+        Assert.Equal(2, notices.Count(x => x.Kind == "RequestAccepted"));
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Pending_offer_blocks_enabling_and_disabling_only_changes_future_offers()
+    {
+        using var fixture = await Fixture.Create(); var pending = await fixture.SubmitOffer();
+        using (var session = fixture.Session())
+            await Assert.ThrowsAsync<ShiftConflictException>(() => fixture.Service(session).SetWorkPreferences(fixture.Cleaner.Id, true, default));
+        using (var session = fixture.Session()) await fixture.Service(session).Accept(fixture.Cleaner.Id, pending.OfferId!.Value, new(pending.Version), default);
+        using (var session = fixture.Session()) await fixture.Service(session).SetWorkPreferences(fixture.Cleaner.Id, true, default);
+        using (var session = fixture.Session()) await fixture.Service(session).SetWorkPreferences(fixture.Cleaner.Id, false, default);
+        using var reader = fixture.Store.QuerySession(fixture.Tenant);
+        Assert.Equal("Accepted", (await reader.LoadAsync<PartnerCleaningRequest>(pending.Id))!.Status);
+        Assert.False((await reader.LoadAsync<Employee>(fixture.Cleaner.Id))!.AutoAcceptWork);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Automatic_offer_requires_exact_time_and_overlap_failure_commits_nothing()
+    {
+        using var fixture = await Fixture.Create();
+        using (var session = fixture.Session()) await fixture.Service(session).SetWorkPreferences(fixture.Cleaner.Id, true, default);
+        using (var session = fixture.Session())
+        {
+            var service = fixture.Service(session);
+            var request = await service.Create(fixture.Partner.Id, new(Guid.NewGuid(), fixture.Branch.Id, Fixture.Day, Fixture.Day), default);
+            await Assert.ThrowsAsync<ShiftConflictException>(() => service.Offer(fixture.Admin.Id, request.Id, new(request.Version, fixture.Cleaner.Id), default));
+        }
+        var first = await fixture.SubmitOffer();
+        await Assert.ThrowsAsync<ShiftConflictException>(() => fixture.SubmitOffer());
+        using var reader = fixture.Store.QuerySession(fixture.Tenant);
+        Assert.Single(await reader.Query<Shift>().ToListAsync());
+        Assert.Single(await reader.Query<ShiftAssignment>().Where(x => x.IsActive).ToListAsync());
+        Assert.Single(await reader.Query<ShiftBillingProfile>().ToListAsync());
+        Assert.Single((await reader.Query<PartnerCleaningRequest>().ToListAsync()).Where(x => x.Status == "Accepted"));
+        Assert.DoesNotContain(await reader.Query<PartnerCleaningRequest>().ToListAsync(), x => x.Status == "Offered");
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Automatic_single_day_exact_appointment_rejects_a_different_clock_and_retains_fixed_fallback()
+    {
+        using var fixture = await Fixture.Create();
+        using var session = fixture.Session(); var service = fixture.Service(session);
+        await service.SetWorkPreferences(fixture.Cleaner.Id, true, default);
+        var request = await service.Create(fixture.Partner.Id,
+            new(Guid.NewGuid(), fixture.Branch.Id, Fixture.Day, Fixture.Day, "08:00"), default);
+        await Assert.ThrowsAsync<ValidationException>(() => service.Offer(fixture.Admin.Id, request.Id,
+            new(request.Version, fixture.Cleaner.Id, $"{Fixture.Day:yyyy-MM-dd}T09:00"), default));
+        var accepted = await service.Offer(fixture.Admin.Id, request.Id, new(request.Version, fixture.Cleaner.Id), default);
+        Assert.Equal("Accepted", accepted.Status);
+        Assert.Equal(new DateTime(2026, 11, 10, 6, 0, 0, DateTimeKind.Utc), accepted.PlannedStartUtc);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Legacy_multiday_exact_clock_requires_an_explicit_date_before_automatic_acceptance()
+    {
+        using var fixture = await Fixture.Create();
+        using (var session = fixture.Session()) await fixture.Service(session).SetWorkPreferences(fixture.Cleaner.Id, true, default);
+        // Legacy/imported records may contain a clock time on a flexible date window.
+        var request = new PartnerCleaningRequest
+        {
+            CompanyId = fixture.Company.Id, BranchId = fixture.Branch.Id, RequestedByEmployeeId = fixture.Partner.Id,
+            FromDate = Fixture.Day, ToDate = Fixture.Day.AddDays(1), ExactStartLocalTime = "08:00",
+            EstimatedDurationMinutes = 120, PriceNet = 100, VatRatePercent = 25.5m
+        };
+        using (var writer = fixture.Store.LightweightSession(fixture.Tenant)) { writer.Store(request); await writer.SaveChangesAsync(); }
+        var push = new Mock<CleaningSuite.Application.Notifications.IPushOutbox>(MockBehavior.Strict);
+        using (var session = fixture.Session())
+            await Assert.ThrowsAsync<ShiftConflictException>(() => fixture.Service(session, push.Object).Offer(fixture.Admin.Id, request.Id,
+                new(request.Revision, fixture.Cleaner.Id), default));
+        push.VerifyNoOtherCalls();
+        using (var reader = fixture.Store.QuerySession(fixture.Tenant))
+        {
+            var unchanged = await reader.LoadAsync<PartnerCleaningRequest>(request.Id);
+            Assert.Equal("Requested", unchanged!.Status); Assert.Equal(request.Revision, unchanged.Revision); Assert.Null(unchanged.OfferId);
+            Assert.Empty(await reader.Query<Shift>().ToListAsync());
+            Assert.Empty(await reader.Query<ShiftAssignment>().ToListAsync());
+            Assert.Empty(await reader.Query<ShiftOccurrenceException>().ToListAsync());
+            Assert.Empty(await reader.Query<ShiftBillingProfile>().ToListAsync());
+            Assert.Empty(await reader.Query<PartnerNotification>().ToListAsync());
+        }
+        using (var session = fixture.Session())
+        {
+            var accepted = await fixture.Service(session).Offer(fixture.Admin.Id, request.Id,
+                new(request.Revision, fixture.Cleaner.Id, $"{Fixture.Day.AddDays(1):yyyy-MM-dd}T09:00"), default);
+            Assert.Equal("Accepted", accepted.Status);
+            Assert.Equal(new DateTime(2026, 11, 11, 7, 0, 0, DateTimeKind.Utc), accepted.PlannedStartUtc);
+        }
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Preference_enable_racing_offer_never_hides_a_pending_offer()
+    {
+        using var fixture = await Fixture.Create();
+        using var session = fixture.Session(); var service = fixture.Service(session);
+        var request = await service.Create(fixture.Partner.Id, new(Guid.NewGuid(), fixture.Branch.Id, Fixture.Day, Fixture.Day, "08:00"), default);
+        using var one = fixture.Session(); using var two = fixture.Session();
+        async Task Enable() { try { await fixture.Service(one).SetWorkPreferences(fixture.Cleaner.Id, true, default); } catch (ShiftConflictException) { } }
+        await Task.WhenAll(Enable(), fixture.Service(two).Offer(fixture.Admin.Id, request.Id, new(request.Version, fixture.Cleaner.Id), default));
+        using var reader = fixture.Store.QuerySession(fixture.Tenant);
+        var employee = await reader.LoadAsync<Employee>(fixture.Cleaner.Id);
+        var current = await reader.LoadAsync<PartnerCleaningRequest>(request.Id);
+        Assert.Equal(employee!.AutoAcceptWork ? "Accepted" : "Offered", current!.Status);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Preferences_are_own_active_work_role_and_tenant_bound()
+    {
+        using var fixture = await Fixture.Create();
+        using (var session = fixture.Session())
+        {
+            var service = fixture.Service(session);
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.SetWorkPreferences(fixture.Partner.Id, true, default));
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.SetWorkPreferences(Guid.NewGuid(), true, default));
+            await service.SetWorkPreferences(fixture.Cleaner.Id, true, default);
+            Assert.False((await service.WorkPreferences(fixture.Admin.Id, default)).AutoAcceptWork);
+        }
+        using var foreign = new TenantSessionFactory(fixture.Store, Fixture.Context("foreign-" + Guid.NewGuid().ToString("N")));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => fixture.Service(foreign).SetWorkPreferences(fixture.Cleaner.Id, true, default));
+    }
+
     private sealed class Fixture : IDisposable
     {
         public static DateOnly Day => new(2026, 11, 10);
@@ -228,8 +367,8 @@ public class PartnerWorkflowTests
         public Company Company { get; } = Company.Create(Guid.NewGuid().ToString(), "Owner company");
         public Branch Branch { get; private set; } = null!;
         public Employee Partner { get; private set; } = null!;
-        public Employee Admin { get; } = new() { Role = Employee.RoleAdmin };
-        public Employee Cleaner { get; } = new() { Role = Employee.RoleEmployee, FirstName = "Cleaner", LastName = "Test" };
+        public Employee Admin { get; } = new() { Role = Employee.RoleAdmin, KeycloakUserId = "synthetic-admin" };
+        public Employee Cleaner { get; } = new() { Role = Employee.RoleEmployee, KeycloakUserId = "synthetic-cleaner", FirstName = "Cleaner", LastName = "Test" };
         private Fixture(ServiceProvider provider) { this.provider = provider; Store = provider.GetRequiredService<IDocumentStore>(); }
         public static async Task<Fixture> Create()
         {
@@ -246,12 +385,12 @@ public class PartnerWorkflowTests
         }
         public static ITenantContext Context(string tenant) { var mock = new Mock<ITenantContext>(); mock.SetupGet(x => x.TenantId).Returns(tenant); return mock.Object; }
         public TenantSessionFactory Session() => new(Store, Context(Tenant));
-        public PartnerService Service(ITenantSession session)
+        public PartnerService Service(ITenantSession session, CleaningSuite.Application.Notifications.IPushOutbox? push = null)
         {
             var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
             { ["ConnectionStrings:DefaultConnection"] = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING") }).Build();
             return new(new PartnerStore(session), new ShiftWorkReservation(config, session), new ShiftRepository(session),
-                new TenantProfileRepository(Store), Context(session.TenantId));
+                new TenantProfileRepository(Store), Context(session.TenantId), push);
         }
         public async Task<PartnerRequestDto> SubmitOffer()
         {

@@ -68,7 +68,7 @@ public sealed class PushDeliveryService(ITenantSession tenant, IPushDeliveryRese
         }
         delivery.State = "Sending"; delivery.Attempts++; delivery.AttemptUtc = Now;
         await tenant.Session.SaveChangesAsync(ct);
-        var body = intent.Kind switch { "Upcoming" => "Your scheduled work starts soon. Open My shifts for details.", "Unfinished" => "Your work is still running. Open My shifts to finish or submit it.", "PartnerRequest" => "A new partner cleaning request is ready for review.", "PartnerOffer" => "New work is available for your approval. Open your account to review it.", _ => "Your work schedule has changed. Open My shifts for the latest details." };
+        var body = intent.Kind switch { "Upcoming" => "Your scheduled work starts soon. Open My shifts for details.", "Unfinished" => "Your work is still running. Open My shifts to finish or submit it.", "PartnerRequest" => "A new partner cleaning request is ready for review.", "WorkAutoAccepted" => "Cleaning was automatically accepted. Open My shifts for details.", "PartnerOffer" => "New work is available for your approval. Open your account to review it.", _ => "Your work schedule has changed. Open My shifts for the latest details." };
         var path = intent.AdminAudience ? "/admin/partner-requests/" : intent.Kind == "PartnerOffer" ? "/account/" : "/me/shifts/";
         var result = await transport.SendAsync(device, new("ReadySetSiivous", body, path + "?tenant=" + Uri.EscapeDataString(tenant.TenantId), "push-" + intent.Id.ToString("N")), intent.ExpiresUtc, ct);
         if (result.Accepted) delivery.State = "Accepted";

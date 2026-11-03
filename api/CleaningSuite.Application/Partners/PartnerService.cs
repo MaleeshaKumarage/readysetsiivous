@@ -8,6 +8,7 @@ using CleaningSuite.Domain.Companies;
 using CleaningSuite.Domain.Employees;
 using CleaningSuite.Domain.Invoicing;
 using CleaningSuite.Domain.Partners;
+using CleaningSuite.Domain.Notifications;
 using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Shifts;
 using FluentValidation;
@@ -72,6 +73,30 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         if (request is null || company.HasValue && request.CompanyId != company)
             throw new NotFoundException("Cleaning request", id);
         return request;
+    }
+
+    private async Task<Employee> PreferenceOwner(Guid actor, CancellationToken ct)
+    {
+        var employee = await Staff(actor, ct);
+        if (string.IsNullOrWhiteSpace(employee.KeycloakUserId))
+            throw new UnauthorizedAccessException("An active linked staff account is required.");
+        return employee;
+    }
+
+    public async Task<WorkPreferenceResponse> WorkPreferences(Guid actor, CancellationToken ct) =>
+        new((await PreferenceOwner(actor, ct)).AutoAcceptWork);
+
+    public async Task<WorkPreferenceResponse> SetWorkPreferences(Guid actor, bool autoAcceptWork, CancellationToken ct)
+    {
+        await using var lease = await reservation.AcquireAsync(ct);
+        // Reservation refreshes the tenant session; never use middleware's earlier employee snapshot.
+        var employee = await PreferenceOwner(actor, ct);
+        if (autoAcceptWork && await Db.Query<PartnerCleaningRequest>()
+            .AnyAsync(x => x.Status == "Offered" && x.OfferedEmployeeId == actor, ct))
+            throw new ShiftConflictException("Accept or decline your pending offers before enabling automatic acceptance.");
+        employee.AutoAcceptWork = autoAcceptWork;
+        Db.Store(employee); await Db.SaveChangesAsync(ct);
+        return new(employee.AutoAcceptWork);
     }
 
     public async Task<object> Me(Guid actor, CancellationToken ct)
@@ -255,25 +280,46 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         if (request.Status == "Cancelled") throw new ShiftConflictException("Cancelled requests cannot be offered.");
         await EnsureUnstartedUnbilled(request, ct);
         var employee = await Db.LoadAsync<Employee>(body.EmployeeId, ct);
-        if (employee is not { IsActive: true } || !Employee.IsWorkRole(employee.Role))
+        if (employee is not { IsActive: true, IdentitySyncPending: false } || !Employee.IsWorkRole(employee.Role))
             throw new ValidationException("Select an active cleaner, manager or administrator.");
+        if (employee.AutoAcceptWork && string.IsNullOrWhiteSpace(employee.KeycloakUserId))
+            throw new ShiftConflictException("The employee must have an active linked login before work can be automatically accepted.");
         DateTime? planned = null;
         if (!string.IsNullOrWhiteSpace(body.PlannedStartLocal)) planned = await Plan(request, body.PlannedStartLocal, ct);
-        else if (request.ExactStartLocalTime is not null) planned = await Plan(request, $"{request.FromDate:yyyy-MM-dd}T{request.ExactStartLocalTime}", ct);
+        else if (request.FromDate == request.ToDate && request.ExactStartLocalTime is not null)
+            planned = await Plan(request, $"{request.FromDate:yyyy-MM-dd}T{request.ExactStartLocalTime}", ct);
+        if (employee.AutoAcceptWork && !planned.HasValue)
+            throw new ShiftConflictException("Set an exact planned start before offering work to an employee with automatic acceptance enabled.");
         if (request.LinkedShiftId.HasValue)
         {
             var shift = await Db.LoadAsync<Shift>(request.LinkedShiftId.Value, ct);
             if (shift is not null) { shift.Deactivate(); Db.Store(shift);
-                if (push is not null && request.AcceptedEmployeeId.HasValue) await push.StageScheduleChangeAsync(Db, shift.Id, [request.AcceptedEmployeeId.Value], DateTimeOffset.UtcNow, ct); }
+                if (push is not null && request.AcceptedEmployeeId.HasValue && (!employee.AutoAcceptWork || request.AcceptedEmployeeId != employee.Id)) await push.StageScheduleChangeAsync(Db, shift.Id, [request.AcceptedEmployeeId.Value], DateTimeOffset.UtcNow, ct); }
         }
         var previousEmployee = request.OfferedEmployeeId ?? request.AcceptedEmployeeId;
         request.AcceptedEmployeeId = null; request.PlannedStartUtc = null; request.PlannedEndUtc = null;
         Touch(request); request.OfferId = PartnerCleaningRequest.StableId($"offer:{request.Id}:{request.Revision}");
         request.OfferedEmployeeId = employee.Id; request.OfferPlannedStartUtc = planned; request.Status = "Offered";
-        Db.Store(request); NotifyRequest(request, "OfferCreated", "Employee", employee.Id);
+        if (employee.AutoAcceptWork)
+        {
+            await MaterializeAcceptance(request, employee.Id, planned!.Value, ct, automatic: true);
+            NotifyRequest(request, "WorkAutoAccepted", "Employee", employee.Id);
+            if (push is not null)
+            {
+                var now = DateTime.UtcNow;
+                await push.StageAsync(Db, new PushIntent { EmployeeId = employee.Id, PartnerRequestId = request.Id,
+                    RequestRevision = request.Revision, Kind = "WorkAutoAccepted", EventKey = $"work-auto-accepted:{request.Id}:{request.Revision}:{employee.Id}",
+                    OccurredUtc = now, DueUtc = now, ExpiresUtc = now.AddHours(24) }, ct);
+            }
+        }
+        else
+        {
+            Db.Store(request); NotifyRequest(request, "OfferCreated", "Employee", employee.Id);
+            NotifyRequest(request, "AwaitingAcceptance", "Company");
+            if (push is not null) await push.StagePartnerOfferAsync(Db, request.Id, request.Revision, request.OfferId.Value, employee.Id, DateTimeOffset.UtcNow, ct);
+        }
         if (previousEmployee.HasValue && previousEmployee != employee.Id) NotifyRequest(request, "OfferWithdrawn", "Employee", previousEmployee);
-        NotifyRequest(request, "AwaitingAcceptance", "Company");
-        if (push is not null) await push.StagePartnerOfferAsync(Db, request.Id, request.Revision, request.OfferId.Value, employee.Id, DateTimeOffset.UtcNow, ct);
+
         await Db.SaveChangesAsync(ct);
         return await Map(request, true, ct);
     }
@@ -308,7 +354,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         CheckVersion(request, body.Version);
         if (request.Status != "Offered") throw new ShiftConflictException("This offer is no longer awaiting acceptance.");
         await ActiveCompany(request.CompanyId, ct);
-        var branch = await Branch(request.BranchId, request.CompanyId, ct);
+        await Branch(request.BranchId, request.CompanyId, ct);
         await EnsureUnstartedUnbilled(request, ct);
         DateTime start;
         if (request.OfferPlannedStartUtc.HasValue)
@@ -318,6 +364,18 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
                 throw new ValidationException("Accept the planned time set by your manager.");
         }
         else start = await Plan(request, body.PlannedStartLocal, ct);
+        await MaterializeAcceptance(request, actor, start, ct);
+        await Db.SaveChangesAsync(ct);
+        return await Map(request, false, ct);
+    }
+
+    // Caller holds the tenant work reservation; all documents and notifications commit together.
+    private async Task MaterializeAcceptance(PartnerCleaningRequest request, Guid actor, DateTime start, CancellationToken ct, bool automatic = false)
+    {
+        await Staff(actor, ct);
+        await ActiveCompany(request.CompanyId, ct);
+        var branch = await Branch(request.BranchId, request.CompanyId, ct);
+        await EnsureUnstartedUnbilled(request, ct);
         var end = start.AddMinutes(request.EstimatedDurationMinutes);
         var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
         var localFrom = TenantTimeZone.LocalDate(start, zone);
@@ -348,10 +406,8 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         request.FirstAcceptedAtUtc ??= DateTime.UtcNow; request.Status = "Accepted"; Touch(request);
         // A single Marten commit owns every document. Repository methods that commit individually are deliberately avoided.
         Db.Store(shift); Db.Store(occurrence); Db.Store(assignment); Db.Store(billing); Db.Store(request);
-        if (push is not null) await push.StageScheduleChangeAsync(Db, shiftId, assignments.Select(x => x.EmployeeId).Append(actor), DateTimeOffset.UtcNow, ct);
+        if (push is not null) await push.StageScheduleChangeAsync(Db, shiftId, assignments.Select(x => x.EmployeeId).Append(actor).Where(id => !automatic || id != actor), DateTimeOffset.UtcNow, ct);
         NotifyRequest(request, "RequestAccepted", "Company"); NotifyRequest(request, "RequestAccepted", "Staff");
-        await Db.SaveChangesAsync(ct);
-        return await Map(request, false, ct);
     }
 
     public async Task Decline(Guid actor, Guid offerId, PartnerDecline body, CancellationToken ct)
@@ -468,7 +524,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         var upper = TenantTimeZone.StartOfLocalDay(request.ToDate.ToDateTime(TimeOnly.MinValue).AddDays(1), zone);
         if (start < lower || start.AddMinutes(request.EstimatedDurationMinutes) > upper)
             throw new ValidationException("The entire visit must fit within the requested dates.");
-        if (request.ExactStartLocalTime is not null && local != request.FromDate.ToDateTime(TimeOnly.ParseExact(request.ExactStartLocalTime, "HH:mm", CultureInfo.InvariantCulture)))
+        if (request.FromDate == request.ToDate && request.ExactStartLocalTime is not null && local != request.FromDate.ToDateTime(TimeOnly.ParseExact(request.ExactStartLocalTime, "HH:mm", CultureInfo.InvariantCulture)))
             throw new ValidationException("This cleaning has an exact appointment time.");
         return start;
     }

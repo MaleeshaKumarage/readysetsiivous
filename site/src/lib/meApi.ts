@@ -54,7 +54,25 @@ export interface MyShiftCalendar {
   toLocalDate: string;
 }
 
+export interface WorkPreferences { autoAcceptWork: boolean }
+export interface SelfIdentity { realm: string; employee?: { id: string; role: string; isActive: boolean; identitySyncPending?: boolean } | null }
+export function supportsWorkPreferences(identity: SelfIdentity): boolean {
+  const employee = identity.employee;
+  return Boolean(employee?.isActive && !employee.identitySyncPending && ['employee', 'manager', 'admin'].includes(employee.role));
+}
+async function workPreferences(method: 'GET' | 'PUT', value?: boolean): Promise<WorkPreferences> {
+  const response = await authorizedFetch('/api/v1/me/work-preferences', { method, cache: 'no-store', ...(method === 'PUT' ? { body: JSON.stringify({ autoAcceptWork: value }) } : {}) });
+  if (!response.ok) {
+    const problem = await response.json().catch(() => ({}));
+    throw new Error(problem.detail || problem.title || 'Could not confirm work preferences. Please retry.');
+  }
+  const data = await response.json();
+  if (typeof data.autoAcceptWork !== 'boolean') throw new Error('Could not confirm work preferences. Please retry.');
+  return data;
+}
 export const meApi = {
+  workPreferences: () => workPreferences('GET'),
+  saveWorkPreferences: (autoAcceptWork: boolean) => workPreferences('PUT', autoAcceptWork),
   calendar: async (view: ShiftCalendarView, cursor?: string): Promise<MyShiftCalendar> => {
     const query = new URLSearchParams({ view });
     if (cursor) query.set('cursor', cursor);

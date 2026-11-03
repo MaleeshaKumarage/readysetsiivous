@@ -87,8 +87,9 @@ public class EmployeeReadScopeTests
         Assert.Contains(host.Employee.Id.ToString(), body); Assert.DoesNotContain("secret", body);
         Assert.DoesNotContain("98765", body); Assert.DoesNotContain("scope-sub", body);
         using var json = JsonDocument.Parse(body);
-        Assert.Equal(new[] { "id", "firstName", "lastName", "phone", "isActive", "colorHex", "skills", "serviceAreas", "defaultHours" }.Order(),
+        Assert.Equal(new[] { "id", "firstName", "lastName", "phone", "isActive", "colorHex", "skills", "serviceAreas", "defaultHours", "autoAcceptWork" }.Order(),
             json.RootElement[0].EnumerateObject().Select(p => p.Name).Order());
+        Assert.False(json.RootElement[0].GetProperty("autoAcceptWork").GetBoolean());
     }
 
     [Theory]

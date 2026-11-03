@@ -144,6 +144,7 @@ public sealed class PartnerNotificationDispatcher(IPartnerStore store, IShiftWor
 
     public static bool CurrentForRequest(PartnerNotification item, PartnerCleaningRequest? request) => request is not null && (item.Kind switch
     {
+        "WorkAutoAccepted" => request.Status == "Accepted" && request.Revision == item.Revision && request.AcceptedEmployeeId == item.RecipientEmployeeId,
         "OfferCreated" => request.Status == "Offered" && request.Revision == item.Revision && request.OfferedEmployeeId == item.RecipientEmployeeId,
         "RequestCancelled" => request.Status == "Cancelled",
         "OfferWithdrawn" => request.Revision >= item.Revision
@@ -168,7 +169,7 @@ public sealed class PartnerNotificationDispatcher(IPartnerStore store, IShiftWor
             throw new InvalidOperationException("Configure App:FrontendBaseUrl for partner notifications.");
         var route = item.Audience == "Company" ? "/partner/" : item.Audience == "Employee" ? "/me/shifts/" : employee.Role == Employee.RoleManager ? "/manager/partner-requests/" : "/admin/partner-requests/";
         var link = origin!.TrimEnd('/') + route;
-        var title = item.Kind switch { "WorkStarted" => "Cleaning has started", "WorkCompleted" => "Cleaning is complete", _ => "Cleaning request update" };
+        var title = item.Kind switch { "WorkAutoAccepted" => "Cleaning automatically accepted", "WorkStarted" => "Cleaning has started", "WorkCompleted" => "Cleaning is complete", _ => "Cleaning request update" };
         var dates = request is null ? "" : $"<p>Requested dates: {request.FromDate:yyyy-MM-dd} to {request.ToDate:yyyy-MM-dd}.</p>";
         return new() { Id = PartnerCleaningRequest.StableId($"partner-delivery:{item.Id:N}:{employee.Id:N}"), RecipientEmployeeId = employee.Id,
             To = employee.Email, Subject = $"ReadySetSiivous — {title}",

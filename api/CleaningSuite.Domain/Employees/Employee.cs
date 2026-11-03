@@ -16,6 +16,7 @@ public class Employee : BaseDocument
     public DateTime? InviteLastAttemptUtc { get; set; }
     public DateTime? InviteLastSentUtc { get; set; }
     public string? InviteError { get; set; }
+    public bool AutoAcceptWork { get; set; }
     public bool IdentitySyncPending { get; set; }
     public DateTime? InvitedAtUtc { get; set; }
     public string Email { get; set; } = "";

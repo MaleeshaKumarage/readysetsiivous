@@ -61,6 +61,7 @@ test('cleaner must choose a time before accepting an unscheduled offer; acceptan
     if (route.request().method() === 'GET') return route.fulfill({ headers, json: offer ? [offer] : [] });
     decisions.push(route.request().postDataJSON()); offer = null; return route.fulfill({ headers, json: { ...request, status: 'Accepted' } });
   });
+  await page.route(/\/api\/v1\/me\/work-preferences$/, route => route.fulfill({ headers, json: { autoAcceptWork: false } }));
   await page.goto('/me/shifts/');
   const offerCard = page.getByRole('article', { name: 'Lake apartment offer', exact: true }).locator('.rounded-2xl');
   await expect(offerCard).toHaveCSS('background-color', 'rgb(255, 255, 255)');

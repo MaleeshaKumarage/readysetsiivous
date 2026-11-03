@@ -75,7 +75,7 @@ test('cleaner declines an offer with its revision and reason then sees it remove
     if (req.method() === 'GET') return route.fulfill({ headers, json: offers });
     decisions.push({ path: new URL(req.url()).pathname, method: req.method(), body: req.postDataJSON() as { version: number; reason: string } }); offers = []; return route.fulfill({ status: 204, headers });
   });
-  await page.goto('/me/shifts/'); await page.getByLabel('Decline reason (optional)').fill('Unavailable during checkout window'); await page.getByRole('button', { name: 'Decline cleaning', exact: true }).click();
+  await page.route(/\/api\/v1\/me\/work-preferences$/, route => route.fulfill({ headers, json: { autoAcceptWork: false } })); await page.goto('/me/shifts/'); await page.getByLabel('Decline reason (optional)').fill('Unavailable during checkout window'); await page.getByRole('button', { name: 'Decline cleaning', exact: true }).click();
   await expect(page.getByText('No pending cleaning offers.', { exact: true })).toBeVisible();
   await expect(page.getByRole('article', { name: 'Lake apartment offer', exact: true })).toHaveCount(0);
   expect(decisions).toEqual([{ path: '/api/v1/me/partner-offers/offer-one/decline', method: 'POST', body: { version: 7, reason: 'Unavailable during checkout window' } }]);
@@ -133,4 +133,45 @@ test('staff updates reusable cleaning pricing from Properties and sees the refre
   await expect(page.getByText('Pricing saved.', { exact: true })).toBeVisible(); await expect(page.getByText('€95.00 excl. VAT · 150 minutes', { exact: true })).toBeVisible();
   expect(writes).toEqual([{ path: `/branches/${branch.id}/pricing`, method: 'PUT', body: { priceNet: 95, vatRatePercent: 14, estimatedDurationMinutes: 150 } }]);
   await page.getByRole('button', { name: 'Set cleaning price', exact: true }).click(); await expect(page.getByLabel('VAT (%)')).toHaveValue('14');
+});
+
+test('A01 staff requires exact time only for automatic cleaner and reports scheduled work', async ({ page }) => {
+  await setupAdminMocks(page); await companies(page);
+  await page.route(/\/api\/v1\/admin\/employees$/, route => route.fulfill({ headers, json: [
+    { id: 'auto', firstName: 'Auto', lastName: 'Cleaner', isActive: true, role: 'employee', autoAcceptWork: true },
+    { id: 'manual', firstName: 'Manual', lastName: 'Cleaner', isActive: true, role: 'employee', autoAcceptWork: false },
+  ] }));
+  let current = { ...cleaning }, writes: any[] = [];
+  await page.route(/\/api\/v1\/admin\/partner\//, route => {
+    const request = route.request(), path = new URL(request.url()).pathname.split('/partner')[1];
+    if (request.method() === 'OPTIONS') return route.fulfill({ headers });
+    if (request.method() === 'GET') return route.fulfill({ headers, json: path === '/requests' ? [current] : path === '/branches' ? [branch] : [] });
+    if (path.endsWith('/offer')) { const body = request.postDataJSON(); writes.push(body); current = { ...current, status: body.employeeId === 'auto' ? 'Accepted' : 'Offered', version: current.version + 1 }; return route.fulfill({ headers, json: current }); }
+    return route.fulfill({ status: 404, headers });
+  });
+  await page.goto('/admin/partner-requests/');
+  await page.getByRole('button', { name: 'Arrange cleaner / time' }).click();
+  await page.getByRole('combobox', { name: 'Cleaner', exact: true }).selectOption('auto');
+  const time = page.getByLabel(/^Planned start/); await expect(time).toHaveAttribute('required', '');
+  await page.getByRole('button', { name: 'Send cleaning offer' }).click(); expect(writes).toHaveLength(0);
+  await time.fill('2026-12-01T10:00'); await page.getByRole('button', { name: 'Send cleaning offer' }).click();
+  await expect(page.getByText('Work scheduled automatically.', { exact: true })).toBeVisible();
+  expect(writes[0]).toMatchObject({ employeeId: 'auto', plannedStartLocal: '2026-12-01T10:00' });
+  await page.getByRole('button', { name: 'Arrange cleaner / time' }).click();
+  await page.getByRole('combobox', { name: 'Cleaner', exact: true }).selectOption('manual');
+  await expect(time).not.toHaveAttribute('required', ''); await page.getByRole('button', { name: 'Send cleaning offer' }).click();
+  await expect(page.getByText('Offer sent. Waiting for cleaner acceptance.', { exact: true })).toBeVisible(); expect(writes[1].plannedStartLocal).toBeNull();
+  current = { ...cleaning, exactStartLocalTime: '09:00:00' };
+  await page.reload(); await page.getByRole('button', { name: 'Arrange cleaner / time' }).click();
+  await page.getByRole('combobox', { name: 'Cleaner', exact: true }).selectOption('auto');
+  await expect(time).toHaveAttribute('required', ''); await expect(time).toHaveValue('');
+  await page.getByRole('button', { name: 'Send cleaning offer' }).click(); expect(writes).toHaveLength(2);
+  await time.fill('2026-12-02T09:00'); await page.getByRole('button', { name: 'Send cleaning offer' }).click();
+  await expect(page.getByText('Work scheduled automatically.', { exact: true })).toBeVisible();
+  expect(writes[2]).toMatchObject({ employeeId: 'auto', plannedStartLocal: '2026-12-02T09:00' });
+  current = { ...cleaning, fromDate: '2026-12-01', toDate: '2026-12-01', exactStartLocalTime: '09:00:00' };
+  await page.reload(); await page.getByRole('button', { name: 'Arrange cleaner / time' }).click();
+  await page.getByRole('combobox', { name: 'Cleaner', exact: true }).selectOption('auto'); await expect(time).not.toHaveAttribute('required', '');
+  await page.getByRole('button', { name: 'Send cleaning offer' }).click();
+  await expect(page.getByText('Work scheduled automatically.', { exact: true })).toBeVisible(); expect(writes).toHaveLength(4);
 });
