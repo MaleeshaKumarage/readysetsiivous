@@ -172,7 +172,20 @@ export default function ShiftsAdminPage() {
   const [assigningVisit, setAssigningVisit] = useState<ShiftOccurrence | null>(null);
   useEffect(() => () => { assignmentGeneration.current++; }, []);
 
-  const load = () => adminShifts.list(undefined, undefined, true).then((r) => { if (r) setShifts(r); setLoading(false); });
+  // The shift list has no assignee data, so the Employees column is filled from each shift's assignments.
+  // Only missing entries are written, so a newer list from Employees actions is never overwritten.
+  const loadAssignmentCounts = async (list: Shift[]) => {
+    const loaded = await Promise.all(list.map(async (s) => [s.id, await adminShifts.assignments(s.id).catch(() => null)] as const));
+    setAssignments(m => {
+      const next = { ...m };
+      for (const [id, rows] of loaded) if (rows && !next[id]) next[id] = rows;
+      return next;
+    });
+  };
+  const load = () => adminShifts.list(undefined, undefined, true).then((r) => {
+    if (r) { setShifts(r); void loadAssignmentCounts(r); }
+    setLoading(false);
+  });
   useEffect(() => { load(); adminTenant.get().then(profile => {
     if (!profile) throw new Error('Could not load scheduling settings. Refresh the page to retry.');
     const zone = profile.timeZoneId?.trim() || 'Europe/Helsinki';
@@ -486,7 +499,7 @@ export default function ShiftsAdminPage() {
                       {s.schedule.type === 4 && 'On-call'}
                       {s.schedule.type === 6 && `One-time ${s.schedule.oneTimeDate?.slice(0, 10)} ${s.schedule.oneTimeStart?.slice(0, 5)}–${s.schedule.oneTimeEnd?.slice(0, 5)}`}
                     </Table.Td>
-                    <Table.Td>{assignments[s.id]?.length ?? 0}</Table.Td>
+                    <Table.Td>{(assignments[s.id] ?? []).filter(a => a.isActive).length}</Table.Td>
                     <Table.Td>
                       <Group gap={6} wrap="nowrap">
                         {isAdmin() && <Button size="xs" variant="light" onClick={() => { setPricingShift(s); setPricingOccurrence(undefined); }}>Pricing</Button>}
