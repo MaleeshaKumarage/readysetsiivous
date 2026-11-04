@@ -1,20 +1,28 @@
 import { authorizedFetch } from './adminApi';
 
+export interface CalendarReview { kind: 'missing-completion' | 'unusual-duration'; label: string }
 export interface CalendarEmployee {
   employeeId: string; name: string; actualStartUtc: string | null; actualEndUtc: string | null;
-  hours: number | null; status: string; version: string | null; canRecord: boolean;
+  hours: number | null; status: string; version: string | null; canRecord: boolean; review?: CalendarReview | null;
 }
 export interface CalendarVisit {
   shiftId: string; shiftName: string; companyName: string; branchName: string;
   startUtc: string; endUtc: string; exceptionId: string | null; cancelled: boolean; ambiguous: boolean;
-  assignees: CalendarEmployee[];
+  needsReview?: boolean; assignees: CalendarEmployee[];
 }
 export interface AdminShiftCalendar {
   date: string; today: string; timeZoneId: string; occurrences: CalendarVisit[];
 }
 export class CalendarAccessError extends Error {}
+export class CalendarConnectionError extends Error {}
 export async function calendarRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await authorizedFetch(`/api/v1/admin/shifts/calendar${path}`, { ...init, cache: 'no-store' });
+  let response: Response;
+  try {
+    response = await authorizedFetch(`/api/v1/admin/shifts/calendar${path}`, { ...init, cache: 'no-store' });
+  } catch {
+    // The request may have reached the server before the connection failed. Do not offer a blind retry.
+    throw new CalendarConnectionError('The connection was lost before the server confirmed the request. Reload the calendar to check what was saved before trying again.');
+  }
   if (response.status === 403) throw new CalendarAccessError('Shift calendar access is not enabled for your account.');
   if (!response.ok) {
     const problem = await response.json().catch(() => null);

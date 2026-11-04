@@ -58,14 +58,22 @@ public class ShiftCalendarAdminController(IShiftRepository shifts, IEmployeeRepo
                 var assignees = visit.EmployeeIds.Concat(recorded.Select(f => f.EmployeeId)).Distinct().Select(id => {
                     staff.TryGetValue(id, out var person);
                     var form = recorded.FirstOrDefault(f => f.EmployeeId == id);
+                    // Same boundary as correction: every review flag has an available action; today/future never flag.
+                    var correctable = day < today && !visit.IsCancelled && !ambiguous && !shift.PartnerRequestId.HasValue && person?.IsActive == true && Employee.IsWorkRole(person.Role);
+                    var lastCorrection = form?.WorkTimeCorrections is { Count: > 0 } corrections ? corrections[^1] : null;
+                    var corrected = lastCorrection is not null && lastCorrection.StartUtc == form!.StartedAtUtc && lastCorrection.EndUtc == form.EndedAtUtc;
+                    var flag = CompletionReview.Evaluate(correctable, occurrence.StartUtc, occurrence.EndUtc, form?.IsSubmitted == true,
+                        form?.StartedAtUtc, form?.EndedAtUtc, corrected);
                     return new { employeeId = id, name = person is null ? form?.EmployeeName ?? "Unknown employee" : $"{person.FirstName} {person.LastName}",
                         actualStartUtc = form?.StartedAtUtc, actualEndUtc = form?.EndedAtUtc,
                         hours = form?.StartedAtUtc is DateTime start && form.EndedAtUtc is DateTime end ? (double?)(end - start).TotalHours : null,
                         status = form?.IsSubmitted == true ? "Recorded" : form?.StartedAtUtc is not null ? "Started" : "Not started",
-                        version = form?.Version, canRecord = day < today && !visit.IsCancelled && !ambiguous && !shift.PartnerRequestId.HasValue && person?.IsActive == true && Employee.IsWorkRole(person.Role) };
+                        version = form?.Version, canRecord = correctable,
+                        review = flag is null ? (object?)null : new { kind = flag.Kind, label = flag.Label } };
                 }).ToArray();
                 result.Add(new { shiftId = shift.Id, shiftName = shift.Name, companyName = companyNames[shift.CompanyId], branchName = branchNames[shift.BranchId],
-                    occurrence.StartUtc, occurrence.EndUtc, occurrence.ExceptionId, cancelled = visit.IsCancelled, ambiguous, assignees });
+                    occurrence.StartUtc, occurrence.EndUtc, occurrence.ExceptionId, cancelled = visit.IsCancelled, ambiguous,
+                    needsReview = assignees.Any(a => a.review is not null), assignees });
             }
         }
         return Ok(new { date = day.ToString("yyyy-MM-dd"), today = today.ToString("yyyy-MM-dd"), timeZoneId = zoneId, occurrences = result });

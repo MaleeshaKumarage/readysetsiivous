@@ -153,3 +153,14 @@ A01 (employee-owned work autoaccept) follows C01. Start-time question resolved: 
 - Baseline before edits on the unchanged worktree: 114 of 114 desktop and mobile cases passed across the shift specs.
 - Specs routed through the new `e2e/shift-actions.ts` helpers: lifecycle-shifts, lifecycle-one-time-shifts, lifecycle-shift-assignment-count, lifecycle-shift-completed, shift-assignment, shift-dates, shift-occurrences, shift-reactivation, admin-edit-inactive, lifecycle-invoice-billing, quality-cycle, admin.spec.
 - New `e2e/shift-workspace.spec.ts` covers row actions, workspace sections, workspace-to-dialog handoffs, on-call and inactive next steps, and phone overflow.
+
+### W03 completion review checkpoint - 2026-11-04
+
+- Branch feat/completion-review-w03 from main 1fed3af (W02 PR #256). Scope from #245 W03 only: server-computed review flags on the existing admin shift calendar for past visits.
+- Missing completion: a past, eligible visit whose assignee has no submitted record (includes started but not ended). Unusual duration: a submitted record whose duration is below 0.5x or above 1.5x the scheduled duration (CompletionReview constants; a product threshold, not a settled rule). A reasoned correction whose times equal the current actual times clears the flag. Flags never change times automatically.
+- Eligibility uses the same boundary as correction (past day, not cancelled, not ambiguous, not partner, active work-role employee), so every flag has an action and today/future never flag. Inactive employees and deleted-source records are not flagged or changed.
+- The calendar shows Scheduled and Actual labels apart, a per-day count of visits needing review, a Needs-review filter, and the reason in the correction dialog. A lost save response now says the save may have reached the server and asks for a reload instead of showing a raw network error.
+- Backend: 13 new AdminShiftCalendarTests cases (classification theory, past/future flags, unusual duration cleared by correction, inactive employee, lost-response stale-version retry). Full backend suite: 1257 passed, 0 failed, 89 skipped (database tests skipped locally; CI executes them).
+- Frontend: lifecycle-admin-calendar.spec.ts 32 cases (16 tests on chromium-desktop and mobile-touch, including the new review, unusual-duration and lost-response cases). Regression: my-shifts, my-shifts-one-time, my-shifts-calendar, quality-cycle, shift-workspace, lifecycle-shifts and shift-occurrences, 174 passed. TypeScript passed.
+- Open product decisions: the duration thresholds above; review is per day, not a cross-date queue, so D01 still needs a bounded server count for missing completions. The checklist is unchanged: unchecked items still finish a visit (existing quality-cycle.spec coverage).
+- Merge and deployment status are recorded separately after PR CI completes.
