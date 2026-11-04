@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Title, Button, Group, Stack, Text, Loader, Badge, Tabs, Select, TextInput, Drawer, Paper } from '@mantine/core';
 import {
-  adminWorkQueue, adminBookings, type Booking, type WorkQueueItem, type WorkQueuePage, type WorkQueueSource, type WorkQueueView,
+  adminWorkQueue, adminBookings, adminEmployees, type Booking, type Employee, type WorkQueueItem, type WorkQueuePage, type WorkQueueSource, type WorkQueueView,
 } from '@/lib/adminApi';
 
 const VIEWS: { value: WorkQueueView; label: string }[] = [
@@ -33,12 +33,25 @@ function bookingActions(status: string): ('confirm' | 'cancel' | 'complete')[] {
 
 const ACTION_LABEL = { confirm: 'Confirm', cancel: 'Cancel booking', complete: 'Mark completed' } as const;
 
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Accepts yyyy-MM-dd bounds only; a reversed range is dropped rather than sent to the server. */
+function readDates(from: string | null, to: string | null): { dateFrom: string; dateTo: string } {
+  const start = from && DATE_PATTERN.test(from) ? from : '';
+  const end = to && DATE_PATTERN.test(to) ? to : '';
+  return start && end && start > end ? { dateFrom: '', dateTo: '' } : { dateFrom: start, dateTo: end };
+}
+
 export default function WorkQueuePage() {
   const [view, setView] = useState<WorkQueueView>('needs-action');
   const [source, setSource] = useState<WorkQueueSource>('all');
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [assignee, setAssignee] = useState('');
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [result, setResult] = useState<WorkQueuePage | null>(null);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState('');
@@ -50,12 +63,18 @@ export default function WorkQueuePage() {
   const [detailError, setDetailError] = useState('');
   const [actionBusy, setActionBusy] = useState<string | null>(null);
 
-  const writeUrl = (next: { view: WorkQueueView; source: WorkQueueSource; search: string; page: number }, mode: 'push' | 'replace' = 'push') => {
+  type Filters = { view: WorkQueueView; source: WorkQueueSource; search: string; page: number; dateFrom: string; dateTo: string; assignee: string };
+  const current = (overrides: Partial<Filters> = {}): Filters => ({ view, source, search, page, dateFrom, dateTo, assignee, ...overrides });
+
+  const writeUrl = (next: Filters, mode: 'push' | 'replace' = 'push') => {
     try {
       const params = new URLSearchParams(window.location.search);
       params.set('view', next.view);
       params.set('source', next.source);
       if (next.search) params.set('q', next.search); else params.delete('q');
+      if (next.dateFrom) params.set('from', next.dateFrom); else params.delete('from');
+      if (next.dateTo) params.set('to', next.dateTo); else params.delete('to');
+      if (next.assignee) params.set('assignee', next.assignee); else params.delete('assignee');
       params.set('page', String(next.page));
       const qs = params.toString();
       const url = `${window.location.pathname}?${qs}`;
@@ -73,6 +92,8 @@ export default function WorkQueuePage() {
       source: requestedSource && SOURCE_VALUES.includes(requestedSource) ? requestedSource : 'all' as WorkQueueSource,
       search: (params.get('q') ?? '').trim(),
       page: Number.isInteger(requestedPage) && requestedPage >= 1 ? requestedPage : 1,
+      ...readDates(params.get('from'), params.get('to')),
+      assignee: (params.get('assignee') ?? '').trim(),
       booking: params.get('booking'),
     };
   };
@@ -82,6 +103,7 @@ export default function WorkQueuePage() {
     const apply = () => {
       const state = readUrl();
       setView(state.view); setSource(state.source); setQuery(state.search); setSearch(state.search); setPage(state.page);
+      setDateFrom(state.dateFrom); setDateTo(state.dateTo); setAssignee(state.assignee);
     };
     apply();
     setReady(true);
@@ -107,7 +129,7 @@ export default function WorkQueuePage() {
       const next = query.trim();
       if (next === search) return;
       setSearch(next); setPage(1);
-      writeUrl({ view, source, search: next, page: 1 });
+      writeUrl(current({ search: next, page: 1 }));
     }, 300);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -118,27 +140,39 @@ export default function WorkQueuePage() {
     if (!ready) return;
     const version = ++generation.current;
     setLoading(true); setListError('');
-    void adminWorkQueue.page({ view, source, q: search || undefined, skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE }).then(next => {
+    void adminWorkQueue.page({ view, source, q: search || undefined, from: dateFrom || undefined, to: dateTo || undefined, assignee: assignee || undefined, skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE }).then(next => {
       if (version !== generation.current) return;
       if (!next) { setListError('The work queue could not be loaded. Retry.'); setResult(null); }
       else if (next.items.length === 0 && next.total > 0 && page > 1) {
         const last = Math.ceil(next.total / PAGE_SIZE);
-        setPage(last); writeUrl({ view, source, search, page: last }, 'replace');
+        setPage(last); writeUrl(current({ page: last }), 'replace');
         return;
       } else setResult(next);
       setLoading(false);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, view, source, search, page, reload]);
+  }, [ready, view, source, search, page, dateFrom, dateTo, assignee, reload]);
+
+  // Employees feed the assignee filter. A failure leaves the filter on "Anyone" rather than blocking the queue.
+  useEffect(() => {
+    if (!ready) return;
+    void adminEmployees.list(false).then(list => setEmployees(list ?? [])).catch(() => setEmployees([]));
+  }, [ready]);
 
   const changeView = (next: WorkQueueView) => {
-    setView(next); setPage(1); writeUrl({ view: next, source, search, page: 1 });
+    setView(next); setPage(1); writeUrl(current({ view: next, page: 1 }));
   };
   const changeSource = (next: WorkQueueSource) => {
-    setSource(next); setPage(1); writeUrl({ view, source: next, search, page: 1 });
+    setSource(next); setPage(1); writeUrl(current({ source: next, page: 1 }));
+  };
+  const changeDates = (nextFrom: string, nextTo: string) => {
+    setDateFrom(nextFrom); setDateTo(nextTo); setPage(1); writeUrl(current({ dateFrom: nextFrom, dateTo: nextTo, page: 1 }));
+  };
+  const changeAssignee = (next: string) => {
+    setAssignee(next); setPage(1); writeUrl(current({ assignee: next, page: 1 }));
   };
   const changePage = (next: number) => {
-    setPage(next); writeUrl({ view, source, search, page: next });
+    setPage(next); writeUrl(current({ page: next }));
   };
 
   const openDetail = async (id: string) => {
@@ -188,7 +222,16 @@ export default function WorkQueuePage() {
           onChange={value => value && changeSource(value as WorkQueueSource)} allowDeselect={false} w={220} />
         <TextInput label="Search" placeholder="Customer, booking number or company" value={query}
           onChange={event => setQuery(event.currentTarget.value)} w={320} />
+        <TextInput type="date" label="From" aria-label="From date" value={dateFrom} max={dateTo || undefined}
+          onChange={event => changeDates(event.currentTarget.value, dateTo)} w={170} />
+        <TextInput type="date" label="To" aria-label="To date" value={dateTo} min={dateFrom || undefined}
+          onChange={event => changeDates(dateFrom, event.currentTarget.value)} w={170} />
+        <Select aria-label="Assignee" label="Assignee" placeholder="Anyone" clearable
+          data={employees.map(employee => ({ value: employee.id, label: `${employee.firstName} ${employee.lastName}`.trim() }))}
+          value={assignee || null} onChange={value => changeAssignee(value ?? '')} w={220} />
       </Group>
+
+      {assignee && <Text size="sm" c="dimmed" mb="sm">Partner requests have no assignee, so they are hidden while this filter is on.</Text>}
 
       {loading ? <Loader /> : listError ? (
         <Stack>

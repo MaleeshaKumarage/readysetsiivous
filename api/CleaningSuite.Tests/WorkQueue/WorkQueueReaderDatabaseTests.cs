@@ -120,6 +120,40 @@ public class WorkQueueReaderDatabaseTests
     }
 
     [QualityCycleDatabaseFact]
+    public async Task Date_and_assignee_filters_apply_before_paging_and_counts()
+    {
+        using var f = await Fixture.Create();
+        var company = new Company { Name = "Filter Oy", BusinessId = "WQ-" + Guid.NewGuid().ToString("N")[..8], IsActive = true, IsPartnerEnabled = true };
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(company);
+            // 01:00 Helsinki on 3 Dec is 23:00 UTC on 2 Dec. A date window must use the local day edge, not the UTC date.
+            db.Store(new Booking { BookingNumber = "BK-EARLY", Customer = new Customer { Name = "Early bird" }, Status = Booking.StatusConfirmed, EmployeeId = "emp-a",
+                StartUtc = new DateTime(2026, 12, 2, 23, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-03", StartLocalTime = "01:00" });
+            db.Store(new Booking { BookingNumber = "BK-DAY2", Customer = new Customer { Name = "Day two" }, Status = Booking.StatusNew,
+                StartUtc = new DateTime(2026, 12, 2, 8, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-02", StartLocalTime = "10:00" });
+            db.Store(new Booking { BookingNumber = "BK-LATE", Customer = new Customer { Name = "Late one" }, Status = Booking.StatusConfirmed, EmployeeId = "emp-b",
+                StartUtc = new DateTime(2026, 12, 9, 8, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-09", StartLocalTime = "10:00" });
+            await db.SaveChangesAsync();
+        }
+        using var session = f.Session();
+        var reader = Reader(f, session);
+
+        var dayThree = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Scheduled, "booking", null, 0, 25, "2026-12-03", "2026-12-03"));
+        Assert.Equal(["BK-EARLY"], dayThree.Items.Select(i => i.Reference).ToArray());
+        Assert.Equal(0, dayThree.Counts[WorkQueueViews.NeedsAction]);
+        Assert.Equal(1, dayThree.Counts[WorkQueueViews.Scheduled]);
+
+        var counts = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Scheduled, "booking", null, 0, 25, "2026-12-01", "2026-12-08"));
+        Assert.Equal(1, counts.Total);
+        Assert.Equal(1, counts.Counts[WorkQueueViews.Scheduled]);
+
+        var emp = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Scheduled, "all", null, 0, 25, Assignee: "emp-b"));
+        Assert.Equal(["BK-LATE"], emp.Items.Select(i => i.Reference).ToArray());
+        Assert.Equal(1, emp.Total);
+    }
+
+    [QualityCycleDatabaseFact]
     public async Task Shift_queue_reads_occurrence_forms_with_unspecified_kind_bounds()
     {
         // Regression: UTC-kind window bounds against ShiftOccurrenceUtc made Npgsql reject the query.

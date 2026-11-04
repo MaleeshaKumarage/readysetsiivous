@@ -23,14 +23,25 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
         var includeBookings = query.Source is "all" or "booking";
         var includePartners = query.Source is "all" or "partner";
         var includeShifts = query.Source is "all" or "shift";
+        var assignee = query.Assignee;
+        // Partner requests carry no assignee of their own, so an assignee filter leaves them out.
+        if (assignee is not null) includePartners = false;
+        var fromDay = query.DateFrom is null ? (DateOnly?)null : DateOnly.ParseExact(query.DateFrom, "yyyy-MM-dd");
+        var toDay = query.DateTo is null ? (DateOnly?)null : DateOnly.ParseExact(query.DateTo, "yyyy-MM-dd");
+        bool InDates(DateOnly day) => (fromDay is null || day >= fromDay) && (toDay is null || day <= toDay);
         var companyIds = search is not null && (includePartners || includeShifts)
             ? (await Db.Query<Company>().Where(c => c.Name.Contains(search, StringComparison.OrdinalIgnoreCase)).Select(c => c.Id).ToListAsync(ct)).ToArray()
             : Array.Empty<Guid>();
 
         // Partner visits are few per tenant and their view depends on their forms, so they are classified in memory.
-        var partnerViews = includePartners ? await ClassifyPartnersAsync(search, companyIds, ct) : new List<PartnerView>();
+        var partnerViews = includePartners ? (await ClassifyPartnersAsync(search, companyIds, ct)).Where(p => InDates(p.Request.FromDate)).ToList() : new List<PartnerView>();
         var (_, zone) = await TenantTimeZone.LoadAsync(profiles, context, ct);
-        var shiftRows = includeShifts ? await ClassifyShiftsAsync(search, companyIds, zone, ct) : new List<ShiftRow>();
+        var assigneeId = assignee is not null && Guid.TryParse(assignee, out var parsedAssignee) ? parsedAssignee : (Guid?)null;
+        var shiftRows = includeShifts
+            ? (await ClassifyShiftsAsync(search, companyIds, zone, ct))
+                .Where(r => InDates(DateOnly.FromDateTime(r.Local)) && (assignee is null || (assigneeId is { } id && r.Visit.EmployeeIds.Contains(id))))
+                .ToList()
+            : new List<ShiftRow>();
 
         var counts = new Dictionary<string, int>();
         foreach (var view in WorkQueueViews.All)
@@ -114,6 +125,10 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
         {
             var q = Db.Query<Booking>().Where(WorkQueueRules.BookingIn(view));
             if (search is not null) q = q.Where(b => b.BookingNumber.Contains(search, StringComparison.OrdinalIgnoreCase) || b.Customer.Name.Contains(search, StringComparison.OrdinalIgnoreCase));
+            // Date bounds compare stored UTC starts against the tenant-local day edges, so the filter runs in SQL.
+            if (fromDay is { } firstDay) { var lower = TenantTimeZone.StartOfLocalDay(firstDay.ToDateTime(TimeOnly.MinValue), zone); q = q.Where(b => b.StartUtc >= lower); }
+            if (toDay is { } lastDay) { var upper = TenantTimeZone.StartOfLocalDay(lastDay.AddDays(1).ToDateTime(TimeOnly.MinValue), zone); q = q.Where(b => b.StartUtc < upper); }
+            if (assignee is not null) q = q.Where(b => b.EmployeeId == assignee);
             return q;
         }
     }
