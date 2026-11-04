@@ -8,9 +8,9 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
-  MantineProvider, AppShell, NavLink, Group, Text, Button, Stack, Paper, createTheme, Burger, ActionIcon, Tooltip,
+  MantineProvider, AppShell, Box, NavLink, Group, Text, Button, Stack, Paper, createTheme, Burger, ActionIcon, Tooltip, Drawer,
 } from '@mantine/core';
-import { useDisclosure } from '@mantine/hooks';
+import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 import {
   LayoutDashboard, ListChecks, Sparkles, FileSignature, Users, Building2, CalendarClock, CheckSquare, Receipt, LogOut, LogIn, UserRound,
 } from 'lucide-react';
@@ -21,7 +21,7 @@ import { QuoteRequestBanner, QuoteRequestProvider, PartnerPendingBadge } from '@
 
 const NAV_GROUPS = [
   { label: 'Workspace', items: [{ href: '', label: 'Dashboard', icon: LayoutDashboard }] },
-  { label: 'Operations', items: [{ href: 'shifts', label: 'Shifts', icon: CalendarClock }, { href: 'shifts/calendar', label: 'Shift calendar', icon: CalendarClock }, { href: 'work-queue', label: 'Work queue', icon: ListChecks }, { href: 'partner-requests', label: 'Partner requests', icon: Building2 }, { href: 'quality-cycle', label: 'Quality Cycle', icon: CheckSquare }] },
+  { label: 'Operations', items: [{ href: 'shifts', label: 'Shifts', icon: CalendarClock }, { href: 'shifts/calendar', label: 'Shift calendar', icon: CalendarClock }, { href: 'work-queue', label: 'Work queue', icon: ListChecks }, { href: 'partner-requests', label: 'Partner operations', icon: Building2 }, { href: 'quality-cycle', label: 'Quality Cycle', icon: CheckSquare }] },
   { label: 'Customers', items: [{ href: 'leads', label: 'Leads', icon: Users }, { href: 'companies', label: 'Companies', icon: Building2 }, { href: 'agreements', label: 'Agreements', icon: FileSignature }] },
   { label: 'People', items: [{ href: 'employees', label: 'Employees', icon: Users }] },
   { label: 'Finance', items: [{ href: 'invoices', label: 'Invoices', icon: Receipt }] },
@@ -40,6 +40,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   // Capture before the child provider's layout effect writes its forced scheme.
   const previousScheme = useRef(typeof document === 'undefined' ? null : document.documentElement.getAttribute('data-mantine-color-scheme'));
   const [opened, { toggle, close }] = useDisclosure(false);
+  // Desktop keeps the fixed sidebar; phones get the same navigation in a drawer. Only one copy is rendered, so links stay unique.
+  const desktop = useMediaQuery('(min-width: 48em)', true);
   const pathname = usePathname() ?? '';
 
   const verifyAccess = useCallback(async () => {
@@ -159,19 +161,39 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     );
   }
 
+  const navigationContent = (<>
+    <Link href="/admin/" onClick={close} className="admin-brand">
+      <Image src="/brand/readyset-logomark.png" alt="" width={32} height={32} />
+      <Text fw={700}>ReadySet<Text component="span" c="indigo" fw={700}>Siivous</Text></Text>
+    </Link>
+    <Box className="admin-nav-scroll" style={{ flexGrow: 1 }}>
+      <Stack gap="md">
+        {NAV_GROUPS.map(group => <div key={group.label}>
+          <Text className="admin-nav-label" size="xs" fw={700} c="dimmed" mb={6}>{group.label}</Text>
+          <Stack gap={4}>{group.items.map(item => {
+            if (item.href === 'shifts/calendar' && !canUseShiftCalendar) return null;
+            const href = item.href ? `${base}${item.href}/` : base;
+            const active = item.href === '' ? pathname === '/admin' || pathname === '/admin/' : item.href === 'shifts' ? pathname === '/admin/shifts' || pathname === '/admin/shifts/' : pathname.startsWith(base + item.href);
+            return <NavLink key={href} component={Link} href={href} label={item.label} aria-label={item.label} rightSection={item.href === 'partner-requests' ? <PartnerPendingBadge /> : undefined} leftSection={<item.icon size={18} aria-hidden="true" />} active={active} aria-current={active ? 'page' : undefined} onClick={close} />;
+          })}</Stack>
+        </div>)}
+      </Stack>
+    </Box>
+    <Box className="admin-sidebar-footer" pt="md"><Stack gap="xs"><Button component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}#notifications`} variant="subtle">Notifications</Button><PwaInstallButton variant="light" size="sm" language="en" /></Stack></Box>
+  </>);
   return (
     <MantineProvider theme={adminTheme} forceColorScheme="light">
       <QuoteRequestProvider pathname={pathname}><AppShell
         className="admin-shell"
         header={{ height: 76 }}
-        navbar={{ width: 256, breakpoint: 'sm', collapsed: { mobile: !opened } }}
+        navbar={desktop ? { width: 256, breakpoint: 'sm', collapsed: { mobile: true } } : undefined}
         padding={{ base: 'md', sm: 'xl' }}
       >
         <AppShell.Header className="admin-header">
           <Group h="100%" justify="space-between" wrap="nowrap" gap="xs">
             <Group gap="xs" wrap="nowrap" className="admin-context">
               <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" aria-label="Toggle navigation" aria-expanded={opened} aria-controls="admin-navigation" />
-              <div><Text size="xs" c="dimmed" className="admin-eyebrow">Tenant administration</Text><Text fw={600}>{NAV_GROUPS.flatMap(group => group.items).find(item => item.href ? pathname.startsWith(base + item.href) : pathname === '/admin' || pathname === '/admin/')?.label ?? 'Workspace'}</Text></div>
+              <div><Text size="xs" c="dimmed" className="admin-eyebrow">Tenant administration</Text><Text fw={600}>{NAV_GROUPS.flatMap(group => group.items).filter(item => item.href ? pathname.startsWith(base + item.href) : pathname === '/admin' || pathname === '/admin/').sort((a, b) => b.href.length - a.href.length)[0]?.label ?? 'Workspace'}</Text></div>
             </Group>
             <Group gap={4} wrap="nowrap">
               {hasOwnWorkIdentity && <Button component={Link} href="/me/shifts/" variant="light" size="xs">My shifts</Button>}
@@ -181,28 +203,15 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             </Group>
           </Group>
         </AppShell.Header>
-        <AppShell.Navbar id="admin-navigation" className="admin-sidebar" p="md" aria-label="Administration">
-          <Link href="/admin/" onClick={close} className="admin-brand">
-            <Image src="/brand/readyset-logomark.png" alt="" width={32} height={32} />
-            <Text fw={700}>ReadySet<Text component="span" c="indigo" fw={700}>Siivous</Text></Text>
-          </Link>
-          <AppShell.Section grow className="admin-nav-scroll">
-            <Stack gap="md">
-              {NAV_GROUPS.map(group => <div key={group.label}>
-                <Text className="admin-nav-label" size="xs" fw={700} c="dimmed" mb={6}>{group.label}</Text>
-                <Stack gap={4}>{group.items.map(item => {
-                  if (item.href === 'shifts/calendar' && !canUseShiftCalendar) return null;
-                  const href = item.href ? `${base}${item.href}/` : base;
-                  const active = item.href === '' ? pathname === '/admin' || pathname === '/admin/' : item.href === 'shifts' ? pathname === '/admin/shifts' || pathname === '/admin/shifts/' : pathname.startsWith(base + item.href);
-                  return <NavLink key={href} component={Link} href={href} label={item.label} aria-label={item.label} rightSection={item.href === 'partner-requests' ? <PartnerPendingBadge /> : undefined} leftSection={<item.icon size={18} aria-hidden="true" />} active={active} aria-current={active ? 'page' : undefined} onClick={close} />;
-                })}</Stack>
-              </div>)}
-            </Stack>
-          </AppShell.Section>
-          <AppShell.Section className="admin-sidebar-footer" pt="md"><Stack gap="xs"><Button component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}#notifications`} variant="subtle">Notifications</Button><PwaInstallButton variant="light" size="sm" language="en" /></Stack></AppShell.Section>
-        </AppShell.Navbar>
+        {desktop && <AppShell.Navbar id="admin-navigation" className="admin-sidebar" p="md" aria-label="Administration">
+          {navigationContent}
+        </AppShell.Navbar>}
         <AppShell.Main><div className="admin-content"><QuoteRequestBanner />{children}</div></AppShell.Main>
-      </AppShell></QuoteRequestProvider>
+      </AppShell>
+      {!desktop && <Drawer opened={opened} onClose={close} size={256} padding="md" title="Administration" position="left" className="admin-sidebar">
+        <nav id="admin-navigation" aria-label="Administration" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>{navigationContent}</nav>
+      </Drawer>}
+      </QuoteRequestProvider>
     </MantineProvider>
   );
 }

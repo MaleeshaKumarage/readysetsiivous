@@ -175,7 +175,7 @@ export default function AdminQualityCyclePage() {
     <Stack gap="lg" p="md" style={{ color: 'var(--mantine-color-text)', background: 'var(--mantine-color-body)', borderRadius: 12 }}>
       <Group justify="space-between" align="flex-start" wrap="wrap">
         <div>
-          <Title order={2}>Quality Cycle Management</Title>
+          <Title order={2} component="h1">Quality Cycle Management</Title>
           <Text size="sm" c="dimmed" mt={2}>
             Create checklist templates and prepare, export or share client quality reports.
           </Text>

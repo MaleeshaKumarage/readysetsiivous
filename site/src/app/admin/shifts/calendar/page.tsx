@@ -64,7 +64,7 @@ export default function ShiftCalendarPage() {
   const reviewCount = data?.occurrences.filter(visit => visit.needsReview).length ?? 0;
   const shownVisits = data?.occurrences.filter(visit => !reviewOnly || visit.needsReview) ?? [];
   return <Stack>
-    <Title order={2}>Shift calendar</Title>
+    <Title order={2} component="h1">Shift calendar</Title>
     {!denied && <Group align="end" wrap="wrap">
       <Button variant="default" disabled={!day || saving} onClick={() => setDay(addDay(day, -1))}>Previous day</Button>
       <TextInput label="Calendar date" type="date" min="1900-01-01" max="9998-12-31" value={day} disabled={saving} onChange={event => { if (event.target.value) setDay(event.target.value); }} />

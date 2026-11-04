@@ -6,7 +6,7 @@ export const SCALE = { companies: 60, branchesMin: 2, branchesMax: 4 } as const;
 
 export type ScaleCompany = { id: string; name: string; businessId: string; isActive: boolean; isPartnerEnabled: boolean; contactName: string; contactEmail: string; contactPhone: string; notes: null };
 export type ScaleBranch = { id: string; companyId: string; name: string; street: string; postalCode: string; city: string; isActive: boolean };
-export type ScaleShift = { id: string; companyId: string; branchId: string; name: string; isActive: boolean; schedule: { type: string; weekdays: number[]; startTime: string; endTime: string }; validFrom: string; validUntil: null; notes: null };
+export type ScaleShift = { id: string; companyId: string; branchId: string; name: string; isActive: boolean; schedule: { type: number; weeklyDays: number[]; weeklyStart: string; weeklyEnd: string }; validFrom: string; validUntil: null; notes: null };
 export type ScaleInvoice = { id: string; invoiceNumber: string; customer: { name: string }; issueDate: string; dueDate: string; total: { net: number; vat: number; gross: number }; status: 'Issued' | 'Paid' | 'Void'; issuerIsSample: boolean };
 
 export type ScaleData = { companies: ScaleCompany[]; branches: ScaleBranch[]; shifts: ScaleShift[]; invoices: ScaleInvoice[] };
@@ -15,7 +15,7 @@ const pad = (n: number, width = 2) => String(n).padStart(width, '0');
 
 export function buildScaleData(): ScaleData {
   const companies: ScaleCompany[] = Array.from({ length: SCALE.companies }, (_, c) => ({
-    id: `co-${pad(c + 1, 3)}`, name: `Company ${pad(c + 1)} Ltd`, businessId: `${1000000 + c}-${c % 9}`,
+    id: `00000000-0000-4000-8000-${pad(c + 1, 12)}`, name: `Company ${pad(c + 1)} Ltd`, businessId: `${1000000 + c}-${c % 9}`,
     isActive: c % 5 !== 0, isPartnerEnabled: c % 4 === 0,
     contactName: `Contact ${c + 1}`, contactEmail: `contact${c + 1}@example.test`, contactPhone: '+358 00 000 0000', notes: null,
   }));
@@ -28,7 +28,7 @@ export function buildScaleData(): ScaleData {
   }
   const shifts: ScaleShift[] = branches.map((branch, index) => ({
     id: `${branch.id}-shift`, companyId: branch.companyId, branchId: branch.id, name: `${branch.name} cleaning`,
-    isActive: index % 6 !== 0, schedule: { type: 'weekly', weekdays: [1, 3, 5], startTime: '08:00', endTime: '12:00' },
+    isActive: index % 6 !== 0, schedule: { type: 2, weeklyDays: [1, 3, 5], weeklyStart: '08:00', weeklyEnd: '12:00' },
     validFrom: '2026-10-01', validUntil: null, notes: null,
   }));
   const statuses: ScaleInvoice['status'][] = ['Issued', 'Paid', 'Void'];
@@ -66,6 +66,7 @@ export async function installScaleRoutes(page: Page, data: ScaleData) {
     const q = url.searchParams;
     const json = (body: unknown) => route.fulfill({ headers: CORS, json: body });
     if (path.endsWith('/legacy-repairs')) return json({ agreements: [] });
+    if (path.endsWith('/assignment-counts')) return json(Object.fromEntries(data.shifts.map(shift => [shift.id, 1])));
     if (path.endsWith('/leads')) return json({ items: [], total: 0 });
     if (path.endsWith('/shifts/calendar')) return json({ timeZoneId: 'Europe/Helsinki', occurrences: [], people: [] });
     if (path.endsWith('/work-queue')) return json({ view: q.get('view') ?? 'needs-action', source: q.get('source') ?? 'all', items: [], total: 0, counts: { 'needs-action': 0, scheduled: 0, 'in-progress': 0, completed: 0, cancelled: 0 } });
@@ -83,7 +84,7 @@ export async function installScaleRoutes(page: Page, data: ScaleData) {
     const companyMatch = /\/companies\/([^/]+)$/.exec(path);
     if (companyMatch) {
       const company = data.companies.find(c => c.id === companyMatch[1]);
-      return company ? json({ ...company, branches: branchesOf(company.id) }) : route.fulfill({ status: 404, headers: CORS, json: { title: 'Not found' } });
+      return company ? json({ company, branches: branchesOf(company.id) }) : route.fulfill({ status: 404, headers: CORS, json: { title: 'Not found' } });
     }
     if (path.endsWith('/shifts')) {
       const companyId = q.get('companyId'), branchId = q.get('branchId'), includeInactive = q.get('includeInactive') === 'true';

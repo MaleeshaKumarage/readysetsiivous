@@ -171,10 +171,10 @@ export default function WorkQueuePage() {
 
   return (
     <>
-      <Title order={2} mb="md">Work queue</Title>
+      <Title order={2} component="h1" mb="md">Work queue</Title>
 
       <Tabs value={view} onChange={value => value && changeView(value as WorkQueueView)}>
-        <Tabs.List aria-label="Work queue views">
+        <Tabs.List aria-label="Work queue views" className="admin-tabs-list">
           {VIEWS.map(item => (
             <Tabs.Tab key={item.value} value={item.value}>
               {item.label}{result ? ` (${result.counts[item.value]})` : ''}
