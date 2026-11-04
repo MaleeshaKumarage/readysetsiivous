@@ -33,6 +33,8 @@ type Options = {
   invoicesList?: typeof invoices;
   failDetail?: boolean;
   failAgreements?: { value: boolean };
+  failShifts?: { value: boolean };
+  failInvoices?: { value: boolean };
   agreementsGate?: Promise<void>;
   requests?: string[];
 };
@@ -74,10 +76,12 @@ async function mockWorkspace(page: Page, options: Options = {}) {
     }
     if (path === '/api/v1/admin/agreements/legacy-repairs') return json({ agreements: [], companies: [] });
     if (path === '/api/v1/admin/shifts') {
+      if (options.failShifts?.value) return json({}, 500);
       const companyId = url.searchParams.get('companyId');
       return json(companyId ? shiftsList.filter(item => item.companyId === companyId) : shiftsList);
     }
     if (path === '/api/v1/admin/invoices') {
+      if (options.failInvoices?.value) return json({}, 500);
       const companyId = url.searchParams.get('companyId');
       return json(companyId ? invoicesList.filter(item => item.companyId === companyId) : invoicesList);
     }
@@ -286,6 +290,77 @@ test('invoices tab lists only this customer’s invoices', async ({ page }) => {
   await expect(page.getByRole('cell', { name: 'INV-100', exact: true })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'INV-200', exact: true })).toHaveCount(0);
   expect(requests.some(r => r.startsWith('GET /api/v1/admin/invoices?companyId=' + CUSTOMER))).toBe(true);
+});
+
+test('edit in companies list link opens the pinned customer', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockWorkspace(page);
+  await page.goto(ws(CUSTOMER));
+  await page.getByRole('link', { name: 'Edit in companies list' }).click();
+  await expect(page).toHaveURL(url => url.pathname === '/admin/companies/' && url.searchParams.get('company') === CUSTOMER);
+  await expect(page.getByRole('group', { name: 'Branch Harbour flat' })).toBeVisible();
+});
+
+test('manage properties link opens the pinned customer', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockWorkspace(page);
+  await page.goto(ws(CUSTOMER, 'properties'));
+  await page.getByRole('link', { name: 'Manage properties' }).click();
+  await expect(page).toHaveURL(url => url.pathname === '/admin/companies/' && url.searchParams.get('company') === CUSTOMER);
+  await expect(page.getByRole('group', { name: 'Branch Harbour flat' })).toBeVisible();
+});
+
+test('populated properties list shows branches and inactive badges', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockWorkspace(page);
+  await page.goto(ws(CUSTOMER, 'properties'));
+  await expect(page.getByText('Harbour flat · Helsinki', { exact: true })).toBeVisible();
+  await expect(page.getByText('Old office · Espoo', { exact: true })).toBeVisible();
+  await expect(page.getByRole('tabpanel', { name: 'Properties' }).getByText('Inactive', { exact: true })).toBeVisible();
+  await expect(page.getByText('No properties yet.', { exact: true })).toHaveCount(0);
+});
+
+test('work tab shows an error and retry reloads shifts once', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const failure = { value: true };
+  const requests = await mockWorkspace(page, { failShifts: failure });
+  await page.goto(ws(CUSTOMER, 'work'));
+  await expect(page.getByRole('alert').filter({ hasText: 'Shifts could not be loaded.' })).toBeVisible();
+  failure.value = false;
+  await page.getByRole('button', { name: 'Retry shifts' }).click();
+  await expect(page.getByRole('cell', { name: 'Weekly visit', exact: true })).toBeVisible();
+  expect(requests.filter(r => r.startsWith('GET /api/v1/admin/shifts?')).length).toBe(2);
+});
+
+test('work tab shows the no-shifts empty state for a customer with none', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockWorkspace(page, { shiftsList: [] });
+  await page.goto(ws(CUSTOMER, 'work'));
+  await expect(page.getByText('No shifts for this customer yet.', { exact: true })).toBeVisible();
+  await expect(page.getByText('No active shifts.', { exact: true })).toHaveCount(0);
+});
+
+test('open invoices button navigates to the invoices page', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockWorkspace(page);
+  await page.goto(ws(CUSTOMER, 'invoices'));
+  await page.getByRole('link', { name: 'Open invoices' }).click();
+  await expect(page).toHaveURL(/\/admin\/invoices\/$/);
+});
+
+test('invoices error shows retry while overview stays usable', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const failure = { value: true };
+  const requests = await mockWorkspace(page, { failInvoices: failure });
+  await page.goto(ws(CUSTOMER, 'invoices'));
+  await expect(page.getByRole('alert').filter({ hasText: 'Invoices could not be loaded.' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Overview' }).click();
+  await expect(page.getByText('Properties: 1 active · 1 inactive')).toBeVisible();
+  await page.getByRole('tab', { name: 'Invoices' }).click();
+  failure.value = false;
+  await page.getByRole('button', { name: 'Retry invoices' }).click();
+  await expect(page.getByRole('cell', { name: 'INV-100', exact: true })).toBeVisible();
+  expect(requests.filter(r => r.startsWith('GET /api/v1/admin/invoices?companyId=')).length).toBe(2);
 });
 
 test('invoices tab shows an empty state', async ({ page }) => {
