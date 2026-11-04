@@ -494,3 +494,16 @@ test('Finnish cancelled and completed request lists page with Finnish labels and
   await expect(page.getByText('Suunniteltu: Joustava, päivien sisällä', { exact: true })).toBeVisible();
   await expect(page.getByText('Peruutettu kohde 0', { exact: true })).toHaveCount(0);
 });
+
+test('owner Cancelled pager moves between pages from the keyboard', async ({ page }) => {
+  const cancelled = Array.from({ length: 27 }, (_, index) => ({ ...pending, id: `kb-cancelled-${index}`, branchName: `Keyboard cancelled ${index}`, status: 'Cancelled', firstAcceptedAtUtc: null }));
+  await owner(page, { requests: cancelled }); await page.goto('/partner/');
+  await page.getByRole('tab', { name: 'Cleaning requests', exact: true }).click();
+  await page.getByRole('tab', { name: /^Cancelled requests \(27\)/ }).click();
+  const pages = page.getByRole('navigation', { name: 'Cancelled requests', exact: true });
+  await pages.getByRole('button', { name: 'Next', exact: true }).focus(); await page.keyboard.press('Enter');
+  await expect(pages.getByText('2 / 2', { exact: true })).toBeVisible();
+  await pages.getByRole('button', { name: 'Previous', exact: true }).focus(); await page.keyboard.press('Enter');
+  await expect(pages.getByText('1 / 2', { exact: true })).toBeVisible();
+});
+

@@ -63,3 +63,16 @@ test('Assigned and Cancelled tabs page 25 rows at a time, each keeping its own p
   await expect(assignedPages.getByText('Page 2 of 2', { exact: true })).toBeVisible();
   await expect(page.getByRole('article')).toHaveCount(2);
 });
+
+test('staff Assigned pager moves between pages from the keyboard', async ({ page }) => {
+  await setup(page, Array.from({ length: 27 }, (_, index) => requestFor(index, 'Accepted')));
+  await page.goto('/admin/partner-requests/');
+  await page.getByRole('tab', { name: 'Assigned', exact: true }).click();
+  const pages = page.getByRole('navigation', { name: 'Assigned pages' });
+  const next = pages.getByRole('button', { name: 'Next', exact: true });
+  await next.focus(); await page.keyboard.press('Enter');
+  await expect(pages.getByText('Page 2 of 2', { exact: true })).toBeVisible();
+  await pages.getByRole('button', { name: 'Previous', exact: true }).focus(); await page.keyboard.press('Enter');
+  await expect(pages.getByText('Page 1 of 2', { exact: true })).toBeVisible();
+});
+
