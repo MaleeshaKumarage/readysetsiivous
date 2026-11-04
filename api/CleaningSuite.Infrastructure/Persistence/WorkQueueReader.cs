@@ -125,9 +125,9 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
         {
             var q = Db.Query<Booking>().Where(WorkQueueRules.BookingIn(view));
             if (search is not null) q = q.Where(b => b.BookingNumber.Contains(search, StringComparison.OrdinalIgnoreCase) || b.Customer.Name.Contains(search, StringComparison.OrdinalIgnoreCase));
-            // Date bounds compare stored UTC starts against the tenant-local day edges, so the filter runs in SQL.
-            if (fromDay is { } firstDay) { var lower = TenantTimeZone.StartOfLocalDay(firstDay.ToDateTime(TimeOnly.MinValue), zone); q = q.Where(b => b.StartUtc >= lower); }
-            if (toDay is { } lastDay) { var upper = TenantTimeZone.StartOfLocalDay(lastDay.AddDays(1).ToDateTime(TimeOnly.MinValue), zone); q = q.Where(b => b.StartUtc < upper); }
+            // Booking StartUtc is a timestamp without time zone, so the bounds are Unspecified-kind (Npgsql rejects Kind=Utc).
+            if (fromDay is { } firstDay) { var lower = TenantTimeZone.StartOfLocalDay(firstDay.ToDateTime(TimeOnly.MinValue), zone); var unspecifiedLower = DateTime.SpecifyKind(lower, DateTimeKind.Unspecified); q = q.Where(b => b.StartUtc >= unspecifiedLower); }
+            if (toDay is { } lastDay) { var upper = TenantTimeZone.StartOfLocalDay(lastDay.AddDays(1).ToDateTime(TimeOnly.MinValue), zone); var unspecifiedUpper = DateTime.SpecifyKind(upper, DateTimeKind.Unspecified); q = q.Where(b => b.StartUtc < unspecifiedUpper); }
             if (assignee is not null) q = q.Where(b => b.EmployeeId == assignee);
             return q;
         }
