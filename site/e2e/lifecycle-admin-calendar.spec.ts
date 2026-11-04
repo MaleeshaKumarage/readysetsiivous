@@ -5,29 +5,47 @@ const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Meth
 async function setup(page: Page, allowed = true) {
   await setupAdminMocks(page);
   await page.route(/\/api\/v1\/me$/, route => route.fulfill({ headers, json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: ['admin'] })], canUseShiftCalendar: allowed, employee: null } }));
-  const state = { saved: null as any, fail: false, saveFailure: 0, specialStates: false, partialWork: false, hold: null as Promise<void> | null };
+  const state = { saved: null as any, fail: false, saveFailure: 0, specialStates: false, partialWork: false, hold: null as Promise<void> | null, settled: false, unusual: false, abortPut: false, abortGet: false, secondFlagged: false };
   await page.route(/\/api\/v1\/admin\/shifts\/calendar(?:\?|\/|$)/, async route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
     if (!allowed) return route.fulfill({ headers, status: 403, json: {} });
     if (route.request().method() === 'PUT') {
       if (state.saveFailure) return route.fulfill({ headers, status: state.saveFailure, json: { detail: state.saveFailure === 409 ? 'Work times changed. Reload the calendar before saving.' : 'Could not save times. Please retry.' } });
-      state.saved = route.request().postDataJSON(); state.partialWork = false; return route.fulfill({ headers, json: { id: 'work' } });
+      state.saved = route.request().postDataJSON(); state.partialWork = false; state.unusual = false;
+      // A lost response: the server has saved the work, but the browser never receives the reply.
+      if (state.abortPut) { state.abortPut = false; return route.abort('connectionclosed'); }
+      return route.fulfill({ headers, json: { id: 'work' } });
     }
+    // A connection that drops before any reply: the load failed, nothing changed.
+    if (state.abortGet) return route.abort('connectionclosed');
     if (state.fail) return route.fulfill({ headers, status: 503, json: { detail: 'Calendar unavailable' } });
     const date = new URL(route.request().url()).searchParams.get('date') || '2026-10-30';
     if (state.hold && date === '2026-10-29') await state.hold;
+    const past = date < '2026-11-01';
     const specialVisit = (id: string, cancelled: boolean, ambiguous: boolean, assigned: boolean) => ({
       shiftId: id, shiftName: id, companyName: 'Test company', branchName: 'Helsinki branch',
-      startUtc: `${date}T11:00:00Z`, endUtc: `${date}T13:00:00Z`, exceptionId: id, cancelled, ambiguous,
-      assignees: assigned ? [{ employeeId: 'special', name: 'Assigned Cleaner', status: 'Not started', actualStartUtc: null, actualEndUtc: null, hours: null, version: null, canRecord: false }] : [],
+      startUtc: `${date}T11:00:00Z`, endUtc: `${date}T13:00:00Z`, exceptionId: id, cancelled, ambiguous, needsReview: false,
+      assignees: assigned ? [{ employeeId: 'special', name: 'Assigned Cleaner', status: 'Not started', actualStartUtc: null, actualEndUtc: null, hours: null, version: null, canRecord: false, review: null }] : [],
     });
-    return route.fulfill({ headers, json: { date, today: '2026-11-01', timeZoneId: 'Europe/Helsinki', occurrences: date > '2026-11-01' ? [] : [{
+    // Server-computed review flags: past visits without completion are missing; a recorded visit is unusual until a reasoned correction.
+    const aliceReview = !past ? null : state.saved && !state.partialWork ? (state.unusual ? { kind: 'unusual-duration', label: 'Actual duration differs from scheduled' } : null)
+      : state.partialWork ? { kind: 'missing-completion', label: 'Started, not ended' } : { kind: 'missing-completion', label: 'No completion recorded' };
+    const bobReview = past ? { kind: 'missing-completion', label: 'No completion recorded' } : null;
+    const visits: any[] = date > '2026-11-01' ? [] : [{
       shiftId: 'shift', shiftName: `Cleaning ${date}`, companyName: 'Test company', branchName: 'Helsinki branch',
-      startUtc: `${date}T08:00:00Z`, endUtc: `${date}T10:00:00Z`, exceptionId: null, cancelled: false, ambiguous: false,
+      startUtc: `${date}T08:00:00Z`, endUtc: `${date}T10:00:00Z`, exceptionId: null, cancelled: false, ambiguous: false, needsReview: !!aliceReview || !!bobReview,
       assignees: [{ employeeId: 'alice', name: 'Alice Cleaner', status: state.partialWork ? 'Started' : state.saved ? 'Recorded' : 'Not started', actualStartUtc: state.saved ? `${date}T08:15:00Z` : null,
-        actualEndUtc: state.saved && !state.partialWork ? `${date}T10:15:00Z` : null, hours: state.saved && !state.partialWork ? 2 : null, version: state.saved ? '11111111-1111-1111-1111-111111111111' : null, canRecord: date < '2026-11-01' },
-        { employeeId: 'bob', name: 'Bob Cleaner', status: 'Not started', actualStartUtc: null, actualEndUtc: null, hours: null, version: null, canRecord: date < '2026-11-01' }],
-    }, ...(state.specialStates ? [specialVisit('Cancelled clean', true, false, true), specialVisit('Overlapping clean', false, true, true), specialVisit('Unassigned clean', false, false, false)] : [])] } });
+        actualEndUtc: state.saved && !state.partialWork ? `${date}T10:15:00Z` : null, hours: state.saved && !state.partialWork ? 2 : null, version: state.saved ? '11111111-1111-1111-1111-111111111111' : null, canRecord: past, review: aliceReview },
+        { employeeId: 'bob', name: 'Bob Cleaner', status: 'Not started', actualStartUtc: null, actualEndUtc: null, hours: null, version: null, canRecord: past, review: bobReview }],
+    }];
+    if (state.settled && past) visits.push({ shiftId: 'settled', shiftName: 'Settled clean', companyName: 'Test company', branchName: 'Helsinki branch',
+      startUtc: `${date}T12:00:00Z`, endUtc: `${date}T14:00:00Z`, exceptionId: 'settled', cancelled: false, ambiguous: false, needsReview: false,
+      assignees: [{ employeeId: 'carol', name: 'Carol Done', status: 'Recorded', actualStartUtc: `${date}T12:00:00Z`, actualEndUtc: `${date}T14:00:00Z`, hours: 2, version: '22222222-2222-2222-2222-222222222222', canRecord: true, review: null }] });
+    if (state.secondFlagged && past) visits.push({ shiftId: 'second', shiftName: 'Second clean', companyName: 'Test company', branchName: 'Helsinki branch',
+      startUtc: `${date}T13:00:00Z`, endUtc: `${date}T15:00:00Z`, exceptionId: 'second', cancelled: false, ambiguous: false, needsReview: true,
+      assignees: [{ employeeId: 'dan', name: 'Dan Pending', status: 'Not started', actualStartUtc: null, actualEndUtc: null, hours: null, version: null, canRecord: true, review: { kind: 'missing-completion', label: 'No completion recorded' } }] });
+    if (state.specialStates) visits.push(specialVisit('Cancelled clean', true, false, true), specialVisit('Overlapping clean', false, true, true), specialVisit('Unassigned clean', false, false, false));
+    return route.fulfill({ headers, json: { date, today: '2026-11-01', timeZoneId: 'Europe/Helsinki', occurrences: visits } });
   });
   return state;
 }
@@ -219,4 +237,95 @@ test('failed permission changes retain the toggle and show a retryable error', a
   failing = false;
   await page.getByRole('button', { name: 'Enable shift calendar' }).click();
   await expect(page.getByRole('button', { name: 'Disable shift calendar' })).toBeVisible();
+});
+
+test('started-but-not-ended visit shows Missing completion with the Started, not ended label', async ({ page }) => {
+  const state = await setup(page); state.saved = {}; state.partialWork = true;
+  await page.goto('/admin/shifts/calendar/');
+  await expect(page.getByText('Missing completion', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Started, not ended', { exact: true })).toBeVisible();
+  await expect(page.getByText('No completion recorded', { exact: true })).toHaveCount(1);
+});
+
+test('visit with no recorded work shows Missing completion with the No completion recorded label', async ({ page }) => {
+  await setup(page);
+  await page.goto('/admin/shifts/calendar/');
+  await expect(page.getByText('Missing completion', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('No completion recorded', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Started, not ended', { exact: true })).toHaveCount(0);
+});
+
+test('visits needing review are counted and filterable; scheduled and actual times are labelled apart', async ({ page }) => {
+  const state = await setup(page); state.settled = true;
+  await page.goto('/admin/shifts/calendar/');
+  await expect(page.getByText('1 visit needs review.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Settled clean' })).toBeVisible();
+  await expect(page.getByText(/^Scheduled: /).first()).toBeVisible();
+  await expect(page.getByText('Missing completion', { exact: true }).first()).toBeVisible();
+  await page.getByText('Show only visits that need review', { exact: true }).click();
+  await expect(page.getByRole('checkbox', { name: 'Show only visits that need review' })).toBeChecked();
+  await expect(page.getByRole('heading', { name: 'Settled clean' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Cleaning 2026-10-30' })).toBeVisible();
+  await page.getByText('Show only visits that need review', { exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Settled clean' })).toBeVisible();
+});
+
+test('unusual duration is flagged, explained in the correction, and clears after a reasoned correction without moving times', async ({ page }) => {
+  const state = await setup(page); state.saved = {}; state.unusual = true;
+  await page.goto('/admin/shifts/calendar/');
+  await expect(page.getByText('Unusual time', { exact: true })).toBeVisible();
+  await expect(page.getByText('Actual duration differs from scheduled', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Correct times for Alice Cleaner' }).click();
+  await expect(page.getByText(/Review: Actual duration differs from scheduled/)).toBeVisible();
+  await expect(page.getByRole('dialog').getByText(/^Scheduled: /)).toBeVisible();
+  await expect(page.getByLabel('Actual start')).toHaveValue('2026-10-30T10:15');
+  await page.getByRole('textbox', { name: 'Reason', exact: true }).fill('Confirmed long visit');
+  await page.getByRole('button', { name: 'Save work times' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByText('Unusual time', { exact: true })).toHaveCount(0);
+  expect(state.saved).toMatchObject({ actualStartLocal: '2026-10-30T10:15', reason: 'Confirmed long visit' });
+});
+
+test('a dropped load connection shows a plain reload message and Retry recovers', async ({ page }) => {
+  const state = await setup(page); state.abortGet = true;
+  await page.goto('/admin/shifts/calendar/');
+  const alert = page.getByRole('alert').filter({ hasText: 'The calendar could not be loaded' });
+  await expect(alert).toContainText('Reload the page to try again.');
+  await expect(page.getByText('The connection was lost before the server confirmed the request')).toHaveCount(0);
+  state.abortGet = false;
+  await alert.getByRole('button', { name: 'Retry' }).click();
+  await expect(page.getByRole('button', { name: 'Record work for Alice Cleaner' })).toBeVisible();
+});
+
+test('a lost save response explains that the save may have happened; reloading shows the recorded work', async ({ page }) => {
+  const state = await setup(page); state.abortPut = true;
+  await page.goto('/admin/shifts/calendar/');
+  await page.getByRole('button', { name: 'Record work for Alice Cleaner' }).click();
+  await page.getByRole('textbox', { name: 'Reason', exact: true }).fill('Timesheet received');
+  await page.getByRole('button', { name: 'Save work times' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('alert')).toContainText('The connection was lost before the server confirmed the request');
+  await expect(dialog.getByRole('alert')).toContainText('Reload the calendar');
+  await expect(page.getByRole('textbox', { name: 'Reason', exact: true })).toHaveValue('Timesheet received');
+  await page.getByRole('button', { name: 'Close work times' }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Correct times for Alice Cleaner' })).toBeVisible();
+  expect(state.saved).toMatchObject({ reason: 'Timesheet received' });
+});
+
+test('review summary counts two flagged visits and filter-empty copy only appears when no visit needs review', async ({ page }) => {
+  const state = await setup(page); state.secondFlagged = true;
+  await page.goto('/admin/shifts/calendar/');
+  await expect(page.getByText('2 visits need review.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Second clean' })).toBeVisible();
+  await expect(page.getByText('Turn off the review filter to see every visit.', { exact: true })).toHaveCount(0);
+  // Today has no review flags: the summary says so, and the filter then needs an explicit empty message.
+  await page.getByLabel('Calendar date').fill('2026-11-01');
+  await expect(page.getByRole('heading', { name: 'Cleaning 2026-10-30' })).toHaveCount(0);
+  await expect(page.getByText('No visits need review on this day.', { exact: true })).toBeVisible();
+  await page.getByText('Show only visits that need review', { exact: true }).click();
+  await expect(page.getByText('Turn off the review filter to see every visit.', { exact: true })).toBeVisible();
+  await expect(page.getByText('No shifts on this day.', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Cleaning 2026-11-01' })).toHaveCount(0);
 });

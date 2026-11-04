@@ -124,10 +124,10 @@ test('FI/EN switching preserves a draft, creates and cancels a Finnish request a
   await expect(page.getByText('Siivouspyyntö tallennettu. Henkilökunta järjestää siivoojan.', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Lake apartment · Pyydetty', exact: true })).toBeVisible();
   await expect(page.getByText('Keep this entered text unchanged.', { exact: true })).toBeVisible();
-  let confirmation = '';
-  page.once('dialog', async dialog => { confirmation = dialog.message(); await dialog.accept(); });
   await page.getByRole('button', { name: 'Peruuta pyyntö', exact: true }).click();
-  expect(confirmation).toBe('Haluatko peruuttaa tämän siivouspyynnön?');
+  const confirm = page.getByRole('group', { name: 'Haluatko peruuttaa tämän siivouspyynnön?', exact: true });
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole('button', { name: 'Kyllä, peruuta pyyntö', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Lake apartment · Peruttu', exact: true })).toHaveCount(0);
   await page.getByRole('tab', { name: /^Peruutetut pyynnöt/ }).click();
   await expect(page.getByRole('heading', { name: 'Lake apartment · Peruttu', exact: true })).toBeVisible();
@@ -273,8 +273,12 @@ test('owner edits a pending request with its revision and cancels the refreshed 
   await expect(form.getByLabel('From date', { exact: true })).toHaveValue('2026-12-01'); await expect(form.getByLabel('Cleaning instructions')).toHaveValue(pending.notes!);
   await form.getByLabel('From date', { exact: true }).fill('2026-12-05'); await form.getByLabel('To date', { exact: true }).fill('2026-12-06'); await form.getByLabel('Cleaning instructions').fill('Updated checkout instructions.'); await form.getByRole('button', { name: 'Save cleaning request', exact: true }).click();
   await expect(page.getByText('2026-12-05 – 2026-12-06', { exact: true })).toBeVisible(); expect(state.writes[0]).toEqual({ path: `/requests/${pending.id}`, method: 'PUT', body: { version: 5, fromDate: '2026-12-05', toDate: '2026-12-06', exactStartLocalTime: null, notes: 'Updated checkout instructions.' } });
-  page.once('dialog', dialog => dialog.dismiss()); await page.getByRole('button', { name: 'Cancel request', exact: true }).click(); expect(state.writes).toHaveLength(1);
-  page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Cancel request', exact: true }).click();
+  const dialogs: string[] = []; page.on('dialog', dialog => { dialogs.push(dialog.message()); void dialog.dismiss(); });
+  await page.getByRole('button', { name: 'Cancel request', exact: true }).click();
+  await page.getByRole('button', { name: 'Keep request', exact: true }).click(); expect(state.writes).toHaveLength(1);
+  await page.getByRole('button', { name: 'Cancel request', exact: true }).click();
+  await page.getByRole('button', { name: 'Yes, cancel request', exact: true }).click();
+  expect(dialogs).toEqual([]);
   await expect(page.getByRole('heading', { name: 'Lake apartment · Cancelled', exact: true })).toHaveCount(0);
   await page.getByRole('tab', { name: /^Cancelled requests/ }).click();
   await expect(page.getByRole('heading', { name: 'Lake apartment · Cancelled', exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: 'Edit request', exact: true })).toHaveCount(0);
