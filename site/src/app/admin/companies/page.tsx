@@ -42,6 +42,11 @@ export default function CompaniesAdminPage() {
   const [error, setError] = useState('');
 
   const [expanded, setExpanded] = useState<string | null>(null);
+  // A deep-linked company is shown above the page so its branches render whichever page it sits on.
+  const [pinned, setPinned] = useState<Company | null>(null);
+  const tableRows = pinned && pinned.isActive === (status === 'active') && !visibleCompanies.some(c => c.id === pinned.id)
+    ? [pinned, ...visibleCompanies]
+    : visibleCompanies;
   const [companyBranchesMap, setCompanyBranchesMap] = useState<Record<string, Branch[]>>({});
   const [branchModal, setBranchModal] = useState(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
@@ -54,11 +59,7 @@ export default function CompaniesAdminPage() {
     const version = ++loadGeneration.current;
     setLoading(true); setListError('');
     const skip = (next.page - 1) * next.pageSize;
-    // A failed summary only hides the tab counts; the list itself still loads.
-    const [pageResult, summary] = await Promise.all([
-      adminCompanies.list(next.query, skip, next.pageSize, next.status === 'inactive' ? 'inactive' : 'active').catch(() => null),
-      adminCompanies.summary().catch(() => null),
-    ]);
+    const pageResult = await adminCompanies.list(next.query, skip, next.pageSize, next.status === 'inactive' ? 'inactive' : 'active').catch(() => null);
     if (version !== loadGeneration.current) return;
     if (!pageResult || !Array.isArray(pageResult.items)) {
       setListError('Companies could not be loaded. Refresh to retry.'); setLoading(false); return;
@@ -67,8 +68,13 @@ export default function CompaniesAdminPage() {
     const lastPage = Math.max(1, Math.ceil(pageResult.total / next.pageSize));
     if (pageResult.items.length === 0 && next.page > lastPage) { replaceUrlNext.current = true; setPage(lastPage); setLoading(false); return; }
     setCompanies(pageResult.items); setTotal(pageResult.total);
-    setCounts(summary ? { all: summary.all, active: summary.active, inactive: summary.inactive } : null);
     setLoading(false);
+    // Counts load independently: a slow or failed summary never holds the rows.
+    void adminCompanies.summary().catch(() => null).then(summary => {
+      if (version !== loadGeneration.current) return;
+      setCounts(summary && Number.isInteger(summary.all) && Number.isInteger(summary.active) && Number.isInteger(summary.inactive)
+        ? { all: summary.all, active: summary.active, inactive: summary.inactive } : null);
+    });
   };
   const reload = () => load({ status, page, pageSize, query });
 
@@ -85,6 +91,7 @@ export default function CompaniesAdminPage() {
 
   useEffect(() => {
     applyParams(new URLSearchParams(window.location.search));
+    replaceUrlNext.current = true;
     setReady(true);
     const onPopState = () => applyParams(new URLSearchParams(window.location.search));
     window.addEventListener('popstate', onPopState);
@@ -150,7 +157,7 @@ export default function CompaniesAdminPage() {
     setBranchLoading(null);
   };
   const toggleBranches = async (id: string) => {
-    if (expanded === id) { branchGeneration.current++; setExpanded(null); setBranchLoading(null); return; }
+    if (expanded === id) { branchGeneration.current++; setExpanded(null); setPinned(p => (p?.id === id ? null : p)); setBranchLoading(null); return; }
     setExpanded(id); setBranchStatus('active');
     await loadBranches(id);
   };
@@ -163,9 +170,8 @@ export default function CompaniesAdminPage() {
     void (async () => {
       const detail = await adminCompanies.get(requested);
       if (!detail) return;
-      // Search by business ID so the company lands on page one with its branch rows; the search can be cleared afterwards.
       setStatus(detail.company.isActive ? 'active' : 'inactive');
-      setPage(1); setSearchText(detail.company.businessId); setQuery(detail.company.businessId);
+      setPinned(detail.company);
       setExpanded(detail.company.id); setBranchStatus('active'); void loadBranches(detail.company.id);
     })();
   }, [ready]);
@@ -247,8 +253,8 @@ export default function CompaniesAdminPage() {
         <Loader />
       ) : listError ? (
         <Stack><Text role="alert" c="red">{listError}</Text><Button variant="light" onClick={() => void reload()}>Refresh companies</Button></Stack>
-      ) : visibleCompanies.length === 0 ? (
-        <Text c="dimmed">{(counts?.all ?? total) === 0 && !query ? 'No companies yet. Add one to get started.' : query ? 'No companies match this search.' : `No ${status} companies.`}</Text>
+      ) : tableRows.length === 0 ? (
+        <Text c="dimmed">{counts !== null && counts.all === 0 && !query ? 'No companies yet. Add one to get started.' : query ? 'No companies match this search.' : `No ${status} companies.`}</Text>
       ) : (
         <Table.ScrollContainer minWidth={550}>
           <Table striped highlightOnHover withTableBorder>
@@ -262,7 +268,7 @@ export default function CompaniesAdminPage() {
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {visibleCompanies.map((c) => {
+              {tableRows.map((c) => {
                 const currentBranches = companyBranchesMap[c.id] ?? [];
                 const visibleBranches = currentBranches.filter(branch => inLifecycle(branch, branchStatus));
                 const isExpanded = expanded === c.id;

@@ -5,7 +5,7 @@ const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Meth
 const companies = Array.from({ length: 101 }, (_, index) => ({ id: `company-${index}`, name: `Company ${index}`, businessId: `ID-${index}`, contactName: null, isActive: index < 100 }));
 
 /** Serves the companies contract: server status filter, search, skip/take paging, summary counts and detail. */
-async function mockCompanies(page: Page, options: { list?: typeof companies; failAll?: { value: boolean }; failSummary?: boolean } = {}) {
+async function mockCompanies(page: Page, options: { list?: typeof companies; failAll?: { value: boolean }; failSummary?: boolean; summaryGate?: Promise<void> } = {}) {
   const list = options.list ?? companies;
   const requests: URL[] = [];
   await page.route('**/api/v1/admin/companies**', async route => {
@@ -19,6 +19,7 @@ async function mockCompanies(page: Page, options: { list?: typeof companies; fai
       return route.fulfill({ status: 201, headers, json: created });
     }
     if (url.pathname.endsWith('/summary')) {
+      if (options.summaryGate) await options.summaryGate;
       if (options.failSummary) return route.fulfill({ status: 503, headers, json: {} });
       return route.fulfill({ headers, json: { all: list.length, active: list.filter(c => c.isActive).length, inactive: list.filter(c => !c.isActive).length } });
     }
@@ -204,4 +205,45 @@ test('branch tabs stay scoped to the open company across company tab changes', a
   await expect(page.getByText('Active branch', { exact: true })).not.toBeVisible();
   await page.getByRole('tablist', { name: 'Company activity' }).getByRole('tab', { name: /^Active/ }).click();
   await expect(branchTabs).not.toBeVisible();
+});
+
+test('a direct URL restores the search text and filtered results', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockCompanies(page);
+  await page.goto('/admin/companies/?status=active&page=1&size=25&q=Company%2010');
+  await expect(page.getByRole('textbox', { name: 'Search companies' })).toHaveValue('Company 10');
+  await expect(page.getByRole('cell', { name: 'Company 10', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Company 0', exact: true })).not.toBeVisible();
+});
+
+test('Back after a search restores the unfiltered list and empty search box', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockCompanies(page);
+  await page.goto('/admin/companies/');
+  await page.getByRole('textbox', { name: 'Search companies' }).fill('Company 10');
+  await page.getByRole('textbox', { name: 'Search companies' }).press('Enter');
+  await expect(page.getByRole('cell', { name: 'Company 0', exact: true })).not.toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole('textbox', { name: 'Search companies' })).toHaveValue('');
+  await expect(page.getByRole('cell', { name: 'Company 0', exact: true })).toBeVisible();
+});
+
+test('a slow summary never holds the company rows and counts appear when it resolves', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await mockCompanies(page, { summaryGate: gate });
+  await page.goto('/admin/companies/');
+  await expect(page.getByRole('cell', { name: 'Company 0', exact: true })).toBeVisible();
+  await expect(page.getByRole('tablist', { name: 'Company activity' }).getByRole('tab', { name: 'Active (100)', exact: true })).not.toBeVisible();
+  release();
+  await expect(page.getByRole('tablist', { name: 'Company activity' }).getByRole('tab', { name: 'Active (100)', exact: true })).toBeVisible();
+});
+
+test('with the summary unavailable an empty tab does not claim there are no companies', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockCompanies(page, { list: [], failSummary: true });
+  await page.goto('/admin/companies/');
+  await expect(page.getByText('No active companies.', { exact: true })).toBeVisible();
+  await expect(page.getByText('No companies yet.', { exact: false })).not.toBeVisible();
 });
