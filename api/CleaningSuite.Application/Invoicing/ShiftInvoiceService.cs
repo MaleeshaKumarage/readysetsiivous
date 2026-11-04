@@ -90,7 +90,9 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             if (partnerSource is null) Invalid("Partner invoice selection is unavailable.");
             // Completion-month billing covers every company shift, whoever created it. A shift is a candidate
             // when one of its visits was completed in this month; roster and assignment checks run below.
-            var companyShifts = (await shifts.ListIncludingInactiveAsync(ct)).Where(s => s.CompanyId == request.CompanyId && !existing.Any(i => Billed(i, s.Id))).ToArray();
+            // A partner-created shift is a candidate only while its request is live and accepted; a cancelled visit is never billed.
+            var companyShifts = (await shifts.ListIncludingInactiveAsync(ct)).Where(s => s.CompanyId == request.CompanyId && !existing.Any(i => Billed(i, s.Id))
+                && (s.PartnerRequestId is null || partnerRequests.Any(r => r.Id == s.PartnerRequestId && r.LinkedShiftId == s.Id && r.Status != "Cancelled" && r.FirstAcceptedAtUtc.HasValue))).ToArray();
             foreach (var shift in companyShifts)
             {
                 var evidence = await forms.ListFormsAsync(shift.Id, null, null, ct);
