@@ -20,6 +20,9 @@ public class Branch : BaseDocument
     public int? EstimatedDurationMinutes { get; set; }
     public int PricingVersion { get; set; }
     public DateTime? QuoteRequestedUtc { get; set; }
+    public DateTime? QuoteRejectedUtc { get; set; }
+    public string? QuoteRejectionReason { get; set; }
+    public bool HasPendingQuote => QuoteRequestedUtc.HasValue && !PricingReady;
     public bool PricingReady => PriceNet is > 0 && VatRatePercent is >= 0 and <= 100 && EstimatedDurationMinutes is > 0 and <= 1440;
 
     public void SetPropertyCounts(int? rooms, int? beds)
@@ -40,7 +43,19 @@ public class Branch : BaseDocument
         if (PriceNet != priceNet || VatRatePercent != vatRatePercent || EstimatedDurationMinutes != durationMinutes)
             PricingVersion++;
         PriceNet = priceNet; VatRatePercent = vatRatePercent; EstimatedDurationMinutes = durationMinutes;
-        QuoteRequestedUtc = null; UpdatedUtc = DateTime.UtcNow;
+        QuoteRequestedUtc = null; QuoteRejectedUtc = null; QuoteRejectionReason = null; UpdatedUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>The owner withdraws a pending quote request. Staff queues drop it because it is no longer requested.</summary>
+    public void WithdrawQuote(DateTime nowUtc)
+    {
+        QuoteRequestedUtc = null; UpdatedUtc = nowUtc;
+    }
+
+    /// <summary>Staff decline a pending quote request with a reason the owner can read.</summary>
+    public void RejectQuote(string reason, DateTime nowUtc)
+    {
+        QuoteRejectedUtc = nowUtc; QuoteRejectionReason = reason.Trim(); QuoteRequestedUtc = null; UpdatedUtc = nowUtc;
     }
 
     public static Branch Create(

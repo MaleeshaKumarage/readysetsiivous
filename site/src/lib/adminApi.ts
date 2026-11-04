@@ -414,6 +414,8 @@ export interface Branch {
   pricingVersion?: number;
   pricingReady?: boolean;
   quoteRequestedUtc?: string | null;
+  quoteRejectedUtc?: string | null;
+  quoteRejectionReason?: string | null;
   id: string;
   companyId: string;
   name: string;

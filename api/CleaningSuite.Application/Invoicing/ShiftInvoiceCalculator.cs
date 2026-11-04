@@ -14,7 +14,11 @@ public static class ShiftInvoiceCalculator
 {
     public static List<InvoiceLine> Calculate(Shift shift, ShiftBillingProfile profile, IReadOnlyList<BillableShiftVisit> visits,
         DateOnly from, DateOnly to, TimeZoneInfo zone, IReadOnlyDictionary<Guid, string> branches,
-        IReadOnlyList<MonthlyInvoiceOverride> overrides)
+        IReadOnlyList<MonthlyInvoiceOverride> overrides,
+        // Completion-month billing passes each billed visit's completion time: every visit becomes its own line.
+        IReadOnlyDictionary<DateTime, DateTime>? completedAtByStart = null,
+        // The period that monthly prices are charged over; defaults to the visit range.
+        (DateOnly From, DateOnly To)? billingPeriod = null)
     {
         if (profile.Plans.GroupBy(p => p.EffectiveFrom).Any(g => g.Count() > 1)) Invalid("Pricing has duplicate effective dates. Correct the pricing history before invoicing.");
         foreach (var plan in profile.Plans)
@@ -37,7 +41,8 @@ public static class ShiftInvoiceCalculator
         string Branch(Guid id) => branches.TryGetValue(id, out var name) ? name : throw new ShiftConflictException("A shift branch is missing. Restore its company/branch association before invoicing.");
         var monthlyDays = new List<(DateOnly Date, ShiftPricingPlan Price, QualityCyclePlan Plan)>();
         var mixedBasisMonths = new HashSet<string>();
-        for (var day = from; day <= to; day = day.AddDays(1))
+        var billFrom = billingPeriod?.From ?? from; var billTo = billingPeriod?.To ?? to;
+        for (var day = billFrom; day <= billTo; day = day.AddDays(1))
         {
             var active = Active(day); if (active is null) continue;
             var price = Price(day);
@@ -51,8 +56,8 @@ public static class ShiftInvoiceCalculator
             var days = group.Select(d => d.Date).ToHashSet(); var first = days.Min(); var last = days.Max();
             var visitsInLine = visits.Where(v => v.BranchId == group.Key.BranchId && days.Contains(DateOnly.FromDateTime(TenantTimeZone.LocalDate(v.StartUtc, zone)))).ToArray();
             var calendarDays = DateTime.DaysInMonth(first.Year, first.Month);
-            var wholeMonth = from <= new DateOnly(first.Year, first.Month, 1)
-                && to >= new DateOnly(first.Year, first.Month, calendarDays)
+            var wholeMonth = billFrom <= new DateOnly(first.Year, first.Month, 1)
+                && billTo >= new DateOnly(first.Year, first.Month, calendarDays)
                 && !mixedBasisMonths.Contains(group.Key.Month);
             // A selected full calendar month is one fixed monthly charge, even when
             // the shift's first/last active day is inside that month. Split price/branch
@@ -72,15 +77,23 @@ public static class ShiftInvoiceCalculator
         foreach (var group in pricedVisits.Where(v => v.Price!.Mode != "Monthly" && (v.Price.Mode != "PerOccurrence" || v.Visit.Completed))
             .Select(v => { var special = v.Price!.Mode == "PerOccurrence" ? profile.Overrides.FirstOrDefault(o => o.OccurrenceStartUtc == v.Visit.StartUtc) : null;
                 return (v.Visit, v.Date, Price: v.Price!, Rate: special?.RateNet ?? v.Price!.RateNet, Reason: special?.Reason); })
-            .GroupBy(v => (v.Price, v.Rate, v.Reason, v.Visit.BranchId, v.Visit.ShiftName)))
+            .GroupBy(v => (v.Price, v.Rate, v.Reason, v.Visit.BranchId, v.Visit.ShiftName,
+                // Per-occurrence billing keeps each completed visit on its own line, with its own completion time.
+                Start: completedAtByStart is null ? (DateTime?)null : v.Visit.StartUtc)))
         {
             var hours = group.Sum(v => (decimal)(v.Visit.EndUtc - v.Visit.StartUtc).Ticks / TimeSpan.TicksPerHour);
             var quantity = group.Key.Price.Mode == "Hourly" ? hours : group.Count();
-            lines.Add(new() { ShiftId = shift.Id, ShiftName = group.Key.ShiftName, BranchName = Branch(group.Key.BranchId), BranchId = group.Key.BranchId,
+            var line = new InvoiceLine { ShiftId = shift.Id, ShiftName = group.Key.ShiftName, BranchName = Branch(group.Key.BranchId), BranchId = group.Key.BranchId,
                 PricingMode = group.Key.Price.Mode, PeriodFrom = group.Min(v => v.Date), PeriodTo = group.Max(v => v.Date),
                 LineKey = $"{shift.Id:N}:{group.Key.Price.EffectiveFrom:yyyyMMdd}:{group.Key.BranchId:N}:{lines.Count}",
                 Quantity = quantity, UnitPriceNet = group.Key.Rate, NetAmount = Round(quantity * group.Key.Rate),
-                VatRatePercent = group.Key.Price.VatRatePercent, Hours = hours, Occurrences = group.Count(), OverrideReason = group.Key.Reason });
+                VatRatePercent = group.Key.Price.VatRatePercent, Hours = hours, Occurrences = group.Count(), OverrideReason = group.Key.Reason };
+            if (group.Key.Start is { } start && completedAtByStart!.TryGetValue(start, out var completedAt))
+            {
+                line.CompletedAtUtc = completedAt;
+                line.CompletedOn = DateOnly.FromDateTime(TenantTimeZone.LocalDate(completedAt, zone));
+            }
+            lines.Add(line);
         }
         foreach (var adjustment in overrides.Where(o => o.ShiftId == shift.Id))
         {

@@ -37,7 +37,8 @@ public record BranchDto(
     string? ContactEmail = null,
     int? RoomCount = null, int? BedCount = null, decimal? PriceNet = null,
     decimal? VatRatePercent = null, int? EstimatedDurationMinutes = null,
-    int PricingVersion = 0, bool PricingReady = false, DateTime? QuoteRequestedUtc = null);
+    int PricingVersion = 0, bool PricingReady = false, DateTime? QuoteRequestedUtc = null,
+    DateTime? QuoteRejectedUtc = null, string? QuoteRejectionReason = null);
 
 public record CompanyDetailDto(CompanyDto Company, IReadOnlyList<BranchDto> Branches);
 
@@ -441,7 +442,8 @@ public class CompanyHandlers
             branch.ContactPhone,
             branch.IsActive,
             branch.ContactEmail, branch.RoomCount, branch.BedCount, branch.PriceNet, branch.VatRatePercent,
-            branch.EstimatedDurationMinutes, branch.PricingVersion, branch.PricingReady, branch.QuoteRequestedUtc);
+            branch.EstimatedDurationMinutes, branch.PricingVersion, branch.PricingReady, branch.QuoteRequestedUtc,
+            branch.QuoteRejectedUtc, branch.QuoteRejectionReason);
     private static void ApplyProperty(Branch branch, int? rooms, int? beds, decimal? price, decimal? vat, int? duration)
     {
         try

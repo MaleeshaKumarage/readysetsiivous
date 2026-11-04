@@ -54,6 +54,8 @@ var autoCreate = builder.Configuration.GetValue<AutoCreate?>("Marten:AutoCreateS
 
 builder.Services.AddCleaningMarten(connectionString, autoCreate);
 builder.Services.AddHostedService<MartenSchemaInitializer>();
+builder.Services.AddScoped<CleaningSuite.Infrastructure.Persistence.ShiftValidityCorrectionRunner>();
+builder.Services.AddHostedService<CleaningSuite.Api.ShiftValidityCorrectionService>();
 if (builder.Configuration.GetValue("BackgroundWorkers:Enabled", true))
     builder.Services.AddHostedService<CleaningSuite.Api.Services.EntertainmentGroupCleanupService>();
 

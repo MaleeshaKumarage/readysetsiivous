@@ -107,11 +107,25 @@ public static class ShiftScheduleCalculator
         return GenerateOccurrences(shift.Schedule, from, to);
     }
 
+    /// <summary>
+    /// Scheduled occurrences of a shift, limited to its own ValidFrom/ValidUntil window in the tenant zone.
+    /// Every roster, calendar, queue and assignment path reads occurrences through here, so a shift that
+    /// ends on a date never schedules visits after it. Explicit extra visits are not generated here.
+    /// </summary>
     public static IReadOnlyList<ShiftOccurrence> GenerateOccurrences(
         Shift shift, DateTime from, DateTime to, TimeZoneInfo timeZone)
     {
         if (shift is null) throw new ArgumentNullException(nameof(shift));
-        return Calculate(shift.Schedule, from, to, timeZone);
+        return Calculate(shift.Schedule, from, to, timeZone)
+            .Where(occurrence => WithinValidity(shift, occurrence.StartUtc, timeZone)).ToArray();
+    }
+
+    private static bool WithinValidity(Shift shift, DateTime startUtc, TimeZoneInfo timeZone)
+    {
+        var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(startUtc, DateTimeKind.Utc), timeZone).Date;
+        if (shift.ValidFrom.HasValue && local < shift.ValidFrom.Value.Date) return false;
+        if (shift.ValidUntil.HasValue && local > shift.ValidUntil.Value.Date) return false;
+        return true;
     }
 
     /// <summary>

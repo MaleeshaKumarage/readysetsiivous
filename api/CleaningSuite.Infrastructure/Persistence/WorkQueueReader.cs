@@ -91,7 +91,7 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
                 rows.Add((row.Local, row.Id, new WorkQueueItem(
                     "shift", row.Id, row.Shift.Name, company?.Name ?? "Customer",
                     row.Local.ToString("yyyy-MM-dd HH:mm"), row.View,
-                    WorkQueueRules.ShiftLabel(row.Visit, row.View), null, "/admin/shifts/calendar/")));
+                    row.Label, null, "/admin/shifts/calendar/")));
             }
         }
 
@@ -120,7 +120,7 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
 
     private sealed record PartnerView(string View, PartnerCleaningRequest Request);
 
-    private sealed record ShiftRow(string View, Shift Shift, ShiftVisitRosterEntry Visit, DateTime Local, Guid Id);
+    private sealed record ShiftRow(string View, string Label, Shift Shift, ShiftVisitRosterEntry Visit, DateTime Local, Guid Id);
 
     /// <summary>
     /// Company shifts (not partner-created ones, which appear as partner requests). Each occurrence in the bounded
@@ -154,7 +154,7 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
                 var start = visit.Occurrence.StartUtc;
                 var evidence = formsByOccurrence.TryGetValue((shift.Id, start), out var found) ? found : Array.Empty<QualityCycleForm>();
                 var view = WorkQueueRules.ShiftView(visit, evidence, now);
-                rows.Add(new ShiftRow(view, shift, visit, TimeZoneInfo.ConvertTimeFromUtc(start, zone), StableOccurrenceId(shift.Id, start)));
+                rows.Add(new ShiftRow(view, WorkQueueRules.ShiftLabel(visit, view, now), shift, visit, TimeZoneInfo.ConvertTimeFromUtc(start, zone), StableOccurrenceId(shift.Id, start)));
             }
         }
         return rows;
