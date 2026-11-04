@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import type { Branch } from '@/lib/adminApi';
+import { adminCompanies, type Branch } from '@/lib/adminApi';
 import { staffPartnerApi } from '@/lib/partnerApi';
 
 const pendingQuote = (branch: Branch) => branch.isActive && Boolean(branch.quoteRequestedUtc) && !branch.pricingReady;
@@ -20,16 +20,19 @@ export function QuoteRequestProvider({ pathname, children }: { pathname: string;
     const request = new AbortController(); controller.current = request;
     try {
       const api = staffPartnerApi('admin');
-      const [quotes, requests, changes] = await Promise.allSettled([api.quotes(request.signal), api.requests(request.signal), api.changes(request.signal)]);
+      const [companies, quotes, requests, changes] = await Promise.allSettled([adminCompanies.listAll(), api.quotes(request.signal), api.requests(request.signal), api.changes(request.signal)]);
       if (request.signal.aborted) return;
-      if (requests.status === 'fulfilled' && Array.isArray(requests.value)) setRequestCount(requests.value.filter(item => item.status === 'Requested').length);
-      if (changes.status === 'fulfilled' && Array.isArray(changes.value)) setChangeCount(changes.value.filter(item => !item.resolvedUtc).length);
+      // Banner, badge and counts follow the partner operations lists: only partner-enabled companies count.
+      if (companies.status !== 'fulfilled' || !Array.isArray(companies.value)) throw new Error('Company data unavailable');
+      const partnerCompanyIds = new Set(companies.value.filter(company => company.isPartnerEnabled).map(company => company.id));
+      if (requests.status === 'fulfilled' && Array.isArray(requests.value)) setRequestCount(requests.value.filter(item => item.status === 'Requested' && partnerCompanyIds.has(item.companyId)).length);
+      if (changes.status === 'fulfilled' && Array.isArray(changes.value)) setChangeCount(changes.value.filter(item => !item.resolvedUtc && partnerCompanyIds.has(item.companyId)).length);
       setActionsError(requests.status === 'rejected' || changes.status === 'rejected' || (requests.status === 'fulfilled' && !Array.isArray(requests.value)) || (changes.status === 'fulfilled' && !Array.isArray(changes.value)));
       if (quotes.status === 'rejected') throw quotes.reason;
       const result = quotes.value;
       if (request.signal.aborted) return;
       if (!Array.isArray(result)) throw new Error('Invalid quote queue');
-      setBranches(result.filter(pendingQuote)); setLoaded(true); setError(false);
+      setBranches(result.filter(branch => partnerCompanyIds.has(branch.companyId)).filter(pendingQuote)); setLoaded(true); setError(false);
     } catch {
       if (!request.signal.aborted) setError(true);
     }

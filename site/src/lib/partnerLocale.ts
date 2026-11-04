@@ -54,6 +54,8 @@ const en = {
   networkError: 'Connection unavailable. Check your connection and retry.',
   accessError: 'Your access could not be verified. Sign in again.',
   notFound: 'This record is no longer available. Refresh the page.',
+  editProperty: 'Edit property', withdrawQuote: 'Withdraw quote request', quoteWithdrawn: 'Quote request withdrawn.',
+  quoteRejected: 'Staff could not quote this property', propertyUpdated: 'Property details saved.',
 } as const;
 
 const fi: Record<keyof typeof en, string> = {
@@ -109,6 +111,8 @@ const fi: Record<keyof typeof en, string> = {
   networkError: 'Yhteys ei ole käytettävissä. Tarkista verkkoyhteys ja yritä uudelleen.',
   accessError: 'Käyttöoikeuttasi ei voitu vahvistaa. Kirjaudu uudelleen sisään.',
   notFound: 'Tietuetta ei enää löydy. Päivitä sivu.',
+  editProperty: 'Muokkaa kohdetta', withdrawQuote: 'Peruuta tarjouspyyntö', quoteWithdrawn: 'Tarjouspyyntö peruutettu.',
+  quoteRejected: 'Henkilökunta ei voinut hinnoitella tätä kohdetta', propertyUpdated: 'Kohteen tiedot tallennettu.',
 };
 
 export const partnerCopy = { en, fi };
@@ -139,6 +143,8 @@ export function partnerMessage(message: string, language: PartnerLanguage): stri
     'Load failed': fi.networkError,
     'NetworkError when attempting to fetch resource.': fi.networkError,
     'Cleaning could not be saved. Please retry.': 'Siivouspyyntöä ei voitu tallentaa. Yritä uudelleen.',
+    'There is no pending quote request to withdraw.': 'Kohteella ei ole odottavaa tarjouspyyntöä.',
+    'This property has no pending quote request.': 'Kohteella ei ole odottavaa tarjouspyyntöä.',
   };
   if (known[message]) return known[message];
   if (/Request failed \((401|403)\)/.test(message)) return fi.accessError;

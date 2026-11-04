@@ -35,7 +35,7 @@ export default function PartnerPage() {
   const [changes, setChanges] = useState<PartnerChange[]>([]);
   const [access, setAccess] = useState('pending'), [error, setError] = useState(''), [busy, setBusy] = useState(false), [notice, setNotice] = useState('');
   const [requestView, setRequestView] = useState<'active' | 'completed' | 'cancelled'>('active'), [requestPage, setRequestPage] = useState(1);
-  const [tab, setTab] = useState<Section>('Properties'), [adding, setAdding] = useState(false), [target, setTarget] = useState<Branch | null>(null), [editing, setEditing] = useState<CleaningRequest | null>(null);
+  const [tab, setTab] = useState<Section>('Properties'), [adding, setAdding] = useState(false), [editingProperty, setEditingProperty] = useState<Branch | null>(null), [target, setTarget] = useState<Branch | null>(null), [editing, setEditing] = useState<CleaningRequest | null>(null);
   const [from, setFrom] = useState(''), [to, setTo] = useState(''), [exact, setExact] = useState(false), [time, setTime] = useState(''), [notes, setNotes] = useState('');
   const [change, setChange] = useState<{ kind: 'branch' | 'request'; id: string } | null>(null), [message, setMessage] = useState('');
   // The request whose cancellation is waiting for confirmation on its own card.
@@ -156,11 +156,14 @@ export default function PartnerPage() {
               <Card className="partner-surface partner-property">
                 <div className="partner-card-heading"><h3>{branch.name}</h3>{!branch.isActive ? <Badge variant="outline" className="partner-badge">{t.inactive}</Badge> : branch.pricingReady ? <Badge variant="subtle" className="partner-badge">{t.ready}</Badge> : null}</div>
                 <QuoteRequestedBadge branch={branch} label={t.quoteRequested} />
+                {branch.quoteRejectedUtc && !branch.quoteRequestedUtc && !branch.pricingReady && <p role="status" className="partner-muted">{t.quoteRejected}: {branch.quoteRejectionReason}</p>}
                 <p className="partner-muted">{[branch.street, branch.postalCode, branch.city].filter(Boolean).join(', ')}</p>
                 <dl className="partner-property-facts"><div><dt>{t.rooms}</dt><dd>{branch.roomCount ?? t.notSet}</dd></div><div><dt>{t.beds}</dt><dd>{branch.bedCount ?? t.notSet}</dd></div></dl>
                 <div className="partner-price">{branch.pricingReady ? <><p><strong>{money(branch.priceNet)}</strong> {t.exclVat} ({t.vat} {number(branch.vatRatePercent ?? 0)}%)</p><p className="partner-muted">{t.estimated} {branch.estimatedDurationMinutes} {t.minutes}</p></> : <p>{branch.quoteRequestedUtc ? t.quoteWaiting : t.pricingRequired}</p>}</div>
                 <div className="partner-card-actions"><Button disabled={busy || !branch.isActive || !branch.pricingReady} onClick={() => openRequest(branch)}>{t.requestCleaning}<ArrowRight size={16} aria-hidden="true" /></Button>
                   {!branch.pricingReady && <Button variant="outline" className="partner-secondary" disabled={busy || !branch.isActive || Boolean(branch.quoteRequestedUtc)} onClick={() => act(() => partnerApi.quote(branch.id), base.quoteSaved)}>{t.requestQuote}</Button>}
+                  {!branch.pricingReady && branch.quoteRequestedUtc && <Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => act(() => partnerApi.withdrawQuote(branch.id), base.quoteWithdrawn)}>{t.withdrawQuote}</Button>}
+                  <Button variant="outline" className="partner-secondary" disabled={busy || !branch.isActive} onClick={() => setEditingProperty(branch)}>{t.editProperty}</Button>
                   <Button variant="ghost" size="sm" className="partner-quiet" onClick={() => { setChange({ kind: 'branch', id: branch.id }); setMessage(''); }}>{t.propertyChanges}</Button>
                 </div>
               </Card>
@@ -204,17 +207,18 @@ export default function PartnerPage() {
             <div className="partner-grid">{shifts.map(shift => <article key={shift.id}><Card className="partner-surface"><h3>{shift.name}</h3><p>{shift.branchName}</p><Badge variant="outline" className="partner-badge">{shift.isActive ? t.active : t.inactive}</Badge><p>{shift.validFrom ? date(shift.validFrom) : t.noStart} – {shift.validUntil ? date(shift.validUntil) : t.ongoing}</p></Card></article>)}</div>
           </section>}
         </div>
-        <Dialog open={adding} title={t.addProperty} onClose={() => setAdding(false)} className="partner-form-panel">
+        <Dialog open={adding || editingProperty !== null} title={editingProperty ? t.editProperty : t.addProperty} onClose={() => { setAdding(false); setEditingProperty(null); }} className="partner-form-panel">
           <Card className="partner-surface">
-            <form className="partner-form-grid" onInvalid={invalid} onSubmit={event => {
+            <form key={editingProperty?.id ?? 'new'} className="partner-form-grid" onInvalid={invalid} onSubmit={event => {
               event.preventDefault(); const fields = Object.fromEntries(new FormData(event.currentTarget));
-              void act(async () => { await partnerApi.createBranch({ ...fields, roomCount: fields.roomCount === '' ? null : Number(fields.roomCount), bedCount: fields.bedCount === '' ? null : Number(fields.bedCount) }); setAdding(false); }, base.propertyCreated);
+              const body = { ...fields, roomCount: fields.roomCount === '' ? null : Number(fields.roomCount), bedCount: fields.bedCount === '' ? null : Number(fields.bedCount) };
+              void act(async () => { if (editingProperty) { await partnerApi.updateBranch(editingProperty.id, body); setEditingProperty(null); } else { await partnerApi.createBranch(body); setAdding(false); } }, editingProperty ? base.propertyUpdated : base.propertyCreated);
             }}>
               {([
                 ['name', t.propertyName], ['street', t.street], ['postalCode', t.postalCode], ['city', t.city], ['country', t.country],
                 ['contactPhone', t.phone], ['contactEmail', t.email], ['roomCount', t.optionalRooms], ['bedCount', t.optionalBeds],
-              ] as const).map(([name, label]) => <Field key={name} label={label}><Input className="partner-field" name={name} required={name === 'name'} maxLength={name === 'name' ? 200 : undefined} type={name.endsWith('Count') ? 'number' : name === 'contactEmail' ? 'email' : 'text'} min={0} max={name.endsWith('Count') ? 10000 : undefined} step={1} /></Field>)}
-              <div className="partner-form-actions"><Button type="submit" disabled={busy}>{t.saveProperty}</Button><Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => setAdding(false)}>{t.cancel}</Button></div>
+              ] as const).map(([name, label]) => <Field key={name} label={label}><Input className="partner-field" name={name} defaultValue={editingProperty ? String((editingProperty as unknown as Record<string, unknown>)[name] ?? '') : undefined} required={name === 'name'} maxLength={name === 'name' ? 200 : undefined} type={name.endsWith('Count') ? 'number' : name === 'contactEmail' ? 'email' : 'text'} min={0} max={name.endsWith('Count') ? 10000 : undefined} step={1} /></Field>)}
+              <div className="partner-form-actions"><Button type="submit" disabled={busy}>{t.saveProperty}</Button><Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => { setAdding(false); setEditingProperty(null); }}>{t.cancel}</Button></div>
             </form>
           </Card>
         </Dialog>
