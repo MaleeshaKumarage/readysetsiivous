@@ -66,6 +66,9 @@ export async function installScaleRoutes(page: Page, data: ScaleData) {
     const q = url.searchParams;
     const json = (body: unknown) => route.fulfill({ headers: CORS, json: body });
     if (path.endsWith('/legacy-repairs')) return json({ agreements: [] });
+    if (path.endsWith('/leads')) return json({ items: [], total: 0 });
+    if (path.endsWith('/shifts/calendar')) return json({ timeZoneId: 'Europe/Helsinki', occurrences: [], people: [] });
+    if (path.endsWith('/work-queue')) return json({ view: q.get('view') ?? 'needs-action', source: q.get('source') ?? 'all', items: [], total: 0, counts: { 'needs-action': 0, scheduled: 0, 'in-progress': 0, completed: 0, cancelled: 0 } });
     if (path.endsWith('/issuer')) return json({ companyName: 'Supplier', businessId: '123', companyAddress: { street: 'Street', postalCode: '00100', city: 'Helsinki', country: 'FI' }, email: 'a@b.fi', phone: '1', bankAccountIBAN: 'FI00', bankBic: 'BIC', paymentTermsDays: 14, defaultVatRatePercent: 25.5, isSampleData: false });
     if (path.endsWith('/invoices')) return json(data.invoices);
     if (path.endsWith('/companies/summary')) return json({ all: data.companies.length, active: data.companies.filter(c => c.isActive).length, inactive: data.companies.filter(c => !c.isActive).length });
