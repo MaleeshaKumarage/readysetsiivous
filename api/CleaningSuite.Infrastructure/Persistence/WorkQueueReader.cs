@@ -137,8 +137,11 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
             .Where(shift => shift.PartnerRequestId is null && (search is null || companyIds.Contains(shift.CompanyId))).ToArray();
         if (shifts.Length == 0) return new List<ShiftRow>();
         var shiftIds = shifts.Select(shift => shift.Id).ToArray();
+        // Occurrence columns hold Unspecified-kind values; Npgsql rejects Kind=Utc bounds against them.
+        var fromKey = DateTime.SpecifyKind(fromUtc, DateTimeKind.Unspecified);
+        var toKey = DateTime.SpecifyKind(toUtc, DateTimeKind.Unspecified);
         var forms = await Db.Query<QualityCycleForm>()
-            .Where(f => shiftIds.Contains(f.ShiftId) && f.ShiftDeletedUtc == null && f.ShiftOccurrenceUtc >= fromUtc && f.ShiftOccurrenceUtc < toUtc)
+            .Where(f => shiftIds.Contains(f.ShiftId) && f.ShiftDeletedUtc == null && f.ShiftOccurrenceUtc >= fromKey && f.ShiftOccurrenceUtc < toKey)
             .ToListAsync(ct);
         var formsByOccurrence = forms.GroupBy(f => (f.ShiftId, f.ShiftOccurrenceUtc))
             .ToDictionary(g => g.Key, g => (IReadOnlyList<QualityCycleForm>)g.ToList());
