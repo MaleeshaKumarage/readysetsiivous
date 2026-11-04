@@ -48,8 +48,8 @@ public class AgreementsAdminController : ControllerBase
 
     [HttpGet]
     [OutputCache(Duration = 30)]
-    public async Task<IActionResult> List(CancellationToken ct) =>
-        Ok(await _mediator.Send(new ListAgreementsQuery(), ct));
+    public async Task<IActionResult> List([FromQuery] Guid? companyId, CancellationToken ct) =>
+        Ok(await _mediator.Send(new ListAgreementSummariesQuery(companyId), ct));
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct)

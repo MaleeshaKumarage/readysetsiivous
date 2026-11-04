@@ -5,6 +5,7 @@ import {
   Title, Button, Table, Modal, TextInput, Textarea, Group, Stack, Text, Loader, Badge, Checkbox, NumberInput, Pagination, Select,
 } from '@mantine/core';
 import { Plus, ChevronDown, Pencil } from 'lucide-react';
+import Link from 'next/link';
 import { adminCompanies, adminBranches, type Company, type Branch } from '@/lib/adminApi';
 import { companyLifecycle, branchLifecycle } from '@/lib/reactivationApi';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
@@ -120,6 +121,8 @@ export default function CompaniesAdminPage() {
     else window.history.pushState(null, '', target);
   }, [ready, status, page, pageSize, query, pinned]);
 
+  // The list state a customer workspace returns to via its Back link.
+  const listQuery = new URLSearchParams({ status, page: String(page), size: String(pageSize), ...(query ? { q: query } : {}) }).toString();
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
   const setB = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -268,7 +271,7 @@ export default function CompaniesAdminPage() {
                 <Table.Th>Business ID</Table.Th>
                 <Table.Th>Contact</Table.Th>
                 <Table.Th w={120}>Branches</Table.Th>
-                <Table.Th>Activity</Table.Th><Table.Th w={110}>Actions</Table.Th>
+                <Table.Th>Activity</Table.Th><Table.Th w={170}>Actions</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -290,7 +293,7 @@ export default function CompaniesAdminPage() {
                       <Table.Td><Button size="xs" variant="light" color={c.isActive ? 'red' : undefined}
                         loading={actionBusy === c.id} disabled={actionBusy !== null && actionBusy !== c.id}
                         onClick={() => void changeActivity(c.id, c.isActive)}>{c.isActive ? 'Deactivate' : 'Reactivate'}</Button></Table.Td>
-                      <Table.Td><Group gap={4} wrap="nowrap"><Button size="xs" variant="subtle" leftSection={<Pencil size={13} />} onClick={() => openCompanyEdit(c)}>Edit</Button>{!c.isActive && <Button size="xs" color="red" variant="subtle" loading={actionBusy === c.id} disabled={!!actionBusy} onClick={() => void deleteCompany(c)}>Delete</Button>}</Group></Table.Td>
+                      <Table.Td><Group gap={4} wrap="nowrap"><Button size="xs" variant="subtle" component={Link} href={`/admin/companies/customer/?id=${c.id}&section=overview&back=${encodeURIComponent(listQuery)}`} aria-label={`Open ${c.name}`}>Open</Button><Button size="xs" variant="subtle" leftSection={<Pencil size={13} />} onClick={() => openCompanyEdit(c)}>Edit</Button>{!c.isActive && <Button size="xs" color="red" variant="subtle" loading={actionBusy === c.id} disabled={!!actionBusy} onClick={() => void deleteCompany(c)}>Delete</Button>}</Group></Table.Td>
                     </Table.Tr>
                     {isExpanded && (
                       <Table.Tr>

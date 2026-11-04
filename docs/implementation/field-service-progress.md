@@ -153,3 +153,11 @@ A01 (employee-owned work autoaccept) follows C01. Start-time question resolved: 
 - Baseline before edits on the unchanged worktree: 114 of 114 desktop and mobile cases passed across the shift specs.
 - Specs routed through the new `e2e/shift-actions.ts` helpers: lifecycle-shifts, lifecycle-one-time-shifts, lifecycle-shift-assignment-count, lifecycle-shift-completed, shift-assignment, shift-dates, shift-occurrences, shift-reactivation, admin-edit-inactive, lifecycle-invoice-billing, quality-cycle, admin.spec.
 - New `e2e/shift-workspace.spec.ts` covers row actions, workspace sections, workspace-to-dialog handoffs, on-call and inactive next steps, and phone overflow.
+
+### C03 customer workspace checkpoint (#137 part 1) - 2026-11-04
+
+- Branch `feat/customer-lifecycle-c03` from main `93753c4f` (PR #274). Design: `docs/superpowers/specs/2026-11-04-c03-design.md`; edge-case matrix: `docs/implementation/edge-cases/C03.md`.
+- Shipped: static route `/admin/companies/customer/?id=&section=&back=` with Overview, Properties, Agreements, Work and Invoices tabs (lazy, per-tab errors and retry, stale-response guard). Companies list rows gain an Open link. Agreements and Shifts pages preselect `?company=`. Agreement list rows show the customer name.
+- Backend: `ListAgreementSummariesQuery` (company filter, customer name), `ListInvoicesQuery` company filter, optional `companyId` on `GET /api/v1/admin/agreements` and `GET /api/v1/admin/invoices`.
+- Deferred to PR 2 of #137: agreement service metadata, renewal/amendment lineage, expiry filters and alerts. Also deferred: Expenses (E01), reports/public links and incidents (no company key or model), current/upcoming shift classification (tenant timezone rule), manager access, and the "Customers" nav label rename.
+- Verification: backend full suite 1346 passed, 0 failed, 4 skipped (with `QC_TEST_CONNECTION_STRING` against the local PostgreSQL 16 container; includes the new DB tenant-isolation test). `npx tsc --noEmit` exit 0. `npm run build` compiled, 49 static pages. Playwright `lifecycle-customer-workspace.spec.ts`: 55 passed, 1 skipped (desktop phone-width case by design). Regression run of companies/admin/agreements/shifts specs: 245 passed, plus one admin assertion made exact after the new Open control, rerun 2/2.
