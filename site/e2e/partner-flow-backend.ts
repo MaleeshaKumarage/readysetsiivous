@@ -48,6 +48,8 @@ export class PartnerFlowBackend {
   preferences: Record<string, boolean> = {};
   shiftActive: Record<string, boolean> = {};
   writes: WriteRecord[] = [];
+  // Holds writes open for a moment, so in-progress states can be observed.
+  writeDelayMs = 0;
   private sequence = 0;
   private failures: { method: string; pattern: RegExp; status: number; detail: string; remaining: number }[] = [];
 
@@ -71,7 +73,7 @@ export class PartnerFlowBackend {
     this.offerRequest(request, this.employeeById(employeeId), request.version, plannedStartLocal);
     return request;
   }
-  seedAccepted(request: RequestRecord, employeeId: string, plannedStartLocal: string) {
+  seedAccepted(request: RequestRecord, employeeId: string, plannedStartLocal: string | null) {
     this.seedOffer(request, employeeId, plannedStartLocal);
     this.materialize(request, employeeId, request.offerPlannedStartUtc!);
     return request;
@@ -94,6 +96,7 @@ export class PartnerFlowBackend {
     const path = new URL(req.url()).pathname.replace(/^\/api\/v1\//, '').replace(/\/$/, '');
     const method = req.method();
     const body = req.postData() ? req.postDataJSON() : undefined;
+    if (method !== 'GET' && this.writeDelayMs) await new Promise(resolve => setTimeout(resolve, this.writeDelayMs));
     const failure = this.failures.find(item => item.remaining > 0 && item.method === method && item.pattern.test(path));
     let status = 200; let json: unknown = {};
     if (failure) { failure.remaining--; status = failure.status; json = { detail: failure.detail }; }
