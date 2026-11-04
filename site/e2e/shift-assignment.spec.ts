@@ -171,12 +171,15 @@ test('late failed roster read does not overwrite another opened row', async ({ p
   await setup(page); let release!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
   await shiftActionAt(page, 'Employees', 0);
+  // Wait for the first menu to finish closing; a closing menu keeps its "Employees" item in the DOM and makes the next lookup ambiguous.
+  await expect(page.getByRole('menu')).toHaveCount(0);
   await page.route(/\/shifts\/one\/assignments$/, async route => {
     if (route.request().method() !== 'GET') return route.fallback();
     await held; return route.fulfill({ status: 500, headers, body: 'old failure' });
   });
   await shiftActionAt(page, 'Employees', 0);
   await expect(page.getByText('Loading assignments…')).toBeVisible();
+  await expect(page.getByRole('menu')).toHaveCount(0);
   await shiftActionAt(page, 'Employees', 1);
   await expect(page.getByText('No employees assigned.')).toBeVisible();
   const response = page.waitForResponse(r => r.url().endsWith('/shifts/one/assignments') && r.status() === 500);
