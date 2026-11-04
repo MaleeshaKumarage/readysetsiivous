@@ -20,6 +20,10 @@ async function ownerOpenRequests(page: Page) {
 async function staffOpenRequests(page: Page) {
   await page.goto('/admin/partner-requests/');
 }
+// Cancelled owner bookings leave the active list and open from the collapsed section.
+async function ownerOpenCancelled(page: Page) {
+  await page.getByText(/^Cancelled requests \(\d+\)$/).click();
+}
 async function staffOpenAssigned(page: Page) {
   await page.goto('/admin/partner-requests/');
   await page.getByRole('tab', { name: 'Assigned', exact: true }).click();
@@ -388,6 +392,9 @@ test('owner cancels an unaccepted request only after confirming, and the cleaner
   page.once('dialog', dialog => dialog.accept());
   await ownerCard(page).getByRole('button', { name: 'Cancel request', exact: true }).click();
   await expect(page.getByText('Request cancelled.', { exact: true })).toBeVisible();
+  await expect(ownerCard(page)).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: 'Cleaning requests', exact: true })).toContainText('0');
+  await ownerOpenCancelled(page);
   await expect(ownerCard(page).getByText('Cancelled', { exact: true })).toBeVisible();
   expect(shape(backend.writes.filter(write => write.path.endsWith('/cancel')))).toEqual(['owner POST partner/requests/<id>/cancel']);
 
@@ -425,6 +432,8 @@ test('staff cancellation of an accepted visit uses an inline reason, not a brows
 
   await prepareRolePage(page, backend, 'owner');
   await ownerOpenRequests(page);
+  await expect(ownerCard(page)).toHaveCount(0);
+  await ownerOpenCancelled(page);
   await expect(ownerCard(page).getByText('Cancelled', { exact: true })).toBeVisible();
   await staff.context.close();
 });

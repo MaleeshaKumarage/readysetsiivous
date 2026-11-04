@@ -113,7 +113,25 @@ export default function PartnerPage() {
   const stamp = (value: string | null) => value && !Number.isNaN(Date.parse(value))
     ? stampFormatter.format(new Date(value)) : t.notRecorded;
   const selectedIndex = sections.findIndex(section => section.key === tab);
-  const counts = [branches.length, requests.length, shifts.length, changes.length];
+  // Cancelled bookings leave the active list; they stay available in their own section.
+  const openWork = requests.filter(request => request.status !== 'Cancelled');
+  const cancelledWork = requests.filter(request => request.status === 'Cancelled');
+  const renderRequest = (request: CleaningRequest) => (<article key={request.id} aria-label={request.branchName + ' ' + request.fromDate}>
+              <Card className="partner-surface partner-request">
+                <div className="partner-card-heading"><h3>{request.branchName}<span className="sr-only"> · {partnerStatus(request.status, language)}</span></h3>
+                  <Badge variant={request.status === 'Completed' ? 'subtle' : 'outline'} className="partner-badge">{partnerStatus(request.status, language)}</Badge>
+                </div>
+                <p>{date(request.fromDate)} – {date(request.toDate)}{request.exactStartLocalTime && ' ' + t.at + ' ' + request.exactStartLocalTime.slice(0, 5)}</p>
+                <p className="partner-price">{t.agreedPrice} <strong>{money(request.priceNet)}</strong> {t.exclVat} ({t.vat} {number(request.vatRatePercent)}%)</p>
+                <div className="partner-request-details"><p>{t.cleaner}: {request.acceptedCleanerName ?? t.awaitingAcceptance}</p><p>{t.planned}: {request.plannedStartUtc ? <>{stamp(request.plannedStartUtc)} – {stamp(request.plannedEndUtc)}</> : request.firstAcceptedAtUtc || request.status === 'Accepted' ? t.flexible : t.notRecorded}</p><p>{t.actualStart}: {stamp(request.actualStartUtc)} · {t.actualEnd}: {stamp(request.actualEndUtc)}</p></div>
+                {request.notes && <p className="partner-entered">{request.notes}</p>}
+                <div className="partner-card-actions">{!request.firstAcceptedAtUtc && request.status !== 'Cancelled' ? <>
+                  <Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => { const branch = branches.find(item => item.id === request.branchId); if (branch) openRequest(branch, request); }}>{t.editRequest}</Button>
+                  <Button variant="ghost" className="partner-danger" disabled={busy} onClick={() => { if (confirm(t.cancelConfirm)) void act(() => partnerApi.cancel(request), base.requestCancelled); }}>{t.cancelRequest}</Button>
+                </> : request.status !== 'Cancelled' && <Button variant="outline" className="partner-secondary" onClick={() => { setChange({ kind: 'request', id: request.id }); setMessage(''); }}>{t.changeOrCancel}</Button>}</div>
+              </Card>
+            </article>);
+  const counts = [branches.length, openWork.length, shifts.length, changes.length];
   const alert = error ? <p role="alert" className="partner-alert partner-alert-error">{partnerMessage(error, language)}</p> : null;
 
   return <main lang={language} className="partner-portal" style={theme}>
@@ -163,22 +181,9 @@ export default function PartnerPage() {
           </section>}
           {tab === 'Cleaning requests' && <section className="partner-section">
             <div className="partner-section-heading"><div><h2>{t.requests}</h2><p>{t.requestsHint}</p></div></div>
-            {!requests.length && <Card className="partner-surface partner-empty">{t.noRequests}</Card>}
-            <div className="partner-grid">{requests.map(request => <article key={request.id} aria-label={request.branchName + ' ' + request.fromDate}>
-              <Card className="partner-surface partner-request">
-                <div className="partner-card-heading"><h3>{request.branchName}<span className="sr-only"> · {partnerStatus(request.status, language)}</span></h3>
-                  <Badge variant={request.status === 'Completed' ? 'subtle' : 'outline'} className="partner-badge">{partnerStatus(request.status, language)}</Badge>
-                </div>
-                <p>{date(request.fromDate)} – {date(request.toDate)}{request.exactStartLocalTime && ' ' + t.at + ' ' + request.exactStartLocalTime.slice(0, 5)}</p>
-                <p className="partner-price">{t.agreedPrice} <strong>{money(request.priceNet)}</strong> {t.exclVat} ({t.vat} {number(request.vatRatePercent)}%)</p>
-                <div className="partner-request-details"><p>{t.cleaner}: {request.acceptedCleanerName ?? t.awaitingAcceptance}</p><p>{t.planned}: {request.plannedStartUtc ? <>{stamp(request.plannedStartUtc)} – {stamp(request.plannedEndUtc)}</> : request.firstAcceptedAtUtc || request.status === 'Accepted' ? t.flexible : t.notRecorded}</p><p>{t.actualStart}: {stamp(request.actualStartUtc)} · {t.actualEnd}: {stamp(request.actualEndUtc)}</p></div>
-                {request.notes && <p className="partner-entered">{request.notes}</p>}
-                <div className="partner-card-actions">{!request.firstAcceptedAtUtc && request.status !== 'Cancelled' ? <>
-                  <Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => { const branch = branches.find(item => item.id === request.branchId); if (branch) openRequest(branch, request); }}>{t.editRequest}</Button>
-                  <Button variant="ghost" className="partner-danger" disabled={busy} onClick={() => { if (confirm(t.cancelConfirm)) void act(() => partnerApi.cancel(request), base.requestCancelled); }}>{t.cancelRequest}</Button>
-                </> : request.status !== 'Cancelled' && <Button variant="outline" className="partner-secondary" onClick={() => { setChange({ kind: 'request', id: request.id }); setMessage(''); }}>{t.changeOrCancel}</Button>}</div>
-              </Card>
-            </article>)}</div>
+            {!openWork.length && <Card className="partner-surface partner-empty">{t.noRequests}</Card>}
+            <div className="partner-grid">{openWork.map(renderRequest)}</div>
+            {cancelledWork.length > 0 && <details className="partner-cancelled"><summary>{t.cancelledRequests} ({cancelledWork.length})</summary><div className="partner-grid">{cancelledWork.map(renderRequest)}</div></details>}
           </section>}
           {tab === 'Change requests' && <section aria-label={t.history} className="partner-section">
             <div className="partner-section-heading"><div><h2>{t.changes}</h2><p>{t.changesHint}</p></div></div>
