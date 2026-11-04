@@ -229,3 +229,18 @@ test('company shifts show in the same queue with their own source filter, includ
   await expect(page.getByText(/Weekly office clean/)).toBeVisible();
 });
 
+
+test('a past assigned company visit nobody started reads Not started, and Open company shift opens the calendar', async ({ page }) => {
+  const state = await setup(page);
+  const missed: QueueItem = { source: 'shift', id: 'occurrence-missed', reference: 'Weekly office clean', customerName: 'Owner company', scheduledLocal: '2026-10-20 10:00', status: 'scheduled', stateLabel: 'Not started', assigneeName: 'Test Cleaner', href: '/admin/shifts/calendar/' };
+  const upcoming: QueueItem = { ...missed, id: 'occurrence-upcoming', scheduledLocal: '2026-11-12 10:00', stateLabel: 'Scheduled' };
+  state.counts = { 'needs-action': 1, scheduled: 2, 'in-progress': 0, completed: 0, cancelled: 0 };
+  state.items = { ...state.items, scheduled: [missed, upcoming] };
+  await page.goto('/admin/work-queue/');
+  await page.getByRole('tab', { name: /^Scheduled/ }).click();
+  const missedRow = page.getByRole('link', { name: 'Open company shift Weekly office clean', exact: true }).first();
+  await expect(page.getByText('Not started', { exact: true })).toBeVisible();
+  await expect(page.getByText('Scheduled', { exact: true })).toBeVisible();
+  await missedRow.click();
+  await expect(page).toHaveURL(/\/admin\/shifts\/calendar\/?$/);
+});

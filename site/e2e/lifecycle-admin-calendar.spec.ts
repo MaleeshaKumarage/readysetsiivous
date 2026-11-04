@@ -329,3 +329,35 @@ test('review summary counts two flagged visits and filter-empty copy only appear
   await expect(page.getByText('No shifts on this day.', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Cleaning 2026-11-01' })).toHaveCount(0);
 });
+
+test('a partner-accepted visit on the admin calendar can be recorded and its saved time is shown', async ({ page }) => {
+  const state = await setup(page);
+  // Partner acceptance names the visit after the property; the recording contract is the same as any company visit.
+  await page.route(/\/api\/v1\/admin\/shifts\/calendar(?:\?|\/|$)/, async route => {
+    const url = new URL(route.request().url());
+    if (route.request().method() !== 'GET' || url.searchParams.get('date') !== '2026-10-30') return route.fallback();
+    const saved = Boolean(state.saved);
+    return route.fulfill({ headers, json: { date: '2026-10-30', today: '2026-11-01', timeZoneId: 'Europe/Helsinki', occurrences: [{
+      shiftId: 'partner-shift', shiftName: 'Cleaning — Lake apartment', companyName: 'Owner company', branchName: 'Lake apartment',
+      startUtc: '2026-10-30T08:00:00Z', endUtc: '2026-10-30T10:00:00Z', exceptionId: 'partner-visit', cancelled: false, ambiguous: false, needsReview: !saved,
+      assignees: [{ employeeId: 'partner-cleaner', name: 'Partner Cleaner', status: saved ? 'Recorded' : 'Not started', actualStartUtc: saved ? '2026-10-30T08:15:00Z' : null,
+        actualEndUtc: saved ? '2026-10-30T10:15:00Z' : null, hours: saved ? 2 : null, version: saved ? '33333333-3333-3333-3333-333333333333' : null, canRecord: true,
+        review: saved ? null : { kind: 'missing-completion', label: 'No completion recorded' } }],
+    }] } });
+  });
+  await page.goto('/admin/shifts/calendar/');
+  await expect(page.getByRole('heading', { name: 'Cleaning — Lake apartment' })).toBeVisible();
+  const record = page.getByRole('button', { name: 'Record work for Partner Cleaner' });
+  await expect(record).toBeEnabled();
+  await record.click();
+  await page.getByLabel('Actual start').fill('2026-10-30T10:15');
+  await page.getByLabel('Actual end').fill('2026-10-30T12:15');
+  await page.getByRole('textbox', { name: 'Reason', exact: true }).fill('Timesheet received');
+  await page.getByRole('button', { name: 'Save work times' }).click();
+  await expect(page.getByText('Work times saved.', { exact: true })).toBeVisible();
+  expect(state.saved).toMatchObject({ employeeId: 'partner-cleaner', actualStartLocal: '2026-10-30T10:15', actualEndLocal: '2026-10-30T12:15' });
+  await expect(page.getByRole('button', { name: 'Correct times for Partner Cleaner' })).toBeVisible();
+  await page.getByRole('button', { name: 'Correct times for Partner Cleaner' }).click();
+  await expect(page.getByLabel('Actual start')).toHaveValue('2026-10-30T10:15');
+  await expect(page.getByLabel('Actual end')).toHaveValue('2026-10-30T12:15');
+});

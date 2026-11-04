@@ -184,3 +184,41 @@ test('changes from companies without partner access stay out of the Changes list
   // One quote and one enabled change; the disabled company's change is not counted.
   await expect(page.getByLabel('2 pending partner actions')).toHaveCount(1);
 });
+
+test('owner edit and quote withdrawal work from the keyboard, and Escape returns focus to Edit property', async ({ page }) => {
+  const state = await owner(page, [pendingQuote]);
+  await page.goto('/partner/');
+  const card = page.getByRole('article', { name: 'Cabin', exact: true });
+  const edit = card.getByRole('button', { name: 'Edit property', exact: true });
+  await edit.focus(); await page.keyboard.press('Enter');
+  const dialog = page.getByRole('dialog', { name: 'Edit property', exact: true });
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(edit).toBeFocused();
+  const withdraw = card.getByRole('button', { name: 'Withdraw quote request', exact: true });
+  await withdraw.focus(); await page.keyboard.press('Enter');
+  await expect(page.getByText('Quote request withdrawn.', { exact: true })).toBeVisible();
+  expect(state.writes.some(item => item.path === '/branches/cabin-branch/quote-request/withdraw')).toBe(true);
+});
+
+test('staff reject from the keyboard: reason, Tab to confirm, Escape keeps the quote', async ({ page }) => {
+  const state = await staff(page, [enabledStaffQuote]);
+  await page.goto('/admin/partner-requests/?tab=quotes');
+  const reject = page.getByRole('button', { name: 'Reject quote', exact: true });
+  await reject.focus(); await page.keyboard.press('Enter');
+  const dialog = page.getByRole('dialog', { name: 'Reject quote · Lake apartment', exact: true });
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  expect(state.writes).toHaveLength(0);
+  await reject.focus(); await page.keyboard.press('Enter');
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel('Reason for rejecting the quote', { exact: true }).focus();
+  await page.keyboard.type('Outside the service area');
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Confirm rejection', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('Quote rejected.', { exact: true })).toBeVisible();
+  expect(state.writes).toContainEqual(expect.objectContaining({ body: { reason: 'Outside the service area' } }));
+});
