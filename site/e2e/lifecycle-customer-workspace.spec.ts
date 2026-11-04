@@ -340,6 +340,16 @@ test('work tab shows the no-shifts empty state for a customer with none', async 
   await expect(page.getByText('No active shifts.', { exact: true })).toHaveCount(0);
 });
 
+test('work tab lists only this customer’s shifts and requests them by company', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const otherShift = { ...shifts[0], id: 'shift-other-tenant', companyId: OTHER_TENANT, name: 'Other tenant visit' };
+  const requests = await mockWorkspace(page, { shiftsList: [shifts[0], otherShift] });
+  await page.goto(ws(CUSTOMER, 'work'));
+  await expect(page.getByRole('cell', { name: 'Weekly visit', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Other tenant visit', exact: true })).toHaveCount(0);
+  expect(requests.some(r => r.startsWith(`GET /api/v1/admin/shifts?companyId=${CUSTOMER}`))).toBe(true);
+});
+
 test('open invoices button navigates to the invoices page', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   await mockWorkspace(page);
