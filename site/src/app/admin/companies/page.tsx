@@ -213,7 +213,7 @@ export default function CompaniesAdminPage() {
       const api = companyId ? branchLifecycle : companyLifecycle;
       await (active ? api.deactivate(id) : api.reactivate(id));
       if (companyId) await loadBranches(companyId);
-      else { setExpanded(null); await reload(); }
+      else { setExpanded(null); setPinned(null); await reload(); }
     } catch (failure) {
       setActionError(failure instanceof Error ? failure.message : 'Could not change activity. Please retry.');
     } finally { setActionBusy(null); }
@@ -222,7 +222,7 @@ export default function CompaniesAdminPage() {
   const deleteCompany = async (company: Company) => {
     if (!window.confirm(`Permanently delete inactive company “${company.name}”? Companies with branches or business history are retained.`)) return;
     setActionBusy(company.id); setActionError('');
-    try { await adminCompanies.deleteInactive(company.id); setExpanded(null); await reload(); }
+    try { await adminCompanies.deleteInactive(company.id); setExpanded(null); setPinned(null); await reload(); }
     catch (failure) { setActionError(failure instanceof Error ? failure.message : 'Could not delete company. Please retry.'); }
     finally { setActionBusy(null); }
   };

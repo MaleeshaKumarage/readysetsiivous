@@ -12,6 +12,11 @@ async function mockCompanies(page: Page, options: { list?: typeof companies; fai
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
     const url = new URL(route.request().url());
     if (options.failAll?.value) return route.fulfill({ status: 503, headers, json: {} });
+    if (route.request().method() === 'POST' && url.pathname.endsWith('/deactivate')) {
+      const target = list.find(c => c.id === url.pathname.split('/').at(-2));
+      if (target) target.isActive = false;
+      return route.fulfill({ status: 204, headers });
+    }
     if (route.request().method() === 'POST') {
       const body = route.request().postDataJSON();
       const created = { id: `created-${list.length}`, name: body.name, businessId: body.businessId, contactName: null, isActive: true };
@@ -246,4 +251,15 @@ test('with the summary unavailable an empty tab does not claim there are no comp
   await page.goto('/admin/companies/');
   await expect(page.getByText('No active companies.', { exact: true })).toBeVisible();
   await expect(page.getByText('No companies yet.', { exact: false })).not.toBeVisible();
+});
+
+test('deactivating the open deep-linked company removes its branch panel', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockCompanies(page, { list: companies.map(c => ({ ...c })) });
+  await page.goto('/admin/companies/?company=company-60');
+  await expect(page.getByText('Active branch', { exact: true })).toBeVisible();
+  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Company 60', exact: true }) });
+  await row.getByRole('button', { name: 'Deactivate', exact: true }).click();
+  await expect(page.getByRole('cell', { name: 'Company 60', exact: true })).not.toBeVisible();
+  await expect(page.getByText('Active branch', { exact: true })).not.toBeVisible();
 });
