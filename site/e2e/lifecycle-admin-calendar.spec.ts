@@ -239,6 +239,22 @@ test('failed permission changes retain the toggle and show a retryable error', a
   await expect(page.getByRole('button', { name: 'Disable shift calendar' })).toBeVisible();
 });
 
+test('started-but-not-ended visit shows Missing completion with the Started, not ended label', async ({ page }) => {
+  const state = await setup(page); state.saved = {}; state.partialWork = true;
+  await page.goto('/admin/shifts/calendar/');
+  await expect(page.getByText('Missing completion', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Started, not ended', { exact: true })).toBeVisible();
+  await expect(page.getByText('No completion recorded', { exact: true })).toHaveCount(1);
+});
+
+test('visit with no recorded work shows Missing completion with the No completion recorded label', async ({ page }) => {
+  await setup(page);
+  await page.goto('/admin/shifts/calendar/');
+  await expect(page.getByText('Missing completion', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('No completion recorded', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Started, not ended', { exact: true })).toHaveCount(0);
+});
+
 test('visits needing review are counted and filterable; scheduled and actual times are labelled apart', async ({ page }) => {
   const state = await setup(page); state.settled = true;
   await page.goto('/admin/shifts/calendar/');
