@@ -77,9 +77,10 @@ test.describe('partner operations actions open as modal dialogs', () => {
     await card.getByRole('button', { name: 'Edit / reschedule request', exact: true }).click();
     await expect(dialog.getByLabel('From date', { exact: true })).toHaveValue('2026-12-01');
     await dialog.getByLabel('From date', { exact: true }).fill('2026-12-05');
+    await dialog.getByLabel('To date', { exact: true }).fill('2026-12-06');
     await dialog.getByRole('button', { name: 'Save request changes', exact: true }).click();
     await expect(dialog).toHaveCount(0);
-    await expect(card.getByText('2026-12-05 – 2026-12-02', { exact: true })).toBeVisible();
+    await expect(card.getByText('2026-12-05 – 2026-12-06', { exact: true })).toBeVisible();
     expect(writes[0]).toMatchObject({ method: 'PUT', path: `/requests/${requestFor(0).id}`, body: { fromDate: '2026-12-05', version: 7 } });
   });
 
@@ -110,7 +111,12 @@ test.describe('partner operations completed work and large lists', () => {
     await expect(page.getByRole('article', { name: 'Property 2 request' })).toHaveCount(0);
     await page.getByRole('tab', { name: 'Completed requests', exact: true }).click();
     await expect(page.getByRole('article', { name: 'Property 1 request' })).toBeVisible();
+    await expect(page.getByRole('article', { name: 'Property 2 request' })).toHaveCount(0);
+    await page.getByRole('tab', { name: 'Cancelled requests', exact: true }).click();
     await expect(page.getByRole('article', { name: 'Property 2 request' })).toBeVisible();
+    await expect(page.getByRole('article', { name: 'Property 1 request' })).toHaveCount(0);
+    await expect(page.getByRole('article', { name: 'Property 2 request' }).getByRole('button', { name: 'Cancel request', exact: true })).toHaveCount(0);
+    await page.getByRole('tab', { name: 'Completed requests', exact: true }).click();
     await expect(page.getByRole('article', { name: 'Property 1 request' }).getByRole('button', { name: 'Cancel request', exact: true })).toHaveCount(0);
     await expect(page.getByRole('article', { name: 'Property 1 request' }).getByRole('button', { name: 'Arrange cleaner / time', exact: true })).toHaveCount(0);
   });
@@ -128,7 +134,7 @@ test.describe('partner operations completed work and large lists', () => {
   });
 
   test('Completed requests has its own pager that keeps its page separately from Requests', async ({ page }) => {
-    const closed = Array.from({ length: 28 }, (_, index) => requestFor(index + 2, index % 2 ? 'Cancelled' : 'Completed'));
+    const closed = Array.from({ length: 28 }, (_, index) => requestFor(index + 2, 'Completed'));
     await setup(page, [requestFor(0), requestFor(1), ...closed]);
     await page.goto('/admin/partner-requests/');
     await expect(page.getByRole('article')).toHaveCount(2);
@@ -226,8 +232,9 @@ test('a manager opening the partner-request push link uses the same actions thro
   await cancel.getByLabel('Reason for cancellation', { exact: true }).fill('Owner cancelled.');
   await cancel.getByRole('button', { name: 'Confirm cancellation', exact: true }).click();
   await expect(page.getByText('Request cancelled.', { exact: true })).toBeVisible();
-  await page.getByRole('tab', { name: 'Completed requests', exact: true }).click();
+  await page.getByRole('tab', { name: 'Cancelled requests', exact: true }).click();
   await expect(page.getByRole('article', { name: 'Property 1 request' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Completed requests', exact: true }).click();
   await expect(page.getByRole('article', { name: 'Property 2 request' })).toBeVisible();
   expect(writes.map(write => `${write.method} ${write.path}`)).toEqual([
     `POST /partner/requests/${requestFor(0).id}/offer`, `POST /partner/requests/${requestFor(1).id}/cancel`]);

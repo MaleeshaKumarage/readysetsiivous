@@ -168,6 +168,37 @@ public class CompanyTenantDatabaseTests
 
     private static string ConnectionString => Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
 
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Status_filter_pages_deterministically_and_summary_counts_full_tenant_set()
+    {
+        using var services = ProductionServices("company_status_" + Guid.NewGuid().ToString("N"));
+        var store = services.GetRequiredService<IDocumentStore>();
+        await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
+        var alpha = Company.Create("ALPHA-1", "Alpha");
+        var beta = Company.Create("BETA-2", "Beta");
+        var gamma = Company.Create("GAMMA-3", "Gamma");
+        var inactive = Company.Create("ZULU-4", "Zulu");
+        inactive.Deactivate();
+        foreach (var company in new[] { alpha, beta, gamma, inactive }) await Save(store, "tenant-a", company);
+        using var tenant = Tenant(store, "tenant-a");
+        var repository = new CompanyRepository(tenant);
+
+        var active = await repository.ListByStatusAsync(null, "active", 0, 2, default);
+        Assert.Equal(3, active.Total);
+        Assert.Equal(new[] { "Alpha", "Beta" }, active.Items.Select(x => x.Name));
+        var secondPage = await repository.ListByStatusAsync(null, "active", 2, 2, default);
+        Assert.Equal(new[] { "Gamma" }, secondPage.Items.Select(x => x.Name));
+        var onlyInactive = await repository.ListByStatusAsync(null, "inactive", 0, 50, default);
+        Assert.Equal(new[] { "Zulu" }, onlyInactive.Items.Select(x => x.Name));
+        var everything = await repository.ListByStatusAsync(null, "all", 0, 50, default);
+        Assert.Equal(4, everything.Total);
+        var searched = await repository.ListByStatusAsync("beta", "active", 0, 50, default);
+        Assert.Equal(new[] { "Beta" }, searched.Items.Select(x => x.Name));
+
+        var counts = await repository.CountByStatusAsync(default);
+        Assert.Equal(new CompanyCounts(4, 3, 1), counts);
+    }
+
     private static ServiceProvider ProductionServices(string schema)
     {
         var services = new ServiceCollection();

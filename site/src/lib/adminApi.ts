@@ -134,11 +134,11 @@ export async function adminDelete(path: string): Promise<void> {
   invalidateAdminCache();
 }
 
-export type WorkQueueView = 'needs-action' | 'scheduled' | 'in-progress' | 'completed';
-export type WorkQueueSource = 'all' | 'booking' | 'partner';
+export type WorkQueueView = 'needs-action' | 'scheduled' | 'in-progress' | 'completed' | 'cancelled';
+export type WorkQueueSource = 'all' | 'booking' | 'partner' | 'shift';
 
 export interface WorkQueueItem {
-  source: 'booking' | 'partner';
+  source: 'booking' | 'partner' | 'shift';
   id: string;
   reference: string;
   customerName: string;
@@ -621,10 +621,12 @@ async function companyRequest<T>(path: string, method: 'POST' | 'PUT', body: unk
 }
 
 export const adminCompanies = {
-  list: (search = '', skip = 0, take = 100) =>
+  list: (search = '', skip = 0, take = 100, status: 'all' | 'active' | 'inactive' = 'all') =>
     adminGet<{ items: Company[]; total: number }>(
-      `/api/v1/admin/companies?search=${encodeURIComponent(search)}&skip=${skip}&take=${take}`
+      `/api/v1/admin/companies?search=${encodeURIComponent(search)}&skip=${skip}&take=${take}&status=${status}`,
+      false
     ),
+  summary: () => adminGet<{ all: number; active: number; inactive: number }>('/api/v1/admin/companies/summary', false),
   listAll: async (): Promise<Company[] | null> => {
     const records: Company[] = [];
     const ids = new Set<string>();

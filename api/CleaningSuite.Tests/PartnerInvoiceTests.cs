@@ -126,6 +126,8 @@ public class PartnerInvoiceTests
                 shifts.Setup(x=>x.ListOccurrenceAssignmentsAsync(shift.Id,It.IsAny<CancellationToken>())).ReturnsAsync(()=>Rosters[shift.Id]);
             }
             shifts.Setup(x=>x.ListByIdsAsync(It.IsAny<IReadOnlyCollection<Guid>>(),It.IsAny<CancellationToken>())).ReturnsAsync((IReadOnlyCollection<Guid> ids,CancellationToken _) => (IReadOnlyList<Shift>)ids.Select(id=>selected[id]).ToArray());
+            // Completion-month billing scans every company shift; here those are the shifts built above.
+            shifts.Setup(x=>x.ListIncludingInactiveAsync(It.IsAny<CancellationToken>())).ReturnsAsync(()=>(IReadOnlyList<Shift>)selected.Values.ToArray());
             var billing=new Mock<IShiftBillingRepository>(); billing.Setup(x=>x.GetAsync(It.IsAny<Guid>(),It.IsAny<CancellationToken>())).ReturnsAsync(new ShiftBillingProfile {Plans=[new("PerOccurrence",999,0,new(2000,1,1))]});
             var companies=new Mock<ICompanyRepository>(); companies.Setup(x=>x.GetAsync(company.Id,It.IsAny<CancellationToken>())).ReturnsAsync(company);
             var branches=new Mock<IBranchRepository>(); branches.Setup(x=>x.GetAsync(branch.Id,It.IsAny<CancellationToken>())).ReturnsAsync(branch);

@@ -59,7 +59,7 @@ public class ShiftCalendarAdminController(IShiftRepository shifts, IEmployeeRepo
                     staff.TryGetValue(id, out var person);
                     var form = recorded.FirstOrDefault(f => f.EmployeeId == id);
                     // Same boundary as correction: every review flag has an available action; today/future never flag.
-                    var correctable = day < today && !visit.IsCancelled && !ambiguous && !shift.PartnerRequestId.HasValue && person?.IsActive == true && Employee.IsWorkRole(person.Role);
+                    var correctable = day < today && !visit.IsCancelled && !ambiguous && person?.IsActive == true && Employee.IsWorkRole(person.Role);
                     var lastCorrection = form?.WorkTimeCorrections is { Count: > 0 } corrections ? corrections[^1] : null;
                     var corrected = lastCorrection is not null && lastCorrection.StartUtc == form!.StartedAtUtc && lastCorrection.EndUtc == form.EndedAtUtc;
                     var flag = CompletionReview.Evaluate(correctable, occurrence.StartUtc, occurrence.EndUtc, form?.IsSubmitted == true,
@@ -112,8 +112,6 @@ public class ShiftCalendarAdminController(IShiftRepository shifts, IEmployeeRepo
         var shift = await shifts.GetAsync(body.ShiftId, ct);
         var employee = await employees.GetByIdAsync(body.EmployeeId, ct);
         if (shift?.IsActive != true || employee?.IsActive != true) return BadRequest(new { detail = "Choose an active shift and employee." });
-        if (shift.PartnerRequestId.HasValue)
-            return Conflict(new { detail = "Partner visits are read-only here. Manage their work through Partner requests." });
         if (!Employee.IsWorkRole(employee.Role)) return BadRequest(new { detail = "Choose an employee with a work role." });
         var visits = await shifts.ResolveRosterAsync(shift, TenantTimeZone.StartOfLocalDay(day, zone), TenantTimeZone.StartOfLocalDay(day.AddDays(1), zone), zone, ct, includeCancelled: true);
         var matching = visits.Where(v => v.Occurrence.StartUtc == scheduled).ToList();

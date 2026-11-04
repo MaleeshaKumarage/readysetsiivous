@@ -35,7 +35,7 @@ public record ManagerAssignmentResponse(Guid Id, Guid ShiftId, Guid EmployeeId, 
 public static class ManagerResponses
 {
     public static ManagerEmployeeResponse Employee(Employee e) => new(e.Id, e.FirstName, e.LastName,
-        e.Phone, e.IsActive, e.ColorHex, e.Skills.ToArray(), e.ServiceAreas.ToArray(), AdminResponses.Hours(e.DefaultHours)) { AutoAcceptWork = e.AutoAcceptWork };
+        e.Phone, e.IsActive, e.ColorHex, e.Skills.ToArray(), e.ServiceAreas.ToArray(), AdminResponses.Hours(e.DefaultHours)) { AutoAcceptWork = e.AutoAcceptWork && !string.IsNullOrWhiteSpace(e.KeycloakUserId) };
     public static ManagerScheduleResponse Schedule(ShiftSchedule s) => new(s.Type, s.DailyStart, s.DailyEnd,
         s.DailyTimes.ToDictionary(x => x.Key, x => new ScheduleRangeResponse(x.Value.Start, x.Value.End)),
         s.WeeklyDay, s.WeeklyDays.ToArray(), s.WeeklyStart, s.WeeklyEnd, s.BiWeeklyWeekParity,

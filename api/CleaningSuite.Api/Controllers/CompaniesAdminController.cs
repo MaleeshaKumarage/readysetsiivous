@@ -27,11 +27,25 @@ public class CompaniesAdminController : ControllerBase
         [FromQuery] string? search,
         [FromQuery] int skip = 0,
         [FromQuery] int take = 50,
+        [FromQuery] string? status = null,
         CancellationToken ct = default)
     {
+        var normalizedStatus = (status ?? "all").Trim().ToLowerInvariant();
+        if (normalizedStatus is not ("all" or "active" or "inactive"))
+        {
+            return BadRequest(new { error = "status must be all, active or inactive." });
+        }
+
         skip = Math.Max(0, skip);
         take = Math.Clamp(take, 1, MaxTake);
-        var result = await _mediator.Send(new ListCompaniesQuery(search, skip, take), ct);
+        var result = await _mediator.Send(new ListCompaniesQuery(search, skip, take, normalizedStatus), ct);
+        return Ok(result);
+    }
+
+    [HttpGet("summary")]
+    public async Task<IActionResult> Summary(CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(new CompanySummaryQuery(), ct);
         return Ok(result);
     }
 

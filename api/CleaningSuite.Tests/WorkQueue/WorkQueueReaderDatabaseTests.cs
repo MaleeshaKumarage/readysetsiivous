@@ -3,6 +3,7 @@ using CleaningSuite.Application.WorkQueue;
 using CleaningSuite.Domain.Bookings;
 using CleaningSuite.Domain.Companies;
 using CleaningSuite.Domain.Partners;
+using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Infrastructure.Persistence;
 using CleaningSuite.Tests.QualityCycle;
 using Marten;
@@ -14,6 +15,48 @@ namespace CleaningSuite.Tests.WorkQueue;
 /// <summary>Runs the merged work queue query against PostgreSQL, including case-insensitive search.</summary>
 public class WorkQueueReaderDatabaseTests
 {
+    private static WorkQueueReader Reader(Fixture f, ITenantSession session) =>
+        new(session, new TenantProfileRepository(f.Store), TenantContext(f.Tenant));
+
+    private static ITenantContext TenantContext(string tenant)
+    {
+        var mock = new Mock<ITenantContext>();
+        mock.SetupGet(t => t.TenantId).Returns(tenant);
+        return mock.Object;
+    }
+
+    [QualityCycleDatabaseFact]
+    public async Task Finished_partner_visit_is_completed_and_cancelled_visits_stay_out_of_completed()
+    {
+        using var f = await Fixture.Create();
+        var lake = new Company { Name = "Lake Owners Oy", BusinessId = "WQ-" + Guid.NewGuid().ToString("N")[..8], IsActive = true, IsPartnerEnabled = true };
+        var shift = Guid.NewGuid();
+        var finished = new PartnerCleaningRequest { ClientRequestId = Guid.NewGuid(), CompanyId = lake.Id, BranchId = Guid.NewGuid(), Status = PartnerCleaningRequest.StatusAccepted,
+            LinkedShiftId = shift, FromDate = new DateOnly(2026, 12, 1), ToDate = new DateOnly(2026, 12, 1) };
+        var cancelled = new PartnerCleaningRequest { ClientRequestId = Guid.NewGuid(), CompanyId = lake.Id, BranchId = Guid.NewGuid(), Status = PartnerCleaningRequest.StatusCancelled,
+            FromDate = new DateOnly(2026, 12, 2), ToDate = new DateOnly(2026, 12, 2) };
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(lake);
+            db.Store(finished, cancelled);
+            db.Store(new QualityCycleForm { ShiftId = shift, EmployeeId = Guid.NewGuid(), IsSubmitted = true,
+                StartedAtUtc = new DateTime(2026, 12, 1, 8, 0, 0, DateTimeKind.Utc), EndedAtUtc = new DateTime(2026, 12, 1, 9, 30, 0, DateTimeKind.Utc) });
+            await db.SaveChangesAsync();
+        }
+
+        using var session = f.Session();
+        var reader = Reader(f, session);
+        var completed = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Completed, "partner", null, 0, 25));
+        Assert.Equal(finished.Id, Assert.Single(completed.Items).Id);
+        Assert.Equal("Completed", Assert.Single(completed.Items).StateLabel);
+        var cancelledPage = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Cancelled, "partner", null, 0, 25));
+        Assert.Equal(cancelled.Id, Assert.Single(cancelledPage.Items).Id);
+        var scheduled = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Scheduled, "partner", null, 0, 25));
+        Assert.Empty(scheduled.Items);
+        Assert.Equal(1, completed.Counts[WorkQueueViews.Completed]);
+        Assert.Equal(1, completed.Counts[WorkQueueViews.Cancelled]);
+    }
+
     [QualityCycleDatabaseFact]
     public async Task Search_is_case_insensitive_across_bookings_and_partner_companies()
     {
@@ -32,7 +75,7 @@ public class WorkQueueReaderDatabaseTests
         }
 
         using var session = f.Session();
-        var reader = new WorkQueueReader(session);
+        var reader = Reader(f, session);
 
         var all = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.NeedsAction, "all", null, 0, 25));
         Assert.Equal(4, all.Total);
@@ -65,7 +108,7 @@ public class WorkQueueReaderDatabaseTests
             await db.SaveChangesAsync();
         }
         using var session = f.Session();
-        var reader = new WorkQueueReader(session);
+        var reader = Reader(f, session);
 
         var page = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.NeedsAction, "all", null, 0, 25));
         Assert.Equal(["2026-12-02 10:00", "2026-12-03", "2026-12-03 01:00"], page.Items.Select(i => i.ScheduledLocal).ToArray());

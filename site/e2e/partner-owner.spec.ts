@@ -128,7 +128,8 @@ test('FI/EN switching preserves a draft, creates and cancels a Finnish request a
   page.once('dialog', async dialog => { confirmation = dialog.message(); await dialog.accept(); });
   await page.getByRole('button', { name: 'Peruuta pyyntö', exact: true }).click();
   expect(confirmation).toBe('Haluatko peruuttaa tämän siivouspyynnön?');
-  await page.getByRole('tab', { name: /^Valmiit pyynnöt/ }).click();
+  await expect(page.getByRole('heading', { name: 'Lake apartment · Peruttu', exact: true })).toHaveCount(0);
+  await page.getByRole('tab', { name: /^Peruutetut pyynnöt/ }).click();
   await expect(page.getByRole('heading', { name: 'Lake apartment · Peruttu', exact: true })).toBeVisible();
   expect(state.writes.filter(write => write.path === '/requests')).toHaveLength(1);
   await page.reload();
@@ -274,7 +275,8 @@ test('owner edits a pending request with its revision and cancels the refreshed 
   await expect(page.getByText('2026-12-05 – 2026-12-06', { exact: true })).toBeVisible(); expect(state.writes[0]).toEqual({ path: `/requests/${pending.id}`, method: 'PUT', body: { version: 5, fromDate: '2026-12-05', toDate: '2026-12-06', exactStartLocalTime: null, notes: 'Updated checkout instructions.' } });
   page.once('dialog', dialog => dialog.dismiss()); await page.getByRole('button', { name: 'Cancel request', exact: true }).click(); expect(state.writes).toHaveLength(1);
   page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Cancel request', exact: true }).click();
-  await page.getByRole('tab', { name: /^Completed requests/ }).click();
+  await expect(page.getByRole('heading', { name: 'Lake apartment · Cancelled', exact: true })).toHaveCount(0);
+  await page.getByRole('tab', { name: /^Cancelled requests/ }).click();
   await expect(page.getByRole('heading', { name: 'Lake apartment · Cancelled', exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: 'Edit request', exact: true })).toHaveCount(0);
   expect(state.writes[1]).toEqual({ path: `/requests/${pending.id}/cancel`, method: 'POST', body: { version: 6 } });
 });
@@ -373,11 +375,13 @@ test('partner portal moves finished and cancelled requests to Completed and page
   await pages.getByRole('button', { name: 'Previous', exact: true }).click();
   await expect(page.getByRole('article')).toHaveCount(25);
   await expect(page.getByRole('article', { name: /Apartment 0/ })).toBeVisible();
-  await page.getByRole('tab', { name: /^Completed requests \(2\)/ }).click();
-  await expect(page.getByRole('article')).toHaveCount(2);
+  await page.getByRole('tab', { name: /^Completed requests \(1\)/ }).click();
+  await expect(page.getByRole('article')).toHaveCount(1);
   const done = page.getByRole('article', { name: /Finished apartment/ });
   await expect(done.getByRole('button', { name: 'Edit request', exact: true })).toHaveCount(0);
   await expect(done.getByRole('button', { name: 'Cancel request', exact: true })).toHaveCount(0);
+  await page.getByRole('tab', { name: /^Cancelled requests \(1\)/ }).click();
+  await expect(page.getByRole('article', { name: /Cancelled apartment/ })).toBeVisible();
 });
 
 test('Escape closes the request dialog and returns focus to the button that opened it', async ({ page }) => {
@@ -408,7 +412,7 @@ test('a backdrop click closes the request dialog, a click inside does not, and f
 
 test('completed requests page 25 at a time, and switching lists resets to the first page', async ({ page }) => {
   const active = Array.from({ length: 27 }, (_, index) => ({ ...pending, id: `active-${index}`, branchName: `Apartment ${index}`, status: 'Requested', firstAcceptedAtUtc: null }));
-  const done = Array.from({ length: 28 }, (_, index) => ({ ...pending, id: `done-${index}`, branchName: `Done apartment ${index}`, status: index % 2 ? 'Cancelled' : 'Completed', firstAcceptedAtUtc: null }));
+  const done = Array.from({ length: 28 }, (_, index) => ({ ...pending, id: `done-${index}`, branchName: `Done apartment ${index}`, status: 'Completed', firstAcceptedAtUtc: null }));
   await owner(page, { requests: [...active, ...done] }); await page.goto('/partner/');
   await page.getByRole('tab', { name: 'Cleaning requests', exact: true }).click();
   const activePages = page.getByRole('navigation', { name: 'Active requests' });

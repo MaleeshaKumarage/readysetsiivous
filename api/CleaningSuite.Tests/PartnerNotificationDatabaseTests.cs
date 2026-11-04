@@ -17,6 +17,19 @@ namespace CleaningSuite.Tests.Partners;
 public class PartnerNotificationDatabaseTests
 {
     [QualityCycleDatabaseFact]
+    public async Task Cleaning_updates_are_app_only_when_partner_email_is_off()
+    {
+        using var f = await Fixture.Create(emailEnabled: false); using var session = f.Session();
+        f.Transport.Setup(t => t.SendAsync(It.IsAny<PartnerNotificationDelivery>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        await f.Dispatcher(session).DispatchAsync(CancellationToken.None);
+        using var query = f.Store.QuerySession(f.TenantId);
+        var stored = (await query.LoadAsync<PartnerNotification>(f.Notification.Id))!;
+        Assert.Equal("Skipped", stored.State);
+        Assert.Empty(stored.Deliveries);
+        f.Transport.Verify(t => t.SendAsync(It.IsAny<PartnerNotificationDelivery>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [QualityCycleDatabaseFact]
     public async Task Worker_poll_with_UTC_clock_dispatches_due_notifications_but_not_future_notifications()
     {
         using var f = await Fixture.Create(); using var session = f.Session();
@@ -120,12 +133,12 @@ public class PartnerNotificationDatabaseTests
         public Employee Owner=new(){Email="owner@example.test",FirstName="Owner",Role=Employee.RolePartner};
         public PartnerNotification Notification=new(){Audience="Company",Kind="OfferAccepted"};public Mock<IPartnerNotificationTransport> Transport=new();
         public DateTimeOffset Now=new(2026,11,1,12,0,0,TimeSpan.Zero);
-        public static async Task<Fixture> Create()
+        public static async Task<Fixture> Create(bool emailEnabled = true)
         {
             var connection=Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
             var services=new ServiceCollection();services.AddLogging();services.AddCleaningMarten(connection,databaseSchemaName:"partner_delivery_"+Guid.NewGuid().ToString("N"));
             var provider=services.BuildServiceProvider();var store=provider.GetRequiredService<IDocumentStore>();await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
-            var f=new Fixture{Provider=provider,Store=store,Config=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"ConnectionStrings:DefaultConnection",connection},{"App:FrontendBaseUrl","https://example.test"}}).Build()};
+            var f=new Fixture{Provider=provider,Store=store,Config=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"ConnectionStrings:DefaultConnection",connection},{"App:FrontendBaseUrl","https://example.test"},{"Notifications:PartnerEmail:Enabled",emailEnabled ? "true" : "false"}}).Build()};
             f.Company.IsPartnerEnabled=true;f.Owner.PartnerCompanyId=f.Company.Id;var branch=Branch.Create(f.Company.Id,"Apartment");
             var request=new PartnerCleaningRequest{CompanyId=f.Company.Id,BranchId=branch.Id,Status="Accepted",Notes="private access code",FromDate=new(2026,11,1),ToDate=new(2026,11,1)};
             f.Notification.CompanyId=f.Company.Id;f.Notification.BranchId=branch.Id;f.Notification.RequestId=request.Id;f.Notification.NextAttemptUtc=f.Now.UtcDateTime;
