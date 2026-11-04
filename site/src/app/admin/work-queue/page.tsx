@@ -12,6 +12,7 @@ const VIEWS: { value: WorkQueueView; label: string }[] = [
   { value: 'scheduled', label: 'Scheduled' },
   { value: 'in-progress', label: 'In progress' },
   { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
 ];
 const SOURCES: { value: WorkQueueSource; label: string }[] = [
   { value: 'all', label: 'All sources' },

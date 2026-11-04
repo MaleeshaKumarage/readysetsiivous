@@ -22,7 +22,7 @@ async function setup(page: Page) {
     queries: [] as URLSearchParams[],
     actions: [] as string[],
     listFails: false,
-    counts: { 'needs-action': 1, scheduled: 0, 'in-progress': 0, completed: 0 },
+    counts: { 'needs-action': 1, scheduled: 0, 'in-progress': 0, completed: 0, cancelled: 0 },
     // Items per view; the mock pages them with skip/take like the server.
     items: { 'needs-action': [bookingItem] } as Record<string, QueueItem[]>,
   };
@@ -195,3 +195,19 @@ test('Public bookings source sends source=booking and All sources sends source=a
   await page.getByRole('option', { name: 'All sources' }).click();
   await expect.poll(() => state.queries.at(-1)?.get('source')).toBe('all');
 });
+
+test('cancelled bookings have their own tab and never appear under Completed', async ({ page }) => {
+  const state = await setup(page);
+  const cancelled: QueueItem = { ...bookingItem, id: 'booking-9', reference: 'BK-9009', customerName: 'Cancelled Customer', status: 'Cancelled', stateLabel: 'Cancelled', href: '/admin/work-queue/?booking=booking-9' };
+  state.counts = { ...state.counts, completed: 1, cancelled: 1 };
+  state.items = { ...state.items, completed: [{ ...bookingItem, id: 'booking-7', reference: 'BK-7007', customerName: 'Done Customer', status: 'Completed', stateLabel: 'Completed' }], cancelled: [cancelled] };
+  await page.goto('/admin/work-queue/');
+  await page.getByRole('tab', { name: /^Completed/ }).click();
+  await expect(page.getByText('Done Customer', { exact: true })).toBeVisible();
+  await expect(page.getByText('Cancelled Customer', { exact: true })).toHaveCount(0);
+  await page.getByRole('tab', { name: /^Cancelled/ }).click();
+  await expect(page.getByText('Cancelled Customer', { exact: true })).toBeVisible();
+  await expect(page.getByText('Done Customer', { exact: true })).toHaveCount(0);
+  expect(state.queries.at(-1)?.get('view')).toBe('cancelled');
+});
+

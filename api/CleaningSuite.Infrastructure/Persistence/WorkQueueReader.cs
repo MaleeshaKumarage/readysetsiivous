@@ -2,6 +2,7 @@ using CleaningSuite.Application.WorkQueue;
 using CleaningSuite.Domain.Bookings;
 using CleaningSuite.Domain.Companies;
 using CleaningSuite.Domain.Partners;
+using CleaningSuite.Domain.QualityCycle;
 using Marten;
 
 namespace CleaningSuite.Infrastructure.Persistence;
@@ -20,16 +21,19 @@ public sealed class WorkQueueReader(ITenantSession tenant) : IWorkQueueReader
             ? (await Db.Query<Company>().Where(c => c.Name.Contains(search, StringComparison.OrdinalIgnoreCase)).Select(c => c.Id).ToListAsync(ct)).ToArray()
             : Array.Empty<Guid>();
 
+        // Partner visits are few per tenant and their view depends on their forms, so they are classified in memory.
+        var partnerViews = includePartners ? await ClassifyPartnersAsync(search, companyIds, ct) : new List<PartnerView>();
+
         var counts = new Dictionary<string, int>();
         foreach (var view in WorkQueueViews.All)
         {
             var count = 0;
             if (includeBookings) count += await BookingsIn(view).CountAsync(ct);
-            if (includePartners) count += await PartnersIn(view).CountAsync(ct);
+            count += partnerViews.Count(p => p.View == view);
             counts[view] = count;
         }
 
-        var completedFirst = query.View == WorkQueueViews.Completed;
+        var closedFirst = query.View is WorkQueueViews.Completed or WorkQueueViews.Cancelled;
         var skip = Math.Clamp(query.Skip, 0, WorkQueueLimits.MaxSkip);
         var window = skip + Math.Clamp(query.Take, 1, 100);
         var rows = new List<(DateTime Key, Guid Id, WorkQueueItem Item)>();
@@ -37,7 +41,7 @@ public sealed class WorkQueueReader(ITenantSession tenant) : IWorkQueueReader
         if (includeBookings)
         {
             var bookings = BookingsIn(query.View);
-            bookings = completedFirst ? bookings.OrderByDescending(b => b.StartUtc).ThenBy(b => b.Id) : bookings.OrderBy(b => b.StartUtc).ThenBy(b => b.Id);
+            bookings = closedFirst ? bookings.OrderByDescending(b => b.StartUtc).ThenBy(b => b.Id) : bookings.OrderBy(b => b.StartUtc).ThenBy(b => b.Id);
             foreach (var booking in await bookings.Take(window).ToListAsync(ct))
             {
                 rows.Add((LocalKey(booking.StartLocalDate, booking.StartLocalTime) ?? booking.StartUtc, booking.Id, new WorkQueueItem(
@@ -49,16 +53,12 @@ public sealed class WorkQueueReader(ITenantSession tenant) : IWorkQueueReader
 
         if (includePartners)
         {
-            var partners = PartnersIn(query.View);
-            partners = completedFirst ? partners.OrderByDescending(r => r.FromDate).ThenBy(r => r.Id) : partners.OrderBy(r => r.FromDate).ThenBy(r => r.Id);
-            var requests = await partners.Take(window).ToListAsync(ct);
-            var companyKeys = requests.Select(r => r.CompanyId).Distinct().ToArray();
-            var branchKeys = requests.Select(r => r.BranchId).Distinct().ToArray();
-            var companies = companyKeys.Length == 0 ? new Dictionary<Guid, Company>()
-                : (await Db.Query<Company>().Where(c => companyKeys.Contains(c.Id)).ToListAsync(ct)).ToDictionary(c => c.Id);
-            var branches = branchKeys.Length == 0 ? new Dictionary<Guid, Branch>()
-                : (await Db.Query<Branch>().Where(b => branchKeys.Contains(b.Id)).ToListAsync(ct)).ToDictionary(b => b.Id);
-            foreach (var request in requests)
+            var ordered = partnerViews.Where(p => p.View == query.View);
+            ordered = closedFirst ? ordered.OrderByDescending(p => p.Request.FromDate).ThenBy(p => p.Request.Id) : ordered.OrderBy(p => p.Request.FromDate).ThenBy(p => p.Request.Id);
+            var page = ordered.Take(window).ToList();
+            var companies = await CompaniesAsync(page.Select(p => p.Request.CompanyId), ct);
+            var branches = await BranchesAsync(page.Select(p => p.Request.BranchId), ct);
+            foreach (var (view, request) in page.Select(p => (p.View, p.Request)))
             {
                 companies.TryGetValue(request.CompanyId, out var company);
                 branches.TryGetValue(request.BranchId, out var branch);
@@ -66,14 +66,14 @@ public sealed class WorkQueueReader(ITenantSession tenant) : IWorkQueueReader
                 rows.Add((request.FromDate.ToDateTime(TimeOnly.MinValue), request.Id, new WorkQueueItem(
                     "partner", request.Id, branch?.Name ?? "Property", company?.Name ?? "Customer",
                     request.FromDate.ToString("yyyy-MM-dd") + time, request.Status,
-                    WorkQueueRules.PartnerLabel(request), null, "/admin/partner-requests/")));
+                    WorkQueueRules.PartnerLabel(request, view), null, "/admin/partner-requests/")));
             }
         }
 
-        var ordered = completedFirst
+        var merged = closedFirst
             ? rows.OrderByDescending(r => r.Key).ThenBy(r => r.Id)
             : rows.OrderBy(r => r.Key).ThenBy(r => r.Id);
-        var items = ordered.Skip(skip).Take(query.Take).Select(r => r.Item).ToList();
+        var items = merged.Skip(skip).Take(query.Take).Select(r => r.Item).ToList();
 
         return new WorkQueuePage(query.View, query.Source, items, counts[query.View], counts);
 
@@ -91,12 +91,38 @@ public sealed class WorkQueueReader(ITenantSession tenant) : IWorkQueueReader
             if (search is not null) q = q.Where(b => b.BookingNumber.Contains(search, StringComparison.OrdinalIgnoreCase) || b.Customer.Name.Contains(search, StringComparison.OrdinalIgnoreCase));
             return q;
         }
+    }
 
-        IQueryable<PartnerCleaningRequest> PartnersIn(string view)
+    private sealed record PartnerView(string View, PartnerCleaningRequest Request);
+
+    private async Task<List<PartnerView>> ClassifyPartnersAsync(string? search, Guid[] companyIds, CancellationToken ct)
+    {
+        var q = Db.Query<PartnerCleaningRequest>().AsQueryable();
+        if (search is not null) q = q.Where(r => companyIds.Contains(r.CompanyId));
+        var requests = await q.ToListAsync(ct);
+        var shiftIds = requests.Where(r => r.LinkedShiftId.HasValue).Select(r => r.LinkedShiftId!.Value).Distinct().ToArray();
+        var forms = shiftIds.Length == 0 ? new List<QualityCycleForm>()
+            : await Db.Query<QualityCycleForm>().Where(f => shiftIds.Contains(f.ShiftId)).ToListAsync(ct);
+        var formsByShift = forms.GroupBy(f => f.ShiftId).ToDictionary(g => g.Key, g => (IReadOnlyList<QualityCycleForm>)g.ToList());
+        var classified = new List<PartnerView>();
+        foreach (var request in requests)
         {
-            var q = Db.Query<PartnerCleaningRequest>().Where(WorkQueueRules.PartnerIn(view));
-            if (search is not null) q = q.Where(r => companyIds.Contains(r.CompanyId));
-            return q;
+            var visitForms = request.LinkedShiftId is { } shift && formsByShift.TryGetValue(shift, out var found) ? found : Array.Empty<QualityCycleForm>();
+            var view = WorkQueueRules.PartnerView(request, visitForms);
+            if (view is not null) classified.Add(new PartnerView(view, request));
         }
+        return classified;
+    }
+
+    private async Task<Dictionary<Guid, Company>> CompaniesAsync(IEnumerable<Guid> ids, CancellationToken ct)
+    {
+        var keys = ids.Distinct().ToArray();
+        return keys.Length == 0 ? new() : (await Db.Query<Company>().Where(c => keys.Contains(c.Id)).ToListAsync(ct)).ToDictionary(c => c.Id);
+    }
+
+    private async Task<Dictionary<Guid, Branch>> BranchesAsync(IEnumerable<Guid> ids, CancellationToken ct)
+    {
+        var keys = ids.Distinct().ToArray();
+        return keys.Length == 0 ? new() : (await Db.Query<Branch>().Where(b => keys.Contains(b.Id)).ToListAsync(ct)).ToDictionary(b => b.Id);
     }
 }
