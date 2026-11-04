@@ -2,9 +2,9 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Title, Button, Table, Modal, TextInput, Select, MultiSelect, Group, Stack, Text, Loader, ActionIcon, NumberInput,
+  Title, Button, Table, Modal, TextInput, Select, MultiSelect, Group, Stack, Text, Loader, ActionIcon, NumberInput, Menu,
 } from '@mantine/core';
-import { Plus, Trash2, Pencil } from 'lucide-react';
+import { Plus, Trash2, Pencil, MoreHorizontal } from 'lucide-react';
 import {
   adminShifts, adminCompanies, adminEmployees, adminTenant,
   type Shift, type Branch, type Employee, type ShiftAssignment, type ShiftOccurrence,
@@ -14,7 +14,9 @@ import { VisitAssigneesDialog } from '@/components/VisitAssigneesDialog';
 import { isAdmin } from '@/lib/auth';
 import { adminQualityCycle, type QualityCycleTemplate } from '@/lib/qualityCycleApi';
 import { CompanyPicker } from '@/components/admin/CompanyPicker';
-import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
+import { LifecycleTabs, type LifecycleStatus } from '@/components/LifecycleTabs';
+import { ListPager, paginate, PAGE_SIZE } from '@/components/ListPager';
+import { ShiftWorkspace, scheduleLabel } from '@/components/admin/ShiftWorkspace';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const SCHEDULE_TYPES = [
@@ -102,6 +104,9 @@ const addCalendarDays = (date: string, days: number) => {
   return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
 };
 
+/** Active, Completed (finished one-time visits) or Inactive. Inactive wins over completed. */
+const shiftView = (shift: Shift): LifecycleStatus => (!shift.isActive ? 'inactive' : shift.isCompleted ? 'completed' : 'active');
+
 export default function ShiftsAdminPage() {
   const [pricingShift, setPricingShift] = useState<Shift | null>(null);
   const [pricingOccurrence, setPricingOccurrence] = useState<ShiftOccurrence | undefined>();
@@ -117,6 +122,7 @@ export default function ShiftsAdminPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingShift, setEditingShift] = useState<Shift | null>(null);
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
 
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [branchId, setBranchId] = useState<string | null>(null);
@@ -172,7 +178,22 @@ export default function ShiftsAdminPage() {
   const [assigningVisit, setAssigningVisit] = useState<ShiftOccurrence | null>(null);
   useEffect(() => () => { assignmentGeneration.current++; }, []);
 
-  const load = () => adminShifts.list(undefined, undefined, true).then((r) => { if (r) setShifts(r); setLoading(false); });
+  // The shift list has no assignee data, so the Employees column uses one bulk count request.
+  // Every freshly loaded roster also updates that shift's count, so the column always shows the newest
+  // of the two sources: a later bulk reload (after another admin's change) replaces an older roster count.
+  const [assignmentCounts, setAssignmentCounts] = useState<Record<string, number> | null>(null);
+  const [countError, setCountError] = useState('');
+  const storeRoster = (id: string, roster: ShiftAssignment[]) => {
+    setAssignments(m => ({ ...m, [id]: roster }));
+    setAssignmentCounts(c => c && { ...c, [id]: roster.filter(a => a.isActive).length });
+  };
+  const loadAssignmentCounts = () => adminShifts.assignmentCounts()
+    .then(counts => { setAssignmentCounts(counts); setCountError(''); })
+    .catch((failure: Error) => { setAssignmentCounts(null); setCountError(failure.message); });
+  const load = () => adminShifts.list(undefined, undefined, true).then((r) => {
+    if (r) { setShifts(r); void loadAssignmentCounts(); }
+    setLoading(false);
+  });
   useEffect(() => { load(); adminTenant.get().then(profile => {
     if (!profile) throw new Error('Could not load scheduling settings. Refresh the page to retry.');
     const zone = profile.timeZoneId?.trim() || 'Europe/Helsinki';
@@ -185,27 +206,37 @@ export default function ShiftsAdminPage() {
     setAssignOpen(null); setAssignSel([]); setAssignLoading(false);
     setAssignError(''); setAssignStatus('');
   };
+  const [shiftPage, setShiftPage] = useState(1);
   const changeLifecycle = (status: LifecycleStatus) => {
     if (status === lifecycle) return;
-    closeAssignments(); setTemplateShift(null); setLifecycle(status);
+    closeAssignments(); setTemplateShift(null); setLifecycle(status); setShiftPage(1);
   };
 
   // Performance Optimization: Memoize visible shifts and counts to avoid recalculating
   // filtered arrays on every component render (e.g., input updates in modals or selection state changes).
   const visibleShifts = useMemo(
-    () => shifts.filter((s) => inLifecycle(s, lifecycle)),
+    () => shifts.filter((s) => shiftView(s) === lifecycle),
     [shifts, lifecycle]
   );
+  // Keep the stored page in range when the list shrinks (deactivate, delete, reload), so later growth
+  // does not jump to a stale page.
+  useEffect(() => {
+    const last = Math.max(1, Math.ceil(visibleShifts.length / PAGE_SIZE));
+    if (shiftPage > last) setShiftPage(last);
+  }, [visibleShifts.length, shiftPage]);
 
-  const { activeCount, inactiveCount } = useMemo(() => {
-    if (loading) return { activeCount: undefined, inactiveCount: undefined };
+  const { activeCount, completedCount, inactiveCount } = useMemo(() => {
+    if (loading) return { activeCount: undefined, completedCount: undefined, inactiveCount: undefined };
     let active = 0;
+    let completed = 0;
     let inactive = 0;
     for (const s of shifts) {
-      if (s.isActive) active++;
-      else inactive++;
+      const view = shiftView(s);
+      if (view === 'inactive') inactive++;
+      else if (view === 'completed') completed++;
+      else active++;
     }
-    return { activeCount: active, inactiveCount: inactive };
+    return { activeCount: active, completedCount: completed, inactiveCount: inactive };
   }, [loading, shifts]);
 
   useEffect(() => {
@@ -323,7 +354,7 @@ export default function ShiftsAdminPage() {
     setAssignOpen(id); setAssignLoading(true);
     try {
       const a = await adminShifts.assignments(id);
-      if (version === assignmentGeneration.current) setAssignments(m => ({ ...m, [id]: a }));
+      if (version === assignmentGeneration.current) storeRoster(id, a);
     } catch (e) {
       if (version === assignmentGeneration.current) {
         setAssignments(m => { const next = { ...m }; delete next[id]; return next; });
@@ -335,7 +366,7 @@ export default function ShiftsAdminPage() {
   const refreshAssignments = async (id: string, version: number) => {
     try {
       const a = await adminShifts.assignments(id);
-      if (version === assignmentGeneration.current) setAssignments(m => ({ ...m, [id]: a }));
+      if (version === assignmentGeneration.current) storeRoster(id, a);
       return a;
     } catch (e) {
       if (version === assignmentGeneration.current) setAssignments(m => { const next = { ...m }; delete next[id]; return next; });
@@ -451,6 +482,14 @@ export default function ShiftsAdminPage() {
     finally { setOccurrenceSaving(false); }
   };
 
+  // Workspace actions close the workspace first, so each existing dialog or panel opens alone.
+  const workspaceShift = workspaceId ? shifts.find(s => s.id === workspaceId) ?? null : null;
+  const fromWorkspace = (action: (shift: Shift) => void) => () => {
+    if (!workspaceShift) return;
+    setWorkspaceId(null);
+    action(workspaceShift);
+  };
+
   return (
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
@@ -459,51 +498,51 @@ export default function ShiftsAdminPage() {
       </Group>
 
       {listError && <Text role="alert" c="red" mb="md">{listError}</Text>}
+      {countError && <Text role="alert" c="red" mb="md">{countError}</Text>}
 
       <LifecycleTabs value={lifecycle} onChange={changeLifecycle} label="Shift activity" disabled={assignBusy || templateSaving}
-        activeCount={activeCount} inactiveCount={inactiveCount}>
+        showCompleted activeCount={activeCount} completedCount={completedCount} inactiveCount={inactiveCount}>
       {loading ? <Loader /> : visibleShifts.length === 0 ? (
         <Text c="dimmed">{shifts.length === 0 ? 'No shifts yet.' : `No ${lifecycle} shifts. Check the ${lifecycle === 'active' ? 'Inactive' : 'Active'} tab.`}</Text>
-      ) : (
+      ) : (<>
         <Table.ScrollContainer minWidth={600}>
           <Table striped highlightOnHover withTableBorder>
             <Table.Thead>
-              <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Schedule</Table.Th><Table.Th>Employees</Table.Th><Table.Th w={180}></Table.Th></Table.Tr>
+              <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Schedule</Table.Th><Table.Th>Employees</Table.Th><Table.Th>Status</Table.Th><Table.Th w={200}>Actions</Table.Th></Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {visibleShifts.map((s) => (
+              {paginate(visibleShifts, shiftPage).pageItems.map((s) => (
                 <Fragment key={s.id}>
                   <Table.Tr>
                     <Table.Td fw={500}>{s.name}</Table.Td>
-                    <Table.Td>
-                      {s.schedule.type === 0 && `Daily ${s.schedule.dailyStart}–${s.schedule.dailyEnd}`}
-                      {s.schedule.type === 1 && `Daily by day (${Object.keys(s.schedule.dailyTimes ?? {}).length} days)`}
-                      {s.schedule.type === 2 && (s.schedule.weeklyDays?.length
-                        ? `${s.schedule.weeklyDays.map((d) => DAYS[d]).join(', ')} ${s.schedule.weeklyStart}–${s.schedule.weeklyEnd}`
-                        : `${DAYS[s.schedule.weeklyDay ?? 0]} ${s.schedule.weeklyStart}–${s.schedule.weeklyEnd}`)}
-                      {s.schedule.type === 3 && `Bi-weekly ${DAYS[s.schedule.biWeeklyDay ?? 0]}`}
-                      {s.schedule.type === 5 && `Monthly day ${s.schedule.monthlyDay}`}
-                      {s.schedule.type === 4 && 'On-call'}
-                      {s.schedule.type === 6 && `One-time ${s.schedule.oneTimeDate?.slice(0, 10)} ${s.schedule.oneTimeStart?.slice(0, 5)}–${s.schedule.oneTimeEnd?.slice(0, 5)}`}
-                    </Table.Td>
-                    <Table.Td>{assignments[s.id]?.length ?? 0}</Table.Td>
+                    <Table.Td>{scheduleLabel(s)}</Table.Td>
+                    <Table.Td>{assignmentCounts ? (assignmentCounts[s.id] ?? 0) : assignments[s.id] ? assignments[s.id].filter(a => a.isActive).length : '—'}</Table.Td>
+                    <Table.Td><Text size="sm">{shiftView(s) === 'inactive' ? 'Inactive' : shiftView(s) === 'completed' ? 'Completed' : 'Active'}</Text></Table.Td>
                     <Table.Td>
                       <Group gap={6} wrap="nowrap">
-                        {isAdmin() && <Button size="xs" variant="light" onClick={() => { setPricingShift(s); setPricingOccurrence(undefined); }}>Pricing</Button>}
-                        {isAdmin() && <Button size="xs" variant="light" leftSection={<Pencil size={13} />} onClick={() => openEdit(s)}>Edit</Button>}
-                        {s.isActive && <Button size="xs" variant="light" disabled={assignBusy} onClick={() => openAssign(s.id)}>Employees</Button>}
-                        {s.isActive && <Button size="xs" variant="light" onClick={() => openOccurrences(s)}>Occurrences</Button>}
-                        {s.isActive && s.schedule.type === 4 && <Button size="xs" variant="light" onClick={() => { void openOccurrences(s); openOccurrenceEditor(undefined, '4'); }}>Schedule one-time visit</Button>}
-                        {isAdmin() && s.isActive && <Button size="xs" variant="light" onClick={() => { setTemplateShift(s); setAssignedTemplate(s.qualityCycleTemplateId ?? null); setTemplateError(''); }}>Checklist template</Button>}
-                        {s.isActive && <Button size="xs" variant="subtle" color="red" disabled={assignBusy} onClick={() => deactivate(s.id)}>Deactivate</Button>}
-                        {!s.isActive && <Button size="xs" loading={restoring === s.id} disabled={!!restoring} onClick={() => reactivate(s.id)}>Reactivate</Button>}
-                        {!s.isActive && <Button size="xs" color="red" variant="subtle" loading={restoring === s.id} disabled={!!restoring} onClick={() => deleteShift(s)}>Delete</Button>}
+                        <Button size="xs" variant="light" onClick={() => setWorkspaceId(s.id)}>Manage</Button>
+                        <Menu shadow="md" width={230} position="bottom-end" withinPortal>
+                          <Menu.Target>
+                            <ActionIcon variant="light" size="md" aria-label={`More actions for ${s.name}`}><MoreHorizontal size={16} /></ActionIcon>
+                          </Menu.Target>
+                          <Menu.Dropdown>
+                            {isAdmin() && <Menu.Item onClick={() => { setPricingShift(s); setPricingOccurrence(undefined); }}>Pricing</Menu.Item>}
+                            {isAdmin() && <Menu.Item leftSection={<Pencil size={13} />} onClick={() => openEdit(s)}>Edit</Menu.Item>}
+                            {s.isActive && <Menu.Item disabled={assignBusy} onClick={() => openAssign(s.id)}>Employees</Menu.Item>}
+                            {s.isActive && <Menu.Item onClick={() => openOccurrences(s)}>Occurrences</Menu.Item>}
+                            {s.isActive && s.schedule.type === 4 && <Menu.Item onClick={() => { void openOccurrences(s); openOccurrenceEditor(undefined, '4'); }}>Schedule one-time visit</Menu.Item>}
+                            {isAdmin() && s.isActive && <Menu.Item onClick={() => { setTemplateShift(s); setAssignedTemplate(s.qualityCycleTemplateId ?? null); setTemplateError(''); }}>Checklist template</Menu.Item>}
+                            {s.isActive && <Menu.Item color="red" disabled={assignBusy} onClick={() => deactivate(s.id)}>Deactivate</Menu.Item>}
+                            {!s.isActive && <Menu.Item disabled={!!restoring} onClick={() => reactivate(s.id)}>Reactivate</Menu.Item>}
+                            {!s.isActive && <Menu.Item color="red" disabled={!!restoring} onClick={() => deleteShift(s)}>Delete</Menu.Item>}
+                          </Menu.Dropdown>
+                        </Menu>
                       </Group>
                     </Table.Td>
                   </Table.Tr>
                   {assignOpen === s.id && (
                     <Table.Tr key={s.id + '-assign'}>
-                      <Table.Td colSpan={4} p="sm">
+                      <Table.Td colSpan={5} p="sm">
                         <Group align="flex-end" mb="xs" wrap="wrap" gap="xs">
                           <MultiSelect
                             label="Assign employees"
@@ -549,9 +588,23 @@ export default function ShiftsAdminPage() {
             </Table.Tbody>
           </Table>
         </Table.ScrollContainer>
+        <ListPager label="Shifts" total={visibleShifts.length} page={paginate(visibleShifts, shiftPage).page} pageCount={paginate(visibleShifts, shiftPage).pageCount} onPage={setShiftPage} /></>
       )}
       </LifecycleTabs>
 
+      {workspaceShift && <ShiftWorkspace shift={workspaceShift} isAdmin={isAdmin()} busy={assignBusy || Boolean(restoring)}
+        employeeCount={assignmentCounts ? (assignmentCounts[workspaceShift.id] ?? 0) : assignments[workspaceShift.id] ? assignments[workspaceShift.id].filter(a => a.isActive).length : undefined}
+        templateName={templates.find(t => t.id === workspaceShift.qualityCycleTemplateId)?.title ?? null}
+        onClose={() => setWorkspaceId(null)}
+        onEdit={fromWorkspace(s => { void openEdit(s); })}
+        onPricing={fromWorkspace(s => { setPricingShift(s); setPricingOccurrence(undefined); })}
+        onAssign={fromWorkspace(s => { void openAssign(s.id); })}
+        onOccurrences={fromWorkspace(s => { void openOccurrences(s); })}
+        onScheduleOneTime={fromWorkspace(s => { void openOccurrences(s); openOccurrenceEditor(undefined, '4'); })}
+        onTemplate={fromWorkspace(s => { setTemplateShift(s); setAssignedTemplate(s.qualityCycleTemplateId ?? null); setTemplateError(''); })}
+        onDeactivate={fromWorkspace(s => { void deactivate(s.id); })}
+        onReactivate={fromWorkspace(s => { void reactivate(s.id); })}
+        onDelete={fromWorkspace(s => { void deleteShift(s); })} />}
       {pricingShift && <ShiftPricingDialog key={`${pricingShift.id}-${pricingOccurrence?.startUtc ?? "plan"}`} shift={pricingShift} occurrence={pricingOccurrence} onClose={() => { setPricingShift(null); setPricingOccurrence(undefined); }} />}
       <Modal opened={Boolean(occurrenceShift)} onClose={() => { if (occurrenceSaving) return; occurrenceGeneration.current++; setOccurrenceShift(null); setEditingOccurrence(null); }} closeButtonProps={{ disabled: occurrenceSaving }} closeOnEscape={!occurrenceSaving} closeOnClickOutside={!occurrenceSaving} title={`Occurrences${occurrenceShift ? ` — ${occurrenceShift.name}` : ''}`} size="xl">
         <Stack>

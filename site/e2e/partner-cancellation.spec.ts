@@ -38,13 +38,13 @@ async function cancel(editor: Locator, writes: Write[]) {
 test('owner cancels valid property, cleaning and staff-change drafts without any writes', async ({ page }) => {
   const state = await fixture(page); await page.goto('/partner/');
   await page.getByRole('button', { name: 'Add property', exact: true }).click();
-  const property = page.getByRole('region', { name: 'Add property', exact: true }); await property.getByLabel('Property name', { exact: true }).fill('Unsaved property'); await cancel(property, state.writes); await expect(page.getByRole('article', { name: 'Unsaved property', exact: true })).toHaveCount(0);
+  const property = page.getByRole('dialog', { name: 'Add property', exact: true }); await property.getByLabel('Property name', { exact: true }).fill('Unsaved property'); await cancel(property, state.writes); await expect(page.getByRole('article', { name: 'Unsaved property', exact: true })).toHaveCount(0);
   const branchCard = page.getByRole('article', { name: branch.name, exact: true });
   await branchCard.getByRole('button', { name: 'Request cleaning', exact: true }).click();
-  const cleaning = page.getByRole('region', { name: 'Cleaning request form', exact: true });
+  const cleaning = page.getByRole('dialog', { name: /cleaning request/i });
   await cleaning.getByLabel('From date', { exact: true }).fill('2026-12-10'); await cleaning.getByLabel('To date', { exact: true }).fill('2026-12-11'); await cleaning.getByLabel('Cleaning instructions').fill('Unsaved new cleaning'); await cancel(cleaning, state.writes);
   await branchCard.getByRole('button', { name: 'Request property changes', exact: true }).click();
-  const staffChange = page.getByRole('region', { name: 'Request staff changes', exact: true }); await staffChange.getByLabel('Describe the requested change').fill('Unsaved property change'); await cancel(staffChange, state.writes);
+  const staffChange = page.getByRole('dialog', { name: 'Request staff changes', exact: true }); await staffChange.getByLabel('Describe the requested change').fill('Unsaved property change'); await cancel(staffChange, state.writes);
   await page.getByRole('tab', { name: 'Cleaning requests', exact: true }).click();
   const pendingCard = page.getByRole('article', { name: `${branch.name} ${pending.fromDate}`, exact: true }); await pendingCard.getByRole('button', { name: 'Edit request', exact: true }).click();
   await cleaning.getByLabel('From date', { exact: true }).fill('2026-12-10'); await cleaning.getByLabel('To date', { exact: true }).fill('2026-12-11'); await cleaning.getByLabel('Cleaning instructions').fill('Unsaved edited instructions'); await cancel(cleaning, state.writes);
@@ -57,17 +57,17 @@ test('staff cancels valid offer, pricing, resolution, reschedule and property dr
   const state = await fixture(page, 'admin'); await page.goto('/admin/partner-requests/');
   const card = page.getByRole('article', { name: `${branch.name} request`, exact: true }).first();
   await card.getByRole('button', { name: 'Arrange cleaner / time', exact: true }).click();
-  const offer = page.getByRole('region', { name: 'Arrange cleaning', exact: true }); await offer.getByLabel('Cleaner', { exact: true }).selectOption('cleaner'); await offer.getByLabel('Planned start (tenant local time, optional)').fill('2026-12-01T10:00'); await cancel(offer, state.writes);
+  const offer = page.getByRole('dialog', { name: /^Arrange / }); await offer.getByLabel('Cleaner', { exact: true }).selectOption('cleaner'); await offer.getByLabel('Planned start (tenant local time, optional)').fill('2026-12-01T10:00'); await cancel(offer, state.writes);
   await card.getByRole('button', { name: 'Edit / reschedule request', exact: true }).click();
-  const edit = page.getByRole('region', { name: 'Edit cleaning request', exact: true }); await edit.getByLabel('From date', { exact: true }).fill('2026-12-10'); await edit.getByLabel('To date', { exact: true }).fill('2026-12-11'); await edit.getByLabel('Cleaning instructions').fill('Unsaved reschedule'); await cancel(edit, state.writes);
+  const edit = page.getByRole('dialog', { name: /^Edit \/ reschedule / }); await edit.getByLabel('From date', { exact: true }).fill('2026-12-10'); await edit.getByLabel('To date', { exact: true }).fill('2026-12-11'); await edit.getByLabel('Cleaning instructions').fill('Unsaved reschedule'); await cancel(edit, state.writes);
   await expect(card.getByText('2026-12-01 – 2026-12-02', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Quote requests', exact: true }).click(); await page.getByRole('button', { name: 'Set cleaning price', exact: true }).click();
-  const price = page.getByRole('region', { name: 'Property pricing', exact: true }); await price.getByLabel('Fixed cleaning price excl. VAT (€)').fill('99'); await price.getByLabel('VAT (%)').fill('14'); await price.getByLabel('Estimated duration (minutes)').fill('90'); await cancel(price, state.writes);
+  const price = page.getByRole('dialog', { name: /^Price / }); await price.getByLabel('Fixed cleaning price excl. VAT (€)').fill('99'); await price.getByLabel('VAT (%)').fill('14'); await price.getByLabel('Estimated duration (minutes)').fill('90'); await cancel(price, state.writes);
   await page.getByRole('tab', { name: 'Changes', exact: true }).click(); await page.getByRole('button', { name: 'Resolve change request', exact: true }).click();
   const resolution = page.locator('form').filter({ has: page.getByRole('button', { name: 'Save resolution', exact: true }) }); await resolution.getByLabel('Resolution', { exact: true }).fill('Unsaved resolution'); await cancel(resolution, state.writes); await expect(page.getByText('Awaiting staff response', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Properties', exact: true }).click(); await page.getByRole('button', { name: 'Add property', exact: true }).click();
-  const add = page.getByRole('heading', { name: 'Add property', exact: true }).locator('..'); await add.getByRole('combobox').selectOption(companyId); await add.getByLabel('Property name', { exact: true }).fill('Unsaved staff property'); await cancel(add, state.writes);
-  await page.getByRole('button', { name: 'Edit property', exact: true }).click(); const property = page.getByRole('heading', { name: 'Edit property', exact: true }).locator('..'); await property.getByLabel('Property name', { exact: true }).fill('Unsaved edited property'); await property.getByLabel('street', { exact: true }).fill('Unsaved address'); await cancel(property, state.writes);
+  const add = page.getByRole('dialog', { name: 'Add property', exact: true }); await add.getByRole('combobox').selectOption(companyId); await add.getByLabel('Property name', { exact: true }).fill('Unsaved staff property'); await cancel(add, state.writes);
+  await page.getByRole('button', { name: 'Edit property', exact: true }).click(); const property = page.getByRole('dialog', { name: 'Edit property', exact: true }); await property.getByLabel('Property name', { exact: true }).fill('Unsaved edited property'); await property.getByLabel('street', { exact: true }).fill('Unsaved address'); await cancel(property, state.writes);
   await expect(page.getByRole('heading', { name: 'Lake apartment · Owner company', exact: true })).toBeVisible(); await expect(page.getByText('€70.00 excl. VAT · 120 minutes', { exact: true })).toBeVisible(); expect(state.writes).toEqual([]);
 });
 

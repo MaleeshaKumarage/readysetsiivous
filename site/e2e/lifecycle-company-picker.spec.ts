@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { shiftAction } from './shift-actions';
 import { setupAdminMocks } from './admin-helpers';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
@@ -133,7 +134,7 @@ test('search failures retry, empty results are distinct, and stale responses can
 test('editing an inactive shift hydrates its current company outside the first page', async ({ page }) => {
   const { queries } = await setup(page, { inactiveEdit: true });
   await page.goto('/admin/shifts/'); await page.getByRole('tab', { name: /^Inactive/ }).click();
-  await page.getByRole('row').filter({ hasText: 'Old shift' }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await shiftAction(page, 'Old shift', 'Edit');
   const dialog = page.getByRole('dialog', { name: 'Edit shift', exact: true });
   await expect(dialog.getByRole('textbox', { name: 'Company', exact: true })).toHaveValue('Company 125 (inactive)');
   expect(queries).toHaveLength(0);
@@ -143,7 +144,7 @@ test('editing an inactive shift hydrates its current company outside the first p
 test('editing a shift can return to its original inactive company after selecting an active company', async ({ page }) => {
   const { writes } = await setup(page, { inactiveEdit: true });
   await page.goto('/admin/shifts/'); await page.getByRole('tab', { name: /^Inactive/ }).click();
-  await page.getByRole('row').filter({ hasText: 'Old shift' }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await shiftAction(page, 'Old shift', 'Edit');
   const dialog = page.getByRole('dialog', { name: 'Edit shift', exact: true });
   const company = dialog.getByRole('textbox', { name: 'Company', exact: true });
   const branch = dialog.getByLabel('Branch', { exact: true });
@@ -200,7 +201,7 @@ test('company changes cannot restore branches from a late previous-company respo
 test('selected-company load failure retains the edit identity and can be retried', async ({ page }) => {
   const { state } = await setup(page, { inactiveEdit: true }); state.failSelection = true;
   await page.goto('/admin/shifts/'); await page.getByRole('tab', { name: /^Inactive/ }).click();
-  await page.getByRole('row').filter({ hasText: 'Old shift' }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await shiftAction(page, 'Old shift', 'Edit');
   const dialog = page.getByRole('dialog', { name: 'Edit shift', exact: true });
   await expect(dialog.getByRole('alert').filter({ hasText: 'Your selection is kept' })).toBeVisible();
   await expect(dialog.getByRole('textbox', { name: 'Company', exact: true })).toHaveValue('Selected company (unavailable)');

@@ -1,0 +1,258 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { Title, Button, Group, Stack, Text, Loader, Badge, Tabs, Select, TextInput, Drawer, Paper } from '@mantine/core';
+import {
+  adminWorkQueue, adminBookings, type Booking, type WorkQueueItem, type WorkQueuePage, type WorkQueueSource, type WorkQueueView,
+} from '@/lib/adminApi';
+
+const VIEWS: { value: WorkQueueView; label: string }[] = [
+  { value: 'needs-action', label: 'Needs action' },
+  { value: 'scheduled', label: 'Scheduled' },
+  { value: 'in-progress', label: 'In progress' },
+  { value: 'completed', label: 'Completed' },
+];
+const SOURCES: { value: WorkQueueSource; label: string }[] = [
+  { value: 'all', label: 'All sources' },
+  { value: 'booking', label: 'Public bookings' },
+  { value: 'partner', label: 'Partner requests' },
+];
+const PAGE_SIZE = 25;
+const VIEW_VALUES = VIEWS.map(view => view.value);
+const SOURCE_VALUES = SOURCES.map(source => source.value);
+
+/** Booking actions allowed per stored status. The server enforces the same transitions. */
+function bookingActions(status: string): ('confirm' | 'cancel' | 'complete')[] {
+  if (status === 'New') return ['confirm', 'cancel'];
+  if (status === 'Confirmed') return ['complete', 'cancel'];
+  return [];
+}
+
+const ACTION_LABEL = { confirm: 'Confirm', cancel: 'Cancel booking', complete: 'Mark completed' } as const;
+
+export default function WorkQueuePage() {
+  const [view, setView] = useState<WorkQueueView>('needs-action');
+  const [source, setSource] = useState<WorkQueueSource>('all');
+  const [query, setQuery] = useState('');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [result, setResult] = useState<WorkQueuePage | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState('');
+  const [reload, setReload] = useState(0);
+  const [ready, setReady] = useState(false);
+  const generation = useRef(0);
+
+  const [openBooking, setOpenBooking] = useState<Booking | null>(null);
+  const [detailError, setDetailError] = useState('');
+  const [actionBusy, setActionBusy] = useState<string | null>(null);
+
+  const writeUrl = (next: { view: WorkQueueView; source: WorkQueueSource; search: string; page: number }, mode: 'push' | 'replace' = 'push') => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      params.set('view', next.view);
+      params.set('source', next.source);
+      if (next.search) params.set('q', next.search); else params.delete('q');
+      params.set('page', String(next.page));
+      const qs = params.toString();
+      const url = `${window.location.pathname}?${qs}`;
+      if (mode === 'push') window.history.pushState(null, '', url); else window.history.replaceState(null, '', url);
+    } catch { /* URL state is a convenience; the queue still works without it */ }
+  };
+
+  const readUrl = () => {
+    const params = new URLSearchParams(window.location.search);
+    const requestedView = params.get('view') as WorkQueueView | null;
+    const requestedSource = params.get('source') as WorkQueueSource | null;
+    const requestedPage = Number(params.get('page'));
+    return {
+      view: requestedView && VIEW_VALUES.includes(requestedView) ? requestedView : 'needs-action' as WorkQueueView,
+      source: requestedSource && SOURCE_VALUES.includes(requestedSource) ? requestedSource : 'all' as WorkQueueSource,
+      search: (params.get('q') ?? '').trim(),
+      page: Number.isInteger(requestedPage) && requestedPage >= 1 ? requestedPage : 1,
+      booking: params.get('booking'),
+    };
+  };
+
+  // Restore state from the URL after mount, and on browser Back/Forward.
+  useEffect(() => {
+    const apply = () => {
+      const state = readUrl();
+      setView(state.view); setSource(state.source); setQuery(state.search); setSearch(state.search); setPage(state.page);
+    };
+    apply();
+    setReady(true);
+    window.addEventListener('popstate', apply);
+    return () => { window.removeEventListener('popstate', apply); generation.current++; };
+  }, []);
+
+  // Open a deep-linked booking once.
+  const openedBooking = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ready) return;
+    const requested = readUrl().booking;
+    if (!requested || openedBooking.current === requested) return;
+    openedBooking.current = requested;
+    void openDetail(requested);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
+
+  // Debounce free-text search into the applied search.
+  useEffect(() => {
+    if (!ready) return;
+    const timer = window.setTimeout(() => {
+      const next = query.trim();
+      if (next === search) return;
+      setSearch(next); setPage(1);
+      writeUrl({ view, source, search: next, page: 1 });
+    }, 300);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+
+  // Load the current page. Stale responses are ignored by generation.
+  useEffect(() => {
+    if (!ready) return;
+    const version = ++generation.current;
+    setLoading(true); setListError('');
+    void adminWorkQueue.page({ view, source, q: search || undefined, skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE }).then(next => {
+      if (version !== generation.current) return;
+      if (!next) { setListError('The work queue could not be loaded. Retry.'); setResult(null); }
+      else if (next.items.length === 0 && next.total > 0 && page > 1) {
+        const last = Math.ceil(next.total / PAGE_SIZE);
+        setPage(last); writeUrl({ view, source, search, page: last }, 'replace');
+        return;
+      } else setResult(next);
+      setLoading(false);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, view, source, search, page, reload]);
+
+  const changeView = (next: WorkQueueView) => {
+    setView(next); setPage(1); writeUrl({ view: next, source, search, page: 1 });
+  };
+  const changeSource = (next: WorkQueueSource) => {
+    setSource(next); setPage(1); writeUrl({ view, source: next, search, page: 1 });
+  };
+  const changePage = (next: number) => {
+    setPage(next); writeUrl({ view, source, search, page: next });
+  };
+
+  const openDetail = async (id: string) => {
+    setDetailError('');
+    const booking = await adminBookings.detail(id);
+    if (!booking) { setDetailError('This booking could not be loaded. Retry.'); }
+    setOpenBooking(booking ?? null);
+  };
+
+  const runAction = async (booking: Booking, action: 'confirm' | 'cancel' | 'complete') => {
+    if (action === 'cancel' && !window.confirm(`Cancel booking ${booking.bookingNumber}?`)) return;
+    setActionBusy(action); setDetailError('');
+    const ok = action === 'confirm' ? await adminBookings.confirm(booking.id)
+      : action === 'cancel' ? await adminBookings.cancel(booking.id)
+      : await adminBookings.complete(booking.id);
+    setActionBusy(null);
+    if (!ok) { setDetailError('The action could not be completed. Refresh and check the booking status.'); return; }
+    const refreshed = await adminBookings.detail(booking.id);
+    setOpenBooking(refreshed ?? null);
+    setReload(n => n + 1);
+  };
+
+  const onOpen = (item: WorkQueueItem) => {
+    if (item.source === 'booking') void openDetail(item.id);
+  };
+
+  const pageCount = result ? Math.max(1, Math.ceil(result.total / PAGE_SIZE)) : 1;
+  const from = result && result.total > 0 ? (page - 1) * PAGE_SIZE + 1 : 0;
+  const to = result ? Math.min(result.total, page * PAGE_SIZE) : 0;
+
+  return (
+    <>
+      <Title order={2} mb="md">Work queue</Title>
+
+      <Tabs value={view} onChange={value => value && changeView(value as WorkQueueView)}>
+        <Tabs.List aria-label="Work queue views">
+          {VIEWS.map(item => (
+            <Tabs.Tab key={item.value} value={item.value}>
+              {item.label}{result ? ` (${result.counts[item.value]})` : ''}
+            </Tabs.Tab>
+          ))}
+        </Tabs.List>
+      </Tabs>
+
+      <Group mt="md" mb="md" align="flex-end" wrap="wrap" gap="sm">
+        <Select aria-label="Source" label="Source" data={SOURCES} value={source}
+          onChange={value => value && changeSource(value as WorkQueueSource)} allowDeselect={false} w={220} />
+        <TextInput label="Search" placeholder="Customer, booking number or company" value={query}
+          onChange={event => setQuery(event.currentTarget.value)} w={320} />
+      </Group>
+
+      {loading ? <Loader /> : listError ? (
+        <Stack>
+          <Text role="alert" c="red">{listError}</Text>
+          <Button variant="light" onClick={() => setReload(n => n + 1)}>Retry</Button>
+        </Stack>
+      ) : !result || result.items.length === 0 ? (
+        <Text c="dimmed">{search ? `Nothing in this view matches “${search}”.` : 'Nothing in this view.'}</Text>
+      ) : (
+        <Stack gap="xs" role="list" aria-label="Work items">
+          {result.items.map(item => (
+            <Paper key={`${item.source}-${item.id}`} withBorder p="sm" role="listitem">
+              <Group justify="space-between" wrap="wrap" gap="xs">
+                <Stack gap={2}>
+                  <Text fw={600}>{item.customerName}</Text>
+                  <Text size="sm" c="dimmed">{item.reference} · {item.scheduledLocal}</Text>
+                  <Group gap={6}>
+                    <Badge size="sm" variant="light">{item.stateLabel}</Badge>
+                    <Badge size="sm" variant="outline" color="gray">{item.source === 'booking' ? 'Public booking' : 'Partner request'}</Badge>
+                    {item.assigneeName && <Text size="xs">{item.assigneeName}</Text>}
+                  </Group>
+                </Stack>
+                {item.source === 'booking' ? (
+                  <Button size="sm" variant="light" onClick={() => onOpen(item)} aria-label={`Open booking ${item.reference}`}>Open</Button>
+                ) : (
+                  <Button size="sm" variant="light" component={Link} href={item.href} aria-label={`Open partner request for ${item.customerName}`}>Open</Button>
+                )}
+              </Group>
+            </Paper>
+          ))}
+        </Stack>
+      )}
+
+      {result && result.total > 0 && (
+        <Group justify="space-between" mt="md" wrap="wrap" gap="sm">
+          <Text size="sm">Showing {from}–{to} of {result.total}</Text>
+          <Group gap="xs">
+            <Button variant="default" size="sm" disabled={page <= 1 || loading} onClick={() => changePage(page - 1)}>Previous</Button>
+            <Text size="sm">Page {page} of {pageCount}</Text>
+            <Button variant="default" size="sm" disabled={page >= pageCount || loading} onClick={() => changePage(page + 1)}>Next</Button>
+          </Group>
+        </Group>
+      )}
+
+      <Drawer opened={openBooking !== null || detailError !== ''} onClose={() => { setOpenBooking(null); setDetailError(''); }}
+        title={openBooking ? `Booking ${openBooking.bookingNumber}` : 'Booking'} position="right" size="md">
+        {detailError && <Text role="alert" c="red" mb="sm">{detailError}</Text>}
+        {openBooking && (
+          <Stack gap="sm">
+            <Text><strong>Customer:</strong> {openBooking.customer.name}</Text>
+            <Text><strong>Contact:</strong> {openBooking.customer.phone} · {openBooking.customer.email}</Text>
+            <Text><strong>Service:</strong> {openBooking.service.nameFi}, {openBooking.service.durationMinutes} min</Text>
+            <Text><strong>Start:</strong> {openBooking.startLocalDate} {openBooking.startLocalTime}</Text>
+            <Text><strong>Status:</strong> {openBooking.status}</Text>
+            <Text><strong>Assigned to:</strong> {openBooking.employeeName ?? 'Unassigned'}</Text>
+            <Group gap="xs" wrap="wrap">
+              {bookingActions(openBooking.status).map(action => (
+                <Button key={action} size="sm" variant={action === 'cancel' ? 'light' : 'filled'} color={action === 'cancel' ? 'red' : undefined}
+                  loading={actionBusy === action} disabled={actionBusy !== null} onClick={() => void runAction(openBooking, action)}>
+                  {ACTION_LABEL[action]}
+                </Button>
+              ))}
+            </Group>
+          </Stack>
+        )}
+      </Drawer>
+    </>
+  );
+}

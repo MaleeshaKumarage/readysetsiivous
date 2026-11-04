@@ -572,6 +572,8 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
     private void Notify(Guid company, Guid branch, Guid? request, string kind, int revision, string audience,
         Guid? employee = null, Guid? eventId = null)
     {
+        // Staff alerts are app push notifications (PartnerRequest intents), never email outbox rows.
+        if (audience == "Staff") return;
         Db.Store(new PartnerNotification { Id = PartnerCleaningRequest.StableId($"notice:{eventId ?? request ?? branch}:{kind}:{revision}:{audience}:{employee}"),
             CompanyId = company, BranchId = branch, RequestId = request, Kind = kind, Revision = revision,
             Audience = audience, RecipientEmployeeId = employee });

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { shiftAction } from './shift-actions';
 import { setupAdminMocks } from './admin-helpers';
 
 const CORS_HEADERS = {
@@ -740,10 +741,10 @@ test.describe('Admin Panel - Shifts Page', () => {
     await modal.getByRole('button', { name: 'Create shift' }).click();
 
     await expect(modal).not.toBeVisible();
-    await expect(page.getByRole('cell', { name: 'Aamuvuoro' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'Aamuvuoro', exact: true })).toBeVisible();
 
     // Assign employee
-    await page.getByRole('button', { name: 'Employees' }).click();
+    await shiftAction(page, 'Aamuvuoro', 'Employees');
     await expect(page.getByText('No employees assigned.')).toBeVisible();
 
     await page.locator('input[placeholder="Select employees"]').click();
@@ -757,9 +758,8 @@ test.describe('Admin Panel - Shifts Page', () => {
     await expect(page.getByText('No employees assigned.')).toBeVisible();
 
     // Deactivate shift
-    const deactivateBtn = page.getByRole('button', { name: 'Deactivate' });
-    await deactivateBtn.click({ force: true });
-    await expect(page.getByRole('button', { name: 'Deactivate' })).not.toBeVisible();
+    await shiftAction(page, 'Aamuvuoro', 'Deactivate');
+    await expect(page.getByRole('button', { name: 'More actions for Aamuvuoro', exact: true })).not.toBeVisible();
   });
 
   test('worst path: required fields missing & specific days validation', async ({ page }) => {

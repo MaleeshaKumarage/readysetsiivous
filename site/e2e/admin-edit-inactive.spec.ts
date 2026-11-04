@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { shiftAction } from './shift-actions';
 import { setupAdminMocks } from './admin-helpers';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization' };
@@ -64,7 +65,7 @@ test('inactive shift and employee edits keep their existing activity state', asy
 
   await page.goto('/admin/shifts/');
   await page.getByRole('tab', { name: /^Inactive/ }).click();
-  await page.getByRole('row').filter({ hasText: 'Old shift' }).getByRole('button', { name: 'Edit' }).click();
+  await shiftAction(page, 'Old shift', 'Edit');
   const shiftDialog = page.getByRole('dialog', { name: 'Edit shift' });
   await shiftDialog.getByLabel('Name').fill('Updated shift');
   await shiftDialog.getByRole('button', { name: 'Save changes' }).click();

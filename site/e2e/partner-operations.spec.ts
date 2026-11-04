@@ -3,6 +3,7 @@ import { setupAdminMocks } from './admin-helpers';
 import type { Branch } from '../src/lib/adminApi';
 import type { CleanerOffer, CleaningRequest, PartnerChange } from '../src/lib/partnerApi';
 import type { InvoiceIssuer, ShiftInvoice, ShiftInvoiceInput } from '../src/lib/invoiceBillingApi';
+async function pickMonth(page: Page, label: string) { await page.getByRole('textbox', { name: 'Completion month', exact: true }).click(); await page.getByRole('option', { name: label, exact: true }).click(); }
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const companyId = '11111111-1111-4111-8111-111111111111';
@@ -38,30 +39,61 @@ test('Partner Operations excludes ordinary properties and reveals editors below 
   await expect(page.getByText('Ordinary property', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Former partner property', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Edit property', exact: true }).first().click();
-  const editor = page.getByRole('region', { name: 'Property editor', exact: true });
-  await expect(editor).toBeInViewport(); await expect(editor).toBeFocused();
-  await page.getByRole('button', { name: 'Edit property', exact: true }).first().click();
-  await expect(editor).toBeInViewport(); await expect(editor).toBeFocused();
+  const editor = page.getByRole('dialog', { name: 'Edit property', exact: true });
+  await expect(editor).toBeVisible();
   await editor.getByLabel('Rooms (optional)').fill('6');
   await editor.getByRole('button', { name: 'Save property', exact: true }).click();
   await expect(page.getByText('Property saved.', { exact: true })).toBeVisible();
   expect(writes[0]).toMatchObject({ path: '/branches/property-0', body: { roomCount: 6 } });
   await page.getByRole('button', { name: 'Set cleaning price', exact: true }).first().click();
-  const pricing = page.getByRole('region', { name: 'Property pricing', exact: true });
-  await expect(pricing).toBeInViewport(); await expect(pricing).toBeFocused();
-  await page.getByRole('button', { name: 'Set cleaning price', exact: true }).first().click();
-  await expect(pricing).toBeInViewport(); await expect(pricing).toBeFocused();
+  const pricing = page.getByRole('dialog', { name: /^Price / });
+  await expect(pricing).toBeVisible();
   await pricing.getByLabel('Fixed cleaning price excl. VAT (€)').fill('95');
   await pricing.getByRole('button', { name: 'Save pricing', exact: true }).click();
   await expect(page.getByText('Pricing saved.', { exact: true })).toBeVisible();
   expect(writes[1]).toMatchObject({ path: '/branches/property-0/pricing', body: { priceNet: 95 } });
   await page.getByRole('button', { name: 'Add property', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Property editor', exact: true }).getByRole('combobox').locator('option')).toHaveText(['Select company', 'Owner company']);
+  await expect(page.getByRole('dialog', { name: 'Add property', exact: true }).getByRole('combobox').locator('option')).toHaveText(['Select company', 'Owner company']);
+  await page.getByRole('dialog', { name: 'Add property', exact: true }).getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('tab', { name: 'Quote requests', exact: true }).click();
   await expect(page.getByText('No quotes awaiting pricing.', { exact: true })).toBeVisible();
 });
 
+test('completion month offers exactly 36 months without older shifts and can be cleared', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-11-15T12:00:00Z'));
+  await setupAdminMocks(page); await companies(page);
+  const issuer: InvoiceIssuer = { companyName: 'ReadySetSiivous', businessId: '3404861-9', companyAddress: { street: 'Issuer road 1', postalCode: '00100', city: 'Helsinki', country: 'FI' }, email: 'office@example.test', phone: '', bankAccountIBAN: 'FI2112345600000785', bankBic: 'NDEAFIHH', paymentTermsDays: 14, defaultVatRatePercent: 25.5 };
+  const previews: ShiftInvoiceInput[] = [];
+  await page.route(/\/api\/v1\/admin\/shifts(?:\?.*)?$/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/admin\/invoices(?:\/.*)?$/, route => {
+    const req = route.request(), path = new URL(req.url()).pathname.split('/invoices')[1];
+    if (req.method() === 'OPTIONS') return route.fulfill({ headers });
+    if (req.method() === 'GET') return route.fulfill({ headers, json: path === '/issuer' ? issuer : [] });
+    if (path === '/shift-preview') previews.push(req.postDataJSON() as ShiftInvoiceInput);
+    return route.fulfill({ status: 404, headers });
+  });
+  await page.goto('/admin/invoices/');
+  await page.getByRole('textbox', { name: 'Company', exact: true }).click(); await page.getByRole('option', { name: 'Owner company', exact: true }).click();
+  const month = page.getByRole('textbox', { name: 'Completion month', exact: true });
+  await month.click();
+  await expect(page.getByRole('option', { name: 'November 2026', exact: true })).toBeAttached();
+  await expect(page.getByRole('option', { name: 'December 2023', exact: true })).toBeAttached();
+  await expect(page.getByRole('option', { name: 'November 2023', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('option', { name: /^[A-Z][a-z]+ \d{4}$/ })).toHaveCount(36);
+  await page.getByRole('option', { name: 'October 2026', exact: true }).click();
+  await expect(month).toHaveValue('October 2026');
+  const preview = page.getByRole('button', { name: 'Preview invoice', exact: true });
+  await expect(preview).toBeEnabled();
+  // Mantine hides the clear control from assistive tech (aria-hidden), so target it by its label attribute.
+  await page.locator('button[aria-label="Clear completion month"]').click();
+  await expect(month).toHaveValue('');
+  await expect(preview).toBeDisabled();
+  expect(previews).toHaveLength(0);
+});
+
 test('partner month previews all company visits and issues the exact approved payload', async ({ page }, testInfo) => {
+  // Month options are relative to "now"; freeze it so the labels picked below always exist.
+  await page.clock.setFixedTime(new Date('2026-11-15T12:00:00Z'));
   await setupAdminMocks(page); await companies(page);
   const issuer: InvoiceIssuer = { companyName: 'ReadySetSiivous', businessId: '3404861-9', companyAddress: { street: 'Issuer road 1', postalCode: '00100', city: 'Helsinki', country: 'FI' }, email: 'office@example.test', phone: '', bankAccountIBAN: 'FI2112345600000785', bankBic: 'NDEAFIHH', paymentTermsDays: 14, defaultVatRatePercent: 25.5 };
   const preview: ShiftInvoice = { id: 'preview', invoiceNumber: '', customer: { name: 'Owner company' }, issuer, issueDate: '2026-12-31', dueDate: '2027-01-14', status: 'Preview', periodFrom: '2026-12-01', periodTo: '2026-12-31', previewToken: 'frozen-preview-token', total: { net: 140, vat: 35.7, gross: 175.7 }, lines: [{ lineKey: 'visit-1', description: 'Completed cleaning visits', shiftName: 'Lake apartment cleaning', branchName: branch.name, hours: 4, occurrences: 2, pricingMode: 'PerOccurrence', quantity: 2, unitPriceNet: 70, netAmount: 140, vatRatePercent: 25.5, vatAmount: 35.7, total: 175.7, periodFrom: '2026-12-01', periodTo: '2026-12-31' }] };
@@ -73,7 +105,9 @@ test('partner month previews all company visits and issues the exact approved pa
   ];
   const previews: ShiftInvoiceInput[] = [], issues: (ShiftInvoiceInput & { previewToken: string })[] = [];
   let records: ShiftInvoice[] = [];
-  await page.route(/\/api\/v1\/admin\/shifts(?:\?.*)?$/, route => route.fulfill({ headers, json: [] }));
+  // An old shift for the company extends the month list past the default 36-month window.
+  const oldShift = { id: 'old-shift', companyId, branchId: branch.id, name: 'Old lake cleaning', schedule: {}, isActive: false, validFrom: '2021-03-10' };
+  await page.route(/\/api\/v1\/admin\/shifts(?:\?.*)?$/, route => route.fulfill({ headers, json: [oldShift] }));
   await page.route(/\/api\/v1\/admin\/invoices(?:\/.*)?$/, route => {
     const req = route.request(), path = new URL(req.url()).pathname.split('/invoices')[1];
     if (req.method() === 'OPTIONS') return route.fulfill({ headers });
@@ -86,11 +120,17 @@ test('partner month previews all company visits and issues the exact approved pa
   await expect(page.getByLabel('Completed cleaning month', { exact: true })).not.toBeChecked();
   await page.getByRole('textbox', { name: 'Company', exact: true }).click(); await page.getByRole('option', { name: 'Owner company', exact: true }).click();
   await expect(page.getByLabel('Completed cleaning month', { exact: true })).toBeChecked();
-  await expect(page.getByLabel('Completion month', { exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Completion month', exact: true })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Completion month', exact: true }).click();
+  await expect(page.getByRole('option', { name: 'November 2026', exact: true })).toBeAttached();
+  await expect(page.getByRole('option', { name: 'March 2021', exact: true })).toBeAttached();
+  await expect(page.getByRole('option', { name: 'February 2021', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('option', { name: 'December 2026', exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
   await expect(page.getByLabel('Invoice shifts', { exact: true })).toHaveCount(0);
   await expect(page.getByLabel('Invoice from', { exact: true })).toHaveCount(0);
   await expect(page.getByLabel('Invoice to (inclusive)', { exact: true })).toHaveCount(0);
-  await page.getByLabel('Completion month').fill('2026-12');
+  await pickMonth(page, 'October 2026');
   await page.getByLabel(/^Billing street/).fill('Customer road 2'); await page.getByLabel(/^Billing postalCode/).fill('33100'); await page.getByLabel(/^Billing city/).fill('Tampere');
   await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Invoice preview', exact: true })).toBeVisible();
@@ -101,13 +141,13 @@ test('partner month previews all company visits and issues the exact approved pa
   await expect(page.getByRole('region', { name: 'Invoice preview', exact: true })).not.toContainText(/partner/i);
   await expect(page.getByText('Net €140.00 · VAT €35.70 · Total €175.70', { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('branch-grouped-invoice-preview.png'), fullPage: true });
-  expect(previews).toEqual([{ companyId, partnerMonth: true, shiftIds: [], from: '2026-12-01', to: '2026-12-31', billingAddress: { street: 'Customer road 2', postalCode: '33100', city: 'Tampere', country: 'FI' }, language: 'en', monthlyOverrides: [] }]);
+  expect(previews).toEqual([{ companyId, partnerMonth: true, shiftIds: [], from: '2026-10-01', to: '2026-10-31', billingAddress: { street: 'Customer road 2', postalCode: '33100', city: 'Tampere', country: 'FI' }, language: 'en', monthlyOverrides: [] }]);
   expect(issues).toHaveLength(0);
-  await page.getByLabel('Completion month').fill('2027-01'); await expect(page.getByRole('heading', { name: 'Invoice preview', exact: true })).toHaveCount(0); await expect(page.getByRole('button', { name: 'Issue invoice', exact: true })).toHaveCount(0);
-  await page.getByLabel('Completed cleaning month', { exact: true }).uncheck(); await expect(page.getByLabel('Completion month')).toHaveCount(0); await expect(page.getByRole('textbox', { name: 'Invoice shifts', exact: true })).toBeVisible(); await expect(page.getByLabel('Invoice from', { exact: true })).toBeVisible(); await expect(page.getByLabel('Invoice to (inclusive)', { exact: true })).toBeVisible();
-  await page.getByLabel('Completed cleaning month', { exact: true }).check(); await expect(page.getByLabel('Completion month')).toHaveValue(''); await expect(page.getByRole('button', { name: 'Preview invoice', exact: true })).toBeDisabled();
-  await page.getByLabel('Completion month').fill('2027-02'); await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Invoice preview', exact: true })).toBeVisible(); await expect(page.getByText('Owner company · 2027-02-01 – 2027-02-28', { exact: true })).toBeVisible();
-  expect(previews[1]).toEqual({ ...previews[0], from: '2027-02-01', to: '2027-02-28' }); expect(issues).toHaveLength(0);
+  await pickMonth(page, 'September 2026'); await expect(page.getByRole('heading', { name: 'Invoice preview', exact: true })).toHaveCount(0); await expect(page.getByRole('button', { name: 'Issue invoice', exact: true })).toHaveCount(0);
+  await page.getByLabel('Completed cleaning month', { exact: true }).uncheck(); await expect(page.getByRole('textbox', { name: 'Completion month', exact: true })).toHaveCount(0); await expect(page.getByRole('textbox', { name: 'Invoice shifts', exact: true })).toBeVisible(); await expect(page.getByLabel('Invoice from', { exact: true })).toBeVisible(); await expect(page.getByLabel('Invoice to (inclusive)', { exact: true })).toBeVisible();
+  await page.getByLabel('Completed cleaning month', { exact: true }).check(); await expect(page.getByRole('textbox', { name: 'Completion month', exact: true })).toHaveValue(''); await expect(page.getByRole('button', { name: 'Preview invoice', exact: true })).toBeDisabled();
+  await pickMonth(page, 'August 2026'); await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Invoice preview', exact: true })).toBeVisible(); await expect(page.getByText('Owner company · 2026-08-01 – 2026-08-31', { exact: true })).toBeVisible();
+  expect(previews[1]).toEqual({ ...previews[0], from: '2026-08-01', to: '2026-08-31' }); expect(issues).toHaveLength(0);
   await page.getByRole('button', { name: 'Issue invoice', exact: true }).click();
   await expect(page.getByText('Invoice RSS-2026-001 issued.', { exact: true })).toBeVisible();
   expect(issues).toEqual([{ ...previews[1], previewToken: 'frozen-preview-token' }]);
@@ -158,9 +198,10 @@ test('staff resolves owner changes, creates a property and cancels a versioned r
   expect(writes[1]).toMatchObject({ path: '/branches', method: 'POST', body: { companyId, name: 'Forest apartment', street: 'Forest road 8', city: 'Oulu', roomCount: 3, bedCount: 4, priceNet: null, isActive: true } });
   await page.getByRole('tab', { name: 'Requests', exact: true }).click();
   await page.getByRole('button', { name: 'Cancel request', exact: true }).click();
-  await page.getByLabel('Reason for cancellation', { exact: true }).fill('Owner cancelled travel.');
-  await page.getByRole('button', { name: 'Confirm cancellation', exact: true }).click();
-  await expect(page.getByText('Request cancelled.', { exact: true })).toBeVisible();
+  const cancelDialog = page.getByRole('dialog', { name: /^Cancel / });
+  await expect(cancelDialog.getByRole('button', { name: 'Confirm cancellation', exact: true })).toBeDisabled();
+  await cancelDialog.getByLabel('Reason for cancellation', { exact: true }).fill('Owner cancelled travel.');
+  await cancelDialog.getByRole('button', { name: 'Confirm cancellation', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Lake apartment · Cancelled', exact: true })).toHaveCount(0); await expect(page.getByRole('button', { name: 'Cancel request', exact: true })).toHaveCount(0);
   expect(writes[2]).toEqual({ path: `/requests/${cleaning.id}/cancel`, method: 'POST', body: { version: 7, reason: 'Owner cancelled travel.' } });
 });

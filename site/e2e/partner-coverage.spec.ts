@@ -140,7 +140,7 @@ test('staff edit refuses a window that ends before it starts with a readable mes
   const staff = await openActor(browser, testInfo, backend, 'admin');
   await staffTab(staff.page, 'Requests');
   await staff.page.getByRole('article', { name: `${PROPERTY} request`, exact: true }).getByRole('button', { name: 'Edit / reschedule request', exact: true }).click();
-  const editor = staff.page.getByRole('region', { name: 'Edit cleaning request' });
+  const editor = staff.page.getByRole('dialog', { name: /^Edit \/ reschedule/ });
   await editor.getByLabel('From date', { exact: true }).fill('2026-12-05');
   await editor.getByLabel('To date', { exact: true }).fill('2026-12-03');
   await editor.getByRole('button', { name: 'Save request changes', exact: true }).click();

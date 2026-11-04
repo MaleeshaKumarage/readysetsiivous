@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
+import { shiftAction } from './shift-actions';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 async function setup(page: Page) {
@@ -40,12 +41,12 @@ for (const width of [1280, 390]) test(`admin shift lifecycle tabs filter without
   await expect(active).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('cell', { name: 'Active shift', exact: true })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'Inactive shift', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Employees', exact: true }).click();
+  await shiftAction(page, 'Active shift', 'Employees');
   await expect(page.getByRole('textbox', { name: 'Assign employees', exact: true })).toBeVisible();
   const loads = state.loads;
   await active.focus(); await active.press('End'); await expect(inactive).toBeFocused();
   await expect(page.getByRole('cell', { name: 'Inactive shift', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Employees', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'More actions for Active shift', exact: true })).toHaveCount(0);
   await inactive.press('Home');
   await expect(page.getByRole('textbox', { name: 'Assign employees', exact: true })).toHaveCount(0);
   expect(state.loads).toBe(loads);
@@ -61,9 +62,9 @@ test('admin creating from Inactive returns to Active and deactivation moves the 
   await modal.getByRole('textbox', { name: /^Name\s*\*?$/ }).fill('Created shift'); await modal.getByRole('button', { name: 'Create shift' }).click();
   await expect(page.getByRole('tab', { name: 'Active (2)', exact: true })).toHaveAttribute('aria-selected', 'true');
   const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Created shift', exact: true }) });
-  await expect(row).toBeVisible(); await row.getByRole('button', { name: 'Deactivate', exact: true }).click();
+  await expect(row).toBeVisible(); await shiftAction(page, 'Created shift', 'Deactivate');
   await expect(row).toHaveCount(0); await page.getByRole('tab', { name: 'Inactive (2)', exact: true }).click();
-  await expect(row).toBeVisible(); await expect(row.getByRole('button', { name: 'Reactivate', exact: true })).toBeVisible();
+  await expect(row).toBeVisible(); await row.getByRole('button', { name: 'More actions for Created shift', exact: true }).click(); await expect(page.getByRole('menuitem', { name: 'Reactivate', exact: true })).toBeVisible(); await page.keyboard.press('Escape');
 });
 
 test('late admin assignment response is discarded when lifecycle tabs change', async ({ page }) => {
@@ -75,11 +76,11 @@ test('late admin assignment response is discarded when lifecycle tabs change', a
     delayed = false; started = true; await gate;
     return route.fulfill({ status: 200, headers, json: [{ id: 'late', employeeId: 'cleaner', isActive: true }] });
   });
-  await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'Employees', exact: true }).click();
+  await page.goto('/admin/shifts/'); await shiftAction(page, 'Active shift', 'Employees');
   await expect.poll(() => started).toBe(true);
   await page.getByRole('tab', { name: /^Inactive/ }).click(); await page.getByRole('tab', { name: /^Active/ }).click();
   release(); await expect(page.getByRole('textbox', { name: 'Assign employees', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Employees', exact: true }).click();
+  await shiftAction(page, 'Active shift', 'Employees');
   await expect(page.getByText('No employees assigned.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Unassign Test Cleaner' })).toHaveCount(0);
 });

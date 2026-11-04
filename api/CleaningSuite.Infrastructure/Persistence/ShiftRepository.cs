@@ -123,6 +123,17 @@ public class ShiftRepository : IShiftRepository
             .ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyDictionary<Guid, int>> CountActiveAssignmentsByShiftAsync(CancellationToken ct = default)
+    {
+        // The session is tenant-scoped (all documents are multi-tenanted), so this never sees another tenant's rows.
+        // Only the shift id column is read, not whole assignment documents.
+        var shiftIds = await Session.Query<ShiftAssignment>()
+            .Where(x => x.IsActive)
+            .Select(x => x.ShiftId)
+            .ToListAsync(ct);
+        return shiftIds.GroupBy(id => id).ToDictionary(g => g.Key, g => g.Count());
+    }
+
     public async Task SaveAssignmentAsync(ShiftAssignment assignment, CancellationToken ct = default)
     {
         await StageChange(assignment.ShiftId, [assignment.EmployeeId], ct);

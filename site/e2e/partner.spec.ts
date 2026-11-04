@@ -118,6 +118,8 @@ test('switching inline staff editors resets fields to the newly selected record'
   await page.goto('/admin/partner-requests/');
   await page.getByRole('article', { name: 'Lake apartment request', exact: true }).getByRole('button', { name: 'Edit / reschedule request' }).click();
   await page.getByLabel('From date', { exact: true }).fill('2026-12-05');
+  // Modal dialog blocks the page: close it (discarding the draft) before opening the other request.
+  await page.getByRole('dialog', { name: /^Edit \/ reschedule / }).getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('article', { name: 'Forest apartment request', exact: true }).getByRole('button', { name: 'Edit / reschedule request' }).click();
   await expect(page.getByLabel('From date', { exact: true })).toHaveValue('2026-12-10');
   await expect(page.getByLabel('Cleaning instructions')).toHaveValue('Forest instructions');
@@ -127,6 +129,7 @@ test('switching inline staff editors resets fields to the newly selected record'
   await page.getByRole('tab', { name: 'Properties', exact: true }).click();
   await page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Lake apartment · Owner company' }) }).getByRole('button', { name: 'Edit property' }).click();
   await page.getByLabel('Property name', { exact: true }).fill('Unsaved lake edit');
+  await page.getByRole('dialog', { name: 'Edit property', exact: true }).getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Forest apartment · Owner company' }) }).getByRole('button', { name: 'Edit property' }).click();
   await expect(page.getByLabel('Property name', { exact: true })).toHaveValue('Forest apartment');
   await expect(page.getByLabel('street', { exact: true })).toHaveValue('Forest road 9');

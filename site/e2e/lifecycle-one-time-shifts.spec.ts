@@ -1,4 +1,5 @@
 import { test, expect, Locator, Page } from '@playwright/test';
+import { shiftAction } from './shift-actions';
 import { setupAdminMocks } from './admin-helpers';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
@@ -76,10 +77,11 @@ test('one-time is offered for new shifts while on-call appears only for an exist
   await page.getByRole('option', { name: 'Daily', exact: true }).click();
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
 
-  await page.getByRole('row').filter({ hasText: 'Legacy on-call' }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await shiftAction(page, 'Legacy on-call', 'Edit');
   const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
   await expect(edit.getByLabel('Schedule', { exact: true })).toHaveValue('On-call / flexible (legacy)');
-  await expect(page.getByRole('row').filter({ hasText: 'Legacy on-call' }).getByRole('button', { name: 'Schedule one-time visit', exact: true })).toBeVisible();
+  await edit.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(edit).toHaveCount(0);
+  await page.getByRole('row').filter({ hasText: 'Legacy on-call' }).getByRole('button', { name: /^More actions for / }).click(); await expect(page.getByRole('menuitem', { name: 'Schedule one-time visit', exact: true })).toBeVisible(); await page.keyboard.press('Escape');
 });
 
 test('admin creates a past one-time visit from one form without a second visit popup', async ({ page }) => {
@@ -101,7 +103,7 @@ test('admin creates a past one-time visit from one form without a second visit p
   });
   const row = page.getByRole('row').filter({ hasText: 'Past visit' });
   await expect(row).toContainText('One-time 2026-10-01 09:00–11:30');
-  await expect(row.getByRole('button', { name: 'Schedule one-time visit', exact: true })).toHaveCount(0);
+  await row.getByRole('button', { name: /^More actions for / }).click(); await expect(page.getByRole('menuitem', { name: 'Schedule one-time visit', exact: true })).toHaveCount(0); await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: /^Occurrences/ })).toHaveCount(0);
 });
 
@@ -132,7 +134,7 @@ test('date, start and end errors block the save and keep the draft', async ({ pa
 test('edit restores the one-time date and times and saves a changed end time', async ({ page }) => {
   const mock = await mockAdmin(page, [visitShift]);
   await page.goto('/admin/shifts/');
-  await page.getByRole('row').filter({ hasText: 'Past visit' }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await shiftAction(page, 'Past visit', 'Edit');
   const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
   await expect(edit.getByLabel('Schedule', { exact: true })).toHaveValue('One-time');
   await expect(edit.getByRole('textbox', { name: 'Date', exact: true })).toHaveValue('2026-10-01');
@@ -187,7 +189,7 @@ test('one-time visit price saves only that visit from the occurrences dialog', a
     return route.fulfill({ headers, json: { plans: [], overrides: [] } });
   });
   await page.goto('/admin/shifts/');
-  await page.getByRole('row').filter({ hasText: 'Past visit' }).getByRole('button', { name: 'Occurrences', exact: true }).click();
+  await shiftAction(page, 'Past visit', 'Occurrences');
   await page.getByRole('button', { name: 'Visit price', exact: true }).click();
   const dialog = page.getByRole('dialog').filter({ hasText: 'Visit price — Past visit' });
   await dialog.getByRole('textbox', { name: 'Visit price before VAT (€)', exact: true }).fill('75');
@@ -209,7 +211,7 @@ test('one-time shift can be priced per completed visit from the pricing dialog',
     return route.fulfill({ headers, json: { plans: [], overrides: [] } });
   });
   await page.goto('/admin/shifts/');
-  await page.getByRole('row').filter({ hasText: 'Past visit' }).getByRole('button', { name: 'Pricing', exact: true }).click();
+  await shiftAction(page, 'Past visit', 'Pricing');
   const dialog = page.getByRole('dialog').filter({ hasText: 'Shift pricing — Past visit' });
   await expect(dialog.getByRole('button', { name: 'Save price', exact: true })).toBeEnabled();
   await dialog.getByLabel('Pricing basis', { exact: true }).click();

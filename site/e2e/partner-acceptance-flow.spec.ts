@@ -22,7 +22,7 @@ async function staffOpenRequests(page: Page) {
 }
 // Cancelled owner bookings leave the active list and open from the collapsed section.
 async function ownerOpenCancelled(page: Page) {
-  await page.getByText(/^Cancelled requests \(\d+\)$/).click();
+  await page.getByRole('tab', { name: /^Cancelled requests/ }).click();
 }
 async function staffOpenAssigned(page: Page) {
   await page.goto('/admin/partner-requests/');
@@ -393,7 +393,7 @@ test('owner cancels an unaccepted request only after confirming, and the cleaner
   await ownerCard(page).getByRole('button', { name: 'Cancel request', exact: true }).click();
   await expect(page.getByText('Request cancelled.', { exact: true })).toBeVisible();
   await expect(ownerCard(page)).toHaveCount(0);
-  await expect(page.getByRole('tab', { name: 'Cleaning requests', exact: true })).toContainText('0');
+  await expect(page.getByRole('tab', { name: /^Active requests \(0\)/ })).toBeVisible();
   await ownerOpenCancelled(page);
   await expect(ownerCard(page).getByText('Cancelled', { exact: true })).toBeVisible();
   expect(shape(backend.writes.filter(write => write.path.endsWith('/cancel')))).toEqual(['owner POST partner/requests/<id>/cancel']);
@@ -410,10 +410,11 @@ test('staff cancellation of an accepted visit uses an inline reason, not a brows
   await staffOpenAssigned(staff.page);
   await expect(staffCard(staff.page).getByText('Cleaner: Test Cleaner')).toBeVisible();
 
-  const form = staff.page.getByRole('region', { name: 'Cancel cleaning request' });
+  const form = staff.page.getByRole('dialog', { name: /^Cancel / });
   await staffCard(staff.page).getByRole('button', { name: 'Cancel request', exact: true }).click();
   await expect(form).toBeVisible();
-  await expect(form).toBeFocused();
+  // Focus moves into the dialog, so keyboard users start inside it.
+  expect(await staff.page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]'))).toBe(true);
   const confirm = form.getByRole('button', { name: 'Confirm cancellation', exact: true });
   await expect(confirm).toBeDisabled();
   await form.getByLabel('Reason for cancellation', { exact: true }).fill('   ');
@@ -444,7 +445,7 @@ test('re-offering an accepted visit names the booked cleaner before anything is 
   const staff = await openActor(browser, testInfo, backend, 'admin');
   await staffOpenAssigned(staff.page);
   await staffCard(staff.page).getByRole('button', { name: 'Arrange cleaner / time', exact: true }).click();
-  const arrange = staff.page.getByRole('region', { name: 'Arrange cleaning' });
+  const arrange = staff.page.getByRole('dialog', { name: /^Arrange / });
   await expect(arrange.getByText('Test Cleaner is booked on this visit. Sending a new offer removes them from it.', { exact: true })).toBeVisible();
   await arrange.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(arrange).toHaveCount(0);
@@ -459,7 +460,7 @@ test('staff deactivates a property from its editor, the owner is blocked from bo
   await staffOpenRequests(staff.page);
   await staff.page.getByRole('tab', { name: 'Properties', exact: true }).click();
   const card = () => staff.page.getByRole('article').filter({ has: staff.page.getByRole('heading', { name: `${PROPERTY} · Owner company` }) });
-  const editor = staff.page.getByRole('region', { name: 'Property editor' });
+  const editor = staff.page.getByRole('dialog', { name: 'Edit property' });
 
   await card().getByRole('button', { name: 'Edit property', exact: true }).click();
   await editor.getByLabel('Active property', { exact: true }).uncheck();

@@ -93,7 +93,7 @@ test('manager navigation and shift form fit the viewport without covering save o
   await setup(page); await page.goto('/manager/');
   await page.getByRole('button', { name: 'Add shift' }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  const form = page.getByRole('form', { name: 'Create shift' });
+  const form = page.getByRole('dialog', { name: 'Create shift', exact: true });
   const dates = form.locator('input[type="date"]');
   const save = form.getByRole('button', { name: 'Save shift', exact: true });
   const cancel = form.getByRole('button', { name: 'Cancel', exact: true });
@@ -306,4 +306,25 @@ test('late manager assignment response cannot reopen or populate a hidden lifecy
   await card.getByRole('button', { name: 'Employees' }).click();
   await expect(card.getByText('No employees assigned.')).toBeVisible();
   await expect(card.getByRole('button', { name: 'Remove assignment' })).toHaveCount(0);
+});
+
+test('the shift dialog closes on Escape and on a backdrop click without saving, and focus returns to the opener', async ({ page }) => {
+  const state = await setup(page); await page.goto('/manager/');
+  const card = page.getByRole('article', { name: 'AAA1 weekdays' });
+  const edit = card.getByRole('button', { name: 'Edit shift', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Edit shift', exact: true });
+  await edit.click(); await expect(dialog).toBeVisible();
+  await dialog.getByLabel('Shift name', { exact: true }).fill('Escaped edit');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0); await expect(edit).toBeFocused();
+  await edit.click(); await expect(dialog).toBeVisible();
+  // The draft is discarded on close; the form reopens with the saved name.
+  await expect(dialog.getByLabel('Shift name', { exact: true })).toHaveValue('AAA1 weekdays');
+  await dialog.getByLabel('Shift name', { exact: true }).fill('Backdrop edit');
+  // The overlay must cover the whole window, including the top edge above the page's first section.
+  expect(await page.evaluate(() => document.querySelector('[role=dialog]')!.parentElement!.getBoundingClientRect().top)).toBe(0);
+  await page.mouse.click(4, 4);
+  await expect(dialog).toHaveCount(0); await expect(edit).toBeFocused();
+  await expect(page.getByRole('article', { name: 'AAA1 weekdays' })).toBeVisible();
+  expect(state.writes).toHaveLength(0);
 });

@@ -127,3 +127,29 @@ A01 (employee-owned work autoaccept) follows C01. Start-time question resolved: 
 - Production push configuration has separately been prepared in protected deployment storage for the next approved release; the running API was disabled at its last check. This source change keeps repository defaults disabled. Runtime activation/availability and real-device receipt still require verification after deployment. No secret values or private deployment paths are recorded here.
 - Publication, latest-head CI/database checks, merge and production verification remain distinct next steps. No workflow has been manually retried and no production records were changed by this repair.
 - Final production build passed on the scoped repair: Next.js 14.2.35 compiled, lint/type validation passed and all 47 static pages exported. This is local artifact verification, not deployment.
+
+### W01 work queue checkpoint - 2026-11-03
+
+- Branch `feat/work-queue-w01` from main f23ac0d. Adds admin-only `GET /api/v1/admin/work-queue` (view, source, q, skip, take capped at 100) with per-view counts, and an admin Work queue page with view tabs, source and search filters, URL state and a booking drawer with existing confirm, cancel and complete actions.
+- View rules: bookings New or unassigned Confirmed = Needs action; assigned Confirmed = Scheduled; Completed and Cancelled = Completed. Partner requests Requested (Unassigned) and Offered (Awaiting acceptance) = Needs action; Accepted = Scheduled; Cancelled = Completed. In progress is empty: no stored state yet. Partner in-progress/completed derivation from shift and form state is deferred.
+- Deferred from W01: manager access (bookings endpoints not verified for manager policy), date and assignee filters, assign and unassign controls, shift occurrences in unassigned work, and partner request actions (remain on Partner requests page).
+- Verification: Rules unit tests 17 passed; tsc exit 0; Playwright lifecycle-work-queue 6 passed (desktop and mobile); admin.spec and lifecycle-companies-services 50 passed. Backend read paging is covered by reasoning and rules tests only; no database test yet, so the merged query is unverified against PostgreSQL. Latest-head CI pending.
+
+### W02 shift workspace checkpoint - 2026-11-03
+
+- Branch `feat/shift-workspace-w02` from main `a9b6fb2`. Scope from #245 W02 only: compact admin shift rows, one primary Manage action, a More actions menu with the existing actions under unchanged labels, and a per-shift workspace.
+- Workspace sections: Schedule, Assignees, Visits, Checklist and Pricing. Each section opens the existing editor, panel or dialog. Workspace actions close the workspace first, so each existing dialog opens alone.
+- Next step text is derived only from fields the shift list already returns: active or inactive, completed one-time visit, on-call type, and assignment count.
+- Status column shows Active, Completed or Inactive from the existing lifecycle classifier.
+- Visit scopes (This visit, Recurring, From date) are unchanged and remain in VisitAssigneesDialog.
+
+#### Deviations from #245 W02
+
+- Request, awaiting acceptance, accepted, in progress and completed states are not shown. The shift and occurrence DTOs carry no offer, acceptance or progress state. Adding them needs backend work tracked separately.
+- Next actor is limited to admin or cleaner wording from the fields above. It does not name a specific person.
+
+#### Verification
+
+- Baseline before edits on the unchanged worktree: 114 of 114 desktop and mobile cases passed across the shift specs.
+- Specs routed through the new `e2e/shift-actions.ts` helpers: lifecycle-shifts, lifecycle-one-time-shifts, lifecycle-shift-assignment-count, lifecycle-shift-completed, shift-assignment, shift-dates, shift-occurrences, shift-reactivation, admin-edit-inactive, lifecycle-invoice-billing, quality-cycle, admin.spec.
+- New `e2e/shift-workspace.spec.ts` covers row actions, workspace sections, workspace-to-dialog handoffs, on-call and inactive next steps, and phone overflow.
