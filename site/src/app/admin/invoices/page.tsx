@@ -36,7 +36,7 @@ export default function InvoicesPage() {
   const [address, setAddress] = useState<BillingAddress>(emptyAddress); const [monthlyOverrides, setMonthlyOverrides] = useState<MonthlyOverride[]>([]);
   const [overrideShift, setOverrideShift] = useState<string | null>(null); const [overrideMonth, setOverrideMonth] = useState(''); const [overrideAmount, setOverrideAmount] = useState<number | string>(0); const [overrideReason, setOverrideReason] = useState('');
   const [preview, setPreview] = useState<ShiftInvoice | null>(null); const [previewInput, setPreviewInput] = useState<ShiftInvoiceInput | ManualInvoiceInput | null>(null);
-  const [error, setError] = useState(''); const [status, setStatus] = useState(''); const [busy, setBusy] = useState(false); const [showIssuer, setShowIssuer] = useState(false);
+  const [error, setError] = useState(''); const [status, setStatus] = useState(''); const [busy, setBusy] = useState(false); const [showIssuer, setShowIssuer] = useState(false); const [createOpen, setCreateOpen] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0); const [loadFailed, setLoadFailed] = useState(false);
   const version = useRef(0); const pending = useRef(false);
   const invalidate = () => { version.current++; setPreview(null); setPreviewInput(null); setStatus(''); };
@@ -72,13 +72,13 @@ export default function InvoicesPage() {
         lines: rows.map(row => ({ description: row.description.trim(), quantity: Number(row.quantity), unitPriceNet: Number(row.unitPriceNet) })) };
       const attempt = ++version.current; setPreview(null); setPreviewInput(null);
       const result = await invoiceBillingApi.previewManual(input); if (attempt !== version.current) return;
-      setPreview(result); setPreviewInput(input); return;
+      setPreview(result); setPreviewInput(input); setCreateOpen(false); return;
     }
     if (!companyId || (!partnerMonth && !shiftIds.length) || !from || !to || from > to || !address.street.trim() || !address.postalCode.trim() || !address.city.trim() || !address.country.trim()) throw new Error('Select a company, shifts or a partner month, and the full billing address.');
     const input = { companyId, shiftIds: partnerMonth ? [] : [...shiftIds], from, to, billingAddress: { ...address }, language, monthlyOverrides: partnerMonth ? [] : [...monthlyOverrides], ...(partnerMonth ? { partnerMonth: true } : {}) };
     const attempt = ++version.current; setPreview(null); setPreviewInput(null);
     const result = await invoiceBillingApi.preview(input); if (attempt !== version.current) return;
-    setPreview(result); setPreviewInput(input);
+    setPreview(result); setPreviewInput(input); setCreateOpen(false);
   });
   const issue = () => run(async () => {
     if (!preview?.previewToken || !previewInput) throw new Error('Preview the invoice before issuing it.');
@@ -91,7 +91,7 @@ export default function InvoicesPage() {
       if (isManual) {
         const unknown = !(failure instanceof InvoiceRequestError) || failure.status >= 500 || failure.status === 408;
         setUncertain(unknown || (uncertain && !(failure instanceof InvoiceRequestError && failure.status === 409)));
-        if (!unknown && failure instanceof InvoiceRequestError && failure.status === 409) invalidate();
+        if (!unknown && failure instanceof InvoiceRequestError && failure.status === 409) { invalidate(); setCreateOpen(true); }
       }
       throw failure;
     } finally { setIssuing(false); }
@@ -108,7 +108,7 @@ export default function InvoicesPage() {
   const previewLocked = busy || issuing || uncertain;
   const closePreview = () => { if (!previewLocked) invalidate(); };
   return <Stack>
-    <Group justify="space-between"><Title order={1}>Invoices</Title><Button variant="default" onClick={() => setShowIssuer(!showIssuer)}>Company and payment details</Button></Group>
+    <Group justify="space-between"><Title order={1}>Invoices</Title><Group gap="xs"><Button onClick={() => setCreateOpen(true)}>New invoice</Button><Button variant="default" onClick={() => setShowIssuer(!showIssuer)}>Company and payment details</Button></Group></Group>
     {error && <Text role="alert" c="red">{error}</Text>}{loadFailed && <Button variant="light" onClick={() => setLoadAttempt(current => current + 1)}>Retry loading invoice data</Button>}{status && <Text role="status" c="green">{status}</Text>}
     {uncertain && <Text role="alert" c="orange">The issue result could not be confirmed. Open the invoice preview and retry issuing to retrieve the same invoice safely before editing or starting another invoice.</Text>}
     <fieldset disabled={issuing || uncertain} ref={element => { if (element) element.inert = issuing || uncertain; }} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><Stack>
@@ -121,7 +121,7 @@ export default function InvoicesPage() {
       <Button loading={busy} onClick={() => run(async () => { const value = await invoiceBillingApi.saveIssuer(issuer); if (value) { setIssuer(value); setSavedVat(value.defaultVatRatePercent); } invalidate(); setShowIssuer(false); setStatus('Company and payment details saved.'); })}>Save company details</Button>
     </Stack>}</Modal>
 
-    <Paper withBorder p="md"><Stack><Title order={2}>{manual ? 'Create manual invoice' : 'Create shift invoice'}</Title>
+    <Modal opened={createOpen} onClose={() => { if (!busy) setCreateOpen(false); }} closeOnClickOutside={!busy} closeOnEscape={!busy} withCloseButton={!busy} title={manual ? 'Create manual invoice' : 'Create shift invoice'} size="lg" radius="md"><Stack>
       <Select label="Invoice type" allowDeselect={false} value={manual ? 'manual' : 'shift'} data={[{ value: 'shift', label: 'Shift invoice' }, { value: 'manual', label: 'Manual invoice' }]} onChange={value => { invalidate(); setManual(value === 'manual'); }} />
       {!manual && <Checkbox label="Completed cleaning month" checked={partnerMonth} onChange={event => { invalidate(); setPartnerMonth(event.currentTarget.checked); setFrom(''); setTo(''); setMonth(''); setShiftIds([]); setMonthlyOverrides([]); }} />}
       <Select label="Company" searchable data={companies.map(company => ({ value: company.id, label: company.name }))} value={companyId} onChange={value => { invalidate(); setCompanyId(value); setPartnerMonth(Boolean(companies.find(company => company.id === value)?.isPartnerEnabled)); setFrom(''); setTo(''); setMonth(''); setShiftIds([]); setMonthlyOverrides([]); }} />
@@ -139,7 +139,7 @@ export default function InvoicesPage() {
         {monthlyOverrides.map(item => <Group key={`${item.shiftId}-${item.month}`}><Text>{shifts.find(shift => shift.id === item.shiftId)?.name} · {item.month} · {money(item.amountNet)} · {item.reason}</Text><Button size="xs" variant="subtle" onClick={() => { invalidate(); setMonthlyOverrides(current => current.filter(value => value !== item)); }}>Remove override</Button></Group>)}
       </Stack></details>}
       <Button loading={busy} disabled={!issuer || (!manual && ((!partnerMonth && !shiftIds.length) || (partnerMonth && !month)))} onClick={buildPreview}>Preview invoice</Button>
-    </Stack></Paper>
+    </Stack></Modal>
     </Stack></fieldset>
     <Modal opened={Boolean(preview)} onClose={closePreview} closeButtonProps={{ disabled: previewLocked }} closeOnClickOutside={!previewLocked} closeOnEscape={!previewLocked} title="Invoice preview" size="xl" radius="md">{preview && <Stack>{preview.issuerIsSample && <Badge color="orange">Sample issuer details</Badge>}<Text fw={600}>{preview.issuer.companyName} · {preview.issuer.businessId}</Text><Text size="sm">{preview.issuer.companyAddress.street}, {preview.issuer.companyAddress.postalCode} {preview.issuer.companyAddress.city} · IBAN {preview.issuer.bankAccountIBAN} · BIC {preview.issuer.bankBic}</Text><Text>{preview.customer.name}{!manual && <> · {preview.periodFrom?.slice(0, 10) ?? from} – {preview.periodTo?.slice(0, 10) ?? to}</>}</Text>
       {manual ? <Table.ScrollContainer minWidth={580}><Table><Table.Thead><Table.Tr>{['Description', 'Quantity', 'Unit price (net)', 'Net', 'VAT', 'Total'].map(label => <Table.Th key={label}>{label}</Table.Th>)}</Table.Tr></Table.Thead><Table.Tbody>{preview.lines.map((line, index) => <Table.Tr key={line.lineKey || index}><Table.Td>{line.description}</Table.Td><Table.Td>{line.quantity}</Table.Td><Table.Td>{money(line.unitPriceNet)}</Table.Td><Table.Td>{money(line.netAmount)}</Table.Td><Table.Td>{money(line.vatAmount)} ({line.vatRatePercent}%)</Table.Td><Table.Td>{money(line.total)}</Table.Td></Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer> : <Table.ScrollContainer minWidth={850}><Table><Table.Thead><Table.Tr>{['Shift / branch', 'Period', 'Scheduled hours', 'Occurrences', 'Basis / quantity', 'Net', 'VAT', 'Total'].map(label => <Table.Th key={label}>{label}</Table.Th>)}</Table.Tr></Table.Thead><Table.Tbody>{[...new Map(preview.lines.map(line => [line.branchId || line.branchName || '', line.branchName || ''])).entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([branchKey, branchName]) => <Fragment key={branchKey}>{branchName && <Table.Tr><Table.Th colSpan={8}>{branchName}</Table.Th></Table.Tr>}{preview.lines.filter(line => (line.branchId || line.branchName || '') === branchKey).sort((a, b) => (a.periodFrom || '').localeCompare(b.periodFrom || '')).map((line, index) => <Table.Tr key={line.lineKey || index}><Table.Td>{line.shiftName || line.description}<Text size="xs">{line.branchName}</Text>{line.completedOn && <Text size="xs">Completed on: {line.completedOn.slice(0, 10)}</Text>}{line.overrideReason && <Text size="xs">Override: {line.overrideReason}</Text>}</Table.Td><Table.Td>{line.periodFrom?.slice(0, 10)} – {line.periodTo?.slice(0, 10)}</Table.Td><Table.Td>{line.hours == null ? '—' : new Intl.NumberFormat('en', { maximumFractionDigits: 2 }).format(line.hours)}</Table.Td><Table.Td>{line.occurrences ?? '—'}</Table.Td><Table.Td>{line.pricingMode} × {new Intl.NumberFormat('en', { maximumFractionDigits: 4 }).format(line.quantity)}<Text size="xs">{line.description}</Text></Table.Td><Table.Td>{money(line.netAmount)}</Table.Td><Table.Td>{money(line.vatAmount)} ({line.vatRatePercent}%)</Table.Td><Table.Td>{money(line.total)}</Table.Td></Table.Tr>)}</Fragment>)}</Table.Tbody></Table></Table.ScrollContainer>}

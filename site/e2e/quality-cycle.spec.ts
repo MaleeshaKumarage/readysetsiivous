@@ -183,7 +183,8 @@ test.describe('Admin Panel - Quality Cycle Page', () => {
     await expect(page.getByRole('heading', { name: 'Quality Cycle Management' })).toBeVisible();
     await expect(page.getByText('No quality cycle templates created yet.')).toBeVisible();
 
-    // Fill form to create template
+    // Open the template dialog, then fill it
+    await page.getByRole('button', { name: 'New template', exact: true }).click();
     await page.getByPlaceholder('e.g. Daily Office Cleaning Checklist').fill('Daily Office Checklist');
     await page.getByPlaceholder('Optional description or guidance...').fill('Standard office cleaning routines');
 

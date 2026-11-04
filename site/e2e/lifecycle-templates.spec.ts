@@ -77,6 +77,7 @@ test('editing inactive templates preserves lifecycle and scope; creation returns
   await expect(page.getByText('Updated archived checklist', { exact: true })).toBeVisible();
   await expect(tabs.getByRole('tab', { name: 'Inactive (1)', exact: true })).toHaveAttribute('aria-selected', 'true');
   expect(requests.update()).toMatchObject({ isActive: false, companyId: 'company-1', branchId: 'branch-1' });
+  await page.getByRole('button', { name: 'New template', exact: true }).click();
   await page.getByPlaceholder('e.g. Daily Office Cleaning Checklist').fill('New active checklist');
   await page.locator('input[placeholder^="Item "]').first().fill('Wash floor');
   await page.getByRole('button', { name: 'Create Template', exact: true }).click();
@@ -91,5 +92,17 @@ test('empty templates retain first-use messaging in either tab', async ({ page }
   await expect(page.getByText('No quality cycle templates created yet.')).toBeVisible();
   await page.getByRole('tab', { name: 'Inactive (0)', exact: true }).click();
   await expect(page.getByText('No quality cycle templates created yet.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Create Template', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'New template', exact: true })).toBeVisible();
+});
+
+test('template editor opens in a dialog and the template list keeps the full width', async ({ page }) => {
+  await mockTemplates(page, [template('active', 'Office checklist', true)]);
+  await page.goto('/admin/quality-cycle/');
+  await expect(page.getByText('Office checklist', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Create New Template' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'New template', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Create New Template' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Create New Template' })).toHaveCount(0);
+  await expect(page.getByText('Office checklist', { exact: true })).toBeVisible();
 });
