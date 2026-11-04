@@ -5,7 +5,7 @@ const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Meth
 async function setup(page: Page, allowed = true) {
   await setupAdminMocks(page);
   await page.route(/\/api\/v1\/me$/, route => route.fulfill({ headers, json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: ['admin'] })], canUseShiftCalendar: allowed, employee: null } }));
-  const state = { saved: null as any, fail: false, saveFailure: 0, specialStates: false, partialWork: false, hold: null as Promise<void> | null, settled: false, unusual: false, abortPut: false, secondFlagged: false };
+  const state = { saved: null as any, fail: false, saveFailure: 0, specialStates: false, partialWork: false, hold: null as Promise<void> | null, settled: false, unusual: false, abortPut: false, abortGet: false, secondFlagged: false };
   await page.route(/\/api\/v1\/admin\/shifts\/calendar(?:\?|\/|$)/, async route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
     if (!allowed) return route.fulfill({ headers, status: 403, json: {} });
@@ -16,6 +16,8 @@ async function setup(page: Page, allowed = true) {
       if (state.abortPut) { state.abortPut = false; return route.abort('connectionclosed'); }
       return route.fulfill({ headers, json: { id: 'work' } });
     }
+    // A connection that drops before any reply: the load failed, nothing changed.
+    if (state.abortGet) return route.abort('connectionclosed');
     if (state.fail) return route.fulfill({ headers, status: 503, json: { detail: 'Calendar unavailable' } });
     const date = new URL(route.request().url()).searchParams.get('date') || '2026-10-30';
     if (state.hold && date === '2026-10-29') await state.hold;
@@ -266,6 +268,17 @@ test('unusual duration is flagged, explained in the correction, and clears after
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByText('Unusual time', { exact: true })).toHaveCount(0);
   expect(state.saved).toMatchObject({ actualStartLocal: '2026-10-30T10:15', reason: 'Confirmed long visit' });
+});
+
+test('a dropped load connection shows a plain reload message and Retry recovers', async ({ page }) => {
+  const state = await setup(page); state.abortGet = true;
+  await page.goto('/admin/shifts/calendar/');
+  const alert = page.getByRole('alert').filter({ hasText: 'The calendar could not be loaded' });
+  await expect(alert).toContainText('Reload the page to try again.');
+  await expect(page.getByText('The connection was lost before the server confirmed the request')).toHaveCount(0);
+  state.abortGet = false;
+  await alert.getByRole('button', { name: 'Retry' }).click();
+  await expect(page.getByRole('button', { name: 'Record work for Alice Cleaner' })).toBeVisible();
 });
 
 test('a lost save response explains that the save may have happened; reloading shows the recorded work', async ({ page }) => {
