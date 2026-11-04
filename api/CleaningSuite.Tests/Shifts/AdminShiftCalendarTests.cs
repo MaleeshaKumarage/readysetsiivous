@@ -124,7 +124,12 @@ public class AdminShiftCalendarTests
         var before = await VisitAsync(f);
         Assert.Equal("unusual-duration", before.GetProperty("assignees")[0].GetProperty("review").GetProperty("kind").GetString());
         Assert.Equal(f.Start.AddHours(5), form.EndedAtUtc);
-        form.WorkTimeCorrections.Add(new("admin-subject", DateTime.UtcNow, "Confirmed long visit", form.StartedAtUtc, form.EndedAtUtc, f.Start, f.Start.AddHours(5)));
+        // Record stores the previous times, then replaces the form times with the corrected ones.
+        var correctedStart = f.Start; var correctedEnd = f.Start.AddHours(2);
+        form.WorkTimeCorrections.Add(new("admin-subject", DateTime.UtcNow, "Confirmed long visit", form.StartedAtUtc, form.EndedAtUtc, correctedStart, correctedEnd));
+        form.StartedAtUtc = correctedStart; form.EndedAtUtc = correctedEnd;
+        var correction = Assert.Single(form.WorkTimeCorrections);
+        Assert.Equal(f.Start.AddHours(5), correction.PreviousEndUtc);
         var after = await VisitAsync(f);
         Assert.Equal(JsonValueKind.Null, after.GetProperty("assignees")[0].GetProperty("review").ValueKind);
         Assert.False(after.GetProperty("needsReview").GetBoolean());
@@ -153,6 +158,22 @@ public class AdminShiftCalendarTests
         f.Forms.Verify(r => r.CreateStartedFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Once);
         f.Forms.Verify(r => r.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);
         Assert.Single(stored!.WorkTimeCorrections);
+    }
+
+    [Fact]
+    public async Task Retry_on_an_existing_form_with_stale_version_conflicts_and_does_not_duplicate_the_correction()
+    {
+        var f = new Fixture(); var v1 = Guid.NewGuid();
+        var form = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Cleaner One", Guid.NewGuid(), "Checklist", f.Start, new() { "Floor" }, f.Start.AddHours(2));
+        form.Start(f.Start); form.Version = v1;
+        f.Forms.Setup(r => r.GetFormByShiftOccurrenceAsync(f.Shift.Id, f.Person.Id, f.Start, It.IsAny<CancellationToken>())).ReturnsAsync(form);
+        f.Forms.Setup(r => r.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()))
+            .Callback<QualityCycleForm, CancellationToken>((saved, _) => saved.Version = Guid.NewGuid()).Returns(Task.CompletedTask);
+        // First save bumps the version; its response is lost, so the retry still sends v1.
+        Assert.IsType<OkObjectResult>(await f.Controller.Record(f.Body(v1), default));
+        Assert.IsType<ConflictObjectResult>(await f.Controller.Record(f.Body(v1), default));
+        f.Forms.Verify(r => r.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Single(form.WorkTimeCorrections);
     }
 
     private static async Task<JsonElement> VisitAsync(Fixture f)
