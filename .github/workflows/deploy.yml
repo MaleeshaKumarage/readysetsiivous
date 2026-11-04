@@ -67,3 +67,6 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          # Default is 10 minutes. Pages can stay in updating_pages longer; a 10-minute cap cancels the deployment and keeps the old site.
+          timeout: 1800000
