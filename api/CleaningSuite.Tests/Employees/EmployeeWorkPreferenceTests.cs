@@ -7,10 +7,10 @@ public class EmployeeWorkPreferenceTests
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     [Fact]
-    public void New_and_historical_employee_documents_default_to_manual()
+    public void New_and_historical_employee_documents_default_to_automatic()
     {
-        Assert.False(new Employee().AutoAcceptWork);
-        Assert.False(JsonSerializer.Deserialize<Employee>("{}", Json)!.AutoAcceptWork);
+        Assert.True(new Employee().AutoAcceptWork);
+        Assert.True(JsonSerializer.Deserialize<Employee>("{}", Json)!.AutoAcceptWork);
     }
     [Theory]
     [InlineData("{}")]

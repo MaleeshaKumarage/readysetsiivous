@@ -69,7 +69,8 @@ public class AdminShiftCalendarTests
         Assert.Equal(f.Start, visit.GetProperty("startUtc").GetDateTime());
         var person = Assert.Single(visit.GetProperty("assignees").EnumerateArray());
         Assert.Equal(f.Person.Id, person.GetProperty("employeeId").GetGuid());
-        Assert.Equal(!partner, person.GetProperty("canRecord").GetBoolean());
+        // Partner visits are recorded and corrected like any other shift.
+        Assert.True(person.GetProperty("canRecord").GetBoolean());
     }
 
     private sealed class Lease : IAsyncDisposable { public ValueTask DisposeAsync() => ValueTask.CompletedTask; }
@@ -155,12 +156,10 @@ public class AdminShiftCalendarTests
     }
 
     [Fact]
-    public async Task Partner_visit_is_an_explicit_readonly_conflict()
+    public async Task Partner_visit_time_can_be_recorded_by_admin_like_any_other_shift()
     {
         var f = new Fixture(); f.Shift.PartnerRequestId = Guid.NewGuid();
-        Assert.IsType<ConflictObjectResult>(await f.Controller.Record(f.Body(), default));
-        f.Forms.Verify(r => r.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);
-        f.Forms.Verify(r => r.CreateStartedFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);
+        Assert.IsType<OkObjectResult>(await f.Controller.Record(f.Body(), default));
     }
 
     [Fact]

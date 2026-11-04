@@ -62,7 +62,7 @@ public class ShiftCalendarAdminController(IShiftRepository shifts, IEmployeeRepo
                         actualStartUtc = form?.StartedAtUtc, actualEndUtc = form?.EndedAtUtc,
                         hours = form?.StartedAtUtc is DateTime start && form.EndedAtUtc is DateTime end ? (double?)(end - start).TotalHours : null,
                         status = form?.IsSubmitted == true ? "Recorded" : form?.StartedAtUtc is not null ? "Started" : "Not started",
-                        version = form?.Version, canRecord = day < today && !visit.IsCancelled && !ambiguous && !shift.PartnerRequestId.HasValue && person?.IsActive == true && Employee.IsWorkRole(person.Role) };
+                        version = form?.Version, canRecord = day < today && !visit.IsCancelled && !ambiguous && person?.IsActive == true && Employee.IsWorkRole(person.Role) };
                 }).ToArray();
                 result.Add(new { shiftId = shift.Id, shiftName = shift.Name, companyName = companyNames[shift.CompanyId], branchName = branchNames[shift.BranchId],
                     occurrence.StartUtc, occurrence.EndUtc, occurrence.ExceptionId, cancelled = visit.IsCancelled, ambiguous, assignees });
@@ -104,8 +104,6 @@ public class ShiftCalendarAdminController(IShiftRepository shifts, IEmployeeRepo
         var shift = await shifts.GetAsync(body.ShiftId, ct);
         var employee = await employees.GetByIdAsync(body.EmployeeId, ct);
         if (shift?.IsActive != true || employee?.IsActive != true) return BadRequest(new { detail = "Choose an active shift and employee." });
-        if (shift.PartnerRequestId.HasValue)
-            return Conflict(new { detail = "Partner visits are read-only here. Manage their work through Partner requests." });
         if (!Employee.IsWorkRole(employee.Role)) return BadRequest(new { detail = "Choose an employee with a work role." });
         var visits = await shifts.ResolveRosterAsync(shift, TenantTimeZone.StartOfLocalDay(day, zone), TenantTimeZone.StartOfLocalDay(day.AddDays(1), zone), zone, ct, includeCancelled: true);
         var matching = visits.Where(v => v.Occurrence.StartUtc == scheduled).ToList();

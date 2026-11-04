@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace CleaningSuite.Api.Controllers;
 
-/// <summary>Typed work queue over public bookings and partner requests. Admin only until manager access is verified.</summary>
+/// <summary>Typed work queue over public bookings, partner requests and company shifts. Admin only until manager access is verified.</summary>
 [ApiController]
 [Route("api/v1/admin/work-queue")]
 [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
@@ -22,8 +22,8 @@ public class WorkQueueAdminController(IMediator mediator) : ControllerBase
         [FromQuery] int take = 25,
         CancellationToken ct = default)
     {
-        if (!WorkQueueViews.IsKnown(view)) return BadRequest("View must be needs-action, scheduled, in-progress or completed.");
-        if (source is not ("all" or "booking" or "partner")) return BadRequest("Source must be all, booking or partner.");
+        if (!WorkQueueViews.IsKnown(view)) return BadRequest("View must be needs-action, scheduled, in-progress, completed or cancelled.");
+        if (source is not ("all" or "booking" or "partner" or "shift")) return BadRequest("Source must be all, booking, partner or shift.");
         // Each source reads skip+take rows before merging, so bound skip to keep that window small and non-negative.
         skip = Math.Clamp(skip, 0, WorkQueueLimits.MaxSkip);
         take = Math.Clamp(take, 1, 100);

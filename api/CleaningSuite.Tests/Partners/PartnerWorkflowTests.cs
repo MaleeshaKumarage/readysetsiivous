@@ -203,6 +203,47 @@ public class PartnerWorkflowTests
     }
 
     [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Automatic_offer_without_a_time_is_a_flexible_visit_across_the_requested_window()
+    {
+        using var fixture = await Fixture.Create();
+        using (var session = fixture.Session()) await fixture.Service(session).SetWorkPreferences(fixture.Cleaner.Id, true, default);
+        PartnerRequestDto accepted;
+        using (var session = fixture.Session())
+        {
+            var service = fixture.Service(session);
+            var request = await service.Create(fixture.Partner.Id, new(Guid.NewGuid(), fixture.Branch.Id, Fixture.Day, Fixture.Day.AddDays(1)), default);
+            accepted = await service.Offer(fixture.Admin.Id, request.Id, new(request.Version, fixture.Cleaner.Id), default);
+        }
+        Assert.Equal("Accepted", accepted.Status);
+        Assert.Null(accepted.PlannedStartUtc);
+        Assert.Null(accepted.PlannedEndUtc);
+        using var reader = fixture.Store.QuerySession(fixture.Tenant);
+        var shift = await reader.LoadAsync<Shift>(accepted.LinkedShiftId!.Value);
+        Assert.Equal(Fixture.Day.ToDateTime(TimeOnly.MinValue), shift!.ValidFrom);
+        Assert.Equal(Fixture.Day.AddDays(1).ToDateTime(TimeOnly.MinValue), shift.ValidUntil);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Manual_offer_accepted_without_a_time_becomes_a_flexible_visit()
+    {
+        using var fixture = await Fixture.Create(); PartnerRequestDto offer;
+        using (var session = fixture.Session())
+        {
+            var service = fixture.Service(session);
+            var request = await service.Create(fixture.Partner.Id, new(Guid.NewGuid(), fixture.Branch.Id, Fixture.Day, Fixture.Day.AddDays(1)), default);
+            offer = await service.Offer(fixture.Admin.Id, request.Id, new(request.Version, fixture.Cleaner.Id), default);
+        }
+        PartnerRequestDto accepted;
+        using (var session = fixture.Session())
+            accepted = await fixture.Service(session).Accept(fixture.Cleaner.Id, offer.OfferId!.Value, new(offer.Version, null), default);
+        Assert.Equal("Accepted", accepted.Status);
+        Assert.Null(accepted.PlannedStartUtc);
+    }
+
+    [Fact]
+    public void New_employees_default_to_automatic_work_acceptance() => Assert.True(new Employee().AutoAcceptWork);
+
+    [QualityCycle.QualityCycleDatabaseFact]
     public async Task Accept_versus_cancel_cannot_leave_a_cancelled_request_with_a_live_shift()
     {
         using var fixture = await Fixture.Create(); var offer = await fixture.SubmitOffer();
@@ -257,16 +298,10 @@ public class PartnerWorkflowTests
     }
 
     [QualityCycle.QualityCycleDatabaseFact]
-    public async Task Automatic_offer_requires_exact_time_and_overlap_failure_commits_nothing()
+    public async Task Automatic_offer_overlap_failure_commits_nothing()
     {
         using var fixture = await Fixture.Create();
         using (var session = fixture.Session()) await fixture.Service(session).SetWorkPreferences(fixture.Cleaner.Id, true, default);
-        using (var session = fixture.Session())
-        {
-            var service = fixture.Service(session);
-            var request = await service.Create(fixture.Partner.Id, new(Guid.NewGuid(), fixture.Branch.Id, Fixture.Day, Fixture.Day), default);
-            await Assert.ThrowsAsync<ShiftConflictException>(() => service.Offer(fixture.Admin.Id, request.Id, new(request.Version, fixture.Cleaner.Id), default));
-        }
         var first = await fixture.SubmitOffer();
         await Assert.ThrowsAsync<ShiftConflictException>(() => fixture.SubmitOffer());
         using var reader = fixture.Store.QuerySession(fixture.Tenant);
@@ -409,8 +444,8 @@ public class PartnerWorkflowTests
         public Company Company { get; } = Company.Create(Guid.NewGuid().ToString(), "Owner company");
         public Branch Branch { get; private set; } = null!;
         public Employee Partner { get; private set; } = null!;
-        public Employee Admin { get; } = new() { Role = Employee.RoleAdmin, KeycloakUserId = "synthetic-admin" };
-        public Employee Cleaner { get; } = new() { Role = Employee.RoleEmployee, KeycloakUserId = "synthetic-cleaner", FirstName = "Cleaner", LastName = "Test" };
+        public Employee Admin { get; } = new() { Role = Employee.RoleAdmin, KeycloakUserId = "synthetic-admin", AutoAcceptWork = false };
+        public Employee Cleaner { get; } = new() { Role = Employee.RoleEmployee, KeycloakUserId = "synthetic-cleaner", FirstName = "Cleaner", LastName = "Test", AutoAcceptWork = false };
         private Fixture(ServiceProvider provider) { this.provider = provider; Store = provider.GetRequiredService<IDocumentStore>(); }
         public static async Task<Fixture> Create()
         {

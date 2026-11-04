@@ -12,7 +12,7 @@ function booking(overrides: Record<string, unknown> = {}) {
   };
 }
 
-type QueueItem = { source: 'booking' | 'partner'; id: string; reference: string; customerName: string; scheduledLocal: string; status: string; stateLabel: string; assigneeName: string | null; href: string };
+type QueueItem = { source: 'booking' | 'partner' | 'shift'; id: string; reference: string; customerName: string; scheduledLocal: string; status: string; stateLabel: string; assigneeName: string | null; href: string };
 const bookingItem: QueueItem = { source: 'booking', id: 'booking-1', reference: 'BK-1001', customerName: 'Anna Virtanen', scheduledLocal: '2026-11-10 09:00', status: 'New', stateLabel: 'New booking', assigneeName: null, href: '/admin/work-queue/?booking=booking-1' };
 
 async function setup(page: Page) {
@@ -22,7 +22,7 @@ async function setup(page: Page) {
     queries: [] as URLSearchParams[],
     actions: [] as string[],
     listFails: false,
-    counts: { 'needs-action': 1, scheduled: 0, 'in-progress': 0, completed: 0 },
+    counts: { 'needs-action': 1, scheduled: 0, 'in-progress': 0, completed: 0, cancelled: 0 },
     // Items per view; the mock pages them with skip/take like the server.
     items: { 'needs-action': [bookingItem] } as Record<string, QueueItem[]>,
   };
@@ -111,7 +111,7 @@ test('booking drawer cancels a new booking after the confirmation dialog', async
 test('booking drawer marks a confirmed booking completed', async ({ page }) => {
   const state = await setup(page);
   state.bookings['booking-1'] = booking({ status: 'Confirmed' });
-  state.counts = { 'needs-action': 0, scheduled: 1, 'in-progress': 0, completed: 0 };
+  state.counts = { 'needs-action': 0, scheduled: 1, 'in-progress': 0, completed: 0, cancelled: 0 };
   state.items = { scheduled: [{ ...bookingItem, status: 'Confirmed', stateLabel: 'Confirmed' }] };
   await page.goto('/admin/work-queue/?view=scheduled');
   await page.getByRole('button', { name: 'Open booking BK-1001' }).click();
@@ -125,7 +125,7 @@ test('booking drawer marks a confirmed booking completed', async ({ page }) => {
 
 test('Scheduled and In progress tabs request their view from the server', async ({ page }) => {
   const state = await setup(page);
-  state.counts = { 'needs-action': 1, scheduled: 3, 'in-progress': 2, completed: 0 };
+  state.counts = { 'needs-action': 1, scheduled: 3, 'in-progress': 2, completed: 0, cancelled: 0 };
   await page.goto('/admin/work-queue/');
   await page.getByRole('tab', { name: 'Scheduled (3)' }).click();
   await expect.poll(() => state.queries.at(-1)?.get('view')).toBe('scheduled');
@@ -139,7 +139,7 @@ test('Scheduled and In progress tabs request their view from the server', async 
 
 test('Next and Previous move between pages and re-fetch with the page offset', async ({ page }) => {
   const state = await setup(page);
-  state.counts = { 'needs-action': 30, scheduled: 0, 'in-progress': 0, completed: 0 };
+  state.counts = { 'needs-action': 30, scheduled: 0, 'in-progress': 0, completed: 0, cancelled: 0 };
   state.items = { 'needs-action': Array.from({ length: 30 }, (_, index) => ({ ...bookingItem, id: `booking-${index + 1}`, reference: `BK-${2001 + index}`, customerName: `Customer ${index + 1}` })) };
   await page.goto('/admin/work-queue/');
   await expect(page.getByText('Showing 1–25 of 30')).toBeVisible();
@@ -195,3 +195,37 @@ test('Public bookings source sends source=booking and All sources sends source=a
   await page.getByRole('option', { name: 'All sources' }).click();
   await expect.poll(() => state.queries.at(-1)?.get('source')).toBe('all');
 });
+
+test('cancelled bookings have their own tab and never appear under Completed', async ({ page }) => {
+  const state = await setup(page);
+  const cancelled: QueueItem = { ...bookingItem, id: 'booking-9', reference: 'BK-9009', customerName: 'Cancelled Customer', status: 'Cancelled', stateLabel: 'Cancelled', href: '/admin/work-queue/?booking=booking-9' };
+  state.counts = { ...state.counts, completed: 1, cancelled: 1 };
+  state.items = { ...state.items, completed: [{ ...bookingItem, id: 'booking-7', reference: 'BK-7007', customerName: 'Done Customer', status: 'Completed', stateLabel: 'Completed' }], cancelled: [cancelled] };
+  await page.goto('/admin/work-queue/');
+  await page.getByRole('tab', { name: /^Completed/ }).click();
+  await expect(page.getByText('Done Customer', { exact: true })).toBeVisible();
+  await expect(page.getByText('Cancelled Customer', { exact: true })).toHaveCount(0);
+  await page.getByRole('tab', { name: /^Cancelled/ }).click();
+  await expect(page.getByText('Cancelled Customer', { exact: true })).toBeVisible();
+  await expect(page.getByText('Done Customer', { exact: true })).toHaveCount(0);
+  expect(state.queries.at(-1)?.get('view')).toBe('cancelled');
+});
+
+test('company shifts show in the same queue with their own source filter, including future and completed visits', async ({ page }) => {
+  const state = await setup(page);
+  const shiftItem: QueueItem = { source: 'shift', id: 'occurrence-1', reference: 'Weekly office clean', customerName: 'Owner company', scheduledLocal: '2026-11-12 10:00', status: 'scheduled', stateLabel: 'Scheduled', assigneeName: null, href: '/admin/shifts/calendar/' };
+  const doneShift: QueueItem = { ...shiftItem, id: 'occurrence-2', scheduledLocal: '2026-10-20 10:00', status: 'completed', stateLabel: 'Completed' };
+  state.counts = { 'needs-action': 1, scheduled: 1, 'in-progress': 0, completed: 1, cancelled: 0 };
+  state.items = { ...state.items, scheduled: [shiftItem], completed: [doneShift] };
+  await page.goto('/admin/work-queue/');
+  await page.getByRole('tab', { name: /^Scheduled/ }).click();
+  await expect(page.getByText(/Weekly office clean/)).toBeVisible();
+  await expect(page.getByText(/Company shift/).first()).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open company shift Weekly office clean', exact: true })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Source' }).click();
+  await page.getByRole('option', { name: 'Company shifts' }).click();
+  await expect.poll(() => state.queries.at(-1)?.get('source')).toBe('shift');
+  await page.getByRole('tab', { name: /^Completed/ }).click();
+  await expect(page.getByText(/Weekly office clean/)).toBeVisible();
+});
+

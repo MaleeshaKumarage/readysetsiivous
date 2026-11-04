@@ -34,7 +34,7 @@ export default function PartnerPage() {
   const [identity, setIdentity] = useState<PartnerIdentity | null>(null), [branches, setBranches] = useState<Branch[]>([]), [requests, setRequests] = useState<CleaningRequest[]>([]), [shifts, setShifts] = useState<PartnerShift[]>([]);
   const [changes, setChanges] = useState<PartnerChange[]>([]);
   const [access, setAccess] = useState('pending'), [error, setError] = useState(''), [busy, setBusy] = useState(false), [notice, setNotice] = useState('');
-  const [requestView, setRequestView] = useState<'active' | 'completed'>('active'), [requestPage, setRequestPage] = useState(1);
+  const [requestView, setRequestView] = useState<'active' | 'completed' | 'cancelled'>('active'), [requestPage, setRequestPage] = useState(1);
   const [tab, setTab] = useState<Section>('Properties'), [adding, setAdding] = useState(false), [target, setTarget] = useState<Branch | null>(null), [editing, setEditing] = useState<CleaningRequest | null>(null);
   const [from, setFrom] = useState(''), [to, setTo] = useState(''), [exact, setExact] = useState(false), [time, setTime] = useState(''), [notes, setNotes] = useState('');
   const [change, setChange] = useState<{ kind: 'branch' | 'request'; id: string } | null>(null), [message, setMessage] = useState('');
@@ -111,8 +111,9 @@ export default function PartnerPage() {
   const counts = [branches.length, requests.length, shifts.length, changes.length];
   // Finished and cancelled requests move out of the active list. Both lists page 25 at a time.
   const activeRequests = requests.filter(request => !['Completed', 'Cancelled'].includes(request.status));
-  const completedRequests = requests.filter(request => ['Completed', 'Cancelled'].includes(request.status));
-  const requestList = requestView === 'active' ? activeRequests : completedRequests;
+  const completedRequests = requests.filter(request => request.status === 'Completed');
+  const cancelledRequests = requests.filter(request => request.status === 'Cancelled');
+  const requestList = requestView === 'active' ? activeRequests : requestView === 'completed' ? completedRequests : cancelledRequests;
   const requestPageCount = Math.max(1, Math.ceil(requestList.length / 25));
   const currentRequestPage = Math.min(requestPage, requestPageCount);
   const pagedRequests = requestList.slice((currentRequestPage - 1) * 25, currentRequestPage * 25);
@@ -165,7 +166,7 @@ export default function PartnerPage() {
           </section>}
           {tab === 'Cleaning requests' && <section className="partner-section">
             <div className="partner-section-heading"><div><h2>{t.requests}</h2><p>{t.requestsHint}</p></div></div>
-            <div className="partner-form-actions" role="tablist" aria-label={t.requests}><Button role="tab" aria-selected={requestView === 'active'} variant={requestView === 'active' ? 'primary' : 'outline'} className={requestView === 'active' ? '' : 'partner-secondary'} onClick={() => { setRequestView('active'); setRequestPage(1); }}>{t.activeRequests} ({activeRequests.length})</Button><Button role="tab" aria-selected={requestView === 'completed'} variant={requestView === 'completed' ? 'primary' : 'outline'} className={requestView === 'completed' ? '' : 'partner-secondary'} onClick={() => { setRequestView('completed'); setRequestPage(1); }}>{t.completedRequests} ({completedRequests.length})</Button></div>
+            <div className="partner-form-actions" role="tablist" aria-label={t.requests}><Button role="tab" aria-selected={requestView === 'active'} variant={requestView === 'active' ? 'primary' : 'outline'} className={requestView === 'active' ? '' : 'partner-secondary'} onClick={() => { setRequestView('active'); setRequestPage(1); }}>{t.activeRequests} ({activeRequests.length})</Button><Button role="tab" aria-selected={requestView === 'completed'} variant={requestView === 'completed' ? 'primary' : 'outline'} className={requestView === 'completed' ? '' : 'partner-secondary'} onClick={() => { setRequestView('completed'); setRequestPage(1); }}>{t.completedRequests} ({completedRequests.length})</Button><Button role="tab" aria-selected={requestView === 'cancelled'} variant={requestView === 'cancelled' ? 'primary' : 'outline'} className={requestView === 'cancelled' ? '' : 'partner-secondary'} onClick={() => { setRequestView('cancelled'); setRequestPage(1); }}>{t.cancelledRequests} ({cancelledRequests.length})</Button></div>
             {!requestList.length && <Card className="partner-surface partner-empty">{t.noRequests}</Card>}
             <div className="partner-grid">{pagedRequests.map(request => <article key={request.id} aria-label={request.branchName + ' ' + request.fromDate}>
               <Card className="partner-surface partner-request">
@@ -174,7 +175,7 @@ export default function PartnerPage() {
                 </div>
                 <p>{date(request.fromDate)} – {date(request.toDate)}{request.exactStartLocalTime && ' ' + t.at + ' ' + request.exactStartLocalTime.slice(0, 5)}</p>
                 <p className="partner-price">{t.agreedPrice} <strong>{money(request.priceNet)}</strong> {t.exclVat} ({t.vat} {number(request.vatRatePercent)}%)</p>
-                <div className="partner-request-details"><p>{t.cleaner}: {request.acceptedCleanerName ?? t.awaitingAcceptance}</p><p>{t.planned}: {stamp(request.plannedStartUtc)} – {stamp(request.plannedEndUtc)}</p><p>{t.actualStart}: {stamp(request.actualStartUtc)} · {t.actualEnd}: {stamp(request.actualEndUtc)}</p></div>
+                <div className="partner-request-details"><p>{t.cleaner}: {request.acceptedCleanerName ?? t.awaitingAcceptance}</p><p>{t.planned}: {request.plannedStartUtc ? <>{stamp(request.plannedStartUtc)} – {stamp(request.plannedEndUtc)}</> : request.firstAcceptedAtUtc || request.status === 'Accepted' ? t.flexible : t.notRecorded}</p><p>{t.actualStart}: {stamp(request.actualStartUtc)} · {t.actualEnd}: {stamp(request.actualEndUtc)}</p></div>
                 {request.notes && <p className="partner-entered">{request.notes}</p>}
                 <div className="partner-card-actions">{request.status === 'Completed' ? null : !request.firstAcceptedAtUtc && request.status !== 'Cancelled' ? <>
                   <Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => { const branch = branches.find(item => item.id === request.branchId); if (branch) openRequest(branch, request); }}>{t.editRequest}</Button>
@@ -182,7 +183,7 @@ export default function PartnerPage() {
                 </> : request.status !== 'Cancelled' && <Button variant="outline" className="partner-secondary" onClick={() => { setChange({ kind: 'request', id: request.id }); setMessage(''); }}>{t.changeOrCancel}</Button>}</div>
               </Card>
             </article>)}</div>
-            <div className="partner-form-actions" role="navigation" aria-label={requestView === 'active' ? t.activeRequests : t.completedRequests}>{requestList.length > 25 && <><Button variant="outline" className="partner-secondary" disabled={currentRequestPage <= 1} onClick={() => setRequestPage(currentRequestPage - 1)}>{t.previousPage}</Button><span className="partner-muted">{currentRequestPage} / {requestPageCount}</span><Button variant="outline" className="partner-secondary" disabled={currentRequestPage >= requestPageCount} onClick={() => setRequestPage(currentRequestPage + 1)}>{t.nextPage}</Button></>}</div>
+            <div className="partner-form-actions" role="navigation" aria-label={requestView === 'active' ? t.activeRequests : requestView === 'completed' ? t.completedRequests : t.cancelledRequests}>{requestList.length > 25 && <><Button variant="outline" className="partner-secondary" disabled={currentRequestPage <= 1} onClick={() => setRequestPage(currentRequestPage - 1)}>{t.previousPage}</Button><span className="partner-muted">{currentRequestPage} / {requestPageCount}</span><Button variant="outline" className="partner-secondary" disabled={currentRequestPage >= requestPageCount} onClick={() => setRequestPage(currentRequestPage + 1)}>{t.nextPage}</Button></>}</div>
           </section>}
           {tab === 'Change requests' && <section aria-label={t.history} className="partner-section">
             <div className="partner-section-heading"><div><h2>{t.changes}</h2><p>{t.changesHint}</p></div></div>

@@ -75,7 +75,7 @@ public static class AdminResponses
         e.Email, e.FirstName, e.LastName, e.Phone, e.Role, e.IsActive, e.ColorHex, e.Skills.ToArray(),
         e.ServiceAreas.ToArray(), e.PayRate, e.Certifications.Select(c => new CertificationAdminResponse(c.Name, c.ExpiresAtUtc)).ToArray(),
         e.Notes, Hours(e.DefaultHours), e.KeycloakUserId, e.InvitedAtUtc, e.InviteLastAttemptUtc,
-        e.InviteLastSentUtc, e.InviteError, e.IdentitySyncPending, e.PartnerCompanyId) { ShiftCalendarEnabled = e.CanUseShiftCalendar, AutoAcceptWork = e.AutoAcceptWork };
+        e.InviteLastSentUtc, e.InviteError, e.IdentitySyncPending, e.PartnerCompanyId) { ShiftCalendarEnabled = e.CanUseShiftCalendar, AutoAcceptWork = e.AutoAcceptWork && !string.IsNullOrWhiteSpace(e.KeycloakUserId) };
     public static BookingAdminResponse Booking(Booking b) => new(b.Id, b.CreatedUtc, b.UpdatedUtc,
         b.BookingNumber, Customer(b.Customer), Address(b.CleaningAddress), b.ServiceId,
         new(b.Service.NameFi, b.Service.NameEn, b.Service.NameSv, b.Service.DurationMinutes, b.Service.PriceNet, b.Service.VatRatePercent),
