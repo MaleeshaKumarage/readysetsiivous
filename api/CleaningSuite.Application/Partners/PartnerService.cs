@@ -95,6 +95,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
             .AnyAsync(x => x.Status == "Offered" && x.OfferedEmployeeId == actor, ct))
             throw new ShiftConflictException("Accept or decline your pending offers before enabling automatic acceptance.");
         employee.AutoAcceptWork = autoAcceptWork;
+        employee.AutoAcceptWorkChosenUtc = DateTime.UtcNow;
         Db.Store(employee); await Db.SaveChangesAsync(ct);
         return new(employee.AutoAcceptWork);
     }
