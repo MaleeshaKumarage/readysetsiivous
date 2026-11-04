@@ -14,10 +14,10 @@ Each tenant gets a `DataCorrectionRecord` marker when applied, so a later deploy
 
 ## Mode
 
-`SHIFT_VALIDITY_CORRECTION_MODE` in the deployment environment (compose default `Apply`):
+`SHIFT_VALIDITY_CORRECTION_MODE` in the deployment environment (compose default `Report`, so nothing is deleted until Apply is chosen):
 
 - `Report`: logs every planned change and writes nothing. Use this to preview on a deployment first.
-- `Apply`: removes the planned records and writes the marker.
+- `Apply`: removes the planned records and writes the marker. Shifts with an issued or paid invoice are never removed, only reported.
 - `Off`: does nothing. Local runs and test hosts use this when the setting is absent.
 
 Logs use the `Shift validity` message prefix, with one line per finding and a summary per tenant.

@@ -1,3 +1,4 @@
+using CleaningSuite.Domain.Invoicing;
 using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Shifts;
 
@@ -24,7 +25,8 @@ public static class ShiftValidityCorrection
         IEnumerable<ShiftOccurrenceAssignment> overrides,
         IEnumerable<ShiftOccurrenceException> exceptions,
         IEnumerable<QualityCycleForm> forms,
-        TimeZoneInfo zone)
+        TimeZoneInfo zone,
+        IEnumerable<Invoice>? invoices = null)
     {
         var endByShift = shifts.Where(shift => shift.ValidUntil.HasValue)
             .ToDictionary(shift => shift.Id, shift => DateOnly.FromDateTime(shift.ValidUntil!.Value.Date));
@@ -79,6 +81,12 @@ public static class ShiftValidityCorrection
             }
         }
 
-        return findings;
+        // A shift that an issued or paid invoice has billed keeps every stored record, so the invoice can be explained later.
+        var billedShifts = (invoices ?? [])
+            .Where(invoice => invoice.Status is Invoice.StatusIssued or Invoice.StatusPaid)
+            .SelectMany(invoice => invoice.Lines).Select(line => line.ShiftId).Where(id => id.HasValue).Select(id => id!.Value).ToHashSet();
+        return findings.Select(finding => finding.Action == ShiftValidityFindingAction.Remove && billedShifts.Contains(finding.ShiftId)
+            ? finding with { Action = ShiftValidityFindingAction.Report, Reason = "Shift has an issued or paid invoice; kept for review." }
+            : finding).ToList();
     }
 }

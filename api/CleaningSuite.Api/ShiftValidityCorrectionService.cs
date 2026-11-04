@@ -6,7 +6,7 @@ namespace CleaningSuite.Api;
 /// <summary>
 /// Runs the one-time shift validity correction when the API starts, so each deployment corrects older data once per tenant.
 /// Mode comes from DataCorrections:ShiftValidityWindow:Mode. Deployments set Apply through their compose file; when the
-/// setting is absent (local runs and test hosts) nothing runs. Failures are logged and retried on the next start.
+/// setting is absent (local runs and test hosts) nothing runs. Deployments default to Report; Apply must be chosen explicitly. Failures are logged and retried on the next start.
 /// </summary>
 public sealed class ShiftValidityCorrectionService(IServiceScopeFactory scopes, IConfiguration configuration,
     ILogger<ShiftValidityCorrectionService> logger) : BackgroundService

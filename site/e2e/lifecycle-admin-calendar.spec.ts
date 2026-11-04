@@ -349,7 +349,13 @@ test('a partner-accepted visit on the admin calendar can be recorded and its sav
   await expect(page.getByRole('heading', { name: 'Cleaning — Lake apartment' })).toBeVisible();
   const record = page.getByRole('button', { name: 'Record work for Partner Cleaner' });
   await expect(record).toBeEnabled();
-  await record.click();
+  // Keyboard: Enter opens the dialog, Escape closes it and returns focus to the Record button, Enter reopens it.
+  await record.focus(); await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog', { name: 'Record work', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Record work', exact: true })).toHaveCount(0);
+  await expect(record).toBeFocused();
+  await page.keyboard.press('Enter');
   await page.getByLabel('Actual start').fill('2026-10-30T10:15');
   await page.getByLabel('Actual end').fill('2026-10-30T12:15');
   await page.getByRole('textbox', { name: 'Reason', exact: true }).fill('Timesheet received');

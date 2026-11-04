@@ -91,4 +91,24 @@ public class ShiftValidityCorrectionTests
         var plan = ShiftValidityCorrection.Plan([shift], [Override(shift.Id, new DateTime(2027, 1, 4, 6, 0, 0, DateTimeKind.Utc))], [], [], Utc);
         Assert.Empty(plan);
     }
+
+    [Fact]
+    public void A_shift_billed_by_an_issued_invoice_keeps_its_records_and_is_only_reported()
+    {
+        var shift = Monthly();
+        var nov16 = new DateTime(2026, 11, 16, 6, 0, 0, DateTimeKind.Utc);
+        var invoice = new CleaningSuite.Domain.Invoicing.Invoice { Status = CleaningSuite.Domain.Invoicing.Invoice.StatusIssued, Lines = [new() { ShiftId = shift.Id }] };
+        var plan = ShiftValidityCorrection.Plan([shift], [Override(shift.Id, nov16)], [Cancelled(shift.Id, nov16)], [], Utc, [invoice]);
+        Assert.DoesNotContain(plan, x => x.Action == ShiftValidityFindingAction.Remove);
+        Assert.Equal(2, plan.Count(x => x.Reason.Contains("issued or paid invoice")));
+    }
+
+    [Fact]
+    public void A_draft_invoice_does_not_protect_a_shift()
+    {
+        var shift = Monthly();
+        var draft = new CleaningSuite.Domain.Invoicing.Invoice { Status = "Draft", Lines = [new() { ShiftId = shift.Id }] };
+        var plan = ShiftValidityCorrection.Plan([shift], [Override(shift.Id, new DateTime(2026, 11, 2, 6, 0, 0, DateTimeKind.Utc))], [], [], Utc, [draft]);
+        Assert.Single(plan, x => x.Action == ShiftValidityFindingAction.Remove);
+    }
 }

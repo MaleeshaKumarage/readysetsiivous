@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using CleaningSuite.Application.Shifts;
 using CleaningSuite.Application.Tenants;
+using CleaningSuite.Domain.Invoicing;
 using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Shifts;
 using CleaningSuite.Domain.Tenants;
@@ -36,7 +37,8 @@ public sealed class ShiftValidityCorrectionRunner(IDocumentStore store, ITenantR
             var overrides = ids.Length == 0 ? [] : await session.Query<ShiftOccurrenceAssignment>().Where(x => ids.Contains(x.ShiftId)).ToListAsync(ct);
             var exceptions = ids.Length == 0 ? [] : await session.Query<ShiftOccurrenceException>().Where(x => ids.Contains(x.ShiftId)).ToListAsync(ct);
             var forms = ids.Length == 0 ? [] : await session.Query<QualityCycleForm>().Where(x => ids.Contains(x.ShiftId)).ToListAsync(ct);
-            var findings = ShiftValidityCorrection.Plan(shifts, overrides, exceptions, forms, zone);
+            var invoices = await session.Query<Invoice>().Where(x => x.Status == Invoice.StatusIssued || x.Status == Invoice.StatusPaid).ToListAsync(ct);
+            var findings = ShiftValidityCorrection.Plan(shifts, overrides, exceptions, forms, zone, invoices);
             var removals = findings.Where(x => x.Action == ShiftValidityFindingAction.Remove).ToArray();
             var reported = findings.Count - removals.Length;
             foreach (var finding in findings)

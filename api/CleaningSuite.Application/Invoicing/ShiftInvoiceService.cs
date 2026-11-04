@@ -168,8 +168,11 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             }
             var calculationFrom = request.PartnerMonth ? DateOnly.FromDateTime(TenantTimeZone.LocalDate(visits.Min(v => v.StartUtc), zone)) : request.From;
             var calculationTo = request.PartnerMonth ? DateOnly.FromDateTime(TenantTimeZone.LocalDate(visits.Max(v => v.StartUtc), zone)) : request.To;
+            // Monthly prices are charged over the requested month, not over the span of completed visits, so a full
+            // month is never prorated as if it were partial. Visit dates still come from the visits themselves.
+            var billingPeriod = request.PartnerMonth ? (request.From, request.To) : (ValueTuple<DateOnly, DateOnly>?)null;
             var calculated = ShiftInvoiceCalculator.Calculate(schedule, pricing, visits, calculationFrom, calculationTo, zone, names, adjustments,
-                request.PartnerMonth ? completionTimes : null);
+                request.PartnerMonth ? completionTimes : null, billingPeriod);
             if (partnerRequest is not null)
             {
                 foreach (var line in calculated)

@@ -122,9 +122,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
     {
         await using var lease = await reservation.AcquireAsync(ct);
         var (_, company) = await Partner(actor, ct);
-        ValidateText(body.Name, 200, "Property name");
-        if (body.ContactEmail?.Length > 254 || body.ContactEmail is { Length: > 0 } && !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(body.ContactEmail))
-            throw new ValidationException("Enter a valid property contact email.");
+        ValidateBranchDetails(body);
         var branch = Domain.Companies.Branch.Create(company.Id, body.Name, body.Street, body.PostalCode,
             body.City, body.Country, body.ContactPhone);
         try { branch.SetPropertyCounts(body.RoomCount, body.BedCount); }
@@ -142,9 +140,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         await using var lease = await reservation.AcquireAsync(ct);
         var (_, company) = await Partner(actor, ct);
         var branch = await Branch(id, company.Id, ct);
-        ValidateText(body.Name, 200, "Property name");
-        if (body.ContactEmail?.Length > 254 || body.ContactEmail is { Length: > 0 } && !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(body.ContactEmail))
-            throw new ValidationException("Enter a valid property contact email.");
+        ValidateBranchDetails(body);
         try { branch.SetPropertyCounts(body.RoomCount, body.BedCount); }
         catch (ArgumentException ex) { throw new ValidationException(ex.Message); }
         branch.Update(body.Name, body.Street, body.PostalCode, body.City, body.Country, body.ContactPhone, branch.IsActive);
@@ -605,6 +601,13 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
 
     private static PartnerChangeDto MapChange(PartnerChangeRequest x) => new(x.Id, x.CompanyId, x.BranchId,
         x.RequestId, x.Kind, x.Message, x.CreatedUtc, x.ResolvedUtc, x.Resolution);
+    // Shared by owner property creation and owner property edits, so both accept exactly the same details.
+    private static void ValidateBranchDetails(CreatePartnerBranch body)
+    {
+        ValidateText(body.Name, 200, "Property name");
+        if (body.ContactEmail?.Length > 254 || body.ContactEmail is { Length: > 0 } && !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(body.ContactEmail))
+            throw new ValidationException("Enter a valid property contact email.");
+    }
     private static void ValidateText(string? value, int max, string name)
     { if (string.IsNullOrWhiteSpace(value) || value.Length > max) throw new ValidationException($"{name} is required and must be at most {max} characters."); }
     private static void CheckVersion(PartnerCleaningRequest request, int version)
