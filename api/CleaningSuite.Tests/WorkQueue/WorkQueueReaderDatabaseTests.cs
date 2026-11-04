@@ -128,7 +128,7 @@ public class WorkQueueReaderDatabaseTests
         var today = DateTime.UtcNow.Date;
         var shift = new Shift { Id = Guid.NewGuid(), CompanyId = company.Id, BranchId = Guid.NewGuid(), Name = "Weekly clean", IsActive = true,
             ValidFrom = today.AddDays(-1), ValidUntil = today.AddDays(30), CreatedUtc = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc),
-            Schedule = new ShiftSchedule { Type = ShiftScheduleType.OnCallFlexible } };
+            Schedule = new ShiftSchedule { Type = ShiftScheduleType.DailySameTime, DailyStart = TimeSpan.FromHours(8), DailyEnd = TimeSpan.FromHours(10) } };
         using (var db = f.Store.LightweightSession(f.Tenant))
         {
             db.Store(company);
@@ -142,7 +142,8 @@ public class WorkQueueReaderDatabaseTests
         using var session = f.Session();
         var reader = Reader(f, session);
         var page = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.NeedsAction, "shift", null, 0, 25));
-        Assert.True(page.Counts.ContainsKey(WorkQueueViews.Completed));
+        // Guards against a vacuous pass: the shift must resolve to at least one occurrence and reach classification.
+        Assert.True(page.Counts.Values.Sum() > 0, "No shift occurrence classified; shift path not exercised.");
     }
 
     private sealed class Fixture : IDisposable
