@@ -18,11 +18,11 @@
 
 Tell admins before the release:
 
-> Partner cleaning work is now accepted automatically by default for employees who have
-> not chosen a setting themselves. Employees can switch it off in their profile. Employees
-> who already chose a setting keep it.
+> Partner cleaning work is now accepted automatically for every employee. This includes
+> employees who had switched it off: their earlier choice has been reset. Employees can
+> switch it off again in their profile.
 
 ## Note
 
-Employees who had automatic acceptance switched off will have it switched on by the apply step.
+Every existing work employee is switched on by the apply step, including those who had switched it off.
 Tell them before the release, so they can switch it off again if they need to.

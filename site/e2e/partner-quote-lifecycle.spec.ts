@@ -222,3 +222,13 @@ test('staff reject from the keyboard: reason, Tab to confirm, Escape keeps the q
   await expect(page.getByText('Quote rejected.', { exact: true })).toBeVisible();
   expect(state.writes).toContainEqual(expect.objectContaining({ body: { reason: 'Outside the service area' } }));
 });
+
+test('the pending partner actions badge counts only partner-enabled Requested requests', async ({ page }) => {
+  const requested = (id: string, companyId: string) => ({ id, companyId, branchId: 'b-' + id, branchName: 'Flat ' + id, fromDate: '2026-12-01', toDate: '2026-12-01', status: 'Requested', firstAcceptedAtUtc: null, linkedShiftId: null, plannedStartUtc: null, plannedEndUtc: null, acceptedCleanerName: null, offeredEmployeeId: null, version: 1, notes: null, priceNet: 70, vatRatePercent: 25.5, estimatedDurationMinutes: 120 });
+  // One enabled quote and one enabled Requested request count; the disabled company's quote and request do not.
+  await staff(page, [enabledStaffQuote, disabledStaffQuote], [requested('on-request', ownerCompanyId), requested('off-request', otherCompanyId)]);
+  await page.goto('/admin/companies/');
+  await expect(page.getByLabel('2 pending partner actions')).toHaveCount(1);
+  await expect(page.getByLabel('3 pending partner actions')).toHaveCount(0);
+});
+
