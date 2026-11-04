@@ -12,6 +12,12 @@ async function mockCompanies(page: Page, options: { list?: typeof companies; fai
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
     const url = new URL(route.request().url());
     if (options.failAll?.value) return route.fulfill({ status: 503, headers, json: {} });
+    if (route.request().method() === 'POST') {
+      const body = route.request().postDataJSON();
+      const created = { id: `created-${list.length}`, name: body.name, businessId: body.businessId, contactName: null, isActive: true };
+      list.unshift(created); // the mock does not sort; a new name sorts first among these fixtures
+      return route.fulfill({ status: 201, headers, json: created });
+    }
     if (url.pathname.endsWith('/summary')) {
       if (options.failSummary) return route.fulfill({ status: 503, headers, json: {} });
       return route.fulfill({ headers, json: { all: list.length, active: list.filter(c => c.isActive).length, inactive: list.filter(c => !c.isActive).length } });
@@ -117,6 +123,22 @@ test('list failure shows a retryable error and refresh loads the current page', 
   failure.value = false;
   await page.getByRole('button', { name: 'Refresh companies' }).click();
   await expect(page.getByRole('cell', { name: 'Company 0', exact: true })).toBeVisible();
+});
+
+test('creating a company from a later page returns to the Active tab, page one, and shows it', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const list = [...companies];
+  await mockCompanies(page, { list });
+  await page.goto('/admin/companies/?status=inactive&page=1&size=25');
+  await page.getByRole('button', { name: 'Add company', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add company', exact: true });
+  await dialog.getByRole('textbox', { name: 'Business ID', exact: true }).fill('NEW-ID');
+  await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Brand New Oy');
+  await dialog.getByRole('button', { name: 'Create company', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page).toHaveURL(/status=active/);
+  await expect(page).toHaveURL(/page=1/);
+  await expect(page.getByRole('cell', { name: 'Brand New Oy', exact: true })).toBeVisible();
 });
 
 test('deep link to a company on a later page still shows its branch list', async ({ page }) => {

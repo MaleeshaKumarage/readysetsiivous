@@ -82,7 +82,8 @@ public class CompanyRepository : ICompanyRepository
     {
         var all = await Session.Query<Company>().CountAsync(ct);
         var active = await Session.Query<Company>().Where(c => c.IsActive).CountAsync(ct);
-        return new CompanyCounts(all, active, all - active);
+        var inactive = await Session.Query<Company>().Where(c => !c.IsActive).CountAsync(ct);
+        return new CompanyCounts(all, active, inactive);
     }
 
     public async Task SaveAsync(Company company, CancellationToken ct = default)
