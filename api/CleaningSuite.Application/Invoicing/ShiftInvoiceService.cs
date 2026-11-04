@@ -24,6 +24,9 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
     ICompanyRepository companies, IBranchRepository branches, IQualityCycleRepository forms,
     ITenantProfileRepository profiles, ITenantContext tenant, IShiftWorkReservation reservation, TimeProvider clock, IPartnerInvoiceSource? partnerSource = null)
 {
+    private static DateTime PartnerAnchor(PartnerCleaningRequest request, TimeZoneInfo zone) =>
+        request.PlannedStartUtc ?? TenantTimeZone.StartOfLocalDay(request.FromDate.ToDateTime(TimeOnly.MinValue), zone);
+
     public async Task<ShiftInvoicePreview> PreviewAsync(ShiftInvoiceRequest request, CancellationToken ct) => await BuildAsync(request, ct);
 
     public async Task<Invoice> IssueAsync(ShiftInvoiceRequest request, CancellationToken ct)
@@ -96,7 +99,10 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             foreach (var shift in companyShifts)
             {
                 var evidence = await forms.ListFormsAsync(shift.Id, null, null, ct);
-                if (evidence.Any(f => f.IsSubmitted && !f.ShiftDeletedUtc.HasValue
+                // A partner visit is anchored to its request's planned start, so a moved visit is not billed from its old form.
+                var partner = shift.PartnerRequestId is { } partnerId ? partnerRequests.FirstOrDefault(r => r.Id == partnerId) : null;
+                var anchor = partner is null ? (DateTime?)null : PartnerAnchor(partner, zone);
+                if (evidence.Any(f => f.IsSubmitted && !f.ShiftDeletedUtc.HasValue && (anchor is null || f.ShiftOccurrenceUtc == anchor.Value)
                     && (f.EndedAtUtc ?? f.SubmittedUtc) is DateTime ended && ended >= from && ended < to)) monthEvidence[shift.Id] = evidence;
             }
             ids = monthEvidence.Keys.Order().ToArray();
@@ -124,7 +130,10 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             // Month billing resolves exactly the visits that have a submitted form, wherever they were scheduled.
             // PostgreSQL timestamps have microsecond precision: a one-tick window
             // can collapse to zero width when its upper bound is persisted/bound.
-            var completedStarts = request.PartnerMonth ? monthEvidence[shift.Id].Where(f => f.IsSubmitted && !f.ShiftDeletedUtc.HasValue).Select(f => f.ShiftOccurrenceUtc).ToArray() : [];
+            var completedStarts = request.PartnerMonth
+                ? (partnerRequest is not null ? new[] { PartnerAnchor(partnerRequest, zone) }
+                    : monthEvidence[shift.Id].Where(f => f.IsSubmitted && !f.ShiftDeletedUtc.HasValue).Select(f => f.ShiftOccurrenceUtc).ToArray())
+                : Array.Empty<DateTime>();
             var visitFrom = request.PartnerMonth ? (completedStarts.Length > 0 ? completedStarts.Min() : from) : from;
             var visitTo = request.PartnerMonth ? (completedStarts.Length > 0 ? completedStarts.Max().AddSeconds(1) : visitFrom.AddSeconds(1)) : to;
             var resolved = await QualityCycleOccurrences.ResolvedInWindowAsync(shifts, schedule, visitFrom, visitTo, zone, ct, true);
