@@ -222,6 +222,7 @@ export const adminServices = {
 
 export const adminInvoices = {
   list: () => adminGet<Invoice[]>('/api/v1/admin/invoices'),
+  listForCustomer: (companyId: string) => adminGet<Invoice[]>(`/api/v1/admin/invoices?companyId=${encodeURIComponent(companyId)}`, false),
   create: (bookingId: string) => adminSend('/api/v1/admin/invoices', 'POST', { bookingId }),
   markPaid: (id: string) =>
     adminSend(`/api/v1/admin/invoices/${id}/mark-paid`, 'POST', { paidAtUtc: new Date().toISOString() }),
@@ -277,6 +278,8 @@ export interface AgreementSignerDto {
 }
 export interface AgreementListItem {
   hasSignedEvidence?: boolean;
+  companyId?: string;
+  companyName?: string;
   id: string; title: string; code: string; status: string; isActive: boolean; signerCount: number; signedCount: number; createdUtc: string;
 }
 export interface AgreementDetail extends AgreementListItem {
@@ -307,6 +310,7 @@ async function agreementCreateError(response: Response): Promise<string> {
 
 export const adminAgreements = {
   list: () => adminGet<AgreementListItem[]>('/api/v1/admin/agreements'),
+  listForCustomer: (companyId: string) => adminGet<AgreementListItem[]>(`/api/v1/admin/agreements?companyId=${encodeURIComponent(companyId)}`, false),
   get: (id: string) => adminGet<AgreementDetail>(`/api/v1/admin/agreements/${id}`),
   create: async (title: string, companyId: string, pdf: File, signers: { name: string; email: string }[]):
     Promise<{ ok: true; data: AgreementDetail } | { ok: false; error: string }> => {
@@ -581,6 +585,7 @@ export const adminShifts = {
     const suffix = query.toString();
     return adminGet<Shift[]>(`/api/v1/admin/shifts${suffix ? `?${suffix}` : ''}`);
   },
+  listForCustomer: (companyId: string) => adminGet<Shift[]>(`/api/v1/admin/shifts?companyId=${encodeURIComponent(companyId)}&includeInactive=true`, false),
   get: (id: string) => adminGet<Shift>(`/api/v1/admin/shifts/${id}`),
   create: (fields: unknown) => adminSendJson<Shift>('/api/v1/admin/shifts', 'POST', fields),
   update: (id: string, fields: unknown) =>

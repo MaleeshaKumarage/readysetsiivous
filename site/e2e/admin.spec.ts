@@ -586,7 +586,7 @@ test.describe('Admin Panel - Companies & Branches Page', () => {
     await page.getByRole('button', { name: 'Create company' }).click();
 
     await expect(page.getByRole('dialog', { name: 'Add company' })).not.toBeVisible();
-    await expect(page.getByRole('cell', { name: 'Nordic Clean Ltd' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'Nordic Clean Ltd', exact: true })).toBeVisible();
     await expect(page.getByRole('cell', { name: '9999999-9' })).toBeVisible();
 
     // Expand branches
