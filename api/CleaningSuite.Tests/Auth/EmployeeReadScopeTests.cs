@@ -222,7 +222,7 @@ public class EmployeeReadScopeTests
         public Mock<IMediator> Mediator { get; } = new();
         public Mock<IEmployeeRepository> Employees { get; } = new();
         public Mock<ITenantProfileRepository> Profiles { get; } = new();
-        public Employee Employee { get; } = new() { KeycloakUserId = "scope-sub" };
+        public Employee Employee { get; } = new() { KeycloakUserId = "scope-sub", AutoAcceptWork = false };
         private readonly HttpClient client;
         public Host()
         {

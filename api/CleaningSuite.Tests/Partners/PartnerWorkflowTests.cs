@@ -444,8 +444,8 @@ public class PartnerWorkflowTests
         public Company Company { get; } = Company.Create(Guid.NewGuid().ToString(), "Owner company");
         public Branch Branch { get; private set; } = null!;
         public Employee Partner { get; private set; } = null!;
-        public Employee Admin { get; } = new() { Role = Employee.RoleAdmin, KeycloakUserId = "synthetic-admin" };
-        public Employee Cleaner { get; } = new() { Role = Employee.RoleEmployee, KeycloakUserId = "synthetic-cleaner", FirstName = "Cleaner", LastName = "Test" };
+        public Employee Admin { get; } = new() { Role = Employee.RoleAdmin, KeycloakUserId = "synthetic-admin", AutoAcceptWork = false };
+        public Employee Cleaner { get; } = new() { Role = Employee.RoleEmployee, KeycloakUserId = "synthetic-cleaner", FirstName = "Cleaner", LastName = "Test", AutoAcceptWork = false };
         private Fixture(ServiceProvider provider) { this.provider = provider; Store = provider.GetRequiredService<IDocumentStore>(); }
         public static async Task<Fixture> Create()
         {
