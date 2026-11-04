@@ -24,10 +24,6 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
     ICompanyRepository companies, IBranchRepository branches, IQualityCycleRepository forms,
     ITenantProfileRepository profiles, ITenantContext tenant, IShiftWorkReservation reservation, TimeProvider clock, IPartnerInvoiceSource? partnerSource = null)
 {
-    // A fixed visit is anchored to its planned start; a flexible visit to the first day of its window, where its occurrence begins.
-    private static DateTime VisitAnchor(PartnerCleaningRequest request, TimeZoneInfo zone) =>
-        request.PlannedStartUtc ?? TenantTimeZone.StartOfLocalDay(request.FromDate.ToDateTime(TimeOnly.MinValue), zone);
-
     public async Task<ShiftInvoicePreview> PreviewAsync(ShiftInvoiceRequest request, CancellationToken ct) => await BuildAsync(request, ct);
 
     public async Task<Invoice> IssueAsync(ShiftInvoiceRequest request, CancellationToken ct)
@@ -92,17 +88,14 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
         if (request.PartnerMonth)
         {
             if (partnerSource is null) Invalid("Partner invoice selection is unavailable.");
-            var candidates = partnerRequests.Where(r => r.Status != "Cancelled" && r.FirstAcceptedAtUtc.HasValue
-                && r.LinkedShiftId.HasValue
-                && !existing.Any(i => Billed(i, r.LinkedShiftId.Value))).ToArray();
-            foreach (var candidate in candidates)
+            // Completion-month billing covers every company shift, whoever created it. A shift is a candidate
+            // when one of its visits was completed in this month; roster and assignment checks run below.
+            var companyShifts = (await shifts.ListIncludingInactiveAsync(ct)).Where(s => s.CompanyId == request.CompanyId && !existing.Any(i => Billed(i, s.Id))).ToArray();
+            foreach (var shift in companyShifts)
             {
-                var id = candidate.LinkedShiftId!.Value;
-                var evidence = await forms.ListFormsAsync(id, null, null, ct);
-                // Only a completion in this month can make a visit eligible. Roster
-                // completeness and the last assigned finish are checked below.
-                if (evidence.Any(f => f.ShiftOccurrenceUtc == VisitAnchor(candidate, zone) && f.IsSubmitted && !f.ShiftDeletedUtc.HasValue
-                    && (f.EndedAtUtc ?? f.SubmittedUtc) is DateTime ended && ended >= from && ended < to)) monthEvidence[id] = evidence;
+                var evidence = await forms.ListFormsAsync(shift.Id, null, null, ct);
+                if (evidence.Any(f => f.IsSubmitted && !f.ShiftDeletedUtc.HasValue
+                    && (f.EndedAtUtc ?? f.SubmittedUtc) is DateTime ended && ended >= from && ended < to)) monthEvidence[shift.Id] = evidence;
             }
             ids = monthEvidence.Keys.Order().ToArray();
         }
@@ -123,20 +116,21 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
                     Invalid("A partner visit is missing its accepted request or has been cancelled.");
                 pricing = new() { Id = shift.Id, ShiftId = shift.Id, CreatedUtc = partnerRequest!.CreatedUtc, UpdatedUtc = partnerRequest.CreatedUtc, Plans = [new("PerOccurrence", partnerRequest.PriceNet, partnerRequest.VatRatePercent, new(2000, 1, 1))] };
             }
-            else if (request.PartnerMonth) Invalid("Partner month selection contains an unrelated shift.");
             var schedule = ShiftContractSchedule.Snapshot(shift, zone);
             // Completion-month billing must resolve the original visit even when scheduled
             // outside the invoice month. Never select it by its scheduled month.
-            var visitFrom = request.PartnerMonth ? VisitAnchor(partnerRequest!, zone) : from;
+            // Month billing resolves exactly the visits that have a submitted form, wherever they were scheduled.
             // PostgreSQL timestamps have microsecond precision: a one-tick window
             // can collapse to zero width when its upper bound is persisted/bound.
-            var visitTo = request.PartnerMonth ? visitFrom.AddSeconds(1) : to;
+            var completedStarts = request.PartnerMonth ? monthEvidence[shift.Id].Where(f => f.IsSubmitted && !f.ShiftDeletedUtc.HasValue).Select(f => f.ShiftOccurrenceUtc).ToArray() : [];
+            var visitFrom = request.PartnerMonth ? (completedStarts.Length > 0 ? completedStarts.Min() : from) : from;
+            var visitTo = request.PartnerMonth ? (completedStarts.Length > 0 ? completedStarts.Max().AddSeconds(1) : visitFrom.AddSeconds(1)) : to;
             var resolved = await QualityCycleOccurrences.ResolvedInWindowAsync(shifts, schedule, visitFrom, visitTo, zone, ct, true);
             if (resolved.Count > 10000) Invalid("Too many scheduled visits in this period. Select a shorter range.");
             var submitted = request.PartnerMonth ? monthEvidence[shift.Id] : await forms.ListFormsAsync(shift.Id, from, to, ct);
             var completionTimes = new Dictionary<DateTime, DateTime>();
             var visits = resolved.Where(v => v.Plan.CompanyId == request.CompanyId
-                && (!request.PartnerMonth || v.Occurrence.StartUtc == visitFrom)).Select(v =>
+                ).Select(v =>
             {
                 var evidence = submitted.Where(f => f.ShiftOccurrenceUtc == v.Occurrence.StartUtc && f.IsSubmitted && !f.ShiftDeletedUtc.HasValue
                     && (!request.PartnerMonth || (f.EndedAtUtc ?? f.SubmittedUtc).HasValue)
@@ -168,11 +162,14 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
                 {
                     if (line.ShiftName is "Partner cleaning" or "Accepted partner cleaning") line.ShiftName = "Cleaning";
                     if (line.Description is "Partner cleaning" or "Accepted partner cleaning") line.Description = "Cleaning";
-                    if (request.PartnerMonth)
-                    {
-                        line.CompletedAtUtc = completionTimes[visits[0].StartUtc];
-                        line.CompletedOn = DateOnly.FromDateTime(TenantTimeZone.LocalDate(line.CompletedAtUtc.Value, zone));
-                    }
+                }
+            }
+            if (request.PartnerMonth && visits.Length == 1)
+            {
+                foreach (var line in calculated)
+                {
+                    line.CompletedAtUtc = completionTimes[visits[0].StartUtc];
+                    line.CompletedOn = DateOnly.FromDateTime(TenantTimeZone.LocalDate(line.CompletedAtUtc.Value, zone));
                 }
             }
             lines.AddRange(calculated);
@@ -182,7 +179,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
         if (lines.Count == 0 && request.PartnerMonth && !string.IsNullOrWhiteSpace(request.PreviewToken))
             throw new ShiftConflictException("Partner work eligibility changed. Load a new preview before issuing.");
         if (lines.Count == 0) Invalid(request.PartnerMonth
-            ? "No completed partner-booked visits were found for this month. Visits that were not booked through the partner portal must be selected manually under Invoice shifts."
+            ? "No completed, unbilled visits were found for this month. Choose another month, or select shifts manually under Invoice shifts."
             : "No billable shift work was found in this period. On-call visits must be completed before invoicing.");
         var issueDate = TenantTimeZone.LocalDate(clock.GetUtcNow().UtcDateTime, zone);
         var invoice = new Invoice { Id = Guid.Empty, CreatedUtc = issueDate, UpdatedUtc = issueDate, CompanyId = company.Id,
