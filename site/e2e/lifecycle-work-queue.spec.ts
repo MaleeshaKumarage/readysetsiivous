@@ -244,6 +244,6 @@ test('a past assigned company visit nobody started reads Not started, and Open c
   // Unstarted work stays in Scheduled with a red border; upcoming work keeps the plain row.
   await expect(page.getByRole('listitem').filter({ hasText: '2026-10-20 10:00' })).toHaveAttribute('data-state', 'not-started');
   await expect(page.getByRole('listitem').filter({ hasText: '2026-11-12 10:00' })).not.toHaveAttribute('data-state', 'not-started');
-  await missedRow.click();
+  await missedRow.focus(); await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/admin\/shifts\/calendar\/?$/);
 });
