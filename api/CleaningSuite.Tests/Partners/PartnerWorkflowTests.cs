@@ -1,3 +1,4 @@
+using CleaningSuite.Application.Common;
 using CleaningSuite.Application.Partners;
 using CleaningSuite.Application.Shifts;
 using CleaningSuite.Application.Tenants;
@@ -452,6 +453,119 @@ public class PartnerWorkflowTests
             Assert.DoesNotContain(await fixture.Service(session).Branches(fixture.Admin.Id, true, null, default), x => x.CompanyId == fixture.Company.Id);
             Assert.Empty(await fixture.Service(session).Quotes(fixture.Admin.Id, default));
         }
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Owner_edits_property_details_but_never_price_company_or_active_flag()
+    {
+        using var fixture = await Fixture.Create();
+        using var session = fixture.Session();
+        var service = fixture.Service(session);
+        var before = fixture.Branch;
+        var updated = await service.UpdateBranch(fixture.Partner.Id, before.Id,
+            new("Renamed flat", "New street 2", "00100", "Helsinki", "FI", "+358 40 123", "owner@example.test", 3, 4), default);
+        Assert.Equal("Renamed flat", updated.Name);
+        Assert.Equal("New street 2", updated.Street);
+        Assert.Equal("owner@example.test", updated.ContactEmail);
+        Assert.Equal(3, updated.RoomCount);
+        Assert.Equal(4, updated.BedCount);
+        Assert.Equal(before.PriceNet, updated.PriceNet);
+        Assert.Equal(before.VatRatePercent, updated.VatRatePercent);
+        Assert.Equal(before.EstimatedDurationMinutes, updated.EstimatedDurationMinutes);
+        Assert.Equal(before.PricingVersion, updated.PricingVersion);
+        Assert.True(updated.IsActive);
+        Assert.Equal(fixture.Company.Id, updated.CompanyId);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Owner_property_edit_rejects_invalid_details_and_other_companies_properties()
+    {
+        using var fixture = await Fixture.Create();
+        var other = await StoreBranch(fixture, Guid.NewGuid(), "Other company flat", priced: true);
+        using var session = fixture.Session();
+        var service = fixture.Service(session);
+        var id = fixture.Branch.Id;
+        await Assert.ThrowsAsync<ValidationException>(() => service.UpdateBranch(fixture.Partner.Id, id, new(""), default));
+        await Assert.ThrowsAsync<ValidationException>(() => service.UpdateBranch(fixture.Partner.Id, id, new("Flat", ContactEmail: "not-an-email"), default));
+        await Assert.ThrowsAsync<ValidationException>(() => service.UpdateBranch(fixture.Partner.Id, id, new("Flat", RoomCount: 10001), default));
+        await Assert.ThrowsAsync<NotFoundException>(() => service.UpdateBranch(fixture.Partner.Id, other.Id, new("Flat"), default));
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Owner_withdraws_a_pending_quote_and_the_staff_queue_drops_it()
+    {
+        using var fixture = await Fixture.Create();
+        var pending = await StoreBranch(fixture, fixture.Company.Id, "Cabin", priced: false);
+        using (var session = fixture.Session()) await fixture.Service(session).Quote(fixture.Partner.Id, pending.Id, default);
+        using (var session = fixture.Session())
+        {
+            Assert.Contains(await fixture.Service(session).Quotes(fixture.Admin.Id, default), x => x.Id == pending.Id);
+            var withdrawn = await fixture.Service(session).WithdrawQuote(fixture.Partner.Id, pending.Id, default);
+            Assert.Null(withdrawn.QuoteRequestedUtc);
+        }
+        using (var session = fixture.Session())
+        {
+            Assert.DoesNotContain(await fixture.Service(session).Quotes(fixture.Admin.Id, default), x => x.Id == pending.Id);
+            // Withdrawing again, or withdrawing a priced property, has nothing pending to withdraw.
+            await Assert.ThrowsAsync<ShiftConflictException>(() => fixture.Service(session).WithdrawQuote(fixture.Partner.Id, pending.Id, default));
+            await Assert.ThrowsAsync<ShiftConflictException>(() => fixture.Service(session).WithdrawQuote(fixture.Partner.Id, fixture.Branch.Id, default));
+        }
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Staff_reject_requires_a_reason_and_a_pending_quote_and_the_owner_sees_the_reason()
+    {
+        using var fixture = await Fixture.Create();
+        var outside = await StoreBranch(fixture, fixture.Company.Id, "Outside area", priced: false);
+        using (var session = fixture.Session()) await fixture.Service(session).Quote(fixture.Partner.Id, outside.Id, default);
+        using (var session = fixture.Session())
+        {
+            var service = fixture.Service(session);
+            await Assert.ThrowsAsync<ValidationException>(() => service.RejectQuote(fixture.Admin.Id, outside.Id, new(" "), default));
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.RejectQuote(fixture.Partner.Id, outside.Id, new("Not allowed"), default));
+            var rejected = await service.RejectQuote(fixture.Admin.Id, outside.Id, new("  Outside the service area  "), default);
+            Assert.Equal("Outside the service area", rejected.QuoteRejectionReason);
+            Assert.NotNull(rejected.QuoteRejectedUtc);
+            Assert.Null(rejected.QuoteRequestedUtc);
+            await Assert.ThrowsAsync<ShiftConflictException>(() => service.RejectQuote(fixture.Admin.Id, outside.Id, new("Again"), default));
+        }
+        using (var session = fixture.Session())
+        {
+            Assert.DoesNotContain(await fixture.Service(session).Quotes(fixture.Admin.Id, default), x => x.Id == outside.Id);
+            var owner = Assert.Single(await fixture.Service(session).Branches(fixture.Partner.Id, false, null, default), x => x.Id == outside.Id);
+            Assert.Equal("Outside the service area", owner.QuoteRejectionReason);
+        }
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Rejected_owner_can_request_again_and_pricing_clears_the_rejection()
+    {
+        using var fixture = await Fixture.Create();
+        var branch = await StoreBranch(fixture, fixture.Company.Id, "Second try", priced: false);
+        using (var session = fixture.Session()) await fixture.Service(session).Quote(fixture.Partner.Id, branch.Id, default);
+        using (var session = fixture.Session()) await fixture.Service(session).RejectQuote(fixture.Admin.Id, branch.Id, new("Too remote"), default);
+        using (var session = fixture.Session())
+        {
+            var requested = await fixture.Service(session).Quote(fixture.Partner.Id, branch.Id, default);
+            Assert.NotNull(requested.QuoteRequestedUtc);
+            Assert.Null(requested.QuoteRejectionReason);
+        }
+        using (var session = fixture.Session())
+        {
+            var priced = await fixture.Service(session).Price(fixture.Admin.Id, branch.Id, new(90, 25.5m, 120), default);
+            Assert.True(priced.PricingReady);
+            Assert.Null(priced.QuoteRejectedUtc);
+            Assert.Null(priced.QuoteRejectionReason);
+        }
+    }
+
+    private static async Task<Branch> StoreBranch(Fixture fixture, Guid companyId, string name, bool priced)
+    {
+        var branch = Branch.Create(companyId, name);
+        if (priced) branch.SetPricing(100, 25.5m, 120);
+        using var writer = fixture.Store.LightweightSession(fixture.Tenant);
+        writer.Store(branch); await writer.SaveChangesAsync();
+        return branch;
     }
 
     private sealed class Fixture : IDisposable

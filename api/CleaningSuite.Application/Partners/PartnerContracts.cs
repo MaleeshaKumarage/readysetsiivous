@@ -13,6 +13,7 @@ public record CreatePartnerRequest(Guid ClientRequestId, Guid BranchId, DateOnly
 public record EditPartnerRequest(int Version, DateOnly FromDate, DateOnly ToDate,
     string? ExactStartLocalTime = null, string? Notes = null);
 public record PartnerVersion(int Version);
+public record PartnerQuoteRejection(string Reason);
 public record PartnerMessage(string Message);
 public record PartnerResolution(string Resolution);
 public record PartnerPricing(decimal PriceNet, decimal VatRatePercent, int EstimatedDurationMinutes);
