@@ -223,6 +223,17 @@ test('staff reject from the keyboard: reason, Tab to confirm, Escape keeps the q
   expect(state.writes).toContainEqual(expect.objectContaining({ body: { reason: 'Outside the service area' } }));
 });
 
+test('reject dialog opens with the reason field focused, not the close button', async ({ page }) => {
+  await staff(page, [enabledStaffQuote]);
+  await page.goto('/admin/partner-requests/?tab=quotes');
+  const reject = page.getByRole('button', { name: 'Reject quote', exact: true });
+  await reject.focus(); await page.keyboard.press('Enter');
+  const dialog = page.getByRole('dialog', { name: 'Reject quote · Lake apartment', exact: true });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel('Reason for rejecting the quote', { exact: true })).toBeFocused();
+  await expect(dialog.getByRole('button', { name: 'Close dialog', exact: true })).not.toBeFocused();
+});
+
 test('the pending partner actions badge counts only partner-enabled Requested requests', async ({ page }) => {
   const requested = (id: string, companyId: string) => ({ id, companyId, branchId: 'b-' + id, branchName: 'Flat ' + id, fromDate: '2026-12-01', toDate: '2026-12-01', status: 'Requested', firstAcceptedAtUtc: null, linkedShiftId: null, plannedStartUtc: null, plannedEndUtc: null, acceptedCleanerName: null, offeredEmployeeId: null, version: 1, notes: null, priceNet: 70, vatRatePercent: 25.5, estimatedDurationMinutes: 120 });
   // One enabled quote and one enabled Requested request count; the disabled company's quote and request do not.
