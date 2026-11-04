@@ -49,6 +49,11 @@ export default function AgreementsPage() {
     } finally { setRepairLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
+  // A customer workspace link carries ?company= and opens the form with that customer already selected.
+  useEffect(() => {
+    const preselected = new URLSearchParams(window.location.search).get('company');
+    if (preselected) { setCompanyId(preselected); setOpen(true); }
+  }, []);
   useEffect(() => { loadRepairPreview(); }, [loadRepairPreview]);
 
   const repairCompany = async (agreementId: string) => {
@@ -189,12 +194,13 @@ export default function AgreementsPage() {
         <Table.ScrollContainer minWidth={600}>
           <Table striped highlightOnHover withTableBorder>
             <Table.Thead>
-              <Table.Tr><Table.Th>Title</Table.Th><Table.Th>Code</Table.Th><Table.Th>Signers</Table.Th><Table.Th>Status</Table.Th><Table.Th w={180}>Actions</Table.Th></Table.Tr>
+              <Table.Tr><Table.Th>Title</Table.Th><Table.Th>Customer</Table.Th><Table.Th>Code</Table.Th><Table.Th>Signers</Table.Th><Table.Th>Status</Table.Th><Table.Th w={180}>Actions</Table.Th></Table.Tr>
             </Table.Thead>
             <Table.Tbody>
               {visibleItems.map((a) => (
                 <Table.Tr key={a.id}>
                   <Table.Td fw={500}>{a.title}</Table.Td>
+                  <Table.Td>{a.companyName ?? '—'}</Table.Td>
                   <Table.Td>{a.code}</Table.Td>
                   <Table.Td>{a.signedCount} / {a.signerCount}</Table.Td>
                   <Table.Td><Badge color={a.isActive ? 'green' : 'gray'}>{a.status}</Badge></Table.Td>

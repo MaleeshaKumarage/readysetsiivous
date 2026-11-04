@@ -278,7 +278,10 @@ export default function ShiftsAdminPage() {
     setName(''); setNotes(''); setWeekDays([]); setCompanyId(null); setBranchId(null); setQualityCycleTemplateId(null); setScheduleType('0'); setStart('08:00'); setEnd('17:00'); setWeekParity('1'); setMonthlyDay(1); setOneTimeDate(''); setOneTimeStart('08:00'); setOneTimeEnd('17:00'); setDailyTimes({}); setEditingShift(null); setError(''); setModalOpen(false);
   };
 
-  const openCreate = () => { if (!schedulingReady) return; closeModal(); setValidFrom(localInputValue(new Date().toISOString(), timeZoneId).slice(0, 10)); setValidUntil(''); setModalOpen(true); };
+  // A customer workspace link carries ?company= so the create form opens with that customer selected.
+  const preselectedCompany = useRef<string | null>(null);
+  useEffect(() => { preselectedCompany.current = new URLSearchParams(window.location.search).get('company'); }, []);
+  const openCreate = () => { if (!schedulingReady) return; closeModal(); if (preselectedCompany.current) { setCompanyId(preselectedCompany.current); preselectedCompany.current = null; } setValidFrom(localInputValue(new Date().toISOString(), timeZoneId).slice(0, 10)); setValidUntil(''); setModalOpen(true); };
   const openEdit = async (shift: Shift) => {
     const schedule = shift.schedule;
     setEditingShift(shift); setCompanyId(shift.companyId); setBranchId(shift.branchId);

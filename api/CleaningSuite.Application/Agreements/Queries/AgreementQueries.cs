@@ -31,6 +31,34 @@ public class ListAgreementsHandler : IRequestHandler<ListAgreementsQuery, IReadO
     }
 }
 
+public record AgreementSummaryDto(Guid Id, string Title, string Code, string Status, bool IsActive, int SignerCount, int SignedCount, DateTime CreatedUtc, bool HasSignedEvidence, Guid CompanyId, string CompanyName);
+
+/// <summary>Agreement summaries with the customer name; a missing company (legacy association) is named rather than dropped.</summary>
+public record ListAgreementSummariesQuery(Guid? CompanyId = null) : IRequest<IReadOnlyList<AgreementSummaryDto>>;
+
+public class ListAgreementSummariesHandler : IRequestHandler<ListAgreementSummariesQuery, IReadOnlyList<AgreementSummaryDto>>
+{
+    private readonly ITenantContext _context;
+    private readonly IAgreementRepository _repo;
+    private readonly CleaningSuite.Application.Companies.ICompanyRepository _companies;
+    public ListAgreementSummariesHandler(ITenantContext context, IAgreementRepository repo, CleaningSuite.Application.Companies.ICompanyRepository companies) { _context = context; _repo = repo; _companies = companies; }
+
+    public async Task<IReadOnlyList<AgreementSummaryDto>> Handle(ListAgreementSummariesQuery request, CancellationToken ct)
+    {
+        var list = await _repo.ListAsync(_context.TenantId, ct);
+        if (request.CompanyId is Guid companyId) list = list.Where(a => a.CompanyId == companyId).ToList();
+        var names = new Dictionary<Guid, string>();
+        foreach (var id in list.Select(a => a.CompanyId).Distinct())
+        {
+            var company = await _companies.GetAsync(id, ct);
+            names[id] = company?.Name is { Length: > 0 } name ? name : "Unknown customer";
+        }
+        return list.Select(a => new AgreementSummaryDto(a.Id, a.Title, a.Code, a.Status, a.IsActive,
+            a.Signers.Count, a.Signers.Count(s => s.Status == Signer.StatusSigned), a.CreatedUtc, a.HasSignedEvidence,
+            a.CompanyId, names[a.CompanyId])).ToList();
+    }
+}
+
 public record GetAgreementQuery(Guid Id) : IRequest<AgreementDetailDto?>;
 
 public class GetAgreementHandler : IRequestHandler<GetAgreementQuery, AgreementDetailDto?>

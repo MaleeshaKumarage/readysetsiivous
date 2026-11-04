@@ -3,7 +3,7 @@ using MediatR;
 
 namespace CleaningSuite.Application.Invoicing.Queries;
 
-public record ListInvoicesQuery(string? Status, DateTime? FromUtc) : IRequest<IReadOnlyList<Invoice>>;
+public record ListInvoicesQuery(string? Status, DateTime? FromUtc, Guid? CompanyId = null) : IRequest<IReadOnlyList<Invoice>>;
 
 public class ListInvoicesHandler : IRequestHandler<ListInvoicesQuery, IReadOnlyList<Invoice>>
 {
@@ -11,8 +11,12 @@ public class ListInvoicesHandler : IRequestHandler<ListInvoicesQuery, IReadOnlyL
 
     public ListInvoicesHandler(IInvoiceRepository invoices) => _invoices = invoices;
 
-    public Task<IReadOnlyList<Invoice>> Handle(ListInvoicesQuery request, CancellationToken ct) =>
-        _invoices.ListAsync(request.Status, request.FromUtc, ct);
+    public async Task<IReadOnlyList<Invoice>> Handle(ListInvoicesQuery request, CancellationToken ct)
+    {
+        var invoices = await _invoices.ListAsync(request.Status, request.FromUtc, ct);
+        // shortcut: company filter is applied in memory after the tenant list; upgrade to a repository filter if invoice volume grows.
+        return request.CompanyId is Guid companyId ? invoices.Where(i => i.CompanyId == companyId).ToList() : invoices;
+    }
 }
 
 public record GetInvoiceQuery(Guid Id) : IRequest<Invoice?>;

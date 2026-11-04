@@ -43,9 +43,9 @@ public class InvoicesAdminController : ControllerBase
 
     [HttpGet]
     public async Task<IActionResult> List(
-        [FromQuery] string? status, [FromQuery] DateTime? fromUtc, CancellationToken ct)
+        [FromQuery] string? status, [FromQuery] DateTime? fromUtc, [FromQuery] Guid? companyId, CancellationToken ct)
     {
-        var invoices = await _mediator.Send(new ListInvoicesQuery(status, fromUtc), ct);
+        var invoices = await _mediator.Send(new ListInvoicesQuery(status, fromUtc, companyId), ct);
         return Ok(invoices.Select(AdminResponses.Invoice).ToArray());
     }
 
