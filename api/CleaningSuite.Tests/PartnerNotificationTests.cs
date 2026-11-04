@@ -19,6 +19,23 @@ public class PartnerNotificationTests
         Assert.Equal(handler.Payloads[0],handler.Payloads[1]); Assert.Equal(handler.Keys[0],handler.Keys[1]);
         Assert.Equal($"partner/{delivery.Id:N}",handler.Keys[0]);
     }
+    [Fact]
+    public void Shipped_configuration_sets_partner_email_explicitly_off()
+    {
+        // Opt-in default: the value is written out in the shipped configuration rather than left implicit.
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        string? path = null;
+        while (directory is not null && path is null)
+        {
+            var candidate = Path.Combine(directory.FullName, "api", "CleaningSuite.Api", "appsettings.json");
+            if (File.Exists(candidate)) path = candidate;
+            directory = directory.Parent;
+        }
+        Assert.NotNull(path);
+        using var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path!));
+        var enabled = document.RootElement.GetProperty("Notifications").GetProperty("PartnerEmail").GetProperty("Enabled");
+        Assert.Equal(System.Text.Json.JsonValueKind.False, enabled.ValueKind);
+    }
     [Theory][InlineData(400,false)][InlineData(401,false)][InlineData(429,true)][InlineData(503,true)]
     public async Task Provider_errors_are_classified_without_exposing_response_body(int status,bool retryable)
     {
