@@ -5,7 +5,7 @@ const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Meth
 async function setup(page: Page, allowed = true) {
   await setupAdminMocks(page);
   await page.route(/\/api\/v1\/me$/, route => route.fulfill({ headers, json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: ['admin'] })], canUseShiftCalendar: allowed, employee: null } }));
-  const state = { saved: null as any, fail: false, saveFailure: 0, specialStates: false, partialWork: false, hold: null as Promise<void> | null, settled: false, unusual: false, abortPut: false };
+  const state = { saved: null as any, fail: false, saveFailure: 0, specialStates: false, partialWork: false, hold: null as Promise<void> | null, settled: false, unusual: false, abortPut: false, secondFlagged: false };
   await page.route(/\/api\/v1\/admin\/shifts\/calendar(?:\?|\/|$)/, async route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
     if (!allowed) return route.fulfill({ headers, status: 403, json: {} });
@@ -39,6 +39,9 @@ async function setup(page: Page, allowed = true) {
     if (state.settled && past) visits.push({ shiftId: 'settled', shiftName: 'Settled clean', companyName: 'Test company', branchName: 'Helsinki branch',
       startUtc: `${date}T12:00:00Z`, endUtc: `${date}T14:00:00Z`, exceptionId: 'settled', cancelled: false, ambiguous: false, needsReview: false,
       assignees: [{ employeeId: 'carol', name: 'Carol Done', status: 'Recorded', actualStartUtc: `${date}T12:00:00Z`, actualEndUtc: `${date}T14:00:00Z`, hours: 2, version: '22222222-2222-2222-2222-222222222222', canRecord: true, review: null }] });
+    if (state.secondFlagged && past) visits.push({ shiftId: 'second', shiftName: 'Second clean', companyName: 'Test company', branchName: 'Helsinki branch',
+      startUtc: `${date}T13:00:00Z`, endUtc: `${date}T15:00:00Z`, exceptionId: 'second', cancelled: false, ambiguous: false, needsReview: true,
+      assignees: [{ employeeId: 'dan', name: 'Dan Pending', status: 'Not started', actualStartUtc: null, actualEndUtc: null, hours: null, version: null, canRecord: true, review: { kind: 'missing-completion', label: 'No completion recorded' } }] });
     if (state.specialStates) visits.push(specialVisit('Cancelled clean', true, false, true), specialVisit('Overlapping clean', false, true, true), specialVisit('Unassigned clean', false, false, false));
     return route.fulfill({ headers, json: { date, today: '2026-11-01', timeZoneId: 'Europe/Helsinki', occurrences: visits } });
   });
@@ -279,4 +282,20 @@ test('a lost save response explains that the save may have happened; reloading s
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Correct times for Alice Cleaner' })).toBeVisible();
   expect(state.saved).toMatchObject({ reason: 'Timesheet received' });
+});
+
+test('review summary counts two flagged visits and filter-empty copy only appears when no visit needs review', async ({ page }) => {
+  const state = await setup(page); state.secondFlagged = true;
+  await page.goto('/admin/shifts/calendar/');
+  await expect(page.getByText('2 visits need review.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Second clean' })).toBeVisible();
+  await expect(page.getByText('Turn off the review filter to see every visit.', { exact: true })).toHaveCount(0);
+  // Today has no review flags: the summary says so, and the filter then needs an explicit empty message.
+  await page.getByLabel('Calendar date').fill('2026-11-01');
+  await expect(page.getByRole('heading', { name: 'Cleaning 2026-10-30' })).toHaveCount(0);
+  await expect(page.getByText('No visits need review on this day.', { exact: true })).toBeVisible();
+  await page.getByText('Show only visits that need review', { exact: true }).click();
+  await expect(page.getByText('Turn off the review filter to see every visit.', { exact: true })).toBeVisible();
+  await expect(page.getByText('No shifts on this day.', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Cleaning 2026-11-01' })).toHaveCount(0);
 });
