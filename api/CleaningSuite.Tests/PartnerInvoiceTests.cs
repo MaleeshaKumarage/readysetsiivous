@@ -133,11 +133,27 @@ public class PartnerInvoiceTests
         var result = await f.Service.PreviewAsync(f.Input, default);
         Assert.Equal(new DateOnly(2026,10,5), Assert.Single(result.Invoice.Lines).PeriodFrom);
     }
+    [Fact]
+    public async Task Flexible_visit_is_invoiced_in_the_month_it_was_completed_not_the_month_it_started()
+    {
+        var f = new Fixture(1); var request = f.Requests[0]; var id = request.LinkedShiftId!.Value; var form = f.Forms[id][0];
+        // Flexible: no planned start, so the visit is anchored to the first local day of its window and finished on 2 November.
+        request.PlannedStartUtc = null; request.FromDate = new(2026,10,30); request.ToDate = new(2026,11,2);
+        var anchor = new DateTime(2026,10,29,22,0,0,DateTimeKind.Utc); // local midnight 30 Oct, after the 25 Oct clock change (UTC+2)
+        form.ShiftOccurrenceUtc = anchor; form.EndedAtUtc = new(2026,11,2,12,0,0,DateTimeKind.Utc);
+        f.Visits[id] = ShiftOccurrenceException.Create(id,null,anchor,anchor.AddHours(2),ShiftOccurrenceExceptionStatus.Extra,"Cleaning",form.EmployeeId);
+        f.SetShiftValidity(id, new(2026,10,30), new(2026,11,2));
+        var november = await f.Service.PreviewAsync(f.Input with { From = new(2026,11,1), To = new(2026,11,30) }, default);
+        var line = Assert.Single(november.Invoice.Lines);
+        Assert.Equal(new DateOnly(2026,11,2), line.CompletedOn);
+        await Assert.ThrowsAsync<ValidationException>(() => f.Service.PreviewAsync(f.Input, default));
+    }
     private sealed class Fixture
     {
         public List<PartnerCleaningRequest> Requests = []; public Dictionary<Guid,List<QualityCycleForm>> Forms = []; public List<Invoice> Existing = []; public Dictionary<Guid, ShiftOccurrenceException> Visits = []; public Dictionary<Guid, List<ShiftOccurrenceAssignment>> Rosters = [];
         private readonly Dictionary<Guid,Shift> selected = new(); private readonly Guid employeeId = Guid.NewGuid(); private Company companyRef = null!; private Branch branchRef = null!; private Mock<IShiftRepository> shiftRepo = null!;
         public Mock<IInvoiceRepository> Invoices = new(); public ShiftInvoiceService Service; public ShiftBillingSettingsService Settings; public ShiftInvoiceRequest Input;
+        public void SetShiftValidity(Guid id, DateOnly from, DateOnly to) { selected[id].ValidFrom = from.ToDateTime(TimeOnly.MinValue); selected[id].ValidUntil = to.ToDateTime(TimeOnly.MinValue); }
         // A recurring company shift (not partner-created) completed on the given local weekdays and starts.
         public Guid AddWeeklyCompanyShift(DayOfWeek[] days, params DateTime[] completedStartsUtc)
         {

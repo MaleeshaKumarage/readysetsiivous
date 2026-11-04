@@ -224,6 +224,25 @@ public class PartnerWorkflowTests
     }
 
     [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Automatic_preference_without_sign_in_gets_an_ordinary_offer_not_automatic_acceptance()
+    {
+        using var fixture = await Fixture.Create();
+        // Added but not yet signed in: the stored preference is on, but automatic acceptance needs a login to accept.
+        var pending = new Employee { Role = Employee.RoleEmployee, KeycloakUserId = "", FirstName = "Pending", LastName = "Cleaner", AutoAcceptWork = true };
+        using (var writer = fixture.Store.LightweightSession(fixture.Tenant)) { writer.Store(pending); await writer.SaveChangesAsync(); }
+        PartnerRequestDto offered;
+        using (var session = fixture.Session())
+        {
+            var service = fixture.Service(session);
+            var request = await service.Create(fixture.Partner.Id, new(Guid.NewGuid(), fixture.Branch.Id, Fixture.Day, Fixture.Day, "08:00"), default);
+            offered = await service.Offer(fixture.Admin.Id, request.Id, new(request.Version, pending.Id), default);
+        }
+        Assert.Equal("Offered", offered.Status);
+        Assert.Equal(pending.Id, offered.OfferedEmployeeId);
+        Assert.Null(offered.LinkedShiftId);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
     public async Task Manual_offer_accepted_without_a_time_becomes_a_flexible_visit()
     {
         using var fixture = await Fixture.Create(); PartnerRequestDto offer;
