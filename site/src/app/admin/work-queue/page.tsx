@@ -18,6 +18,7 @@ const SOURCES: { value: WorkQueueSource; label: string }[] = [
   { value: 'all', label: 'All sources' },
   { value: 'booking', label: 'Public bookings' },
   { value: 'partner', label: 'Partner requests' },
+  { value: 'shift', label: 'Company shifts' },
 ];
 const PAGE_SIZE = 25;
 const VIEW_VALUES = VIEWS.map(view => view.value);
@@ -206,14 +207,14 @@ export default function WorkQueuePage() {
                   <Text size="sm" c="dimmed">{item.reference} · {item.scheduledLocal}</Text>
                   <Group gap={6}>
                     <Badge size="sm" variant="light">{item.stateLabel}</Badge>
-                    <Badge size="sm" variant="outline" color="gray">{item.source === 'booking' ? 'Public booking' : 'Partner request'}</Badge>
+                    <Badge size="sm" variant="outline" color="gray">{item.source === 'booking' ? 'Public booking' : item.source === 'shift' ? 'Company shift' : 'Partner request'}</Badge>
                     {item.assigneeName && <Text size="xs">{item.assigneeName}</Text>}
                   </Group>
                 </Stack>
                 {item.source === 'booking' ? (
                   <Button size="sm" variant="light" onClick={() => onOpen(item)} aria-label={`Open booking ${item.reference}`}>Open</Button>
                 ) : (
-                  <Button size="sm" variant="light" component={Link} href={item.href} aria-label={`Open partner request for ${item.customerName}`}>Open</Button>
+                  <Button size="sm" variant="light" component={Link} href={item.href} aria-label={item.source === 'shift' ? `Open company shift ${item.reference}` : `Open partner request for ${item.customerName}`}>Open</Button>
                 )}
               </Group>
             </Paper>

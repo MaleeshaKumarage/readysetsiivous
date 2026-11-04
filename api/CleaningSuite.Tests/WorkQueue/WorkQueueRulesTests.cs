@@ -1,7 +1,9 @@
 using CleaningSuite.Application.WorkQueue;
 using CleaningSuite.Domain.Bookings;
 using CleaningSuite.Domain.Partners;
+using CleaningSuite.Application.Shifts;
 using CleaningSuite.Domain.QualityCycle;
+using CleaningSuite.Domain.Shifts;
 
 namespace CleaningSuite.Tests.WorkQueue;
 
@@ -91,4 +93,56 @@ public class WorkQueueRulesTests
             Assert.NotNull(WorkQueueRules.PartnerView(request, []));
         }
     }
+
+    [Fact]
+    public void Cancelled_occurrence_is_cancelled_even_when_its_form_was_submitted()
+    {
+        var visit = Visit(start: new DateTime(2026, 12, 1, 8, 0, 0, DateTimeKind.Utc), cancelled: true, employees: [Guid.NewGuid()]);
+
+        Assert.Equal(WorkQueueViews.Cancelled, WorkQueueRules.ShiftView(visit, [SubmittedForm(visit.EmployeeIds[0])], DateTime.UtcNow));
+    }
+
+    [Fact]
+    public void Future_occurrence_without_a_cleaner_needs_action_and_with_one_is_scheduled()
+    {
+        var now = new DateTime(2026, 11, 4, 8, 0, 0, DateTimeKind.Utc);
+        var unassigned = Visit(start: now.AddDays(2), employees: []);
+        var assigned = Visit(start: now.AddDays(2), employees: [Guid.NewGuid()]);
+
+        Assert.Equal(WorkQueueViews.NeedsAction, WorkQueueRules.ShiftView(unassigned, [], now));
+        Assert.Equal("Unassigned", WorkQueueRules.ShiftLabel(unassigned, WorkQueueViews.NeedsAction));
+        Assert.Equal(WorkQueueViews.Scheduled, WorkQueueRules.ShiftView(assigned, [], now));
+        Assert.Equal("Scheduled", WorkQueueRules.ShiftLabel(assigned, WorkQueueViews.Scheduled));
+    }
+
+    [Fact]
+    public void Completed_needs_a_submitted_form_from_every_assigned_cleaner()
+    {
+        var now = new DateTime(2026, 11, 4, 8, 0, 0, DateTimeKind.Utc);
+        var first = Guid.NewGuid(); var second = Guid.NewGuid();
+        var visit = Visit(start: now.AddDays(-3), employees: [first, second]);
+
+        Assert.Equal(WorkQueueViews.InProgress, WorkQueueRules.ShiftView(visit, [SubmittedForm(first), StartedForm(second)], now));
+        Assert.Equal(WorkQueueViews.InProgress, WorkQueueRules.ShiftView(visit, [SubmittedForm(first)], now));
+        Assert.Equal(WorkQueueViews.Completed, WorkQueueRules.ShiftView(visit, [SubmittedForm(first), SubmittedForm(second)], now));
+        Assert.Equal("Completed", WorkQueueRules.ShiftLabel(visit, WorkQueueViews.Completed));
+    }
+
+    [Fact]
+    public void Past_occurrence_nobody_started_is_shown_as_not_started_not_hidden()
+    {
+        var now = new DateTime(2026, 11, 4, 8, 0, 0, DateTimeKind.Utc);
+        var missed = Visit(start: now.AddDays(-1), employees: []);
+
+        Assert.Equal(WorkQueueViews.Scheduled, WorkQueueRules.ShiftView(missed, [], now));
+        Assert.Equal("Not started", WorkQueueRules.ShiftLabel(missed, WorkQueueViews.Scheduled));
+    }
+
+    private static ShiftVisitRosterEntry Visit(DateTime start, IReadOnlyList<Guid> employees, bool cancelled = false) =>
+        new(new ResolvedShiftOccurrence(start, start.AddHours(2), Status: cancelled ? ShiftOccurrenceExceptionStatus.CustomerCancelled : null),
+            null, null, employees, "Schedule", null);
+
+    private static QualityCycleForm SubmittedForm(Guid employee) => new() { EmployeeId = employee, IsSubmitted = true, StartedAtUtc = DateTime.UtcNow };
+
+    private static QualityCycleForm StartedForm(Guid employee) => new() { EmployeeId = employee, IsSubmitted = false, StartedAtUtc = DateTime.UtcNow };
 }

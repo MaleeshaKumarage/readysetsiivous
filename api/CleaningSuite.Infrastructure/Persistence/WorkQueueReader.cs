@@ -1,14 +1,19 @@
+using System.Security.Cryptography;
+using System.Text;
+using CleaningSuite.Application.Shifts;
+using CleaningSuite.Application.Tenants;
 using CleaningSuite.Application.WorkQueue;
 using CleaningSuite.Domain.Bookings;
 using CleaningSuite.Domain.Companies;
 using CleaningSuite.Domain.Partners;
 using CleaningSuite.Domain.QualityCycle;
+using CleaningSuite.Domain.Shifts;
 using Marten;
 
 namespace CleaningSuite.Infrastructure.Persistence;
 
 /// <summary>Reads bounded pages from bookings and partner requests. Each source returns at most skip+take rows before merging.</summary>
-public sealed class WorkQueueReader(ITenantSession tenant) : IWorkQueueReader
+public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileRepository profiles, ITenantContext context) : IWorkQueueReader
 {
     private IDocumentSession Db => tenant.Session;
 
@@ -17,12 +22,15 @@ public sealed class WorkQueueReader(ITenantSession tenant) : IWorkQueueReader
         var search = string.IsNullOrWhiteSpace(query.Search) ? null : query.Search.Trim();
         var includeBookings = query.Source is "all" or "booking";
         var includePartners = query.Source is "all" or "partner";
-        var companyIds = search is not null && includePartners
+        var includeShifts = query.Source is "all" or "shift";
+        var companyIds = search is not null && (includePartners || includeShifts)
             ? (await Db.Query<Company>().Where(c => c.Name.Contains(search, StringComparison.OrdinalIgnoreCase)).Select(c => c.Id).ToListAsync(ct)).ToArray()
             : Array.Empty<Guid>();
 
         // Partner visits are few per tenant and their view depends on their forms, so they are classified in memory.
         var partnerViews = includePartners ? await ClassifyPartnersAsync(search, companyIds, ct) : new List<PartnerView>();
+        var (_, zone) = await TenantTimeZone.LoadAsync(profiles, context, ct);
+        var shiftRows = includeShifts ? await ClassifyShiftsAsync(search, companyIds, zone, ct) : new List<ShiftRow>();
 
         var counts = new Dictionary<string, int>();
         foreach (var view in WorkQueueViews.All)
@@ -30,6 +38,7 @@ public sealed class WorkQueueReader(ITenantSession tenant) : IWorkQueueReader
             var count = 0;
             if (includeBookings) count += await BookingsIn(view).CountAsync(ct);
             count += partnerViews.Count(p => p.View == view);
+            count += shiftRows.Count(r => r.View == view);
             counts[view] = count;
         }
 
@@ -70,6 +79,22 @@ public sealed class WorkQueueReader(ITenantSession tenant) : IWorkQueueReader
             }
         }
 
+        if (includeShifts)
+        {
+            var ordered = shiftRows.Where(r => r.View == query.View);
+            ordered = closedFirst ? ordered.OrderByDescending(r => r.Local).ThenBy(r => r.Shift.Id) : ordered.OrderBy(r => r.Local).ThenBy(r => r.Shift.Id);
+            var page = ordered.Take(window).ToList();
+            var companies = await CompaniesAsync(page.Select(r => r.Shift.CompanyId), ct);
+            foreach (var row in page)
+            {
+                companies.TryGetValue(row.Shift.CompanyId, out var company);
+                rows.Add((row.Local, row.Id, new WorkQueueItem(
+                    "shift", row.Id, row.Shift.Name, company?.Name ?? "Customer",
+                    row.Local.ToString("yyyy-MM-dd HH:mm"), row.View,
+                    WorkQueueRules.ShiftLabel(row.Visit, row.View), null, "/admin/shifts/calendar/")));
+            }
+        }
+
         var merged = closedFirst
             ? rows.OrderByDescending(r => r.Key).ThenBy(r => r.Id)
             : rows.OrderBy(r => r.Key).ThenBy(r => r.Id);
@@ -94,6 +119,46 @@ public sealed class WorkQueueReader(ITenantSession tenant) : IWorkQueueReader
     }
 
     private sealed record PartnerView(string View, PartnerCleaningRequest Request);
+
+    private sealed record ShiftRow(string View, Shift Shift, ShiftVisitRosterEntry Visit, DateTime Local, Guid Id);
+
+    /// <summary>
+    /// Company shifts (not partner-created ones, which appear as partner requests). Each occurrence in the bounded
+    /// window is classified from its roster entry and its forms.
+    /// </summary>
+    private async Task<List<ShiftRow>> ClassifyShiftsAsync(string? search, Guid[] companyIds, TimeZoneInfo zone, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var today = TenantTimeZone.LocalDate(now, zone);
+        var fromUtc = TenantTimeZone.StartOfLocalDay(today.AddDays(-WorkQueueLimits.ShiftHistoryDays), zone);
+        var toUtc = TenantTimeZone.StartOfLocalDay(today.AddDays(WorkQueueLimits.ShiftFutureDays + 1), zone);
+        var shiftRepository = new ShiftRepository(tenant);
+        var shifts = (await shiftRepository.ListIncludingInactiveAsync(ct))
+            .Where(shift => shift.PartnerRequestId is null && (search is null || companyIds.Contains(shift.CompanyId))).ToArray();
+        if (shifts.Length == 0) return new List<ShiftRow>();
+        var shiftIds = shifts.Select(shift => shift.Id).ToArray();
+        var forms = await Db.Query<QualityCycleForm>()
+            .Where(f => shiftIds.Contains(f.ShiftId) && f.ShiftDeletedUtc == null && f.ShiftOccurrenceUtc >= fromUtc && f.ShiftOccurrenceUtc < toUtc)
+            .ToListAsync(ct);
+        var formsByOccurrence = forms.GroupBy(f => (f.ShiftId, f.ShiftOccurrenceUtc))
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<QualityCycleForm>)g.ToList());
+        var rows = new List<ShiftRow>();
+        foreach (var shift in shifts)
+        {
+            var visits = await shiftRepository.ResolveRosterAsync(shift, fromUtc, toUtc, zone, ct, includeCancelled: true);
+            foreach (var visit in visits)
+            {
+                var start = visit.Occurrence.StartUtc;
+                var evidence = formsByOccurrence.TryGetValue((shift.Id, start), out var found) ? found : Array.Empty<QualityCycleForm>();
+                var view = WorkQueueRules.ShiftView(visit, evidence, now);
+                rows.Add(new ShiftRow(view, shift, visit, TimeZoneInfo.ConvertTimeFromUtc(start, zone), StableOccurrenceId(shift.Id, start)));
+            }
+        }
+        return rows;
+    }
+
+    private static Guid StableOccurrenceId(Guid shiftId, DateTime startUtc) =>
+        new(SHA256.HashData(Encoding.UTF8.GetBytes($"shift-occurrence:{shiftId:N}:{startUtc.Ticks}")).AsSpan(0, 16));
 
     private async Task<List<PartnerView>> ClassifyPartnersAsync(string? search, Guid[] companyIds, CancellationToken ct)
     {

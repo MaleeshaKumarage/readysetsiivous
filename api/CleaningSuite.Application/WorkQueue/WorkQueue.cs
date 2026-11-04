@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using CleaningSuite.Application.Shifts;
 using CleaningSuite.Domain.Bookings;
 using CleaningSuite.Domain.Partners;
 using CleaningSuite.Domain.QualityCycle;
@@ -23,6 +24,12 @@ public static class WorkQueueLimits
 {
     /// <summary>Deepest offset served. Each source reads skip+take rows, so this bounds the merge window.</summary>
     public const int MaxSkip = 10_000;
+
+    /// <summary>How far back company-shift history is read for Completed, In progress and Cancelled.</summary>
+    public const int ShiftHistoryDays = 180;
+
+    /// <summary>How far ahead company-shift occurrences are read for Scheduled and Needs action.</summary>
+    public const int ShiftFutureDays = 120;
 }
 
 /// <summary>
@@ -55,6 +62,34 @@ public static class WorkQueueRules
         if (live.Length > 0 && live.All(f => f.IsSubmitted)) return WorkQueueViews.Completed;
         return live.Any(f => f.StartedAtUtc.HasValue) ? WorkQueueViews.InProgress : WorkQueueViews.Scheduled;
     }
+
+    /// <summary>
+    /// The view of one company-shift occurrence. Completed needs a submitted form from every assigned cleaner, the same
+    /// rule invoicing uses. A future occurrence without a cleaner is Needs action; one with a cleaner is Scheduled.
+    /// A past occurrence that nobody has started is shown as Scheduled, labelled Not started, so it is not hidden.
+    /// </summary>
+    public static string ShiftView(ShiftVisitRosterEntry visit, IReadOnlyList<QualityCycleForm> occurrenceForms, DateTime nowUtc)
+    {
+        if (visit.IsCancelled) return WorkQueueViews.Cancelled;
+        var submitted = occurrenceForms.Where(f => f.IsSubmitted).Select(f => f.EmployeeId).ToHashSet();
+        var assigned = visit.EmployeeIds;
+        var done = assigned.Count > 0 ? assigned.All(submitted.Contains) : submitted.Count > 0;
+        if (done) return WorkQueueViews.Completed;
+        if (occurrenceForms.Any(f => f.StartedAtUtc.HasValue)) return WorkQueueViews.InProgress;
+        if (visit.Occurrence.StartUtc >= nowUtc && assigned.Count == 0) return WorkQueueViews.NeedsAction;
+        return WorkQueueViews.Scheduled;
+    }
+
+    public static string ShiftLabel(ShiftVisitRosterEntry visit, string view) => view switch
+    {
+        WorkQueueViews.NeedsAction => "Unassigned",
+        WorkQueueViews.Scheduled when visit.EmployeeIds.Count > 0 => "Scheduled",
+        WorkQueueViews.Scheduled => "Not started",
+        WorkQueueViews.InProgress => "In progress",
+        WorkQueueViews.Completed => "Completed",
+        WorkQueueViews.Cancelled => "Cancelled",
+        _ => view,
+    };
 
     public static string BookingLabel(Booking booking) => booking.Status switch
     {

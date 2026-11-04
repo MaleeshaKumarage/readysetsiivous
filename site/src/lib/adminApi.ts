@@ -135,10 +135,10 @@ export async function adminDelete(path: string): Promise<void> {
 }
 
 export type WorkQueueView = 'needs-action' | 'scheduled' | 'in-progress' | 'completed' | 'cancelled';
-export type WorkQueueSource = 'all' | 'booking' | 'partner';
+export type WorkQueueSource = 'all' | 'booking' | 'partner' | 'shift';
 
 export interface WorkQueueItem {
-  source: 'booking' | 'partner';
+  source: 'booking' | 'partner' | 'shift';
   id: string;
   reference: string;
   customerName: string;
