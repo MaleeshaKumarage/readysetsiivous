@@ -263,3 +263,24 @@ test('deactivating the open deep-linked company removes its branch panel', async
   await expect(page.getByRole('cell', { name: 'Company 60', exact: true })).not.toBeVisible();
   await expect(page.getByText('Active branch', { exact: true })).not.toBeVisible();
 });
+
+test('the last page of a longer list is reachable from the pagination control', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockCompanies(page);
+  await page.goto('/admin/companies/');
+  await page.getByRole('button', { name: '4', exact: true }).click();
+  await expect(page).toHaveURL(/page=4/);
+  await expect(page.getByRole('cell', { name: 'Company 75', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Company 74', exact: true })).not.toBeVisible();
+});
+
+test('collapsing the pinned deep-linked company removes its row and branch panel', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockCompanies(page);
+  await page.goto('/admin/companies/?company=company-60');
+  await expect(page.getByText('Active branch', { exact: true })).toBeVisible();
+  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Company 60', exact: true }) }).first();
+  await row.getByRole('button', { name: /Branches|^\d+$/ }).first().click();
+  await expect(page.getByText('Active branch', { exact: true })).not.toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Company 60', exact: true })).not.toBeVisible();
+});
