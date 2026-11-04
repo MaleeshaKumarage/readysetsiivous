@@ -20,11 +20,15 @@ export function QuoteRequestProvider({ pathname, children }: { pathname: string;
     const request = new AbortController(); controller.current = request;
     try {
       const api = staffPartnerApi('admin');
-      const [companies, quotes, requests, changes] = await Promise.allSettled([adminCompanies.listAll(), api.quotes(request.signal), api.requests(request.signal), api.changes(request.signal)]);
+      const [quotes, requests, changes] = await Promise.allSettled([api.quotes(request.signal), api.requests(request.signal), api.changes(request.signal)]);
       if (request.signal.aborted) return;
       // Banner, badge and counts follow the partner operations lists: only partner-enabled companies count.
-      if (companies.status !== 'fulfilled' || !Array.isArray(companies.value)) throw new Error('Company data unavailable');
-      const partnerCompanyIds = new Set(companies.value.filter(company => company.isPartnerEnabled).map(company => company.id));
+      // The company list is only read when there are queue rows to filter.
+      const hasRows = [quotes, requests, changes].some(result => result.status !== 'fulfilled' || !Array.isArray(result.value) || result.value.length > 0);
+      const companies = hasRows ? await adminCompanies.listAll() : [];
+      if (request.signal.aborted) return;
+      if (!Array.isArray(companies)) throw new Error('Company data unavailable');
+      const partnerCompanyIds = new Set(companies.filter(company => company.isPartnerEnabled).map(company => company.id));
       if (requests.status === 'fulfilled' && Array.isArray(requests.value)) setRequestCount(requests.value.filter(item => item.status === 'Requested' && partnerCompanyIds.has(item.companyId)).length);
       if (changes.status === 'fulfilled' && Array.isArray(changes.value)) setChangeCount(changes.value.filter(item => !item.resolvedUtc && partnerCompanyIds.has(item.companyId)).length);
       setActionsError(requests.status === 'rejected' || changes.status === 'rejected' || (requests.status === 'fulfilled' && !Array.isArray(requests.value)) || (changes.status === 'fulfilled' && !Array.isArray(changes.value)));
