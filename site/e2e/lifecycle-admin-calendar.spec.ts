@@ -259,6 +259,7 @@ test('unusual duration is flagged, explained in the correction, and clears after
   await expect(page.getByText('Actual duration differs from scheduled', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Correct times for Alice Cleaner' }).click();
   await expect(page.getByText(/Review: Actual duration differs from scheduled/)).toBeVisible();
+  await expect(page.getByRole('dialog').getByText(/^Scheduled: /)).toBeVisible();
   await expect(page.getByLabel('Actual start')).toHaveValue('2026-10-30T10:15');
   await page.getByRole('textbox', { name: 'Reason', exact: true }).fill('Confirmed long visit');
   await page.getByRole('button', { name: 'Save work times' }).click();

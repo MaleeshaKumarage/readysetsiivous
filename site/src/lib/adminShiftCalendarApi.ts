@@ -20,8 +20,12 @@ export async function calendarRequest<T>(path: string, init: RequestInit = {}): 
   try {
     response = await authorizedFetch(`/api/v1/admin/shifts/calendar${path}`, { ...init, cache: 'no-store' });
   } catch {
-    // The request may have reached the server before the connection failed. Do not offer a blind retry.
-    throw new CalendarConnectionError('The connection was lost before the server confirmed the request. Reload the calendar to check what was saved before trying again.');
+    // A failed save may have reached the server before the connection dropped: do not offer a blind retry.
+    // A failed load changed nothing, so it gets a plain reload message.
+    const reading = !init.method || init.method === 'GET';
+    throw new CalendarConnectionError(reading
+      ? 'The calendar could not be loaded. Reload the page to try again.'
+      : 'The connection was lost before the server confirmed the request. Reload the calendar to check what was saved before trying again.');
   }
   if (response.status === 403) throw new CalendarAccessError('Shift calendar access is not enabled for your account.');
   if (!response.ok) {
