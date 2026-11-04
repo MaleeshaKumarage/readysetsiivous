@@ -64,8 +64,9 @@ public class CompanyRepository : ICompanyRepository
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            query = query.Where(c => c.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
-                                     || c.BusinessId.Contains(search, StringComparison.OrdinalIgnoreCase));
+            // ToLower().Contains translates to SQL in Marten; the StringComparison overload does not.
+            var term = search.Trim().ToLowerInvariant();
+            query = query.Where(c => c.Name.ToLower().Contains(term) || c.BusinessId.ToLower().Contains(term));
         }
 
         var total = await query.CountAsync(ct);

@@ -168,7 +168,8 @@ export default function CompaniesAdminPage() {
     if (!ready || !requested || openedCustomer.current === requested) return;
     openedCustomer.current = requested;
     void (async () => {
-      const detail = await adminCompanies.get(requested);
+      // A deleted or mistyped id, or a network error, leaves the list as it is instead of an unhandled rejection.
+      const detail = await adminCompanies.get(requested).catch(() => null);
       if (!detail) return;
       setStatus(detail.company.isActive ? 'active' : 'inactive');
       setPinned(detail.company);
