@@ -200,13 +200,13 @@ export default function WorkQueuePage() {
       ) : (
         <Stack gap="xs" role="list" aria-label="Work items">
           {result.items.map(item => (
-            <Paper key={`${item.source}-${item.id}`} withBorder p="sm" role="listitem">
+            <Paper key={`${item.source}-${item.id}`} withBorder p="sm" role="listitem" data-state={item.stateLabel === 'Not started' ? 'not-started' : undefined} style={item.stateLabel === 'Not started' ? { borderColor: 'var(--mantine-color-red-6)' } : undefined}>
               <Group justify="space-between" wrap="wrap" gap="xs">
                 <Stack gap={2}>
                   <Text fw={600}>{item.customerName}</Text>
                   <Text size="sm" c="dimmed">{item.reference} · {item.scheduledLocal}</Text>
                   <Group gap={6}>
-                    <Badge size="sm" variant="light">{item.stateLabel}</Badge>
+                    <Badge size="sm" variant="light" color={item.stateLabel === 'Not started' ? 'red' : undefined}>{item.stateLabel}</Badge>
                     <Badge size="sm" variant="outline" color="gray">{item.source === 'booking' ? 'Public booking' : item.source === 'shift' ? 'Company shift' : 'Partner request'}</Badge>
                     {item.assigneeName && <Text size="xs">{item.assigneeName}</Text>}
                   </Group>

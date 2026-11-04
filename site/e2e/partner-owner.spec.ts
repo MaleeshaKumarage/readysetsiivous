@@ -449,3 +449,61 @@ test('Tab and Shift+Tab keep focus inside the open request dialog', async ({ pag
   for (let press = 0; press < 15; press++) { await page.keyboard.press('Shift+Tab'); expect(await focusInside()).toBe(true); }
   await expect(form).toBeVisible();
 });
+
+test('cancelled requests page 25 at a time with their own pager, independent of completed requests', async ({ page }) => {
+  const cancelled = Array.from({ length: 27 }, (_, index) => ({ ...pending, id: `cancelled-${index}`, branchName: `Cancelled apartment ${index}`, status: 'Cancelled', firstAcceptedAtUtc: null }));
+  const done = Array.from({ length: 26 }, (_, index) => ({ ...pending, id: `done-${index}`, branchName: `Done apartment ${index}`, status: 'Completed', firstAcceptedAtUtc: null }));
+  await owner(page, { requests: [...cancelled, ...done] }); await page.goto('/partner/');
+  await page.getByRole('tab', { name: 'Cleaning requests', exact: true }).click();
+  await page.getByRole('tab', { name: /^Cancelled requests \(27\)/ }).click();
+  const cancelledPages = page.getByRole('navigation', { name: 'Cancelled requests', exact: true });
+  await expect(cancelledPages.getByText('1 / 2', { exact: true })).toBeVisible();
+  await expect(page.getByRole('article')).toHaveCount(25);
+  await expect(cancelledPages.getByRole('button', { name: 'Previous', exact: true })).toBeDisabled();
+  await cancelledPages.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(cancelledPages.getByText('2 / 2', { exact: true })).toBeVisible();
+  await expect(page.getByRole('article')).toHaveCount(2);
+  await expect(cancelledPages.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
+  // Completed keeps its own page state: it starts on page 1 while Cancelled is on page 2.
+  await page.getByRole('tab', { name: /^Completed requests \(26\)/ }).click();
+  const completedPages = page.getByRole('navigation', { name: 'Completed requests', exact: true });
+  await expect(completedPages.getByText('1 / 2', { exact: true })).toBeVisible();
+  await expect(page.getByRole('article')).toHaveCount(25);
+  await page.getByRole('tab', { name: /^Cancelled requests \(27\)/ }).click();
+  await expect(cancelledPages.getByText('1 / 2', { exact: true })).toBeVisible();
+  await expect(page.getByRole('article')).toHaveCount(25);
+});
+
+test('Finnish cancelled and completed request lists page with Finnish labels and keep the flexible-visit wording', async ({ page }) => {
+  const flexibleAccepted = { ...pending, status: 'Accepted', firstAcceptedAtUtc: '2026-11-01T10:00:00Z', plannedStartUtc: null, plannedEndUtc: null, acceptedCleanerName: 'Test Cleaner' };
+  const cancelled = Array.from({ length: 27 }, (_, index) => ({ ...pending, id: `fi-cancelled-${index}`, branchName: `Peruutettu kohde ${index}`, status: 'Cancelled', firstAcceptedAtUtc: null }));
+  const done = [{ ...flexibleAccepted, id: 'fi-done', branchName: 'Valmis kohde', status: 'Completed' }];
+  await owner(page, { requests: [...cancelled, ...done] }); await page.goto('/partner/');
+  await page.getByRole('button', { name: 'Suomi', exact: true }).click();
+  await expect(page.getByRole('main')).toHaveAttribute('lang', 'fi');
+  await page.getByRole('tab', { name: 'Siivouspyynnöt', exact: true }).click();
+  await page.getByRole('tab', { name: /^Peruutetut pyynnöt \(27\)/ }).click();
+  const cancelledPages = page.getByRole('navigation', { name: 'Peruutetut pyynnöt', exact: true });
+  await expect(cancelledPages.getByText('1 / 2', { exact: true })).toBeVisible();
+  await expect(cancelledPages.getByRole('button', { name: 'Edellinen', exact: true })).toBeDisabled();
+  await cancelledPages.getByRole('button', { name: 'Seuraava', exact: true }).click();
+  await expect(cancelledPages.getByText('2 / 2', { exact: true })).toBeVisible();
+  await expect(page.getByRole('article')).toHaveCount(2);
+  await page.getByRole('tab', { name: /^Valmiit pyynnöt \(1\)/ }).click();
+  await expect(page.getByRole('heading', { name: 'Valmis kohde · Valmis', exact: true })).toBeVisible();
+  await expect(page.getByText('Suunniteltu: Joustava, päivien sisällä', { exact: true })).toBeVisible();
+  await expect(page.getByText('Peruutettu kohde 0', { exact: true })).toHaveCount(0);
+});
+
+test('owner Cancelled pager moves between pages from the keyboard', async ({ page }) => {
+  const cancelled = Array.from({ length: 27 }, (_, index) => ({ ...pending, id: `kb-cancelled-${index}`, branchName: `Keyboard cancelled ${index}`, status: 'Cancelled', firstAcceptedAtUtc: null }));
+  await owner(page, { requests: cancelled }); await page.goto('/partner/');
+  await page.getByRole('tab', { name: 'Cleaning requests', exact: true }).click();
+  await page.getByRole('tab', { name: /^Cancelled requests \(27\)/ }).click();
+  const pages = page.getByRole('navigation', { name: 'Cancelled requests', exact: true });
+  await pages.getByRole('button', { name: 'Next', exact: true }).focus(); await page.keyboard.press('Enter');
+  await expect(pages.getByText('2 / 2', { exact: true })).toBeVisible();
+  await pages.getByRole('button', { name: 'Previous', exact: true }).focus(); await page.keyboard.press('Enter');
+  await expect(pages.getByText('1 / 2', { exact: true })).toBeVisible();
+});
+

@@ -18,7 +18,9 @@ public sealed class PartnerController(PartnerService service) : ControllerBase
     [HttpGet("me")] public async Task<IActionResult> Me(CancellationToken ct) => Ok(await service.Me(Actor, ct));
     [HttpGet("branches")] public async Task<IActionResult> Branches(CancellationToken ct) => Ok(await service.Branches(Actor, false, null, ct));
     [HttpPost("branches")] public async Task<IActionResult> CreateBranch(CreatePartnerBranch body, CancellationToken ct) => Ok(await service.CreateBranch(Actor, body, ct));
+    [HttpPut("branches/{id:guid}")] public async Task<IActionResult> UpdateBranch(Guid id, CreatePartnerBranch body, CancellationToken ct) => Ok(await service.UpdateBranch(Actor, id, body, ct));
     [HttpPost("branches/{id:guid}/quote-request")] public async Task<IActionResult> Quote(Guid id, CancellationToken ct) => Ok(await service.Quote(Actor, id, ct));
+    [HttpPost("branches/{id:guid}/quote-request/withdraw")] public async Task<IActionResult> WithdrawQuote(Guid id, CancellationToken ct) => Ok(await service.WithdrawQuote(Actor, id, ct));
     [HttpPost("branches/{id:guid}/change-requests")] public async Task<IActionResult> PropertyChange(Guid id, PartnerMessage body, CancellationToken ct) => Ok(await service.Change(Actor, id, true, body, ct));
     [HttpGet("requests")] public async Task<IActionResult> Requests(CancellationToken ct) => Ok(await service.Requests(Actor, false, null, ct));
     [HttpGet("change-requests")] public async Task<IActionResult> Changes(CancellationToken ct) => Ok(await service.OwnChanges(Actor, ct));

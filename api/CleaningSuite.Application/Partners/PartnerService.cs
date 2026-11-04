@@ -95,6 +95,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
             .AnyAsync(x => x.Status == "Offered" && x.OfferedEmployeeId == actor, ct))
             throw new ShiftConflictException("Accept or decline your pending offers before enabling automatic acceptance.");
         employee.AutoAcceptWork = autoAcceptWork;
+        employee.AutoAcceptWorkChosenUtc = DateTime.UtcNow;
         Db.Store(employee); await Db.SaveChangesAsync(ct);
         return new(employee.AutoAcceptWork);
     }
@@ -121,9 +122,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
     {
         await using var lease = await reservation.AcquireAsync(ct);
         var (_, company) = await Partner(actor, ct);
-        ValidateText(body.Name, 200, "Property name");
-        if (body.ContactEmail?.Length > 254 || body.ContactEmail is { Length: > 0 } && !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(body.ContactEmail))
-            throw new ValidationException("Enter a valid property contact email.");
+        ValidateBranchDetails(body);
         var branch = Domain.Companies.Branch.Create(company.Id, body.Name, body.Street, body.PostalCode,
             body.City, body.Country, body.ContactPhone);
         try { branch.SetPropertyCounts(body.RoomCount, body.BedCount); }
@@ -131,6 +130,49 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         branch.ContactEmail = body.ContactEmail?.Trim();
         Db.Store(branch);
         Notify(company.Id, branch.Id, null, "PropertyCreated", 1, "Staff");
+        await Db.SaveChangesAsync(ct);
+        return CompanyHandlers.MapBranch(branch);
+    }
+
+    // Owners correct a property's details (never its price, company or active flag). Same validation as creation.
+    public async Task<BranchDto> UpdateBranch(Guid actor, Guid id, CreatePartnerBranch body, CancellationToken ct)
+    {
+        await using var lease = await reservation.AcquireAsync(ct);
+        var (_, company) = await Partner(actor, ct);
+        var branch = await Branch(id, company.Id, ct);
+        ValidateBranchDetails(body);
+        try { branch.SetPropertyCounts(body.RoomCount, body.BedCount); }
+        catch (ArgumentException ex) { throw new ValidationException(ex.Message); }
+        branch.Update(body.Name, body.Street, body.PostalCode, body.City, body.Country, body.ContactPhone, branch.IsActive);
+        branch.ContactEmail = body.ContactEmail?.Trim();
+        Db.Store(branch);
+        await Db.SaveChangesAsync(ct);
+        return CompanyHandlers.MapBranch(branch);
+    }
+
+    public async Task<BranchDto> WithdrawQuote(Guid actor, Guid id, CancellationToken ct)
+    {
+        await using var lease = await reservation.AcquireAsync(ct);
+        var (_, company) = await Partner(actor, ct);
+        var branch = await Branch(id, company.Id, ct);
+        if (!branch.HasPendingQuote) throw new ShiftConflictException("There is no pending quote request to withdraw.");
+        branch.WithdrawQuote(DateTime.UtcNow);
+        Db.Store(branch);
+        await Db.SaveChangesAsync(ct);
+        return CompanyHandlers.MapBranch(branch);
+    }
+
+    // Staff decline a quote that cannot be priced. The reason is required and shown to the owner.
+    public async Task<BranchDto> RejectQuote(Guid actor, Guid id, PartnerQuoteRejection body, CancellationToken ct)
+    {
+        await using var lease = await reservation.AcquireAsync(ct);
+        await RequireManager(actor, ct);
+        ValidateText(body.Reason, 1000, "Rejection reason");
+        var branch = await Db.LoadAsync<Branch>(id, ct) ?? throw new NotFoundException("Branch", id);
+        await ActiveCompany(branch.CompanyId, ct);
+        if (!branch.HasPendingQuote) throw new ShiftConflictException("This property has no pending quote request.");
+        branch.RejectQuote(body.Reason, DateTime.UtcNow);
+        Db.Store(branch);
         await Db.SaveChangesAsync(ct);
         return CompanyHandlers.MapBranch(branch);
     }
@@ -143,6 +185,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         if (!branch.PricingReady && !branch.QuoteRequestedUtc.HasValue)
         {
             branch.QuoteRequestedUtc = DateTime.UtcNow; branch.UpdatedUtc = DateTime.UtcNow;
+            branch.QuoteRejectedUtc = null; branch.QuoteRejectionReason = null;
             Db.Store(branch); Notify(company.Id, id, null, "QuoteRequested", branch.PricingVersion + 1, "Staff");
             await Db.SaveChangesAsync(ct);
         }
@@ -558,6 +601,13 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
 
     private static PartnerChangeDto MapChange(PartnerChangeRequest x) => new(x.Id, x.CompanyId, x.BranchId,
         x.RequestId, x.Kind, x.Message, x.CreatedUtc, x.ResolvedUtc, x.Resolution);
+    // Shared by owner property creation and owner property edits, so both accept exactly the same details.
+    private static void ValidateBranchDetails(CreatePartnerBranch body)
+    {
+        ValidateText(body.Name, 200, "Property name");
+        if (body.ContactEmail?.Length > 254 || body.ContactEmail is { Length: > 0 } && !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(body.ContactEmail))
+            throw new ValidationException("Enter a valid property contact email.");
+    }
     private static void ValidateText(string? value, int max, string name)
     { if (string.IsNullOrWhiteSpace(value) || value.Length > max) throw new ValidationException($"{name} is required and must be at most {max} characters."); }
     private static void CheckVersion(PartnerCleaningRequest request, int version)

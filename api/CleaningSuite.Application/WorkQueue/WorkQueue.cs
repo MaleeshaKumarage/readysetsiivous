@@ -80,10 +80,11 @@ public static class WorkQueueRules
         return WorkQueueViews.Scheduled;
     }
 
-    public static string ShiftLabel(ShiftVisitRosterEntry visit, string view) => view switch
+    /// <summary>Scheduled work that has already started its window and has no started form reads "Not started".</summary>
+    public static string ShiftLabel(ShiftVisitRosterEntry visit, string view, DateTime nowUtc) => view switch
     {
         WorkQueueViews.NeedsAction => "Unassigned",
-        WorkQueueViews.Scheduled when visit.EmployeeIds.Count > 0 => "Scheduled",
+        WorkQueueViews.Scheduled when visit.EmployeeIds.Count > 0 && visit.Occurrence.StartUtc >= nowUtc => "Scheduled",
         WorkQueueViews.Scheduled => "Not started",
         WorkQueueViews.InProgress => "In progress",
         WorkQueueViews.Completed => "Completed",

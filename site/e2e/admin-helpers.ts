@@ -6,6 +6,11 @@ export async function setupAdminMocks(page: Page, options: { authenticated?: boo
     headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' },
     json: [],
   }));
+  // The quote banner reads the company list to count only partner-enabled companies; empty by default.
+  await page.route(/\/api\/v1\/admin\/companies(?:\?.*)?$/, route => route.fulfill({
+    headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' },
+    json: { items: [], total: 0 },
+  }));
   await page.route(/\/api\/v1\/admin\/tenant$/, route => route.fulfill({
     headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' },
     json: { companyName: 'ReadySetSiivous', timeZoneId: 'Europe/Helsinki' },

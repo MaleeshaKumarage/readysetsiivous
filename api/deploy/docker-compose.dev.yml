@@ -66,6 +66,8 @@ services:
       PushNotifications__VapidSubject: ${PUSH_NOTIFICATIONS_VAPID_SUBJECT:-}
       PushNotifications__VapidPublicKey: ${PUSH_NOTIFICATIONS_VAPID_PUBLIC_KEY:-}
       PushNotifications__VapidPrivateKey: ${PUSH_NOTIFICATIONS_VAPID_PRIVATE_KEY:-}
+      Notifications__PartnerEmail__Enabled: ${PARTNER_EMAIL_ENABLED:-false}
+      DataCorrections__ShiftValidityWindow__Mode: ${SHIFT_VALIDITY_CORRECTION_MODE:-Report}
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
       # Empty trust lists disable forwarded processing; configure only verified upstream peers.

@@ -154,6 +154,41 @@ test('partner month previews all company visits and issues the exact approved pa
   await expect(page.getByRole('cell', { name: 'RSS-2026-001', exact: true })).toBeVisible();
 });
 
+test('a month with several completed visits of one shift previews one line per visit, each with its own completion date', async ({ page }) => {
+  // Month options are relative to "now"; freeze it so the labels picked below always exist.
+  await page.clock.setFixedTime(new Date('2026-11-15T12:00:00Z'));
+  await setupAdminMocks(page); await companies(page);
+  const issuer: InvoiceIssuer = { companyName: 'ReadySetSiivous', businessId: '3404861-9', companyAddress: { street: 'Issuer road 1', postalCode: '00100', city: 'Helsinki', country: 'FI' }, email: 'office@example.test', phone: '', bankAccountIBAN: 'FI2112345600000785', bankBic: 'NDEAFIHH', paymentTermsDays: 14, defaultVatRatePercent: 25.5 };
+  const preview: ShiftInvoice = { id: 'preview', invoiceNumber: '', customer: { name: 'Owner company' }, issuer, issueDate: '2026-12-31', dueDate: '2027-01-14', status: 'Preview', periodFrom: '2026-12-01', periodTo: '2026-12-31', previewToken: 'frozen-preview-token', total: { net: 140, vat: 35.7, gross: 175.7 }, lines: [{ lineKey: 'visit-1', description: 'Completed cleaning visits', shiftName: 'Lake apartment cleaning', branchName: branch.name, hours: 4, occurrences: 2, pricingMode: 'PerOccurrence', quantity: 2, unitPriceNet: 70, netAmount: 140, vatRatePercent: 25.5, vatAmount: 35.7, total: 175.7, periodFrom: '2026-12-01', periodTo: '2026-12-31' }] };
+  const baseLine = preview.lines[0];
+  // Three occurrences of the same shift completed in the month: each stays its own line with its own completion date.
+  preview.lines = [
+    { ...baseLine, lineKey: 'occ-1', branchId: branch.id, shiftName: 'Lake apartment cleaning', quantity: 1, occurrences: 1, unitPriceNet: 40, netAmount: 40, vatAmount: 10.2, total: 50.2, periodFrom: '2026-10-05', periodTo: '2026-10-05', completedOn: '2026-10-05' },
+    { ...baseLine, lineKey: 'occ-2', branchId: branch.id, shiftName: 'Lake apartment cleaning', quantity: 1, occurrences: 1, unitPriceNet: 40, netAmount: 40, vatAmount: 10.2, total: 50.2, periodFrom: '2026-10-09', periodTo: '2026-10-09', completedOn: '2026-10-09' },
+    { ...baseLine, lineKey: 'occ-3', branchId: branch.id, shiftName: 'Lake apartment cleaning', quantity: 1, occurrences: 1, unitPriceNet: 40, netAmount: 40, vatAmount: 10.2, total: 50.2, periodFrom: '2026-10-12', periodTo: '2026-10-12', completedOn: '2026-10-12' },
+  ];
+  preview.total = { net: 120, vat: 30.6, gross: 150.6 };
+  await page.route(/\/api\/v1\/admin\/shifts(?:\?.*)?$/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/admin\/invoices(?:\/.*)?$/, route => {
+    const req = route.request(), path = new URL(req.url()).pathname.split('/invoices')[1];
+    if (req.method() === 'OPTIONS') return route.fulfill({ headers });
+    if (req.method() === 'GET') return route.fulfill({ headers, json: path === '/issuer' ? issuer : [] });
+    if (path === '/shift-preview') { const input = req.postDataJSON() as ShiftInvoiceInput; return route.fulfill({ headers, json: { ...preview, periodFrom: input.from, periodTo: input.to, lines: preview.lines } }); }
+    return route.fulfill({ status: 404, headers });
+  });
+  await page.goto('/admin/invoices/');
+  await page.getByRole('textbox', { name: 'Company', exact: true }).click(); await page.getByRole('option', { name: 'Owner company', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Completion month', exact: true }).click();
+  await pickMonth(page, 'October 2026');
+  await page.getByLabel(/^Billing street/).fill('Customer road 2'); await page.getByLabel(/^Billing postalCode/).fill('33100'); await page.getByLabel(/^Billing city/).fill('Tampere');
+  await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Invoice preview', exact: true })).toBeVisible();
+  const lineCells = page.getByRole('cell', { name: /Lake apartment cleaning/ });
+  await expect(lineCells).toHaveCount(3);
+  for (const day of ['2026-10-05', '2026-10-09', '2026-10-12']) await expect(page.getByText('Completed on: ' + day, { exact: true })).toBeVisible();
+  await expect(page.getByText('Net €120.00 · VAT €30.60 · Total €150.60', { exact: true })).toBeVisible();
+});
+
 test('cleaner declines an offer with its revision and reason then sees it removed', async ({ page }) => {
   await setupAdminMocks(page); await page.addInitScript(() => { (window as unknown as { __MOCK_ROLES__: string[] }).__MOCK_ROLES__ = ['employee']; });
   let offers: CleanerOffer[] = [{ id: 'offer-one', requestId: cleaning.id, version: 7, branchName: branch.name, street: branch.street ?? null, postalCode: null, city: branch.city ?? null, fromDate: cleaning.fromDate, toDate: cleaning.toDate, exactStartLocalTime: null, plannedStartUtc: null, estimatedDurationMinutes: 120, notes: null, timeZoneId: 'Europe/Helsinki' }];
