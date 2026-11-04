@@ -90,7 +90,9 @@ export default function CompaniesAdminPage() {
   };
 
   useEffect(() => {
-    applyParams(new URLSearchParams(window.location.search));
+    const initialParams = new URLSearchParams(window.location.search);
+    requestedCompany.current = initialParams.get('company');
+    applyParams(initialParams);
     replaceUrlNext.current = true;
     setReady(true);
     const onPopState = () => applyParams(new URLSearchParams(window.location.search));
@@ -105,19 +107,18 @@ export default function CompaniesAdminPage() {
 
   useEffect(() => {
     if (!ready) return;
-    const current = new URLSearchParams(window.location.search);
     const next = new URLSearchParams();
     next.set('status', status); next.set('page', String(page)); next.set('size', String(pageSize));
     if (query) next.set('q', query);
-    const deepLink = current.get('company');
-    if (deepLink) next.set('company', deepLink);
+    // ?company= stays only while the pinned row is shown; dismissing it drops the param so a reload does not reopen it.
+    if (pinned) next.set('company', pinned.id);
     const target = `${window.location.pathname}?${next.toString()}`;
     const replace = replaceUrlNext.current;
     replaceUrlNext.current = false;
     if (target === `${window.location.pathname}${window.location.search}`) return;
     if (replace) window.history.replaceState(null, '', target);
     else window.history.pushState(null, '', target);
-  }, [ready, status, page, pageSize, query]);
+  }, [ready, status, page, pageSize, query, pinned]);
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -163,8 +164,10 @@ export default function CompaniesAdminPage() {
   };
 
   const openedCustomer = useRef<string | null>(null);
+  // The ?company= value read at mount; the URL loses it once the list state takes over.
+  const requestedCompany = useRef<string | null>(null);
   useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get('company');
+    const requested = requestedCompany.current;
     if (!ready || !requested || openedCustomer.current === requested) return;
     openedCustomer.current = requested;
     void (async () => {
@@ -334,7 +337,8 @@ export default function CompaniesAdminPage() {
         <Group justify="space-between" mt="sm" wrap="wrap" gap="sm">
           <Select aria-label="Companies per page" data={['25', '50', '100']} value={String(pageSize)} allowDeselect={false} w={120}
             onChange={value => { if (value) { setPageSize(Number(value)); setPage(1); } }} />
-          <Pagination total={Math.max(1, Math.ceil(total / pageSize))} value={page} onChange={setPage} />
+          <Pagination total={Math.max(1, Math.ceil(total / pageSize))} value={page} onChange={setPage}
+            getControlProps={control => ({ 'aria-label': control === 'next' ? 'Next page' : control === 'previous' ? 'Previous page' : control === 'first' ? 'First page' : 'Last page' })} />
         </Group>
       )}
       </LifecycleTabs>

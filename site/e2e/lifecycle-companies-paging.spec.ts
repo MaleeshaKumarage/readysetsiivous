@@ -30,7 +30,9 @@ async function mockCompanies(page: Page, options: { list?: typeof companies; fai
     }
     const detail = url.pathname.match(/\/admin\/companies\/([^/]+)$/);
     if (detail) {
+      if (detail[1] === 'company-fail') return route.fulfill({ status: 500, headers, json: {} });
       const company = list.find(c => c.id === detail[1]);
+      if (!company) return route.fulfill({ status: 404, headers, json: {} });
       return route.fulfill({ headers, json: { company, branches: [
         { id: 'branch-active', companyId: detail[1], name: 'Active branch', isActive: true },
         { id: 'branch-inactive', companyId: detail[1], name: 'Inactive branch', isActive: false },
@@ -283,4 +285,57 @@ test('collapsing the pinned deep-linked company removes its row and branch panel
   await row.getByRole('button', { name: /Branches|^\d+$/ }).first().click();
   await expect(page.getByText('Active branch', { exact: true })).not.toBeVisible();
   await expect(page.getByRole('cell', { name: 'Company 60', exact: true })).not.toBeVisible();
+});
+
+test('clicking Next and a non-adjacent page number moves through the pages', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockCompanies(page);
+  await page.goto('/admin/companies/');
+  await page.getByRole('button', { name: 'Next page' }).click();
+  await expect(page).toHaveURL(/page=2/);
+  await expect(page.getByRole('cell', { name: 'Company 25', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Previous page' }).click();
+  await expect(page).toHaveURL(/page=1/);
+  await page.getByRole('button', { name: '3', exact: true }).click();
+  await expect(page).toHaveURL(/page=3/);
+  await expect(page.getByRole('cell', { name: 'Company 50', exact: true })).toBeVisible();
+});
+
+test('a deleted or mistyped company id is ignored and the list still loads', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockCompanies(page);
+  await page.goto('/admin/companies/?company=does-not-exist');
+  await expect(page.getByRole('cell', { name: 'Company 0', exact: true })).toBeVisible();
+  await expect(page.getByRole('tablist', { name: 'Branch activity' })).toHaveCount(0);
+});
+
+test('a failed company detail request leaves the list usable', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockCompanies(page);
+  await page.goto('/admin/companies/?company=company-fail');
+  await expect(page.getByRole('cell', { name: 'Company 0', exact: true })).toBeVisible();
+  await expect(page.getByText('Active branch', { exact: true })).not.toBeVisible();
+});
+
+test('dismissing the pinned company drops ?company= from the URL', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockCompanies(page);
+  await page.goto('/admin/companies/?company=company-60');
+  await expect(page.getByText('Active branch', { exact: true })).toBeVisible();
+  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Company 60', exact: true }) }).first();
+  await row.getByRole('button', { name: /Branches|^\d+$/ }).first().click();
+  await expect(page).not.toHaveURL(/company=/);
+  await page.reload();
+  await expect(page.getByText('Active branch', { exact: true })).not.toBeVisible();
+});
+
+test('Back after an out-of-range page correction does not return to the invalid page', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockCompanies(page);
+  await page.goto('/admin/companies/');
+  await page.goto('/admin/companies/?status=active&page=9&size=25');
+  await expect(page).toHaveURL(/page=4/);
+  await page.goBack();
+  await expect(page).not.toHaveURL(/page=9/);
+  await expect(page).not.toHaveURL(/page=4/);
 });
