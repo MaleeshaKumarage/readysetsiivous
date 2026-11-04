@@ -102,8 +102,10 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
                 // A partner visit is anchored to its request's planned start, so a moved visit is not billed from its old form.
                 var partner = shift.PartnerRequestId is { } partnerId ? partnerRequests.FirstOrDefault(r => r.Id == partnerId) : null;
                 var anchor = partner is null ? (DateTime?)null : PartnerAnchor(partner, zone);
-                if (evidence.Any(f => f.IsSubmitted && !f.ShiftDeletedUtc.HasValue && (anchor is null || f.ShiftOccurrenceUtc == anchor.Value)
-                    && (f.EndedAtUtc ?? f.SubmittedUtc) is DateTime ended && ended >= from && ended < to)) monthEvidence[shift.Id] = evidence;
+                // Only forms completed inside the invoice month can select visits; earlier completions never seed the window.
+                var inMonth = evidence.Where(f => f.IsSubmitted && !f.ShiftDeletedUtc.HasValue
+                    && (f.EndedAtUtc ?? f.SubmittedUtc) is DateTime ended && ended >= from && ended < to).ToArray();
+                if (inMonth.Any(f => anchor is null || f.ShiftOccurrenceUtc == anchor.Value)) monthEvidence[shift.Id] = inMonth;
             }
             ids = monthEvidence.Keys.Order().ToArray();
         }
@@ -166,21 +168,14 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             }
             var calculationFrom = request.PartnerMonth ? DateOnly.FromDateTime(TenantTimeZone.LocalDate(visits.Min(v => v.StartUtc), zone)) : request.From;
             var calculationTo = request.PartnerMonth ? DateOnly.FromDateTime(TenantTimeZone.LocalDate(visits.Max(v => v.StartUtc), zone)) : request.To;
-            var calculated = ShiftInvoiceCalculator.Calculate(schedule, pricing, visits, calculationFrom, calculationTo, zone, names, adjustments);
+            var calculated = ShiftInvoiceCalculator.Calculate(schedule, pricing, visits, calculationFrom, calculationTo, zone, names, adjustments,
+                request.PartnerMonth ? completionTimes : null);
             if (partnerRequest is not null)
             {
                 foreach (var line in calculated)
                 {
                     if (line.ShiftName is "Partner cleaning" or "Accepted partner cleaning") line.ShiftName = "Cleaning";
                     if (line.Description is "Partner cleaning" or "Accepted partner cleaning") line.Description = "Cleaning";
-                }
-            }
-            if (request.PartnerMonth && visits.Length == 1)
-            {
-                foreach (var line in calculated)
-                {
-                    line.CompletedAtUtc = completionTimes[visits[0].StartUtc];
-                    line.CompletedOn = DateOnly.FromDateTime(TenantTimeZone.LocalDate(line.CompletedAtUtc.Value, zone));
                 }
             }
             lines.AddRange(calculated);

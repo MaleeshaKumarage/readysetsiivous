@@ -102,16 +102,63 @@ public class PartnerInvoiceTests
         var result=await f.Service.PreviewAsync(f.Input with {From=new(2026,11,1),To=new(2026,11,30)},default);
         Assert.Equal(new DateOnly(2026,11,2),Assert.Single(result.Invoice.Lines).CompletedOn);
     }
+    [Fact]
+    public async Task Missed_weekly_occurrence_between_two_completed_visits_is_not_billed()
+    {
+        var f = new Fixture(0);
+        f.AddWeeklyCompanyShift([DayOfWeek.Monday, DayOfWeek.Wednesday, DayOfWeek.Friday],
+            new(2026,10,5,6,0,0,DateTimeKind.Utc), new(2026,10,9,6,0,0,DateTimeKind.Utc));
+        var result = await f.Service.PreviewAsync(f.Input, default);
+        Assert.Equal(new[] { new DateOnly(2026,10,5), new DateOnly(2026,10,9) }, result.Invoice.Lines.Select(l => l.PeriodFrom!.Value).OrderBy(d => d).ToArray());
+        Assert.Equal(2, result.Invoice.Lines.Sum(l => l.Occurrences));
+    }
+    [Fact]
+    public async Task Several_completed_visits_in_one_month_each_carry_their_own_completion_line()
+    {
+        var f = new Fixture(0);
+        f.AddWeeklyCompanyShift([DayOfWeek.Monday, DayOfWeek.Wednesday, DayOfWeek.Friday],
+            new(2026,10,5,6,0,0,DateTimeKind.Utc), new(2026,10,7,6,0,0,DateTimeKind.Utc), new(2026,10,9,6,0,0,DateTimeKind.Utc));
+        var result = await f.Service.PreviewAsync(f.Input, default);
+        Assert.Equal(3, result.Invoice.Lines.Count);
+        Assert.All(result.Invoice.Lines, l => Assert.Equal(1, l.Occurrences));
+        Assert.Equal(new[] { new DateOnly(2026,10,5), new DateOnly(2026,10,7), new DateOnly(2026,10,9) },
+            result.Invoice.Lines.Select(l => l.CompletedOn!.Value).OrderBy(d => d).ToArray());
+    }
+    [Fact]
+    public async Task Completion_from_an_earlier_month_does_not_seed_the_month_window()
+    {
+        var f = new Fixture(0);
+        f.AddWeeklyCompanyShift([DayOfWeek.Monday, DayOfWeek.Wednesday, DayOfWeek.Friday],
+            new(2026,9,28,6,0,0,DateTimeKind.Utc), new(2026,10,5,6,0,0,DateTimeKind.Utc));
+        var result = await f.Service.PreviewAsync(f.Input, default);
+        Assert.Equal(new DateOnly(2026,10,5), Assert.Single(result.Invoice.Lines).PeriodFrom);
+    }
     private sealed class Fixture
     {
         public List<PartnerCleaningRequest> Requests = []; public Dictionary<Guid,List<QualityCycleForm>> Forms = []; public List<Invoice> Existing = []; public Dictionary<Guid, ShiftOccurrenceException> Visits = []; public Dictionary<Guid, List<ShiftOccurrenceAssignment>> Rosters = [];
+        private readonly Dictionary<Guid,Shift> selected = new(); private readonly Guid employeeId = Guid.NewGuid(); private Company companyRef = null!; private Branch branchRef = null!; private Mock<IShiftRepository> shiftRepo = null!;
         public Mock<IInvoiceRepository> Invoices = new(); public ShiftInvoiceService Service; public ShiftBillingSettingsService Settings; public ShiftInvoiceRequest Input;
+        // A recurring company shift (not partner-created) completed on the given local weekdays and starts.
+        public Guid AddWeeklyCompanyShift(DayOfWeek[] days, params DateTime[] completedStartsUtc)
+        {
+            var shift = new Shift { Id = Guid.NewGuid(), CompanyId = companyRef.Id, BranchId = branchRef.Id, Name = "Weekly cleaning", IsActive = true,
+                ValidFrom = new(2026,10,1), ValidUntil = new(2026,10,31), CreatedUtc = new(2026,9,1,0,0,0,DateTimeKind.Utc),
+                Schedule = new() { Type = ShiftScheduleType.Weekly, WeeklyDays = days.ToList(), WeeklyStart = new TimeSpan(9,0,0), WeeklyEnd = new TimeSpan(11,0,0) } };
+            selected.Add(shift.Id, shift);
+            Forms.Add(shift.Id, completedStartsUtc.Select(start => new QualityCycleForm { Id = Guid.NewGuid(), ShiftId = shift.Id, EmployeeId = employeeId,
+                ShiftOccurrenceUtc = start, IsSubmitted = true, EndedAtUtc = start.AddHours(2) }).ToList());
+            shiftRepo.Setup(x => x.GetAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+            shiftRepo.Setup(x => x.ListOccurrenceExceptionsAsync(shift.Id, It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<ShiftOccurrenceException>());
+            shiftRepo.Setup(x => x.ListAssignmentHistoryAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync([]);
+            shiftRepo.Setup(x => x.ListOccurrenceAssignmentsAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync([]);
+            return shift.Id;
+        }
         public Fixture(int count)
         {
             var company = new Company { Id=Guid.NewGuid(), Name="Property owner", IsActive=true, IsPartnerEnabled=true };
             var branch = new Branch { Id=Guid.NewGuid(), CompanyId=company.Id, Name="Apartment" };
             var profile = new TenantProfile { TimeZoneId="Europe/Helsinki", PaymentTermsDays=14 };
-            var shifts = new Mock<IShiftRepository>(); var selected = new Dictionary<Guid,Shift>();
+            var shifts = shiftRepo = new Mock<IShiftRepository>(); companyRef = company; branchRef = branch;
             for(var i=0;i<count;i++)
             {
                 var request = new PartnerCleaningRequest { Id=Guid.NewGuid(),CompanyId=company.Id,BranchId=branch.Id,PriceNet=100,VatRatePercent=25.5m,EstimatedDurationMinutes=120,Status="Accepted",FirstAcceptedAtUtc=DateTime.UtcNow,LinkedShiftId=Guid.NewGuid(),PlannedStartUtc=new(2026,10,15,12,0,0,DateTimeKind.Utc) };
