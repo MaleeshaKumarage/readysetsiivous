@@ -49,3 +49,23 @@ test('shifts list pages through every generated active shift', async ({ page }) 
   await pager.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(pager.getByText(`Showing 26–50 of ${active}`)).toBeVisible();
 });
+
+test('expanding a company lists exactly its own generated branches', async ({ page }) => {
+  const data = buildScaleData();
+  const company = data.companies.find(c => c.name === 'Company 02 Ltd')!;
+  const branches = data.branches.filter(b => b.companyId === company.id);
+  expect(branches.length).toBeGreaterThanOrEqual(SCALE.branchesMin);
+  await setupAdminMocks(page);
+  await installScaleRoutes(page, data);
+  await page.goto('/admin/companies/');
+  const row = page.locator('tbody tr').filter({ hasText: company.name }).first();
+  await expect(row).toBeVisible({ timeout: 15000 });
+  await row.getByRole('button', { name: 'Branches', exact: false }).click();
+  // The expansion is the row directly under the company; scope every assertion to it so other companies' branches cannot match.
+  const panel = row.locator('xpath=following-sibling::tr[1]');
+  await expect(panel.getByText('Branches', { exact: true })).toBeVisible();
+  await expect(panel.getByText(/^Branch \d+ · Helsinki/)).toHaveCount(branches.length);
+  for (const branch of branches) {
+    await expect(panel.getByText(new RegExp(`^${branch.name} · Helsinki`))).toBeVisible();
+  }
+});
