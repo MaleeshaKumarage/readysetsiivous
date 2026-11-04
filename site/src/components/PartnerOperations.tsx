@@ -127,7 +127,7 @@ function PartnerOperationsContent({ role }: { role: 'admin' | 'manager' }) {
     <Modal closeButtonProps={{ 'aria-label': 'Close dialog' }} opened={rejecting !== null} onClose={() => setRejecting(null)} title={rejecting ? `Reject quote · ${rejecting.name}` : 'Reject quote'} radius="md">
       {rejecting && <form className="space-y-3" onSubmit={event => { event.preventDefault(); const reason = rejectReason.trim(); if (!reason) return; void act(async () => { await staffPartnerApi(role).rejectQuote(rejecting, reason); setRejecting(null); }, 'Quote rejected.'); }}>
         <p>The owner sees this reason and the property leaves the quote queue.</p>
-        <label>Reason for rejecting the quote<Textarea className={input} required value={rejectReason} onChange={e => setRejectReason(e.target.value)} /></label>
+        <label>Reason for rejecting the quote<Textarea data-autofocus className={input} required value={rejectReason} onChange={e => setRejectReason(e.target.value)} /></label>
         <div className="flex flex-wrap gap-3"><StaffButton className={button} disabled={busy || !rejectReason.trim()}>Confirm rejection</StaffButton><StaffButton type="button" disabled={busy} onClick={() => setRejecting(null)}>Keep quote</StaffButton></div>
       </form>}
     </Modal>
