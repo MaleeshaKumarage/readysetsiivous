@@ -47,7 +47,9 @@ public class AgreementsAdminController : ControllerBase
     }
 
     [HttpGet]
-    [OutputCache(Duration = 30)]
+    // Not cached: the response is tenant- and companyId-specific, and the output cache key does not vary by tenant.
+    [OutputCache(NoStore = true)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<IActionResult> List([FromQuery] Guid? companyId, CancellationToken ct) =>
         Ok(await _mediator.Send(new ListAgreementSummariesQuery(companyId), ct));
 
