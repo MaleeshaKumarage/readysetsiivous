@@ -3,10 +3,10 @@
 ## What changed
 
 - New employees accept partner work automatically unless they choose otherwise.
-- Existing employees who never chose a setting are switched to automatic acceptance by
+- Every existing work employee (admin, manager, employee) is switched to automatic acceptance by
   [`api/deploy/employee-auto-accept-migration.sql`](../../api/deploy/employee-auto-accept-migration.sql).
-- Employees who turned automatic acceptance on or off themselves keep their choice. The
-  choice is recorded with `AutoAcceptWorkChosenUtc` when they save it.
+  This includes employees who had switched it off; the decision is that all employees move to automatic.
+- Employees can still switch it off in their profile afterwards.
 
 ## Run
 
@@ -22,9 +22,7 @@ Tell admins before the release:
 > not chosen a setting themselves. Employees can switch it off in their profile. Employees
 > who already chose a setting keep it.
 
-## Known limitation
+## Note
 
-Employees who switched automatic acceptance off before `AutoAcceptWorkChosenUtc` existed
-have no recorded choice. The migration cannot tell those apart from employees who never
-chose, so it switches them on. Review the list of employees who had it off before running
-the apply step, and ask them to switch it off again if needed.
+Employees who had automatic acceptance switched off will have it switched on by the apply step.
+Tell them before the release, so they can switch it off again if they need to.

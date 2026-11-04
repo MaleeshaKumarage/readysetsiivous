@@ -241,6 +241,9 @@ test('a past assigned company visit nobody started reads Not started, and Open c
   const missedRow = page.getByRole('link', { name: 'Open company shift Weekly office clean', exact: true }).first();
   await expect(page.getByText('Not started', { exact: true })).toBeVisible();
   await expect(page.getByText('Scheduled', { exact: true })).toBeVisible();
+  // Unstarted work stays in Scheduled with a red border; upcoming work keeps the plain row.
+  await expect(page.getByRole('listitem').filter({ hasText: '2026-10-20 10:00' })).toHaveAttribute('data-state', 'not-started');
+  await expect(page.getByRole('listitem').filter({ hasText: '2026-11-12 10:00' })).not.toHaveAttribute('data-state', 'not-started');
   await missedRow.click();
   await expect(page).toHaveURL(/\/admin\/shifts\/calendar\/?$/);
 });

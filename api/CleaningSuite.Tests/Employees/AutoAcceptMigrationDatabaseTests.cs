@@ -12,7 +12,7 @@ namespace CleaningSuite.Tests.Employees;
 public class AutoAcceptMigrationDatabaseTests
 {
     [QualityCycleDatabaseFact]
-    public async Task Migration_switches_only_employees_who_never_chose_and_is_idempotent()
+    public async Task Migration_switches_every_work_employee_to_automatic_and_leaves_partners_alone()
     {
         var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
         var schema = "auto_accept_" + Guid.NewGuid().ToString("N");
@@ -46,20 +46,20 @@ public class AutoAcceptMigrationDatabaseTests
         Assert.Equal(new Dictionary<string, bool>
         {
             [legacyFalse.Id.ToString()] = true,
-            [chosenFalse.Id.ToString()] = false,
+            [chosenFalse.Id.ToString()] = true,
             [chosenTrue.Id.ToString()] = true,
             [legacyAdmin.Id.ToString()] = true,
             [partner.Id.ToString()] = false,
             [defaulted.Id.ToString()] = true,
         }, await AutoAcceptValues(data, schema));
 
-        // A second run changes nothing, so a retried release cannot flip a later deliberate opt-out.
+        // A second run changes nothing, so a retried release is safe.
         await using (var connectionScope = await data.OpenConnectionAsync())
         {
             await Exec(connectionScope, $"SET search_path TO {schema}");
             await Exec(connectionScope, migration);
         }
-        Assert.False((await AutoAcceptValues(data, schema))[chosenFalse.Id.ToString()]);
+        Assert.True((await AutoAcceptValues(data, schema))[chosenFalse.Id.ToString()]);
     }
 
     private static string ShippedMigrationBlock()
