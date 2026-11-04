@@ -73,6 +73,116 @@ public class AdminShiftCalendarTests
         Assert.True(person.GetProperty("canRecord").GetBoolean());
     }
 
+    [Theory]
+    [InlineData(false, false, 120, null, false, null)]
+    [InlineData(true, false, 120, null, false, "missing-completion")]
+    [InlineData(true, false, 120, 60, false, "missing-completion")]
+    [InlineData(true, true, 120, 120, false, null)]
+    [InlineData(true, true, 120, 240, false, "unusual-duration")]
+    [InlineData(true, true, 120, 30, false, "unusual-duration")]
+    [InlineData(true, true, 120, 180, false, null)]
+    [InlineData(true, true, 120, 240, true, null)]
+    [InlineData(false, true, 120, 240, false, null)]
+    public void Completion_review_flags_only_eligible_visits_needing_review(bool eligible, bool submitted, int scheduledMinutes,
+        int? actualMinutes, bool corrected, string? expected)
+    {
+        var start = new DateTime(2026, 10, 30, 8, 0, 0, DateTimeKind.Utc);
+        var flag = CompletionReview.Evaluate(eligible, start, start.AddMinutes(scheduledMinutes), submitted,
+            actualMinutes is null ? null : start, actualMinutes is null ? null : start.AddMinutes(actualMinutes.Value), corrected);
+        Assert.Equal(expected, flag?.Kind);
+    }
+
+    [Fact]
+    public async Task Past_visit_without_completion_is_flagged_but_future_visit_is_not()
+    {
+        var f = new Fixture();
+        var past = Assert.IsType<OkObjectResult>(await f.Controller.Get(f.Start.ToString("yyyy-MM-dd"), default));
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(past.Value, new JsonSerializerOptions(JsonSerializerDefaults.Web))))
+        {
+            var visit = Assert.Single(json.RootElement.GetProperty("occurrences").EnumerateArray());
+            Assert.True(visit.GetProperty("needsReview").GetBoolean());
+            var person = Assert.Single(visit.GetProperty("assignees").EnumerateArray());
+            Assert.Equal("missing-completion", person.GetProperty("review").GetProperty("kind").GetString());
+            Assert.True(person.GetProperty("canRecord").GetBoolean());
+        }
+        var future = Assert.IsType<OkObjectResult>(await f.Controller.Get(f.Start.AddDays(4).ToString("yyyy-MM-dd"), default));
+        using var futureJson = JsonDocument.Parse(JsonSerializer.Serialize(future.Value, new JsonSerializerOptions(JsonSerializerDefaults.Web))); 
+        var upcoming = Assert.Single(futureJson.RootElement.GetProperty("occurrences").EnumerateArray());
+        Assert.False(upcoming.GetProperty("needsReview").GetBoolean());
+        var upcomingPerson = Assert.Single(upcoming.GetProperty("assignees").EnumerateArray());
+        Assert.Equal(JsonValueKind.Null, upcomingPerson.GetProperty("review").ValueKind);
+        Assert.False(upcomingPerson.GetProperty("canRecord").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Unusual_duration_is_flagged_until_a_reasoned_correction_is_recorded_and_no_time_is_edited_automatically()
+    {
+        var f = new Fixture();
+        var form = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Cleaner One", Guid.NewGuid(), "Checklist", f.Start, new() { "Floor" }, f.Start.AddHours(2));
+        form.Start(f.Start); form.Submit(new() { new() { ItemText = "Floor", IsChecked = false } }, null, null, null, f.Start.AddHours(5));
+        f.Forms.Setup(r => r.ListFormsAsync(null, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>())).ReturnsAsync(new[] { form });
+        var before = await VisitAsync(f);
+        Assert.Equal("unusual-duration", before.GetProperty("assignees")[0].GetProperty("review").GetProperty("kind").GetString());
+        Assert.Equal(f.Start.AddHours(5), form.EndedAtUtc);
+        // Record stores the previous times, then replaces the form times with the corrected ones.
+        var correctedStart = f.Start; var correctedEnd = f.Start.AddHours(2);
+        form.WorkTimeCorrections.Add(new("admin-subject", DateTime.UtcNow, "Confirmed long visit", form.StartedAtUtc, form.EndedAtUtc, correctedStart, correctedEnd));
+        form.StartedAtUtc = correctedStart; form.EndedAtUtc = correctedEnd;
+        var correction = Assert.Single(form.WorkTimeCorrections);
+        Assert.Equal(f.Start.AddHours(5), correction.PreviousEndUtc);
+        var after = await VisitAsync(f);
+        Assert.Equal(JsonValueKind.Null, after.GetProperty("assignees")[0].GetProperty("review").ValueKind);
+        Assert.False(after.GetProperty("needsReview").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Inactive_employee_visit_is_not_flagged_because_no_correction_action_exists()
+    {
+        var f = new Fixture(); f.Person.IsActive = false;
+        var visit = await VisitAsync(f);
+        var person = visit.GetProperty("assignees")[0];
+        Assert.Equal(JsonValueKind.Null, person.GetProperty("review").ValueKind);
+        Assert.False(person.GetProperty("canRecord").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Lost_response_retry_with_stale_version_conflicts_and_does_not_duplicate_the_correction()
+    {
+        var f = new Fixture(); QualityCycleForm? stored = null;
+        f.Forms.Setup(r => r.GetFormByShiftOccurrenceAsync(f.Shift.Id, f.Person.Id, f.Start, It.IsAny<CancellationToken>())).ReturnsAsync(() => stored);
+        f.Forms.Setup(r => r.CreateStartedFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()))
+            .Callback<QualityCycleForm, CancellationToken>((form, _) => { form.Version = Guid.NewGuid(); stored = form; }).Returns(Task.CompletedTask);
+        // The first save succeeds on the server but its response is lost; the retry still sends the version it saw before saving.
+        Assert.IsType<OkObjectResult>(await f.Controller.Record(f.Body(null), default));
+        Assert.IsType<ConflictObjectResult>(await f.Controller.Record(f.Body(null), default));
+        f.Forms.Verify(r => r.CreateStartedFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Once);
+        f.Forms.Verify(r => r.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);
+        Assert.Single(stored!.WorkTimeCorrections);
+    }
+
+    [Fact]
+    public async Task Retry_on_an_existing_form_with_stale_version_conflicts_and_does_not_duplicate_the_correction()
+    {
+        var f = new Fixture(); var v1 = Guid.NewGuid();
+        var form = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Cleaner One", Guid.NewGuid(), "Checklist", f.Start, new() { "Floor" }, f.Start.AddHours(2));
+        form.Start(f.Start); form.Version = v1;
+        f.Forms.Setup(r => r.GetFormByShiftOccurrenceAsync(f.Shift.Id, f.Person.Id, f.Start, It.IsAny<CancellationToken>())).ReturnsAsync(form);
+        f.Forms.Setup(r => r.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()))
+            .Callback<QualityCycleForm, CancellationToken>((saved, _) => saved.Version = Guid.NewGuid()).Returns(Task.CompletedTask);
+        // First save bumps the version; its response is lost, so the retry still sends v1.
+        Assert.IsType<OkObjectResult>(await f.Controller.Record(f.Body(v1), default));
+        Assert.IsType<ConflictObjectResult>(await f.Controller.Record(f.Body(v1), default));
+        f.Forms.Verify(r => r.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Single(form.WorkTimeCorrections);
+    }
+
+    private static async Task<JsonElement> VisitAsync(Fixture f)
+    {
+        var result = Assert.IsType<OkObjectResult>(await f.Controller.Get(f.Start.ToString("yyyy-MM-dd"), default));
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(result.Value, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        return Assert.Single(json.RootElement.GetProperty("occurrences").EnumerateArray()).Clone();
+    }
+
     private sealed class Lease : IAsyncDisposable { public ValueTask DisposeAsync() => ValueTask.CompletedTask; }
     private sealed class Fixture
     {
