@@ -542,7 +542,7 @@ test.describe('Admin Panel - Companies & Branches Page', () => {
         const match = url.match(/\/companies\/([a-zA-Z0-9\-]+)($|\?)/);
         if (match) {
           const compId = match[1];
-          if (compId !== 'branches') {
+          if (compId !== 'branches' && compId !== 'summary') {
             const comp = companies.find(c => c.id === compId);
             return route.fulfill({
               status: 200,
@@ -550,6 +550,10 @@ test.describe('Admin Panel - Companies & Branches Page', () => {
               headers: CORS_HEADERS
             });
           }
+        }
+        if (url.includes('/summary')) {
+          const active = companies.filter(c => c.isActive !== false).length;
+          return route.fulfill({ status: 200, json: { all: companies.length, active, inactive: companies.length - active }, headers: CORS_HEADERS });
         }
         return route.fulfill({ status: 200, json: { items: companies, total: companies.length }, headers: CORS_HEADERS });
       }
