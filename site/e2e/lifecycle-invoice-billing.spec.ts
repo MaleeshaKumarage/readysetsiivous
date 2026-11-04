@@ -102,10 +102,22 @@ test('issuer settings save every company payment field and sample flag across re
 test('changing PDF language discards preview and uses the new language when issued', async ({ page }) => {
   const calls = await setup(page); await fillInvoice(page); await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Invoice preview' })).toBeVisible();
+  await page.keyboard.press('Escape'); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0);
   await page.getByRole('textbox', { name: 'PDF language', exact: true }).click(); await page.getByRole('option', { name: 'Swedish', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0); await expect(page.getByRole('button', { name: 'Issue invoice', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await page.getByRole('button', { name: 'Issue invoice', exact: true }).click();
   await expect(page.getByRole('status')).toHaveText('Invoice INV-1 issued.'); expect(calls.previews.map(value => value.language)).toEqual(['en', 'sv']); expect(calls.issues[0].language).toBe('sv');
+});
+
+test('issuer details and invoice preview open as dialogs over the form', async ({ page }) => {
+  await setup(page); await fillInvoice(page);
+  await page.getByRole('button', { name: 'Company and payment details' }).click();
+  await expect(page.getByRole('dialog', { name: 'Invoice issuer' })).toBeVisible();
+  await page.getByRole('button', { name: 'Save company details', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Invoice issuer' })).toHaveCount(0); await expect(page.getByRole('status')).toHaveText('Company and payment details saved.');
+  await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Invoice preview' })).toBeVisible(); await expect(page.getByRole('button', { name: 'Issue invoice', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape'); await expect(page.getByRole('dialog', { name: 'Invoice preview' })).toHaveCount(0);
 });
 
 test('removing a monthly override invalidates preview and removes it from the next payload', async ({ page }) => {
@@ -113,6 +125,7 @@ test('removing a monthly override invalidates preview and removes it from the ne
   await page.getByRole('textbox', { name: 'Override shift', exact: true }).click(); await page.getByRole('option', { name: 'Biweekly', exact: true }).click();
   await page.getByLabel('Override month', { exact: true }).fill('2026-10'); await page.getByRole('textbox', { name: 'Monthly subtotal before VAT (€)', exact: true }).fill('150'); await page.getByLabel('Monthly override reason', { exact: true }).fill('Agreed amount');
   await page.getByRole('button', { name: 'Apply monthly override' }).click(); await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toBeVisible();
+  await page.keyboard.press('Escape'); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Remove override', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0); await expect(page.getByRole('button', { name: 'Issue invoice', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toBeVisible(); expect(calls.previews[0].monthlyOverrides).toHaveLength(1); expect(calls.previews[1].monthlyOverrides).toEqual([]);
 });

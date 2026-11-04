@@ -66,9 +66,11 @@ test('manual rows preview VAT and issue into existing history and PDF download',
 test('row changes and removal invalidate preview; mode switch restores shift controls', async ({ page }) => {
   await setup(page); await fill(page); await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Invoice preview' })).toBeVisible();
+  await page.keyboard.press('Escape'); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Add row', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Remove row 2', exact: true }).click();
   await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toBeVisible();
+  await page.keyboard.press('Escape'); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0);
   await page.getByRole('textbox', { name: 'Row 1 unit price before VAT (€)', exact: true }).fill('51'); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0);
   await page.getByRole('textbox', { name: 'Invoice type', exact: true }).click(); await page.getByRole('option', { name: 'Shift invoice', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Invoice from', exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: 'Add row', exact: true })).toHaveCount(0);
@@ -108,7 +110,8 @@ test('manual VAT uses saved settings and saving issuer details clears preview', 
   await page.getByRole('button', { name: 'Company and payment details' }).click();
   await page.getByRole('textbox', { name: 'Default VAT (%)', exact: true }).fill('10');
   await expect(page.getByText(/VAT \(25.5%\) is added/)).toBeVisible();
-  await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toBeVisible();
   await page.getByRole('button', { name: 'Save company details', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0); await expect(page.getByText(/VAT \(10%\) is added/)).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Invoice issuer' })).toHaveCount(0); await expect(page.getByRole('status')).toHaveText('Company and payment details saved.');
+  await expect(page.getByText(/VAT \(10%\) is added/)).toBeVisible();
+  await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toBeVisible();
 });
