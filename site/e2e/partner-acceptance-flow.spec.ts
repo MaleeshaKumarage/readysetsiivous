@@ -384,13 +384,14 @@ test('owner cancels an unaccepted request only after confirming, and the cleaner
   await prepareRolePage(page, backend, 'owner');
   await ownerOpenRequests(page);
 
-  page.once('dialog', dialog => dialog.dismiss());
+  // Cancelling asks for confirmation on the card; keeping the request sends nothing.
   await ownerCard(page).getByRole('button', { name: 'Cancel request', exact: true }).click();
+  await ownerCard(page).getByRole('button', { name: 'Keep request', exact: true }).click();
   await expect(ownerCard(page).getByText('Offered', { exact: true })).toBeVisible();
   expect(backend.writes.filter(write => write.path.endsWith('/cancel'))).toHaveLength(0);
 
-  page.once('dialog', dialog => dialog.accept());
   await ownerCard(page).getByRole('button', { name: 'Cancel request', exact: true }).click();
+  await ownerCard(page).getByRole('button', { name: 'Yes, cancel request', exact: true }).click();
   await expect(page.getByText('Request cancelled.', { exact: true })).toBeVisible();
   await expect(ownerCard(page)).toHaveCount(0);
   await expect(page.getByRole('tab', { name: /^Active requests \(0\)/ })).toBeVisible();
