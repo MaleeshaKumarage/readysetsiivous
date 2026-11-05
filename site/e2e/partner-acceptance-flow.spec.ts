@@ -522,7 +522,7 @@ test('a cleaner may accept a visit without a start time, which becomes flexible 
   backend.seedOffer(backend.seedRequest(backend.branches[0], WINDOW), 'cleaner');
   const cleaner = await openActor(browser, testInfo, backend, 'cleaner');
   await cleanerOpenOffers(cleaner.page);
-  await expect(cleanerOffer(cleaner.page).getByText('Leave blank to choose your start any time from 2026-12-01 to 2026-12-02. The visit takes 90 minutes and must finish by the end of 2026-12-02.', { exact: true })).toBeVisible();
+  await expect(cleanerOffer(cleaner.page).getByText('Accept cleaning saves this start time. Leave it blank to choose any time from 2026-12-01 to 2026-12-02. The visit takes 90 minutes and must finish by the end of 2026-12-02.', { exact: true })).toBeVisible();
   await cleanerOffer(cleaner.page).getByRole('button', { name: 'Accept cleaning', exact: true }).click();
   await expect(cleaner.page.getByRole('status').filter({ hasText: 'Cleaning accepted for Lake apartment. Choose your start any time from 2026-12-01 to 2026-12-02.' })).toBeVisible();
   expect(backend.writes.at(-1)).toMatchObject({ actor: 'cleaner', body: { version: 2, plannedStartLocal: null } });
