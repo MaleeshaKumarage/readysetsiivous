@@ -195,6 +195,32 @@ test('switching the status filter back to All statuses drops the filter and rest
   expect(queries.some(q => q.includes('status=New'))).toBe(true);
 });
 
+test('a slow earlier filter response cannot overwrite the rows of a newer filter', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockBookings(page, fixtures());
+  let releaseConfirmed!: () => void;
+  const confirmedGate = new Promise<void>(resolve => { releaseConfirmed = resolve; });
+  await page.route(/\/api\/v1\/admin\/bookings(?:\?.*)?$/, async (route: any) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() !== 'GET' || url.searchParams.get('status') !== 'Confirmed') return route.fallback();
+    await confirmedGate;
+    return route.fulfill({ status: 200, headers, json: fixtures().filter(b => b.status === 'Confirmed') });
+  });
+  await page.goto('/admin/bookings/');
+  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
+
+  await page.getByRole('textbox', { name: 'Filter by status', exact: true }).click();
+  await page.getByRole('option', { name: 'Confirmed', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Filter by status', exact: true }).click();
+  await page.getByRole('option', { name: 'New', exact: true }).click();
+  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
+
+  releaseConfirmed();
+  await page.waitForResponse(response => response.url().includes('status=Confirmed'));
+  await expect(page.getByRole('cell', { name: 'BK-1002', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
+});
+
 test('manager is blocked from the bookings administration page', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   await page.addInitScript(() => { (window as any).__MOCK_ROLES__ = ['manager']; });

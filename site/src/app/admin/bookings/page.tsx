@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Title, Button, Table, Modal, Group, Stack, Text, Loader, Badge, Select } from '@mantine/core';
 import { isAdmin } from '@/lib/auth';
 import { adminBookings, type Booking } from '@/lib/adminApi';
@@ -35,10 +35,14 @@ export default function BookingsAdminPage() {
   const [actionError, setActionError] = useState('');
   const [message, setMessage] = useState('');
 
+  // Only the most recent request may update state, so a slow earlier response cannot overwrite a newer filter's rows.
+  const requestSeq = useRef(0);
   const load = async (status: string) => {
+    const seq = ++requestSeq.current;
     setLoading(true); setLoadError('');
     const query = status ? `?status=${encodeURIComponent(status)}` : '';
     const records = await adminBookings.list(query);
+    if (seq !== requestSeq.current) return;
     if (records) setBookings(records); else setLoadError('Bookings could not be loaded. Reload and retry.');
     setLoading(false);
   };
