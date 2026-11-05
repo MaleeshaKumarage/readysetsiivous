@@ -173,7 +173,7 @@ public class PartnerInvoiceTests
         {
             var company = new Company { Id=Guid.NewGuid(), Name="Property owner", IsActive=true, IsPartnerEnabled=true };
             var branch = new Branch { Id=Guid.NewGuid(), CompanyId=company.Id, Name="Apartment" };
-            var profile = new TenantProfile { TimeZoneId="Europe/Helsinki", PaymentTermsDays=14 };
+            var profile = new TenantProfile { CompanyName="Supplier", BusinessId="1234567-8", CompanyAddress=new() { Street="Supplier 1", City="Helsinki", PostalCode="00100", Country="FI" }, BankAccountIBAN="FI2112345600000785", BankBic="NDEAFIHH", TimeZoneId="Europe/Helsinki", PaymentTermsDays=14 };
             var shifts = shiftRepo = new Mock<IShiftRepository>(); companyRef = company; branchRef = branch;
             for(var i=0;i<count;i++)
             {
@@ -202,7 +202,7 @@ public class PartnerInvoiceTests
             var source=new Mock<IPartnerInvoiceSource>(); source.Setup(x=>x.ListCompanyAsync(company.Id,It.IsAny<CancellationToken>())).ReturnsAsync(()=>Requests);
             Service=new(shifts.Object,billing.Object,Invoices.Object,companies.Object,branches.Object,forms.Object,profiles.Object,tenant.Object,reserve.Object,TimeProvider.System,source.Object);
             Settings=new(shifts.Object,billing.Object,Invoices.Object,profiles.Object,tenant.Object,reserve.Object);
-            Input=new(company.Id,[],new(2026,10,1),new(2026,10,31),PartnerMonth:true);
+            Input=new(company.Id,[],new(2026,10,1),new(2026,10,31),PartnerMonth:true,BillingAddress:new() { Street="Customer 2", PostalCode="00100", City="Helsinki", Country="FI" });
         }
     }
     private sealed class Lease:IAsyncDisposable { public ValueTask DisposeAsync()=>ValueTask.CompletedTask; }
