@@ -18,6 +18,9 @@ jobs:
     # Skip draft PRs: review fires when the PR is opened as ready, reopened, or
     # a draft is marked ready_for_review.
     if: github.event.pull_request.draft == false
+    # Non-blocking: a provider outage must not hold a PR. The job still runs and
+    # its failure is still visible, but it does not fail the PR's checks.
+    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
