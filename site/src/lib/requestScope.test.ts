@@ -42,3 +42,25 @@ test('request signal aborts immediately when the caller aborts', () => {
   caller.abort();
   assert.equal(signal.aborted, true);
 });
+
+test('request signal still times out and honours the caller when the newer AbortSignal helpers are missing', async () => {
+  const original = { timeout: AbortSignal.timeout, any: AbortSignal.any };
+  (AbortSignal as any).timeout = undefined;
+  (AbortSignal as any).any = undefined;
+  try {
+    const timed = requestSignal(undefined, 20);
+    await new Promise<void>((resolve, reject) => {
+      const backstop = setTimeout(() => reject(new Error('fallback timeout never fired')), 5_000);
+      timed.addEventListener('abort', () => { clearTimeout(backstop); resolve(); }, { once: true });
+    });
+    assert.equal(timed.aborted, true);
+
+    const caller = new AbortController();
+    const linked = requestSignal(caller.signal, 60_000);
+    caller.abort();
+    assert.equal(linked.aborted, true);
+  } finally {
+    (AbortSignal as any).timeout = original.timeout;
+    (AbortSignal as any).any = original.any;
+  }
+});

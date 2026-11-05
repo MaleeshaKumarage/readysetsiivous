@@ -19,7 +19,21 @@ export function cacheScopeFor(accessToken: string | undefined): string {
 }
 
 // A request fails after the timeout, or immediately when the caller aborts it, whichever happens first.
+// AbortSignal.timeout and AbortSignal.any are missing in older browsers, so fall back to a controller and a timer.
 export function requestSignal(external: AbortSignal | null | undefined, timeoutMs: number = ADMIN_REQUEST_TIMEOUT_MS): AbortSignal {
-  const timeout = AbortSignal.timeout(timeoutMs);
-  return external ? AbortSignal.any([external, timeout]) : timeout;
+  const hasTimeout = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function';
+  const hasAny = typeof AbortSignal !== 'undefined' && typeof AbortSignal.any === 'function';
+  if (hasTimeout && hasAny) {
+    const timeout = AbortSignal.timeout(timeoutMs);
+    return external ? AbortSignal.any([external, timeout]) : timeout;
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new DOMException('Request timed out', 'TimeoutError')), timeoutMs);
+  const cancel = () => { clearTimeout(timer); controller.abort(external?.reason); };
+  if (external) {
+    if (external.aborted) cancel();
+    else external.addEventListener('abort', cancel, { once: true });
+  }
+  controller.signal.addEventListener('abort', () => clearTimeout(timer), { once: true });
+  return controller.signal;
 }
