@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, setNavOpen } from './admin-helpers';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization' };
 
@@ -77,6 +77,31 @@ test('admin cancels a new booking once and the status and row update', async ({ 
   await expect(page.getByRole('status')).toContainText('BK-1001 is now Cancelled.');
   await expect(page.getByRole('row', { name: /BK-1001/ })).toContainText('Cancelled');
   expect(actions).toEqual([{ id: 'b-new', action: 'cancel' }]);
+});
+
+test('admin cancels a confirmed booking once and the status and row update', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const bookings = fixtures();
+  const { actions } = await mockBookings(page, bookings);
+  await page.goto('/admin/bookings/');
+  await page.getByRole('row', { name: /BK-1002/ }).getByRole('button', { name: 'Details', exact: true }).click();
+  await page.getByRole('button', { name: 'Cancel booking', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('BK-1002 is now Cancelled.');
+  await expect(page.getByRole('row', { name: /BK-1002/ })).toContainText('Cancelled');
+  expect(actions).toEqual([{ id: 'b-confirmed', action: 'cancel' }]);
+});
+
+test('Bookings navigation link is listed under Operations and opens the bookings page', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockBookings(page, fixtures());
+  await page.goto('/admin/');
+  await setNavOpen(page, true);
+  const link = page.locator('#admin-navigation').getByRole('link', { name: 'Bookings', exact: true });
+  await expect(link).toHaveAttribute('href', /\/admin\/bookings\/?$/);
+  await link.click();
+  await expect(page).toHaveURL(/\/admin\/bookings\/?$/);
+  await expect(page.getByRole('heading', { name: 'Bookings', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
 });
 
 test('confirmed booking can be completed and then offers no further actions', async ({ page }) => {
