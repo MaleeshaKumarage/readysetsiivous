@@ -98,6 +98,6 @@ export async function installScaleRoutes(page: Page, data: ScaleData) {
       const companyId = q.get('companyId'), branchId = q.get('branchId'), includeInactive = q.get('includeInactive') === 'true';
       return json(data.shifts.filter(s => (!companyId || s.companyId === companyId) && (!branchId || s.branchId === branchId) && (includeInactive || s.isActive)));
     }
-    return json([]);
+    return route.fallback();
   });
 }

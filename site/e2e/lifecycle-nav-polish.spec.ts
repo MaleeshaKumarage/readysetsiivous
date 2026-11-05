@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, setNavOpen } from './admin-helpers';
 import { buildScaleData, installScaleRoutes } from './admin-scale-data';
 
 const NAV_PAGES = ['/admin/', '/admin/shifts/', '/admin/shifts/calendar/', '/admin/work-queue/', '/admin/partner-requests/', '/admin/quality-cycle/', '/admin/leads/', '/admin/companies/', '/admin/agreements/', '/admin/employees/', '/admin/invoices/', '/admin/services/'];
@@ -15,7 +15,7 @@ test('header names the most specific section and the partner entry matches its p
   await openAdmin(page, '/admin/shifts/calendar/');
   await expect(page.getByText('Shift calendar', { exact: true }).first()).toBeVisible();
   const partnerLink = page.locator('a[aria-label="Partner operations"]').first();
-  if (test.info().project.name === 'mobile-touch' && !(await partnerLink.isVisible())) await page.getByRole('button', { name: 'Toggle navigation', exact: true }).click();
+  if (!(await partnerLink.isVisible())) await setNavOpen(page, true);
   await expect(partnerLink).toBeVisible({ timeout: 15000 });
   await openAdmin(page, '/admin/partner-requests/');
   await expect(page.getByRole('heading', { level: 1, name: 'Partner operations', exact: true })).toBeVisible();
