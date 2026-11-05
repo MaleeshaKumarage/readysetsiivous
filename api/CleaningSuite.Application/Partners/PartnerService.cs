@@ -473,8 +473,10 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         await Staff(actor, ct);
         var request = await Db.Query<PartnerCleaningRequest>().FirstOrDefaultAsync(x => x.OfferId == offerId && x.OfferedEmployeeId == actor, ct)
             ?? throw new NotFoundException("Cleaning offer", offerId);
+        // Status first: an offer that was already accepted or cancelled also has a newer version, and the user
+        // should hear that it is no longer waiting for an answer, not that someone else changed it.
+        if (request.Status != "Offered") throw new ShiftConflictException("This offer is no longer waiting for your answer, so it cannot be declined. Check your scheduled work for its current status.");
         CheckVersion(request, body.Version);
-        if (request.Status != "Offered") throw new ShiftConflictException("This offer is no longer awaiting acceptance.");
         if (body.Reason?.Length > 1000) throw new ValidationException("Use at most 1000 characters for the reason.");
         InvalidateOffer(request); request.Status = "Requested"; Touch(request); Db.Store(request);
         NotifyRequest(request, "OfferDeclined", "Staff"); NotifyRequest(request, "AwaitingAssignment", "Company");
