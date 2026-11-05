@@ -141,6 +141,13 @@ test('add employee after cancelled edit does not carry the previous profile into
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 
   await page.getByRole('button', { name: 'Add employee', exact: true }).click();
+  await expect(page.getByRole('dialog').getByLabel(/^Email/)).toBeVisible();
+  await expect(page.getByLabel('Pay rate')).toHaveCount(0);
+  await expect(page.getByLabel('Colour', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Skills', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Service areas', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Notes', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Add certification', exact: true })).toHaveCount(0);
   await page.getByLabel(/^Email/).fill('new@example.invalid');
   await page.getByLabel(/^First name/).fill('New');
   await page.getByLabel(/^Last name/).fill('Person');
