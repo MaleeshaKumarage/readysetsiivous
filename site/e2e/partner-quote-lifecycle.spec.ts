@@ -243,3 +243,20 @@ test('the pending partner actions badge counts only partner-enabled Requested re
   await expect(page.getByLabel('3 pending partner actions')).toHaveCount(0);
 });
 
+
+test('a failed quote request explains the problem in the card and the request can be retried', async ({ page }) => {
+  await owner(page, [declinedQuote]);
+  const MESSAGE = 'The quote service is unavailable right now. Wait a few minutes, then request the quote again.';
+  let attempts = 0;
+  await page.route(/\/branches\/remote-branch\/quote-request$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
+    attempts++;
+    return route.fulfill({ headers, status: 503, json: { detail: MESSAGE } });
+  });
+  await page.goto('/partner/');
+  const card = page.getByRole('article', { name: 'Remote cabin', exact: true });
+  await card.getByRole('button', { name: 'Request quote', exact: true }).click();
+  await expect(page.getByText(MESSAGE).first()).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Request quote', exact: true })).toBeEnabled();
+  expect(attempts).toBe(1);
+});
