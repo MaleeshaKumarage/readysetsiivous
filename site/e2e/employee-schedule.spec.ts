@@ -83,3 +83,20 @@ test('previous and next week move the requested range by seven days', async ({ p
   await page.getByRole('button', { name: 'Previous week' }).click();
   await expect.poll(() => state.requests.at(-1)).toBe(addDay(start, -7));
 });
+
+test('this week returns to the starting week after moving away', async ({ page }) => {
+  const state = await setup(page);
+  const start = state.requests[0];
+  await page.getByRole('button', { name: 'Next week' }).click();
+  await expect.poll(() => state.requests.at(-1)).toBe(addDay(start, 7));
+  await page.getByRole('button', { name: 'This week' }).click();
+  await expect.poll(() => state.requests.at(-1)).toBe(start);
+});
+
+test('a date typed into Week starting jumps to the Monday of that week', async ({ page }) => {
+  const state = await setup(page);
+  // 2026-10-14 is a Wednesday, so the requested week starts on Monday 2026-10-12.
+  await page.getByLabel('Week starting').fill('2026-10-14');
+  await expect.poll(() => state.requests.at(-1)).toBe('2026-10-12');
+  await expect(page.getByLabel('Week starting')).toHaveValue('2026-10-12');
+});

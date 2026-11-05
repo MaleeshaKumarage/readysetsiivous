@@ -47,7 +47,7 @@ test('changing filters invalidates a preview and its in-flight response', async 
 });
 test('preview exposes the real billing validation reason', async ({ page }) => {
   await setup(page, { failPreview: true }); await fillInvoice(page); await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
-  await expect(page.getByRole('main').getByRole('alert').filter({ hasText: 'No pricing is configured' })).toHaveText('No pricing is configured for this billing period.'); await expect(page.getByRole('button', { name: 'Issue invoice', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('dialog').getByRole('alert').filter({ hasText: 'No pricing is configured' })).toHaveText('No pricing is configured for this billing period.'); await expect(page.getByRole('button', { name: 'Issue invoice', exact: true })).toHaveCount(0);
 });
 test('admin saves an effective monthly rate before VAT outside quality cycle', async ({ page }) => {
   const calls = await setup(page); await page.goto('/admin/shifts/'); await shiftAction(page, 'Biweekly', 'Pricing');
