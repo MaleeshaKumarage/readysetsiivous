@@ -226,7 +226,7 @@ export default function WorkQueuePage() {
           onChange={event => changeDates(event.currentTarget.value, dateTo)} w={170} />
         <TextInput type="date" label="To" aria-label="To date" value={dateTo} min={dateFrom || undefined}
           onChange={event => changeDates(dateFrom, event.currentTarget.value)} w={170} />
-        <Select aria-label="Assignee" label="Assignee" placeholder="Anyone" clearable
+        <Select aria-label="Assignee" label="Assignee" placeholder="Anyone" clearable clearButtonProps={{ 'aria-label': 'Clear assignee' }}
           data={employees.map(employee => ({ value: employee.id, label: `${employee.firstName} ${employee.lastName}`.trim() }))}
           value={assignee || null} onChange={value => changeAssignee(value ?? '')} w={220} />
       </Group>

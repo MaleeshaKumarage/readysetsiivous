@@ -280,3 +280,29 @@ test('a reversed date range is dropped instead of sent to the server', async ({ 
   expect(state.queries.at(-1)?.has('from')).toBe(false);
   expect(state.queries.at(-1)?.has('to')).toBe(false);
 });
+
+test('clearing the assignee removes the filter, its URL param and the partner note', async ({ page }) => {
+  const state = await setup(page);
+  await page.route('**/api/v1/admin/employees**', route => route.fulfill({ headers, json: [{ id: 'emp-1', firstName: 'Liisa', lastName: 'Korhonen', email: 'liisa@example.test', isActive: true }] }));
+  await page.goto('/admin/work-queue/');
+  await expect(page.getByRole('listitem').filter({ hasText: 'Anna Virtanen' })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Assignee' }).click();
+  await page.getByRole('option', { name: 'Liisa Korhonen' }).click();
+  await expect.poll(() => state.queries.at(-1)?.get('assignee')).toBe('emp-1');
+  await expect(page.getByText('Partner requests have no assignee, so they are hidden while this filter is on.')).toBeVisible();
+
+  await page.locator('[aria-label="Clear assignee"]').click();
+  await expect.poll(() => state.queries.at(-1)?.has('assignee')).toBe(false);
+  expect(new URL(page.url()).searchParams.has('assignee')).toBe(false);
+  await expect(page.getByText('Partner requests have no assignee, so they are hidden while this filter is on.')).toHaveCount(0);
+});
+
+test('a date that is not yyyy-MM-dd is ignored while a valid end date is still sent', async ({ page }) => {
+  const state = await setup(page);
+  await page.goto('/admin/work-queue/?from=garbage&to=2026-11-30');
+  await expect(page.getByRole('listitem').filter({ hasText: 'Anna Virtanen' })).toBeVisible();
+  expect(state.queries.at(-1)?.has('from')).toBe(false);
+  expect(state.queries.at(-1)?.get('to')).toBe('2026-11-30');
+  await expect(page.getByRole('textbox', { name: 'From date' })).toHaveValue('');
+  await expect(page.getByRole('textbox', { name: 'To date' })).toHaveValue('2026-11-30');
+});

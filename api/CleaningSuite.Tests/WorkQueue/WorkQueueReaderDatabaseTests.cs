@@ -154,6 +154,32 @@ public class WorkQueueReaderDatabaseTests
     }
 
     [QualityCycleDatabaseFact]
+    public async Task Partner_requests_are_kept_when_their_span_overlaps_the_date_window()
+    {
+        // A request that starts before the window but runs into it must stay; one that starts after the window must go.
+        using var f = await Fixture.Create();
+        var lake = new Company { Name = "Span Oy", BusinessId = "WQ-" + Guid.NewGuid().ToString("N")[..8], IsActive = true, IsPartnerEnabled = true };
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(lake);
+            db.Store(new PartnerCleaningRequest { ClientRequestId = Guid.NewGuid(), CompanyId = lake.Id, BranchId = Guid.NewGuid(), Status = PartnerCleaningRequest.StatusRequested,
+                FromDate = new DateOnly(2026, 11, 28), ToDate = new DateOnly(2026, 12, 3) });
+            db.Store(new PartnerCleaningRequest { ClientRequestId = Guid.NewGuid(), CompanyId = lake.Id, BranchId = Guid.NewGuid(), Status = PartnerCleaningRequest.StatusRequested,
+                FromDate = new DateOnly(2026, 12, 2), ToDate = new DateOnly(2026, 12, 20) });
+            db.Store(new PartnerCleaningRequest { ClientRequestId = Guid.NewGuid(), CompanyId = lake.Id, BranchId = Guid.NewGuid(), Status = PartnerCleaningRequest.StatusRequested,
+                FromDate = new DateOnly(2026, 12, 5), ToDate = new DateOnly(2026, 12, 9) });
+            await db.SaveChangesAsync();
+        }
+        using var session = f.Session();
+        var reader = Reader(f, session);
+
+        var window = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.NeedsAction, "partner", null, 0, 25, "2026-12-01", "2026-12-02"));
+        Assert.Equal(2, window.Total);
+        Assert.Equal(2, window.Counts[WorkQueueViews.NeedsAction]);
+        Assert.Equal(2, window.Items.Count);
+    }
+
+    [QualityCycleDatabaseFact]
     public async Task Shift_queue_reads_occurrence_forms_with_unspecified_kind_bounds()
     {
         // Regression: UTC-kind window bounds against ShiftOccurrenceUtc made Npgsql reject the query.

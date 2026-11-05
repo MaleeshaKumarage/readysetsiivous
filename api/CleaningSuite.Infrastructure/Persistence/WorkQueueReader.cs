@@ -29,12 +29,14 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
         var fromDay = query.DateFrom is null ? (DateOnly?)null : DateOnly.ParseExact(query.DateFrom, "yyyy-MM-dd");
         var toDay = query.DateTo is null ? (DateOnly?)null : DateOnly.ParseExact(query.DateTo, "yyyy-MM-dd");
         bool InDates(DateOnly day) => (fromDay is null || day >= fromDay) && (toDay is null || day <= toDay);
+        // A partner request is kept when its whole span overlaps the window, the same rule bookings and shifts use.
+        bool SpanOverlaps(DateOnly start, DateOnly end) => (fromDay is null || end >= fromDay) && (toDay is null || start <= toDay);
         var companyIds = search is not null && (includePartners || includeShifts)
             ? (await Db.Query<Company>().Where(c => c.Name.Contains(search, StringComparison.OrdinalIgnoreCase)).Select(c => c.Id).ToListAsync(ct)).ToArray()
             : Array.Empty<Guid>();
 
         // Partner visits are few per tenant and their view depends on their forms, so they are classified in memory.
-        var partnerViews = includePartners ? (await ClassifyPartnersAsync(search, companyIds, ct)).Where(p => InDates(p.Request.FromDate)).ToList() : new List<PartnerView>();
+        var partnerViews = includePartners ? (await ClassifyPartnersAsync(search, companyIds, ct)).Where(p => SpanOverlaps(p.Request.FromDate, p.Request.ToDate)).ToList() : new List<PartnerView>();
         var (_, zone) = await TenantTimeZone.LoadAsync(profiles, context, ct);
         var assigneeId = assignee is not null && Guid.TryParse(assignee, out var parsedAssignee) ? parsedAssignee : (Guid?)null;
         var shiftRows = includeShifts
