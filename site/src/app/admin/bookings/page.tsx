@@ -116,6 +116,7 @@ export default function BookingsAdminPage() {
 
   // Changing the day or employee clears the previous results in the same render, so stale rows or messages never show for the new selection.
   const changeDaySelection = (date: string, employeeId: string | null) => {
+    dayRequestSeq.current++; // discard any in-flight response for the previous selection
     setDayDate(date); setDayEmployeeId(employeeId);
     setDayRows([]); setDayError('');
     setDayLoading(Boolean(date && employeeId));

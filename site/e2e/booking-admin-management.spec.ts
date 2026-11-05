@@ -382,9 +382,21 @@ test('day view shows an empty message and a recoverable error', async ({ page })
   await expect(page.getByText('No bookings for this employee on 2026-11-10.', { exact: true })).toBeVisible();
 });
 
-test('day view reports a failed schedule load instead of an empty day', async ({ page }) => {
+test('day view reports a failed schedule load and recovers when the selection changes', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   await mockBookings(page, fixtures(), { scheduleFails: true });
+  await page.route(/\/api\/v1\/admin\/schedule(?:\?.*)?$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    if (new URL(route.request().url()).searchParams.get('employeeId') === 'e-1') return route.fulfill({ status: 500, headers, json: { detail: 'Schedule unavailable' } });
+    return route.fulfill({ status: 200, headers, json: fixtures().filter(b => b.id === 'b-new') });
+  });
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    return route.fulfill({ status: 200, headers, json: [
+      { id: 'e-1', firstName: 'Ada', lastName: 'Cleaner', role: 'employee', isActive: true },
+      { id: 'e-2', firstName: 'Ben', lastName: 'Second', role: 'employee', isActive: true },
+    ] });
+  });
   await page.goto('/admin/bookings/');
   await page.getByText('Day view', { exact: true }).click();
   await page.getByLabel('Day', { exact: true }).fill('2026-11-10');
@@ -392,6 +404,11 @@ test('day view reports a failed schedule load instead of an empty day', async ({
   await page.getByRole('option', { name: 'Ada Cleaner', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'The day schedule could not be loaded. Reload and retry.' })).toBeVisible();
   await expect(page.getByText('No bookings for this employee', { exact: false })).toHaveCount(0);
+
+  await page.getByRole('textbox', { name: 'Employee', exact: true }).click();
+  await page.getByRole('option', { name: 'Ben Second', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'The day schedule could not be loaded' })).toHaveCount(0);
+  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
 });
 
 test('day view can show a deactivated employee schedule, while assignment offers only active employees', async ({ page }) => {
