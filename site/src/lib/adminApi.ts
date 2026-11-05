@@ -12,6 +12,7 @@ export interface Booking {
   startLocalTime: string;
   status: string;
   employeeName?: string | null;
+  history?: { status: string; atUtc: string; by: string; note?: string | null }[];
 }
 
 export interface Invoice {
@@ -180,6 +181,8 @@ export const adminBookings = {
   assign: (id: string, employeeId: string) =>
     adminSend(`/api/v1/admin/bookings/${id}/assign`, 'POST', { employeeId }),
   unassign: (id: string) => adminSend(`/api/v1/admin/bookings/${id}/unassign`, 'POST'),
+  schedule: (date: string, employeeId: string) =>
+    adminGet<Booking[]>(`/api/v1/admin/schedule?date=${encodeURIComponent(date)}&employeeId=${encodeURIComponent(employeeId)}`, false),
 };
 
 export interface ServiceFields {

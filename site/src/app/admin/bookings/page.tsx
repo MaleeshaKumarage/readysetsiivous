@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Title, Button, Table, Modal, Group, Stack, Text, Loader, Badge, Select } from '@mantine/core';
+import { Title, Button, Table, Modal, Group, Stack, Text, Loader, Badge, Select, SegmentedControl, TextInput } from '@mantine/core';
 import { isAdmin } from '@/lib/auth';
 import { adminBookings, adminEmployees, type Booking } from '@/lib/adminApi';
 
@@ -28,6 +28,7 @@ function canAssign(status: string) {
 }
 
 const LOAD_FAILED = 'Bookings could not be loaded. Reload and retry.';
+const DAY_LOAD_FAILED = 'The day schedule could not be loaded. Reload and retry.';
 const EMPLOYEES_LOAD_FAILED = 'Employees could not be loaded, so bookings cannot be assigned. Reload and retry.';
 
 const ACTION_LABEL: Record<BookingAction, string> = { confirm: 'Confirm', cancel: 'Cancel booking', complete: 'Mark completed' };
@@ -46,6 +47,13 @@ export default function BookingsAdminPage() {
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
   const [assignBusy, setAssignBusy] = useState(false);
   const [employeesError, setEmployeesError] = useState('');
+  const [view, setView] = useState<'bookings' | 'day'>('bookings');
+  const [dayDate, setDayDate] = useState('');
+  const [dayEmployeeId, setDayEmployeeId] = useState<string | null>(null);
+  const [dayRows, setDayRows] = useState<Booking[]>([]);
+  const [dayLoading, setDayLoading] = useState(false);
+  const [dayError, setDayError] = useState('');
+  const dayRequestSeq = useRef(0);
 
   // Only the most recent request may update state, so a slow earlier response cannot overwrite a newer filter's rows.
   const requestSeq = useRef(0);
@@ -76,6 +84,30 @@ export default function BookingsAdminPage() {
       })
       .catch(() => setEmployeesError(EMPLOYEES_LOAD_FAILED));
   }, []);
+
+  // The list omits history, so the detail panel loads it once a booking is opened.
+  useEffect(() => {
+    if (!selected) return;
+    let active = true;
+    adminBookings.detail(selected.id).then(detail => {
+      if (active && detail) setSelected(current => (current && current.id === detail.id ? { ...current, history: detail.history } : current));
+    });
+    return () => { active = false; };
+  }, [selected?.id]);
+
+  // The day view only queries once both a day and an employee are chosen; stale responses are ignored.
+  useEffect(() => {
+    if (view !== 'day' || !dayDate || !dayEmployeeId) return;
+    const seq = ++dayRequestSeq.current;
+    setDayLoading(true); setDayError('');
+    adminBookings.schedule(dayDate, dayEmployeeId)
+      .then(records => {
+        if (seq !== dayRequestSeq.current) return;
+        if (records) setDayRows(records); else { setDayRows([]); setDayError(DAY_LOAD_FAILED); }
+      })
+      .catch(() => { if (seq === dayRequestSeq.current) { setDayRows([]); setDayError(DAY_LOAD_FAILED); } })
+      .finally(() => { if (seq === dayRequestSeq.current) setDayLoading(false); });
+  }, [view, dayDate, dayEmployeeId]);
 
   const runAction = async (action: BookingAction) => {
     if (!selected) return;
@@ -130,7 +162,45 @@ export default function BookingsAdminPage() {
         <Select aria-label="Filter by status" data={STATUS_OPTIONS} value={statusFilter} onChange={value => setStatusFilter(value ?? '')} allowDeselect={false} w={200} />
       </Group>
 
+      <SegmentedControl mb="md" value={view} onChange={value => setView(value as 'bookings' | 'day')} data={[{ value: 'bookings', label: 'Bookings' }, { value: 'day', label: 'Day view' }]} />
+
       {message && <Text role="status" c="green" mb="sm">{message}</Text>}
+      {view === 'day' ? (
+        <>
+          <Group align="flex-end" mb="md" wrap="wrap">
+            <TextInput type="date" label="Day" value={dayDate} onChange={e => setDayDate(e.currentTarget.value)} w={200} />
+            <Select label="Employee" searchable placeholder="Choose employee" data={employees.map(e => ({ value: e.id, label: e.name }))} value={dayEmployeeId} onChange={setDayEmployeeId} w={240} />
+          </Group>
+          {!dayDate || !dayEmployeeId ? (
+            <Text c="dimmed">Choose a day and an employee to see their bookings.</Text>
+          ) : dayLoading ? <Loader /> : dayError ? (
+            <Text role="alert" c="red">{dayError}</Text>
+          ) : dayRows.length === 0 ? (
+            <Text c="dimmed">No bookings for this employee on {dayDate}.</Text>
+          ) : (
+            <Table.ScrollContainer minWidth={500}>
+              <Table striped withTableBorder>
+                <Table.Thead>
+                  <Table.Tr><Table.Th>Time</Table.Th><Table.Th>Booking</Table.Th><Table.Th>Customer</Table.Th><Table.Th>Service</Table.Th><Table.Th>Status</Table.Th></Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {dayRows.map(row => (
+                    <Table.Tr key={row.id}>
+                      <Table.Td>{row.startLocalTime}</Table.Td>
+                      <Table.Td fw={500}>{row.bookingNumber}</Table.Td>
+                      <Table.Td>{row.customer.name}</Table.Td>
+                      <Table.Td>{row.service.nameFi}</Table.Td>
+                      <Table.Td><Badge color={STATUS_COLOR[row.status] ?? 'gray'}>{row.status}</Badge></Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </Table.ScrollContainer>
+          )}
+        </>
+      ) : null}
+
+      {view === 'bookings' && (<>
       {loadError && <Text role="alert" c="red" mb="sm">{loadError}</Text>}
 
       {loading ? <Loader /> : loadError ? null : bookings.length === 0 ? (
@@ -157,6 +227,7 @@ export default function BookingsAdminPage() {
           </Table>
         </Table.ScrollContainer>
       )}
+      </>)}
 
       <Modal opened={selected !== null} onClose={() => { setSelected(null); setActionError(''); }} title={selected ? `Booking ${selected.bookingNumber}` : ''} radius="md">
         {selected && (
@@ -166,6 +237,14 @@ export default function BookingsAdminPage() {
             <Text size="sm"><strong>Customer:</strong> {selected.customer.name} · {selected.customer.phone} · {selected.customer.email}</Text>
             <Text size="sm"><strong>Service:</strong> {selected.service.nameFi} ({selected.service.durationMinutes} min)</Text>
             <Text size="sm"><strong>Employee:</strong> {selected.employeeName ?? 'Unassigned'}</Text>
+            {selected.history && selected.history.length > 0 && (
+              <Stack gap={4}>
+                <Text size="sm" fw={500}>History</Text>
+                {selected.history.map((entry, index) => (
+                  <Text key={index} size="xs" c="dimmed">{entry.atUtc.replace('T', ' ').slice(0, 16)} UTC · {entry.status} · {entry.by}{entry.note ? ` · ${entry.note}` : ''}</Text>
+                ))}
+              </Stack>
+            )}
             {actionError && <Text role="alert" size="sm" c="red">{actionError}</Text>}
             {availableActions(selected.status).length === 0 && !canAssign(selected.status) ? (
               <Text size="sm" c="dimmed">This booking is {selected.status.toLowerCase()}. No further changes are available.</Text>
