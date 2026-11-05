@@ -217,6 +217,22 @@ if (app.Environment.IsDevelopment())
 // Wrap exception translation too so the audit records the final HTTP outcome.
 app.UseMiddleware<PlatformAuditMiddleware>();
 app.UseExceptionHandler();
+// Sign-in and permission refusals from authentication and authorization have no body; give the
+// user the next step. Responses that already carry a body (validation, conflicts) are left alone.
+app.UseStatusCodePages(async context =>
+{
+    var response = context.HttpContext.Response;
+    if (response.HasStarted) return;
+    var body = response.StatusCode switch
+    {
+        StatusCodes.Status401Unauthorized => new { title = "Sign in required", status = 401, detail = "Your session has ended or you are not signed in. Sign in again, then retry." },
+        StatusCodes.Status403Forbidden => new { title = "Access not allowed", status = 403, detail = "Your account does not have access to this area. Ask an owner to check your access." },
+        _ => null,
+    };
+    if (body is null) return;
+    response.ContentType = "application/problem+json";
+    await response.WriteAsJsonAsync(body);
+});
 app.UseCors("SiteOrigins");
 app.UseOutputCache();
 
