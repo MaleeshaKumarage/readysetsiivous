@@ -9,6 +9,9 @@ import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/L
 
 const ROLES = ['admin', 'manager', 'employee', 'partner'];
 
+// `source` keeps the certification as the API returned it, so an unedited expiry keeps its time of day and any extra fields.
+type CertificationDraft = { name: string; expiresAt: string; source?: Record<string, unknown> & { expiresAtUtc?: string | null } };
+
 export default function EmployeesAdminPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [companyError, setCompanyError] = useState('');
@@ -19,7 +22,7 @@ export default function EmployeesAdminPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [form, setForm] = useState({ email: '', firstName: '', lastName: '', phone: '', role: 'employee', partnerCompanyId: '' });
-  const emptyProfile = { skills: [] as string[], serviceAreas: [] as string[], colorHex: '', payRate: '' as number | '', notes: '', certifications: [] as { name: string; expiresAt: string }[] };
+  const emptyProfile = { skills: [] as string[], serviceAreas: [] as string[], colorHex: '', payRate: '' as number | '', notes: '', certifications: [] as CertificationDraft[] };
   const [profile, setProfile] = useState(emptyProfile);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -72,7 +75,11 @@ export default function EmployeesAdminPage() {
       colorHex: colour || null,
       payRate: profile.payRate === '' ? null : Number(profile.payRate),
       notes: profile.notes.trim() || null,
-      certifications: profile.certifications.map(c => ({ name: c.name.trim(), expiresAtUtc: c.expiresAt ? `${c.expiresAt}T00:00:00Z` : null })),
+      certifications: profile.certifications.map(c => {
+        const original = c.source?.expiresAtUtc ?? null;
+        const dateUnchanged = c.source !== undefined && c.expiresAt === (original ? original.slice(0, 10) : '');
+        return { ...(c.source ?? {}), name: c.name.trim(), expiresAtUtc: dateUnchanged ? original : (c.expiresAt ? `${c.expiresAt}T00:00:00Z` : null) };
+      }),
       defaultHours: editingEmployee?.defaultHours ?? {},
     };
     if (editingEmployee) {
@@ -99,7 +106,7 @@ export default function EmployeesAdminPage() {
       colorHex: employee.colorHex ?? '',
       payRate: employee.payRate ?? '',
       notes: employee.notes ?? '',
-      certifications: (employee.certifications ?? []).map(c => ({ name: c.name, expiresAt: c.expiresAtUtc ? c.expiresAtUtc.slice(0, 10) : '' })),
+      certifications: (employee.certifications ?? []).map(c => ({ name: c.name, expiresAt: c.expiresAtUtc ? c.expiresAtUtc.slice(0, 10) : '', source: { ...c } })),
     });
     setError(''); setModalOpen(true);
   };

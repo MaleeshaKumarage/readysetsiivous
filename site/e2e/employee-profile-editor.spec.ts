@@ -150,6 +150,36 @@ test('add employee after cancelled edit does not carry the previous profile into
   expect(posts[0].fields).toMatchObject({ email: 'new@example.invalid', skills: [], serviceAreas: [], certifications: [], notes: null, payRate: null, colorHex: null });
 });
 
+test('employee without optional profile data opens empty and saves nulls and empty lists', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const employee: any = { id: 'employee-a', email: 'cleaner@example.invalid', firstName: 'Test', lastName: 'Cleaner', phone: '', role: 'employee', isActive: true, keycloakUserId: 'user-a', defaultHours: {} };
+  const puts = await mockEmployee(page, employee);
+  await page.goto('/admin/employees/');
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.getByLabel('Pay rate')).toHaveValue('');
+  await expect(page.getByRole('textbox', { name: 'Notes' })).toHaveValue('');
+  await expect(page.getByLabel('Colour', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel(/^Certification \d+ name/)).toHaveCount(0);
+  await page.getByLabel('Phone', { exact: true }).fill('+358 40 000 0000');
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+
+  await expect.poll(() => puts.length).toBe(1);
+  expect(puts[0].fields).toMatchObject({ skills: [], serviceAreas: [], colorHex: null, payRate: null, notes: null, certifications: [] });
+});
+
+test('editing an unrelated field keeps a certification timestamp and its extra fields', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const employee: any = { ...baseEmployee(), certifications: [{ id: 'cert-1', name: 'Hygiene', expiresAtUtc: '2027-03-01T13:30:00Z' }] };
+  const puts = await mockEmployee(page, employee);
+  await page.goto('/admin/employees/');
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.getByLabel('Phone', { exact: true }).fill('+358 40 000 0000');
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+
+  await expect.poll(() => puts.length).toBe(1);
+  expect(puts[0].fields.certifications).toEqual([{ id: 'cert-1', name: 'Hygiene', expiresAtUtc: '2027-03-01T13:30:00Z' }]);
+});
+
 test('invalid pay rate, colour and blank certification are blocked before saving', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   const employee = baseEmployee();
