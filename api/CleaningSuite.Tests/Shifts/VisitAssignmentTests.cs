@@ -194,4 +194,16 @@ public class VisitAssignmentTests
         extra.StartUtc = Start.AddHours(2); extra.EndUtc = Start.AddHours(4);
         Assert.Equal(s.B, Assert.Single((await s.Run(s.Command())).EmployeeIds));
     }
+
+    [Fact]
+    public async Task Overlap_refusal_names_the_clashing_visit_and_recovery_steps()
+    {
+        var s = new Setup(); var extra = ShiftOccurrenceException.Create(s.Shift.Id, null, Start, Start.AddHours(2), ShiftOccurrenceExceptionStatus.Extra, "Extra", s.B); s.Exceptions.Add(extra);
+        var ex = await Assert.ThrowsAsync<ShiftConflictException>(() => s.Run(s.Command()));
+        var conflict = Assert.Single(ex.Conflicts);
+        Assert.Equal(s.Shift.Id, conflict.ShiftId);
+        Assert.Equal(Start, conflict.StartUtc);
+        Assert.Equal(Start.AddHours(2), conflict.EndUtc);
+        Assert.Contains("Choose another cleaner or time", ex.Message);
+    }
 }
