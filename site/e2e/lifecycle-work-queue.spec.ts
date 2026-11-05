@@ -269,6 +269,7 @@ test('date range and assignee filters are sent to the server and restored from t
 
   await page.reload();
   await expect.poll(() => state.queries.at(-1)?.get('assignee')).toBe('emp-1');
+  await expect(page.getByRole('textbox', { name: 'Assignee', exact: true })).toHaveValue('Liisa Korhonen');
   await expect(page.getByLabel('From date', { exact: true })).toHaveValue('2026-11-01');
   await expect(page.getByLabel('To date', { exact: true })).toHaveValue('2026-11-30');
 });
@@ -339,5 +340,38 @@ test('typing a From date after the To date clears both bounds, and From is cappe
   await expect(page.getByLabel('To date', { exact: true })).toHaveValue('');
   await expect.poll(() => state.queries.at(-1)?.has('to')).toBe(false);
   expect(state.queries.at(-1)?.has('from')).toBe(false);
+  expect(new URL(page.url()).searchParams.has('to')).toBe(false);
+});
+
+test('date and assignee filters survive a view, source or page change', async ({ page }) => {
+  const state = await setup(page);
+  await page.route('**/api/v1/admin/employees**', route => route.fulfill({ headers, json: [{ id: 'emp-1', firstName: 'Liisa', lastName: 'Korhonen', email: 'liisa@example.test', isActive: true }] }));
+  await page.goto('/admin/work-queue/?from=2026-11-01&to=2026-11-30&assignee=emp-1');
+  await expect(page.getByRole('listitem').filter({ hasText: 'Anna Virtanen' })).toBeVisible();
+  await page.getByRole('tab', { name: /^Scheduled/ }).click();
+  await expect.poll(() => state.queries.at(-1)?.get('from')).toBe('2026-11-01');
+  expect(state.queries.at(-1)?.get('to')).toBe('2026-11-30');
+  expect(state.queries.at(-1)?.get('assignee')).toBe('emp-1');
+  expect(new URL(page.url()).searchParams.get('from')).toBe('2026-11-01');
+  expect(new URL(page.url()).searchParams.get('assignee')).toBe('emp-1');
+  await page.getByRole('textbox', { name: 'Source', exact: true }).click();
+  await page.getByRole('option', { name: 'Public bookings', exact: true }).click();
+  await expect.poll(() => state.queries.at(-1)?.get('source')).toBe('booking');
+  expect(state.queries.at(-1)?.get('from')).toBe('2026-11-01');
+  expect(state.queries.at(-1)?.get('assignee')).toBe('emp-1');
+  expect(new URL(page.url()).searchParams.get('to')).toBe('2026-11-30');
+});
+
+test('typing a To date before From clears both bounds, and To is capped from below by From', async ({ page }) => {
+  const state = await setup(page);
+  await page.goto('/admin/work-queue/?from=2026-11-10');
+  await expect(page.getByRole('listitem').filter({ hasText: 'Anna Virtanen' })).toBeVisible();
+  await expect(page.getByLabel('To date', { exact: true })).toHaveAttribute('min', '2026-11-10');
+  await page.getByLabel('To date', { exact: true }).fill('2026-11-01');
+  await expect(page.getByLabel('From date', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('To date', { exact: true })).toHaveValue('');
+  await expect.poll(() => state.queries.at(-1)?.has('from')).toBe(false);
+  expect(state.queries.at(-1)?.has('to')).toBe(false);
+  expect(new URL(page.url()).searchParams.has('from')).toBe(false);
   expect(new URL(page.url()).searchParams.has('to')).toBe(false);
 });
