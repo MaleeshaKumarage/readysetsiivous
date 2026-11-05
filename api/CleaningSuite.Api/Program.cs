@@ -355,6 +355,7 @@ public class DefaultExceptionHandler : IExceptionHandler
             CleaningSuite.Application.Shifts.ShiftConflictException => (409, "Shift conflict"),
             CleaningSuite.Application.Common.PublicBookingNotFoundException => (404, "Booking not found"),
             CleaningSuite.Application.Common.PublicSigningLinkNotFoundException => (404, "Signing link not found"),
+            CleaningSuite.Application.Invoicing.Commands.InvoiceNotFoundException => (404, "Invoice not found"),
             CleaningSuite.Application.QualityCycle.QualityCycleConflictException => (409, "Shift task conflict"),
             CleaningSuite.Application.Employees.EmployeeIdentityConflictException => (409, "Employee identity conflict"),
             CleaningSuite.Application.Employees.EmployeeInviteConfigurationException => (503, "Employee invitation configuration incomplete"),
