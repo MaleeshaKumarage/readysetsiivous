@@ -24,13 +24,18 @@ public sealed class LeadsAdminController(LeadService leads) : ControllerBase
     [HttpDelete("{id:guid}")] public async Task<IActionResult> Delete(Guid id,[FromBody]VersionRequest request,CancellationToken ct)
     { await leads.DeleteAsync(id,request.Version,ct);return NoContent(); }
     [HttpPost("{id:guid}/convert")] public async Task<IActionResult> Convert(Guid id,[FromBody]VersionRequest request,CancellationToken ct)=>Ok(await leads.ConvertAsync(id,request.Version,ct));
+    // The body limit leaves room for multipart overhead, so a 5 MiB image reaches the clear size check below
+    // instead of failing as a raw form-size error.
+    public const long LeadImageMaxBytes = 5 * 1024 * 1024;
+    public const long LeadImageBodyLimitBytes = 8 * 1024 * 1024;
+
     [HttpPost("{id:guid}/images")]
-    [RequestSizeLimit(6*1024*1024)]
-    [RequestFormLimits(MultipartBodyLengthLimit=6*1024*1024)]
+    [RequestSizeLimit(LeadImageBodyLimitBytes)]
+    [RequestFormLimits(MultipartBodyLengthLimit = LeadImageBodyLimitBytes)]
     public async Task<IActionResult> Upload(Guid id,[FromForm]Guid version,IFormFile file,CancellationToken ct)
     {
         if(file is null || file.Length==0) throw new FluentValidation.ValidationException("Choose a non-empty image.");
-        if(file.Length>5*1024*1024) throw new UploadPayloadTooLargeException("Lead images must be 5 MiB or smaller.");
+        if(file.Length>LeadImageMaxBytes) throw new UploadPayloadTooLargeException("Lead images must be 5 MiB or smaller. Choose a smaller photo, or reduce its size, then upload again.");
         await using var input=file.OpenReadStream();using var buffer=new MemoryStream();await input.CopyToAsync(buffer,ct);
         return Ok(await leads.UploadAsync(id,version,buffer.ToArray(),ct));
     }
