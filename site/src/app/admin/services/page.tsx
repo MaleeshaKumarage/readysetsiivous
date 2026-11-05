@@ -103,7 +103,7 @@ export default function ServicesAdminPage() {
   return (
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
-        <Title order={2}>Services</Title>
+        <Title order={2} component="h1">Services</Title>
         <Button leftSection={<Plus size={16} />} onClick={openAdd}>Add service</Button>
       </Group>
 

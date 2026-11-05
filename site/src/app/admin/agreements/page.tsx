@@ -161,7 +161,7 @@ export default function AgreementsPage() {
   return (
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
-        <Title order={2}>Agreements</Title>
+        <Title order={2} component="h1">Agreements</Title>
         <Button leftSection={<Plus size={16} />} onClick={() => setOpen(true)}>New agreement</Button>
       </Group>
 

@@ -96,8 +96,11 @@ for (const width of [375, 768, 1440]) test(`workspace navigation and surfaces at
   await expect(page.getByRole('heading', { name: 'Leads', exact: true })).toBeVisible();
   await expect(header.getByText('Tenant administration', { exact: true })).toBeVisible();
   await expect(header.getByText('Leads', { exact: true })).toBeVisible();
-  if (width < 768) await expect(burger).toHaveAttribute('aria-expanded', 'false');
+  if (width < 768) { await expect(burger).toHaveAttribute('aria-expanded', 'false'); await expect(navigation).toBeHidden(); }
+  // The phone drawer closes after navigating; reopen it to check the active entry.
+  if (width < 768) await burger.click();
   await expect(navigation.getByRole('link', { name: 'Leads', exact: true })).toHaveAttribute('aria-current', 'page');
+  if (width < 768) await page.keyboard.press('Escape');
   await expect(page.getByRole('cell', { name: 'Workspace preview company' })).toBeVisible();
   await noOverflow();
   await page.screenshot({ path: testInfo.outputPath(`leads-${width}.png`), fullPage: true });
@@ -141,11 +144,13 @@ test('phone header with own shifts and invoice form remain within viewport', asy
   await expect(page.getByRole('heading', { name: 'Invoices', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole('button', { name: 'New invoice', exact: true }).click();
   const fields = page.getByRole('textbox', { name: 'Billing street', exact: true });
   await expect(fields).toBeVisible(); expect((await fields.boundingBox())!.width).toBeGreaterThan(160);
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(246, 247, 251)');
   await expect.poll(() => page.getByText('No invoices yet.', { exact: true }).evaluate(element => getComputedStyle(element).color)).toBe('rgb(89, 100, 119)');
   await page.screenshot({ path: testInfo.outputPath('invoices-own-shifts-375.png'), fullPage: true });
+  await page.keyboard.press('Escape'); await expect(page.getByRole('dialog', { name: 'Create shift invoice' })).toHaveCount(0);
   const accountLink = page.getByRole('banner').getByRole('link', { name: 'My account', exact: true }).filter({ visible: true });
   await expect(accountLink).toBeVisible();
   await expect(accountLink).toHaveAttribute('href', '/account/?tenant=readysetsiivous');

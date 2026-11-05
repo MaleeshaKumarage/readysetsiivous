@@ -44,7 +44,7 @@ export function LifecycleTabs({ value, onChange, label = 'Record activity', acti
   const countFor = (status: LifecycleStatus) => status === 'active' ? activeCount : status === 'completed' ? completedCount : inactiveCount;
   const nameFor = (status: LifecycleStatus) => status === 'active' ? 'Active' : status === 'completed' ? 'Completed' : 'Inactive';
   return <div>
-    <div role="tablist" aria-label={label} className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
+    <div role="tablist" aria-label={label} className="admin-tabs-list flex gap-1 border-b border-gray-200 dark:border-gray-700">
       {statuses.map(status => {
         const count = countFor(status);
         return <button key={status} ref={element => { tabs.current[status] = element; }}

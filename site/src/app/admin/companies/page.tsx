@@ -245,7 +245,7 @@ export default function CompaniesAdminPage() {
   return (
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
-        <Title order={2}>Companies</Title>
+        <Title order={2} component="h1">Companies</Title>
         <Button leftSection={<Plus size={16} />} onClick={() => { setEditingCompany(null); setForm(emptyForm); setError(''); setModalOpen(true); }}>Add company</Button>
       </Group>
 
@@ -263,7 +263,8 @@ export default function CompaniesAdminPage() {
       ) : tableRows.length === 0 ? (
         <Text c="dimmed">{counts !== null && counts.all === 0 && !query ? 'No companies yet. Add one to get started.' : query ? 'No companies match this search.' : `No ${status} companies.`}</Text>
       ) : (
-        <Table.ScrollContainer minWidth={550}>
+        <Stack gap={6}><Text size="xs" c="dimmed" hiddenFrom="sm">Scroll sideways to see all columns.</Text>
+        <Table.ScrollContainer minWidth={550} tabIndex={0} role="region" aria-label="Companies table">
           <Table striped highlightOnHover withTableBorder>
             <Table.Thead>
               <Table.Tr>
@@ -334,7 +335,7 @@ export default function CompaniesAdminPage() {
               })}
             </Table.Tbody>
           </Table>
-        </Table.ScrollContainer>
+        </Table.ScrollContainer></Stack>
       )}
       {!loading && !listError && total > 0 && (
         <Group justify="space-between" mt="sm" wrap="wrap" gap="sm">

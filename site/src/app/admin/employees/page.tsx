@@ -129,7 +129,7 @@ export default function EmployeesAdminPage() {
   return (
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
-        <Title order={2}>Employees</Title>
+        <Title order={2} component="h1">Employees</Title>
         {isAdmin() && <Button leftSection={<Plus size={16} />} onClick={() => { setEditingEmployee(null); setForm({ email: '', firstName: '', lastName: '', phone: '', role: 'employee', partnerCompanyId: '' }); setError(''); setModalOpen(true); }}>Add employee</Button>}
       </Group>
 

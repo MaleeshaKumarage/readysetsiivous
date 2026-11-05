@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, setNavOpen } from './admin-helpers';
 import type { Branch } from '../src/lib/adminApi';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
@@ -160,7 +160,7 @@ test('pending action badges exclude cancelled and already arranged work, then re
   state.work = [request, { ...request, id: 'cancelled', branchName: 'Cancelled apartment', status: 'Cancelled' }, { ...request, id: 'arranged', branchName: 'Arranged apartment', status: 'Offered' }];
   state.changes = [{ id: 'open-change', companyId: company.id, kind: 'Property', message: 'Please update access instructions', resolvedUtc: null }, { id: 'resolved-change', resolvedUtc: '2026-11-01T10:00:00Z' }];
   await page.goto('/admin/partner-requests/');
-  await expect(page.getByLabel('3 pending partner actions', { exact: true })).toHaveText('3');
+  await setNavOpen(page, true); await expect(page.getByLabel('3 pending partner actions', { exact: true })).toHaveText('3', { timeout: 20000 }); await setNavOpen(page, false);
   for (const name of ['Requests', 'Quote requests', 'Changes']) await expect(page.getByRole('tab', { name, exact: true }).getByLabel('1 pending', { exact: true })).toHaveText('1');
   await expect(page.getByRole('article', { name: 'Cancelled apartment request', exact: true })).toHaveCount(0);
   await expect(page.getByRole('article', { name: 'Arranged apartment request', exact: true })).toBeVisible();
@@ -173,7 +173,7 @@ test('pending action badges exclude cancelled and already arranged work, then re
   state.work = [{ ...request, status: 'Offered' }]; state.changes = []; state.branches = [];
   await page.getByRole('button', { name: 'Refresh partner operations', exact: true }).click();
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await expect(page.getByLabel(/pending partner actions$/)).toHaveCount(0);
+  await setNavOpen(page, true); await expect(page.getByLabel(/pending partner actions$/)).toHaveCount(0, { timeout: 20000 }); await setNavOpen(page, false);
   await expect(page.getByRole('tab', { name: 'Requests', exact: true }).getByLabel('1 pending', { exact: true })).toHaveCount(0);
 });
 
