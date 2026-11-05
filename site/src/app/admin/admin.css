@@ -30,7 +30,8 @@ html[data-admin-theme='light'] .mantine-Modal-content, html[data-admin-theme='li
 @media (prefers-reduced-motion: reduce) { .admin-destination { transition: none; } }
 /* Phone: touch targets at least 44px, and tab strips scroll sideways instead of wrapping. */
 @media (max-width: 47.99em) {
-  .admin-content .mantine-Tabs-tab, .admin-content .mantine-SegmentedControl-control, .admin-content .mantine-Pagination-control,
+  .admin-content .mantine-Tabs-tab, .admin-content .mantine-SegmentedControl-control, .admin-content .mantine-SegmentedControl-label, .admin-content .mantine-Pagination-control,
   .admin-content .mantine-Button-root, .admin-content .mantine-ActionIcon-root { min-height: 44px; min-width: 44px; }
   .admin-content .admin-tabs-list { flex-wrap: nowrap !important; overflow-x: auto; }
+  .admin-content .admin-tabs-list [role="tab"] { min-height: 44px; }
 }

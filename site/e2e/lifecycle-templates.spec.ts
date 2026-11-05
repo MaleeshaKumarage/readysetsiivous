@@ -106,3 +106,20 @@ test('template editor opens in a dialog and the template list keeps the full wid
   await expect(page.getByRole('dialog', { name: 'Create New Template' })).toHaveCount(0);
   await expect(page.getByText('Office checklist', { exact: true })).toBeVisible();
 });
+
+test('template dialog Cancel discards edits; Add Item and Remove item work inside it', async ({ page }) => {
+  await mockTemplates(page, []);
+  await page.goto('/admin/quality-cycle/');
+  await page.getByRole('button', { name: 'New template', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Create New Template' });
+  await page.getByPlaceholder('e.g. Daily Office Cleaning Checklist').fill('Draft checklist');
+  await dialog.getByRole('button', { name: 'Add Item', exact: true }).click();
+  await expect(page.locator('input[placeholder^="Item "]')).toHaveCount(4);
+  await dialog.getByRole('button', { name: 'Remove item 4', exact: true }).click();
+  await expect(page.locator('input[placeholder^="Item "]')).toHaveCount(3);
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.getByRole('button', { name: 'New template', exact: true }).click();
+  await expect(page.getByPlaceholder('e.g. Daily Office Cleaning Checklist')).toHaveValue('');
+});
+

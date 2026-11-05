@@ -81,6 +81,7 @@ test('lost issue response locks edits and retry sends same submission exactly on
   const calls = await setup(page, { lostResponse: true }); await fill(page);
   await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await page.getByRole('button', { name: 'Issue invoice', exact: true }).click();
   await expect(page.getByText(/The issue result could not be confirmed/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'New invoice', exact: true })).toBeDisabled();
   await page.keyboard.press('Escape'); await expect(page.getByRole('dialog', { name: 'Invoice preview' })).toBeVisible();
   await page.getByRole('button', { name: 'Retry issuing invoice', exact: true }).click();
   await expect(page.getByRole('status')).toHaveText('Invoice 2026-0001 issued.'); expect(calls.issues).toHaveLength(2); expect(calls.issues[0]).toEqual(calls.issues[1]);

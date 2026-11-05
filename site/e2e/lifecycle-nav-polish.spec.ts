@@ -99,3 +99,32 @@ test('sample issuer badge is readable at 12px or larger on phone', async ({ page
   await expect(badge).toBeVisible();
   expect(parseFloat(await badge.evaluate(element => getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(12);
 });
+
+test('phone tabs and buttons meet the 44px touch target on every admin nav page', async ({ page }) => {
+  test.setTimeout(240000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await setupAdminMocks(page); await installScaleRoutes(page, buildScaleData());
+  for (const path of NAV_PAGES) {
+    await openAdmin(page, path);
+    const targets = page.getByRole('tab').or(page.getByRole('button', { name: 'Next', exact: true })).or(page.getByRole('button', { name: 'Previous', exact: true }));
+    const count = await targets.count();
+    for (let i = 0; i < count; i++) {
+      const target = targets.nth(i);
+      if (!(await target.isVisible())) continue;
+      expect((await target.boundingBox())!.height, `${path} control ${i}`).toBeGreaterThanOrEqual(44);
+    }
+  }
+});
+
+test('quality cycle template list uses the full content width on desktop', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await setupAdminMocks(page); await installScaleRoutes(page, buildScaleData());
+  await openAdmin(page, '/admin/quality-cycle/');
+  const list = page.getByText('Existing Templates', { exact: true });
+  await expect(list).toBeVisible();
+  const card = list.locator('xpath=ancestor::*[contains(@class,"mantine-Paper-root")][1]');
+  const content = page.locator('.admin-content');
+  const cardWidth = (await card.boundingBox())!.width;
+  const contentWidth = (await content.boundingBox())!.width;
+  expect(cardWidth).toBeGreaterThanOrEqual(contentWidth * 0.95);
+});

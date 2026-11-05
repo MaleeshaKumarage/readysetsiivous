@@ -13,6 +13,13 @@ export type ScaleData = { companies: ScaleCompany[]; branches: ScaleBranch[]; sh
 
 const pad = (n: number, width = 2) => String(n).padStart(width, '0');
 
+// Gross is always computed from net and VAT, so the fixture's totals add up like real invoices.
+const VAT_RATE = 0.255;
+function totalFor(net: number): { net: number; vat: number; gross: number } {
+  const vat = Number((net * VAT_RATE).toFixed(2));
+  return { net, vat, gross: Number((net + vat).toFixed(2)) };
+}
+
 export function buildScaleData(): ScaleData {
   const companies: ScaleCompany[] = Array.from({ length: SCALE.companies }, (_, c) => ({
     id: `00000000-0000-4000-8000-${pad(c + 1, 12)}`, name: `Company ${pad(c + 1)} Ltd`, businessId: `${1000000 + c}-${c % 9}`,
@@ -35,7 +42,7 @@ export function buildScaleData(): ScaleData {
   const invoices: ScaleInvoice[] = companies.map((company, i) => ({
     id: `inv-${pad(i + 1, 3)}`, invoiceNumber: `2026-${pad(i + 1, 4)}`, customer: { name: company.name },
     issueDate: `2026-10-${pad((i % 28) + 1)}T00:00:00Z`, dueDate: `2026-11-${pad((i % 28) + 1)}T00:00:00Z`,
-    total: { net: 100 + i, vat: Number((25.5 + i / 10).toFixed(2)), gross: 125.5 + i }, status: statuses[i % 3], issuerIsSample: i % 7 === 0,
+    total: totalFor(100 + i), status: statuses[i % 3], issuerIsSample: i % 7 === 0,
   }));
   return { companies, branches, shifts, invoices };
 }
@@ -52,6 +59,7 @@ export function integrityProblems(data: ScaleData): string[] {
     else if (branch.companyId !== shift.companyId) problems.push(`shift ${shift.id} points at a branch of another company`);
   }
   for (const invoice of data.invoices) if (!data.companies.some(c => c.name === invoice.customer.name)) problems.push(`invoice ${invoice.invoiceNumber} has no customer`);
+  for (const invoice of data.invoices) if (Math.abs(invoice.total.net + invoice.total.vat - invoice.total.gross) > 0.005) problems.push(`invoice ${invoice.invoiceNumber} gross does not equal net plus VAT`);
   return problems;
 }
 

@@ -189,3 +189,21 @@ test('invoice history stays on the page and new invoices open in a dialog', asyn
   await expect(page.getByRole('dialog', { name: 'Create shift invoice' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Issued invoices', exact: true })).toBeVisible();
 });
+
+test('closing company details with Escape discards unsaved edits without saving', async ({ page }) => {
+  await setup(page);
+  let saves = 0;
+  await page.route(/\/api\/v1\/admin\/invoices\/issuer$/, route => {
+    if (route.request().method() === 'PUT') { saves++; return route.fulfill({ headers, json: route.request().postDataJSON() }); }
+    return route.fulfill({ headers, json: issuer });
+  });
+  await page.goto('/admin/invoices/');
+  await page.getByRole('button', { name: 'Company and payment details' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Invoice issuer' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('textbox', { name: 'IBAN', exact: true }).fill('FI00-UNSAVED');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  expect(saves).toBe(0);
+});
+
