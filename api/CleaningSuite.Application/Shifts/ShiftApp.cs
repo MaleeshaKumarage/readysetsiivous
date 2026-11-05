@@ -264,6 +264,13 @@ public class ShiftHandlers
             shift.EnsureQualityCycleHistory();
             shift.Deactivate();
             shift.RecordQualityCyclePlan(DateTime.UtcNow);
+            var now = DateTime.UtcNow;
+            foreach (var assignment in await _repository.ListAssignmentsByShiftAsync(shift.Id, ct))
+            {
+                if (!assignment.IsActive) continue;
+                assignment.Release(now);
+                await _repository.SaveAssignmentAsync(assignment, ct);
+            }
             await _repository.SaveAsync(shift, ct);
         }
     }

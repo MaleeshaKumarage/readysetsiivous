@@ -11,6 +11,14 @@ public class ShiftAssignment : BaseDocument
     public string? Note { get; set; }
     public DateTime? UnassignedAtUtc { get; set; }
     public List<ShiftAssignmentPeriod> Periods { get; set; } = new();
+    /// <summary>Ends an assignment when its shift is deactivated or its request is cancelled, so it no longer blocks other work.</summary>
+    public void Release(DateTime nowUtc)
+    {
+        if (!IsActive) return;
+        IsActive = false;
+        UnassignedAtUtc = nowUtc;
+    }
+
     public void EnsureHistory()
     {
         if (Periods.Count == 0) Periods.Add(new() { FromUtc = AssignedAtUtc, ToUtc = IsActive ? null : UnassignedAtUtc ?? UpdatedUtc });
