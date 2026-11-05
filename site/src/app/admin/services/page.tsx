@@ -1,5 +1,6 @@
 'use client';
 
+import { showError } from '@/lib/toast';
 import { useEffect, useState } from 'react';
 import { Title, Button, Table, Modal, TextInput, Textarea, Group, Stack, Text, Loader, Badge, NumberInput } from '@mantine/core';
 import { Plus } from 'lucide-react';
@@ -69,11 +70,15 @@ export default function ServicesAdminPage() {
     setSaving(true); setError('');
     // Edits start from the stored record so unedited translations, image, icon, extra info, order and featured flag survive.
     const fields = serviceFieldsFromForm(editingRecord, form);
-    const ok = editingId
+    const result = editingId
       ? await adminServices.update(editingId, fields, editingIsActive)
       : await adminServices.create(fields);
     setSaving(false);
-    if (!ok) { setError(editingId ? 'Failed to update service.' : 'Failed to create service.'); return; }
+    if (!result.ok) {
+      setError(result.message);
+      showError(result.message, editingId ? 'Service not updated' : 'Service not created');
+      return;
+    }
     if (!editingId) setStatus('active');
     setForm(EMPTY);
     setEditingId(null);

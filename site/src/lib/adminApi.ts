@@ -110,6 +110,27 @@ export async function adminSend(
   return ok;
 }
 
+export type AdminSendResult = { ok: true } | { ok: false; message: string };
+
+// Like adminSend, but keeps the server's reason (problem detail) so the user can act on it.
+export async function adminSendResult(
+  path: string,
+  method: 'POST' | 'PUT' | 'DELETE',
+  body?: unknown
+): Promise<AdminSendResult> {
+  let response: Response;
+  try {
+    response = await authorizedFetch(path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
+  } catch {
+    return { ok: false, message: 'Could not reach the server. Check your connection, then save again.' };
+  }
+  if (response.ok || response.status === 204) { invalidateAdminCache(); return { ok: true }; }
+  const problem = await response.json().catch(() => null);
+  const detail = typeof problem?.detail === 'string' ? problem.detail.trim() : '';
+  const title = typeof problem?.title === 'string' ? problem.title.trim() : '';
+  return { ok: false, message: detail || title || `The change was not saved (error ${response.status}). Check the fields, then save again.` };
+}
+
 export async function adminSendJson<T>(
   path: string,
   method: 'POST' | 'PUT',
@@ -200,9 +221,9 @@ export const adminServices = {
     adminGet<{ id: string; slug: string; category: string; name: { values: Record<string, string> }; description: { values: Record<string, string> }; additionalInfo: { values: Record<string, string> } | null; icon: string; imageUrl: string; durationMinutes: number; priceNet: number; vatRatePercent: number; isActive: boolean; isFeatured: boolean; sortOrder: number }[]>(
       `/api/v1/admin/services?includeInactive=${includeInactive}`
     ),
-  create: (fields: ServiceFields) => adminSend('/api/v1/admin/services', 'POST', { fields }),
-  update: (id: string, fields: ServiceFields, isActive: boolean) =>
-    adminSend(`/api/v1/admin/services/${id}`, 'PUT', { fields, isActive }),
+  create: (fields: ServiceFields): Promise<AdminSendResult> => adminSendResult('/api/v1/admin/services', 'POST', { fields }),
+  update: (id: string, fields: ServiceFields, isActive: boolean): Promise<AdminSendResult> =>
+    adminSendResult(`/api/v1/admin/services/${id}`, 'PUT', { fields, isActive }),
   remove: (id: string) => adminSend(`/api/v1/admin/services/${id}`, 'DELETE'),
   deleteInactive: (id: string) => adminDelete(`/api/v1/admin/services/${id}`),
   uploadImage: async (id: string, file: File): Promise<string | null> => {

@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
   // Partner tests are explicitly included below alongside the existing workflow suites.
-  testMatch: ['**/push-notifications.spec.ts', '**/partner*.spec.ts', '**/lifecycle-*.spec.ts', '**/company-integrity.spec.ts', '**/public-accessibility.spec.ts', '**/public-website-ux.spec.ts', '**/admin.spec.ts', '**/admin-scope.spec.ts', '**/manager.spec.ts', '**/shift-reactivation.spec.ts', '**/shift-assignment.spec.ts', '**/shift-occurrences.spec.ts', '**/shift-overlap.spec.ts', '**/employee-schedule.spec.ts', '**/shift-workspace.spec.ts', '**/shift-dates.spec.ts', '**/quality-cycle.spec.ts', '**/my-shifts*.spec.ts', '**/booking-availability.spec.ts', '**/booking-management-key.spec.ts', '**/employee-invite.spec.ts', '**/entertainment*.spec.ts'],
+  testMatch: ['**/push-notifications.spec.ts', '**/partner*.spec.ts', '**/lifecycle-*.spec.ts', '**/company-integrity.spec.ts', '**/public-accessibility.spec.ts', '**/public-website-ux.spec.ts', '**/admin.spec.ts', '**/admin-scope.spec.ts', '**/manager.spec.ts', '**/shift-reactivation.spec.ts', '**/shift-assignment.spec.ts', '**/shift-occurrences.spec.ts', '**/shift-overlap.spec.ts', '**/employee-schedule.spec.ts', '**/service-slug-conflict.spec.ts', '**/shift-workspace.spec.ts', '**/shift-dates.spec.ts', '**/quality-cycle.spec.ts', '**/my-shifts*.spec.ts', '**/booking-availability.spec.ts', '**/booking-management-key.spec.ts', '**/employee-invite.spec.ts', '**/entertainment*.spec.ts'],
   timeout: 30000,
   use: {
     baseURL: 'http://localhost:3000',
