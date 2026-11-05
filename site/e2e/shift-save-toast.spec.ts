@@ -49,3 +49,29 @@ test('a field validation failure names the field problem instead of a generic ti
   await expect(dialog.getByText(FIELD)).toBeVisible();
   await expect(dialog.getByText('Validation failed')).toHaveCount(0);
 });
+
+test('a refused shift update says it was not updated, keeps the edited values and the dialog open', async ({ page }) => {
+  await setupAdminMocks(page);
+  const UPDATE_REFUSED = 'A shift with this name already exists in this branch. Change the name, then save again.';
+  const shift = { id: 'shift-1', name: 'Morning clean', companyId: 'company', branchId: 'branch', isActive: true, notes: null, validFrom: '2026-11-01T00:00:00Z', validUntil: null, schedule: { type: 0, dailyStart: '08:00:00', dailyEnd: '10:00:00', dailyTimes: {}, weeklyDays: [] } };
+  let puts = 0;
+  await page.route(/\/api\/v1\/admin\//, route => {
+    const request = route.request(); const path = new URL(request.url()).pathname; const method = request.method();
+    if (method === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    if (path.endsWith('/shifts/shift-1') && method === 'PUT') { puts++; return route.fulfill({ status: 409, headers, json: { title: 'Shift conflict', detail: UPDATE_REFUSED } }); }
+    return route.fulfill({ headers, json: path.endsWith('/shifts') ? [shift]
+      : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'AAA', isActive: true }], total: 1 }
+      : path.endsWith('/companies/company') ? { company: { id: 'company', name: 'AAA', isActive: true }, branches: [{ id: 'branch', companyId: 'company', name: 'AAA1', isActive: true }] }
+      : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
+  });
+  await page.goto('/admin/shifts/');
+  await page.getByRole('button', { name: 'More actions for Morning clean' }).click();
+  await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Edit shift', exact: true });
+  await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Morning clean edited');
+  await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(page.getByText('Shift not updated').first()).toBeVisible();
+  await expect(dialog.getByText(UPDATE_REFUSED)).toBeVisible();
+  await expect(dialog.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Morning clean edited');
+  expect(puts).toBe(1);
+});

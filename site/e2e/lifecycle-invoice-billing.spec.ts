@@ -228,3 +228,52 @@ test('closing company details with Escape discards unsaved edits without saving'
   await expect(reopened.getByRole('textbox', { name: 'IBAN', exact: true })).not.toHaveValue('FI00-UNSAVED');
 });
 
+
+test('a failed invoice preview shows the reason as a toast and keeps the form for a retry', async ({ page }) => {
+  await setup(page, { failPreview: true }); await fillInvoice(page);
+  await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
+  await expect(page.getByText('Invoice action not completed').first()).toBeVisible();
+  await expect(page.getByText('No pricing is configured for this billing period.').first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Preview invoice', exact: true })).toBeEnabled();
+});
+
+test('a failed invoice issue shows the reason as a toast and the preview can be issued again', async ({ page }) => {
+  await setup(page); await fillInvoice(page);
+  const ISSUE_REFUSED = 'This invoice could not be issued because the billing address is incomplete. Complete the company details, then preview again.';
+  let issues = 0;
+  await page.route(/\/api\/v1\/admin\/invoices\/shifts$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    issues++;
+    return route.fulfill({ status: 409, headers, json: { title: 'Invoice conflict', detail: ISSUE_REFUSED } });
+  });
+  await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Invoice preview' })).toBeVisible();
+  await page.getByRole('button', { name: 'Issue invoice', exact: true }).click();
+  await expect(page.getByText('Invoice action not completed').first()).toBeVisible();
+  await expect(page.getByText(ISSUE_REFUSED).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Issue invoice', exact: true })).toBeEnabled();
+  expect(issues).toBe(1);
+});
+
+test('a refused void shows the reason as a toast and the invoice stays issued', async ({ page }) => {
+  await setup(page);
+  const VOID_REFUSED = 'This invoice was already sent to the customer, so it cannot be voided. Issue a credit note instead.';
+  let voids = 0;
+  await page.route(/\/api\/v1\/admin\/invoices(?:\?.*)?$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    return route.fulfill({ headers, json: [invoice] });
+  });
+  await page.route(/\/api\/v1\/admin\/invoices\/[^/]+\/void$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    voids++;
+    return route.fulfill({ status: 409, headers, json: { title: 'Invoice conflict', detail: VOID_REFUSED } });
+  });
+  await page.goto('/admin/invoices/');
+  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'INV-1', exact: true }) });
+  page.once('dialog', dialog => dialog.accept());
+  await row.getByRole('button', { name: 'Void', exact: true }).click();
+  await expect(page.getByText('Invoice action not completed').first()).toBeVisible();
+  await expect(page.getByText(VOID_REFUSED).first()).toBeVisible();
+  await expect(row.getByRole('button', { name: 'Void', exact: true })).toBeEnabled();
+  expect(voids).toBe(1);
+});

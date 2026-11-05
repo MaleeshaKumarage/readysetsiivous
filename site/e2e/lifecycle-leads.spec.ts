@@ -67,6 +67,8 @@ test('lead images reject a fourth, upload privately, remove and retry failure', 
   await page.getByLabel('Add images', { exact: true }).setInputFiles([1, 2, 3, 4].map(image));
   await expect(page.getByRole('alert').filter({ hasText: 'at most 3' })).toBeVisible(); expect(state.requests).toHaveLength(0);
   state.uploadError = true; await page.getByLabel('Add images', { exact: true }).setInputFiles(image(1)); await expect(page.getByRole('alert').filter({ hasText: 'Upload failed' }).first()).toBeVisible();
+  // The failed upload also raises a toast that names what was kept, so the user knows the remaining files can be retried.
+  await expect(page.getByText('Not all images were uploaded').first()).toBeVisible(); await expect(page.getByText('Images already uploaded are kept', { exact: false }).first()).toBeVisible();
   state.uploadError = false; await page.getByLabel('Add images', { exact: true }).setInputFiles([1, 2, 3].map(image));
   await expect(page.getByRole('status').filter({ hasText: 'Images uploaded.' })).toBeVisible(); await expect(page.getByAltText('Lead image')).toHaveCount(3);
   await expect(page.getByLabel('Add images', { exact: true })).toBeDisabled();
