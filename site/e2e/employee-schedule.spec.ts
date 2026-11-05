@@ -145,3 +145,23 @@ test('the Employee schedule navigation item opens the page', async ({ page }) =>
   await expect(page).toHaveURL(/\/admin\/shifts\/employee-schedule\/?$/);
   await expect(page.getByRole('heading', { name: 'Employee schedule' })).toBeVisible();
 });
+
+test('the Reload button in the time-zone error recovers the schedule once the zone loads', async ({ page }) => {
+  await setupAdminMocks(page);
+  let tenantCalls = 0; let zoneHealthy = false;
+  await page.route(/\/api\/v1\/admin\/tenant$/, route => {
+    tenantCalls++;
+    if (!zoneHealthy) return route.fulfill({ status: 500, headers, json: { detail: 'boom' } });
+    return route.fulfill({ headers, json: { companyName: 'QA', timeZoneId: 'Europe/Helsinki' } });
+  });
+  await page.route(/\/api\/v1\/admin\/shifts\/employee-schedule/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/admin\/shifts\/overlap-audit/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/admin\/employees/, route => route.fulfill({ headers, json: [] }));
+  await page.goto('/admin/shifts/employee-schedule/');
+  await expect(page.getByText('Time zone unavailable')).toBeVisible();
+  zoneHealthy = true;
+  await page.getByRole('button', { name: 'Reload', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Previous week' })).toBeVisible();
+  await expect(page.getByText('Time zone unavailable')).toHaveCount(0);
+  expect(tenantCalls).toBeGreaterThanOrEqual(2);
+});
