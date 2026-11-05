@@ -24,6 +24,9 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
         var includePartners = query.Source is "all" or "partner";
         var includeShifts = query.Source is "all" or "shift";
         var assignee = query.Assignee;
+        // Employee ids are GUIDs. A non-GUID assignee matches nothing in any source, so bookings and shifts treat it the same way.
+        if (assignee is not null && !Guid.TryParse(assignee, out _)) { includeBookings = false; includeShifts = false; }
+        var assigneeKey = assignee is not null && Guid.TryParse(assignee, out var parsedKey) ? parsedKey.ToString() : assignee;
         // Partner requests carry no assignee of their own, so an assignee filter leaves them out.
         if (assignee is not null) includePartners = false;
         var fromDay = query.DateFrom is null ? (DateOnly?)null : DateOnly.ParseExact(query.DateFrom, "yyyy-MM-dd");
@@ -130,7 +133,7 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
             // Booking StartUtc is a timestamp without time zone, so the bounds are Unspecified-kind (Npgsql rejects Kind=Utc).
             if (fromDay is { } firstDay) { var lower = TenantTimeZone.StartOfLocalDay(firstDay.ToDateTime(TimeOnly.MinValue), zone); var unspecifiedLower = DateTime.SpecifyKind(lower, DateTimeKind.Unspecified); q = q.Where(b => b.StartUtc >= unspecifiedLower); }
             if (toDay is { } lastDay) { var upper = TenantTimeZone.StartOfLocalDay(lastDay.AddDays(1).ToDateTime(TimeOnly.MinValue), zone); var unspecifiedUpper = DateTime.SpecifyKind(upper, DateTimeKind.Unspecified); q = q.Where(b => b.StartUtc < unspecifiedUpper); }
-            if (assignee is not null) q = q.Where(b => b.EmployeeId == assignee);
+            if (assignee is not null) q = q.Where(b => b.EmployeeId == assigneeKey);
             return q;
         }
     }

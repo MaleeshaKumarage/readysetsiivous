@@ -124,15 +124,17 @@ public class WorkQueueReaderDatabaseTests
     {
         using var f = await Fixture.Create();
         var company = new Company { Name = "Filter Oy", BusinessId = "WQ-" + Guid.NewGuid().ToString("N")[..8], IsActive = true, IsPartnerEnabled = true };
+        var employeeA = Guid.NewGuid().ToString();
+        var employeeB = Guid.NewGuid().ToString();
         using (var db = f.Store.LightweightSession(f.Tenant))
         {
             db.Store(company);
             // 01:00 Helsinki on 3 Dec is 23:00 UTC on 2 Dec. A date window must use the local day edge, not the UTC date.
-            db.Store(new Booking { BookingNumber = "BK-EARLY", Customer = new Customer { Name = "Early bird" }, Status = Booking.StatusConfirmed, EmployeeId = "emp-a",
+            db.Store(new Booking { BookingNumber = "BK-EARLY", Customer = new Customer { Name = "Early bird" }, Status = Booking.StatusConfirmed, EmployeeId = employeeA,
                 StartUtc = new DateTime(2026, 12, 2, 23, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-03", StartLocalTime = "01:00" });
             db.Store(new Booking { BookingNumber = "BK-DAY2", Customer = new Customer { Name = "Day two" }, Status = Booking.StatusNew,
                 StartUtc = new DateTime(2026, 12, 2, 8, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-02", StartLocalTime = "10:00" });
-            db.Store(new Booking { BookingNumber = "BK-LATE", Customer = new Customer { Name = "Late one" }, Status = Booking.StatusConfirmed, EmployeeId = "emp-b",
+            db.Store(new Booking { BookingNumber = "BK-LATE", Customer = new Customer { Name = "Late one" }, Status = Booking.StatusConfirmed, EmployeeId = employeeB,
                 StartUtc = new DateTime(2026, 12, 9, 8, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-09", StartLocalTime = "10:00" });
             await db.SaveChangesAsync();
         }
@@ -148,9 +150,30 @@ public class WorkQueueReaderDatabaseTests
         Assert.Equal(1, counts.Total);
         Assert.Equal(1, counts.Counts[WorkQueueViews.Scheduled]);
 
-        var emp = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Scheduled, "all", null, 0, 25, Assignee: "emp-b"));
+        var emp = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Scheduled, "all", null, 0, 25, Assignee: employeeB));
         Assert.Equal(["BK-LATE"], emp.Items.Select(i => i.Reference).ToArray());
         Assert.Equal(1, emp.Total);
+    }
+
+    [QualityCycleDatabaseFact]
+    public async Task Non_guid_assignee_matches_nothing_in_any_source()
+    {
+        // Bookings and shifts must agree: a non-GUID assignee returns an empty queue, not a partial one.
+        using var f = await Fixture.Create();
+        var company = new Company { Name = "Assignee Oy", BusinessId = "WQ-" + Guid.NewGuid().ToString("N")[..8], IsActive = true, IsPartnerEnabled = true };
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(company);
+            db.Store(new Booking { BookingNumber = "BK-ANY", Customer = new Customer { Name = "Anyone" }, Status = Booking.StatusConfirmed, EmployeeId = Guid.NewGuid().ToString(),
+                StartUtc = new DateTime(2026, 12, 2, 8, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-02", StartLocalTime = "10:00" });
+            await db.SaveChangesAsync();
+        }
+        using var session = f.Session();
+        var reader = Reader(f, session);
+
+        var result = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Scheduled, "all", null, 0, 25, Assignee: "emp-1"));
+        Assert.Equal(0, result.Total);
+        Assert.Equal(0, result.Counts[WorkQueueViews.Scheduled]);
     }
 
     [QualityCycleDatabaseFact]

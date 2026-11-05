@@ -328,3 +328,16 @@ test('an impossible calendar date in the URL is ignored while a valid end date i
   await expect(page.getByLabel('From date', { exact: true })).toHaveValue('');
 });
 
+
+test('typing a From date after the To date clears both bounds, and From is capped by To', async ({ page }) => {
+  const state = await setup(page);
+  await page.goto('/admin/work-queue/?to=2026-11-30');
+  await expect(page.getByRole('listitem').filter({ hasText: 'Anna Virtanen' })).toBeVisible();
+  await expect(page.getByLabel('From date', { exact: true })).toHaveAttribute('max', '2026-11-30');
+  await page.getByLabel('From date', { exact: true }).fill('2026-12-05');
+  await expect(page.getByLabel('From date', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('To date', { exact: true })).toHaveValue('');
+  await expect.poll(() => state.queries.at(-1)?.has('to')).toBe(false);
+  expect(state.queries.at(-1)?.has('from')).toBe(false);
+  expect(new URL(page.url()).searchParams.has('to')).toBe(false);
+});
