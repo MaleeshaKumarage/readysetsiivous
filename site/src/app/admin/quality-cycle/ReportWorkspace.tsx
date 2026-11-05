@@ -1,5 +1,6 @@
 'use client';
 
+import { showError } from '@/lib/toast';
 import { useEffect, useRef, useState } from 'react';
 import { Badge, Button, Group, Modal, MultiSelect, NumberInput, Paper, SegmentedControl, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { adminShifts, type Shift } from '@/lib/adminApi';
@@ -29,9 +30,12 @@ export default function ReportWorkspace() {
   const valid = shiftIds.length > 0 && shiftIds.length <= 50 && (mode === 'months' ? months.length > 0 : !!from && !!to && from <= to);
   const periodKey = JSON.stringify({ shiftIds, mode, months, from, to });
 
+  // Action failures are shown in the panel and as a toast, so they are noticed even when the panel is below the fold.
+  const reportError = (message: string) => { setError(message); showError(message, 'Report action not completed'); };
+  const reportShareError = (message: string) => { setShareError(message); showError(message, 'Report not shared'); };
   useEffect(() => {
     let active = true;
-    void adminShifts.list(undefined, undefined, true).then(value => { if (active) { if (value) setShifts(value); else setError('Could not load shifts. Refresh this page to retry.'); } }).catch(e => { if (active) setError(failure(e)); });
+    void adminShifts.list(undefined, undefined, true).then(value => { if (active) { if (value) setShifts(value); else setError('Could not load shifts. Refresh this page to retry.'); } }).catch(e => { if (active) reportError(failure(e)); });
     return () => { active = false; version.current++; recipientVersion.current++; };
   }, []);
   useEffect(() => { version.current++; setReport(null); setLoadedSelection(null); setBusy(false); }, [periodKey]);
@@ -42,14 +46,14 @@ export default function ReportWorkspace() {
   async function load() {
     const current = ++version.current; setBusy(true); setError(''); setReport(null); setLoadedSelection(null);
     try { const value = await adminQualityCycle.selectedReport(selection); if (current === version.current) { setReport(value); setLoadedSelection(selection); } }
-    catch (e) { if (current === version.current) setError(failure(e)); }
+    catch (e) { if (current === version.current) reportError(failure(e)); }
     finally { if (current === version.current) setBusy(false); }
   }
   async function download(id?: string) {
     if (!loadedSelection) return;
     setBusy(true); setError('');
     try { await adminQualityCycle.downloadSelectedPdf({ ...loadedSelection, language, ...(id ? { shiftIds: [id] } : {}) }); }
-    catch (e) { setError(failure(e)); } finally { setBusy(false); }
+    catch (e) { reportError(failure(e)); } finally { setBusy(false); }
   }
   async function openShare(id?: string) {
     if (!loadedSelection) return;
@@ -57,7 +61,7 @@ export default function ReportWorkspace() {
     const current = ++recipientVersion.current;
     setShareSelection(chosen); setEmail(''); setRecipientChoice('other'); setRecipients([]); setShareError('');
     try { const options = await adminQualityCycle.recipientOptions(chosen.shiftIds); if (current === recipientVersion.current) setRecipients(options); }
-    catch (e) { if (current === recipientVersion.current) setShareError(failure(e)); }
+    catch (e) { if (current === recipientVersion.current) reportShareError(failure(e)); }
   }
   async function send() {
     if (!shareSelection) return;
@@ -67,17 +71,17 @@ export default function ReportWorkspace() {
       setShares(current => [created, ...current]);
       if (created.emailError) setError(created.emailError); else setError('');
       setShareSelection(null); recipientVersion.current++;
-    } catch (e) { setShareError(failure(e)); } finally { setSending(false); }
+    } catch (e) { reportShareError(failure(e)); } finally { setSending(false); }
   }
   async function manageShares() {
     setBusy(true); setError('');
     try { const value = await adminQualityCycle.listReportShares(); if (!value) throw new Error('Could not load shared reports.'); setShares(value); }
-    catch (e) { setError(failure(e)); } finally { setBusy(false); }
+    catch (e) { reportError(failure(e)); } finally { setBusy(false); }
   }
   async function retry(share: ReportShare) {
     setBusy(true); setError('');
     try { const updated = await adminQualityCycle.retryEmail(share.id); setShares(current => current.map(s => s.id === updated.id ? updated : s)); if (updated.emailError) setError(updated.emailError); }
-    catch (e) { setError(failure(e)); } finally { setBusy(false); }
+    catch (e) { reportError(failure(e)); } finally { setBusy(false); }
   }
   return <Stack>
     <Paper withBorder p="md"><Stack>
@@ -125,7 +129,7 @@ export default function ReportWorkspace() {
           {share.emailError && <Text size="sm" c="red">{share.emailError}</Text>}
           {!inactive && <Group><Button component="a" size="xs" href={share.recipientEmail ? reportLandingUrl(share) : reportShareUrl(share)} target="_blank" rel="noreferrer">Open report</Button>
             {share.recipientEmail && !share.emailSentUtc && <Button size="xs" disabled={busy} onClick={() => retry(share)}>Retry email</Button>}
-            <Button size="xs" color="red" variant="light" disabled={busy} onClick={async () => { setBusy(true); try { if (!await adminQualityCycle.revokeReportShare(share.id)) throw new Error('Could not revoke report.'); setShares(current => current.map(s => s.id === share.id ? { ...s, isRevoked: true } : s)); } catch (e) { setError(failure(e)); } finally { setBusy(false); } }}>Revoke</Button>
+            <Button size="xs" color="red" variant="light" disabled={busy} onClick={async () => { setBusy(true); try { if (!await adminQualityCycle.revokeReportShare(share.id)) throw new Error('Could not revoke report.'); setShares(current => current.map(s => s.id === share.id ? { ...s, isRevoked: true } : s)); } catch (e) { reportError(failure(e)); } finally { setBusy(false); } }}>Revoke</Button>
           </Group>}
         </Stack></Paper>;
       })}

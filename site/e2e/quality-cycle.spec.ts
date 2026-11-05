@@ -523,3 +523,25 @@ test('public PDF download requests the report endpoint and failed acknowledgment
   await expect(page.getByRole('status')).toContainText('Receipt acknowledged');
   expect(attempts).toBe(2);
 });
+
+test('a failed email retry explains the problem as a toast and in the panel, and the retry stays available', async ({ page }) => {
+  const calls = await setupReportWorkspace(page); await selectReportShifts(page);
+  await page.getByRole('button', { name: 'Load report', exact: true }).click();
+  await page.getByRole('button', { name: 'Share all selected shifts' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('textbox', { name: 'Recipient source' }).click();
+  await page.getByRole('option', { name: 'Other email address', exact: true }).click();
+  await dialog.getByLabel('Recipient email').fill('other@example.test');
+  await dialog.getByRole('button', { name: 'Send report', exact: true }).click();
+  await expect(page.getByText('Email failed', { exact: true })).toBeVisible();
+  const RETRY_FAILED = 'The report email could not be sent again. Check the recipient address, then retry.';
+  await page.route(/\/retry-email$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers: CORS_HEADERS, status: 200 });
+    return route.fulfill({ status: 502, headers: CORS_HEADERS, json: { detail: RETRY_FAILED } });
+  });
+  await page.getByRole('button', { name: 'Retry email', exact: true }).click();
+  await expect(page.getByText('Report action not completed').first()).toBeVisible();
+  await expect(page.getByText(RETRY_FAILED).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Retry email', exact: true })).toBeEnabled();
+  expect(calls.retry).toBe(0);
+});
