@@ -65,6 +65,7 @@ export default function ServicesAdminPage() {
 
   const submit = async () => {
     if (!form.slug.trim() || !form.nameFi.trim()) { setError('Slug and Finnish name are required.'); return; }
+    if (form.priceNet.trim() !== '' && Number(form.priceNet) < 0) { setError('Price cannot be negative.'); return; }
     setSaving(true); setError('');
     // Edits start from the stored record so unedited translations, image, icon, extra info, order and featured flag survive.
     const fields = serviceFieldsFromForm(editingRecord, form);
@@ -170,7 +171,7 @@ export default function ServicesAdminPage() {
           <Textarea label="Description (Swedish)" value={form.descSv} onChange={set('descSv')} />
 
           <Group wrap="wrap" grow gap="xs">
-            <NumberInput label="Price (€)" value={form.priceNet} onChange={(v) => setForm((f) => ({ ...f, priceNet: String(v ?? '') }))} />
+            <NumberInput label="Price (€)" min={0} value={form.priceNet} onChange={(v) => setForm((f) => ({ ...f, priceNet: String(v ?? '') }))} />
             <TextInput label="VAT %" inputMode="decimal" value={form.vatRatePercent} onChange={set('vatRatePercent')} />
             <NumberInput label="Duration (min)" value={form.durationMinutes} onChange={(v) => setForm((f) => ({ ...f, durationMinutes: String(v ?? '') }))} />
           </Group>

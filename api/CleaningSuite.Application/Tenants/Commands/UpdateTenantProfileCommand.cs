@@ -50,7 +50,7 @@ public class UpdateTenantProfileHandler : IRequestHandler<UpdateTenantProfileCom
     {
         var tenantId = _context.TenantId;
         var profile = await _profiles.GetAsync(tenantId, ct)
-            ?? new TenantProfile { Slug = tenantId, RealmName = tenantId };
+            ?? new TenantProfile { Id = CleaningSuite.Domain.Common.TenantDocumentIds.TenantProfile(tenantId), Slug = tenantId, RealmName = tenantId };
 
         profile.CompanyName = request.CompanyName;
         profile.BusinessId = request.BusinessId;

@@ -62,7 +62,8 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
     {
         if (request.CompanyId == Guid.Empty || request.ShiftIds is null || (!request.PartnerMonth && request.ShiftIds.Count is < 1 or > 50) || request.ShiftIds.Any(id => id == Guid.Empty))
             Invalid("Select a company and between 1 and 50 shifts.");
-        if (request.From.Year < 2000 || request.To.Year > 2100 || request.To < request.From || request.To.DayNumber - request.From.DayNumber >= 366)
+        if (request.To < request.From) Invalid("The billing period must end on or after its start date.");
+        if (request.From.Year < 2000 || request.To.Year > 2100 || request.To.DayNumber - request.From.DayNumber >= 366)
             Invalid("Choose an inclusive billing period of at most 366 days between 2000 and 2100.");
         if (request.Language is not ("en" or "fi" or "sv")) Invalid("Choose English, Finnish or Swedish for the invoice.");
         if (request.BillingAddress is { } address && new[] { address.Street, address.PostalCode, address.City, address.Country }.Any(s => s?.Length > 250))
@@ -189,7 +190,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             throw new ShiftConflictException("Partner work eligibility changed. Load a new preview before issuing.");
         if (lines.Count == 0) Invalid(request.PartnerMonth
             ? "No completed, unbilled visits were found for this month. Choose another month, or select shifts manually under Invoice shifts."
-            : "No billable shift work was found in this period. On-call visits must be completed before invoicing.");
+            : "No billable work was found for the selected shifts in this period. Completed visits and scheduled hours or fees are billed.");
         var issueDate = TenantTimeZone.LocalDate(clock.GetUtcNow().UtcDateTime, zone);
         var invoice = new Invoice { Id = Guid.Empty, CreatedUtc = issueDate, UpdatedUtc = issueDate, CompanyId = company.Id,
             PeriodFrom = request.From, PeriodTo = request.To, Language = request.Language, BillingAddress = request.BillingAddress ?? new(),
