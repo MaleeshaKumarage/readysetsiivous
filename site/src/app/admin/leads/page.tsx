@@ -1,4 +1,5 @@
 'use client';
+import { showError } from '@/lib/toast';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { LeadBranchesEditor } from '@/components/leads/LeadBranchesEditor';
@@ -50,7 +51,7 @@ export default function LeadsPage() {
   useEffect(() => { const requested = new URLSearchParams(window.location.search).get('lead'); if (requested && !openedFromLink.current) { openedFromLink.current = true; void openDetail(requested); } return () => { openedFromLink.current = false; }; }, []);
   const perform = async (name: string, action: () => Promise<LeadDetail>, replaceForm = true) => { setBusy(name); setError(''); setMessage('');
     try { const result = await action(); setDetail(result); if (replaceForm) setForm(result.lead.fields); reload(); setMessage(name === 'Saving' ? 'Lead saved.' : 'Lead updated.'); return result; }
-    catch (failure) { setError(errorText(failure)); return null; } finally { setBusy(''); }
+    catch (failure) { const message = errorText(failure); setError(message); showError(message, 'Lead action not completed'); return null; } finally { setBusy(''); }
   };
   const save = () => { if ((form.branches || []).some(branch => !branch.name.trim())) { setError('Enter a name for each added branch, or remove the draft branch.'); return; } if (!form.name.trim()) { setError('Company name is required.'); return; } void perform('Saving', () => detail ? leadsApi.update(detail.lead, form) : leadsApi.create(form)); };
   const upload = async (files: FileList | null) => { if (!files?.length || !detail) return;
@@ -59,7 +60,7 @@ export default function LeadsPage() {
     if (selected.some(file => file.size > 5 * 1024 * 1024 || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type))) { setError('Choose JPEG, PNG or WebP images up to 5 MiB each.'); return; }
     setError(''); setMessage(''); let current = detail;
     try { for (let i = 0; i < selected.length; i++) { setBusy(`Uploading image ${i + 1}/${selected.length}`); current = await leadsApi.upload(current.lead, selected[i]); setDetail(current); } reload(); setMessage('Images uploaded.'); }
-    catch (failure) { reload(); setError(errorText(failure) + ' Images already uploaded are kept; you can retry the remaining files.'); } finally { setBusy(''); }
+    catch (failure) { reload(); const message = errorText(failure) + ' Images already uploaded are kept; you can retry the remaining files.'; setError(message); showError(message, 'Not all images were uploaded'); } finally { setBusy(''); }
   };
   const input = (key: keyof LeadFields, label: string, required = false) => <TextInput key={key} label={label} required={required} maxLength={bounds[key]} value={form[key] as string} readOnly={converted} disabled={!!busy} onChange={event => setForm(current => ({ ...current, [key]: event.target.value }))} />;
   return <Stack>

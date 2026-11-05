@@ -66,7 +66,7 @@ test('lead images reject a fourth, upload privately, remove and retry failure', 
   const image = (i: number) => ({ name: `${i}.png`, mimeType: 'image/png', buffer: png });
   await page.getByLabel('Add images', { exact: true }).setInputFiles([1, 2, 3, 4].map(image));
   await expect(page.getByRole('alert').filter({ hasText: 'at most 3' })).toBeVisible(); expect(state.requests).toHaveLength(0);
-  state.uploadError = true; await page.getByLabel('Add images', { exact: true }).setInputFiles(image(1)); await expect(page.getByRole('alert').filter({ hasText: 'Upload failed' })).toBeVisible();
+  state.uploadError = true; await page.getByLabel('Add images', { exact: true }).setInputFiles(image(1)); await expect(page.getByRole('alert').filter({ hasText: 'Upload failed' }).first()).toBeVisible();
   state.uploadError = false; await page.getByLabel('Add images', { exact: true }).setInputFiles([1, 2, 3].map(image));
   await expect(page.getByRole('status').filter({ hasText: 'Images uploaded.' })).toBeVisible(); await expect(page.getByAltText('Lead image')).toHaveCount(3);
   await expect(page.getByLabel('Add images', { exact: true })).toBeDisabled();
@@ -98,7 +98,8 @@ test('lead stale save preserves input and inactive records can edit reactivate a
   await expect(page.getByLabel('Add images', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toHaveCount(0);
   await page.getByRole('textbox', { name: 'Description', exact: true }).fill('Unsaved change'); state.saveError = 'This lead changed. Refresh before retrying.';
-  await page.getByRole('button', { name: 'Save lead', exact: true }).click(); await expect(page.getByRole('alert').filter({ hasText: 'This lead changed' })).toBeVisible();
+  await page.getByRole('button', { name: 'Save lead', exact: true }).click(); await expect(page.getByRole('alert').filter({ hasText: 'This lead changed' }).first()).toBeVisible();
+  await expect(page.getByText('Lead action not completed').first()).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Description', exact: true })).toHaveValue('Unsaved change'); await expect(page.getByRole('button', { name: 'Reactivate', exact: true })).toBeDisabled();
   state.saveError = ''; await page.getByRole('button', { name: 'Save lead', exact: true }).click(); await expect(page.getByRole('button', { name: 'Reactivate', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Reactivate', exact: true }).click(); await expect(page.getByRole('button', { name: 'Deactivate', exact: true })).toBeVisible();
