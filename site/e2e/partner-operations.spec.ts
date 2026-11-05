@@ -73,6 +73,7 @@ test('completion month offers exactly 36 months without older shifts and can be 
     return route.fulfill({ status: 404, headers });
   });
   await page.goto('/admin/invoices/');
+  await page.getByRole('button', { name: 'New invoice', exact: true }).click();
   await page.getByRole('textbox', { name: 'Company', exact: true }).click(); await page.getByRole('option', { name: 'Owner company', exact: true }).click();
   const month = page.getByRole('textbox', { name: 'Completion month', exact: true });
   await month.click();
@@ -117,6 +118,7 @@ test('partner month previews all company visits and issues the exact approved pa
     return route.fulfill({ status: 404, headers });
   });
   await page.goto('/admin/invoices/');
+  await page.getByRole('button', { name: 'New invoice', exact: true }).click();
   await expect(page.getByLabel('Completed cleaning month', { exact: true })).not.toBeChecked();
   await page.getByRole('textbox', { name: 'Company', exact: true }).click(); await page.getByRole('option', { name: 'Owner company', exact: true }).click();
   await expect(page.getByLabel('Completed cleaning month', { exact: true })).toBeChecked();
@@ -177,6 +179,7 @@ test('a month with several completed visits of one shift previews one line per v
     return route.fulfill({ status: 404, headers });
   });
   await page.goto('/admin/invoices/');
+  await page.getByRole('button', { name: 'New invoice', exact: true }).click();
   await page.getByRole('textbox', { name: 'Company', exact: true }).click(); await page.getByRole('option', { name: 'Owner company', exact: true }).click();
   await page.getByRole('textbox', { name: 'Completion month', exact: true }).click();
   await pickMonth(page, 'October 2026');

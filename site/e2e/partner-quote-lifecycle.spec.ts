@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, setNavOpen } from './admin-helpers';
 
 // Owner withdraw/edit/declined-quote paths and staff rejection, plus banner counts limited to partner-enabled companies.
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
@@ -144,7 +144,7 @@ test('staff reject needs a reason, leaves the queue, and the banner counts only 
   await page.goto('/admin/companies/');
   // The banner and badge count only partner-enabled companies, the same rule the Quote requests tab uses.
   await expect(page.getByRole('status', { name: 'Pending quote requests' })).toContainText('1 branch awaiting a quote');
-  await expect(page.getByLabel('1 pending partner actions')).toHaveCount(1);
+  await setNavOpen(page, true); await expect(page.getByLabel('1 pending partner actions')).toHaveCount(1); await setNavOpen(page, false);
   await page.goto('/admin/partner-requests/?tab=quotes');
   await expect(page.getByRole('heading', { name: 'Lake apartment', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Disabled flat', exact: true })).toHaveCount(0);
@@ -182,7 +182,7 @@ test('changes from companies without partner access stay out of the Changes list
   await expect(page.getByText('Enable the sauna', { exact: true })).toBeVisible();
   await expect(page.getByText('Not partner company', { exact: true })).toHaveCount(0);
   // One quote and one enabled change; the disabled company's change is not counted.
-  await expect(page.getByLabel('2 pending partner actions')).toHaveCount(1);
+  await setNavOpen(page, true); await expect(page.getByLabel('2 pending partner actions')).toHaveCount(1); await setNavOpen(page, false);
 });
 
 test('owner edit and quote withdrawal work from the keyboard, and Escape returns focus to Edit property', async ({ page }) => {
@@ -239,7 +239,7 @@ test('the pending partner actions badge counts only partner-enabled Requested re
   // One enabled quote and one enabled Requested request count; the disabled company's quote and request do not.
   await staff(page, [enabledStaffQuote, disabledStaffQuote], [requested('on-request', ownerCompanyId), requested('off-request', otherCompanyId)]);
   await page.goto('/admin/companies/');
-  await expect(page.getByLabel('2 pending partner actions')).toHaveCount(1);
-  await expect(page.getByLabel('3 pending partner actions')).toHaveCount(0);
+  await setNavOpen(page, true); await expect(page.getByLabel('2 pending partner actions')).toHaveCount(1); await setNavOpen(page, false);
+  await setNavOpen(page, true); await expect(page.getByLabel('3 pending partner actions')).toHaveCount(0); await setNavOpen(page, false);
 });
 

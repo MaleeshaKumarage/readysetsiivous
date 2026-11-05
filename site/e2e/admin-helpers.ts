@@ -70,3 +70,12 @@ export async function setupAdminMocks(page: Page, options: { authenticated?: boo
 }
 
 export { expect };
+
+/** Opens or closes the phone navigation drawer. The desktop sidebar has no toggle, so this is a no-op there. */
+export async function setNavOpen(page: Page, open: boolean) {
+  const toggle = page.getByRole('button', { name: 'Toggle navigation', exact: true });
+  if (!(await toggle.isVisible())) return;
+  if ((await toggle.getAttribute('aria-expanded')) === String(open)) return;
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', String(open));
+}
