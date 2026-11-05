@@ -46,7 +46,7 @@ test('changing filters invalidates a preview and its in-flight response', async 
 });
 test('preview exposes the real billing validation reason', async ({ page }) => {
   await setup(page, { failPreview: true }); await fillInvoice(page); await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
-  await expect(page.getByRole('alert').filter({ hasText: 'No pricing is configured' })).toHaveText('No pricing is configured for this billing period.'); await expect(page.getByRole('button', { name: 'Issue invoice', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('main').getByRole('alert').filter({ hasText: 'No pricing is configured' })).toHaveText('No pricing is configured for this billing period.'); await expect(page.getByRole('button', { name: 'Issue invoice', exact: true })).toHaveCount(0);
 });
 test('admin saves an effective monthly rate before VAT outside quality cycle', async ({ page }) => {
   const calls = await setup(page); await page.goto('/admin/shifts/'); await shiftAction(page, 'Biweekly', 'Pricing');
@@ -162,4 +162,20 @@ test('hourly pricing shows history and saves VAT while cancelling edits sends no
   await shiftAction(page, 'Biweekly', 'Pricing'); dialog = page.getByRole('dialog'); await expect(dialog.getByRole('textbox', { name: 'Rate before VAT (€)', exact: true })).toHaveValue('150');
   await dialog.getByRole('textbox', { name: 'Pricing basis', exact: true }).click(); await page.getByRole('option', { name: 'Per scheduled hour', exact: true }).click(); await dialog.getByRole('textbox', { name: 'Rate before VAT (€)', exact: true }).fill('35'); await dialog.getByRole('textbox', { name: 'VAT (%)', exact: true }).fill('14'); await dialog.getByRole('textbox', { name: 'Effective from', exact: true }).fill('2026-11-01'); await dialog.getByRole('button', { name: 'Save price', exact: true }).click(); await expect(dialog).toHaveCount(0);
   expect(calls.pricing).toEqual([{ mode: 'Hourly', rateNet: 35, vatRatePercent: 14, effectiveFrom: '2026-11-01' }]); await shiftAction(page, 'Biweekly', 'Pricing'); await expect(page.getByRole('dialog').getByRole('cell', { name: '€35.00', exact: true })).toBeVisible(); await expect(page.getByRole('dialog').getByRole('cell', { name: '€150.00', exact: true })).toBeVisible();
+});
+
+test('a refused mark-paid explains the next step as a toast and in the list, and the list stays usable', async ({ page }) => {
+  await setup(page);
+  const MESSAGE = 'This invoice was voided, so it cannot be marked paid. Issue a new invoice for the amount that is still owed.';
+  await page.route(/\/api\/v1\/admin\/invoices(?:\?.*)?$/, route => route.request().method() === 'OPTIONS' ? route.fulfill({ headers }) : route.fulfill({ headers, json: [invoice] }));
+  await page.route(/\/mark-paid$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    return route.fulfill({ status: 409, headers, json: { title: 'Invoice conflict', detail: MESSAGE } });
+  });
+  await page.goto('/admin/invoices/');
+  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'INV-1', exact: true }) });
+  await row.getByRole('button', { name: 'Mark paid', exact: true }).click();
+  await expect(page.getByText('Invoice action not completed').first()).toBeVisible();
+  await expect(page.getByText(MESSAGE).first()).toBeVisible();
+  await expect(row.getByRole('button', { name: 'Mark paid', exact: true })).toBeEnabled();
 });
