@@ -318,6 +318,8 @@ public class ValidationExceptionHandler : IExceptionHandler
         {
             Status = StatusCodes.Status400BadRequest,
             Title = "Validation failed",
+            // Rules that throw a plain message have no field errors; the message is the only reason the user gets.
+            Detail = validationException.Errors.Any() ? null : validationException.Message,
             Errors = validationException.Errors
                 .GroupBy(e => e.PropertyName, e => e.ErrorMessage)
                 .ToDictionary(g => g.Key, g => g.ToArray()),
