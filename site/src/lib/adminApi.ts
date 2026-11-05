@@ -101,7 +101,8 @@ export async function adminGet<T>(path: string, useCache = true): Promise<T | nu
     const response = await authorizedFetch(path, useCache ? {} : { cache: 'no-store' });
     if (!response.ok) return null;
     const data = (await response.json()) as T;
-    if (useCache) _cache.set(path, { data, ts: Date.now() });
+    // Cache only if the same user is still signed in; a response that landed after a user switch must not be stored for the next user.
+    if (useCache && cacheScopeFor(token()) === scope) _cache.set(path, { data, ts: Date.now() });
     return data;
   } catch {
     return null;
