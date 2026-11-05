@@ -61,6 +61,32 @@ test('admin edits advanced profile fields and they persist after reload', async 
   await expect(page.getByLabel('Certification 2 name')).toHaveValue('Forklift');
 });
 
+test('admin adds a skill and service area, removes a certification, and sees them after reload', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const employee = baseEmployee();
+  const puts = await mockEmployee(page, employee);
+  await page.goto('/admin/employees/');
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+
+  await page.getByRole('textbox', { name: 'Skills', exact: true }).fill('Forklift');
+  await page.getByRole('textbox', { name: 'Skills', exact: true }).press('Enter');
+  await page.getByRole('textbox', { name: 'Service areas', exact: true }).fill('Espoo');
+  await page.getByRole('textbox', { name: 'Service areas', exact: true }).press('Enter');
+  await page.getByRole('button', { name: 'Remove', exact: true }).click();
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+
+  await expect.poll(() => puts.length).toBe(1);
+  expect(puts[0].fields.skills).toEqual(['Windows', 'Forklift']);
+  expect(puts[0].fields.serviceAreas).toEqual(['Helsinki', 'Espoo']);
+  expect(puts[0].fields.certifications).toEqual([]);
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.getByText('Forklift', { exact: true })).toBeVisible();
+  await expect(page.getByText('Espoo', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Certification 1 name')).toHaveCount(0);
+});
+
 test('invalid pay rate, colour and blank certification are blocked before saving', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   const employee = baseEmployee();
