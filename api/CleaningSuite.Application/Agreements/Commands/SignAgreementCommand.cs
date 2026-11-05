@@ -76,11 +76,11 @@ public class SignAgreementHandler : IRequestHandler<SignAgreementCommand, SignRe
             ?? throw new CleaningSuite.Application.Common.PublicSigningLinkNotFoundException();
 
         if (agreement.Status == Agreement.StatusCancelled)
-            throw new AgreementConflictException("Agreement cancelled");
+            throw new AgreementConflictException("This agreement was cancelled, so it cannot be signed. Ask the sender whether a new agreement will be sent.");
         if (!agreement.IsActive)
             throw new AgreementConflictException("Agreement deactivated");
         if (signer.Status == Signer.StatusSigned)
-            throw new AgreementConflictException("Already signed");
+            throw new AgreementConflictException("You have already signed this agreement. No further action is needed.");
 
         string? signaturePath = null;
         string? signedPdfPath = null;
@@ -172,10 +172,10 @@ public class SignAgreementHandler : IRequestHandler<SignAgreementCommand, SignRe
     private static void EnsureCanSign(Agreement agreement, Signer signer)
     {
         if (agreement.Status == Agreement.StatusCancelled)
-            throw new AgreementConflictException("Agreement cancelled");
+            throw new AgreementConflictException("This agreement was cancelled, so it cannot be signed. Ask the sender whether a new agreement will be sent.");
         if (!agreement.IsActive)
             throw new AgreementConflictException("Agreement deactivated");
         if (signer.Status == Signer.StatusSigned || signer.SignatureImagePath is not null || signer.SignedAtUtc.HasValue)
-            throw new AgreementConflictException("Already signed");
+            throw new AgreementConflictException("You have already signed this agreement. No further action is needed.");
     }
 }
