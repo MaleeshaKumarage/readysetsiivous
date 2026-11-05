@@ -24,13 +24,19 @@ async function mockBookings(page: any, bookings: any[], options: { failAction?: 
     const rows = status ? bookings.filter(b => b.status === status) : bookings;
     return route.fulfill({ status: 200, headers, json: rows });
   });
-  await page.route(/\/api\/v1\/admin\/bookings\/([^/]+)\/(confirm|cancel|complete)$/, (route: any) => {
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, (route: any) => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
-    const [, id, action] = route.request().url().match(/bookings\/([^/]+)\/(confirm|cancel|complete)$/) ?? [];
+    return route.fulfill({ status: 200, headers, json: [{ id: 'e-1', firstName: 'Ada', lastName: 'Cleaner', role: 'employee', isActive: true }] });
+  });
+  await page.route(/\/api\/v1\/admin\/bookings\/([^/]+)\/(confirm|cancel|complete|assign|unassign)$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    const [, id, action] = route.request().url().match(/bookings\/([^/]+)\/(confirm|cancel|complete|assign|unassign)$/) ?? [];
     actions.push({ id, action });
     if (options.failAction === action) return route.fulfill({ status: 409, headers, json: { detail: 'Booking is cancelled' } });
-    const next = action === 'confirm' ? 'Confirmed' : action === 'cancel' ? 'Cancelled' : 'Completed';
     const booking = bookings.find(b => b.id === id);
+    if (action === 'assign') { if (booking) booking.employeeName = 'Ada Cleaner'; return route.fulfill({ status: 204, headers }); }
+    if (action === 'unassign') { if (booking) booking.employeeName = null; return route.fulfill({ status: 204, headers }); }
+    const next = action === 'confirm' ? 'Confirmed' : action === 'cancel' ? 'Cancelled' : 'Completed';
     if (booking) booking.status = next;
     return route.fulfill({ status: 204, headers });
   });
@@ -249,6 +255,55 @@ test('a network failure on load clears the spinner and shows the alert', async (
   await expect(page.getByRole('alert').filter({ hasText: 'Bookings could not be loaded. Reload and retry.' })).toBeVisible();
   await expect(page.locator('.mantine-Loader-root')).toHaveCount(0);
   await expect(page.getByRole('row', { name: /BK-/ })).toHaveCount(0);
+});
+
+test('admin assigns an open booking to an employee and the row shows the assignee', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const bookings = fixtures();
+  const { actions } = await mockBookings(page, bookings);
+  await page.goto('/admin/bookings/');
+  await page.getByRole('row', { name: /BK-1001/ }).getByRole('button', { name: 'Details', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Unassign', exact: true })).toHaveCount(0);
+  await page.getByRole('textbox', { name: 'Assign to', exact: true }).click();
+  await page.getByRole('option', { name: 'Ada Cleaner', exact: true }).click();
+  await page.getByRole('button', { name: 'Assign', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('BK-1001 assigned to Ada Cleaner.');
+  await expect(page.getByRole('row', { name: /BK-1001/ })).toContainText('Ada Cleaner');
+  expect(actions).toEqual([{ id: 'b-new', action: 'assign' }]);
+});
+
+test('admin unassigns a confirmed booking and the row shows it as unassigned', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const bookings = fixtures();
+  const { actions } = await mockBookings(page, bookings);
+  await page.goto('/admin/bookings/');
+  await page.getByRole('row', { name: /BK-1002/ }).getByRole('button', { name: 'Details', exact: true }).click();
+  await page.getByRole('button', { name: 'Unassign', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('BK-1002 is unassigned.');
+  await expect(page.getByRole('row', { name: /BK-1002/ })).toContainText('Unassigned');
+  expect(actions).toEqual([{ id: 'b-confirmed', action: 'unassign' }]);
+});
+
+test('terminal bookings offer no assignment controls', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockBookings(page, fixtures());
+  await page.goto('/admin/bookings/');
+  await page.getByRole('row', { name: /BK-1003/ }).getByRole('button', { name: 'Details', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Assign to', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Unassign', exact: true })).toHaveCount(0);
+});
+
+test('failed assignment keeps the booking unassigned and shows a recoverable error', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const bookings = fixtures();
+  await mockBookings(page, bookings, { failAction: 'assign' });
+  await page.goto('/admin/bookings/');
+  await page.getByRole('row', { name: /BK-1001/ }).getByRole('button', { name: 'Details', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Assign to', exact: true }).click();
+  await page.getByRole('option', { name: 'Ada Cleaner', exact: true }).click();
+  await page.getByRole('button', { name: 'Assign', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Could not assign the booking' })).toBeVisible();
+  expect(bookings.find(b => b.id === 'b-new').employeeName).toBeNull();
 });
 
 test('manager is blocked from the bookings administration page', async ({ page }) => {

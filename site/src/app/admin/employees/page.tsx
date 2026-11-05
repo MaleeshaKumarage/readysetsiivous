@@ -12,6 +12,20 @@ const ROLES = ['admin', 'manager', 'employee', 'partner'];
 // `source` keeps the certification as the API returned it, so an unedited expiry keeps its time of day and any extra fields.
 type CertificationDraft = { name: string; expiresAt: string; source?: Record<string, unknown> & { expiresAtUtc?: string | null } };
 
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+type HoursDraft = Record<string, { start: string; end: string }>;
+
+// Keeps default-hours entries for days the editor does not show, and rewrites the weekday entries from the form.
+function buildDefaultHours(original: Employee['defaultHours'], hours: HoursDraft) {
+  const next: Record<string, { start?: string | null; end?: string | null }> = {};
+  for (const [day, value] of Object.entries(original)) if (!WEEKDAYS.includes(day)) next[day] = value;
+  for (const day of WEEKDAYS) {
+    const entry = hours[day];
+    if (entry && entry.start.trim() && entry.end.trim()) next[day] = { start: `${entry.start.trim()}:00`, end: `${entry.end.trim()}:00` };
+  }
+  return next;
+}
+
 export default function EmployeesAdminPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [companyError, setCompanyError] = useState('');
@@ -22,7 +36,7 @@ export default function EmployeesAdminPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [form, setForm] = useState({ email: '', firstName: '', lastName: '', phone: '', role: 'employee', partnerCompanyId: '' });
-  const emptyProfile = { skills: [] as string[], serviceAreas: [] as string[], colorHex: '', payRate: '' as number | '', notes: '', certifications: [] as CertificationDraft[] };
+  const emptyProfile = { skills: [] as string[], serviceAreas: [] as string[], colorHex: '', payRate: '' as number | '', notes: '', certifications: [] as CertificationDraft[], hours: {} as HoursDraft };
   const [profile, setProfile] = useState(emptyProfile);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -61,6 +75,14 @@ export default function EmployeesAdminPage() {
     if (colour && !/^#[0-9a-fA-F]{6}$/.test(colour)) { setError('Colour must be a 6-digit hex value such as #1a2b3c.'); return; }
     if (profile.payRate !== '' && (!Number.isFinite(Number(profile.payRate)) || Number(profile.payRate) < 0)) { setError('Pay rate must be zero or more.'); return; }
     if (profile.certifications.some(c => !c.name.trim())) { setError('Each certification needs a name. Remove empty rows before saving.'); return; }
+    for (const day of WEEKDAYS) {
+      const entry = profile.hours[day];
+      const start = entry?.start.trim() ?? '';
+      const end = entry?.end.trim() ?? '';
+      if (!start && !end) continue;
+      if (!start || !end) { setError(`${day}: enter both a start and an end time, or clear both.`); return; }
+      if (end <= start) { setError(`${day}: the end time must be after the start time.`); return; }
+    }
     setSaving(true); setError('');
     try {
     const fields = {
@@ -80,7 +102,7 @@ export default function EmployeesAdminPage() {
         const dateUnchanged = c.source !== undefined && c.expiresAt === (original ? original.slice(0, 10) : '');
         return { ...(c.source ?? {}), name: c.name.trim(), expiresAtUtc: dateUnchanged ? original : (c.expiresAt ? `${c.expiresAt}T00:00:00Z` : null) };
       }),
-      defaultHours: editingEmployee?.defaultHours ?? {},
+      defaultHours: buildDefaultHours(editingEmployee?.defaultHours ?? {}, profile.hours),
     };
     if (editingEmployee) {
       if (!await adminEmployees.update(editingEmployee.id, fields, editingEmployee.isActive)) throw new Error('Could not update employee. Please retry.');
@@ -107,6 +129,7 @@ export default function EmployeesAdminPage() {
       payRate: employee.payRate ?? '',
       notes: employee.notes ?? '',
       certifications: (employee.certifications ?? []).map(c => ({ name: c.name, expiresAt: c.expiresAtUtc ? c.expiresAtUtc.slice(0, 10) : '', source: { ...c } })),
+      hours: Object.fromEntries(WEEKDAYS.filter(day => employee.defaultHours?.[day]).map(day => [day, { start: (employee.defaultHours[day].start ?? '').slice(0, 5), end: (employee.defaultHours[day].end ?? '').slice(0, 5) }])),
     });
     setError(''); setModalOpen(true);
   };
@@ -223,6 +246,18 @@ export default function EmployeesAdminPage() {
               <Button size="xs" variant="light" onClick={() => setProfile(current => ({ ...current, certifications: [...current.certifications, { name: '', expiresAt: '' }] }))}>Add certification</Button>
             </Stack>
           </>}
+          {editingEmployee && (
+            <Stack gap="xs">
+              <Text size="sm" fw={500}>Default hours</Text>
+              {WEEKDAYS.map(day => (
+                <Group key={day} gap="xs" wrap="nowrap" align="flex-end">
+                  <Text size="sm" w={96}>{day}</Text>
+                  <TextInput type="time" aria-label={`${day} start`} value={profile.hours[day]?.start ?? ''} onChange={e => { const start = e.currentTarget.value; setProfile(current => ({ ...current, hours: { ...current.hours, [day]: { start, end: current.hours[day]?.end ?? '' } } })); }} />
+                  <TextInput type="time" aria-label={`${day} end`} value={profile.hours[day]?.end ?? ''} onChange={e => { const end = e.currentTarget.value; setProfile(current => ({ ...current, hours: { ...current.hours, [day]: { start: current.hours[day]?.start ?? '', end } } })); }} />
+                </Group>
+              ))}
+            </Stack>
+          )}
           {error && <Text role="alert" size="sm" c="red">{error}</Text>}
           <Group justify="flex-end" mt="xs">
             <Button variant="default" onClick={() => setModalOpen(false)}>Cancel</Button>

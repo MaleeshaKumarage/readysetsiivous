@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Title, Button, Table, Modal, Group, Stack, Text, Loader, Badge, Select } from '@mantine/core';
 import { isAdmin } from '@/lib/auth';
-import { adminBookings, type Booking } from '@/lib/adminApi';
+import { adminBookings, adminEmployees, type Booking } from '@/lib/adminApi';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
@@ -22,6 +22,11 @@ function availableActions(status: string): BookingAction[] {
   return [];
 }
 
+// Assignment is only offered while a booking is still open; terminal bookings keep the no-changes message.
+function canAssign(status: string) {
+  return status === 'New' || status === 'Confirmed';
+}
+
 const ACTION_LABEL: Record<BookingAction, string> = { confirm: 'Confirm', cancel: 'Cancel booking', complete: 'Mark completed' };
 const STATUS_COLOR: Record<string, string> = { New: 'blue', Confirmed: 'green', Completed: 'gray', Cancelled: 'red' };
 
@@ -34,6 +39,9 @@ export default function BookingsAdminPage() {
   const [busy, setBusy] = useState<BookingAction | null>(null);
   const [actionError, setActionError] = useState('');
   const [message, setMessage] = useState('');
+  const [employees, setEmployees] = useState<{ id: string; name: string }[]>([]);
+  const [assigneeId, setAssigneeId] = useState<string | null>(null);
+  const [assignBusy, setAssignBusy] = useState(false);
 
   // Only the most recent request may update state, so a slow earlier response cannot overwrite a newer filter's rows.
   const requestSeq = useRef(0);
@@ -57,6 +65,10 @@ export default function BookingsAdminPage() {
 
   useEffect(() => { load(statusFilter); }, [statusFilter]);
 
+  useEffect(() => {
+    adminEmployees.list(false).then(records => { if (records) setEmployees(records.map(e => ({ id: e.id, name: `${e.firstName} ${e.lastName}` }))); });
+  }, []);
+
   const runAction = async (action: BookingAction) => {
     if (!selected) return;
     setBusy(action); setActionError(''); setMessage('');
@@ -72,6 +84,35 @@ export default function BookingsAdminPage() {
     } catch {
       setActionError('Could not update the booking. Please retry.');
     } finally { setBusy(null); }
+  };
+
+  const assign = async () => {
+    if (!selected || !assigneeId) return;
+    setAssignBusy(true); setActionError(''); setMessage('');
+    try {
+      const ok = await adminBookings.assign(selected.id, assigneeId);
+      if (!ok) { setActionError('Could not assign the booking. Reload and retry.'); return; }
+      const name = employees.find(e => e.id === assigneeId)?.name ?? 'the employee';
+      setMessage(`${selected.bookingNumber} assigned to ${name}.`);
+      setSelected(null); setAssigneeId(null);
+      await load(statusFilter);
+    } catch {
+      setActionError('Could not assign the booking. Please retry.');
+    } finally { setAssignBusy(false); }
+  };
+
+  const unassign = async () => {
+    if (!selected) return;
+    setAssignBusy(true); setActionError(''); setMessage('');
+    try {
+      const ok = await adminBookings.unassign(selected.id);
+      if (!ok) { setActionError('Could not unassign the booking. Reload and retry.'); return; }
+      setMessage(`${selected.bookingNumber} is unassigned.`);
+      setSelected(null); setAssigneeId(null);
+      await load(statusFilter);
+    } catch {
+      setActionError('Could not unassign the booking. Please retry.');
+    } finally { setAssignBusy(false); }
   };
 
   return (
@@ -101,7 +142,7 @@ export default function BookingsAdminPage() {
                   <Table.Td>{booking.service.nameFi}</Table.Td>
                   <Table.Td><Badge color={STATUS_COLOR[booking.status] ?? 'gray'}>{booking.status}</Badge></Table.Td>
                   <Table.Td>{booking.employeeName ?? 'Unassigned'}</Table.Td>
-                  <Table.Td><Button size="xs" variant="light" onClick={() => { setSelected(booking); setActionError(''); }}>Details</Button></Table.Td>
+                  <Table.Td><Button size="xs" variant="light" onClick={() => { setSelected(booking); setActionError(''); setAssigneeId(null); }}>Details</Button></Table.Td>
                 </Table.Tr>
               ))}
             </Table.Tbody>
@@ -118,15 +159,22 @@ export default function BookingsAdminPage() {
             <Text size="sm"><strong>Service:</strong> {selected.service.nameFi} ({selected.service.durationMinutes} min)</Text>
             <Text size="sm"><strong>Employee:</strong> {selected.employeeName ?? 'Unassigned'}</Text>
             {actionError && <Text role="alert" size="sm" c="red">{actionError}</Text>}
-            {availableActions(selected.status).length === 0 ? (
+            {availableActions(selected.status).length === 0 && !canAssign(selected.status) ? (
               <Text size="sm" c="dimmed">This booking is {selected.status.toLowerCase()}. No further changes are available.</Text>
-            ) : isAdmin() && (
+            ) : isAdmin() && availableActions(selected.status).length > 0 && (
               <Group gap="xs" wrap="wrap">
                 {availableActions(selected.status).map(action => (
                   <Button key={action} variant={action === 'cancel' ? 'light' : 'filled'} color={action === 'cancel' ? 'red' : undefined} loading={busy === action} disabled={busy !== null} onClick={() => runAction(action)}>
                     {ACTION_LABEL[action]}
                   </Button>
                 ))}
+              </Group>
+            )}
+            {isAdmin() && canAssign(selected.status) && (
+              <Group gap="xs" wrap="wrap" align="flex-end">
+                <Select aria-label="Assign to" placeholder="Choose employee" searchable data={employees.map(e => ({ value: e.id, label: e.name }))} value={assigneeId} onChange={setAssigneeId} w={240} />
+                <Button variant="light" loading={assignBusy} disabled={!assigneeId || assignBusy} onClick={assign}>Assign</Button>
+                {selected.employeeName && <Button variant="subtle" color="red" loading={assignBusy} disabled={assignBusy} onClick={unassign}>Unassign</Button>}
               </Group>
             )}
           </Stack>

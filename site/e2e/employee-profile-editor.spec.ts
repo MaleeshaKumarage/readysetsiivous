@@ -187,6 +187,43 @@ test('editing an unrelated field keeps a certification timestamp and its extra f
   expect(puts[0].fields.certifications).toEqual([{ id: 'cert-1', name: 'Hygiene', expiresAtUtc: '2027-03-01T13:30:00Z' }]);
 });
 
+test('admin sets default hours, keeps unrelated stored hours, and the values persist after reload', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const employee: any = { ...baseEmployee(), defaultHours: { Legacy: { start: '09:00:00', end: '10:00:00' } } };
+  const puts = await mockEmployee(page, employee);
+  await page.goto('/admin/employees/');
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.getByLabel('Monday start', { exact: true }).fill('08:00');
+  await page.getByLabel('Monday end', { exact: true }).fill('16:00');
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+
+  await expect.poll(() => puts.length).toBe(1);
+  expect(puts[0].fields.defaultHours).toEqual({ Legacy: { start: '09:00:00', end: '10:00:00' }, Monday: { start: '08:00:00', end: '16:00:00' } });
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.getByLabel('Monday start', { exact: true })).toHaveValue('08:00');
+  await expect(page.getByLabel('Monday end', { exact: true })).toHaveValue('16:00');
+  await expect(page.getByLabel('Tuesday start', { exact: true })).toHaveValue('');
+});
+
+test('incomplete or reversed default hours are blocked before saving', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const puts = await mockEmployee(page, baseEmployee());
+  await page.goto('/admin/employees/');
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+
+  await page.getByLabel('Friday start', { exact: true }).fill('08:00');
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(page.locator('p[role="alert"]')).toContainText('Friday: enter both a start and an end time');
+
+  await page.getByLabel('Friday end', { exact: true }).fill('07:00');
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(page.locator('p[role="alert"]')).toContainText('Friday: the end time must be after the start time.');
+  await page.waitForTimeout(300);
+  expect(puts).toHaveLength(0);
+});
+
 test('invalid pay rate, colour and blank certification are blocked before saving', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   const employee = baseEmployee();
