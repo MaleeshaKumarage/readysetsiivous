@@ -96,7 +96,7 @@ for (const width of [375, 768, 1440]) test(`workspace navigation and surfaces at
   await expect(page.getByRole('heading', { name: 'Leads', exact: true })).toBeVisible();
   await expect(header.getByText('Tenant administration', { exact: true })).toBeVisible();
   await expect(header.getByText('Leads', { exact: true })).toBeVisible();
-  if (width < 768) await expect(burger).toHaveAttribute('aria-expanded', 'false');
+  if (width < 768) { await expect(burger).toHaveAttribute('aria-expanded', 'false'); await expect(navigation).toBeHidden(); }
   // The phone drawer closes after navigating; reopen it to check the active entry.
   if (width < 768) await burger.click();
   await expect(navigation.getByRole('link', { name: 'Leads', exact: true })).toHaveAttribute('aria-current', 'page');

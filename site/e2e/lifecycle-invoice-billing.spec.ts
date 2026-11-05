@@ -205,5 +205,11 @@ test('closing company details with Escape discards unsaved edits without saving'
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
   expect(saves).toBe(0);
+  // Reopening shows the last saved details, not the abandoned edit.
+  await page.getByRole('button', { name: 'Company and payment details' }).click();
+  const reopened = page.getByRole('dialog', { name: 'Invoice issuer' });
+  await expect(reopened).toBeVisible();
+  await expect(reopened.getByRole('textbox', { name: 'IBAN', exact: true })).toHaveValue(issuer.bankAccountIBAN);
+  await expect(reopened.getByRole('textbox', { name: 'IBAN', exact: true })).not.toHaveValue('FI00-UNSAVED');
 });
 

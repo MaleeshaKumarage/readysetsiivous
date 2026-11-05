@@ -25,7 +25,7 @@ function completionMonthOptions(now: Date, earliest?: string | null) {
 
 export default function InvoicesPage() {
   const [companies, setCompanies] = useState<Company[]>([]); const [shifts, setShifts] = useState<Shift[]>([]);
-  const [invoices, setInvoices] = useState<ShiftInvoice[]>([]); const [issuer, setIssuer] = useState<InvoiceIssuer | null>(null);
+  const [invoices, setInvoices] = useState<ShiftInvoice[]>([]); const [issuer, setIssuer] = useState<InvoiceIssuer | null>(null); const [savedIssuer, setSavedIssuer] = useState<InvoiceIssuer | null>(null);
   const [savedVat, setSavedVat] = useState(0);
   const [companyId, setCompanyId] = useState<string | null>(null); const [shiftIds, setShiftIds] = useState<string[]>([]);
   const [partnerMonth, setPartnerMonth] = useState(false); const [month, setMonth] = useState('');
@@ -55,7 +55,7 @@ export default function InvoicesPage() {
   useEffect(() => {
     let active = true; setLoadFailed(false); setError('');
     Promise.all([adminCompanies.listAll(), adminShifts.list(undefined, undefined, true), invoiceBillingApi.issuer(), invoiceBillingApi.list()])
-      .then(([companyList, shiftList, value, records]) => { if (!active) return; if (!companyList || !shiftList) throw new Error('Could not load companies or shifts. Refresh to retry.'); setCompanies(companyList); setShifts(shiftList); setIssuer(value); setSavedVat(value.defaultVatRatePercent); setInvoices(records); })
+      .then(([companyList, shiftList, value, records]) => { if (!active) return; if (!companyList || !shiftList) throw new Error('Could not load companies or shifts. Refresh to retry.'); setCompanies(companyList); setShifts(shiftList); setIssuer(value); setSavedIssuer(value); setSavedVat(value.defaultVatRatePercent); setInvoices(records); })
       .catch(failure => { if (active) { setError(failure.message); setLoadFailed(true); } });
     return () => { active = false; version.current++; };
   }, [loadAttempt]);
@@ -104,23 +104,25 @@ export default function InvoicesPage() {
   });
   const patchAddress = (key: keyof BillingAddress, value: string) => { invalidate(); setAddress(current => ({ ...current, [key]: value })); };
   const patchIssuer = <K extends keyof InvoiceIssuer>(key: K, value: InvoiceIssuer[K]) => { invalidate(); setIssuer(current => current && ({ ...current, [key]: value })); };
+  // Closing without saving drops the unsaved edits, so reopening shows and saves only the last saved details.
+  const closeIssuer = () => { setIssuer(savedIssuer); setShowIssuer(false); };
   // The preview stays open while a request is in flight or an issue result is unconfirmed, so its retry path cannot be dismissed.
   const previewLocked = busy || issuing || uncertain;
   // While a dialog is open, its feedback is shown inside it so the overlay cannot hide a failure.
   const dialogOpen = createOpen || Boolean(preview) || showIssuer;
   const closePreview = () => { if (!previewLocked) invalidate(); };
   return <Stack>
-    <Group justify="space-between"><Title order={1}>Invoices</Title><Group gap="xs"><Button disabled={busy || issuing || uncertain} onClick={() => setCreateOpen(true)}>New invoice</Button><Button variant="default" onClick={() => setShowIssuer(!showIssuer)}>Company and payment details</Button></Group></Group>
+    <Group justify="space-between"><Title order={1}>Invoices</Title><Group gap="xs"><Button disabled={busy || issuing || uncertain} onClick={() => setCreateOpen(true)}>New invoice</Button><Button variant="default" onClick={() => (showIssuer ? closeIssuer() : setShowIssuer(true))}>Company and payment details</Button></Group></Group>
     {error && !dialogOpen && <Text role="alert" c="red">{error}</Text>}{loadFailed && <Button variant="light" onClick={() => setLoadAttempt(current => current + 1)}>Retry loading invoice data</Button>}{status && !dialogOpen && <Text role="status" c="green">{status}</Text>}
     {uncertain && !dialogOpen && <Text role="alert" c="orange">The issue result could not be confirmed. Open the invoice preview and retry issuing to retrieve the same invoice safely before editing or starting another invoice.</Text>}
     <Stack>
-    <Modal opened={showIssuer && Boolean(issuer)} onClose={() => { if (!busy) setShowIssuer(false); }} closeButtonProps={{ disabled: busy }} closeOnClickOutside={!busy} closeOnEscape={!busy} title="Invoice issuer" size="lg" radius="md">{issuer && <Stack>{error && <Text role="alert" c="red">{error}</Text>}<Text size="sm">These details are saved in each issued invoice. Later edits do not change existing invoices.</Text>
+    <Modal opened={showIssuer && Boolean(issuer)} onClose={() => { if (!busy) closeIssuer(); }} closeButtonProps={{ disabled: busy }} closeOnClickOutside={!busy} closeOnEscape={!busy} title="Invoice issuer" size="lg" radius="md">{issuer && <Stack>{error && <Text role="alert" c="red">{error}</Text>}<Text size="sm">These details are saved in each issued invoice. Later edits do not change existing invoices.</Text>
       {(['companyName', 'businessId', 'email', 'phone', 'bankAccountIBAN', 'bankBic'] as const).map(key => <TextInput key={key} label={{ companyName: 'Issuer company name', businessId: 'Business ID', email: 'Issuer email', phone: 'Issuer phone', bankAccountIBAN: 'IBAN', bankBic: 'BIC' }[key]} value={issuer[key]} onChange={event => patchIssuer(key, event.target.value)} />)}
       {(['street', 'postalCode', 'city', 'country'] as const).map(key => <TextInput key={key} label={`Issuer ${key}`} value={issuer.companyAddress[key] ?? ''} onChange={event => patchIssuer('companyAddress', { ...issuer.companyAddress, [key]: event.target.value })} />)}
       <Checkbox label="Sample issuer details" checked={issuer.isSampleData ?? false} onChange={event => patchIssuer("isSampleData", event.currentTarget.checked)} />
       <NumberInput label="Payment terms (days)" min={0} max={365} value={issuer.paymentTermsDays} onChange={value => patchIssuer('paymentTermsDays', Number(value))} />
       <NumberInput label="Default VAT (%)" min={0} max={50} decimalScale={2} value={issuer.defaultVatRatePercent} onChange={value => patchIssuer('defaultVatRatePercent', Number(value))} />
-      <Button loading={busy} onClick={() => run(async () => { const value = await invoiceBillingApi.saveIssuer(issuer); if (value) { setIssuer(value); setSavedVat(value.defaultVatRatePercent); } invalidate(); setShowIssuer(false); setStatus('Company and payment details saved.'); })}>Save company details</Button>
+      <Button loading={busy} onClick={() => run(async () => { const value = await invoiceBillingApi.saveIssuer(issuer); if (value) { setIssuer(value); setSavedIssuer(value); setSavedVat(value.defaultVatRatePercent); } invalidate(); setShowIssuer(false); setStatus('Company and payment details saved.'); })}>Save company details</Button>
     </Stack>}</Modal>
 
     <Modal opened={createOpen} onClose={() => { if (!busy) setCreateOpen(false); }} closeOnClickOutside={!busy} closeOnEscape={!busy} withCloseButton={!busy} title={manual ? 'Create manual invoice' : 'Create shift invoice'} size="lg" radius="md"><fieldset disabled={issuing || uncertain} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><Stack>{error && <Text role="alert" c="red">{error}</Text>}

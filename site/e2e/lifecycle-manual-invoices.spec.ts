@@ -66,14 +66,26 @@ test('manual rows preview VAT and issue into existing history and PDF download',
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 test('row changes and removal invalidate preview; mode switch restores shift controls', async ({ page }) => {
-  await setup(page); await fill(page); await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
+  const calls = await setup(page); await fill(page); await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Invoice preview' })).toBeVisible();
+  const baseRows = calls.previews.at(-1).lines.length;
   await page.keyboard.press('Escape'); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0); await page.getByRole('button', { name: 'New invoice', exact: true }).click();
-  await page.getByRole('button', { name: 'Add row', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0);
+  // Each re-preview must send the rows as they are now, so a stale preview cannot be issued.
+  await page.getByRole('button', { name: 'Add row', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Row 2 description', exact: true }).fill('Extra row');
+  await page.getByRole('textbox', { name: 'Row 2 quantity (pieces)', exact: true }).fill('1');
+  await page.getByRole('textbox', { name: 'Row 2 unit price before VAT (€)', exact: true }).fill('10');
+  await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toBeVisible();
+  expect(calls.previews.at(-1).lines).toHaveLength(baseRows + 1);
+  await page.keyboard.press('Escape'); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0); await page.getByRole('button', { name: 'New invoice', exact: true }).click();
   await page.getByRole('button', { name: 'Remove row 2', exact: true }).click();
   await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toBeVisible();
+  expect(calls.previews.at(-1).lines).toHaveLength(baseRows);
   await page.keyboard.press('Escape'); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0); await page.getByRole('button', { name: 'New invoice', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Row 1 unit price before VAT (€)', exact: true }).fill('51'); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0);
+  await page.getByRole('textbox', { name: 'Row 1 unit price before VAT (€)', exact: true }).fill('51');
+  await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toBeVisible();
+  expect(calls.previews.at(-1).lines[0].unitPriceNet).toBe(51);
+  await page.keyboard.press('Escape'); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0); await page.getByRole('button', { name: 'New invoice', exact: true }).click();
   await page.getByRole('textbox', { name: 'Invoice type', exact: true }).click(); await page.getByRole('option', { name: 'Shift invoice', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Invoice from', exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: 'Add row', exact: true })).toHaveCount(0);
 });
