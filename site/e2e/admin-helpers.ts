@@ -73,9 +73,14 @@ export { expect };
 
 /** Opens or closes the phone navigation drawer. The desktop sidebar has no toggle, so this is a no-op there. */
 export async function setNavOpen(page: Page, open: boolean) {
+  // Wait for the admin header first, so the toggle's visibility is known before deciding.
+  await expect(page.getByText('Tenant administration', { exact: true }).first()).toBeVisible({ timeout: 15000 });
   const toggle = page.getByRole('button', { name: 'Toggle navigation', exact: true });
   if (!(await toggle.isVisible())) return;
   if ((await toggle.getAttribute('aria-expanded')) === String(open)) return;
-  await toggle.click();
+  if (open) await toggle.click();
+  else await page.keyboard.press('Escape'); // the open drawer covers the toggle, so close it with Escape
   await expect(toggle).toHaveAttribute('aria-expanded', String(open));
+  // The drawer's links mount after the open animation starts; wait for them before the caller looks inside.
+  if (open) await expect(page.locator('#admin-navigation a[href]').first()).toBeAttached({ timeout: 15000 });
 }

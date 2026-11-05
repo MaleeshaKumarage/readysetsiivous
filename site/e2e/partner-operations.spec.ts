@@ -140,11 +140,12 @@ test('partner month previews all company visits and issues the exact approved pa
   await expect(page.getByRole('columnheader', { name: branch.name, exact: true })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'Forest apartment', exact: true })).toBeVisible();
   await expect(page.getByText('Completed on: 2026-12-01', { exact: true })).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Invoice preview', exact: true })).not.toContainText(/partner/i);
+  await expect(page.getByRole('dialog', { name: 'Invoice preview', exact: true })).not.toContainText(/partner/i);
   await expect(page.getByText('Net €140.00 · VAT €35.70 · Total €175.70', { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('branch-grouped-invoice-preview.png'), fullPage: true });
   expect(previews).toEqual([{ companyId, partnerMonth: true, shiftIds: [], from: '2026-10-01', to: '2026-10-31', billingAddress: { street: 'Customer road 2', postalCode: '33100', city: 'Tampere', country: 'FI' }, language: 'en', monthlyOverrides: [] }]);
   expect(issues).toHaveLength(0);
+  await page.keyboard.press('Escape'); await page.getByRole('button', { name: 'New invoice', exact: true }).click();
   await pickMonth(page, 'September 2026'); await expect(page.getByRole('heading', { name: 'Invoice preview', exact: true })).toHaveCount(0); await expect(page.getByRole('button', { name: 'Issue invoice', exact: true })).toHaveCount(0);
   await page.getByLabel('Completed cleaning month', { exact: true }).uncheck(); await expect(page.getByRole('textbox', { name: 'Completion month', exact: true })).toHaveCount(0); await expect(page.getByRole('textbox', { name: 'Invoice shifts', exact: true })).toBeVisible(); await expect(page.getByLabel('Invoice from', { exact: true })).toBeVisible(); await expect(page.getByLabel('Invoice to (inclusive)', { exact: true })).toBeVisible();
   await page.getByLabel('Completed cleaning month', { exact: true }).check(); await expect(page.getByRole('textbox', { name: 'Completion month', exact: true })).toHaveValue(''); await expect(page.getByRole('button', { name: 'Preview invoice', exact: true })).toBeDisabled();
