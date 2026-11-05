@@ -115,9 +115,20 @@ public class AvailabilityEngineTests
         Assert.Equal(count, slots.Count);
         Assert.All(slots, slot => Assert.True(TimeOnly.Parse(slot.EndTime) <= new TimeOnly(20, 0)));
     }
+
+    [Fact]
+    public async Task A_refused_slot_says_what_to_choose_instead()
+    {
+        var engine = Engine();
+        var pastDay = await Assert.ThrowsAsync<SlotConflictException>(() => engine.ReserveAsync("tenant", "2020-01-01", "09:00", _service));
+        Assert.Contains("Choose a later date or time", pastDay.Message);
+        var closed = await Assert.ThrowsAsync<SlotConflictException>(() => engine.ReserveAsync("tenant", "2027-01-15", "03:17", _service));
+        Assert.Contains("opening hours", closed.Message);
+    }
 }
 
 internal sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
 {
     public override DateTimeOffset GetUtcNow() => now;
+
 }

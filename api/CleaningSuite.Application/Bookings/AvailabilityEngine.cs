@@ -110,10 +110,10 @@ public class AvailabilityEngine
 
         var minHours = profile?.MinHoursBeforeBooking ?? 2;
         if (startUtc < EarliestStartUtc(minHours))
-            throw new SlotConflictException($"Booking must be at least {minHours} hours in the future");
+            throw new SlotConflictException($"Booking must be at least {minHours} hours in the future. Choose a later date or time.");
 
         if (time.ToTimeSpan() < WindowStart || endLocal.TimeOfDay > WindowEnd)
-            throw new SlotConflictException("Slot is outside business hours");
+            throw new SlotConflictException("Slot is outside business hours. Choose a time within the opening hours shown on the booking page.");
 
         if (!service.IsActive)
             throw new SlotConflictException("Service is not active");
