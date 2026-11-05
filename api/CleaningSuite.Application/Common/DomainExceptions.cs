@@ -13,3 +13,9 @@ public class PublicBookingNotFoundException() : Exception(GuidanceText)
 {
     public const string GuidanceText = "No booking matches these details. Check the booking reference and the management code in your confirmation email, then try again.";
 }
+
+/// <summary>A public signing link that matches no agreement or signer. Explains the next step.</summary>
+public class PublicSigningLinkNotFoundException() : Exception(GuidanceText)
+{
+    public const string GuidanceText = "This signing link is not valid or has been replaced. Ask the sender for a new signing link.";
+}

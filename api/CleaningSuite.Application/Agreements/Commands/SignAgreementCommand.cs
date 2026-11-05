@@ -71,9 +71,9 @@ public class SignAgreementHandler : IRequestHandler<SignAgreementCommand, SignRe
         _uploads.ValidateSignaturePng(request.SignaturePng);
 
         var agreement = await _repo.FindBySignerTokenAsync(tenantId, request.Token, ct)
-            ?? throw new NotFoundException("Agreement", Guid.Empty);
+            ?? throw new CleaningSuite.Application.Common.PublicSigningLinkNotFoundException();
         var signer = agreement.Signers.FirstOrDefault(s => s.Token == request.Token)
-            ?? throw new NotFoundException("Signer", Guid.Empty);
+            ?? throw new CleaningSuite.Application.Common.PublicSigningLinkNotFoundException();
 
         if (agreement.Status == Agreement.StatusCancelled)
             throw new AgreementConflictException("Agreement cancelled");
@@ -97,9 +97,9 @@ public class SignAgreementHandler : IRequestHandler<SignAgreementCommand, SignRe
                     if (attempt > 0)
                     {
                         agreement = await _repo.ReloadBySignerTokenAsync(tenantId, request.Token, ct)
-                            ?? throw new NotFoundException("Agreement", Guid.Empty);
+                            ?? throw new CleaningSuite.Application.Common.PublicSigningLinkNotFoundException();
                         signer = agreement.Signers.FirstOrDefault(s => s.Token == request.Token)
-                            ?? throw new NotFoundException("Signer", Guid.Empty);
+                            ?? throw new CleaningSuite.Application.Common.PublicSigningLinkNotFoundException();
 
                         EnsureCanSign(agreement, signer);
                     }
@@ -152,9 +152,9 @@ public class SignAgreementHandler : IRequestHandler<SignAgreementCommand, SignRe
                     }
 
                     agreement = await _repo.ReloadBySignerTokenAsync(tenantId, request.Token, ct)
-                        ?? throw new NotFoundException("Agreement", Guid.Empty);
+                        ?? throw new CleaningSuite.Application.Common.PublicSigningLinkNotFoundException();
                     signer = agreement.Signers.FirstOrDefault(s => s.Token == request.Token)
-                        ?? throw new NotFoundException("Signer", Guid.Empty);
+                        ?? throw new CleaningSuite.Application.Common.PublicSigningLinkNotFoundException();
                     EnsureCanSign(agreement, signer);
                 }
             }
