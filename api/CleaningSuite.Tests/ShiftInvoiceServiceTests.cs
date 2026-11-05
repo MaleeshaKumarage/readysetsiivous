@@ -96,6 +96,15 @@ public class ShiftInvoiceServiceTests
         f.Invoices.Verify(x=>x.NextInvoiceNumberForYearAsync(2026, It.IsAny<CancellationToken>()),Times.Never);
     }
     [Fact]
+    public async Task Blank_billing_address_is_named_even_when_the_preview_token_is_stale()
+    {
+        var f=new Fixture();
+        var request=f.Request with { BillingAddress=new() { Street="", PostalCode="", City="", Country="FI" } };
+        var ex=await Assert.ThrowsAsync<ValidationException>(()=>f.Service.IssueAsync(request with { PreviewToken="stale-token" },default));
+        Assert.Contains("billing street", ex.Message);
+        f.Invoices.Verify(x=>x.NextInvoiceNumberForYearAsync(2026, It.IsAny<CancellationToken>()),Times.Never);
+    }
+    [Fact]
     public async Task Issue_without_preview_is_rejected()
     {
         var f=new Fixture();await Assert.ThrowsAsync<ValidationException>(()=>f.Service.IssueAsync(f.Request,default));

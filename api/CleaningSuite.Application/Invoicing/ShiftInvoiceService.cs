@@ -34,8 +34,6 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
         if (string.IsNullOrWhiteSpace(request.PreviewToken)) Invalid("Preview the invoice before issuing it.");
         await using var lease = await reservation.AcquireAsync(ct);
         var preview = await BuildAsync(request, ct);
-        if (!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(preview.PreviewToken), Encoding.UTF8.GetBytes(request.PreviewToken!)))
-            throw new ShiftConflictException("Invoice inputs, pricing or work records changed. Load a new preview before issuing.");
         var invoice = preview.Invoice;
         var issuer = invoice.Issuer;
         if (string.IsNullOrWhiteSpace(issuer.CompanyName) || string.IsNullOrWhiteSpace(issuer.BusinessId)
@@ -44,6 +42,9 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             Invalid("Complete invoice issuer name, business ID, address, valid IBAN and BIC in issuer settings before issuing.");
         if (string.IsNullOrWhiteSpace(invoice.BillingAddress.Street) || string.IsNullOrWhiteSpace(invoice.BillingAddress.PostalCode) || string.IsNullOrWhiteSpace(invoice.BillingAddress.City))
             Invalid("Enter the customer's billing street, postal code and city before issuing.");
+        // Field checks run on the freshly built preview first, so a missing field is named rather than reported as a stale preview.
+        if (!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(preview.PreviewToken), Encoding.UTF8.GetBytes(request.PreviewToken!)))
+            throw new ShiftConflictException("Invoice inputs, pricing or work records changed. Load a new preview before issuing.");
         var number = await invoices.NextInvoiceNumberForYearAsync(invoice.IssueDate.Year, ct);
         invoice.Id = Guid.NewGuid(); invoice.InvoiceNumber = $"{invoice.IssueDate.Year}-{number:D4}";
         invoice.PaymentReference = PaymentReference($"{invoice.IssueDate.Year}{number:D4}");
