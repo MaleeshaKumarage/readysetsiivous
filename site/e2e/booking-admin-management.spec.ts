@@ -394,6 +394,44 @@ test('day view reports a failed schedule load instead of an empty day', async ({
   await expect(page.getByText('No bookings for this employee', { exact: false })).toHaveCount(0);
 });
 
+test('day view can show a deactivated employee schedule, while assignment offers only active employees', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const { scheduleQueries } = await mockBookings(page, fixtures());
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    const includeInactive = new URL(route.request().url()).searchParams.get('includeInactive') === 'true';
+    const employees = [{ id: 'e-1', firstName: 'Ada', lastName: 'Cleaner', role: 'employee', isActive: true }];
+    if (includeInactive) employees.push({ id: 'e-2', firstName: 'Ben', lastName: 'Former', role: 'employee', isActive: false });
+    return route.fulfill({ status: 200, headers, json: employees });
+  });
+  await page.goto('/admin/bookings/');
+  await page.getByText('Day view', { exact: true }).click();
+  await page.getByLabel('Day', { exact: true }).fill('2026-11-10');
+  await page.getByRole('textbox', { name: 'Employee', exact: true }).click();
+  await page.getByRole('option', { name: 'Ben Former', exact: true }).click();
+  await expect(page.getByRole('cell', { name: 'BK-1002', exact: true })).toBeVisible();
+  expect(scheduleQueries.some(q => q.includes('employeeId=e-2'))).toBe(true);
+
+  await page.getByText('Bookings', { exact: true }).last().click();
+  await page.getByRole('row', { name: /BK-1001/ }).getByRole('button', { name: 'Details', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Assign to', exact: true }).click();
+  await expect(page.getByRole('option', { name: 'Ben Former', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('option', { name: 'Ada Cleaner', exact: true })).toBeVisible();
+});
+
+test('a failed history load shows a message in the booking detail', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockBookings(page, fixtures());
+  await page.route(/\/api\/v1\/admin\/bookings\/b-new$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    return route.fulfill({ status: 500, headers, json: { detail: 'History unavailable' } });
+  });
+  await page.goto('/admin/bookings/');
+  await page.getByRole('row', { name: /BK-1001/ }).getByRole('button', { name: 'Details', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'History could not be loaded.' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Confirm', exact: true })).toBeVisible();
+});
+
 test('manager is blocked from the bookings administration page', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   await page.addInitScript(() => { (window as any).__MOCK_ROLES__ = ['manager']; });

@@ -43,7 +43,8 @@ export default function BookingsAdminPage() {
   const [busy, setBusy] = useState<BookingAction | null>(null);
   const [actionError, setActionError] = useState('');
   const [message, setMessage] = useState('');
-  const [employees, setEmployees] = useState<{ id: string; name: string }[]>([]);
+  const [employees, setEmployees] = useState<{ id: string; name: string; isActive: boolean }[]>([]);
+  const [historyError, setHistoryError] = useState(false);
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
   const [assignBusy, setAssignBusy] = useState(false);
   const [employeesError, setEmployeesError] = useState('');
@@ -77,9 +78,10 @@ export default function BookingsAdminPage() {
   useEffect(() => { load(statusFilter); }, [statusFilter]);
 
   useEffect(() => {
-    adminEmployees.list(false)
+    // Includes inactive employees so the day view can show a past schedule for someone since deactivated; the assign picker filters them out.
+    adminEmployees.list(true)
       .then(records => {
-        if (records) setEmployees(records.map(e => ({ id: e.id, name: `${e.firstName} ${e.lastName}` })));
+        if (records) setEmployees(records.map(e => ({ id: e.id, name: `${e.firstName} ${e.lastName}`, isActive: e.isActive })));
         else setEmployeesError(EMPLOYEES_LOAD_FAILED);
       })
       .catch(() => setEmployeesError(EMPLOYEES_LOAD_FAILED));
@@ -89,9 +91,12 @@ export default function BookingsAdminPage() {
   useEffect(() => {
     if (!selected) return;
     let active = true;
+    setHistoryError(false);
     adminBookings.detail(selected.id).then(detail => {
-      if (active && detail) setSelected(current => (current && current.id === detail.id ? { ...current, history: detail.history } : current));
-    });
+      if (!active) return;
+      if (detail) setSelected(current => (current && current.id === detail.id ? { ...current, history: detail.history } : current));
+      else setHistoryError(true);
+    }).catch(() => { if (active) setHistoryError(true); });
     return () => { active = false; };
   }, [selected?.id]);
 
@@ -252,6 +257,7 @@ export default function BookingsAdminPage() {
                 ))}
               </Stack>
             )}
+            {historyError && <Text role="alert" size="xs" c="red">History could not be loaded.</Text>}
             {actionError && <Text role="alert" size="sm" c="red">{actionError}</Text>}
             {availableActions(selected.status).length === 0 && !canAssign(selected.status) ? (
               <Text size="sm" c="dimmed">This booking is {selected.status.toLowerCase()}. No further changes are available.</Text>
@@ -268,7 +274,7 @@ export default function BookingsAdminPage() {
               <Stack gap="xs">
                 {employeesError && <Text role="alert" size="sm" c="red">{employeesError}</Text>}
                 <Group gap="xs" wrap="wrap" align="flex-end">
-                <Select aria-label="Assign to" placeholder="Choose employee" searchable data={employees.map(e => ({ value: e.id, label: e.name }))} value={assigneeId} onChange={setAssigneeId} w={240} />
+                <Select aria-label="Assign to" placeholder="Choose employee" searchable data={employees.filter(e => e.isActive).map(e => ({ value: e.id, label: e.name }))} value={assigneeId} onChange={setAssigneeId} w={240} />
                 <Button variant="light" loading={assignBusy} disabled={!assigneeId || assignBusy} onClick={assign}>Assign</Button>
                 {selected.employeeName && <Button variant="subtle" color="red" loading={assignBusy} disabled={assignBusy} onClick={unassign}>Unassign</Button>}
                 </Group>
