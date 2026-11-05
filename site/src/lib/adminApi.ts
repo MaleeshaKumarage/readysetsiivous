@@ -112,6 +112,19 @@ export async function adminSend(
 
 export type AdminSendResult = { ok: true } | { ok: false; message: string };
 
+// Turns an RFC 7807 problem into one readable sentence. Field-level messages are used when
+// there is no detail, so validation failures still say what to change.
+export function problemText(problem: unknown, fallback: string): string {
+  const body = (problem ?? {}) as { detail?: unknown; title?: unknown; errors?: Record<string, unknown> };
+  if (typeof body.detail === 'string' && body.detail.trim()) return body.detail.trim();
+  if (body.errors && typeof body.errors === 'object') {
+    const messages = Object.values(body.errors).flat().filter((m): m is string => typeof m === 'string' && m.trim() !== '');
+    if (messages.length) return [...new Set(messages)].slice(0, 3).join(' ');
+  }
+  if (typeof body.title === 'string' && body.title.trim()) return body.title.trim();
+  return fallback;
+}
+
 // Like adminSend, but keeps the server's reason (problem detail) so the user can act on it.
 export async function adminSendResult(
   path: string,
@@ -126,9 +139,7 @@ export async function adminSendResult(
   }
   if (response.ok || response.status === 204) { invalidateAdminCache(); return { ok: true }; }
   const problem = await response.json().catch(() => null);
-  const detail = typeof problem?.detail === 'string' ? problem.detail.trim() : '';
-  const title = typeof problem?.title === 'string' ? problem.title.trim() : '';
-  return { ok: false, message: detail || title || `The change was not saved (error ${response.status}). Check the fields, then save again.` };
+  return { ok: false, message: problemText(problem, `The change was not saved (error ${response.status}). Check the fields, then save again.`) };
 }
 
 export type AdminJsonResult<T> = { ok: true; value: T } | { ok: false; message: string };
@@ -143,9 +154,7 @@ export async function adminSendJsonResult<T>(path: string, method: 'POST' | 'PUT
   }
   if (!response.ok) {
     const problem = await response.json().catch(() => null);
-    const detail = typeof problem?.detail === 'string' ? problem.detail.trim() : '';
-    const title = typeof problem?.title === 'string' ? problem.title.trim() : '';
-    return { ok: false, message: detail || title || `The change was not saved (error ${response.status}). Check the fields, then save again.` };
+    return { ok: false, message: problemText(problem, `The change was not saved (error ${response.status}). Check the fields, then save again.`) };
   }
   invalidateAdminCache();
   return { ok: true, value: (await response.json()) as T };
@@ -291,7 +300,7 @@ async function employeeMutation(path: string, body?: unknown): Promise<boolean> 
   const response = await authorizedFetch(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) });
   if (!response.ok) {
     const problem = await response.json().catch(() => ({})) as { detail?: string; title?: string };
-    throw new Error(problem.detail || problem.title || `The change was not saved (error ${response.status}). Check the fields, then save again.`);
+    throw new Error(problemText(problem, `The change was not saved (error ${response.status}). Check the fields, then save again.`));
   }
   invalidateAdminCache(); return true;
 }
@@ -585,7 +594,7 @@ async function occurrenceRequest<T>(path: string, method: 'PUT' | 'DELETE', body
     ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   if (!response.ok) {
     const problem = await response.json().catch(() => null);
-    const message = typeof problem?.detail === 'string' && problem.detail.trim() ? problem.detail.trim() : 'Could not update this occurrence. Please retry.';
+    const message = problemText(problem, 'Could not update this occurrence. Please retry.');
     const conflicts = Array.isArray(problem?.conflicts) ? problem.conflicts as ShiftConflictDetail[] : [];
     if (response.status === 409 && conflicts.length > 0) throw new VisitConflictError(message, conflicts);
     throw new Error(message);
@@ -607,8 +616,7 @@ async function shiftAssignmentRequest<T>(path: string, method = 'GET', body?: un
   }
   if (!response.ok) {
     const problem = await response.json().catch(() => null);
-    const detail = response.status < 500 && typeof problem?.detail === 'string' ? problem.detail.trim() : '';
-    throw new Error(detail || `Could not ${operation}. Please retry.`);
+    throw new Error(response.status < 500 ? problemText(problem, `Could not ${operation}. Please retry.`) : `Could not ${operation}. Please retry.`);
   }
   if (method !== 'GET') { invalidateAdminCache(); return undefined as T; }
   try {
@@ -677,9 +685,7 @@ async function companyRequest<T>(path: string, method: 'POST' | 'PUT', body: unk
   const response = await authorizedFetch(path, { method, body: JSON.stringify(body) });
   if (!response.ok) {
     const problem = await response.json().catch(() => null);
-    const detail = response.status < 500 && typeof problem?.detail === 'string' ? problem.detail.trim() : '';
-    const title = response.status < 500 && typeof problem?.title === 'string' ? problem.title.trim() : '';
-    throw new Error(detail || title || 'Could not save. Please retry.');
+    throw new Error(response.status < 500 ? problemText(problem, 'Could not save. Please retry.') : 'Could not save. Please retry.');
   }
   const result = await response.json() as T;
   invalidateAdminCache();
