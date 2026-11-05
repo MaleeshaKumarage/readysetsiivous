@@ -18,6 +18,7 @@ import {
   Grid,
   Card,
   Tooltip,
+  Modal,
 } from '@mantine/core';
 import {
   Plus,
@@ -41,6 +42,7 @@ export default function AdminQualityCyclePage() {
   const visibleTemplates = templates.filter(template => inLifecycle(template, templateStatus));
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [editingTemplate, setEditingTemplate] = useState<Partial<QualityCycleTemplate> | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
   const [templateTitle, setTemplateTitle] = useState('');
   const [templateDesc, setTemplateDesc] = useState('');
   const [templateItems, setTemplateItems] = useState<string[]>(['', '', '']);
@@ -105,6 +107,7 @@ export default function AdminQualityCyclePage() {
 
       if (!saved) { alert('Template could not be saved. Please retry.'); return; }
       if (!editingTemplate?.id) setTemplateStatus('active');
+      setEditorOpen(false);
       setEditingTemplate(null);
       setTemplateTitle('');
       setTemplateDesc('');
@@ -115,7 +118,27 @@ export default function AdminQualityCyclePage() {
     }
   }
 
+  function resetEditorFields() {
+    setTemplateTitle('');
+    setTemplateDesc('');
+    setTemplateItems(['', '', '']);
+  }
+
+  function openNewTemplate() {
+    setEditingTemplate(null);
+    resetEditorFields();
+    setEditorOpen(true);
+  }
+
+  function closeEditor() {
+    if (savingTemplate) return;
+    setEditorOpen(false);
+    setEditingTemplate(null);
+    resetEditorFields();
+  }
+
   function handleEditTemplate(t: QualityCycleTemplate) {
+    setEditorOpen(true);
     setEditingTemplate(t);
     setTemplateTitle(t.title);
     setTemplateDesc(t.description || '');
@@ -139,7 +162,7 @@ export default function AdminQualityCyclePage() {
     setActivityBusy(t.id); setActivityError('');
     try {
       await adminQualityCycle.deleteTemplate(t.id);
-      if (editingTemplate?.id === t.id) setEditingTemplate(null);
+      if (editingTemplate?.id === t.id) { setEditorOpen(false); setEditingTemplate(null); }
       await loadTemplates();
     } catch (failure) {
       setActivityError(failure instanceof Error ? failure.message : 'Could not delete the template. Please retry.');
@@ -152,7 +175,7 @@ export default function AdminQualityCyclePage() {
     <Stack gap="lg" p="md" style={{ color: 'var(--mantine-color-text)', background: 'var(--mantine-color-body)', borderRadius: 12 }}>
       <Group justify="space-between" align="flex-start" wrap="wrap">
         <div>
-          <Title order={2}>Quality Cycle Management</Title>
+          <Title order={2} component="h1">Quality Cycle Management</Title>
           <Text size="sm" c="dimmed" mt={2}>
             Create checklist templates and prepare, export or share client quality reports.
           </Text>
@@ -168,103 +191,11 @@ export default function AdminQualityCyclePage() {
       </Group>
 
       {activeTab === 'templates' && (
-        <Grid gutter="md">
-          <Grid.Col span={{ base: 12, md: 5, lg: 4 }}>
-            <Paper p="md" radius="md" withBorder>
-              <Stack gap="md">
-                <Text fw={600} size="lg">
-                  {editingTemplate?.id ? 'Edit Template' : 'Create New Template'}
-                </Text>
-                <form onSubmit={handleSaveTemplate}>
-                  <Stack gap="sm">
-                    <TextInput
-                      label="Template Title"
-                      placeholder="e.g. Daily Office Cleaning Checklist"
-                      required
-                      value={templateTitle}
-                      onChange={(e) => setTemplateTitle(e.target.value)}
-                    />
-
-                    <Textarea
-                      label="Description"
-                      placeholder="Optional description or guidance..."
-                      rows={2}
-                      value={templateDesc}
-                      onChange={(e) => setTemplateDesc(e.target.value)}
-                    />
-
-                    <div>
-                      <Group justify="space-between" mb={6}>
-                        <Text size="xs" fw={500}>
-                          Checklist Items (up to 10)
-                        </Text>
-                        {templateItems.length < 10 && (
-                          <Button
-                            size="xs"
-                            variant="subtle"
-                            leftSection={<Plus size={12} />}
-                            onClick={handleAddItemField}
-                          >
-                            Add Item
-                          </Button>
-                        )}
-                      </Group>
-                      <Stack gap="xs" style={{ maxHeight: 260, overflowY: 'auto' }}>
-                        {templateItems.map((item, index) => (
-                          <Group key={index} gap="xs" wrap="nowrap">
-                            <Text size="xs" c="dimmed" w={16}>
-                              {index + 1}.
-                            </Text>
-                            <TextInput
-                              placeholder={`Item ${index + 1} task...`}
-                              size="xs"
-                              style={{ flex: 1 }}
-                              value={item}
-                              onChange={(e) => handleItemChange(index, e.target.value)}
-                            />
-                            {templateItems.length > 1 && (
-                              <ActionIcon
-                                variant="subtle"
-                                color="red"
-                                size="sm"
-                                aria-label={`Remove item ${index + 1}`}
-                                onClick={() => handleRemoveItemField(index)}
-                              >
-                                <Trash2 size={14} />
-                              </ActionIcon>
-                            )}
-                          </Group>
-                        ))}
-                      </Stack>
-                    </div>
-
-                    <Group justify="flex-end" gap="xs" mt="sm">
-                      {editingTemplate && (
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={() => {
-                            setEditingTemplate(null);
-                            setTemplateTitle('');
-                            setTemplateDesc('');
-                            setTemplateItems(['', '', '']);
-                          }}
-                        >
-                          Cancel
-                        </Button>
-                      )}
-                      <Button type="submit" size="sm" loading={savingTemplate}>
-                        {editingTemplate?.id ? 'Update Template' : 'Create Template'}
-                      </Button>
-                    </Group>
-                  </Stack>
-                </form>
-              </Stack>
-            </Paper>
-          </Grid.Col>
-
-          <Grid.Col span={{ base: 12, md: 7, lg: 8 }}>
-            <Paper p="md" radius="md" withBorder>
+        <Stack gap="md">
+          <Group justify="flex-end">
+            <Button leftSection={<Plus size={14} />} onClick={openNewTemplate}>New template</Button>
+          </Group>
+          <Paper p="md" radius="md" withBorder>
               <Stack gap="md">
                 <Text fw={600} size="lg">
                   Existing Templates
@@ -347,9 +278,84 @@ export default function AdminQualityCyclePage() {
                 </LifecycleTabs>
               </Stack>
             </Paper>
-          </Grid.Col>
-        </Grid>
+        </Stack>
       )}
+
+      <Modal opened={editorOpen} onClose={closeEditor} closeOnClickOutside={!savingTemplate} closeOnEscape={!savingTemplate} withCloseButton={!savingTemplate} title={editingTemplate?.id ? 'Edit Template' : 'Create New Template'} size="lg" radius="md">
+        <form onSubmit={handleSaveTemplate}>
+                  <Stack gap="sm">
+                    <TextInput
+                      label="Template Title"
+                      placeholder="e.g. Daily Office Cleaning Checklist"
+                      required
+                      value={templateTitle}
+                      onChange={(e) => setTemplateTitle(e.target.value)}
+                    />
+
+                    <Textarea
+                      label="Description"
+                      placeholder="Optional description or guidance..."
+                      rows={2}
+                      value={templateDesc}
+                      onChange={(e) => setTemplateDesc(e.target.value)}
+                    />
+
+                    <div>
+                      <Group justify="space-between" mb={6}>
+                        <Text size="xs" fw={500}>
+                          Checklist Items (up to 10)
+                        </Text>
+                        {templateItems.length < 10 && (
+                          <Button
+                            size="xs"
+                            variant="subtle"
+                            leftSection={<Plus size={12} />}
+                            onClick={handleAddItemField}
+                          >
+                            Add Item
+                          </Button>
+                        )}
+                      </Group>
+                      <Stack gap="xs" style={{ maxHeight: 260, overflowY: 'auto' }}>
+                        {templateItems.map((item, index) => (
+                          <Group key={index} gap="xs" wrap="nowrap">
+                            <Text size="xs" c="dimmed" w={16}>
+                              {index + 1}.
+                            </Text>
+                            <TextInput
+                              placeholder={`Item ${index + 1} task...`}
+                              size="xs"
+                              style={{ flex: 1 }}
+                              value={item}
+                              onChange={(e) => handleItemChange(index, e.target.value)}
+                            />
+                            {templateItems.length > 1 && (
+                              <ActionIcon
+                                variant="subtle"
+                                color="red"
+                                size="sm"
+                                aria-label={`Remove item ${index + 1}`}
+                                onClick={() => handleRemoveItemField(index)}
+                              >
+                                <Trash2 size={14} />
+                              </ActionIcon>
+                            )}
+                          </Group>
+                        ))}
+                      </Stack>
+                    </div>
+
+                    <Group justify="flex-end" gap="xs" mt="sm">
+                      <Button variant="default" size="sm" onClick={closeEditor} disabled={savingTemplate}>
+                        Cancel
+                      </Button>
+                      <Button type="submit" size="sm" loading={savingTemplate}>
+                        {editingTemplate?.id ? 'Update Template' : 'Create Template'}
+                      </Button>
+                    </Group>
+                  </Stack>
+                </form>
+      </Modal>
 
       {activeTab === 'submissions' && <ReportWorkspace />}
     </Stack>

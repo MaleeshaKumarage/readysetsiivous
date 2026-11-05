@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Alert, Badge, Button, Group, Loader, Paper, ScrollArea, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { adminEmployees, adminShifts, adminTenant, type Employee, type EmployeeDaySchedule, type OverlapFinding, type ScheduleVisit } from '@/lib/adminApi';
 
-const MAX_DAYS = 31;
 const DAYS = 7;
 
 function isoDate(date: Date) {
@@ -58,7 +57,6 @@ export default function EmployeeSchedulePage() {
   const overlapFor = (employeeId: string, day: string) => visitsFor(employeeId, day).some(visit => overlaps.some(finding => finding.employeeId === employeeId
     && (sameVisit(finding.earlier, visit) || sameVisit(finding.later, visit))));
   const staff = (employees ?? []).filter(employee => employee.isActive && employee.role !== 'partner');
-  const rangeTooLong = (new Date(weekEnd).getTime() - new Date(weekStart).getTime()) / 86_400_000 > MAX_DAYS;
   const visitLabel = (visit: ScheduleVisit) => `${visit.shiftName} ${timeOf(visit.startUtc)}–${timeOf(visit.endUtc)}`;
 
   return (
@@ -70,7 +68,6 @@ export default function EmployeeSchedulePage() {
         <Button variant="default" onClick={() => setWeekStart(addDays(weekStart, DAYS))}>Next week</Button>
         <Button variant="subtle" onClick={() => setWeekStart(mondayOf(isoDate(new Date())))}>This week</Button>
       </Group>
-      {rangeTooLong && <Alert color="orange">The schedule shows one week at a time.</Alert>}
       {loading && <Loader aria-label="Loading schedule" />}
       {error && <Alert color="red" title="Schedule unavailable"><Stack gap="xs"><Text>{error}</Text><Button size="xs" variant="light" onClick={() => setReloadKey(key => key + 1)}>Retry</Button></Stack></Alert>}
       {!loading && !error && schedule && staff.length === 0 && <Text>No active cleaners yet. Add employees, then their visits appear here.</Text>}

@@ -68,6 +68,8 @@ public interface IShiftRepository
     Task<IReadOnlyList<ShiftAssignment>> ListAssignmentsByShiftAsync(Guid shiftId, CancellationToken ct = default);
     Task<IReadOnlyDictionary<Guid, int>> CountActiveAssignmentsByShiftAsync(CancellationToken ct = default);
     Task SaveAssignmentAsync(ShiftAssignment assignment, CancellationToken ct = default);
+    /// <summary>Saves a deactivated shift and its released assignments in one transaction.</summary>
+    Task SaveDeactivationAsync(Shift shift, IReadOnlyList<ShiftAssignment> releasedAssignments, CancellationToken ct = default);
     Task DeleteAssignmentAsync(Guid assignmentId, CancellationToken ct = default);
     Task<IReadOnlyList<Shift>> ListForReportingAsync(CancellationToken ct = default);
     Task<IReadOnlyList<Shift>> ListIncludingInactiveAsync(CancellationToken ct = default);
@@ -269,13 +271,15 @@ public class ShiftHandlers
             shift.Deactivate();
             shift.RecordQualityCyclePlan(DateTime.UtcNow);
             var now = DateTime.UtcNow;
+            var released = new List<ShiftAssignment>();
             foreach (var assignment in await _repository.ListAssignmentsByShiftAsync(shift.Id, ct))
             {
                 if (!assignment.IsActive) continue;
                 assignment.Release(now);
-                await _repository.SaveAssignmentAsync(assignment, ct);
+                released.Add(assignment);
             }
-            await _repository.SaveAsync(shift, ct);
+            // The shift and its releases commit together, so a failure never leaves a half-deactivated shift.
+            await _repository.SaveDeactivationAsync(shift, released, ct);
         }
     }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CleaningSuite.Application.Shifts;
@@ -28,7 +29,24 @@ public class DeactivateReleasesAssignmentsTests
         Assert.False(shift.IsActive);
         Assert.False(active.IsActive);
         Assert.NotNull(active.UnassignedAtUtc);
-        repo.Verify(r => r.SaveAssignmentAsync(active, It.IsAny<CancellationToken>()), Times.Once);
-        repo.Verify(r => r.SaveAssignmentAsync(alreadyEnded, It.IsAny<CancellationToken>()), Times.Never);
+        repo.Verify(r => r.SaveDeactivationAsync(shift,
+            It.Is<IReadOnlyList<ShiftAssignment>>(l => l.Count == 1 && ReferenceEquals(l[0], active)),
+            It.IsAny<CancellationToken>()), Times.Once);
+        repo.Verify(r => r.SaveAssignmentAsync(It.IsAny<ShiftAssignment>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public void Releasing_closes_the_open_history_period_so_later_visits_are_not_attributed()
+    {
+        var now = new DateTime(2026, 11, 5, 12, 0, 0, DateTimeKind.Utc);
+        var assignment = new ShiftAssignment { ShiftId = Guid.NewGuid(), EmployeeId = Guid.NewGuid(), IsActive = true, AssignedAtUtc = now.AddDays(-30) };
+        assignment.Periods.Add(new ShiftAssignmentPeriod { FromUtc = now.AddDays(-30) });
+
+        assignment.Release(now);
+
+        Assert.Equal(now, assignment.Periods.Single().ToUtc);
+        var laterStart = now.AddDays(3);
+        Assert.False(assignment.CoversVisit(laterStart, laterStart.AddHours(2)));
+        Assert.False(assignment.Overlaps(laterStart, laterStart.AddHours(2)));
     }
 }

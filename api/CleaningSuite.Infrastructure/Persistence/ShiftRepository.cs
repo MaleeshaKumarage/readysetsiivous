@@ -141,6 +141,17 @@ public class ShiftRepository : IShiftRepository
         await Session.SaveChangesAsync(ct);
     }
 
+    public async Task SaveDeactivationAsync(Shift shift, IReadOnlyList<ShiftAssignment> releasedAssignments, CancellationToken ct = default)
+    {
+        foreach (var assignment in releasedAssignments)
+            await StageChange(assignment.ShiftId, [assignment.EmployeeId], ct);
+        if (!_shiftSnapshots.TryGetValue(shift.Id, out var before) || before != ScheduleFingerprint(shift))
+            await StageChange(shift.Id, [], ct);
+        Session.Store(shift);
+        foreach (var assignment in releasedAssignments) Session.Store(assignment);
+        await Session.SaveChangesAsync(ct);
+    }
+
     public async Task<ShiftOccurrenceAssignment?> GetOccurrenceAssignmentAsync(Guid id, CancellationToken ct = default)
     {
         var item = await Session.LoadAsync<ShiftOccurrenceAssignment>(id, ct);

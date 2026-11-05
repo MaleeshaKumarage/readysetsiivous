@@ -92,7 +92,8 @@ test('administrator prices a quote and offers work only to staff', async ({ page
   await page.evaluate(() => document.getElementById('mock-test-style')?.remove());
   const navigationToggle = page.getByRole('button', { name: 'Toggle navigation', exact: true });
   if ((page.viewportSize()?.width ?? 1280) < 768) await navigationToggle.click();
-  await page.getByRole('link', { name: 'Partner requests', exact: true }).click(); await page.getByRole('tab', { name: 'Quote requests', exact: true }).click(); await page.getByRole('button', { name: 'Set cleaning price' }).click();
+  const partnerNav = page.locator('a[aria-label="Partner operations"]').first(); const navToggle = page.getByRole('button', { name: 'Toggle navigation', exact: true }); await expect(partnerNav.or(navToggle).first()).toBeVisible(); if (!(await partnerNav.isVisible())) await navToggle.click();
+  await partnerNav.click(); await page.getByRole('tab', { name: 'Quote requests', exact: true }).click(); await page.getByRole('button', { name: 'Set cleaning price' }).click();
   await page.getByLabel('Fixed cleaning price excl. VAT (€)').fill('85'); await page.getByLabel('Estimated duration (minutes)').fill('90'); await page.getByRole('button', { name: 'Save pricing' }).click(); await expect(page.getByText('Pricing saved.')).toBeVisible();
   expect(writes[0].body).toEqual({ priceNet: 85, vatRatePercent: 25.5, estimatedDurationMinutes: 90 });
   await page.getByRole('tab', { name: 'Requests', exact: true }).click(); await page.getByRole('button', { name: 'Arrange cleaner / time' }).click();

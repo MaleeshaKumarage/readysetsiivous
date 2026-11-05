@@ -502,7 +502,7 @@ export default function ShiftsAdminPage() {
   return (
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
-        <Title order={2}>Shifts</Title>
+        <Title order={2} component="h1">Shifts</Title>
         <Button leftSection={<Plus size={16} />} disabled={!schedulingReady} onClick={openCreate}>Add shift</Button>
       </Group>
 
@@ -514,7 +514,8 @@ export default function ShiftsAdminPage() {
       {loading ? <Loader /> : visibleShifts.length === 0 ? (
         <Text c="dimmed">{shifts.length === 0 ? 'No shifts yet.' : `No ${lifecycle} shifts. Check the ${lifecycle === 'active' ? 'Inactive' : 'Active'} tab.`}</Text>
       ) : (<>
-        <Table.ScrollContainer minWidth={600}>
+        <Text size="xs" c="dimmed" hiddenFrom="sm" mb={6}>Scroll sideways to see all columns.</Text>
+        <Table.ScrollContainer minWidth={600} tabIndex={0} role="region" aria-label="Shifts table">
           <Table striped highlightOnHover withTableBorder>
             <Table.Thead>
               <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Schedule</Table.Th><Table.Th>Employees</Table.Th><Table.Th>Status</Table.Th><Table.Th w={200}>Actions</Table.Th></Table.Tr>

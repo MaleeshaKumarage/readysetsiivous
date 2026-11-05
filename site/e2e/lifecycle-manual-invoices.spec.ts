@@ -36,6 +36,7 @@ async function setup(page: Page, options: { lostResponse?: boolean; delayPreview
 }
 async function fill(page: Page) {
   await page.goto('/admin/invoices/');
+  await page.getByRole('button', { name: 'New invoice', exact: true }).click();
   await page.getByRole('textbox', { name: 'Invoice type', exact: true }).click(); await page.getByRole('option', { name: 'Manual invoice', exact: true }).click();
   await page.getByRole('textbox', { name: 'Company', exact: true }).click(); await page.getByRole('option', { name: 'Customer', exact: true }).click();
   await page.getByRole('textbox', { name: 'Billing street', exact: true }).fill('Customer street'); await page.getByRole('textbox', { name: 'Billing postalCode', exact: true }).fill('00100'); await page.getByRole('textbox', { name: 'Billing city', exact: true }).fill('Helsinki');
@@ -60,16 +61,31 @@ test('manual rows preview VAT and issue into existing history and PDF download',
   expect(calls.issues[0].lines).toEqual([{ description: 'Additional agreed service', quantity: 2, unitPriceNet: 50 }, { description: 'Materials', quantity: 1, unitPriceNet: 20 }]);
   expect(calls.issues[0].shiftIds).toBeUndefined(); expect(calls.issues[0].submissionId).toMatch(/^[0-9a-f-]{36}$/);
   await page.getByRole('button', { name: 'PDF', exact: true }).click(); await expect.poll(() => calls.downloads).toBe(1);
+  await page.getByRole('button', { name: 'New invoice', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Row 1 description', exact: true })).toHaveValue('');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 test('row changes and removal invalidate preview; mode switch restores shift controls', async ({ page }) => {
-  await setup(page); await fill(page); await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
+  const calls = await setup(page); await fill(page); await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Invoice preview' })).toBeVisible();
-  await page.getByRole('button', { name: 'Add row', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0);
+  const baseRows = calls.previews.at(-1).lines.length;
+  await page.keyboard.press('Escape'); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0); await page.getByRole('button', { name: 'New invoice', exact: true }).click();
+  // Each re-preview must send the rows as they are now, so a stale preview cannot be issued.
+  await page.getByRole('button', { name: 'Add row', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Row 2 description', exact: true }).fill('Extra row');
+  await page.getByRole('textbox', { name: 'Row 2 quantity (pieces)', exact: true }).fill('1');
+  await page.getByRole('textbox', { name: 'Row 2 unit price before VAT (€)', exact: true }).fill('10');
+  await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toBeVisible();
+  expect(calls.previews.at(-1).lines).toHaveLength(baseRows + 1);
+  await page.keyboard.press('Escape'); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0); await page.getByRole('button', { name: 'New invoice', exact: true }).click();
   await page.getByRole('button', { name: 'Remove row 2', exact: true }).click();
   await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toBeVisible();
-  await page.getByRole('textbox', { name: 'Row 1 unit price before VAT (€)', exact: true }).fill('51'); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0);
+  expect(calls.previews.at(-1).lines).toHaveLength(baseRows);
+  await page.keyboard.press('Escape'); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0); await page.getByRole('button', { name: 'New invoice', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Row 1 unit price before VAT (€)', exact: true }).fill('51');
+  await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toBeVisible();
+  expect(calls.previews.at(-1).lines[0].unitPriceNet).toBe(51);
+  await page.keyboard.press('Escape'); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0); await page.getByRole('button', { name: 'New invoice', exact: true }).click();
   await page.getByRole('textbox', { name: 'Invoice type', exact: true }).click(); await page.getByRole('option', { name: 'Shift invoice', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Invoice from', exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: 'Add row', exact: true })).toHaveCount(0);
 });
@@ -77,7 +93,8 @@ test('lost issue response locks edits and retry sends same submission exactly on
   const calls = await setup(page, { lostResponse: true }); await fill(page);
   await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await page.getByRole('button', { name: 'Issue invoice', exact: true }).click();
   await expect(page.getByText(/The issue result could not be confirmed/)).toBeVisible();
-  await expect(page.getByRole('textbox', { name: 'Row 1 description', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'New invoice', exact: true })).toBeDisabled();
+  await page.keyboard.press('Escape'); await expect(page.getByRole('dialog', { name: 'Invoice preview' })).toBeVisible();
   await page.getByRole('button', { name: 'Retry issuing invoice', exact: true }).click();
   await expect(page.getByRole('status')).toHaveText('Invoice 2026-0001 issued.'); expect(calls.issues).toHaveLength(2); expect(calls.issues[0]).toEqual(calls.issues[1]);
   await expect(page.getByRole('cell', { name: '2026-0001', exact: true })).toHaveCount(1);
@@ -105,10 +122,11 @@ test('required rows fail locally and backend validation preserves input', async 
 test('manual VAT uses saved settings and saving issuer details clears preview', async ({ page }) => {
   await setup(page); await fill(page);
   await page.route(/\/api\/v1\/admin\/invoices\/issuer$/, route => route.fulfill({ headers, json: route.request().method() === 'PUT' ? route.request().postDataJSON() : issuer }));
-  await page.getByRole('button', { name: 'Company and payment details' }).click();
+  await page.keyboard.press('Escape'); await page.getByRole('button', { name: 'Company and payment details' }).click();
   await page.getByRole('textbox', { name: 'Default VAT (%)', exact: true }).fill('10');
-  await expect(page.getByText(/VAT \(25.5%\) is added/)).toBeVisible();
-  await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toBeVisible();
   await page.getByRole('button', { name: 'Save company details', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0); await expect(page.getByText(/VAT \(10%\) is added/)).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Invoice issuer' })).toHaveCount(0); await expect(page.getByRole('status')).toHaveText('Company and payment details saved.');
+  await page.getByRole('button', { name: 'New invoice', exact: true }).click();
+  await expect(page.getByText(/VAT \(10%\) is added/)).toBeVisible();
+  await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toBeVisible();
 });

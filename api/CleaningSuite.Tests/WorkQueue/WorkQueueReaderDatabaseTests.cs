@@ -120,6 +120,160 @@ public class WorkQueueReaderDatabaseTests
     }
 
     [QualityCycleDatabaseFact]
+    public async Task Date_and_assignee_filters_apply_before_paging_and_counts()
+    {
+        using var f = await Fixture.Create();
+        var company = new Company { Name = "Filter Oy", BusinessId = "WQ-" + Guid.NewGuid().ToString("N")[..8], IsActive = true, IsPartnerEnabled = true };
+        var employeeA = Guid.NewGuid().ToString();
+        var employeeB = Guid.NewGuid().ToString();
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(company);
+            // 01:00 Helsinki on 3 Dec is 23:00 UTC on 2 Dec. A date window must use the local day edge, not the UTC date.
+            db.Store(new Booking { BookingNumber = "BK-EARLY", Customer = new Customer { Name = "Early bird" }, Status = Booking.StatusConfirmed, EmployeeId = employeeA,
+                StartUtc = new DateTime(2026, 12, 2, 23, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-03", StartLocalTime = "01:00" });
+            db.Store(new Booking { BookingNumber = "BK-DAY2", Customer = new Customer { Name = "Day two" }, Status = Booking.StatusNew,
+                StartUtc = new DateTime(2026, 12, 2, 8, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-02", StartLocalTime = "10:00" });
+            db.Store(new Booking { BookingNumber = "BK-LATE", Customer = new Customer { Name = "Late one" }, Status = Booking.StatusConfirmed, EmployeeId = employeeB,
+                StartUtc = new DateTime(2026, 12, 9, 8, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-09", StartLocalTime = "10:00" });
+            await db.SaveChangesAsync();
+        }
+        using var session = f.Session();
+        var reader = Reader(f, session);
+
+        var dayThree = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Scheduled, "booking", null, 0, 25, "2026-12-03", "2026-12-03"));
+        Assert.Equal(["BK-EARLY"], dayThree.Items.Select(i => i.Reference).ToArray());
+        Assert.Equal(0, dayThree.Counts[WorkQueueViews.NeedsAction]);
+        Assert.Equal(1, dayThree.Counts[WorkQueueViews.Scheduled]);
+
+        var counts = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Scheduled, "booking", null, 0, 25, "2026-12-01", "2026-12-08"));
+        Assert.Equal(1, counts.Total);
+        Assert.Equal(1, counts.Counts[WorkQueueViews.Scheduled]);
+
+        var emp = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Scheduled, "all", null, 0, 25, Assignee: employeeB));
+        Assert.Equal(["BK-LATE"], emp.Items.Select(i => i.Reference).ToArray());
+        Assert.Equal(1, emp.Total);
+    }
+
+    [QualityCycleDatabaseFact]
+    public async Task Non_guid_assignee_matches_nothing_in_any_source()
+    {
+        // Bookings and shifts must agree: a non-GUID assignee returns an empty queue, not a partial one.
+        using var f = await Fixture.Create();
+        var company = new Company { Name = "Assignee Oy", BusinessId = "WQ-" + Guid.NewGuid().ToString("N")[..8], IsActive = true, IsPartnerEnabled = true };
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(company);
+            db.Store(new Booking { BookingNumber = "BK-ANY", Customer = new Customer { Name = "Anyone" }, Status = Booking.StatusConfirmed, EmployeeId = Guid.NewGuid().ToString(),
+                StartUtc = new DateTime(2026, 12, 2, 8, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-02", StartLocalTime = "10:00" });
+            await db.SaveChangesAsync();
+        }
+        using var session = f.Session();
+        var reader = Reader(f, session);
+
+        var result = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Scheduled, "all", null, 0, 25, Assignee: "emp-1"));
+        Assert.Equal(0, result.Total);
+        Assert.Equal(0, result.Counts[WorkQueueViews.Scheduled]);
+    }
+
+    [QualityCycleDatabaseFact]
+    public async Task Shift_occurrences_follow_the_assignee_by_guid_and_drop_for_everyone_else()
+    {
+        // Shift rows must use the same assignee id as bookings: the assigned employee sees the occurrences, others see none.
+        using var f = await Fixture.Create();
+        var company = new Company { Name = "Roster Oy", BusinessId = "WQ-" + Guid.NewGuid().ToString("N")[..8], IsActive = true, IsPartnerEnabled = true };
+        var assigned = Guid.NewGuid();
+        var other = Guid.NewGuid();
+        var today = DateTime.UtcNow.Date;
+        var shift = new Shift { Id = Guid.NewGuid(), CompanyId = company.Id, BranchId = Guid.NewGuid(), Name = "Assigned clean", IsActive = true,
+            ValidFrom = today.AddDays(-1), ValidUntil = today.AddDays(30), CreatedUtc = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc),
+            Schedule = new ShiftSchedule { Type = ShiftScheduleType.DailySameTime, DailyStart = TimeSpan.FromHours(8), DailyEnd = TimeSpan.FromHours(10) } };
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(company);
+            db.Store(shift);
+            db.Store(new ShiftAssignment { ShiftId = shift.Id, EmployeeId = assigned, AssignedAtUtc = today.AddDays(-10), IsActive = true });
+            await db.SaveChangesAsync();
+        }
+        using var session = f.Session();
+        var reader = Reader(f, session);
+
+        var forAssigned = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.NeedsAction, "shift", null, 0, 25, Assignee: assigned.ToString()));
+        // Guards against a vacuous pass: the assigned employee must see at least one occurrence through the GUID match.
+        Assert.True(forAssigned.Counts.Values.Sum() > 0, "Assigned employee saw no shift occurrence.");
+
+        var forOther = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.NeedsAction, "shift", null, 0, 25, Assignee: other.ToString()));
+        Assert.Equal(0, forOther.Total);
+        Assert.Equal(0, forOther.Counts.Values.Sum());
+    }
+
+    [QualityCycleDatabaseFact]
+    public async Task Maximum_end_date_does_not_overflow_the_upper_bound()
+    {
+        // Regression: adding a day to 9999-12-31 threw, so a valid but extreme `to` failed the whole request.
+        using var f = await Fixture.Create();
+        var company = new Company { Name = "Edge Oy", BusinessId = "WQ-" + Guid.NewGuid().ToString("N")[..8], IsActive = true, IsPartnerEnabled = true };
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(company);
+            db.Store(new Booking { BookingNumber = "BK-EDGE", Customer = new Customer { Name = "Edge case" }, Status = Booking.StatusConfirmed, EmployeeId = Guid.NewGuid().ToString(),
+                StartUtc = new DateTime(2026, 12, 2, 8, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-02", StartLocalTime = "10:00" });
+            await db.SaveChangesAsync();
+        }
+        using var session = f.Session();
+        var reader = Reader(f, session);
+
+        var result = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Scheduled, "booking", null, 0, 25, "2026-12-01", "9999-12-31"));
+        Assert.Equal(["BK-EDGE"], result.Items.Select(i => i.Reference).ToArray());
+    }
+
+    [QualityCycleDatabaseFact]
+    public async Task Minimum_start_date_does_not_underflow_the_lower_bound()
+    {
+        // Regression: local midnight on 0001-01-01 converted to UTC fell below DateTime.MinValue for tenants east of UTC.
+        using var f = await Fixture.Create();
+        var company = new Company { Name = "Floor Oy", BusinessId = "WQ-" + Guid.NewGuid().ToString("N")[..8], IsActive = true, IsPartnerEnabled = true };
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(company);
+            db.Store(new Booking { BookingNumber = "BK-FLOOR", Customer = new Customer { Name = "Floor case" }, Status = Booking.StatusConfirmed, EmployeeId = Guid.NewGuid().ToString(),
+                StartUtc = new DateTime(2026, 12, 2, 8, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-02", StartLocalTime = "10:00" });
+            await db.SaveChangesAsync();
+        }
+        using var session = f.Session();
+        var reader = Reader(f, session);
+
+        var result = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Scheduled, "booking", null, 0, 25, "0001-01-01", "2026-12-31"));
+        Assert.Equal(["BK-FLOOR"], result.Items.Select(i => i.Reference).ToArray());
+    }
+
+    [QualityCycleDatabaseFact]
+    public async Task Partner_requests_are_kept_when_their_span_overlaps_the_date_window()
+    {
+        // A request that starts before the window but runs into it must stay; one that starts after the window must go.
+        using var f = await Fixture.Create();
+        var lake = new Company { Name = "Span Oy", BusinessId = "WQ-" + Guid.NewGuid().ToString("N")[..8], IsActive = true, IsPartnerEnabled = true };
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(lake);
+            db.Store(new PartnerCleaningRequest { ClientRequestId = Guid.NewGuid(), CompanyId = lake.Id, BranchId = Guid.NewGuid(), Status = PartnerCleaningRequest.StatusRequested,
+                FromDate = new DateOnly(2026, 11, 28), ToDate = new DateOnly(2026, 12, 3) });
+            db.Store(new PartnerCleaningRequest { ClientRequestId = Guid.NewGuid(), CompanyId = lake.Id, BranchId = Guid.NewGuid(), Status = PartnerCleaningRequest.StatusRequested,
+                FromDate = new DateOnly(2026, 12, 2), ToDate = new DateOnly(2026, 12, 20) });
+            db.Store(new PartnerCleaningRequest { ClientRequestId = Guid.NewGuid(), CompanyId = lake.Id, BranchId = Guid.NewGuid(), Status = PartnerCleaningRequest.StatusRequested,
+                FromDate = new DateOnly(2026, 12, 5), ToDate = new DateOnly(2026, 12, 9) });
+            await db.SaveChangesAsync();
+        }
+        using var session = f.Session();
+        var reader = Reader(f, session);
+
+        var window = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.NeedsAction, "partner", null, 0, 25, "2026-12-01", "2026-12-02"));
+        Assert.Equal(2, window.Total);
+        Assert.Equal(2, window.Counts[WorkQueueViews.NeedsAction]);
+        Assert.Equal(2, window.Items.Count);
+    }
+
+    [QualityCycleDatabaseFact]
     public async Task Shift_queue_reads_occurrence_forms_with_unspecified_kind_bounds()
     {
         // Regression: UTC-kind window bounds against ShiftOccurrenceUtc made Npgsql reject the query.

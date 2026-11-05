@@ -2,13 +2,30 @@
 
 import { showError } from '@/lib/toast';
 import { useEffect, useState } from 'react';
-import { Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge } from '@mantine/core';
+import { Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge, TagsInput, NumberInput, Textarea } from '@mantine/core';
 import { isAdmin } from '@/lib/auth';
 import { Plus } from 'lucide-react';
 import { adminEmployees, adminCompanies, authorizedFetch, invalidateAdminCache, type Company, type Employee } from '@/lib/adminApi';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
 
 const ROLES = ['admin', 'manager', 'employee', 'partner'];
+
+// `source` keeps the certification as the API returned it, so an unedited expiry keeps its time of day and any extra fields.
+type CertificationDraft = { name: string; expiresAt: string; source?: Record<string, unknown> & { expiresAtUtc?: string | null } };
+
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+type HoursDraft = Record<string, { start: string; end: string }>;
+
+// Keeps default-hours entries for days the editor does not show, and rewrites the weekday entries from the form.
+function buildDefaultHours(original: Employee['defaultHours'], hours: HoursDraft) {
+  const next: Record<string, { start?: string | null; end?: string | null }> = {};
+  for (const [day, value] of Object.entries(original)) if (!WEEKDAYS.includes(day)) next[day] = value;
+  for (const day of WEEKDAYS) {
+    const entry = hours[day];
+    if (entry && entry.start.trim() && entry.end.trim()) next[day] = { start: `${entry.start.trim()}:00`, end: `${entry.end.trim()}:00` };
+  }
+  return next;
+}
 
 export default function EmployeesAdminPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -20,6 +37,8 @@ export default function EmployeesAdminPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [form, setForm] = useState({ email: '', firstName: '', lastName: '', phone: '', role: 'employee', partnerCompanyId: '' });
+  const emptyProfile = { skills: [] as string[], serviceAreas: [] as string[], colorHex: '', payRate: '' as number | '', notes: '', certifications: [] as CertificationDraft[], hours: {} as HoursDraft };
+  const [profile, setProfile] = useState(emptyProfile);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [retryEmployee, setRetryEmployee] = useState<Employee | null>(null);
@@ -44,7 +63,13 @@ export default function EmployeesAdminPage() {
     finally { setCalendarBusy(null); }
   };
 
-  const load = () => adminEmployees.list(true).then((r) => { if (r) setEmployees(r); setLoading(false); });
+  const [listError, setListError] = useState('');
+  // A failed refresh keeps the rows already on screen and shows the error above them.
+  const load = () => adminEmployees.list(true).then((r) => {
+    if (r) { setEmployees(r); setListError(''); }
+    else setListError('Employees could not be loaded. Reload and retry.');
+    setLoading(false);
+  });
   useEffect(() => { load(); adminCompanies.listAll().then(records => { if (records) setCompanies(records); else setCompanyError('Company selection could not be loaded. Refresh before creating a partner.'); }); }, []);
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -53,6 +78,18 @@ export default function EmployeesAdminPage() {
   const submit = async () => {
     if (!form.email.trim() || !form.firstName.trim() || !form.lastName.trim()) { setError('Email, first and last name are required.'); return; }
     if (form.role === 'partner' && !companies.some(c => c.id === form.partnerCompanyId && c.isActive && c.isPartnerEnabled)) { setError('Select an active company with partner access enabled.'); return; }
+    const colour = profile.colorHex.trim();
+    if (colour && !/^#[0-9a-fA-F]{6}$/.test(colour)) { setError('Colour must be a 6-digit hex value such as #1a2b3c.'); return; }
+    if (profile.payRate !== '' && (!Number.isFinite(Number(profile.payRate)) || Number(profile.payRate) < 0)) { setError('Pay rate must be zero or more.'); return; }
+    if (profile.certifications.some(c => !c.name.trim())) { setError('Each certification needs a name. Remove empty rows before saving.'); return; }
+    for (const day of WEEKDAYS) {
+      const entry = profile.hours[day];
+      const start = entry?.start.trim() ?? '';
+      const end = entry?.end.trim() ?? '';
+      if (!start && !end) continue;
+      if (!start || !end) { setError(`${day}: enter both a start and an end time, or clear both.`); return; }
+      if (end <= start) { setError(`${day}: the end time must be after the start time.`); return; }
+    }
     setSaving(true); setError('');
     try {
     const fields = {
@@ -62,13 +99,17 @@ export default function EmployeesAdminPage() {
       phone: form.phone.trim(),
       role: form.role,
       partnerCompanyId: form.role === 'partner' ? form.partnerCompanyId : null,
-      skills: editingEmployee?.skills ?? [],
-      serviceAreas: editingEmployee?.serviceAreas ?? [],
-      colorHex: editingEmployee?.colorHex ?? null,
-      payRate: editingEmployee?.payRate ?? null,
-      notes: editingEmployee?.notes ?? null,
-      certifications: editingEmployee?.certifications ?? [],
-      defaultHours: editingEmployee?.defaultHours ?? {},
+      skills: profile.skills,
+      serviceAreas: profile.serviceAreas,
+      colorHex: colour || null,
+      payRate: profile.payRate === '' ? null : Number(profile.payRate),
+      notes: profile.notes.trim() || null,
+      certifications: profile.certifications.map(c => {
+        const original = c.source?.expiresAtUtc ?? null;
+        const dateUnchanged = c.source !== undefined && c.expiresAt === (original ? original.slice(0, 10) : '');
+        return { ...(c.source ?? {}), name: c.name.trim(), expiresAtUtc: dateUnchanged ? original : (c.expiresAt ? `${c.expiresAt}T00:00:00Z` : null) };
+      }),
+      defaultHours: buildDefaultHours(editingEmployee?.defaultHours ?? {}, profile.hours),
     };
     if (editingEmployee) {
       const result = await adminEmployees.update(editingEmployee.id, fields, editingEmployee.isActive);
@@ -92,6 +133,15 @@ export default function EmployeesAdminPage() {
   const openEdit = (employee: Employee) => {
     setEditingEmployee(employee);
     setForm({ email: employee.email, firstName: employee.firstName, lastName: employee.lastName, phone: employee.phone ?? '', role: employee.role, partnerCompanyId: employee.partnerCompanyId ?? '' });
+    setProfile({
+      skills: employee.skills ?? [],
+      serviceAreas: employee.serviceAreas ?? [],
+      colorHex: employee.colorHex ?? '',
+      payRate: employee.payRate ?? '',
+      notes: employee.notes ?? '',
+      certifications: (employee.certifications ?? []).map(c => ({ name: c.name, expiresAt: c.expiresAtUtc ? c.expiresAtUtc.slice(0, 10) : '', source: { ...c } })),
+      hours: Object.fromEntries(WEEKDAYS.filter(day => employee.defaultHours?.[day]).map(day => [day, { start: (employee.defaultHours[day].start ?? '').slice(0, 5), end: (employee.defaultHours[day].end ?? '').slice(0, 5) }])),
+    });
     setError(''); setModalOpen(true);
   };
 
@@ -134,8 +184,8 @@ export default function EmployeesAdminPage() {
   return (
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
-        <Title order={2}>Employees</Title>
-        {isAdmin() && <Button leftSection={<Plus size={16} />} onClick={() => { setEditingEmployee(null); setForm({ email: '', firstName: '', lastName: '', phone: '', role: 'employee', partnerCompanyId: '' }); setError(''); setModalOpen(true); }}>Add employee</Button>}
+        <Title order={2} component="h1">Employees</Title>
+        {isAdmin() && <Button leftSection={<Plus size={16} />} onClick={() => { setEditingEmployee(null); setForm({ email: '', firstName: '', lastName: '', phone: '', role: 'employee', partnerCompanyId: '' }); setProfile(emptyProfile); setError(''); setModalOpen(true); }}>Add employee</Button>}
       </Group>
 
       {inviteMessage && <Text role="status" c="green" mb="sm">{inviteMessage}</Text>}
@@ -144,7 +194,8 @@ export default function EmployeesAdminPage() {
       <LifecycleTabs value={lifecycle} onChange={setLifecycle} label="Employee activity"
         activeCount={loading ? undefined : employees.filter(employee => employee.isActive).length}
         inactiveCount={loading ? undefined : employees.filter(employee => !employee.isActive).length}>
-      {loading ? <Loader /> : employees.length === 0 ? (
+      {listError && <Text role="alert" c="red" mb="sm">{listError}</Text>}
+      {loading ? <Loader /> : employees.length === 0 && listError ? null : employees.length === 0 ? (
         <Text c="dimmed">No employees yet.</Text>
       ) : visibleEmployees.length === 0 ? (
         <Text c="dimmed">No {lifecycle} employees. Check the {lifecycle === 'active' ? 'Inactive' : 'Active'} tab.</Text>
@@ -189,6 +240,36 @@ export default function EmployeesAdminPage() {
           <TextInput label="Phone" value={form.phone} onChange={set('phone')} />
           <Select label="Role" data={ROLES} value={form.role} onChange={(v) => setForm((f) => ({ ...f, role: v ?? 'employee' }))} />
           {form.role === 'partner' && <><Select label="Partner company" required searchable data={companies.filter(c => c.isActive && c.isPartnerEnabled).map(c => ({ value: c.id, label: c.name }))} value={form.partnerCompanyId || null} onChange={value => setForm(current => ({ ...current, partnerCompanyId: value ?? '' }))} description="Only companies with partner access enabled are available." />{companyError && <Text role="alert" c="red">{companyError}</Text>}</>}
+          {editingEmployee && <>
+            <TagsInput label="Skills" value={profile.skills} onChange={skills => setProfile(current => ({ ...current, skills }))} />
+            <TagsInput label="Service areas" value={profile.serviceAreas} onChange={serviceAreas => setProfile(current => ({ ...current, serviceAreas }))} />
+            <TextInput label="Colour" placeholder="#1a2b3c" value={profile.colorHex} onChange={e => { const colorHex = e.currentTarget.value; setProfile(current => ({ ...current, colorHex })); }} />
+            <NumberInput label="Pay rate" decimalScale={2} value={profile.payRate} onChange={payRate => setProfile(current => ({ ...current, payRate: typeof payRate === 'number' ? payRate : '' }))} />
+            <Textarea label="Notes" autosize minRows={2} value={profile.notes} onChange={e => { const notes = e.currentTarget.value; setProfile(current => ({ ...current, notes })); }} />
+            <Stack gap="xs">
+              <Text size="sm" fw={500}>Certifications</Text>
+              {profile.certifications.map((cert, index) => (
+                <Group key={index} gap="xs" wrap="wrap" align="flex-end">
+                  <TextInput style={{ flex: 1, minWidth: 140 }} aria-label={`Certification ${index + 1} name`} placeholder="Name" value={cert.name} onChange={e => { const name = e.currentTarget.value; setProfile(current => ({ ...current, certifications: current.certifications.map((c, i) => i === index ? { ...c, name } : c) })); }} />
+                  <TextInput type="date" aria-label={`Certification ${index + 1} expiry`} value={cert.expiresAt} onChange={e => { const expiresAt = e.currentTarget.value; setProfile(current => ({ ...current, certifications: current.certifications.map((c, i) => i === index ? { ...c, expiresAt } : c) })); }} />
+                  <Button size="xs" variant="subtle" color="red" onClick={() => setProfile(current => ({ ...current, certifications: current.certifications.filter((_, i) => i !== index) }))}>Remove</Button>
+                </Group>
+              ))}
+              <Button size="xs" variant="light" onClick={() => setProfile(current => ({ ...current, certifications: [...current.certifications, { name: '', expiresAt: '' }] }))}>Add certification</Button>
+            </Stack>
+          </>}
+          {editingEmployee && (
+            <Stack gap="xs">
+              <Text size="sm" fw={500}>Default hours</Text>
+              {WEEKDAYS.map(day => (
+                <Group key={day} gap="xs" wrap="nowrap" align="flex-end">
+                  <Text size="sm" w={96}>{day}</Text>
+                  <TextInput type="time" aria-label={`${day} start`} value={profile.hours[day]?.start ?? ''} onChange={e => { const start = e.currentTarget.value; setProfile(current => ({ ...current, hours: { ...current.hours, [day]: { start, end: current.hours[day]?.end ?? '' } } })); }} />
+                  <TextInput type="time" aria-label={`${day} end`} value={profile.hours[day]?.end ?? ''} onChange={e => { const end = e.currentTarget.value; setProfile(current => ({ ...current, hours: { ...current.hours, [day]: { start: current.hours[day]?.start ?? '', end } } })); }} />
+                </Group>
+              ))}
+            </Stack>
+          )}
           {error && <Text role="alert" size="sm" c="red">{error}</Text>}
           <Group justify="flex-end" mt="xs">
             <Button variant="default" onClick={() => setModalOpen(false)}>Cancel</Button>

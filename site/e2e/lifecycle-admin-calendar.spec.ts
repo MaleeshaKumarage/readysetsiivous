@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, setNavOpen } from './admin-helpers';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 async function setup(page: Page, allowed = true) {
@@ -166,12 +166,12 @@ test('employee page grants and revokes calendar access for admins only', async (
   });
   await page.goto('/admin/employees/');
   const calendarLink = page.locator('a[href="/admin/shifts/calendar/"]');
-  await expect(calendarLink).toHaveCount(0);
+  await setNavOpen(page, true); await expect(calendarLink).toHaveCount(0); await setNavOpen(page, false);
   await expect(page.getByRole('button', { name: 'Enable shift calendar' })).toHaveCount(1);
   await page.getByRole('button', { name: 'Enable shift calendar' }).click();
-  await expect(calendarLink).toHaveCount(1);
+  await setNavOpen(page, true); await expect(calendarLink).toHaveCount(1); await setNavOpen(page, false);
   await page.getByRole('button', { name: 'Disable shift calendar' }).click();
-  await expect(calendarLink).toHaveCount(0);
+  await setNavOpen(page, true); await expect(calendarLink).toHaveCount(0); await setNavOpen(page, false);
   await expect(page.getByRole('button', { name: 'Enable shift calendar' })).toBeVisible();
   expect(updates).toEqual([true, false]);
 });

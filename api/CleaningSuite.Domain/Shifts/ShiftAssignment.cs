@@ -1,3 +1,4 @@
+using System.Linq;
 using CleaningSuite.Domain.Common;
 
 namespace CleaningSuite.Domain.Shifts;
@@ -15,6 +16,9 @@ public class ShiftAssignment : BaseDocument
     public void Release(DateTime nowUtc)
     {
         if (!IsActive) return;
+        EnsureHistory();
+        // Close any open period, otherwise the history treats the cleaner as busy for all later time.
+        foreach (var period in Periods.Where(p => !p.ToUtc.HasValue)) period.ToUtc = nowUtc;
         IsActive = false;
         UnassignedAtUtc = nowUtc;
     }

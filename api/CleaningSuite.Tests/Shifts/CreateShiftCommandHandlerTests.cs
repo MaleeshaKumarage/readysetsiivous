@@ -160,7 +160,7 @@ public class CreateShiftCommandHandlerTests
         await handler.Handle(new DeactivateShiftCommand(shift.Id), CancellationToken.None);
 
         Assert.False(shift.IsActive);
-        _shiftRepoMock.Verify(r => r.SaveAsync(shift, It.IsAny<CancellationToken>()), Times.Once);
+        _shiftRepoMock.Verify(r => r.SaveDeactivationAsync(shift, It.Is<IReadOnlyList<ShiftAssignment>>(l => l.Count == 0), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
