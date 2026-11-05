@@ -574,3 +574,58 @@ test('a failed report send says the report was not shared, keeps the dialog and 
   await expect(dialog).toHaveCount(0);
   expect(sends).toBe(2);
 });
+
+test('a failed recipient lookup says the report was not shared and the address can still be typed', async ({ page }) => {
+  await setupReportWorkspace(page);
+  let lookups = 0;
+  await page.route(/\/api\/v1\/admin\/quality-cycle\/reports\/recipients$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+    lookups++;
+    return route.fulfill({ status: 503, headers: CORS_HEADERS, json: { detail: 'Recipient list unavailable. Type the email address instead, or try again shortly.' } });
+  });
+  await selectReportShifts(page);
+  await page.getByRole('button', { name: 'Load report', exact: true }).click();
+  await page.getByRole('button', { name: 'Share all selected shifts' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(page.getByText('Report not shared').first()).toBeVisible();
+  await expect(dialog.getByText('Recipient list unavailable. Type the email address instead, or try again shortly.').first()).toBeVisible();
+  await dialog.getByRole('textbox', { name: 'Recipient source' }).click();
+  await page.getByRole('option', { name: 'Other email address', exact: true }).click();
+  await dialog.getByLabel('Recipient email').fill('typed@example.test');
+  await expect(dialog.getByLabel('Recipient email')).toHaveValue('typed@example.test');
+  expect(lookups).toBe(1);
+});
+
+test('a failed PDF export keeps the report on screen and can be exported again', async ({ page }) => {
+  await setupReportWorkspace(page);
+  let exports = 0;
+  await page.route(/\/api\/v1\/admin\/quality-cycle\/reports\/pdf$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+    exports++;
+    if (exports === 1) return route.fulfill({ status: 500, headers: CORS_HEADERS, json: { detail: 'PDF generation failed. Export again in a moment.' } });
+    return route.fulfill({ headers: CORS_HEADERS, contentType: 'application/pdf', body: '%PDF-1.4 synthetic report' });
+  });
+  await selectReportShifts(page);
+  await page.getByRole('button', { name: 'Load report', exact: true }).click();
+  await page.getByRole('button', { name: 'Export all selected shifts' }).click();
+  await expect(page.getByText('Report action not completed').first()).toBeVisible();
+  await expect(page.getByText('PDF generation failed. Export again in a moment.').first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Export all selected shifts' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Export all selected shifts' }).click();
+  await expect.poll(() => exports).toBe(2);
+});
+
+test('a failed revoke keeps the link active and says the change was not made', async ({ page }) => {
+  const share = { id: 'share-1', token: 'synthetic-token', tenantId: 'tenant-a', recipientEmail: 'branch@example.test', emailSentUtc: '2026-10-17T12:00:00Z', emailError: null, isRevoked: false, expiresUtc: '2026-11-16T12:00:00Z', year: 2026, month: 10 };
+  await setupReportWorkspace(page, [share]);
+  await page.route(/\/api\/v1\/admin\/quality-cycle\/report-shares\/share-1$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+    if (route.request().method() === 'DELETE') return route.fulfill({ status: 409, headers: CORS_HEADERS, json: { title: 'Report conflict', detail: 'This link was already revoked in another window. Refresh shared reports to see its current state.' } });
+    return route.fulfill({ headers: CORS_HEADERS, json: share });
+  });
+  await page.getByRole('button', { name: 'Refresh shared reports' }).click();
+  await page.getByRole('button', { name: 'Revoke', exact: true }).click();
+  await expect(page.getByText('Report action not completed').first()).toBeVisible();
+  await expect(page.getByText('This link was already revoked in another window. Refresh shared reports to see its current state.').first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Revoke', exact: true })).toBeEnabled();
+});

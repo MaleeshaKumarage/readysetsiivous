@@ -129,7 +129,7 @@ export default function ReportWorkspace() {
           {share.emailError && <Text size="sm" c="red">{share.emailError}</Text>}
           {!inactive && <Group><Button component="a" size="xs" href={share.recipientEmail ? reportLandingUrl(share) : reportShareUrl(share)} target="_blank" rel="noreferrer">Open report</Button>
             {share.recipientEmail && !share.emailSentUtc && <Button size="xs" disabled={busy} onClick={() => retry(share)}>Retry email</Button>}
-            <Button size="xs" color="red" variant="light" disabled={busy} onClick={async () => { setBusy(true); try { if (!await adminQualityCycle.revokeReportShare(share.id)) throw new Error('Could not revoke report.'); setShares(current => current.map(s => s.id === share.id ? { ...s, isRevoked: true } : s)); } catch (e) { reportError(failure(e)); } finally { setBusy(false); } }}>Revoke</Button>
+            <Button size="xs" color="red" variant="light" disabled={busy} onClick={async () => { setBusy(true); try { const result = await adminQualityCycle.revokeReportShare(share.id); if (!result.ok) throw new Error(result.message); setShares(current => current.map(s => s.id === share.id ? { ...s, isRevoked: true } : s)); } catch (e) { reportError(failure(e)); } finally { setBusy(false); } }}>Revoke</Button>
           </Group>}
         </Stack></Paper>;
       })}
