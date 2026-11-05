@@ -199,9 +199,11 @@ public class CompanyHandlers
 
         private readonly IShiftWorkReservation? _reservation;
 
-            public DeactivateCompanyCommandHandler(ICompanyRepository repository, IShiftWorkReservation? reservation = null)
+            private readonly IShiftRepository? _shifts;
+
+            public DeactivateCompanyCommandHandler(ICompanyRepository repository, IShiftWorkReservation? reservation = null, IShiftRepository? shifts = null)
         {
-            _repository = repository; _reservation = reservation;
+            _repository = repository; _reservation = reservation; _shifts = shifts;
         }
 
         public async Task Handle(DeactivateCompanyCommand request, CancellationToken ct)
@@ -209,6 +211,14 @@ public class CompanyHandlers
             await using var lease = _reservation is null ? null : await _reservation.AcquireAsync(ct);
             var company = await _repository.GetAsync(request.Id, ct)
                 ?? throw new NotFoundException("Company", request.Id);
+            // Shifts keep running for cleaners after the company flag changes, so the company must be emptied of active shifts first.
+            if (_shifts is not null)
+            {
+                var active = (await _shifts.ListAsync(request.Id, null, ct)).Count(shift => shift.IsActive);
+                if (active > 0)
+                    throw new CleaningSuite.Application.Shifts.ShiftConflictException(
+                        $"This company still has {active} active shift(s). Deactivate or move them first, then deactivate the company.");
+            }
             company.Deactivate();
             await _repository.SaveAsync(company, ct);
         }
