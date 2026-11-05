@@ -55,27 +55,24 @@ public class ShiftSchedule
             case ShiftScheduleType.DailySameTime:
                 if (DailyStart is null || DailyEnd is null)
                     throw new ArgumentException(
-                        "DailySameTime schedules require both DailyStart and DailyEnd.",
-                        nameof(DailyStart));
+                        "DailySameTime schedules require both DailyStart and DailyEnd.");
                 if (DailyEnd <= DailyStart)
                     throw new ArgumentException(
-                        "DailyEnd must be after DailyStart.", nameof(DailyEnd));
+                        "DailyEnd must be after DailyStart.");
                 break;
 
             case ShiftScheduleType.DailyDifferentTime:
                 if (DailyTimes is null || DailyTimes.Count == 0)
                     throw new ArgumentException(
-                        "DailyDifferentTime schedules require at least one entry in DailyTimes.",
-                        nameof(DailyTimes));
+                        "DailyDifferentTime schedules require at least one entry in DailyTimes.");
                 foreach (var (day, range) in DailyTimes)
                 {
                     if (range is null)
                         throw new ArgumentException(
-                            $"DailyTimes is missing a time range for {day}.", nameof(DailyTimes));
+                            $"DailyTimes is missing a time range for {day}.");
                     if (!range.IsValid)
                         throw new ArgumentException(
-                            $"DailyTimes end time for {day} must be after its start time.",
-                            nameof(DailyTimes));
+                            $"DailyTimes end time for {day} must be after its start time.");
                 }
                 break;
 
@@ -93,15 +90,13 @@ public class ShiftSchedule
                 if (BiWeeklyWeekParity is null || BiWeeklyDay is null
                     || BiWeeklyStart is null || BiWeeklyEnd is null)
                     throw new ArgumentException(
-                        "BiWeekly schedules require BiWeeklyWeekParity, BiWeeklyDay, BiWeeklyStart and BiWeeklyEnd.",
-                        nameof(BiWeeklyWeekParity));
+                        "BiWeekly schedules require BiWeeklyWeekParity, BiWeeklyDay, BiWeeklyStart and BiWeeklyEnd.");
                 if (BiWeeklyWeekParity != 1 && BiWeeklyWeekParity != 2)
                     throw new ArgumentException(
-                        "BiWeeklyWeekParity must be 1 or 2.",
-                        nameof(BiWeeklyWeekParity));
+                        "BiWeeklyWeekParity must be 1 or 2.");
                 if (BiWeeklyEnd <= BiWeeklyStart)
                     throw new ArgumentException(
-                        "BiWeeklyEnd must be after BiWeeklyStart.", nameof(BiWeeklyEnd));
+                        "BiWeeklyEnd must be after BiWeeklyStart.");
                 break;
 
             case ShiftScheduleType.OnCallFlexible:
@@ -111,30 +106,27 @@ public class ShiftSchedule
             case ShiftScheduleType.Monthly:
                 if (MonthlyDay is null || MonthlyStart is null || MonthlyEnd is null)
                     throw new ArgumentException(
-                        "Monthly schedules require MonthlyDay, MonthlyStart and MonthlyEnd.",
-                        nameof(MonthlyDay));
+                        "Monthly schedules require MonthlyDay, MonthlyStart and MonthlyEnd.");
                 if (MonthlyDay < 1 || MonthlyDay > 31)
                     throw new ArgumentException(
-                        "MonthlyDay must be between 1 and 31.", nameof(MonthlyDay));
+                        "MonthlyDay must be between 1 and 31.");
                 if (MonthlyEnd <= MonthlyStart)
                     throw new ArgumentException(
-                        "MonthlyEnd must be after MonthlyStart.", nameof(MonthlyEnd));
+                        "MonthlyEnd must be after MonthlyStart.");
                 break;
 
             case ShiftScheduleType.OneTime:
                 // Past dates are valid; the visit is a single local date with same-day start and end.
                 if (OneTimeDate is null || OneTimeStart is null || OneTimeEnd is null)
                     throw new ArgumentException(
-                        "OneTime schedules require OneTimeDate, OneTimeStart and OneTimeEnd.",
-                        nameof(OneTimeDate));
+                        "OneTime schedules require OneTimeDate, OneTimeStart and OneTimeEnd.");
                 if (OneTimeEnd <= OneTimeStart)
                     throw new ArgumentException(
-                        "OneTimeEnd must be after OneTimeStart.", nameof(OneTimeEnd));
+                        "OneTimeEnd must be after OneTimeStart.");
                 break;
 
             default:
-                throw new ArgumentOutOfRangeException(
-                    nameof(Type), Type, "Unknown shift schedule type.");
+                throw new ArgumentException("Choose a shift schedule type: daily, weekly, bi-weekly, monthly, one-time or on-call.");
         }
     }
 }

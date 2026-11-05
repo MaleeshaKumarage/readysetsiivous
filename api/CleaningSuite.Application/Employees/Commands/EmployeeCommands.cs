@@ -53,10 +53,11 @@ public class EmployeeFieldsValidator : AbstractValidator<EmployeeFields>
         RuleFor(x => x.Email).EmailAddress();
         RuleFor(x => x.FirstName).NotEmpty().MaximumLength(100);
         RuleFor(x => x.LastName).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.Role).Must(r => r is Employee.RoleAdmin or Employee.RoleEmployee or Employee.RoleManager or Employee.RolePartner);
+        RuleFor(x => x.Role).Must(r => r is Employee.RoleAdmin or Employee.RoleEmployee or Employee.RoleManager or Employee.RolePartner)
+            .WithMessage("Choose a role: admin, manager, employee or partner. Then save again.");
         RuleFor(x => x.PartnerCompanyId).Must(id => id.HasValue && id != Guid.Empty).When(x => x.Role == Employee.RolePartner).WithMessage("Choose a partner-enabled company.");
         RuleFor(x => x.PartnerCompanyId).Null().When(x => x.Role != Employee.RolePartner);
-        RuleFor(x => x.PayRate).GreaterThanOrEqualTo(0).When(x => x.PayRate.HasValue);
+        RuleFor(x => x.PayRate).GreaterThanOrEqualTo(0).WithMessage("Pay rate cannot be negative. Enter 0 or a positive amount.").When(x => x.PayRate.HasValue);
         RuleForEach(x => x.Certifications).ChildRules(c =>
         {
             c.RuleFor(x => x.Name).NotEmpty().MaximumLength(200);

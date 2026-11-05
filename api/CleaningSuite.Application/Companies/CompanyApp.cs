@@ -471,12 +471,19 @@ public class CompanyHandlers
 
 public class CompanyValidators
 {
+    // Finnish business IDs: seven digits, a dash and one check digit, such as 1234567-8.
+    private const string BusinessIdPattern = @"^\d{7}-\d$";
+    private const string BusinessIdMessage = "Business ID must look like 1234567-8: seven digits, a dash and one check digit. Check the company's registration, then try again.";
+
     public class CreateCompanyCommandValidator : AbstractValidator<CreateCompanyCommand>
     {
         public CreateCompanyCommandValidator()
         {
             RuleFor(x => x.BusinessId).NotEmpty().WithMessage("Business ID is mandatory.");
             RuleFor(x => x.Name).NotEmpty().WithMessage("Name is mandatory.");
+            RuleFor(x => x.BusinessId).Matches(BusinessIdPattern).WithMessage(BusinessIdMessage).When(x => !string.IsNullOrWhiteSpace(x.BusinessId));
+            RuleFor(x => x.Name).MaximumLength(200).WithMessage("Company name can be at most 200 characters. Shorten it, then save again.");
+            RuleFor(x => x.ContactEmail).EmailAddress().WithMessage("Enter a valid contact email, such as name@company.fi, or leave the field empty.").When(x => !string.IsNullOrWhiteSpace(x.ContactEmail));
         }
     }
 
@@ -487,6 +494,9 @@ public class CompanyValidators
             RuleFor(x => x.Id).NotEqual(Guid.Empty);
             RuleFor(x => x.BusinessId).NotEmpty().WithMessage("Business ID is mandatory.");
             RuleFor(x => x.Name).NotEmpty().WithMessage("Name is mandatory.");
+            RuleFor(x => x.BusinessId).Matches(BusinessIdPattern).WithMessage(BusinessIdMessage).When(x => !string.IsNullOrWhiteSpace(x.BusinessId));
+            RuleFor(x => x.Name).MaximumLength(200).WithMessage("Company name can be at most 200 characters. Shorten it, then save again.");
+            RuleFor(x => x.ContactEmail).EmailAddress().WithMessage("Enter a valid contact email, such as name@company.fi, or leave the field empty.").When(x => !string.IsNullOrWhiteSpace(x.ContactEmail));
         }
     }
 
