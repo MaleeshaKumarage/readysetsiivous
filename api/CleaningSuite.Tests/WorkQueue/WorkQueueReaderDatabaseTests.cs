@@ -146,6 +146,31 @@ public class WorkQueueReaderDatabaseTests
         Assert.True(page.Counts.Values.Sum() > 0, "No shift occurrence classified; shift path not exercised.");
     }
 
+    [QualityCycleDatabaseFact]
+    public async Task Future_visits_with_an_assigned_cleaner_are_scheduled_and_only_unassigned_visits_need_action()
+    {
+        using var f = await Fixture.Create();
+        var company = new Company { Name = "Assigned Co", BusinessId = "WQ-" + Guid.NewGuid().ToString("N")[..8], IsActive = true };
+        var schedule = new ShiftSchedule { Type = ShiftScheduleType.DailySameTime, DailyStart = new TimeSpan(8, 0, 0), DailyEnd = new TimeSpan(10, 0, 0) };
+        var assigned = Shift.Create(company.Id, Guid.NewGuid(), "Assigned daily", schedule, null, DateTime.UtcNow.Date.AddDays(3), null);
+        var open = Shift.Create(company.Id, Guid.NewGuid(), "Open daily", schedule, null, DateTime.UtcNow.Date.AddDays(3), null);
+        var cleaner = ShiftAssignment.Create(assigned.Id, Guid.NewGuid(), null);
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(company); db.Store(assigned, open); db.Store(cleaner);
+            await db.SaveChangesAsync();
+        }
+
+        using var session = f.Session();
+        var reader = Reader(f, session);
+        var needsAction = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.NeedsAction, "shift", null, 0, 200));
+        Assert.All(needsAction.Items, item => Assert.Equal("Unassigned", item.StateLabel));
+        Assert.Contains(needsAction.Items, item => item.Reference.Contains("Open daily"));
+        Assert.DoesNotContain(needsAction.Items, item => item.Reference.Contains("Assigned daily"));
+        var scheduled = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Scheduled, "shift", null, 0, 200));
+        Assert.Contains(scheduled.Items, item => item.Reference.Contains("Assigned daily") && item.StateLabel == "Scheduled");
+    }
+
     private sealed class Fixture : IDisposable
     {
         public required ServiceProvider Provider; public required IDocumentStore Store;
