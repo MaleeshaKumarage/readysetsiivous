@@ -177,6 +177,37 @@ public class WorkQueueReaderDatabaseTests
     }
 
     [QualityCycleDatabaseFact]
+    public async Task Shift_occurrences_follow_the_assignee_by_guid_and_drop_for_everyone_else()
+    {
+        // Shift rows must use the same assignee id as bookings: the assigned employee sees the occurrences, others see none.
+        using var f = await Fixture.Create();
+        var company = new Company { Name = "Roster Oy", BusinessId = "WQ-" + Guid.NewGuid().ToString("N")[..8], IsActive = true, IsPartnerEnabled = true };
+        var assigned = Guid.NewGuid();
+        var other = Guid.NewGuid();
+        var today = DateTime.UtcNow.Date;
+        var shift = new Shift { Id = Guid.NewGuid(), CompanyId = company.Id, BranchId = Guid.NewGuid(), Name = "Assigned clean", IsActive = true,
+            ValidFrom = today.AddDays(-1), ValidUntil = today.AddDays(30), CreatedUtc = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc),
+            Schedule = new ShiftSchedule { Type = ShiftScheduleType.DailySameTime, DailyStart = TimeSpan.FromHours(8), DailyEnd = TimeSpan.FromHours(10) } };
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(company);
+            db.Store(shift);
+            db.Store(new ShiftAssignment { ShiftId = shift.Id, EmployeeId = assigned, AssignedAtUtc = today.AddDays(-10), IsActive = true });
+            await db.SaveChangesAsync();
+        }
+        using var session = f.Session();
+        var reader = Reader(f, session);
+
+        var forAssigned = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.NeedsAction, "shift", null, 0, 25, Assignee: assigned.ToString()));
+        // Guards against a vacuous pass: the assigned employee must see at least one occurrence through the GUID match.
+        Assert.True(forAssigned.Counts.Values.Sum() > 0, "Assigned employee saw no shift occurrence.");
+
+        var forOther = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.NeedsAction, "shift", null, 0, 25, Assignee: other.ToString()));
+        Assert.Equal(0, forOther.Total);
+        Assert.Equal(0, forOther.Counts.Values.Sum());
+    }
+
+    [QualityCycleDatabaseFact]
     public async Task Partner_requests_are_kept_when_their_span_overlaps_the_date_window()
     {
         // A request that starts before the window but runs into it must stay; one that starts after the window must go.
