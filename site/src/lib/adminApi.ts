@@ -131,6 +131,26 @@ export async function adminSendResult(
   return { ok: false, message: detail || title || `The change was not saved (error ${response.status}). Check the fields, then save again.` };
 }
 
+export type AdminJsonResult<T> = { ok: true; value: T } | { ok: false; message: string };
+
+// Like adminSendJson, but keeps the server's reason so the form can say what to change.
+export async function adminSendJsonResult<T>(path: string, method: 'POST' | 'PUT', body?: unknown): Promise<AdminJsonResult<T>> {
+  let response: Response;
+  try {
+    response = await authorizedFetch(path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
+  } catch {
+    return { ok: false, message: 'Could not reach the server. Check your connection, then save again.' };
+  }
+  if (!response.ok) {
+    const problem = await response.json().catch(() => null);
+    const detail = typeof problem?.detail === 'string' ? problem.detail.trim() : '';
+    const title = typeof problem?.title === 'string' ? problem.title.trim() : '';
+    return { ok: false, message: detail || title || `The change was not saved (error ${response.status}). Check the fields, then save again.` };
+  }
+  invalidateAdminCache();
+  return { ok: true, value: (await response.json()) as T };
+}
+
 export async function adminSendJson<T>(
   path: string,
   method: 'POST' | 'PUT',
@@ -621,9 +641,9 @@ export const adminShifts = {
   },
   listForCustomer: (companyId: string) => adminGet<Shift[]>(`/api/v1/admin/shifts?companyId=${encodeURIComponent(companyId)}&includeInactive=true`, false),
   get: (id: string) => adminGet<Shift>(`/api/v1/admin/shifts/${id}`),
-  create: (fields: unknown) => adminSendJson<Shift>('/api/v1/admin/shifts', 'POST', fields),
+  create: (fields: unknown) => adminSendJsonResult<Shift>('/api/v1/admin/shifts', 'POST', fields),
   update: (id: string, fields: unknown) =>
-    adminSendJson<Shift>(`/api/v1/admin/shifts/${id}`, 'PUT', fields),
+    adminSendJsonResult<Shift>(`/api/v1/admin/shifts/${id}`, 'PUT', fields),
   setQualityCycleTemplate: (id: string, templateId: string | null) => adminSendJson<Shift>(`/api/v1/admin/shifts/${id}/quality-cycle-template`, "PUT", { templateId }),
   deactivate: (id: string) => adminSend(`/api/v1/admin/shifts/${id}/deactivate`, 'POST'),
   reactivate: (id: string) => adminSendJson<Shift>(`/api/v1/admin/shifts/${id}/reactivate`, 'POST'),
