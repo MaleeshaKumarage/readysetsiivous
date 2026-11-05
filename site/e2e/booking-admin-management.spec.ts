@@ -13,9 +13,23 @@ function fixtures(): any[] {
   return [base('b-new', 'BK-1001', 'New'), base('b-confirmed', 'BK-1002', 'Confirmed', 'Test Cleaner'), base('b-completed', 'BK-1003', 'Completed', 'Test Cleaner'), base('b-cancelled', 'BK-1004', 'Cancelled')];
 }
 
-async function mockBookings(page: any, bookings: any[], options: { failAction?: string } = {}) {
+async function mockBookings(page: any, bookings: any[], options: { failAction?: string; scheduleFails?: boolean; history?: any[] } = {}) {
   const actions: { id: string; action: string }[] = [];
   const queries: string[] = [];
+  const scheduleQueries: string[] = [];
+  await page.route(/\/api\/v1\/admin\/schedule(?:\?.*)?$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    scheduleQueries.push(new URL(route.request().url()).search);
+    if (options.scheduleFails) return route.fulfill({ status: 500, headers, json: { detail: 'Schedule unavailable' } });
+    return route.fulfill({ status: 200, headers, json: bookings.filter(b => b.status === 'Confirmed') });
+  });
+  await page.route(/\/api\/v1\/admin\/bookings\/([^/]+)$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    const id = route.request().url().match(/bookings\/([^/]+)$/)?.[1];
+    const booking = bookings.find(b => b.id === id);
+    if (!booking) return route.fulfill({ status: 404, headers, json: {} });
+    return route.fulfill({ status: 200, headers, json: { ...booking, history: options.history ?? [] } });
+  });
   await page.route(/\/api\/v1\/admin\/bookings(?:\?.*)?$/, (route: any) => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
     const url = new URL(route.request().url());
@@ -40,7 +54,7 @@ async function mockBookings(page: any, bookings: any[], options: { failAction?: 
     if (booking) booking.status = next;
     return route.fulfill({ status: 204, headers });
   });
-  return { actions, queries };
+  return { actions, queries, scheduleQueries };
 }
 
 test('admin lists bookings and filters by status on the server', async ({ page }) => {
@@ -317,6 +331,170 @@ test('a failed employee list shows an alert in the assign control instead of an 
   await page.getByRole('row', { name: /BK-1001/ }).getByRole('button', { name: 'Details', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Employees could not be loaded, so bookings cannot be assigned.' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Assign', exact: true })).toBeDisabled();
+});
+
+test('booking detail shows its status history', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockBookings(page, fixtures(), { history: [{ status: 'New', atUtc: '2026-11-05T08:00:00Z', by: 'customer', note: 'Booked online' }, { status: 'Confirmed', atUtc: '2026-11-05T09:30:00Z', by: 'admin', note: null }] });
+  await page.goto('/admin/bookings/');
+  await page.getByRole('row', { name: /BK-1002/ }).getByRole('button', { name: 'Details', exact: true }).click();
+  await expect(page.getByText('History', { exact: true })).toBeVisible();
+  await expect(page.getByText('2026-11-05 08:00 UTC · New · customer · Booked online')).toBeVisible();
+  await expect(page.getByText('2026-11-05 09:30 UTC · Confirmed · admin', { exact: true })).toBeVisible();
+});
+
+test('day view lists the chosen employee bookings for the chosen day', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const { scheduleQueries } = await mockBookings(page, fixtures());
+  await page.goto('/admin/bookings/');
+  await page.getByText('Day view', { exact: true }).click();
+  await expect(page.getByText('Choose a day and an employee to see their bookings.')).toBeVisible();
+  await page.getByLabel('Day', { exact: true }).fill('2026-11-10');
+  await page.getByRole('textbox', { name: 'Employee', exact: true }).click();
+  await page.getByRole('option', { name: 'Ada Cleaner', exact: true }).click();
+  await expect(page.getByRole('cell', { name: 'BK-1002', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toHaveCount(0);
+  expect(scheduleQueries.some(q => q.includes('date=2026-11-10') && q.includes('employeeId=e-1'))).toBe(true);
+});
+
+test('switching back from the day view to Bookings restores the list and its filter', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockBookings(page, fixtures());
+  await page.goto('/admin/bookings/');
+  await page.getByText('Day view', { exact: true }).click();
+  await expect(page.getByText('Choose a day and an employee to see their bookings.')).toBeVisible();
+  await page.locator('label').filter({ hasText: /^Bookings$/ }).click();
+  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Filter by status', exact: true }).click();
+  await page.getByRole('option', { name: 'Confirmed', exact: true }).click();
+  await expect(page.getByRole('cell', { name: 'BK-1002', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toHaveCount(0);
+});
+
+test('day view shows an empty message and a recoverable error', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockBookings(page, fixtures().filter(b => b.status === 'New'));
+  await page.goto('/admin/bookings/');
+  await page.getByText('Day view', { exact: true }).click();
+  await page.getByLabel('Day', { exact: true }).fill('2026-11-10');
+  await page.getByRole('textbox', { name: 'Employee', exact: true }).click();
+  await page.getByRole('option', { name: 'Ada Cleaner', exact: true }).click();
+  await expect(page.getByText('No bookings for this employee on 2026-11-10.', { exact: true })).toBeVisible();
+});
+
+test('day view reports a failed schedule load and recovers when the selection changes', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockBookings(page, fixtures(), { scheduleFails: true });
+  await page.route(/\/api\/v1\/admin\/schedule(?:\?.*)?$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    if (new URL(route.request().url()).searchParams.get('employeeId') === 'e-1') return route.fulfill({ status: 500, headers, json: { detail: 'Schedule unavailable' } });
+    return route.fulfill({ status: 200, headers, json: fixtures().filter(b => b.id === 'b-new') });
+  });
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    return route.fulfill({ status: 200, headers, json: [
+      { id: 'e-1', firstName: 'Ada', lastName: 'Cleaner', role: 'employee', isActive: true },
+      { id: 'e-2', firstName: 'Ben', lastName: 'Second', role: 'employee', isActive: true },
+    ] });
+  });
+  await page.goto('/admin/bookings/');
+  await page.getByText('Day view', { exact: true }).click();
+  await page.getByLabel('Day', { exact: true }).fill('2026-11-10');
+  await page.getByRole('textbox', { name: 'Employee', exact: true }).click();
+  await page.getByRole('option', { name: 'Ada Cleaner', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'The day schedule could not be loaded. Reload and retry.' })).toBeVisible();
+  await expect(page.getByText('No bookings for this employee', { exact: false })).toHaveCount(0);
+
+  await page.getByRole('textbox', { name: 'Employee', exact: true }).click();
+  await page.getByRole('option', { name: 'Ben Second', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'The day schedule could not be loaded' })).toHaveCount(0);
+  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
+});
+
+test('day view can show a deactivated employee schedule, while assignment offers only active employees', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const { scheduleQueries } = await mockBookings(page, fixtures());
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    const includeInactive = new URL(route.request().url()).searchParams.get('includeInactive') === 'true';
+    const employees = [{ id: 'e-1', firstName: 'Ada', lastName: 'Cleaner', role: 'employee', isActive: true }];
+    if (includeInactive) employees.push({ id: 'e-2', firstName: 'Ben', lastName: 'Former', role: 'employee', isActive: false });
+    return route.fulfill({ status: 200, headers, json: employees });
+  });
+  await page.goto('/admin/bookings/');
+  await page.getByText('Day view', { exact: true }).click();
+  await page.getByLabel('Day', { exact: true }).fill('2026-11-10');
+  await page.getByRole('textbox', { name: 'Employee', exact: true }).click();
+  await page.getByRole('option', { name: 'Ben Former', exact: true }).click();
+  await expect(page.getByRole('cell', { name: 'BK-1002', exact: true })).toBeVisible();
+  expect(scheduleQueries.some(q => q.includes('employeeId=e-2'))).toBe(true);
+
+  await page.getByText('Bookings', { exact: true }).last().click();
+  await page.getByRole('row', { name: /BK-1001/ }).getByRole('button', { name: 'Details', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Assign to', exact: true }).click();
+  await expect(page.getByRole('option', { name: 'Ben Former', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('option', { name: 'Ada Cleaner', exact: true })).toBeVisible();
+});
+
+test('a failed history load shows a message in the booking detail', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockBookings(page, fixtures());
+  await page.route(/\/api\/v1\/admin\/bookings\/b-new$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    return route.fulfill({ status: 500, headers, json: { detail: 'History unavailable' } });
+  });
+  await page.goto('/admin/bookings/');
+  await page.getByRole('row', { name: /BK-1001/ }).getByRole('button', { name: 'Details', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'History could not be loaded.' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Confirm', exact: true })).toBeVisible();
+});
+
+test('day view shows the employee load failure and disables the employee picker', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockBookings(page, fixtures());
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    return route.fulfill({ status: 500, headers, json: { detail: 'Employee service unavailable' } });
+  });
+  await page.goto('/admin/bookings/');
+  await page.getByText('Day view', { exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Employees could not be loaded, so bookings cannot be assigned.' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Employee', exact: true })).toBeDisabled();
+});
+
+test('changing the day view selection replaces the rows and a late earlier response cannot repopulate them', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockBookings(page, fixtures());
+  let releaseAda!: () => void;
+  const adaGate = new Promise<void>(resolve => { releaseAda = resolve; });
+  await page.route(/\/api\/v1\/admin\/schedule(?:\?.*)?$/, async (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    const employeeId = new URL(route.request().url()).searchParams.get('employeeId');
+    if (employeeId === 'e-1') {
+      await adaGate;
+      return route.fulfill({ status: 200, headers, json: fixtures().filter(b => b.id === 'b-confirmed') });
+    }
+    return route.fulfill({ status: 200, headers, json: fixtures().filter(b => b.id === 'b-new') });
+  });
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    return route.fulfill({ status: 200, headers, json: [
+      { id: 'e-1', firstName: 'Ada', lastName: 'Cleaner', role: 'employee', isActive: true },
+      { id: 'e-2', firstName: 'Ben', lastName: 'Second', role: 'employee', isActive: true },
+    ] });
+  });
+  await page.goto('/admin/bookings/');
+  await page.getByText('Day view', { exact: true }).click();
+  await page.getByLabel('Day', { exact: true }).fill('2026-11-10');
+  await page.getByRole('textbox', { name: 'Employee', exact: true }).click();
+  await page.getByRole('option', { name: 'Ada Cleaner', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Employee', exact: true }).click();
+  await page.getByRole('option', { name: 'Ben Second', exact: true }).click();
+  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
+  releaseAda();
+  await page.waitForResponse(response => response.url().includes('employeeId=e-1'));
+  await expect(page.getByRole('cell', { name: 'BK-1002', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
 });
 
 test('manager is blocked from the bookings administration page', async ({ page }) => {
