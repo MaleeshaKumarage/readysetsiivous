@@ -13,6 +13,9 @@ namespace CleaningSuite.Infrastructure.Leads;
 
 public sealed class LeadAudioProbe(IConfiguration config) : ILeadAudioProbe
 {
+    /// <summary>Shown when a recording cannot be decoded. Says what to do next.</summary>
+    public const string UnreadableMessage = "This recording is unreadable or uses an unsupported audio format. Record again, or upload WebM, Ogg or M4A audio.";
+
     public async Task<LeadAudioInfo> ValidateAsync(byte[] content,CancellationToken ct)
     {
         if(content.Length is 0 or >20*1024*1024) throw new ValidationException("Record audio up to 20 MiB.");
@@ -53,7 +56,7 @@ public sealed class LeadAudioProbe(IConfiguration config) : ILeadAudioProbe
                 await result.WriteAsync(buffer.AsMemory(0,count),deadline.Token);
             }
             await process.WaitForExitAsync(deadline.Token);await drain;
-            if(process.ExitCode!=0) throw new ValidationException("This recording is unreadable or uses an unsupported audio format.");
+            if(process.ExitCode!=0) throw new ValidationException(LeadAudioProbe.UnreadableMessage);
             return result.ToArray();
         } catch(OperationCanceledException) when(!ct.IsCancellationRequested) { throw new ValidationException("Audio validation timed out. Try a shorter recording."); }
         finally { if(!process.HasExited) { process.Kill(entireProcessTree:true);await process.WaitForExitAsync(CancellationToken.None); } }
