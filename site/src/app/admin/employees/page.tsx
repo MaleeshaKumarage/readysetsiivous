@@ -62,7 +62,13 @@ export default function EmployeesAdminPage() {
     finally { setCalendarBusy(null); }
   };
 
-  const load = () => adminEmployees.list(true).then((r) => { if (r) setEmployees(r); setLoading(false); });
+  const [listError, setListError] = useState('');
+  // A failed refresh keeps the rows already on screen and shows the error above them.
+  const load = () => adminEmployees.list(true).then((r) => {
+    if (r) { setEmployees(r); setListError(''); }
+    else setListError('Employees could not be loaded. Reload and retry.');
+    setLoading(false);
+  });
   useEffect(() => { load(); adminCompanies.listAll().then(records => { if (records) setCompanies(records); else setCompanyError('Company selection could not be loaded. Refresh before creating a partner.'); }); }, []);
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -183,7 +189,8 @@ export default function EmployeesAdminPage() {
       <LifecycleTabs value={lifecycle} onChange={setLifecycle} label="Employee activity"
         activeCount={loading ? undefined : employees.filter(employee => employee.isActive).length}
         inactiveCount={loading ? undefined : employees.filter(employee => !employee.isActive).length}>
-      {loading ? <Loader /> : employees.length === 0 ? (
+      {listError && <Text role="alert" c="red" mb="sm">{listError}</Text>}
+      {loading ? <Loader /> : employees.length === 0 && listError ? null : employees.length === 0 ? (
         <Text c="dimmed">No employees yet.</Text>
       ) : visibleEmployees.length === 0 ? (
         <Text c="dimmed">No {lifecycle} employees. Check the {lifecycle === 'active' ? 'Inactive' : 'Active'} tab.</Text>

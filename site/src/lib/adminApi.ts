@@ -2,6 +2,7 @@
 
 import { API_URL } from './api';
 import { token, refreshToken, login } from './auth';
+import { cacheScopeFor, requestSignal } from './requestScope';
 
 export interface Booking {
   id: string;
@@ -54,25 +55,25 @@ export async function authorizedFetch(path: string, init: RequestInit = {}): Pro
   if (!t) t = await refreshToken();
   if (!t) await login();
 
-  let response = await fetch(`${API_URL}${path}`, {
+  // Reads get a timeout so a hung page can settle. Writes do not: the server may still commit a create or invite after the client gives up, and a retry would duplicate it.
+  const isRead = !init.method || init.method === 'GET';
+  const send = (bearer: string | undefined) => fetch(`${API_URL}${path}`, {
     ...init,
+    signal: isRead ? requestSignal(init.signal) : init.signal,
     headers: {
       ...(init.headers ?? {}),
-      Authorization: `Bearer ${t}`,
+      ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
       ...(init.body ? { "Content-Type": "application/json" } : {}),
     },
   });
 
+  let response = await send(t);
+
   if (response.status === 401) {
-    t = await refreshToken();
-    response = await fetch(`${API_URL}${path}`, {
-      ...init,
-      headers: {
-        ...(init.headers ?? {}),
-        Authorization: `Bearer ${t}`,
-        ...(init.body ? { "Content-Type": "application/json" } : {}),
-      },
-    });
+    const refreshed = await refreshToken();
+    // Without a fresh token the original 401 is the answer; never retry with an empty bearer.
+    if (!refreshed) return response;
+    response = await send(refreshed);
   }
 
   return response;
@@ -87,14 +88,25 @@ export function invalidateAdminCache() {
   _cache.clear();
 }
 
+let _cacheScope = 'anonymous';
+
+// A null result means the read failed (HTTP error, timeout or network). Callers already treat null as "could not load".
 export async function adminGet<T>(path: string, useCache = true): Promise<T | null> {
+  // Responses are only reused for the same signed-in user; a different user or no user clears them.
+  const scope = cacheScopeFor(token());
+  if (scope !== _cacheScope) { _cache.clear(); _cacheScope = scope; }
   const hit = useCache ? _cache.get(path) : undefined;
   if (hit && Date.now() - hit.ts < _CACHE_TTL) return hit.data as T;
-  const response = await authorizedFetch(path, useCache ? {} : { cache: 'no-store' });
-  if (!response.ok) return null;
-  const data = (await response.json()) as T;
-  if (useCache) _cache.set(path, { data, ts: Date.now() });
-  return data;
+  try {
+    const response = await authorizedFetch(path, useCache ? {} : { cache: 'no-store' });
+    if (!response.ok) return null;
+    const data = (await response.json()) as T;
+    // Cache only if the same user is still signed in; a response that landed after a user switch must not be stored for the next user.
+    if (useCache && cacheScopeFor(token()) === scope) _cache.set(path, { data, ts: Date.now() });
+    return data;
+  } catch {
+    return null;
+  }
 }
 
 export async function adminSend(

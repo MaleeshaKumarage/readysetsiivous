@@ -114,7 +114,10 @@ public class MarkInvoicePaidHandler : IRequestHandler<MarkInvoicePaidCommand, Un
             ?? throw new NotFoundException("Invoice", request.Id);
 
         if (invoice.Status == Invoice.StatusVoided)
-            throw new CleaningSuite.Application.Bookings.SlotConflictException("Invoice is voided");
+            throw new InvoiceConflictException("Invoice is voided");
+        // A paid invoice is final: a second payment would double-count revenue.
+        if (invoice.Status == Invoice.StatusPaid)
+            throw new InvoiceConflictException("Invoice is already paid.");
 
         invoice.Status = Invoice.StatusPaid;
         invoice.PaidAtUtc = request.PaidAtUtc;
@@ -134,6 +137,10 @@ public class VoidInvoiceHandler : IRequestHandler<VoidInvoiceCommand, Unit>
     {
         var invoice = await _invoices.GetByIdAsync(request.Id, ct)
             ?? throw new NotFoundException("Invoice", request.Id);
+
+        // A paid invoice is final. Corrections go through a credit note, not a void.
+        if (invoice.Status == Invoice.StatusPaid)
+            throw new InvoiceConflictException("A paid invoice cannot be voided. Issue a credit note instead.");
 
         invoice.Status = Invoice.StatusVoided;
         invoice.UpdatedUtc = DateTime.UtcNow;

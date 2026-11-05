@@ -207,6 +207,54 @@ test('admin sets default hours, keeps unrelated stored hours, and the values per
   await expect(page.getByLabel('Tuesday start', { exact: true })).toHaveValue('');
 });
 
+test('a failed employee list shows an error instead of an empty list', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    return route.abort('failed');
+  });
+  await page.goto('/admin/employees/');
+  await expect(page.getByRole('alert').filter({ hasText: 'Employees could not be loaded. Reload and retry.' })).toBeVisible();
+  await expect(page.getByText('No employees yet.', { exact: true })).toHaveCount(0);
+  await expect(page.locator('.mantine-Loader-root')).toHaveCount(0);
+});
+
+test('a failed list refresh after an action keeps the rows on screen with an error above them', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  let listCalls = 0;
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    listCalls += 1;
+    if (listCalls === 1) return route.fulfill({ status: 200, headers, json: [baseEmployee()] });
+    return route.fulfill({ status: 500, headers, json: { detail: 'Employee service unavailable' } });
+  });
+  await page.route(/\/api\/v1\/admin\/employees\/employee-a\/deactivate$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    return route.fulfill({ status: 204, headers });
+  });
+  await page.goto('/admin/employees/');
+  await expect(page.getByRole('cell', { name: 'Test Cleaner' })).toBeVisible();
+  await page.getByRole('button', { name: 'Deactivate', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Employees could not be loaded. Reload and retry.' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Test Cleaner' })).toBeVisible();
+});
+
+test('a failed employee list recovers when a later load succeeds', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  let healthy = false;
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    if (!healthy) return route.fulfill({ status: 500, headers, json: { detail: 'Employee service unavailable' } });
+    return route.fulfill({ status: 200, headers, json: [baseEmployee()] });
+  });
+  await page.goto('/admin/employees/');
+  await expect(page.getByRole('alert').filter({ hasText: 'Employees could not be loaded. Reload and retry.' })).toBeVisible();
+  healthy = true;
+  await page.reload();
+  await expect(page.getByRole('alert').filter({ hasText: 'Employees could not be loaded' })).toHaveCount(0);
+  await expect(page.getByRole('cell', { name: 'Test Cleaner' })).toBeVisible();
+});
+
 test('clearing an existing certification expiry sends null and the field stays empty after reload', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   const employee: any = { ...baseEmployee(), certifications: [{ id: 'cert-1', name: 'Hygiene', expiresAtUtc: '2027-03-01T13:30:00Z' }] };
