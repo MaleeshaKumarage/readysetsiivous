@@ -125,6 +125,31 @@ test('admin changes colour to a new valid value and it persists after reload', a
   await expect(page.getByLabel('Colour', { exact: true })).toHaveValue('#00ff00');
 });
 
+test('add employee after cancelled edit does not carry the previous profile into the new employee', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const employee = baseEmployee();
+  await mockEmployee(page, employee);
+  const posts: any[] = [];
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, route => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    posts.push(route.request().postDataJSON());
+    return route.fulfill({ status: 200, headers, json: { id: 'employee-new' } });
+  });
+  await page.goto('/admin/employees/');
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.getByLabel('Pay rate')).toHaveValue('18.5');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+
+  await page.getByRole('button', { name: 'Add employee', exact: true }).click();
+  await page.getByLabel(/^Email/).fill('new@example.invalid');
+  await page.getByLabel(/^First name/).fill('New');
+  await page.getByLabel(/^Last name/).fill('Person');
+  await page.getByRole('button', { name: 'Create employee', exact: true }).click();
+
+  await expect.poll(() => posts.length).toBe(1);
+  expect(posts[0].fields).toMatchObject({ email: 'new@example.invalid', skills: [], serviceAreas: [], certifications: [], notes: null, payRate: null, colorHex: null });
+});
+
 test('invalid pay rate, colour and blank certification are blocked before saving', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   const employee = baseEmployee();
