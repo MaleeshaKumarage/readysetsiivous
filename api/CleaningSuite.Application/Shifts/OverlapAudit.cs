@@ -48,6 +48,21 @@ public sealed class ShiftOverlapAuditQueryHandler(IShiftRepository repository, I
         if ((localTo - localFrom).TotalDays > MaxWindowDays)
             throw new ValidationException([new ValidationFailure("To", $"Choose an audit window of {MaxWindowDays} days or fewer.")]);
 
+        var visits = await ScheduleVisits.GatherAsync(repository, zone, localFrom, localTo, ct);
+        return OverlapAudit.Find(visits);
+    }
+}
+
+public sealed record EmployeeDaySchedule(Guid EmployeeId, DateTime LocalDay, IReadOnlyList<ShiftOverlapVisit> Visits);
+
+public record EmployeeScheduleQuery(DateTime From, DateTime To) : IRequest<IReadOnlyList<EmployeeDaySchedule>>;
+
+// Shared by the overlap audit and the employee-by-day schedule so both see the same visits.
+public static class ScheduleVisits
+{
+    public static async Task<List<(Guid EmployeeId, ShiftOverlapVisit Visit)>> GatherAsync(
+        IShiftRepository repository, TimeZoneInfo zone, DateTime localFrom, DateTime localTo, CancellationToken ct)
+    {
         var fromUtc = TenantTimeZone.StartOfLocalDay(localFrom, zone);
         var toUtc = TenantTimeZone.StartOfLocalDay(localTo.AddDays(1), zone);
         var visits = new List<(Guid EmployeeId, ShiftOverlapVisit Visit)>();
@@ -58,6 +73,29 @@ public sealed class ShiftOverlapAuditQueryHandler(IShiftRepository repository, I
                 foreach (var employee in entry.EmployeeIds)
                     visits.Add((employee, new ShiftOverlapVisit(shift.Id, shift.Name, entry.Occurrence.StartUtc, entry.Occurrence.EndUtc)));
         }
-        return OverlapAudit.Find(visits);
+        return visits;
+    }
+
+    // Groups visits by cleaner and tenant-local day, earliest visit first.
+    public static IReadOnlyList<EmployeeDaySchedule> GroupByDay(IEnumerable<(Guid EmployeeId, ShiftOverlapVisit Visit)> visits, TimeZoneInfo zone) =>
+        visits.GroupBy(x => (x.EmployeeId, Day: TenantTimeZone.LocalDate(x.Visit.StartUtc, zone)))
+            .Select(g => new EmployeeDaySchedule(g.Key.EmployeeId, g.Key.Day, g.Select(x => x.Visit).OrderBy(v => v.StartUtc).ToList()))
+            .OrderBy(x => x.LocalDay).ThenBy(x => x.EmployeeId)
+            .ToList();
+}
+
+public sealed class EmployeeScheduleQueryHandler(IShiftRepository repository, ITenantProfileRepository profiles, ITenantContext tenant)
+    : IRequestHandler<EmployeeScheduleQuery, IReadOnlyList<EmployeeDaySchedule>>
+{
+    public async Task<IReadOnlyList<EmployeeDaySchedule>> Handle(EmployeeScheduleQuery request, CancellationToken ct)
+    {
+        var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
+        var localFrom = TenantTimeZone.LocalDate(DateTime.SpecifyKind(request.From, DateTimeKind.Utc), zone);
+        var localTo = TenantTimeZone.LocalDate(DateTime.SpecifyKind(request.To, DateTimeKind.Utc), zone);
+        if (localTo < localFrom)
+            throw new ValidationException([new ValidationFailure("To", "The schedule end date must be on or after its start date.")]);
+        if ((localTo - localFrom).TotalDays > 31)
+            throw new ValidationException([new ValidationFailure("To", "Choose a schedule window of 31 days or fewer.")]);
+        return ScheduleVisits.GroupByDay(await ScheduleVisits.GatherAsync(repository, zone, localFrom, localTo, ct), zone);
     }
 }
