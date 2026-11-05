@@ -1,6 +1,8 @@
 'use client';
 
 import '@mantine/core/styles.css';
+import '@mantine/notifications/styles.css';
+import { Notifications } from '@mantine/notifications';
 import './admin.css';
 import { adminTheme } from '@/lib/adminTheme';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
@@ -161,6 +163,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   return (
     <MantineProvider theme={adminTheme} forceColorScheme="light">
+      <Notifications position="top-right" />
       <QuoteRequestProvider pathname={pathname}><AppShell
         className="admin-shell"
         header={{ height: 76 }}

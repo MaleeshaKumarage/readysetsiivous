@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Alert, Button, Group, Modal, MultiSelect, Select, Stack, Text, Textarea } from '@mantine/core';
+import { showError } from '@/lib/toast';
 import { adminShifts, VisitConflictError, type Employee, type ShiftConflictDetail, type ShiftOccurrence, type VisitAssignmentResult } from '@/lib/adminApi';
 
 export function VisitAssigneesDialog({ shiftId, visit, employees, timeZone, onClose, onSaved }: {
@@ -45,7 +46,10 @@ export function VisitAssigneesDialog({ shiftId, visit, employees, timeZone, onCl
       setBusy(false);
       await submit(true);
       return;
-    } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not remove the overlapping cleaner. Reload occurrences and retry.'); }
+    } catch (failure) {
+      const message = failure instanceof Error ? failure.message : 'Could not remove the overlapping cleaner. Reload occurrences and retry.';
+      setError(message); showError(message, 'Overlap not changed');
+    }
     finally { setBusy(false); }
   };
   const submit = async (isPreview: boolean) => {
@@ -64,7 +68,8 @@ export function VisitAssigneesDialog({ shiftId, visit, employees, timeZone, onCl
       else { await onSaved(); onClose(); }
     } catch (failure) {
       if (failure instanceof VisitConflictError) setConflicts(failure.conflicts);
-      setError(failure instanceof Error ? failure.message : 'Could not change assignments. Retry or reload occurrences.');
+      const message = failure instanceof Error ? failure.message : 'Could not change assignments. Retry or reload occurrences.';
+      setError(message); showError(message, 'Assignment not saved');
     }
     finally { setBusy(false); }
   };

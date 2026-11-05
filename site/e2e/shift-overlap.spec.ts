@@ -87,3 +87,20 @@ test('overlap removal explains when the cleaner is no longer on the clashing vis
   await expect(editor.getByText('The selected cleaners are no longer on the overlapping visit. Preview again to continue.')).toBeVisible();
   await expect(editor.getByRole('button', { name: 'Save assignment', exact: true })).toBeDisabled();
 });
+
+test('a failed save shows the reason as a toast and keeps the dialog open to retry', async ({ page }) => {
+  await setup(page, []);
+  await page.route(/\/visit-assignees$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    const body = route.request().postDataJSON() as { preview: boolean };
+    if (body.preview) return route.fulfill({ headers, json: { employeeIds: ['cleaner'], preview: true, message: 'Only this visit changes.' } });
+    return route.fulfill({ status: 500, headers, json: { detail: 'Assignments could not be saved. Your changes were kept; retry the save.' } });
+  });
+  const editor = await openAssignForMorningVisit(page, 'Cover the morning visit');
+  await editor.getByRole('button', { name: 'Preview assignment', exact: true }).click();
+  await expect(editor.getByText('Selected visit: Test Cleaner')).toBeVisible();
+  await editor.getByRole('button', { name: 'Save assignment', exact: true }).click();
+  await expect(page.getByText('Assignment not saved')).toBeVisible();
+  await expect(page.getByText('Assignments could not be saved. Your changes were kept; retry the save.').first()).toBeVisible();
+  await expect(editor).toBeVisible();
+});
