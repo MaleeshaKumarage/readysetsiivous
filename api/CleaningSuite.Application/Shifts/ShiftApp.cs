@@ -329,7 +329,7 @@ public class ShiftHandlers
         }
     }
 
-    public sealed class DeleteShiftCommandHandler(IShiftRepository shifts)
+    public sealed class DeleteShiftCommandHandler(IShiftRepository shifts, IQualityCycleRepository? forms = null)
         : IRequestHandler<DeleteShiftCommand>
     {
         public async Task Handle(DeleteShiftCommand request, CancellationToken ct)
@@ -337,6 +337,9 @@ public class ShiftHandlers
             var shift = await shifts.GetAsync(request.Id, ct) ?? throw new NotFoundException("Shift", request.Id);
             CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
             if (shift.IsActive) throw new InactiveRecordDeleteConflictException("Deactivate the shift before deleting it.");
+            // Started or submitted visit records carry completed work that may not be invoiced yet; deleting the shift would remove it.
+            if (forms is not null && (await forms.ListFormsAsync(shift.Id, null, null, ct)).Any(f => f.IsSubmitted || f.StartedAtUtc.HasValue))
+                throw new InactiveRecordDeleteConflictException("This shift has started or completed visits that may not be invoiced yet. Keep it deactivated so its work and billing stay available.");
             await shifts.DeleteAsync(shift.Id, ct);
         }
     }
