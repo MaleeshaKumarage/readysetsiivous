@@ -14,14 +14,18 @@ const stored = {
   isActive: true, isFeatured: true, sortOrder: 7,
 };
 
+const creates: any[] = [];
+
 async function mockServices(page: Page) {
   const writes: any[] = [];
+  creates.length = 0;
   await setupAdminMocks(page, { authenticated: true });
   await page.route('**/api/v1/admin/services**', async route => {
     const method = route.request().method();
     if (method === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS });
     if (method === 'GET') return route.fulfill({ status: 200, json: [stored], headers: CORS });
     if (method === 'PUT') { writes.push(route.request().postDataJSON()); return route.fulfill({ status: 200, json: true, headers: CORS }); }
+    if (method === 'POST') { creates.push(route.request().postDataJSON()); return route.fulfill({ status: 200, json: true, headers: CORS }); }
     return route.continue();
   });
   return writes;
@@ -65,4 +69,25 @@ test('clearing the English name removes only that translation', async ({ page })
   await page.getByRole('button', { name: 'Save changes' }).click();
   await expect.poll(() => writes.length).toBe(1);
   expect(writes[0].fields.name).toEqual({ fi: 'Syväsiivous', sv: 'Djupstädning', de: 'Tiefenreinigung' });
+});
+
+test('adding a service sends the create defaults', async ({ page }) => {
+  await mockServices(page);
+  await page.goto('/admin/services/');
+  await page.getByRole('button', { name: 'Add service', exact: true }).click();
+  await page.getByLabel('Slug').fill('window-cleaning');
+  await page.getByLabel('Name (Finnish)').fill('Ikkunanpesu');
+  await page.getByRole('button', { name: 'Create service', exact: true }).click();
+  await expect.poll(() => creates.length).toBe(1);
+  const fields = creates[0].fields;
+  expect(fields.slug).toBe('window-cleaning');
+  expect(fields.name).toEqual({ fi: 'Ikkunanpesu' });
+  expect(fields.vatRatePercent).toBe(25.5);
+  expect(fields.durationMinutes).toBe(60);
+  expect(fields.priceNet).toBe(0);
+  expect(fields.icon).toBe('Sparkles');
+  expect(fields.currency).toBe('EUR');
+  expect(fields.sortOrder).toBe(0);
+  expect(fields.isFeatured).toBe(false);
+  expect(fields.additionalInfo).toBeNull();
 });
