@@ -147,7 +147,13 @@ export default function EmployeesAdminPage() {
 
   const deactivate = async (id: string) => {
     setInviteFailure('');
-    try { if (!await adminEmployees.deactivate(id)) setInviteFailure('Employee access update could not be confirmed. Reload and retry or contact an administrator.'); await load(); }
+    try {
+      const result = await adminEmployees.deactivate(id);
+      // A refusal (for example, the cleaner still has active shifts) is shown as the server explains it.
+      // A server error may or may not have saved the change, so the user is told to check before retrying.
+      if (!result.ok) setInviteFailure(result.status >= 500 ? `${result.message} Reload to check whether the change was saved before retrying.` : result.message);
+      await load();
+    }
     catch { setInviteFailure('Employee access update could not be confirmed. Please retry.'); }
   };
 

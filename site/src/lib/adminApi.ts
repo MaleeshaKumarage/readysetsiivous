@@ -123,7 +123,7 @@ export async function adminSend(
   return ok;
 }
 
-export type AdminSendResult = { ok: true } | { ok: false; message: string };
+export type AdminSendResult = { ok: true } | { ok: false; message: string; status: number };
 
 // Turns an RFC 7807 problem into one readable sentence. Field-level messages are used when
 // there is no detail, so validation failures still say what to change.
@@ -155,14 +155,14 @@ export async function adminSendResult(
   try {
     response = await authorizedFetch(path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
   } catch {
-    return { ok: false, message: 'Could not reach the server. Check your connection, then save again.' };
+    return { ok: false, message: 'Could not reach the server. Check your connection, then save again.', status: 0 };
   }
   if (response.ok || response.status === 204) { invalidateAdminCache(); return { ok: true }; }
   const problem = await response.json().catch(() => null);
-  return { ok: false, message: failureMessage(response.status, problem, `The change was not saved (error ${response.status}). Check the fields, then save again.`) };
+  return { ok: false, message: failureMessage(response.status, problem, `The change was not saved (error ${response.status}). Check the fields, then save again.`), status: response.status };
 }
 
-export type AdminJsonResult<T> = { ok: true; value: T } | { ok: false; message: string };
+export type AdminJsonResult<T> = { ok: true; value: T } | { ok: false; message: string; status: number };
 
 // Like adminSendJson, but keeps the server's reason so the form can say what to change.
 export async function adminSendJsonResult<T>(path: string, method: 'POST' | 'PUT', body?: unknown): Promise<AdminJsonResult<T>> {
@@ -170,11 +170,11 @@ export async function adminSendJsonResult<T>(path: string, method: 'POST' | 'PUT
   try {
     response = await authorizedFetch(path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
   } catch {
-    return { ok: false, message: 'Could not reach the server. Check your connection, then save again.' };
+    return { ok: false, message: 'Could not reach the server. Check your connection, then save again.', status: 0 };
   }
   if (!response.ok) {
     const problem = await response.json().catch(() => null);
-    return { ok: false, message: failureMessage(response.status, problem, `The change was not saved (error ${response.status}). Check the fields, then save again.`) };
+    return { ok: false, message: failureMessage(response.status, problem, `The change was not saved (error ${response.status}). Check the fields, then save again.`), status: response.status };
   }
   invalidateAdminCache();
   return { ok: true, value: (await response.json()) as T };
@@ -336,7 +336,7 @@ export const adminEmployees = {
   reactivate: (id: string) => employeeMutation(`/api/v1/admin/employees/${id}/reactivate`),
   update: (id: string, fields: EmployeeFields, isActive: boolean): Promise<AdminSendResult> =>
     adminSendResult(`/api/v1/admin/employees/${id}`, 'PUT', { fields, isActive }),
-  deactivate: (id: string) => adminSend(`/api/v1/admin/employees/${id}/deactivate`, 'POST'),
+  deactivate: (id: string): Promise<AdminSendResult> => adminSendResult(`/api/v1/admin/employees/${id}/deactivate`, 'POST'),
   deleteInactive: (id: string) => adminDelete(`/api/v1/admin/employees/${id}`),
   invite: async (id: string): Promise<{ email: string; keycloakUserId: string; status: 'Sent' | 'AlreadySent'; sentUtc: string }> => {
     const response = await authorizedFetch(`/api/v1/admin/employees/${id}/invite`, { method: 'POST' });

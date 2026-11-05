@@ -197,6 +197,7 @@ public class ReactivateEmployeeHandler : IRequestHandler<ReactivateEmployeeComma
 }
 
 public class DeactivateEmployeeHandler : IRequestHandler<DeactivateEmployeeCommand, Unit>
+
 {
     private readonly IEmployeeRepository _employees;
 
@@ -204,8 +205,9 @@ public class DeactivateEmployeeHandler : IRequestHandler<DeactivateEmployeeComma
     private readonly ITenantContext _tenant;
     private readonly IEmployeeIdentityLock _locks;
     private readonly IShiftWorkReservation _reservation;
-    public DeactivateEmployeeHandler(IEmployeeRepository employees, IEmployeeIdentityProvider identities, ITenantContext tenant, IEmployeeIdentityLock locks, IShiftWorkReservation reservation)
-    { _employees = employees; _identities = identities; _tenant = tenant; _locks = locks; _reservation = reservation; }
+    private readonly IShiftRepository? _shifts;
+    public DeactivateEmployeeHandler(IEmployeeRepository employees, IEmployeeIdentityProvider identities, ITenantContext tenant, IEmployeeIdentityLock locks, IShiftWorkReservation reservation, IShiftRepository? shifts = null)
+    { _employees = employees; _identities = identities; _tenant = tenant; _locks = locks; _reservation = reservation; _shifts = shifts; }
 
     public async Task<Unit> Handle(DeactivateEmployeeCommand request, CancellationToken ct)
     {
@@ -217,6 +219,7 @@ public class DeactivateEmployeeHandler : IRequestHandler<DeactivateEmployeeComma
         await using (var work = await _reservation.AcquireAsync(ct))
         {
             employee = await _employees.GetByIdAsync(request.Id, ct) ?? throw new NotFoundException("Employee", request.Id);
+            await RefuseWhileAssignedToActiveShifts(employee.Id, ct);
             employee.IsActive = false;
             employee.IdentitySyncPending = !string.IsNullOrWhiteSpace(employee.KeycloakUserId);
             employee.UpdatedUtc = DateTime.UtcNow;
@@ -226,6 +229,20 @@ public class DeactivateEmployeeHandler : IRequestHandler<DeactivateEmployeeComma
         if (employee.IdentitySyncPending)
             await EmployeeAccessSynchronization.CompleteAsync(_employees, _identities, _tenant.TenantId, employee, ct);
         return Unit.Value;
+    }
+
+    // A cleaner still assigned to an active shift has ongoing work. Deactivating them would leave that work
+    // assigned to a former employee, so the admin must reassign or remove it first.
+    private async Task RefuseWhileAssignedToActiveShifts(Guid employeeId, CancellationToken ct)
+    {
+        if (_shifts is null) return;
+        var shiftIds = (await _shifts.ListAssignmentsByEmployeeAsync(employeeId, ct))
+            .Where(assignment => assignment.IsActive).Select(assignment => assignment.ShiftId).Distinct().ToArray();
+        if (shiftIds.Length == 0) return;
+        var activeShifts = (await _shifts.ListByIdsAsync(shiftIds, ct)).Count(shift => shift.IsActive);
+        if (activeShifts > 0)
+            throw new CleaningSuite.Application.Shifts.ShiftConflictException(
+                $"This cleaner is still assigned to {activeShifts} active shift(s). Reassign or remove them first, then deactivate the cleaner.");
     }
 }
 

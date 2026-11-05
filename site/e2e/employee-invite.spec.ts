@@ -75,7 +75,8 @@ test('deactivation failure is visible instead of silently disappearing', async (
   await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, route => route.fulfill({ status: 200, headers, json: [{ id: 'employee-a', email: 'cleaner@example.invalid', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true }] }));
   await page.route(/\/api\/v1\/admin\/employees\/employee-a\/deactivate$/, route => route.fulfill({ status: 502, headers, json: { title: 'Login synchronization failed' } }));
   await page.goto('/admin/employees/'); await page.getByRole('button', { name: 'Deactivate', exact: true }).click();
-  await expect(page.locator('p[role="alert"]')).toContainText('could not be confirmed');
+  await expect(page.locator('p[role="alert"]')).toContainText('Login synchronization failed');
+  await expect(page.locator('p[role="alert"]')).toContainText('Reload to check whether the change was saved');
 });
 
 test('A01 account preference persists, rejects pending offers and retries without optimistic saving', async ({ page }) => {
@@ -137,4 +138,14 @@ test('A01 account retries failed preference loading for verified manager and adm
   await expect(page.getByRole('checkbox', { name: 'Automatically accept cleaning offers' })).not.toBeChecked();
   role = 'admin'; await page.reload();
   await expect(page.getByRole('checkbox', { name: 'Automatically accept cleaning offers' })).not.toBeChecked();
+});
+
+test('deactivating a cleaner who still has active shifts is refused with the reason and the next step', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const REASON = 'This cleaner is still assigned to 2 active shift(s). Reassign or remove them first, then deactivate the cleaner.';
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, route => route.fulfill({ status: 200, headers, json: [{ id: 'employee-a', email: 'cleaner@example.invalid', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true, phone: '', defaultHours: {}, skills: [], serviceAreas: [] }] }));
+  await page.route(/\/api\/v1\/admin\/employees\/employee-a\/deactivate$/, route => route.fulfill({ status: 409, headers, json: { title: 'Shift conflict', detail: REASON } }));
+  await page.goto('/admin/employees/'); await page.getByRole('button', { name: 'Deactivate', exact: true }).click();
+  await expect(page.locator('p[role="alert"]')).toHaveText(REASON);
+  await expect(page.getByText('could not be confirmed')).toHaveCount(0);
 });
