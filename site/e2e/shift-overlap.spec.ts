@@ -9,9 +9,9 @@ const clashStart = '2026-11-02T06:30:00.000Z', clashEnd = '2026-11-02T08:30:00.0
 // Mocks the morning shift (target) and an evening shift (the clashing visit).
 // `clashHolders` lists who is on the clashing visit; the server refuses the target
 // assignment until the clashing visit no longer holds the selected cleaner.
-async function setup(page: Page, clashHolders: string[] = ['cleaner']) {
+async function setup(page: Page, clashHolders: string[] = ['cleaner'], options: { extraClash?: boolean } = {}) {
   await setupAdminMocks(page);
-  const writes: { path: string; employeeIds: string[]; preview: boolean; mode: number }[] = [];
+  const writes: { path: string; employeeIds: string[]; preview: boolean; mode: number; body: Record<string, unknown> }[] = [];
   let clashCleared = false;
   await page.route(/\/api\/v1\/admin\//, route => {
     const request = route.request(); const path = new URL(request.url()).pathname;
@@ -30,7 +30,7 @@ async function setup(page: Page, clashHolders: string[] = ['cleaner']) {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
     const body = route.request().postDataJSON() as { employeeIds: string[]; preview: boolean; mode: number };
     const path = new URL(route.request().url()).pathname;
-    writes.push({ path, employeeIds: body.employeeIds, preview: body.preview, mode: body.mode });
+    writes.push({ path, employeeIds: body.employeeIds, preview: body.preview, mode: body.mode, body: body as unknown as Record<string, unknown> });
     if (path.includes('/shifts/other/')) { clashCleared = true; return route.fulfill({ headers, json: { employeeIds: [], preview: false, message: 'Overlapping visit updated.' } }); }
     if (!clashCleared) return route.fulfill({ status: 409, headers, json: {
       title: 'Shift conflict',
@@ -41,7 +41,7 @@ async function setup(page: Page, clashHolders: string[] = ['cleaner']) {
   });
   await page.route(/\/occurrences(?:\?.*)?$/, route => {
     const path = new URL(route.request().url()).pathname;
-    if (path.includes('/shifts/other/')) return route.fulfill({ headers, json: [{ startUtc: clashStart, endUtc: clashEnd, assigneeIds: clashCleared ? [] : clashHolders, overrideEmployeeIds: clashCleared ? [] : clashHolders, rosterVersion: 'other-v1' }] });
+    if (path.includes('/shifts/other/')) return route.fulfill({ headers, json: [{ startUtc: clashStart, endUtc: clashEnd, assigneeIds: clashCleared ? [] : clashHolders, overrideEmployeeIds: clashCleared ? [] : clashHolders, rosterVersion: 'other-v1', assignmentVersion: 'other-a1', ...(options.extraClash ? { status: 4, exceptionId: 'extra-1', originalStartUtc: null } : { originalStartUtc: clashStart }) }] });
     return route.fulfill({ headers, json: [{ startUtc: visitStart, endUtc: visitEnd, assigneeIds: [], rosterVersion: 'v1' }] });
   });
   await page.goto('/admin/shifts/');
@@ -70,12 +70,25 @@ test('overlap refusal names the clashing visit, removes that cleaner from it, th
   await expect(editor.getByText('Selected visit: Test Cleaner')).toBeVisible();
   await editor.getByRole('button', { name: 'Save assignment', exact: true }).click();
   await expect(editor).toHaveCount(0);
-  expect(state.writes).toEqual([
+  expect(state.writes.map(({ path, employeeIds, preview, mode }) => ({ path, employeeIds, preview, mode }))).toEqual([
     { path: '/api/v1/admin/shifts/shift/visit-assignees', employeeIds: ['cleaner'], preview: true, mode: 1 },
     { path: '/api/v1/admin/shifts/other/visit-assignees', employeeIds: [], preview: false, mode: 1 },
     { path: '/api/v1/admin/shifts/shift/visit-assignees', employeeIds: ['cleaner'], preview: true, mode: 1 },
     { path: '/api/v1/admin/shifts/shift/visit-assignees', employeeIds: ['cleaner'], preview: false, mode: 1 },
   ]);
+  // The removal request carries the clashing visit's identity and versions, so the server can reject a stale edit.
+  expect(state.writes[1].body).toMatchObject({ originalStartUtc: clashStart, extraExceptionId: null, rosterVersion: 'other-v1', assignmentVersion: 'other-a1', fromThisDate: false, preview: false, employeeIds: [] });
+  expect(String(state.writes[1].body.reason).length).toBeGreaterThan(0);
+});
+
+test('removing a cleaner from an extra (status 4) clashing visit sends its exception id and no original start', async ({ page }) => {
+  const state = await setup(page, ['cleaner'], { extraClash: true });
+  const editor = await openAssignForMorningVisit(page, 'Cover the morning visit');
+  await editor.getByRole('button', { name: 'Preview assignment', exact: true }).click();
+  await editor.getByRole('button', { name: 'Remove from Evening deep clean and assign here' }).click();
+  await expect(editor.getByText('Selected visit: Test Cleaner')).toBeVisible();
+  expect(state.writes[1].path).toBe('/api/v1/admin/shifts/other/visit-assignees');
+  expect(state.writes[1].body).toMatchObject({ originalStartUtc: null, extraExceptionId: 'extra-1', rosterVersion: 'other-v1', assignmentVersion: 'other-a1' });
 });
 
 test('overlap removal explains when the cleaner is no longer on the clashing visit', async ({ page }) => {

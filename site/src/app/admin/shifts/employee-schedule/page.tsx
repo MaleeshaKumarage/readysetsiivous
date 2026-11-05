@@ -25,6 +25,7 @@ export default function EmployeeSchedulePage() {
   const [overlaps, setOverlaps] = useState<OverlapFinding[]>([]);
   const [employees, setEmployees] = useState<Employee[] | null>(null);
   const [timeZone, setTimeZone] = useState<string | undefined>(undefined);
+  const [zoneError, setZoneError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -32,7 +33,10 @@ export default function EmployeeSchedulePage() {
   const days = useMemo(() => Array.from({ length: DAYS }, (_, index) => addDays(weekStart, index)), [weekStart]);
 
   useEffect(() => {
-    adminTenant.get().then(tenant => { if (tenant?.timeZoneId) setTimeZone(tenant.timeZoneId); }).catch(() => undefined);
+    // Times are grouped by the workplace day, so they must use the workplace zone. Without it the page does not render times.
+    adminTenant.get()
+      .then(tenant => { if (tenant?.timeZoneId) setTimeZone(tenant.timeZoneId); else setZoneError(true); })
+      .catch(() => setZoneError(true));
   }, []);
 
   useEffect(() => {
@@ -41,8 +45,9 @@ export default function EmployeeSchedulePage() {
     Promise.all([adminShifts.employeeSchedule(weekStart, weekEnd), adminShifts.overlapAudit(weekStart, weekEnd), adminEmployees.list()])
       .then(([scheduleRows, overlapRows, staff]) => {
         if (cancelled) return;
-        if (!scheduleRows || !staff) { setError('Could not load the schedule. Check your connection, then retry.'); setSchedule(null); return; }
-        setSchedule(scheduleRows); setOverlaps(overlapRows ?? []); setEmployees(staff);
+        // A missing overlap result is a failed load, not zero overlaps: a double booking must never look clear.
+        if (!scheduleRows || !staff || !overlapRows) { setError('Could not load the schedule. Check your connection, then retry.'); setSchedule(null); return; }
+        setSchedule(scheduleRows); setOverlaps(overlapRows); setEmployees(staff);
       })
       .catch(() => { if (!cancelled) setError('Could not load the schedule. Check your connection, then retry.'); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -59,6 +64,16 @@ export default function EmployeeSchedulePage() {
   const staff = (employees ?? []).filter(employee => employee.isActive && employee.role !== 'partner');
   const visitLabel = (visit: ScheduleVisit) => `${visit.shiftName} ${timeOf(visit.startUtc)}–${timeOf(visit.endUtc)}`;
 
+  if (zoneError) return (
+    <Stack p="md" gap="md">
+      <Title order={2}>Employee schedule</Title>
+      <Alert color="red" title="Time zone unavailable">Could not load the workplace time zone, so visit times cannot be shown correctly. Reload the page to try again.</Alert>
+      <Button variant="default" onClick={() => window.location.reload()}>Reload</Button>
+    </Stack>
+  );
+  if (!timeZone) return (
+    <Stack p="md" gap="md"><Title order={2}>Employee schedule</Title><Loader /></Stack>
+  );
   return (
     <Stack p="md" gap="md">
       <Title order={2}>Employee schedule</Title>

@@ -18,8 +18,9 @@ test('a negative price is blocked in the form and no request is sent', async ({ 
   await page.getByLabel('Slug').fill('negative-price');
   await page.getByLabel('Name (Finnish)').fill('Negative price');
   await page.getByLabel('Price (€)').fill('-5');
-  // dispatchEvent keeps focus in the price field, so the value is not clamped to 0 on blur before the submit runs.
-  await page.getByRole('button', { name: 'Create service' }).dispatchEvent('click');
+  // A normal click blurs the price field first; the field no longer clamps -5 to 0, so the real user flow reaches the check.
+  await page.getByRole('button', { name: 'Create service' }).click();
+  await expect(page.getByLabel('Price (€)')).toHaveValue('-5');
   await expect(page.getByText('Price cannot be negative.').first()).toBeVisible();
   await expect(page.getByLabel('Slug')).toHaveValue('negative-price');
   // Give any stray request a moment to appear before asserting none was sent.

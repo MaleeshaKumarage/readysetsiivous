@@ -100,3 +100,48 @@ test('a date typed into Week starting jumps to the Monday of that week', async (
   await expect.poll(() => state.requests.at(-1)).toBe('2026-10-12');
   await expect(page.getByLabel('Week starting')).toHaveValue('2026-10-12');
 });
+
+test('a failed time-zone load blocks the schedule instead of showing times in the browser zone', async ({ page }) => {
+  await setupAdminMocks(page);
+  await page.route(/\/api\/v1\/admin\/tenant$/, route => route.fulfill({ status: 500, headers, json: { detail: 'boom' } }));
+  await page.route(/\/api\/v1\/admin\/shifts\/employee-schedule/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/admin\/shifts\/overlap-audit/, route => route.fulfill({ headers, json: [] }));
+  await page.goto('/admin/shifts/employee-schedule/');
+  await expect(page.getByText('Time zone unavailable')).toBeVisible();
+  await expect(page.getByText('Could not load the workplace time zone')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Previous week' })).toHaveCount(0);
+});
+
+test('a failed overlap audit shows a retryable error instead of reporting no overlaps', async ({ page }) => {
+  await setupAdminMocks(page);
+  await page.route(/\/api\/v1\/admin\/shifts\/overlap-audit/, route => route.fulfill({ status: 500, headers, json: { detail: 'boom' } }));
+  await page.goto('/admin/shifts/employee-schedule/');
+  await expect(page.getByText('Could not load the schedule. Check your connection, then retry.')).toBeVisible();
+  await expect(page.getByText('Overlap', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
+});
+
+test('an empty staff list says there are no active cleaners yet', async ({ page }) => {
+  await setupAdminMocks(page);
+  await page.route(/\/api\/v1\/admin\/employees/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/admin\/shifts\/employee-schedule/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/admin\/shifts\/overlap-audit/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/admin\/tenant$/, route => route.fulfill({ headers, json: { companyName: 'QA', timeZoneId: 'Europe/Helsinki' } }));
+  await page.goto('/admin/shifts/employee-schedule/');
+  await expect(page.getByText('No active cleaners yet. Add employees, then their visits appear here.')).toBeVisible();
+});
+
+test('the Employee schedule navigation item opens the page', async ({ page }) => {
+  await setupAdminMocks(page);
+  await page.route(/\/api\/v1\/admin\/shifts\/employee-schedule/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/admin\/shifts\/overlap-audit/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/admin\/employees/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/admin\/tenant$/, route => route.fulfill({ headers, json: { companyName: 'QA', timeZoneId: 'Europe/Helsinki' } }));
+  await page.goto('/admin/');
+  // On phones the navigation sits in a drawer behind the toggle; open it when the toggle is visible.
+  const toggle = page.getByRole('button', { name: 'Toggle navigation' });
+  await toggle.click({ timeout: 3000 }).catch(() => undefined);
+  await page.getByRole('link', { name: 'Employee schedule', exact: true }).first().click();
+  await expect(page).toHaveURL(/\/admin\/shifts\/employee-schedule\/?$/);
+  await expect(page.getByRole('heading', { name: 'Employee schedule' })).toBeVisible();
+});

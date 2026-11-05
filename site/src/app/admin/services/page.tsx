@@ -176,7 +176,7 @@ export default function ServicesAdminPage() {
           <Textarea label="Description (Swedish)" value={form.descSv} onChange={set('descSv')} />
 
           <Group wrap="wrap" grow gap="xs">
-            <NumberInput label="Price (€)" min={0} value={form.priceNet} onChange={(v) => setForm((f) => ({ ...f, priceNet: String(v ?? '') }))} />
+            <NumberInput label="Price (€)" clampBehavior="none" value={form.priceNet} onChange={(v) => setForm((f) => ({ ...f, priceNet: String(v ?? '') }))} />
             <TextInput label="VAT %" inputMode="decimal" value={form.vatRatePercent} onChange={set('vatRatePercent')} />
             <NumberInput label="Duration (min)" value={form.durationMinutes} onChange={(v) => setForm((f) => ({ ...f, durationMinutes: String(v ?? '') }))} />
           </Group>

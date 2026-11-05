@@ -25,6 +25,7 @@ export function VisitAssigneesDialog({ shiftId, visit, employees, timeZone, onCl
   const removeClash = async (conflict: ShiftConflictDetail) => {
     if (busy) return;
     setBusy(true); setError('');
+    let removed = false;
     try {
       const from = new Date(new Date(conflict.startUtc).getTime() - 60_000).toISOString();
       const to = new Date(new Date(conflict.endUtc).getTime() + 60_000).toISOString();
@@ -42,28 +43,37 @@ export function VisitAssigneesDialog({ shiftId, visit, employees, timeZone, onCl
         rosterVersion: clash.rosterVersion ?? '', assignmentVersion: clash.assignmentVersion ?? null,
         fromThisDate: false, preview: false,
       });
-      setConflicts([]);
-      setBusy(false);
-      await submit(true);
-      return;
+      removed = true;
     } catch (failure) {
       const message = failure instanceof Error ? failure.message : 'Could not remove the overlapping cleaner. Reload occurrences and retry.';
       setError(message); showError(message, 'Overlap not changed');
+      return;
+    } finally {
+      if (!removed) setBusy(false);
     }
-    finally { setBusy(false); }
+    // The removal succeeded, so it is reported as done even if the re-preview below fails.
+    setConflicts([]);
+    try {
+      setPreview(await adminShifts.setVisitAssignees(shiftId, assignmentPayload(true)));
+    } catch (failure) {
+      const message = failure instanceof Error ? failure.message : 'The overlap was removed, but the new assignment could not be previewed. Preview again to continue.';
+      setError(message); showError(message, 'Overlap removed, preview failed');
+    } finally { setBusy(false); }
   };
+  // Shared by preview and save, so both send the same request body. Reads the current form values.
+  const assignmentPayload = (isPreview: boolean) => ({
+    originalStartUtc: visit.status === 4 ? null : visit.originalStartUtc ?? visit.startUtc,
+    extraExceptionId: visit.status === 4 ? visit.exceptionId ?? null : null,
+    mode: Number(mode), employeeIds: mode === '0' ? [] : selected, reason: reason.trim(),
+    rosterVersion: visit.rosterVersion ?? '', assignmentVersion: visit.assignmentVersion ?? null,
+    fromThisDate: scope === 'future', preview: isPreview,
+  });
   const submit = async (isPreview: boolean) => {
     if (busy) return;
     if (!reason.trim() || (mode !== '0' && selected.length === 0)) { setError('Select employees and provide a reason.'); return; }
     setBusy(true); setError('');
     try {
-      const result = await adminShifts.setVisitAssignees(shiftId, {
-        originalStartUtc: visit.status === 4 ? null : visit.originalStartUtc ?? visit.startUtc,
-        extraExceptionId: visit.status === 4 ? visit.exceptionId ?? null : null,
-        mode: Number(mode), employeeIds: mode === '0' ? [] : selected, reason: reason.trim(),
-        rosterVersion: visit.rosterVersion ?? '', assignmentVersion: visit.assignmentVersion ?? null,
-        fromThisDate: scope === 'future', preview: isPreview,
-      });
+      const result = await adminShifts.setVisitAssignees(shiftId, assignmentPayload(isPreview));
       if (isPreview) setPreview(result);
       else { await onSaved(); onClose(); }
     } catch (failure) {
