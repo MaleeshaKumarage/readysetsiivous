@@ -226,6 +226,21 @@ test('clearing an existing certification expiry sends null and the field stays e
   await expect(page.getByLabel('Certification 1 expiry', { exact: true })).toHaveValue('');
 });
 
+test('clearing a saved default-hours day removes it from the payload and keeps unrelated entries', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const employee: any = { ...baseEmployee(), defaultHours: { Monday: { start: '08:00:00', end: '16:00:00' }, Legacy: { start: '09:00:00', end: '10:00:00' } } };
+  const puts = await mockEmployee(page, employee);
+  await page.goto('/admin/employees/');
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.getByLabel('Monday start', { exact: true })).toHaveValue('08:00');
+  await page.getByLabel('Monday start', { exact: true }).fill('');
+  await page.getByLabel('Monday end', { exact: true }).fill('');
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+
+  await expect.poll(() => puts.length).toBe(1);
+  expect(puts[0].fields.defaultHours).toEqual({ Legacy: { start: '09:00:00', end: '10:00:00' } });
+});
+
 test('incomplete or reversed default hours are blocked before saving', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   const puts = await mockEmployee(page, baseEmployee());

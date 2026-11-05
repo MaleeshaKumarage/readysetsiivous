@@ -27,6 +27,9 @@ function canAssign(status: string) {
   return status === 'New' || status === 'Confirmed';
 }
 
+const LOAD_FAILED = 'Bookings could not be loaded. Reload and retry.';
+const EMPLOYEES_LOAD_FAILED = 'Employees could not be loaded, so bookings cannot be assigned. Reload and retry.';
+
 const ACTION_LABEL: Record<BookingAction, string> = { confirm: 'Confirm', cancel: 'Cancel booking', complete: 'Mark completed' };
 const STATUS_COLOR: Record<string, string> = { New: 'blue', Confirmed: 'green', Completed: 'gray', Cancelled: 'red' };
 
@@ -46,7 +49,6 @@ export default function BookingsAdminPage() {
 
   // Only the most recent request may update state, so a slow earlier response cannot overwrite a newer filter's rows.
   const requestSeq = useRef(0);
-  const LOAD_FAILED = 'Bookings could not be loaded. Reload and retry.';
   const load = async (status: string) => {
     const seq = ++requestSeq.current;
     setLoading(true); setLoadError('');
@@ -70,9 +72,9 @@ export default function BookingsAdminPage() {
     adminEmployees.list(false)
       .then(records => {
         if (records) setEmployees(records.map(e => ({ id: e.id, name: `${e.firstName} ${e.lastName}` })));
-        else setEmployeesError('Employees could not be loaded, so bookings cannot be assigned. Reload and retry.');
+        else setEmployeesError(EMPLOYEES_LOAD_FAILED);
       })
-      .catch(() => setEmployeesError('Employees could not be loaded, so bookings cannot be assigned. Reload and retry.'));
+      .catch(() => setEmployeesError(EMPLOYEES_LOAD_FAILED));
   }, []);
 
   const runAction = async (action: BookingAction) => {
