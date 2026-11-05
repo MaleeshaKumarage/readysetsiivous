@@ -21,6 +21,10 @@ public class ShiftCalendarAdminController(IShiftRepository shifts, IEmployeeRepo
     IQualityCycleRepository forms, ICompanyRepository companies, IBranchRepository branches,
     ITenantProfileRepository profiles, ITenantContext tenant, IShiftWorkReservation reservation) : ControllerBase
 {
+    // Explain the refusal so the admin knows to ask for calendar access instead of seeing a blank 403.
+    private ObjectResult CalendarForbidden() => StatusCode(StatusCodes.Status403Forbidden,
+        new { detail = "Your account does not have shift calendar access. Ask an owner to enable Shift calendar for your employee record, then reload." });
+
     private async Task<bool> Allowed(CancellationToken ct)
     {
         var subject = User.FindFirstValue("sub");
@@ -31,7 +35,7 @@ public class ShiftCalendarAdminController(IShiftRepository shifts, IEmployeeRepo
     [HttpGet]
     public async Task<IActionResult> Get([FromQuery] string? date, CancellationToken ct)
     {
-        if (!await Allowed(ct)) return Forbid();
+        if (!await Allowed(ct)) return CalendarForbidden();
         var (zoneId, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
         var today = TenantTimeZone.LocalDate(DateTime.UtcNow, zone);
         var day = today;
@@ -94,10 +98,10 @@ public class ShiftCalendarAdminController(IShiftRepository shifts, IEmployeeRepo
     [HttpPut("work-time")]
     public async Task<IActionResult> Record(WorkTimeBody body, CancellationToken ct)
     {
-        if (!await Allowed(ct)) return Forbid();
+        if (!await Allowed(ct)) return CalendarForbidden();
         await using var lease = await reservation.AcquireAsync(ct);
         // Recheck after acquiring the reservation, including revocation/lifecycle changes.
-        if (!await Allowed(ct)) return Forbid();
+        if (!await Allowed(ct)) return CalendarForbidden();
         var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
         var now = DateTime.UtcNow;
         var scheduled = DateTime.SpecifyKind(body.OccurrenceStartUtc, DateTimeKind.Utc);

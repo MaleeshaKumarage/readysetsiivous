@@ -220,8 +220,8 @@ public class AdminShiftCalendarTests
     public async Task Denies_disabled_admin_even_with_admin_role()
     {
         var f = new Fixture(); f.Admin.ShiftCalendarEnabled = false;
-        Assert.IsType<ForbidResult>(await f.Controller.Get(null, default));
-        Assert.IsType<ForbidResult>(await f.Controller.Record(f.Body(), default));
+        var denied = Assert.IsType<ObjectResult>(await f.Controller.Get(null, default)); Assert.Equal(403, denied.StatusCode); Assert.Contains("shift calendar access", denied.Value?.ToString());
+        Assert.Equal(403, Assert.IsType<ObjectResult>(await f.Controller.Record(f.Body(), default)).StatusCode);
         f.Forms.Verify(r => r.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
