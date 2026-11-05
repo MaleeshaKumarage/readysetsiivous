@@ -87,6 +87,44 @@ test('admin adds a skill and service area, removes a certification, and sees the
   await expect(page.getByLabel('Certification 1 name')).toHaveCount(0);
 });
 
+test('admin removes a skill and service area with the tag remove buttons and the change persists', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const employee = baseEmployee();
+  const puts = await mockEmployee(page, employee);
+  await page.goto('/admin/employees/');
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+
+  await page.locator('.mantine-Pill-root', { hasText: 'Windows' }).locator('.mantine-Pill-remove').click();
+  await page.locator('.mantine-Pill-root', { hasText: 'Helsinki' }).locator('.mantine-Pill-remove').click();
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+
+  await expect.poll(() => puts.length).toBe(1);
+  expect(puts[0].fields.skills).toEqual([]);
+  expect(puts[0].fields.serviceAreas).toEqual([]);
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.getByText('Windows', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Helsinki', { exact: true })).toHaveCount(0);
+});
+
+test('admin changes colour to a new valid value and it persists after reload', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const employee = baseEmployee();
+  const puts = await mockEmployee(page, employee);
+  await page.goto('/admin/employees/');
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.getByLabel('Colour', { exact: true }).fill('#00ff00');
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+
+  await expect.poll(() => puts.length).toBe(1);
+  expect(puts[0].fields.colorHex).toBe('#00ff00');
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.getByLabel('Colour', { exact: true })).toHaveValue('#00ff00');
+});
+
 test('invalid pay rate, colour and blank certification are blocked before saving', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   const employee = baseEmployee();
