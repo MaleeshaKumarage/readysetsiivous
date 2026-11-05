@@ -159,9 +159,12 @@ export interface WorkQueuePage {
 
 /** One bounded page of the admin work queue. Null on any failure so callers can offer retry. */
 export const adminWorkQueue = {
-  page: async (params: { view: WorkQueueView; source: WorkQueueSource; q?: string; skip: number; take: number }): Promise<WorkQueuePage | null> => {
+  page: async (params: { view: WorkQueueView; source: WorkQueueSource; q?: string; from?: string; to?: string; assignee?: string; skip: number; take: number }): Promise<WorkQueuePage | null> => {
     const qs = new URLSearchParams({ view: params.view, source: params.source, skip: String(params.skip), take: String(params.take) });
     if (params.q) qs.set('q', params.q);
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    if (params.assignee) qs.set('assignee', params.assignee);
     const page = await adminGet<WorkQueuePage>(`/api/v1/admin/work-queue?${qs.toString()}`, false);
     if (!page || !Array.isArray(page.items) || !Number.isInteger(page.total) || page.total < 0 || !page.counts) return null;
     return page;

@@ -247,3 +247,149 @@ test('a past assigned company visit nobody started reads Not started, and Open c
   await missedRow.focus(); await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/admin\/shifts\/calendar\/?$/);
 });
+
+test('date range and assignee filters are sent to the server and restored from the URL', async ({ page }) => {
+  const state = await setup(page);
+  await page.route('**/api/v1/admin/employees**', route => route.fulfill({ headers, json: [{ id: 'emp-1', firstName: 'Liisa', lastName: 'Korhonen', email: 'liisa@example.test', isActive: true }] }));
+  await page.goto('/admin/work-queue/');
+  await expect(page.getByRole('listitem').filter({ hasText: 'Anna Virtanen' })).toBeVisible();
+
+  await page.getByLabel('From date', { exact: true }).fill('2026-11-01');
+  await expect.poll(() => state.queries.at(-1)?.get('from')).toBe('2026-11-01');
+  await page.getByLabel('To date', { exact: true }).fill('2026-11-30');
+  await expect.poll(() => state.queries.at(-1)?.get('to')).toBe('2026-11-30');
+  await expect(page.getByRole('tab', { name: 'Needs action (1)' })).toHaveAttribute('aria-selected', 'true');
+  expect(new URL(page.url()).searchParams.get('from')).toBe('2026-11-01');
+  expect(new URL(page.url()).searchParams.get('to')).toBe('2026-11-30');
+
+  await page.getByRole('textbox', { name: 'Assignee', exact: true }).click();
+  await page.getByRole('option', { name: 'Liisa Korhonen' }).click();
+  await expect.poll(() => state.queries.at(-1)?.get('assignee')).toBe('emp-1');
+  await expect(page.getByText('Partner requests have no assignee, so they are hidden while this filter is on.')).toBeVisible();
+
+  await page.reload();
+  await expect.poll(() => state.queries.at(-1)?.get('assignee')).toBe('emp-1');
+  await expect(page.getByRole('textbox', { name: 'Assignee', exact: true })).toHaveValue('Liisa Korhonen');
+  await expect(page.getByLabel('From date', { exact: true })).toHaveValue('2026-11-01');
+  await expect(page.getByLabel('To date', { exact: true })).toHaveValue('2026-11-30');
+});
+
+test('a reversed date range is dropped instead of sent to the server', async ({ page }) => {
+  const state = await setup(page);
+  await page.goto('/admin/work-queue/?from=2026-12-05&to=2026-12-01');
+  await expect(page.getByRole('listitem').filter({ hasText: 'Anna Virtanen' })).toBeVisible();
+  expect(state.queries.at(-1)?.has('from')).toBe(false);
+  expect(state.queries.at(-1)?.has('to')).toBe(false);
+});
+
+test('clearing the assignee removes the filter, its URL param and the partner note', async ({ page }) => {
+  const state = await setup(page);
+  await page.route('**/api/v1/admin/employees**', route => route.fulfill({ headers, json: [{ id: 'emp-1', firstName: 'Liisa', lastName: 'Korhonen', email: 'liisa@example.test', isActive: true }] }));
+  await page.goto('/admin/work-queue/');
+  await expect(page.getByRole('listitem').filter({ hasText: 'Anna Virtanen' })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Assignee', exact: true }).click();
+  await page.getByRole('option', { name: 'Liisa Korhonen' }).click();
+  await expect.poll(() => state.queries.at(-1)?.get('assignee')).toBe('emp-1');
+  await expect(page.getByText('Partner requests have no assignee, so they are hidden while this filter is on.')).toBeVisible();
+
+  await page.locator('[aria-label="Clear assignee"]').click();
+  await expect.poll(() => state.queries.at(-1)?.has('assignee')).toBe(false);
+  expect(new URL(page.url()).searchParams.has('assignee')).toBe(false);
+  await expect(page.getByText('Partner requests have no assignee, so they are hidden while this filter is on.')).toHaveCount(0);
+});
+
+test('a date that is not yyyy-MM-dd is ignored while a valid end date is still sent', async ({ page }) => {
+  const state = await setup(page);
+  await page.goto('/admin/work-queue/?from=garbage&to=2026-11-30');
+  await expect(page.getByRole('listitem').filter({ hasText: 'Anna Virtanen' })).toBeVisible();
+  expect(state.queries.at(-1)?.has('from')).toBe(false);
+  expect(state.queries.at(-1)?.get('to')).toBe('2026-11-30');
+  await expect(page.getByLabel('From date', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('To date', { exact: true })).toHaveValue('2026-11-30');
+});
+
+test('clearing both date fields removes the bounds from the request and the URL', async ({ page }) => {
+  const state = await setup(page);
+  await page.goto('/admin/work-queue/?from=2026-11-01&to=2026-11-30');
+  await expect(page.getByRole('listitem').filter({ hasText: 'Anna Virtanen' })).toBeVisible();
+  await page.getByLabel('From date', { exact: true }).fill('');
+  await page.getByLabel('To date', { exact: true }).fill('');
+  await expect.poll(() => state.queries.at(-1)?.has('from')).toBe(false);
+  expect(state.queries.at(-1)?.has('to')).toBe(false);
+  expect(new URL(page.url()).searchParams.has('from')).toBe(false);
+  expect(new URL(page.url()).searchParams.has('to')).toBe(false);
+});
+
+test('an impossible calendar date in the URL is ignored while a valid end date is still sent', async ({ page }) => {
+  const state = await setup(page);
+  await page.goto('/admin/work-queue/?from=2026-13-45&to=2026-11-30');
+  await expect(page.getByRole('listitem').filter({ hasText: 'Anna Virtanen' })).toBeVisible();
+  expect(state.queries.at(-1)?.has('from')).toBe(false);
+  expect(state.queries.at(-1)?.get('to')).toBe('2026-11-30');
+  await expect(page.getByLabel('From date', { exact: true })).toHaveValue('');
+});
+
+
+test('typing a From date after the To date clears both bounds, and From is capped by To', async ({ page }) => {
+  const state = await setup(page);
+  await page.goto('/admin/work-queue/?to=2026-11-30');
+  await expect(page.getByRole('listitem').filter({ hasText: 'Anna Virtanen' })).toBeVisible();
+  await expect(page.getByLabel('From date', { exact: true })).toHaveAttribute('max', '2026-11-30');
+  await page.getByLabel('From date', { exact: true }).fill('2026-12-05');
+  await expect(page.getByLabel('From date', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('To date', { exact: true })).toHaveValue('');
+  await expect.poll(() => state.queries.at(-1)?.has('to')).toBe(false);
+  expect(state.queries.at(-1)?.has('from')).toBe(false);
+  expect(new URL(page.url()).searchParams.has('to')).toBe(false);
+});
+
+test('date and assignee filters survive a view, source or page change', async ({ page }) => {
+  const state = await setup(page);
+  await page.route('**/api/v1/admin/employees**', route => route.fulfill({ headers, json: [{ id: 'emp-1', firstName: 'Liisa', lastName: 'Korhonen', email: 'liisa@example.test', isActive: true }] }));
+  await page.goto('/admin/work-queue/?from=2026-11-01&to=2026-11-30&assignee=emp-1');
+  await expect(page.getByRole('listitem').filter({ hasText: 'Anna Virtanen' })).toBeVisible();
+  await page.getByRole('tab', { name: /^Scheduled/ }).click();
+  await expect.poll(() => state.queries.at(-1)?.get('from')).toBe('2026-11-01');
+  expect(state.queries.at(-1)?.get('to')).toBe('2026-11-30');
+  expect(state.queries.at(-1)?.get('assignee')).toBe('emp-1');
+  expect(new URL(page.url()).searchParams.get('from')).toBe('2026-11-01');
+  expect(new URL(page.url()).searchParams.get('assignee')).toBe('emp-1');
+  await page.getByRole('textbox', { name: 'Source', exact: true }).click();
+  await page.getByRole('option', { name: 'Public bookings', exact: true }).click();
+  await expect.poll(() => state.queries.at(-1)?.get('source')).toBe('booking');
+  expect(state.queries.at(-1)?.get('from')).toBe('2026-11-01');
+  expect(state.queries.at(-1)?.get('assignee')).toBe('emp-1');
+  expect(new URL(page.url()).searchParams.get('to')).toBe('2026-11-30');
+});
+
+test('date and assignee filters carry through the Next page control', async ({ page }) => {
+  const state = await setup(page);
+  await page.route('**/api/v1/admin/employees**', route => route.fulfill({ headers, json: [{ id: 'emp-1', firstName: 'Liisa', lastName: 'Korhonen', email: 'liisa@example.test', isActive: true }] }));
+  state.items['needs-action'] = Array.from({ length: 26 }, (_, i) => ({ ...bookingItem, id: `booking-${i + 1}`, reference: `BK-${2000 + i}`, customerName: `Customer ${i + 1}`, href: `/admin/work-queue/?booking=booking-${i + 1}` }));
+  state.counts['needs-action'] = 26;
+  await page.goto('/admin/work-queue/?from=2026-11-01&to=2026-11-30&assignee=emp-1');
+  await expect(page.getByText(/Showing 1–25 of 26/)).toBeVisible();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(page.getByRole('listitem').filter({ hasText: 'Customer 26' })).toBeVisible();
+  await expect.poll(() => state.queries.at(-1)?.get('skip')).toBe('25');
+  expect(state.queries.at(-1)?.get('from')).toBe('2026-11-01');
+  expect(state.queries.at(-1)?.get('to')).toBe('2026-11-30');
+  expect(state.queries.at(-1)?.get('assignee')).toBe('emp-1');
+  expect(new URL(page.url()).searchParams.get('from')).toBe('2026-11-01');
+  expect(new URL(page.url()).searchParams.get('to')).toBe('2026-11-30');
+  expect(new URL(page.url()).searchParams.get('assignee')).toBe('emp-1');
+});
+
+test('typing a To date before From clears both bounds, and To is capped from below by From', async ({ page }) => {
+  const state = await setup(page);
+  await page.goto('/admin/work-queue/?from=2026-11-10');
+  await expect(page.getByRole('listitem').filter({ hasText: 'Anna Virtanen' })).toBeVisible();
+  await expect(page.getByLabel('To date', { exact: true })).toHaveAttribute('min', '2026-11-10');
+  await page.getByLabel('To date', { exact: true }).fill('2026-11-01');
+  await expect(page.getByLabel('From date', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('To date', { exact: true })).toHaveValue('');
+  await expect.poll(() => state.queries.at(-1)?.has('from')).toBe(false);
+  expect(state.queries.at(-1)?.has('to')).toBe(false);
+  expect(new URL(page.url()).searchParams.has('from')).toBe(false);
+  expect(new URL(page.url()).searchParams.has('to')).toBe(false);
+});
