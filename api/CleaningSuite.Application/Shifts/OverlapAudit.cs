@@ -41,8 +41,9 @@ public sealed class ShiftOverlapAuditQueryHandler(IShiftRepository repository, I
     public async Task<IReadOnlyList<ShiftOverlapFinding>> Handle(ShiftOverlapAuditQuery request, CancellationToken ct)
     {
         var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
-        var localFrom = TenantTimeZone.LocalDate(DateTime.SpecifyKind(request.From, DateTimeKind.Utc), zone);
-        var localTo = TenantTimeZone.LocalDate(DateTime.SpecifyKind(request.To, DateTimeKind.Utc), zone);
+        // The client sends calendar dates as UTC midnights; the calendar date is the tenant-local day, so no zone conversion is applied.
+        var localFrom = request.From.Date;
+        var localTo = request.To.Date;
         if (localTo < localFrom)
             throw new ValidationException([new ValidationFailure("To", "The audit end date must be on or after its start date.")]);
         if ((localTo - localFrom).TotalDays > MaxWindowDays)
@@ -90,8 +91,9 @@ public sealed class EmployeeScheduleQueryHandler(IShiftRepository repository, IT
     public async Task<IReadOnlyList<EmployeeDaySchedule>> Handle(EmployeeScheduleQuery request, CancellationToken ct)
     {
         var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
-        var localFrom = TenantTimeZone.LocalDate(DateTime.SpecifyKind(request.From, DateTimeKind.Utc), zone);
-        var localTo = TenantTimeZone.LocalDate(DateTime.SpecifyKind(request.To, DateTimeKind.Utc), zone);
+        // The client sends calendar dates as UTC midnights; the calendar date is the tenant-local day, so no zone conversion is applied.
+        var localFrom = request.From.Date;
+        var localTo = request.To.Date;
         if (localTo < localFrom)
             throw new ValidationException([new ValidationFailure("To", "The schedule end date must be on or after its start date.")]);
         if ((localTo - localFrom).TotalDays > 31)

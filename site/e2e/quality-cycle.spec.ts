@@ -546,3 +546,31 @@ test('a failed email retry explains the problem as a toast and in the panel, and
   await expect(page.getByRole('button', { name: 'Retry email', exact: true })).toBeEnabled();
   expect(calls.retry).toBe(0);
 });
+
+test('a failed report send says the report was not shared, keeps the dialog and can be sent again', async ({ page }) => {
+  const calls = await setupReportWorkspace(page);
+  let sends = 0;
+  // Registered after the helper, so this route takes precedence for the send request only.
+  await page.route(/\/api\/v1\/admin\/quality-cycle\/reports\/send$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+    sends++;
+    if (sends === 1) return route.fulfill({ status: 503, headers: CORS_HEADERS, json: { detail: 'Mail service unavailable. Try again in a few minutes.' } });
+    return route.fulfill({ status: 200, headers: CORS_HEADERS, json: { id: 'share-2', token: 'synthetic-token-2', recipientEmail: 'other@example.test', emailSentUtc: '2026-10-17T12:01:00Z', isRevoked: false, expiresUtc: '2026-11-16T12:00:00Z', year: 2026, month: 10 } });
+  });
+  await selectReportShifts(page);
+  await page.getByRole('button', { name: 'Load report', exact: true }).click();
+  await page.getByRole('button', { name: 'Share all selected shifts' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('textbox', { name: 'Recipient source' }).click();
+  await page.getByRole('option', { name: 'Other email address', exact: true }).click();
+  await dialog.getByLabel('Recipient email').fill('other@example.test');
+  await dialog.getByRole('button', { name: 'Send report', exact: true }).click();
+  await expect(page.getByText('Report not shared').first()).toBeVisible();
+  await expect(page.getByText('Mail service unavailable. Try again in a few minutes.').first()).toBeVisible();
+  // The dialog stays open with the entered address, and the same send can be retried.
+  await expect(dialog.getByLabel('Recipient email')).toHaveValue('other@example.test');
+  await expect(dialog.getByRole('button', { name: 'Send report', exact: true })).toBeEnabled();
+  await dialog.getByRole('button', { name: 'Send report', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(sends).toBe(2);
+});
