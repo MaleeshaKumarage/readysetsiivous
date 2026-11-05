@@ -265,7 +265,7 @@ export class PartnerFlowBackend {
       const request = this.offerFor(match[1], me.id);
       if (request.status === 'Accepted' && request.acceptedEmployeeId === me.id && body?.version === request.version - 1) return this.dto(request, false);
       this.checkVersion(request, body?.version);
-      if (request.status !== 'Offered') throw new ApiError(409, 'This offer is no longer awaiting acceptance.');
+      if (request.status !== 'Offered') throw new ApiError(409, 'This offer is no longer waiting for your answer, so it cannot be declined. Check your scheduled work for its current status.');
       this.ensureUnstarted(request);
       let start: string | null;
       if (request.offerPlannedStartUtc) {
@@ -279,7 +279,7 @@ export class PartnerFlowBackend {
     if (method === 'POST' && match) {
       const request = this.offerFor(match[1], me.id);
       this.checkVersion(request, body?.version);
-      if (request.status !== 'Offered') throw new ApiError(409, 'This offer is no longer awaiting acceptance.');
+      if (request.status !== 'Offered') throw new ApiError(409, 'This offer is no longer waiting for your answer, so it cannot be declined. Check your scheduled work for its current status.');
       if (body?.reason?.length > 1000) throw new ApiError(400, 'Use at most 1000 characters for the reason.');
       this.invalidateOffer(request); request.status = 'Requested'; request.version++;
       return null;
