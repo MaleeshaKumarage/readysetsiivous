@@ -362,6 +362,24 @@ test('date and assignee filters survive a view, source or page change', async ({
   expect(new URL(page.url()).searchParams.get('to')).toBe('2026-11-30');
 });
 
+test('date and assignee filters carry through the Next page control', async ({ page }) => {
+  const state = await setup(page);
+  await page.route('**/api/v1/admin/employees**', route => route.fulfill({ headers, json: [{ id: 'emp-1', firstName: 'Liisa', lastName: 'Korhonen', email: 'liisa@example.test', isActive: true }] }));
+  state.items['needs-action'] = Array.from({ length: 26 }, (_, i) => ({ ...bookingItem, id: `booking-${i + 1}`, reference: `BK-${2000 + i}`, customerName: `Customer ${i + 1}`, href: `/admin/work-queue/?booking=booking-${i + 1}` }));
+  state.counts['needs-action'] = 26;
+  await page.goto('/admin/work-queue/?from=2026-11-01&to=2026-11-30&assignee=emp-1');
+  await expect(page.getByText(/Showing 1–25 of 26/)).toBeVisible();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(page.getByRole('listitem').filter({ hasText: 'Customer 26' })).toBeVisible();
+  await expect.poll(() => state.queries.at(-1)?.get('skip')).toBe('25');
+  expect(state.queries.at(-1)?.get('from')).toBe('2026-11-01');
+  expect(state.queries.at(-1)?.get('to')).toBe('2026-11-30');
+  expect(state.queries.at(-1)?.get('assignee')).toBe('emp-1');
+  expect(new URL(page.url()).searchParams.get('from')).toBe('2026-11-01');
+  expect(new URL(page.url()).searchParams.get('to')).toBe('2026-11-30');
+  expect(new URL(page.url()).searchParams.get('assignee')).toBe('emp-1');
+});
+
 test('typing a To date before From clears both bounds, and To is capped from below by From', async ({ page }) => {
   const state = await setup(page);
   await page.goto('/admin/work-queue/?from=2026-11-10');

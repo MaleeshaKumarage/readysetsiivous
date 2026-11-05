@@ -208,6 +208,26 @@ public class WorkQueueReaderDatabaseTests
     }
 
     [QualityCycleDatabaseFact]
+    public async Task Maximum_end_date_does_not_overflow_the_upper_bound()
+    {
+        // Regression: adding a day to 9999-12-31 threw, so a valid but extreme `to` failed the whole request.
+        using var f = await Fixture.Create();
+        var company = new Company { Name = "Edge Oy", BusinessId = "WQ-" + Guid.NewGuid().ToString("N")[..8], IsActive = true, IsPartnerEnabled = true };
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(company);
+            db.Store(new Booking { BookingNumber = "BK-EDGE", Customer = new Customer { Name = "Edge case" }, Status = Booking.StatusConfirmed,
+                StartUtc = new DateTime(2026, 12, 2, 8, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-02", StartLocalTime = "10:00" });
+            await db.SaveChangesAsync();
+        }
+        using var session = f.Session();
+        var reader = Reader(f, session);
+
+        var result = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Scheduled, "booking", null, 0, 25, "2026-12-01", "9999-12-31"));
+        Assert.Equal(["BK-EDGE"], result.Items.Select(i => i.Reference).ToArray());
+    }
+
+    [QualityCycleDatabaseFact]
     public async Task Partner_requests_are_kept_when_their_span_overlaps_the_date_window()
     {
         // A request that starts before the window but runs into it must stay; one that starts after the window must go.
