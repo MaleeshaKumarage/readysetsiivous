@@ -20,7 +20,10 @@ public class AgreementsPublicController : ControllerBase
     public async Task<IActionResult> Get(string token, CancellationToken ct)
     {
         var dto = await _mediator.Send(new GetPublicAgreementQuery(token), ct);
-        return dto is null ? NotFound() : Ok(dto);
+        // A wrong or replaced link needs a next step; the customer cannot look it up anywhere else.
+        return dto is null
+            ? NotFound(new { title = "Signing link not found", status = 404, detail = "This signing link is not valid or has been replaced. Ask the sender for a new signing link." })
+            : Ok(dto);
     }
 
     [HttpPost("{token}/sign")]
