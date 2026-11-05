@@ -138,6 +138,13 @@ export function problemText(problem: unknown, fallback: string): string {
   return fallback;
 }
 
+// Guidance for failures that are not about the form's content: an ended session or a missing permission.
+export function failureMessage(status: number, problem: unknown, fallback: string): string {
+  if (status === 401) return 'Your session has ended. Sign in again, then retry the change.';
+  if (status === 403) return 'Your account is not allowed to make this change. Ask an owner to check your access.';
+  return problemText(problem, fallback);
+}
+
 // Like adminSend, but keeps the server's reason (problem detail) so the user can act on it.
 export async function adminSendResult(
   path: string,
@@ -152,7 +159,7 @@ export async function adminSendResult(
   }
   if (response.ok || response.status === 204) { invalidateAdminCache(); return { ok: true }; }
   const problem = await response.json().catch(() => null);
-  return { ok: false, message: problemText(problem, `The change was not saved (error ${response.status}). Check the fields, then save again.`) };
+  return { ok: false, message: failureMessage(response.status, problem, `The change was not saved (error ${response.status}). Check the fields, then save again.`) };
 }
 
 export type AdminJsonResult<T> = { ok: true; value: T } | { ok: false; message: string };
@@ -167,7 +174,7 @@ export async function adminSendJsonResult<T>(path: string, method: 'POST' | 'PUT
   }
   if (!response.ok) {
     const problem = await response.json().catch(() => null);
-    return { ok: false, message: problemText(problem, `The change was not saved (error ${response.status}). Check the fields, then save again.`) };
+    return { ok: false, message: failureMessage(response.status, problem, `The change was not saved (error ${response.status}). Check the fields, then save again.`) };
   }
   invalidateAdminCache();
   return { ok: true, value: (await response.json()) as T };
