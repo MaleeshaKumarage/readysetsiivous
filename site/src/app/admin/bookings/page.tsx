@@ -37,14 +37,22 @@ export default function BookingsAdminPage() {
 
   // Only the most recent request may update state, so a slow earlier response cannot overwrite a newer filter's rows.
   const requestSeq = useRef(0);
+  const LOAD_FAILED = 'Bookings could not be loaded. Reload and retry.';
   const load = async (status: string) => {
     const seq = ++requestSeq.current;
     setLoading(true); setLoadError('');
-    const query = status ? `?status=${encodeURIComponent(status)}` : '';
-    const records = await adminBookings.list(query);
-    if (seq !== requestSeq.current) return;
-    if (records) setBookings(records); else setLoadError('Bookings could not be loaded. Reload and retry.');
-    setLoading(false);
+    try {
+      const query = status ? `?status=${encodeURIComponent(status)}` : '';
+      const records = await adminBookings.list(query);
+      if (seq !== requestSeq.current) return;
+      if (records) setBookings(records);
+      else { setBookings([]); setLoadError(LOAD_FAILED); }
+    } catch {
+      if (seq !== requestSeq.current) return;
+      setBookings([]); setLoadError(LOAD_FAILED);
+    } finally {
+      if (seq === requestSeq.current) setLoading(false);
+    }
   };
 
   useEffect(() => { load(statusFilter); }, [statusFilter]);
@@ -76,7 +84,7 @@ export default function BookingsAdminPage() {
       {message && <Text role="status" c="green" mb="sm">{message}</Text>}
       {loadError && <Text role="alert" c="red" mb="sm">{loadError}</Text>}
 
-      {loading ? <Loader /> : bookings.length === 0 ? (
+      {loading ? <Loader /> : loadError ? null : bookings.length === 0 ? (
         <Text c="dimmed">No bookings{statusFilter ? ` with status ${statusFilter}` : ''}.</Text>
       ) : (
         <Table.ScrollContainer minWidth={600}>

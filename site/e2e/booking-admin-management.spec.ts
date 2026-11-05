@@ -221,6 +221,36 @@ test('a slow earlier filter response cannot overwrite the rows of a newer filter
   await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
 });
 
+test('a failed filter change shows only the alert, never stale rows or the empty message', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockBookings(page, fixtures());
+  await page.route(/\/api\/v1\/admin\/bookings\?status=Completed$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    return route.fulfill({ status: 500, headers, json: { detail: 'Database unavailable' } });
+  });
+  await page.goto('/admin/bookings/');
+  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
+
+  await page.getByRole('textbox', { name: 'Filter by status', exact: true }).click();
+  await page.getByRole('option', { name: 'Completed', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Bookings could not be loaded. Reload and retry.' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toHaveCount(0);
+  await expect(page.getByText('No bookings with status Completed.', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('No bookings.', { exact: true })).toHaveCount(0);
+});
+
+test('a network failure on load clears the spinner and shows the alert', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await page.route(/\/api\/v1\/admin\/bookings(?:\?.*)?$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    return route.abort('failed');
+  });
+  await page.goto('/admin/bookings/');
+  await expect(page.getByRole('alert').filter({ hasText: 'Bookings could not be loaded. Reload and retry.' })).toBeVisible();
+  await expect(page.locator('.mantine-Loader-root')).toHaveCount(0);
+  await expect(page.getByRole('row', { name: /BK-/ })).toHaveCount(0);
+});
+
 test('manager is blocked from the bookings administration page', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   await page.addInitScript(() => { (window as any).__MOCK_ROLES__ = ['manager']; });
