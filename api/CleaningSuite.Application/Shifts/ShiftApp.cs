@@ -86,9 +86,13 @@ public interface IShiftRepository
     Task DeleteOccurrenceExceptionAsync(Guid id, CancellationToken ct = default);
 }
 
+public record ShiftConflictDetail(Guid ShiftId, string ShiftName, DateTime StartUtc, DateTime EndUtc);
+
 public class ShiftConflictException : Exception
 {
     public ShiftConflictException(string message) : base(message) { }
+    public ShiftConflictException(string message, IReadOnlyList<ShiftConflictDetail> conflicts) : base(message) { Conflicts = conflicts; }
+    public IReadOnlyList<ShiftConflictDetail> Conflicts { get; } = Array.Empty<ShiftConflictDetail>();
 }
 
 public record CreateShiftCommand(

@@ -8,6 +8,7 @@ public record ShiftVisitRosterEntry(ResolvedShiftOccurrence Occurrence, DateTime
 {
     public string RosterVersion { get; init; } = "";
     public string? ScheduleReason { get; init; }
+    public Guid ShiftId { get; init; }
     public bool IsCancelled => Occurrence.Status is ShiftOccurrenceExceptionStatus.CustomerCancelled
         or ShiftOccurrenceExceptionStatus.CompanyCancelled;
 }
@@ -50,7 +51,7 @@ public static class ShiftVisitRoster
                 return new ShiftVisitRosterEntry(visit, original, extra,
                     cancelled ? Array.Empty<Guid>() : selected.Where(id => id != Guid.Empty).Distinct().Order().ToArray(),
                     cancelled ? "Cancelled" : source, change) { RosterVersion = rosterVersion,
-                        ScheduleReason = scheduleChanges.FirstOrDefault(x => x.Id == visit.ExceptionId)?.Reason };
+                        ScheduleReason = scheduleChanges.FirstOrDefault(x => x.Id == visit.ExceptionId)?.Reason, ShiftId = shiftId };
             }).ToList();
     }
 }
