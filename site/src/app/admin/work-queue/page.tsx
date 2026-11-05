@@ -35,10 +35,18 @@ const ACTION_LABEL = { confirm: 'Confirm', cancel: 'Cancel booking', complete: '
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Accepts yyyy-MM-dd bounds only; a reversed range is dropped rather than sent to the server. */
+/** A yyyy-MM-dd string that is a real calendar date (rejects 2026-13-45 and 2026-02-30). */
+function isCalendarDate(value: string): boolean {
+  if (!DATE_PATTERN.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+/** Accepts real yyyy-MM-dd bounds only; a reversed range is dropped rather than sent to the server. */
 function readDates(from: string | null, to: string | null): { dateFrom: string; dateTo: string } {
-  const start = from && DATE_PATTERN.test(from) ? from : '';
-  const end = to && DATE_PATTERN.test(to) ? to : '';
+  const start = from && isCalendarDate(from) ? from : '';
+  const end = to && isCalendarDate(to) ? to : '';
   return start && end && start > end ? { dateFrom: '', dateTo: '' } : { dateFrom: start, dateTo: end };
 }
 
@@ -166,7 +174,9 @@ export default function WorkQueuePage() {
     setSource(next); setPage(1); writeUrl(current({ source: next, page: 1 }));
   };
   const changeDates = (nextFrom: string, nextTo: string) => {
-    setDateFrom(nextFrom); setDateTo(nextTo); setPage(1); writeUrl(current({ dateFrom: nextFrom, dateTo: nextTo, page: 1 }));
+    // Input edits go through the same rule as the URL, so a reversed or invalid pair is cleared before it is stored or sent.
+    const next = readDates(nextFrom, nextTo);
+    setDateFrom(next.dateFrom); setDateTo(next.dateTo); setPage(1); writeUrl(current({ dateFrom: next.dateFrom, dateTo: next.dateTo, page: 1 }));
   };
   const changeAssignee = (next: string) => {
     setAssignee(next); setPage(1); writeUrl(current({ assignee: next, page: 1 }));
