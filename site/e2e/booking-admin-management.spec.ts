@@ -306,6 +306,19 @@ test('failed assignment keeps the booking unassigned and shows a recoverable err
   expect(bookings.find(b => b.id === 'b-new').employeeName).toBeNull();
 });
 
+test('a failed employee list shows an alert in the assign control instead of an empty picker', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockBookings(page, fixtures());
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    return route.fulfill({ status: 500, headers, json: { detail: 'Employee service unavailable' } });
+  });
+  await page.goto('/admin/bookings/');
+  await page.getByRole('row', { name: /BK-1001/ }).getByRole('button', { name: 'Details', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Employees could not be loaded, so bookings cannot be assigned.' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Assign', exact: true })).toBeDisabled();
+});
+
 test('manager is blocked from the bookings administration page', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   await page.addInitScript(() => { (window as any).__MOCK_ROLES__ = ['manager']; });

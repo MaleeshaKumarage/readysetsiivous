@@ -42,6 +42,7 @@ export default function BookingsAdminPage() {
   const [employees, setEmployees] = useState<{ id: string; name: string }[]>([]);
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
   const [assignBusy, setAssignBusy] = useState(false);
+  const [employeesError, setEmployeesError] = useState('');
 
   // Only the most recent request may update state, so a slow earlier response cannot overwrite a newer filter's rows.
   const requestSeq = useRef(0);
@@ -66,7 +67,12 @@ export default function BookingsAdminPage() {
   useEffect(() => { load(statusFilter); }, [statusFilter]);
 
   useEffect(() => {
-    adminEmployees.list(false).then(records => { if (records) setEmployees(records.map(e => ({ id: e.id, name: `${e.firstName} ${e.lastName}` }))); });
+    adminEmployees.list(false)
+      .then(records => {
+        if (records) setEmployees(records.map(e => ({ id: e.id, name: `${e.firstName} ${e.lastName}` })));
+        else setEmployeesError('Employees could not be loaded, so bookings cannot be assigned. Reload and retry.');
+      })
+      .catch(() => setEmployeesError('Employees could not be loaded, so bookings cannot be assigned. Reload and retry.'));
   }, []);
 
   const runAction = async (action: BookingAction) => {
@@ -171,11 +177,14 @@ export default function BookingsAdminPage() {
               </Group>
             )}
             {isAdmin() && canAssign(selected.status) && (
-              <Group gap="xs" wrap="wrap" align="flex-end">
+              <Stack gap="xs">
+                {employeesError && <Text role="alert" size="sm" c="red">{employeesError}</Text>}
+                <Group gap="xs" wrap="wrap" align="flex-end">
                 <Select aria-label="Assign to" placeholder="Choose employee" searchable data={employees.map(e => ({ value: e.id, label: e.name }))} value={assigneeId} onChange={setAssigneeId} w={240} />
                 <Button variant="light" loading={assignBusy} disabled={!assigneeId || assignBusy} onClick={assign}>Assign</Button>
                 {selected.employeeName && <Button variant="subtle" color="red" loading={assignBusy} disabled={assignBusy} onClick={unassign}>Unassign</Button>}
-              </Group>
+                </Group>
+              </Stack>
             )}
           </Stack>
         )}

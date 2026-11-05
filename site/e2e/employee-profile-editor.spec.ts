@@ -207,6 +207,25 @@ test('admin sets default hours, keeps unrelated stored hours, and the values per
   await expect(page.getByLabel('Tuesday start', { exact: true })).toHaveValue('');
 });
 
+test('clearing an existing certification expiry sends null and the field stays empty after reload', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const employee: any = { ...baseEmployee(), certifications: [{ id: 'cert-1', name: 'Hygiene', expiresAtUtc: '2027-03-01T13:30:00Z' }] };
+  const puts = await mockEmployee(page, employee);
+  await page.goto('/admin/employees/');
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.getByLabel('Certification 1 expiry', { exact: true })).toHaveValue('2027-03-01');
+  await page.getByLabel('Certification 1 expiry', { exact: true }).fill('');
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+
+  await expect.poll(() => puts.length).toBe(1);
+  expect(puts[0].fields.certifications).toEqual([{ id: 'cert-1', name: 'Hygiene', expiresAtUtc: null }]);
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.getByLabel('Certification 1 name', { exact: true })).toHaveValue('Hygiene');
+  await expect(page.getByLabel('Certification 1 expiry', { exact: true })).toHaveValue('');
+});
+
 test('incomplete or reversed default hours are blocked before saving', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   const puts = await mockEmployee(page, baseEmployee());
