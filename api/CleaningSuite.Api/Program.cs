@@ -332,6 +332,7 @@ public class DefaultExceptionHandler : IExceptionHandler
             BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge } => (413, "Payload too large"),
             CleaningSuite.Application.Common.NotFoundException => (404, "Not found"),
             CleaningSuite.Application.Bookings.SlotConflictException => (409, "Slot conflict"),
+            CleaningSuite.Application.Invoicing.InvoiceConflictException => (409, "Invoice conflict"),
             CleaningSuite.Application.Agreements.AgreementConflictException => (409, "Agreement conflict"),
             CleaningSuite.Application.Shifts.ShiftConflictException => (409, "Shift conflict"),
             CleaningSuite.Application.QualityCycle.QualityCycleConflictException => (409, "Shift task conflict"),
