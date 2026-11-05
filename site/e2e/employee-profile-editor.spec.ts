@@ -207,6 +207,18 @@ test('admin sets default hours, keeps unrelated stored hours, and the values per
   await expect(page.getByLabel('Tuesday start', { exact: true })).toHaveValue('');
 });
 
+test('a failed employee list shows an error instead of an empty list', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    return route.abort('failed');
+  });
+  await page.goto('/admin/employees/');
+  await expect(page.getByRole('alert').filter({ hasText: 'Employees could not be loaded. Reload and retry.' })).toBeVisible();
+  await expect(page.getByText('No employees yet.', { exact: true })).toHaveCount(0);
+  await expect(page.locator('.mantine-Loader-root')).toHaveCount(0);
+});
+
 test('clearing an existing certification expiry sends null and the field stays empty after reload', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   const employee: any = { ...baseEmployee(), certifications: [{ id: 'cert-1', name: 'Hygiene', expiresAtUtc: '2027-03-01T13:30:00Z' }] };
