@@ -177,7 +177,7 @@ public class CancelPublicBookingHandler : IRequestHandler<CancelPublicBookingCom
     {
         var booking = await _bookings.GetByNumberAsync(request.BookingNumber, ct);
         if (booking is null || !BookingManagementKey.Verify(request.ManagementKey, booking.ManagementKeyHash))
-            throw new NotFoundException("Booking", Guid.Empty);
+            throw new CleaningSuite.Application.Common.PublicBookingNotFoundException();
 
         if (booking.Status is Booking.StatusCancelled or Booking.StatusCompleted)
             throw new SlotConflictException("Booking can no longer be cancelled");

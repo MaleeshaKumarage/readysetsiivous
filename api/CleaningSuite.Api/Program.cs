@@ -353,6 +353,7 @@ public class DefaultExceptionHandler : IExceptionHandler
             CleaningSuite.Application.Invoicing.InvoiceConflictException => (409, "Invoice conflict"),
             CleaningSuite.Application.Agreements.AgreementConflictException => (409, "Agreement conflict"),
             CleaningSuite.Application.Shifts.ShiftConflictException => (409, "Shift conflict"),
+            CleaningSuite.Application.Common.PublicBookingNotFoundException => (404, "Booking not found"),
             CleaningSuite.Application.QualityCycle.QualityCycleConflictException => (409, "Shift task conflict"),
             CleaningSuite.Application.Employees.EmployeeIdentityConflictException => (409, "Employee identity conflict"),
             CleaningSuite.Application.Employees.EmployeeInviteConfigurationException => (503, "Employee invitation configuration incomplete"),

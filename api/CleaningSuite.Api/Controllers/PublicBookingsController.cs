@@ -38,7 +38,9 @@ public class PublicBookingsController : ControllerBase
         [FromBody] GetPublicBookingQuery body, CancellationToken ct)
     {
         var booking = await _mediator.Send(body, ct);
-        return booking is null ? NotFound() : Ok(booking);
+        return booking is null
+            ? NotFound(new { title = "Booking not found", status = 404, detail = CleaningSuite.Application.Common.PublicBookingNotFoundException.GuidanceText })
+            : Ok(booking);
     }
 
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]

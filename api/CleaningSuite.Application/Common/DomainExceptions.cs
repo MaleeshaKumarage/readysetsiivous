@@ -7,3 +7,9 @@ public class SlugConflictException(string slug)
 /// <summary>Requested document does not exist.</summary>
 public class NotFoundException(string entity, Guid id)
     : Exception($"{entity} {id} not found");
+
+/// <summary>A public booking lookup or cancel that does not match a booking number and management key. Explains the next step.</summary>
+public class PublicBookingNotFoundException() : Exception(GuidanceText)
+{
+    public const string GuidanceText = "No booking matches these details. Check the booking reference and the management code in your confirmation email, then try again.";
+}
