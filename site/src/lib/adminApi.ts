@@ -528,12 +528,22 @@ export interface ShiftOccurrenceExceptionInput {
   employeeId?: string | null;
 }
 
+export interface ShiftConflictDetail { shiftId: string; shiftName: string; startUtc: string; endUtc: string }
+
+// Overlap refusals carry the clashing shift so the assignment dialog can offer a fix.
+export class VisitConflictError extends Error {
+  constructor(message: string, public readonly conflicts: ShiftConflictDetail[]) { super(message); this.name = 'VisitConflictError'; }
+}
+
 async function occurrenceRequest<T>(path: string, method: 'PUT' | 'DELETE', body?: unknown): Promise<T> {
   const response = await authorizedFetch(path, { method, cache: 'no-store',
     ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   if (!response.ok) {
     const problem = await response.json().catch(() => null);
-    throw new Error(typeof problem?.detail === 'string' ? problem.detail : 'Could not update this occurrence. Please retry.');
+    const message = typeof problem?.detail === 'string' && problem.detail.trim() ? problem.detail.trim() : 'Could not update this occurrence. Please retry.';
+    const conflicts = Array.isArray(problem?.conflicts) ? problem.conflicts as ShiftConflictDetail[] : [];
+    if (response.status === 409 && conflicts.length > 0) throw new VisitConflictError(message, conflicts);
+    throw new Error(message);
   }
   invalidateAdminCache();
   return method === 'DELETE' ? undefined as T : await response.json() as T;
