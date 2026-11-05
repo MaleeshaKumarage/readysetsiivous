@@ -1,5 +1,6 @@
 'use client';
 
+import { showError } from '@/lib/toast';
 import { useCallback, useEffect, useState } from 'react';
 import { Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge, ActionIcon, Tooltip, CopyButton, Paper } from '@mantine/core';
 import { Plus, Trash2, Copy, Mail, Check, Eye } from 'lucide-react';
@@ -76,7 +77,7 @@ export default function AgreementsPage() {
         throw new Error(problem.detail || problem.title || 'Could not update agreement activity. Please retry.');
       }
       invalidateAdminCache(); await load();
-    } catch (failure) { setLifecycleError(failure instanceof Error ? failure.message : 'Could not update agreement activity. Please retry.'); }
+    } catch (failure) { const message = failure instanceof Error ? failure.message : 'Could not update agreement activity. Please retry.'; setLifecycleError(message); showError(message, 'Agreement activity not changed'); }
     finally { setLifecycleBusy(null); }
   };
 
@@ -93,7 +94,7 @@ export default function AgreementsPage() {
       if (!signed && message.toLowerCase().includes('signed evidence')) {
         invalidateAdminCache(); await load();
       }
-      setLifecycleError(message);
+      setLifecycleError(message); showError(message, 'Agreement not deleted');
     }
     finally { setLifecycleBusy(null); }
   };
@@ -105,7 +106,7 @@ export default function AgreementsPage() {
     setSubmitting(true); setError('');
     const res = await adminAgreements.create(title.trim(), companyId, pdf, validSigners);
     setSubmitting(false);
-    if (!res.ok) { setError(res.error); return; }
+    if (!res.ok) { setError(res.error); showError(res.error, 'Agreement not created'); return; }
     setLifecycle('active');
     setOpen(false); setTitle(''); setCompanyId(null); setPdf(null); setSigners([{ name: '', email: '' }]);
     setCreatedAgreement(res.data);

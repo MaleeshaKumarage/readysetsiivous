@@ -291,7 +291,7 @@ async function employeeMutation(path: string, body?: unknown): Promise<boolean> 
   const response = await authorizedFetch(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) });
   if (!response.ok) {
     const problem = await response.json().catch(() => ({})) as { detail?: string; title?: string };
-    throw new Error(problem.detail || problem.title || `Employee update failed (${response.status}). Please retry.`);
+    throw new Error(problem.detail || problem.title || `The change was not saved (error ${response.status}). Check the fields, then save again.`);
   }
   invalidateAdminCache(); return true;
 }
@@ -341,12 +341,13 @@ async function agreementCreateError(response: Response): Promise<string> {
       const first = Object.values(body.errors).flat()[0];
       if (first) return first;
     }
-    if (body.title) return body.title;
+    // The detail explains what to change; the title is only a category.
     if (body.detail) return body.detail;
+    if (body.title) return body.title;
   } catch {
     // fall through
   }
-  return `Request failed (${response.status})`;
+  return `The agreement was not created (error ${response.status}). Check the fields and the PDF, then create it again.`;
 }
 
 export const adminAgreements = {
