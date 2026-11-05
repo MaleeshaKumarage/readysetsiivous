@@ -131,7 +131,8 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
             var q = Db.Query<Booking>().Where(WorkQueueRules.BookingIn(view));
             if (search is not null) q = q.Where(b => b.BookingNumber.Contains(search, StringComparison.OrdinalIgnoreCase) || b.Customer.Name.Contains(search, StringComparison.OrdinalIgnoreCase));
             // Booking StartUtc is a timestamp without time zone, so the bounds are Unspecified-kind (Npgsql rejects Kind=Utc).
-            if (fromDay is { } firstDay) { var lower = TenantTimeZone.StartOfLocalDay(firstDay.ToDateTime(TimeOnly.MinValue), zone); var unspecifiedLower = DateTime.SpecifyKind(lower, DateTimeKind.Unspecified); q = q.Where(b => b.StartUtc >= unspecifiedLower); }
+            // Local midnight on 0001-01-01 is before DateTime.MinValue once converted to UTC, so an open start stays open.
+            if (fromDay is { } firstDay && firstDay != DateOnly.MinValue) { var lower = TenantTimeZone.StartOfLocalDay(firstDay.ToDateTime(TimeOnly.MinValue), zone); var unspecifiedLower = DateTime.SpecifyKind(lower, DateTimeKind.Unspecified); q = q.Where(b => b.StartUtc >= unspecifiedLower); }
             // The day after 9999-12-31 does not exist, so an end date at the maximum leaves the upper bound open.
             if (toDay is { } lastDay && lastDay != DateOnly.MaxValue) { var upper = TenantTimeZone.StartOfLocalDay(lastDay.AddDays(1).ToDateTime(TimeOnly.MinValue), zone); var unspecifiedUpper = DateTime.SpecifyKind(upper, DateTimeKind.Unspecified); q = q.Where(b => b.StartUtc < unspecifiedUpper); }
             if (assignee is not null) q = q.Where(b => b.EmployeeId == assigneeKey);

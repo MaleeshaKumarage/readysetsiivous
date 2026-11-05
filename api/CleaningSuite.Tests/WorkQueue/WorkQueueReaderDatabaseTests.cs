@@ -216,7 +216,7 @@ public class WorkQueueReaderDatabaseTests
         using (var db = f.Store.LightweightSession(f.Tenant))
         {
             db.Store(company);
-            db.Store(new Booking { BookingNumber = "BK-EDGE", Customer = new Customer { Name = "Edge case" }, Status = Booking.StatusConfirmed,
+            db.Store(new Booking { BookingNumber = "BK-EDGE", Customer = new Customer { Name = "Edge case" }, Status = Booking.StatusConfirmed, EmployeeId = Guid.NewGuid().ToString(),
                 StartUtc = new DateTime(2026, 12, 2, 8, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-02", StartLocalTime = "10:00" });
             await db.SaveChangesAsync();
         }
@@ -225,6 +225,26 @@ public class WorkQueueReaderDatabaseTests
 
         var result = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Scheduled, "booking", null, 0, 25, "2026-12-01", "9999-12-31"));
         Assert.Equal(["BK-EDGE"], result.Items.Select(i => i.Reference).ToArray());
+    }
+
+    [QualityCycleDatabaseFact]
+    public async Task Minimum_start_date_does_not_underflow_the_lower_bound()
+    {
+        // Regression: local midnight on 0001-01-01 converted to UTC fell below DateTime.MinValue for tenants east of UTC.
+        using var f = await Fixture.Create();
+        var company = new Company { Name = "Floor Oy", BusinessId = "WQ-" + Guid.NewGuid().ToString("N")[..8], IsActive = true, IsPartnerEnabled = true };
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(company);
+            db.Store(new Booking { BookingNumber = "BK-FLOOR", Customer = new Customer { Name = "Floor case" }, Status = Booking.StatusConfirmed, EmployeeId = Guid.NewGuid().ToString(),
+                StartUtc = new DateTime(2026, 12, 2, 8, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-02", StartLocalTime = "10:00" });
+            await db.SaveChangesAsync();
+        }
+        using var session = f.Session();
+        var reader = Reader(f, session);
+
+        var result = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Scheduled, "booking", null, 0, 25, "0001-01-01", "2026-12-31"));
+        Assert.Equal(["BK-FLOOR"], result.Items.Select(i => i.Reference).ToArray());
     }
 
     [QualityCycleDatabaseFact]
