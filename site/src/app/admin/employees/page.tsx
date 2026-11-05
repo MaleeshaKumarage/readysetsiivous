@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge } from '@mantine/core';
+import { Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge, TagsInput, NumberInput, Textarea } from '@mantine/core';
 import { isAdmin } from '@/lib/auth';
 import { Plus } from 'lucide-react';
 import { adminEmployees, adminCompanies, authorizedFetch, invalidateAdminCache, type Company, type Employee } from '@/lib/adminApi';
@@ -19,6 +19,8 @@ export default function EmployeesAdminPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [form, setForm] = useState({ email: '', firstName: '', lastName: '', phone: '', role: 'employee', partnerCompanyId: '' });
+  const emptyProfile = { skills: [] as string[], serviceAreas: [] as string[], colorHex: '', payRate: '' as number | '', notes: '', certifications: [] as { name: string; expiresAt: string }[] };
+  const [profile, setProfile] = useState(emptyProfile);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [retryEmployee, setRetryEmployee] = useState<Employee | null>(null);
@@ -52,6 +54,10 @@ export default function EmployeesAdminPage() {
   const submit = async () => {
     if (!form.email.trim() || !form.firstName.trim() || !form.lastName.trim()) { setError('Email, first and last name are required.'); return; }
     if (form.role === 'partner' && !companies.some(c => c.id === form.partnerCompanyId && c.isActive && c.isPartnerEnabled)) { setError('Select an active company with partner access enabled.'); return; }
+    const colour = profile.colorHex.trim();
+    if (colour && !/^#[0-9a-fA-F]{6}$/.test(colour)) { setError('Colour must be a 6-digit hex value such as #1a2b3c.'); return; }
+    if (profile.payRate !== '' && (!Number.isFinite(Number(profile.payRate)) || Number(profile.payRate) < 0)) { setError('Pay rate must be zero or more.'); return; }
+    if (profile.certifications.some(c => !c.name.trim())) { setError('Each certification needs a name. Remove empty rows before saving.'); return; }
     setSaving(true); setError('');
     try {
     const fields = {
@@ -61,12 +67,12 @@ export default function EmployeesAdminPage() {
       phone: form.phone.trim(),
       role: form.role,
       partnerCompanyId: form.role === 'partner' ? form.partnerCompanyId : null,
-      skills: editingEmployee?.skills ?? [],
-      serviceAreas: editingEmployee?.serviceAreas ?? [],
-      colorHex: editingEmployee?.colorHex ?? null,
-      payRate: editingEmployee?.payRate ?? null,
-      notes: editingEmployee?.notes ?? null,
-      certifications: editingEmployee?.certifications ?? [],
+      skills: profile.skills,
+      serviceAreas: profile.serviceAreas,
+      colorHex: colour || null,
+      payRate: profile.payRate === '' ? null : Number(profile.payRate),
+      notes: profile.notes.trim() || null,
+      certifications: profile.certifications.map(c => ({ name: c.name.trim(), expiresAtUtc: c.expiresAt ? `${c.expiresAt}T00:00:00Z` : null })),
       defaultHours: editingEmployee?.defaultHours ?? {},
     };
     if (editingEmployee) {
@@ -87,6 +93,14 @@ export default function EmployeesAdminPage() {
   const openEdit = (employee: Employee) => {
     setEditingEmployee(employee);
     setForm({ email: employee.email, firstName: employee.firstName, lastName: employee.lastName, phone: employee.phone ?? '', role: employee.role, partnerCompanyId: employee.partnerCompanyId ?? '' });
+    setProfile({
+      skills: employee.skills ?? [],
+      serviceAreas: employee.serviceAreas ?? [],
+      colorHex: employee.colorHex ?? '',
+      payRate: employee.payRate ?? '',
+      notes: employee.notes ?? '',
+      certifications: (employee.certifications ?? []).map(c => ({ name: c.name, expiresAt: c.expiresAtUtc ? c.expiresAtUtc.slice(0, 10) : '' })),
+    });
     setError(''); setModalOpen(true);
   };
 
@@ -130,7 +144,7 @@ export default function EmployeesAdminPage() {
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
         <Title order={2} component="h1">Employees</Title>
-        {isAdmin() && <Button leftSection={<Plus size={16} />} onClick={() => { setEditingEmployee(null); setForm({ email: '', firstName: '', lastName: '', phone: '', role: 'employee', partnerCompanyId: '' }); setError(''); setModalOpen(true); }}>Add employee</Button>}
+        {isAdmin() && <Button leftSection={<Plus size={16} />} onClick={() => { setEditingEmployee(null); setForm({ email: '', firstName: '', lastName: '', phone: '', role: 'employee', partnerCompanyId: '' }); setProfile(emptyProfile); setError(''); setModalOpen(true); }}>Add employee</Button>}
       </Group>
 
       {inviteMessage && <Text role="status" c="green" mb="sm">{inviteMessage}</Text>}
@@ -184,6 +198,24 @@ export default function EmployeesAdminPage() {
           <TextInput label="Phone" value={form.phone} onChange={set('phone')} />
           <Select label="Role" data={ROLES} value={form.role} onChange={(v) => setForm((f) => ({ ...f, role: v ?? 'employee' }))} />
           {form.role === 'partner' && <><Select label="Partner company" required searchable data={companies.filter(c => c.isActive && c.isPartnerEnabled).map(c => ({ value: c.id, label: c.name }))} value={form.partnerCompanyId || null} onChange={value => setForm(current => ({ ...current, partnerCompanyId: value ?? '' }))} description="Only companies with partner access enabled are available." />{companyError && <Text role="alert" c="red">{companyError}</Text>}</>}
+          {editingEmployee && <>
+            <TagsInput label="Skills" value={profile.skills} onChange={skills => setProfile(current => ({ ...current, skills }))} />
+            <TagsInput label="Service areas" value={profile.serviceAreas} onChange={serviceAreas => setProfile(current => ({ ...current, serviceAreas }))} />
+            <TextInput label="Colour" placeholder="#1a2b3c" value={profile.colorHex} onChange={e => { const colorHex = e.currentTarget.value; setProfile(current => ({ ...current, colorHex })); }} />
+            <NumberInput label="Pay rate" decimalScale={2} value={profile.payRate} onChange={payRate => setProfile(current => ({ ...current, payRate: typeof payRate === 'number' ? payRate : '' }))} />
+            <Textarea label="Notes" autosize minRows={2} value={profile.notes} onChange={e => { const notes = e.currentTarget.value; setProfile(current => ({ ...current, notes })); }} />
+            <Stack gap="xs">
+              <Text size="sm" fw={500}>Certifications</Text>
+              {profile.certifications.map((cert, index) => (
+                <Group key={index} gap="xs" wrap="wrap" align="flex-end">
+                  <TextInput style={{ flex: 1, minWidth: 140 }} aria-label={`Certification ${index + 1} name`} placeholder="Name" value={cert.name} onChange={e => { const name = e.currentTarget.value; setProfile(current => ({ ...current, certifications: current.certifications.map((c, i) => i === index ? { ...c, name } : c) })); }} />
+                  <TextInput type="date" aria-label={`Certification ${index + 1} expiry`} value={cert.expiresAt} onChange={e => { const expiresAt = e.currentTarget.value; setProfile(current => ({ ...current, certifications: current.certifications.map((c, i) => i === index ? { ...c, expiresAt } : c) })); }} />
+                  <Button size="xs" variant="subtle" color="red" onClick={() => setProfile(current => ({ ...current, certifications: current.certifications.filter((_, i) => i !== index) }))}>Remove</Button>
+                </Group>
+              ))}
+              <Button size="xs" variant="light" onClick={() => setProfile(current => ({ ...current, certifications: [...current.certifications, { name: '', expiresAt: '' }] }))}>Add certification</Button>
+            </Stack>
+          </>}
           {error && <Text role="alert" size="sm" c="red">{error}</Text>}
           <Group justify="flex-end" mt="xs">
             <Button variant="default" onClick={() => setModalOpen(false)}>Cancel</Button>
