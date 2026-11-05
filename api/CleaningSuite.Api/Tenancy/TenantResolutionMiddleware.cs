@@ -59,7 +59,7 @@ public class TenantResolutionMiddleware
             }
             if (!await IsActiveAsync(registry, slug, context.RequestAborted))
             {
-                await WriteInactiveAsync(context, slug);
+                await WriteInactiveAsync(context, registry, slug);
                 return;
             }
         }
@@ -87,7 +87,7 @@ public class TenantResolutionMiddleware
                 if (RequiresActiveTenant(path)
                     && !await IsActiveAsync(registry, realm, context.RequestAborted))
                 {
-                    await WriteInactiveAsync(context, realm);
+                    await WriteInactiveAsync(context, registry, realm);
                     return;
                 }
             }
@@ -131,15 +131,26 @@ public class TenantResolutionMiddleware
         return registration?.Status == TenantRegistration.StatusActive;
     }
 
-    private async Task WriteInactiveAsync(HttpContext context, string tenantId)
+    private async Task WriteInactiveAsync(HttpContext context, ITenantRegistry registry, string tenantId)
     {
-        _logger.LogWarning("Rejected request for unknown/inactive tenant {Tenant}", tenantId);
+        // Error path only: a second lookup tells an unknown address apart from a suspended workspace.
+        var known = await registry.GetBySlugAsync(tenantId, context.RequestAborted) is not null;
+        _logger.LogWarning("Rejected request for {Kind} tenant {Tenant}", known ? "inactive" : "unknown", tenantId);
         context.Response.StatusCode = StatusCodes.Status403Forbidden;
-        await context.Response.WriteAsJsonAsync(new
-        {
-            type = "https://cleaning-suite.local/errors/tenant-inactive",
-            title = "Tenant is not active",
-            status = 403,
-        });
+        await context.Response.WriteAsJsonAsync(known
+            ? new
+            {
+                type = "https://cleaning-suite.local/errors/tenant-inactive",
+                title = "Tenant is not active",
+                status = 403,
+                detail = "This workspace is suspended, so it cannot be used right now. Contact ReadySetSiivous support to restore access.",
+            }
+            : new
+            {
+                type = "https://cleaning-suite.local/errors/tenant-not-found",
+                title = "Workspace not found",
+                status = 403,
+                detail = "No workspace matches this web address. Check the address or the workspace name, then try again.",
+            });
     }
 }

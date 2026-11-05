@@ -197,7 +197,6 @@ public class ReactivateEmployeeHandler : IRequestHandler<ReactivateEmployeeComma
 }
 
 public class DeactivateEmployeeHandler : IRequestHandler<DeactivateEmployeeCommand, Unit>
-
 {
     private readonly IEmployeeRepository _employees;
 
@@ -205,8 +204,8 @@ public class DeactivateEmployeeHandler : IRequestHandler<DeactivateEmployeeComma
     private readonly ITenantContext _tenant;
     private readonly IEmployeeIdentityLock _locks;
     private readonly IShiftWorkReservation _reservation;
-    private readonly IShiftRepository? _shifts;
-    public DeactivateEmployeeHandler(IEmployeeRepository employees, IEmployeeIdentityProvider identities, ITenantContext tenant, IEmployeeIdentityLock locks, IShiftWorkReservation reservation, IShiftRepository? shifts = null)
+    private readonly IShiftRepository _shifts;
+    public DeactivateEmployeeHandler(IEmployeeRepository employees, IEmployeeIdentityProvider identities, ITenantContext tenant, IEmployeeIdentityLock locks, IShiftWorkReservation reservation, IShiftRepository shifts)
     { _employees = employees; _identities = identities; _tenant = tenant; _locks = locks; _reservation = reservation; _shifts = shifts; }
 
     public async Task<Unit> Handle(DeactivateEmployeeCommand request, CancellationToken ct)
