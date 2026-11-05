@@ -145,6 +145,56 @@ test('failed action keeps the booking status and shows a recoverable error', asy
   expect(bookings.find(b => b.id === 'b-new').status).toBe('New');
 });
 
+test('empty list shows the no-bookings message and no rows', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockBookings(page, []);
+  await page.goto('/admin/bookings/');
+  await expect(page.getByText('No bookings.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('row', { name: /BK-/ })).toHaveCount(0);
+});
+
+test('filter that matches nothing shows the status-specific empty message', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockBookings(page, fixtures().filter(b => b.status !== 'Completed'));
+  await page.goto('/admin/bookings/');
+  await page.getByRole('textbox', { name: 'Filter by status', exact: true }).click();
+  await page.getByRole('option', { name: 'Completed', exact: true }).click();
+  await expect(page.getByText('No bookings with status Completed.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('row', { name: /BK-/ })).toHaveCount(0);
+});
+
+test('a failed list load shows a recoverable alert instead of a table', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await page.route(/\/api\/v1\/admin\/bookings(?:\?.*)?$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    return route.fulfill({ status: 500, headers, json: { detail: 'Database unavailable' } });
+  });
+  await page.goto('/admin/bookings/');
+  await expect(page.getByRole('alert').filter({ hasText: 'Bookings could not be loaded. Reload and retry.' })).toBeVisible();
+  await expect(page.getByRole('row', { name: /BK-/ })).toHaveCount(0);
+  await expect(page.locator('.mantine-Loader-root')).toHaveCount(0);
+});
+
+test('switching the status filter back to All statuses drops the filter and restores the full list', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const { queries } = await mockBookings(page, fixtures());
+  await page.goto('/admin/bookings/');
+  await page.getByRole('textbox', { name: 'Filter by status', exact: true }).click();
+  await page.getByRole('option', { name: 'Confirmed', exact: true }).click();
+  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toHaveCount(0);
+  await page.getByRole('textbox', { name: 'Filter by status', exact: true }).click();
+  await page.getByRole('option', { name: 'New', exact: true }).click();
+  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Filter by status', exact: true }).click();
+  await page.getByRole('option', { name: 'All statuses', exact: true }).click();
+  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'BK-1002', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'BK-1004', exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Filter by status', exact: true })).toHaveValue('All statuses');
+  expect(queries.some(q => q.includes('status=Confirmed'))).toBe(true);
+  expect(queries.some(q => q.includes('status=New'))).toBe(true);
+});
+
 test('manager is blocked from the bookings administration page', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   await page.addInitScript(() => { (window as any).__MOCK_ROLES__ = ['manager']; });
