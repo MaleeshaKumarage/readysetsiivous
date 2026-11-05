@@ -179,9 +179,10 @@ export default function BookingsAdminPage() {
       {message && <Text role="status" c="green" mb="sm">{message}</Text>}
       {view === 'day' ? (
         <>
+          {employeesError && <Text role="alert" c="red" mb="sm">{employeesError}</Text>}
           <Group align="flex-end" mb="md" wrap="wrap">
             <TextInput type="date" label="Day" value={dayDate} onChange={e => changeDaySelection(e.currentTarget.value, dayEmployeeId)} w={200} />
-            <Select label="Employee" searchable placeholder="Choose employee" data={employees.map(e => ({ value: e.id, label: e.name }))} value={dayEmployeeId} onChange={value => changeDaySelection(dayDate, value)} w={240} />
+            <Select label="Employee" searchable disabled={Boolean(employeesError)} placeholder="Choose employee" data={employees.map(e => ({ value: e.id, label: e.name }))} value={dayEmployeeId} onChange={value => changeDaySelection(dayDate, value)} w={240} />
           </Group>
           {!dayDate || !dayEmployeeId ? (
             <Text c="dimmed">Choose a day and an employee to see their bookings.</Text>

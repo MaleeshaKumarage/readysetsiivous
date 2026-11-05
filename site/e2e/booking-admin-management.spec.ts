@@ -432,6 +432,54 @@ test('a failed history load shows a message in the booking detail', async ({ pag
   await expect(page.getByRole('button', { name: 'Confirm', exact: true })).toBeVisible();
 });
 
+test('day view shows the employee load failure and disables the employee picker', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockBookings(page, fixtures());
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    return route.fulfill({ status: 500, headers, json: { detail: 'Employee service unavailable' } });
+  });
+  await page.goto('/admin/bookings/');
+  await page.getByText('Day view', { exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Employees could not be loaded, so bookings cannot be assigned.' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Employee', exact: true })).toBeDisabled();
+});
+
+test('changing the day view selection replaces the rows and a late earlier response cannot repopulate them', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockBookings(page, fixtures());
+  let releaseAda!: () => void;
+  const adaGate = new Promise<void>(resolve => { releaseAda = resolve; });
+  await page.route(/\/api\/v1\/admin\/schedule(?:\?.*)?$/, async (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    const employeeId = new URL(route.request().url()).searchParams.get('employeeId');
+    if (employeeId === 'e-1') {
+      await adaGate;
+      return route.fulfill({ status: 200, headers, json: fixtures().filter(b => b.id === 'b-confirmed') });
+    }
+    return route.fulfill({ status: 200, headers, json: fixtures().filter(b => b.id === 'b-new') });
+  });
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    return route.fulfill({ status: 200, headers, json: [
+      { id: 'e-1', firstName: 'Ada', lastName: 'Cleaner', role: 'employee', isActive: true },
+      { id: 'e-2', firstName: 'Ben', lastName: 'Second', role: 'employee', isActive: true },
+    ] });
+  });
+  await page.goto('/admin/bookings/');
+  await page.getByText('Day view', { exact: true }).click();
+  await page.getByLabel('Day', { exact: true }).fill('2026-11-10');
+  await page.getByRole('textbox', { name: 'Employee', exact: true }).click();
+  await page.getByRole('option', { name: 'Ada Cleaner', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Employee', exact: true }).click();
+  await page.getByRole('option', { name: 'Ben Second', exact: true }).click();
+  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
+  releaseAda();
+  await page.waitForResponse(response => response.url().includes('employeeId=e-1'));
+  await expect(page.getByRole('cell', { name: 'BK-1002', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
+});
+
 test('manager is blocked from the bookings administration page', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   await page.addInitScript(() => { (window as any).__MOCK_ROLES__ = ['manager']; });
