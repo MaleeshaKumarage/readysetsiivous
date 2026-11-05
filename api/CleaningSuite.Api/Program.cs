@@ -376,7 +376,11 @@ public class DefaultExceptionHandler : IExceptionHandler
         {
             Status = status,
             Title = title,
-            Detail = status == 500 ? null : exception.Message,
+            // A missing record names what was not found and what to do, without echoing an internal id.
+            Detail = status == 500 ? null
+                : exception is CleaningSuite.Application.Common.NotFoundException notFound
+                    ? $"That {notFound.Entity.ToLowerInvariant()} could not be found. Refresh the page and try again."
+                    : exception.Message,
         };
         if (exception is CleaningSuite.Application.Shifts.ShiftConflictException { Conflicts.Count: > 0 } shiftConflict)
             problem.Extensions["conflicts"] = shiftConflict.Conflicts;
