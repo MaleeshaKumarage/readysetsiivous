@@ -43,6 +43,13 @@ function isCalendarDate(value: string): boolean {
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
 
+/** The first view shows this many days from today (tenant time zone), so a busy schedule opens on work that is due soon. */
+const DEFAULT_WINDOW_DAYS = 14;
+function defaultWindow(): { dateFrom: string; dateTo: string } {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Helsinki' });
+  const end = new Date(Date.parse(`${today}T12:00:00Z`) + (DEFAULT_WINDOW_DAYS - 1) * 86_400_000).toISOString().slice(0, 10);
+  return { dateFrom: today, dateTo: end };
+}
 /** Accepts real yyyy-MM-dd bounds only; a reversed range is dropped rather than sent to the server. */
 function readDates(from: string | null, to: string | null): { dateFrom: string; dateTo: string } {
   const start = from && isCalendarDate(from) ? from : '';
@@ -82,6 +89,7 @@ export default function WorkQueuePage() {
       if (next.search) params.set('q', next.search); else params.delete('q');
       if (next.dateFrom) params.set('from', next.dateFrom); else params.delete('from');
       if (next.dateTo) params.set('to', next.dateTo); else params.delete('to');
+      if (!next.dateFrom && !next.dateTo) params.set('range', 'all'); else params.delete('range');
       if (next.assignee) params.set('assignee', next.assignee); else params.delete('assignee');
       params.set('page', String(next.page));
       const qs = params.toString();
@@ -95,12 +103,16 @@ export default function WorkQueuePage() {
     const requestedView = params.get('view') as WorkQueueView | null;
     const requestedSource = params.get('source') as WorkQueueSource | null;
     const requestedPage = Number(params.get('page'));
+    const view = requestedView && VIEW_VALUES.includes(requestedView) ? requestedView : 'needs-action' as WorkQueueView;
+    const chosenDates = params.has('from') || params.has('to') || params.has('range');
+    const dates = chosenDates ? readDates(params.get('from'), params.get('to'))
+      : view === 'needs-action' ? defaultWindow() : { dateFrom: '', dateTo: '' };
     return {
-      view: requestedView && VIEW_VALUES.includes(requestedView) ? requestedView : 'needs-action' as WorkQueueView,
+      view,
       source: requestedSource && SOURCE_VALUES.includes(requestedSource) ? requestedSource : 'all' as WorkQueueSource,
       search: (params.get('q') ?? '').trim(),
       page: Number.isInteger(requestedPage) && requestedPage >= 1 ? requestedPage : 1,
-      ...readDates(params.get('from'), params.get('to')),
+      ...dates,
       assignee: (params.get('assignee') ?? '').trim(),
       booking: params.get('booking'),
     };
@@ -173,6 +185,8 @@ export default function WorkQueuePage() {
   const changeSource = (next: WorkQueueSource) => {
     setSource(next); setPage(1); writeUrl(current({ source: next, page: 1 }));
   };
+  const windowDates = defaultWindow();
+  const defaultWindowActive = dateFrom === windowDates.dateFrom && dateTo === windowDates.dateTo;
   const changeDates = (nextFrom: string, nextTo: string) => {
     // Input edits go through the same rule as the URL, so a reversed or invalid pair is cleared before it is stored or sent.
     const next = readDates(nextFrom, nextTo);
@@ -240,6 +254,12 @@ export default function WorkQueuePage() {
           data={employees.map(employee => ({ value: employee.id, label: `${employee.firstName} ${employee.lastName}`.trim() }))}
           value={assignee || null} onChange={value => changeAssignee(value ?? '')} w={220} />
       </Group>
+      {defaultWindowActive && (
+        <Group gap="xs" mb="md" role="status">
+          <Text size="sm">Showing the next {DEFAULT_WINDOW_DAYS} days ({dateFrom} to {dateTo}). Overdue and later work is hidden.</Text>
+          <Button size="xs" variant="subtle" onClick={() => changeDates('', '')}>Show all dates</Button>
+        </Group>
+      )}
 
       {assignee && <Text size="sm" c="dimmed" mb="sm">Partner requests have no assignee, so they are hidden while this filter is on.</Text>}
 
