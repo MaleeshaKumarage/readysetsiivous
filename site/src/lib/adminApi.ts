@@ -280,8 +280,8 @@ export const adminEmployees = {
   list: (includeInactive = false) => adminGet<Employee[]>(`/api/v1/admin/employees${includeInactive ? '?includeInactive=true' : ''}`, false),
   create: (fields: EmployeeFields) => employeeMutation('/api/v1/admin/employees', { fields }),
   reactivate: (id: string) => employeeMutation(`/api/v1/admin/employees/${id}/reactivate`),
-  update: (id: string, fields: EmployeeFields, isActive: boolean) =>
-    adminSend(`/api/v1/admin/employees/${id}`, 'PUT', { fields, isActive }),
+  update: (id: string, fields: EmployeeFields, isActive: boolean): Promise<AdminSendResult> =>
+    adminSendResult(`/api/v1/admin/employees/${id}`, 'PUT', { fields, isActive }),
   deactivate: (id: string) => adminSend(`/api/v1/admin/employees/${id}/deactivate`, 'POST'),
   deleteInactive: (id: string) => adminDelete(`/api/v1/admin/employees/${id}`),
   invite: async (id: string): Promise<{ email: string; keycloakUserId: string; status: 'Sent' | 'AlreadySent'; sentUtc: string }> => {

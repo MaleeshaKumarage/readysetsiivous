@@ -1,5 +1,6 @@
 'use client';
 
+import { showError } from '@/lib/toast';
 import { useEffect, useState } from 'react';
 import { Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge } from '@mantine/core';
 import { isAdmin } from '@/lib/auth';
@@ -70,7 +71,8 @@ export default function EmployeesAdminPage() {
       defaultHours: editingEmployee?.defaultHours ?? {},
     };
     if (editingEmployee) {
-      if (!await adminEmployees.update(editingEmployee.id, fields, editingEmployee.isActive)) throw new Error('Could not update employee. Please retry.');
+      const result = await adminEmployees.update(editingEmployee.id, fields, editingEmployee.isActive);
+      if (!result.ok) throw new Error(result.message);
       setModalOpen(false); setEditingEmployee(null); await load();
       return;
     }
@@ -80,7 +82,10 @@ export default function EmployeesAdminPage() {
     setLifecycle('active');
     setForm({ email: '', firstName: '', lastName: '', phone: '', role: 'employee', partnerCompanyId: '' });
     setModalOpen(false); await load();
-    } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not create employee. Please retry.'); }
+    } catch (failure) {
+      const message = failure instanceof Error ? failure.message : 'Could not save the employee. Check the fields, then save again.';
+      setError(message); showError(message, editingEmployee ? 'Employee not updated' : 'Employee not created');
+    }
     finally { setSaving(false); }
   };
 
