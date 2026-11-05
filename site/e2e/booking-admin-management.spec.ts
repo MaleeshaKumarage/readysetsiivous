@@ -67,6 +67,18 @@ test('new booking offers confirm and cancel, and confirming updates the row', as
   expect(actions).toEqual([{ id: 'b-new', action: 'confirm' }]);
 });
 
+test('admin cancels a new booking once and the status and row update', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const bookings = fixtures();
+  const { actions } = await mockBookings(page, bookings);
+  await page.goto('/admin/bookings/');
+  await page.getByRole('row', { name: /BK-1001/ }).getByRole('button', { name: 'Details', exact: true }).click();
+  await page.getByRole('button', { name: 'Cancel booking', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('BK-1001 is now Cancelled.');
+  await expect(page.getByRole('row', { name: /BK-1001/ })).toContainText('Cancelled');
+  expect(actions).toEqual([{ id: 'b-new', action: 'cancel' }]);
+});
+
 test('confirmed booking can be completed and then offers no further actions', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   const bookings = fixtures();
