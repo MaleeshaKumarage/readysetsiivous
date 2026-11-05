@@ -114,7 +114,8 @@ public static class WorkQueueRules
     };
 }
 
-public record WorkQueueQuery(string View, string Source, string? Search, int Skip, int Take) : IRequest<WorkQueuePage>;
+/// <summary>DateFrom/DateTo are inclusive tenant-local dates (yyyy-MM-dd). Assignee is an employee id; partner requests have no assignee and are left out when it is set.</summary>
+public record WorkQueueQuery(string View, string Source, string? Search, int Skip, int Take, string? DateFrom = null, string? DateTo = null, string? Assignee = null) : IRequest<WorkQueuePage>;
 
 public record WorkQueueItem(
     string Source,

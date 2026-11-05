@@ -3,18 +3,12 @@
 import { useEffect, useState } from 'react';
 import { Title, Button, Table, Modal, TextInput, Textarea, Group, Stack, Text, Loader, Badge, NumberInput } from '@mantine/core';
 import { Plus } from 'lucide-react';
+import { serviceFieldsFromForm } from '@/lib/serviceFields';
 import { adminServices } from '@/lib/adminApi';
 import { setServiceActivity } from '@/lib/serviceLifecycleApi';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
 
-type ServiceRowLocal = { id: string; slug: string; category: string; name: { values: Record<string, string> }; description: { values: Record<string, string> }; icon: string; durationMinutes: number; priceNet: number; vatRatePercent: number; isActive: boolean; isFeatured: boolean; sortOrder: number };
-
-function localized(fi: string, en: string, sv: string): Record<string, string> {
-  const d: Record<string, string> = { fi: fi.trim() };
-  if (en.trim()) d.en = en.trim();
-  if (sv.trim()) d.sv = sv.trim();
-  return d;
-}
+type ServiceRowLocal = { id: string; slug: string; category: string; name: { values: Record<string, string> }; description: { values: Record<string, string> }; additionalInfo: { values: Record<string, string> } | null; icon: string; imageUrl?: string | null; currency?: string; durationMinutes: number; priceNet: number; vatRatePercent: number; isActive: boolean; isFeatured: boolean; sortOrder: number };
 
 const EMPTY = { slug: '', nameFi: '', nameEn: '', nameSv: '', descFi: '', descEn: '', descSv: '', priceNet: '', vatRatePercent: '', durationMinutes: '', category: 'cleaning' };
 
@@ -26,6 +20,7 @@ export default function ServicesAdminPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingIsActive, setEditingIsActive] = useState(true);
+  const [editingRecord, setEditingRecord] = useState<ServiceRowLocal | null>(null);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -40,6 +35,7 @@ export default function ServicesAdminPage() {
 
   const openAdd = () => {
     setEditingId(null);
+    setEditingRecord(null);
     setEditingIsActive(true);
     setForm(EMPTY);
     setError('');
@@ -48,6 +44,7 @@ export default function ServicesAdminPage() {
 
   const openEdit = (s: ServiceRowLocal) => {
     setEditingId(s.id);
+    setEditingRecord(s);
     setEditingIsActive(s.isActive);
     setForm({
       slug: s.slug,
@@ -69,20 +66,8 @@ export default function ServicesAdminPage() {
   const submit = async () => {
     if (!form.slug.trim() || !form.nameFi.trim()) { setError('Slug and Finnish name are required.'); return; }
     setSaving(true); setError('');
-    const fields = {
-      slug: form.slug.trim(),
-      category: form.category,
-      name: localized(form.nameFi, form.nameEn, form.nameSv),
-      description: localized(form.descFi, form.descEn, form.descSv),
-      additionalInfo: null,
-      durationMinutes: Math.max(15, Number(form.durationMinutes) || 60),
-      priceNet: Math.max(0, Number(form.priceNet) || 0),
-      vatRatePercent: Math.max(0, Number(form.vatRatePercent) || 25.5),
-      currency: 'EUR',
-      icon: 'Sparkles',
-      sortOrder: 0,
-      isFeatured: false,
-    };
+    // Edits start from the stored record so unedited translations, image, icon, extra info, order and featured flag survive.
+    const fields = serviceFieldsFromForm(editingRecord, form);
     const ok = editingId
       ? await adminServices.update(editingId, fields, editingIsActive)
       : await adminServices.create(fields);
@@ -91,6 +76,7 @@ export default function ServicesAdminPage() {
     if (!editingId) setStatus('active');
     setForm(EMPTY);
     setEditingId(null);
+    setEditingRecord(null);
     setModalOpen(false); await load();
   };
 
@@ -185,7 +171,7 @@ export default function ServicesAdminPage() {
 
           <Group wrap="wrap" grow gap="xs">
             <NumberInput label="Price (€)" value={form.priceNet} onChange={(v) => setForm((f) => ({ ...f, priceNet: String(v ?? '') }))} />
-            <NumberInput label="VAT %" value={form.vatRatePercent} onChange={(v) => setForm((f) => ({ ...f, vatRatePercent: String(v ?? '') }))} />
+            <TextInput label="VAT %" inputMode="decimal" value={form.vatRatePercent} onChange={set('vatRatePercent')} />
             <NumberInput label="Duration (min)" value={form.durationMinutes} onChange={(v) => setForm((f) => ({ ...f, durationMinutes: String(v ?? '') }))} />
           </Group>
           {error && <Text size="sm" c="red">{error}</Text>}

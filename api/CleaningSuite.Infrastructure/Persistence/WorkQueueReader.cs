@@ -23,14 +23,30 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
         var includeBookings = query.Source is "all" or "booking";
         var includePartners = query.Source is "all" or "partner";
         var includeShifts = query.Source is "all" or "shift";
+        var assignee = query.Assignee;
+        // Employee ids are GUIDs. A non-GUID assignee matches nothing in any source, so bookings and shifts treat it the same way.
+        if (assignee is not null && !Guid.TryParse(assignee, out _)) { includeBookings = false; includeShifts = false; }
+        var assigneeKey = assignee is not null && Guid.TryParse(assignee, out var parsedKey) ? parsedKey.ToString() : assignee;
+        // Partner requests carry no assignee of their own, so an assignee filter leaves them out.
+        if (assignee is not null) includePartners = false;
+        var fromDay = query.DateFrom is null ? (DateOnly?)null : DateOnly.ParseExact(query.DateFrom, "yyyy-MM-dd");
+        var toDay = query.DateTo is null ? (DateOnly?)null : DateOnly.ParseExact(query.DateTo, "yyyy-MM-dd");
+        bool InDates(DateOnly day) => (fromDay is null || day >= fromDay) && (toDay is null || day <= toDay);
+        // A partner request is kept when its whole span overlaps the window, the same rule bookings and shifts use.
+        bool SpanOverlaps(DateOnly start, DateOnly end) => (fromDay is null || end >= fromDay) && (toDay is null || start <= toDay);
         var companyIds = search is not null && (includePartners || includeShifts)
             ? (await Db.Query<Company>().Where(c => c.Name.Contains(search, StringComparison.OrdinalIgnoreCase)).Select(c => c.Id).ToListAsync(ct)).ToArray()
             : Array.Empty<Guid>();
 
         // Partner visits are few per tenant and their view depends on their forms, so they are classified in memory.
-        var partnerViews = includePartners ? await ClassifyPartnersAsync(search, companyIds, ct) : new List<PartnerView>();
+        var partnerViews = includePartners ? (await ClassifyPartnersAsync(search, companyIds, ct)).Where(p => SpanOverlaps(p.Request.FromDate, p.Request.ToDate)).ToList() : new List<PartnerView>();
         var (_, zone) = await TenantTimeZone.LoadAsync(profiles, context, ct);
-        var shiftRows = includeShifts ? await ClassifyShiftsAsync(search, companyIds, zone, ct) : new List<ShiftRow>();
+        var assigneeId = assignee is not null && Guid.TryParse(assignee, out var parsedAssignee) ? parsedAssignee : (Guid?)null;
+        var shiftRows = includeShifts
+            ? (await ClassifyShiftsAsync(search, companyIds, zone, ct))
+                .Where(r => InDates(DateOnly.FromDateTime(r.Local)) && (assignee is null || (assigneeId is { } id && r.Visit.EmployeeIds.Contains(id))))
+                .ToList()
+            : new List<ShiftRow>();
 
         var counts = new Dictionary<string, int>();
         foreach (var view in WorkQueueViews.All)
@@ -114,6 +130,12 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
         {
             var q = Db.Query<Booking>().Where(WorkQueueRules.BookingIn(view));
             if (search is not null) q = q.Where(b => b.BookingNumber.Contains(search, StringComparison.OrdinalIgnoreCase) || b.Customer.Name.Contains(search, StringComparison.OrdinalIgnoreCase));
+            // Booking StartUtc is a timestamp without time zone, so the bounds are Unspecified-kind (Npgsql rejects Kind=Utc).
+            // Local midnight on 0001-01-01 is before DateTime.MinValue once converted to UTC, so an open start stays open.
+            if (fromDay is { } firstDay && firstDay != DateOnly.MinValue) { var lower = TenantTimeZone.StartOfLocalDay(firstDay.ToDateTime(TimeOnly.MinValue), zone); var unspecifiedLower = DateTime.SpecifyKind(lower, DateTimeKind.Unspecified); q = q.Where(b => b.StartUtc >= unspecifiedLower); }
+            // The day after 9999-12-31 does not exist, so an end date at the maximum leaves the upper bound open.
+            if (toDay is { } lastDay && lastDay != DateOnly.MaxValue) { var upper = TenantTimeZone.StartOfLocalDay(lastDay.AddDays(1).ToDateTime(TimeOnly.MinValue), zone); var unspecifiedUpper = DateTime.SpecifyKind(upper, DateTimeKind.Unspecified); q = q.Where(b => b.StartUtc < unspecifiedUpper); }
+            if (assignee is not null) q = q.Where(b => b.EmployeeId == assigneeKey);
             return q;
         }
     }
