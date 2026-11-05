@@ -8,8 +8,14 @@ function jwtWith(claims: object): string {
 }
 
 test('cache scope is the token subject, so another user never reuses cached data', () => {
-  assert.equal(cacheScopeFor(jwtWith({ sub: 'user-a' })), 'user:user-a');
   assert.notEqual(cacheScopeFor(jwtWith({ sub: 'user-a' })), cacheScopeFor(jwtWith({ sub: 'user-b' })));
+});
+
+test('cache scope changes when the same user loses a role', () => {
+  const admin = cacheScopeFor(jwtWith({ sub: 'user-a', realm_access: { roles: ['admin'] } }));
+  const manager = cacheScopeFor(jwtWith({ sub: 'user-a', realm_access: { roles: ['manager'] } }));
+  assert.notEqual(admin, manager);
+  assert.equal(admin, cacheScopeFor(jwtWith({ sub: 'user-a', realm_access: { roles: ['admin'] } })));
 });
 
 test('missing, malformed or subject-less tokens share the anonymous scope', () => {
@@ -21,8 +27,11 @@ test('missing, malformed or subject-less tokens share the anonymous scope', () =
 test('request signal aborts after the timeout', async () => {
   const signal = requestSignal(undefined, 20);
   assert.equal(signal.aborted, false);
-  // The timeout timer is unreferenced, so keep the event loop alive while waiting for it.
-  await new Promise<void>(resolve => setTimeout(resolve, 100));
+  // The timeout timer is unreferenced, so hold the event loop open until the abort fires (with a generous backstop).
+  await new Promise<void>((resolve, reject) => {
+    const backstop = setTimeout(() => reject(new Error('timeout signal never fired')), 5_000);
+    signal.addEventListener('abort', () => { clearTimeout(backstop); resolve(); }, { once: true });
+  });
   assert.equal(signal.aborted, true);
 });
 

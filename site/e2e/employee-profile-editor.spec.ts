@@ -219,6 +219,26 @@ test('a failed employee list shows an error instead of an empty list', async ({ 
   await expect(page.locator('.mantine-Loader-root')).toHaveCount(0);
 });
 
+test('a failed list refresh after an action keeps the rows on screen with an error above them', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  let listCalls = 0;
+  await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    listCalls += 1;
+    if (listCalls === 1) return route.fulfill({ status: 200, headers, json: [baseEmployee()] });
+    return route.fulfill({ status: 500, headers, json: { detail: 'Employee service unavailable' } });
+  });
+  await page.route(/\/api\/v1\/admin\/employees\/employee-a\/deactivate$/, (route: any) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    return route.fulfill({ status: 204, headers });
+  });
+  await page.goto('/admin/employees/');
+  await expect(page.getByRole('cell', { name: 'Test Cleaner' })).toBeVisible();
+  await page.getByRole('button', { name: 'Deactivate', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Employees could not be loaded. Reload and retry.' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Test Cleaner' })).toBeVisible();
+});
+
 test('clearing an existing certification expiry sends null and the field stays empty after reload', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   const employee: any = { ...baseEmployee(), certifications: [{ id: 'cert-1', name: 'Hygiene', expiresAtUtc: '2027-03-01T13:30:00Z' }] };

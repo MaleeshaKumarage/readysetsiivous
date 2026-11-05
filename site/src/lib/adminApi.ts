@@ -55,13 +55,14 @@ export async function authorizedFetch(path: string, init: RequestInit = {}): Pro
   if (!t) t = await refreshToken();
   if (!t) await login();
 
-  // Every admin request gets a timeout, and the caller's own abort signal still applies.
+  // Reads get a timeout so a hung page can settle. Writes do not: the server may still commit a create or invite after the client gives up, and a retry would duplicate it.
+  const isRead = !init.method || init.method === 'GET';
   const send = (bearer: string | undefined) => fetch(`${API_URL}${path}`, {
     ...init,
-    signal: requestSignal(init.signal),
+    signal: isRead ? requestSignal(init.signal) : init.signal,
     headers: {
       ...(init.headers ?? {}),
-      Authorization: `Bearer ${bearer}`,
+      ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
       ...(init.body ? { "Content-Type": "application/json" } : {}),
     },
   });
