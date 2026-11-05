@@ -97,6 +97,10 @@ public class ShiftsAdminController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("overlap-audit")]
+    public async Task<IActionResult> OverlapAuditReport([FromQuery] DateTime from, [FromQuery] DateTime to, CancellationToken ct) =>
+        Ok(await _mediator.Send(new ShiftOverlapAuditQuery(from, to), ct));
+
     [HttpGet("{id:guid}/occurrences")]
     public async Task<IActionResult> Occurrences(
         Guid id,

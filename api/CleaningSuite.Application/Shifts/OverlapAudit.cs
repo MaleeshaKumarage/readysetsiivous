@@ -1,0 +1,63 @@
+using CleaningSuite.Application.Common;
+using CleaningSuite.Application.Tenants;
+using CleaningSuite.Domain.Shifts;
+using FluentValidation;
+using FluentValidation.Results;
+using MediatR;
+
+namespace CleaningSuite.Application.Shifts;
+
+public sealed record ShiftOverlapVisit(Guid ShiftId, string ShiftName, DateTime StartUtc, DateTime EndUtc);
+
+public sealed record ShiftOverlapFinding(Guid EmployeeId, ShiftOverlapVisit Earlier, ShiftOverlapVisit Later);
+
+// Finds cleaners booked on two visits that overlap in time. Back-to-back visits (one ends when the next starts) are not overlaps.
+public static class OverlapAudit
+{
+    public static IReadOnlyList<ShiftOverlapFinding> Find(IEnumerable<(Guid EmployeeId, ShiftOverlapVisit Visit)> visits)
+    {
+        var findings = new List<ShiftOverlapFinding>();
+        foreach (var group in visits.GroupBy(x => x.EmployeeId))
+        {
+            ShiftOverlapVisit? latest = null;
+            foreach (var visit in group.Select(x => x.Visit).OrderBy(x => x.StartUtc).ThenBy(x => x.EndUtc))
+            {
+                if (latest is not null && visit.StartUtc < latest.EndUtc)
+                    findings.Add(new ShiftOverlapFinding(group.Key, latest, visit));
+                if (latest is null || visit.EndUtc > latest.EndUtc) latest = visit;
+            }
+        }
+        return findings.OrderBy(f => f.Later.StartUtc).ThenBy(f => f.EmployeeId).ToList();
+    }
+}
+
+public record ShiftOverlapAuditQuery(DateTime From, DateTime To) : IRequest<IReadOnlyList<ShiftOverlapFinding>>;
+
+public sealed class ShiftOverlapAuditQueryHandler(IShiftRepository repository, ITenantProfileRepository profiles, ITenantContext tenant)
+    : IRequestHandler<ShiftOverlapAuditQuery, IReadOnlyList<ShiftOverlapFinding>>
+{
+    private const int MaxWindowDays = 366;
+
+    public async Task<IReadOnlyList<ShiftOverlapFinding>> Handle(ShiftOverlapAuditQuery request, CancellationToken ct)
+    {
+        var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
+        var localFrom = TenantTimeZone.LocalDate(DateTime.SpecifyKind(request.From, DateTimeKind.Utc), zone);
+        var localTo = TenantTimeZone.LocalDate(DateTime.SpecifyKind(request.To, DateTimeKind.Utc), zone);
+        if (localTo < localFrom)
+            throw new ValidationException([new ValidationFailure("To", "The audit end date must be on or after its start date.")]);
+        if ((localTo - localFrom).TotalDays > MaxWindowDays)
+            throw new ValidationException([new ValidationFailure("To", $"Choose an audit window of {MaxWindowDays} days or fewer.")]);
+
+        var fromUtc = TenantTimeZone.StartOfLocalDay(localFrom, zone);
+        var toUtc = TenantTimeZone.StartOfLocalDay(localTo.AddDays(1), zone);
+        var visits = new List<(Guid EmployeeId, ShiftOverlapVisit Visit)>();
+        foreach (var shift in (await repository.ListForReportingAsync(ct)).Where(s => s.IsActive))
+        {
+            var roster = await repository.ResolveRosterAsync(shift, fromUtc, toUtc, zone, ct);
+            foreach (var entry in roster)
+                foreach (var employee in entry.EmployeeIds)
+                    visits.Add((employee, new ShiftOverlapVisit(shift.Id, shift.Name, entry.Occurrence.StartUtc, entry.Occurrence.EndUtc)));
+        }
+        return OverlapAudit.Find(visits);
+    }
+}
