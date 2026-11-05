@@ -357,6 +357,20 @@ test('day view lists the chosen employee bookings for the chosen day', async ({ 
   expect(scheduleQueries.some(q => q.includes('date=2026-11-10') && q.includes('employeeId=e-1'))).toBe(true);
 });
 
+test('switching back from the day view to Bookings restores the list and its filter', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await mockBookings(page, fixtures());
+  await page.goto('/admin/bookings/');
+  await page.getByText('Day view', { exact: true }).click();
+  await expect(page.getByText('Choose a day and an employee to see their bookings.')).toBeVisible();
+  await page.locator('label').filter({ hasText: /^Bookings$/ }).click();
+  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Filter by status', exact: true }).click();
+  await page.getByRole('option', { name: 'Confirmed', exact: true }).click();
+  await expect(page.getByRole('cell', { name: 'BK-1002', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toHaveCount(0);
+});
+
 test('day view shows an empty message and a recoverable error', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   await mockBookings(page, fixtures().filter(b => b.status === 'New'));

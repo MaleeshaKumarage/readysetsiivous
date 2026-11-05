@@ -109,6 +109,13 @@ export default function BookingsAdminPage() {
       .finally(() => { if (seq === dayRequestSeq.current) setDayLoading(false); });
   }, [view, dayDate, dayEmployeeId]);
 
+  // Changing the day or employee clears the previous results in the same render, so stale rows or messages never show for the new selection.
+  const changeDaySelection = (date: string, employeeId: string | null) => {
+    setDayDate(date); setDayEmployeeId(employeeId);
+    setDayRows([]); setDayError('');
+    setDayLoading(Boolean(date && employeeId));
+  };
+
   const runAction = async (action: BookingAction) => {
     if (!selected) return;
     setBusy(action); setActionError(''); setMessage('');
@@ -168,8 +175,8 @@ export default function BookingsAdminPage() {
       {view === 'day' ? (
         <>
           <Group align="flex-end" mb="md" wrap="wrap">
-            <TextInput type="date" label="Day" value={dayDate} onChange={e => setDayDate(e.currentTarget.value)} w={200} />
-            <Select label="Employee" searchable placeholder="Choose employee" data={employees.map(e => ({ value: e.id, label: e.name }))} value={dayEmployeeId} onChange={setDayEmployeeId} w={240} />
+            <TextInput type="date" label="Day" value={dayDate} onChange={e => changeDaySelection(e.currentTarget.value, dayEmployeeId)} w={200} />
+            <Select label="Employee" searchable placeholder="Choose employee" data={employees.map(e => ({ value: e.id, label: e.name }))} value={dayEmployeeId} onChange={value => changeDaySelection(dayDate, value)} w={240} />
           </Group>
           {!dayDate || !dayEmployeeId ? (
             <Text c="dimmed">Choose a day and an employee to see their bookings.</Text>
