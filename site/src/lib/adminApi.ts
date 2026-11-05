@@ -504,6 +504,9 @@ export interface VisitAssigneesInput {
   mode: number; employeeIds: string[]; reason: string; rosterVersion: string;
   assignmentVersion: string | null; fromThisDate: boolean; preview: boolean;
 }
+export interface ScheduleVisit { shiftId: string; shiftName: string; startUtc: string; endUtc: string }
+export interface EmployeeDaySchedule { employeeId: string; localDay: string; visits: ScheduleVisit[] }
+export interface OverlapFinding { employeeId: string; earlier: ScheduleVisit; later: ScheduleVisit }
 export interface VisitAssignmentResult { employeeIds: string[]; message: string; preview: boolean }
 export interface ShiftOccurrence {
   startUtc: string;
@@ -605,6 +608,10 @@ export const adminShifts = {
   reactivate: (id: string) => adminSendJson<Shift>(`/api/v1/admin/shifts/${id}/reactivate`, 'POST'),
   deleteInactive: (id: string) => adminDelete(`/api/v1/admin/shifts/${id}`),
   assignmentCounts: shiftAssignmentCounts,
+  employeeSchedule: (fromDate: string, toDate: string) =>
+    adminGet<EmployeeDaySchedule[]>(`/api/v1/admin/shifts/employee-schedule?from=${fromDate}T00:00:00Z&to=${toDate}T00:00:00Z`, false),
+  overlapAudit: (fromDate: string, toDate: string) =>
+    adminGet<OverlapFinding[]>(`/api/v1/admin/shifts/overlap-audit?from=${fromDate}T00:00:00Z&to=${toDate}T00:00:00Z`, false),
   assignments: (id: string) =>
     shiftAssignmentRequest<ShiftAssignment[]>(`/api/v1/admin/shifts/${id}/assignments`),
   assign: (id: string, employeeId: string) =>

@@ -21,7 +21,7 @@ import { QuoteRequestBanner, QuoteRequestProvider, PartnerPendingBadge } from '@
 
 const NAV_GROUPS = [
   { label: 'Workspace', items: [{ href: '', label: 'Dashboard', icon: LayoutDashboard }] },
-  { label: 'Operations', items: [{ href: 'shifts', label: 'Shifts', icon: CalendarClock }, { href: 'shifts/calendar', label: 'Shift calendar', icon: CalendarClock }, { href: 'work-queue', label: 'Work queue', icon: ListChecks }, { href: 'partner-requests', label: 'Partner requests', icon: Building2 }, { href: 'quality-cycle', label: 'Quality Cycle', icon: CheckSquare }] },
+  { label: 'Operations', items: [{ href: 'shifts', label: 'Shifts', icon: CalendarClock }, { href: 'shifts/calendar', label: 'Shift calendar', icon: CalendarClock }, { href: 'shifts/employee-schedule', label: 'Employee schedule', icon: Users }, { href: 'work-queue', label: 'Work queue', icon: ListChecks }, { href: 'partner-requests', label: 'Partner requests', icon: Building2 }, { href: 'quality-cycle', label: 'Quality Cycle', icon: CheckSquare }] },
   { label: 'Customers', items: [{ href: 'leads', label: 'Leads', icon: Users }, { href: 'companies', label: 'Companies', icon: Building2 }, { href: 'agreements', label: 'Agreements', icon: FileSignature }] },
   { label: 'People', items: [{ href: 'employees', label: 'Employees', icon: Users }] },
   { label: 'Finance', items: [{ href: 'invoices', label: 'Invoices', icon: Receipt }] },
