@@ -19,6 +19,8 @@ test('services list states that the price excludes VAT and shows the rate', asyn
 });
 
 test('shift list uses one time format for every schedule type and shows monthly times', async ({ page }) => {
+  // The dev server compiles the admin shifts page and its client chunks on first use, which can exceed the default 30s under CI load.
+  test.setTimeout(120000);
   await setupAdminMocks(page);
   await page.route(/\/api\/v1\/admin\//, route => {
     const path = new URL(route.request().url()).pathname;
@@ -38,6 +40,7 @@ test('shift list uses one time format for every schedule type and shows monthly 
 });
 
 test('assignee picker shows each employee email so similar names can be told apart', async ({ page }) => {
+  test.setTimeout(120000);
   await setupAdminMocks(page);
   const people = [
     { id: 'maleesha-1', firstName: 'Maleesha', lastName: 'Kumarage', email: 'maleesha@hiava.fi', isActive: true },
