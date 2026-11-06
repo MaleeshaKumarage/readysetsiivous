@@ -32,6 +32,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(options => CleaningSuite.Api.Middleware.TrustedProxyConfiguration.Configure(options, builder.Configuration));
 builder.Services.Configure<CleaningSuite.Api.Middleware.PublicRateLimitOptions>(builder.Configuration.GetSection("PublicRateLimit"));
 
+builder.Services.PostConfigure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(options =>
+    options.InvalidModelStateResponseFactory = context => new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(CleaningSuite.Api.RequestErrorText.FromModelState(context.ModelState)));
 builder.Services.AddControllers().AddJsonOptions(o =>
 {
     o.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
@@ -356,6 +358,7 @@ public class DefaultExceptionHandler : IExceptionHandler
             CleaningSuite.Application.Shifts.ShiftConflictException => (409, "Shift conflict"),
             CleaningSuite.Application.Common.PublicBookingNotFoundException => (404, "Booking not found"),
             CleaningSuite.Application.Common.PublicSigningLinkNotFoundException => (404, "Signing link not found"),
+            CleaningSuite.Application.Common.PublicServiceNotOfferedException => (404, "Service not offered"),
             CleaningSuite.Application.Invoicing.Commands.InvoiceNotFoundException => (404, "Invoice not found"),
             CleaningSuite.Application.QualityCycle.QualityCycleConflictException => (409, "Shift task conflict"),
             CleaningSuite.Application.Employees.EmployeeIdentityConflictException => (409, "Employee identity conflict"),

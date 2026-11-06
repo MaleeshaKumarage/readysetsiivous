@@ -62,7 +62,9 @@ public record InvoiceAdminResponse(Guid Id, DateTime CreatedUtc, DateTime Update
     public string PaymentReference { get; init; } = "";
     public string? PreviewToken { get; init; }
     public bool IssuerIsSample { get; init; }
+    public IReadOnlyList<UnstartedVisitResponse>? UnstartedVisits { get; init; }
 }
+public sealed record UnstartedVisitResponse(Guid ShiftId, string ShiftName, DateTime StartUtc, DateTime EndUtc, bool Included);
 
 public static class AdminResponses
 {

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { shiftAction } from './shift-actions';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, shiftsResponse } from './admin-helpers';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization' };
 
@@ -55,6 +55,7 @@ test('inactive shift and employee edits keep their existing activity state', asy
     if (path.endsWith('/employees/employee-old') && route.request().method() === 'PUT') {
       const body = route.request().postDataJSON(); changes.push({ path, body }); Object.assign(employee, body.fields); employee.isActive = body.isActive; return route.fulfill({ status: 204, headers });
     }
+    if (path.endsWith('/shifts/page')) return route.fulfill({ headers, json: shiftsResponse([shift], route.request().url()) });
     if (path.endsWith('/shifts')) return route.fulfill({ headers, json: [shift] });
     if (path.endsWith('/companies/company-old')) return route.fulfill({ headers, json: { company: { id: 'company-old', name: 'Old company', isActive: false }, branches: [{ id: 'branch-old', companyId: 'company-old', name: 'Old branch', isActive: false }] } });
     if (path.endsWith('/companies')) return route.fulfill({ headers, json: { items: [{ id: 'company-old', name: 'Old company', isActive: false }], total: 1 } });

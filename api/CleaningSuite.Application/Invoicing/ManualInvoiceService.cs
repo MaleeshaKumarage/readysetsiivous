@@ -69,7 +69,7 @@ public class ManualInvoiceService(IInvoiceRepository invoices, ICompanyRepositor
                 VatRatePercent = profile.DefaultVatRatePercent, VatAmount = Round(net * profile.DefaultVatRatePercent / 100m) };
         }).ToList();
         var total = new Money { Net = lines.Sum(l => l.NetAmount!.Value), Vat = lines.Sum(l => l.VatAmount) };
-        if (total.Gross <= 0) Invalid("The invoice total must be greater than zero.");
+        if (total.Gross <= 0) Invalid("The invoice total must be greater than zero. Enter a quantity and a net price above zero for at least one row, then preview again.");
         var issueDate = TenantTimeZone.LocalDate(clock.GetUtcNow().UtcDateTime, TenantTimeZone.Resolve(profile.TimeZoneId));
         var invoice = new Invoice { Id = Guid.Empty, CreatedUtc = issueDate, UpdatedUtc = issueDate,
             CompanyId = company.Id, CustomerBusinessId = company.BusinessId,

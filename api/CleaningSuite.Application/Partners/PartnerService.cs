@@ -225,7 +225,13 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
     {
         await using var lease = await reservation.AcquireAsync(ct);
         var (_, company) = await Partner(actor, ct);
-        if (body.ClientRequestId == Guid.Empty) throw new ValidationException("A request identifier is required.");
+        // Name every missing field, so the caller sees all of them at once rather than the first one.
+        var missing = new List<FluentValidation.Results.ValidationFailure>();
+        if (body.ClientRequestId == Guid.Empty) missing.Add(new("ClientRequestId", "A request identifier is required."));
+        if (body.BranchId == Guid.Empty) missing.Add(new("BranchId", "Choose the property for this cleaning."));
+        if (body.FromDate == default) missing.Add(new("FromDate", "Choose the first day of the cleaning."));
+        if (body.ToDate == default) missing.Add(new("ToDate", "Choose the last day of the cleaning."));
+        if (missing.Count > 0) throw new ValidationException(missing);
         var id = PartnerCleaningRequest.StableId($"request:{actor}:{body.ClientRequestId}");
         var existing = await Db.LoadAsync<PartnerCleaningRequest>(id, ct);
         if (existing is not null)
@@ -285,7 +291,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         if (request.LinkedShiftId.HasValue)
         {
             var shift = await Db.LoadAsync<Shift>(request.LinkedShiftId.Value, ct);
-            if (shift is not null) { shift.Deactivate(); Db.Store(shift); await ReleaseShiftAssignments(shift.Id, ct);
+            if (shift is not null) { shift.Deactivate(); await ShiftTabs.StoreAsync(Db, shift, ct); await ReleaseShiftAssignments(shift.Id, ct);
                 if (push is not null && request.AcceptedEmployeeId.HasValue) await push.StageScheduleChangeAsync(Db, shift.Id, [request.AcceptedEmployeeId.Value], DateTimeOffset.UtcNow, ct); }
         }
         var previous = request.OfferedEmployeeId ?? request.AcceptedEmployeeId;
@@ -312,7 +318,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         if (request.LinkedShiftId.HasValue)
         {
             var shift = await Db.LoadAsync<Shift>(request.LinkedShiftId.Value, ct);
-            if (shift is not null) { shift.Deactivate(); Db.Store(shift); await ReleaseShiftAssignments(shift.Id, ct);
+            if (shift is not null) { shift.Deactivate(); await ShiftTabs.StoreAsync(Db, shift, ct); await ReleaseShiftAssignments(shift.Id, ct);
                 if (push is not null && request.AcceptedEmployeeId.HasValue) await push.StageScheduleChangeAsync(Db, shift.Id, [request.AcceptedEmployeeId.Value], DateTimeOffset.UtcNow, ct); }
         }
         request.Status = "Cancelled"; request.CancellationReason = reason?.Trim();
@@ -347,7 +353,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         if (request.LinkedShiftId.HasValue)
         {
             var shift = await Db.LoadAsync<Shift>(request.LinkedShiftId.Value, ct);
-            if (shift is not null) { shift.Deactivate(); Db.Store(shift); await ReleaseShiftAssignments(shift.Id, ct);
+            if (shift is not null) { shift.Deactivate(); await ShiftTabs.StoreAsync(Db, shift, ct); await ReleaseShiftAssignments(shift.Id, ct);
                 if (push is not null && request.AcceptedEmployeeId.HasValue && (!automatic || request.AcceptedEmployeeId != employee.Id)) await push.StageScheduleChangeAsync(Db, shift.Id, [request.AcceptedEmployeeId.Value], DateTimeOffset.UtcNow, ct); }
         }
         var previousEmployee = request.OfferedEmployeeId ?? request.AcceptedEmployeeId;
@@ -462,7 +468,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         request.PlannedStartUtc = plannedStart; request.PlannedEndUtc = plannedStart.HasValue ? end : null;
         request.FirstAcceptedAtUtc ??= DateTime.UtcNow; request.Status = "Accepted"; Touch(request);
         // A single Marten commit owns every document. Repository methods that commit individually are deliberately avoided.
-        Db.Store(shift); Db.Store(occurrence); Db.Store(assignment); Db.Store(billing); Db.Store(request);
+        await ShiftTabs.StoreAsync(Db, shift, ct); Db.Store(occurrence); Db.Store(assignment); Db.Store(billing); Db.Store(request);
         if (push is not null) await push.StageScheduleChangeAsync(Db, shiftId, assignments.Select(x => x.EmployeeId).Append(actor).Where(id => !automatic || id != actor), DateTimeOffset.UtcNow, ct);
         NotifyRequest(request, "RequestAccepted", "Company"); NotifyRequest(request, "RequestAccepted", "Staff");
     }

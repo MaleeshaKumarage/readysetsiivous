@@ -116,6 +116,12 @@ public class QualityCycleRepository : IQualityCycleRepository
     {
         _session.Store(form);
         await _session.SaveChangesAsync(ct);
+        // A one-time shift's list tab depends on its checklist, so refresh the stored tab after the checklist is saved.
+        if (form.ShiftId == Guid.Empty) return;
+        var shift = await _session.LoadAsync<CleaningSuite.Domain.Shifts.Shift>(form.ShiftId, ct);
+        if (shift is null || !shift.Schedule.IsOneTime) return;
+        await CleaningSuite.Application.Shifts.ShiftTabs.StoreAsync(_session, shift, ct);
+        await _session.SaveChangesAsync(ct);
     }
 
     public async Task CreateStartedFormAsync(QualityCycleForm form, CancellationToken ct = default)

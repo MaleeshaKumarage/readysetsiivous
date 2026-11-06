@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, shiftsResponse } from './admin-helpers';
 import { shiftRowAction } from './shift-actions';
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS' };
@@ -20,8 +20,8 @@ async function setup(page: Page, shifts: unknown[], options: { listDelay?: Promi
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS });
     if (route.request().url().includes('/assignment-counts')) return route.fulfill({ status: 200, headers: CORS, json: {} });
     if (route.request().url().includes('/assignments')) return route.fulfill({ status: 200, headers: CORS, json: [] });
-    if (options.listDelay) return options.listDelay.then(() => route.fulfill({ status: 200, headers: CORS, json: shifts }));
-    return route.fulfill({ status: 200, headers: CORS, json: shifts });
+    if (options.listDelay) return options.listDelay.then(() => route.fulfill({ status: 200, headers: CORS, json: shiftsResponse(shifts, route.request().url()) }));
+    return route.fulfill({ status: 200, headers: CORS, json: shiftsResponse(shifts, route.request().url()) });
   });
 }
 
@@ -124,7 +124,7 @@ test('the shift page is clamped when the list shrinks, so later growth does not 
       if (deactivations === 2) shifts = [...shifts, ...Array.from({ length: 6 }, (_, index) => weekly(`Extra ${index}`, `x-${index}`))];
       return route.fulfill({ status: 204, headers: CORS });
     }
-    return route.fulfill({ status: 200, headers: CORS, json: shifts });
+    return route.fulfill({ status: 200, headers: CORS, json: shiftsResponse(shifts, route.request().url()) });
   });
   await page.goto('/admin/shifts/');
   const pager = page.getByRole('navigation', { name: 'Shifts pages' });

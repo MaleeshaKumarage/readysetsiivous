@@ -41,7 +41,7 @@ export default function ManagerLayout({ children }: { children: ReactNode }) {
       {access === 'pending' && <p role="status">Checking access…</p>}
       {access === 'anonymous' && <button className="rounded bg-gray-900 text-white px-4 py-2" onClick={() => login()}>Sign in</button>}
       {access === 'denied' && <p role="alert">Access denied. Tenant manager or administrator access is required.</p>}
-      {access === 'error' && <div role="alert">Could not verify access. <button className="underline" onClick={verify}>Retry access check</button></div>}
+      {access === 'error' && <div role="alert"><p>Could not verify your access. The server could not be reached or returned an error, so nothing was changed. Check your connection and retry. If it keeps failing, contact your tenant administrator.</p><button className="underline" onClick={verify}>Retry verification</button></div>}
       {access === 'allowed' && children}
     </div>
   </main>;

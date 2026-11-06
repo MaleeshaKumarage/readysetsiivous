@@ -12,6 +12,10 @@ public class Shift : BaseDocument
     public string? Notes { get; set; }
     public Guid? QualityCycleTemplateId { get; set; }
     public bool IsActive { get; set; }
+    /// <summary>Stored list tab (active, completed or inactive). Kept current by ShiftTabs.StoreAsync so the list can page in the database.</summary>
+    public string Tab { get; set; } = string.Empty;
+    /// <summary>True when a one-time visit has a submitted checklist.</summary>
+    public bool ChecklistCompleted { get; set; }
     public DateTime? ValidFrom { get; set; }
     public DateTime? ValidUntil { get; set; }
     public List<CleaningSuite.Domain.QualityCycle.QualityCyclePlan> QualityCyclePlans { get; set; } = new();
