@@ -196,9 +196,11 @@ export default function ShiftsAdminPage() {
     .then(counts => { setAssignmentCounts(counts); setCountError(''); })
     .catch((failure: Error) => { setAssignmentCounts(null); setCountError(failure.message); });
   const load = () => adminShifts.page({ tab: lifecycle, skip: (shiftPage - 1) * PAGE_SIZE, take: PAGE_SIZE }).then((r) => {
-    if (r) { setPageRows(r.items); setPageTotal(r.total); setTabCounts(r.counts); void loadAssignmentCounts(); }
+    // A reply without the paged shape cannot be shown; say so and keep the retry path instead of crashing the screen.
+    if (!r || !Array.isArray(r.items) || typeof r.total !== 'number' || !r.counts) throw new Error('The shift list could not be read. Refresh the page to retry.');
+    setPageRows(r.items); setPageTotal(r.total); setTabCounts(r.counts); setListError(''); void loadAssignmentCounts();
     setLoading(false);
-  });
+  }).catch((failure: Error) => { setListError(failure.message); setLoading(false); });
   // Reload the current tab and page whenever either changes, and once on mount.
   useEffect(() => { void load(); }, [lifecycle, shiftPage]);
   useEffect(() => { adminTenant.get().then(profile => {
