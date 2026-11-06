@@ -195,11 +195,21 @@ export async function adminSendJson<T>(
   return data;
 }
 
+export async function adminPostJson<T>(path: string): Promise<T> {
+  const response = await authorizedFetch(path, { method: 'POST' });
+  if (!response.ok) {
+    const problem = await response.json().catch(() => ({})) as { detail?: string; title?: string };
+    throw Object.assign(new Error(problem.detail || problem.title || `Request failed (${response.status}). Please retry.`), { status: response.status });
+  }
+  invalidateAdminCache();
+  return await response.json() as T;
+}
+
 export async function adminDelete(path: string): Promise<void> {
   const response = await authorizedFetch(path, { method: 'DELETE' });
   if (!response.ok) {
     const problem = await response.json().catch(() => ({})) as { detail?: string; title?: string };
-    throw new Error(problem.detail || problem.title || `Delete failed (${response.status}). Please retry.`);
+    throw Object.assign(new Error(problem.detail || problem.title || `Delete failed (${response.status}). Please retry.`), { status: response.status });
   }
   invalidateAdminCache();
 }
@@ -778,6 +788,7 @@ export const adminCompanies = {
   ) => companyRequest<Company>(`/api/v1/admin/companies/${id}`, 'PUT', { id, ...body }),
   deactivate: (id: string) => adminSend(`/api/v1/admin/companies/${id}/deactivate`, 'POST'),
   deleteInactive: (id: string) => adminDelete(`/api/v1/admin/companies/${id}`),
+  clearRelated: (id: string) => adminPostJson<{ shiftsDeleted: number; employeesUnassigned: number; branchesDeleted: number }>(`/api/v1/admin/companies/${id}/clear-related`),
 };
 
 export const adminBranches = {
