@@ -19,6 +19,13 @@ import { LifecycleTabs, type LifecycleStatus } from '@/components/LifecycleTabs'
 import { ListPager, PAGE_SIZE } from '@/components/ListPager';
 import { ShiftWorkspace, scheduleLabel } from '@/components/admin/ShiftWorkspace';
 
+// The price version in force today (or the earliest when all start later): the default billing price for a new shift.
+const defaultPriceVersion = (versions?: { effectiveFrom: string }[] | null) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const sorted = [...(versions ?? [])].sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
+  return (sorted.filter(v => v.effectiveFrom <= today).pop() ?? sorted[0])?.effectiveFrom ?? null;
+};
+
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const SCHEDULE_TYPES = [
   { value: '0', label: 'Daily' },
@@ -131,6 +138,7 @@ export default function ShiftsAdminPage() {
 
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [branchId, setBranchId] = useState<string | null>(null);
+  const [priceFrom, setPriceFrom] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [validFrom, setValidFrom] = useState('');
   const [validUntil, setValidUntil] = useState('');
@@ -278,7 +286,7 @@ export default function ShiftsAdminPage() {
   };
 
   const closeModal = () => {
-    setName(''); setNotes(''); setWeekDays([]); setCompanyId(null); setBranchId(null); setQualityCycleTemplateId(null); setScheduleType('0'); setStart('08:00'); setEnd('17:00'); setWeekParity('1'); setMonthlyDay(1); setOneTimeDate(''); setOneTimeStart('08:00'); setOneTimeEnd('17:00'); setDailyTimes({}); setEditingShift(null); setError(''); setModalOpen(false);
+    setName(''); setNotes(''); setWeekDays([]); setCompanyId(null); setBranchId(null); setPriceFrom(null); setQualityCycleTemplateId(null); setScheduleType('0'); setStart('08:00'); setEnd('17:00'); setWeekParity('1'); setMonthlyDay(1); setOneTimeDate(''); setOneTimeStart('08:00'); setOneTimeEnd('17:00'); setDailyTimes({}); setEditingShift(null); setError(''); setModalOpen(false);
   };
 
   // A customer workspace link carries ?company= so the create form opens with that customer selected.
@@ -323,7 +331,9 @@ export default function ShiftsAdminPage() {
     if (scheduleType === '3' && weekDays.length === 0) { setError('Select a day.'); return; }
     submitting.current = true; setSaving(true); setError('');
     // A one-time visit is valid only on its date, so the validity dates mirror that date.
-    const fields = { companyId, branchId, name: name.trim(), schedule: buildSchedule(), notes: notes.trim() || undefined, isActive: editingShift?.isActive ?? true, validFrom: oneTime ? oneTimeDate : validFrom || undefined, validUntil: oneTime ? oneTimeDate : validUntil || undefined, qualityCycleTemplateId: qualityCycleTemplateId || undefined };
+    const fields = { companyId, branchId, name: name.trim(), schedule: buildSchedule(), notes: notes.trim() || undefined, isActive: editingShift?.isActive ?? true, validFrom: oneTime ? oneTimeDate : validFrom || undefined, validUntil: oneTime ? oneTimeDate : validUntil || undefined, qualityCycleTemplateId: qualityCycleTemplateId || undefined,
+      // Creating a shift picks the branch price version it bills at; the default is the price in force today.
+      priceEffectiveFrom: editingShift ? undefined : (priceFrom ?? defaultPriceVersion(branches.find(b => b.id === branchId)?.priceVersions)) ?? undefined };
     const result = await (editingShift ? adminShifts.update(editingShift.id, fields) : adminShifts.create(fields)).finally(() => { submitting.current = false; });
     setSaving(false);
     if (!result.ok) {
@@ -693,6 +703,8 @@ export default function ShiftsAdminPage() {
           <Text size="sm" c="dimmed">Schedule times use the tenant time zone: {timeZoneId}.</Text>
           <CompanyPicker allowInactive={false} allowedInactiveCompanyId={editingShift?.companyId} value={companyId} onChange={(v) => { setBranches([]); setCompanyId(v); setBranchId(null); setQualityCycleTemplateId(null); }} />
           <Select label="Branch" data={branches.filter(b => b.isActive !== false || b.id === editingShift?.branchId).map((b) => ({ value: b.id, label: `${b.name}${b.isActive === false ? ' (inactive)' : ''}` }))} value={branchId} onChange={v => { setBranchId(v); setQualityCycleTemplateId(null); }} searchable disabled={!companyId} />
+          {!editingShift && (branches.find(b => b.id === branchId)?.priceVersions?.length ?? 0) > 1 && <Select label="Price version" description="The property price this shift is billed at. Defaults to the price in force today." allowDeselect={false} value={priceFrom ?? defaultPriceVersion(branches.find(b => b.id === branchId)?.priceVersions)} onChange={setPriceFrom}
+            data={(branches.find(b => b.id === branchId)?.priceVersions ?? []).map(v => ({ value: v.effectiveFrom, label: `From ${v.effectiveFrom} · €${v.priceNet.toFixed(2)} excl. VAT` }))} />}
           <TextInput label="Name" required value={name} onChange={(e) => setName(e.target.value)} />
           {scheduleType !== '6' && <Group grow>
             <TextInput label="Start date" type="date" required={!editingShift || Boolean(editingShift.validFrom)} value={validFrom} onChange={e => setValidFrom(e.target.value)} />

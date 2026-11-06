@@ -243,8 +243,8 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         if (!branch.PricingReady) throw new ShiftConflictException("Request a quote before booking this property.");
         var request = new PartnerCleaningRequest { Id = id, ClientRequestId = body.ClientRequestId,
             CompanyId = company.Id, BranchId = branch.Id, RequestedByEmployeeId = actor,
-            PriceNet = branch.PriceNet!.Value, VatRatePercent = branch.VatRatePercent!.Value,
-            EstimatedDurationMinutes = branch.EstimatedDurationMinutes!.Value, PricingVersion = branch.PricingVersion };
+            PriceNet = branch.CurrentPriceNet!.Value, VatRatePercent = branch.CurrentVatRatePercent!.Value,
+            EstimatedDurationMinutes = branch.CurrentEstimatedDurationMinutes!.Value, PricingVersion = branch.PricingVersion };
         await SetWindow(request, body.FromDate, body.ToDate, body.ExactStartLocalTime, body.Notes, ct);
         Db.Store(request); NotifyRequest(request, "Requested", "Staff");
         if (push is not null) await push.StagePartnerRequestAsync(Db, request.Id, request.Revision, DateTimeOffset.UtcNow, ct);

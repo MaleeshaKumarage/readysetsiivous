@@ -8,6 +8,12 @@ public class ShiftBillingProfile : BaseDocument
     public Guid ShiftId { get; set; }
     public List<ShiftPricingPlan> Plans { get; set; } = [];
     public List<ShiftOccurrencePrice> Overrides { get; set; } = [];
+    /// <summary>
+    /// The branch price version this shift is billed at (its effective date). Set for shifts created against a branch
+    /// with price history; the price itself is read from the branch, never copied here. Null for legacy shifts, which
+    /// keep their own <see cref="Plans"/>.
+    /// </summary>
+    public DateOnly? BranchPriceEffectiveFrom { get; set; }
 }
 
 public record ShiftPricingPlan(string Mode, decimal RateNet, decimal VatRatePercent, DateOnly EffectiveFrom);

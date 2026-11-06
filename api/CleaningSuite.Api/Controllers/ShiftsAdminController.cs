@@ -29,6 +29,11 @@ public class ShiftsAdminController : ControllerBase
     public async Task<IActionResult> SavePricing(Guid id, [FromBody] ShiftPricingPlan plan,
         [FromServices] ShiftBillingSettingsService billing, CancellationToken ct) => Ok(await billing.SaveAsync(id, plan, ct));
 
+    /// <summary>Bills this shift at one of its branch's price versions (the version's effective date).</summary>
+    [HttpPut("{id:guid}/branch-price")]
+    public async Task<IActionResult> SelectBranchPrice(Guid id, [FromBody] SelectBranchPriceRequest body,
+        [FromServices] ShiftBillingSettingsService billing, CancellationToken ct) => Ok(await billing.SelectBranchPriceAsync(id, body.EffectiveFrom, ct));
+
     [HttpPut("{id:guid}/occurrence-price")]
     public async Task<IActionResult> SaveVisitPrice(Guid id, [FromBody] ShiftOccurrencePrice price,
         [FromServices] ShiftBillingSettingsService billing, CancellationToken ct)

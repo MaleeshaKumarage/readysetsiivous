@@ -1,8 +1,10 @@
+using CleaningSuite.Application.Invoicing;
 using CleaningSuite.Application.Common;
 using CleaningSuite.Application.Companies;
 using CleaningSuite.Application.Employees;
 using CleaningSuite.Application.QualityCycle;
 using CleaningSuite.Application.Tenants;
+using CleaningSuite.Domain.Invoicing;
 using CleaningSuite.Domain.Employees;
 using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Shifts;
@@ -114,7 +116,9 @@ public record CreateShiftCommand(
     string? Notes = null,
     DateTime? ValidFrom = null,
     DateTime? ValidUntil = null,
-    Guid? QualityCycleTemplateId = null) : IRequest<ShiftDto>;
+    Guid? QualityCycleTemplateId = null,
+    // The branch price version to bill at. Omitted: the version in force today (or the only version).
+    DateOnly? PriceEffectiveFrom = null) : IRequest<ShiftDto>;
 
 public record UpdateShiftCommand(
     Guid Id,
@@ -170,12 +174,13 @@ public class ShiftHandlers
 
         private readonly ITenantProfileRepository? _profiles;
         private readonly ITenantContext? _tenant;
+        private readonly IShiftBillingRepository? _billing;
 
         public CreateShiftCommandHandler(
             IShiftRepository repository,
             ICompanyRepository companyRepository,
             IBranchRepository branchRepository, IQualityCycleRepository? qualityCycles = null,
-            ITenantProfileRepository? profiles = null, ITenantContext? tenant = null)
+            ITenantProfileRepository? profiles = null, ITenantContext? tenant = null, IShiftBillingRepository? billing = null)
         {
             _repository = repository;
             _companyRepository = companyRepository;
@@ -202,6 +207,8 @@ public class ShiftHandlers
             await ValidateTemplateAsync(_qualityCycles, request.QualityCycleTemplateId, request.CompanyId, request.BranchId, ct);
             var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
             EnsureOneTimeTimesExist(request.Schedule, zone);
+            var priceVersion = ShiftBillingSettingsService.ChooseBranchPrice(branch, request.PriceEffectiveFrom,
+                DateOnly.FromDateTime(TenantTimeZone.LocalDate(DateTime.UtcNow, zone)));
             var shift = Shift.Create(
                 request.CompanyId,
                 request.BranchId,
@@ -213,6 +220,8 @@ public class ShiftHandlers
                 request.QualityCycleTemplateId);
             shift.EnsureQualityCycleHistory();
             await _repository.SaveAsync(shift, ct);
+            if (priceVersion is not null && _billing is not null)
+                await _billing.SaveAsync(new ShiftBillingProfile { Id = shift.Id, ShiftId = shift.Id, BranchPriceEffectiveFrom = priceVersion.EffectiveFrom }, ct);
             return MapShift(shift);
         }
     }

@@ -137,6 +137,16 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
                     Invalid("A partner visit has no accepted request or was cancelled. Refresh the selection to continue.");
                 pricing = new() { Id = shift.Id, ShiftId = shift.Id, CreatedUtc = partnerRequest!.CreatedUtc, UpdatedUtc = partnerRequest.CreatedUtc, Plans = [new("PerOccurrence", partnerRequest.PriceNet, partnerRequest.VatRatePercent, new(2000, 1, 1))] };
             }
+            // A shift billed at a branch price reads that version from the branch: one price, never a copy on the shift.
+            if (partnerRequest is null && pricing.BranchPriceEffectiveFrom is { } branchFrom)
+            {
+                var branchForPrice = await branches.GetAsync(shift.BranchId, ct);
+                var version = branchForPrice?.Versions.FirstOrDefault(v => v.EffectiveFrom == branchFrom);
+                if (version is null) ShiftBillingSettingsService.Invalid($"{shift.Name}: the branch price from {branchFrom:yyyy-MM-dd} is missing. Restore the branch price history before invoicing.");
+                pricing = new() { Id = shift.Id, ShiftId = shift.Id, CreatedUtc = pricing.CreatedUtc, UpdatedUtc = pricing.UpdatedUtc,
+                    BranchPriceEffectiveFrom = branchFrom, Overrides = pricing.Overrides,
+                    Plans = [new(version!.Mode, version.PriceNet, version.VatRatePercent, new(2000, 1, 1))] };
+            }
             var schedule = ShiftContractSchedule.Snapshot(shift, zone);
             // Completion-month billing must resolve the original visit even when scheduled
             // outside the invoice month. Never select it by its scheduled month.
