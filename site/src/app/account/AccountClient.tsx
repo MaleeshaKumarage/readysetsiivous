@@ -86,7 +86,6 @@ export default function AccountClient() {
           </section>}
           {account.person?.role === 'partner' && <><p>{account.company?.name}</p><Link className="block rounded bg-gray-900 text-white px-4 py-2 text-center" href="/partner/">Open partner portal</Link></>}
           {account.employee?.isActive && !isPartner() && <Link className="block rounded bg-gray-900 text-white px-4 py-2 text-center" href="/me/shifts/">My shifts</Link>}
-          {account.employee?.isActive && !isPartner() && <Link className="block rounded border border-gray-900 px-4 py-2 text-center text-gray-900 dark:text-gray-100" href="/me/inventory/">Inventory</Link>}
           {!isPartner() && <><a className="block underline" href="#notifications">Notification settings</a><NotificationsPanel /></>}
           {!account.employee && isAdmin() && <p>To receive shifts, add an Administrator profile in Employees using your verified login email, then use Invite to link that profile to your existing account.</p>}
           {account.employee?.role === 'manager' && isManager() && <Link className="block underline" href="/manager/">Manage tenant operations</Link>}
