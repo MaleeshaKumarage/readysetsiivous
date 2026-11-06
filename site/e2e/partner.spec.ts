@@ -63,6 +63,7 @@ test('cleaner may accept an unscheduled offer without a time, which becomes flex
   });
   await page.route(/\/api\/v1\/me\/work-preferences$/, route => route.fulfill({ headers, json: { autoAcceptWork: false } }));
   await page.goto('/me/shifts/');
+  await page.getByRole('tab', { name: 'Offers', exact: true }).click();
   const offerCard = page.getByRole('article', { name: 'Lake apartment offer', exact: true }).locator('.rounded-2xl');
   await expect(offerCard).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await page.evaluate(() => document.documentElement.classList.add('dark'));
