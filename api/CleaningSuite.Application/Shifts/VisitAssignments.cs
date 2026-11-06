@@ -156,14 +156,33 @@ public static class VisitAssignmentSafety
         foreach (var employee in affected)
         {
             var allEnd = DateTime.MinValue; var changedEnd = DateTime.MinValue;
+            ShiftVisitRosterEntry? latest = null;
             foreach (var visit in visits.Where(x => x.EmployeeIds.Contains(employee)).OrderBy(x => x.Occurrence.StartUtc))
             {
                 var isChanged = changed.Contains(visit);
                 if (visit.Occurrence.StartUtc < (isChanged ? allEnd : changedEnd))
-                    throw new ShiftConflictException("An employee is already assigned to an overlapping visit. No assignments were saved.");
-                if (visit.Occurrence.EndUtc > allEnd) allEnd = visit.Occurrence.EndUtc;
+                    throw OverlapConflict(visit, latest, zone, current, others);
+                if (visit.Occurrence.EndUtc > allEnd) { allEnd = visit.Occurrence.EndUtc; latest = visit; }
                 if (isChanged && visit.Occurrence.EndUtc > changedEnd) changedEnd = visit.Occurrence.EndUtc;
             }
         }
+    }
+
+    // Names the requested visit and the visit it clashes with, in tenant-local time, and says how to recover.
+    private static ShiftConflictException OverlapConflict(ShiftVisitRosterEntry visit, ShiftVisitRosterEntry? other, TimeZoneInfo zone, Shift current, IReadOnlyList<Shift> others)
+    {
+        var names = others.ToDictionary(x => x.Id, x => x.Name);
+        names[current.Id] = current.Name;
+        var conflicts = new List<ShiftConflictDetail>();
+        if (other is not null)
+            conflicts.Add(new ShiftConflictDetail(other.ShiftId, names.GetValueOrDefault(other.ShiftId, "Another shift"), other.Occurrence.StartUtc, other.Occurrence.EndUtc));
+        return new ShiftConflictException(OverlapMessage(visit, other, zone), conflicts);
+    }
+
+    private static string OverlapMessage(ShiftVisitRosterEntry visit, ShiftVisitRosterEntry? other, TimeZoneInfo zone)
+    {
+        string Local(DateTime utc) => TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), zone).ToString("d MMM yyyy HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+        var clash = other is null ? "" : $" It clashes with the visit from {Local(other.Occurrence.StartUtc)} to {Local(other.Occurrence.EndUtc)}.";
+        return $"This cleaner already has a visit that overlaps the visit starting {Local(visit.Occurrence.StartUtc)}.{clash} No assignments were saved. Choose another cleaner or time, or remove the cleaner from the other visit first."; 
     }
 }

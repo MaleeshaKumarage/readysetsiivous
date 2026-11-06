@@ -1,5 +1,6 @@
 'use client';
 
+import { showError } from '@/lib/toast';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Title, Button, Table, Modal, TextInput, Select, MultiSelect, Group, Stack, Text, Loader, ActionIcon, NumberInput, Menu,
@@ -321,9 +322,14 @@ export default function ShiftsAdminPage() {
     submitting.current = true; setSaving(true); setError('');
     // A one-time visit is valid only on its date, so the validity dates mirror that date.
     const fields = { companyId, branchId, name: name.trim(), schedule: buildSchedule(), notes: notes.trim() || undefined, isActive: editingShift?.isActive ?? true, validFrom: oneTime ? oneTimeDate : validFrom || undefined, validUntil: oneTime ? oneTimeDate : validUntil || undefined, qualityCycleTemplateId: qualityCycleTemplateId || undefined };
-    const created = await (editingShift ? adminShifts.update(editingShift.id, fields) : adminShifts.create(fields)).finally(() => { submitting.current = false; });
+    const result = await (editingShift ? adminShifts.update(editingShift.id, fields) : adminShifts.create(fields)).finally(() => { submitting.current = false; });
     setSaving(false);
-    if (!created) { setError(editingShift ? 'Failed to update shift. Check that the company and branch are valid, then retry.' : 'Failed to create shift.'); return; }
+    if (!result.ok) {
+      setError(result.message);
+      showError(result.message, editingShift ? 'Shift not updated' : 'Shift not created');
+      return;
+    }
+    const created = result.value;
     const wasEditing = Boolean(editingShift);
     closeModal(); if (!wasEditing) changeLifecycle('active'); await load();
     if (!wasEditing && created.schedule.type === 4) {

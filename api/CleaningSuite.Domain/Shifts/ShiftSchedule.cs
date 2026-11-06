@@ -83,11 +83,10 @@ public class ShiftSchedule
                 if ((WeeklyDay is null && (WeeklyDays is null || WeeklyDays.Count == 0))
                     || WeeklyStart is null || WeeklyEnd is null)
                     throw new ArgumentException(
-                        "Weekly schedules require WeeklyDay or WeeklyDays, WeeklyStart and WeeklyEnd.",
-                        nameof(WeeklyDay));
+                        "Choose at least one weekday, plus a start and an end time, for a weekly shift.");
                 if (WeeklyEnd <= WeeklyStart)
                     throw new ArgumentException(
-                        "WeeklyEnd must be after WeeklyStart.", nameof(WeeklyEnd));
+                        "The weekly end time must be later than the start time. Choose a later end time.");
                 break;
 
             case ShiftScheduleType.BiWeekly:

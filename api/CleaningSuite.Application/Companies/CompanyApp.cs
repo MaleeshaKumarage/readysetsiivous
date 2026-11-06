@@ -451,7 +451,7 @@ public class CompanyHandlers
             branch.SetPropertyCounts(rooms, beds);
             if (price.HasValue || vat.HasValue || duration.HasValue)
             {
-                if (!price.HasValue || !vat.HasValue || !duration.HasValue) throw new ValidationException("Net price, VAT and estimated duration must be supplied together.");
+                if (!price.HasValue || !vat.HasValue || !duration.HasValue) throw new ValidationException([new FluentValidation.Results.ValidationFailure("Pricing", "Net price, VAT and estimated duration must be supplied together.")]);
                 branch.SetPricing(price.Value, vat.Value, duration.Value);
             }
         }

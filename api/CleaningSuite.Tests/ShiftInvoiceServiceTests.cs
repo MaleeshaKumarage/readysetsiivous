@@ -31,6 +31,16 @@ public class ShiftInvoiceServiceTests
         else Assert.Empty(f.Shift.QualityCyclePlans);
     }
     [Fact]
+    public async Task Inverted_billing_period_reports_the_date_order_not_the_length_limit()
+    {
+        var f = new Fixture();
+        var inverted = f.Request with { From = f.Request.To, To = f.Request.From };
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => f.Service.PreviewAsync(inverted, default));
+        var message = Assert.Single(ex.Errors).ErrorMessage;
+        Assert.Equal("The billing period must end on or after its start date.", message);
+    }
+
+    [Fact]
     public async Task New_year_number_uses_the_tenant_local_issue_year_for_both_counter_and_prefix()
     {
         var f = new Fixture(new DateTimeOffset(2026, 12, 31, 22, 30, 0, TimeSpan.Zero));
@@ -83,6 +93,15 @@ public class ShiftInvoiceServiceTests
         if(issuer)f.Profile.BankAccountIBAN="INVALID";else request=request with { BillingAddress=new() { Street="Street only" } };
         var preview=await f.Service.PreviewAsync(request,default);
         await Assert.ThrowsAsync<ValidationException>(()=>f.Service.IssueAsync(request with { PreviewToken=preview.PreviewToken },default));
+        f.Invoices.Verify(x=>x.NextInvoiceNumberForYearAsync(2026, It.IsAny<CancellationToken>()),Times.Never);
+    }
+    [Fact]
+    public async Task Blank_billing_address_is_named_even_when_the_preview_token_is_stale()
+    {
+        var f=new Fixture();
+        var request=f.Request with { BillingAddress=new() { Street="", PostalCode="", City="", Country="FI" } };
+        var ex=await Assert.ThrowsAsync<ValidationException>(()=>f.Service.IssueAsync(request with { PreviewToken="stale-token" },default));
+        Assert.Contains("billing street", ex.Message);
         f.Invoices.Verify(x=>x.NextInvoiceNumberForYearAsync(2026, It.IsAny<CancellationToken>()),Times.Never);
     }
     [Fact]

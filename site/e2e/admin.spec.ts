@@ -172,7 +172,7 @@ test.describe('Admin Panel - Services Page', () => {
     await page.getByLabel('Slug').fill('test-slug');
     await page.getByLabel('Name (Finnish)').fill('Test Name');
     await page.getByRole('button', { name: 'Create service' }).click();
-    await expect(page.getByText('Failed to create service.')).toBeVisible();
+    await expect(page.getByText('The change was not saved (error 400). Check the fields, then save again.').first()).toBeVisible();
   });
 
   test('edit service prefills and saves all three languages', async ({ page }) => {
@@ -506,7 +506,7 @@ test.describe('Admin Panel - Employees Page', () => {
     await page.getByLabel('First name').fill('Err');
     await page.getByLabel('Last name').fill('User');
     await page.getByRole('button', { name: 'Create employee' }).click();
-    await expect(page.getByText('Employee update failed (500). Please retry.')).toBeVisible();
+    await expect(page.getByText('The change was not saved (error 500). Check the fields, then save again.').first()).toBeVisible();
   });
 });
 

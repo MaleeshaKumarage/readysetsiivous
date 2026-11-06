@@ -97,6 +97,14 @@ public class ShiftsAdminController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("employee-schedule")]
+    public async Task<IActionResult> EmployeeSchedule([FromQuery] DateTime from, [FromQuery] DateTime to, CancellationToken ct) =>
+        Ok(await _mediator.Send(new EmployeeScheduleQuery(from, to), ct));
+
+    [HttpGet("overlap-audit")]
+    public async Task<IActionResult> OverlapAuditReport([FromQuery] DateTime from, [FromQuery] DateTime to, CancellationToken ct) =>
+        Ok(await _mediator.Send(new ShiftOverlapAuditQuery(from, to), ct));
+
     [HttpGet("{id:guid}/occurrences")]
     public async Task<IActionResult> Occurrences(
         Guid id,

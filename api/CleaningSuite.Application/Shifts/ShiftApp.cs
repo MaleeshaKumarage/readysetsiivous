@@ -68,6 +68,8 @@ public interface IShiftRepository
     Task<IReadOnlyList<ShiftAssignment>> ListAssignmentsByShiftAsync(Guid shiftId, CancellationToken ct = default);
     Task<IReadOnlyDictionary<Guid, int>> CountActiveAssignmentsByShiftAsync(CancellationToken ct = default);
     Task SaveAssignmentAsync(ShiftAssignment assignment, CancellationToken ct = default);
+    /// <summary>Saves a deactivated shift and its released assignments in one transaction.</summary>
+    Task SaveDeactivationAsync(Shift shift, IReadOnlyList<ShiftAssignment> releasedAssignments, CancellationToken ct = default);
     Task DeleteAssignmentAsync(Guid assignmentId, CancellationToken ct = default);
     Task<IReadOnlyList<Shift>> ListForReportingAsync(CancellationToken ct = default);
     Task<IReadOnlyList<Shift>> ListIncludingInactiveAsync(CancellationToken ct = default);
@@ -86,9 +88,13 @@ public interface IShiftRepository
     Task DeleteOccurrenceExceptionAsync(Guid id, CancellationToken ct = default);
 }
 
+public record ShiftConflictDetail(Guid ShiftId, string ShiftName, DateTime StartUtc, DateTime EndUtc);
+
 public class ShiftConflictException : Exception
 {
     public ShiftConflictException(string message) : base(message) { }
+    public ShiftConflictException(string message, IReadOnlyList<ShiftConflictDetail> conflicts) : base(message) { Conflicts = conflicts; }
+    public IReadOnlyList<ShiftConflictDetail> Conflicts { get; } = Array.Empty<ShiftConflictDetail>();
 }
 
 public record CreateShiftCommand(
@@ -264,7 +270,16 @@ public class ShiftHandlers
             shift.EnsureQualityCycleHistory();
             shift.Deactivate();
             shift.RecordQualityCyclePlan(DateTime.UtcNow);
-            await _repository.SaveAsync(shift, ct);
+            var now = DateTime.UtcNow;
+            var released = new List<ShiftAssignment>();
+            foreach (var assignment in await _repository.ListAssignmentsByShiftAsync(shift.Id, ct))
+            {
+                if (!assignment.IsActive) continue;
+                assignment.Release(now);
+                released.Add(assignment);
+            }
+            // The shift and its releases commit together, so a failure never leaves a half-deactivated shift.
+            await _repository.SaveDeactivationAsync(shift, released, ct);
         }
     }
 
@@ -318,7 +333,8 @@ public class ShiftHandlers
         }
     }
 
-    public sealed class DeleteShiftCommandHandler(IShiftRepository shifts)
+    // Required: a missing started-visit check would let a shift with uninvoiced work be deleted without any error.
+    public sealed class DeleteShiftCommandHandler(IShiftRepository shifts, IQualityCycleRepository forms)
         : IRequestHandler<DeleteShiftCommand>
     {
         public async Task Handle(DeleteShiftCommand request, CancellationToken ct)
@@ -326,6 +342,9 @@ public class ShiftHandlers
             var shift = await shifts.GetAsync(request.Id, ct) ?? throw new NotFoundException("Shift", request.Id);
             CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
             if (shift.IsActive) throw new InactiveRecordDeleteConflictException("Deactivate the shift before deleting it.");
+            // Started or submitted visit records carry completed work that may not be invoiced yet; deleting the shift would remove it.
+            if ((await forms.ListFormsAsync(shift.Id, null, null, ct)).Any(f => f.IsSubmitted || f.StartedAtUtc.HasValue))
+                throw new InactiveRecordDeleteConflictException("This shift has started or completed visits that may not be invoiced yet. Keep it deactivated so its work and billing stay available.");
             await shifts.DeleteAsync(shift.Id, ct);
         }
     }

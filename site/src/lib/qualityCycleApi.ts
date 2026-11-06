@@ -1,6 +1,6 @@
 import { API_URL } from './api';
 import { lifecycleRequest } from './reactivationApi';
-import { adminDelete, adminGet, adminSend, adminSendJson, authorizedFetch } from './adminApi';
+import { adminDelete, adminGet, adminSendJson, adminSendResult, authorizedFetch, type AdminSendResult } from './adminApi';
 import { refreshToken } from './auth';
 import type { ShiftPhoto } from './shiftPhotos';
 
@@ -69,7 +69,8 @@ export const adminQualityCycle = {
   createReportShare: (year: number, month: number, shiftId?: string, branchId?: string) =>
     adminSendJson<ReportShare>('/api/v1/admin/quality-cycle/report-shares', 'POST', { year, month, shiftId, branchId }),
   listReportShares: () => adminGet<ReportShare[]>('/api/v1/admin/quality-cycle/report-shares'),
-  revokeReportShare: (id: string) => adminSend(`/api/v1/admin/quality-cycle/report-shares/${id}`, 'DELETE'),
+  // Keeps the server's reason (for example, a link already revoked elsewhere) so the user sees what to do next.
+  revokeReportShare: (id: string): Promise<AdminSendResult> => adminSendResult(`/api/v1/admin/quality-cycle/report-shares/${id}`, 'DELETE'),
   listTemplates: (companyId?: string, branchId?: string) => {
     const query = new URLSearchParams();
     if (companyId) query.set('companyId', companyId);

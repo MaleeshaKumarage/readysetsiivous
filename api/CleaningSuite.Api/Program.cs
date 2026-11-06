@@ -351,12 +351,15 @@ public class DefaultExceptionHandler : IExceptionHandler
             _logger.LogError(exception, "Unhandled exception for {Path}", context.Request.Path);
 
         context.Response.StatusCode = status;
-        await context.Response.WriteAsJsonAsync(new ProblemDetails
+        var problem = new ProblemDetails
         {
             Status = status,
             Title = title,
             Detail = status == 500 ? null : exception.Message,
-        }, ct);
+        };
+        if (exception is CleaningSuite.Application.Shifts.ShiftConflictException { Conflicts.Count: > 0 } shiftConflict)
+            problem.Extensions["conflicts"] = shiftConflict.Conflicts;
+        await context.Response.WriteAsJsonAsync(problem, ct);
         return true;
     }
 }

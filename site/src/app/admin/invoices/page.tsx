@@ -1,5 +1,6 @@
 'use client';
 
+import { showError } from '@/lib/toast';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge, Button, Checkbox, Group, Modal, MultiSelect, NumberInput, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { adminCompanies, adminShifts, type Company, type Shift } from '@/lib/adminApi';
@@ -61,7 +62,10 @@ export default function InvoicesPage() {
   }, [loadAttempt]);
   const run = async (action: () => Promise<void>) => {
     if (pending.current) return; pending.current = true; setBusy(true); setError(''); setStatus('');
-    try { await action(); } catch (failure) { setError(failure instanceof Error ? failure.message : 'Request failed. Please retry.'); }
+    try { await action(); } catch (failure) {
+      const message = failure instanceof Error ? failure.message : 'Request failed. Please retry.';
+      setError(message); showError(message, 'Invoice action not completed');
+    }
     finally { pending.current = false; setBusy(false); }
   };
   const buildPreview = () => run(async () => {

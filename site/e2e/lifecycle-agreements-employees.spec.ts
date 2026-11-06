@@ -176,7 +176,7 @@ test('inactive agreements support signed deletion confirmation, cancellation and
 
   const unsigned = page.getByRole('row').filter({ hasText: 'Inactive unsigned' });
   await unsigned.getByRole('button', { name: 'Delete' }).click();
-  await expect(page.getByText('This agreement contains signed evidence. Explicitly confirm deletion of the signed agreement.', { exact: true })).toBeVisible();
+  await expect(page.getByText('This agreement contains signed evidence. Explicitly confirm deletion of the signed agreement.', { exact: true }).first()).toBeVisible();
   expect(deleteCalls).toBe(1);
 
   retainOnDelete = false;

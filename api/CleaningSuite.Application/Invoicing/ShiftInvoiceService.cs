@@ -34,8 +34,6 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
         if (string.IsNullOrWhiteSpace(request.PreviewToken)) Invalid("Preview the invoice before issuing it.");
         await using var lease = await reservation.AcquireAsync(ct);
         var preview = await BuildAsync(request, ct);
-        if (!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(preview.PreviewToken), Encoding.UTF8.GetBytes(request.PreviewToken!)))
-            throw new ShiftConflictException("Invoice inputs, pricing or work records changed. Load a new preview before issuing.");
         var invoice = preview.Invoice;
         var issuer = invoice.Issuer;
         if (string.IsNullOrWhiteSpace(issuer.CompanyName) || string.IsNullOrWhiteSpace(issuer.BusinessId)
@@ -44,6 +42,9 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             Invalid("Complete invoice issuer name, business ID, address, valid IBAN and BIC in issuer settings before issuing.");
         if (string.IsNullOrWhiteSpace(invoice.BillingAddress.Street) || string.IsNullOrWhiteSpace(invoice.BillingAddress.PostalCode) || string.IsNullOrWhiteSpace(invoice.BillingAddress.City))
             Invalid("Enter the customer's billing street, postal code and city before issuing.");
+        // Field checks run on the freshly built preview first, so a missing field is named rather than reported as a stale preview.
+        if (!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(preview.PreviewToken), Encoding.UTF8.GetBytes(request.PreviewToken!)))
+            throw new ShiftConflictException("Invoice inputs, pricing or work records changed. Load a new preview before issuing.");
         var number = await invoices.NextInvoiceNumberForYearAsync(invoice.IssueDate.Year, ct);
         invoice.Id = Guid.NewGuid(); invoice.InvoiceNumber = $"{invoice.IssueDate.Year}-{number:D4}";
         invoice.PaymentReference = PaymentReference($"{invoice.IssueDate.Year}{number:D4}");
@@ -62,7 +63,8 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
     {
         if (request.CompanyId == Guid.Empty || request.ShiftIds is null || (!request.PartnerMonth && request.ShiftIds.Count is < 1 or > 50) || request.ShiftIds.Any(id => id == Guid.Empty))
             Invalid("Select a company and between 1 and 50 shifts.");
-        if (request.From.Year < 2000 || request.To.Year > 2100 || request.To < request.From || request.To.DayNumber - request.From.DayNumber >= 366)
+        if (request.To < request.From) Invalid("The billing period must end on or after its start date.");
+        if (request.From.Year < 2000 || request.To.Year > 2100 || request.To.DayNumber - request.From.DayNumber >= 366)
             Invalid("Choose an inclusive billing period of at most 366 days between 2000 and 2100.");
         if (request.Language is not ("en" or "fi" or "sv")) Invalid("Choose English, Finnish or Swedish for the invoice.");
         if (request.BillingAddress is { } address && new[] { address.Street, address.PostalCode, address.City, address.Country }.Any(s => s?.Length > 250))
@@ -189,7 +191,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             throw new ShiftConflictException("Partner work eligibility changed. Load a new preview before issuing.");
         if (lines.Count == 0) Invalid(request.PartnerMonth
             ? "No completed, unbilled visits were found for this month. Choose another month, or select shifts manually under Invoice shifts."
-            : "No billable shift work was found in this period. On-call visits must be completed before invoicing.");
+            : "No billable work was found for the selected shifts in this period. Completed visits and scheduled hours or fees are billed.");
         var issueDate = TenantTimeZone.LocalDate(clock.GetUtcNow().UtcDateTime, zone);
         var invoice = new Invoice { Id = Guid.Empty, CreatedUtc = issueDate, UpdatedUtc = issueDate, CompanyId = company.Id,
             PeriodFrom = request.From, PeriodTo = request.To, Language = request.Language, BillingAddress = request.BillingAddress ?? new(),

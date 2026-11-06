@@ -162,7 +162,7 @@ test('a failed save keeps the draft and a retry creates the visit once', async (
   await dialog.getByRole('textbox', { name: 'End time', exact: true }).fill('11:30');
 
   await dialog.getByRole('button', { name: 'Create shift', exact: true }).click();
-  await expect(dialog.getByText('Failed to create shift.', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('Synthetic failure', { exact: true }).first()).toBeVisible();
   await expect(dialog.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Past visit');
   await expect(dialog.getByRole('textbox', { name: 'Date', exact: true })).toHaveValue('2026-10-01');
 

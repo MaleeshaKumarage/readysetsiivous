@@ -123,6 +123,56 @@ export async function adminSend(
   return ok;
 }
 
+export type AdminSendResult = { ok: true } | { ok: false; message: string };
+
+// Turns an RFC 7807 problem into one readable sentence. Field-level messages are used when
+// there is no detail, so validation failures still say what to change.
+export function problemText(problem: unknown, fallback: string): string {
+  const body = (problem ?? {}) as { detail?: unknown; title?: unknown; errors?: Record<string, unknown> };
+  if (typeof body.detail === 'string' && body.detail.trim()) return body.detail.trim();
+  if (body.errors && typeof body.errors === 'object') {
+    const messages = Object.values(body.errors).flat().filter((m): m is string => typeof m === 'string' && m.trim() !== '');
+    if (messages.length) return [...new Set(messages)].slice(0, 3).join(' ');
+  }
+  if (typeof body.title === 'string' && body.title.trim()) return body.title.trim();
+  return fallback;
+}
+
+// Like adminSend, but keeps the server's reason (problem detail) so the user can act on it.
+export async function adminSendResult(
+  path: string,
+  method: 'POST' | 'PUT' | 'DELETE',
+  body?: unknown
+): Promise<AdminSendResult> {
+  let response: Response;
+  try {
+    response = await authorizedFetch(path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
+  } catch {
+    return { ok: false, message: 'Could not reach the server. Check your connection, then save again.' };
+  }
+  if (response.ok || response.status === 204) { invalidateAdminCache(); return { ok: true }; }
+  const problem = await response.json().catch(() => null);
+  return { ok: false, message: problemText(problem, `The change was not saved (error ${response.status}). Check the fields, then save again.`) };
+}
+
+export type AdminJsonResult<T> = { ok: true; value: T } | { ok: false; message: string };
+
+// Like adminSendJson, but keeps the server's reason so the form can say what to change.
+export async function adminSendJsonResult<T>(path: string, method: 'POST' | 'PUT', body?: unknown): Promise<AdminJsonResult<T>> {
+  let response: Response;
+  try {
+    response = await authorizedFetch(path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
+  } catch {
+    return { ok: false, message: 'Could not reach the server. Check your connection, then save again.' };
+  }
+  if (!response.ok) {
+    const problem = await response.json().catch(() => null);
+    return { ok: false, message: problemText(problem, `The change was not saved (error ${response.status}). Check the fields, then save again.`) };
+  }
+  invalidateAdminCache();
+  return { ok: true, value: (await response.json()) as T };
+}
+
 export async function adminSendJson<T>(
   path: string,
   method: 'POST' | 'PUT',
@@ -218,9 +268,9 @@ export const adminServices = {
     adminGet<{ id: string; slug: string; category: string; name: { values: Record<string, string> }; description: { values: Record<string, string> }; additionalInfo: { values: Record<string, string> } | null; icon: string; imageUrl: string; durationMinutes: number; priceNet: number; vatRatePercent: number; isActive: boolean; isFeatured: boolean; sortOrder: number }[]>(
       `/api/v1/admin/services?includeInactive=${includeInactive}`
     ),
-  create: (fields: ServiceFields) => adminSend('/api/v1/admin/services', 'POST', { fields }),
-  update: (id: string, fields: ServiceFields, isActive: boolean) =>
-    adminSend(`/api/v1/admin/services/${id}`, 'PUT', { fields, isActive }),
+  create: (fields: ServiceFields): Promise<AdminSendResult> => adminSendResult('/api/v1/admin/services', 'POST', { fields }),
+  update: (id: string, fields: ServiceFields, isActive: boolean): Promise<AdminSendResult> =>
+    adminSendResult(`/api/v1/admin/services/${id}`, 'PUT', { fields, isActive }),
   remove: (id: string) => adminSend(`/api/v1/admin/services/${id}`, 'DELETE'),
   deleteInactive: (id: string) => adminDelete(`/api/v1/admin/services/${id}`),
   uploadImage: async (id: string, file: File): Promise<string | null> => {
@@ -268,7 +318,7 @@ async function employeeMutation(path: string, body?: unknown): Promise<boolean> 
   const response = await authorizedFetch(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) });
   if (!response.ok) {
     const problem = await response.json().catch(() => ({})) as { detail?: string; title?: string };
-    throw new Error(problem.detail || problem.title || `Employee update failed (${response.status}). Please retry.`);
+    throw new Error(problemText(problem, `The change was not saved (error ${response.status}). Check the fields, then save again.`));
   }
   invalidateAdminCache(); return true;
 }
@@ -277,8 +327,8 @@ export const adminEmployees = {
   list: (includeInactive = false) => adminGet<Employee[]>(`/api/v1/admin/employees${includeInactive ? '?includeInactive=true' : ''}`, false),
   create: (fields: EmployeeFields) => employeeMutation('/api/v1/admin/employees', { fields }),
   reactivate: (id: string) => employeeMutation(`/api/v1/admin/employees/${id}/reactivate`),
-  update: (id: string, fields: EmployeeFields, isActive: boolean) =>
-    adminSend(`/api/v1/admin/employees/${id}`, 'PUT', { fields, isActive }),
+  update: (id: string, fields: EmployeeFields, isActive: boolean): Promise<AdminSendResult> =>
+    adminSendResult(`/api/v1/admin/employees/${id}`, 'PUT', { fields, isActive }),
   deactivate: (id: string) => adminSend(`/api/v1/admin/employees/${id}/deactivate`, 'POST'),
   deleteInactive: (id: string) => adminDelete(`/api/v1/admin/employees/${id}`),
   invite: async (id: string): Promise<{ email: string; keycloakUserId: string; status: 'Sent' | 'AlreadySent'; sentUtc: string }> => {
@@ -318,12 +368,13 @@ async function agreementCreateError(response: Response): Promise<string> {
       const first = Object.values(body.errors).flat()[0];
       if (first) return first;
     }
-    if (body.title) return body.title;
+    // The detail explains what to change; the title is only a category.
     if (body.detail) return body.detail;
+    if (body.title) return body.title;
   } catch {
     // fall through
   }
-  return `Request failed (${response.status})`;
+  return `The agreement was not created (error ${response.status}). Check the fields and the PDF, then create it again.`;
 }
 
 export const adminAgreements = {
@@ -522,6 +573,9 @@ export interface VisitAssigneesInput {
   mode: number; employeeIds: string[]; reason: string; rosterVersion: string;
   assignmentVersion: string | null; fromThisDate: boolean; preview: boolean;
 }
+export interface ScheduleVisit { shiftId: string; shiftName: string; startUtc: string; endUtc: string }
+export interface EmployeeDaySchedule { employeeId: string; localDay: string; visits: ScheduleVisit[] }
+export interface OverlapFinding { employeeId: string; earlier: ScheduleVisit; later: ScheduleVisit }
 export interface VisitAssignmentResult { employeeIds: string[]; message: string; preview: boolean }
 export interface ShiftOccurrence {
   startUtc: string;
@@ -546,12 +600,22 @@ export interface ShiftOccurrenceExceptionInput {
   employeeId?: string | null;
 }
 
+export interface ShiftConflictDetail { shiftId: string; shiftName: string; startUtc: string; endUtc: string }
+
+// Overlap refusals carry the clashing shift so the assignment dialog can offer a fix.
+export class VisitConflictError extends Error {
+  constructor(message: string, public readonly conflicts: ShiftConflictDetail[]) { super(message); this.name = 'VisitConflictError'; }
+}
+
 async function occurrenceRequest<T>(path: string, method: 'PUT' | 'DELETE', body?: unknown): Promise<T> {
   const response = await authorizedFetch(path, { method, cache: 'no-store',
     ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   if (!response.ok) {
     const problem = await response.json().catch(() => null);
-    throw new Error(typeof problem?.detail === 'string' ? problem.detail : 'Could not update this occurrence. Please retry.');
+    const message = problemText(problem, 'Could not update this occurrence. Please retry.');
+    const conflicts = Array.isArray(problem?.conflicts) ? problem.conflicts as ShiftConflictDetail[] : [];
+    if (response.status === 409 && conflicts.length > 0) throw new VisitConflictError(message, conflicts);
+    throw new Error(message);
   }
   invalidateAdminCache();
   return method === 'DELETE' ? undefined as T : await response.json() as T;
@@ -570,8 +634,7 @@ async function shiftAssignmentRequest<T>(path: string, method = 'GET', body?: un
   }
   if (!response.ok) {
     const problem = await response.json().catch(() => null);
-    const detail = response.status < 500 && typeof problem?.detail === 'string' ? problem.detail.trim() : '';
-    throw new Error(detail || `Could not ${operation}. Please retry.`);
+    throw new Error(response.status < 500 ? problemText(problem, `Could not ${operation}. Please retry.`) : `Could not ${operation}. Please retry.`);
   }
   if (method !== 'GET') { invalidateAdminCache(); return undefined as T; }
   try {
@@ -605,14 +668,18 @@ export const adminShifts = {
   },
   listForCustomer: (companyId: string) => adminGet<Shift[]>(`/api/v1/admin/shifts?companyId=${encodeURIComponent(companyId)}&includeInactive=true`, false),
   get: (id: string) => adminGet<Shift>(`/api/v1/admin/shifts/${id}`),
-  create: (fields: unknown) => adminSendJson<Shift>('/api/v1/admin/shifts', 'POST', fields),
+  create: (fields: unknown) => adminSendJsonResult<Shift>('/api/v1/admin/shifts', 'POST', fields),
   update: (id: string, fields: unknown) =>
-    adminSendJson<Shift>(`/api/v1/admin/shifts/${id}`, 'PUT', fields),
+    adminSendJsonResult<Shift>(`/api/v1/admin/shifts/${id}`, 'PUT', fields),
   setQualityCycleTemplate: (id: string, templateId: string | null) => adminSendJson<Shift>(`/api/v1/admin/shifts/${id}/quality-cycle-template`, "PUT", { templateId }),
   deactivate: (id: string) => adminSend(`/api/v1/admin/shifts/${id}/deactivate`, 'POST'),
   reactivate: (id: string) => adminSendJson<Shift>(`/api/v1/admin/shifts/${id}/reactivate`, 'POST'),
   deleteInactive: (id: string) => adminDelete(`/api/v1/admin/shifts/${id}`),
   assignmentCounts: shiftAssignmentCounts,
+  employeeSchedule: (fromDate: string, toDate: string) =>
+    adminGet<EmployeeDaySchedule[]>(`/api/v1/admin/shifts/employee-schedule?from=${fromDate}T00:00:00Z&to=${toDate}T00:00:00Z`, false),
+  overlapAudit: (fromDate: string, toDate: string) =>
+    adminGet<OverlapFinding[]>(`/api/v1/admin/shifts/overlap-audit?from=${fromDate}T00:00:00Z&to=${toDate}T00:00:00Z`, false),
   assignments: (id: string) =>
     shiftAssignmentRequest<ShiftAssignment[]>(`/api/v1/admin/shifts/${id}/assignments`),
   assign: (id: string, employeeId: string) =>
@@ -636,9 +703,7 @@ async function companyRequest<T>(path: string, method: 'POST' | 'PUT', body: unk
   const response = await authorizedFetch(path, { method, body: JSON.stringify(body) });
   if (!response.ok) {
     const problem = await response.json().catch(() => null);
-    const detail = response.status < 500 && typeof problem?.detail === 'string' ? problem.detail.trim() : '';
-    const title = response.status < 500 && typeof problem?.title === 'string' ? problem.title.trim() : '';
-    throw new Error(detail || title || 'Could not save. Please retry.');
+    throw new Error(response.status < 500 ? problemText(problem, 'Could not save. Please retry.') : 'Could not save. Please retry.');
   }
   const result = await response.json() as T;
   invalidateAdminCache();
