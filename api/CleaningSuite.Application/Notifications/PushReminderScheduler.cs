@@ -23,10 +23,17 @@ public sealed class PushReminderScheduler(IPartnerStore store, IShiftRepository 
         if (devices.Count == 0) return;
         var employees = devices.Select(x => x.EmployeeId).ToHashSet();
         var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
-        foreach (var shift in await shifts.ListAsync(null, null, ct))
+        var allShifts = await shifts.ListAsync(null, null, ct);
+        // One load per roster collection for every shift, instead of three loads per shift on every minute.
+        var rosterFrom = now.AddDays(-2); var rosterTo = now.AddMinutes(31);
+        var inputs = await shifts.ListRosterInputsAsync(allShifts.Select(x => x.Id).ToArray(), rosterFrom, rosterTo, ct);
+        foreach (var shift in allShifts)
         {
             // Include overnight visits and moved visits through the canonical resolver.
-            var visits = await shifts.ResolveRosterAsync(shift, now.AddDays(-2), now.AddMinutes(31), zone, ct);
+            var visits = ShiftRosterReader.ResolveRoster(shift, rosterFrom, rosterTo, zone,
+                inputs.Exceptions.GetValueOrDefault(shift.Id) ?? Array.Empty<ShiftOccurrenceException>(),
+                inputs.History.GetValueOrDefault(shift.Id) ?? Array.Empty<ShiftAssignment>(),
+                inputs.Overrides.GetValueOrDefault(shift.Id) ?? Array.Empty<ShiftOccurrenceAssignment>());
             foreach (var visit in visits.Where(x => !x.IsCancelled))
             foreach (var employee in visit.EmployeeIds.Where(employees.Contains))
             {

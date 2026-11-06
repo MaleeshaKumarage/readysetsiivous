@@ -55,8 +55,13 @@ public record SaveShiftOccurrenceExceptionCommand(Guid ShiftId, Guid? Id,
     : IRequest<ShiftOccurrenceDto>;
 public record DeleteShiftOccurrenceExceptionCommand(Guid ShiftId, Guid Id) : IRequest;
 
+public sealed record ShiftRosterInputs(IReadOnlyDictionary<Guid, IReadOnlyList<ShiftOccurrenceException>> Exceptions,
+    IReadOnlyDictionary<Guid, IReadOnlyList<ShiftAssignment>> History, IReadOnlyDictionary<Guid, IReadOnlyList<ShiftOccurrenceAssignment>> Overrides);
+
 public interface IShiftRepository
 {
+    /// <summary>Roster inputs for many shifts in one load per collection, keyed by shift id.</summary>
+    Task<ShiftRosterInputs> ListRosterInputsAsync(IReadOnlyCollection<Guid> shiftIds, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default);
     Task<Shift?> GetAsync(Guid id, CancellationToken ct = default);
     Task<Shift?> GetDeletedSnapshotAsync(Guid id, CancellationToken ct = default);
     Task<IReadOnlyList<Shift>> ListAsync(Guid? companyId, Guid? branchId, CancellationToken ct = default);

@@ -384,6 +384,9 @@ public class PushReminderDatabaseTests
             f.Shifts.Setup(x => x.ListOccurrenceExceptionsAsync(f.Shift.Id, It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync(() => f.Exceptions);
             f.Shifts.Setup(x => x.ListAssignmentHistoryAsync(f.Shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(() => f.Assignments);
             f.Shifts.Setup(x => x.ListOccurrenceAssignmentsAsync(f.Shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync([]);
+            f.Shifts.Setup(x => x.ListRosterInputsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => new ShiftRosterInputs(new Dictionary<Guid, IReadOnlyList<ShiftOccurrenceException>> { [f.Shift.Id] = f.Exceptions },
+                    new Dictionary<Guid, IReadOnlyList<ShiftAssignment>> { [f.Shift.Id] = f.Assignments }, new Dictionary<Guid, IReadOnlyList<ShiftOccurrenceAssignment>>()));
             return f;
         }
         public ShiftOccurrenceException AddExtra(DateTime start, DateTime end)
