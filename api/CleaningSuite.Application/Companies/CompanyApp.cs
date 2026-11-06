@@ -291,14 +291,17 @@ public class CompanyHandlers
             if (partnerStore is not null && await partnerStore.Session.Query<CleaningSuite.Domain.Employees.Employee>().AnyAsync(x => x.PartnerCompanyId == company.Id, ct))
                 throw new InactiveRecordDeleteConflictException("Partner user accounts belong to this company. Remove those accounts first, then clear again.");
 
-            var partnerDocs = new List<object>();
+            var partnerRequests = new List<PartnerCleaningRequest>();
+            var partnerChanges = new List<PartnerChangeRequest>();
+            var partnerNotes = new List<PartnerNotification>();
             if (partnerStore is not null)
             {
                 var session = partnerStore.Session;
-                partnerDocs.AddRange(await session.Query<PartnerCleaningRequest>().Where(x => x.CompanyId == company.Id || branchIds.Contains(x.BranchId)).ToListAsync(ct));
-                partnerDocs.AddRange(await session.Query<PartnerChangeRequest>().Where(x => x.CompanyId == company.Id || branchIds.Contains(x.BranchId)).ToListAsync(ct));
-                partnerDocs.AddRange(await session.Query<PartnerNotification>().Where(x => branchIds.Contains(x.BranchId)).ToListAsync(ct));
+                partnerRequests = (await session.Query<PartnerCleaningRequest>().Where(x => x.CompanyId == company.Id || branchIds.Contains(x.BranchId)).ToListAsync(ct)).ToList();
+                partnerChanges = (await session.Query<PartnerChangeRequest>().Where(x => x.CompanyId == company.Id || branchIds.Contains(x.BranchId)).ToListAsync(ct)).ToList();
+                partnerNotes = (await session.Query<PartnerNotification>().Where(x => branchIds.Contains(x.BranchId)).ToListAsync(ct)).ToList();
             }
+            var partnerRecordCount = partnerRequests.Count + partnerChanges.Count + partnerNotes.Count;
 
             // Each save commits on its own, so the clear cannot be one transaction. It stops, reports how far it got, and can
             // be run again: finished work is skipped on the next run (shifts, places and invoices that are already gone or voided).
@@ -306,11 +309,13 @@ public class CompanyHandlers
             var removedShifts = 0; var removedPlaces = 0; var unassigned = 0; var voided = 0; var partnerRemoved = 0; var agreementsRemoved = 0;
             try
             {
-                if (partnerStore is not null && partnerDocs.Count > 0)
+                if (partnerStore is not null && partnerRecordCount > 0)
                 {
-                    foreach (var doc in partnerDocs) partnerStore.Session.Delete(doc);
+                    foreach (var partnerRequest in partnerRequests) partnerStore.Session.Delete(partnerRequest);
+                    foreach (var change in partnerChanges) partnerStore.Session.Delete(change);
+                    foreach (var note in partnerNotes) partnerStore.Session.Delete(note);
                     await partnerStore.Session.SaveChangesAsync(ct);
-                    partnerRemoved = partnerDocs.Count;
+                    partnerRemoved = partnerRecordCount;
                 }
 
                 foreach (var shift in companyShifts)
