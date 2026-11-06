@@ -7,12 +7,16 @@ namespace CleaningSuite.Api;
 /// Runs every data repair in one place, on each API start. Repairs run in order, and each one is isolated: a failure
 /// is logged and the others still run. Every repair is safe to repeat, so the next start retries anything that failed.
 /// The shift validity correction runs only when DataCorrections:ShiftValidityWindow:Mode is set (Report or Apply).
+/// StartupRepairs:Enabled turns the whole service off; it defaults to on.
 /// </summary>
 public sealed class StartupRepairService(IServiceScopeFactory scopes, IConfiguration configuration,
     ILogger<StartupRepairService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Test hosts turn repairs off (StartupRepairs:Enabled=false) so they do not touch the tenant registry at start.
+        if (!configuration.GetValue("StartupRepairs:Enabled", true)) return;
+
         await RunAsync("shift validity correction", stoppingToken, async (services, ct) =>
         {
             var mode = configuration["DataCorrections:ShiftValidityWindow:Mode"] ?? "Off";
