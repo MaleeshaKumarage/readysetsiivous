@@ -68,7 +68,7 @@ public class ClearCompanyRelatedDatabaseTests
         var context = new Mock<ITenantContext>(); context.SetupGet(x => x.TenantId).Returns(tenant);
         session = new TenantSessionFactory(store, context.Object);
         return new CompanyHandlers.ClearCompanyRelatedCommandHandler(new CompanyRepository(session), new BranchRepository(session),
-            new ShiftRepository(session), new QualityCycleRepository(session, store), new AgreementRepository(store), context.Object,
+            new ShiftRepository(session), new AgreementRepository(store), context.Object,
             new PartnerStore(session), null, new InvoiceRepository(session));
     }
 

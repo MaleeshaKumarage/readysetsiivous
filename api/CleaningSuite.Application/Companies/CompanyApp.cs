@@ -267,7 +267,7 @@ public class CompanyHandlers
     // One-step clear: removes the company's shifts, places, partner requests and agreements (when asked), and voids its
     // open invoices. Paid invoices and partner user accounts are refused up front, so a refusal changes nothing.
     public sealed class ClearCompanyRelatedCommandHandler(ICompanyRepository companies, IBranchRepository branches,
-        IShiftRepository shifts, IQualityCycleRepository forms, IAgreementRepository agreements, ITenantContext tenant,
+        IShiftRepository shifts, IAgreementRepository agreements, ITenantContext tenant,
         IPartnerStore? partnerStore = null, IShiftWorkReservation? reservation = null, IInvoiceRepository? invoices = null)
         : IRequestHandler<ClearCompanyRelatedCommand, ClearCompanyRelatedResultDto>
     {
@@ -309,15 +309,6 @@ public class CompanyHandlers
             var removedShifts = 0; var removedPlaces = 0; var unassigned = 0; var voided = 0; var partnerRemoved = 0; var agreementsRemoved = 0;
             try
             {
-                if (partnerStore is not null && partnerRecordCount > 0)
-                {
-                    foreach (var partnerRequest in partnerRequests) partnerStore.Session.Delete(partnerRequest);
-                    foreach (var change in partnerChanges) partnerStore.Session.Delete(change);
-                    foreach (var note in partnerNotes) partnerStore.Session.Delete(note);
-                    await partnerStore.Session.SaveChangesAsync(ct);
-                    partnerRemoved = partnerRecordCount;
-                }
-
                 foreach (var shift in companyShifts)
                 {
                     if (shift.IsActive)
@@ -361,6 +352,16 @@ public class CompanyHandlers
                     await branches.DeleteAsync(branch.Id, ct);
                     removedPlaces++;
                 }
+                // Partner records go last: if any earlier step refuses, they are still there and nothing is half-removed.
+                if (partnerStore is not null && partnerRecordCount > 0)
+                {
+                    foreach (var partnerRequest in partnerRequests) partnerStore.Session.Delete(partnerRequest);
+                    foreach (var change in partnerChanges) partnerStore.Session.Delete(change);
+                    foreach (var note in partnerNotes) partnerStore.Session.Delete(note);
+                    await partnerStore.Session.SaveChangesAsync(ct);
+                    partnerRemoved = partnerRecordCount;
+                }
+
                 return new ClearCompanyRelatedResultDto(removedShifts, unassigned, removedPlaces, voided, partnerRemoved, agreementsRemoved);
             }
             catch (Exception ex) when (ex is InactiveRecordDeleteConflictException or ShiftConflictException or OperationCanceledException)

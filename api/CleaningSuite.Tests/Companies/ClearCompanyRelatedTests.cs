@@ -45,7 +45,7 @@ public class ClearCompanyRelatedTests
         }
 
         public CompanyHandlers.ClearCompanyRelatedCommandHandler Handler() =>
-            new(Companies.Object, Branches.Object, Shifts.Object, Forms.Object, Agreements.Object, Tenant, invoices: Invoices.Object);
+            new(Companies.Object, Branches.Object, Shifts.Object, Agreements.Object, Tenant, invoices: Invoices.Object);
     }
 
     [Fact]
