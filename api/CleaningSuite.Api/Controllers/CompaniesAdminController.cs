@@ -27,7 +27,8 @@ public class CompaniesAdminController : ControllerBase
         _outputCache = outputCache;
     }
 
-    private ValueTask EvictCompanyCachesAsync(CancellationToken ct) => _outputCache.EvictByTagAsync(CompaniesCacheTag, ct);
+    // Eviction uses CancellationToken.None: a client that disconnects after a commit must not leave the cache stale.
+    private ValueTask EvictCompanyCachesAsync() => _outputCache.EvictByTagAsync(CompaniesCacheTag, CancellationToken.None);
 
     [HttpGet]
     [OutputCache(Duration = 30, Tags = new[] { CompaniesCacheTag })]
@@ -68,7 +69,7 @@ public class CompaniesAdminController : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreateCompanyCommand command, CancellationToken ct)
     {
         var result = await _mediator.Send(command, ct);
-        await EvictCompanyCachesAsync(ct);
+        await EvictCompanyCachesAsync();
         return CreatedAtAction(nameof(Get), new { id = result.Id }, result);
     }
 
@@ -76,7 +77,7 @@ public class CompaniesAdminController : ControllerBase
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateCompanyCommand command, CancellationToken ct)
     {
         var result = await _mediator.Send(command with { Id = id }, ct);
-        await EvictCompanyCachesAsync(ct);
+        await EvictCompanyCachesAsync();
         return Ok(result);
     }
 
@@ -84,7 +85,7 @@ public class CompaniesAdminController : ControllerBase
     public async Task<IActionResult> Deactivate(Guid id, CancellationToken ct)
     {
         await _mediator.Send(new DeactivateCompanyCommand(id), ct);
-        await EvictCompanyCachesAsync(ct);
+        await EvictCompanyCachesAsync();
         return NoContent();
     }
 
@@ -92,13 +93,13 @@ public class CompaniesAdminController : ControllerBase
     public async Task<IActionResult> Reactivate(Guid id, CancellationToken ct)
     {
         await _mediator.Send(new ReactivateCompanyCommand(id), ct);
-        await EvictCompanyCachesAsync(ct);
+        await EvictCompanyCachesAsync();
         return NoContent();
     }
 
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
-    { await _mediator.Send(new DeleteCompanyCommand(id), ct); await EvictCompanyCachesAsync(ct); return NoContent(); }
+    { await _mediator.Send(new DeleteCompanyCommand(id), ct); await EvictCompanyCachesAsync(); return NoContent(); }
 
     [HttpPost("{id:guid}/clear-related")]
     public async Task<IActionResult> ClearRelated(Guid id, CancellationToken ct)
@@ -111,8 +112,8 @@ public class CompaniesAdminController : ControllerBase
         finally
         {
             // Runs on failure too: a clear that stopped part way has already removed some shifts and places.
-            await EvictCompanyCachesAsync(ct);
-            await _outputCache.EvictByTagAsync(ShiftsCacheTag, ct);
+            await EvictCompanyCachesAsync();
+            await _outputCache.EvictByTagAsync(ShiftsCacheTag, CancellationToken.None);
         }
     }
 
@@ -120,19 +121,19 @@ public class CompaniesAdminController : ControllerBase
     public async Task<IActionResult> ReactivateBranch(Guid branchId, CancellationToken ct)
     {
         await _mediator.Send(new ReactivateBranchCommand(branchId), ct);
-        await EvictCompanyCachesAsync(ct);
+        await EvictCompanyCachesAsync();
         return NoContent();
     }
 
     [HttpDelete("branches/{branchId:guid}")]
     public async Task<IActionResult> DeleteBranch(Guid branchId, CancellationToken ct)
-    { await _mediator.Send(new DeleteBranchCommand(branchId), ct); await EvictCompanyCachesAsync(ct); return NoContent(); }
+    { await _mediator.Send(new DeleteBranchCommand(branchId), ct); await EvictCompanyCachesAsync(); return NoContent(); }
 
     [HttpPost("{companyId:guid}/branches")]
     public async Task<IActionResult> CreateBranch(Guid companyId, [FromBody] CreateBranchCommand command, CancellationToken ct)
     {
         var result = await _mediator.Send(command with { CompanyId = companyId }, ct);
-        await EvictCompanyCachesAsync(ct);
+        await EvictCompanyCachesAsync();
         return Ok(result);
     }
 
@@ -140,7 +141,7 @@ public class CompaniesAdminController : ControllerBase
     public async Task<IActionResult> UpdateBranch(Guid branchId, [FromBody] UpdateBranchCommand command, CancellationToken ct)
     {
         var result = await _mediator.Send(command with { Id = branchId }, ct);
-        await EvictCompanyCachesAsync(ct);
+        await EvictCompanyCachesAsync();
         return Ok(result);
     }
 
@@ -148,7 +149,7 @@ public class CompaniesAdminController : ControllerBase
     public async Task<IActionResult> DeactivateBranch(Guid branchId, CancellationToken ct)
     {
         await _mediator.Send(new DeactivateBranchCommand(branchId), ct);
-        await EvictCompanyCachesAsync(ct);
+        await EvictCompanyCachesAsync();
         return NoContent();
     }
 }

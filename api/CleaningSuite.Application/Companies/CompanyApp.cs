@@ -299,14 +299,15 @@ public class CompanyHandlers
             // it got, and can be run again: finished shifts and places are skipped on the next run.
             var now = DateTime.UtcNow;
             var removedShifts = 0;
+            var removedPlaces = 0;
             var unassigned = 0;
             try
             {
                 foreach (var shift in companyShifts)
                 {
-                    shift.EnsureQualityCycleHistory();
                     if (shift.IsActive)
                     {
+                        shift.EnsureQualityCycleHistory();
                         shift.Deactivate();
                         shift.RecordQualityCyclePlan(now);
                         await shifts.SaveAsync(shift, ct);
@@ -322,7 +323,6 @@ public class CompanyHandlers
                     removedShifts++;
                 }
 
-                var removedPlaces = 0;
                 foreach (var branch in companyBranches)
                 {
                     if (branch.IsActive)
@@ -335,10 +335,15 @@ public class CompanyHandlers
                 }
                 return new ClearCompanyRelatedResultDto(removedShifts, unassigned, removedPlaces);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex is InactiveRecordDeleteConflictException or ShiftConflictException or OperationCanceledException)
             {
-                throw new InactiveRecordDeleteConflictException(
-                    $"Clearing stopped after {removedShifts} of {companyShifts.Count} shift(s) were removed. The company was not deactivated or deleted. Run Clear again to finish.");
+                // Specific refusals keep their meaning and message; only unexpected failures get the progress report.
+                throw;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"Clearing stopped after removing {removedShifts} of {companyShifts.Count} shift(s) and {removedPlaces} of {companyBranches.Count} place(s). The company was not deactivated or deleted. Run Clear again to finish.", ex);
             }
         }
     }

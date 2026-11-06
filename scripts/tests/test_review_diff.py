@@ -46,6 +46,17 @@ class ChunkTests(unittest.TestCase):
         hunks_seen = sum(c.count("\n@@") + c.startswith("@@") for c in chunks)
         self.assertEqual(hunks_seen, 8)
 
+    def test_non_ascii_hunks_respect_the_byte_limit(self):
+        module = load("review_diff")
+        header = "diff --git a/x.md b/x.md\n--- a/x.md\n+++ b/x.md\n"
+        # Each hunk is about 300 characters but about 600 bytes, so a character budget would let two hunks share one piece.
+        hunks = ["@@ -1 +1 @@\n" + "\u00e4" * 300 + "\n" for _ in range(4)]
+        diff = header + "".join(hunks)
+        limit = 1000
+        pieces = module.split_hunks(diff, limit)
+        self.assertTrue(all(len(piece.encode()) <= limit for piece in pieces if piece.count("@@ -1 +1 @@") == 1), pieces)
+        self.assertEqual("".join(pieces).count("@@ -1 +1 @@"), 4)
+
     def test_empty_diff_has_no_chunks(self):
         self.assertEqual(review_diff.make_chunks("", limit=1_000), [])
 

@@ -54,7 +54,7 @@ def split_hunks(section, limit):
     pieces, current = [], "".join(header)
     for hunk in hunks:
         text = "".join(hunk)
-        if len(current) + len(text) > limit and current != "".join(header):
+        if len(current.encode()) + len(text.encode()) > limit and current != "".join(header):
             pieces.append(current)
             current = "".join(header)
         current += text

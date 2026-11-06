@@ -125,3 +125,87 @@ test('a refused delete of an inactive company can clear its places first, then d
   expect(clearCalls).toEqual(['POST']);
   expect(deleteCalls).toBe(2);
 });
+
+const PARTNER_REASON = 'This company has partner request history and must be retained.';
+
+test('skip deletion on a refused delete leaves the company, its shifts and places untouched', async ({ page }) => {
+  await setupAdminMocks(page);
+  const clearCalls: string[] = [];
+  let deleteCalls = 0;
+  await page.route(/\/api\/v1\/admin\/companies\/company-a$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
+    if (route.request().method() !== 'DELETE') return route.fallback();
+    deleteCalls++;
+    return route.fulfill({ headers, status: 409, json: { title: 'Delete conflict', detail: BRANCH_REASON } });
+  });
+  await page.route(/\/api\/v1\/admin\/companies\/company-a\/clear-related$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
+    clearCalls.push(route.request().method());
+    return route.fulfill({ headers, json: { shiftsDeleted: 0, employeesUnassigned: 0, branchesDeleted: 0 } });
+  });
+  await routeCompanies(page, inactiveCompany);
+  await page.goto('/admin/companies/');
+  await page.getByRole('tab', { name: /inactive/i }).click();
+  page.once('dialog', dialog => void dialog.accept());
+  await page.getByRole('button', { name: 'Delete', exact: true }).first().click();
+
+  const dialog = page.getByRole('dialog', { name: DIALOG });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Skip deletion' }).click();
+  await expect(dialog).toBeHidden();
+  expect(clearCalls).toEqual([]);
+  expect(deleteCalls).toBe(1);
+  await expect(page.getByRole('button', { name: 'Delete', exact: true }).first()).toBeVisible();
+});
+
+test('a refused clear on the delete path shows the reason and does not retry the delete', async ({ page }) => {
+  await setupAdminMocks(page);
+  const clearCalls: string[] = [];
+  let deleteCalls = 0;
+  await page.route(/\/api\/v1\/admin\/companies\/company-a$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
+    if (route.request().method() !== 'DELETE') return route.fallback();
+    deleteCalls++;
+    return route.fulfill({ headers, status: 409, json: { title: 'Delete conflict', detail: BRANCH_REASON } });
+  });
+  await page.route(/\/api\/v1\/admin\/companies\/company-a\/clear-related$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
+    clearCalls.push(route.request().method());
+    return route.fulfill({ headers, status: 409, json: { title: 'Delete conflict', detail: HISTORY_REASON } });
+  });
+  await routeCompanies(page, inactiveCompany);
+  await page.goto('/admin/companies/');
+  await page.getByRole('tab', { name: /inactive/i }).click();
+  page.once('dialog', dialog => void dialog.accept());
+  await page.getByRole('button', { name: 'Delete', exact: true }).first().click();
+
+  const dialog = page.getByRole('dialog', { name: DIALOG });
+  await dialog.getByRole('button', { name: CLEAR_BUTTON }).click();
+  await expect(dialog.getByRole('alert').filter({ hasText: HISTORY_REASON })).toBeVisible();
+  expect(clearCalls).toEqual(['POST']);
+  expect(deleteCalls).toBe(1);
+});
+
+test('a partner refusal on delete shows only the reason and no clear prompt', async ({ page }) => {
+  await setupAdminMocks(page);
+  const clearCalls: string[] = [];
+  await page.route(/\/api\/v1\/admin\/companies\/company-a$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
+    if (route.request().method() !== 'DELETE') return route.fallback();
+    return route.fulfill({ headers, status: 409, json: { title: 'Delete conflict', detail: PARTNER_REASON } });
+  });
+  await page.route(/\/api\/v1\/admin\/companies\/company-a\/clear-related$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
+    clearCalls.push(route.request().method());
+    return route.fulfill({ headers, json: { shiftsDeleted: 0, employeesUnassigned: 0, branchesDeleted: 0 } });
+  });
+  await routeCompanies(page, inactiveCompany);
+  await page.goto('/admin/companies/');
+  await page.getByRole('tab', { name: /inactive/i }).click();
+  page.once('dialog', dialog => void dialog.accept());
+  await page.getByRole('button', { name: 'Delete', exact: true }).first().click();
+
+  await expect(page.getByRole('alert').filter({ hasText: PARTNER_REASON }).first()).toBeVisible();
+  await expect(page.getByRole('dialog', { name: DIALOG })).toBeHidden();
+  expect(clearCalls).toEqual([]);
+});

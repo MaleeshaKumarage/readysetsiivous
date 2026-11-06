@@ -101,7 +101,7 @@ public class ClearCompanyRelatedTests
     }
 
     [Fact]
-    public async Task A_failure_part_way_reports_how_far_it_got_so_the_clear_can_be_run_again()
+    public async Task An_unexpected_failure_part_way_reports_how_far_it_got_so_the_clear_can_be_run_again()
     {
         var fixture = new Fixture();
         var company = fixture.Company;
@@ -109,14 +109,32 @@ public class ClearCompanyRelatedTests
         var second = new Shift { Id = Guid.NewGuid(), CompanyId = company.Id, IsActive = false };
         fixture.Shifts.Setup(x => x.ListAsync(company.Id, null, It.IsAny<CancellationToken>())).ReturnsAsync([first, second]);
         fixture.Shifts.Setup(x => x.ListAssignmentsByShiftAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
-        fixture.Shifts.Setup(x => x.DeleteAsync(second.Id, It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("boom"));
+        fixture.Shifts.Setup(x => x.DeleteAsync(second.Id, It.IsAny<CancellationToken>())).ThrowsAsync(new TimeoutException("db timeout"));
+        fixture.Branches.Setup(x => x.ListByCompanyAsync(company.Id, true, It.IsAny<CancellationToken>())).ReturnsAsync([]);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Handler().Handle(new(company.Id), default));
+
+        Assert.Contains("stopped after removing 1 of 2 shift(s)", ex.Message);
+        Assert.Contains("Run Clear again", ex.Message);
+        Assert.IsType<TimeoutException>(ex.InnerException);
+        fixture.Shifts.Verify(x => x.DeleteAsync(first.Id, It.IsAny<CancellationToken>()), Times.Once);
+        fixture.Branches.Verify(x => x.DeleteAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task A_specific_refusal_from_a_delete_passes_through_unchanged()
+    {
+        var fixture = new Fixture();
+        var company = fixture.Company;
+        var first = new Shift { Id = Guid.NewGuid(), CompanyId = company.Id, IsActive = false };
+        fixture.Shifts.Setup(x => x.ListAsync(company.Id, null, It.IsAny<CancellationToken>())).ReturnsAsync([first]);
+        fixture.Shifts.Setup(x => x.ListAssignmentsByShiftAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        fixture.Shifts.Setup(x => x.DeleteAsync(first.Id, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InactiveRecordDeleteConflictException("This shift has started or completed visits that may not be invoiced yet."));
 
         var ex = await Assert.ThrowsAsync<InactiveRecordDeleteConflictException>(() => fixture.Handler().Handle(new(company.Id), default));
 
-        Assert.Contains("stopped after 1 of 2 shift(s) were removed", ex.Message);
-        Assert.Contains("Run Clear again", ex.Message);
-        fixture.Shifts.Verify(x => x.DeleteAsync(first.Id, It.IsAny<CancellationToken>()), Times.Once);
-        fixture.Branches.Verify(x => x.DeleteAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        Assert.Equal("This shift has started or completed visits that may not be invoiced yet.", ex.Message);
     }
 
     [Fact]
