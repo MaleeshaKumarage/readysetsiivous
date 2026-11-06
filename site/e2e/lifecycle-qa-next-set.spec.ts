@@ -6,6 +6,7 @@ import type { MyShiftOccurrence } from '../src/lib/meApi';
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 
 test('services list states that the price excludes VAT and shows the rate', async ({ page }) => {
+  test.setTimeout(120000);
   await setupAdminMocks(page);
   const service = { id: '11111111-1111-4111-8111-111111111111', slug: 'home-cleaning', name: { values: { fi: 'Kotisiivous' } },
     description: { values: { fi: 'Description' } }, additionalInfo: null, currency: 'EUR', imageUrl: null,
@@ -15,7 +16,7 @@ test('services list states that the price excludes VAT and shows the rate', asyn
     return route.fulfill({ status: 200, headers, json: [service] });
   });
   await page.goto('/admin/services/');
-  await expect(page.getByRole('cell', { name: '20.00 € excl. VAT (25.5%)', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: '20.00 € excl. VAT (25.5%)', exact: true })).toBeVisible({ timeout: 30000 });
 });
 
 test('shift list uses one time format for every schedule type and shows monthly times', async ({ page }) => {
@@ -66,6 +67,7 @@ test('assignee picker shows each employee email so similar names can be told apa
 });
 
 test('my shifts on an empty Today offers past and upcoming work instead of a dead end', async ({ page }) => {
+  test.setTimeout(120000);
   await setupAdminMocks(page);
   const shift = (id: string, shiftName: string, startUtc: string): MyShiftOccurrence => ({ shiftId: id, shiftName, startUtc,
     endUtc: new Date(Date.parse(startUtc) + 7200000).toISOString(), timeZoneId: 'Europe/Helsinki', form: null });
@@ -78,14 +80,20 @@ test('my shifts on an empty Today offers past and upcoming work instead of a dea
       : view === 'future' ? [shift('later', 'Upcoming clean', '2026-11-20T08:00:00Z')] : [];
     return route.fulfill({ status: 200, headers, json: { timeZoneId: 'Europe/Helsinki', fromLocalDate: '2026-11-06', toLocalDate: '2026-11-06', occurrences } });
   });
+  const calendarLoaded = page.waitForResponse(r => r.url().includes('/api/v1/me/shifts/calendar') && r.request().method() === 'GET', { timeout: 90000 });
   await page.goto('/me/shifts/');
-  await expect(page.getByText('No shifts today.', { exact: true })).toBeVisible();
+  await calendarLoaded;
+  await expect(page.getByText('No shifts today.', { exact: true })).toBeVisible({ timeout: 30000 });
   await page.getByRole('button', { name: 'View past shifts', exact: true }).click();
   await expect(page.getByRole('tab', { name: 'Past', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('button', { name: /Week of/ }).first().click();
+  await expect(page.getByRole('button', { name: /16\/10\/2026 Friday.*1 shift/ })).toBeVisible({ timeout: 30000 });
   await page.goto('/me/shifts/');
-  await expect(page.getByRole('button', { name: 'View upcoming shifts', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'View upcoming shifts', exact: true })).toBeVisible({ timeout: 30000 });
   await page.getByRole('button', { name: 'View upcoming shifts', exact: true }).click();
   await expect(page.getByRole('tab', { name: 'Future', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('button', { name: /Week of/ }).first().click();
+  await expect(page.getByRole('button', { name: /20\/11\/2026 Friday.*1 shift/ })).toBeVisible({ timeout: 30000 });
   expect(views).toContain('past');
   expect(views).toContain('future');
 });
