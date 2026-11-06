@@ -10,32 +10,37 @@ const unstarted = [
   { shiftId: 'shift', shiftName: 'Biweekly', startUtc: '2026-10-30T14:00:00Z', endUtc: '2026-10-30T16:00:00Z' },
 ];
 
-function previewFor(input: any) {
+function previewFor(input: any, withBaseLine = true) {
   const decisions: { shiftId: string; startUtc: string; include: boolean }[] = input?.unstartedDecisions ?? [];
   const isIncluded = (visit: typeof unstarted[number]) => decisions.some(d => d.shiftId === visit.shiftId && d.startUtc === visit.startUtc && d.include);
   const ticked = unstarted.filter(isIncluded).length;
-  const net = 100 + 50 * ticked;
+  const base = withBaseLine ? 100 : 0;
+  const net = base + 50 * ticked;
   const vat = Math.round(net * 25.5) / 100;
   const total = net + vat;
+  const hours = (withBaseLine ? 2 : 0) + 2 * ticked;
+  const occurrences = (withBaseLine ? 1 : 0) + ticked;
+  // With only unstarted visits and none ticked there is nothing billable, so the preview has no lines.
+  const lines = net === 0 ? [] : [{ lineKey: 'line', shiftId: 'shift', shiftName: 'Biweekly', branchName: 'Main', hours, occurrences,
+    pricingMode: 'Hourly', quantity: hours, unitPriceNet: 50, netAmount: net, vatRatePercent: 25.5, vatAmount: vat, total,
+    periodFrom: '2026-10-01', periodTo: '2026-10-31', description: 'Hourly' }];
   return {
     id: 'draft', invoiceNumber: '', issuer, customer: { name: 'Methehe' }, companyId: 'company', periodFrom: '2026-10-01', periodTo: '2026-10-31',
     issueDate: '2026-11-01', dueDate: '2026-11-15', status: 'Draft', previewToken: `token-${ticked}`, issuerIsSample: false,
     total: { net, vat, gross: total },
-    lines: [{ lineKey: 'line', shiftId: 'shift', shiftName: 'Biweekly', branchName: 'Main', hours: 2 + 2 * ticked, occurrences: 1 + ticked,
-      pricingMode: 'Hourly', quantity: 2 + 2 * ticked, unitPriceNet: 50, netAmount: net, vatRatePercent: 25.5, vatAmount: vat, total,
-      periodFrom: '2026-10-01', periodTo: '2026-10-31', description: 'Hourly' }],
+    lines,
     unstartedVisits: unstarted.map(visit => ({ ...visit, included: isIncluded(visit) })),
   };
 }
 
-async function setup(page: Page, timeZoneId = 'Europe/Helsinki') {
+async function setup(page: Page, timeZoneId = 'Europe/Helsinki', withBaseLine = true) {
   await setupAdminMocks(page);
   const calls = { previews: [] as any[], issues: [] as any[] };
   await page.route(/\/api\/v1\/admin\//, async route => {
     const request = route.request(); const path = new URL(request.url()).pathname;
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
     const body = request.postData() ? request.postDataJSON() : undefined;
-    if (path.endsWith('/shift-preview')) { calls.previews.push(body); return route.fulfill({ headers, json: previewFor(body) }); }
+    if (path.endsWith('/shift-preview')) { calls.previews.push(body); return route.fulfill({ headers, json: previewFor(body, withBaseLine) }); }
     if (path.endsWith('/invoices/shifts')) { calls.issues.push(body); return route.fulfill({ headers, json: { ...previewFor(body), id: 'invoice', invoiceNumber: 'INV-1', status: 'Issued' } }); }
     return route.fulfill({ headers, json: path.endsWith('/issuer') ? issuer : path.endsWith('/invoices') ? [] : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'Methehe', isActive: true, isPartnerEnabled: false }], total: 1 } : path.endsWith('/shifts') ? [shift] : path.endsWith('/tenant') ? { timeZoneId } : [] });
   });
@@ -97,4 +102,14 @@ test('the invoice form explains that monthly fees follow completed visits', asyn
   await page.getByRole('button', { name: 'New invoice', exact: true }).click();
   await expect(page.getByText(/Monthly fees are charged on completed visits/)).toBeVisible();
   await expect(page.getByText(/Monthly fees are prorated/)).toHaveCount(0);
+});
+
+test('a selection with only unstarted visits still shows the tick list, and ticking one bills it', async ({ page }) => {
+  await setup(page, 'Europe/Helsinki', false); await previewInvoice(page);
+  const list = page.getByLabel('Unstarted visits', { exact: true });
+  await expect(list.getByRole('checkbox')).toHaveCount(2);
+  await expect(page.getByText('Net €0.00 · VAT €0.00 · Total €0.00')).toBeVisible();
+  await list.getByLabel(/23 Oct 2026/).click();
+  await expect(page.getByText('Net €50.00 · VAT €12.75 · Total €62.75')).toBeVisible();
+  await expect(list.getByLabel(/23 Oct 2026/)).toBeChecked();
 });

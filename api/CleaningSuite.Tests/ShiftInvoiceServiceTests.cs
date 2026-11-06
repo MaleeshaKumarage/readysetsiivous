@@ -160,6 +160,23 @@ public class ShiftInvoiceServiceTests
     }
 
     [Fact]
+    public async Task Unstarted_only_selection_still_previews_the_tick_list_and_cannot_be_issued_empty()
+    {
+        var f = new Fixture(completedDays: []);
+        f.Pricing.Plans = [new("Hourly", 50, 25.5m, new(2026, 10, 1))];
+        var preview = await f.Service.PreviewAsync(f.Request, default);
+        Assert.Empty(preview.Invoice.Lines);
+        Assert.Equal(5, preview.UnstartedVisits!.Count);
+        Assert.All(preview.UnstartedVisits!, u => Assert.False(u.Included));
+        await Assert.ThrowsAsync<FluentValidation.ValidationException>(() => f.Service.IssueAsync(f.Request with { PreviewToken = preview.PreviewToken }, default));
+        f.Invoices.Verify(x => x.SaveAsync(It.IsAny<Invoice>(), It.IsAny<CancellationToken>()), Times.Never);
+        // Ticking one visit gives the preview a billable line, so issuing becomes possible.
+        var ticked = new[] { new UnstartedVisitDecision(f.Shift.Id, FridayStartUtc(23), true) };
+        var included = await f.Service.PreviewAsync(f.Request with { UnstartedDecisions = ticked }, default);
+        Assert.Equal(1, included.Invoice.Lines.Single().Occurrences);
+    }
+
+    [Fact]
     public async Task Ticking_an_unstarted_monthly_visit_counts_it_as_done_in_the_fraction()
     {
         var f = new Fixture(completedDays: [2, 9, 16]);

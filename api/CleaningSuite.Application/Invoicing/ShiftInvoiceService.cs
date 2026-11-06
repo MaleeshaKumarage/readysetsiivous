@@ -48,6 +48,8 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
         // Field checks run on the freshly built preview first, so a missing field is named rather than reported as a stale preview.
         if (!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(preview.PreviewToken), Encoding.UTF8.GetBytes(request.PreviewToken!)))
             throw new ShiftConflictException("Invoice inputs, pricing or work records changed. Load a new preview before issuing.");
+        // A preview with only unticked unstarted visits has no lines; it can be reviewed but never issued empty.
+        if (invoice.Lines.Count == 0) Invalid("No billable work is selected. Tick at least one unstarted visit or choose billable work before issuing.");
         var number = await invoices.NextInvoiceNumberForYearAsync(invoice.IssueDate.Year, ct);
         invoice.Id = Guid.NewGuid(); invoice.InvoiceNumber = $"{invoice.IssueDate.Year}-{number:D4}";
         invoice.PaymentReference = PaymentReference($"{invoice.IssueDate.Year}{number:D4}");
@@ -218,7 +220,8 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
         var unstartedVisits = unstarted.OrderBy(u => u.ShiftId).ThenBy(u => u.StartUtc).ToArray();
         if (lines.Count == 0 && request.PartnerMonth && !string.IsNullOrWhiteSpace(request.PreviewToken))
             throw new ShiftConflictException("Partner work eligibility changed. Load a new preview before issuing.");
-        if (lines.Count == 0) Invalid(request.PartnerMonth
+        // Unstarted-only selections still return a preview, so the tick list can be shown and used.
+        if (lines.Count == 0 && unstartedVisits.Length == 0) Invalid(request.PartnerMonth
             ? "No completed, unbilled visits were found for this month. Choose another month, or select shifts manually under Invoice shifts."
             : "No billable work was found for the selected shifts in this period. Completed visits and scheduled hours or fees are billed. Unstarted visits are billed only when ticked in the unstarted visits list.");
         var issueDate = TenantTimeZone.LocalDate(clock.GetUtcNow().UtcDateTime, zone);
