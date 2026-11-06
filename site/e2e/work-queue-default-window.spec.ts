@@ -72,3 +72,13 @@ test('choosing Unassigned in the assignee list sends the unassigned filter, and 
   await expect.poll(() => last()?.get('assignee')).toBe('emp-1');
   expect(last()?.has('unassigned')).toBe(false);
 });
+
+test('the 14-day window follows the tenant time zone, not Helsinki', async ({ page }) => {
+  // 23:30 UTC on 5 Nov is still 5 Nov in Honolulu (UTC-10) but already 6 Nov in Helsinki (UTC+2).
+  await page.clock.setFixedTime(new Date('2026-11-05T23:30:00Z'));
+  const { last } = await setup(page);
+  await page.route(/\/api\/v1\/admin\/tenant$/, route => route.fulfill({ headers, json: { companyName: 'QA', timeZoneId: 'Pacific/Honolulu' } }));
+  await page.goto('/admin/work-queue/');
+  await expect.poll(() => last()?.get('from')).toBe('2026-11-05');
+  expect(last()?.get('to')).toBe('2026-11-18');
+});

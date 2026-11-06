@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Title, Button, Group, Stack, Text, Loader, Badge, Tabs, Select, TextInput, Drawer, Paper } from '@mantine/core';
 import {
-  adminWorkQueue, adminBookings, adminEmployees, type Booking, type Employee, type WorkQueueItem, type WorkQueuePage, type WorkQueueSource, type WorkQueueView,
+  adminWorkQueue, adminBookings, adminEmployees, adminTenant, type Booking, type Employee, type WorkQueueItem, type WorkQueuePage, type WorkQueueSource, type WorkQueueView,
 } from '@/lib/adminApi';
 
 const VIEWS: { value: WorkQueueView; label: string }[] = [
@@ -47,8 +47,11 @@ function isCalendarDate(value: string): boolean {
 const DEFAULT_WINDOW_DAYS = 14;
 /** Assignee filter value for work with no cleaner. Sent to the server as unassigned=true. */
 const UNASSIGNED = 'unassigned';
-function defaultWindow(): { dateFrom: string; dateTo: string } {
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Helsinki' });
+/** Used until the tenant's own time zone loads, and if it cannot be loaded. Matches the shift pages' fallback. */
+const DEFAULT_ZONE = 'Europe/Helsinki';
+/** Today's date in the tenant's time zone, and the window that follows it. The server filters on the same zone. */
+function defaultWindow(zone: string): { dateFrom: string; dateTo: string } {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: zone });
   const end = new Date(Date.parse(`${today}T12:00:00Z`) + (DEFAULT_WINDOW_DAYS - 1) * 86_400_000).toISOString().slice(0, 10);
   return { dateFrom: today, dateTo: end };
 }
@@ -74,6 +77,7 @@ export default function WorkQueuePage() {
   const [listError, setListError] = useState('');
   const [reload, setReload] = useState(0);
   const [ready, setReady] = useState(false);
+  const [zone, setZone] = useState<string | null>(null);
   const generation = useRef(0);
 
   const [openBooking, setOpenBooking] = useState<Booking | null>(null);
@@ -109,7 +113,7 @@ export default function WorkQueuePage() {
     const view = requestedView && VIEW_VALUES.includes(requestedView) ? requestedView : 'needs-action' as WorkQueueView;
     const chosenQueue = params.has('from') || params.has('to') || params.has('range') || params.has('assignee');
     const dates = chosenQueue ? readDates(params.get('from'), params.get('to'))
-      : view === 'needs-action' ? defaultWindow() : { dateFrom: '', dateTo: '' };
+      : view === 'needs-action' ? defaultWindow(zone ?? DEFAULT_ZONE) : { dateFrom: '', dateTo: '' };
     const rawAssignee = (params.get('assignee') ?? '').trim();
     // A fresh Needs-action link opens on unassigned work. 'all' means Anyone, and a named employee is kept as chosen.
     const assignee = chosenQueue ? (rawAssignee === 'all' ? '' : rawAssignee) : view === 'needs-action' ? UNASSIGNED : '';
@@ -124,8 +128,14 @@ export default function WorkQueuePage() {
     };
   };
 
+  // The tenant's time zone decides the default window, so it loads before the URL state is applied.
+  useEffect(() => {
+    adminTenant.get().then(profile => setZone(profile?.timeZoneId?.trim() || DEFAULT_ZONE)).catch(() => setZone(DEFAULT_ZONE));
+  }, []);
+
   // Restore state from the URL after mount, and on browser Back/Forward.
   useEffect(() => {
+    if (!zone) return;
     const apply = () => {
       const state = readUrl();
       setView(state.view); setSource(state.source); setQuery(state.search); setSearch(state.search); setPage(state.page);
@@ -135,7 +145,7 @@ export default function WorkQueuePage() {
     setReady(true);
     window.addEventListener('popstate', apply);
     return () => { window.removeEventListener('popstate', apply); generation.current++; };
-  }, []);
+  }, [zone]);
 
   // Open a deep-linked booking once.
   const openedBooking = useRef<string | null>(null);
@@ -191,7 +201,7 @@ export default function WorkQueuePage() {
   const changeSource = (next: WorkQueueSource) => {
     setSource(next); setPage(1); writeUrl(current({ source: next, page: 1 }));
   };
-  const windowDates = defaultWindow();
+  const windowDates = defaultWindow(zone ?? DEFAULT_ZONE);
   const defaultWindowActive = dateFrom === windowDates.dateFrom && dateTo === windowDates.dateTo;
   // Show everything: clears the dates and the assignee together, so one URL change carries all three.
   const showEverything = () => { setDateFrom(''); setDateTo(''); setAssignee(''); setPage(1); writeUrl(current({ dateFrom: '', dateTo: '', assignee: '', page: 1 })); };
