@@ -56,6 +56,8 @@ builder.Services.AddCleaningMarten(connectionString, autoCreate);
 builder.Services.AddHostedService<MartenSchemaInitializer>();
 builder.Services.AddScoped<CleaningSuite.Infrastructure.Persistence.ShiftValidityCorrectionRunner>();
 builder.Services.AddHostedService<CleaningSuite.Api.ShiftValidityCorrectionService>();
+builder.Services.AddScoped<CleaningSuite.Infrastructure.Persistence.StaleAssignmentRepairRunner>();
+builder.Services.AddHostedService<CleaningSuite.Api.StaleAssignmentRepairService>();
 if (builder.Configuration.GetValue("BackgroundWorkers:Enabled", true))
     builder.Services.AddHostedService<CleaningSuite.Api.Services.EntertainmentGroupCleanupService>();
 

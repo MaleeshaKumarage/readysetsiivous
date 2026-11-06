@@ -22,11 +22,6 @@ public class ShiftsAdminController : ControllerBase
         _mediator = mediator;
     }
 
-    /// <summary>Releases active assignments that no longer count: on deactivated shifts or cancelled partner requests.</summary>
-    [HttpPost("repair-stale-assignments")]
-    public async Task<IActionResult> RepairStaleAssignments(CancellationToken ct) =>
-        Ok(await _mediator.Send(new StaleAssignmentRepairCommand(), ct));
-
     [HttpGet("{id:guid}/pricing")]
     public async Task<IActionResult> Pricing(Guid id, [FromServices] ShiftBillingSettingsService billing, CancellationToken ct) => Ok(await billing.GetAsync(id, ct));
 
