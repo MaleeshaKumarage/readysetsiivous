@@ -318,7 +318,7 @@ test.describe('Public Quality Cycle Page', () => {
     // Missing token
     await page.goto('/quality-cycle');
     await expect(page.getByRole('heading', { name: 'Invalid Form Link' })).toBeVisible();
-    await expect(page.getByText('Missing Quality Cycle Form token.')).toBeVisible();
+    await expect(page.getByText('This form link is incomplete. Open the link from your message again, or ask your manager for a new one.')).toBeVisible();
 
     // Invalid token mock API 404
     await page.route(/\/api\/v1\/public\/[^\/]+\/quality-cycle\/invalid-token$/, async (route) => {
@@ -382,7 +382,7 @@ test('legacy photo submission requires a note and retains evidence after server 
   await expect(page.getByRole('alert', { name: 'Form error' })).toHaveText('Add a separate note for each photo.');
   await expect(note).toBeFocused(); expect(requests).toBe(0);
   await note.fill('Corridor entrance cleaned.'); await page.getByRole('button', { name: 'Submit Quality Cycle Form' }).click();
-  await expect(page.getByRole('alert', { name: 'Form error' })).toHaveText('Failed to submit form. Please try again.');
+  await expect(page.getByRole('alert', { name: 'Form error' })).toHaveText('The form was not submitted. Your answers are kept; check your connection and submit again.');
   await expect(note).toHaveValue('Corridor entrance cleaned.');
   await expect(page.getByRole('button', { name: 'Remove photo' })).toHaveCount(1);
   await page.getByRole('button', { name: 'Submit Quality Cycle Form' }).click();

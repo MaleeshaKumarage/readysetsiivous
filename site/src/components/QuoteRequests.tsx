@@ -35,7 +35,7 @@ export function QuoteRequestProvider({ pathname, children }: { pathname: string;
       if (quotes.status === 'rejected') throw quotes.reason;
       const result = quotes.value;
       if (request.signal.aborted) return;
-      if (!Array.isArray(result)) throw new Error('Invalid quote queue');
+      if (!Array.isArray(result)) throw new Error('The quote requests could not be read. Refresh the page to retry.');
       setBranches(result.filter(branch => partnerCompanyIds.has(branch.companyId)).filter(pendingQuote)); setLoaded(true); setError(false);
     } catch {
       if (!request.signal.aborted) setError(true);

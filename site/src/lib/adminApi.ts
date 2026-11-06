@@ -639,7 +639,7 @@ async function shiftAssignmentRequest<T>(path: string, method = 'GET', body?: un
   if (method !== 'GET') { invalidateAdminCache(); return undefined as T; }
   try {
     const data = await response.json();
-    if (!Array.isArray(data) || data.some(a => !a || typeof a.employeeId !== 'string' || typeof a.isActive !== 'boolean')) throw new Error('Invalid roster');
+    if (!Array.isArray(data) || data.some(a => !a || typeof a.employeeId !== 'string' || typeof a.isActive !== 'boolean')) throw new Error('The assigned employees could not be read. Refresh the page to retry.');
     return data as T;
   }
   catch { throw new Error('Could not load assignments. Please retry.'); }
