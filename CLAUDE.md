@@ -11,4 +11,5 @@
 ## Other conventions
 
 - One small PR per chunk. Merge only after every latest-head CI check is green and no review thread is unresolved.
+- The automated `review` check (AI review job) is advisory, not a required check. Its failure does not block a merge, but any finding it posts still needs a fix or a reply on its thread before the thread is resolved.
 - Preserve tenant and role boundaries and existing financial snapshots.

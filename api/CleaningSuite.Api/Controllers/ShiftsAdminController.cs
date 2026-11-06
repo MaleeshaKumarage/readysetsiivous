@@ -40,7 +40,7 @@ public class ShiftsAdminController : ControllerBase
     { await billing.SaveOccurrenceAsync(id, price, ct); return NoContent(); }
 
     [HttpGet]
-    [OutputCache(Duration = 30)]
+    [OutputCache(Duration = 30, Tags = new[] { "shifts" })]
     public async Task<IActionResult> List(
         [FromQuery] Guid? companyId,
         [FromQuery] Guid? branchId,

@@ -8,7 +8,7 @@ export async function lifecycleRequest(path: string): Promise<void> {
       const problem = await response.json() as { detail?: string; title?: string };
       message = problem.detail || problem.title || message;
     } catch { /* Keep the useful fallback for non-JSON responses. */ }
-    throw new Error(message);
+    throw Object.assign(new Error(message), { status: response.status });
   }
   invalidateAdminCache();
 }
