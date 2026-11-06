@@ -5,6 +5,7 @@ using CleaningSuite.Application.Shifts;
 using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Companies;
 using CleaningSuite.Domain.Invoicing;
+using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Shifts;
 using CleaningSuite.Domain.Tenants;
 using CleaningSuite.Infrastructure.Persistence;
@@ -66,7 +67,7 @@ public class ManualInvoiceDatabaseTests
 
         // Manual and scheduled company charges share the exact same numbering/reference sequence.
         var branch = Branch.Create(company.Id, "Branch");
-        var shift = Shift.Create(company.Id, branch.Id, "Monthly service", new() { Type = ShiftScheduleType.OnCallFlexible }, null, new(2026, 10, 1), null);
+        var shift = Shift.Create(company.Id, branch.Id, "Monthly service", new() { Type = ShiftScheduleType.Weekly, WeeklyDay = DayOfWeek.Friday, WeeklyStart = TimeSpan.FromHours(16), WeeklyEnd = TimeSpan.FromHours(18) }, null, new(2026, 10, 1), null);
         shift.CreatedUtc = new(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
         using (var writer = store.LightweightSession(partition)) {
             writer.Store(new ShiftBillingProfile { Id = shift.Id, ShiftId = shift.Id, Plans = [new("Monthly", 150, 25.5m, new(2026, 10, 1))] });
@@ -78,7 +79,7 @@ public class ManualInvoiceDatabaseTests
         shifts.Setup(r => r.ListOccurrenceAssignmentsAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync([]);
         var branchRepo = new Mock<IBranchRepository>(); branchRepo.Setup(r => r.GetAsync(branch.Id, It.IsAny<CancellationToken>())).ReturnsAsync(branch);
         var companyRepo = new Mock<ICompanyRepository>(); companyRepo.Setup(r => r.GetAsync(company.Id, It.IsAny<CancellationToken>())).ReturnsAsync(company);
-        var forms = new Mock<IQualityCycleRepository>(); forms.Setup(r => r.ListFormsAsync(shift.Id, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        var forms = new Mock<IQualityCycleRepository>(); forms.Setup(r => r.ListFormsAsync(shift.Id, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>())).ReturnsAsync([new QualityCycleForm { ShiftId = shift.Id, EmployeeId = Guid.NewGuid(), IsSubmitted = true, ShiftOccurrenceUtc = new DateTime(2026, 10, 2, 13, 0, 0, DateTimeKind.Utc) }]);
         var profilesRepo = new Mock<ITenantProfileRepository>(); profilesRepo.Setup(r => r.GetAsync(partition, It.IsAny<CancellationToken>())).ReturnsAsync(profile);
         var tenantContext = new Mock<ITenantContext>(); tenantContext.SetupGet(t => t.TenantId).Returns(partition);
         var clockProvider = new Mock<TimeProvider>(); clockProvider.Setup(t => t.GetUtcNow()).Returns(new DateTimeOffset(2026, 11, 2, 10, 0, 0, TimeSpan.Zero));
