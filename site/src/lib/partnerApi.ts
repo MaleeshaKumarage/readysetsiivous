@@ -10,7 +10,8 @@ export async function partnerSend<T>(path: string, method = 'GET', body?: unknow
   const response = await authorizedFetch(`/api/v1/${path}`, { method, cache: 'no-store', signal, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   if (!response.ok) {
     const problem = await response.json().catch(() => ({}));
-    const errors = Object.values(problem.errors ?? {}).flat().join(' ');
+    // Newline-separated so the UI can translate each message on its own.
+    const errors = Object.values(problem.errors ?? {}).flat().join('\n');
     throw new Error(errors || problem.detail || problem.title || `Request failed (${response.status}). Refresh to check whether your change was saved before retrying.`);
   }
   return response.status === 204 ? undefined as T : response.json();

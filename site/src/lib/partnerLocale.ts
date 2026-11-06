@@ -117,7 +117,10 @@ const fi: Record<keyof typeof en, string> = {
 
 export const partnerCopy = { en, fi };
 export function partnerMessage(message: string, language: PartnerLanguage): string {
-  if (language === 'en' || !message) return message;
+  if (!message) return message;
+  // Several field errors arrive joined by newlines; translate each one separately.
+  if (message.includes('\n')) return message.split('\n').map(part => partnerMessage(part, language)).join(' ');
+  if (language === 'en') return message;
   const key = (Object.keys(en) as (keyof typeof en)[]).find(key => en[key] === message);
   if (key) return fi[key];
   const known: Record<string, string> = {
