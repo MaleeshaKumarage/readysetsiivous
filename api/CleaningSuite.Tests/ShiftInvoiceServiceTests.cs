@@ -1,3 +1,4 @@
+using System.Linq;
 using CleaningSuite.Application.Common;
 using CleaningSuite.Application.Companies;
 using CleaningSuite.Application.Invoicing;
@@ -149,7 +150,8 @@ public class ShiftInvoiceServiceTests
             var billing=new Mock<IShiftBillingRepository>();billing.Setup(x=>x.GetAsync(Shift.Id,It.IsAny<CancellationToken>())).ReturnsAsync(Pricing);
             var companies=new Mock<ICompanyRepository>();companies.Setup(x=>x.GetAsync(Company.Id,It.IsAny<CancellationToken>())).ReturnsAsync(Company);
             var branches=new Mock<IBranchRepository>();branches.Setup(x=>x.GetAsync(branch.Id,It.IsAny<CancellationToken>())).ReturnsAsync(branch);
-            var forms=new Mock<IQualityCycleRepository>();forms.Setup(x=>x.ListFormsAsync(Shift.Id,It.IsAny<DateTime>(),It.IsAny<DateTime>(),It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<QualityCycleForm>());
+            var forms=new Mock<IQualityCycleRepository>();// 16:00 Helsinki is 13:00 UTC until the 25 Oct change to standard time, and 14:00 UTC after it.
+var completed=new[]{2,9,16,23,30}.Select(d=>new QualityCycleForm{ShiftId=Shift.Id,EmployeeId=Guid.NewGuid(),IsSubmitted=true,ShiftOccurrenceUtc=new DateTime(2026,10,d,d>25?14:13,0,0,DateTimeKind.Utc)}).ToArray();forms.Setup(x=>x.ListFormsAsync(Shift.Id,It.IsAny<DateTime>(),It.IsAny<DateTime>(),It.IsAny<CancellationToken>())).ReturnsAsync(completed);
             var profiles=new Mock<ITenantProfileRepository>();profiles.Setup(x=>x.GetAsync("test",It.IsAny<CancellationToken>())).ReturnsAsync(Profile);
             var tenant=new Mock<ITenantContext>();tenant.SetupGet(x=>x.TenantId).Returns("test");
             Invoices.Setup(x=>x.ListAsync(null,null,It.IsAny<CancellationToken>())).ReturnsAsync(()=>Existing);Invoices.Setup(x=>x.NextInvoiceNumberForYearAsync(2026, It.IsAny<CancellationToken>())).ReturnsAsync(7L);

@@ -1,3 +1,4 @@
+using System.Linq;
 using CleaningSuite.Application.Invoicing;
 using CleaningSuite.Domain.Invoicing;
 using CleaningSuite.Domain.Shifts;
@@ -10,30 +11,39 @@ public class ShiftInvoiceCalculatorTests
     private static Shift Shift() => new() { Id = Guid.NewGuid(), Name = "Biweekly", BranchId = BranchId, CompanyId = Guid.NewGuid(), IsActive = true, ValidFrom = new DateTime(2024,1,1) };
     private static ShiftBillingProfile Price(string mode, decimal rate, DateOnly from) => new() { Plans = [new(mode,rate,25.5m,from)] };
     private static List<InvoiceLine> Calculate(Shift s, ShiftBillingProfile p, DateOnly from, DateOnly to, IReadOnlyList<BillableShiftVisit>? visits = null, IReadOnlyList<MonthlyInvoiceOverride>? overrides = null) => ShiftInvoiceCalculator.Calculate(s,p,visits ?? [],from,to,TimeZoneInfo.Utc,Branches,overrides ?? []);
+    // Monthly fee = monthly rate x completed visits / scheduled visits in the month (the shift's active days only).
+    private static BillableShiftVisit MonthlyVisit(DateTime day, bool completed) => new(day.AddHours(8), day.AddHours(10), BranchId, "Biweekly", completed);
     [Theory]
-    [InlineData(2026,10,17,31,150,72.58)]
-    [InlineData(2024,2,15,29,290,150)]
-    public void Monthly_rate_prorates_using_calendar_month_days(int year,int month,int start,int end,decimal rate,decimal expected)
+    [InlineData(4,2,75)]
+    [InlineData(5,3,90)]
+    [InlineData(5,2,60)]
+    [InlineData(4,4,150)]
+    [InlineData(4,0,0)]
+    public void Monthly_fee_follows_completed_visits_over_scheduled_visits(int scheduled,int completed,decimal expected)
     {
-        var s=Shift(); var from=new DateOnly(year,month,start); var to=new DateOnly(year,month,end);
-        var line=Assert.Single(Calculate(s,Price("Monthly",rate,new(year,month,1)),from,to));
-        Assert.Equal(expected,line.NetAmount); Assert.Equal((decimal)(end-start+1)/DateTime.DaysInMonth(year,month),line.Quantity);
-        Assert.Equal(decimal.Round(expected*.255m,2),line.VatAmount);
-    }
-    [Theory]
-    [InlineData(2,31)] [InlineData(17,31)] [InlineData(1,16)] [InlineData(17,17)]
-    public void Full_month_selection_charges_full_fixed_rate_for_part_month_active_shift(int start,int end)
-    {
-        var shift=Shift();shift.ValidFrom=new(2026,10,start);shift.ValidUntil=new(2026,10,end);
-        var line=Assert.Single(Calculate(shift,Price("Monthly",150,new(2026,10,1)),new(2026,10,1),new(2026,10,31)));
-        Assert.Equal(150m,line.NetAmount);Assert.Equal(1m,line.Quantity);Assert.Equal(38.25m,line.VatAmount);
+        var visits=Enumerable.Range(0,scheduled).Select(i=>MonthlyVisit(new DateTime(2026,10,1+i*7),i<completed)).ToList();
+        var line=Assert.Single(Calculate(Shift(),Price("Monthly",150,new(2026,10,1)),new(2026,10,1),new(2026,10,31),visits));
+        Assert.Equal(expected,line.NetAmount);
+        Assert.Equal((decimal)completed/scheduled,line.Quantity);
+        Assert.Equal(Math.Round(expected*.255m,2,MidpointRounding.AwayFromZero),line.VatAmount);
     }
     [Fact]
-    public void Partial_selection_still_prorates_active_days_by_calendar_month()
+    public void Shift_ending_mid_month_is_billed_only_for_the_visits_it_covered()
+    {
+        // The shift ends on 22 Oct, so the 29 Oct visit is outside its active days and does not count.
+        var shift=Shift();shift.ValidUntil=new(2026,10,22);
+        var visits=new[]{MonthlyVisit(new DateTime(2026,10,1),true),MonthlyVisit(new DateTime(2026,10,8),true),MonthlyVisit(new DateTime(2026,10,15),false),MonthlyVisit(new DateTime(2026,10,22),false),MonthlyVisit(new DateTime(2026,10,29),true)};
+        var line=Assert.Single(Calculate(shift,Price("Monthly",150,new(2026,10,1)),new(2026,10,1),new(2026,10,31),visits));
+        Assert.Equal(75m,line.NetAmount);
+        Assert.Equal(4,line.Occurrences);
+    }
+    [Fact]
+    public void Partial_selection_bills_the_completed_share_of_the_visits_it_covers()
     {
         var shift=Shift();shift.ValidFrom=new(2026,10,2);
-        var line=Assert.Single(Calculate(shift,Price("Monthly",150,new(2026,10,1)),new(2026,10,2),new(2026,10,31)));
-        Assert.Equal(145.16m,line.NetAmount);
+        var visits=new[]{MonthlyVisit(new DateTime(2026,10,2),true),MonthlyVisit(new DateTime(2026,10,9),true),MonthlyVisit(new DateTime(2026,10,16),true),MonthlyVisit(new DateTime(2026,10,23),false),MonthlyVisit(new DateTime(2026,10,30),false)};
+        var line=Assert.Single(Calculate(shift,Price("Monthly",150,new(2026,10,1)),new(2026,10,2),new(2026,10,31),visits));
+        Assert.Equal(90m,line.NetAmount);
     }
     [Fact]
     public void Full_month_with_no_active_days_does_not_charge()
@@ -51,8 +61,10 @@ public class ShiftInvoiceCalculatorTests
     public void Midmonth_price_change_uses_each_effective_price()
     {
         var s=Shift();var profile=Price("Monthly",310,new(2026,10,1));profile.Plans.Add(new("Monthly",620,25.5m,new(2026,10,17)));
-        var lines=Calculate(s,profile,new(2026,10,1),new(2026,10,31));
-        Assert.Equal(2,lines.Count);Assert.Equal(460,lines.Sum(l=>l.NetAmount));Assert.Contains(lines,l=>l.NetAmount==160);Assert.Contains(lines,l=>l.NetAmount==300);
+        var visits=new[]{MonthlyVisit(new DateTime(2026,10,1),true),MonthlyVisit(new DateTime(2026,10,8),false),MonthlyVisit(new DateTime(2026,10,22),true),MonthlyVisit(new DateTime(2026,10,29),true)};
+        var lines=Calculate(s,profile,new(2026,10,1),new(2026,10,31),visits);
+        // Before 17 Oct: 310 x 1/2 = 155. From 17 Oct: 620 x 2/2 = 620.
+        Assert.Equal(2,lines.Count);Assert.Equal(775,lines.Sum(l=>l.NetAmount));Assert.Contains(lines,l=>l.NetAmount==155);Assert.Contains(lines,l=>l.NetAmount==620);
     }
     [Fact]
     public void Monthly_override_cannot_hide_mixed_vat_rates()

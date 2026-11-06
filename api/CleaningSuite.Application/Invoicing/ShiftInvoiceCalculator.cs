@@ -55,20 +55,17 @@ public static class ShiftInvoiceCalculator
         {
             var days = group.Select(d => d.Date).ToHashSet(); var first = days.Min(); var last = days.Max();
             var visitsInLine = visits.Where(v => v.BranchId == group.Key.BranchId && days.Contains(DateOnly.FromDateTime(TenantTimeZone.LocalDate(v.StartUtc, zone)))).ToArray();
-            var calendarDays = DateTime.DaysInMonth(first.Year, first.Month);
-            var wholeMonth = billFrom <= new DateOnly(first.Year, first.Month, 1)
-                && billTo >= new DateOnly(first.Year, first.Month, calendarDays)
-                && !mixedBasisMonths.Contains(group.Key.Month);
-            // A selected full calendar month is one fixed monthly charge, even when
-            // the shift's first/last active day is inside that month. Split price/branch
-            // segments proportionally; retain calendar-day proration for partial selections.
-            var denominator = wholeMonth ? monthlyDays.Count(d => d.Date.Year == first.Year && d.Date.Month == first.Month) : calendarDays;
+            // The monthly fee is earned by completed visits: fee x completed / scheduled visits in the month.
+            // A shift that ends mid-month has fewer scheduled visits, so it is billed only for what it covered.
+            var scheduledInMonth = visitsInLine.Length;
+            var completedInMonth = visitsInLine.Count(v => v.Completed);
+            var fraction = scheduledInMonth == 0 ? 0m : (decimal)completedInMonth / scheduledInMonth;
             lines.Add(new() { ShiftId = shift.Id, ShiftName = group.Key.ShiftName, BranchName = Branch(group.Key.BranchId), BranchId = group.Key.BranchId,
                 PricingMode = "Monthly", Month = group.Key.Month, PeriodFrom = first, PeriodTo = last,
                 LineKey = $"{shift.Id:N}:{group.Key.Month}:{group.Key.Price.EffectiveFrom:yyyyMMdd}:{group.Key.BranchId:N}",
-                Description = $"{group.Key.Price.RateNet:0.00} EUR × {days.Count}/{denominator}",
-                Quantity = (decimal)days.Count / denominator, UnitPriceNet = group.Key.Price.RateNet,
-                NetAmount = Round(group.Key.Price.RateNet * days.Count / denominator), VatRatePercent = group.Key.Price.VatRatePercent,
+                Description = $"{group.Key.Price.RateNet:0.00} EUR × {completedInMonth}/{scheduledInMonth} completed visits",
+                Quantity = fraction, UnitPriceNet = group.Key.Price.RateNet,
+                NetAmount = Round(group.Key.Price.RateNet * fraction), VatRatePercent = group.Key.Price.VatRatePercent,
                 Hours = visitsInLine.Sum(v => (decimal)(v.EndUtc - v.StartUtc).Ticks / TimeSpan.TicksPerHour), Occurrences = visitsInLine.Length });
         }
         var pricedVisits = visits.Select(v => (Visit: v, Date: DateOnly.FromDateTime(TenantTimeZone.LocalDate(v.StartUtc, zone))))
