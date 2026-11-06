@@ -325,6 +325,64 @@ public class WorkQueueReaderDatabaseTests
         Assert.Contains(scheduled.Items, item => item.Reference.Contains("Assigned daily") && item.StateLabel == "Scheduled");
     }
 
+    [QualityCycleDatabaseFact]
+    public async Task Long_running_shift_assigned_before_the_window_still_reads_future_visits_as_scheduled()
+    {
+        using var f = await Fixture.Create();
+        var company = new Company { Name = "Long Assigned Co", BusinessId = "WQ-" + Guid.NewGuid().ToString("N")[..8], IsActive = true };
+        var schedule = new ShiftSchedule { Type = ShiftScheduleType.DailySameTime, DailyStart = new TimeSpan(8, 0, 0), DailyEnd = new TimeSpan(10, 0, 0) };
+        // Created 40 days ago and assigned then; its future visits must still show the cleaner.
+        var started = DateTime.UtcNow.Date.AddDays(-40);
+        var assigned = Shift.Create(company.Id, Guid.NewGuid(), "Long assigned daily", schedule, null, started, null);
+        var open = Shift.Create(company.Id, Guid.NewGuid(), "Long open daily", schedule, null, started, null);
+        var cleaner = ShiftAssignment.Create(assigned.Id, Guid.NewGuid(), null);
+        cleaner.AssignedAtUtc = started;
+        cleaner.UpdatedUtc = started;
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(company); db.Store(assigned, open); db.Store(cleaner);
+            await db.SaveChangesAsync();
+        }
+
+        using var session = f.Session();
+        var reader = Reader(f, session);
+        var needsAction = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.NeedsAction, "shift", null, 0, 200));
+        Assert.DoesNotContain(needsAction.Items, item => item.Reference.Contains("Long assigned daily"));
+        Assert.Contains(needsAction.Items, item => item.Reference.Contains("Long open daily"));
+        var scheduled = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Scheduled, "shift", null, 0, 200));
+        Assert.Contains(scheduled.Items, item => item.Reference.Contains("Long assigned daily") && item.StateLabel == "Scheduled");
+    }
+
+    [QualityCycleDatabaseFact]
+    public async Task One_occurrence_assigned_by_override_is_scheduled_and_the_other_days_stay_unassigned()
+    {
+        using var f = await Fixture.Create();
+        var company = new Company { Name = "Override Co", BusinessId = "WQ-" + Guid.NewGuid().ToString("N")[..8], IsActive = true };
+        var schedule = new ShiftSchedule { Type = ShiftScheduleType.DailySameTime, DailyStart = new TimeSpan(8, 0, 0), DailyEnd = new TimeSpan(10, 0, 0) };
+        var start = DateTime.UtcNow.Date.AddDays(3);
+        var shift = Shift.Create(company.Id, Guid.NewGuid(), "Override daily", schedule, null, start, null);
+        var cleaner = Guid.NewGuid();
+        // The fixture has no tenant profile, so the reader uses the default Helsinki zone: 08:00 local is the override day.
+        var helsinki = TimeZoneInfo.FindSystemTimeZoneById("Europe/Helsinki");
+        var localDay = DateTime.SpecifyKind(start.AddDays(1), DateTimeKind.Unspecified);
+        var overrideDay = TimeZoneInfo.ConvertTimeToUtc(localDay.AddHours(8), helsinki);
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(company); db.Store(shift);
+            db.Store(ShiftOccurrenceAssignment.Create(shift.Id, overrideDay, null, OccurrenceAssignmentMode.Replace, [cleaner], "Covered"));
+            await db.SaveChangesAsync();
+        }
+
+        using var session = f.Session();
+        var reader = Reader(f, session);
+        var scheduled = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Scheduled, "shift", null, 0, 200));
+        var overrideKey = localDay.ToString("yyyy-MM-dd");
+        Assert.Contains(scheduled.Items, item => item.Reference.Contains("Override daily") && item.ScheduledLocal.StartsWith(overrideKey));
+        var needsAction = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.NeedsAction, "shift", null, 0, 200));
+        Assert.DoesNotContain(needsAction.Items, item => item.Reference.Contains("Override daily") && item.ScheduledLocal.StartsWith(overrideKey));
+        Assert.Contains(needsAction.Items, item => item.Reference.Contains("Override daily"));
+    }
+
     private sealed class Fixture : IDisposable
     {
         public required ServiceProvider Provider; public required IDocumentStore Store;
