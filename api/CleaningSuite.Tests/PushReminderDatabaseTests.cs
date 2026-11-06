@@ -36,6 +36,27 @@ public class PushReminderDatabaseTests
     }
 
     [QualityCycleDatabaseFact]
+    public async Task Unstarted_visit_reminders_fire_once_at_one_twelve_and_twenty_four_hours_after_start()
+    {
+        using var f = await Fixture.Create();
+        f.Shift.Schedule = new() { Type = ShiftScheduleType.DailySameTime, DailyStart = TimeSpan.FromHours(10), DailyEnd = TimeSpan.FromHours(11) };
+        // Helsinki is UTC+2 in November: the 10:00 visit starts at 08:00 UTC.
+        async Task<string[]> UnstartedKindsAt(DateTime utc)
+        {
+            f.Now = utc; await f.Scheduler().ScheduleAsync();
+            using var query = f.Store.QuerySession(f.Tenant);
+            // Only the 2 Nov visit: the 1 Nov visit's own reminders are due at other times.
+            var visitStart = new DateTime(2026, 11, 2, 8, 0, 0, DateTimeKind.Utc);
+            return (await query.Query<PushIntent>().ToListAsync()).Where(x => x.Kind.StartsWith("Unstarted") && x.OccurrenceStartUtc == visitStart)
+                .Select(x => x.Kind).OrderBy(k => k).ToArray();
+        }
+        Assert.Empty(await UnstartedKindsAt(new(2026, 11, 2, 8, 59, 0, DateTimeKind.Utc)));
+        Assert.Equal(new[] { "Unstarted1h" }, await UnstartedKindsAt(new(2026, 11, 2, 9, 1, 0, DateTimeKind.Utc)));
+        Assert.Equal(new[] { "Unstarted12h", "Unstarted1h" }, await UnstartedKindsAt(new(2026, 11, 2, 20, 1, 0, DateTimeKind.Utc)));
+        Assert.Equal(new[] { "Unstarted12h", "Unstarted1h", "Unstarted24h" }, await UnstartedKindsAt(new(2026, 11, 3, 8, 1, 0, DateTimeKind.Utc)));
+    }
+
+    [QualityCycleDatabaseFact]
     public async Task Enrollment_after_due_time_does_not_backfill_unfinished_or_old_assignments()
     {
         using var f = await Fixture.Create();

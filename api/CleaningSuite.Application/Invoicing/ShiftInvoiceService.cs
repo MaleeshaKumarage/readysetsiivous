@@ -17,8 +17,11 @@ namespace CleaningSuite.Application.Invoicing;
 
 public record ShiftInvoiceRequest(Guid CompanyId, IReadOnlyList<Guid> ShiftIds, DateOnly From, DateOnly To,
     Address? BillingAddress = null, string Language = "fi", IReadOnlyList<MonthlyInvoiceOverride>? MonthlyOverrides = null,
-    string? PreviewToken = null, bool PartnerMonth = false);
-public record ShiftInvoicePreview(Invoice Invoice, string PreviewToken);
+    string? PreviewToken = null, bool PartnerMonth = false, IReadOnlyList<UnstartedVisitDecision>? UnstartedDecisions = null);
+/// <summary>Tick choice for a scheduled visit that has not started. Excluded visits are not billed (or counted as done) on the invoice.</summary>
+public record UnstartedVisitDecision(Guid ShiftId, DateTime StartUtc, bool Include);
+public record UnstartedVisit(Guid ShiftId, string ShiftName, DateTime StartUtc, DateTime EndUtc, bool Included);
+public record ShiftInvoicePreview(Invoice Invoice, string PreviewToken, IReadOnlyList<UnstartedVisit>? UnstartedVisits = null);
 
 public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepository billing, IInvoiceRepository invoices,
     ICompanyRepository companies, IBranchRepository branches, IQualityCycleRepository forms,
@@ -71,6 +74,9 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             Invalid("Billing address fields must be at most 250 characters.");
         if (request.PartnerMonth && (request.ShiftIds!.Count != 0 || request.From.Day != 1 || request.To != request.From.AddMonths(1).AddDays(-1)
             || request.MonthlyOverrides?.Count > 0)) Invalid("Partner invoicing requires a full calendar month and no manual shift selection or monthly overrides.");
+        var decisions = request.UnstartedDecisions?.ToArray() ?? [];
+        if (request.PartnerMonth && decisions.Length > 0) Invalid("Partner invoices do not use unstarted visit choices.");
+        if (decisions.GroupBy(d => (d.ShiftId, d.StartUtc)).Any(g => g.Count() > 1)) Invalid("Each unstarted visit can be chosen only once.");
         var ids = request.ShiftIds!.Distinct().Order().ToArray();
         var adjustments = request.MonthlyOverrides?.ToArray() ?? [];
         if (adjustments.Length > 600 || adjustments.GroupBy(o => (o.ShiftId, o.Month)).Any(g => g.Count() > 1)) Invalid("Only one override per shift and month is allowed.");
@@ -116,7 +122,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
         if (selected.Count != ids.Length || selected.Any(s => s.CompanyId != request.CompanyId)) Invalid("One or more selected shifts are missing or belong to another company. Refresh the selection.");
         if (existing.Any(i => ids.Any(id => Billed(i, id)) && i.PeriodFrom <= request.To && i.PeriodTo >= request.From))
             throw new ShiftConflictException("A selected shift already has an invoice covering these dates. Select an unbilled period or void the existing invoice first.");
-        var lines = new List<InvoiceLine>(); var fingerprints = new List<string>();
+        var lines = new List<InvoiceLine>(); var fingerprints = new List<string>(); var unstarted = new List<UnstartedVisit>();
         foreach (var shift in selected.OrderBy(s => s.Id))
         {
             var pricing = await billing.GetAsync(shift.Id, ct) ?? new ShiftBillingProfile { Id = shift.Id, ShiftId = shift.Id };
@@ -153,8 +159,15 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
                 var done = evidence.Select(f => f.EmployeeId).ToHashSet();
                 if (request.PartnerMonth && evidence.Length > 0)
                     completionTimes[v.Occurrence.StartUtc] = evidence.Max(f => (f.EndedAtUtc ?? f.SubmittedUtc)!.Value);
+                var completed = v.EmployeeIds.Count > 0 ? v.EmployeeIds.All(done.Contains) : done.Count > 0;
+                // A visit with no started or submitted form is unstarted: billed only when the user ticks it in.
+                var started = submitted.Any(f => f.ShiftOccurrenceUtc == v.Occurrence.StartUtc && !f.ShiftDeletedUtc.HasValue && (f.StartedAtUtc.HasValue || f.IsSubmitted));
+                var isUnstarted = !request.PartnerMonth && !started;
+                var decision = decisions.FirstOrDefault(d => d.ShiftId == shift.Id && d.StartUtc == v.Occurrence.StartUtc);
+                if (isUnstarted && !unstarted.Any(u => u.ShiftId == shift.Id && u.StartUtc == v.Occurrence.StartUtc))
+                    unstarted.Add(new(shift.Id, shift.Name, v.Occurrence.StartUtc, v.Occurrence.EndUtc, decision?.Include == true));
                 return new BillableShiftVisit(v.Occurrence.StartUtc, v.Occurrence.EndUtc, v.Plan.BranchId, v.Plan.ShiftName,
-                    v.EmployeeIds.Count > 0 ? v.EmployeeIds.All(done.Contains) : done.Count > 0);
+                    completed || (isUnstarted && decision?.Include == true), isUnstarted);
             }).GroupBy(v => v.StartUtc).Select(g => g.First()).ToArray();
             if (request.PartnerMonth)
             {
@@ -187,11 +200,15 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             fingerprints.Add(JsonSerializer.Serialize(new { Shift = shift, Pricing = pricing, PartnerRequest = partnerRequest, Visits = visits,
                 Completion = submitted.OrderBy(f => f.Id).Select(f => new { f.Id, f.EmployeeId, f.IsSubmitted, f.ShiftOccurrenceUtc, f.StartedAtUtc, f.EndedAtUtc, f.ShiftDeletedUtc }) }));
         }
+        foreach (var decision in decisions)
+            if (!unstarted.Any(u => u.ShiftId == decision.ShiftId && u.StartUtc == decision.StartUtc))
+                Invalid("The unstarted visits changed. Refresh the preview and choose again.");
+        var unstartedVisits = unstarted.OrderBy(u => u.ShiftId).ThenBy(u => u.StartUtc).ToArray();
         if (lines.Count == 0 && request.PartnerMonth && !string.IsNullOrWhiteSpace(request.PreviewToken))
             throw new ShiftConflictException("Partner work eligibility changed. Load a new preview before issuing.");
         if (lines.Count == 0) Invalid(request.PartnerMonth
             ? "No completed, unbilled visits were found for this month. Choose another month, or select shifts manually under Invoice shifts."
-            : "No billable work was found for the selected shifts in this period. Completed visits and scheduled hours or fees are billed.");
+            : "No billable work was found for the selected shifts in this period. Completed visits and scheduled hours or fees are billed. Unstarted visits are billed only when ticked in the unstarted visits list.");
         var issueDate = TenantTimeZone.LocalDate(clock.GetUtcNow().UtcDateTime, zone);
         var invoice = new Invoice { Id = Guid.Empty, CreatedUtc = issueDate, UpdatedUtc = issueDate, CompanyId = company.Id,
             PeriodFrom = request.From, PeriodTo = request.To, Language = request.Language, BillingAddress = request.BillingAddress ?? new(),
@@ -200,7 +217,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
                 Email = profile.Email, Phone = profile.Phone, BankAccountIBAN = profile.BankAccountIBAN, BankBic = profile.BankBic },
             IssuerIsSample = profile.InvoiceIssuerIsSample, Lines = lines, Total = new() { Net = lines.Sum(l => l.NetAmount!.Value), Vat = lines.Sum(l => l.VatAmount) },
             Currency = "EUR", IssueDate = issueDate, DueDate = issueDate.AddDays(profile.PaymentTermsDays), Status = Invoice.StatusDraft };
-        var tokenPayload = JsonSerializer.Serialize(new { Invoice = invoice, PartnerMonth = request.PartnerMonth, Inputs = adjustments.OrderBy(a => a.ShiftId).ThenBy(a => a.Month), Sources = fingerprints });
-        return new(invoice, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(tokenPayload))));
+        var tokenPayload = JsonSerializer.Serialize(new { Invoice = invoice, PartnerMonth = request.PartnerMonth, Inputs = adjustments.OrderBy(a => a.ShiftId).ThenBy(a => a.Month), Unstarted = unstartedVisits, Sources = fingerprints });
+        return new(invoice, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(tokenPayload))), unstartedVisits);
     }
 }

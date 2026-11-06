@@ -33,7 +33,8 @@ public class InvoicesAdminController : ControllerBase
         [FromServices] ShiftInvoiceService service, CancellationToken ct)
     {
         var preview = await service.PreviewAsync(request, ct);
-        return Ok(AdminResponses.Invoice(preview.Invoice) with { PreviewToken = preview.PreviewToken });
+        return Ok(AdminResponses.Invoice(preview.Invoice) with { PreviewToken = preview.PreviewToken,
+            UnstartedVisits = preview.UnstartedVisits?.Select(u => new UnstartedVisitResponse(u.ShiftId, u.ShiftName, u.StartUtc, u.EndUtc, u.Included)).ToArray() });
     }
 
     [HttpPost("shifts")]

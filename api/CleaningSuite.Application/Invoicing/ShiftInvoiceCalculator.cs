@@ -7,7 +7,7 @@ using static CleaningSuite.Application.Invoicing.ShiftBillingSettingsService;
 namespace CleaningSuite.Application.Invoicing;
 
 public record MonthlyInvoiceOverride(Guid ShiftId, string Month, decimal AmountNet, string Reason);
-public record BillableShiftVisit(DateTime StartUtc, DateTime EndUtc, Guid BranchId, string ShiftName, bool Completed);
+public record BillableShiftVisit(DateTime StartUtc, DateTime EndUtc, Guid BranchId, string ShiftName, bool Completed, bool Unstarted = false);
 
 /// <summary>Pure decimal calculation; consumes schedule/completion facts, never changes work evidence.</summary>
 public static class ShiftInvoiceCalculator
@@ -71,7 +71,8 @@ public static class ShiftInvoiceCalculator
         var pricedVisits = visits.Select(v => (Visit: v, Date: DateOnly.FromDateTime(TenantTimeZone.LocalDate(v.StartUtc, zone))))
             .Where(v => v.Date >= from && v.Date <= to).Select(v => (v.Visit, v.Date, Price: Price(v.Date))).ToArray();
         if (pricedVisits.Any(v => v.Price is null)) Invalid($"{shift.Name}: a scheduled visit has no effective price. Add pricing before invoicing.");
-        foreach (var group in pricedVisits.Where(v => v.Price!.Mode != "Monthly" && (v.Price.Mode != "PerOccurrence" || v.Visit.Completed))
+        // Unstarted visits are billed only when the user ticked them in (Completed); unticked ones bill nothing.
+        foreach (var group in pricedVisits.Where(v => v.Price!.Mode != "Monthly" && (v.Price.Mode != "PerOccurrence" ? (v.Visit.Completed || !v.Visit.Unstarted) : v.Visit.Completed))
             .Select(v => { var special = v.Price!.Mode == "PerOccurrence" ? profile.Overrides.FirstOrDefault(o => o.OccurrenceStartUtc == v.Visit.StartUtc) : null;
                 return (v.Visit, v.Date, Price: v.Price!, Rate: special?.RateNet ?? v.Price!.RateNet, Reason: special?.Reason); })
             .GroupBy(v => (v.Price, v.Rate, v.Reason, v.Visit.BranchId, v.Visit.ShiftName,
