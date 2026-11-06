@@ -471,7 +471,8 @@ export default function MyShiftsPage() {
         </Button>}
         </div>}
       </div>
-      <Dialog open={inventoryOpen} title="Inventory" onClose={() => setInventoryOpen(false)}>
+      <Dialog open={inventoryOpen} title="Inventory" onClose={() => setInventoryOpen(false)}
+        className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-900 [&_h2:first-child]:mb-4 [&_h2:first-child]:text-lg [&_h2:first-child]:font-bold">
         <InventoryPanel />
       </Dialog>
     </div>
