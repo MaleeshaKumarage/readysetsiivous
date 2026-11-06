@@ -41,7 +41,12 @@ async function setup(page: Page, timeZoneId = 'Europe/Helsinki', withBaseLine = 
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
     const body = request.postData() ? request.postDataJSON() : undefined;
     if (path.endsWith('/shift-preview')) { calls.previews.push(body); return route.fulfill({ headers, json: previewFor(body, withBaseLine) }); }
-    if (path.endsWith('/invoices/shifts')) { calls.issues.push(body); return route.fulfill({ headers, json: { ...previewFor(body), id: 'invoice', invoiceNumber: 'INV-1', status: 'Issued' } }); }
+    if (path.endsWith('/invoices/shifts')) {
+      calls.issues.push(body);
+      // The server refuses an invoice with no billable lines, as the real backend does.
+      if (previewFor(body, withBaseLine).lines.length === 0) return route.fulfill({ status: 400, headers, json: { title: 'Invalid request', status: 400, errors: { Billing: ['No billable work is selected. Tick at least one unstarted visit or choose billable work before issuing.'] } } });
+      return route.fulfill({ headers, json: { ...previewFor(body, withBaseLine), id: 'invoice', invoiceNumber: 'INV-1', status: 'Issued' } });
+    }
     return route.fulfill({ headers, json: path.endsWith('/issuer') ? issuer : path.endsWith('/invoices') ? [] : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'Methehe', isActive: true, isPartnerEnabled: false }], total: 1 } : path.endsWith('/shifts') ? [shift] : path.endsWith('/tenant') ? { timeZoneId } : [] });
   });
   return calls;
@@ -112,4 +117,14 @@ test('a selection with only unstarted visits still shows the tick list, and tick
   await list.getByLabel(/23 Oct 2026/).click();
   await expect(page.getByText('Net €50.00 · VAT €12.75 · Total €62.75')).toBeVisible();
   await expect(list.getByLabel(/23 Oct 2026/)).toBeChecked();
+});
+
+test('issuing a selection with no billable lines is refused and nothing is issued', async ({ page }) => {
+  const calls = await setup(page, 'Europe/Helsinki', false); await previewInvoice(page);
+  await expect(page.getByText('Net €0.00 · VAT €0.00 · Total €0.00')).toBeVisible();
+  await page.getByRole('button', { name: 'Issue invoice', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Invoice preview' }).getByRole('alert')).toContainText('No billable work is selected.');
+  await expect(page.getByRole('status').filter({ hasText: 'Invoice INV-1 issued.' })).toHaveCount(0);
+  expect(calls.issues).toHaveLength(1);
+  expect(calls.issues[0].unstartedDecisions ?? []).toEqual([]);
 });
