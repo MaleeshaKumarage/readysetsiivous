@@ -58,8 +58,10 @@ public static class MartenConfig
         options.Schema.For<Invoice>().Index(x => x.InvoiceNumber);
         options.Schema.For<CleaningSuite.Domain.Leads.Lead>().Index(x => x.UpdatedUtc).Index(x => x.Fields.Name).Index(x => x.Fields.BusinessId).Index(x => x.Fields.Status);
         options.Schema.For<CleaningSuite.Domain.Leads.LeadVoiceNote>().Index(x => x.LeadId);
-        options.Schema.For<CleaningSuite.Domain.Inventory.InventoryLocation>().Index(x => x.IsActive);
-        options.Schema.For<CleaningSuite.Domain.Inventory.InventoryItem>().Index(x => x.IsActive);
+        options.Schema.For<CleaningSuite.Domain.Inventory.InventoryLocation>().Index(x => x.IsActive)
+            .UniqueIndex(Marten.Schema.UniqueIndexType.Computed, "mt_doc_inventorylocation_uidx_normalized_name", Marten.Schema.Indexing.Unique.TenancyScope.PerTenant, x => x.NormalizedName);
+        options.Schema.For<CleaningSuite.Domain.Inventory.InventoryItem>().Index(x => x.IsActive)
+            .UniqueIndex(Marten.Schema.UniqueIndexType.Computed, "mt_doc_inventoryitem_uidx_normalized_name", Marten.Schema.Indexing.Unique.TenancyScope.PerTenant, x => x.NormalizedName);
         options.Schema.For<CleaningSuite.Domain.Inventory.InventoryUsage>().Index(x => x.EmployeeId).Index(x => x.TakenUtc);
         options.Schema.For<CleaningSuite.Domain.Leads.LeadFollowUp>().Index(x => x.LeadId).Index(x => x.NextCheckUtc).Index(x => x.State);
         options.Schema.For<CleaningSuite.Domain.Leads.LeadFollowUpDelivery>().Index(x => x.LeadId).Index(x => x.FollowUpId);

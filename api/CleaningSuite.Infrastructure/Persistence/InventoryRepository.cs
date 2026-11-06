@@ -2,6 +2,7 @@ using CleaningSuite.Application.Inventory;
 using CleaningSuite.Domain.Common;
 using CleaningSuite.Domain.Inventory;
 using Marten;
+using Npgsql;
 
 namespace CleaningSuite.Infrastructure.Persistence;
 
@@ -10,10 +11,10 @@ public sealed class InventoryRepository(ITenantSession tenant) : IInventoryRepos
     private IDocumentSession Session => tenant.Session;
 
     public async Task<IReadOnlyList<InventoryLocation>> ListLocationsAsync(CancellationToken ct) =>
-        await Session.Query<InventoryLocation>().Take(1000).ToListAsync(ct);
+        await Session.Query<InventoryLocation>().ToListAsync(ct);
 
     public async Task<IReadOnlyList<InventoryItem>> ListItemsAsync(CancellationToken ct) =>
-        await Session.Query<InventoryItem>().Take(1000).ToListAsync(ct);
+        await Session.Query<InventoryItem>().ToListAsync(ct);
 
     public Task<InventoryLocation?> GetLocationAsync(Guid id, CancellationToken ct) => Session.LoadAsync<InventoryLocation>(id, ct);
 
@@ -39,6 +40,13 @@ public sealed class InventoryRepository(ITenantSession tenant) : IInventoryRepos
     public async Task SaveAsync<T>(T document, CancellationToken ct) where T : BaseDocument
     {
         Session.Store(document);
-        await Session.SaveChangesAsync(ct);
+        try { await Session.SaveChangesAsync(ct); }
+        catch (Exception e) when (UniqueViolation(e)) { throw new InventoryDuplicateNameException(DuplicateNameMessage); }
     }
+
+    public const string DuplicateNameMessage = "That name is already in the catalog, including inactive entries. Refresh and choose the existing entry.";
+
+    private static bool UniqueViolation(Exception e) =>
+        e is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation }
+        || e.InnerException is not null && UniqueViolation(e.InnerException);
 }

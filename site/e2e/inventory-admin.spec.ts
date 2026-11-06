@@ -71,6 +71,44 @@ test('log shows every employee entry and sends the chosen date range to the serv
   expect(state.usageQueries.at(-1)).toContain('to=2026-11-06');
 });
 
+test('the employee filter includes deactivated employees', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  const employeeRequests: string[] = [];
+  await page.route(/\/api\/v1\/admin\/employees(\?.*)?$/, route => {
+    employeeRequests.push(route.request().url());
+    return route.fulfill({ headers, json: employees });
+  });
+  await page.route(/\/api\/v1\/admin\/inventory\/usage(\?.*)?$/, route => route.fulfill({ headers, json: usageRows }));
+  await page.goto('/admin/inventory/');
+  await expect(page.getByRole('cell', { name: 'Keys' })).toBeVisible();
+  expect(employeeRequests.some(url => url.includes('includeInactive=true'))).toBe(true);
+});
+
+test('a slow response for an older filter does not overwrite the newer results', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: true });
+  await page.route(/\/api\/v1\/admin\/employees(\?.*)?$/, route => route.fulfill({ headers, json: employees }));
+  await page.route(/\/api\/v1\/admin\/inventory\/usage(\?.*)?$/, async route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    if (new URL(route.request().url()).searchParams.get('from') === '2026-01-01') {
+      // The older filter answers last, with a different row.
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      return route.fulfill({ headers, json: [usageRows[1]] });
+    }
+    return route.fulfill({ headers, json: [usageRows[0]] });
+  });
+  await page.goto('/admin/inventory/');
+  await expect(page.getByRole('cell', { name: 'Keys' })).toBeVisible();
+
+  await page.getByLabel('From', { exact: true }).fill('2026-01-01');
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByLabel('From', { exact: true }).fill('2026-11-01');
+  await page.getByRole('button', { name: 'Apply' }).click();
+
+  await expect(page.getByRole('cell', { name: 'Keys' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Bedsheets' })).toHaveCount(0, { timeout: 5000 });
+  await expect.poll(async () => page.getByRole('cell', { name: 'Bedsheets' }).count(), { timeout: 3000 }).toBe(0);
+});
+
 test('an end date before the start date is refused without a request', async ({ page }) => {
   const state = await setup(page);
   await page.goto('/admin/inventory/');

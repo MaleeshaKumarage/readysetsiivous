@@ -32,6 +32,7 @@ public class InventoryServiceTests
         public List<InventoryItem> Items { get; } = new();
         public List<InventoryUsage> Usage { get; } = new();
         public int SaveCount { get; private set; }
+        public InventoryItem? RaceWinner { get; set; }
         public Task<IReadOnlyList<InventoryLocation>> ListLocationsAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<InventoryLocation>>(Locations.ToList());
         public Task<IReadOnlyList<InventoryItem>> ListItemsAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<InventoryItem>>(Items.ToList());
         public Task<InventoryLocation?> GetLocationAsync(Guid id, CancellationToken ct) => Task.FromResult(Locations.SingleOrDefault(x => x.Id == id));
@@ -50,6 +51,13 @@ public class InventoryServiceTests
         public Task SaveAsync<T>(T document, CancellationToken ct) where T : BaseDocument
         {
             SaveCount++;
+            if (document is InventoryItem && RaceWinner is { } winner)
+            {
+                // Simulate another request inserting the same name after our read, before our save.
+                RaceWinner = null;
+                Items.Add(winner);
+                throw new InventoryDuplicateNameException("duplicate");
+            }
             document.Version = Guid.NewGuid();
             switch (document)
             {
@@ -209,6 +217,28 @@ public class InventoryServiceTests
 
         var verified = await service.VerifyItemAsync(created.Id, created.Version, default);
         Assert.True(verified.IsVerified);
+    }
+
+    [Fact]
+    public async Task Employee_add_that_loses_a_race_returns_the_item_that_won()
+    {
+        var (service, repo, _) = Build();
+        repo.RaceWinner = new InventoryItem { Name = "Mop heads", Unit = "pcs", IsVerified = false, IsActive = true, Version = Guid.NewGuid() };
+
+        var dto = await service.AddItemFromEmployeeAsync(Actor, "mop heads", null, default);
+
+        Assert.Equal(repo.Items.Single().Id, dto.Id);
+        Assert.Single(repo.Items);
+    }
+
+    [Fact]
+    public async Task Open_ended_date_range_at_the_calendar_limit_does_not_overflow()
+    {
+        var (service, _, _) = Build();
+
+        var rows = await service.ListUsageAsync(null, null, DateOnly.MaxValue, 0, 10, default);
+
+        Assert.Empty(rows);
     }
 
     [Fact]

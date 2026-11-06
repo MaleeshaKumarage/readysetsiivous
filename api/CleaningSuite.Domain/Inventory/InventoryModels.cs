@@ -15,7 +15,15 @@ public static class InventoryDefaults
 public class InventoryLocation : BaseDocument
 {
     public string InventoryId { get; set; } = InventoryDefaults.InventoryId;
-    public string Name { get; set; } = "";
+    private string _name = "";
+    public string Name
+    {
+        get => _name;
+        set { _name = value; NormalizedName = value.Trim().ToLowerInvariant(); }
+    }
+
+    /// <summary>Trimmed, lower-cased name. Unique per tenant, so concurrent creates cannot store the same name twice.</summary>
+    public string NormalizedName { get; private set; } = "";
     public bool IsActive { get; set; } = true;
 }
 
@@ -26,7 +34,15 @@ public class InventoryLocation : BaseDocument
 public class InventoryItem : BaseDocument
 {
     public string InventoryId { get; set; } = InventoryDefaults.InventoryId;
-    public string Name { get; set; } = "";
+    private string _name = "";
+    public string Name
+    {
+        get => _name;
+        set { _name = value; NormalizedName = value.Trim().ToLowerInvariant(); }
+    }
+
+    /// <summary>Trimmed, lower-cased name. Unique per tenant, so concurrent creates cannot store the same name twice.</summary>
+    public string NormalizedName { get; private set; } = "";
     public string Unit { get; set; } = "pcs";
     public bool IsVerified { get; set; } = true;
     public bool IsActive { get; set; } = true;

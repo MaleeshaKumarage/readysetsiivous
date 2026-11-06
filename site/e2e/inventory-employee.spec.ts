@@ -111,8 +111,29 @@ test('employee logs an existing item with a photo and sees it in their history',
   const history = page.locator('section[aria-labelledby="history-heading"]');
   await expect(history.getByText('Keys: 2 pcs')).toBeVisible();
   await expect(history.getByText('From Main store')).toBeVisible();
+  await history.getByRole('button', { name: 'Show photos (1)' }).click();
   await expect(history.getByRole('img', { name: 'Keys photo 1' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Save entry' })).toBeDisabled();
+});
+
+test('a failed history reload after a successful save is not reported as an unsaved entry', async ({ page }) => {
+  const work = await setup(page);
+  await page.route(/\/api\/v1\/me\/inventory\/usage(\?.*)?$/, route => {
+    // Fail only the reload that follows the save; the first load and the save itself succeed.
+    if (route.request().method() === 'GET' && work.posts.some(p => p.url.includes('/usage'))) return route.fulfill({ status: 503, headers });
+    return route.fallback();
+  });
+  await page.goto('/me/inventory/');
+
+  await page.getByLabel('Where did you take it from?').selectOption({ label: 'Main store' });
+  await page.getByLabel('What did you take?').selectOption({ label: 'Keys' });
+  await page.getByLabel('Photos (at least 1, up to 5)').setInputFiles(photo);
+  await page.getByRole('button', { name: 'Save entry' }).click();
+
+  await expect(page.getByText('Entry saved.')).toBeVisible();
+  await expect(page.getByText('The entry was not saved')).toHaveCount(0);
+  await expect(page.getByText('Could not load your history.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
 });
 
 test('employee adds a new item and it is used for the entry', async ({ page }) => {

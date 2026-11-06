@@ -1,6 +1,5 @@
 using CleaningSuite.Api.Auth;
 using CleaningSuite.Application.Inventory;
-using CleaningSuite.Domain.Employees;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -35,6 +34,9 @@ public class MeInventoryController(InventoryService inventory) : ControllerBase
     [RequestSizeLimit(40 * 1024 * 1024)]
     public async Task<IActionResult> RecordUsage([FromForm] MeUsageForm form, CancellationToken ct)
     {
+        // Check the count before buffering any file, so an oversized request is rejected cheaply.
+        if ((form.Photos?.Count ?? 0) > InventoryService.MaxPhotosPerEntry)
+            throw new FluentValidation.ValidationException($"Attach up to {InventoryService.MaxPhotosPerEntry} photos per entry.");
         var photos = new List<byte[]>();
         foreach (var file in form.Photos ?? [])
         {
@@ -59,10 +61,7 @@ public class MeInventoryController(InventoryService inventory) : ControllerBase
 
     private InventoryActor Actor()
     {
-        var employee = HttpContext.Items["Employee"] as Employee;
-        if (employee is null || !employee.IsActive || employee.IdentitySyncPending || !Employee.IsWorkRole(employee.Role)
-            || string.IsNullOrWhiteSpace(employee.KeycloakUserId))
-            throw new UnauthorizedAccessException("An active linked staff account is required.");
+        var employee = StaffActor.RequireActive(HttpContext);
         return new InventoryActor(employee.Id, $"{employee.FirstName} {employee.LastName}".Trim());
     }
 

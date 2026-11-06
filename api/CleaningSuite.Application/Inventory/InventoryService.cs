@@ -6,7 +6,10 @@ using FluentValidation;
 namespace CleaningSuite.Application.Inventory;
 
 /// <summary>A name or version conflict in the inventory catalog or log. The message says what to do next.</summary>
-public sealed class InventoryConflictException(string message) : Exception(message);
+public class InventoryConflictException(string message) : Exception(message);
+
+/// <summary>The database refused a second catalog entry with the same name (a concurrent create won).</summary>
+public sealed class InventoryDuplicateNameException(string message) : InventoryConflictException(message);
 
 public interface IInventoryRepository
 {
@@ -121,7 +124,18 @@ public sealed class InventoryService(IInventoryRepository repository, IInventory
             Name = clean, Unit = CleanUnit(unit), IsVerified = false, CreatedByEmployeeId = actor.EmployeeId,
             CreatedUtc = now, UpdatedUtc = now,
         };
-        await repository.SaveAsync(item, ct);
+        try
+        {
+            await repository.SaveAsync(item, ct);
+        }
+        catch (InventoryDuplicateNameException)
+        {
+            // Another employee created the same item between our read and our save. Return that item, as the
+            // non-racing path does, rather than failing the employee's entry.
+            var winner = (await repository.ListItemsAsync(ct)).FirstOrDefault(x => string.Equals(x.Name, clean, StringComparison.OrdinalIgnoreCase));
+            if (winner is { IsActive: true }) return ItemDto(winner);
+            throw;
+        }
         return ItemDto(item);
     }
 
@@ -261,7 +275,8 @@ public sealed class InventoryService(IInventoryRepository repository, IInventory
     private static (DateTime? FromUtc, DateTime? ToUtc) DateRange(DateOnly? from, DateOnly? to)
     {
         if (from is { } f && to is { } t && t < f) throw new FluentValidation.ValidationException("The end date must be on or after the start date.");
-        return (from is { } fd ? HelsinkiDayStartUtc(fd) : null, to is { } td ? HelsinkiDayStartUtc(td.AddDays(1)) : null);
+        // DateOnly.MaxValue has no next day; an open upper bound covers everything up to it.
+        return (from is { } fd ? HelsinkiDayStartUtc(fd) : null, to is { } td && td < DateOnly.MaxValue ? HelsinkiDayStartUtc(td.AddDays(1)) : null);
     }
 
     private static string CleanName(string? name, string label)

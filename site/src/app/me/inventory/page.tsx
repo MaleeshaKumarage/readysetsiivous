@@ -42,6 +42,25 @@ function PhotoThumb({ path, label }: { path: string; label: string }) {
   return <img src={url} alt={label} className="h-16 w-16 rounded object-cover" />;
 }
 
+// Photos are fetched only when the employee opens them, so a long history does not request every image up front.
+function PhotoPanel({ entry }: { entry: InventoryUsage }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-2">
+      <button type="button" className="text-sm underline" aria-expanded={open} onClick={() => setOpen(value => !value)}>
+        {open ? 'Hide photos' : `Show photos (${entry.photoIds.length})`}
+      </button>
+      {open && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {entry.photoIds.map((photoId, index) => (
+            <PhotoThumb key={photoId} path={meInventory.photoPath(entry.id, photoId)} label={`${entry.itemName} photo ${index + 1}`} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function InventoryPage() {
   const [ready, setReady] = useState(false);
   const [authed, setAuthed] = useState(false);
@@ -49,6 +68,7 @@ export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [history, setHistory] = useState<InventoryUsage[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   const [locationId, setLocationId] = useState('');
   const [itemChoice, setItemChoice] = useState('');
@@ -134,6 +154,7 @@ export default function InventoryPage() {
     setSubmitting(true);
     setFormError(null);
     setSavedMessage(null);
+    let recorded = false;
     try {
       let itemId = itemChoice;
       if (addingNew) {
@@ -149,13 +170,24 @@ export default function InventoryPage() {
       form.append('Note', note);
       photos.forEach(photo => form.append('Photos', photo.file, photo.file.name));
       await meInventory.record(form);
+      recorded = true;
       resetForm();
       setSavedMessage('Entry saved.');
-      setHistory(await meInventory.usage());
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'The entry was not saved. Try again.');
     } finally {
       setSubmitting(false);
+    }
+    // Refresh separately: a failed reload must not be reported as a failed save.
+    if (recorded) await refreshHistory();
+  }
+
+  async function refreshHistory() {
+    setHistoryError(null);
+    try {
+      setHistory(await meInventory.usage());
+    } catch (err) {
+      setHistoryError(err instanceof Error ? err.message : 'Your history could not be loaded.');
     }
   }
 
@@ -310,6 +342,11 @@ export default function InventoryPage() {
 
           <section aria-labelledby="history-heading">
             <h2 id="history-heading" className="mb-3 text-lg font-semibold">My history</h2>
+            {historyError && (
+              <p role="alert" className="mb-3 text-sm text-red-700 dark:text-red-300">
+                {historyError} <button type="button" className="underline" onClick={() => refreshHistory()}>Try again</button>
+              </p>
+            )}
             {history === null && !loadError && <p className="text-sm text-gray-500">Loading…</p>}
             {history !== null && history.length === 0 && <p className="text-sm text-gray-500">No entries yet.</p>}
             {history !== null && history.length > 0 && (
@@ -325,15 +362,7 @@ export default function InventoryPage() {
                     {entry.photosPurged ? (
                       <p className="mt-2 text-xs text-gray-500">Photos were deleted after 3 months.</p>
                     ) : (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {entry.photoIds.map((photoId, index) => (
-                          <PhotoThumb
-                            key={photoId}
-                            path={meInventory.photoPath(entry.id, photoId)}
-                            label={`${entry.itemName} photo ${index + 1}`}
-                          />
-                        ))}
-                      </div>
+                      <PhotoPanel entry={entry} />
                     )}
                   </li>
                 ))}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Title, Tabs, Table, Button, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge, Switch } from '@mantine/core';
 import { Download } from 'lucide-react';
 import { showError, showSuccess } from '@/lib/toast';
@@ -41,21 +41,28 @@ function LogTab() {
   const [photoView, setPhotoView] = useState<InventoryUsage | null>(null);
 
   useEffect(() => {
-    adminEmployees.list(false).then(list => setEmployees(list ?? [])).catch(() => setEmployees([]));
+    // Include inactive employees so their past entries can still be filtered.
+    adminEmployees.list(true).then(list => setEmployees(list ?? [])).catch(() => setEmployees([]));
   }, []);
 
   useEffect(() => { load(applied, 0); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [applied]);
 
+  // Each request gets a sequence number. Only the latest request may update the table, so a slow response
+  // for an older filter cannot overwrite the results of a newer one.
+  const latestRequest = useRef(0);
+
   async function load(filters: Filters, skip: number) {
+    const request = ++latestRequest.current;
     setLoading(true);
     try {
       const page = await adminInventory.usage({ ...toFilterParams(filters), skip, take: PAGE_SIZE });
+      if (request !== latestRequest.current) return;
       setRows(prev => (skip === 0 || !prev ? page : [...prev, ...page]));
       setHasMore(page.length === PAGE_SIZE);
     } catch (err) {
-      showError(err instanceof Error ? err.message : 'Could not load the inventory log.');
+      if (request === latestRequest.current) showError(err instanceof Error ? err.message : 'Could not load the inventory log.');
     } finally {
-      setLoading(false);
+      if (request === latestRequest.current) setLoading(false);
     }
   }
 
@@ -93,7 +100,7 @@ function LogTab() {
           placeholder="All employees"
           clearable
           searchable
-          data={employees.map(e => ({ value: e.id, label: employeeName(e) }))}
+          data={employees.map(e => ({ value: e.id, label: e.isActive ? employeeName(e) : `${employeeName(e)} (inactive)` }))}
           value={draft.employeeId || null}
           onChange={value => setDraft({ ...draft, employeeId: value ?? '' })}
           style={{ minWidth: 220 }}
