@@ -63,7 +63,8 @@ export async function authorizedFetch(path: string, init: RequestInit = {}): Pro
     headers: {
       ...(init.headers ?? {}),
       ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
-      ...(init.body ? { "Content-Type": "application/json" } : {}),
+      // FormData sets its own multipart boundary, so it must not be forced to JSON.
+      ...(init.body && !(init.body instanceof FormData) ? { "Content-Type": "application/json" } : {}),
     },
   });
 

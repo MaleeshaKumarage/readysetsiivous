@@ -1,0 +1,46 @@
+using System.Security.Cryptography;
+using System.Text;
+using CleaningSuite.Application.Inventory;
+using CleaningSuite.Application.Tenants;
+using CleaningSuite.Domain.Inventory;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+
+namespace CleaningSuite.Infrastructure.Inventory;
+
+/// <summary>Stores inventory photos on disk, partitioned by tenant and entry. Files are never served directly.</summary>
+public sealed class DiskInventoryFileStore(IConfiguration config, ITenantContext tenant, ILogger<DiskInventoryFileStore> logger) : IInventoryFileStore
+{
+    private string PathFor(Guid usageId, InventoryPhoto photo)
+    {
+        if (photo.Extension is not (".jpg" or ".png" or ".webp")) throw new InventoryConflictException("Unsupported stored photo format.");
+        var partition = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(tenant.TenantId))).ToLowerInvariant();
+        return Path.Combine(config["Uploads:Path"] ?? Path.Combine(Directory.GetCurrentDirectory(), "uploads"),
+            "inventory", partition, usageId.ToString("N"), photo.Id.ToString("N") + photo.Extension);
+    }
+
+    public async Task SaveAsync(Guid usageId, InventoryPhoto photo, byte[] content, CancellationToken ct)
+    {
+        var path = PathFor(usageId, photo);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        await stream.WriteAsync(content, ct);
+    }
+
+    public async Task<byte[]?> ReadAsync(Guid usageId, InventoryPhoto photo, CancellationToken ct)
+    {
+        try { return await File.ReadAllBytesAsync(PathFor(usageId, photo), ct); }
+        catch (FileNotFoundException) { return null; }
+        catch (DirectoryNotFoundException) { return null; }
+    }
+
+    public Task DeleteAsync(Guid usageId, InventoryPhoto photo)
+    {
+        try { File.Delete(PathFor(usageId, photo)); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogError(e, "Inventory photo cleanup failed for {UsageId}/{PhotoId}", usageId, photo.Id);
+        }
+        return Task.CompletedTask;
+    }
+}
