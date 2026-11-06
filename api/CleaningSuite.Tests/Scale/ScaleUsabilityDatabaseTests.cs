@@ -32,6 +32,7 @@ namespace CleaningSuite.Tests.Scale;
 /// and times the hot paths against real PostgreSQL. Results are checked for correctness, not only speed.
 /// Set SCALE_REPORT_PATH to write the timings to a file.
 /// </summary>
+[Collection(ScaleCollection.Name)]
 public class ScaleUsabilityDatabaseTests
 {
     // Friday 2026-11-06 15:45 Helsinki is 13:45 UTC: the 16:00 Friday visits are due for their Upcoming reminder.

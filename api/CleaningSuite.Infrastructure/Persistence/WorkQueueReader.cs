@@ -167,10 +167,24 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
             .ToListAsync(ct);
         var formsByOccurrence = forms.GroupBy(f => (f.ShiftId, f.ShiftOccurrenceUtc))
             .ToDictionary(g => g.Key, g => (IReadOnlyList<QualityCycleForm>)g.ToList());
+        // Roster inputs are loaded once for every shift in the window, not once per shift.
+        var exceptions = (await Db.Query<ShiftOccurrenceException>()
+            .Where(x => shiftIds.Contains(x.ShiftId) && ((x.StartUtc >= fromKey && x.StartUtc < toKey)
+                || (x.OriginalStartUtc != null && x.OriginalStartUtc >= fromKey && x.OriginalStartUtc < toKey)))
+            .ToListAsync(ct)).GroupBy(x => x.ShiftId).ToDictionary(g => g.Key, g => (IReadOnlyList<ShiftOccurrenceException>)g.ToList());
+        var history = (await Db.Query<ShiftAssignment>().Where(a => shiftIds.Contains(a.ShiftId)).ToListAsync(ct))
+            .GroupBy(a => a.ShiftId).ToDictionary(g => g.Key, g => (IReadOnlyList<ShiftAssignment>)g.ToList());
+        var overrides = (await Db.Query<ShiftOccurrenceAssignment>().Where(x => shiftIds.Contains(x.ShiftId)).ToListAsync(ct))
+            .GroupBy(x => x.ShiftId).ToDictionary(g => g.Key, g => (IReadOnlyList<ShiftOccurrenceAssignment>)g.ToList());
+        var none = Array.Empty<ShiftOccurrenceException>();
+        var noHistory = Array.Empty<ShiftAssignment>();
+        var noOverrides = Array.Empty<ShiftOccurrenceAssignment>();
         var rows = new List<ShiftRow>();
         foreach (var shift in shifts)
         {
-            var visits = await shiftRepository.ResolveRosterAsync(shift, fromUtc, toUtc, zone, ct, includeCancelled: true);
+            var visits = ShiftRosterReader.ResolveRoster(shift, fromUtc, toUtc, zone,
+                exceptions.GetValueOrDefault(shift.Id) ?? none, history.GetValueOrDefault(shift.Id) ?? noHistory,
+                overrides.GetValueOrDefault(shift.Id) ?? noOverrides, includeCancelled: true);
             foreach (var visit in visits)
             {
                 var start = visit.Occurrence.StartUtc;
