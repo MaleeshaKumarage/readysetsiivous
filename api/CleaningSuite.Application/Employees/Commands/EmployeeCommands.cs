@@ -235,7 +235,6 @@ public class DeactivateEmployeeHandler : IRequestHandler<DeactivateEmployeeComma
     // assigned to a former employee, so the admin must reassign or remove it first.
     private async Task RefuseWhileAssignedToActiveShifts(Guid employeeId, CancellationToken ct)
     {
-        if (_shifts is null) return;
         var shiftIds = (await _shifts.ListAssignmentsByEmployeeAsync(employeeId, ct))
             .Where(assignment => assignment.IsActive).Select(assignment => assignment.ShiftId).Distinct().ToArray();
         if (shiftIds.Length == 0) return;

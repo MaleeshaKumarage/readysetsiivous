@@ -199,9 +199,9 @@ public class CompanyHandlers
 
         private readonly IShiftWorkReservation? _reservation;
 
-            private readonly IShiftRepository? _shifts;
+            private readonly IShiftRepository _shifts;
 
-            public DeactivateCompanyCommandHandler(ICompanyRepository repository, IShiftWorkReservation? reservation = null, IShiftRepository? shifts = null)
+            public DeactivateCompanyCommandHandler(ICompanyRepository repository, IShiftWorkReservation? reservation, IShiftRepository shifts)
         {
             _repository = repository; _reservation = reservation; _shifts = shifts;
         }
@@ -212,13 +212,10 @@ public class CompanyHandlers
             var company = await _repository.GetAsync(request.Id, ct)
                 ?? throw new NotFoundException("Company", request.Id);
             // Shifts keep running for cleaners after the company flag changes, so the company must be emptied of active shifts first.
-            if (_shifts is not null)
-            {
-                var active = (await _shifts.ListAsync(request.Id, null, ct)).Count(shift => shift.IsActive);
-                if (active > 0)
-                    throw new CleaningSuite.Application.Shifts.ShiftConflictException(
-                        $"This company still has {active} active shift(s). Deactivate or move them first, then deactivate the company.");
-            }
+            var active = (await _shifts.ListAsync(request.Id, null, ct)).Count(shift => shift.IsActive);
+            if (active > 0)
+                throw new CleaningSuite.Application.Shifts.ShiftConflictException(
+                    $"This company still has {active} active shift(s). Deactivate or move them first, then deactivate the company.");
             company.Deactivate();
             await _repository.SaveAsync(company, ct);
         }
@@ -494,9 +491,6 @@ public class CompanyValidators
             RuleFor(x => x.Id).NotEqual(Guid.Empty);
             RuleFor(x => x.BusinessId).NotEmpty().WithMessage("Business ID is mandatory.");
             RuleFor(x => x.Name).NotEmpty().WithMessage("Name is mandatory.");
-            RuleFor(x => x.BusinessId).Matches(BusinessIdPattern).WithMessage(BusinessIdMessage).When(x => !string.IsNullOrWhiteSpace(x.BusinessId));
-            RuleFor(x => x.Name).MaximumLength(200).WithMessage("Company name can be at most 200 characters. Shorten it, then save again.");
-            RuleFor(x => x.ContactEmail).EmailAddress().WithMessage("Enter a valid contact email, such as name@company.fi, or leave the field empty.").When(x => !string.IsNullOrWhiteSpace(x.ContactEmail));
         }
     }
 
