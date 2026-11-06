@@ -779,7 +779,7 @@ test.describe('Admin Panel - Shifts Page', () => {
     });
     await page.route('**/api/v1/admin/shifts**', async (route) => {
       if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
-      return route.fulfill({ status: 200, json: [], headers: CORS_HEADERS });
+      return route.fulfill({ status: 200, json: shiftsResponse([], route.request().url()), headers: CORS_HEADERS });
     });
 
     await page.goto('/admin/shifts/');

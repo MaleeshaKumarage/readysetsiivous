@@ -6,7 +6,7 @@ test('admin waits for valid scheduling settings before defaulting a new shift da
   await setupAdminMocks(page); let zone = 'Invalid/Zone'; let release!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });
   const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
-  await page.route(/\/api\/v1\/admin\//, route => route.fulfill({ headers, json: new URL(route.request().url()).pathname.endsWith('/companies') ? { items: [], total: 0 } : [] }));
+  await page.route(/\/api\/v1\/admin\//, route => route.fulfill({ headers, json: new URL(route.request().url()).pathname.endsWith('/companies') ? { items: [], total: 0 } : isShiftsRoute(new URL(route.request().url()).pathname) ? shiftsResponse([], route.request().url()) : [] }));
   await page.route('**/api/v1/admin/tenant', async route => { await gate; return route.fulfill({ headers, json: { timeZoneId: zone } }); });
   await page.goto('/admin/shifts/');
   await expect(page.getByRole('button', { name: 'Add shift', exact: true })).toBeDisabled();
