@@ -330,10 +330,10 @@ public class InventoryServiceTests
     }
 
     [Fact]
-    public void Date_range_end_must_not_be_before_start()
+    public async Task Date_range_end_must_not_be_before_start()
     {
         var (service, _, _) = Build();
-        Assert.ThrowsAsync<ValidationException>(() =>
+        await Assert.ThrowsAsync<ValidationException>(() =>
             service.ListUsageAsync(null, new DateOnly(2026, 11, 6), new DateOnly(2026, 11, 1), 0, 10, default));
     }
 

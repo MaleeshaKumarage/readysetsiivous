@@ -1,6 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
-
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization' };
 const locationId = '33333333-3333-4333-8333-333333333331';
 const keysId = '33333333-3333-4333-8333-333333333332';
@@ -83,6 +82,8 @@ test('quantity must be a whole number of at least one', async ({ page }) => {
   await page.getByLabel('Photos (at least 1, up to 5)').setInputFiles(photo);
 
   await page.getByLabel(/Quantity/).fill('0');
+  await expect(page.getByRole('button', { name: 'Save entry' })).toBeDisabled();
+  await page.getByLabel(/Quantity/).fill('1.5');
   await expect(page.getByRole('button', { name: 'Save entry' })).toBeDisabled();
   await page.getByLabel(/Quantity/).fill('2');
   await expect(page.getByRole('button', { name: 'Save entry' })).toBeEnabled();
@@ -172,4 +173,36 @@ test('inventory page has no horizontal scroll', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Inventory' })).toBeVisible();
   const overflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(overflows).toBe(false);
+});
+
+test('attaching more than five photos keeps only five and disables the input', async ({ page }) => {
+  await setup(page);
+  await page.goto('/me/inventory/');
+  const six = Array.from({ length: 6 }, (_, i) => ({ name: `p${i}.png`, mimeType: 'image/png', buffer: photo.buffer }));
+  await page.getByLabel('Photos (at least 1, up to 5)').setInputFiles(six);
+  await expect(page.getByText('You can attach up to 5 photos per entry.')).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Selected photo 5' })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Selected photo 6' })).toHaveCount(0);
+  await expect(page.getByLabel('Photos (at least 1, up to 5)')).toBeDisabled();
+});
+
+test('a history photo that fails to load shows the unavailable fallback', async ({ page }) => {
+  await setup(page, {
+    history: [{
+      id: usageId, employeeId: 'employee-a', employeeName: 'Test Staff', locationId, locationName: 'Main store',
+      itemId: keysId, itemName: 'Keys', unit: 'pcs', quantity: 1, note: '', takenUtc: '2026-05-01T09:00:00Z',
+      photoIds: [photoId], photosPurged: false, version: 'v1',
+    }],
+  });
+  await page.route(/\/api\/v1\/me\/inventory\/usage\/[^/]+\/photos\/[^/?]+(\?.*)?$/, route => route.fulfill({ status: 503, headers }));
+  await page.goto('/me/inventory/');
+  await page.getByRole('button', { name: 'Show photos (1)' }).click();
+  await expect(page.getByText('Photo unavailable')).toBeVisible();
+});
+
+test('an unauthenticated employee sees the sign-in prompt', async ({ page }) => {
+  await setupAdminMocks(page, { authenticated: false });
+  await page.goto('/me/inventory/');
+  await expect(page.getByText('Sign in to log items you have taken.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
 });

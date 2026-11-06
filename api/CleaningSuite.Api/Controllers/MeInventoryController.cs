@@ -41,6 +41,7 @@ public class MeInventoryController(InventoryService inventory) : ControllerBase
         foreach (var file in form.Photos ?? [])
         {
             if (file.Length == 0) throw new FluentValidation.ValidationException("Choose a non-empty photo.");
+            if (file.Length > InventoryService.MaxPhotoBytes) throw new FluentValidation.ValidationException("Each photo must be 5 MiB or smaller.");
             await using var input = file.OpenReadStream();
             using var buffer = new MemoryStream();
             await input.CopyToAsync(buffer, ct);
@@ -54,8 +55,8 @@ public class MeInventoryController(InventoryService inventory) : ControllerBase
     {
         var employee = Actor();
         var (bytes, contentType) = await inventory.ReadPhotoAsync(id, photoId, employee.EmployeeId, ct);
-        Response.Headers.CacheControl = "private, no-store";
-        Response.Headers.XContentTypeOptions = "nosniff";
+        Response.Headers["Cache-Control"] = "private, no-store";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
         return File(bytes, contentType);
     }
 

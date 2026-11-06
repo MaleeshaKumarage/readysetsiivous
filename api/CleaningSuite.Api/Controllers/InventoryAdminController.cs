@@ -48,7 +48,7 @@ public class InventoryAdminController(InventoryService inventory) : ControllerBa
     public async Task<IActionResult> Export([FromQuery] Guid? employeeId, [FromQuery] DateOnly? from, [FromQuery] DateOnly? to, CancellationToken ct)
     {
         var csv = await inventory.ExportCsvAsync(employeeId, from, to, ct);
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers["Cache-Control"] = "no-store";
         return File(System.Text.Encoding.UTF8.GetPreamble().Concat(System.Text.Encoding.UTF8.GetBytes(csv)).ToArray(), "text/csv; charset=utf-8",
             $"inventory-{DateTime.UtcNow:yyyyMMdd-HHmm}.csv");
     }
@@ -57,8 +57,8 @@ public class InventoryAdminController(InventoryService inventory) : ControllerBa
     public async Task<IActionResult> Photo(Guid id, Guid photoId, CancellationToken ct)
     {
         var (bytes, contentType) = await inventory.ReadPhotoAsync(id, photoId, null, ct);
-        Response.Headers.CacheControl = "private, no-store";
-        Response.Headers.XContentTypeOptions = "nosniff";
+        Response.Headers["Cache-Control"] = "private, no-store";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
         return File(bytes, contentType);
     }
 

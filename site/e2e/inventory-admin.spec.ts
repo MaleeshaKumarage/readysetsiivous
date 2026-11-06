@@ -166,3 +166,12 @@ test('admin verifies an employee-added item', async ({ page }) => {
   await expect(page.getByText('Needs review')).toHaveCount(0);
   expect(state.posts.at(-1)?.body).toEqual({ version: 'v7' });
 });
+
+test('selecting an employee filters the log by that employee', async ({ page }) => {
+  const state = await setup(page);
+  await page.goto('/admin/inventory/');
+  await page.getByRole('textbox', { name: 'Employee' }).click();
+  await page.getByRole('option', { name: 'Ben Cleaner' }).click();
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await expect.poll(() => state.usageQueries.at(-1)).toContain('employeeId=employee-b');
+});

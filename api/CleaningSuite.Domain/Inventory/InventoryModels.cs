@@ -19,7 +19,7 @@ public class InventoryLocation : BaseDocument
     public string Name
     {
         get => _name;
-        set { _name = value; NormalizedName = value.Trim().ToLowerInvariant(); }
+        set { _name = value; NormalizedName = (value ?? "").Trim().ToLowerInvariant(); }
     }
 
     /// <summary>Trimmed, lower-cased name. Unique per tenant, so concurrent creates cannot store the same name twice.</summary>
@@ -38,7 +38,7 @@ public class InventoryItem : BaseDocument
     public string Name
     {
         get => _name;
-        set { _name = value; NormalizedName = value.Trim().ToLowerInvariant(); }
+        set { _name = value; NormalizedName = (value ?? "").Trim().ToLowerInvariant(); }
     }
 
     /// <summary>Trimmed, lower-cased name. Unique per tenant, so concurrent creates cannot store the same name twice.</summary>

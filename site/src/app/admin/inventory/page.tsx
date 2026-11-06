@@ -72,7 +72,7 @@ function LogTab() {
       return;
     }
     setRows(null);
-    setApplied(draft);
+    setApplied({ ...draft });
   }
 
   async function exportCsv() {
@@ -163,6 +163,7 @@ function LogTab() {
 function PhotoGallery({ entry }: { entry: InventoryUsage }) {
   const [urls, setUrls] = useState<string[]>([]);
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -172,8 +173,9 @@ function PhotoGallery({ entry }: { entry: InventoryUsage }) {
         if (!active) { list.forEach(url => URL.revokeObjectURL(url)); return; }
         created.push(...list);
         setUrls(list);
+        setLoaded(true);
       })
-      .catch(() => { if (active) setFailed(true); });
+      .catch(() => { if (active) { setFailed(true); setLoaded(true); } });
     return () => {
       active = false;
       created.forEach(url => URL.revokeObjectURL(url));
@@ -181,7 +183,8 @@ function PhotoGallery({ entry }: { entry: InventoryUsage }) {
   }, [entry]);
 
   if (failed) return <Text c="red">Photos could not be loaded.</Text>;
-  if (urls.length === 0) return <Loader size="sm" />;
+  if (!loaded) return <Loader size="sm" />;
+  if (urls.length === 0) return <Text c="dimmed">No photos.</Text>;
   return (
     <Group>
       {urls.map((url, index) => (

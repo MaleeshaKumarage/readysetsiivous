@@ -48,6 +48,7 @@ public sealed record InventoryUsageDto(
 public sealed class InventoryService(IInventoryRepository repository, IInventoryFileStore files, IUploadContentValidator uploads, TimeProvider clock)
 {
     public const int MaxPhotosPerEntry = 5;
+    public const int MaxPhotoBytes = 5 * 1024 * 1024;
     public const int MaxQuantity = 10000;
     public const int MaxNoteLength = 500;
     public const int MaxNameLength = 80;
@@ -232,7 +233,8 @@ public sealed class InventoryService(IInventoryRepository repository, IInventory
     public async Task<string> ExportCsvAsync(Guid? employeeId, DateOnly? from, DateOnly? to, CancellationToken ct)
     {
         var (fromUtc, toUtc) = DateRange(from, to);
-        var rows = await repository.ListUsageAsync(new InventoryUsageQuery(employeeId, fromUtc, toUtc, 0, MaxExportRows), ct);
+        var rows = await repository.ListUsageAsync(new InventoryUsageQuery(employeeId, fromUtc, toUtc, 0, MaxExportRows + 1), ct);
+        if (rows.Count > MaxExportRows) throw new FluentValidation.ValidationException($"The export has more than {MaxExportRows:N0} entries. Narrow the date range or employee filter.");
         var lines = new List<string> { string.Join(',', "Taken (Helsinki)", "Employee", "Location", "Item", "Quantity", "Unit", "Note", "Photos") };
         foreach (var row in rows)
         {
@@ -307,8 +309,9 @@ public sealed class InventoryService(IInventoryRepository repository, IInventory
 
     private static string Csv(string value)
     {
-        // Prefix formula-like values so a spreadsheet does not run them as formulas.
-        var safe = value.Length > 0 && "=+-@".Contains(value[0]) ? "'" + value : value;
+        // Prefix formula-like values so a spreadsheet does not run them as formulas. Tab and CR also start a
+        // formula/DDE in Excel, so they are treated the same as = + - @.
+        var safe = value.Length > 0 && "=+-@\t\r".Contains(value[0]) ? "'" + value : value;
         return "\"" + safe.Replace("\"", "\"\"") + "\"";
     }
 

@@ -96,6 +96,8 @@ export function InventoryPanel() {
       setReady(true);
       setAuthed(ok);
       if (ok) loadAll();
+    }).catch(() => {
+      if (active) { setReady(true); setAuthed(false); }
     });
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps

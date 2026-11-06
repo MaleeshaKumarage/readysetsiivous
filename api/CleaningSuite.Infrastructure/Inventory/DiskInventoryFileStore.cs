@@ -21,8 +21,12 @@ public sealed class DiskInventoryFileStore(IConfiguration config, ITenantContext
     {
         var path = PathFor(usageId, photo);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-        await stream.WriteAsync(content, ct);
+        // Write a temp file then move it into place, so a cancelled or failed write never leaves a truncated
+        // file at the final path that ReadAsync would return as valid.
+        var temp = path + ".tmp";
+        await using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
+            await stream.WriteAsync(content, ct);
+        File.Move(temp, path, overwrite: true);
     }
 
     public async Task<byte[]?> ReadAsync(Guid usageId, InventoryPhoto photo, CancellationToken ct)

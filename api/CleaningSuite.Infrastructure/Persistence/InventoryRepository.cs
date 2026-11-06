@@ -47,6 +47,6 @@ public sealed class InventoryRepository(ITenantSession tenant) : IInventoryRepos
     public const string DuplicateNameMessage = "That name is already in the catalog, including inactive entries. Refresh and choose the existing entry.";
 
     private static bool UniqueViolation(Exception e) =>
-        e is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation }
+        e is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: MartenConfig.InventoryLocationNormalizedNameIndexName or MartenConfig.InventoryItemNormalizedNameIndexName }
         || e.InnerException is not null && UniqueViolation(e.InnerException);
 }
