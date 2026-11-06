@@ -7,6 +7,7 @@ using CleaningSuite.Application.QualityCycle;
 using CleaningSuite.Application.Shifts;
 using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Companies;
+using CleaningSuite.Domain.Shifts;
 using FluentValidation;
 using MediatR;
 using System.Text.Json.Serialization;
@@ -84,6 +85,8 @@ public record UpdateCompanyCommand(
 public record DeactivateCompanyCommand(Guid Id) : IRequest;
 public record ReactivateCompanyCommand(Guid Id) : IRequest;
 public record DeleteCompanyCommand(Guid Id) : IRequest;
+public record ClearCompanyRelatedCommand(Guid Id) : IRequest<ClearCompanyRelatedResultDto>;
+public record ClearCompanyRelatedResultDto(int ShiftsDeleted, int EmployeesUnassigned, int BranchesDeleted);
 
 public record CompanyCounts(int All, int Active, int Inactive);
 
@@ -246,6 +249,66 @@ public class CompanyHandlers
             if ((await agreements.ListAsync(tenant.TenantId, ct)).Any(a => a.CompanyId == company.Id))
                 throw new InactiveRecordDeleteConflictException("This company has agreement records and must be retained.");
             await companies.DeleteAsync(company.Id, ct);
+        }
+    }
+
+    // One-step cleanup offered when deactivating or deleting a company is refused because of its shifts or places.
+    // Shifts and places with checklist, visit or partner history are kept, so the whole request is refused and nothing changes.
+    public sealed class ClearCompanyRelatedCommandHandler(ICompanyRepository companies, IBranchRepository branches,
+        IShiftRepository shifts, IQualityCycleRepository forms, IAgreementRepository agreements, ITenantContext tenant,
+        IPartnerStore? partnerStore = null, IShiftWorkReservation? reservation = null)
+        : IRequestHandler<ClearCompanyRelatedCommand, ClearCompanyRelatedResultDto>
+    {
+        public async Task<ClearCompanyRelatedResultDto> Handle(ClearCompanyRelatedCommand request, CancellationToken ct)
+        {
+            await using var lease = reservation is null ? null : await reservation.AcquireAsync(ct);
+            if (partnerStore is not null && (await partnerStore.Session.Query<PartnerCleaningRequest>().AnyAsync(x => x.CompanyId == request.Id, ct)
+                || await partnerStore.Session.Query<PartnerChangeRequest>().AnyAsync(x => x.CompanyId == request.Id, ct)
+                || await partnerStore.Session.Query<CleaningSuite.Domain.Employees.Employee>().AnyAsync(x => x.PartnerCompanyId == request.Id, ct)))
+                throw new InactiveRecordDeleteConflictException("This company has partner request history and must be retained, so its shifts and places cannot be cleared.");
+            var company = await companies.GetAsync(request.Id, ct) ?? throw new NotFoundException("Company", request.Id);
+
+            var companyShifts = await shifts.ListAsync(company.Id, null, ct);
+            var companyBranches = await branches.ListByCompanyAsync(company.Id, true, ct);
+            if (companyShifts.Any(s => s.PartnerRequestId.HasValue))
+                throw new InactiveRecordDeleteConflictException("Partner-requested shifts must be kept, so this company's shifts cannot be cleared.");
+            if ((await forms.ListFormsAsync(null, null, null, ct, null, null, company.Id, null)).Count > 0)
+                throw new InactiveRecordDeleteConflictException("This company has shift or checklist history and must be retained, so its shifts and places cannot be cleared.");
+            if ((await agreements.ListAsync(tenant.TenantId, ct)).Any(a => a.CompanyId == company.Id))
+                throw new InactiveRecordDeleteConflictException("This company has agreement records and must be retained, so its shifts and places cannot be cleared.");
+
+            var now = DateTime.UtcNow;
+            var unassigned = 0;
+            foreach (var shift in companyShifts)
+            {
+                shift.EnsureQualityCycleHistory();
+                if (shift.IsActive)
+                {
+                    shift.Deactivate();
+                    shift.RecordQualityCyclePlan(now);
+                    await shifts.SaveAsync(shift, ct);
+                }
+                foreach (var assignment in await shifts.ListAssignmentsByShiftAsync(shift.Id, ct))
+                {
+                    if (!assignment.IsActive) continue;
+                    assignment.EndFrom(now, now);
+                    await shifts.SaveAssignmentAsync(assignment, ct);
+                    unassigned++;
+                }
+                await shifts.DeleteAsync(shift.Id, ct);
+            }
+
+            foreach (var branch in companyBranches)
+            {
+                if (branch.IsActive)
+                {
+                    branch.Deactivate();
+                    await branches.SaveAsync(branch, ct);
+                }
+                await branches.DeleteAsync(branch.Id, ct);
+            }
+
+            return new ClearCompanyRelatedResultDto(companyShifts.Count, unassigned, companyBranches.Count);
         }
     }
 

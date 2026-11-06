@@ -13,16 +13,20 @@ namespace CleaningSuite.Api.Controllers;
 public class CompaniesAdminController : ControllerBase
 {
     private const int MaxTake = 200;
+    // The company list is cached for 30 seconds; every change to companies or their shifts and places evicts it so reloads never show stale rows.
+    private const string CompaniesCacheTag = "companies";
 
     private readonly IMediator _mediator;
+    private readonly IOutputCacheStore _outputCache;
 
-    public CompaniesAdminController(IMediator mediator)
+    public CompaniesAdminController(IMediator mediator, IOutputCacheStore outputCache)
     {
         _mediator = mediator;
+        _outputCache = outputCache;
     }
 
     [HttpGet]
-    [OutputCache(Duration = 30)]
+    [OutputCache(Duration = 30, Tags = new[] { CompaniesCacheTag })]
     public async Task<IActionResult> List(
         [FromQuery] string? search,
         [FromQuery] int skip = 0,
@@ -74,6 +78,7 @@ public class CompaniesAdminController : ControllerBase
     public async Task<IActionResult> Deactivate(Guid id, CancellationToken ct)
     {
         await _mediator.Send(new DeactivateCompanyCommand(id), ct);
+        await _outputCache.EvictByTagAsync(CompaniesCacheTag, ct);
         return NoContent();
     }
 
@@ -86,7 +91,15 @@ public class CompaniesAdminController : ControllerBase
 
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
-    { await _mediator.Send(new DeleteCompanyCommand(id), ct); return NoContent(); }
+    { await _mediator.Send(new DeleteCompanyCommand(id), ct); await _outputCache.EvictByTagAsync(CompaniesCacheTag, ct); return NoContent(); }
+
+    [HttpPost("{id:guid}/clear-related")]
+    public async Task<IActionResult> ClearRelated(Guid id, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new ClearCompanyRelatedCommand(id), ct);
+        await _outputCache.EvictByTagAsync(CompaniesCacheTag, ct);
+        return Ok(result);
+    }
 
     [HttpPost("branches/{branchId:guid}/reactivate")]
     public async Task<IActionResult> ReactivateBranch(Guid branchId, CancellationToken ct)
