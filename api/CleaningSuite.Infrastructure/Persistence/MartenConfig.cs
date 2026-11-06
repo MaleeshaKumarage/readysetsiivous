@@ -77,7 +77,8 @@ public static class MartenConfig
 
         options.Schema.For<Shift>()
             .Index(x => x.CompanyId)
-            .Index(x => x.BranchId);
+            .Index(x => x.BranchId)
+            .Index(x => x.Tab);
 
         options.Schema.For<DeletedShift>();
         options.Schema.For<ShiftOccurrenceAssignment>().Index(x => x.ShiftId);

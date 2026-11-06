@@ -13,8 +13,9 @@ public static class RequestErrorText
     public const string BadValue = "This value is not in the expected format. Check it and try again.";
     public const string BodyRequired = "The body field is required.";
 
-    public static string Plain(string message) =>
-        message.Contains("could not be converted to", StringComparison.OrdinalIgnoreCase) ? BadValue : message;
+    // A model error can carry only an exception, so its message may be null; never echo exception text.
+    public static string Plain(string? message) =>
+        string.IsNullOrWhiteSpace(message) || message.Contains("could not be converted to", StringComparison.OrdinalIgnoreCase) ? BadValue : message;
 
     /// <summary>Builds the 400 response from model state: field names without the JSON path marker, plain messages, and no body-required noise when a field error explains the problem.</summary>
     public static ValidationProblemDetails FromModelState(ModelStateDictionary state)

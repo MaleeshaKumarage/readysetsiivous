@@ -1,7 +1,7 @@
 'use client';
 
 import { showError } from '@/lib/toast';
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import {
   Title, Button, Table, Modal, TextInput, Select, MultiSelect, Group, Stack, Text, Loader, ActionIcon, NumberInput, Menu,
 } from '@mantine/core';
@@ -16,7 +16,7 @@ import { isAdmin } from '@/lib/auth';
 import { adminQualityCycle, type QualityCycleTemplate } from '@/lib/qualityCycleApi';
 import { CompanyPicker } from '@/components/admin/CompanyPicker';
 import { LifecycleTabs, type LifecycleStatus } from '@/components/LifecycleTabs';
-import { ListPager, paginate, PAGE_SIZE } from '@/components/ListPager';
+import { ListPager, PAGE_SIZE } from '@/components/ListPager';
 import { ShiftWorkspace, scheduleLabel } from '@/components/admin/ShiftWorkspace';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -111,7 +111,11 @@ const shiftView = (shift: Shift): LifecycleStatus => (!shift.isActive ? 'inactiv
 export default function ShiftsAdminPage() {
   const [pricingShift, setPricingShift] = useState<Shift | null>(null);
   const [pricingOccurrence, setPricingOccurrence] = useState<ShiftOccurrence | undefined>();
-  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [shiftPage, setShiftPage] = useState(1);
+  const [pageRows, setPageRows] = useState<Shift[]>([]);
+  const [pageTotal, setPageTotal] = useState(0);
+  const [tabCounts, setTabCounts] = useState<{ active: number; completed: number; inactive: number } | null>(null);
+  const [workspaceFetched, setWorkspaceFetched] = useState<Shift | null>(null);
   const [loading, setLoading] = useState(true);
   const [lifecycle, setLifecycle] = useState<LifecycleStatus>('active');
   const [listError, setListError] = useState('');
@@ -191,11 +195,18 @@ export default function ShiftsAdminPage() {
   const loadAssignmentCounts = () => adminShifts.assignmentCounts()
     .then(counts => { setAssignmentCounts(counts); setCountError(''); })
     .catch((failure: Error) => { setAssignmentCounts(null); setCountError(failure.message); });
-  const load = () => adminShifts.list(undefined, undefined, true).then((r) => {
-    if (r) { setShifts(r); void loadAssignmentCounts(); }
+  // Only the newest tab/page request may update the list, so a slow earlier response cannot show the wrong tab.
+  const loadSeq = useRef(0);
+  const load = () => { const seq = ++loadSeq.current; setLoading(true); return adminShifts.page({ tab: lifecycle, skip: (shiftPage - 1) * PAGE_SIZE, take: PAGE_SIZE }).then((r) => {
+    if (seq !== loadSeq.current) return;
+    // A reply without the paged shape cannot be shown; say so and keep the retry path instead of crashing the screen.
+    if (!r || !Array.isArray(r.items) || typeof r.total !== 'number' || !r.counts) throw new Error('The shift list could not be read. Refresh the page to retry.');
+    setPageRows(r.items); setPageTotal(r.total); setTabCounts(r.counts); setListError(''); void loadAssignmentCounts();
     setLoading(false);
-  });
-  useEffect(() => { load(); adminTenant.get().then(profile => {
+  }).catch((failure: Error) => { if (seq !== loadSeq.current) return; setListError(failure.message); setLoading(false); }); };
+  // Reload the current tab and page whenever either changes, and once on mount.
+  useEffect(() => { void load(); }, [lifecycle, shiftPage]);
+  useEffect(() => { adminTenant.get().then(profile => {
     if (!profile) throw new Error('Could not load scheduling settings. Refresh the page to retry.');
     const zone = profile.timeZoneId?.trim() || 'Europe/Helsinki';
     new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(new Date());
@@ -207,38 +218,29 @@ export default function ShiftsAdminPage() {
     setAssignOpen(null); setAssignSel([]); setAssignLoading(false);
     setAssignError(''); setAssignStatus('');
   };
-  const [shiftPage, setShiftPage] = useState(1);
   const changeLifecycle = (status: LifecycleStatus) => {
     if (status === lifecycle) return;
     closeAssignments(); setTemplateShift(null); setLifecycle(status); setShiftPage(1);
   };
 
-  // Performance Optimization: Memoize visible shifts and counts to avoid recalculating
-  // filtered arrays on every component render (e.g., input updates in modals or selection state changes).
-  const visibleShifts = useMemo(
-    () => shifts.filter((s) => shiftView(s) === lifecycle),
-    [shifts, lifecycle]
-  );
+  // The server pages and counts the tabs, so the page only holds the current slice.
+  const shiftPageCount = Math.max(1, Math.ceil(pageTotal / PAGE_SIZE));
   // Keep the stored page in range when the list shrinks (deactivate, delete, reload), so later growth
   // does not jump to a stale page.
   useEffect(() => {
-    const last = Math.max(1, Math.ceil(visibleShifts.length / PAGE_SIZE));
-    if (shiftPage > last) setShiftPage(last);
-  }, [visibleShifts.length, shiftPage]);
+    if (shiftPage > shiftPageCount) setShiftPage(shiftPageCount);
+  }, [shiftPageCount, shiftPage]);
+  // A shift opened from the workspace may fall outside the current page; fetch it so its panel still works.
+  useEffect(() => {
+    if (!workspaceId || pageRows.some(s => s.id === workspaceId)) { setWorkspaceFetched(null); return; }
+    let cancelled = false;
+    adminShifts.get(workspaceId).then(shift => { if (!cancelled) setWorkspaceFetched(shift ?? null); }).catch(() => { if (!cancelled) setWorkspaceFetched(null); });
+    return () => { cancelled = true; };
+  }, [workspaceId, pageRows]);
 
-  const { activeCount, completedCount, inactiveCount } = useMemo(() => {
-    if (loading) return { activeCount: undefined, completedCount: undefined, inactiveCount: undefined };
-    let active = 0;
-    let completed = 0;
-    let inactive = 0;
-    for (const s of shifts) {
-      const view = shiftView(s);
-      if (view === 'inactive') inactive++;
-      else if (view === 'completed') completed++;
-      else active++;
-    }
-    return { activeCount: active, completedCount: completed, inactiveCount: inactive };
-  }, [loading, shifts]);
+  const activeCount = loading ? undefined : tabCounts?.active;
+  const completedCount = loading ? undefined : tabCounts?.completed;
+  const inactiveCount = loading ? undefined : tabCounts?.inactive;
 
   useEffect(() => {
     adminEmployees.list().then((e) => { if (e) setEmployees(e.filter(person => person.role !== 'partner')); });
@@ -438,9 +440,9 @@ export default function ShiftsAdminPage() {
       const nextDayUtc = tenantLocalToUtc(`${addCalendarDays(toDate, 1)}T00:00`, timeZoneId);
       const toUtc = new Date(Date.parse(nextDayUtc) - 1).toISOString();
       const result = await adminShifts.occurrences(shift.id, fromUtc, toUtc);
-      if (!result) throw new Error('Could not load occurrences.');
+      if (!result) throw new Error('The visits could not be loaded. Close this window and open it again to retry.');
       if (version === occurrenceGeneration.current) setOccurrences(result);
-    } catch (failure) { if (version === occurrenceGeneration.current) setOccurrenceError(failure instanceof Error ? failure.message : 'Could not load occurrences.'); }
+    } catch (failure) { if (version === occurrenceGeneration.current) setOccurrenceError(failure instanceof Error ? failure.message : 'The visits could not be loaded. Close this window and open it again to retry.'); }
     finally { if (version === occurrenceGeneration.current) setOccurrenceLoading(false); }
   };
 
@@ -492,7 +494,7 @@ export default function ShiftsAdminPage() {
   };
 
   // Workspace actions close the workspace first, so each existing dialog or panel opens alone.
-  const workspaceShift = workspaceId ? shifts.find(s => s.id === workspaceId) ?? null : null;
+  const workspaceShift = workspaceId ? pageRows.find(s => s.id === workspaceId) ?? workspaceFetched : null;
   const fromWorkspace = (action: (shift: Shift) => void) => () => {
     if (!workspaceShift) return;
     setWorkspaceId(null);
@@ -511,8 +513,8 @@ export default function ShiftsAdminPage() {
 
       <LifecycleTabs value={lifecycle} onChange={changeLifecycle} label="Shift activity" disabled={assignBusy || templateSaving}
         showCompleted activeCount={activeCount} completedCount={completedCount} inactiveCount={inactiveCount}>
-      {loading ? <Loader /> : visibleShifts.length === 0 ? (
-        <Text c="dimmed">{shifts.length === 0 ? 'No shifts yet.' : `No ${lifecycle} shifts. Check the ${lifecycle === 'active' ? 'Inactive' : 'Active'} tab.`}</Text>
+      {loading ? <Loader /> : pageTotal === 0 ? (
+        <Text c="dimmed">{(tabCounts?.active ?? 0) + (tabCounts?.completed ?? 0) + (tabCounts?.inactive ?? 0) === 0 ? 'No shifts yet.' : `No ${lifecycle} shifts. Check the ${lifecycle === 'active' ? 'Inactive' : 'Active'} tab.`}</Text>
       ) : (<>
         <Text size="xs" c="dimmed" hiddenFrom="sm" mb={6}>Scroll sideways to see all columns.</Text>
         <Table.ScrollContainer minWidth={600} tabIndex={0} role="region" aria-label="Shifts table">
@@ -521,7 +523,7 @@ export default function ShiftsAdminPage() {
               <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Schedule</Table.Th><Table.Th>Employees</Table.Th><Table.Th>Status</Table.Th><Table.Th w={200}>Actions</Table.Th></Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {paginate(visibleShifts, shiftPage).pageItems.map((s) => (
+              {pageRows.map((s) => (
                 <Fragment key={s.id}>
                   <Table.Tr>
                     <Table.Td fw={500}>{s.name}</Table.Td>
@@ -598,7 +600,7 @@ export default function ShiftsAdminPage() {
             </Table.Tbody>
           </Table>
         </Table.ScrollContainer>
-        <ListPager label="Shifts" total={visibleShifts.length} page={paginate(visibleShifts, shiftPage).page} pageCount={paginate(visibleShifts, shiftPage).pageCount} onPage={setShiftPage} /></>
+        <ListPager label="Shifts" total={pageTotal} page={shiftPage} pageCount={shiftPageCount} onPage={setShiftPage} /></>
       )}
       </LifecycleTabs>
 

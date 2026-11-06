@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, shiftsResponse } from './admin-helpers';
 import type { Branch } from '../src/lib/adminApi';
 import type { CleanerOffer, CleaningRequest, PartnerChange } from '../src/lib/partnerApi';
 import type { InvoiceIssuer, ShiftInvoice, ShiftInvoiceInput } from '../src/lib/invoiceBillingApi';
@@ -64,7 +64,7 @@ test('completion month offers exactly 36 months without older shifts and can be 
   await setupAdminMocks(page); await companies(page);
   const issuer: InvoiceIssuer = { companyName: 'ReadySetSiivous', businessId: '3404861-9', companyAddress: { street: 'Issuer road 1', postalCode: '00100', city: 'Helsinki', country: 'FI' }, email: 'office@example.test', phone: '', bankAccountIBAN: 'FI2112345600000785', bankBic: 'NDEAFIHH', paymentTermsDays: 14, defaultVatRatePercent: 25.5 };
   const previews: ShiftInvoiceInput[] = [];
-  await page.route(/\/api\/v1\/admin\/shifts(?:\?.*)?$/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/admin\/shifts(?:\/page)?(?:\?.*)?$/, route => route.fulfill({ headers, json: shiftsResponse([], route.request().url()) }));
   await page.route(/\/api\/v1\/admin\/invoices(?:\/.*)?$/, route => {
     const req = route.request(), path = new URL(req.url()).pathname.split('/invoices')[1];
     if (req.method() === 'OPTIONS') return route.fulfill({ headers });
@@ -108,7 +108,7 @@ test('partner month previews all company visits and issues the exact approved pa
   let records: ShiftInvoice[] = [];
   // An old shift for the company extends the month list past the default 36-month window.
   const oldShift = { id: 'old-shift', companyId, branchId: branch.id, name: 'Old lake cleaning', schedule: {}, isActive: false, validFrom: '2021-03-10' };
-  await page.route(/\/api\/v1\/admin\/shifts(?:\?.*)?$/, route => route.fulfill({ headers, json: [oldShift] }));
+  await page.route(/\/api\/v1\/admin\/shifts(?:\/page)?(?:\?.*)?$/, route => route.fulfill({ headers, json: shiftsResponse([oldShift], route.request().url()) }));
   await page.route(/\/api\/v1\/admin\/invoices(?:\/.*)?$/, route => {
     const req = route.request(), path = new URL(req.url()).pathname.split('/invoices')[1];
     if (req.method() === 'OPTIONS') return route.fulfill({ headers });
@@ -171,7 +171,7 @@ test('a month with several completed visits of one shift previews one line per v
     { ...baseLine, lineKey: 'occ-3', branchId: branch.id, shiftName: 'Lake apartment cleaning', quantity: 1, occurrences: 1, unitPriceNet: 40, netAmount: 40, vatAmount: 10.2, total: 50.2, periodFrom: '2026-10-12', periodTo: '2026-10-12', completedOn: '2026-10-12' },
   ];
   preview.total = { net: 120, vat: 30.6, gross: 150.6 };
-  await page.route(/\/api\/v1\/admin\/shifts(?:\?.*)?$/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/admin\/shifts(?:\/page)?(?:\?.*)?$/, route => route.fulfill({ headers, json: shiftsResponse([], route.request().url()) }));
   await page.route(/\/api\/v1\/admin\/invoices(?:\/.*)?$/, route => {
     const req = route.request(), path = new URL(req.url()).pathname.split('/invoices')[1];
     if (req.method() === 'OPTIONS') return route.fulfill({ headers });

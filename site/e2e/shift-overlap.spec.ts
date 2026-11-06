@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
 import { shiftAction } from './shift-actions';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,PUT,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
@@ -16,10 +16,10 @@ async function setup(page: Page, clashHolders: string[] = ['cleaner'], options: 
   await page.route(/\/api\/v1\/admin\//, route => {
     const request = route.request(); const path = new URL(request.url()).pathname;
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
-    const json = path.endsWith('/shifts') ? [
+    const json = isShiftsRoute(path) ? shiftsResponse([
       { id: 'shift', name: 'Morning clean', companyId: 'company', branchId: 'branch', isActive: true, schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' } },
       { id: 'other', name: 'Evening deep clean', companyId: 'company', branchId: 'branch', isActive: true, schedule: { type: 0, dailyStart: '08:30', dailyEnd: '10:30' } },
-    ] : path.endsWith('/employees') ? [
+    ], route.request().url()) : path.endsWith('/employees') ? [
       { id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true },
       { id: 'second', firstName: 'Second', lastName: 'Cleaner', role: 'employee', isActive: true },
     ] : path.endsWith('/companies') ? { items: [], total: 0 }

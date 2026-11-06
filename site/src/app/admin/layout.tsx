@@ -65,7 +65,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       const response = await fetch(`${API_URL}/api/v1/me`, { headers: { Authorization: `Bearer ${bearer}` }, cache: 'no-store' });
       if (attempt !== verification.current) return;
       if (response.status === 401 || response.status === 403) { setAccess('denied'); return; }
-      if (!response.ok) throw new Error('Identity verification unavailable');
+      if (!response.ok) throw new Error('Could not verify your admin access right now. Refresh the page to retry.');
       const identity = await response.json();
       setCanUseShiftCalendar(identity.canUseShiftCalendar === true);
       const hasAdmin = Array.isArray(identity.roles) && identity.roles.some((value: unknown) => {

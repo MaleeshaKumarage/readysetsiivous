@@ -13,6 +13,8 @@ export default function EntertainmentClient() {
   const [session, setSession] = useState<EntertainmentSession | null>(() => loadEntertainmentSession());
   const [view, setView] = useState<View>(() => loadEntertainmentSession() ? 'lobby' : 'landing');
   const [lobby, setLobby] = useState<Lobby | null>(null);
+  const [lobbyError, setLobbyError] = useState<string | null>(null);
+  const [lobbyAttempt, setLobbyAttempt] = useState(0);
   const [round, setRound] = useState<RoundStarted | null>(null);
   const [answer, setAnswer] = useState('');
   const [evaluation, setEvaluation] = useState<AnswerEvaluation | null>(null);
@@ -29,11 +31,19 @@ export default function EntertainmentClient() {
   const roundRef = useRef<RoundStarted | null>(null);
   const busyRef = useRef(false);
   const pendingRef = useRef<{ method: string; args: unknown[] } | null>(null);
+  // The lobby is loaded separately from the live connection, so a failed load can be retried without reconnecting.
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    setLobbyError(null);
+    getEntertainmentLobby(session.groupId).then(l => { if (!cancelled) setLobby(l); })
+      .catch(() => { if (!cancelled) setLobbyError('The lobby could not be loaded. Check your connection, then retry.'); });
+    return () => { cancelled = true; };
+  }, [session?.groupId, lobbyAttempt]);
   useEffect(() => {
     if (!session) return;
     let cancelled = false;
     const connection = createEntertainmentHub(); connectionRef.current = connection;
-    getEntertainmentLobby(session.groupId).then(l => { if (!cancelled) setLobby(l); }).catch(() => {});
     connection.on('lobbyUpdated', (l: Lobby) => setLobby(l));
     connection.on('roundStarted', (r: RoundStarted) => {
       const current = roundRef.current;
@@ -100,6 +110,7 @@ export default function EntertainmentClient() {
       {!connected && <Button onClick={() => setSession(session ? { ...session } : null)}>Reconnect</Button>}</div>}
     {busy && <p role="status">Working…</p>}
     {view === 'lobby' && session && <Card padding="lg" className="space-y-4"><h2>{lobby?.groupName || 'Lobby'}</h2>
+      {lobbyError && <div role="alert"><p>{lobbyError}</p><Button onClick={() => setLobbyAttempt(attempt => attempt + 1)}>Retry loading lobby</Button></div>}
       {session.joinKey && <><p className="text-3xl">{session.joinKey}</p><Button onClick={() => void navigator.clipboard.writeText(session.joinKey!)}>Copy key</Button>
         <Button onClick={() => void navigator.clipboard.writeText(`${window.location.origin}/entertainment/?join=${encodeURIComponent(session.joinKey!)}`)}>Copy join link</Button></>}
       {!lobby?.players.length && <p>Waiting for players to join...</p>}

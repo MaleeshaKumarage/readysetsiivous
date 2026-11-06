@@ -46,7 +46,7 @@ for (const scheme of ['light', 'dark'] as const) test.describe(`admin with ${sch
   test('all admin sections retain readable headings', async ({ page }) => {
     await page.route('**/api/v1/admin/**', route => {
       const path = new URL(route.request().url()).pathname;
-      return route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' }, json: path.endsWith('/legacy-repairs') ? { agreements: [] } : path.endsWith('/companies') ? { items: [], total: 0 } : path.endsWith('/issuer') ? null : [] });
+      return route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' }, json: path.endsWith('/legacy-repairs') ? { agreements: [] } : path.endsWith('/companies') ? { items: [], total: 0 } : path.endsWith('/issuer') ? null : path.endsWith('/shifts/page') ? { items: [], total: 0, counts: { active: 0, completed: 0, inactive: 0 } } : [] });
     });
     await setupAdminMocks(page); await standaloneDarkSite(page);
     for (const [path, title] of [['companies', 'Companies'], ['shifts', 'Shifts'], ['employees', 'Employees'], ['invoices', 'Invoices'], ['agreements', 'Agreements'], ['services', 'Services'], ['quality-cycle', 'Quality Cycle Management']]) {

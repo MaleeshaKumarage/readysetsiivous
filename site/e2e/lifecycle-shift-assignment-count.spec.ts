@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, shiftsResponse } from './admin-helpers';
 import { shiftRowAction } from './shift-actions';
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS' };
@@ -28,7 +28,7 @@ async function mockShifts(page: Page, counts: { status: number; json?: unknown }
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS });
     if (url.includes('/assignment-counts')) { calls.counts++; return route.fulfill({ status: counts.status, headers: CORS, json: counts.json ?? {} }); }
     if (/\/shifts\/[^/]+\/assignments/.test(url)) { calls.perShift++; return route.fulfill({ status: 200, headers: CORS, json: assignments }); }
-    return route.fulfill({ status: 200, headers: CORS, json: shifts });
+    return route.fulfill({ status: 200, headers: CORS, json: shiftsResponse(shifts, url) });
   });
   return calls;
 }

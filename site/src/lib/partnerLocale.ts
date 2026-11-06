@@ -116,11 +116,20 @@ const fi: Record<keyof typeof en, string> = {
 };
 
 export const partnerCopy = { en, fi };
+// Several field errors arrive joined by spaces (see partnerSend); translate each sentence on its own.
 export function partnerMessage(message: string, language: PartnerLanguage): string {
-  if (!message) return message;
-  // Several field errors arrive joined by newlines; translate each one separately.
-  if (message.includes('\n')) return message.split('\n').map(part => partnerMessage(part, language)).join(' ');
-  if (language === 'en') return message;
+  if (language === 'en' || !message) return message;
+  const direct = knownTranslation(message);
+  if (direct) return direct;
+  const sentences = message.match(/[^.!?]+[.!?]+/g);
+  if (sentences && sentences.length > 1 && sentences.join('') === message) {
+    const parts = sentences.map(sentence => knownTranslation(sentence.trim()));
+    if (parts.every((part): part is string => Boolean(part))) return parts.join(' ');
+  }
+  return fi.operationFailed;
+}
+
+function knownTranslation(message: string): string | undefined {
   const key = (Object.keys(en) as (keyof typeof en)[]).find(key => en[key] === message);
   if (key) return fi[key];
   const known: Record<string, string> = {
@@ -155,7 +164,7 @@ export function partnerMessage(message: string, language: PartnerLanguage): stri
   if (known[message]) return known[message];
   if (/Request failed \((401|403)\)/.test(message)) return fi.accessError;
   if (/Request failed \(404\)/.test(message)) return fi.notFound;
-  return fi.operationFailed;
+  return undefined;
 }
 
 export function partnerStatus(value: string, language: PartnerLanguage): string {

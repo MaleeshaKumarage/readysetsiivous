@@ -126,7 +126,7 @@ export default function EmployeesAdminPage() {
     }
     const created = await adminEmployees.create(fields);
     setSaving(false);
-    if (!created) { setError('Failed to create employee.'); return; }
+    if (!created) { setError('The employee was not created. Check the name and email, then save again.'); return; }
     setLifecycle('active');
     setForm({ email: '', firstName: '', lastName: '', phone: '', role: 'employee', partnerCompanyId: '' });
     setModalOpen(false); await load();

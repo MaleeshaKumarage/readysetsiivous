@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { shiftAction } from './shift-actions';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const companies = Array.from({ length: 130 }, (_, index) => ({ id: `company-${index + 1}`, name: `Company ${String(index + 1).padStart(3, '0')}`, businessId: `B-${index + 1}`, isActive: true }));
@@ -43,7 +43,7 @@ async function setup(page: Page, options: { inactiveEdit?: boolean; inactiveSear
       return route.fulfill({ headers, json: { id: 'agreement', title: 'Agreement', signers: [], signerCount: 0, signedCount: 0, code: 'AGR', isActive: true, status: 'Pending' } });
     }
     return route.fulfill({ headers, json: path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' }
-      : path.endsWith('/shifts') && options.inactiveEdit ? [{ id: 'old-shift', name: 'Old shift', companyId: 'company-125', branchId: 'branch-company-125', isActive: false, validFrom: '2026-01-01', schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' } }]
+      : isShiftsRoute(path) ? shiftsResponse(options.inactiveEdit ? [{ id: 'old-shift', name: 'Old shift', companyId: 'company-125', branchId: 'branch-company-125', isActive: false, validFrom: '2026-01-01', schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' } }] : [], request.url())
       : path.endsWith('/legacy-repairs') ? { agreements: [], companies: [] } : [] });
   });
   return { state, queries, writes };

@@ -21,6 +21,10 @@ export default function CompaniesAdminPage() {
   const [branchStatus, setBranchStatus] = useState<LifecycleStatus>('active');
   const [actionError, setActionError] = useState('');
   const [actionBusy, setActionBusy] = useState<string | null>(null);
+  // Offered when a deactivate or delete is refused because of the company's shifts or places.
+  const [relatedPrompt, setRelatedPrompt] = useState<{ company: Company; action: 'deactivate' | 'delete'; reason: string } | null>(null);
+  const [relatedBusy, setRelatedBusy] = useState(false);
+  const [relatedError, setRelatedError] = useState('');
   const [listError, setListError] = useState('');
   const loadGeneration = useRef(0);
   const branchGeneration = useRef(0);
@@ -216,6 +220,10 @@ export default function CompaniesAdminPage() {
     setBranchError(''); setBranchModal(true);
   };
 
+  const isConflict = (failure: unknown) => failure instanceof Error && (failure as { status?: number }).status === 409;
+  // Only refusals caused by the company's own shifts or places are offered the clear option; partner or agreement refusals are not.
+  const clearableReason = (message: string) => /shift|branch|place/i.test(message) && !/partner|agreement/i.test(message);
+
   const changeActivity = async (id: string, active: boolean, companyId?: string) => {
     setActionBusy(id); setActionError('');
     try {
@@ -224,7 +232,10 @@ export default function CompaniesAdminPage() {
       if (companyId) await loadBranches(companyId);
       else { setExpanded(null); setPinned(null); await reload(); }
     } catch (failure) {
-      setActionError(failure instanceof Error ? failure.message : 'Could not change activity. Please retry.');
+      const message = failure instanceof Error ? failure.message : 'Could not change activity. Please retry.';
+      setActionError(message);
+      const company = companies.find(c => c.id === id);
+      if (!companyId && active && company && isConflict(failure) && clearableReason(message)) setRelatedPrompt({ company, action: 'deactivate', reason: message });
     } finally { setActionBusy(null); }
   };
 
@@ -232,8 +243,49 @@ export default function CompaniesAdminPage() {
     if (!window.confirm(`Permanently delete inactive company “${company.name}”? Companies with branches or business history are retained.`)) return;
     setActionBusy(company.id); setActionError('');
     try { await adminCompanies.deleteInactive(company.id); setExpanded(null); setPinned(null); await reload(); }
-    catch (failure) { setActionError(failure instanceof Error ? failure.message : 'Could not delete company. Please retry.'); }
+    catch (failure) {
+      const message = failure instanceof Error ? failure.message : 'Could not delete company. Please retry.';
+      setActionError(message);
+      if (isConflict(failure) && clearableReason(message)) setRelatedPrompt({ company, action: 'delete', reason: message });
+    }
     finally { setActionBusy(null); }
+  };
+
+  const closeRelatedPrompt = () => { setRelatedPrompt(null); setRelatedError(''); };
+
+  // Clears the shifts, unassigns employees and removes every place, then finishes the original action.
+  // Every view that showed the company's shifts or places is reset so nothing stale remains on screen.
+  const clearRelatedAndContinue = async () => {
+    if (!relatedPrompt) return;
+    const { company, action } = relatedPrompt;
+    setRelatedBusy(true); setRelatedError('');
+    let clearFailure: unknown = null;
+    try {
+      await adminCompanies.clearRelated(company.id);
+    } catch (failure) {
+      clearFailure = failure;
+    }
+    // A clear that stopped part way has already removed some rows, so the cached branch panel and the list are stale either way.
+    setCompanyBranchesMap(current => { const next = { ...current }; delete next[company.id]; return next; });
+    setBranchLoadError(''); setBranchLoading(null); branchGeneration.current++;
+    setExpanded(null); setPinned(null);
+    if (clearFailure) {
+      setRelatedError(clearFailure instanceof Error ? clearFailure.message : 'Could not clear related shifts and places. Please retry.');
+      setRelatedBusy(false);
+      await reload();
+      return;
+    }
+    try {
+      if (action === 'deactivate') await companyLifecycle.deactivate(company.id);
+      else await adminCompanies.deleteInactive(company.id);
+      closeRelatedPrompt();
+    } catch (failure) {
+      closeRelatedPrompt();
+      setActionError(failure instanceof Error ? failure.message : 'Shifts and places were cleared, but the company could not be finished. Please retry.');
+    } finally {
+      setRelatedBusy(false);
+      await reload();
+    }
   };
 
   const deleteBranch = async (branch: Branch, companyId: string) => {
@@ -364,6 +416,18 @@ export default function CompaniesAdminPage() {
             <Button loading={saving} onClick={submit}>{editingCompany ? 'Save changes' : 'Create company'}</Button>
           </Group>
         </Stack>
+      </Modal>
+
+      <Modal opened={!!relatedPrompt} onClose={() => { if (!relatedBusy) closeRelatedPrompt(); }} title="Clear related shifts and places?" radius="md">
+        {relatedPrompt && (
+          <Stack gap="sm">
+            <Text>{relatedPrompt.reason}</Text>
+            <Text size="sm" c="dimmed">Choose the first option to delete this company&apos;s related shifts, unassign every employee from them and clear all its places. If any shift or place has visit, checklist, partner or agreement history, the clear is refused and nothing is changed.</Text>
+            {relatedError && <Text c="red" role="alert">{relatedError}</Text>}
+            <Button color="red" loading={relatedBusy} onClick={() => void clearRelatedAndContinue()}>Delete related shifts, unassign employees and clear all places</Button>
+            <Button variant="default" disabled={relatedBusy} onClick={closeRelatedPrompt}>Skip deletion</Button>
+          </Stack>
+        )}
       </Modal>
 
       <Modal opened={branchModal} onClose={() => { setBranchModal(false); setEditingBranch(null); }} title={editingBranch ? 'Edit branch' : 'Add branch'} radius="md">

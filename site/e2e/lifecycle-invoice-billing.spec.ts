@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { shiftAction } from './shift-actions';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const shift = { id: 'shift', companyId: 'company', branchId: 'branch', name: 'Biweekly', isActive: true, validFrom: '2026-10-01', schedule: { type: 3 } };
@@ -15,7 +15,7 @@ async function setup(page: Page, options: { failPreview?: boolean; delayPreview?
     if (path.endsWith('/shift-preview')) { calls.previews.push(body); if (options.delayPreview) await new Promise(resolve => setTimeout(resolve, 600)); return route.fulfill({ status: options.failPreview ? 409 : 200, headers, json: options.failPreview ? { detail: 'No pricing is configured for this billing period.' } : invoice }); }
     if (path.endsWith('/invoices/shifts')) { calls.issues.push(body); issued = true; return route.fulfill({ headers, json: invoice }); }
     if (path.endsWith('/pricing')) { if (body) calls.pricing.push(body); return route.fulfill({ headers, json: { plans: body ? [body] : [], overrides: [] } }); }
-    return route.fulfill({ headers, json: path.endsWith('/issuer') ? issuer : path.endsWith('/invoices') ? issued ? [invoice] : [] : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'Methehe', isActive: true, isPartnerEnabled: false }], total: 1 } : path.endsWith('/shifts') ? [shift] : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
+    return route.fulfill({ headers, json: path.endsWith('/issuer') ? issuer : path.endsWith('/invoices') ? issued ? [invoice] : [] : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'Methehe', isActive: true, isPartnerEnabled: false }], total: 1 } : isShiftsRoute(path) ? shiftsResponse([shift], route.request().url()) : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
   });
   return calls;
 }
@@ -152,7 +152,7 @@ test('invoice PDF downloads and paid or void actions refresh status with explici
 
 test('on-call occurrence price requires a reason and saves only that visit', async ({ page }) => {
   await setup(page); const writes: any[] = []; const visit = { startUtc: '2026-10-20T13:00:00Z', endUtc: '2026-10-20T15:00:00Z', assigneeIds: [] };
-  await page.route(/\/api\/v1\/admin\/shifts(?:\?.*)?$/, route => route.fulfill({ headers, json: [{ ...shift, schedule: { type: 4 } }] }));
+  await page.route(/\/api\/v1\/admin\/shifts(?:\/page)?(?:\?.*)?$/, route => route.fulfill({ headers, json: shiftsResponse([{ ...shift, schedule: { type: 4 } }], route.request().url()) }));
   await page.route(/\/api\/v1\/admin\/shifts\/shift\/(?:occurrences|occurrence-price)(?:\?.*)?$/, route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
     if (route.request().method() === 'PUT') { writes.push(route.request().postDataJSON()); return route.fulfill({ headers, json: {} }); }

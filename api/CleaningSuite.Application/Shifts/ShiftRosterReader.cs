@@ -19,12 +19,20 @@ public static class ShiftRosterReader
         Shift shift, DateTime from, DateTime to, TimeZoneInfo zone, CancellationToken ct,
         bool includeCancelled = false, IEnumerable<ShiftAssignment>? fallbackAssignments = null)
     {
-        var (localFrom, localTo) = TenantTimeZone.LocalDatesForUtcRange(from, to, zone);
         var exceptions = await shifts.ListOccurrenceExceptionsAsync(shift.Id, from, to, ct) ?? Array.Empty<ShiftOccurrenceException>();
         var history = await shifts.ListAssignmentHistoryAsync(shift.Id, ct) ?? Array.Empty<ShiftAssignment>();
+        var overrides = await shifts.ListOccurrenceAssignmentsAsync(shift.Id, ct) ?? Array.Empty<ShiftOccurrenceAssignment>();
+        return ResolveRoster(shift, from, to, zone, exceptions, history, overrides, includeCancelled, fallbackAssignments);
+    }
+
+    /// <summary>Pure roster resolution from already-loaded records. Lets a caller load many shifts' records in one query each.</summary>
+    public static IReadOnlyList<ShiftVisitRosterEntry> ResolveRoster(Shift shift, DateTime from, DateTime to, TimeZoneInfo zone,
+        IReadOnlyList<ShiftOccurrenceException> exceptions, IReadOnlyList<ShiftAssignment> history,
+        IReadOnlyList<ShiftOccurrenceAssignment> overrides, bool includeCancelled = false, IEnumerable<ShiftAssignment>? fallbackAssignments = null)
+    {
+        var (localFrom, localTo) = TenantTimeZone.LocalDatesForUtcRange(from, to, zone);
         var assignments = history.Concat(fallbackAssignments ?? Array.Empty<ShiftAssignment>())
             .GroupBy(x => (x.Id, x.EmployeeId)).Select(g => g.First());
-        var overrides = await shifts.ListOccurrenceAssignmentsAsync(shift.Id, ct) ?? Array.Empty<ShiftOccurrenceAssignment>();
         return ShiftVisitRoster.Resolve(shift.Id, ShiftScheduleCalculator.GenerateOccurrences(shift, localFrom, localTo, zone),
                 exceptions, assignments, overrides, includeCancelled, shift.ValidFrom.HasValue ? TenantTimeZone.StartOfLocalDay(shift.ValidFrom.Value.Date, zone) : null)
             .Where(x => x.Occurrence.StartUtc >= from && x.Occurrence.StartUtc < to).ToList();

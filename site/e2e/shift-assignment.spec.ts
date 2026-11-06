@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
 import { shiftActionAt } from './shift-actions';
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const people = [
@@ -44,7 +44,7 @@ async function setup(page: Page, options: { failure?: Failure; partial?: boolean
       if (fail === 'saved-network') return route.abort('failed');
       return route.fulfill({ status: 200, headers, json: assigned.at(-1) });
     }
-    const json = path.endsWith('/shifts') ? ['one', 'two'].map(id => ({ id, name: 'Shift ' + id, schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' }, isActive: true }))
+    const json = isShiftsRoute(path) ? shiftsResponse(['one', 'two'].map(id => ({ id, name: 'Shift ' + id, schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' }, isActive: true })), route.request().url())
       : path.endsWith('/employees') ? (options.managementPeople ? [...people,
           { id: 'working-admin', firstName: 'Working', lastName: 'Admin', role: 'admin', isActive: true },
           { id: 'working-manager', firstName: 'Working', lastName: 'Manager', role: 'manager', isActive: true }] : people) : path.endsWith('/companies') ? { items: [], total: 0 } : [];

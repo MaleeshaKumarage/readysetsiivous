@@ -35,7 +35,7 @@ public class ShiftsAdminController : ControllerBase
     { await billing.SaveOccurrenceAsync(id, price, ct); return NoContent(); }
 
     [HttpGet]
-    [OutputCache(Duration = 30)]
+    [OutputCache(Duration = 30, Tags = new[] { "shifts" })]
     public async Task<IActionResult> List(
         [FromQuery] Guid? companyId,
         [FromQuery] Guid? branchId,
@@ -43,6 +43,24 @@ public class ShiftsAdminController : ControllerBase
     {
         var result = await _mediator.Send(new ListShiftsQuery(companyId, branchId, includeInactive), ct);
         return Ok(result);
+    }
+
+    // One page of one tab, with counts for all tabs. Never cached: a save must show in the counts straight away.
+    [HttpGet("page")]
+    [OutputCache(NoStore = true)]
+    public async Task<IActionResult> Page(
+        [FromQuery] string tab = "active",
+        [FromQuery] Guid? companyId = null,
+        [FromQuery] Guid? branchId = null,
+        [FromQuery] string? q = null,
+        [FromQuery] int skip = 0,
+        [FromQuery] int take = 25,
+        CancellationToken ct = default)
+    {
+        if (!ShiftHandlers.ListShiftPageQueryHandler.Tabs.Contains(tab)) return BadRequest("Tab must be active, completed or inactive.");
+        skip = Math.Max(0, skip);
+        take = Math.Clamp(take, 1, 100);
+        return Ok(await _mediator.Send(new ListShiftPageQuery(tab, companyId, branchId, q, skip, take), ct));
     }
 
     [HttpGet("{id:guid}")]

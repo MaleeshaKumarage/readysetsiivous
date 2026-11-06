@@ -28,6 +28,32 @@ public class PushReminderEligibilityTests
     }
 
     [Theory]
+    [InlineData("Unstarted1h", 0, true)]
+    [InlineData("Unstarted1h", 59, true)]
+    [InlineData("Unstarted1h", 60, false)]
+    [InlineData("Unstarted1h", -1, false)]
+    [InlineData("Unstarted12h", 59, true)]
+    [InlineData("Unstarted12h", 60, false)]
+    [InlineData("Unstarted24h", 0, true)]
+    [InlineData("Unstarted24h", 60, false)]
+    public async Task Unstarted_reminders_are_due_one_hour_after_their_offset(string kind, int minutesAfterDue, bool expected)
+    {
+        var fixture = Create(kind, minutesAfterDue);
+        Assert.Equal(expected, await fixture.Scheduler.IsEligibleAsync(fixture.Intent));
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task Unstarted_reminder_stops_once_this_employee_starts_or_submits_the_visit(bool started, bool submitted)
+    {
+        var fixture = Create("Unstarted12h", 1);
+        fixture.Evidence.StartedAtUtc = started ? fixture.Intent.OccurrenceStartUtc : null;
+        fixture.Evidence.IsSubmitted = submitted;
+        Assert.False(await fixture.Scheduler.IsEligibleAsync(fixture.Intent));
+    }
+
+    [Theory]
     [InlineData("Upcoming", true, false, false, false)]
     [InlineData("Upcoming", false, true, false, false)]
     [InlineData("Unfinished", false, false, false, false)]
@@ -60,7 +86,12 @@ public class PushReminderEligibilityTests
         var end = start.AddHours(6); var employee = Guid.NewGuid();
         var shift = new Shift { IsActive = true, Schedule = new() { Type = ShiftScheduleType.OnCallFlexible } };
         var visit = ShiftOccurrenceException.Create(shift.Id, null, start, end, ShiftOccurrenceExceptionStatus.Extra, "test", employee);
-        var due = kind == "Upcoming" ? start.AddMinutes(-30) : end.AddMinutes(30);
+        var due = kind switch
+        {
+            "Upcoming" => start.AddMinutes(-30),
+            "Unfinished" => end.AddMinutes(30),
+            _ => start.AddHours(kind switch { "Unstarted1h" => 1, "Unstarted12h" => 12, _ => 24 }),
+        };
         var intent = new PushIntent { Kind = kind, EmployeeId = employee, ShiftId = shift.Id, ExtraExceptionId = visit.Id,
             OccurrenceStartUtc = start, OccurrenceEndUtc = end, DueUtc = due,
             ExpiresUtc = kind == "Upcoming" ? start : due.AddMinutes(60) };
