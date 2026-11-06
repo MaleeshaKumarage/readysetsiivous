@@ -50,7 +50,7 @@ public class AvailabilityEngine
         string tenantId, string localDate, Guid serviceId, CancellationToken ct)
     {
         var service = await _services.GetByIdAsync(serviceId, ct)
-            ?? throw new NotFoundException("Service", serviceId);
+            ?? throw new CleaningSuite.Application.Common.PublicServiceNotOfferedException();
 
         if (!service.IsActive)
             return Array.Empty<AvailabilitySlot>();
