@@ -7,12 +7,14 @@ import { Card } from '@/ds/Card';
 import { PartnerOffers } from '@/components/PartnerOffers';
 import { NotificationsPanel } from '@/components/NotificationsPanel';
 import { PwaInstallButton } from '@/components/PwaInstallButton';
+import { InventoryPanel } from '@/components/InventoryPanel';
 
-export type EmployeeSection = 'schedules' | 'offers' | 'settings';
+export type EmployeeSection = 'schedules' | 'offers' | 'inventory' | 'settings';
 
 const SECTIONS: { id: EmployeeSection; label: string }[] = [
   { id: 'schedules', label: 'Schedules' },
   { id: 'offers', label: 'Offers' },
+  { id: 'inventory', label: 'Inventory' },
   { id: 'settings', label: 'Settings' },
 ];
 
@@ -78,6 +80,14 @@ export function OffersSection({ autoAcceptWork, preferenceError, onRetryPreferen
       ) : (
         <PartnerOffers onAccepted={onAccepted} />
       )}
+    </div>
+  );
+}
+
+export function InventorySection() {
+  return (
+    <div id="employee-panel-inventory" role="tabpanel" aria-labelledby="employee-tab-inventory" className="space-y-6">
+      <InventoryPanel />
     </div>
   );
 }
