@@ -12,8 +12,8 @@ public sealed class DiskLeadFileStore(IConfiguration config,ITenantContext tenan
     private string PathFor(Guid leadId,LeadImage image)
     {
         if(image.Extension is not (".jpg" or ".png" or ".webp")) throw new LeadConflictException("Unsupported stored image format.");
-        var partition=Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(tenant.TenantId))).ToLowerInvariant();
-        return Path.Combine(config["Uploads:Path"]??Path.Combine(Directory.GetCurrentDirectory(),"uploads"),"leads",partition,leadId.ToString("N"),image.Id.ToString("N")+image.Extension);
+        var partition=CleaningSuite.Infrastructure.Uploads.TenantUploadPath.Partition(tenant.TenantId);
+        return Path.Combine(CleaningSuite.Infrastructure.Uploads.TenantUploadPath.Root(config),"leads",partition,leadId.ToString("N"),image.Id.ToString("N")+image.Extension);
     }
     public async Task SaveAsync(Guid leadId,LeadImage image,byte[] content,CancellationToken ct)
     {

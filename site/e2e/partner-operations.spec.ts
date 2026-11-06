@@ -203,7 +203,7 @@ test('cleaner declines an offer with its revision and reason then sees it remove
     if (req.method() === 'GET') return route.fulfill({ headers, json: offers });
     decisions.push({ path: new URL(req.url()).pathname, method: req.method(), body: req.postDataJSON() as { version: number; reason: string } }); offers = []; return route.fulfill({ status: 204, headers });
   });
-  await page.route(/\/api\/v1\/me\/work-preferences$/, route => route.fulfill({ headers, json: { autoAcceptWork: false } })); await page.goto('/me/shifts/'); await page.getByLabel('Decline reason (optional)').fill('Unavailable during checkout window'); await page.getByRole('button', { name: 'Decline cleaning', exact: true }).click();
+  await page.route(/\/api\/v1\/me\/work-preferences$/, route => route.fulfill({ headers, json: { autoAcceptWork: false } })); await page.goto('/me/shifts/'); await page.getByRole('tab', { name: 'Offers' }).click(); await page.getByLabel('Decline reason (optional)').fill('Unavailable during checkout window'); await page.getByRole('button', { name: 'Decline cleaning', exact: true }).click();
   await expect(page.getByText('No pending cleaning offers.', { exact: true })).toBeVisible();
   await expect(page.getByRole('article', { name: 'Lake apartment offer', exact: true })).toHaveCount(0);
   expect(decisions).toEqual([{ path: '/api/v1/me/partner-offers/offer-one/decline', method: 'POST', body: { version: 7, reason: 'Unavailable during checkout window' } }]);

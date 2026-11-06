@@ -52,14 +52,7 @@ public class MeController : ControllerBase
         [FromServices] CleaningSuite.Application.Partners.PartnerService service, CancellationToken ct) =>
         Ok(await service.SetWorkPreferences(ActorVerifiedEmployee().Id, body.AutoAcceptWork, ct));
 
-    private Employee ActorVerifiedEmployee()
-    {
-        var employee = HttpContext.Items["Employee"] as Employee;
-        if (employee is null || !employee.IsActive || employee.IdentitySyncPending || !Employee.IsWorkRole(employee.Role)
-            || string.IsNullOrWhiteSpace(employee.KeycloakUserId))
-            throw new UnauthorizedAccessException("An active linked staff account is required.");
-        return employee;
-    }
+    private Employee ActorVerifiedEmployee() => StaffActor.RequireActive(HttpContext);
 
     [HttpGet("work")]
     public async Task<IActionResult> Work([FromQuery] string date, CancellationToken ct) =>

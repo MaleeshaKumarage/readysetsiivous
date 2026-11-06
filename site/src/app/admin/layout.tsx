@@ -14,7 +14,7 @@ import {
 } from '@mantine/core';
 import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 import {
-  LayoutDashboard, ListChecks, Sparkles, FileSignature, Users, Building2, CalendarClock, CalendarCheck2, CheckSquare, Receipt, LogOut, LogIn, UserRound,
+  LayoutDashboard, ListChecks, Sparkles, FileSignature, Users, Building2, CalendarClock, CalendarCheck2, CheckSquare, Receipt, LogOut, LogIn, UserRound, Package,
 } from 'lucide-react';
 import { initAuth, isAuthenticated, isAdmin, authTenant, refreshToken, login, logout } from '@/lib/auth';
 import { API_URL } from '@/lib/api';
@@ -29,6 +29,7 @@ const NAV_GROUPS = [
   { label: 'People', items: [{ href: 'employees', label: 'Employees', icon: Users }] },
   { label: 'Finance', items: [{ href: 'invoices', label: 'Invoices', icon: Receipt }] },
   { label: 'Catalog', items: [{ href: 'services', label: 'Services', icon: Sparkles }] },
+  { label: 'Stock', items: [{ href: 'inventory', label: 'Inventory', icon: Package }] },
 ];
 
 

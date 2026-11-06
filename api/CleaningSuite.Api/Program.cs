@@ -112,6 +112,9 @@ builder.Services.AddSingleton<CleaningSuite.Application.Agreements.IAgreementDoc
 
 builder.Services.AddScoped<CleaningSuite.Application.Leads.ILeadRepository, CleaningSuite.Infrastructure.Persistence.LeadRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.Leads.ILeadFileStore, CleaningSuite.Infrastructure.Leads.DiskLeadFileStore>();
+builder.Services.AddScoped<CleaningSuite.Application.Inventory.IInventoryRepository, CleaningSuite.Infrastructure.Persistence.InventoryRepository>();
+builder.Services.AddScoped<CleaningSuite.Application.Inventory.IInventoryFileStore, CleaningSuite.Infrastructure.Inventory.DiskInventoryFileStore>();
+builder.Services.AddScoped<CleaningSuite.Application.Inventory.InventoryService>();
 builder.Services.AddScoped<CleaningSuite.Application.Leads.LeadService>();
 builder.Services.AddScoped<CleaningSuite.Application.Leads.ILeadCollaborationRepository, CleaningSuite.Infrastructure.Persistence.LeadCollaborationRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.Leads.ILeadAudioStore, CleaningSuite.Infrastructure.Leads.DiskLeadAudioStore>();
@@ -122,6 +125,8 @@ builder.Services.AddScoped<CleaningSuite.Application.Leads.LeadCollaborationServ
 builder.Services.AddScoped<CleaningSuite.Application.Leads.LeadFollowUpDispatcher>();
 if (builder.Configuration.GetValue("BackgroundWorkers:Enabled", true))
     builder.Services.AddHostedService<CleaningSuite.Api.LeadFollowUpWorker>();
+if (builder.Configuration.GetValue("BackgroundWorkers:Enabled", true))
+    builder.Services.AddHostedService<CleaningSuite.Api.InventoryPhotoRetentionWorker>();
 
 
 // New repositories for Companies and Shifts.
@@ -347,6 +352,7 @@ public class DefaultExceptionHandler : IExceptionHandler
         {
             CleaningSuite.Application.Common.SlugConflictException => (409, "Slug already exists"),
             CleaningSuite.Application.Leads.LeadConflictException => (409, "Lead conflict"),
+            CleaningSuite.Application.Inventory.InventoryConflictException => (409, "Inventory conflict"),
             CleaningSuite.Application.Companies.CompanyConflictException => (409, "Company business ID conflict"),
             CleaningSuite.Application.Common.InactiveRecordDeleteConflictException => (409, "Record cannot be deleted"),
             CleaningSuite.Application.Common.UploadPayloadTooLargeException => (413, "Payload too large"),
