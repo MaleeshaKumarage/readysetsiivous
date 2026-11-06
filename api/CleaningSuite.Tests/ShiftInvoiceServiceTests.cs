@@ -203,6 +203,16 @@ public class ShiftInvoiceServiceTests
         Assert.Equal("Each unstarted visit can be chosen only once.", Assert.Single(ex.Errors).ErrorMessage);
     }
 
+    [Fact]
+    public async Task Partner_month_refuses_unstarted_visit_choices_with_a_clear_reason()
+    {
+        var f = new Fixture(completedDays: [2, 9, 16]);
+        var partnerMonth = new ShiftInvoiceRequest(f.Company.Id, [], new(2026, 10, 1), new(2026, 10, 31), PartnerMonth: true,
+            UnstartedDecisions: [new UnstartedVisitDecision(f.Shift.Id, FridayStartUtc(23), true)]);
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => f.Service.PreviewAsync(partnerMonth, default));
+        Assert.Equal("Partner invoices do not use unstarted visit choices.", Assert.Single(ex.Errors).ErrorMessage);
+    }
+
     private sealed class Fixture
     {
         public readonly Mock<IInvoiceRepository> Invoices=new();public readonly Mock<IShiftWorkReservation> Reservation=new();
