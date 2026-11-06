@@ -695,7 +695,7 @@ export default function ShiftsAdminPage() {
             <TextInput label="Start date" type="date" required={!editingShift || Boolean(editingShift.validFrom)} value={validFrom} onChange={e => setValidFrom(e.target.value)} />
             <TextInput label="End date (optional)" type="date" min={validFrom || undefined} value={validUntil} onChange={e => setValidUntil(e.target.value)} />
           </Group>}
-          <Select label="Schedule" data={scheduleType === '4' ? [...SCHEDULE_TYPES, LEGACY_ON_CALL] : SCHEDULE_TYPES} value={scheduleType} onChange={(v) => setScheduleType(v ?? '0')} />
+          <Select label="Schedule" allowDeselect={false} data={scheduleType === '4' ? [...SCHEDULE_TYPES, LEGACY_ON_CALL] : SCHEDULE_TYPES} value={scheduleType} onChange={(v) => { if (v) setScheduleType(v); }} />
           {scheduleType === '4' && <Text size="sm">On-call is a reusable shift without scheduled dates. After creating it, enter the date, time and cleaner for a one-time visit. Only dated visits appear on calendars.</Text>}
 
           {scheduleType === '2' && (
