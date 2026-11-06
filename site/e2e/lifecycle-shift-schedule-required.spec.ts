@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
+import { setupAdminMocks } from './admin-helpers';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 
@@ -8,7 +8,7 @@ test('the schedule picker cannot be cleared, so a shift never gets a schedule no
   await page.route(/\/api\/v1\/admin\//, route => {
     const url = route.request().url(); const path = new URL(url).pathname;
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
-    return route.fulfill({ headers, json: isShiftsRoute(path) ? shiftsResponse([], url)
+    return route.fulfill({ headers, json: path.endsWith('/shifts') ? []
       : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'AAA', isActive: true }], total: 1 }
       : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
   });
