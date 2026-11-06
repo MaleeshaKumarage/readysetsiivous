@@ -20,7 +20,7 @@ async function setup(page: Page, options: { lostResponse?: boolean; delayPreview
     if (path.endsWith('/manual-preview')) {
       const input = req.postDataJSON(); calls.previews.push(input);
       if (options.delayPreview) await new Promise(resolve => setTimeout(resolve, 600));
-      return route.fulfill({ status: options.failPreview ? 400 : 200, headers, json: options.failPreview ? { detail: 'The invoice total must be greater than zero.' } : invoice(input) });
+      return route.fulfill({ status: options.failPreview ? 400 : 200, headers, json: options.failPreview ? { detail: 'The invoice total must be greater than zero. Enter a quantity and a net price above zero for at least one row, then preview again.' } : invoice(input) });
     }
     if (path.endsWith('/invoices/manual')) {
       const input = req.postDataJSON(); calls.issues.push(input);

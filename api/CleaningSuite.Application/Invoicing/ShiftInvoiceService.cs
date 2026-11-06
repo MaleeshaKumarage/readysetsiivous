@@ -98,7 +98,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
         var monthEvidence = new Dictionary<Guid, IReadOnlyList<QualityCycleForm>>();
         if (request.PartnerMonth)
         {
-            if (partnerSource is null) Invalid("Partner invoice selection is unavailable.");
+            if (partnerSource is null) Invalid("Partner invoice selection is unavailable right now. Reload the page and try again.");
             // Completion-month billing covers every company shift, whoever created it. A shift is a candidate
             // when one of its visits was completed in this month; roster and assignment checks run below.
             // A partner-created shift is a candidate only while its request is live and accepted; a cancelled visit is never billed.
@@ -131,7 +131,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             {
                 partnerRequest = partnerRequests.SingleOrDefault(r => r.Id == shift.PartnerRequestId && r.LinkedShiftId == shift.Id);
                 if (partnerRequest is null || partnerRequest.Status == "Cancelled" || !partnerRequest.FirstAcceptedAtUtc.HasValue)
-                    Invalid("A partner visit is missing its accepted request or has been cancelled.");
+                    Invalid("A partner visit has no accepted request or was cancelled. Refresh the selection to continue.");
                 pricing = new() { Id = shift.Id, ShiftId = shift.Id, CreatedUtc = partnerRequest!.CreatedUtc, UpdatedUtc = partnerRequest.CreatedUtc, Plans = [new("PerOccurrence", partnerRequest.PriceNet, partnerRequest.VatRatePercent, new(2000, 1, 1))] };
             }
             var schedule = ShiftContractSchedule.Snapshot(shift, zone);

@@ -131,7 +131,8 @@ test('a stale invoice issue is refused with a reload message, and a new preview 
   await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Invoice preview' })).toBeVisible();
   await page.getByRole('button', { name: 'Issue invoice', exact: true }).click();
-  await expect(page.getByRole('dialog').getByRole('alert')).toContainText('Load a new preview before issuing.');
+  // Scoped to the preview: the closing form dialog can briefly keep a copy of the same message.
+  await expect(page.getByRole('dialog', { name: 'Invoice preview', exact: true }).getByRole('alert')).toContainText('Load a new preview before issuing.');
   expect(state.issues).toHaveLength(0);
   // Closing the preview returns to the form with its values kept, so the admin can preview again without retyping.
   await page.keyboard.press('Escape');
