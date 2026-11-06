@@ -18,6 +18,12 @@ public class PublicBookingNotFoundException() : Exception(GuidanceText)
     public const string GuidanceText = "No booking matches these details. Check the booking reference and the management code in your confirmation email, then try again.";
 }
 
+/// <summary>A public availability lookup for a service that no longer exists. Explains the next step without the internal id.</summary>
+public class PublicServiceNotOfferedException() : Exception(GuidanceText)
+{
+    public const string GuidanceText = "That service is no longer offered. Choose another service, then try again.";
+}
+
 /// <summary>A public signing link that matches no agreement or signer. Explains the next step.</summary>
 public class PublicSigningLinkNotFoundException() : Exception(GuidanceText)
 {
