@@ -123,9 +123,10 @@ for (const options of [{ documentRole: 'employee' }, { unbound: true }]) test(`m
 });
 test('verification and operational failures are visible and retry preserves entered shift data', async ({ page }) => {
   const state = await setup(page, { failIdentity: true, failures: ['load', 'save', 'assign', 'deactivate'] }); await page.goto('/manager/');
-  await expect(page.getByRole('button', { name: 'Retry access check' })).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: 'nothing was changed' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Retry verification', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Retry access check' }).click(); await expect(page.getByRole('main').getByRole('alert')).toContainText('load failed');
+  await page.getByRole('button', { name: 'Retry verification', exact: true }).click(); await expect(page.getByRole('main').getByRole('alert')).toContainText('load failed');
   state.recoverLoad(); await page.getByRole('button', { name: 'Refresh operations' }).click();
   const card = page.getByRole('article', { name: 'AAA1 weekdays' }); await card.getByRole('button', { name: 'Edit shift' }).click();
   await page.getByLabel('Shift name', { exact: true }).fill('Retained name'); await page.getByRole('button', { name: 'Save shift' }).click();
