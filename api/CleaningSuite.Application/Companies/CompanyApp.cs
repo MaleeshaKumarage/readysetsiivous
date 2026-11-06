@@ -39,7 +39,7 @@ public record BranchDto(
     int? RoomCount = null, int? BedCount = null, decimal? PriceNet = null,
     decimal? VatRatePercent = null, int? EstimatedDurationMinutes = null,
     int PricingVersion = 0, bool PricingReady = false, DateTime? QuoteRequestedUtc = null,
-    DateTime? QuoteRejectedUtc = null, string? QuoteRejectionReason = null);
+    DateTime? QuoteRejectedUtc = null, string? QuoteRejectionReason = null, IReadOnlyList<BranchPriceVersion>? PriceVersions = null);
 
 public record CompanyDetailDto(CompanyDto Company, IReadOnlyList<BranchDto> Branches);
 
@@ -106,7 +106,9 @@ public record CreateBranchCommand(
     string? ContactPhone = null,
     string? ContactEmail = null,
     int? RoomCount = null, int? BedCount = null, decimal? PriceNet = null,
-    decimal? VatRatePercent = null, int? EstimatedDurationMinutes = null) : IRequest<BranchDto>;
+    decimal? VatRatePercent = null, int? EstimatedDurationMinutes = null,
+    // Optional new price version: effective date (default today) and billing mode (default PerOccurrence).
+    DateOnly? PriceEffectiveFrom = null, string? PriceMode = null) : IRequest<BranchDto>;
 
 public record UpdateBranchCommand(
     Guid Id,
@@ -119,7 +121,8 @@ public record UpdateBranchCommand(
     bool IsActive = true,
     string? ContactEmail = null,
     int? RoomCount = null, int? BedCount = null, decimal? PriceNet = null,
-    decimal? VatRatePercent = null, int? EstimatedDurationMinutes = null) : IRequest<BranchDto>
+    decimal? VatRatePercent = null, int? EstimatedDurationMinutes = null,
+    DateOnly? PriceEffectiveFrom = null, string? PriceMode = null) : IRequest<BranchDto>
 {
     // JSON must distinguish an old client's omitted field from an explicit null
     // clearing an optional count. Keep the positional constructor for existing callers.
@@ -425,7 +428,7 @@ public class CompanyHandlers
                     request.Country,
                     request.ContactPhone);
                 branch.ContactEmail = request.ContactEmail?.Trim();
-                ApplyProperty(branch, request.RoomCount, request.BedCount, request.PriceNet, request.VatRatePercent, request.EstimatedDurationMinutes);
+                ApplyProperty(branch, request.RoomCount, request.BedCount, request.PriceNet, request.VatRatePercent, request.EstimatedDurationMinutes, request.PriceMode, request.PriceEffectiveFrom);
                 await _repository.SaveAsync(branch, ct);
                 return MapBranch(branch);
             }
@@ -459,7 +462,7 @@ public class CompanyHandlers
                 ApplyProperty(branch,
                     request.HasRoomCount ? request.RoomCount : branch.RoomCount,
                     request.HasBedCount ? request.BedCount : branch.BedCount,
-                    request.PriceNet, request.VatRatePercent, request.EstimatedDurationMinutes);
+                    request.PriceNet, request.VatRatePercent, request.EstimatedDurationMinutes, request.PriceMode, request.PriceEffectiveFrom);
                 await _repository.SaveAsync(branch, ct);
                 return MapBranch(branch);
             }
@@ -540,10 +543,10 @@ public class CompanyHandlers
             branch.Country,
             branch.ContactPhone,
             branch.IsActive,
-            branch.ContactEmail, branch.RoomCount, branch.BedCount, branch.PriceNet, branch.VatRatePercent,
-            branch.EstimatedDurationMinutes, branch.PricingVersion, branch.PricingReady, branch.QuoteRequestedUtc,
-            branch.QuoteRejectedUtc, branch.QuoteRejectionReason);
-    private static void ApplyProperty(Branch branch, int? rooms, int? beds, decimal? price, decimal? vat, int? duration)
+            branch.ContactEmail, branch.RoomCount, branch.BedCount, branch.CurrentPriceNet, branch.CurrentVatRatePercent,
+            branch.CurrentEstimatedDurationMinutes, branch.PricingVersion, branch.PricingReady, branch.QuoteRequestedUtc,
+            branch.QuoteRejectedUtc, branch.QuoteRejectionReason, branch.Versions.ToArray());
+    private static void ApplyProperty(Branch branch, int? rooms, int? beds, decimal? price, decimal? vat, int? duration, string? mode = null, DateOnly? effectiveFrom = null)
     {
         try
         {
@@ -551,7 +554,9 @@ public class CompanyHandlers
             if (price.HasValue || vat.HasValue || duration.HasValue)
             {
                 if (!price.HasValue || !vat.HasValue || !duration.HasValue) throw new ValidationException([new FluentValidation.Results.ValidationFailure("Pricing", "Net price, VAT and estimated duration must be supplied together.")]);
-                branch.SetPricing(price.Value, vat.Value, duration.Value);
+                // Without a mode, keep the billing mode of the version in force on that date, so a name or contact edit never changes Monthly/Hourly billing.
+                var date = effectiveFrom ?? DateOnly.FromDateTime(DateTime.UtcNow);
+                branch.SetPricing(price.Value, vat.Value, duration.Value, mode ?? branch.PriceOn(date)?.Mode ?? "PerOccurrence", date);
             }
         }
         catch (ArgumentException ex) { throw new ValidationException(ex.Message); }

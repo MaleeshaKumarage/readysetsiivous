@@ -481,9 +481,9 @@ public class PartnerWorkflowTests
         Assert.Equal("owner@example.test", updated.ContactEmail);
         Assert.Equal(3, updated.RoomCount);
         Assert.Equal(4, updated.BedCount);
-        Assert.Equal(before.PriceNet, updated.PriceNet);
-        Assert.Equal(before.VatRatePercent, updated.VatRatePercent);
-        Assert.Equal(before.EstimatedDurationMinutes, updated.EstimatedDurationMinutes);
+        Assert.Equal(before.CurrentPriceNet, updated.PriceNet);
+        Assert.Equal(before.CurrentVatRatePercent, updated.VatRatePercent);
+        Assert.Equal(before.CurrentEstimatedDurationMinutes, updated.EstimatedDurationMinutes);
         Assert.Equal(before.PricingVersion, updated.PricingVersion);
         Assert.True(updated.IsActive);
         Assert.Equal(fixture.Company.Id, updated.CompanyId);

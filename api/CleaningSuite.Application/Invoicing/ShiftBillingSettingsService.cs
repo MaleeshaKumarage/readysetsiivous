@@ -1,7 +1,9 @@
 using CleaningSuite.Application.Common;
 using CleaningSuite.Application.Shifts;
+using CleaningSuite.Application.Companies;
 using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Common;
+using CleaningSuite.Domain.Companies;
 using CleaningSuite.Domain.Invoicing;
 using CleaningSuite.Domain.Shifts;
 using FluentValidation;
@@ -11,10 +13,13 @@ namespace CleaningSuite.Application.Invoicing;
 
 public record InvoiceIssuerSettings(string CompanyName, string BusinessId, Address CompanyAddress,
     string Email, string Phone, string BankAccountIBAN, string BankBic, int PaymentTermsDays, decimal DefaultVatRatePercent, bool IsSampleData = false);
-public record BillingSettingsResponse(IReadOnlyList<ShiftPricingPlan> Plans, IReadOnlyList<ShiftOccurrencePrice> Overrides);
+public record SelectBranchPriceRequest(DateOnly EffectiveFrom);
+public record BillingSettingsResponse(IReadOnlyList<ShiftPricingPlan> Plans, IReadOnlyList<ShiftOccurrencePrice> Overrides,
+    IReadOnlyList<BranchPriceVersion>? BranchPriceVersions = null, DateOnly? BranchPriceEffectiveFrom = null);
 
 public class ShiftBillingSettingsService(IShiftRepository shifts, IShiftBillingRepository billing,
-    IInvoiceRepository invoices, ITenantProfileRepository profiles, ITenantContext tenant, IShiftWorkReservation reservation)
+    IInvoiceRepository invoices, ITenantProfileRepository profiles, ITenantContext tenant, IShiftWorkReservation reservation,
+    IBranchRepository? branches = null)
 {
     public static void Invalid(string message) => throw new ValidationException([new ValidationFailure("Billing", message)]);
     public static decimal Round(decimal amount) => decimal.Round(amount, 2, MidpointRounding.AwayFromZero);
@@ -25,9 +30,11 @@ public class ShiftBillingSettingsService(IShiftRepository shifts, IShiftBillingR
     }
     public async Task<BillingSettingsResponse> GetAsync(Guid id, CancellationToken ct)
     {
-        _ = await shifts.GetAsync(id, ct) ?? throw new NotFoundException("Shift", id);
+        var shift = await shifts.GetAsync(id, ct) ?? throw new NotFoundException("Shift", id);
         var profile = await billing.GetAsync(id, ct);
-        return new(profile?.Plans.OrderBy(p => p.EffectiveFrom).ToArray() ?? [], profile?.Overrides.OrderBy(p => p.OccurrenceStartUtc).ToArray() ?? []);
+        var branch = branches is null ? null : await branches.GetAsync(shift.BranchId, ct);
+        return new(profile?.Plans.OrderBy(p => p.EffectiveFrom).ToArray() ?? [], profile?.Overrides.OrderBy(p => p.OccurrenceStartUtc).ToArray() ?? [],
+            branch?.Versions.ToArray(), profile?.BranchPriceEffectiveFrom);
     }
     public async Task<BillingSettingsResponse> SaveAsync(Guid id, ShiftPricingPlan plan, CancellationToken ct)
     {
@@ -41,6 +48,8 @@ public class ShiftBillingSettingsService(IShiftRepository shifts, IShiftBillingR
         if ((await invoices.ListAsync(null, null, ct)).Any(i => Billed(i, id) && i.PeriodTo >= plan.EffectiveFrom))
             throw new ShiftConflictException("This price would change an invoiced period. Start after the last invoiced date, or void the affected invoice first.");
         var profile = await billing.GetAsync(id, ct) ?? new() { Id = id, ShiftId = id };
+        if (profile.BranchPriceEffectiveFrom is not null)
+            throw new ShiftConflictException("This shift is priced from its branch. Choose a branch price version instead of entering a separate price.");
         profile.Plans.RemoveAll(p => p.EffectiveFrom == plan.EffectiveFrom);
         profile.Plans.Add(plan);
         profile.Plans = profile.Plans.OrderBy(p => p.EffectiveFrom).ToList();
@@ -48,6 +57,41 @@ public class ShiftBillingSettingsService(IShiftRepository shifts, IShiftBillingR
         await billing.SaveAsync(profile, ct);
         return new(profile.Plans, profile.Overrides);
     }
+    /// <summary>Picks which branch price version a shift is billed at. Allowed until the shift has an issued invoice.</summary>
+    public async Task<BillingSettingsResponse> SelectBranchPriceAsync(Guid id, DateOnly effectiveFrom, CancellationToken ct)
+    {
+        await using var lease = await reservation.AcquireAsync(ct);
+        var shift = await shifts.GetAsync(id, ct) ?? throw new NotFoundException("Shift", id);
+        if (shift.PartnerRequestId.HasValue) throw new ShiftConflictException("Partner visit pricing is frozen when requested. Update branch pricing for future requests instead.");
+        if (branches is null) Invalid("Branch prices are unavailable right now. Reload the page and try again.");
+        var branch = await branches!.GetAsync(shift.BranchId, ct) ?? throw new NotFoundException("Branch", shift.BranchId);
+        if (!branch.Versions.Any(v => v.EffectiveFrom == effectiveFrom)) Invalid("Choose a price version from this shift's branch.");
+        if ((await invoices.ListAsync(null, null, ct)).Any(i => Billed(i, id)))
+            throw new ShiftConflictException("This shift already has an issued invoice, so its price cannot change. Void the invoice first.");
+        var profile = await billing.GetAsync(id, ct) ?? new() { Id = id, ShiftId = id };
+        profile.BranchPriceEffectiveFrom = effectiveFrom; profile.Plans = []; profile.UpdatedUtc = DateTime.UtcNow;
+        await billing.SaveAsync(profile, ct);
+        return await GetAsync(id, ct);
+    }
+
+    /// <summary>
+    /// The branch price version a new shift is billed at. One version needs no choice; with history the version in force
+    /// today is the default; an explicit date must name one of the branch's versions. Null when the branch has no price.
+    /// </summary>
+    public static BranchPriceVersion? ChooseBranchPrice(Branch branch, DateOnly? requested, DateOnly today)
+    {
+        var versions = branch.Versions;
+        if (versions.Count == 0)
+        {
+            if (requested is not null) Invalid("This property has no cleaning price yet. Set a price before choosing one for the shift.");
+            return null;
+        }
+        if (requested is { } date)
+            return versions.FirstOrDefault(v => v.EffectiveFrom == date)
+                ?? throw new ValidationException([new ValidationFailure("Billing", "Choose a price version from this property.")]);
+        return branch.PriceOn(today) ?? versions[0];
+    }
+
     public async Task SaveOccurrenceAsync(Guid id, ShiftOccurrencePrice price, CancellationToken ct)
     {
         await using var lease = await reservation.AcquireAsync(ct);

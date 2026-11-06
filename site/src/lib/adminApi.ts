@@ -503,6 +503,8 @@ export interface Branch {
   quoteRequestedUtc?: string | null;
   quoteRejectedUtc?: string | null;
   quoteRejectionReason?: string | null;
+  // Dated price history; the current price is the version in force today.
+  priceVersions?: { effectiveFrom: string; mode: string; priceNet: number; vatRatePercent: number; durationMinutes: number }[] | null;
   id: string;
   companyId: string;
   name: string;
