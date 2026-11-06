@@ -29,8 +29,10 @@ test('shift list uses one time format for every schedule type and shows monthly 
     ] : path.endsWith('/assignment-counts') ? {} : path.endsWith('/companies') ? { items: [], total: 0 } : [];
     return route.fulfill({ status: 200, headers, json });
   });
+  const listed = page.waitForResponse(r => /\/api\/v1\/admin\/shifts(\?|$)/.test(r.url()) && r.request().method() === 'GET', { timeout: 90000 });
   await page.goto('/admin/shifts/');
-  await expect(page.getByText('Daily 08:00–17:00', { exact: true })).toBeVisible();
+  await listed;
+  await expect(page.getByText('Daily 08:00–17:00', { exact: true })).toBeVisible({ timeout: 30000 });
   await expect(page.getByText('Monthly day 15 13:00–14:00', { exact: true })).toBeVisible();
   await expect(page.getByRole('table').getByText(/:\d{2}:\d{2}/)).toHaveCount(0);
 });
@@ -50,7 +52,10 @@ test('assignee picker shows each employee email so similar names can be told apa
       : path.endsWith('/employees') ? people : path.endsWith('/companies') ? { items: [], total: 0 } : [];
     return route.fulfill({ status: 200, headers, json });
   });
+  const listed = page.waitForResponse(r => /\/api\/v1\/admin\/shifts(\?|$)/.test(r.url()) && r.request().method() === 'GET', { timeout: 90000 });
   await page.goto('/admin/shifts/');
+  await listed;
+  await expect(page.getByRole('button', { name: /^More actions for / }).first()).toBeVisible({ timeout: 30000 });
   await shiftActionAt(page, 'Employees', 0);
   await page.getByRole('textbox', { name: 'Assign employees', exact: true }).click();
   await expect(page.getByRole('option', { name: 'Maleesha Kumarage (maleesha@hiava.fi)', exact: true })).toBeVisible();
