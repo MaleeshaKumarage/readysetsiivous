@@ -32,6 +32,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(options => CleaningSuite.Api.Middleware.TrustedProxyConfiguration.Configure(options, builder.Configuration));
 builder.Services.Configure<CleaningSuite.Api.Middleware.PublicRateLimitOptions>(builder.Configuration.GetSection("PublicRateLimit"));
 
+builder.Services.PostConfigure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(options =>
+    options.InvalidModelStateResponseFactory = context => new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(CleaningSuite.Api.RequestErrorText.FromModelState(context.ModelState)));
 builder.Services.AddControllers().AddJsonOptions(o =>
 {
     o.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
