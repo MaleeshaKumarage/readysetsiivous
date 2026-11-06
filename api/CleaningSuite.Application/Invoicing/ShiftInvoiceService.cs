@@ -50,6 +50,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             throw new ShiftConflictException("Invoice inputs, pricing or work records changed. Load a new preview before issuing.");
         // A preview with only unticked unstarted visits has no lines; it can be reviewed but never issued empty.
         if (invoice.Lines.Count == 0) Invalid("No billable work is selected. Tick at least one unstarted visit or choose billable work before issuing.");
+        if (invoice.Total.Gross <= 0) Invalid("The invoice total must be greater than zero. Check the billable visits, prices and VAT before issuing.");
         var number = await invoices.NextInvoiceNumberForYearAsync(invoice.IssueDate.Year, ct);
         invoice.Id = Guid.NewGuid(); invoice.InvoiceNumber = $"{invoice.IssueDate.Year}-{number:D4}";
         invoice.PaymentReference = PaymentReference($"{invoice.IssueDate.Year}{number:D4}");

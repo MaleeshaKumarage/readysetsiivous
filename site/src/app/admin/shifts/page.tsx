@@ -197,7 +197,7 @@ export default function ShiftsAdminPage() {
     .catch((failure: Error) => { setAssignmentCounts(null); setCountError(failure.message); });
   // Only the newest tab/page request may update the list, so a slow earlier response cannot show the wrong tab.
   const loadSeq = useRef(0);
-  const load = () => { const seq = ++loadSeq.current; return adminShifts.page({ tab: lifecycle, skip: (shiftPage - 1) * PAGE_SIZE, take: PAGE_SIZE }).then((r) => {
+  const load = () => { const seq = ++loadSeq.current; setLoading(true); return adminShifts.page({ tab: lifecycle, skip: (shiftPage - 1) * PAGE_SIZE, take: PAGE_SIZE }).then((r) => {
     if (seq !== loadSeq.current) return;
     // A reply without the paged shape cannot be shown; say so and keep the retry path instead of crashing the screen.
     if (!r || !Array.isArray(r.items) || typeof r.total !== 'number' || !r.counts) throw new Error('The shift list could not be read. Refresh the page to retry.');

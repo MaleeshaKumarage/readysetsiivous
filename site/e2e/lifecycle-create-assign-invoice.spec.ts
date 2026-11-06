@@ -17,15 +17,16 @@ function previewFor(input: any, shifts: any[]) {
   const decisions: { shiftId: string; startUtc: string; include: boolean }[] = input?.unstartedDecisions ?? [];
   const visit = { shiftId: input?.shiftIds?.[0], startUtc: '2026-11-06T14:00:00Z', endUtc: '2026-11-06T16:00:00Z' };
   const included = decisions.some(d => d.shiftId === visit.shiftId && d.startUtc === visit.startUtc && d.include);
-  const net = 100 + (included ? 50 : 0);
+  // The only scheduled visit is unstarted, so nothing bills until it is ticked; the preview has no lines before that.
+  const net = included ? 50 : 0;
   const vat = Math.round(net * 25.5) / 100;
   const name = shifts.find(s => s.id === visit.shiftId)?.name ?? 'Shift';
   return { id: 'draft', invoiceNumber: '', issuer, customer: { name: company.name }, companyId: 'company', periodFrom: input?.from, periodTo: input?.to,
     issueDate: '2026-11-07', dueDate: '2026-11-21', status: 'Draft', previewToken: `token-${included ? 1 : 0}`, issuerIsSample: false,
     total: { net, vat, gross: net + vat },
-    lines: [{ lineKey: 'line', shiftId: visit.shiftId, shiftName: name, branchName: 'Main branch', hours: included ? 2 : 0, occurrences: included ? 1 : 0,
-      pricingMode: 'Hourly', quantity: included ? 2 : 0, unitPriceNet: 50, netAmount: net, vatRatePercent: 25.5, vatAmount: vat, total: net + vat,
-      periodFrom: '2026-11-01', periodTo: '2026-11-30', description: 'Hourly' }],
+    lines: included ? [{ lineKey: 'line', shiftId: visit.shiftId, shiftName: name, branchName: 'Main branch', hours: 2, occurrences: 1,
+      pricingMode: 'Hourly', quantity: 2, unitPriceNet: 50, netAmount: net, vatRatePercent: 25.5, vatAmount: vat, total: net + vat,
+      periodFrom: '2026-11-01', periodTo: '2026-11-30', description: 'Hourly' }] : [],
     unstartedVisits: [{ ...visit, shiftName: name, included }] };
 }
 
@@ -96,11 +97,11 @@ test('admin creates a shift, assigns a cleaner, and invoices its unstarted visit
   const list = page.getByLabel('Unstarted visits', { exact: true });
   await expect(list.getByRole('checkbox')).toHaveCount(1);
   await expect(list.getByRole('checkbox')).not.toBeChecked();
-  await expect(page.getByText('Net €100.00 · VAT €25.50 · Total €125.50')).toBeVisible();
+  await expect(page.getByText('Net €0.00 · VAT €0.00 · Total €0.00')).toBeVisible();
 
   // 4. Tick it in: the preview refreshes and the issued invoice carries the choice.
   await list.getByRole('checkbox').click();
-  await expect(page.getByText('Net €150.00 · VAT €38.25 · Total €188.25')).toBeVisible();
+  await expect(page.getByText('Net €50.00 · VAT €12.75 · Total €62.75')).toBeVisible();
   await page.getByRole('button', { name: 'Issue invoice', exact: true }).click();
   await expect(page.getByRole('status')).toHaveText('Invoice INV-1 issued.');
   expect(state.issues).toHaveLength(1);

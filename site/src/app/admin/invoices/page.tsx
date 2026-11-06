@@ -28,7 +28,11 @@ function completionMonthOptions(now: Date, earliest?: string | null) {
 export default function InvoicesPage() {
   // Visit times are shown in the tenant's time zone, the same zone invoices are dated in.
   const [billingZone, setBillingZone] = useState('Europe/Helsinki');
-  useEffect(() => { void adminTenant.get().then(profile => { if (profile?.timeZoneId?.trim()) setBillingZone(profile.timeZoneId.trim()); }).catch(() => {}); }, []);
+  useEffect(() => { void adminTenant.get().then(profile => {
+    const zone = profile?.timeZoneId?.trim();
+    if (!zone) return;
+    try { new Intl.DateTimeFormat('en-GB', { timeZone: zone }); setBillingZone(zone); } catch { /* an invalid stored zone keeps the default */ }
+  }).catch(() => {}); }, []);
   const formatVisitTime = (iso: string) => new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: billingZone }).format(new Date(iso));
   const [companies, setCompanies] = useState<Company[]>([]); const [shifts, setShifts] = useState<Shift[]>([]);
   const [invoices, setInvoices] = useState<ShiftInvoice[]>([]); const [issuer, setIssuer] = useState<InvoiceIssuer | null>(null); const [savedIssuer, setSavedIssuer] = useState<InvoiceIssuer | null>(null);

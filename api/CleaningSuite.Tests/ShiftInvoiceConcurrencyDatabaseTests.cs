@@ -5,6 +5,7 @@ using CleaningSuite.Application.Shifts;
 using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Companies;
 using CleaningSuite.Domain.Invoicing;
+using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Shifts;
 using CleaningSuite.Domain.Tenants;
 using CleaningSuite.Infrastructure.Persistence;
@@ -29,7 +30,7 @@ public class ShiftInvoiceConcurrencyDatabaseTests
         var partition = "invoice-" + Guid.NewGuid().ToString("N");
         var company = Company.Create("1234567-8", "Customer");
         var branch = Branch.Create(company.Id, "Branch");
-        var shift = Shift.Create(company.Id, branch.Id, "Monthly shift", new() { Type = ShiftScheduleType.OnCallFlexible }, null, new(2026, 10, 1), null);
+        var shift = Shift.Create(company.Id, branch.Id, "Monthly shift", new() { Type = ShiftScheduleType.Weekly, WeeklyDay = DayOfWeek.Friday, WeeklyStart = TimeSpan.FromHours(16), WeeklyEnd = TimeSpan.FromHours(18) }, null, new(2026, 10, 1), null);
         shift.CreatedUtc = new(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
         var price = new ShiftBillingProfile { Id = shift.Id, ShiftId = shift.Id, Plans = [new("Monthly", 150, 25.5m, new(2026, 10, 1))] };
         using (var writer = store.LightweightSession(partition)) { writer.Store(price); await writer.SaveChangesAsync(); }
@@ -42,7 +43,7 @@ public class ShiftInvoiceConcurrencyDatabaseTests
         shifts.Setup(r => r.ListOccurrenceAssignmentsAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync([]);
         var companies = new Mock<ICompanyRepository>(); companies.Setup(r => r.GetAsync(company.Id, It.IsAny<CancellationToken>())).ReturnsAsync(company);
         var branches = new Mock<IBranchRepository>(); branches.Setup(r => r.GetAsync(branch.Id, It.IsAny<CancellationToken>())).ReturnsAsync(branch);
-        var forms = new Mock<IQualityCycleRepository>(); forms.Setup(r => r.ListFormsAsync(shift.Id, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        var forms = new Mock<IQualityCycleRepository>(); forms.Setup(r => r.ListFormsAsync(shift.Id, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>())).ReturnsAsync([new QualityCycleForm { ShiftId = shift.Id, EmployeeId = Guid.NewGuid(), IsSubmitted = true, ShiftOccurrenceUtc = new DateTime(2026, 10, 2, 13, 0, 0, DateTimeKind.Utc) }]);
         var profiles = new Mock<ITenantProfileRepository>(); profiles.Setup(r => r.GetAsync(partition, It.IsAny<CancellationToken>())).ReturnsAsync(profile);
         TenantSessionFactory Session(string id) { var context = new Mock<ITenantContext>(); context.SetupGet(c => c.TenantId).Returns(id); return new(store, context.Object); }
         ShiftInvoiceService Service(TenantSessionFactory session)
@@ -64,8 +65,8 @@ public class ShiftInvoiceConcurrencyDatabaseTests
         Assert.IsType<ShiftConflictException>(Assert.Single(results, r => r is not null));
         using var check = Session(partition);
         var saved = Assert.Single(await new InvoiceRepository(check).ListAsync(null, null));
-        // An on-call shift has no scheduled visits here, so the completed-visit rule bills nothing; the test checks one invoice, not an amount.
-        Assert.Equal(0, saved.Total.Net); Assert.Equal(0, saved.Total.Vat);
+        // Five Friday visits in October, one completed: 150 x 1/5 = 30 net, so the invoice is billable and issues once.
+        Assert.Equal(30m, saved.Total.Net); Assert.Equal(7.65m, saved.Total.Vat);
         Assert.Equal("2026-0001", saved.InvoiceNumber); Assert.True(saved.IssuerIsSample);
         Assert.Equal(input.BillingAddress!.Street, saved.BillingAddress.Street);
         using var foreign = Session(partition + "-foreign");
