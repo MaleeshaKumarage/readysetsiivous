@@ -487,7 +487,13 @@ export default function MyShiftsPage() {
           <Button onClick={() => loadShifts()}>Retry loading shifts</Button>
         ) : occurrences.length === 0 ? (
           <Card variant="elevated" padding="lg" className="text-center text-gray-500 dark:text-gray-400">
-            No shifts scheduled.
+            <p>{view === 'today' ? 'No shifts today.' : 'No shifts scheduled.'}</p>
+            {view === 'today' && (
+              <div className="mt-3 flex flex-wrap justify-center gap-3">
+                <Button variant="outline" disabled={busy} onClick={() => changeView('past')}>View past shifts</Button>
+                <Button variant="outline" disabled={busy} onClick={() => changeView('future')}>View upcoming shifts</Button>
+              </div>
+            )}
           </Card>
         ) : (
           <div className="space-y-4">

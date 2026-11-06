@@ -174,15 +174,16 @@ public static class VisitAssignmentSafety
         var names = others.ToDictionary(x => x.Id, x => x.Name);
         names[current.Id] = current.Name;
         var conflicts = new List<ShiftConflictDetail>();
+        var otherName = other is null ? null : names.GetValueOrDefault(other.ShiftId, "another shift");
         if (other is not null)
-            conflicts.Add(new ShiftConflictDetail(other.ShiftId, names.GetValueOrDefault(other.ShiftId, "Another shift"), other.Occurrence.StartUtc, other.Occurrence.EndUtc));
-        return new ShiftConflictException(OverlapMessage(visit, other, zone), conflicts);
+            conflicts.Add(new ShiftConflictDetail(other.ShiftId, otherName!, other.Occurrence.StartUtc, other.Occurrence.EndUtc));
+        return new ShiftConflictException(OverlapMessage(visit, other, otherName, zone), conflicts);
     }
 
-    private static string OverlapMessage(ShiftVisitRosterEntry visit, ShiftVisitRosterEntry? other, TimeZoneInfo zone)
+    public static string OverlapMessage(ShiftVisitRosterEntry visit, ShiftVisitRosterEntry? other, string? otherName, TimeZoneInfo zone)
     {
         string Local(DateTime utc) => TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), zone).ToString("d MMM yyyy HH:mm", System.Globalization.CultureInfo.InvariantCulture);
-        var clash = other is null ? "" : $" It clashes with the visit from {Local(other.Occurrence.StartUtc)} to {Local(other.Occurrence.EndUtc)}.";
+        var clash = other is null ? "" : $" It clashes with \"{otherName}\", {Local(other.Occurrence.StartUtc)} to {Local(other.Occurrence.EndUtc)}.";
         return $"This cleaner already has a visit that overlaps the visit starting {Local(visit.Occurrence.StartUtc)}.{clash} No assignments were saved. Choose another cleaner or time, or remove the cleaner from the other visit first."; 
     }
 }
