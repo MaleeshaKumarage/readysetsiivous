@@ -18,35 +18,57 @@ async function setup(page: Page) {
     queries.push(url.searchParams);
     return route.fulfill({ headers, json: { view: 'needs-action', source: 'all', items: [], total: 0, counts: { 'needs-action': 0, scheduled: 0, 'in-progress': 0, completed: 0, cancelled: 0 } } });
   });
+  await page.route('**/api/v1/admin/employees**', route => route.fulfill({ headers, json: [{ id: 'emp-1', firstName: 'Ada', lastName: 'Cleaner', isActive: true }] }));
   return { queries, last: () => queries.at(-1) };
 }
 
-test('the first view opens on the next 14 days and says so', async ({ page }) => {
+const windowNotice = (page: Page) => page.getByRole('status').filter({ hasText: 'for the next 14 days' });
+
+test('the first view opens on unassigned work in the next 14 days', async ({ page }) => {
   const { last } = await setup(page);
   const { today, end } = windowDays();
   await page.goto('/admin/work-queue/');
-  await expect(page.getByRole('status').filter({ hasText: 'Showing the next 14 days' })).toBeVisible();
+  await expect(windowNotice(page).filter({ hasText: 'Showing unassigned work' })).toBeVisible();
   await expect.poll(() => last()?.get('from')).toBe(today);
   expect(last()?.get('to')).toBe(end);
+  expect(last()?.get('unassigned')).toBe('true');
+  expect(last()?.has('assignee')).toBe(false);
 });
 
-test('Show all dates removes the bounds and a reload keeps them removed', async ({ page }) => {
+test('Show all work clears dates and the assignee, and a reload keeps them cleared', async ({ page }) => {
   const { last } = await setup(page);
   await page.goto('/admin/work-queue/');
-  await expect(page.getByRole('status').filter({ hasText: 'Showing the next 14 days' })).toBeVisible();
-  await page.getByRole('button', { name: 'Show all dates' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Showing the next 14 days' })).toHaveCount(0);
+  await expect(windowNotice(page)).toBeVisible();
+  await page.getByRole('button', { name: 'Show all work' }).click();
+  await expect(windowNotice(page)).toHaveCount(0);
   await expect.poll(() => last()?.has('from')).toBe(false);
+  expect(last()?.has('unassigned')).toBe(false);
   expect(new URL(page.url()).searchParams.get('range')).toBe('all');
+  expect(new URL(page.url()).searchParams.get('assignee')).toBe('all');
   await page.reload();
   await expect.poll(() => last()?.has('from')).toBe(false);
-  await expect(page.getByRole('status').filter({ hasText: 'Showing the next 14 days' })).toHaveCount(0);
+  expect(last()?.has('unassigned')).toBe(false);
+  await expect(windowNotice(page)).toHaveCount(0);
 });
 
-test('dates in the link are used as chosen and no default notice appears', async ({ page }) => {
+test('dates in a link are used as chosen, with no default unassigned filter', async ({ page }) => {
   const { last } = await setup(page);
   await page.goto('/admin/work-queue/?view=needs-action&from=2026-11-01&to=2026-11-30');
   await expect.poll(() => last()?.get('from')).toBe('2026-11-01');
   expect(last()?.get('to')).toBe('2026-11-30');
-  await expect(page.getByRole('status').filter({ hasText: 'Showing the next 14 days' })).toHaveCount(0);
+  expect(last()?.has('unassigned')).toBe(false);
+  await expect(windowNotice(page)).toHaveCount(0);
+});
+
+test('choosing Unassigned in the assignee list sends the unassigned filter, and a named cleaner sends the assignee', async ({ page }) => {
+  const { last } = await setup(page);
+  await page.goto('/admin/work-queue/?view=needs-action&range=all&assignee=all');
+  await expect.poll(() => last()?.has('unassigned')).toBe(false);
+  await page.getByRole('textbox', { name: 'Assignee', exact: true }).click();
+  await page.getByRole('option', { name: 'Unassigned', exact: true }).click();
+  await expect.poll(() => last()?.get('unassigned')).toBe('true');
+  await page.getByRole('textbox', { name: 'Assignee', exact: true }).click();
+  await page.getByRole('option', { name: 'Ada Cleaner', exact: true }).click();
+  await expect.poll(() => last()?.get('assignee')).toBe('emp-1');
+  expect(last()?.has('unassigned')).toBe(false);
 });

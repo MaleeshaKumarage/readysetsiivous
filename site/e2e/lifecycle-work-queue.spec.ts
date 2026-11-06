@@ -294,7 +294,8 @@ test('clearing the assignee removes the filter, its URL param and the partner no
 
   await page.locator('[aria-label="Clear assignee"]').click();
   await expect.poll(() => state.queries.at(-1)?.has('assignee')).toBe(false);
-  expect(new URL(page.url()).searchParams.has('assignee')).toBe(false);
+  // Clearing writes an explicit 'all', so a reload stays on Anyone instead of the unassigned default.
+  expect(new URL(page.url()).searchParams.get('assignee')).toBe('all');
   await expect(page.getByText('Partner requests have no assignee, so they are hidden while this filter is on.')).toHaveCount(0);
 });
 

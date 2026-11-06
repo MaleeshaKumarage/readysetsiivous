@@ -156,6 +156,32 @@ public class WorkQueueReaderDatabaseTests
     }
 
     [QualityCycleDatabaseFact]
+    public async Task Unassigned_only_keeps_bookings_without_a_cleaner_and_counts_match()
+    {
+        using var f = await Fixture.Create();
+        var company = new Company { Name = "Unassigned Oy", BusinessId = "WQ-" + Guid.NewGuid().ToString("N")[..8], IsActive = true, IsPartnerEnabled = true };
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(company);
+            db.Store(new Booking { BookingNumber = "BK-ASSIGNED", Customer = new Customer { Name = "Assigned" }, Status = Booking.StatusNew, EmployeeId = Guid.NewGuid().ToString(),
+                StartUtc = new DateTime(2026, 12, 2, 8, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-02", StartLocalTime = "10:00" });
+            db.Store(new Booking { BookingNumber = "BK-FREE", Customer = new Customer { Name = "Free" }, Status = Booking.StatusNew,
+                StartUtc = new DateTime(2026, 12, 2, 9, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-02", StartLocalTime = "11:00" });
+            await db.SaveChangesAsync();
+        }
+        using var session = f.Session();
+        var reader = Reader(f, session);
+
+        var everyone = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.NeedsAction, "booking", null, 0, 25));
+        Assert.Equal(2, everyone.Total);
+
+        var unassigned = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.NeedsAction, "booking", null, 0, 25, UnassignedOnly: true));
+        Assert.Equal(["BK-FREE"], unassigned.Items.Select(i => i.Reference).ToArray());
+        Assert.Equal(1, unassigned.Total);
+        Assert.Equal(1, unassigned.Counts[WorkQueueViews.NeedsAction]);
+    }
+
+    [QualityCycleDatabaseFact]
     public async Task Non_guid_assignee_matches_nothing_in_any_source()
     {
         // Bookings and shifts must agree: a non-GUID assignee returns an empty queue, not a partial one.
