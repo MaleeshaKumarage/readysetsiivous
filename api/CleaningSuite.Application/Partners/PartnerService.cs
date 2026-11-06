@@ -75,6 +75,13 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         return request;
     }
 
+    private async Task ReleaseShiftAssignments(Guid shiftId, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var active = await Db.Query<ShiftAssignment>().Where(a => a.ShiftId == shiftId && a.IsActive).ToListAsync(ct);
+        foreach (var assignment in active) { assignment.Release(now); Db.Store(assignment); }
+    }
+
     private async Task<Employee> PreferenceOwner(Guid actor, CancellationToken ct)
     {
         var employee = await Staff(actor, ct);
@@ -218,7 +225,13 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
     {
         await using var lease = await reservation.AcquireAsync(ct);
         var (_, company) = await Partner(actor, ct);
-        if (body.ClientRequestId == Guid.Empty) throw new ValidationException("A request identifier is required.");
+        // Name every missing field, so the caller sees all of them at once rather than the first one.
+        var missing = new List<FluentValidation.Results.ValidationFailure>();
+        if (body.ClientRequestId == Guid.Empty) missing.Add(new("ClientRequestId", "A request identifier is required."));
+        if (body.BranchId == Guid.Empty) missing.Add(new("BranchId", "Choose the property for this cleaning."));
+        if (body.FromDate == default) missing.Add(new("FromDate", "Choose the first day of the cleaning."));
+        if (body.ToDate == default) missing.Add(new("ToDate", "Choose the last day of the cleaning."));
+        if (missing.Count > 0) throw new ValidationException(missing);
         var id = PartnerCleaningRequest.StableId($"request:{actor}:{body.ClientRequestId}");
         var existing = await Db.LoadAsync<PartnerCleaningRequest>(id, ct);
         if (existing is not null)
@@ -278,7 +291,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         if (request.LinkedShiftId.HasValue)
         {
             var shift = await Db.LoadAsync<Shift>(request.LinkedShiftId.Value, ct);
-            if (shift is not null) { shift.Deactivate(); Db.Store(shift);
+            if (shift is not null) { shift.Deactivate(); await ShiftTabs.StoreAsync(Db, shift, ct); await ReleaseShiftAssignments(shift.Id, ct);
                 if (push is not null && request.AcceptedEmployeeId.HasValue) await push.StageScheduleChangeAsync(Db, shift.Id, [request.AcceptedEmployeeId.Value], DateTimeOffset.UtcNow, ct); }
         }
         var previous = request.OfferedEmployeeId ?? request.AcceptedEmployeeId;
@@ -305,7 +318,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         if (request.LinkedShiftId.HasValue)
         {
             var shift = await Db.LoadAsync<Shift>(request.LinkedShiftId.Value, ct);
-            if (shift is not null) { shift.Deactivate(); Db.Store(shift);
+            if (shift is not null) { shift.Deactivate(); await ShiftTabs.StoreAsync(Db, shift, ct); await ReleaseShiftAssignments(shift.Id, ct);
                 if (push is not null && request.AcceptedEmployeeId.HasValue) await push.StageScheduleChangeAsync(Db, shift.Id, [request.AcceptedEmployeeId.Value], DateTimeOffset.UtcNow, ct); }
         }
         request.Status = "Cancelled"; request.CancellationReason = reason?.Trim();
@@ -340,7 +353,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         if (request.LinkedShiftId.HasValue)
         {
             var shift = await Db.LoadAsync<Shift>(request.LinkedShiftId.Value, ct);
-            if (shift is not null) { shift.Deactivate(); Db.Store(shift);
+            if (shift is not null) { shift.Deactivate(); await ShiftTabs.StoreAsync(Db, shift, ct); await ReleaseShiftAssignments(shift.Id, ct);
                 if (push is not null && request.AcceptedEmployeeId.HasValue && (!automatic || request.AcceptedEmployeeId != employee.Id)) await push.StageScheduleChangeAsync(Db, shift.Id, [request.AcceptedEmployeeId.Value], DateTimeOffset.UtcNow, ct); }
         }
         var previousEmployee = request.OfferedEmployeeId ?? request.AcceptedEmployeeId;
@@ -455,7 +468,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         request.PlannedStartUtc = plannedStart; request.PlannedEndUtc = plannedStart.HasValue ? end : null;
         request.FirstAcceptedAtUtc ??= DateTime.UtcNow; request.Status = "Accepted"; Touch(request);
         // A single Marten commit owns every document. Repository methods that commit individually are deliberately avoided.
-        Db.Store(shift); Db.Store(occurrence); Db.Store(assignment); Db.Store(billing); Db.Store(request);
+        await ShiftTabs.StoreAsync(Db, shift, ct); Db.Store(occurrence); Db.Store(assignment); Db.Store(billing); Db.Store(request);
         if (push is not null) await push.StageScheduleChangeAsync(Db, shiftId, assignments.Select(x => x.EmployeeId).Append(actor).Where(id => !automatic || id != actor), DateTimeOffset.UtcNow, ct);
         NotifyRequest(request, "RequestAccepted", "Company"); NotifyRequest(request, "RequestAccepted", "Staff");
     }
@@ -466,8 +479,10 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         await Staff(actor, ct);
         var request = await Db.Query<PartnerCleaningRequest>().FirstOrDefaultAsync(x => x.OfferId == offerId && x.OfferedEmployeeId == actor, ct)
             ?? throw new NotFoundException("Cleaning offer", offerId);
+        // Status first: an offer that was already accepted or cancelled also has a newer version, and the user
+        // should hear that it is no longer waiting for an answer, not that someone else changed it.
+        if (request.Status != "Offered") throw new ShiftConflictException("This offer is no longer waiting for your answer, so it cannot be declined. Check your scheduled work for its current status.");
         CheckVersion(request, body.Version);
-        if (request.Status != "Offered") throw new ShiftConflictException("This offer is no longer awaiting acceptance.");
         if (body.Reason?.Length > 1000) throw new ValidationException("Use at most 1000 characters for the reason.");
         InvalidateOffer(request); request.Status = "Requested"; Touch(request); Db.Store(request);
         NotifyRequest(request, "OfferDeclined", "Staff"); NotifyRequest(request, "AwaitingAssignment", "Company");

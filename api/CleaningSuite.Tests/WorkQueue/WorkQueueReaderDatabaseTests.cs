@@ -156,6 +156,32 @@ public class WorkQueueReaderDatabaseTests
     }
 
     [QualityCycleDatabaseFact]
+    public async Task Unassigned_only_keeps_bookings_without_a_cleaner_and_counts_match()
+    {
+        using var f = await Fixture.Create();
+        var company = new Company { Name = "Unassigned Oy", BusinessId = "WQ-" + Guid.NewGuid().ToString("N")[..8], IsActive = true, IsPartnerEnabled = true };
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(company);
+            db.Store(new Booking { BookingNumber = "BK-ASSIGNED", Customer = new Customer { Name = "Assigned" }, Status = Booking.StatusNew, EmployeeId = Guid.NewGuid().ToString(),
+                StartUtc = new DateTime(2026, 12, 2, 8, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-02", StartLocalTime = "10:00" });
+            db.Store(new Booking { BookingNumber = "BK-FREE", Customer = new Customer { Name = "Free" }, Status = Booking.StatusNew,
+                StartUtc = new DateTime(2026, 12, 2, 9, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-02", StartLocalTime = "11:00" });
+            await db.SaveChangesAsync();
+        }
+        using var session = f.Session();
+        var reader = Reader(f, session);
+
+        var everyone = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.NeedsAction, "booking", null, 0, 25));
+        Assert.Equal(2, everyone.Total);
+
+        var unassigned = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.NeedsAction, "booking", null, 0, 25, UnassignedOnly: true));
+        Assert.Equal(["BK-FREE"], unassigned.Items.Select(i => i.Reference).ToArray());
+        Assert.Equal(1, unassigned.Total);
+        Assert.Equal(1, unassigned.Counts[WorkQueueViews.NeedsAction]);
+    }
+
+    [QualityCycleDatabaseFact]
     public async Task Non_guid_assignee_matches_nothing_in_any_source()
     {
         // Bookings and shifts must agree: a non-GUID assignee returns an empty queue, not a partial one.
@@ -298,6 +324,31 @@ public class WorkQueueReaderDatabaseTests
         var page = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.NeedsAction, "shift", null, 0, 25));
         // Guards against a vacuous pass: the shift must resolve to at least one occurrence and reach classification.
         Assert.True(page.Counts.Values.Sum() > 0, "No shift occurrence classified; shift path not exercised.");
+    }
+
+    [QualityCycleDatabaseFact]
+    public async Task Future_visits_with_an_assigned_cleaner_are_scheduled_and_only_unassigned_visits_need_action()
+    {
+        using var f = await Fixture.Create();
+        var company = new Company { Name = "Assigned Co", BusinessId = "WQ-" + Guid.NewGuid().ToString("N")[..8], IsActive = true };
+        var schedule = new ShiftSchedule { Type = ShiftScheduleType.DailySameTime, DailyStart = new TimeSpan(8, 0, 0), DailyEnd = new TimeSpan(10, 0, 0) };
+        var assigned = Shift.Create(company.Id, Guid.NewGuid(), "Assigned daily", schedule, null, DateTime.UtcNow.Date.AddDays(3), null);
+        var open = Shift.Create(company.Id, Guid.NewGuid(), "Open daily", schedule, null, DateTime.UtcNow.Date.AddDays(3), null);
+        var cleaner = ShiftAssignment.Create(assigned.Id, Guid.NewGuid(), null);
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(company); db.Store(assigned, open); db.Store(cleaner);
+            await db.SaveChangesAsync();
+        }
+
+        using var session = f.Session();
+        var reader = Reader(f, session);
+        var needsAction = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.NeedsAction, "shift", null, 0, 200));
+        Assert.All(needsAction.Items, item => Assert.Equal("Unassigned", item.StateLabel));
+        Assert.Contains(needsAction.Items, item => item.Reference.Contains("Open daily"));
+        Assert.DoesNotContain(needsAction.Items, item => item.Reference.Contains("Assigned daily"));
+        var scheduled = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Scheduled, "shift", null, 0, 200));
+        Assert.Contains(scheduled.Items, item => item.Reference.Contains("Assigned daily") && item.StateLabel == "Scheduled");
     }
 
     private sealed class Fixture : IDisposable

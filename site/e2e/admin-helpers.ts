@@ -84,3 +84,28 @@ export async function setNavOpen(page: Page, open: boolean) {
   // The drawer's links mount after the open animation starts; wait for them before the caller looks inside.
   if (open) await expect(page.locator('#admin-navigation a[href]').first()).toBeAttached({ timeout: 15000 });
 }
+
+// The shift list is answered by the same route as before, and the paged endpoint is answered by the same mock.
+// A list call returns the array unchanged; a page call (has a tab parameter) returns one page with the tab counts.
+export function isShiftsRoute(path: string): boolean {
+  return path.endsWith('/shifts') || path.endsWith('/shifts/page');
+}
+
+export function shiftsResponse(list: any[], url: string): any[] | { items: any[]; total: number; counts: { active: number; completed: number; inactive: number } } {
+  const params = new URL(url).searchParams;
+  if (!new URL(url).pathname.endsWith('/shifts/page')) return list;
+  const tab = params.get('tab') ?? 'active';
+  const skip = Number(params.get('skip') ?? 0);
+  const take = Number(params.get('take') ?? 25);
+  const tabOf = (s: any) => (!s.isActive ? 'inactive' : s.isCompleted ? 'completed' : 'active');
+  const inTab = list.filter(s => tabOf(s) === tab);
+  return {
+    items: inTab.slice(skip, skip + take),
+    total: inTab.length,
+    counts: {
+      active: list.filter(s => tabOf(s) === 'active').length,
+      completed: list.filter(s => tabOf(s) === 'completed').length,
+      inactive: list.filter(s => tabOf(s) === 'inactive').length,
+    },
+  };
+}

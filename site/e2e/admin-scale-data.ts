@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { shiftsResponse } from './admin-helpers';
 
 // Deterministic synthetic tenant data, built in dependency order: companies -> branches -> shifts -> invoices.
 // Every shift points at a branch of its own company, so the fixture cannot describe an impossible tenant.
@@ -94,6 +95,7 @@ export async function installScaleRoutes(page: Page, data: ScaleData) {
       const company = data.companies.find(c => c.id === companyMatch[1]);
       return company ? json({ company, branches: branchesOf(company.id) }) : route.fulfill({ status: 404, headers: CORS, json: { title: 'Not found' } });
     }
+    if (path.endsWith('/shifts/page')) return json(shiftsResponse(data.shifts, route.request().url()));
     if (path.endsWith('/shifts')) {
       const companyId = q.get('companyId'), branchId = q.get('branchId'), includeInactive = q.get('includeInactive') === 'true';
       return json(data.shifts.filter(s => (!companyId || s.companyId === companyId) && (!branchId || s.branchId === branchId) && (includeInactive || s.isActive)));

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { shiftAction } from './shift-actions';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, shiftsResponse } from './admin-helpers';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -172,7 +172,7 @@ test.describe('Admin Panel - Services Page', () => {
     await page.getByLabel('Slug').fill('test-slug');
     await page.getByLabel('Name (Finnish)').fill('Test Name');
     await page.getByRole('button', { name: 'Create service' }).click();
-    await expect(page.getByText('Failed to create service.')).toBeVisible();
+    await expect(page.getByText('The change was not saved (error 400). Check the fields, then save again.').first()).toBeVisible();
   });
 
   test('edit service prefills and saves all three languages', async ({ page }) => {
@@ -359,7 +359,7 @@ test.describe('Admin Panel - Agreements Page', () => {
     await page.route('**/api/v1/admin/agreements**', async (route) => {
       if (new URL(route.request().url()).pathname.endsWith('/legacy-repairs')) return route.fulfill({ status: 200, headers: CORS_HEADERS, json: { agreements: [], companies: [] } });
       if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
-      return route.fulfill({ status: 200, json: [], headers: CORS_HEADERS });
+      return route.fulfill({ status: 200, json: shiftsResponse([], route.request().url()), headers: CORS_HEADERS });
     });
 
     await page.goto('/admin/agreements/');
@@ -506,7 +506,7 @@ test.describe('Admin Panel - Employees Page', () => {
     await page.getByLabel('First name').fill('Err');
     await page.getByLabel('Last name').fill('User');
     await page.getByRole('button', { name: 'Create employee' }).click();
-    await expect(page.getByText('Employee update failed (500). Please retry.')).toBeVisible();
+    await expect(page.getByText('The change was not saved (error 500). Check the fields, then save again.').first()).toBeVisible();
   });
 });
 
@@ -686,7 +686,7 @@ test.describe('Admin Panel - Shifts Page', () => {
         return route.fulfill({ status: 200, json: assignments[shiftId] || [], headers: CORS_HEADERS });
       }
 
-      if (method === 'GET') return route.fulfill({ status: 200, json: shifts, headers: CORS_HEADERS });
+      if (method === 'GET') return route.fulfill({ status: 200, json: shiftsResponse(shifts, url), headers: CORS_HEADERS });
 
       if (method === 'POST') {
         const body = getBody(route);
@@ -779,7 +779,7 @@ test.describe('Admin Panel - Shifts Page', () => {
     });
     await page.route('**/api/v1/admin/shifts**', async (route) => {
       if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
-      return route.fulfill({ status: 200, json: [], headers: CORS_HEADERS });
+      return route.fulfill({ status: 200, json: shiftsResponse([], route.request().url()), headers: CORS_HEADERS });
     });
 
     await page.goto('/admin/shifts/');
@@ -830,7 +830,7 @@ test.describe('Admin Panel - Shifts Page', () => {
     await page.route('**/api/v1/admin/shifts**', async (route) => {
       const method = route.request().method();
       if (method === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
-      if (method === 'GET') return route.fulfill({ status: 200, json: createdShifts, headers: CORS_HEADERS });
+      if (method === 'GET') return route.fulfill({ status: 200, json: shiftsResponse(createdShifts, route.request().url()), headers: CORS_HEADERS });
       if (method === 'POST') {
         const body = getBody(route);
         const newShift = {

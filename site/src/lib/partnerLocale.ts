@@ -116,8 +116,20 @@ const fi: Record<keyof typeof en, string> = {
 };
 
 export const partnerCopy = { en, fi };
+// Several field errors arrive joined by spaces (see partnerSend); translate each sentence on its own.
 export function partnerMessage(message: string, language: PartnerLanguage): string {
   if (language === 'en' || !message) return message;
+  const direct = knownTranslation(message);
+  if (direct) return direct;
+  const sentences = message.match(/[^.!?]+[.!?]+/g);
+  if (sentences && sentences.length > 1 && sentences.join('') === message) {
+    const parts = sentences.map(sentence => knownTranslation(sentence.trim()));
+    if (parts.every((part): part is string => Boolean(part))) return parts.join(' ');
+  }
+  return fi.operationFailed;
+}
+
+function knownTranslation(message: string): string | undefined {
   const key = (Object.keys(en) as (keyof typeof en)[]).find(key => en[key] === message);
   if (key) return fi[key];
   const known: Record<string, string> = {
@@ -125,6 +137,9 @@ export function partnerMessage(message: string, language: PartnerLanguage): stri
     'The company must be active and enabled for partner work.': 'Yrityksen on oltava aktiivinen ja kuuluttava kumppaniohjelmaan.',
     'Request a quote before booking this property.': 'Pyydä tarjous ennen siivouksen tilaamista tähän kohteeseen.',
     'A request identifier is required.': 'Pyynnön tunniste puuttuu. Avaa lomake uudelleen.',
+    'Choose the property for this cleaning.': 'Valitse siivouksen kohde.',
+    'Choose the first day of the cleaning.': 'Valitse siivouksen ensimmäinen päivä.',
+    'Choose the last day of the cleaning.': 'Valitse siivouksen viimeinen päivä.',
     'This request identifier has already been used.': 'Pyynnön tunniste on jo käytössä. Päivitä tiedot.',
     'Choose a supported inclusive date range of at most 367 days.': 'Valitse enintään 367 päivän aikaväli vuosien 2000 ja 2099 väliltä.',
     'The property needs an estimated cleaning duration.': 'Kohteelle on määritettävä arvioitu siivousaika.',
@@ -149,7 +164,7 @@ export function partnerMessage(message: string, language: PartnerLanguage): stri
   if (known[message]) return known[message];
   if (/Request failed \((401|403)\)/.test(message)) return fi.accessError;
   if (/Request failed \(404\)/.test(message)) return fi.notFound;
-  return fi.operationFailed;
+  return undefined;
 }
 
 export function partnerStatus(value: string, language: PartnerLanguage): string {

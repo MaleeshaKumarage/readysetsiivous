@@ -55,8 +55,13 @@ public record SaveShiftOccurrenceExceptionCommand(Guid ShiftId, Guid? Id,
     : IRequest<ShiftOccurrenceDto>;
 public record DeleteShiftOccurrenceExceptionCommand(Guid ShiftId, Guid Id) : IRequest;
 
+public sealed record ShiftRosterInputs(IReadOnlyDictionary<Guid, IReadOnlyList<ShiftOccurrenceException>> Exceptions,
+    IReadOnlyDictionary<Guid, IReadOnlyList<ShiftAssignment>> History, IReadOnlyDictionary<Guid, IReadOnlyList<ShiftOccurrenceAssignment>> Overrides);
+
 public interface IShiftRepository
 {
+    /// <summary>Roster inputs for many shifts in one load per collection, keyed by shift id.</summary>
+    Task<ShiftRosterInputs> ListRosterInputsAsync(IReadOnlyCollection<Guid> shiftIds, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default);
     Task<Shift?> GetAsync(Guid id, CancellationToken ct = default);
     Task<Shift?> GetDeletedSnapshotAsync(Guid id, CancellationToken ct = default);
     Task<IReadOnlyList<Shift>> ListAsync(Guid? companyId, Guid? branchId, CancellationToken ct = default);
@@ -68,9 +73,15 @@ public interface IShiftRepository
     Task<IReadOnlyList<ShiftAssignment>> ListAssignmentsByShiftAsync(Guid shiftId, CancellationToken ct = default);
     Task<IReadOnlyDictionary<Guid, int>> CountActiveAssignmentsByShiftAsync(CancellationToken ct = default);
     Task SaveAssignmentAsync(ShiftAssignment assignment, CancellationToken ct = default);
+    /// <summary>Saves a deactivated shift and its released assignments in one transaction.</summary>
+    Task SaveDeactivationAsync(Shift shift, IReadOnlyList<ShiftAssignment> releasedAssignments, CancellationToken ct = default);
     Task DeleteAssignmentAsync(Guid assignmentId, CancellationToken ct = default);
     Task<IReadOnlyList<Shift>> ListForReportingAsync(CancellationToken ct = default);
     Task<IReadOnlyList<Shift>> ListIncludingInactiveAsync(CancellationToken ct = default);
+    /// <summary>Stores the tab on every shift that does not have one yet (shifts saved before tabs were stored).</summary>
+    Task EnsureTabsAsync(CancellationToken ct = default);
+    Task<ShiftTabCounts> CountTabsAsync(Guid? companyId, Guid? branchId, CancellationToken ct = default);
+    Task<(IReadOnlyList<Shift> Items, int Total)> ListTabPageAsync(string tab, Guid? companyId, Guid? branchId, string? search, int skip, int take, CancellationToken ct = default);
     Task<ShiftOccurrenceAssignment?> GetOccurrenceAssignmentAsync(Guid id, CancellationToken ct = default);
     Task<IReadOnlyList<ShiftOccurrenceAssignment>> ListOccurrenceAssignmentsAsync(Guid shiftId, CancellationToken ct = default);
     Task<IReadOnlyList<ShiftOccurrenceAssignment>> ListOccurrenceAssignmentsByEmployeeAsync(Guid employeeId, CancellationToken ct = default);
@@ -86,9 +97,13 @@ public interface IShiftRepository
     Task DeleteOccurrenceExceptionAsync(Guid id, CancellationToken ct = default);
 }
 
+public record ShiftConflictDetail(Guid ShiftId, string ShiftName, DateTime StartUtc, DateTime EndUtc);
+
 public class ShiftConflictException : Exception
 {
     public ShiftConflictException(string message) : base(message) { }
+    public ShiftConflictException(string message, IReadOnlyList<ShiftConflictDetail> conflicts) : base(message) { Conflicts = conflicts; }
+    public IReadOnlyList<ShiftConflictDetail> Conflicts { get; } = Array.Empty<ShiftConflictDetail>();
 }
 
 public record CreateShiftCommand(
@@ -118,6 +133,11 @@ public record ReactivateShiftCommand(Guid Id) : IRequest<ShiftDto>;
 public record DeleteShiftCommand(Guid Id) : IRequest;
 
 public record ListShiftsQuery(Guid? CompanyId, Guid? BranchId, bool IncludeInactive = false) : IRequest<IReadOnlyList<ShiftDto>>;
+
+/// <summary>One page of the shift list for one tab. Counts cover every tab in the same company and branch scope, ignoring search.</summary>
+public record ListShiftPageQuery(string Tab, Guid? CompanyId, Guid? BranchId, string? Search, int Skip, int Take) : IRequest<ShiftPage>;
+public record ShiftTabCounts(int Active, int Completed, int Inactive);
+public record ShiftPage(IReadOnlyList<ShiftDto> Items, int Total, ShiftTabCounts Counts);
 
 public record GetShiftQuery(Guid Id) : IRequest<ShiftDto>;
 
@@ -264,7 +284,16 @@ public class ShiftHandlers
             shift.EnsureQualityCycleHistory();
             shift.Deactivate();
             shift.RecordQualityCyclePlan(DateTime.UtcNow);
-            await _repository.SaveAsync(shift, ct);
+            var now = DateTime.UtcNow;
+            var released = new List<ShiftAssignment>();
+            foreach (var assignment in await _repository.ListAssignmentsByShiftAsync(shift.Id, ct))
+            {
+                if (!assignment.IsActive) continue;
+                assignment.Release(now);
+                released.Add(assignment);
+            }
+            // The shift and its releases commit together, so a failure never leaves a half-deactivated shift.
+            await _repository.SaveDeactivationAsync(shift, released, ct);
         }
     }
 
@@ -286,13 +315,36 @@ public class ShiftHandlers
                 ? (await _repository.ListIncludingInactiveAsync(ct)).Where(s => (!request.CompanyId.HasValue || s.CompanyId == request.CompanyId)
                     && (!request.BranchId.HasValue || s.BranchId == request.BranchId)).ToList()
                 : await _repository.ListAsync(request.CompanyId, request.BranchId, ct);
-            // A one-time visit is completed once its checklist has been submitted. Recurring shifts stay live.
-            // One batched lookup for all one-time shifts, never one query per shift.
-            var oneTimeIds = shifts.Where(s => s.Schedule.IsOneTime).Select(s => s.Id).ToList();
-            IReadOnlySet<Guid> completed = oneTimeIds.Count == 0
-                ? new HashSet<Guid>()
-                : await _forms.ListShiftIdsWithSubmittedFormAsync(oneTimeIds, ct);
+            var completed = await CompletedOneTimeShiftIdsAsync(shifts, _forms, ct);
             return shifts.Select(shift => MapShift(shift) with { IsCompleted = completed.Contains(shift.Id) }).ToList();
+        }
+    }
+
+    /// <summary>A one-time visit is completed once its checklist has been submitted. Recurring shifts stay live.
+    /// One batched lookup for all one-time shifts, never one query per shift.</summary>
+    private static async Task<IReadOnlySet<Guid>> CompletedOneTimeShiftIdsAsync(IReadOnlyList<Shift> shifts, IQualityCycleRepository forms, CancellationToken ct)
+    {
+        var oneTimeIds = shifts.Where(s => s.Schedule.IsOneTime).Select(s => s.Id).ToList();
+        return oneTimeIds.Count == 0 ? new HashSet<Guid>() : await forms.ListShiftIdsWithSubmittedFormAsync(oneTimeIds, ct);
+    }
+
+    public class ListShiftPageQueryHandler : IRequestHandler<ListShiftPageQuery, ShiftPage>
+    {
+        public static readonly IReadOnlyList<string> Tabs = ShiftTabs.All;
+        private readonly IShiftRepository _repository;
+
+        public ListShiftPageQueryHandler(IShiftRepository repository)
+        {
+            _repository = repository;
+        }
+
+        public async Task<ShiftPage> Handle(ListShiftPageQuery request, CancellationToken ct)
+        {
+            await _repository.EnsureTabsAsync(ct);
+            var counts = await _repository.CountTabsAsync(request.CompanyId, request.BranchId, ct);
+            var search = string.IsNullOrWhiteSpace(request.Search) ? null : request.Search.Trim();
+            var (shifts, total) = await _repository.ListTabPageAsync(request.Tab, request.CompanyId, request.BranchId, search, request.Skip, request.Take, ct);
+            return new ShiftPage(shifts.Select(s => MapShift(s) with { IsCompleted = s.ChecklistCompleted }).ToList(), total, counts);
         }
     }
 
@@ -318,7 +370,8 @@ public class ShiftHandlers
         }
     }
 
-    public sealed class DeleteShiftCommandHandler(IShiftRepository shifts)
+    // Required: a missing started-visit check would let a shift with uninvoiced work be deleted without any error.
+    public sealed class DeleteShiftCommandHandler(IShiftRepository shifts, IQualityCycleRepository forms)
         : IRequestHandler<DeleteShiftCommand>
     {
         public async Task Handle(DeleteShiftCommand request, CancellationToken ct)
@@ -326,6 +379,9 @@ public class ShiftHandlers
             var shift = await shifts.GetAsync(request.Id, ct) ?? throw new NotFoundException("Shift", request.Id);
             CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
             if (shift.IsActive) throw new InactiveRecordDeleteConflictException("Deactivate the shift before deleting it.");
+            // Started or submitted visit records carry completed work that may not be invoiced yet; deleting the shift would remove it.
+            if ((await forms.ListFormsAsync(shift.Id, null, null, ct)).Any(f => f.IsSubmitted || f.StartedAtUtc.HasValue))
+                throw new InactiveRecordDeleteConflictException("This shift has started or completed visits that may not be invoiced yet. Keep it deactivated so its work and billing stay available.");
             await shifts.DeleteAsync(shift.Id, ct);
         }
     }

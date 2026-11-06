@@ -27,7 +27,12 @@ export async function calendarRequest<T>(path: string, init: RequestInit = {}): 
       ? 'The calendar could not be loaded. Reload the page to try again.'
       : 'The connection was lost before the server confirmed the request. Reload the calendar to check what was saved before trying again.');
   }
-  if (response.status === 403) throw new CalendarAccessError('Shift calendar access is not enabled for your account.');
+  if (response.status === 403) {
+    // The server says how to get access; keep a next step even when it sends no detail.
+    const problem = await response.json().catch(() => null);
+    const detail = typeof problem?.detail === 'string' ? problem.detail.trim() : '';
+    throw new CalendarAccessError(detail || 'Shift calendar access is not enabled for your account. Ask an owner to enable it, then reload.');
+  }
   if (!response.ok) {
     const problem = await response.json().catch(() => null);
     throw new Error(problem?.detail || 'Could not load or save the calendar. Please retry.');

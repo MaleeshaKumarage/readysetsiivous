@@ -29,6 +29,8 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
         var assigneeKey = assignee is not null && Guid.TryParse(assignee, out var parsedKey) ? parsedKey.ToString() : assignee;
         // Partner requests carry no assignee of their own, so an assignee filter leaves them out.
         if (assignee is not null) includePartners = false;
+        // Unassigned work: occurrences and bookings with no cleaner. Partner requests have no assignee of their own, so they stay in.
+        var unassignedOnly = query.UnassignedOnly;
         var fromDay = query.DateFrom is null ? (DateOnly?)null : DateOnly.ParseExact(query.DateFrom, "yyyy-MM-dd");
         var toDay = query.DateTo is null ? (DateOnly?)null : DateOnly.ParseExact(query.DateTo, "yyyy-MM-dd");
         bool InDates(DateOnly day) => (fromDay is null || day >= fromDay) && (toDay is null || day <= toDay);
@@ -44,7 +46,7 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
         var assigneeId = assignee is not null && Guid.TryParse(assignee, out var parsedAssignee) ? parsedAssignee : (Guid?)null;
         var shiftRows = includeShifts
             ? (await ClassifyShiftsAsync(search, companyIds, zone, ct))
-                .Where(r => InDates(DateOnly.FromDateTime(r.Local)) && (assignee is null || (assigneeId is { } id && r.Visit.EmployeeIds.Contains(id))))
+                .Where(r => InDates(DateOnly.FromDateTime(r.Local)) && (assignee is null || (assigneeId is { } id && r.Visit.EmployeeIds.Contains(id))) && (!unassignedOnly || r.Visit.EmployeeIds.Count == 0))
                 .ToList()
             : new List<ShiftRow>();
 
@@ -136,6 +138,7 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
             // The day after 9999-12-31 does not exist, so an end date at the maximum leaves the upper bound open.
             if (toDay is { } lastDay && lastDay != DateOnly.MaxValue) { var upper = TenantTimeZone.StartOfLocalDay(lastDay.AddDays(1).ToDateTime(TimeOnly.MinValue), zone); var unspecifiedUpper = DateTime.SpecifyKind(upper, DateTimeKind.Unspecified); q = q.Where(b => b.StartUtc < unspecifiedUpper); }
             if (assignee is not null) q = q.Where(b => b.EmployeeId == assigneeKey);
+            if (unassignedOnly) q = q.Where(b => b.EmployeeId == null);
             return q;
         }
     }
@@ -167,10 +170,24 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
             .ToListAsync(ct);
         var formsByOccurrence = forms.GroupBy(f => (f.ShiftId, f.ShiftOccurrenceUtc))
             .ToDictionary(g => g.Key, g => (IReadOnlyList<QualityCycleForm>)g.ToList());
+        // Roster inputs are loaded once for every shift in the window, not once per shift.
+        var exceptions = (await Db.Query<ShiftOccurrenceException>()
+            .Where(x => shiftIds.Contains(x.ShiftId) && ((x.StartUtc >= fromKey && x.StartUtc < toKey)
+                || (x.OriginalStartUtc != null && x.OriginalStartUtc >= fromKey && x.OriginalStartUtc < toKey)))
+            .ToListAsync(ct)).GroupBy(x => x.ShiftId).ToDictionary(g => g.Key, g => (IReadOnlyList<ShiftOccurrenceException>)g.ToList());
+        var history = (await Db.Query<ShiftAssignment>().Where(a => shiftIds.Contains(a.ShiftId)).ToListAsync(ct))
+            .GroupBy(a => a.ShiftId).ToDictionary(g => g.Key, g => (IReadOnlyList<ShiftAssignment>)g.ToList());
+        var overrides = (await Db.Query<ShiftOccurrenceAssignment>().Where(x => shiftIds.Contains(x.ShiftId)).ToListAsync(ct))
+            .GroupBy(x => x.ShiftId).ToDictionary(g => g.Key, g => (IReadOnlyList<ShiftOccurrenceAssignment>)g.ToList());
+        var none = Array.Empty<ShiftOccurrenceException>();
+        var noHistory = Array.Empty<ShiftAssignment>();
+        var noOverrides = Array.Empty<ShiftOccurrenceAssignment>();
         var rows = new List<ShiftRow>();
         foreach (var shift in shifts)
         {
-            var visits = await shiftRepository.ResolveRosterAsync(shift, fromUtc, toUtc, zone, ct, includeCancelled: true);
+            var visits = ShiftRosterReader.ResolveRoster(shift, fromUtc, toUtc, zone,
+                exceptions.GetValueOrDefault(shift.Id) ?? none, history.GetValueOrDefault(shift.Id) ?? noHistory,
+                overrides.GetValueOrDefault(shift.Id) ?? noOverrides, includeCancelled: true);
             foreach (var visit in visits)
             {
                 var start = visit.Occurrence.StartUtc;

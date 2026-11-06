@@ -1,5 +1,6 @@
 'use client';
 
+import { showError } from '@/lib/toast';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import {
   Title, Button, Table, Modal, TextInput, Textarea, Group, Stack, Text, Loader, Badge, Checkbox, NumberInput, Pagination, Select,
@@ -145,7 +146,8 @@ export default function CompaniesAdminPage() {
       else await adminCompanies.create(fields);
       setForm(emptyForm); setEditingCompany(null); setModalOpen(false); if (!editingCompany) { setStatus('active'); setPage(1); } await reload();
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : 'Could not create company. Please retry.');
+      const message = failure instanceof Error ? failure.message : 'Could not create company. Please retry.';
+      setError(message); showError(message, 'Company not saved');
     } finally { setSaving(false); }
   };
 

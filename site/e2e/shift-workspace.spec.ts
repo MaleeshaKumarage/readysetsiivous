@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, shiftsResponse } from './admin-helpers';
 import { openShiftWorkspace, shiftAction } from './shift-actions';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
@@ -36,6 +36,7 @@ async function setup(page: Page) {
     }
     if (path.endsWith('/pricing')) return route.fulfill({ status: 200, headers, json: { plans: [], overrides: [] } });
     if (path.endsWith('/shifts/assignment-counts')) return route.fulfill({ status: 200, headers, json: { daily: 0, oncall: 0, paused: 0, staffed: 1, done: 0 } });
+    if (path.endsWith('/shifts/page')) return route.fulfill({ status: 200, headers, json: shiftsResponse(shifts, route.request().url()) });
     if (path.endsWith('/shifts')) return route.fulfill({ status: 200, headers, json: shifts });
     const json = path.endsWith('/companies') ? { items: [{ id: 'company', name: 'Company', isActive: true }], total: 1 }
       : path.endsWith('/companies/company') ? { company: { id: 'company', name: 'Company', isActive: true }, branches: [{ id: 'branch', name: 'Branch', isActive: true }] }

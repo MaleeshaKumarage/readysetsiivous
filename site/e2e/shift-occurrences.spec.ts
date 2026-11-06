@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
 import { shiftAction } from './shift-actions';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,PUT,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
@@ -24,7 +24,7 @@ async function setup(page: Page) {
       occurrenceQueries.push(new URL(request.url()).searchParams);
       return route.fulfill({ status: 200, headers, json: occurrences });
     }
-    const json = path.endsWith('/shifts') ? [{ id: 'shift', name: 'Morning clean', companyId: 'company', branchId: 'branch', isActive: true, schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' } }]
+    const json = isShiftsRoute(path) ? shiftsResponse([{ id: 'shift', name: 'Morning clean', companyId: 'company', branchId: 'branch', isActive: true, schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' } }], route.request().url())
       : path.endsWith('/employees') ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true }, { id: 'second', firstName: 'Second', lastName: 'Cleaner', role: 'employee', isActive: true }, { id: 'partner-owner', firstName: 'Active', lastName: 'Partner', role: 'partner', isActive: true }]
       : path.endsWith('/companies') ? { items: [], total: 0 }
       : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [];

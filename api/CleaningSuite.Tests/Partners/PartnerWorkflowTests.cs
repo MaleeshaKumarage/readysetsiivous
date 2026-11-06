@@ -93,6 +93,18 @@ public class PartnerWorkflowTests
     }
 
     [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Declining_an_offer_that_is_no_longer_waiting_says_so_instead_of_reporting_a_change()
+    {
+        using var fixture = await Fixture.Create();
+        var offer = await fixture.SubmitOffer();
+        using (var session = fixture.Session()) await fixture.Service(session).Accept(fixture.Cleaner.Id, offer.OfferId!.Value, new(offer.Version), default);
+        using var declining = fixture.Session();
+        // The cleaner still holds the offer at its old version; the real reason is that it is no longer waiting for an answer.
+        var ex = await Assert.ThrowsAsync<ShiftConflictException>(() => fixture.Service(declining).Decline(fixture.Cleaner.Id, offer.OfferId!.Value, new(offer.Version), default));
+        Assert.Contains("no longer waiting for your answer", ex.Message);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
     public async Task Overlapping_acceptance_rolls_back_all_materialization()
     {
         using var fixture = await Fixture.Create();

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, shiftsResponse } from './admin-helpers';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 
@@ -39,7 +39,7 @@ test('checklist reactivation failure settles and retry preserves scope and items
   await setupAdminMocks(page);
   const template = { id: 'template', title: 'Archived checklist', description: 'Keep description', companyId: 'company', branchId: 'branch', items: ['Floor', 'Windows'], isActive: false, createdUtc: '2026-10-14T08:00:00Z', updatedUtc: '2026-10-14T08:00:00Z' };
   let attempts = 0;
-  await page.route(/\/api\/v1\/admin\/shifts(?:\?.*)?$/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/admin\/shifts(?:\/page)?(?:\?.*)?$/, route => route.fulfill({ headers, json: shiftsResponse([], route.request().url()) }));
   await page.route(/\/api\/v1\/admin\/quality-cycle\/templates(?:.*)?$/, async route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
     if (route.request().method() === 'POST') {

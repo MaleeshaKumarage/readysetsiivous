@@ -32,6 +32,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(options => CleaningSuite.Api.Middleware.TrustedProxyConfiguration.Configure(options, builder.Configuration));
 builder.Services.Configure<CleaningSuite.Api.Middleware.PublicRateLimitOptions>(builder.Configuration.GetSection("PublicRateLimit"));
 
+builder.Services.PostConfigure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(options =>
+    options.InvalidModelStateResponseFactory = context => new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(CleaningSuite.Api.RequestErrorText.FromModelState(context.ModelState)));
 builder.Services.AddControllers().AddJsonOptions(o =>
 {
     o.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
@@ -55,7 +57,8 @@ var autoCreate = builder.Configuration.GetValue<AutoCreate?>("Marten:AutoCreateS
 builder.Services.AddCleaningMarten(connectionString, autoCreate);
 builder.Services.AddHostedService<MartenSchemaInitializer>();
 builder.Services.AddScoped<CleaningSuite.Infrastructure.Persistence.ShiftValidityCorrectionRunner>();
-builder.Services.AddHostedService<CleaningSuite.Api.ShiftValidityCorrectionService>();
+builder.Services.AddScoped<CleaningSuite.Infrastructure.Persistence.StaleAssignmentRepairRunner>();
+builder.Services.AddHostedService<CleaningSuite.Api.StartupRepairService>();
 if (builder.Configuration.GetValue("BackgroundWorkers:Enabled", true))
     builder.Services.AddHostedService<CleaningSuite.Api.Services.EntertainmentGroupCleanupService>();
 
@@ -217,6 +220,22 @@ if (app.Environment.IsDevelopment())
 // Wrap exception translation too so the audit records the final HTTP outcome.
 app.UseMiddleware<PlatformAuditMiddleware>();
 app.UseExceptionHandler();
+// Sign-in and permission refusals from authentication and authorization have no body; give the
+// user the next step. Responses that already carry a body (validation, conflicts) are left alone.
+app.UseStatusCodePages(async context =>
+{
+    var response = context.HttpContext.Response;
+    if (response.HasStarted) return;
+    var body = response.StatusCode switch
+    {
+        StatusCodes.Status401Unauthorized => new { title = "Sign in required", status = 401, detail = "Your session has ended or you are not signed in. Sign in again, then retry." },
+        StatusCodes.Status403Forbidden => new { title = "Access not allowed", status = 403, detail = "Your account does not have access to this area. Ask an owner to check your access." },
+        _ => null,
+    };
+    if (body is null) return;
+    response.ContentType = "application/problem+json";
+    await response.WriteAsJsonAsync(body);
+});
 app.UseCors("SiteOrigins");
 app.UseOutputCache();
 
@@ -302,6 +321,8 @@ public class ValidationExceptionHandler : IExceptionHandler
         {
             Status = StatusCodes.Status400BadRequest,
             Title = "Validation failed",
+            // Rules that throw a plain message have no field errors; the message is the only reason the user gets.
+            Detail = validationException.Errors.Any() ? null : validationException.Message,
             Errors = validationException.Errors
                 .GroupBy(e => e.PropertyName, e => e.ErrorMessage)
                 .ToDictionary(g => g.Key, g => g.ToArray()),
@@ -335,6 +356,10 @@ public class DefaultExceptionHandler : IExceptionHandler
             CleaningSuite.Application.Invoicing.InvoiceConflictException => (409, "Invoice conflict"),
             CleaningSuite.Application.Agreements.AgreementConflictException => (409, "Agreement conflict"),
             CleaningSuite.Application.Shifts.ShiftConflictException => (409, "Shift conflict"),
+            CleaningSuite.Application.Common.PublicBookingNotFoundException => (404, "Booking not found"),
+            CleaningSuite.Application.Common.PublicSigningLinkNotFoundException => (404, "Signing link not found"),
+            CleaningSuite.Application.Common.PublicServiceNotOfferedException => (404, "Service not offered"),
+            CleaningSuite.Application.Invoicing.Commands.InvoiceNotFoundException => (404, "Invoice not found"),
             CleaningSuite.Application.QualityCycle.QualityCycleConflictException => (409, "Shift task conflict"),
             CleaningSuite.Application.Employees.EmployeeIdentityConflictException => (409, "Employee identity conflict"),
             CleaningSuite.Application.Employees.EmployeeInviteConfigurationException => (503, "Employee invitation configuration incomplete"),
@@ -351,12 +376,19 @@ public class DefaultExceptionHandler : IExceptionHandler
             _logger.LogError(exception, "Unhandled exception for {Path}", context.Request.Path);
 
         context.Response.StatusCode = status;
-        await context.Response.WriteAsJsonAsync(new ProblemDetails
+        var problem = new ProblemDetails
         {
             Status = status,
             Title = title,
-            Detail = status == 500 ? null : exception.Message,
-        }, ct);
+            // A missing record names what was not found and what to do, without echoing an internal id.
+            Detail = status == 500 ? null
+                : exception is CleaningSuite.Application.Common.NotFoundException notFound
+                    ? $"That {notFound.Entity.ToLowerInvariant()} could not be found. Refresh the page and try again."
+                    : exception.Message,
+        };
+        if (exception is CleaningSuite.Application.Shifts.ShiftConflictException { Conflicts.Count: > 0 } shiftConflict)
+            problem.Extensions["conflicts"] = shiftConflict.Conflicts;
+        await context.Response.WriteAsJsonAsync(problem, ct);
         return true;
     }
 }

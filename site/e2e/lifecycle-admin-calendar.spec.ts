@@ -10,7 +10,7 @@ async function setup(page: Page, allowed = true) {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
     if (!allowed) return route.fulfill({ headers, status: 403, json: {} });
     if (route.request().method() === 'PUT') {
-      if (state.saveFailure) return route.fulfill({ headers, status: state.saveFailure, json: { detail: state.saveFailure === 409 ? 'Work times changed. Reload the calendar before saving.' : 'Could not save times. Please retry.' } });
+      if (state.saveFailure) return route.fulfill({ headers, status: state.saveFailure, json: { detail: state.saveFailure === 409 ? 'Work times changed. Reload the calendar before saving.' : state.saveFailure === 403 ? 'Your account does not have shift calendar access. Ask an owner to enable Shift calendar for your employee record, then reload.' : 'Could not save times. Please retry.' } });
       state.saved = route.request().postDataJSON(); state.partialWork = false; state.unusual = false;
       // A lost response: the server has saved the work, but the browser never receives the reply.
       if (state.abortPut) { state.abortPut = false; return route.abort('connectionclosed'); }
@@ -110,7 +110,7 @@ test('revoked permission during save closes work entry and hides calendar data',
   await page.getByRole('textbox', { name: 'Reason', exact: true }).fill('Pending entry');
   await page.getByRole('button', { name: 'Save work times' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.getByRole('alert').filter({ hasText: 'not enabled' })).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: 'does not have shift calendar access' })).toBeVisible();
   await expect(page.getByLabel('Calendar date')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Cleaning 2026-10-30' })).toHaveCount(0);
 });

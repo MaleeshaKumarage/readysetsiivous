@@ -23,16 +23,28 @@ public sealed class PushReminderScheduler(IPartnerStore store, IShiftRepository 
         if (devices.Count == 0) return;
         var employees = devices.Select(x => x.EmployeeId).ToHashSet();
         var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
-        foreach (var shift in await shifts.ListAsync(null, null, ct))
+        var allShifts = await shifts.ListAsync(null, null, ct);
+        // One load per roster collection for every shift, instead of three loads per shift on every minute.
+        var rosterFrom = now.AddDays(-2); var rosterTo = now.AddMinutes(31);
+        var inputs = await shifts.ListRosterInputsAsync(allShifts.Select(x => x.Id).ToArray(), rosterFrom, rosterTo, ct);
+        foreach (var shift in allShifts)
         {
             // Include overnight visits and moved visits through the canonical resolver.
-            var visits = await shifts.ResolveRosterAsync(shift, now.AddDays(-2), now.AddMinutes(31), zone, ct);
+            var visits = ShiftRosterReader.ResolveRoster(shift, rosterFrom, rosterTo, zone,
+                inputs.Exceptions.GetValueOrDefault(shift.Id) ?? Array.Empty<ShiftOccurrenceException>(),
+                inputs.History.GetValueOrDefault(shift.Id) ?? Array.Empty<ShiftAssignment>(),
+                inputs.Overrides.GetValueOrDefault(shift.Id) ?? Array.Empty<ShiftOccurrenceAssignment>());
             foreach (var visit in visits.Where(x => !x.IsCancelled))
             foreach (var employee in visit.EmployeeIds.Where(employees.Contains))
             {
-                foreach (var kind in new[] { "Upcoming", "Unfinished" })
+                foreach (var kind in VisitReminderKinds)
                 {
-                    var due = kind == "Upcoming" ? visit.Occurrence.StartUtc.AddMinutes(-30) : visit.Occurrence.EndUtc.AddMinutes(30);
+                    var due = kind switch
+                    {
+                        "Upcoming" => visit.Occurrence.StartUtc.AddMinutes(-30),
+                        "Unfinished" => visit.Occurrence.EndUtc.AddMinutes(30),
+                        _ => visit.Occurrence.StartUtc.AddHours(UnstartedHours(kind)),
+                    };
                     var expiry = kind == "Upcoming" ? visit.Occurrence.StartUtc : due.AddMinutes(60);
                     if (now < due || now >= expiry) continue;
                     // A new enrollment cannot cause an already-due overdue reminder.
@@ -73,6 +85,11 @@ public sealed class PushReminderScheduler(IPartnerStore store, IShiftRepository 
         await store.Session.SaveChangesAsync(ct);
     }
 
+    /// <summary>Reminders for a scheduled visit that has not started: 1, 12 and 24 hours after its scheduled start.</summary>
+    public static readonly string[] VisitReminderKinds = ["Upcoming", "Unfinished", "Unstarted1h", "Unstarted12h", "Unstarted24h"];
+    public static bool IsUnstartedKind(string kind) => kind is "Unstarted1h" or "Unstarted12h" or "Unstarted24h";
+    private static int UnstartedHours(string kind) => kind switch { "Unstarted1h" => 1, "Unstarted12h" => 12, _ => 24 };
+
     public async Task<bool> IsEligibleAsync(PushIntent intent, CancellationToken ct = default)
     {
         if (intent.Kind == "WorkAutoAccepted")
@@ -93,7 +110,7 @@ public sealed class PushReminderScheduler(IPartnerStore store, IShiftRepository 
             return branch is { IsActive: true } && branch.CompanyId == request.CompanyId
                 && company is { IsActive: true, IsPartnerEnabled: true };
         }
-        if (intent.Kind is not ("Upcoming" or "Unfinished")) return true;
+        if (intent.Kind is not ("Upcoming" or "Unfinished") && !IsUnstartedKind(intent.Kind)) return true;
         if (!intent.ShiftId.HasValue || !intent.OccurrenceStartUtc.HasValue) return false;
         var now = clock.GetUtcNow().UtcDateTime;
         if (now < intent.DueUtc || now >= intent.ExpiresUtc) return false;
@@ -105,6 +122,9 @@ public sealed class PushReminderScheduler(IPartnerStore store, IShiftRepository 
         if (visit is null || visit.IsCancelled || !visit.EmployeeIds.Contains(intent.EmployeeId)
             || visit.Occurrence.StartUtc != intent.OccurrenceStartUtc || visit.Occurrence.EndUtc != intent.OccurrenceEndUtc) return false;
         var evidence = await forms.GetFormByShiftOccurrenceAsync(shift.Id, intent.EmployeeId, visit.Occurrence.StartUtc, ct);
+        if (IsUnstartedKind(intent.Kind))
+            // The reminder stops as soon as the visit is started or submitted by this employee.
+            return evidence?.StartedAtUtc is null && evidence?.IsSubmitted != true;
         return intent.Kind == "Upcoming"
             ? now < visit.Occurrence.StartUtc && evidence?.StartedAtUtc is null && evidence?.IsSubmitted != true && evidence?.EndedAtUtc is null
             : evidence?.StartedAtUtc is not null && evidence.EndedAtUtc is null && !evidence.IsSubmitted;

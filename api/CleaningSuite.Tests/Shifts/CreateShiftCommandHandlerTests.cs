@@ -154,12 +154,13 @@ public class CreateShiftCommandHandlerTests
     {
         var shift = Shift.Create(Guid.NewGuid(), Guid.NewGuid(), "Shift", _validSchedule, null, null, null);
         _shiftRepoMock.Setup(r => r.GetAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
+        _shiftRepoMock.Setup(r => r.ListAssignmentsByShiftAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync([]);
 
         var handler = new ShiftHandlers.DeactivateShiftCommandHandler(_shiftRepoMock.Object);
         await handler.Handle(new DeactivateShiftCommand(shift.Id), CancellationToken.None);
 
         Assert.False(shift.IsActive);
-        _shiftRepoMock.Verify(r => r.SaveAsync(shift, It.IsAny<CancellationToken>()), Times.Once);
+        _shiftRepoMock.Verify(r => r.SaveDeactivationAsync(shift, It.Is<IReadOnlyList<ShiftAssignment>>(l => l.Count == 0), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

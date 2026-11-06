@@ -45,6 +45,24 @@ public class ShiftsAdminController : ControllerBase
         return Ok(result);
     }
 
+    // One page of one tab, with counts for all tabs. Never cached: a save must show in the counts straight away.
+    [HttpGet("page")]
+    [OutputCache(NoStore = true)]
+    public async Task<IActionResult> Page(
+        [FromQuery] string tab = "active",
+        [FromQuery] Guid? companyId = null,
+        [FromQuery] Guid? branchId = null,
+        [FromQuery] string? q = null,
+        [FromQuery] int skip = 0,
+        [FromQuery] int take = 25,
+        CancellationToken ct = default)
+    {
+        if (!ShiftHandlers.ListShiftPageQueryHandler.Tabs.Contains(tab)) return BadRequest("Tab must be active, completed or inactive.");
+        skip = Math.Max(0, skip);
+        take = Math.Clamp(take, 1, 100);
+        return Ok(await _mediator.Send(new ListShiftPageQuery(tab, companyId, branchId, q, skip, take), ct));
+    }
+
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct)
     {
@@ -96,6 +114,14 @@ public class ShiftsAdminController : ControllerBase
         var result = await _mediator.Send(new ListShiftAssignmentsQuery(id), ct);
         return Ok(result);
     }
+
+    [HttpGet("employee-schedule")]
+    public async Task<IActionResult> EmployeeSchedule([FromQuery] DateTime from, [FromQuery] DateTime to, CancellationToken ct) =>
+        Ok(await _mediator.Send(new EmployeeScheduleQuery(from, to), ct));
+
+    [HttpGet("overlap-audit")]
+    public async Task<IActionResult> OverlapAuditReport([FromQuery] DateTime from, [FromQuery] DateTime to, CancellationToken ct) =>
+        Ok(await _mediator.Send(new ShiftOverlapAuditQuery(from, to), ct));
 
     [HttpGet("{id:guid}/occurrences")]
     public async Task<IActionResult> Occurrences(

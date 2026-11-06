@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { shiftAction } from './shift-actions';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
 
 test('admin waits for valid scheduling settings before defaulting a new shift date', async ({ page }) => {
   await setupAdminMocks(page); let zone = 'Invalid/Zone'; let release!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });
   const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
-  await page.route(/\/api\/v1\/admin\//, route => route.fulfill({ headers, json: new URL(route.request().url()).pathname.endsWith('/companies') ? { items: [], total: 0 } : [] }));
+  await page.route(/\/api\/v1\/admin\//, route => route.fulfill({ headers, json: new URL(route.request().url()).pathname.endsWith('/companies') ? { items: [], total: 0 } : isShiftsRoute(new URL(route.request().url()).pathname) ? shiftsResponse([], route.request().url()) : [] }));
   await page.route('**/api/v1/admin/tenant', async route => { await gate; return route.fulfill({ headers, json: { timeZoneId: zone } }); });
   await page.goto('/admin/shifts/');
   await expect(page.getByRole('button', { name: 'Add shift', exact: true })).toBeDisabled();
@@ -31,7 +31,7 @@ test('admin requires a start date, supports an open end date, and edits the rang
       const body = route.request().postDataJSON(); writes.push(body); const saved = { id: method === 'POST' ? 'shift' : path.split('/').at(-1), ...body };
       shifts = [saved]; return route.fulfill({ headers, json: saved });
     }
-    return route.fulfill({ headers, json: path.endsWith('/shifts') ? shifts
+    return route.fulfill({ headers, json: isShiftsRoute(path) ? shiftsResponse(shifts, route.request().url())
       : path.endsWith('/companies/company') ? { company: { id: 'company', name: 'AAA', isActive: true }, branches: [{ id: 'branch', companyId: 'company', name: 'AAA1', isActive: true }] }
       : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'AAA', isActive: true }], total: 1 }
       : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
@@ -114,7 +114,7 @@ test('legacy on-call shifts keep scheduling dated visits while new shifts cannot
       }
       return route.fulfill({ headers, json: visits });
     }
-    return route.fulfill({ headers, json: path.endsWith('/shifts') ? shifts
+    return route.fulfill({ headers, json: isShiftsRoute(path) ? shiftsResponse(shifts, route.request().url())
       : path.endsWith('/companies/company') ? { company: { id: 'company', name: 'AAA', isActive: true }, branches: [{ id: 'branch', companyId: 'company', name: 'Property', isActive: true }] }
       : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'AAA', isActive: true }], total: 1 }
       : path.endsWith('/employees') ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true }]

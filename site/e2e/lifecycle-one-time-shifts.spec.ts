@@ -1,6 +1,6 @@
 import { test, expect, Locator, Page } from '@playwright/test';
 import { shiftAction } from './shift-actions';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 
@@ -43,7 +43,7 @@ async function mockAdmin(page: Page, seeded: any[] = [], options: { failFirstCre
       shifts = shifts.map(s => s.id === id ? saved : s);
       return route.fulfill({ headers, json: saved });
     }
-    return route.fulfill({ headers, json: path.endsWith('/shifts') ? shifts
+    return route.fulfill({ headers, json: isShiftsRoute(path) ? shiftsResponse(shifts, route.request().url())
       : path.endsWith('/companies/company') ? { company: { id: 'company', name: 'AAA', isActive: true }, branches: [{ id: 'branch', companyId: 'company', name: 'AAA1', isActive: true }] }
       : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'AAA', isActive: true }], total: 1 }
       : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
@@ -162,7 +162,7 @@ test('a failed save keeps the draft and a retry creates the visit once', async (
   await dialog.getByRole('textbox', { name: 'End time', exact: true }).fill('11:30');
 
   await dialog.getByRole('button', { name: 'Create shift', exact: true }).click();
-  await expect(dialog.getByText('Failed to create shift.', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('Synthetic failure', { exact: true }).first()).toBeVisible();
   await expect(dialog.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Past visit');
   await expect(dialog.getByRole('textbox', { name: 'Date', exact: true })).toHaveValue('2026-10-01');
 

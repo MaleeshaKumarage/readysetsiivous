@@ -61,7 +61,7 @@ public class ShiftRepository : IShiftRepository
     {
         if (!_shiftSnapshots.TryGetValue(shift.Id, out var before) || before != ScheduleFingerprint(shift))
             await StageChange(shift.Id, [], ct);
-        Session.Store(shift);
+        await ShiftTabs.StoreAsync(Session, shift, ct);
         await Session.SaveChangesAsync(ct);
     }
 
@@ -141,6 +141,17 @@ public class ShiftRepository : IShiftRepository
         await Session.SaveChangesAsync(ct);
     }
 
+    public async Task SaveDeactivationAsync(Shift shift, IReadOnlyList<ShiftAssignment> releasedAssignments, CancellationToken ct = default)
+    {
+        foreach (var assignment in releasedAssignments)
+            await StageChange(assignment.ShiftId, [assignment.EmployeeId], ct);
+        if (!_shiftSnapshots.TryGetValue(shift.Id, out var before) || before != ScheduleFingerprint(shift))
+            await StageChange(shift.Id, [], ct);
+        await ShiftTabs.StoreAsync(Session, shift, ct);
+        foreach (var assignment in releasedAssignments) Session.Store(assignment);
+        await Session.SaveChangesAsync(ct);
+    }
+
     public async Task<ShiftOccurrenceAssignment?> GetOccurrenceAssignmentAsync(Guid id, CancellationToken ct = default)
     {
         var item = await Session.LoadAsync<ShiftOccurrenceAssignment>(id, ct);
@@ -176,6 +187,44 @@ public class ShiftRepository : IShiftRepository
 
     public async Task<IReadOnlyList<Shift>> ListIncludingInactiveAsync(CancellationToken ct = default) =>
         await Session.Query<Shift>().OrderBy(s => s.Name).ToListAsync(ct);
+
+    public async Task EnsureTabsAsync(CancellationToken ct = default)
+    {
+        var missing = await Session.Query<Shift>().Where(x => x.Tab == null || x.Tab == "").ToListAsync(ct);
+        if (missing.Count == 0) return;
+        foreach (var shift in missing) await ShiftTabs.StoreAsync(Session, shift, ct);
+        await Session.SaveChangesAsync(ct);
+    }
+
+    public async Task<ShiftTabCounts> CountTabsAsync(Guid? companyId, Guid? branchId, CancellationToken ct = default)
+    {
+        var scope = ShiftScope(companyId, branchId);
+        return new ShiftTabCounts(
+            await scope.CountAsync(x => x.Tab == ShiftTabs.Active, ct),
+            await scope.CountAsync(x => x.Tab == ShiftTabs.Completed, ct),
+            await scope.CountAsync(x => x.Tab == ShiftTabs.Inactive, ct));
+    }
+
+    public async Task<(IReadOnlyList<Shift> Items, int Total)> ListTabPageAsync(string tab, Guid? companyId, Guid? branchId, string? search, int skip, int take, CancellationToken ct = default)
+    {
+        var query = ShiftScope(companyId, branchId).Where(x => x.Tab == tab);
+        if (search is not null)
+        {
+            var term = search.ToLowerInvariant();
+            query = query.Where(x => x.Name.ToLower().Contains(term));
+        }
+        var total = await query.CountAsync(ct);
+        var items = await query.OrderBy(x => x.Name).ThenBy(x => x.Id).Skip(skip).Take(take).ToListAsync(ct);
+        return (items, total);
+    }
+
+    private IQueryable<Shift> ShiftScope(Guid? companyId, Guid? branchId)
+    {
+        var query = Session.Query<Shift>().AsQueryable();
+        if (companyId.HasValue) query = query.Where(s => s.CompanyId == companyId.Value);
+        if (branchId.HasValue) query = query.Where(s => s.BranchId == branchId.Value);
+        return query;
+    }
 
     public async Task<IReadOnlyList<Shift>> ListForReportingAsync(CancellationToken ct = default)
     {
@@ -214,6 +263,39 @@ public class ShiftRepository : IShiftRepository
             .FirstOrDefaultAsync(x => x.ShiftId == shiftId && x.OriginalStartUtc == start, ct);
         if (item is not null) _exceptionRecipients.TryAdd(item.Id, Snapshot(item));
         return item;
+    }
+
+    public async Task<ShiftRosterInputs> ListRosterInputsAsync(IReadOnlyCollection<Guid> shiftIds, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default)
+    {
+        var ids = shiftIds.Distinct().ToArray();
+        var exceptions = new Dictionary<Guid, IReadOnlyList<ShiftOccurrenceException>>();
+        var history = new Dictionary<Guid, IReadOnlyList<ShiftAssignment>>();
+        var overrides = new Dictionary<Guid, IReadOnlyList<ShiftOccurrenceAssignment>>();
+        if (ids.Length == 0) return new(exceptions, history, overrides);
+        // Same archive rule as the per-shift loaders: a deleted shift's reporting snapshot replaces its live rows.
+        var archives = (await Session.Query<DeletedShift>().Where(x => ids.Contains(x.Id)).ToListAsync(ct)).ToDictionary(x => x.Id);
+        foreach (var archive in archives.Values)
+        {
+            exceptions[archive.Id] = archive.OccurrenceExceptions.Where(x =>
+                (x.StartUtc >= fromUtc && x.StartUtc < toUtc) || (x.OriginalStartUtc >= fromUtc && x.OriginalStartUtc < toUtc)).ToList();
+            history[archive.Id] = archive.Assignments;
+            overrides[archive.Id] = archive.OccurrenceAssignments;
+        }
+        var live = ids.Where(id => !archives.ContainsKey(id)).ToArray();
+        if (live.Length == 0) return new(exceptions, history, overrides);
+        // Occurrence columns hold Unspecified-kind values; the bounds are converted the same way as ListOccurrenceExceptionsAsync.
+        var from = DateTime.SpecifyKind(fromUtc, DateTimeKind.Unspecified);
+        var to = DateTime.SpecifyKind(toUtc, DateTimeKind.Unspecified);
+        foreach (var group in (await Session.Query<ShiftOccurrenceException>()
+            .Where(x => live.Contains(x.ShiftId) && ((x.StartUtc >= from && x.StartUtc < to)
+                || (x.OriginalStartUtc != null && x.OriginalStartUtc >= from && x.OriginalStartUtc < to)))
+            .ToListAsync(ct)).GroupBy(x => x.ShiftId))
+            exceptions[group.Key] = group.ToList();
+        foreach (var group in (await Session.Query<ShiftAssignment>().Where(a => live.Contains(a.ShiftId)).ToListAsync(ct)).GroupBy(a => a.ShiftId))
+            history[group.Key] = group.ToList();
+        foreach (var group in (await Session.Query<ShiftOccurrenceAssignment>().Where(x => live.Contains(x.ShiftId)).ToListAsync(ct)).GroupBy(x => x.ShiftId))
+            overrides[group.Key] = group.ToList();
+        return new(exceptions, history, overrides);
     }
 
     public async Task<IReadOnlyList<ShiftOccurrenceException>> ListOccurrenceExceptionsAsync(Guid shiftId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default)

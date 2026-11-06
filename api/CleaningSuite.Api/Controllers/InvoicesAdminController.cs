@@ -33,7 +33,8 @@ public class InvoicesAdminController : ControllerBase
         [FromServices] ShiftInvoiceService service, CancellationToken ct)
     {
         var preview = await service.PreviewAsync(request, ct);
-        return Ok(AdminResponses.Invoice(preview.Invoice) with { PreviewToken = preview.PreviewToken });
+        return Ok(AdminResponses.Invoice(preview.Invoice) with { PreviewToken = preview.PreviewToken,
+            UnstartedVisits = preview.UnstartedVisits?.Select(u => new UnstartedVisitResponse(u.ShiftId, u.ShiftName, u.StartUtc, u.EndUtc, u.Included)).ToArray() });
     }
 
     [HttpPost("shifts")]
@@ -100,7 +101,7 @@ public class InvoicesAdminController : ControllerBase
     {
         var invoice = await _mediator.Send(new GetInvoiceQuery(id), ct);
         if (invoice is null)
-            return NotFound();
+            return NotFound(new { title = "Invoice not found", status = 404, detail = CleaningSuite.Application.Invoicing.Commands.InvoiceNotFoundException.GuidanceText });
 
         var bytes = InvoicePdfRenderer.Render(invoice);
         return File(bytes, "application/pdf", $"invoice-{invoice.InvoiceNumber}.pdf");

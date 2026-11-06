@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { shiftAction } from './shift-actions';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const shift = { id: 'shift', companyId: 'company', branchId: 'branch', name: 'Biweekly', isActive: true, validFrom: '2026-10-01', schedule: { type: 3 } };
@@ -15,7 +15,7 @@ async function setup(page: Page, options: { failPreview?: boolean; delayPreview?
     if (path.endsWith('/shift-preview')) { calls.previews.push(body); if (options.delayPreview) await new Promise(resolve => setTimeout(resolve, 600)); return route.fulfill({ status: options.failPreview ? 409 : 200, headers, json: options.failPreview ? { detail: 'No pricing is configured for this billing period.' } : invoice }); }
     if (path.endsWith('/invoices/shifts')) { calls.issues.push(body); issued = true; return route.fulfill({ headers, json: invoice }); }
     if (path.endsWith('/pricing')) { if (body) calls.pricing.push(body); return route.fulfill({ headers, json: { plans: body ? [body] : [], overrides: [] } }); }
-    return route.fulfill({ headers, json: path.endsWith('/issuer') ? issuer : path.endsWith('/invoices') ? issued ? [invoice] : [] : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'Methehe', isActive: true, isPartnerEnabled: false }], total: 1 } : path.endsWith('/shifts') ? [shift] : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
+    return route.fulfill({ headers, json: path.endsWith('/issuer') ? issuer : path.endsWith('/invoices') ? issued ? [invoice] : [] : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'Methehe', isActive: true, isPartnerEnabled: false }], total: 1 } : isShiftsRoute(path) ? shiftsResponse([shift], route.request().url()) : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
   });
   return calls;
 }
@@ -47,7 +47,7 @@ test('changing filters invalidates a preview and its in-flight response', async 
 });
 test('preview exposes the real billing validation reason', async ({ page }) => {
   await setup(page, { failPreview: true }); await fillInvoice(page); await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
-  await expect(page.getByRole('alert').filter({ hasText: 'No pricing is configured' })).toHaveText('No pricing is configured for this billing period.'); await expect(page.getByRole('button', { name: 'Issue invoice', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('dialog').getByRole('alert').filter({ hasText: 'No pricing is configured' })).toHaveText('No pricing is configured for this billing period.'); await expect(page.getByRole('button', { name: 'Issue invoice', exact: true })).toHaveCount(0);
 });
 test('admin saves an effective monthly rate before VAT outside quality cycle', async ({ page }) => {
   const calls = await setup(page); await page.goto('/admin/shifts/'); await shiftAction(page, 'Biweekly', 'Pricing');
@@ -152,7 +152,7 @@ test('invoice PDF downloads and paid or void actions refresh status with explici
 
 test('on-call occurrence price requires a reason and saves only that visit', async ({ page }) => {
   await setup(page); const writes: any[] = []; const visit = { startUtc: '2026-10-20T13:00:00Z', endUtc: '2026-10-20T15:00:00Z', assigneeIds: [] };
-  await page.route(/\/api\/v1\/admin\/shifts(?:\?.*)?$/, route => route.fulfill({ headers, json: [{ ...shift, schedule: { type: 4 } }] }));
+  await page.route(/\/api\/v1\/admin\/shifts(?:\/page)?(?:\?.*)?$/, route => route.fulfill({ headers, json: shiftsResponse([{ ...shift, schedule: { type: 4 } }], route.request().url()) }));
   await page.route(/\/api\/v1\/admin\/shifts\/shift\/(?:occurrences|occurrence-price)(?:\?.*)?$/, route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
     if (route.request().method() === 'PUT') { writes.push(route.request().postDataJSON()); return route.fulfill({ headers, json: {} }); }
@@ -179,6 +179,21 @@ test('hourly pricing shows history and saves VAT while cancelling edits sends no
   expect(calls.pricing).toEqual([{ mode: 'Hourly', rateNet: 35, vatRatePercent: 14, effectiveFrom: '2026-11-01' }]); await shiftAction(page, 'Biweekly', 'Pricing'); await expect(page.getByRole('dialog').getByRole('cell', { name: '€35.00', exact: true })).toBeVisible(); await expect(page.getByRole('dialog').getByRole('cell', { name: '€150.00', exact: true })).toBeVisible();
 });
 
+test('a refused mark-paid explains the next step as a toast and in the list, and the list stays usable', async ({ page }) => {
+  await setup(page);
+  const MESSAGE = 'This invoice was voided, so it cannot be marked paid. Issue a new invoice for the amount that is still owed.';
+  await page.route(/\/api\/v1\/admin\/invoices(?:\?.*)?$/, route => route.request().method() === 'OPTIONS' ? route.fulfill({ headers }) : route.fulfill({ headers, json: [invoice] }));
+  await page.route(/\/mark-paid$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    return route.fulfill({ status: 409, headers, json: { title: 'Invoice conflict', detail: MESSAGE } });
+  });
+  await page.goto('/admin/invoices/');
+  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'INV-1', exact: true }) });
+  await row.getByRole('button', { name: 'Mark paid', exact: true }).click();
+  await expect(page.getByText('Invoice action not completed').first()).toBeVisible();
+  await expect(page.getByText(MESSAGE).first()).toBeVisible();
+  await expect(row.getByRole('button', { name: 'Mark paid', exact: true })).toBeEnabled();
+});
 test('invoice history stays on the page and new invoices open in a dialog', async ({ page }) => {
   await setup(page); await page.goto('/admin/invoices/');
   await expect(page.getByRole('heading', { name: 'Issued invoices', exact: true })).toBeVisible();
@@ -213,3 +228,52 @@ test('closing company details with Escape discards unsaved edits without saving'
   await expect(reopened.getByRole('textbox', { name: 'IBAN', exact: true })).not.toHaveValue('FI00-UNSAVED');
 });
 
+
+test('a failed invoice preview shows the reason as a toast and keeps the form for a retry', async ({ page }) => {
+  await setup(page, { failPreview: true }); await fillInvoice(page);
+  await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
+  await expect(page.getByText('Invoice action not completed').first()).toBeVisible();
+  await expect(page.getByText('No pricing is configured for this billing period.').first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Preview invoice', exact: true })).toBeEnabled();
+});
+
+test('a failed invoice issue shows the reason as a toast and the preview can be issued again', async ({ page }) => {
+  await setup(page); await fillInvoice(page);
+  const ISSUE_REFUSED = 'This invoice could not be issued because the billing address is incomplete. Complete the company details, then preview again.';
+  let issues = 0;
+  await page.route(/\/api\/v1\/admin\/invoices\/shifts$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    issues++;
+    return route.fulfill({ status: 409, headers, json: { title: 'Invoice conflict', detail: ISSUE_REFUSED } });
+  });
+  await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Invoice preview' })).toBeVisible();
+  await page.getByRole('button', { name: 'Issue invoice', exact: true }).click();
+  await expect(page.getByText('Invoice action not completed').first()).toBeVisible();
+  await expect(page.getByText(ISSUE_REFUSED).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Issue invoice', exact: true })).toBeEnabled();
+  expect(issues).toBe(1);
+});
+
+test('a refused void shows the reason as a toast and the invoice stays issued', async ({ page }) => {
+  await setup(page);
+  const VOID_REFUSED = 'This invoice was already sent to the customer, so it cannot be voided. Issue a credit note instead.';
+  let voids = 0;
+  await page.route(/\/api\/v1\/admin\/invoices(?:\?.*)?$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    return route.fulfill({ headers, json: [invoice] });
+  });
+  await page.route(/\/api\/v1\/admin\/invoices\/[^/]+\/void$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    voids++;
+    return route.fulfill({ status: 409, headers, json: { title: 'Invoice conflict', detail: VOID_REFUSED } });
+  });
+  await page.goto('/admin/invoices/');
+  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'INV-1', exact: true }) });
+  page.once('dialog', dialog => dialog.accept());
+  await row.getByRole('button', { name: 'Void', exact: true }).click();
+  await expect(page.getByText('Invoice action not completed').first()).toBeVisible();
+  await expect(page.getByText(VOID_REFUSED).first()).toBeVisible();
+  await expect(row.getByRole('button', { name: 'Void', exact: true })).toBeEnabled();
+  expect(voids).toBe(1);
+});

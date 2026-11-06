@@ -36,8 +36,10 @@ public sealed class LeadRepository(ITenantSession tenant,IConfiguration config) 
     {
         await LeadCollaborationRepository.CancelForLeadAsync(Session,lead,false,ct);Session.Store(company);foreach(var branch in branches) Session.Store(branch);Session.Store(lead);
         try { await Session.SaveChangesAsync(ct); }
-        catch(Exception e) when(UniqueConflict(e)) { throw new LeadConflictException("A customer with this business ID already exists, including inactive customers. No new customer was created."); }
+        catch(Exception e) when(UniqueConflict(e)) { throw new LeadConflictException(DuplicateCustomerMessage); }
     }
+    /// <summary>Shown when a lead cannot become a customer because the business ID is taken. Says where to go next.</summary>
+    public const string DuplicateCustomerMessage = "A customer with this business ID already exists, including inactive customers. No new customer was created. Open that customer, or change this lead's business ID, then convert again.";
     private static bool UniqueConflict(Exception e)=>e is PostgresException { SqlState:PostgresErrorCodes.UniqueViolation,ConstraintName:MartenConfig.CompanyBusinessIdIndexName }
         || e.InnerException is not null && UniqueConflict(e.InnerException);
     public async Task<IAsyncDisposable> LockAsync(Guid id,CancellationToken ct)

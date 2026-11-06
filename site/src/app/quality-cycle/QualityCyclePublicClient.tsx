@@ -42,7 +42,7 @@ export default function QualityCyclePublicClient() {
       loadForm();
     } else {
       setLoading(false);
-      setError('Missing Quality Cycle Form token.');
+      setError('This form link is incomplete. Open the link from your message again, or ask your manager for a new one.');
     }
   }, [token, tenantSlug]);
 
@@ -113,7 +113,7 @@ export default function QualityCyclePublicClient() {
         setForm(result);
         setSubmitted(true);
       } else {
-        setError('Failed to submit form. Please try again.');
+        setError('The form was not submitted. Your answers are kept; check your connection and submit again.');
       }
     } catch {
       setError('An error occurred submitting the form.');

@@ -53,6 +53,13 @@ public class EmployeeReadScopeTests
             using var response = await host.Send(method, "/api/v1/admin/"+path, role);
             Assert.Equal(role is null ? HttpStatusCode.Unauthorized : HttpStatusCode.Forbidden, response.StatusCode);
         }
+        // Refusals explain the next step, so a user is not left with a blank error.
+        using (var explained = await host.Send("GET", "/api/v1/admin/companies", role))
+        {
+            var text = await explained.Content.ReadAsStringAsync();
+            if (role is null) Assert.Contains("Sign in again", text);
+            else Assert.Contains("\"detail\"", text); // Guard refusals carry their own reason; others get the generic next step.
+        }
         // Lifecycle/binding lookup is allowed; no payroll, financial, signer,
         // settings or operational handler is allowed to run on a denied request.
         Assert.Empty(host.Mediator.Invocations);

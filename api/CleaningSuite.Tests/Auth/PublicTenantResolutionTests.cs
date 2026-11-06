@@ -100,6 +100,19 @@ public class PublicTenantResolutionTests
         Assert.Empty(host.Mediator.Invocations); Assert.Empty(host.Employees.Invocations);
     }
 
+    [Theory]
+    [InlineData("unknown", "tenant-not-found", "No workspace matches this web address")]
+    [InlineData("inactive", "tenant-inactive", "This workspace is suspended")]
+    public async Task Rejected_URL_tenant_says_what_happened_and_what_to_do(string slug, string type, string guidance)
+    {
+        using var host = new Host();
+        using var response = await host.Send(slug, null, Routes[0]);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains(type, body);
+        Assert.Contains(guidance, body);
+    }
+
     [Fact]
     public async Task Public_prefix_is_anchored()
     {

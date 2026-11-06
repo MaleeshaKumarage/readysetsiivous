@@ -47,7 +47,7 @@ public class BookingManagementKeyTests
             var repository = new Mock<IBookingRepository>();
             repository.Setup(x => x.GetByNumberAsync("number", default)).ReturnsAsync(booking);
             Assert.Null(await new GetPublicBookingHandler(repository.Object).Handle(new("number", key), default));
-            var failure = await Assert.ThrowsAsync<NotFoundException>(() => new CancelPublicBookingHandler(repository.Object).Handle(new("number", key), default));
+            var failure = await Assert.ThrowsAsync<CleaningSuite.Application.Common.PublicBookingNotFoundException>(() => new CancelPublicBookingHandler(repository.Object).Handle(new("number", key), default));
             if (!string.IsNullOrEmpty(key)) Assert.DoesNotContain(key, failure.Message);
             repository.Verify(x => x.SaveAsync(It.IsAny<Booking>(), It.IsAny<CancellationToken>()), Times.Never);
             if (booking is not null) Assert.Equal(Booking.StatusNew, booking.Status);

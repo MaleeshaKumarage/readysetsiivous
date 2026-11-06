@@ -8,6 +8,13 @@ using MediatR;
 
 namespace CleaningSuite.Application.Invoicing.Commands;
 
+
+/// <summary>An invoice that no longer exists, for example after another user changed the list. Says what to do next.</summary>
+public sealed class InvoiceNotFoundException() : Exception(GuidanceText)
+{
+    public const string GuidanceText = "This invoice could not be found. Refresh the invoice list and try again.";
+}
+
 public record CreateInvoiceCommand(Guid BookingId) : IRequest<Guid>;
 
 public record MarkInvoicePaidCommand(Guid Id, DateTime PaidAtUtc) : IRequest<Unit>;
@@ -111,16 +118,16 @@ public class MarkInvoicePaidHandler : IRequestHandler<MarkInvoicePaidCommand, Un
     public async Task<Unit> Handle(MarkInvoicePaidCommand request, CancellationToken ct)
     {
         var invoice = await _invoices.GetByIdAsync(request.Id, ct)
-            ?? throw new NotFoundException("Invoice", request.Id);
+            ?? throw new InvoiceNotFoundException();
 
         if (invoice.Status == Invoice.StatusVoided)
-            throw new InvoiceConflictException("Invoice is voided");
-        // A paid invoice is final: a second payment would double-count revenue.
+            throw new InvoiceConflictException("This invoice was voided, so it cannot be marked paid. Issue a new invoice for the amount that is still owed.");
         if (invoice.Status == Invoice.StatusPaid)
-            throw new InvoiceConflictException("Invoice is already paid.");
+            throw new InvoiceConflictException("This invoice is already paid. Check the paid date in the invoice list; it does not need to be marked paid again.");
 
         invoice.Status = Invoice.StatusPaid;
-        invoice.PaidAtUtc = request.PaidAtUtc;
+        // An omitted payment date means "paid now"; the default value would store 0001-01-01.
+        invoice.PaidAtUtc = request.PaidAtUtc == default ? DateTime.UtcNow : DateTime.SpecifyKind(request.PaidAtUtc, DateTimeKind.Utc);
         invoice.UpdatedUtc = DateTime.UtcNow;
         await _invoices.SaveAsync(invoice, ct);
         return Unit.Value;
@@ -136,11 +143,11 @@ public class VoidInvoiceHandler : IRequestHandler<VoidInvoiceCommand, Unit>
     public async Task<Unit> Handle(VoidInvoiceCommand request, CancellationToken ct)
     {
         var invoice = await _invoices.GetByIdAsync(request.Id, ct)
-            ?? throw new NotFoundException("Invoice", request.Id);
+            ?? throw new InvoiceNotFoundException();
 
         // A paid invoice is final. Corrections go through a credit note, not a void.
         if (invoice.Status == Invoice.StatusPaid)
-            throw new InvoiceConflictException("A paid invoice cannot be voided. Issue a credit note instead.");
+            throw new InvoiceConflictException("This invoice is already paid, so it cannot be voided. Keep it as the record of what was paid, and issue a credit note for any correction.");
 
         invoice.Status = Invoice.StatusVoided;
         invoice.UpdatedUtc = DateTime.UtcNow;

@@ -1,3 +1,4 @@
+using CleaningSuite.Tests.QualityCycle;
 using CleaningSuite.Application.Employees;
 using CleaningSuite.Application.Employees.Commands;
 using CleaningSuite.Application.Shifts;
@@ -51,7 +52,7 @@ public class EmployeeWorkReservationTests
         var operation = update
             ? new UpdateEmployeeHandler(employees.Object, identity.Object, tenant.Object, locks.Object, reservation).Handle(new(employee.Id,
                 new EmployeeFields(employee.Email, "Synthetic", "Cleaner", "", Employee.RoleEmployee, null, [], null, null, null, null, null), false), default)
-            : new DeactivateEmployeeHandler(employees.Object, identity.Object, tenant.Object, locks.Object, reservation).Handle(new(employee.Id), default);
+            : new DeactivateEmployeeHandler(employees.Object, identity.Object, tenant.Object, locks.Object, reservation, WorkAccessFixtures.NoAssignedShifts()).Handle(new(employee.Id), default);
         await entered.Task.WaitAsync(TimeSpan.FromSeconds(2));
         Assert.False(operation.IsCompleted); Assert.False(reservation.Held); Assert.True(identityHeld);
         // Other tenant work can reserve while the provider is still blocked.

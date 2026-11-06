@@ -1,6 +1,8 @@
 'use client';
 
 import '@mantine/core/styles.css';
+import '@mantine/notifications/styles.css';
+import { Notifications } from '@mantine/notifications';
 import './admin.css';
 import { adminTheme } from '@/lib/adminTheme';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
@@ -21,7 +23,7 @@ import { QuoteRequestBanner, QuoteRequestProvider, PartnerPendingBadge } from '@
 
 const NAV_GROUPS = [
   { label: 'Workspace', items: [{ href: '', label: 'Dashboard', icon: LayoutDashboard }] },
-  { label: 'Operations', items: [{ href: 'shifts', label: 'Shifts', icon: CalendarClock }, { href: 'bookings', label: 'Bookings', icon: CalendarCheck2 }, { href: 'shifts/calendar', label: 'Shift calendar', icon: CalendarClock }, { href: 'work-queue', label: 'Work queue', icon: ListChecks }, { href: 'partner-requests', label: 'Partner operations', icon: Building2 }, { href: 'quality-cycle', label: 'Quality Cycle', icon: CheckSquare }] },
+  { label: 'Operations', items: [{ href: 'shifts', label: 'Shifts', icon: CalendarClock }, { href: 'bookings', label: 'Bookings', icon: CalendarCheck2 }, { href: 'shifts/calendar', label: 'Shift calendar', icon: CalendarClock }, { href: 'shifts/employee-schedule', label: 'Employee schedule', icon: Users }, { href: 'work-queue', label: 'Work queue', icon: ListChecks }, { href: 'partner-requests', label: 'Partner operations', icon: Building2 }, { href: 'quality-cycle', label: 'Quality Cycle', icon: CheckSquare }] },
   { label: 'Customers', items: [{ href: 'leads', label: 'Leads', icon: Users }, { href: 'companies', label: 'Companies', icon: Building2 }, { href: 'agreements', label: 'Agreements', icon: FileSignature }] },
   { label: 'People', items: [{ href: 'employees', label: 'Employees', icon: Users }] },
   { label: 'Finance', items: [{ href: 'invoices', label: 'Invoices', icon: Receipt }] },
@@ -62,7 +64,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       const response = await fetch(`${API_URL}/api/v1/me`, { headers: { Authorization: `Bearer ${bearer}` }, cache: 'no-store' });
       if (attempt !== verification.current) return;
       if (response.status === 401 || response.status === 403) { setAccess('denied'); return; }
-      if (!response.ok) throw new Error('Identity verification unavailable');
+      if (!response.ok) throw new Error('Could not verify your admin access right now. Refresh the page to retry.');
       const identity = await response.json();
       setCanUseShiftCalendar(identity.canUseShiftCalendar === true);
       const hasAdmin = Array.isArray(identity.roles) && identity.roles.some((value: unknown) => {
@@ -129,7 +131,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           <Paper p="xl" radius="md" w="100%" maw={420} withBorder>
             <Stack>
               <Text component="h1" fw={600}>{access === 'error' ? 'Could not verify access' : 'Admin access required'}</Text>
-              <Text role="alert">{access === 'error' ? 'Account verification is temporarily unavailable. Please retry.' : 'This account cannot access tenant administration.'}</Text>
+              <Text role="alert">{access === 'error' ? 'Could not verify your access. The server could not be reached or returned an error, so nothing was changed. Check your connection and retry. If it keeps failing, contact your tenant administrator.' : 'This account cannot access tenant administration.'}</Text>
               {access === 'error' && <Button onClick={() => void verifyAccess()}>Retry verification</Button>}
               <Button component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="light">My account</Button>
               <Button onClick={() => logout()} variant="subtle">Sign out</Button>
@@ -183,6 +185,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   </>);
   return (
     <MantineProvider theme={adminTheme} forceColorScheme="light">
+      <Notifications position="top-right" />
       <QuoteRequestProvider pathname={pathname}><AppShell
         className="admin-shell"
         header={{ height: 76 }}

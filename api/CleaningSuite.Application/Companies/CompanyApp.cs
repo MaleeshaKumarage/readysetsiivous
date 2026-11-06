@@ -202,9 +202,11 @@ public class CompanyHandlers
 
         private readonly IShiftWorkReservation? _reservation;
 
-            public DeactivateCompanyCommandHandler(ICompanyRepository repository, IShiftWorkReservation? reservation = null)
+            private readonly IShiftRepository _shifts;
+
+            public DeactivateCompanyCommandHandler(ICompanyRepository repository, IShiftWorkReservation? reservation, IShiftRepository shifts)
         {
-            _repository = repository; _reservation = reservation;
+            _repository = repository; _reservation = reservation; _shifts = shifts;
         }
 
         public async Task Handle(DeactivateCompanyCommand request, CancellationToken ct)
@@ -212,6 +214,11 @@ public class CompanyHandlers
             await using var lease = _reservation is null ? null : await _reservation.AcquireAsync(ct);
             var company = await _repository.GetAsync(request.Id, ct)
                 ?? throw new NotFoundException("Company", request.Id);
+            // Shifts keep running for cleaners after the company flag changes, so the company must be emptied of active shifts first.
+            var active = (await _shifts.ListAsync(request.Id, null, ct)).Count(shift => shift.IsActive);
+            if (active > 0)
+                throw new CleaningSuite.Application.Shifts.ShiftConflictException(
+                    $"This company still has {active} active shift(s). Deactivate or move them first, then deactivate the company.");
             company.Deactivate();
             await _repository.SaveAsync(company, ct);
         }
@@ -538,7 +545,7 @@ public class CompanyHandlers
             branch.SetPropertyCounts(rooms, beds);
             if (price.HasValue || vat.HasValue || duration.HasValue)
             {
-                if (!price.HasValue || !vat.HasValue || !duration.HasValue) throw new ValidationException("Net price, VAT and estimated duration must be supplied together.");
+                if (!price.HasValue || !vat.HasValue || !duration.HasValue) throw new ValidationException([new FluentValidation.Results.ValidationFailure("Pricing", "Net price, VAT and estimated duration must be supplied together.")]);
                 branch.SetPricing(price.Value, vat.Value, duration.Value);
             }
         }
@@ -548,12 +555,19 @@ public class CompanyHandlers
 
 public class CompanyValidators
 {
+    // Finnish business IDs: seven digits, a dash and one check digit, such as 1234567-8.
+    public const string BusinessIdPattern = @"^\d{7}-\d$";
+    public const string BusinessIdMessage = "Business ID must look like 1234567-8: seven digits, a dash and one check digit. Check the company's registration, then try again.";
+
     public class CreateCompanyCommandValidator : AbstractValidator<CreateCompanyCommand>
     {
         public CreateCompanyCommandValidator()
         {
             RuleFor(x => x.BusinessId).NotEmpty().WithMessage("Business ID is mandatory.");
             RuleFor(x => x.Name).NotEmpty().WithMessage("Name is mandatory.");
+            RuleFor(x => x.BusinessId).Matches(BusinessIdPattern).WithMessage(BusinessIdMessage).When(x => !string.IsNullOrWhiteSpace(x.BusinessId));
+            RuleFor(x => x.Name).MaximumLength(200).WithMessage("Company name can be at most 200 characters. Shorten it, then save again.");
+            RuleFor(x => x.ContactEmail).EmailAddress().WithMessage("Enter a valid contact email, such as name@company.fi, or leave the field empty.").When(x => !string.IsNullOrWhiteSpace(x.ContactEmail));
         }
     }
 

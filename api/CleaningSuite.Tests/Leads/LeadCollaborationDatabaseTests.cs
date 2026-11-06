@@ -19,7 +19,7 @@ public class LeadCollaborationDatabaseTests
     public async Task Conversion_cancels_pending_work_atomically_retains_audio_and_inactive_delete_removes_history()
     {
         using var services=Services();var store=services.GetRequiredService<IDocumentStore>();await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
-        var lead=new Lead{Fields=new(){Name="Prospect",BusinessId="COLLAB",BranchName="Office"}};
+        var lead=new Lead{Fields=new(){Name="Prospect",BusinessId="2345678-9",BranchName="Office"}};
         var follow=new LeadFollowUp{LeadId=lead.Id};var note=new LeadVoiceNote{LeadId=lead.Id,Extension=".webm"};var delivery=new LeadFollowUpDelivery{LeadId=lead.Id,FollowUpId=follow.Id};
         using(var session=store.LightweightSession("tenant-a")) { session.Store(lead);session.Store(follow);session.Store(note);session.Store(delivery);await session.SaveChangesAsync(); }
         using(var tenant=Tenant(store)) { var service=new LeadService(new LeadRepository(tenant,Config()),Mock.Of<ILeadFileStore>(),NoopUploadContentValidator.Instance,TimeProvider.System);await service.ConvertAsync(lead.Id,lead.Version,default); }
@@ -41,7 +41,7 @@ public class LeadCollaborationDatabaseTests
             LeadDetail created;
             using(var tenant=Tenant(store)) {
                 var service=new LeadService(new LeadRepository(tenant,Config()),Mock.Of<ILeadFileStore>(),NoopUploadContentValidator.Instance,TimeProvider.System);
-                created=await service.CreateAsync(new(){Name=$"Company {count}",BusinessId=$"MULTI-{count}",Branches=Enumerable.Range(1,count).Select(i=>new LeadBranchFields{Name=$"Branch {i}"}).ToList()},default);
+                created=await service.CreateAsync(new(){Name=$"Company {count}",BusinessId=$"{count:D7}-1",Branches=Enumerable.Range(1,count).Select(i=>new LeadBranchFields{Name=$"Branch {i}"}).ToList()},default);
             }
             using(var tenant=Tenant(store)) {
                 var service=new LeadService(new LeadRepository(tenant,Config()),Mock.Of<ILeadFileStore>(),NoopUploadContentValidator.Instance,TimeProvider.System);
@@ -51,7 +51,7 @@ public class LeadCollaborationDatabaseTests
             }
         }
         LeadDetail duplicate;
-        using(var tenant=Tenant(store)) duplicate=await new LeadService(new LeadRepository(tenant,Config()),Mock.Of<ILeadFileStore>(),NoopUploadContentValidator.Instance,TimeProvider.System).CreateAsync(new(){Name="Duplicate",BusinessId="MULTI-3",Branches=[new(){Name="Extra A"},new(){Name="Extra B"}]},default);
+        using(var tenant=Tenant(store)) duplicate=await new LeadService(new LeadRepository(tenant,Config()),Mock.Of<ILeadFileStore>(),NoopUploadContentValidator.Instance,TimeProvider.System).CreateAsync(new(){Name="Duplicate",BusinessId="0000003-1",Branches=[new(){Name="Extra A"},new(){Name="Extra B"}]},default);
         using(var tenant=Tenant(store)) await Assert.ThrowsAsync<LeadConflictException>(()=>new LeadService(new LeadRepository(tenant,Config()),Mock.Of<ILeadFileStore>(),NoopUploadContentValidator.Instance,TimeProvider.System).ConvertAsync(duplicate.Lead.Id,duplicate.Lead.Version,default));
         using(var reader=store.QuerySession("tenant-a")) { Assert.Equal(2,await reader.Query<CleaningSuite.Domain.Companies.Company>().CountAsync());Assert.Equal(3,await reader.Query<CleaningSuite.Domain.Companies.Branch>().CountAsync());Assert.Null((await reader.LoadAsync<Lead>(duplicate.Lead.Id))!.CompanyId); }
     }

@@ -20,7 +20,7 @@ async function setup(page: Page, options: { lostResponse?: boolean; delayPreview
     if (path.endsWith('/manual-preview')) {
       const input = req.postDataJSON(); calls.previews.push(input);
       if (options.delayPreview) await new Promise(resolve => setTimeout(resolve, 600));
-      return route.fulfill({ status: options.failPreview ? 400 : 200, headers, json: options.failPreview ? { detail: 'The invoice total must be greater than zero.' } : invoice(input) });
+      return route.fulfill({ status: options.failPreview ? 400 : 200, headers, json: options.failPreview ? { detail: 'The invoice total must be greater than zero. Enter a quantity and a net price above zero for at least one row, then preview again.' } : invoice(input) });
     }
     if (path.endsWith('/invoices/manual')) {
       const input = req.postDataJSON(); calls.issues.push(input);
@@ -102,7 +102,7 @@ test('lost issue response locks edits and retry sends same submission exactly on
 test('stale preview requires preview again and preserves rows', async ({ page }) => {
   await setup(page, { stale: true }); await fill(page); await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
   await page.getByRole('button', { name: 'Issue invoice', exact: true }).click();
-  await expect(page.getByRole('alert').filter({ hasText: 'Invoice details changed' })).toBeVisible();
+  await expect(page.getByRole('dialog').getByRole('alert').filter({ hasText: 'Invoice details changed' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0); await expect(page.getByRole('textbox', { name: 'Row 1 description', exact: true })).toHaveValue('Additional agreed service');
 });
 test('late preview after a row edit cannot be issued', async ({ page }) => {
@@ -113,9 +113,9 @@ test('late preview after a row edit cannot be issued', async ({ page }) => {
 });
 test('required rows fail locally and backend validation preserves input', async ({ page }) => {
   const calls = await setup(page, { failPreview: true }); await fill(page); await page.getByRole('textbox', { name: 'Row 1 description', exact: true }).fill('');
-  await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await expect(page.getByRole('alert').filter({ hasText: 'every row' })).toBeVisible(); expect(calls.previews).toHaveLength(0);
+  await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await expect(page.getByRole('dialog').getByRole('alert').filter({ hasText: 'every row' })).toBeVisible(); expect(calls.previews).toHaveLength(0);
   await page.getByRole('textbox', { name: 'Row 1 description', exact: true }).fill('Free service'); await page.getByRole('textbox', { name: 'Row 1 unit price before VAT (€)', exact: true }).fill('0');
-  await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await expect(page.getByRole('alert').filter({ hasText: 'greater than zero' })).toBeVisible();
+  await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await expect(page.getByRole('dialog').getByRole('alert').filter({ hasText: 'greater than zero' })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Row 1 description', exact: true })).toHaveValue('Free service');
 });
 

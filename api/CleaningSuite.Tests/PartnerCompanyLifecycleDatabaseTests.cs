@@ -28,7 +28,7 @@ public class PartnerCompanyLifecycleDatabaseTests
             var acceptance=new ShiftWorkReservation(config,acceptanceSession);var signalled=new SignalledReservation(new ShiftWorkReservation(config,deactivateSession));
             var lease=await acceptance.AcquireAsync(default);
             Task operation=companyCase
-                ? new CompanyHandlers.DeactivateCompanyCommandHandler(new CompanyRepository(deactivateSession),signalled).Handle(new(company.Id),default)
+                ? new CompanyHandlers.DeactivateCompanyCommandHandler(new CompanyRepository(deactivateSession),signalled,new ShiftRepository(deactivateSession)).Handle(new(company.Id),default)
                 : new CompanyHandlers.BranchCommands.DeactivateBranchCommandHandler(new BranchRepository(deactivateSession),signalled).Handle(new(branch.Id),default);
             try
             {

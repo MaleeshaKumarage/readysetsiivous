@@ -1,6 +1,6 @@
 import { API_URL } from './api';
 import { lifecycleRequest } from './reactivationApi';
-import { adminDelete, adminGet, adminSend, adminSendJson, authorizedFetch } from './adminApi';
+import { adminDelete, adminGet, adminSendJson, adminSendResult, authorizedFetch, type AdminSendResult } from './adminApi';
 import { refreshToken } from './auth';
 import type { ShiftPhoto } from './shiftPhotos';
 
@@ -69,7 +69,8 @@ export const adminQualityCycle = {
   createReportShare: (year: number, month: number, shiftId?: string, branchId?: string) =>
     adminSendJson<ReportShare>('/api/v1/admin/quality-cycle/report-shares', 'POST', { year, month, shiftId, branchId }),
   listReportShares: () => adminGet<ReportShare[]>('/api/v1/admin/quality-cycle/report-shares'),
-  revokeReportShare: (id: string) => adminSend(`/api/v1/admin/quality-cycle/report-shares/${id}`, 'DELETE'),
+  // Keeps the server's reason (for example, a link already revoked elsewhere) so the user sees what to do next.
+  revokeReportShare: (id: string): Promise<AdminSendResult> => adminSendResult(`/api/v1/admin/quality-cycle/report-shares/${id}`, 'DELETE'),
   listTemplates: (companyId?: string, branchId?: string) => {
     const query = new URLSearchParams();
     if (companyId) query.set('companyId', companyId);
@@ -150,7 +151,7 @@ async function downloadReport(route: string, key: string, id: string, year: numb
   if (!jwt) throw new Error('Please sign in again.');
   const query = new URLSearchParams({ [key]: id, year: String(year), month: String(month) });
   const response = await fetch(`${API_URL}/api/v1/admin/quality-cycle/${route}?${query}`, { headers: { Authorization: `Bearer ${jwt}` } });
-  if (!response.ok) throw new Error(`Report download failed (${response.status}).`);
+  if (!response.ok) throw new Error(`The report could not be downloaded (status ${response.status}). Try again in a moment.`);
   const url = URL.createObjectURL(await response.blob());
   const a = document.createElement('a'); a.href = url; a.download = `QualityCycle_${key === 'shiftId' ? 'Summary' : 'Branch'}_${id}_${year}_${String(month).padStart(2, '0')}.pdf`; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);

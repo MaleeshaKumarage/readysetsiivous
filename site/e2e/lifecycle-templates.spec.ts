@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, shiftsResponse } from './admin-helpers';
 import type { QualityCycleTemplate } from '../src/lib/qualityCycleApi';
 
 const headers = {
@@ -18,7 +18,7 @@ async function mockTemplates(page: Page, initial: QualityCycleTemplate[]) {
   let templates = initial;
   let loads = 0;
   let update: Record<string, unknown> | undefined;
-  await page.route(/\/api\/v1\/admin\/shifts(?:\?.*)?$/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/admin\/shifts(?:\/page)?(?:\?.*)?$/, route => route.fulfill({ headers, json: shiftsResponse([], route.request().url()) }));
   await page.route(/\/api\/v1\/admin\/quality-cycle\/forms(?:\?.*)?$/, route => route.fulfill({ headers, json: [] }));
   await page.route(/\/api\/v1\/admin\/quality-cycle\/templates(?:\/[^/?]+)?(?:\?.*)?$/, async route => {
     const method = route.request().method();

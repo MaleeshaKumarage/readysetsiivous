@@ -81,7 +81,9 @@ public class ShiftCalendarTests
         shifts.Setup(x => x.GetAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
         shifts.Setup(x => x.ListAssignmentHistoryAsync(shift.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync([new ShiftAssignment { ShiftId = shift.Id, EmployeeId = Guid.NewGuid() }]);
-        var handler = new ShiftHandlers.DeleteShiftCommandHandler(shifts.Object);
+        var forms = new Mock<IQualityCycleRepository>();
+        forms.Setup(x => x.ListFormsAsync(shift.Id, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<QualityCycleForm>());
+        var handler = new ShiftHandlers.DeleteShiftCommandHandler(shifts.Object, forms.Object);
         if (active) await Assert.ThrowsAsync<CleaningSuite.Application.Common.InactiveRecordDeleteConflictException>(() => handler.Handle(new(shift.Id), default));
         else await handler.Handle(new(shift.Id), default);
         shifts.Verify(x => x.DeleteAsync(shift.Id, It.IsAny<CancellationToken>()), active ? Times.Never() : Times.Once());

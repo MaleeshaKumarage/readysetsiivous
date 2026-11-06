@@ -6,10 +6,13 @@ export type PricingPlan = { mode: 'Monthly' | 'Hourly' | 'PerOccurrence'; rateNe
 export type OccurrencePrice = { occurrenceStartUtc: string; rateNet: number; reason: string };
 export type ShiftPricing = { plans: PricingPlan[]; overrides: OccurrencePrice[] };
 export type MonthlyOverride = { shiftId: string; month: string; amountNet: number; reason: string };
-export type ShiftInvoiceInput = { partnerMonth?: boolean; companyId: string; shiftIds: string[]; from: string; to: string; billingAddress: BillingAddress; language: string; monthlyOverrides: MonthlyOverride[] };
+export type UnstartedVisitDecision = { shiftId: string; startUtc: string; include: boolean };
+export type ShiftInvoiceInput = { partnerMonth?: boolean; companyId: string; shiftIds: string[]; from: string; to: string; billingAddress: BillingAddress; language: string; monthlyOverrides: MonthlyOverride[]; unstartedDecisions?: UnstartedVisitDecision[] };
+// A scheduled visit with no started work yet. It is billed only when included.
+export type UnstartedVisit = { shiftId: string; shiftName: string; startUtc: string; endUtc: string; included: boolean };
 export type ManualInvoiceInput = { companyId: string; submissionId: string; billingAddress: BillingAddress; language: string; lines: { description: string; quantity: number; unitPriceNet: number }[] };
 export type ShiftInvoiceLine = { lineKey: string; description: string; shiftId?: string; shiftName?: string; branchName?: string; branchId?: string; completedOn?: string; hours?: number; occurrences?: number; pricingMode?: string; periodFrom?: string; periodTo?: string; month?: string; quantity: number; unitPriceNet: number; netAmount: number; vatRatePercent: number; vatAmount: number; total: number; overrideReason?: string };
-export type ShiftInvoice = { id: string; invoiceNumber: string; customer: { name: string }; issuer: InvoiceIssuer; lines: ShiftInvoiceLine[]; total: { net: number; vat: number; gross: number }; issueDate: string; dueDate: string; status: string; companyId?: string; periodFrom?: string; periodTo?: string; language?: string; previewToken?: string; issuerIsSample?: boolean };
+export type ShiftInvoice = { id: string; invoiceNumber: string; customer: { name: string }; issuer: InvoiceIssuer; lines: ShiftInvoiceLine[]; total: { net: number; vat: number; gross: number }; issueDate: string; dueDate: string; status: string; companyId?: string; periodFrom?: string; periodTo?: string; language?: string; previewToken?: string; issuerIsSample?: boolean; unstartedVisits?: UnstartedVisit[] };
 
 export class InvoiceRequestError extends Error {
   constructor(message: string, public readonly status: number) { super(message); }
