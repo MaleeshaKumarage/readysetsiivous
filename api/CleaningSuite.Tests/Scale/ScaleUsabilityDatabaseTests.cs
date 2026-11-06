@@ -136,9 +136,28 @@ public class ScaleUsabilityDatabaseTests
         foreach (var line in timings) Console.WriteLine(line);
     }
 
+    /// <summary>
+    /// Local-only: seeds the target volume into an existing tenant in the default schema, so the running API and browser
+    /// can use it with a real login. Runs only when SCALE_SEED_LOCAL_TENANT and SCALE_SEED_CONNECTION are set.
+    /// </summary>
+    [Fact]
+    public async Task Seed_target_scale_into_local_tenant_for_real_login_checks()
+    {
+        var tenant = Environment.GetEnvironmentVariable("SCALE_SEED_LOCAL_TENANT");
+        var connection = Environment.GetEnvironmentVariable("SCALE_SEED_CONNECTION");
+        if (string.IsNullOrWhiteSpace(tenant) || string.IsNullOrWhiteSpace(connection)) return;
+        var services = new ServiceCollection(); services.AddLogging();
+        services.AddCleaningMarten(connection);
+        await using var provider = services.BuildServiceProvider();
+        var store = provider.GetRequiredService<IDocumentStore>();
+        await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
+        var seeded = await SeedAsync(store, tenant, storeProfile: false);
+        Console.WriteLine($"Seeded tenant {tenant}: first company {seeded.FirstCompany}, expected unstarted {seeded.ExpectedUnstartedForFirstCompany}");
+    }
+
     private sealed record Seeded(Guid FirstCompany, Dictionary<Guid, List<Guid>> CompanyShifts, int AssignedVisitsDueSoon, int ExpectedUnstartedForFirstCompany);
 
-    private static async Task<Seeded> SeedAsync(IDocumentStore store, string tenant)
+    private static async Task<Seeded> SeedAsync(IDocumentStore store, string tenant, bool storeProfile = true)
     {
         var start = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
         var profile = new TenantProfile { Id = TenantDocumentIds.TenantProfile(tenant), Slug = tenant, RealmName = tenant, CompanyName = "ReadySet Scale Oy",
@@ -215,7 +234,8 @@ public class ScaleUsabilityDatabaseTests
 
         using (var db = store.LightweightSession(tenant))
         {
-            db.Store(profile);
+            // An existing tenant keeps its own profile; storing a second copy would conflict on its version.
+            if (storeProfile) db.Store(profile);
             foreach (var chunk in companies.Chunk(500)) db.Store(chunk);
             foreach (var chunk in branches.Chunk(500)) db.Store(chunk);
             foreach (var chunk in employees.Chunk(500)) db.Store(chunk);
