@@ -462,7 +462,9 @@ public class CompanyHandlers
             if (price.HasValue || vat.HasValue || duration.HasValue)
             {
                 if (!price.HasValue || !vat.HasValue || !duration.HasValue) throw new ValidationException([new FluentValidation.Results.ValidationFailure("Pricing", "Net price, VAT and estimated duration must be supplied together.")]);
-                branch.SetPricing(price.Value, vat.Value, duration.Value, mode ?? "PerOccurrence", effectiveFrom);
+                // Without a mode, keep the billing mode of the version in force on that date, so a name or contact edit never changes Monthly/Hourly billing.
+                var date = effectiveFrom ?? DateOnly.FromDateTime(DateTime.UtcNow);
+                branch.SetPricing(price.Value, vat.Value, duration.Value, mode ?? branch.PriceOn(date)?.Mode ?? "PerOccurrence", date);
             }
         }
         catch (ArgumentException ex) { throw new ValidationException(ex.Message); }

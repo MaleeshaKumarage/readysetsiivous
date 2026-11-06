@@ -124,6 +124,37 @@ public sealed class PartnerUpdateCompatibilityTests
         Assert.False(await guard.AllowAsync(Context()));
     }
 
+    [Fact]
+    public async Task Re_saving_an_unchanged_price_without_a_basis_keeps_the_billing_mode_and_adds_no_version()
+    {
+        // A monthly-priced property: the form resends the same price, VAT and duration but no basis.
+        var branch = Branch.Create(Guid.NewGuid(), "Property");
+        branch.SetPricing(150m, 25.5m, 120, "Monthly", new DateOnly(2026, 1, 1));
+        var revision = branch.PricingVersion;
+        var input = JsonSerializer.Deserialize<UpdateBranchCommand>(
+            "{\"name\":\"Renamed\",\"priceNet\":150,\"vatRatePercent\":25.5,\"estimatedDurationMinutes\":120}", Json)!;
+
+        var updated = await Update(branch, input);
+
+        Assert.Equal(revision, updated.PricingVersion);
+        var version = Assert.Single(branch.Versions);
+        Assert.Equal("Monthly", version.Mode);
+    }
+
+    [Fact]
+    public async Task A_changed_price_without_a_basis_keeps_the_monthly_mode_of_the_version_in_force()
+    {
+        var branch = Branch.Create(Guid.NewGuid(), "Property");
+        branch.SetPricing(150m, 25.5m, 120, "Monthly", new DateOnly(2026, 1, 1));
+        var input = JsonSerializer.Deserialize<UpdateBranchCommand>(
+            "{\"name\":\"Property\",\"priceNet\":160,\"vatRatePercent\":25.5,\"estimatedDurationMinutes\":120}", Json)!;
+
+        await Update(branch, input);
+
+        Assert.Equal("Monthly", branch.Versions[^1].Mode);
+        Assert.Equal(160m, branch.Versions[^1].PriceNet);
+    }
+
     private static Branch PricedBranch()
     {
         var branch = Branch.Create(Guid.NewGuid(), "Property"); branch.SetPropertyCounts(3, 5); branch.SetPricing(150m, 25.5m, 120);

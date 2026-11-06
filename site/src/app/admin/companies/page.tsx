@@ -213,7 +213,7 @@ export default function CompaniesAdminPage() {
 
   const openBranchEdit = (branch: Branch) => {
     setEditingBranch(branch);
-    setBranchForm({ name: branch.name, street: branch.street ?? '', postalCode: branch.postalCode ?? '', city: branch.city ?? '', country: branch.country ?? '', contactPhone: branch.contactPhone ?? '', contactEmail: branch.contactEmail ?? '', roomCount: branch.roomCount ?? '', bedCount: branch.bedCount ?? '', priceNet: branch.priceNet ?? '', vatRatePercent: branch.vatRatePercent ?? 25.5, estimatedDurationMinutes: branch.estimatedDurationMinutes ?? '', priceEffectiveFrom: '', priceMode: 'PerOccurrence' });
+    setBranchForm({ name: branch.name, street: branch.street ?? '', postalCode: branch.postalCode ?? '', city: branch.city ?? '', country: branch.country ?? '', contactPhone: branch.contactPhone ?? '', contactEmail: branch.contactEmail ?? '', roomCount: branch.roomCount ?? '', bedCount: branch.bedCount ?? '', priceNet: branch.priceNet ?? '', vatRatePercent: branch.vatRatePercent ?? 25.5, estimatedDurationMinutes: branch.estimatedDurationMinutes ?? '', priceEffectiveFrom: '', priceMode: [...(branch.priceVersions ?? [])].sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom)).filter(v => v.effectiveFrom <= new Date().toISOString().slice(0, 10)).pop()?.mode ?? 'PerOccurrence' });
     setBranchError(''); setBranchModal(true);
   };
 

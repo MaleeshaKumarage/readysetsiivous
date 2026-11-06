@@ -9,13 +9,6 @@ import type { Shift, ShiftOccurrence } from '@/lib/adminApi';
 const isVisitBased = (shift: Shift) => shift.schedule.type === 4 || shift.schedule.type === 6;
 const modeLabel: Record<string, string> = { Monthly: 'Fixed monthly fee', Hourly: 'Per scheduled hour', PerOccurrence: 'Per completed visit' };
 const byDate = (a: BranchPriceVersion, b: BranchPriceVersion) => a.effectiveFrom.localeCompare(b.effectiveFrom);
-const today = () => new Date().toISOString().slice(0, 10);
-// The version in force today, or the earliest one when every version starts later.
-const defaultVersion = (versions: BranchPriceVersion[]) => {
-  const sorted = [...versions].sort(byDate);
-  return (sorted.filter(v => v.effectiveFrom <= today()).pop() ?? sorted[0])?.effectiveFrom ?? '';
-};
-
 export function ShiftPricingDialog({ shift, occurrence, onClose }: { shift: Shift; occurrence?: ShiftOccurrence; onClose: () => void }) {
   const [pricing, setPricing] = useState<ShiftPricing | null>(null);
   const [plan, setPlan] = useState<PricingPlan>({ mode: isVisitBased(shift) ? 'PerOccurrence' : 'Monthly', rateNet: 0, vatRatePercent: 25.5, effectiveFrom: shift.validFrom?.slice(0, 10) || new Date().toISOString().slice(0, 10) });
@@ -23,12 +16,12 @@ export function ShiftPricingDialog({ shift, occurrence, onClose }: { shift: Shif
   const [reason, setReason] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const versions = pricing?.branchPriceVersions ?? [];
   // A shift billed from its branch picks one branch price version. Per-visit overrides still apply on top.
-  const linked = !occurrence && versions.length > 0;
+  const linked = !occurrence && !!pricing?.branchPriceEffectiveFrom && versions.length > 0;
   useEffect(() => {
     let active = true;
     invoiceBillingApi.pricing(shift.id).then(value => {
       if (!active) return; setPricing(value);
-      if (value.branchPriceVersions?.length) setVersionFrom(value.branchPriceEffectiveFrom ?? defaultVersion(value.branchPriceVersions));
+      if (value.branchPriceVersions?.length && value.branchPriceEffectiveFrom) setVersionFrom(value.branchPriceEffectiveFrom);
       const latest = [...value.plans].sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0];
       if (latest) setPlan(latest);
       const override = value.overrides.find(item => item.occurrenceStartUtc === occurrence?.startUtc);
