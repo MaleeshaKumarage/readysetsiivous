@@ -87,6 +87,9 @@ test('my shifts on an empty Today offers past and upcoming work instead of a dea
   await page.goto('/me/shifts/');
   await calendarLoaded;
   await expect(page.getByText('No shifts today.', { exact: true })).toBeVisible({ timeout: 30000 });
+  // Nothing is in progress on an empty Today, so both buttons are enabled.
+  await expect(page.getByRole('button', { name: 'View past shifts', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'View upcoming shifts', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'View past shifts', exact: true }).click();
   await expect(page.getByRole('tab', { name: 'Past', exact: true })).toHaveAttribute('aria-selected', 'true');
   await page.getByRole('button', { name: /Week of/ }).first().click();
