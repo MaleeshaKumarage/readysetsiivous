@@ -81,11 +81,13 @@ public static class WorkQueueRules
     }
 
     /// <summary>
-    /// A deactivated shift's future occurrences are cancelled, so they no longer count as Needs action or Scheduled work.
-    /// Past occurrences keep the view they were given, so history is not rewritten.
+    /// A deactivated shift's future occurrences that are still waiting for work are cancelled, so they no longer count as
+    /// Needs action or Scheduled work. Work already in progress or completed keeps its view, and past occurrences keep
+    /// the view they were given, so history is not rewritten.
     /// </summary>
     public static string ActiveShiftView(bool shiftIsActive, string view, DateTime occurrenceStartUtc, DateTime nowUtc) =>
-        !shiftIsActive && occurrenceStartUtc >= nowUtc ? WorkQueueViews.Cancelled : view;
+        !shiftIsActive && occurrenceStartUtc >= nowUtc && view is WorkQueueViews.NeedsAction or WorkQueueViews.Scheduled
+            ? WorkQueueViews.Cancelled : view;
 
     /// <summary>Scheduled work that has already started its window and has no started form reads "Not started".</summary>
     public static string ShiftLabel(ShiftVisitRosterEntry visit, string view, DateTime nowUtc) => view switch

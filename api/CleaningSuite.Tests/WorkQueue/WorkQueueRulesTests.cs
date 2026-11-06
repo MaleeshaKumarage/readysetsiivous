@@ -14,6 +14,8 @@ public class WorkQueueRulesTests
     [InlineData(false, WorkQueueViews.NeedsAction, true, WorkQueueViews.Cancelled)]
     [InlineData(false, WorkQueueViews.Scheduled, true, WorkQueueViews.Cancelled)]
     [InlineData(false, WorkQueueViews.Scheduled, false, WorkQueueViews.Scheduled)]
+    [InlineData(false, WorkQueueViews.InProgress, true, WorkQueueViews.InProgress)]
+    [InlineData(false, WorkQueueViews.Completed, true, WorkQueueViews.Completed)]
     public void Deactivated_shift_future_visits_are_cancelled_and_past_visits_keep_their_view(bool shiftIsActive, string view, bool future, string expected)
     {
         var now = new DateTime(2026, 11, 6, 9, 0, 0, DateTimeKind.Utc);
