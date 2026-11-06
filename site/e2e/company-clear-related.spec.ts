@@ -18,22 +18,18 @@ async function routeCompanies(page: Page, company: typeof activeCompany) {
   });
 }
 
-function preflight(route: { request: () => { method: () => string } }) {
-  return route.request().method() === 'OPTIONS' ? true : false;
-}
-
 test('clearing a refused deactivation deletes the shifts and places, then deactivates the company', async ({ page }) => {
   await setupAdminMocks(page);
   const clearCalls: string[] = [];
   let deactivateCalls = 0;
   await page.route(/\/api\/v1\/admin\/companies\/company-a\/deactivate$/, route => {
-    if (preflight(route)) return route.fulfill({ headers, status: 200 });
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
     deactivateCalls++;
     if (deactivateCalls === 1) return route.fulfill({ headers, status: 409, json: { title: 'Shift conflict', detail: SHIFT_REASON } });
     return route.fulfill({ headers, status: 204 });
   });
   await page.route(/\/api\/v1\/admin\/companies\/company-a\/clear-related$/, route => {
-    if (preflight(route)) return route.fulfill({ headers, status: 200 });
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
     clearCalls.push(route.request().method());
     return route.fulfill({ headers, json: { shiftsDeleted: 2, employeesUnassigned: 3, branchesDeleted: 1 } });
   });
@@ -55,12 +51,12 @@ test('skip deletion leaves the shifts, places and the company untouched', async 
   const clearCalls: string[] = [];
   let deactivateCalls = 0;
   await page.route(/\/api\/v1\/admin\/companies\/company-a\/deactivate$/, route => {
-    if (preflight(route)) return route.fulfill({ headers, status: 200 });
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
     deactivateCalls++;
     return route.fulfill({ headers, status: 409, json: { title: 'Shift conflict', detail: SHIFT_REASON } });
   });
   await page.route(/\/api\/v1\/admin\/companies\/company-a\/clear-related$/, route => {
-    if (preflight(route)) return route.fulfill({ headers, status: 200 });
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
     clearCalls.push(route.request().method());
     return route.fulfill({ headers, json: { shiftsDeleted: 0, employeesUnassigned: 0, branchesDeleted: 0 } });
   });
@@ -81,12 +77,12 @@ test('when the clear is refused for checklist history nothing changes and the re
   await setupAdminMocks(page);
   let deactivateCalls = 0;
   await page.route(/\/api\/v1\/admin\/companies\/company-a\/deactivate$/, route => {
-    if (preflight(route)) return route.fulfill({ headers, status: 200 });
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
     deactivateCalls++;
     return route.fulfill({ headers, status: 409, json: { title: 'Shift conflict', detail: SHIFT_REASON } });
   });
   await page.route(/\/api\/v1\/admin\/companies\/company-a\/clear-related$/, route => {
-    if (preflight(route)) return route.fulfill({ headers, status: 200 });
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
     return route.fulfill({ headers, status: 409, json: { title: 'Delete conflict', detail: HISTORY_REASON } });
   });
   await routeCompanies(page, activeCompany);
@@ -105,14 +101,14 @@ test('a refused delete of an inactive company can clear its places first, then d
   const clearCalls: string[] = [];
   let deleteCalls = 0;
   await page.route(/\/api\/v1\/admin\/companies\/company-a$/, route => {
-    if (preflight(route)) return route.fulfill({ headers, status: 200 });
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
     if (route.request().method() !== 'DELETE') return route.fallback();
     deleteCalls++;
     if (deleteCalls === 1) return route.fulfill({ headers, status: 409, json: { title: 'Delete conflict', detail: BRANCH_REASON } });
     return route.fulfill({ headers, status: 204 });
   });
   await page.route(/\/api\/v1\/admin\/companies\/company-a\/clear-related$/, route => {
-    if (preflight(route)) return route.fulfill({ headers, status: 200 });
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
     clearCalls.push(route.request().method());
     return route.fulfill({ headers, json: { shiftsDeleted: 0, employeesUnassigned: 0, branchesDeleted: 1 } });
   });

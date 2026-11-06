@@ -257,16 +257,22 @@ export default function CompaniesAdminPage() {
     if (!relatedPrompt) return;
     const { company, action } = relatedPrompt;
     setRelatedBusy(true); setRelatedError('');
+    let clearFailure: unknown = null;
     try {
       await adminCompanies.clearRelated(company.id);
     } catch (failure) {
-      setRelatedError(failure instanceof Error ? failure.message : 'Could not clear related shifts and places. Nothing was changed. Please retry.');
-      setRelatedBusy(false);
-      return;
+      clearFailure = failure;
     }
+    // A clear that stopped part way has already removed some rows, so the cached branch panel and the list are stale either way.
     setCompanyBranchesMap(current => { const next = { ...current }; delete next[company.id]; return next; });
     setBranchLoadError(''); setBranchLoading(null); branchGeneration.current++;
     setExpanded(null); setPinned(null);
+    if (clearFailure) {
+      setRelatedError(clearFailure instanceof Error ? clearFailure.message : 'Could not clear related shifts and places. Please retry.');
+      setRelatedBusy(false);
+      await reload();
+      return;
+    }
     try {
       if (action === 'deactivate') await companyLifecycle.deactivate(company.id);
       else await adminCompanies.deleteInactive(company.id);
@@ -414,7 +420,7 @@ export default function CompaniesAdminPage() {
         {relatedPrompt && (
           <Stack gap="sm">
             <Text>{relatedPrompt.reason}</Text>
-            <Text size="sm" c="dimmed">Choose the first option to delete this company&apos;s related shifts, unassign every employee from them and clear all its places. Shifts or places with visit or checklist history are kept, and in that case nothing is changed.</Text>
+            <Text size="sm" c="dimmed">Choose the first option to delete this company&apos;s related shifts, unassign every employee from them and clear all its places. If any shift or place has visit, checklist, partner or agreement history, the clear is refused and nothing is changed.</Text>
             {relatedError && <Text c="red" role="alert">{relatedError}</Text>}
             <Button color="red" loading={relatedBusy} onClick={() => void clearRelatedAndContinue()}>Delete related shifts, unassign employees and clear all places</Button>
             <Button variant="default" disabled={relatedBusy} onClick={closeRelatedPrompt}>Skip deletion</Button>

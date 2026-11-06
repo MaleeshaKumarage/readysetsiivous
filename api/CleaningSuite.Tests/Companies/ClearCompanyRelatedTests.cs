@@ -101,6 +101,25 @@ public class ClearCompanyRelatedTests
     }
 
     [Fact]
+    public async Task A_failure_part_way_reports_how_far_it_got_so_the_clear_can_be_run_again()
+    {
+        var fixture = new Fixture();
+        var company = fixture.Company;
+        var first = new Shift { Id = Guid.NewGuid(), CompanyId = company.Id, IsActive = false };
+        var second = new Shift { Id = Guid.NewGuid(), CompanyId = company.Id, IsActive = false };
+        fixture.Shifts.Setup(x => x.ListAsync(company.Id, null, It.IsAny<CancellationToken>())).ReturnsAsync([first, second]);
+        fixture.Shifts.Setup(x => x.ListAssignmentsByShiftAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        fixture.Shifts.Setup(x => x.DeleteAsync(second.Id, It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("boom"));
+
+        var ex = await Assert.ThrowsAsync<InactiveRecordDeleteConflictException>(() => fixture.Handler().Handle(new(company.Id), default));
+
+        Assert.Contains("stopped after 1 of 2 shift(s) were removed", ex.Message);
+        Assert.Contains("Run Clear again", ex.Message);
+        fixture.Shifts.Verify(x => x.DeleteAsync(first.Id, It.IsAny<CancellationToken>()), Times.Once);
+        fixture.Branches.Verify(x => x.DeleteAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Partner_requested_shifts_are_kept_and_nothing_is_removed()
     {
         var fixture = new Fixture();

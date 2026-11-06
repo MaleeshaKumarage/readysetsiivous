@@ -276,39 +276,63 @@ public class CompanyHandlers
                 throw new InactiveRecordDeleteConflictException("This company has shift or checklist history and must be retained, so its shifts and places cannot be cleared.");
             if ((await agreements.ListAsync(tenant.TenantId, ct)).Any(a => a.CompanyId == company.Id))
                 throw new InactiveRecordDeleteConflictException("This company has agreement records and must be retained, so its shifts and places cannot be cleared.");
+            if (partnerStore is not null)
+            {
+                foreach (var branch in companyBranches)
+                {
+                    if (await partnerStore.Session.Query<PartnerCleaningRequest>().AnyAsync(x => x.BranchId == branch.Id, ct)
+                        || await partnerStore.Session.Query<PartnerChangeRequest>().AnyAsync(x => x.BranchId == branch.Id, ct)
+                        || await partnerStore.Session.Query<PartnerNotification>().AnyAsync(x => x.BranchId == branch.Id, ct))
+                        throw new InactiveRecordDeleteConflictException("A place has partner request history and must be retained, so its shifts and places cannot be cleared.");
+                }
+            }
 
+            // Every precondition the per-shift and per-place deletes enforce was checked above, so a failure here is
+            // unexpected. Each save commits on its own, so the clear cannot be one transaction. It stops, reports how far
+            // it got, and can be run again: finished shifts and places are skipped on the next run.
             var now = DateTime.UtcNow;
+            var removedShifts = 0;
             var unassigned = 0;
-            foreach (var shift in companyShifts)
+            try
             {
-                shift.EnsureQualityCycleHistory();
-                if (shift.IsActive)
+                foreach (var shift in companyShifts)
                 {
-                    shift.Deactivate();
-                    shift.RecordQualityCyclePlan(now);
-                    await shifts.SaveAsync(shift, ct);
+                    shift.EnsureQualityCycleHistory();
+                    if (shift.IsActive)
+                    {
+                        shift.Deactivate();
+                        shift.RecordQualityCyclePlan(now);
+                        await shifts.SaveAsync(shift, ct);
+                    }
+                    foreach (var assignment in await shifts.ListAssignmentsByShiftAsync(shift.Id, ct))
+                    {
+                        if (!assignment.IsActive) continue;
+                        assignment.EndFrom(now, now);
+                        await shifts.SaveAssignmentAsync(assignment, ct);
+                        unassigned++;
+                    }
+                    await shifts.DeleteAsync(shift.Id, ct);
+                    removedShifts++;
                 }
-                foreach (var assignment in await shifts.ListAssignmentsByShiftAsync(shift.Id, ct))
-                {
-                    if (!assignment.IsActive) continue;
-                    assignment.EndFrom(now, now);
-                    await shifts.SaveAssignmentAsync(assignment, ct);
-                    unassigned++;
-                }
-                await shifts.DeleteAsync(shift.Id, ct);
-            }
 
-            foreach (var branch in companyBranches)
+                var removedPlaces = 0;
+                foreach (var branch in companyBranches)
+                {
+                    if (branch.IsActive)
+                    {
+                        branch.Deactivate();
+                        await branches.SaveAsync(branch, ct);
+                    }
+                    await branches.DeleteAsync(branch.Id, ct);
+                    removedPlaces++;
+                }
+                return new ClearCompanyRelatedResultDto(removedShifts, unassigned, removedPlaces);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                if (branch.IsActive)
-                {
-                    branch.Deactivate();
-                    await branches.SaveAsync(branch, ct);
-                }
-                await branches.DeleteAsync(branch.Id, ct);
+                throw new InactiveRecordDeleteConflictException(
+                    $"Clearing stopped after {removedShifts} of {companyShifts.Count} shift(s) were removed. The company was not deactivated or deleted. Run Clear again to finish.");
             }
-
-            return new ClearCompanyRelatedResultDto(companyShifts.Count, unassigned, companyBranches.Count);
         }
     }
 
