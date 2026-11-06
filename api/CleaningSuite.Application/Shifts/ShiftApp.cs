@@ -78,6 +78,10 @@ public interface IShiftRepository
     Task DeleteAssignmentAsync(Guid assignmentId, CancellationToken ct = default);
     Task<IReadOnlyList<Shift>> ListForReportingAsync(CancellationToken ct = default);
     Task<IReadOnlyList<Shift>> ListIncludingInactiveAsync(CancellationToken ct = default);
+    /// <summary>Stores the tab on every shift that does not have one yet (shifts saved before tabs were stored).</summary>
+    Task EnsureTabsAsync(CancellationToken ct = default);
+    Task<ShiftTabCounts> CountTabsAsync(Guid? companyId, Guid? branchId, CancellationToken ct = default);
+    Task<(IReadOnlyList<Shift> Items, int Total)> ListTabPageAsync(string tab, Guid? companyId, Guid? branchId, string? search, int skip, int take, CancellationToken ct = default);
     Task<ShiftOccurrenceAssignment?> GetOccurrenceAssignmentAsync(Guid id, CancellationToken ct = default);
     Task<IReadOnlyList<ShiftOccurrenceAssignment>> ListOccurrenceAssignmentsAsync(Guid shiftId, CancellationToken ct = default);
     Task<IReadOnlyList<ShiftOccurrenceAssignment>> ListOccurrenceAssignmentsByEmployeeAsync(Guid employeeId, CancellationToken ct = default);
@@ -326,35 +330,21 @@ public class ShiftHandlers
 
     public class ListShiftPageQueryHandler : IRequestHandler<ListShiftPageQuery, ShiftPage>
     {
-        public static readonly IReadOnlyList<string> Tabs = ["active", "completed", "inactive"];
+        public static readonly IReadOnlyList<string> Tabs = ShiftTabs.All;
         private readonly IShiftRepository _repository;
-        private readonly IQualityCycleRepository _forms;
 
-        public ListShiftPageQueryHandler(IShiftRepository repository, IQualityCycleRepository forms)
+        public ListShiftPageQueryHandler(IShiftRepository repository)
         {
             _repository = repository;
-            _forms = forms;
         }
 
         public async Task<ShiftPage> Handle(ListShiftPageQuery request, CancellationToken ct)
         {
-            var shifts = (await _repository.ListIncludingInactiveAsync(ct))
-                .Where(s => (!request.CompanyId.HasValue || s.CompanyId == request.CompanyId)
-                    && (!request.BranchId.HasValue || s.BranchId == request.BranchId))
-                .ToList();
-            var completed = await CompletedOneTimeShiftIdsAsync(shifts, _forms, ct);
-            var rows = shifts.Select(s => (Shift: s, IsCompleted: completed.Contains(s.Id)))
-                .Select(r => (r.Shift, r.IsCompleted, Tab: !r.Shift.IsActive ? "inactive" : r.IsCompleted ? "completed" : "active"))
-                .ToList();
-            var counts = new ShiftTabCounts(
-                rows.Count(r => r.Tab == "active"), rows.Count(r => r.Tab == "completed"), rows.Count(r => r.Tab == "inactive"));
+            await _repository.EnsureTabsAsync(ct);
+            var counts = await _repository.CountTabsAsync(request.CompanyId, request.BranchId, ct);
             var search = string.IsNullOrWhiteSpace(request.Search) ? null : request.Search.Trim();
-            var inTab = rows.Where(r => r.Tab == request.Tab
-                && (search is null || r.Shift.Name.Contains(search, StringComparison.OrdinalIgnoreCase))).ToList();
-            var items = inTab.Skip(request.Skip).Take(request.Take)
-                .Select(r => MapShift(r.Shift) with { IsCompleted = r.IsCompleted })
-                .ToList();
-            return new ShiftPage(items, inTab.Count, counts);
+            var (shifts, total) = await _repository.ListTabPageAsync(request.Tab, request.CompanyId, request.BranchId, search, request.Skip, request.Take, ct);
+            return new ShiftPage(shifts.Select(s => MapShift(s) with { IsCompleted = s.ChecklistCompleted }).ToList(), total, counts);
         }
     }
 

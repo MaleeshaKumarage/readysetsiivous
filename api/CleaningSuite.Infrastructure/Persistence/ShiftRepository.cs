@@ -61,7 +61,7 @@ public class ShiftRepository : IShiftRepository
     {
         if (!_shiftSnapshots.TryGetValue(shift.Id, out var before) || before != ScheduleFingerprint(shift))
             await StageChange(shift.Id, [], ct);
-        Session.Store(shift);
+        await ShiftTabs.StoreAsync(Session, shift, ct);
         await Session.SaveChangesAsync(ct);
     }
 
@@ -147,7 +147,7 @@ public class ShiftRepository : IShiftRepository
             await StageChange(assignment.ShiftId, [assignment.EmployeeId], ct);
         if (!_shiftSnapshots.TryGetValue(shift.Id, out var before) || before != ScheduleFingerprint(shift))
             await StageChange(shift.Id, [], ct);
-        Session.Store(shift);
+        await ShiftTabs.StoreAsync(Session, shift, ct);
         foreach (var assignment in releasedAssignments) Session.Store(assignment);
         await Session.SaveChangesAsync(ct);
     }
@@ -187,6 +187,44 @@ public class ShiftRepository : IShiftRepository
 
     public async Task<IReadOnlyList<Shift>> ListIncludingInactiveAsync(CancellationToken ct = default) =>
         await Session.Query<Shift>().OrderBy(s => s.Name).ToListAsync(ct);
+
+    public async Task EnsureTabsAsync(CancellationToken ct = default)
+    {
+        var missing = await Session.Query<Shift>().Where(x => x.Tab == null || x.Tab == "").ToListAsync(ct);
+        if (missing.Count == 0) return;
+        foreach (var shift in missing) await ShiftTabs.StoreAsync(Session, shift, ct);
+        await Session.SaveChangesAsync(ct);
+    }
+
+    public async Task<ShiftTabCounts> CountTabsAsync(Guid? companyId, Guid? branchId, CancellationToken ct = default)
+    {
+        var scope = ShiftScope(companyId, branchId);
+        return new ShiftTabCounts(
+            await scope.CountAsync(x => x.Tab == ShiftTabs.Active, ct),
+            await scope.CountAsync(x => x.Tab == ShiftTabs.Completed, ct),
+            await scope.CountAsync(x => x.Tab == ShiftTabs.Inactive, ct));
+    }
+
+    public async Task<(IReadOnlyList<Shift> Items, int Total)> ListTabPageAsync(string tab, Guid? companyId, Guid? branchId, string? search, int skip, int take, CancellationToken ct = default)
+    {
+        var query = ShiftScope(companyId, branchId).Where(x => x.Tab == tab);
+        if (search is not null)
+        {
+            var term = search.ToLowerInvariant();
+            query = query.Where(x => x.Name.ToLower().Contains(term));
+        }
+        var total = await query.CountAsync(ct);
+        var items = await query.OrderBy(x => x.Name).ThenBy(x => x.Id).Skip(skip).Take(take).ToListAsync(ct);
+        return (items, total);
+    }
+
+    private IQueryable<Shift> ShiftScope(Guid? companyId, Guid? branchId)
+    {
+        var query = Session.Query<Shift>().AsQueryable();
+        if (companyId.HasValue) query = query.Where(s => s.CompanyId == companyId.Value);
+        if (branchId.HasValue) query = query.Where(s => s.BranchId == branchId.Value);
+        return query;
+    }
 
     public async Task<IReadOnlyList<Shift>> ListForReportingAsync(CancellationToken ct = default)
     {

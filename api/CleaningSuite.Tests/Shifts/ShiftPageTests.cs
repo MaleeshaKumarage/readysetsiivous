@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using CleaningSuite.Application.QualityCycle;
 using CleaningSuite.Application.Shifts;
 using CleaningSuite.Domain.Shifts;
 using Moq;
@@ -11,6 +10,7 @@ using Xunit;
 
 namespace CleaningSuite.Tests.Shifts;
 
+// The page handler reads the tab stored on each shift. This fake repository answers the way the database query does.
 public class ShiftPageTests
 {
     private static readonly Guid CompanyA = Guid.NewGuid();
@@ -23,14 +23,38 @@ public class ShiftPageTests
         var open = oneTime("Open visit");
         var inactive = Shift.Create(CompanyA, Guid.NewGuid(), "Old contract", new ShiftSchedule { Type = ShiftScheduleType.Weekly, WeeklyDays = [DayOfWeek.Friday], WeeklyStart = TimeSpan.FromHours(6), WeeklyEnd = TimeSpan.FromHours(8) }, null, null, null);
         inactive.Deactivate();
+        // The stored tab and checklist state, as ShiftTabs.StoreAsync writes them in production.
+        weekly.Tab = ShiftTabs.Active;
+        open.Tab = ShiftTabs.Active;
+        done.Tab = ShiftTabs.Completed; done.ChecklistCompleted = true;
+        inactive.Tab = ShiftTabs.Inactive;
         var shifts = new List<Shift> { weekly, done, open, inactive };
 
         var repo = new Mock<IShiftRepository>();
-        repo.Setup(r => r.ListIncludingInactiveAsync(It.IsAny<CancellationToken>())).ReturnsAsync(shifts);
-        var forms = new Mock<IQualityCycleRepository>();
-        forms.Setup(f => f.ListShiftIdsWithSubmittedFormAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new HashSet<Guid> { done.Id });
-        return (new ShiftHandlers.ListShiftPageQueryHandler(repo.Object, forms.Object), done);
+        repo.Setup(r => r.EnsureTabsAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        repo.Setup(r => r.CountTabsAsync(It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+            .Returns((Guid? company, Guid? branch, CancellationToken _) => Task.FromResult(Counts(shifts, company, branch)));
+        repo.Setup(r => r.ListTabPageAsync(It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Returns((string tab, Guid? company, Guid? branch, string? search, int skip, int take, CancellationToken _) =>
+                Task.FromResult(TabPage(shifts, tab, company, branch, search, skip, take)));
+        return (new ShiftHandlers.ListShiftPageQueryHandler(repo.Object), done);
+    }
+
+    private static IEnumerable<Shift> InScope(List<Shift> shifts, Guid? company, Guid? branch) =>
+        shifts.Where(s => (!company.HasValue || s.CompanyId == company) && (!branch.HasValue || s.BranchId == branch));
+
+    private static ShiftTabCounts Counts(List<Shift> shifts, Guid? company, Guid? branch)
+    {
+        var scope = InScope(shifts, company, branch).ToList();
+        return new ShiftTabCounts(scope.Count(s => s.Tab == ShiftTabs.Active), scope.Count(s => s.Tab == ShiftTabs.Completed), scope.Count(s => s.Tab == ShiftTabs.Inactive));
+    }
+
+    private static (IReadOnlyList<Shift> Items, int Total) TabPage(List<Shift> shifts, string tab, Guid? company, Guid? branch, string? search, int skip, int take)
+    {
+        var rows = InScope(shifts, company, branch)
+            .Where(s => s.Tab == tab && (search is null || s.Name.Contains(search, StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(s => s.Name).ToList();
+        return (rows.Skip(skip).Take(take).ToList(), rows.Count);
     }
 
     [Fact]
@@ -43,7 +67,7 @@ public class ShiftPageTests
         var inactive = await handler.Handle(new ListShiftPageQuery("inactive", null, null, null, 0, 25), CancellationToken.None);
 
         Assert.Equal(new ShiftTabCounts(2, 1, 1), active.Counts);
-        Assert.Equal(["Weekly clean", "Open visit"], active.Items.Select(i => i.Name).ToArray());
+        Assert.Equal(["Open visit", "Weekly clean"], active.Items.Select(i => i.Name).ToArray());
         Assert.Equal(["Done visit"], completed.Items.Select(i => i.Name).ToArray());
         Assert.True(completed.Items[0].IsCompleted);
         Assert.Equal(done.Id, completed.Items[0].Id);
@@ -72,6 +96,7 @@ public class ShiftPageTests
 
         Assert.Equal(2, second.Total);
         Assert.Single(second.Items);
+        Assert.Equal("Weekly clean", second.Items[0].Name);
         var beyond = await handler.Handle(new ListShiftPageQuery("active", null, null, null, 50, 25), CancellationToken.None);
         Assert.Empty(beyond.Items);
         Assert.Equal(2, beyond.Total);
