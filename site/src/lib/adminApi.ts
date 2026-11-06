@@ -123,7 +123,7 @@ export async function adminSend(
   return ok;
 }
 
-export type AdminSendResult = { ok: true } | { ok: false; message: string };
+export type AdminSendResult = { ok: true } | { ok: false; message: string; status: number };
 
 // Turns an RFC 7807 problem into one readable sentence. Field-level messages are used when
 // there is no detail, so validation failures still say what to change.
@@ -138,6 +138,13 @@ export function problemText(problem: unknown, fallback: string): string {
   return fallback;
 }
 
+// Guidance for failures that are not about the form's content: an ended session or a missing permission.
+export function failureMessage(status: number, problem: unknown, fallback: string): string {
+  if (status === 401) return 'Your session has ended. Sign in again, then retry the change.';
+  if (status === 403) return 'Your account is not allowed to make this change. Ask an owner to check your access.';
+  return problemText(problem, fallback);
+}
+
 // Like adminSend, but keeps the server's reason (problem detail) so the user can act on it.
 export async function adminSendResult(
   path: string,
@@ -148,14 +155,14 @@ export async function adminSendResult(
   try {
     response = await authorizedFetch(path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
   } catch {
-    return { ok: false, message: 'Could not reach the server. Check your connection, then save again.' };
+    return { ok: false, message: 'Could not reach the server. Check your connection, then save again.', status: 0 };
   }
   if (response.ok || response.status === 204) { invalidateAdminCache(); return { ok: true }; }
   const problem = await response.json().catch(() => null);
-  return { ok: false, message: problemText(problem, `The change was not saved (error ${response.status}). Check the fields, then save again.`) };
+  return { ok: false, message: failureMessage(response.status, problem, `The change was not saved (error ${response.status}). Check the fields, then save again.`), status: response.status };
 }
 
-export type AdminJsonResult<T> = { ok: true; value: T } | { ok: false; message: string };
+export type AdminJsonResult<T> = { ok: true; value: T } | { ok: false; message: string; status: number };
 
 // Like adminSendJson, but keeps the server's reason so the form can say what to change.
 export async function adminSendJsonResult<T>(path: string, method: 'POST' | 'PUT', body?: unknown): Promise<AdminJsonResult<T>> {
@@ -163,11 +170,11 @@ export async function adminSendJsonResult<T>(path: string, method: 'POST' | 'PUT
   try {
     response = await authorizedFetch(path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
   } catch {
-    return { ok: false, message: 'Could not reach the server. Check your connection, then save again.' };
+    return { ok: false, message: 'Could not reach the server. Check your connection, then save again.', status: 0 };
   }
   if (!response.ok) {
     const problem = await response.json().catch(() => null);
-    return { ok: false, message: problemText(problem, `The change was not saved (error ${response.status}). Check the fields, then save again.`) };
+    return { ok: false, message: failureMessage(response.status, problem, `The change was not saved (error ${response.status}). Check the fields, then save again.`), status: response.status };
   }
   invalidateAdminCache();
   return { ok: true, value: (await response.json()) as T };
@@ -224,10 +231,11 @@ export interface WorkQueuePage {
 export const adminWorkQueue = {
   page: async (params: { view: WorkQueueView; source: WorkQueueSource; q?: string; from?: string; to?: string; assignee?: string; skip: number; take: number }): Promise<WorkQueuePage | null> => {
     const qs = new URLSearchParams({ view: params.view, source: params.source, skip: String(params.skip), take: String(params.take) });
+    // 'unassigned' is a sentinel for work with no cleaner; the server takes it as its own flag.
+    if (params.assignee === 'unassigned') qs.set('unassigned', 'true'); else if (params.assignee) qs.set('assignee', params.assignee);
     if (params.q) qs.set('q', params.q);
     if (params.from) qs.set('from', params.from);
     if (params.to) qs.set('to', params.to);
-    if (params.assignee) qs.set('assignee', params.assignee);
     const page = await adminGet<WorkQueuePage>(`/api/v1/admin/work-queue?${qs.toString()}`, false);
     if (!page || !Array.isArray(page.items) || !Number.isInteger(page.total) || page.total < 0 || !page.counts) return null;
     return page;
@@ -329,7 +337,7 @@ export const adminEmployees = {
   reactivate: (id: string) => employeeMutation(`/api/v1/admin/employees/${id}/reactivate`),
   update: (id: string, fields: EmployeeFields, isActive: boolean): Promise<AdminSendResult> =>
     adminSendResult(`/api/v1/admin/employees/${id}`, 'PUT', { fields, isActive }),
-  deactivate: (id: string) => adminSend(`/api/v1/admin/employees/${id}/deactivate`, 'POST'),
+  deactivate: (id: string): Promise<AdminSendResult> => adminSendResult(`/api/v1/admin/employees/${id}/deactivate`, 'POST'),
   deleteInactive: (id: string) => adminDelete(`/api/v1/admin/employees/${id}`),
   invite: async (id: string): Promise<{ email: string; keycloakUserId: string; status: 'Sent' | 'AlreadySent'; sentUtc: string }> => {
     const response = await authorizedFetch(`/api/v1/admin/employees/${id}/invite`, { method: 'POST' });

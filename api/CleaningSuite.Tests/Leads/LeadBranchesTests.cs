@@ -8,7 +8,7 @@ public class LeadBranchesTests
     {
         var fields=LeadValidation.Normalize(new LeadFields{Name="Company",Country="FI"},Guid.NewGuid());Assert.Empty(fields.Branches!);Assert.Equal("",fields.BranchName);
         var legacy=new Lead{Fields=new(){Name="Company",Country="FI"}};Assert.Empty(LeadBranches.Project(legacy).Branches!);
-        LeadValidation.Conversion(fields with { BusinessId="BID" });
+        LeadValidation.Conversion(fields with { BusinessId="1234567-8" });
     }
     [Fact] public void Legacy_branch_is_read_without_writing_and_uses_a_stable_identity()
     {

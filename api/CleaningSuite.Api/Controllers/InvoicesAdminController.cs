@@ -101,7 +101,7 @@ public class InvoicesAdminController : ControllerBase
     {
         var invoice = await _mediator.Send(new GetInvoiceQuery(id), ct);
         if (invoice is null)
-            return NotFound();
+            return NotFound(new { title = "Invoice not found", status = 404, detail = CleaningSuite.Application.Invoicing.Commands.InvoiceNotFoundException.GuidanceText });
 
         var bytes = InvoicePdfRenderer.Render(invoice);
         return File(bytes, "application/pdf", $"invoice-{invoice.InvoiceNumber}.pdf");

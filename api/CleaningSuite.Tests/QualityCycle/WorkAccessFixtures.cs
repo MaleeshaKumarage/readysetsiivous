@@ -1,8 +1,10 @@
+using System.Collections.Generic;
 using CleaningSuite.Application.Employees;
 using CleaningSuite.Application.Shifts;
 using CleaningSuite.Domain.Employees;
 using CleaningSuite.Domain.Shifts;
 using Moq;
+using System.Threading;
 
 namespace CleaningSuite.Tests.QualityCycle;
 
@@ -22,6 +24,14 @@ internal static class WorkAccessFixtures
         var shifts = new Mock<IShiftRepository>();
         shifts.Setup(x => x.GetAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Guid id, CancellationToken _) => new Shift { Id = id, IsActive = true });
+        return shifts.Object;
+    }
+    /// <summary>A shift repository for employees with no assigned shifts, so the deactivation guard passes.</summary>
+    public static IShiftRepository NoAssignedShifts()
+    {
+        var shifts = new Mock<IShiftRepository>();
+        shifts.Setup(x => x.ListAssignmentsByEmployeeAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<ShiftAssignment>());
         return shifts.Object;
     }
     public static IShiftWorkReservation Reservation { get; } = new UncontendedReservation();

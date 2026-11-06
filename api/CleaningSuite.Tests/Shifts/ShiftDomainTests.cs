@@ -268,6 +268,8 @@ public class ShiftDomainTests
         Assert.True(schedule1.OnCall);
 
         var schedule2 = new ShiftSchedule { Type = (ShiftScheduleType)99 };
-        Assert.Throws<ArgumentOutOfRangeException>(() => schedule2.Validate());
+        var unknown = Assert.ThrowsAny<ArgumentException>(() => schedule2.Validate());
+        Assert.Contains("Choose a shift schedule type", unknown.Message);
+        Assert.DoesNotContain("Parameter", unknown.Message);
     }
 }

@@ -29,6 +29,8 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
         var assigneeKey = assignee is not null && Guid.TryParse(assignee, out var parsedKey) ? parsedKey.ToString() : assignee;
         // Partner requests carry no assignee of their own, so an assignee filter leaves them out.
         if (assignee is not null) includePartners = false;
+        // Unassigned work: occurrences and bookings with no cleaner. Partner requests have no assignee of their own, so they stay in.
+        var unassignedOnly = query.UnassignedOnly;
         var fromDay = query.DateFrom is null ? (DateOnly?)null : DateOnly.ParseExact(query.DateFrom, "yyyy-MM-dd");
         var toDay = query.DateTo is null ? (DateOnly?)null : DateOnly.ParseExact(query.DateTo, "yyyy-MM-dd");
         bool InDates(DateOnly day) => (fromDay is null || day >= fromDay) && (toDay is null || day <= toDay);
@@ -44,7 +46,7 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
         var assigneeId = assignee is not null && Guid.TryParse(assignee, out var parsedAssignee) ? parsedAssignee : (Guid?)null;
         var shiftRows = includeShifts
             ? (await ClassifyShiftsAsync(search, companyIds, zone, ct))
-                .Where(r => InDates(DateOnly.FromDateTime(r.Local)) && (assignee is null || (assigneeId is { } id && r.Visit.EmployeeIds.Contains(id))))
+                .Where(r => InDates(DateOnly.FromDateTime(r.Local)) && (assignee is null || (assigneeId is { } id && r.Visit.EmployeeIds.Contains(id))) && (!unassignedOnly || r.Visit.EmployeeIds.Count == 0))
                 .ToList()
             : new List<ShiftRow>();
 
@@ -136,6 +138,7 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
             // The day after 9999-12-31 does not exist, so an end date at the maximum leaves the upper bound open.
             if (toDay is { } lastDay && lastDay != DateOnly.MaxValue) { var upper = TenantTimeZone.StartOfLocalDay(lastDay.AddDays(1).ToDateTime(TimeOnly.MinValue), zone); var unspecifiedUpper = DateTime.SpecifyKind(upper, DateTimeKind.Unspecified); q = q.Where(b => b.StartUtc < unspecifiedUpper); }
             if (assignee is not null) q = q.Where(b => b.EmployeeId == assigneeKey);
+            if (unassignedOnly) q = q.Where(b => b.EmployeeId == null);
             return q;
         }
     }

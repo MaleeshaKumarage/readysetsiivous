@@ -23,6 +23,7 @@ public class WorkQueueAdminController(IMediator mediator) : ControllerBase
         [FromQuery] string? from = null,
         [FromQuery] string? to = null,
         [FromQuery] string? assignee = null,
+        [FromQuery] bool unassigned = false,
         CancellationToken ct = default)
     {
         if (!WorkQueueViews.IsKnown(view)) return BadRequest("View must be needs-action, scheduled, in-progress, completed or cancelled.");
@@ -31,9 +32,10 @@ public class WorkQueueAdminController(IMediator mediator) : ControllerBase
         if (to is not null && !DateOnly.TryParseExact(to, "yyyy-MM-dd", out _)) return BadRequest("To must be a yyyy-MM-dd date.");
         if (from is not null && to is not null && string.CompareOrdinal(from, to) > 0) return BadRequest("From must not be after To.");
         if (assignee is not null && string.IsNullOrWhiteSpace(assignee)) return BadRequest("Assignee must not be blank.");
+        if (unassigned && assignee is not null) return BadRequest("Choose either an assignee or unassigned work, not both.");
         // Each source reads skip+take rows before merging, so bound skip to keep that window small and non-negative.
         skip = Math.Clamp(skip, 0, WorkQueueLimits.MaxSkip);
         take = Math.Clamp(take, 1, 100);
-        return Ok(await mediator.Send(new WorkQueueQuery(view, source, q, skip, take, from, to, assignee?.Trim()), ct));
+        return Ok(await mediator.Send(new WorkQueueQuery(view, source, q, skip, take, from, to, assignee?.Trim(), unassigned), ct));
     }
 }

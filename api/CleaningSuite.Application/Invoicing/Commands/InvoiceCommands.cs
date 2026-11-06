@@ -9,6 +9,12 @@ using MediatR;
 namespace CleaningSuite.Application.Invoicing.Commands;
 
 
+/// <summary>An invoice that no longer exists, for example after another user changed the list. Says what to do next.</summary>
+public sealed class InvoiceNotFoundException() : Exception(GuidanceText)
+{
+    public const string GuidanceText = "This invoice could not be found. Refresh the invoice list and try again.";
+}
+
 public record CreateInvoiceCommand(Guid BookingId) : IRequest<Guid>;
 
 public record MarkInvoicePaidCommand(Guid Id, DateTime PaidAtUtc) : IRequest<Unit>;
@@ -112,7 +118,7 @@ public class MarkInvoicePaidHandler : IRequestHandler<MarkInvoicePaidCommand, Un
     public async Task<Unit> Handle(MarkInvoicePaidCommand request, CancellationToken ct)
     {
         var invoice = await _invoices.GetByIdAsync(request.Id, ct)
-            ?? throw new NotFoundException("Invoice", request.Id);
+            ?? throw new InvoiceNotFoundException();
 
         if (invoice.Status == Invoice.StatusVoided)
             throw new InvoiceConflictException("This invoice was voided, so it cannot be marked paid. Issue a new invoice for the amount that is still owed.");
@@ -137,7 +143,7 @@ public class VoidInvoiceHandler : IRequestHandler<VoidInvoiceCommand, Unit>
     public async Task<Unit> Handle(VoidInvoiceCommand request, CancellationToken ct)
     {
         var invoice = await _invoices.GetByIdAsync(request.Id, ct)
-            ?? throw new NotFoundException("Invoice", request.Id);
+            ?? throw new InvoiceNotFoundException();
 
         // A paid invoice is final. Corrections go through a credit note, not a void.
         if (invoice.Status == Invoice.StatusPaid)

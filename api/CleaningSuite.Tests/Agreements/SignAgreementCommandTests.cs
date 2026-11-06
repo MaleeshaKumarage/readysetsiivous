@@ -59,7 +59,7 @@ public class SignAgreementCommandTests
         var uploads = new Mock<IUploadContentValidator>();
         var handler = new SignAgreementHandler(MockTenant(), repo.Object, store.Object, gen.Object, uploads.Object);
 
-        await Assert.ThrowsAsync<NotFoundException>(() =>
+        await Assert.ThrowsAsync<CleaningSuite.Application.Common.PublicSigningLinkNotFoundException>(() =>
             handler.Handle(new SignAgreementCommand("nope", "X", [1]), CancellationToken.None));
     }
 

@@ -5,6 +5,7 @@ using CleaningSuite.Application.Employees.Commands;
 using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Employees;
 using Microsoft.Extensions.Configuration;
+using CleaningSuite.Application.Shifts;
 using Moq;
 
 namespace CleaningSuite.Tests.Employees;
@@ -93,7 +94,7 @@ public class EmployeeInviteTests
         _identity.Setup(x => x.SynchronizeAccessAsync("tenant-a", _employee.Id, "user-a", "employee", false, default)).Callback(() => {
             Assert.False(_employee.IsActive); _employees.Verify(x => x.SaveAsync(_employee, default), Times.Once);
         }).Returns(Task.CompletedTask);
-        await new DeactivateEmployeeHandler(_employees.Object, _identity.Object, _tenant.Object, _locks.Object, WorkAccessFixtures.Reservation).Handle(new(_employee.Id), default);
+        await new DeactivateEmployeeHandler(_employees.Object, _identity.Object, _tenant.Object, _locks.Object, WorkAccessFixtures.Reservation, WorkAccessFixtures.NoAssignedShifts()).Handle(new(_employee.Id), default);
         _identity.Verify(x => x.SynchronizeAccessAsync("tenant-a", _employee.Id, "user-a", "employee", false, default), Times.Once);
     }
     [Fact]
