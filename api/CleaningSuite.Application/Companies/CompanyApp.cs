@@ -3,6 +3,8 @@ using CleaningSuite.Application.Partners;
 using CleaningSuite.Domain.Partners;
 using Marten;
 using CleaningSuite.Application.Agreements;
+using CleaningSuite.Application.Invoicing;
+using CleaningSuite.Domain.Invoicing;
 using CleaningSuite.Application.QualityCycle;
 using CleaningSuite.Application.Shifts;
 using CleaningSuite.Application.Tenants;
@@ -85,8 +87,11 @@ public record UpdateCompanyCommand(
 public record DeactivateCompanyCommand(Guid Id) : IRequest;
 public record ReactivateCompanyCommand(Guid Id) : IRequest;
 public record DeleteCompanyCommand(Guid Id) : IRequest;
-public record ClearCompanyRelatedCommand(Guid Id) : IRequest<ClearCompanyRelatedResultDto>;
-public record ClearCompanyRelatedResultDto(int ShiftsDeleted, int EmployeesUnassigned, int BranchesDeleted);
+// Clears a company in one step: its shifts, places, partner requests and issued invoices (voided, never deleted).
+// Checklist submissions are kept as separate records. Signed agreements are kept unless DeleteSignedAgreements is set.
+public record ClearCompanyRelatedCommand(Guid Id, bool DeleteSignedAgreements = false) : IRequest<ClearCompanyRelatedResultDto>;
+public record ClearCompanyRelatedResultDto(int ShiftsDeleted, int EmployeesUnassigned, int BranchesDeleted,
+    int InvoicesVoided = 0, int PartnerRecordsDeleted = 0, int AgreementsDeleted = 0);
 
 public record CompanyCounts(int All, int Active, int Inactive);
 
@@ -262,48 +267,49 @@ public class CompanyHandlers
         }
     }
 
-    // One-step cleanup offered when deactivating or deleting a company is refused because of its shifts or places.
-    // Shifts and places with checklist, visit or partner history are kept, so the whole request is refused and nothing changes.
+    // One-step clear: removes the company's shifts, places, partner requests and agreements (when asked), and voids its
+    // open invoices. Paid invoices and partner user accounts are refused up front, so a refusal changes nothing.
     public sealed class ClearCompanyRelatedCommandHandler(ICompanyRepository companies, IBranchRepository branches,
-        IShiftRepository shifts, IQualityCycleRepository forms, IAgreementRepository agreements, ITenantContext tenant,
-        IPartnerStore? partnerStore = null, IShiftWorkReservation? reservation = null)
+        IShiftRepository shifts, IAgreementRepository agreements, ITenantContext tenant,
+        IPartnerStore? partnerStore = null, IShiftWorkReservation? reservation = null, IInvoiceRepository? invoices = null)
         : IRequestHandler<ClearCompanyRelatedCommand, ClearCompanyRelatedResultDto>
     {
         public async Task<ClearCompanyRelatedResultDto> Handle(ClearCompanyRelatedCommand request, CancellationToken ct)
         {
             await using var lease = reservation is null ? null : await reservation.AcquireAsync(ct);
-            if (partnerStore is not null && (await partnerStore.Session.Query<PartnerCleaningRequest>().AnyAsync(x => x.CompanyId == request.Id, ct)
-                || await partnerStore.Session.Query<PartnerChangeRequest>().AnyAsync(x => x.CompanyId == request.Id, ct)
-                || await partnerStore.Session.Query<CleaningSuite.Domain.Employees.Employee>().AnyAsync(x => x.PartnerCompanyId == request.Id, ct)))
-                throw new InactiveRecordDeleteConflictException("This company has partner request history and must be retained, so its shifts and places cannot be cleared.");
             var company = await companies.GetAsync(request.Id, ct) ?? throw new NotFoundException("Company", request.Id);
 
             var companyShifts = await shifts.ListAsync(company.Id, null, ct);
             var companyBranches = await branches.ListByCompanyAsync(company.Id, true, ct);
-            if (companyShifts.Any(s => s.PartnerRequestId.HasValue))
-                throw new InactiveRecordDeleteConflictException("Partner-requested shifts must be kept, so this company's shifts cannot be cleared.");
-            if ((await forms.ListFormsAsync(null, null, null, ct, null, null, company.Id, null)).Count > 0)
-                throw new InactiveRecordDeleteConflictException("This company has shift or checklist history and must be retained, so its shifts and places cannot be cleared.");
-            if ((await agreements.ListAsync(tenant.TenantId, ct)).Any(a => a.CompanyId == company.Id))
-                throw new InactiveRecordDeleteConflictException("This company has agreement records and must be retained, so its shifts and places cannot be cleared.");
+            var branchIds = companyBranches.Select(b => b.Id).ToArray();
+            var openInvoices = invoices is null ? [] : (await invoices.ListAsync(null, null, ct))
+                .Where(i => i.CompanyId == company.Id && i.Status != Invoice.StatusVoided).ToArray();
+            var agreementsToDelete = request.DeleteSignedAgreements
+                ? (await agreements.ListAsync(tenant.TenantId, ct)).Where(a => a.CompanyId == company.Id).ToArray()
+                : [];
+
+            // Refusals are decided before anything is removed.
+            if (openInvoices.Any(i => i.Status == Invoice.StatusPaid))
+                throw new InactiveRecordDeleteConflictException("This company has paid invoices. Paid invoices are kept as the record of what was paid; issue a credit note for any correction, then clear again.");
+            if (partnerStore is not null && await partnerStore.Session.Query<CleaningSuite.Domain.Employees.Employee>().AnyAsync(x => x.PartnerCompanyId == company.Id, ct))
+                throw new InactiveRecordDeleteConflictException("Partner user accounts belong to this company. Remove those accounts first, then clear again.");
+
+            var partnerRequests = new List<PartnerCleaningRequest>();
+            var partnerChanges = new List<PartnerChangeRequest>();
+            var partnerNotes = new List<PartnerNotification>();
             if (partnerStore is not null)
             {
-                foreach (var branch in companyBranches)
-                {
-                    if (await partnerStore.Session.Query<PartnerCleaningRequest>().AnyAsync(x => x.BranchId == branch.Id, ct)
-                        || await partnerStore.Session.Query<PartnerChangeRequest>().AnyAsync(x => x.BranchId == branch.Id, ct)
-                        || await partnerStore.Session.Query<PartnerNotification>().AnyAsync(x => x.BranchId == branch.Id, ct))
-                        throw new InactiveRecordDeleteConflictException("A place has partner request history and must be retained, so its shifts and places cannot be cleared.");
-                }
+                var session = partnerStore.Session;
+                partnerRequests = (await session.Query<PartnerCleaningRequest>().Where(x => x.CompanyId == company.Id || branchIds.Contains(x.BranchId)).ToListAsync(ct)).ToList();
+                partnerChanges = (await session.Query<PartnerChangeRequest>().Where(x => x.CompanyId == company.Id || branchIds.Contains(x.BranchId)).ToListAsync(ct)).ToList();
+                partnerNotes = (await session.Query<PartnerNotification>().Where(x => branchIds.Contains(x.BranchId)).ToListAsync(ct)).ToList();
             }
+            var partnerRecordCount = partnerRequests.Count + partnerChanges.Count + partnerNotes.Count;
 
-            // Every precondition the per-shift and per-place deletes enforce was checked above, so a failure here is
-            // unexpected. Each save commits on its own, so the clear cannot be one transaction. It stops, reports how far
-            // it got, and can be run again: finished shifts and places are skipped on the next run.
+            // Each save commits on its own, so the clear cannot be one transaction. It stops, reports how far it got, and can
+            // be run again: finished work is skipped on the next run (shifts, places and invoices that are already gone or voided).
             var now = DateTime.UtcNow;
-            var removedShifts = 0;
-            var removedPlaces = 0;
-            var unassigned = 0;
+            var removedShifts = 0; var removedPlaces = 0; var unassigned = 0; var voided = 0; var partnerRemoved = 0; var agreementsRemoved = 0;
             try
             {
                 foreach (var shift in companyShifts)
@@ -326,6 +332,19 @@ public class CompanyHandlers
                     removedShifts++;
                 }
 
+                foreach (var invoice in openInvoices)
+                {
+                    invoice.Status = Invoice.StatusVoided;
+                    await invoices!.SaveAsync(invoice, ct);
+                    voided++;
+                }
+
+                foreach (var agreement in agreementsToDelete)
+                {
+                    await agreements.DeleteAsync(tenant.TenantId, agreement.Id, ct);
+                    agreementsRemoved++;
+                }
+
                 foreach (var branch in companyBranches)
                 {
                     if (branch.IsActive)
@@ -336,7 +355,17 @@ public class CompanyHandlers
                     await branches.DeleteAsync(branch.Id, ct);
                     removedPlaces++;
                 }
-                return new ClearCompanyRelatedResultDto(removedShifts, unassigned, removedPlaces);
+                // Partner records go last: if any earlier step refuses, they are still there and nothing is half-removed.
+                if (partnerStore is not null && partnerRecordCount > 0)
+                {
+                    foreach (var partnerRequest in partnerRequests) partnerStore.Session.Delete(partnerRequest);
+                    foreach (var change in partnerChanges) partnerStore.Session.Delete(change);
+                    foreach (var note in partnerNotes) partnerStore.Session.Delete(note);
+                    await partnerStore.Session.SaveChangesAsync(ct);
+                    partnerRemoved = partnerRecordCount;
+                }
+
+                return new ClearCompanyRelatedResultDto(removedShifts, unassigned, removedPlaces, voided, partnerRemoved, agreementsRemoved);
             }
             catch (Exception ex) when (ex is InactiveRecordDeleteConflictException or ShiftConflictException or OperationCanceledException)
             {
@@ -346,7 +375,7 @@ public class CompanyHandlers
             catch (Exception ex)
             {
                 throw new InvalidOperationException(
-                    $"Clearing stopped after removing {removedShifts} of {companyShifts.Count} shift(s) and {removedPlaces} of {companyBranches.Count} place(s). The company was not deactivated or deleted. Run Clear again to finish.", ex);
+                    $"Clearing stopped after removing {removedShifts} of {companyShifts.Count} shift(s), {removedPlaces} of {companyBranches.Count} place(s) and voiding {voided} invoice(s). The company was not deactivated or deleted. Run Clear again to finish. ({ex.Message})", ex);
             }
         }
     }
