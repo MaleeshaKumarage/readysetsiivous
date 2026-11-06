@@ -23,6 +23,7 @@ export default function CompaniesAdminPage() {
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   // Offered when a deactivate or delete is refused because of the company's shifts or places.
   const [relatedPrompt, setRelatedPrompt] = useState<{ company: Company; action: 'deactivate' | 'delete'; reason: string } | null>(null);
+  const [relatedDeleteAgreements, setRelatedDeleteAgreements] = useState(false);
   const [relatedBusy, setRelatedBusy] = useState(false);
   const [relatedError, setRelatedError] = useState('');
   const [listError, setListError] = useState('');
@@ -261,7 +262,7 @@ export default function CompaniesAdminPage() {
     setRelatedBusy(true); setRelatedError('');
     let clearFailure: unknown = null;
     try {
-      await adminCompanies.clearRelated(company.id);
+      await adminCompanies.clearRelated(company.id, relatedDeleteAgreements);
     } catch (failure) {
       clearFailure = failure;
     }
@@ -422,7 +423,8 @@ export default function CompaniesAdminPage() {
         {relatedPrompt && (
           <Stack gap="sm">
             <Text>{relatedPrompt.reason}</Text>
-            <Text size="sm" c="dimmed">Choose the first option to delete this company&apos;s related shifts, unassign every employee from them and clear all its places. If any shift or place has visit, checklist, partner or agreement history, the clear is refused and nothing is changed.</Text>
+            <Text size="sm" c="dimmed">This deletes the company&apos;s branches and shifts, unassigns every employee from them, removes its partner requests and voids its open invoices. Checklist submissions are kept as separate records. Paid invoices stop the clear: issue a credit note first. Nothing is changed if the clear is refused.</Text>
+            <Checkbox label="Also delete this company&apos;s signed agreements" description="Off keeps the signed agreements on record." checked={relatedDeleteAgreements} onChange={event => setRelatedDeleteAgreements(event.currentTarget.checked)} disabled={relatedBusy} />
             {relatedError && <Text c="red" role="alert">{relatedError}</Text>}
             <Button color="red" loading={relatedBusy} onClick={() => void clearRelatedAndContinue()}>Delete related shifts, unassign employees and clear all places</Button>
             <Button variant="default" disabled={relatedBusy} onClick={closeRelatedPrompt}>Skip deletion</Button>
