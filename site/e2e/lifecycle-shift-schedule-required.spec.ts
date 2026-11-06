@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
+import { setupAdminMocks } from './admin-helpers';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 
@@ -8,7 +8,7 @@ test('the schedule picker cannot be cleared, so a shift never gets a schedule no
   await page.route(/\/api\/v1\/admin\//, route => {
     const url = route.request().url(); const path = new URL(url).pathname;
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
-    return route.fulfill({ headers, json: isShiftsRoute(path) ? shiftsResponse([], url)
+    return route.fulfill({ headers, json: path.endsWith('/shifts') ? []
       : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'AAA', isActive: true }], total: 1 }
       : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
   });
@@ -17,9 +17,12 @@ test('the schedule picker cannot be cleared, so a shift never gets a schedule no
   const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
   const schedule = dialog.getByLabel('Schedule', { exact: true });
   await expect(schedule).toHaveValue('Daily');
-  // Choosing the selected option again used to clear the picker and then save as Daily without a warning.
+  // Pick a non-default schedule first. Daily is also the fallback when the value is empty, so re-selecting Daily cannot show the regression.
   await schedule.click();
-  await page.getByRole('option', { name: 'Daily', exact: true }).click();
-  await expect(schedule).toHaveValue('Daily');
-  await expect(dialog.getByRole('button', { name: 'Clear', exact: true })).toHaveCount(0);
+  await page.getByRole('option', { name: 'Monthly', exact: true }).click();
+  await expect(schedule).toHaveValue('Monthly');
+  // Re-choosing the selected option used to clear the picker, and the empty value then fell back to Daily.
+  await schedule.click();
+  await page.getByRole('option', { name: 'Monthly', exact: true }).click();
+  await expect(schedule).toHaveValue('Monthly');
 });

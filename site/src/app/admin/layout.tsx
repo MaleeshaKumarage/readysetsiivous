@@ -20,6 +20,7 @@ import { initAuth, isAuthenticated, isAdmin, authTenant, refreshToken, login, lo
 import { API_URL } from '@/lib/api';
 import { PwaInstallButton } from '@/components/PwaInstallButton';
 import { QuoteRequestBanner, QuoteRequestProvider, PartnerPendingBadge } from '@/components/QuoteRequests';
+import { ACCESS_VERIFY_ERROR, ACCESS_RETRY_LABEL } from '@/lib/accessCopy';
 
 const NAV_GROUPS = [
   { label: 'Workspace', items: [{ href: '', label: 'Dashboard', icon: LayoutDashboard }] },
@@ -131,8 +132,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           <Paper p="xl" radius="md" w="100%" maw={420} withBorder>
             <Stack>
               <Text component="h1" fw={600}>{access === 'error' ? 'Could not verify access' : 'Admin access required'}</Text>
-              <Text role="alert">{access === 'error' ? 'Could not verify your access. The server could not be reached or returned an error, so nothing was changed. Check your connection and retry. If it keeps failing, contact your tenant administrator.' : 'This account cannot access tenant administration.'}</Text>
-              {access === 'error' && <Button onClick={() => void verifyAccess()}>Retry verification</Button>}
+              <Text role="alert">{access === 'error' ? ACCESS_VERIFY_ERROR : 'This account cannot access tenant administration.'}</Text>
+              {access === 'error' && <Button onClick={() => void verifyAccess()}>{ACCESS_RETRY_LABEL}</Button>}
               <Button component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="light">My account</Button>
               <Button onClick={() => logout()} variant="subtle">Sign out</Button>
             </Stack>

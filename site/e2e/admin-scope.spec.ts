@@ -31,6 +31,8 @@ test('transient identity verification cannot mount children and retry recovers',
   await page.route(/\/api\/v1\/admin\/employees/, route => { adminReads++; return route.fulfill({ status: 200, headers, json: [] }); });
   await page.goto('/admin/employees/');
   await expect(page.getByRole('heading', { name: 'Could not verify access' })).toBeVisible();
+  await expect(page.getByText('Could not verify your access.')).toContainText('nothing was changed');
+  await expect(page.getByText('Could not verify your access.')).toContainText('contact your tenant administrator');
   expect(adminReads).toBe(0);
   await page.getByRole('button', { name: 'Retry verification' }).click();
   await expect(page.getByRole('button', { name: 'Add employee' })).toBeVisible();
