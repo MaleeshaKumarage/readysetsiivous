@@ -131,7 +131,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           <Paper p="xl" radius="md" w="100%" maw={420} withBorder>
             <Stack>
               <Text component="h1" fw={600}>{access === 'error' ? 'Could not verify access' : 'Admin access required'}</Text>
-              <Text role="alert">{access === 'error' ? 'Account verification is temporarily unavailable. Please retry.' : 'This account cannot access tenant administration.'}</Text>
+              <Text role="alert">{access === 'error' ? 'Could not verify your access. The server could not be reached or returned an error, so nothing was changed. Check your connection and retry. If it keeps failing, contact your tenant administrator.' : 'This account cannot access tenant administration.'}</Text>
               {access === 'error' && <Button onClick={() => void verifyAccess()}>Retry verification</Button>}
               <Button component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="light">My account</Button>
               <Button onClick={() => logout()} variant="subtle">Sign out</Button>
