@@ -117,3 +117,19 @@ test('a failed save shows the reason as a toast and keeps the dialog open to ret
   await expect(page.getByText('Assignments could not be saved. Your changes were kept; retry the save.').first()).toBeVisible();
   await expect(editor).toBeVisible();
 });
+
+test('overlap refusal shows the server message that names the clashing visit', async ({ page }) => {
+  await setup(page);
+  // The server's own wording for this refusal (VisitAssignmentSafety.OverlapMessage), with the clashing shift named.
+  await page.route(/\/visit-assignees$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    return route.fulfill({ status: 409, headers, json: {
+      title: 'Shift conflict',
+      detail: 'This cleaner already has a visit that overlaps the visit starting 2 Nov 2026 08:00. It clashes with "Evening deep clean", 2 Nov 2026 08:30 to 2 Nov 2026 10:30. No assignments were saved. Choose another cleaner or time, or remove the cleaner from the other visit first.',
+      conflicts: [{ shiftId: 'other', shiftName: 'Evening deep clean', startUtc: clashStart, endUtc: clashEnd }],
+    } });
+  });
+  const editor = await openAssignForMorningVisit(page, 'Cover the morning visit');
+  await editor.getByRole('button', { name: 'Preview assignment', exact: true }).click();
+  await expect(editor.getByText(/It clashes with "Evening deep clean", 2 Nov 2026 08:30 to 2 Nov 2026 10:30\./)).toBeVisible();
+});
