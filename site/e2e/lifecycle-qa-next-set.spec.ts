@@ -89,3 +89,44 @@ test('my shifts on an empty Today offers past and upcoming work instead of a dea
   expect(views).toContain('past');
   expect(views).toContain('future');
 });
+
+test('weekly shifts show HH:mm times with no seconds for both day branches', async ({ page }) => {
+  test.setTimeout(120000);
+  await setupAdminMocks(page);
+  await page.route(/\/api\/v1\/admin\//, route => {
+    const path = new URL(route.request().url()).pathname;
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    const json = path.endsWith('/shifts') ? [
+      { id: 'weekly-days', name: 'Weekly days', schedule: { type: 2, weeklyDays: [1, 3], weeklyStart: '08:00:00', weeklyEnd: '17:00:00' }, isActive: true },
+      { id: 'weekly-one', name: 'Weekly one', schedule: { type: 2, weeklyDay: 5, weeklyStart: '09:00:00', weeklyEnd: '12:00:00' }, isActive: true },
+    ] : path.endsWith('/assignment-counts') ? {} : path.endsWith('/companies') ? { items: [], total: 0 } : [];
+    return route.fulfill({ status: 200, headers, json });
+  });
+  const listed = page.waitForResponse(r => /\/api\/v1\/admin\/shifts(\?|$)/.test(r.url()) && r.request().method() === 'GET', { timeout: 90000 });
+  await page.goto('/admin/shifts/');
+  await listed;
+  await expect(page.getByText('Monday, Wednesday 08:00–17:00', { exact: true })).toBeVisible({ timeout: 30000 });
+  await expect(page.getByText('Friday 09:00–12:00', { exact: true })).toBeVisible();
+  await expect(page.getByRole('table').getByText(/:\d{2}:\d{2}/)).toHaveCount(0);
+});
+
+test('a deactivated shift future visit is listed under Cancelled', async ({ page }) => {
+  test.setTimeout(120000);
+  await setupAdminMocks(page, { authenticated: true });
+  const cancelledVisit = { source: 'shift', id: '11111111-1111-4111-8111-111111111111', reference: 'Evening deep clean', customerName: 'AAA',
+    scheduledLocal: '2026-11-20 08:00', status: 'Cancelled', stateLabel: 'Cancelled', assigneeName: null, href: '/admin/shifts/' };
+  await page.route('**/api/v1/admin/work-queue**', route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    const view = new URL(route.request().url()).searchParams.get('view') ?? 'needs-action';
+    const items = view === 'cancelled' ? [cancelledVisit] : [];
+    return route.fulfill({ status: 200, headers, json: { view, source: 'all', items, total: items.length,
+      counts: { 'needs-action': 0, scheduled: 0, 'in-progress': 0, completed: 0, cancelled: 1 } } });
+  });
+  await page.route('**/api/v1/admin/employees**', route => route.fulfill({ status: 200, headers, json: [] }));
+  await page.goto('/admin/work-queue/');
+  await expect(page.getByRole('tab', { name: /^Needs action/ })).toBeVisible({ timeout: 30000 });
+  await expect(page.getByText('Evening deep clean', { exact: true })).toHaveCount(0);
+  await page.getByRole('tab', { name: /^Cancelled/ }).click();
+  await expect(page.getByRole('listitem').filter({ hasText: 'Evening deep clean' })).toBeVisible();
+  await expect(page.getByRole('listitem').filter({ hasText: 'Evening deep clean' })).toContainText('Cancelled');
+});
