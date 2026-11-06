@@ -32,7 +32,7 @@ test('shift list uses one time format for every schedule type and shows monthly 
   await page.goto('/admin/shifts/');
   await expect(page.getByText('Daily 08:00–17:00', { exact: true })).toBeVisible();
   await expect(page.getByText('Monthly day 15 13:00–14:00', { exact: true })).toBeVisible();
-  await expect(page.getByText(/:00:00/)).toHaveCount(0);
+  await expect(page.getByRole('table').getByText(/:\d{2}:\d{2}/)).toHaveCount(0);
 });
 
 test('assignee picker shows each employee email so similar names can be told apart', async ({ page }) => {
