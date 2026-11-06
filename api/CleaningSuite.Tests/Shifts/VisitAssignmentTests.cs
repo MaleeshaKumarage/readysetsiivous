@@ -196,6 +196,17 @@ public class VisitAssignmentTests
     }
 
     [Fact]
+    public async Task A_visit_is_not_counted_twice_when_the_candidate_has_a_different_original_start_key()
+    {
+        var s = new Setup(); var zone = TimeZoneInfo.Utc;
+        var own = await s.Shifts.Object.ResolveRosterAsync(s.Shift, Start, Start.AddDays(1), zone, default);
+        var visit = Assert.Single(own);
+        // The same visit, offered for a different cleaner under a different original-start key, must not clash with itself.
+        var candidate = new[] { visit with { OriginalStartUtc = null, EmployeeIds = [s.B] } };
+        await VisitAssignmentSafety.CheckConflicts(s.Shifts.Object, s.Shift, candidate, zone, default);
+    }
+
+    [Fact]
     public async Task Overlap_refusal_names_the_clashing_visit_and_recovery_steps()
     {
         var s = new Setup(); var extra = ShiftOccurrenceException.Create(s.Shift.Id, null, Start, Start.AddHours(2), ShiftOccurrenceExceptionStatus.Extra, "Extra", s.B); s.Exceptions.Add(extra);

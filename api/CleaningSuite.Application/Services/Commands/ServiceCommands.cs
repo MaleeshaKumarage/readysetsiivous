@@ -49,11 +49,11 @@ public class ServiceFieldsValidator : AbstractValidator<ServiceFields>
 {
     public ServiceFieldsValidator()
     {
-        RuleFor(x => x.Slug).Matches(@"^[a-z0-9][a-z0-9-]{1,60}$");
+        RuleFor(x => x.Slug).Matches(@"^[a-z0-9][a-z0-9-]{1,60}$").WithMessage("Slug can use lowercase letters, numbers and dashes, 2 to 61 characters, such as deep-clean.");
         RuleFor(x => x.Name).NotEmpty().Must(d => d.ContainsKey("fi")).WithMessage("Name must include fi");
-        RuleFor(x => x.DurationMinutes).InclusiveBetween(15, 1440);
-        RuleFor(x => x.PriceNet).GreaterThanOrEqualTo(0);
-        RuleFor(x => x.VatRatePercent).InclusiveBetween(0, 50);
+        RuleFor(x => x.DurationMinutes).InclusiveBetween(15, 1440).WithMessage("Choose a duration from 15 to 1440 minutes.");
+        RuleFor(x => x.PriceNet).GreaterThanOrEqualTo(0).WithMessage("Price cannot be negative. Enter 0 or a positive amount.");
+        RuleFor(x => x.VatRatePercent).InclusiveBetween(0, 50).WithMessage("VAT must be between 0% and 50%. Choose the rate that applies to this service.");
         RuleFor(x => x.SortOrder).InclusiveBetween(0, 10000);
     }
 }

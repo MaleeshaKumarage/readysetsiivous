@@ -75,3 +75,29 @@ test('a refused shift update says it was not updated, keeps the edited values an
   await expect(dialog.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Morning clean edited');
   expect(puts).toBe(1);
 });
+for (const [status, expected] of [
+  [401, 'Your session has ended. Sign in again, then retry the change.'],
+  [403, 'Your account is not allowed to make this change. Ask an owner to check your access.'],
+] as const) {
+  test(`a ${status} on save says what to do instead of asking to check the fields`, async ({ page }) => {
+    await setupAdminMocks(page);
+    await page.route(/\/api\/v1\/admin\//, route => {
+      const request = route.request(); const path = new URL(request.url()).pathname; const method = request.method();
+      if (method === 'OPTIONS') return route.fulfill({ status: 200, headers });
+      if (path.endsWith('/shifts') && method === 'POST') return route.fulfill({ status, headers, body: '' });
+      return route.fulfill({ headers, json: path.endsWith('/shifts') ? []
+        : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'AAA', isActive: true }], total: 1 }
+        : path.endsWith('/companies/company') ? { company: { id: 'company', name: 'AAA', isActive: true }, branches: [{ id: 'branch', companyId: 'company', name: 'AAA1', isActive: true }] }
+        : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
+    });
+    await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'Add shift' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
+    await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'AAA', exact: true }).click();
+    await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'AAA1', exact: true }).click();
+    await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Session clean');
+    await dialog.getByRole('textbox', { name: 'Start date', exact: true }).fill('2026-11-11');
+    await dialog.getByRole('button', { name: 'Create shift' }).click();
+    await expect(dialog.getByText(expected)).toBeVisible();
+    await expect(dialog.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Session clean');
+  });
+}

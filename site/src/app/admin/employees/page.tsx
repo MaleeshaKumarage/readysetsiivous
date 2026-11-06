@@ -33,6 +33,13 @@ export default function EmployeesAdminPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [lifecycle, setLifecycle] = useState<LifecycleStatus>('active');
   const visibleEmployees = employees.filter(employee => inLifecycle(employee, lifecycle));
+  // Rows are paged on the client so a large staff list stays readable; the full list is still loaded once.
+  const EMPLOYEE_PAGE_SIZE = 25;
+  const [employeePage, setEmployeePage] = useState(1);
+  const employeePageCount = Math.max(1, Math.ceil(visibleEmployees.length / EMPLOYEE_PAGE_SIZE));
+  const currentEmployeePage = Math.min(employeePage, employeePageCount);
+  const pageStart = (currentEmployeePage - 1) * EMPLOYEE_PAGE_SIZE;
+  const pagedEmployees = visibleEmployees.slice(pageStart, pageStart + EMPLOYEE_PAGE_SIZE);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
@@ -147,7 +154,13 @@ export default function EmployeesAdminPage() {
 
   const deactivate = async (id: string) => {
     setInviteFailure('');
-    try { if (!await adminEmployees.deactivate(id)) setInviteFailure('Employee access update could not be confirmed. Reload and retry or contact an administrator.'); await load(); }
+    try {
+      const result = await adminEmployees.deactivate(id);
+      // A refusal (for example, the cleaner still has active shifts) is shown as the server explains it.
+      // A server error may or may not have saved the change, so the user is told to check before retrying.
+      if (!result.ok) setInviteFailure(result.status >= 500 || result.status === 0 ? `${result.message} Reload to check whether the change was saved before retrying.` : result.message);
+      await load();
+    }
     catch { setInviteFailure('Employee access update could not be confirmed. Please retry.'); }
   };
 
@@ -191,7 +204,7 @@ export default function EmployeesAdminPage() {
       {inviteMessage && <Text role="status" c="green" mb="sm">{inviteMessage}</Text>}
       {inviteFailure && <Text role="alert" c="red" mb="sm">{inviteFailure}</Text>}
       {retryEmployee && !(lifecycle === 'active' && employees.some(employee => employee.id === retryEmployee.id && employee.isActive && employee.identitySyncPending)) && <Button mb="sm" loading={restoring === retryEmployee.id} disabled={!!restoring} onClick={() => reactivate(retryEmployee)}>Retry reactivation</Button>}
-      <LifecycleTabs value={lifecycle} onChange={setLifecycle} label="Employee activity"
+      <LifecycleTabs value={lifecycle} onChange={value => { setLifecycle(value); setEmployeePage(1); }} label="Employee activity"
         activeCount={loading ? undefined : employees.filter(employee => employee.isActive).length}
         inactiveCount={loading ? undefined : employees.filter(employee => !employee.isActive).length}>
       {listError && <Text role="alert" c="red" mb="sm">{listError}</Text>}
@@ -206,7 +219,7 @@ export default function EmployeesAdminPage() {
               <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Email</Table.Th><Table.Th>Role / company</Table.Th><Table.Th>Status</Table.Th><Table.Th>Registration</Table.Th><Table.Th w={120}></Table.Th></Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {visibleEmployees.map((e) => (
+              {pagedEmployees.map((e) => (
                 <Table.Tr key={e.id}>
                   <Table.Td fw={500}>{e.firstName} {e.lastName}</Table.Td>
                   <Table.Td>{e.email}</Table.Td>
@@ -227,6 +240,16 @@ export default function EmployeesAdminPage() {
             </Table.Tbody>
           </Table>
         </Table.ScrollContainer>
+      )}
+      {visibleEmployees.length > EMPLOYEE_PAGE_SIZE && (
+        <Group justify="space-between" mt="sm" wrap="wrap" gap="sm" role="navigation" aria-label="Employee pages">
+          <Text size="sm">Showing {pageStart + 1}–{Math.min(pageStart + EMPLOYEE_PAGE_SIZE, visibleEmployees.length)} of {visibleEmployees.length} employees</Text>
+          <Group gap="xs">
+            <Button size="xs" variant="default" disabled={currentEmployeePage <= 1} onClick={() => setEmployeePage(currentEmployeePage - 1)}>Previous page</Button>
+            <Text size="sm">Page {currentEmployeePage} of {employeePageCount}</Text>
+            <Button size="xs" variant="default" disabled={currentEmployeePage >= employeePageCount} onClick={() => setEmployeePage(currentEmployeePage + 1)}>Next page</Button>
+          </Group>
+        </Group>
       )}
       </LifecycleTabs>
 

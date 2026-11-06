@@ -8,7 +8,7 @@ using Moq;
 namespace CleaningSuite.Tests.Leads;
 public class LeadServiceTests
 {
-    private static LeadFields Fields()=>new(){Name=" Prospect ",BusinessId="123",BranchName="Office",Emails=["a@example.test","A@example.test","b@example.test"],PrimaryEmail="a@example.test",Description="Description",Notes="Notes"};
+    private static LeadFields Fields()=>new(){Name=" Prospect ",BusinessId="1234567-8",BranchName="Office",Emails=["a@example.test","A@example.test","b@example.test"],PrimaryEmail="a@example.test",Description="Description",Notes="Notes"};
     [Fact] public void Contacts_are_normalized_and_secondary_addresses_preserved()
     { var fields=LeadValidation.Normalize(Fields());Assert.Equal("Prospect",fields.Name);Assert.Equal(2,fields.Emails.Count);Assert.Equal("a@example.test",fields.PrimaryEmail); }
     [Theory][InlineData("bad email","bad email")][InlineData("a@example.test","other@example.test")][InlineData("","other@example.test")]

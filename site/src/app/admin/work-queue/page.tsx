@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Title, Button, Group, Stack, Text, Loader, Badge, Tabs, Select, TextInput, Drawer, Paper } from '@mantine/core';
 import {
-  adminWorkQueue, adminBookings, adminEmployees, type Booking, type Employee, type WorkQueueItem, type WorkQueuePage, type WorkQueueSource, type WorkQueueView,
+  adminWorkQueue, adminBookings, adminEmployees, adminTenant, type Booking, type Employee, type WorkQueueItem, type WorkQueuePage, type WorkQueueSource, type WorkQueueView,
 } from '@/lib/adminApi';
 
 const VIEWS: { value: WorkQueueView; label: string }[] = [
@@ -43,6 +43,18 @@ function isCalendarDate(value: string): boolean {
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
 
+/** The first view shows this many days from today (tenant time zone), so a busy schedule opens on work that is due soon. */
+const DEFAULT_WINDOW_DAYS = 14;
+/** Assignee filter value for work with no cleaner. Sent to the server as unassigned=true. */
+const UNASSIGNED = 'unassigned';
+/** Used until the tenant's own time zone loads, and if it cannot be loaded. Matches the shift pages' fallback. */
+const DEFAULT_ZONE = 'Europe/Helsinki';
+/** Today's date in the tenant's time zone, and the window that follows it. The server filters on the same zone. */
+function defaultWindow(zone: string): { dateFrom: string; dateTo: string } {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: zone });
+  const end = new Date(Date.parse(`${today}T12:00:00Z`) + (DEFAULT_WINDOW_DAYS - 1) * 86_400_000).toISOString().slice(0, 10);
+  return { dateFrom: today, dateTo: end };
+}
 /** Accepts real yyyy-MM-dd bounds only; a reversed range is dropped rather than sent to the server. */
 function readDates(from: string | null, to: string | null): { dateFrom: string; dateTo: string } {
   const start = from && isCalendarDate(from) ? from : '';
@@ -65,6 +77,7 @@ export default function WorkQueuePage() {
   const [listError, setListError] = useState('');
   const [reload, setReload] = useState(0);
   const [ready, setReady] = useState(false);
+  const [zone, setZone] = useState<string | null>(null);
   const generation = useRef(0);
 
   const [openBooking, setOpenBooking] = useState<Booking | null>(null);
@@ -82,7 +95,9 @@ export default function WorkQueuePage() {
       if (next.search) params.set('q', next.search); else params.delete('q');
       if (next.dateFrom) params.set('from', next.dateFrom); else params.delete('from');
       if (next.dateTo) params.set('to', next.dateTo); else params.delete('to');
-      if (next.assignee) params.set('assignee', next.assignee); else params.delete('assignee');
+      if (!next.dateFrom && !next.dateTo) params.set('range', 'all'); else params.delete('range');
+      // An explicit 'all' keeps a cleared assignee from falling back to the default on reload.
+      params.set('assignee', next.assignee || 'all');
       params.set('page', String(next.page));
       const qs = params.toString();
       const url = `${window.location.pathname}?${qs}`;
@@ -95,19 +110,32 @@ export default function WorkQueuePage() {
     const requestedView = params.get('view') as WorkQueueView | null;
     const requestedSource = params.get('source') as WorkQueueSource | null;
     const requestedPage = Number(params.get('page'));
+    const view = requestedView && VIEW_VALUES.includes(requestedView) ? requestedView : 'needs-action' as WorkQueueView;
+    const chosenQueue = params.has('from') || params.has('to') || params.has('range') || params.has('assignee');
+    const dates = chosenQueue ? readDates(params.get('from'), params.get('to'))
+      : view === 'needs-action' ? defaultWindow(zone ?? DEFAULT_ZONE) : { dateFrom: '', dateTo: '' };
+    const rawAssignee = (params.get('assignee') ?? '').trim();
+    // A fresh Needs-action link opens on unassigned work. 'all' means Anyone, and a named employee is kept as chosen.
+    const assignee = chosenQueue ? (rawAssignee === 'all' ? '' : rawAssignee) : view === 'needs-action' ? UNASSIGNED : '';
     return {
-      view: requestedView && VIEW_VALUES.includes(requestedView) ? requestedView : 'needs-action' as WorkQueueView,
+      view,
       source: requestedSource && SOURCE_VALUES.includes(requestedSource) ? requestedSource : 'all' as WorkQueueSource,
       search: (params.get('q') ?? '').trim(),
       page: Number.isInteger(requestedPage) && requestedPage >= 1 ? requestedPage : 1,
-      ...readDates(params.get('from'), params.get('to')),
-      assignee: (params.get('assignee') ?? '').trim(),
+      ...dates,
+      assignee,
       booking: params.get('booking'),
     };
   };
 
+  // The tenant's time zone decides the default window, so it loads before the URL state is applied.
+  useEffect(() => {
+    adminTenant.get().then(profile => setZone(profile?.timeZoneId?.trim() || DEFAULT_ZONE)).catch(() => setZone(DEFAULT_ZONE));
+  }, []);
+
   // Restore state from the URL after mount, and on browser Back/Forward.
   useEffect(() => {
+    if (!zone) return;
     const apply = () => {
       const state = readUrl();
       setView(state.view); setSource(state.source); setQuery(state.search); setSearch(state.search); setPage(state.page);
@@ -117,7 +145,7 @@ export default function WorkQueuePage() {
     setReady(true);
     window.addEventListener('popstate', apply);
     return () => { window.removeEventListener('popstate', apply); generation.current++; };
-  }, []);
+  }, [zone]);
 
   // Open a deep-linked booking once.
   const openedBooking = useRef<string | null>(null);
@@ -173,6 +201,10 @@ export default function WorkQueuePage() {
   const changeSource = (next: WorkQueueSource) => {
     setSource(next); setPage(1); writeUrl(current({ source: next, page: 1 }));
   };
+  const windowDates = defaultWindow(zone ?? DEFAULT_ZONE);
+  const defaultWindowActive = dateFrom === windowDates.dateFrom && dateTo === windowDates.dateTo;
+  // Show everything: clears the dates and the assignee together, so one URL change carries all three.
+  const showEverything = () => { setDateFrom(''); setDateTo(''); setAssignee(''); setPage(1); writeUrl(current({ dateFrom: '', dateTo: '', assignee: '', page: 1 })); };
   const changeDates = (nextFrom: string, nextTo: string) => {
     // Input edits go through the same rule as the URL, so a reversed or invalid pair is cleared before it is stored or sent.
     const next = readDates(nextFrom, nextTo);
@@ -237,11 +269,17 @@ export default function WorkQueuePage() {
         <TextInput type="date" label="To" aria-label="To date" value={dateTo} min={dateFrom || undefined}
           onChange={event => changeDates(dateFrom, event.currentTarget.value)} w={170} />
         <Select aria-label="Assignee" label="Assignee" placeholder="Anyone" clearable clearButtonProps={{ 'aria-label': 'Clear assignee' }}
-          data={employees.map(employee => ({ value: employee.id, label: `${employee.firstName} ${employee.lastName}`.trim() }))}
+          data={[{ value: UNASSIGNED, label: 'Unassigned' }, ...employees.map(employee => ({ value: employee.id, label: `${employee.firstName} ${employee.lastName}`.trim() }))]}
           value={assignee || null} onChange={value => changeAssignee(value ?? '')} w={220} />
       </Group>
+      {defaultWindowActive && (
+        <Group gap="xs" mb="md" role="status">
+          <Text size="sm">{assignee === UNASSIGNED ? 'Showing unassigned work' : 'Showing'} for the next {DEFAULT_WINDOW_DAYS} days ({dateFrom} to {dateTo}).{assignee === UNASSIGNED ? ' Assigned work is hidden.' : ''}</Text>
+          <Button size="xs" variant="subtle" onClick={showEverything}>Show all work</Button>
+        </Group>
+      )}
 
-      {assignee && <Text size="sm" c="dimmed" mb="sm">Partner requests have no assignee, so they are hidden while this filter is on.</Text>}
+      {assignee && assignee !== UNASSIGNED && <Text size="sm" c="dimmed" mb="sm">Partner requests have no assignee, so they are hidden while this filter is on.</Text>}
 
       {loading ? <Loader /> : listError ? (
         <Stack>

@@ -53,6 +53,9 @@ public static class LeadValidation
     {
         var errors=new List<ValidationFailure>();
         if(string.IsNullOrWhiteSpace(fields.BusinessId)) errors.Add(new("BusinessId","Enter the business ID before converting this lead."));
+        // Same format as manual company creation, so a converted customer can be edited and matched like any other.
+        else if(!System.Text.RegularExpressions.Regex.IsMatch(fields.BusinessId, CleaningSuite.Application.Companies.CompanyValidators.BusinessIdPattern))
+            errors.Add(new("BusinessId", CleaningSuite.Application.Companies.CompanyValidators.BusinessIdMessage));
 
         if(errors.Count>0) throw new FluentValidation.ValidationException(errors);
     }

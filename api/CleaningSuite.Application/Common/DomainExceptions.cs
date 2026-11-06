@@ -6,4 +6,20 @@ public class SlugConflictException(string slug)
 
 /// <summary>Requested document does not exist.</summary>
 public class NotFoundException(string entity, Guid id)
-    : Exception($"{entity} {id} not found");
+    : Exception($"{entity} {id} not found")
+{
+    /// <summary>The kind of record that was not found, for example "Company". Used to write a message without the id.</summary>
+    public string Entity { get; } = entity;
+}
+
+/// <summary>A public booking lookup or cancel that does not match a booking number and management key. Explains the next step.</summary>
+public class PublicBookingNotFoundException() : Exception(GuidanceText)
+{
+    public const string GuidanceText = "No booking matches these details. Check the booking reference and the management code in your confirmation email, then try again.";
+}
+
+/// <summary>A public signing link that matches no agreement or signer. Explains the next step.</summary>
+public class PublicSigningLinkNotFoundException() : Exception(GuidanceText)
+{
+    public const string GuidanceText = "This signing link is not valid or has been replaced. Ask the sender for a new signing link.";
+}

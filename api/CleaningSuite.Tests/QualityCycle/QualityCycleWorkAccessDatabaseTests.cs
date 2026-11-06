@@ -101,7 +101,7 @@ public class QualityCycleWorkAccessDatabaseTests
             var operation = update
                 ? new UpdateEmployeeHandler(employees, identities.Object, context, identityLock, reservation).Handle(new(employee.Id,
                     new EmployeeFields(employee.Email, "Synthetic", "Cleaner", "", Employee.RoleEmployee, null, [], null, null, null, null, null), false), timeout.Token)
-                : new DeactivateEmployeeHandler(employees, identities.Object, context, identityLock, reservation).Handle(new(employee.Id), timeout.Token);
+                : new DeactivateEmployeeHandler(employees, identities.Object, context, identityLock, reservation, WorkAccessFixtures.NoAssignedShifts()).Handle(new(employee.Id), timeout.Token);
             try
             {
                 await entered.Task.WaitAsync(timeout.Token);
@@ -165,7 +165,7 @@ public class QualityCycleWorkAccessDatabaseTests
             Task Disable() => useUpdate
                 ? new UpdateEmployeeHandler(employees, identities, context, identityLock, employeeLock).Handle(new(employee.Id,
                     new EmployeeFields(employee.Email, "Synthetic", "Cleaner", "", Employee.RoleEmployee, null, [], null, null, null, null, null), false), timeout.Token)
-                : new DeactivateEmployeeHandler(employees, identities, context, identityLock, employeeLock).Handle(new(employee.Id), timeout.Token);
+                : new DeactivateEmployeeHandler(employees, identities, context, identityLock, employeeLock, WorkAccessFixtures.NoAssignedShifts()).Handle(new(employee.Id), timeout.Token);
             Task Work() => operation switch
             {
                 "start" => new QualityCycleHandlers.StartQualityCycleFormCommandHandler(shifts, workEmployees, forms, workLock, new Clock()).Handle(new(shift.Id, employee.Id, Start, Start.AddHours(2)), timeout.Token),

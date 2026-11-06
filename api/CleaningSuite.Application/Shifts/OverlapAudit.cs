@@ -40,6 +40,9 @@ public sealed class ShiftOverlapAuditQueryHandler(IShiftRepository repository, I
 
     public async Task<IReadOnlyList<ShiftOverlapFinding>> Handle(ShiftOverlapAuditQuery request, CancellationToken ct)
     {
+        // A missing date arrives as the default value; say which date to choose rather than "end before start".
+        if (request.From == default) throw new ValidationException([new ValidationFailure("From", "Choose a start date for the audit window.")]);
+        if (request.To == default) throw new ValidationException([new ValidationFailure("To", "Choose an end date for the audit window.")]);
         var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
         // The client sends calendar dates as UTC midnights; the calendar date is the tenant-local day, so no zone conversion is applied.
         var localFrom = request.From.Date;
@@ -90,6 +93,8 @@ public sealed class EmployeeScheduleQueryHandler(IShiftRepository repository, IT
 {
     public async Task<IReadOnlyList<EmployeeDaySchedule>> Handle(EmployeeScheduleQuery request, CancellationToken ct)
     {
+        if (request.From == default) throw new ValidationException([new ValidationFailure("From", "Choose a start date for the schedule.")]);
+        if (request.To == default) throw new ValidationException([new ValidationFailure("To", "Choose an end date for the schedule.")]);
         var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
         // The client sends calendar dates as UTC midnights; the calendar date is the tenant-local day, so no zone conversion is applied.
         var localFrom = request.From.Date;

@@ -15,7 +15,7 @@ public class LeadDatabaseTests
     public async Task Tenant_isolation_search_and_atomic_conversion_with_duplicate_rollback()
     {
         using var services=Services();var store=services.GetRequiredService<IDocumentStore>();await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
-        var fields=new LeadFields{Name="Prospect",BusinessId="BID",BranchName="Office",Emails=["one@example.test","two@example.test"],PrimaryEmail="one@example.test",Description="Retained description"};
+        var fields=new LeadFields{Name="Prospect",BusinessId="1234567-8",BranchName="Office",Emails=["one@example.test","two@example.test"],PrimaryEmail="one@example.test",Description="Retained description"};
         LeadDetail original;
         using(var scope=Tenant(store,"a")) original=await Service(scope).CreateAsync(fields,default);
         using(var foreign=Tenant(store,"b")) {
@@ -46,7 +46,7 @@ public class LeadDatabaseTests
     public async Task Concurrent_conversion_is_idempotent_and_stale_edit_cannot_overwrite_it()
     {
         using var services=Services();var store=services.GetRequiredService<IDocumentStore>();await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
-        LeadDetail original;using(var scope=Tenant(store,"a")) original=await Service(scope).CreateAsync(new(){Name="Concurrent",BusinessId="RACE",BranchName="Office"},default);
+        LeadDetail original;using(var scope=Tenant(store,"a")) original=await Service(scope).CreateAsync(new(){Name="Concurrent",BusinessId="3456789-0",BranchName="Office"},default);
         var results=await Task.WhenAll(Enumerable.Range(0,3).Select(async _=>{using var scope=Tenant(store,"a");return await Service(scope).ConvertAsync(original.Lead.Id,original.Lead.Version,default);}));
         Assert.Single(results.Select(x=>x.Lead.CompanyId).Distinct());
         using(var scope=Tenant(store,"a")) await Assert.ThrowsAsync<LeadConflictException>(()=>Service(scope).UpdateAsync(original.Lead.Id,original.Lead.Version,original.Lead.Fields,default));
