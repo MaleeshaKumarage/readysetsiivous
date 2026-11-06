@@ -195,12 +195,15 @@ export default function ShiftsAdminPage() {
   const loadAssignmentCounts = () => adminShifts.assignmentCounts()
     .then(counts => { setAssignmentCounts(counts); setCountError(''); })
     .catch((failure: Error) => { setAssignmentCounts(null); setCountError(failure.message); });
-  const load = () => adminShifts.page({ tab: lifecycle, skip: (shiftPage - 1) * PAGE_SIZE, take: PAGE_SIZE }).then((r) => {
+  // Only the newest tab/page request may update the list, so a slow earlier response cannot show the wrong tab.
+  const loadSeq = useRef(0);
+  const load = () => { const seq = ++loadSeq.current; return adminShifts.page({ tab: lifecycle, skip: (shiftPage - 1) * PAGE_SIZE, take: PAGE_SIZE }).then((r) => {
+    if (seq !== loadSeq.current) return;
     // A reply without the paged shape cannot be shown; say so and keep the retry path instead of crashing the screen.
     if (!r || !Array.isArray(r.items) || typeof r.total !== 'number' || !r.counts) throw new Error('The shift list could not be read. Refresh the page to retry.');
     setPageRows(r.items); setPageTotal(r.total); setTabCounts(r.counts); setListError(''); void loadAssignmentCounts();
     setLoading(false);
-  }).catch((failure: Error) => { setListError(failure.message); setLoading(false); });
+  }).catch((failure: Error) => { if (seq !== loadSeq.current) return; setListError(failure.message); setLoading(false); }); };
   // Reload the current tab and page whenever either changes, and once on mount.
   useEffect(() => { void load(); }, [lifecycle, shiftPage]);
   useEffect(() => { adminTenant.get().then(profile => {

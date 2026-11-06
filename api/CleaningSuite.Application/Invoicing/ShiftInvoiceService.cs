@@ -174,6 +174,18 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
                 visits = visits.Where(v => v.Completed && completionTimes.TryGetValue(v.StartUtc, out var ended) && ended >= from && ended < to).ToArray();
                 if (visits.Length == 0) continue;
             }
+            // A monthly fee is divided by every scheduled visit in the calendar month, not just the invoiced window,
+            // so two partial invoices for one month bill the same total as one full-month invoice.
+            var monthVisits = Array.Empty<BillableShiftVisit>();
+            if (!request.PartnerMonth && pricing.Plans.Any(p => p.Mode == "Monthly"))
+            {
+                var monthStart = TenantTimeZone.StartOfLocalDay(new DateTime(request.From.Year, request.From.Month, 1), zone);
+                var monthEnd = TenantTimeZone.StartOfLocalDay(new DateOnly(request.To.Year, request.To.Month, 1).AddMonths(1).ToDateTime(TimeOnly.MinValue), zone);
+                var monthResolved = await QualityCycleOccurrences.ResolvedInWindowAsync(shifts, schedule, monthStart, monthEnd, zone, ct, true);
+                monthVisits = monthResolved.Where(v => v.Plan.CompanyId == request.CompanyId)
+                    .Select(v => new BillableShiftVisit(v.Occurrence.StartUtc, v.Occurrence.EndUtc, v.Plan.BranchId, v.Plan.ShiftName, false))
+                    .GroupBy(v => v.StartUtc).Select(g => g.First()).ToArray();
+            }
             var names = new Dictionary<Guid, string>();
             foreach (var branchId in visits.Select(v => v.BranchId).Concat(shift.QualityCyclePlans.Where(p => p.CompanyId == request.CompanyId).Select(p => p.BranchId)).Append(shift.BranchId).Distinct())
             {
@@ -187,7 +199,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             // month is never prorated as if it were partial. Visit dates still come from the visits themselves.
             var billingPeriod = request.PartnerMonth ? (request.From, request.To) : (ValueTuple<DateOnly, DateOnly>?)null;
             var calculated = ShiftInvoiceCalculator.Calculate(schedule, pricing, visits, calculationFrom, calculationTo, zone, names, adjustments,
-                request.PartnerMonth ? completionTimes : null, billingPeriod);
+                request.PartnerMonth ? completionTimes : null, billingPeriod, monthVisits);
             if (partnerRequest is not null)
             {
                 foreach (var line in calculated)

@@ -28,7 +28,7 @@ function previewFor(input: any) {
   };
 }
 
-async function setup(page: Page) {
+async function setup(page: Page, timeZoneId = 'Europe/Helsinki') {
   await setupAdminMocks(page);
   const calls = { previews: [] as any[], issues: [] as any[] };
   await page.route(/\/api\/v1\/admin\//, async route => {
@@ -37,7 +37,7 @@ async function setup(page: Page) {
     const body = request.postData() ? request.postDataJSON() : undefined;
     if (path.endsWith('/shift-preview')) { calls.previews.push(body); return route.fulfill({ headers, json: previewFor(body) }); }
     if (path.endsWith('/invoices/shifts')) { calls.issues.push(body); return route.fulfill({ headers, json: { ...previewFor(body), id: 'invoice', invoiceNumber: 'INV-1', status: 'Issued' } }); }
-    return route.fulfill({ headers, json: path.endsWith('/issuer') ? issuer : path.endsWith('/invoices') ? [] : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'Methehe', isActive: true, isPartnerEnabled: false }], total: 1 } : path.endsWith('/shifts') ? [shift] : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
+    return route.fulfill({ headers, json: path.endsWith('/issuer') ? issuer : path.endsWith('/invoices') ? [] : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'Methehe', isActive: true, isPartnerEnabled: false }], total: 1 } : path.endsWith('/shifts') ? [shift] : path.endsWith('/tenant') ? { timeZoneId } : [] });
   });
   return calls;
 }
@@ -83,4 +83,18 @@ test('unticking a ticked visit returns the preview to the excluded total', async
   await expect(page.getByText('Net €100.00 · VAT €25.50 · Total €125.50')).toBeVisible();
   await expect(list.getByLabel(/30 Oct 2026/)).not.toBeChecked();
   expect(calls.previews.length).toBe(3);
+});
+
+test('visit times in the tick list use the tenant time zone', async ({ page }) => {
+  // 13:00 UTC on 23 Oct is 09:00 in New York (EDT) rather than 16:00 in Helsinki.
+  await setup(page, 'America/New_York'); await previewInvoice(page);
+  const list = page.getByLabel('Unstarted visits', { exact: true });
+  await expect(list.getByLabel(/23 Oct 2026, 09:00/)).toBeVisible();
+});
+
+test('the invoice form explains that monthly fees follow completed visits', async ({ page }) => {
+  await setup(page); await page.goto('/admin/invoices/');
+  await page.getByRole('button', { name: 'New invoice', exact: true }).click();
+  await expect(page.getByText(/Monthly fees are charged on completed visits/)).toBeVisible();
+  await expect(page.getByText(/Monthly fees are prorated/)).toHaveCount(0);
 });

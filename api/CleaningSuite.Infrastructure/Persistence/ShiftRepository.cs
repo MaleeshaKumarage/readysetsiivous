@@ -230,18 +230,33 @@ public class ShiftRepository : IShiftRepository
     public async Task<ShiftRosterInputs> ListRosterInputsAsync(IReadOnlyCollection<Guid> shiftIds, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default)
     {
         var ids = shiftIds.Distinct().ToArray();
-        if (ids.Length == 0) return new(new Dictionary<Guid, IReadOnlyList<ShiftOccurrenceException>>(), new Dictionary<Guid, IReadOnlyList<ShiftAssignment>>(), new Dictionary<Guid, IReadOnlyList<ShiftOccurrenceAssignment>>());
-        // Same occurrence-window rule as ListOccurrenceExceptionsAsync, with Unspecified-kind bounds for the stored columns.
+        var exceptions = new Dictionary<Guid, IReadOnlyList<ShiftOccurrenceException>>();
+        var history = new Dictionary<Guid, IReadOnlyList<ShiftAssignment>>();
+        var overrides = new Dictionary<Guid, IReadOnlyList<ShiftOccurrenceAssignment>>();
+        if (ids.Length == 0) return new(exceptions, history, overrides);
+        // Same archive rule as the per-shift loaders: a deleted shift's reporting snapshot replaces its live rows.
+        var archives = (await Session.Query<DeletedShift>().Where(x => ids.Contains(x.Id)).ToListAsync(ct)).ToDictionary(x => x.Id);
+        foreach (var archive in archives.Values)
+        {
+            exceptions[archive.Id] = archive.OccurrenceExceptions.Where(x =>
+                (x.StartUtc >= fromUtc && x.StartUtc < toUtc) || (x.OriginalStartUtc >= fromUtc && x.OriginalStartUtc < toUtc)).ToList();
+            history[archive.Id] = archive.Assignments;
+            overrides[archive.Id] = archive.OccurrenceAssignments;
+        }
+        var live = ids.Where(id => !archives.ContainsKey(id)).ToArray();
+        if (live.Length == 0) return new(exceptions, history, overrides);
+        // Occurrence columns hold Unspecified-kind values; the bounds are converted the same way as ListOccurrenceExceptionsAsync.
         var from = DateTime.SpecifyKind(fromUtc, DateTimeKind.Unspecified);
         var to = DateTime.SpecifyKind(toUtc, DateTimeKind.Unspecified);
-        var exceptions = (await Session.Query<ShiftOccurrenceException>()
-            .Where(x => ids.Contains(x.ShiftId) && ((x.StartUtc >= from && x.StartUtc < to)
+        foreach (var group in (await Session.Query<ShiftOccurrenceException>()
+            .Where(x => live.Contains(x.ShiftId) && ((x.StartUtc >= from && x.StartUtc < to)
                 || (x.OriginalStartUtc != null && x.OriginalStartUtc >= from && x.OriginalStartUtc < to)))
-            .ToListAsync(ct)).GroupBy(x => x.ShiftId).ToDictionary(g => g.Key, g => (IReadOnlyList<ShiftOccurrenceException>)g.ToList());
-        var history = (await Session.Query<ShiftAssignment>().Where(a => ids.Contains(a.ShiftId)).ToListAsync(ct))
-            .GroupBy(a => a.ShiftId).ToDictionary(g => g.Key, g => (IReadOnlyList<ShiftAssignment>)g.ToList());
-        var overrides = (await Session.Query<ShiftOccurrenceAssignment>().Where(x => ids.Contains(x.ShiftId)).ToListAsync(ct))
-            .GroupBy(x => x.ShiftId).ToDictionary(g => g.Key, g => (IReadOnlyList<ShiftOccurrenceAssignment>)g.ToList());
+            .ToListAsync(ct)).GroupBy(x => x.ShiftId))
+            exceptions[group.Key] = group.ToList();
+        foreach (var group in (await Session.Query<ShiftAssignment>().Where(a => live.Contains(a.ShiftId)).ToListAsync(ct)).GroupBy(a => a.ShiftId))
+            history[group.Key] = group.ToList();
+        foreach (var group in (await Session.Query<ShiftOccurrenceAssignment>().Where(x => live.Contains(x.ShiftId)).ToListAsync(ct)).GroupBy(x => x.ShiftId))
+            overrides[group.Key] = group.ToList();
         return new(exceptions, history, overrides);
     }
 

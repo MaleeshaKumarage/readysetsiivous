@@ -46,6 +46,23 @@ public class ShiftInvoiceCalculatorTests
         Assert.Equal(90m,line.NetAmount);
     }
     [Fact]
+    public void Partial_invoices_for_one_month_add_up_to_the_full_month_fee()
+    {
+        // 4 visits in October, 2 completed (both in the first half). A full-month invoice bills 2/4 of 150 = 75.
+        var all=new[]{MonthlyVisit(new DateTime(2026,10,1),true),MonthlyVisit(new DateTime(2026,10,8),true),MonthlyVisit(new DateTime(2026,10,15),false),MonthlyVisit(new DateTime(2026,10,22),false)};
+        var shift=Shift();var price=Price("Monthly",150,new(2026,10,1));
+        var full=Assert.Single(ShiftInvoiceCalculator.Calculate(shift,price,all,new(2026,10,1),new(2026,10,31),TimeZoneInfo.Utc,Branches,[],null,null,all));
+        Assert.Equal(75m,full.NetAmount);
+        // Split into two invoices. Each invoice gets the visits in its window, but the fee is divided by all October visits.
+        var firstHalf=all.Where(v=>v.StartUtc.Day<=15).ToArray();
+        var secondHalf=all.Where(v=>v.StartUtc.Day>15).ToArray();
+        var a=Assert.Single(ShiftInvoiceCalculator.Calculate(shift,price,firstHalf,new(2026,10,1),new(2026,10,15),TimeZoneInfo.Utc,Branches,[],null,null,all));
+        var b=Assert.Single(ShiftInvoiceCalculator.Calculate(shift,price,secondHalf,new(2026,10,16),new(2026,10,31),TimeZoneInfo.Utc,Branches,[],null,null,all));
+        Assert.Equal(75m,a.NetAmount);
+        Assert.Equal(0m,b.NetAmount);
+        Assert.Equal(full.NetAmount,a.NetAmount+b.NetAmount);
+    }
+    [Fact]
     public void Full_month_with_no_active_days_does_not_charge()
     {
         var shift=Shift();shift.ValidFrom=new(2026,11,1);

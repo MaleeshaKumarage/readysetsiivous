@@ -18,7 +18,10 @@ public static class ShiftInvoiceCalculator
         // Completion-month billing passes each billed visit's completion time: every visit becomes its own line.
         IReadOnlyDictionary<DateTime, DateTime>? completedAtByStart = null,
         // The period that monthly prices are charged over; defaults to the visit range.
-        (DateOnly From, DateOnly To)? billingPeriod = null)
+        (DateOnly From, DateOnly To)? billingPeriod = null,
+        // Every scheduled visit in the calendar months being billed, including visits outside [from, to].
+        // A monthly fee is divided by these, so partial invoices for one month add up to the full-month fee.
+        IReadOnlyList<BillableShiftVisit>? monthVisits = null)
     {
         if (profile.Plans.GroupBy(p => p.EffectiveFrom).Any(g => g.Count() > 1)) Invalid("Pricing has duplicate effective dates. Correct the pricing history before invoicing.");
         foreach (var plan in profile.Plans)
@@ -40,7 +43,6 @@ public static class ShiftInvoiceCalculator
         }
         string Branch(Guid id) => branches.TryGetValue(id, out var name) ? name : throw new ShiftConflictException("A shift branch is missing. Restore its company/branch association before invoicing.");
         var monthlyDays = new List<(DateOnly Date, ShiftPricingPlan Price, QualityCyclePlan Plan)>();
-        var mixedBasisMonths = new HashSet<string>();
         var billFrom = billingPeriod?.From ?? from; var billTo = billingPeriod?.To ?? to;
         for (var day = billFrom; day <= billTo; day = day.AddDays(1))
         {
@@ -48,16 +50,24 @@ public static class ShiftInvoiceCalculator
             var price = Price(day);
             if (price is null) Invalid($"{shift.Name}: no price is configured for {day:yyyy-MM-dd}. Add an effective price before invoicing.");
             if (price!.Mode == "Monthly") monthlyDays.Add((day, price, active));
-            else mixedBasisMonths.Add(day.ToString("yyyy-MM"));
         }
         var lines = new List<InvoiceLine>();
         foreach (var group in monthlyDays.GroupBy(d => (Month: d.Date.ToString("yyyy-MM"), d.Price, d.Plan.BranchId, d.Plan.ShiftName)))
         {
             var days = group.Select(d => d.Date).ToHashSet(); var first = days.Min(); var last = days.Max();
             var visitsInLine = visits.Where(v => v.BranchId == group.Key.BranchId && days.Contains(DateOnly.FromDateTime(TenantTimeZone.LocalDate(v.StartUtc, zone)))).ToArray();
-            // The monthly fee is earned by completed visits: fee x completed / scheduled visits in the month.
+            // The monthly fee is earned by completed visits: fee x completed / scheduled visits in the calendar month.
+            // Each invoice bills the completed visits it covers, so partial invoices for one month add up to the full fee.
             // A shift that ends mid-month has fewer scheduled visits, so it is billed only for what it covered.
-            var scheduledInMonth = visitsInLine.Length;
+            // Only visits on this price segment's active days count, so a mid-month price change keeps its own denominator.
+            var monthKey = group.Key.Month;
+            var scheduledInMonth = (monthVisits ?? visits).Count(v =>
+            {
+                var date = DateOnly.FromDateTime(TenantTimeZone.LocalDate(v.StartUtc, zone));
+                return v.BranchId == group.Key.BranchId && date.ToString("yyyy-MM") == monthKey
+                    && Price(date) is { } price && price.EffectiveFrom == group.Key.Price.EffectiveFrom
+                    && Active(date) is { } plan && plan.BranchId == group.Key.BranchId;
+            });
             var completedInMonth = visitsInLine.Count(v => v.Completed);
             var fraction = scheduledInMonth == 0 ? 0m : (decimal)completedInMonth / scheduledInMonth;
             lines.Add(new() { ShiftId = shift.Id, ShiftName = group.Key.ShiftName, BranchName = Branch(group.Key.BranchId), BranchId = group.Key.BranchId,

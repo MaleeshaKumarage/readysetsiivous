@@ -311,14 +311,17 @@ public class ShiftHandlers
                 ? (await _repository.ListIncludingInactiveAsync(ct)).Where(s => (!request.CompanyId.HasValue || s.CompanyId == request.CompanyId)
                     && (!request.BranchId.HasValue || s.BranchId == request.BranchId)).ToList()
                 : await _repository.ListAsync(request.CompanyId, request.BranchId, ct);
-            // A one-time visit is completed once its checklist has been submitted. Recurring shifts stay live.
-            // One batched lookup for all one-time shifts, never one query per shift.
-            var oneTimeIds = shifts.Where(s => s.Schedule.IsOneTime).Select(s => s.Id).ToList();
-            IReadOnlySet<Guid> completed = oneTimeIds.Count == 0
-                ? new HashSet<Guid>()
-                : await _forms.ListShiftIdsWithSubmittedFormAsync(oneTimeIds, ct);
+            var completed = await CompletedOneTimeShiftIdsAsync(shifts, _forms, ct);
             return shifts.Select(shift => MapShift(shift) with { IsCompleted = completed.Contains(shift.Id) }).ToList();
         }
+    }
+
+    /// <summary>A one-time visit is completed once its checklist has been submitted. Recurring shifts stay live.
+    /// One batched lookup for all one-time shifts, never one query per shift.</summary>
+    private static async Task<IReadOnlySet<Guid>> CompletedOneTimeShiftIdsAsync(IReadOnlyList<Shift> shifts, IQualityCycleRepository forms, CancellationToken ct)
+    {
+        var oneTimeIds = shifts.Where(s => s.Schedule.IsOneTime).Select(s => s.Id).ToList();
+        return oneTimeIds.Count == 0 ? new HashSet<Guid>() : await forms.ListShiftIdsWithSubmittedFormAsync(oneTimeIds, ct);
     }
 
     public class ListShiftPageQueryHandler : IRequestHandler<ListShiftPageQuery, ShiftPage>
@@ -339,11 +342,7 @@ public class ShiftHandlers
                 .Where(s => (!request.CompanyId.HasValue || s.CompanyId == request.CompanyId)
                     && (!request.BranchId.HasValue || s.BranchId == request.BranchId))
                 .ToList();
-            // Same rule as the full list: a one-time visit is completed once its checklist is submitted. One batched lookup.
-            var oneTimeIds = shifts.Where(s => s.Schedule.IsOneTime).Select(s => s.Id).ToList();
-            IReadOnlySet<Guid> completed = oneTimeIds.Count == 0
-                ? new HashSet<Guid>()
-                : await _forms.ListShiftIdsWithSubmittedFormAsync(oneTimeIds, ct);
+            var completed = await CompletedOneTimeShiftIdsAsync(shifts, _forms, ct);
             var rows = shifts.Select(s => (Shift: s, IsCompleted: completed.Contains(s.Id)))
                 .Select(r => (r.Shift, r.IsCompleted, Tab: !r.Shift.IsActive ? "inactive" : r.IsCompleted ? "completed" : "active"))
                 .ToList();
