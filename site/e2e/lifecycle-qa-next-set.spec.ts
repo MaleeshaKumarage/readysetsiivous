@@ -29,7 +29,7 @@ test('shift list uses one time format for every schedule type and shows monthly 
     const json = path.endsWith('/shifts') ? [
       { id: 'daily', name: 'Daily shift', schedule: { type: 0, dailyStart: '08:00:00', dailyEnd: '17:00:00' }, isActive: true },
       { id: 'monthly', name: 'Monthly shift', schedule: { type: 5, monthlyDay: 15, monthlyStart: '13:00:00', monthlyEnd: '14:00:00' }, isActive: true },
-    ] : path.endsWith('/assignment-counts') ? {} : path.endsWith('/companies') ? { items: [], total: 0 } : [];
+    ] : path.endsWith('/assignment-counts') ? {} : path.endsWith('/companies') ? { items: [], total: 0 } : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [];
     return route.fulfill({ status: 200, headers, json });
   });
   const listed = page.waitForResponse(r => /\/api\/v1\/admin\/shifts(\?|$)/.test(r.url()) && r.request().method() === 'GET', { timeout: 90000 });
@@ -53,7 +53,7 @@ test('assignee picker shows each employee email so similar names can be told apa
     if (path.endsWith('/assignments') && route.request().method() === 'GET') return route.fulfill({ status: 200, headers, json: [] });
     if (path.endsWith('/assignment-counts')) return route.fulfill({ status: 200, headers, json: {} });
     const json = path.endsWith('/shifts') ? [{ id: 'one', name: 'Shift one', schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' }, isActive: true }]
-      : path.endsWith('/employees') ? people : path.endsWith('/companies') ? { items: [], total: 0 } : [];
+      : path.endsWith('/employees') ? people : path.endsWith('/companies') ? { items: [], total: 0 } : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [];
     return route.fulfill({ status: 200, headers, json });
   });
   const listed = page.waitForResponse(r => /\/api\/v1\/admin\/shifts(\?|$)/.test(r.url()) && r.request().method() === 'GET', { timeout: 90000 });
@@ -107,7 +107,7 @@ test('weekly shifts show HH:mm times with no seconds for both day branches', asy
     const json = path.endsWith('/shifts') ? [
       { id: 'weekly-days', name: 'Weekly days', schedule: { type: 2, weeklyDays: [1, 3], weeklyStart: '08:00:00', weeklyEnd: '17:00:00' }, isActive: true },
       { id: 'weekly-one', name: 'Weekly one', schedule: { type: 2, weeklyDay: 5, weeklyStart: '09:00:00', weeklyEnd: '12:00:00' }, isActive: true },
-    ] : path.endsWith('/assignment-counts') ? {} : path.endsWith('/companies') ? { items: [], total: 0 } : [];
+    ] : path.endsWith('/assignment-counts') ? {} : path.endsWith('/companies') ? { items: [], total: 0 } : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [];
     return route.fulfill({ status: 200, headers, json });
   });
   const listed = page.waitForResponse(r => /\/api\/v1\/admin\/shifts(\?|$)/.test(r.url()) && r.request().method() === 'GET', { timeout: 90000 });
