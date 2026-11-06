@@ -58,3 +58,6 @@ api/verify-phase*.sh
 .release-image-retention.json
 .release-image-cleanup.lock
 .image-retention-*
+
+# Python bytecode caches from local test runs
+__pycache__/
