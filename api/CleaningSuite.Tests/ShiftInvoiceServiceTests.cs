@@ -177,6 +177,19 @@ public class ShiftInvoiceServiceTests
     }
 
     [Fact]
+    public async Task A_cancelled_visit_is_not_counted_as_scheduled_in_the_monthly_fraction()
+    {
+        // Friday 23 Oct is cancelled, so 4 visits are scheduled and 3 are completed: 150 x 3/4 = 112.50, not 150 x 3/5 = 90.
+        var cancelled = ShiftOccurrenceException.Create(Guid.NewGuid(), FridayStartUtc(23), FridayStartUtc(23), FridayStartUtc(23).AddHours(2),
+            ShiftOccurrenceExceptionStatus.CustomerCancelled, "Customer cancelled");
+        var f = new Fixture(completedDays: [2, 9, 16], exceptions: [cancelled]);
+        var preview = await f.Service.PreviewAsync(f.Request, default);
+        var line = Assert.Single(preview.Invoice.Lines);
+        Assert.Equal(112.50m, line.NetAmount);
+        Assert.Contains("3/4 completed visits", line.Description);
+    }
+
+    [Fact]
     public async Task Ticking_an_unstarted_monthly_visit_counts_it_as_done_in_the_fraction()
     {
         var f = new Fixture(completedDays: [2, 9, 16]);
@@ -238,12 +251,13 @@ public class ShiftInvoiceServiceTests
         public readonly TenantProfile Profile=new() { CompanyName="ReadySet",BusinessId="1234567-8",TimeZoneId="Europe/Helsinki",CompanyAddress=new(){Street="Street 1",PostalCode="00100",City="Helsinki"},BankAccountIBAN="FI2112345600000785",BankBic="NDEAFIHH",PaymentTermsDays=14 };
         public readonly ShiftBillingProfile Pricing=new(){Plans=[new("Monthly",150,25.5m,new(2026,10,1))]};
         public readonly List<Shift> Selected=[];public readonly List<Invoice> Existing=[];public readonly ShiftInvoiceRequest Request;public readonly ShiftInvoiceService Service;public readonly ShiftBillingSettingsService Settings;
-        public Fixture(DateTimeOffset? now = null, int[]? completedDays = null)
+        public Fixture(DateTimeOffset? now = null, int[]? completedDays = null, ShiftOccurrenceException[]? exceptions = null)
         {
             var branch=new Branch { Id=Guid.NewGuid(),CompanyId=Company.Id,Name="AAA1" };Shift.CompanyId=Company.Id;Shift.BranchId=branch.Id;Pricing.ShiftId=Shift.Id;Selected.Add(Shift);
+            foreach (var exception in exceptions ?? []) exception.ShiftId=Shift.Id;
             Request=new(Company.Id,[Shift.Id],new(2026,10,1),new(2026,10,31),new(){Street="Customer Street",PostalCode="00200",City="Helsinki"});
             var shifts=new Mock<IShiftRepository>();shifts.Setup(x=>x.GetAsync(Shift.Id,It.IsAny<CancellationToken>())).ReturnsAsync(Shift);shifts.Setup(x=>x.ListByIdsAsync(It.IsAny<IReadOnlyCollection<Guid>>(),It.IsAny<CancellationToken>())).ReturnsAsync(()=>Selected);
-            shifts.Setup(x=>x.ListOccurrenceExceptionsAsync(Shift.Id,It.IsAny<DateTime>(),It.IsAny<DateTime>(),It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<ShiftOccurrenceException>());
+            shifts.Setup(x=>x.ListOccurrenceExceptionsAsync(Shift.Id,It.IsAny<DateTime>(),It.IsAny<DateTime>(),It.IsAny<CancellationToken>())).ReturnsAsync(exceptions ?? Array.Empty<ShiftOccurrenceException>());
             shifts.Setup(x=>x.ListAssignmentHistoryAsync(Shift.Id,It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<ShiftAssignment>());
             shifts.Setup(x=>x.ListOccurrenceAssignmentsAsync(Shift.Id,It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<ShiftOccurrenceAssignment>());
             var billing=new Mock<IShiftBillingRepository>();billing.Setup(x=>x.GetAsync(Shift.Id,It.IsAny<CancellationToken>())).ReturnsAsync(Pricing);
