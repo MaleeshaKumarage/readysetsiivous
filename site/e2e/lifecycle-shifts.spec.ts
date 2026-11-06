@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, shiftsResponse } from './admin-helpers';
 import { shiftAction } from './shift-actions';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
@@ -21,6 +21,7 @@ async function setup(page: Page) {
       shifts = shifts.map(s => path.includes(`/${s.id}/`) ? { ...s, isActive: false } : s);
       return route.fulfill({ status: 204, headers });
     }
+    if (path.endsWith('/shifts/page')) return route.fulfill({ status: 200, headers, json: shiftsResponse(shifts, route.request().url()) });
     if (path.endsWith('/shifts')) {
       loads++; expect(url.searchParams.get('includeInactive')).toBe('true');
       return route.fulfill({ status: 200, headers, json: shifts });

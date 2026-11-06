@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { shiftAction } from './shift-actions';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, shiftsResponse } from './admin-helpers';
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 
 test('inactive shift deletion removes the shift after confirmation without blocking on QC history', async ({ page }) => {
@@ -14,6 +14,7 @@ test('inactive shift deletion removes the shift after confirmation without block
     if (request.method() === 'DELETE' && url.pathname.endsWith(`/shifts/${shift.id}`)) {
       deleteCalls++; deleted = true; return route.fulfill({ status: 204, headers });
     }
+    if (url.pathname.endsWith('/shifts/page')) return route.fulfill({ status: 200, headers, json: shiftsResponse(deleted ? [] : [shift], request.url()) });
     return route.fulfill({ status: 200, headers, json: url.pathname.endsWith('/shifts') ? deleted ? [] : [shift]
       : url.pathname.endsWith('/companies') ? { items: [], total: 0 } : [] });
   });
@@ -41,6 +42,7 @@ test('admin discovers deactivated shift, sees restore failure and reactivates it
       restores++; if (restores === 1) return route.fulfill({ status: 409, headers, json: { detail: 'Parents inactive' } });
       active = true; return route.fulfill({ status: 200, headers, json: { ...shift, isActive: true } });
     }
+    if (url.pathname.endsWith('/shifts/page')) return route.fulfill({ status: 200, headers, json: shiftsResponse([{ ...shift, isActive: active }], request.url()) });
     const json = url.pathname.endsWith('/shifts') ? active || url.searchParams.get('includeInactive') === 'true' ? [{ ...shift, isActive: active }] : []
       : url.pathname.endsWith('/companies') ? { items: [], total: 0 } : [];
     return route.fulfill({ status: 200, headers, json });
