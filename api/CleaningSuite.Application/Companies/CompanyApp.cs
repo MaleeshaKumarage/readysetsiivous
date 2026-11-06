@@ -469,8 +469,8 @@ public class CompanyHandlers
 public class CompanyValidators
 {
     // Finnish business IDs: seven digits, a dash and one check digit, such as 1234567-8.
-    private const string BusinessIdPattern = @"^\d{7}-\d$";
-    private const string BusinessIdMessage = "Business ID must look like 1234567-8: seven digits, a dash and one check digit. Check the company's registration, then try again.";
+    public const string BusinessIdPattern = @"^\d{7}-\d$";
+    public const string BusinessIdMessage = "Business ID must look like 1234567-8: seven digits, a dash and one check digit. Check the company's registration, then try again.";
 
     public class CreateCompanyCommandValidator : AbstractValidator<CreateCompanyCommand>
     {
