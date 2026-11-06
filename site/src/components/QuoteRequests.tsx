@@ -27,7 +27,7 @@ export function QuoteRequestProvider({ pathname, children }: { pathname: string;
       const hasRows = [quotes, requests, changes].some(result => result.status !== 'fulfilled' || !Array.isArray(result.value) || result.value.length > 0);
       const companies = hasRows ? await adminCompanies.listAll() : [];
       if (request.signal.aborted) return;
-      if (!Array.isArray(companies)) throw new Error('Company data unavailable');
+      if (!Array.isArray(companies)) throw new Error('Company details could not be loaded for these requests. Refresh the page to retry.');
       const partnerCompanyIds = new Set(companies.filter(company => company.isPartnerEnabled).map(company => company.id));
       if (requests.status === 'fulfilled' && Array.isArray(requests.value)) setRequestCount(requests.value.filter(item => item.status === 'Requested' && partnerCompanyIds.has(item.companyId)).length);
       if (changes.status === 'fulfilled' && Array.isArray(changes.value)) setChangeCount(changes.value.filter(item => !item.resolvedUtc && partnerCompanyIds.has(item.companyId)).length);

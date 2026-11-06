@@ -437,9 +437,9 @@ export default function ShiftsAdminPage() {
       const nextDayUtc = tenantLocalToUtc(`${addCalendarDays(toDate, 1)}T00:00`, timeZoneId);
       const toUtc = new Date(Date.parse(nextDayUtc) - 1).toISOString();
       const result = await adminShifts.occurrences(shift.id, fromUtc, toUtc);
-      if (!result) throw new Error('Could not load occurrences.');
+      if (!result) throw new Error('The visits could not be loaded. Close this window and open it again to retry.');
       if (version === occurrenceGeneration.current) setOccurrences(result);
-    } catch (failure) { if (version === occurrenceGeneration.current) setOccurrenceError(failure instanceof Error ? failure.message : 'Could not load occurrences.'); }
+    } catch (failure) { if (version === occurrenceGeneration.current) setOccurrenceError(failure instanceof Error ? failure.message : 'The visits could not be loaded. Close this window and open it again to retry.'); }
     finally { if (version === occurrenceGeneration.current) setOccurrenceLoading(false); }
   };
 
