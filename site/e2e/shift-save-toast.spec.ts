@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const CONFLICT = 'A shift with this name already exists in this branch. Change the name, then save again.';
@@ -10,7 +10,7 @@ test('a refused shift save explains the fix as a toast and in the dialog, and ke
     const request = route.request(); const path = new URL(request.url()).pathname; const method = request.method();
     if (method === 'OPTIONS') return route.fulfill({ status: 200, headers });
     if (path.endsWith('/shifts') && method === 'POST') return route.fulfill({ status: 409, headers, json: { title: 'Shift conflict', detail: CONFLICT } });
-    return route.fulfill({ headers, json: path.endsWith('/shifts') ? []
+    return route.fulfill({ headers, json: isShiftsRoute(path) ? shiftsResponse([], route.request().url())
       : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'AAA', isActive: true }], total: 1 }
       : path.endsWith('/companies/company') ? { company: { id: 'company', name: 'AAA', isActive: true }, branches: [{ id: 'branch', companyId: 'company', name: 'AAA1', isActive: true }] }
       : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
@@ -34,7 +34,7 @@ test('a field validation failure names the field problem instead of a generic ti
     const request = route.request(); const path = new URL(request.url()).pathname; const method = request.method();
     if (method === 'OPTIONS') return route.fulfill({ status: 200, headers });
     if (path.endsWith('/shifts') && method === 'POST') return route.fulfill({ status: 400, headers, json: { title: 'Validation failed', status: 400, errors: { ValidUntil: [FIELD] } } });
-    return route.fulfill({ headers, json: path.endsWith('/shifts') ? []
+    return route.fulfill({ headers, json: isShiftsRoute(path) ? shiftsResponse([], route.request().url())
       : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'AAA', isActive: true }], total: 1 }
       : path.endsWith('/companies/company') ? { company: { id: 'company', name: 'AAA', isActive: true }, branches: [{ id: 'branch', companyId: 'company', name: 'AAA1', isActive: true }] }
       : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
@@ -59,7 +59,7 @@ test('a refused shift update says it was not updated, keeps the edited values an
     const request = route.request(); const path = new URL(request.url()).pathname; const method = request.method();
     if (method === 'OPTIONS') return route.fulfill({ status: 200, headers });
     if (path.endsWith('/shifts/shift-1') && method === 'PUT') { puts++; return route.fulfill({ status: 409, headers, json: { title: 'Shift conflict', detail: UPDATE_REFUSED } }); }
-    return route.fulfill({ headers, json: path.endsWith('/shifts') ? [shift]
+    return route.fulfill({ headers, json: isShiftsRoute(path) ? shiftsResponse([shift], route.request().url())
       : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'AAA', isActive: true }], total: 1 }
       : path.endsWith('/companies/company') ? { company: { id: 'company', name: 'AAA', isActive: true }, branches: [{ id: 'branch', companyId: 'company', name: 'AAA1', isActive: true }] }
       : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });

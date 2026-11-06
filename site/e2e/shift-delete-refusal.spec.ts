@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const REFUSAL = 'This shift has started or completed visits that may not be invoiced yet. Keep it deactivated so its work and billing stay available.';
@@ -12,7 +12,7 @@ test('deleting an inactive shift with started visits is refused, explains why, a
     const request = route.request(); const path = new URL(request.url()).pathname; const method = request.method();
     if (method === 'OPTIONS') return route.fulfill({ status: 200, headers });
     if (path.endsWith('/shifts/shift-1') && method === 'DELETE') { deletes++; return route.fulfill({ status: 409, headers, json: { title: 'Inactive record conflict', detail: REFUSAL } }); }
-    return route.fulfill({ headers, json: path.endsWith('/shifts') ? [shift]
+    return route.fulfill({ headers, json: isShiftsRoute(path) ? shiftsResponse([shift], route.request().url())
       : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'AAA', isActive: true }], total: 1 }
       : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
   });

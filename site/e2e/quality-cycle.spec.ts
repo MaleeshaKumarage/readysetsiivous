@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { shiftAction } from './shift-actions';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, shiftsResponse } from './admin-helpers';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -25,7 +25,7 @@ async function setupReportWorkspace(page: Page, initialShares: any[] = []) {
   ];
   const calls = { previews: [] as any[], exports: [] as any[], sends: [] as any[], retry: 0 };
   let shares: any[] = initialShares;
-  await page.route(/\/api\/v1\/admin\/shifts(?:\?.*)?$/, route => route.fulfill({ headers: CORS_HEADERS, json: rows.map(row => ({ id: row.shiftId, name: row.shiftName, isActive: true })) }));
+  await page.route(/\/api\/v1\/admin\/shifts(?:\/page)?(?:\?.*)?$/, route => route.fulfill({ headers: CORS_HEADERS, json: shiftsResponse(rows.map(row => ({ id: row.shiftId, name: row.shiftName, isActive: true })), route.request().url()) }));
   await page.route(/\/api\/v1\/admin\/quality-cycle\/templates$/, route => route.fulfill({ headers: CORS_HEADERS, json: [] }));
   await page.route(/\/api\/v1\/admin\/quality-cycle\/(reports|report-shares)(\/.*)?$/, async route => {
     const method = route.request().method(); const url = route.request().url(); const body = getBody(route);
@@ -470,7 +470,7 @@ test('admin can attach a checklist to an existing shift', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   const shift = { id: 'existing-shift', companyId: 'company-a', branchId: 'branch-a', name: 'Existing shift', schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' }, isActive: true, qualityCycleTemplateId: null };
   let saved: any;
-  await page.route(/\/api\/v1\/admin\/shifts(?:\?.*)?$/, route => route.fulfill({ status: 200, headers: CORS_HEADERS, json: [shift] }));
+  await page.route(/\/api\/v1\/admin\/shifts(?:\/page)?(?:\?.*)?$/, route => route.fulfill({ status: 200, headers: CORS_HEADERS, json: shiftsResponse([shift], route.request().url()) }));
   await page.route(/\/api\/v1\/admin\/quality-cycle\/templates$/, route => route.fulfill({ status: 200, headers: CORS_HEADERS, json: [{ id: 'template-a', title: 'Activities checklist', companyId: 'company-a', branchId: 'branch-a', isActive: true, items: ['Corridor', 'Gym'] }] }));
   await page.route(/\/api\/v1\/admin\/shifts\/existing-shift\/quality-cycle-template$/, route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });

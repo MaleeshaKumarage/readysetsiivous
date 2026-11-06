@@ -125,6 +125,11 @@ public record DeleteShiftCommand(Guid Id) : IRequest;
 
 public record ListShiftsQuery(Guid? CompanyId, Guid? BranchId, bool IncludeInactive = false) : IRequest<IReadOnlyList<ShiftDto>>;
 
+/// <summary>One page of the shift list for one tab. Counts cover every tab in the same company and branch scope, ignoring search.</summary>
+public record ListShiftPageQuery(string Tab, Guid? CompanyId, Guid? BranchId, string? Search, int Skip, int Take) : IRequest<ShiftPage>;
+public record ShiftTabCounts(int Active, int Completed, int Inactive);
+public record ShiftPage(IReadOnlyList<ShiftDto> Items, int Total, ShiftTabCounts Counts);
+
 public record GetShiftQuery(Guid Id) : IRequest<ShiftDto>;
 
 public record ListShiftAssignmentsQuery(Guid ShiftId) : IRequest<IReadOnlyList<ShiftAssignmentDto>>;
@@ -308,6 +313,44 @@ public class ShiftHandlers
                 ? new HashSet<Guid>()
                 : await _forms.ListShiftIdsWithSubmittedFormAsync(oneTimeIds, ct);
             return shifts.Select(shift => MapShift(shift) with { IsCompleted = completed.Contains(shift.Id) }).ToList();
+        }
+    }
+
+    public class ListShiftPageQueryHandler : IRequestHandler<ListShiftPageQuery, ShiftPage>
+    {
+        public static readonly IReadOnlyList<string> Tabs = ["active", "completed", "inactive"];
+        private readonly IShiftRepository _repository;
+        private readonly IQualityCycleRepository _forms;
+
+        public ListShiftPageQueryHandler(IShiftRepository repository, IQualityCycleRepository forms)
+        {
+            _repository = repository;
+            _forms = forms;
+        }
+
+        public async Task<ShiftPage> Handle(ListShiftPageQuery request, CancellationToken ct)
+        {
+            var shifts = (await _repository.ListIncludingInactiveAsync(ct))
+                .Where(s => (!request.CompanyId.HasValue || s.CompanyId == request.CompanyId)
+                    && (!request.BranchId.HasValue || s.BranchId == request.BranchId))
+                .ToList();
+            // Same rule as the full list: a one-time visit is completed once its checklist is submitted. One batched lookup.
+            var oneTimeIds = shifts.Where(s => s.Schedule.IsOneTime).Select(s => s.Id).ToList();
+            IReadOnlySet<Guid> completed = oneTimeIds.Count == 0
+                ? new HashSet<Guid>()
+                : await _forms.ListShiftIdsWithSubmittedFormAsync(oneTimeIds, ct);
+            var rows = shifts.Select(s => (Shift: s, IsCompleted: completed.Contains(s.Id)))
+                .Select(r => (r.Shift, r.IsCompleted, Tab: !r.Shift.IsActive ? "inactive" : r.IsCompleted ? "completed" : "active"))
+                .ToList();
+            var counts = new ShiftTabCounts(
+                rows.Count(r => r.Tab == "active"), rows.Count(r => r.Tab == "completed"), rows.Count(r => r.Tab == "inactive"));
+            var search = string.IsNullOrWhiteSpace(request.Search) ? null : request.Search.Trim();
+            var inTab = rows.Where(r => r.Tab == request.Tab
+                && (search is null || r.Shift.Name.Contains(search, StringComparison.OrdinalIgnoreCase))).ToList();
+            var items = inTab.Skip(request.Skip).Take(request.Take)
+                .Select(r => MapShift(r.Shift) with { IsCompleted = r.IsCompleted })
+                .ToList();
+            return new ShiftPage(items, inTab.Count, counts);
         }
     }
 
