@@ -22,27 +22,32 @@ async function setup(page: Page) {
   await page.route(/\/api\/v1\/me\/inventory\/usage(\?.*)?$/, route => route.fulfill({ headers, json: [] }));
 }
 
-test('schedules, offers and settings each show only their own content', async ({ page }) => {
+test('schedules, offers, inventory and settings each show only their own content', async ({ page }) => {
   await setup(page);
   await page.goto('/me/shifts/');
 
   const schedules = page.getByRole('tab', { name: 'Schedules', exact: true });
   const offers = page.getByRole('tab', { name: 'Offers', exact: true });
+  const inventory = page.getByRole('tab', { name: 'Inventory', exact: true });
   const settings = page.getByRole('tab', { name: 'Settings', exact: true });
   await expect(schedules).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('button', { name: 'Inventory', exact: true })).toBeVisible();
   await expect(page.getByText('Automatic acceptance is off.')).toHaveCount(0);
 
   await offers.click();
   await expect(offers).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByText('No pending cleaning offers.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Inventory', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Log an item taken' })).toHaveCount(0);
+
+  await inventory.click();
+  await expect(inventory).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('heading', { name: 'Log an item taken' })).toBeVisible();
+  await expect(page.getByText('No pending cleaning offers.')).toHaveCount(0);
 
   await settings.click();
   await expect(settings).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByText('Automatic acceptance is off.')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Change work preferences in My account' })).toBeVisible();
-  await expect(page.getByText('No pending cleaning offers.')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Log an item taken' })).toHaveCount(0);
 });
 
 test('arrow keys move between sections and focus follows', async ({ page }) => {
@@ -54,6 +59,10 @@ test('arrow keys move between sections and focus follows', async ({ page }) => {
   await expect(page.getByRole('tab', { name: 'Offers', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('tab', { name: 'Offers', exact: true })).toBeFocused();
 
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Inventory', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: 'Inventory', exact: true })).toBeFocused();
+
   await page.keyboard.press('End');
   await expect(page.getByRole('tab', { name: 'Settings', exact: true })).toHaveAttribute('aria-selected', 'true');
 
@@ -61,15 +70,11 @@ test('arrow keys move between sections and focus follows', async ({ page }) => {
   await expect(page.getByRole('tab', { name: 'Schedules', exact: true })).toHaveAttribute('aria-selected', 'true');
 });
 
-test('inventory opens in a modal from Schedules and closes with Escape', async ({ page }) => {
+test('inventory is its own tab and shows the take-log form', async ({ page }) => {
   await setup(page);
   await page.goto('/me/shifts/');
 
-  await page.getByRole('button', { name: 'Inventory', exact: true }).click();
-  const dialog = page.getByRole('dialog');
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole('heading', { name: 'Log an item taken' })).toBeVisible();
-
-  await page.keyboard.press('Escape');
+  await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Log an item taken' })).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });

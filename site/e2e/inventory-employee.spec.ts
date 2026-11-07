@@ -21,6 +21,10 @@ async function setup(page: Page, options: { history?: unknown[] } = {}) {
     headers,
     json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: ['employee'] })], employee: { id: 'employee-a', firstName: 'Test', lastName: 'Staff', role: 'employee', isActive: true } },
   }));
+  // The employee portal now hosts the inventory tab, so the surrounding page must load without error.
+  await page.route(/\/api\/v1\/me\/shifts\/calendar(?:\?.*)?$/, route => route.fulfill({ headers, json: { occurrences: [], timeZoneId: 'Europe/Helsinki', fromLocalDate: '2026-11-06', toLocalDate: '2026-11-06' } }));
+  await page.route(/\/api\/v1\/me\/partner-offers(?:\?.*)?$/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/me\/work-preferences$/, route => route.fulfill({ headers, json: { autoAcceptWork: false } }));
 
   const state = { history: [...(options.history ?? [])] as any[], posts: [] as { url: string; body: string }[], newItemId: null as string | null };
 
@@ -58,10 +62,15 @@ async function setup(page: Page, options: { history?: unknown[] } = {}) {
   return state;
 }
 
+async function openInventory(page: Page) {
+  await page.goto('/me/shifts/');
+  await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
+}
+
 test('save stays disabled until a photo is attached', async ({ page }) => {
   await setup(page);
-  await page.goto('/me/inventory/');
-  await expect(page.getByRole('heading', { name: 'Inventory' })).toBeVisible();
+  await openInventory(page);
+  await expect(page.getByRole('heading', { name: 'Log an item taken' })).toBeVisible();
 
   await page.getByLabel('Where did you take it from?').selectOption({ label: 'Main store' });
   await page.getByLabel('What did you take?').selectOption({ label: 'Keys' });
@@ -76,7 +85,7 @@ test('save stays disabled until a photo is attached', async ({ page }) => {
 
 test('quantity must be a whole number of at least one', async ({ page }) => {
   await setup(page);
-  await page.goto('/me/inventory/');
+  await openInventory(page);
   await page.getByLabel('Where did you take it from?').selectOption({ label: 'Main store' });
   await page.getByLabel('What did you take?').selectOption({ label: 'Keys' });
   await page.getByLabel('Photos (at least 1, up to 5)').setInputFiles(photo);
@@ -91,7 +100,7 @@ test('quantity must be a whole number of at least one', async ({ page }) => {
 
 test('employee logs an existing item with a photo and sees it in their history', async ({ page }) => {
   const work = await setup(page);
-  await page.goto('/me/inventory/');
+  await openInventory(page);
   await expect(page.getByText('No entries yet.')).toBeVisible();
 
   await page.getByLabel('Where did you take it from?').selectOption({ label: 'Main store' });
@@ -124,7 +133,7 @@ test('a failed history reload after a successful save is not reported as an unsa
     if (route.request().method() === 'GET' && work.posts.some(p => p.url.includes('/usage'))) return route.fulfill({ status: 503, headers });
     return route.fallback();
   });
-  await page.goto('/me/inventory/');
+  await openInventory(page);
 
   await page.getByLabel('Where did you take it from?').selectOption({ label: 'Main store' });
   await page.getByLabel('What did you take?').selectOption({ label: 'Keys' });
@@ -139,7 +148,7 @@ test('a failed history reload after a successful save is not reported as an unsa
 
 test('employee adds a new item and it is used for the entry', async ({ page }) => {
   const work = await setup(page);
-  await page.goto('/me/inventory/');
+  await openInventory(page);
 
   await page.getByLabel('Where did you take it from?').selectOption({ label: 'Main store' });
   await page.getByLabel('What did you take?').selectOption({ label: '+ Add new item' });
@@ -163,21 +172,21 @@ test('history shows the photo count for entries whose photos were deleted by ret
       photoIds: [], photosPurged: true, version: 'v1',
     }],
   });
-  await page.goto('/me/inventory/');
+  await openInventory(page);
   await expect(page.getByText('Photos were deleted after 3 months.')).toBeVisible();
 });
 
 test('inventory page has no horizontal scroll', async ({ page }) => {
   await setup(page);
-  await page.goto('/me/inventory/');
-  await expect(page.getByRole('heading', { name: 'Inventory' })).toBeVisible();
+  await openInventory(page);
+  await expect(page.getByRole('heading', { name: 'Log an item taken' })).toBeVisible();
   const overflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(overflows).toBe(false);
 });
 
 test('attaching more than five photos keeps only five and disables the input', async ({ page }) => {
   await setup(page);
-  await page.goto('/me/inventory/');
+  await openInventory(page);
   const six = Array.from({ length: 6 }, (_, i) => ({ name: `p${i}.png`, mimeType: 'image/png', buffer: photo.buffer }));
   await page.getByLabel('Photos (at least 1, up to 5)').setInputFiles(six);
   await expect(page.getByText('You can attach up to 5 photos per entry.')).toBeVisible();
@@ -195,14 +204,14 @@ test('a history photo that fails to load shows the unavailable fallback', async 
     }],
   });
   await page.route(/\/api\/v1\/me\/inventory\/usage\/[^/]+\/photos\/[^/?]+(\?.*)?$/, route => route.fulfill({ status: 503, headers }));
-  await page.goto('/me/inventory/');
+  await openInventory(page);
   await page.getByRole('button', { name: 'Show photos (1)' }).click();
   await expect(page.getByText('Photo unavailable')).toBeVisible();
 });
 
 test('an unauthenticated employee sees the sign-in prompt', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: false });
-  await page.goto('/me/inventory/');
-  await expect(page.getByText('Sign in to log items you have taken.')).toBeVisible();
+  await page.goto('/me/shifts/');
+  await expect(page.getByText('Sign in to view your shifts.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
 });

@@ -7,19 +7,21 @@ import { Card } from '@/ds/Card';
 import { PartnerOffers } from '@/components/PartnerOffers';
 import { NotificationsPanel } from '@/components/NotificationsPanel';
 import { PwaInstallButton } from '@/components/PwaInstallButton';
+import { InventoryPanel } from '@/components/InventoryPanel';
 
-export type EmployeeSection = 'schedules' | 'offers' | 'settings';
+export type EmployeeSection = 'schedules' | 'offers' | 'inventory' | 'settings';
 
 const SECTIONS: { id: EmployeeSection; label: string }[] = [
   { id: 'schedules', label: 'Schedules' },
   { id: 'offers', label: 'Offers' },
+  { id: 'inventory', label: 'Inventory' },
   { id: 'settings', label: 'Settings' },
 ];
 
 /** Top-level sections of the employee portal. Arrow keys, Home and End move between tabs. */
 export function EmployeeTabs({ section, onChange }: { section: EmployeeSection; onChange: (next: EmployeeSection) => void }) {
   return (
-    <div role="tablist" aria-label="My account sections" className="flex gap-2 rounded-xl bg-white/70 p-1 dark:bg-gray-900/60">
+    <div role="tablist" aria-label="My account sections" className="flex gap-2 overflow-x-auto rounded-xl bg-white/70 p-1 dark:bg-gray-900/60">
       {SECTIONS.map((item, index) => {
         const selected = section === item.id;
         return (
@@ -31,7 +33,7 @@ export function EmployeeTabs({ section, onChange }: { section: EmployeeSection; 
             aria-selected={selected}
             aria-controls={`employee-panel-${item.id}`}
             tabIndex={selected ? 0 : -1}
-            className={`flex-1 rounded-lg px-4 py-2 font-semibold focus-visible:outline focus-visible:outline-2 ${selected ? 'bg-accent-900 text-white dark:bg-brand-400 dark:text-accent-950' : 'text-gray-800 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800'}`}
+            className={`shrink-0 whitespace-nowrap rounded-lg px-4 py-2 font-semibold focus-visible:outline focus-visible:outline-2 ${selected ? 'bg-accent-900 text-white dark:bg-brand-400 dark:text-accent-950' : 'text-gray-800 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800'}`}
             onClick={() => onChange(item.id)}
             onKeyDown={event => {
               let next = index;
@@ -78,6 +80,14 @@ export function OffersSection({ autoAcceptWork, preferenceError, onRetryPreferen
       ) : (
         <PartnerOffers onAccepted={onAccepted} />
       )}
+    </div>
+  );
+}
+
+export function InventorySection() {
+  return (
+    <div id="employee-panel-inventory" role="tabpanel" aria-labelledby="employee-tab-inventory" className="space-y-6">
+      <InventoryPanel />
     </div>
   );
 }

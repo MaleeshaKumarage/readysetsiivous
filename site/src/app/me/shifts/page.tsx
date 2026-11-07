@@ -16,9 +16,7 @@ import {
 import { initAuth, isAuthenticated, authTenant, login, logout } from '@/lib/auth';
 import { meApi, MyShiftOccurrence, QualityCycleFormItem, type ShiftCalendarView } from '@/lib/meApi';
 import ShiftCalendar from './ShiftCalendar';
-import { EmployeeTabs, OffersSection, SettingsSection, type EmployeeSection } from '@/components/EmployeeSections';
-import { InventoryPanel } from '@/components/InventoryPanel';
-import { Dialog } from '@/ds/Dialog';
+import { EmployeeTabs, InventorySection, OffersSection, SettingsSection, type EmployeeSection } from '@/components/EmployeeSections';
 import { Logo } from '@/ds/Logo';
 import { Button } from '@/ds/Button';
 import { Card } from '@/ds/Card';
@@ -71,7 +69,6 @@ export default function MyShiftsPage() {
   const [autoAcceptWork, setAutoAcceptWork] = useState<boolean | null>(null);
   const [preferenceError, setPreferenceError] = useState('');
   const [section, setSection] = useState<EmployeeSection>('schedules');
-  const [inventoryOpen, setInventoryOpen] = useState(false);
   const preferenceVersion = useRef(0);
   async function loadPreference() {
     const version = ++preferenceVersion.current;
@@ -418,11 +415,9 @@ export default function MyShiftsPage() {
 
         <EmployeeTabs section={section} onChange={setSection} />
         {section === 'offers' && <OffersSection autoAcceptWork={autoAcceptWork} preferenceError={preferenceError} onRetryPreference={() => void loadPreference()} onAccepted={() => void loadShifts()} />}
+        {section === 'inventory' && <InventorySection />}
         {section === 'settings' && <SettingsSection autoAcceptWork={autoAcceptWork} />}
         {section === 'schedules' && <div id="employee-panel-schedules" role="tabpanel" aria-labelledby="employee-tab-schedules" className="space-y-6">
-        <div className="flex justify-end">
-          <Button variant="outline" onClick={() => setInventoryOpen(true)}>Inventory</Button>
-        </div>
         {error && (
           <div role="alert" aria-label="Shift error" className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
             <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -471,10 +466,6 @@ export default function MyShiftsPage() {
         </Button>}
         </div>}
       </div>
-      <Dialog open={inventoryOpen} title="Inventory" onClose={() => setInventoryOpen(false)}
-        className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-900 [&_h2:first-child]:mb-4 [&_h2:first-child]:text-lg [&_h2:first-child]:font-bold">
-        <InventoryPanel />
-      </Dialog>
     </div>
   );
 }
