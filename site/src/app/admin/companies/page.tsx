@@ -7,7 +7,7 @@ import {
 } from '@mantine/core';
 import { Plus, ChevronDown, Pencil } from 'lucide-react';
 import Link from 'next/link';
-import { adminCompanies, adminBranches, type Company, type Branch } from '@/lib/adminApi';
+import { adminCompanies, adminBranches, type Company, type Branch, type CompanyRemovalSummary } from '@/lib/adminApi';
 import { companyLifecycle, branchLifecycle } from '@/lib/reactivationApi';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
 import { QuoteRequestedBadge, useQuoteRequests } from '@/components/QuoteRequests';
@@ -22,7 +22,8 @@ export default function CompaniesAdminPage() {
   const [actionError, setActionError] = useState('');
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   // Offered when a deactivate or delete is refused because of the company's shifts or places.
-  const [relatedPrompt, setRelatedPrompt] = useState<{ company: Company; action: 'deactivate' | 'delete'; reason: string } | null>(null);
+  const [relatedPrompt, setRelatedPrompt] = useState<{ company: Company; action: 'deactivate'; reason: string } | null>(null);
+  const [removal, setRemoval] = useState<{ company: Company; summary: CompanyRemovalSummary; reason: string; branches: boolean; shifts: boolean; invoices: boolean; confirmName: string; busy: boolean; error: string } | null>(null);
   const [relatedDeleteAgreements, setRelatedDeleteAgreements] = useState(false);
   const [relatedBusy, setRelatedBusy] = useState(false);
   const [relatedError, setRelatedError] = useState('');
@@ -248,9 +249,44 @@ export default function CompaniesAdminPage() {
     catch (failure) {
       const message = failure instanceof Error ? failure.message : 'Could not delete company. Please retry.';
       setActionError(message);
-      if (isConflict(failure) && clearableReason(message)) setRelatedPrompt({ company, action: 'delete', reason: message });
+      // A refused delete (places, shifts, checklists, agreements or partner records) opens the removal dialog for the company.
+      if (isConflict(failure)) await openRemoval(company, message);
     }
     finally { setActionBusy(null); }
+  };
+
+  const openRemoval = async (company: Company, reason: string) => {
+    try {
+      const summary = await adminCompanies.removalSummary(company.id);
+      if (!summary) throw new Error('Could not load what would be removed. Please retry.');
+      setRemoval({ company, summary, reason, branches: false, shifts: false, invoices: false, confirmName: '', busy: false, error: '' });
+    } catch (failure) {
+      setActionError(failure instanceof Error ? failure.message : 'Could not load what would be removed. Please retry.');
+    }
+  };
+
+  // Places need their shifts: unticking shifts also unticks places.
+  const setPlaces = (checked: boolean) => setRemoval(current => current && { ...current, branches: checked, shifts: checked ? true : current.shifts });
+  const setShifts = (checked: boolean) => setRemoval(current => current && { ...current, shifts: checked, branches: checked ? current.branches : false });
+
+  const submitRemoval = async () => {
+    if (!removal) return;
+    const { company, summary, branches, shifts, invoices, confirmName } = removal;
+    const confirmPaidInvoices = invoices && summary.paidInvoices > 0;
+    if (confirmPaidInvoices && confirmName.trim() !== company.name.trim()) return;
+    setRemoval({ ...removal, busy: true, error: '' });
+    try {
+      await adminCompanies.remove(company.id, { branches, shifts, invoices, confirmPaidInvoices: !!confirmPaidInvoices });
+      setCompanyBranchesMap(current => { const next = { ...current }; delete next[company.id]; return next; });
+      setExpanded(null); setPinned(null); setRemoval(null);
+      await reload();
+    } catch (failure) {
+      // A removal that stopped part way has already removed some records, so the list and branch panel are reloaded either way.
+      setCompanyBranchesMap(current => { const next = { ...current }; delete next[company.id]; return next; });
+      setExpanded(null); setPinned(null);
+      setRemoval(current => current && { ...current, busy: false, error: failure instanceof Error ? failure.message : 'Could not remove the company. Please retry.' });
+      await reload();
+    }
   };
 
   const closeRelatedPrompt = () => { setRelatedPrompt(null); setRelatedError(''); };
@@ -263,8 +299,7 @@ export default function CompaniesAdminPage() {
     setRelatedBusy(true); setRelatedError('');
     let clearFailure: unknown = null;
     try {
-      // A delete finishes in the same request: the clear removes the company record as its last step.
-      await adminCompanies.clearRelated(company.id, relatedDeleteAgreements, action === 'delete');
+      await adminCompanies.clearRelated(company.id, relatedDeleteAgreements);
     } catch (failure) {
       clearFailure = failure;
     }
@@ -425,13 +460,50 @@ export default function CompaniesAdminPage() {
           <Stack gap="sm">
             <Text>{relatedPrompt.reason}</Text>
             <Text size="sm" c="dimmed">This deletes the company&apos;s branches and shifts, unassigns every employee from them, removes its partner requests and voids its open invoices. Checklist submissions are kept as separate records. Paid invoices stop the clear: issue a credit note first. Nothing is changed if the clear is refused.</Text>
-            {relatedPrompt.action === 'delete' && <Text size="sm" c="dimmed">Then the company itself is deleted.</Text>}
             <Checkbox label="Also delete this company&apos;s signed agreements" description="Off keeps the signed agreements on record." checked={relatedDeleteAgreements} onChange={event => setRelatedDeleteAgreements(event.currentTarget.checked)} disabled={relatedBusy} />
             {relatedError && <Text c="red" role="alert">{relatedError}</Text>}
             <Button color="red" loading={relatedBusy} onClick={() => void clearRelatedAndContinue()}>Delete related shifts, unassign employees and clear all places</Button>
             <Button variant="default" disabled={relatedBusy} onClick={closeRelatedPrompt}>Skip deletion</Button>
           </Stack>
         )}
+      </Modal>
+
+      <Modal opened={!!removal} onClose={() => { if (!removal?.busy) setRemoval(null); }} title="Remove company" radius="md">
+        {removal && (() => {
+          const everything = removal.branches && removal.shifts && removal.invoices;
+          const paidNeedsName = removal.invoices && removal.summary.paidInvoices > 0;
+          const nameMatches = removal.confirmName.trim() === removal.company.name.trim();
+          const nothingTicked = !removal.branches && !removal.shifts && !removal.invoices;
+          return (
+            <Stack gap="sm">
+              <Text>{removal.reason}</Text>
+              <Text size="sm" c="dimmed">Tick what to remove from {removal.company.name}. Anything not ticked is kept.</Text>
+              <Checkbox label={`Places (${removal.summary.branches})`} description="The company's branches. Removing places also removes their shifts."
+                checked={removal.branches} onChange={event => setPlaces(event.currentTarget.checked)} disabled={removal.busy} />
+              <Checkbox label={`Shifts (${removal.summary.shifts}, ${removal.summary.shiftsWithChecklists} with completed checklists)`}
+                description="Unassigns employees and removes the shifts, including completed ones." checked={removal.shifts}
+                onChange={event => setShifts(event.currentTarget.checked)} disabled={removal.busy} />
+              <Checkbox label={`Invoices (${removal.summary.invoices}, ${removal.summary.paidInvoices} paid)`}
+                description="Removes the invoices, paid ones included. Paid invoices need the company name typed below."
+                checked={removal.invoices} onChange={event => { const checked = event.currentTarget.checked; setRemoval(current => current && { ...current, invoices: checked }); }} disabled={removal.busy} />
+              {everything && (
+                <Text size="sm" c="dimmed">
+                  Ticking all three also removes the company record and everything linked to it: {removal.summary.agreements} signed agreement(s),
+                  {' '}{removal.summary.checklistSubmissions} checklist submission(s) and {removal.summary.partnerRequests} partner request(s).
+                  {' '}{removal.summary.partnerAccounts} partner account(s) are deactivated and their login is disabled.
+                  {' '}{removal.summary.templates} template(s) and {removal.summary.leads} lead(s) are kept and unlinked from the company.
+                </Text>
+              )}
+              {paidNeedsName && (
+                <TextInput label={`Type “${removal.company.name}” to confirm removing ${removal.summary.paidInvoices} paid invoice(s)`}
+                  value={removal.confirmName} onChange={event => { const value = event.currentTarget.value; setRemoval(current => current && { ...current, confirmName: value }); }} disabled={removal.busy} />
+              )}
+              {removal.error && <Text c="red" role="alert">{removal.error}</Text>}
+              <Button color="red" loading={removal.busy} disabled={nothingTicked || removal.busy || (paidNeedsName && !nameMatches)} onClick={() => void submitRemoval()}>Remove selected</Button>
+              <Button variant="default" disabled={removal.busy} onClick={() => setRemoval(null)}>Cancel</Button>
+            </Stack>
+          );
+        })()}
       </Modal>
 
       <Modal opened={branchModal} onClose={() => { setBranchModal(false); setEditingBranch(null); }} title={editingBranch ? 'Edit branch' : 'Add branch'} radius="md">

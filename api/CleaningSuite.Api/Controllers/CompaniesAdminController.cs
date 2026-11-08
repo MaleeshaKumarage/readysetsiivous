@@ -102,16 +102,36 @@ public class CompaniesAdminController : ControllerBase
     { await _mediator.Send(new DeleteCompanyCommand(id), ct); await EvictCompanyCachesAsync(); return NoContent(); }
 
     [HttpPost("{id:guid}/clear-related")]
-    public async Task<IActionResult> ClearRelated(Guid id, [FromQuery] bool deleteSignedAgreements, [FromQuery] bool deleteCompany, CancellationToken ct)
+    public async Task<IActionResult> ClearRelated(Guid id, [FromQuery] bool deleteSignedAgreements, CancellationToken ct)
     {
         try
         {
-            var result = await _mediator.Send(new ClearCompanyRelatedCommand(id, deleteSignedAgreements, deleteCompany), ct);
+            var result = await _mediator.Send(new ClearCompanyRelatedCommand(id, deleteSignedAgreements), ct);
             return Ok(result);
         }
         finally
         {
             // Runs on failure too: a clear that stopped part way has already removed some shifts and places.
+            await EvictCompanyCachesAsync();
+            await _outputCache.EvictByTagAsync(ShiftsCacheTag, CancellationToken.None);
+        }
+    }
+
+    [HttpGet("{id:guid}/removal-summary")]
+    public async Task<IActionResult> RemovalSummary(Guid id, CancellationToken ct)
+        => Ok(await _mediator.Send(new RemoveCompanySummaryQuery(id), ct));
+
+    [HttpPost("{id:guid}/remove")]
+    public async Task<IActionResult> Remove(Guid id, [FromBody] RemoveCompanyRequest body, CancellationToken ct)
+    {
+        try
+        {
+            var result = await _mediator.Send(new RemoveCompanyCommand(id, body.Branches, body.Shifts, body.Invoices, body.ConfirmPaidInvoices), ct);
+            return Ok(result);
+        }
+        finally
+        {
+            // Runs on failure too: a removal that stopped part way has already removed some records.
             await EvictCompanyCachesAsync();
             await _outputCache.EvictByTagAsync(ShiftsCacheTag, CancellationToken.None);
         }
@@ -153,3 +173,5 @@ public class CompaniesAdminController : ControllerBase
         return NoContent();
     }
 }
+
+public record RemoveCompanyRequest(bool Branches, bool Shifts, bool Invoices, bool ConfirmPaidInvoices);
