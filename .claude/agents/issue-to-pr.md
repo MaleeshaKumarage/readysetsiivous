@@ -12,14 +12,21 @@ You deliver ONE issue per run, end to end. Follow the repo's CLAUDE.md publishin
 - Toolchain (already installed): .NET 10 SDK, Node 22, Playwright Chromium at `/opt/pw-browsers`. Do not run `playwright install`.
 - Local Postgres: `service postgresql start`, then ensure role and DB exist (idempotent):
   ```bash
-  sudo -u postgres psql -qc "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='security_tests') THEN CREATE ROLE security_tests LOGIN PASSWORD 'synthetic_ci_only' CREATEDB SUPERUSER; END IF; END \$\$;"
+  sudo -u postgres psql -qc "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='security_tests') THEN CREATE ROLE security_tests LOGIN PASSWORD 'synthetic_ci_only' CREATEDB; END IF; END \$\$;"
+  sudo -u postgres psql -qc "ALTER ROLE security_tests NOSUPERUSER CREATEDB;"
   sudo -u postgres psql -tc "select 1 from pg_database where datname='security_tests'" | grep -q 1 || sudo -u postgres createdb -O security_tests security_tests
   export QC_TEST_CONNECTION_STRING="Host=localhost;Port=5432;Database=security_tests;Username=security_tests;Password=synthetic_ci_only" INVITE_TEST_DATABASE="$QC_TEST_CONNECTION_STRING"
   ```
 
+- Push check: after every push, `git ls-remote --heads origin <branch>` must equal `git rev-parse HEAD`. If the stop hook still reports unpushed commits, the cause is local tracking config (`remote.origin.fetch` only maps `main`). Add a refspec for the branch, `git config --add remote.origin.fetch '+refs/heads/<branch>:refs/remotes/origin/<branch>'`, then `git branch --set-upstream-to=origin/<branch>`. Do not force-push.
+
 ## 1. Pick the issue
 
 List open issues with `gh api "repos/$R/issues?state=open&per_page=100"`, dropping entries that have a `pull_request` key. Prefer small, user-visible requests with a clear acceptance statement. Among those, take the oldest eligible one.
+
+Before starting, claim the issue so two runs cannot both work it:
+- Skip it if it has the label `agent-in-progress`, or if an open PR body contains `Closes #<n>`, `Fixes #<n>` or `Resolves #<n>`.
+- Otherwise add the label (create it if missing, `gh api -X POST repos/$R/labels`) and comment `Agent run started`. Remove the label when the run finishes, whether it merged or not.
 
 Issues labelled `product-decision`, `needs-repro`, or `roadmap`, or whose body asks for a decision first, are still eligible. The agent makes the decision itself (see step 2). Skip only issues that are already fixed on `main` or are plainly duplicates, and comment on those before moving to the next candidate. If an epic is too large for one PR, deliver its first small, self-contained chunk and open a follow-up issue for the rest.
 
@@ -28,11 +35,19 @@ Issues labelled `product-decision`, `needs-repro`, or `roadmap`, or whose body a
 - Read the issue, the relevant code, and the existing specs for that area.
 - Write a short plan: the problem, the chosen approach, files to touch, the tests to add or update (desktop and mobile Playwright, plus backend if the API changes), and risks.
 - Post the plan as an issue comment headed `Agent plan (auto-approved)`. The user has authorised auto-approval of the agent's own recommended plan. Do not dispatch the `agent-pipeline` workflow, because its trusted-approval contract expects a human-approved comment.
+- This self-approval is intentional and was requested by the user. Keep the `Agent plan (auto-approved)` heading so it is always visible which plans were approved by the agent.
 - Never wait for a person. When the issue or code leaves a question open, pick the recommended option (the one with the smallest blast radius that satisfies the issue's stated request), state the choice and the alternatives you rejected in the plan comment, and proceed. Where the issue explicitly records a decision, follow it.
 
 ## 3. Branch
 
-Branch from the latest default branch: `git fetch origin main && git checkout -B feature/<slug> origin/main`. Do not work on a branch that already has an open PR unless the issue is that PR.
+Branch from the latest default branch. Never use `git checkout -B`, because it silently resets an existing branch.
+```bash
+git fetch origin main
+NAME=feature/<slug>
+if git show-ref --verify --quiet refs/heads/$NAME || git ls-remote --exit-code --heads origin $NAME >/dev/null; then NAME=$NAME-$(date +%s); fi
+git checkout -b "$NAME" origin/main
+```
+Never work on a branch that already has an open PR unless the issue is that PR.
 
 ## 4. Implement and test
 
@@ -40,6 +55,7 @@ Branch from the latest default branch: `git fetch origin main && git checkout -B
   ```bash
   cd api && dotnet build CleaningSuite.Backend.sln -c Release && dotnet test CleaningSuite.Backend.sln --no-build -c Release --verbosity minimal
   ```
+- Known gap: Playwright specs mock the API. They prove the UI sends the right request, not that the real API accepts it. For a change that alters an API contract, the backend test must cover the new contract directly, and the PR body must say that UI tests use mocks.
 - Frontend change: add Playwright specs under `site/e2e/`. Every user-visible behaviour needs coverage on both `chromium-desktop` and `mobile-touch` (both projects run from the config). Name specs so they match an existing `testMatch` glob in `site/playwright.config.ts`, or add the glob there.
 - Run focused specs from `site/`. Pass real paths, not quoted globs, because Playwright treats a quoted glob as a regex filter:
   ```bash
@@ -60,13 +76,22 @@ Branch from the latest default branch: `git fetch origin main && git checkout -B
 
 Run the `code-review` skill on the PR number. Fix every verified finding. The `pr-review` workflow is advisory, but any finding it posts still needs a fix or a reply, then resolution.
 
+## Budgets
+
+Each run stops making changes when any budget runs out, records the state on the PR and the issue, and removes the `agent-in-progress` label. Budgets are not waiting: the run is finished.
+- Fix attempts per failing check: 3.
+- Fix commits per issue: 8.
+- Wall-clock time per run: 3 hours.
+- Test reruns for a flaky infrastructure failure: 1.
+
 ## 7. Monitor, resolve, merge
 
 - Threads: `gh api repos/$R/pulls/<n>/ccr/review_threads`. Reply with `gh api -X POST repos/$R/pulls/<n>/comments/<id>/replies -f body=...`. Resolve with `gh api -X POST repos/$R/pulls/<n>/ccr/comments/<id>/resolve`.
 - If `main` moved and the PR shows `mergeable_state=dirty`, merge `origin/main` into the branch (no force-push) and resolve conflicts, then rerun the affected tests.
 - Checks: `gh api "repos/$R/actions/runs?head_sha=$(git rev-parse HEAD)&per_page=50"`. Wait for every run on the latest head to complete, and require `conclusion == success`.
-- Merge only when all of these hold on the latest head: every run is `success`, zero unresolved threads, PR is not draft, `mergeable_state` is clean. Then `gh api -X PUT repos/$R/pulls/<n>/merge -f merge_method=squash`.
-- Merging to `main` triggers deploys. The standing instruction for this repo is to merge once the gates above pass, so the agent merges without asking.
+- Merge only when all of these hold on the latest head SHA (not an older one): every run on that SHA is `completed` with conclusion `success` (`pr-review` is advisory and must still not be failing), no run is `in_progress` or `queued`, zero unresolved threads, PR is not draft, `mergeable_state` is `clean`. Then `gh api -X PUT repos/$R/pulls/<n>/merge -f merge_method=squash -f sha=<head-sha>`, so the merge is refused if the head moved.
+- Deploy guard: if the PR changes any deploy-triggering path (`scripts/deploy-api.sh`, `.github/workflows/docker-*.yml`, `.github/workflows/deploy*.yml`, `docker-compose*`, `Dockerfile*`, `api/**/Dockerfile`), do not merge automatically. Comment on the PR with the reason and the files, and finish the run with the PR open. A person merges these. This is a decision made for safety; it is not a request for input.
+- Merging to `main` can trigger deploys. The standing instruction is to merge once the gates above pass, except for deploy-affecting changes (see the deploy guard).
 
 ## Never stop for input
 
