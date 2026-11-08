@@ -736,6 +736,13 @@ async function companyRequest<T>(path: string, method: 'POST' | 'PUT', body: unk
   return result;
 }
 
+export type CompanyRemovalSummary = {
+  branches: number; shifts: number; shiftsWithChecklists: number; invoices: number; paidInvoices: number;
+  agreements: number; checklistSubmissions: number; partnerRequests: number; partnerAccounts: number; templates: number; leads: number;
+};
+export type CompanyRemovalRequest = { branches: boolean; shifts: boolean; invoices: boolean; confirmPaidInvoices: boolean };
+export type CompanyRemovalResult = { shiftsRemoved: number; placesRemoved: number; invoicesRemoved: number; companyRemoved: boolean };
+
 export const adminCompanies = {
   list: (search = '', skip = 0, take = 100, status: 'all' | 'active' | 'inactive' = 'all') =>
     adminGet<{ items: Company[]; total: number }>(
@@ -792,6 +799,13 @@ export const adminCompanies = {
   deactivate: (id: string) => adminSend(`/api/v1/admin/companies/${id}/deactivate`, 'POST'),
   deleteInactive: (id: string) => adminDelete(`/api/v1/admin/companies/${id}`),
   clearRelated: (id: string, deleteSignedAgreements = false) => adminPostJson<{ shiftsDeleted: number; employeesUnassigned: number; branchesDeleted: number; invoicesVoided: number; partnerRecordsDeleted: number; agreementsDeleted: number }>(`/api/v1/admin/companies/${id}/clear-related?deleteSignedAgreements=${deleteSignedAgreements}`),
+  removalSummary: (id: string) => adminGet<CompanyRemovalSummary>(`/api/v1/admin/companies/${id}/removal-summary`, false),
+  // Throws with the server's reason on a refusal, so the dialog shows it and stays open.
+  remove: async (id: string, body: CompanyRemovalRequest) => {
+    const result = await adminSendJsonResult<CompanyRemovalResult>(`/api/v1/admin/companies/${id}/remove`, 'POST', body);
+    if (!result.ok) throw Object.assign(new Error(result.message), { status: result.status });
+    return result.value;
+  },
 };
 
 export const adminBranches = {

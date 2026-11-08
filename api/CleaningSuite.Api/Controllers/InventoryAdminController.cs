@@ -59,6 +59,8 @@ public class InventoryAdminController(InventoryService inventory) : ControllerBa
         var (bytes, contentType) = await inventory.ReadPhotoAsync(id, photoId, null, ct);
         Response.Headers["Cache-Control"] = "private, no-store";
         Response.Headers["X-Content-Type-Options"] = "nosniff";
+        // Served as a download, so a stored file is never rendered inline in the application origin.
+        Response.Headers["Content-Disposition"] = "attachment";
         return File(bytes, contentType);
     }
 

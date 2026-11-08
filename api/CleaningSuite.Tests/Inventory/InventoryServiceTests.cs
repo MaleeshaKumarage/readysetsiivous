@@ -338,6 +338,57 @@ public class InventoryServiceTests
     }
 
     [Fact]
+    public async Task Csv_export_neutralises_formulas_after_leading_whitespace()
+    {
+        var (service, repo, _) = Build();
+        repo.Usage.Add(new InventoryUsage
+        {
+            EmployeeName = "\t=cmd|' /C calc'!A0", LocationName = "Store", ItemName = "Keys", Unit = "pcs",
+            Quantity = 1, TakenUtc = Now, Photos = [new InventoryPhoto(Guid.NewGuid(), ".png")],
+        });
+
+        var csv = await service.ExportCsvAsync(null, null, null, default);
+
+        Assert.Contains("\"'\t=cmd", csv);
+    }
+
+    [Fact]
+    public async Task Csv_export_neutralises_a_leading_tab_even_without_a_formula()
+    {
+        var (service, repo, _) = Build();
+        repo.Usage.Add(new InventoryUsage
+        {
+            EmployeeName = "\tplain text", LocationName = "Store", ItemName = "Keys", Unit = "pcs",
+            Quantity = 1, TakenUtc = Now, Photos = [new InventoryPhoto(Guid.NewGuid(), ".png")],
+        });
+
+        var csv = await service.ExportCsvAsync(null, null, null, default);
+
+        Assert.Contains("\"'\tplain text\"", csv);
+    }
+
+    [Fact]
+    public async Task Export_refuses_to_truncate_and_asks_for_a_narrower_range()
+    {
+        var (service, repo, _) = Build();
+        for (var i = 0; i < InventoryService.MaxExportRows + 1; i++)
+            repo.Usage.Add(new InventoryUsage { TakenUtc = Now, Photos = [new InventoryPhoto(Guid.NewGuid(), ".png")] });
+
+        var error = await Assert.ThrowsAsync<ValidationException>(() => service.ExportCsvAsync(null, null, null, default));
+        Assert.Contains("Narrow the date range", error.Message);
+    }
+
+    [Fact]
+    public void Null_name_is_normalised_without_throwing()
+    {
+        var location = new InventoryLocation { Name = null! };
+        var item = new InventoryItem { Name = null! };
+
+        Assert.Equal("", location.NormalizedName);
+        Assert.Equal("", item.NormalizedName);
+    }
+
+    [Fact]
     public void Helsinki_day_starts_at_the_previous_utc_evening_in_winter()
     {
         var utc = InventoryService.HelsinkiDayStartUtc(new DateOnly(2026, 1, 15));

@@ -41,12 +41,18 @@ public sealed class InventoryRepository(ITenantSession tenant) : IInventoryRepos
     {
         Session.Store(document);
         try { await Session.SaveChangesAsync(ct); }
-        catch (Exception e) when (UniqueViolation(e)) { throw new InventoryDuplicateNameException(DuplicateNameMessage); }
+        catch (Exception e) when (NameConstraintViolation(e))
+        {
+            // Only the catalog name index maps to a name conflict. Any other unique violation keeps its own error.
+            // The rejected document is removed from the session so a retry in this request does not resubmit it.
+            Session.Eject(document);
+            throw new InventoryDuplicateNameException(DuplicateNameMessage, e);
+        }
     }
 
     public const string DuplicateNameMessage = "That name is already in the catalog, including inactive entries. Refresh and choose the existing entry.";
 
-    private static bool UniqueViolation(Exception e) =>
-        e is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: MartenConfig.InventoryLocationNormalizedNameIndexName or MartenConfig.InventoryItemNormalizedNameIndexName }
-        || e.InnerException is not null && UniqueViolation(e.InnerException);
+    private static bool NameConstraintViolation(Exception e) =>
+        e is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: MartenConfig.InventoryLocationNameIndexName or MartenConfig.InventoryItemNameIndexName }
+        || e.InnerException is not null && NameConstraintViolation(e.InnerException);
 }
