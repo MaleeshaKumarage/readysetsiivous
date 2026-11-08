@@ -314,8 +314,12 @@ public sealed class InventoryService(IInventoryRepository repository, IInventory
     {
         // Spreadsheets treat a cell as a formula when its first visible character is one of these. Leading tabs,
         // carriage returns and spaces are skipped first, so "\t=cmd" is neutralised like "=cmd".
+        // A leading tab or carriage return is itself a trigger, so it is always neutralised. Leading spaces are skipped
+        // before checking for a formula character, so "  =cmd" is neutralised too.
         var firstVisible = value.TrimStart(' ', '\t', '\r', '\n');
-        var safe = firstVisible.Length > 0 && "=+-@".Contains(firstVisible[0]) ? "'" + value : value;
+        var formulaLike = firstVisible.Length > 0 && "=+-@".Contains(firstVisible[0]);
+        var triggerFirst = value.Length > 0 && (value[0] == '\t' || value[0] == '\r');
+        var safe = formulaLike || triggerFirst ? "'" + value : value;
         return "\"" + safe.Replace("\"", "\"\"") + "\"";
     }
 

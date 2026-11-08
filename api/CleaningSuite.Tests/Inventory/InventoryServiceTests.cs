@@ -353,6 +353,21 @@ public class InventoryServiceTests
     }
 
     [Fact]
+    public async Task Csv_export_neutralises_a_leading_tab_even_without_a_formula()
+    {
+        var (service, repo, _) = Build();
+        repo.Usage.Add(new InventoryUsage
+        {
+            EmployeeName = "\tplain text", LocationName = "Store", ItemName = "Keys", Unit = "pcs",
+            Quantity = 1, TakenUtc = Now, Photos = [new InventoryPhoto(Guid.NewGuid(), ".png")],
+        });
+
+        var csv = await service.ExportCsvAsync(null, null, null, default);
+
+        Assert.Contains("\"'\tplain text\"", csv);
+    }
+
+    [Fact]
     public async Task Export_refuses_to_truncate_and_asks_for_a_narrower_range()
     {
         var (service, repo, _) = Build();

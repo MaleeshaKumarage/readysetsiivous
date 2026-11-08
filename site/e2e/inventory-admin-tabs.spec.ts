@@ -69,7 +69,7 @@ async function setup(page: Page, options: { pageOneRows?: unknown[] } = {}): Pro
     const body = route.request().postDataJSON();
     state.puts.push({ url: route.request().url(), body });
     const id = route.request().url().split('/').pop()!;
-    state.items = state.items.map(item => item.id === id ? { ...item, name: body.name, unit: body.unit ?? 'pcs', version: 'v2' } : item);
+    state.items = state.items.map(item => item.id === id ? { ...item, name: body.name, unit: body.unit ?? 'pcs', isActive: body.isActive, version: 'v2' } : item);
     return route.fulfill({ headers, json: state.items.find(item => item.id === id) });
   });
   return state;
@@ -183,6 +183,8 @@ test('a location can be edited, deactivated, and an edit can be cancelled', asyn
   expect(state.puts.at(-1)?.body).toEqual({ name: 'Main store East', isActive: false, version: 'v1' });
 
   await page.getByRole('button', { name: 'Edit Main store East' }).click();
+  // The deactivation was saved, so the reopened dialog shows the Active switch off.
+  await expect(page.getByRole('dialog').getByRole('switch', { name: 'Active' })).not.toBeChecked();
   await page.getByRole('dialog').getByLabel(/^Name/).fill('Something else');
   await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
