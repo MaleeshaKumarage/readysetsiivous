@@ -98,18 +98,19 @@ public class PartnerWorkflowTests
         using var fixture = await Fixture.Create(); var offer = await fixture.SubmitOffer();
         using (var session = fixture.Session())
         {
-            foreach (var blank in new string?[] { null, "", "   " })
+            foreach (var blank in new string?[] { null, "", "   ", new string('x', 1001) })
                 await Assert.ThrowsAsync<ValidationException>(() => fixture.Service(session).Cancel(fixture.Partner.Id, offer.Id, offer.Version, false, blank, default));
         }
         using (var reader = fixture.Store.QuerySession(fixture.Tenant))
             Assert.NotEqual("Cancelled", (await reader.LoadAsync<PartnerCleaningRequest>(offer.Id))!.Status);
         using (var session = fixture.Session())
         {
-            var cancelled = await fixture.Service(session).Cancel(fixture.Partner.Id, offer.Id, offer.Version, false, "  Owner travel  ", default);
+            var padded = "  " + new string('x', 1000) + "  "; // 1000 characters once trimmed: accepted.
+            var cancelled = await fixture.Service(session).Cancel(fixture.Partner.Id, offer.Id, offer.Version, false, padded, default);
             Assert.Equal("Cancelled", cancelled.Status);
         }
         using var check = fixture.Store.QuerySession(fixture.Tenant);
-        Assert.Equal("Owner travel", (await check.LoadAsync<PartnerCleaningRequest>(offer.Id))!.CancellationReason);
+        Assert.Equal(new string('x', 1000), (await check.LoadAsync<PartnerCleaningRequest>(offer.Id))!.CancellationReason);
     }
 
     [QualityCycle.QualityCycleDatabaseFact]

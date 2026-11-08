@@ -311,6 +311,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         Guid? companyId = null;
         if (staff) await RequireManager(actor, ct);
         else companyId = (await Partner(actor, ct)).Company.Id;
+        reason = reason?.Trim();
         ValidateText(reason, 1000, "Cancellation reason");
         var request = await Request(id, companyId, ct); CheckVersion(request, version);
         if (!staff) EnsurePartnerEditable(request);
