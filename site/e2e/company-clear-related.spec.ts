@@ -255,6 +255,92 @@ test('a partner refusal on delete also opens the removal dialog, which names the
   await expect(dialog.getByText(/1 partner account\(s\) are deactivated and their login is disabled/)).toBeVisible();
 });
 
+test('a successful removal of the whole company shows the summary lines and drops the company from the list', async ({ page }) => {
+  await setupAdminMocks(page);
+  let removed = false;
+  await page.route(/\/api\/v1\/admin\/companies(?:\?.*)?$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
+    return route.fulfill({ headers, json: { items: removed ? [] : [inactiveCompany], total: removed ? 0 : 1 } });
+  });
+  const bodies: unknown[] = [];
+  await routeRemoval(page, bodies, route => {
+    removed = true;
+    return route.fulfill({ headers, json: { ...REMOVED, companyRemoved: true } });
+  });
+  await routeRefusedDelete(page, BRANCH_REASON);
+  await page.goto('/admin/companies/');
+
+  const dialog = await openRemovalFromDelete(page);
+  await dialog.getByRole('checkbox', { name: /^Places/ }).check();
+  await dialog.getByRole('checkbox', { name: /^Invoices/ }).check();
+  await expect(dialog.getByText(/4 checklist submission\(s\) and 2 partner request\(s\)/)).toBeVisible();
+  await expect(dialog.getByText(/1 template\(s\) and 1 lead\(s\) are kept and unlinked/)).toBeVisible();
+  await dialog.getByLabel(/Type “Busy Oy” to confirm removing 1 paid invoice/).fill('Busy Oy');
+  await dialog.getByRole('button', { name: 'Remove selected' }).click();
+
+  await expect(dialog).toBeHidden();
+  expect(bodies).toEqual([{ branches: true, shifts: true, invoices: true, confirmPaidInvoices: true }]);
+  await expect(page.getByRole('button', { name: 'Open Busy Oy' })).toHaveCount(0);
+});
+
+test('while a removal is running, Cancel is disabled and Escape does not close the dialog', async ({ page }) => {
+  await setupAdminMocks(page);
+  await routeCompanies(page, inactiveCompany);
+  let release: () => void = () => {};
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const bodies: unknown[] = [];
+  await routeRemoval(page, bodies, async route => {
+    await gate;
+    return route.fulfill({ headers, json: REMOVED });
+  });
+  await routeRefusedDelete(page, BRANCH_REASON);
+  await page.goto('/admin/companies/');
+
+  const dialog = await openRemovalFromDelete(page);
+  await dialog.getByRole('checkbox', { name: /^Places/ }).check();
+  await dialog.getByRole('button', { name: 'Remove selected' }).click();
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeVisible();
+  release();
+  await expect(dialog).toBeHidden();
+  expect(bodies).toHaveLength(1);
+});
+
+test('when the removal summary cannot be loaded, the page says so and no dialog opens', async ({ page }) => {
+  await setupAdminMocks(page);
+  await routeCompanies(page, inactiveCompany);
+  await page.route(/\/api\/v1\/admin\/companies\/company-a\/removal-summary(?:\?.*)?$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
+    return route.fulfill({ headers, status: 500, json: { title: 'Server error', detail: 'Summary failed' } });
+  });
+  await routeRefusedDelete(page, BRANCH_REASON);
+  await page.goto('/admin/companies/');
+
+  page.once('dialog', dialog => void dialog.accept());
+  await page.getByRole('tab', { name: /inactive/i }).click();
+  await page.getByRole('button', { name: 'Delete', exact: true }).first().click();
+
+  await expect(page.getByText('Could not load what would be removed. Please retry.')).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Remove company' })).toBeHidden();
+});
+
+test('the name input for paid invoices appears only while invoices is ticked', async ({ page }) => {
+  await setupAdminMocks(page);
+  await routeCompanies(page, inactiveCompany);
+  await routeRemoval(page, []);
+  await routeRefusedDelete(page, BRANCH_REASON);
+  await page.goto('/admin/companies/');
+
+  const dialog = await openRemovalFromDelete(page);
+  const name = dialog.getByLabel(/Type “Busy Oy” to confirm removing 1 paid invoice/);
+  await expect(name).toBeHidden();
+  await dialog.getByRole('checkbox', { name: /^Invoices/ }).check();
+  await expect(name).toBeVisible();
+  await dialog.getByRole('checkbox', { name: /^Invoices/ }).uncheck();
+  await expect(name).toBeHidden();
+});
+
 test('the signed-agreements box is off by default and sends its choice with the clear', async ({ page }) => {
   await setupAdminMocks(page);
   const clearUrls: string[] = [];

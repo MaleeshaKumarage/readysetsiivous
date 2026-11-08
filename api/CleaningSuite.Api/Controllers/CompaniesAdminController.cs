@@ -4,6 +4,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OutputCaching;
+using Microsoft.Extensions.Logging;
 
 namespace CleaningSuite.Api.Controllers;
 
@@ -20,11 +21,28 @@ public class CompaniesAdminController : ControllerBase
 
     private readonly IMediator _mediator;
     private readonly IOutputCacheStore _outputCache;
+    private readonly ILogger<CompaniesAdminController> _logger;
 
-    public CompaniesAdminController(IMediator mediator, IOutputCacheStore outputCache)
+    public CompaniesAdminController(IMediator mediator, IOutputCacheStore outputCache, ILogger<CompaniesAdminController> logger)
     {
         _mediator = mediator;
         _outputCache = outputCache;
+        _logger = logger;
+    }
+
+    // Runs after a change has been committed. A cache that cannot be evicted must not turn the successful change into an error
+    // the client might retry; it is logged, and the cache entries expire on their own.
+    private async Task EvictAfterChangeAsync()
+    {
+        try
+        {
+            await EvictCompanyCachesAsync();
+            await _outputCache.EvictByTagAsync(ShiftsCacheTag, CancellationToken.None);
+        }
+        catch (Exception error)
+        {
+            _logger.LogWarning(error, "Cache eviction failed after a company change was committed.");
+        }
     }
 
     // Eviction uses CancellationToken.None: a client that disconnects after a commit must not leave the cache stale.
@@ -112,8 +130,7 @@ public class CompaniesAdminController : ControllerBase
         finally
         {
             // Runs on failure too: a clear that stopped part way has already removed some shifts and places.
-            await EvictCompanyCachesAsync();
-            await _outputCache.EvictByTagAsync(ShiftsCacheTag, CancellationToken.None);
+            await EvictAfterChangeAsync();
         }
     }
 
@@ -132,8 +149,7 @@ public class CompaniesAdminController : ControllerBase
         finally
         {
             // Runs on failure too: a removal that stopped part way has already removed some records.
-            await EvictCompanyCachesAsync();
-            await _outputCache.EvictByTagAsync(ShiftsCacheTag, CancellationToken.None);
+            await EvictAfterChangeAsync();
         }
     }
 

@@ -273,7 +273,10 @@ export default function CompaniesAdminPage() {
     if (!removal) return;
     const { company, summary, branches, shifts, invoices, confirmName } = removal;
     const confirmPaidInvoices = invoices && summary.paidInvoices > 0;
-    if (confirmPaidInvoices && confirmName.trim() !== company.name.trim()) return;
+    if (confirmPaidInvoices && confirmName.trim() !== company.name.trim()) {
+      setRemoval({ ...removal, error: `Type “${company.name}” exactly to confirm removing the paid invoices.` });
+      return;
+    }
     setRemoval({ ...removal, busy: true, error: '' });
     try {
       await adminCompanies.remove(company.id, { branches, shifts, invoices, confirmPaidInvoices: !!confirmPaidInvoices });

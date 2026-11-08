@@ -208,4 +208,17 @@ public class CompanyRemovalDatabaseTests
         Assert.Equal(new CompanyRemovalSummaryDto(Branches: 1, Shifts: 1, ShiftsWithChecklists: 1, Invoices: 2, PaidInvoices: 1,
             Agreements: 1, ChecklistSubmissions: 1, PartnerRequests: 1, PartnerAccounts: 1, Templates: 1, Leads: 1), dto);
     }
+
+    [QualityCycleDatabaseFact]
+    public async Task The_summary_of_a_missing_company_is_not_found_rather_than_empty()
+    {
+        var (store, context, provider) = await Start(); using var _ = provider as IDisposable;
+        var seeded = await Seed(store, context);
+        var context2 = new Mock<ITenantContext>(); context2.SetupGet(x => x.TenantId).Returns(seeded.Tenant);
+        using var session = new TenantSessionFactory(store, context2.Object);
+        var summary = new CompanyRemoval.SummaryHandler(new CompanyRepository(session), new BranchRepository(session), new ShiftRepository(session),
+            new InvoiceRepository(session), new AgreementRepository(store), new QualityCycleRepository(session, store), context2.Object, new PartnerStore(session));
+
+        await Assert.ThrowsAsync<NotFoundException>(() => summary.Handle(new(Guid.NewGuid()), default));
+    }
 }
