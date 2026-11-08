@@ -282,6 +282,12 @@ export default function MyShiftsPage() {
                       </span>
                     </div>
 
+                    {o.notes && !o.isDeleted && (
+                      <section aria-label="Visit instructions" className="rounded-lg bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-gray-800 dark:text-gray-100 space-y-1">
+                        <h3 className="font-semibold">Instructions</h3>
+                        <p className="whitespace-pre-wrap">{o.notes}</p>
+                      </section>
+                    )}
                     {o.isDeleted && <p className="text-sm text-gray-500">Deleted shift · historical record</p>}
                     {status === 'not-started' && !o.isDeleted && (
                       <Button size="sm" onClick={() => handleStart(o)} disabled={busy || !canStart} className="gap-1.5">

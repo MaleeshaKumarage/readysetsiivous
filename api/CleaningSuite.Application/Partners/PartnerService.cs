@@ -553,6 +553,12 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         if (notes?.Length > 4000) throw new ValidationException("Use at most 4000 characters for cleaning instructions.");
         request.FromDate = from; request.ToDate = to; request.ExactStartLocalTime = string.IsNullOrWhiteSpace(exact) ? null : exact;
         request.Notes = notes?.Trim();
+        // The cleaner sees the shift's notes, so an edited request keeps its linked shift's instructions current.
+        if (request.LinkedShiftId is { } shiftId && await Db.LoadAsync<Shift>(shiftId, ct) is { } shift)
+        {
+            shift.Notes = request.Notes;
+            Db.Store(shift);
+        }
     }
 
     public static void ValidateWindow(DateOnly from, DateOnly to, string? exact, int duration, TimeZoneInfo zone)

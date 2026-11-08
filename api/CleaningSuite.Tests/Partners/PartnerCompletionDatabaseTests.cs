@@ -6,6 +6,7 @@ using CleaningSuite.Domain.Companies;
 using CleaningSuite.Domain.Employees;
 using CleaningSuite.Domain.Partners;
 using CleaningSuite.Domain.QualityCycle;
+using CleaningSuite.Domain.Shifts;
 using CleaningSuite.Infrastructure.Persistence;
 using CleaningSuite.Tests.QualityCycle;
 using Marten;
@@ -66,6 +67,23 @@ public class PartnerCompletionDatabaseTests
     }
 
     [QualityCycleDatabaseFact]
+    public async Task Editing_request_instructions_updates_the_shift_the_cleaner_sees()
+    {
+        var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
+        using var provider = StoreProvider(connection, out var store);
+        var tenantId = "partner-instructions-" + Guid.NewGuid().ToString("N");
+        var seeded = await SeedAsync(store, tenantId, finishedForm: false, started: false);
+        var (service, session) = ServiceFor(store, connection, tenantId);
+        using var _ = session;
+
+        await service.StaffEdit(seeded.Staff.Id, seeded.Request.Id,
+            new EditPartnerRequest(seeded.Request.Revision, new DateOnly(2026, 12, 1), new DateOnly(2026, 12, 1), null, "Use the back door"), default);
+
+        using var read = store.QuerySession(tenantId);
+        Assert.Equal("Use the back door", (await read.LoadAsync<Shift>(seeded.Request.LinkedShiftId!.Value))!.Notes);
+    }
+
+    [QualityCycleDatabaseFact]
     public async Task A_visit_that_is_not_finished_has_no_completion_summary()
     {
         var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
@@ -113,7 +131,7 @@ public class PartnerCompletionDatabaseTests
         return (service, session);
     }
 
-    private static async Task<Seeded> SeedAsync(IDocumentStore store, string tenantId, bool finishedForm = true)
+    private static async Task<Seeded> SeedAsync(IDocumentStore store, string tenantId, bool finishedForm = true, bool started = true)
     {
         var company = Company.Create("1234567-8", "Synthetic owner"); company.IsPartnerEnabled = true;
         var otherCompany = Company.Create("7654321-0", "Other synthetic owner"); otherCompany.IsPartnerEnabled = true;
@@ -132,7 +150,7 @@ public class PartnerCompletionDatabaseTests
             FirstAcceptedAtUtc = Start.AddDays(-1),
         };
         var form = QualityCycleForm.Create(shiftId, "Cleaning", cleaner.Id, "Test Cleaner", Guid.NewGuid(), "Apartment checklist", Start, ["Vacuum floors", "Restock towels"]);
-        form.Start(Start.AddMinutes(5));
+        if (started) form.Start(Start.AddMinutes(5));
         if (finishedForm)
         {
             var items = form.Items.Select((item, index) => new QualityCycleFormItem { ItemText = item.ItemText, IsChecked = index == 0 }).ToList();
@@ -141,8 +159,12 @@ public class PartnerCompletionDatabaseTests
         var message = new PartnerChangeRequest { CompanyId = company.Id, BranchId = branch.Id, RequestId = request.Id, RequestedByEmployeeId = owner.Id, Kind = "CleaningRequest", Message = "Use the back door" };
         var unrelated = new PartnerChangeRequest { CompanyId = company.Id, BranchId = branch.Id, RequestId = Guid.NewGuid(), RequestedByEmployeeId = owner.Id, Kind = "CleaningRequest", Message = "About another visit" };
 
+        var shift = Shift.Create(company.Id, branch.Id, "Cleaning — Apartment", new ShiftSchedule { Type = ShiftScheduleType.OnCallFlexible },
+            "Old instructions", new DateTime(2026, 12, 1), new DateTime(2026, 12, 1));
+        shift.Id = shiftId;
+
         using var seed = store.LightweightSession(tenantId);
-        seed.Store(company); seed.Store(otherCompany); seed.Store(branch);
+        seed.Store(shift); seed.Store(company); seed.Store(otherCompany); seed.Store(branch);
         seed.Store(owner); seed.Store(otherOwner); seed.Store(staff); seed.Store(cleaner);
         seed.Store(request); seed.Store(form); seed.Store(message); seed.Store(unrelated);
         await seed.SaveChangesAsync();

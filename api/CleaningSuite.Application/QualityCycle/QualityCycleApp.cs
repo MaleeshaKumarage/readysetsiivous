@@ -84,7 +84,8 @@ public record GetQualityCycleSummaryPdfQuery(Guid ShiftId, int Year, int Month) 
 // Employee clock/flow commands & queries
 public record StartQualityCycleFormCommand(Guid ShiftId, Guid EmployeeId, DateTime OccurrenceStartUtc, DateTime OccurrenceEndUtc) : IRequest<QualityCycleFormDto>;
 public record EndQualityCycleFormCommand(Guid FormId, Guid EmployeeId, List<QualityCycleFormItemDto> Items, List<string>? PhotoUrls = null, string? CleanerNotes = null, List<QualityCyclePhoto>? Photos = null) : IRequest<QualityCycleFormDto>;
-public record MyShiftOccurrenceDto(Guid ShiftId, string ShiftName, DateTime StartUtc, DateTime EndUtc, QualityCycleFormDto? Form, string TimeZoneId = "Europe/Helsinki", bool IsDeleted = false);
+// Notes carry the visit instructions. The cleaner sees them before starting.
+public record MyShiftOccurrenceDto(Guid ShiftId, string ShiftName, DateTime StartUtc, DateTime EndUtc, QualityCycleFormDto? Form, string TimeZoneId = "Europe/Helsinki", bool IsDeleted = false, string? Notes = null);
 public record GetMyShiftsQuery(Guid EmployeeId, DateTime FromUtc, DateTime ToUtc) : IRequest<IReadOnlyList<MyShiftOccurrenceDto>>;
 
 // Handlers
@@ -493,7 +494,7 @@ public class QualityCycleHandlers
                     var form = await _repository.GetFormByShiftOccurrenceAsync(shift.Id, request.EmployeeId, occurrence.StartUtc, ct);
                     if (form is not null && (form.EmployeeId != request.EmployeeId || form.ShiftId != shift.Id || form.ShiftOccurrenceUtc != occurrence.StartUtc || form.ShiftDeletedUtc.HasValue))
                         form = null;
-                    result.Add(new MyShiftOccurrenceDto(shift.Id, shift.Name, occurrence.StartUtc, occurrence.EndUtc, form == null ? null : MapForm(form), zoneId));
+                    result.Add(new MyShiftOccurrenceDto(shift.Id, shift.Name, occurrence.StartUtc, occurrence.EndUtc, form == null ? null : MapForm(form), zoneId, Notes: shift.Notes));
                 }
             }
 
@@ -513,7 +514,7 @@ public class QualityCycleHandlers
                 if (liveShift is not { IsActive: true } || form.ShiftDeletedUtc.HasValue) continue;
                 var index = result.FindIndex(x => x.ShiftId == form.ShiftId && x.StartUtc == form.ShiftOccurrenceUtc);
                 var occurrence = new MyShiftOccurrenceDto(form.ShiftId, form.ShiftName, form.ShiftOccurrenceUtc,
-                    form.ShiftOccurrenceEndUtc, MapForm(form), zoneId, form.ShiftDeletedUtc.HasValue);
+                    form.ShiftOccurrenceEndUtc, MapForm(form), zoneId, form.ShiftDeletedUtc.HasValue, liveShift?.Notes);
                 if (index >= 0) result[index] = occurrence;
                 else result.Add(occurrence);
             }

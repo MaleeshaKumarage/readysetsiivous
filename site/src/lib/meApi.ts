@@ -44,6 +44,8 @@ export interface MyShiftOccurrence {
   timeZoneId: string;
   form: QualityCycleForm | null;
   isDeleted?: boolean;
+  // Visit instructions from the request or shift. Shown before the cleaner starts.
+  notes?: string | null;
 }
 
 export type ShiftCalendarView = 'past' | 'today' | 'future';
