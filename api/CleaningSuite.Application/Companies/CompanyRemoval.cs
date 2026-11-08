@@ -47,7 +47,7 @@ public static class CompanyRemoval
             var branchIds = companyBranches.Select(b => b.Id).ToArray();
             var companyShifts = await shifts.ListAsync(company.Id, null, ct);
             var shiftIds = companyShifts.Select(s => s.Id).ToArray();
-            var companyInvoices = (await invoices.ListAsync(null, null, ct)).Where(i => i.CompanyId == company.Id).ToArray();
+            var companyInvoices = await partnerStore.Session.Query<Invoice>().Where(x => x.CompanyId == company.Id).ToListAsync(ct);
             var companyAgreements = (await agreements.ListAsync(tenant.TenantId, ct)).Where(a => a.CompanyId == company.Id).ToArray();
             var checklists = await forms.ListFormsAsync(null, null, null, ct, null, null, company.Id, null);
             var partnerRequests = await session.Query<PartnerCleaningRequest>().Where(x => x.CompanyId == company.Id || branchIds.Contains(x.BranchId)).ToListAsync(ct);
@@ -59,7 +59,7 @@ public static class CompanyRemoval
                 companyBranches.Count,
                 companyShifts.Count,
                 shiftIds.Length == 0 ? 0 : (await forms.ListShiftIdsWithSubmittedFormAsync(shiftIds, ct)).Count,
-                companyInvoices.Length,
+                companyInvoices.Count,
                 companyInvoices.Count(i => i.Status == Invoice.StatusPaid),
                 companyAgreements.Length,
                 checklists.Count,
@@ -98,7 +98,7 @@ public static class CompanyRemoval
                 throw new InactiveRecordDeleteConflictException("Places can only be removed together with their shifts. Tick shifts as well.");
             var companyBranches = await branches.ListByCompanyAsync(company.Id, true, ct);
             var branchIds = companyBranches.Select(b => b.Id).ToArray();
-            var companyInvoices = (await invoices.ListAsync(null, null, ct)).Where(i => i.CompanyId == company.Id).ToArray();
+            var companyInvoices = await partnerStore.Session.Query<Invoice>().Where(x => x.CompanyId == company.Id).ToListAsync(ct);
             var paidCount = companyInvoices.Count(i => i.Status == Invoice.StatusPaid);
             if (request.Invoices && paidCount > 0 && !request.ConfirmPaidInvoices)
                 throw new InactiveRecordDeleteConflictException($"This company has {paidCount} paid invoice(s). Confirm their removal to continue.");
@@ -148,7 +148,7 @@ public static class CompanyRemoval
             if (request.Invoices)
             {
                 foreach (var invoice in companyInvoices) session.Delete<Invoice>(invoice.Id);
-                invoicesRemoved = companyInvoices.Length;
+                invoicesRemoved = companyInvoices.Count;
             }
 
             if (full)
@@ -195,7 +195,8 @@ public static class CompanyRemoval
                 session.Delete<Company>(company.Id);
             }
 
-            await session.SaveChangesAsync(ct);
+            // The one commit runs to completion even if the client has gone: a half-finished commit is the failure this avoids.
+            await session.SaveChangesAsync(CancellationToken.None);
             return (new RemoveCompanyResultDto(shiftsRemoved, placesRemoved, invoicesRemoved, agreementsRemoved, checklistsRemoved,
                 partnerRemoved, accountsDeactivated, templatesUnlinked, leadsUnlinked, full), loginsToDisable);
         }
