@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { Building2, CalendarClock, MessageSquare, RefreshCw, Plus, ArrowRight, UserRound, LogOut, Settings } from 'lucide-react';
 import { Badge, Button, buttonClasses, Card, Dialog, Field, Input, Textarea, fontFamily, palette } from '@/ds';
 import { authTenant, initAuth, isAuthenticated, isPartner, isAdmin, isManager, login, logout } from '@/lib/auth';
-import { partnerApi, type CleaningRequest, type PartnerChangeAction, type PartnerCompletion, type PartnerIdentity, type PartnerShift, type PartnerChange } from '@/lib/partnerApi';
+import { partnerApi, type CleaningRequest, type PartnerAccount, type PartnerChangeAction, type PartnerCompletion, type PartnerIdentity, type PartnerShift, type PartnerChange } from '@/lib/partnerApi';
 import { partnerCopy, partnerLanguageKey, partnerMessage, partnerStatus, type PartnerLanguage } from '@/lib/partnerLocale';
 import type { Branch } from '@/lib/adminApi';
 import { QuoteRequestedBadge } from '@/components/QuoteRequests';
@@ -41,6 +41,8 @@ export default function PartnerPage() {
   const [cityFilter, setCityFilter] = useState('');
   // One-time visit setup: the photo sections every requested visit needs. Loaded with the portal data.
   const [photoLabels, setPhotoLabels] = useState<string[]>([]), [newPhotoLabel, setNewPhotoLabel] = useState('');
+  // Account details saved with the same setup: billing facts, a contact person and access instructions.
+  const [account, setAccount] = useState<PartnerAccount>({});
   const [from, setFrom] = useState(''), [to, setTo] = useState(''), [exact, setExact] = useState(false), [time, setTime] = useState(''), [notes, setNotes] = useState('');
   const [change, setChange] = useState<{ kind: 'branch' | 'request'; id: string } | null>(null), [message, setMessage] = useState('');
   // Structured request changes: what the owner needs, and the proposed dates, time or instructions.
@@ -80,7 +82,7 @@ export default function PartnerPage() {
       if (attempt !== generation.current) return;
       setIdentity(person); setBranches(properties); setRequests(work); setShifts(scheduled); setChanges(changeHistory); setAccess('allowed');
       // Photo sections only shape new requests, so they load alongside the portal and never hold it up.
-      partnerApi.settings().then(photoSettings => { if (attempt === generation.current) setPhotoLabels(photoSettings.photoLabels ?? []); }).catch(() => undefined);
+      partnerApi.settings().then(photoSettings => { if (attempt === generation.current) { setPhotoLabels(photoSettings.photoLabels ?? []); setAccount(photoSettings.account ?? {}); } }).catch(() => undefined);
     } catch (e) { if (attempt === generation.current) { setError(e instanceof Error ? e.message : base.loadFailure); setAccess('error'); } }
   }, []);
   useEffect(() => { void refresh(); return () => { generation.current++; }; }, [refresh]);
@@ -234,13 +236,19 @@ export default function PartnerPage() {
           {tab === 'Settings' && <section className="partner-section">
             <div className="partner-section-heading"><div><h2>{t.visitPhotoSettings}</h2><p>{t.visitPhotoSettingsHint}</p></div></div>
             <Card className="partner-surface partner-settings">
-              <form className="partner-form-grid" onSubmit={event => { event.preventDefault(); void act(async () => { const saved = await partnerApi.saveSettings(photoLabels); setPhotoLabels(saved.photoLabels); }, base.photoSectionsSaved); }}>
+              <form className="partner-form-grid" onSubmit={event => { event.preventDefault(); void act(async () => { const saved = await partnerApi.saveSettings({ photoLabels, account }); setPhotoLabels(saved.photoLabels); setAccount(saved.account); }, base.photoSectionsSaved); }}>
                 <div className="partner-form-wide">
                   {!photoLabels.length && <p className="partner-muted">{t.noPhotoSections}</p>}
                   <ul className="partner-photo-labels">{photoLabels.map((label, index) => <li key={label}><span>{label}</span><Button variant="ghost" size="sm" className="partner-quiet" disabled={busy} aria-label={`Remove ${label}`} onClick={() => setPhotoLabels(current => current.filter((_, position) => position !== index))}>{t.removePhotoSection}</Button></li>)}</ul>
                 </div>
                 <div className="partner-form-wide partner-photo-suggestions">{['Before', 'After', 'Keys', 'Entrance'].filter(suggestion => !photoLabels.includes(suggestion)).map(suggestion => <Button key={suggestion} type="button" variant="outline" className="partner-secondary" disabled={busy || photoLabels.length >= 10} aria-label={`Add ${suggestion}`} onClick={() => setPhotoLabels(current => [...current, suggestion])}>{suggestion}</Button>)}</div>
                 <Field label={t.photoSectionName} className="partner-form-wide"><Input className="partner-field" value={newPhotoLabel} maxLength={60} onChange={event => setNewPhotoLabel(event.target.value)} /></Field>
+                <div className="partner-form-wide"><h3>{t.accountDetails}</h3><p className="partner-muted">{t.accountDetailsHint}</p></div>
+                {([
+                  ['billingName', t.billingName], ['invoiceAddress', t.invoiceAddress], ['businessId', t.businessId], ['invoiceReference', t.invoiceReference],
+                  ['contactName', t.contactName], ['contactPhone', t.contactPhone], ['contactEmail', t.contactEmail],
+                ] as const).map(([key, label]) => <Field key={key} label={label}><Input className="partner-field" type={key === 'contactEmail' ? 'email' : 'text'} maxLength={300} value={account[key] ?? ''} onChange={event => setAccount(current => ({ ...current, [key]: event.target.value }))} /></Field>)}
+                <Field label={t.accessInstructions} className="partner-form-wide"><Textarea className="partner-field" maxLength={2000} value={account.accessInstructions ?? ''} onChange={event => setAccount(current => ({ ...current, accessInstructions: event.target.value }))} /></Field>
                 <div className="partner-form-actions">
                   <Button type="button" variant="outline" className="partner-secondary" disabled={busy || !newPhotoLabel.trim() || photoLabels.length >= 10 || photoLabels.some(label => label.toLowerCase() === newPhotoLabel.trim().toLowerCase())} onClick={() => { setPhotoLabels(current => [...current, newPhotoLabel.trim()]); setNewPhotoLabel(''); }}>{t.addPhotoSection}</Button>
                   <Button type="submit" disabled={busy}>{t.savePhotoSections}</Button>

@@ -5,7 +5,7 @@ const shiftId = '11111111-1111-4111-8111-111111111111';
 const formId = '22222222-2222-4222-8222-222222222222';
 const evidencePhoto = { name: 'corridor.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64') };
 
-async function setupWork(page: Page, options: { empty?: boolean; failStart?: boolean; failEnd?: boolean; lostStart?: boolean; lostEnd?: boolean; loadFailure?: boolean; future?: boolean; startAt?: string; role?: 'employee' | 'admin' | 'manager'; instructions?: string; photoSections?: string[] } = {}) {
+async function setupWork(page: Page, options: { empty?: boolean; failStart?: boolean; failEnd?: boolean; lostStart?: boolean; lostEnd?: boolean; loadFailure?: boolean; future?: boolean; startAt?: string; role?: 'employee' | 'admin' | 'manager'; instructions?: string; photoSections?: string[]; access?: string; contactName?: string; contactPhone?: string } = {}) {
   await setupAdminMocks(page);
   const role = options.role ?? 'employee';
   await page.addInitScript(role => { (window as any).__MOCK_ROLES__ = [role]; }, role);
@@ -18,7 +18,8 @@ async function setupWork(page: Page, options: { empty?: boolean; failStart?: boo
   const start = new Date(now - 3600000).toISOString();
   const scheduledStart = options.startAt ? Date.parse(options.startAt) : options.future ? now + 86400000 : Date.parse(start);
   const occurrence: any = { shiftId, shiftName: 'AAA1 weekday shift', startUtc: new Date(scheduledStart).toISOString(),
-    endUtc: new Date(scheduledStart + (options.startAt ? 8 * 3600000 : options.future ? 3600000 : 2 * 3600000)).toISOString(), timeZoneId: 'Europe/Helsinki', form: null, notes: options.instructions ?? null, requiredPhotoLabels: options.photoSections ?? null };
+    endUtc: new Date(scheduledStart + (options.startAt ? 8 * 3600000 : options.future ? 3600000 : 2 * 3600000)).toISOString(), timeZoneId: 'Europe/Helsinki', form: null, notes: options.instructions ?? null, requiredPhotoLabels: options.photoSections ?? null,
+    accessInstructions: options.access ?? null, contactName: options.contactName ?? null, contactPhone: options.contactPhone ?? null };
   let startCalls = 0; let endCalls = 0; let loadCalls = 0; let submitted: any = null;
   await page.route(/\/api\/v1\/me\/shifts(?:\/calendar)?(?:\?.*)?$/, route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
@@ -129,6 +130,14 @@ test('instructions from the request are shown to the cleaner before the visit st
   await expect(instructions).toBeVisible();
   await expect(instructions).toContainText('Use the back door.');
   await expect(instructions).toContainText('Keys are in the lockbox.');
+});
+
+test('access instructions and the contact are shown to the cleaner before the visit starts', async ({ page }) => {
+  await setupWork(page, { future: true, access: 'Key safe, code 4321', contactName: 'Olivia Oy', contactPhone: '+358 40 000 0000' });
+  await page.goto('/me/shifts/');
+  const details = page.getByRole('region', { name: 'Visit instructions' });
+  await expect(details).toContainText('Access: Key safe, code 4321');
+  await expect(details).toContainText('Contact: Olivia Oy · +358 40 000 0000');
 });
 
 test('a partner visit cannot end until each required photo section has a photo', async ({ page }) => {

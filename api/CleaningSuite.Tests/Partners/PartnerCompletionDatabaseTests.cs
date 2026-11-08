@@ -130,6 +130,29 @@ public class PartnerCompletionDatabaseTests
     }
 
     [QualityCycleDatabaseFact]
+    public async Task Account_details_are_saved_trimmed_and_validated()
+    {
+        var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
+        using var provider = StoreProvider(connection, out var store);
+        var tenantId = "partner-account-" + Guid.NewGuid().ToString("N");
+        var seeded = await SeedAsync(store, tenantId, finishedForm: false, started: false);
+        var (service, session) = ServiceFor(store, connection, tenantId);
+        using var _ = session;
+
+        var saved = await service.UpdateSettings(seeded.Owner.Id, new PartnerSettingsInput([],
+            new PartnerAccountDetails { BillingName = "  Olivia Oy  ", ContactEmail = " owner@example.test ", ContactPhone = "   ", AccessInstructions = "Key safe 1234" }), default);
+
+        Assert.Equal("Olivia Oy", saved.Account.BillingName);
+        Assert.Equal("owner@example.test", saved.Account.ContactEmail);
+        Assert.Null(saved.Account.ContactPhone);
+        Assert.Equal("Key safe 1234", (await service.Settings(seeded.Owner.Id, default)).Account.AccessInstructions);
+        await Assert.ThrowsAsync<ValidationException>(() => service.UpdateSettings(seeded.Owner.Id, new PartnerSettingsInput([],
+            new PartnerAccountDetails { ContactEmail = "not-an-email" }), default));
+        await Assert.ThrowsAsync<ValidationException>(() => service.UpdateSettings(seeded.Owner.Id, new PartnerSettingsInput([],
+            new PartnerAccountDetails { AccessInstructions = new string('x', PartnerPortalSettings.MaxAccessInstructionsLength + 1) }), default));
+    }
+
+    [QualityCycleDatabaseFact]
     public async Task Partner_reschedule_request_needs_a_valid_window()
     {
         var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;

@@ -12,6 +12,10 @@ public class Shift : BaseDocument
     public string? Notes { get; set; }
     // Photo sections the cleaner must attach before ending a partner visit. Copied from the partner's settings at acceptance.
     public List<string> RequiredPhotoLabels { get; set; } = new();
+    // Partner access and contact details, copied from the partner's settings at acceptance.
+    public string? PartnerAccessInstructions { get; set; }
+    public string? PartnerContactName { get; set; }
+    public string? PartnerContactPhone { get; set; }
     public Guid? QualityCycleTemplateId { get; set; }
     public bool IsActive { get; set; }
     /// <summary>Stored list tab (active, completed or inactive). Kept current by ShiftTabs.StoreAsync so the list can page in the database.</summary>

@@ -449,7 +449,11 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         shift.Id = shiftId; shift.PartnerRequestId = request.Id; shift.IsActive = true;
         shift.ValidFrom = localFrom; shift.ValidUntil = localUntil; shift.Notes = request.Notes;
         // The visit carries the photo sections in force when the partner's request is accepted.
-        shift.RequiredPhotoLabels = (await Db.LoadAsync<PartnerPortalSettings>(request.CompanyId, ct))?.PhotoLabels.ToList() ?? [];
+        var portalSettings = await Db.LoadAsync<PartnerPortalSettings>(request.CompanyId, ct);
+        shift.RequiredPhotoLabels = portalSettings?.PhotoLabels.ToList() ?? [];
+        shift.PartnerAccessInstructions = portalSettings?.Account.AccessInstructions;
+        shift.PartnerContactName = portalSettings?.Account.ContactName;
+        shift.PartnerContactPhone = portalSettings?.Account.ContactPhone;
         var occurrenceId = PartnerCleaningRequest.StableId($"partner-occurrence:{request.Id}");
         var occurrence = await Db.LoadAsync<ShiftOccurrenceException>(occurrenceId, ct)
             ?? ShiftOccurrenceException.Create(shiftId, null, start, end, ShiftOccurrenceExceptionStatus.Extra, "Accepted partner cleaning", actor);
@@ -509,7 +513,33 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
     {
         var (_, company) = await Partner(actor, ct);
         var settings = await Db.LoadAsync<PartnerPortalSettings>(company.Id, ct);
-        return new(settings?.PhotoLabels.ToArray() ?? []);
+        return new(settings?.PhotoLabels.ToArray() ?? [], settings?.Account ?? new());
+    }
+
+    // Trims blanks to null and enforces field limits. Billing, contact and access details share these rules.
+    private static PartnerAccountDetails CleanAccount(PartnerAccountDetails? account)
+    {
+        account ??= new();
+        static string? Clean(string? value, int max, string field)
+        {
+            var trimmed = value?.Trim();
+            if (trimmed?.Length > max) throw new ValidationException($"Use at most {max} characters for {field}.");
+            return string.IsNullOrEmpty(trimmed) ? null : trimmed;
+        }
+        var email = Clean(account.ContactEmail, PartnerPortalSettings.MaxAccountFieldLength, "the contact email");
+        if (email is not null && !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email))
+            throw new ValidationException("Enter a valid contact email.");
+        return new PartnerAccountDetails
+        {
+            BillingName = Clean(account.BillingName, PartnerPortalSettings.MaxAccountFieldLength, "the billing name"),
+            InvoiceAddress = Clean(account.InvoiceAddress, PartnerPortalSettings.MaxAccountFieldLength, "the invoice address"),
+            BusinessId = Clean(account.BusinessId, PartnerPortalSettings.MaxAccountFieldLength, "the business ID"),
+            InvoiceReference = Clean(account.InvoiceReference, PartnerPortalSettings.MaxAccountFieldLength, "the invoice reference"),
+            ContactName = Clean(account.ContactName, PartnerPortalSettings.MaxAccountFieldLength, "the contact name"),
+            ContactPhone = Clean(account.ContactPhone, PartnerPortalSettings.MaxAccountFieldLength, "the contact phone"),
+            ContactEmail = email,
+            AccessInstructions = Clean(account.AccessInstructions, PartnerPortalSettings.MaxAccessInstructionsLength, "the access instructions"),
+        };
     }
 
     /// <summary>Replace the company's photo sections. Visits accepted from now on require them.</summary>
@@ -522,11 +552,12 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         if (labels.Any(label => label.Length == 0)) throw new ValidationException("Each photo section needs a name.");
         if (labels.Any(label => label.Length > PartnerPortalSettings.MaxPhotoLabelLength)) throw new ValidationException($"Use at most {PartnerPortalSettings.MaxPhotoLabelLength} characters for a photo section name.");
         if (labels.Select(label => label.ToLowerInvariant()).Distinct().Count() != labels.Count) throw new ValidationException("Each photo section can only be listed once.");
+        var account = CleanAccount(body.Account);
         var settings = await Db.LoadAsync<PartnerPortalSettings>(company.Id, ct) ?? new PartnerPortalSettings { Id = company.Id };
-        settings.PhotoLabels = labels; settings.UpdatedUtc = DateTime.UtcNow;
+        settings.PhotoLabels = labels; settings.Account = account; settings.UpdatedUtc = DateTime.UtcNow;
         Db.Store(settings);
         await Db.SaveChangesAsync(ct);
-        return new(labels);
+        return new(labels, account);
     }
 
     private static readonly string[] RequestChangeActions = ["Message", "Reschedule", "Instructions", "Cancel"];

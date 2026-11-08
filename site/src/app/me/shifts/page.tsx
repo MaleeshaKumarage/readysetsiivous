@@ -294,10 +294,12 @@ export default function MyShiftsPage() {
                       </span>
                     </div>
 
-                    {o.notes && !o.isDeleted && (
+                    {(o.notes || o.accessInstructions || o.contactName || o.contactPhone) && !o.isDeleted && (
                       <section aria-label="Visit instructions" className="rounded-lg bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-gray-800 dark:text-gray-100 space-y-1">
                         <h3 className="font-semibold">Instructions</h3>
-                        <p className="whitespace-pre-wrap">{o.notes}</p>
+                        {o.notes && <p className="whitespace-pre-wrap">{o.notes}</p>}
+                        {o.accessInstructions && <p className="whitespace-pre-wrap"><span className="font-semibold">Access: </span>{o.accessInstructions}</p>}
+                        {(o.contactName || o.contactPhone) && <p><span className="font-semibold">Contact: </span>{[o.contactName, o.contactPhone].filter(Boolean).join(' · ')}</p>}
                       </section>
                     )}
                     {o.isDeleted && <p className="text-sm text-gray-500">Deleted shift · historical record</p>}
