@@ -36,6 +36,8 @@ export default function PartnerPage() {
   const [access, setAccess] = useState('pending'), [error, setError] = useState(''), [busy, setBusy] = useState(false), [notice, setNotice] = useState('');
   const [requestView, setRequestView] = useState<'active' | 'completed' | 'cancelled'>('active'), [requestPage, setRequestPage] = useState(1);
   const [tab, setTab] = useState<Section>('Properties'), [adding, setAdding] = useState(false), [editingProperty, setEditingProperty] = useState<Branch | null>(null), [target, setTarget] = useState<Branch | null>(null), [editing, setEditing] = useState<CleaningRequest | null>(null);
+  // Property list filter: '' shows every city. Cities come from the properties themselves.
+  const [cityFilter, setCityFilter] = useState('');
   const [from, setFrom] = useState(''), [to, setTo] = useState(''), [exact, setExact] = useState(false), [time, setTime] = useState(''), [notes, setNotes] = useState('');
   const [change, setChange] = useState<{ kind: 'branch' | 'request'; id: string } | null>(null), [message, setMessage] = useState('');
   // The request whose cancellation is waiting for confirmation on its own card.
@@ -119,6 +121,9 @@ export default function PartnerPage() {
     ? stampFormatter.format(new Date(value)) : t.notRecorded;
   const selectedIndex = sections.findIndex(section => section.key === tab);
   const counts = [branches.length, requests.length, shifts.length, changes.length];
+  const cities = [...new Set(branches.map(branch => branch.city).filter((city): city is string => Boolean(city)))].sort((a, b) => a.localeCompare(b, locale));
+  const activeCity = cities.includes(cityFilter) ? cityFilter : '';
+  const shownBranches = activeCity ? branches.filter(branch => branch.city === activeCity) : branches;
   // Finished and cancelled requests move out of the active list. Both lists page 25 at a time.
   const activeRequests = requests.filter(request => !['Completed', 'Cancelled'].includes(request.status));
   const completedRequests = requests.filter(request => request.status === 'Completed');
@@ -160,7 +165,13 @@ export default function PartnerPage() {
           {tab === 'Properties' && <section className="partner-section">
             <div className="partner-section-heading"><div><h2>{t.properties}</h2><p>{t.propertiesHint}</p></div><Button variant="gold" disabled={busy} onClick={() => setAdding(true)}><Plus size={18} aria-hidden="true" />{t.addProperty}</Button></div>
             {!branches.length && <Card className="partner-surface partner-empty">{t.noProperties}</Card>}
-            <div className="partner-grid">{branches.map(branch => <article aria-label={branch.name} key={branch.id}>
+            {branches.length > 0 && <div className="partner-filter"><label htmlFor="partner-city-filter" className="block mb-1.5 text-sm font-semibold">{t.filterCity}</label>
+              <select id="partner-city-filter" aria-label={t.filterCity} className="partner-field partner-select" value={activeCity} onChange={event => setCityFilter(event.target.value)}>
+                <option value="">{t.allCities}</option>
+                {cities.map(city => <option key={city} value={city}>{city}</option>)}
+              </select></div>}
+            {branches.length > 0 && !shownBranches.length && <Card className="partner-surface partner-empty">{t.noPropertiesInCity}</Card>}
+            <ul className="partner-property-list">{shownBranches.map(branch => <li key={branch.id}><article aria-label={branch.name}>
               <Card className="partner-surface partner-property">
                 <div className="partner-card-heading"><h3>{branch.name}</h3>{!branch.isActive ? <Badge variant="outline" className="partner-badge">{t.inactive}</Badge> : branch.pricingReady ? <Badge variant="subtle" className="partner-badge">{t.ready}</Badge> : null}</div>
                 <QuoteRequestedBadge branch={branch} label={t.quoteRequested} />
@@ -175,7 +186,7 @@ export default function PartnerPage() {
                   <Button variant="ghost" size="sm" className="partner-quiet" onClick={() => { setChange({ kind: 'branch', id: branch.id }); setMessage(''); }}>{t.propertyChanges}</Button>
                 </div>
               </Card>
-            </article>)}</div>
+            </article></li>)}</ul>
           </section>}
           {tab === 'Cleaning requests' && <section className="partner-section">
             <div className="partner-section-heading"><div><h2>{t.requests}</h2><p>{t.requestsHint}</p></div></div>

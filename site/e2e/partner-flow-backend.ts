@@ -85,9 +85,9 @@ export class PartnerFlowBackend {
   }
 
   // ----- seeding helpers (state set up directly, not through the UI) -----
-  addBranch(input: { name: string; companyId: string; priceNet?: number | null; estimatedDurationMinutes?: number | null; isActive?: boolean; quoteRequestedUtc?: string | null }): BranchRecord {
+  addBranch(input: { name: string; companyId: string; city?: string; priceNet?: number | null; estimatedDurationMinutes?: number | null; isActive?: boolean; quoteRequestedUtc?: string | null }): BranchRecord {
     const priced = input.priceNet != null && input.estimatedDurationMinutes != null;
-    const branch: BranchRecord = { id: this.nextId('branch'), companyId: input.companyId, name: input.name, street: 'Lake road 1', postalCode: '33100', city: 'Tampere', country: 'Finland', contactPhone: null, contactEmail: null, roomCount: 2, bedCount: 3, isActive: input.isActive ?? true, pricingReady: priced, priceNet: input.priceNet ?? null, vatRatePercent: priced ? 25.5 : null, estimatedDurationMinutes: input.estimatedDurationMinutes ?? null, quoteRequestedUtc: input.quoteRequestedUtc ?? null };
+    const branch: BranchRecord = { id: this.nextId('branch'), companyId: input.companyId, name: input.name, street: 'Lake road 1', postalCode: '33100', city: input.city ?? 'Tampere', country: 'Finland', contactPhone: null, contactEmail: null, roomCount: 2, bedCount: 3, isActive: input.isActive ?? true, pricingReady: priced, priceNet: input.priceNet ?? null, vatRatePercent: priced ? 25.5 : null, estimatedDurationMinutes: input.estimatedDurationMinutes ?? null, quoteRequestedUtc: input.quoteRequestedUtc ?? null };
     this.branches.push(branch);
     return branch;
   }
