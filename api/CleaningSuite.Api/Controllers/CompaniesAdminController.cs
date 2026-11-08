@@ -4,6 +4,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OutputCaching;
+using Microsoft.Extensions.Logging;
 
 namespace CleaningSuite.Api.Controllers;
 
@@ -20,11 +21,28 @@ public class CompaniesAdminController : ControllerBase
 
     private readonly IMediator _mediator;
     private readonly IOutputCacheStore _outputCache;
+    private readonly ILogger<CompaniesAdminController> _logger;
 
-    public CompaniesAdminController(IMediator mediator, IOutputCacheStore outputCache)
+    public CompaniesAdminController(IMediator mediator, IOutputCacheStore outputCache, ILogger<CompaniesAdminController> logger)
     {
         _mediator = mediator;
         _outputCache = outputCache;
+        _logger = logger;
+    }
+
+    // Runs after a change has been committed. A cache that cannot be evicted must not turn the successful change into an error
+    // the client might retry; it is logged, and the cache entries expire on their own.
+    private async Task EvictAfterChangeAsync()
+    {
+        try
+        {
+            await EvictCompanyCachesAsync();
+            await _outputCache.EvictByTagAsync(ShiftsCacheTag, CancellationToken.None);
+        }
+        catch (Exception error)
+        {
+            _logger.LogWarning(error, "Cache eviction failed after a company change was committed.");
+        }
     }
 
     // Eviction uses CancellationToken.None: a client that disconnects after a commit must not leave the cache stale.
@@ -112,8 +130,27 @@ public class CompaniesAdminController : ControllerBase
         finally
         {
             // Runs on failure too: a clear that stopped part way has already removed some shifts and places.
-            await EvictCompanyCachesAsync();
-            await _outputCache.EvictByTagAsync(ShiftsCacheTag, CancellationToken.None);
+            await EvictAfterChangeAsync();
+        }
+    }
+
+    [HttpGet("{id:guid}/removal-summary")]
+    public async Task<IActionResult> RemovalSummary(Guid id, CancellationToken ct)
+        => Ok(await _mediator.Send(new RemoveCompanySummaryQuery(id), ct));
+
+    [HttpPost("{id:guid}/remove")]
+    public async Task<IActionResult> Remove(Guid id, [FromBody] RemoveCompanyRequest? body, CancellationToken ct)
+    {
+        if (body is null) return BadRequest(new ProblemDetails { Title = "Removal options are required." });
+        try
+        {
+            var result = await _mediator.Send(new RemoveCompanyCommand(id, body.Branches, body.Shifts, body.Invoices, body.ConfirmPaidInvoices), ct);
+            return Ok(result);
+        }
+        finally
+        {
+            // Runs on failure too: a removal that stopped part way has already removed some records.
+            await EvictAfterChangeAsync();
         }
     }
 
@@ -153,3 +190,5 @@ public class CompaniesAdminController : ControllerBase
         return NoContent();
     }
 }
+
+public record RemoveCompanyRequest(bool Branches, bool Shifts, bool Invoices, bool ConfirmPaidInvoices);
