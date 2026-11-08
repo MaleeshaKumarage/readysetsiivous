@@ -126,4 +126,48 @@ public class ClearCompanyRelatedDatabaseTests
         using var read = store.QuerySession(seeded.Tenant);
         Assert.Null(await read.LoadAsync<Agreement>(seeded.AgreementId));
     }
+
+    [QualityCycleDatabaseFact]
+    public async Task Clear_with_delete_removes_the_company_record_and_keeps_checklists_and_agreements()
+    {
+        var (store, context, provider) = await Start();
+        using var _ = provider as IDisposable;
+        var seeded = await Seed(store, context, Invoice.StatusIssued);
+
+        var handler = Handler(store, seeded.Tenant, out var session); using var disposeSession = session;
+        var result = await handler.Handle(new(seeded.Company.Id, DeleteCompany: true), default);
+
+        Assert.Equal(1, result.ShiftsDeleted);
+        using var read = store.QuerySession(seeded.Tenant);
+        Assert.Null(await read.LoadAsync<Company>(seeded.Company.Id));
+        Assert.Null(await read.LoadAsync<Shift>(seeded.Shift.Id));
+        Assert.NotNull(await read.LoadAsync<QualityCycleForm>(seeded.Form.Id));
+        Assert.NotNull(await read.LoadAsync<Agreement>(seeded.AgreementId));
+        Assert.Equal(Invoice.StatusVoided, (await read.LoadAsync<Invoice>(seeded.InvoiceId))!.Status);
+    }
+
+    [QualityCycleDatabaseFact]
+    public async Task Clear_with_delete_refuses_an_active_company_before_anything_is_removed()
+    {
+        var (store, context, provider) = await Start();
+        using var _ = provider as IDisposable;
+        var seeded = await Seed(store, context, Invoice.StatusIssued);
+        using (var writer = store.LightweightSession(seeded.Tenant))
+        {
+            var company = await writer.LoadAsync<Company>(seeded.Company.Id);
+            company!.IsActive = true;
+            writer.Store(company);
+            await writer.SaveChangesAsync();
+        }
+
+        var handler = Handler(store, seeded.Tenant, out var session); using var disposeSession = session;
+        var ex = await Assert.ThrowsAsync<InactiveRecordDeleteConflictException>(() => handler.Handle(new(seeded.Company.Id, DeleteCompany: true), default));
+
+        Assert.Equal("Deactivate the company before deleting it.", ex.Message);
+        using var read = store.QuerySession(seeded.Tenant);
+        Assert.NotNull(await read.LoadAsync<Company>(seeded.Company.Id));
+        Assert.NotNull(await read.LoadAsync<Shift>(seeded.Shift.Id));
+        Assert.NotNull(await read.LoadAsync<Branch>(seeded.Branch.Id));
+        Assert.Equal(Invoice.StatusIssued, (await read.LoadAsync<Invoice>(seeded.InvoiceId))!.Status);
+    }
 }

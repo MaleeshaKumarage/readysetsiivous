@@ -21,6 +21,7 @@ async function routeCompanies(page: Page, company: typeof activeCompany) {
 test('clearing a refused deactivation deletes the shifts and places, then deactivates the company', async ({ page }) => {
   await setupAdminMocks(page);
   const clearCalls: string[] = [];
+  const clearUrls: string[] = [];
   let deactivateCalls = 0;
   await page.route(/\/api\/v1\/admin\/companies\/company-a\/deactivate$/, route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
@@ -31,6 +32,7 @@ test('clearing a refused deactivation deletes the shifts and places, then deacti
   await page.route(/\/api\/v1\/admin\/companies\/company-a\/clear-related(?:\?.*)?$/, route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
     clearCalls.push(route.request().method());
+    clearUrls.push(route.request().url());
     return route.fulfill({ headers, json: { shiftsDeleted: 2, employeesUnassigned: 3, branchesDeleted: 1 } });
   });
   await routeCompanies(page, activeCompany);
@@ -43,6 +45,7 @@ test('clearing a refused deactivation deletes the shifts and places, then deacti
   await dialog.getByRole('button', { name: CLEAR_BUTTON }).click();
   await expect(dialog).toBeHidden();
   expect(clearCalls).toEqual(['POST']);
+  expect(new URL(clearUrls[0]).searchParams.get('deleteCompany')).toBe('false');
   expect(deactivateCalls).toBe(2);
 });
 
@@ -96,9 +99,10 @@ test('when the clear is refused for paid invoices nothing changes and the reason
   expect(deactivateCalls).toBe(1);
 });
 
-test('a refused delete of an inactive company can clear its places first, then delete the company', async ({ page }) => {
+test('a refused delete of an inactive company clears its places and deletes the company in one request', async ({ page }) => {
   await setupAdminMocks(page);
   const clearCalls: string[] = [];
+  const clearUrls: string[] = [];
   let deleteCalls = 0;
   await page.route(/\/api\/v1\/admin\/companies\/company-a$/, route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
@@ -110,6 +114,7 @@ test('a refused delete of an inactive company can clear its places first, then d
   await page.route(/\/api\/v1\/admin\/companies\/company-a\/clear-related(?:\?.*)?$/, route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
     clearCalls.push(route.request().method());
+    clearUrls.push(route.request().url());
     return route.fulfill({ headers, json: { shiftsDeleted: 0, employeesUnassigned: 0, branchesDeleted: 1 } });
   });
   await routeCompanies(page, inactiveCompany);
@@ -120,10 +125,12 @@ test('a refused delete of an inactive company can clear its places first, then d
 
   const dialog = page.getByRole('dialog', { name: DIALOG });
   await expect(dialog).toBeVisible();
+  await expect(dialog.getByText('Then the company itself is deleted.')).toBeVisible();
   await dialog.getByRole('button', { name: CLEAR_BUTTON }).click();
   await expect(dialog).toBeHidden();
   expect(clearCalls).toEqual(['POST']);
-  expect(deleteCalls).toBe(2);
+  expect(new URL(clearUrls[0]).searchParams.get('deleteCompany')).toBe('true');
+  expect(deleteCalls).toBe(1);
 });
 
 const PARTNER_REASON = 'This company has partner request history and must be retained.';

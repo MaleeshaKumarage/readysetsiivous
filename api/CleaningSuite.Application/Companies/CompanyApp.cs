@@ -89,7 +89,7 @@ public record ReactivateCompanyCommand(Guid Id) : IRequest;
 public record DeleteCompanyCommand(Guid Id) : IRequest;
 // Clears a company in one step: its shifts, places, partner requests and issued invoices (voided, never deleted).
 // Checklist submissions are kept as separate records. Signed agreements are kept unless DeleteSignedAgreements is set.
-public record ClearCompanyRelatedCommand(Guid Id, bool DeleteSignedAgreements = false) : IRequest<ClearCompanyRelatedResultDto>;
+public record ClearCompanyRelatedCommand(Guid Id, bool DeleteSignedAgreements = false, bool DeleteCompany = false) : IRequest<ClearCompanyRelatedResultDto>;
 public record ClearCompanyRelatedResultDto(int ShiftsDeleted, int EmployeesUnassigned, int BranchesDeleted,
     int InvoicesVoided = 0, int PartnerRecordsDeleted = 0, int AgreementsDeleted = 0);
 
@@ -267,8 +267,9 @@ public class CompanyHandlers
         }
     }
 
-    // One-step clear: removes the company's shifts, places, partner requests and agreements (when asked), and voids its
-    // open invoices. Paid invoices and partner user accounts are refused up front, so a refusal changes nothing.
+    // One-step clear: removes the company's shifts, places, partner requests and agreements (when asked), voids its
+    // open invoices, and deletes the company record when asked. Paid invoices and partner user accounts are refused up
+    // front, so a refusal changes nothing.
     public sealed class ClearCompanyRelatedCommandHandler(ICompanyRepository companies, IBranchRepository branches,
         IShiftRepository shifts, IAgreementRepository agreements, ITenantContext tenant,
         IPartnerStore? partnerStore = null, IShiftWorkReservation? reservation = null, IInvoiceRepository? invoices = null)
@@ -305,6 +306,9 @@ public class CompanyHandlers
                 partnerNotes = (await session.Query<PartnerNotification>().Where(x => branchIds.Contains(x.BranchId)).ToListAsync(ct)).ToList();
             }
             var partnerRecordCount = partnerRequests.Count + partnerChanges.Count + partnerNotes.Count;
+            // The delete option is only offered for an inactive company. Checked before anything is removed, like the other refusals.
+            if (request.DeleteCompany && company.IsActive)
+                throw new InactiveRecordDeleteConflictException("Deactivate the company before deleting it.");
 
             // Each save commits on its own, so the clear cannot be one transaction. It stops, reports how far it got, and can
             // be run again: finished work is skipped on the next run (shifts, places and invoices that are already gone or voided).
@@ -364,6 +368,10 @@ public class CompanyHandlers
                     await partnerStore.Session.SaveChangesAsync(ct);
                     partnerRemoved = partnerRecordCount;
                 }
+
+                // Last step: the company record itself. Checklist submissions and signed agreements that were kept keep their
+                // company id and show as "Unknown customer", the same as any other record whose company is gone.
+                if (request.DeleteCompany) await companies.DeleteAsync(company.Id, ct);
 
                 return new ClearCompanyRelatedResultDto(removedShifts, unassigned, removedPlaces, voided, partnerRemoved, agreementsRemoved);
             }

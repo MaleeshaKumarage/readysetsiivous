@@ -263,7 +263,8 @@ export default function CompaniesAdminPage() {
     setRelatedBusy(true); setRelatedError('');
     let clearFailure: unknown = null;
     try {
-      await adminCompanies.clearRelated(company.id, relatedDeleteAgreements);
+      // A delete finishes in the same request: the clear removes the company record as its last step.
+      await adminCompanies.clearRelated(company.id, relatedDeleteAgreements, action === 'delete');
     } catch (failure) {
       clearFailure = failure;
     }
@@ -279,7 +280,6 @@ export default function CompaniesAdminPage() {
     }
     try {
       if (action === 'deactivate') await companyLifecycle.deactivate(company.id);
-      else await adminCompanies.deleteInactive(company.id);
       closeRelatedPrompt();
     } catch (failure) {
       closeRelatedPrompt();
@@ -425,6 +425,7 @@ export default function CompaniesAdminPage() {
           <Stack gap="sm">
             <Text>{relatedPrompt.reason}</Text>
             <Text size="sm" c="dimmed">This deletes the company&apos;s branches and shifts, unassigns every employee from them, removes its partner requests and voids its open invoices. Checklist submissions are kept as separate records. Paid invoices stop the clear: issue a credit note first. Nothing is changed if the clear is refused.</Text>
+            {relatedPrompt.action === 'delete' && <Text size="sm" c="dimmed">Then the company itself is deleted.</Text>}
             <Checkbox label="Also delete this company&apos;s signed agreements" description="Off keeps the signed agreements on record." checked={relatedDeleteAgreements} onChange={event => setRelatedDeleteAgreements(event.currentTarget.checked)} disabled={relatedBusy} />
             {relatedError && <Text c="red" role="alert">{relatedError}</Text>}
             <Button color="red" loading={relatedBusy} onClick={() => void clearRelatedAndContinue()}>Delete related shifts, unassign employees and clear all places</Button>

@@ -102,11 +102,11 @@ public class CompaniesAdminController : ControllerBase
     { await _mediator.Send(new DeleteCompanyCommand(id), ct); await EvictCompanyCachesAsync(); return NoContent(); }
 
     [HttpPost("{id:guid}/clear-related")]
-    public async Task<IActionResult> ClearRelated(Guid id, [FromQuery] bool deleteSignedAgreements, CancellationToken ct)
+    public async Task<IActionResult> ClearRelated(Guid id, [FromQuery] bool deleteSignedAgreements, [FromQuery] bool deleteCompany, CancellationToken ct)
     {
         try
         {
-            var result = await _mediator.Send(new ClearCompanyRelatedCommand(id, deleteSignedAgreements), ct);
+            var result = await _mediator.Send(new ClearCompanyRelatedCommand(id, deleteSignedAgreements, deleteCompany), ct);
             return Ok(result);
         }
         finally

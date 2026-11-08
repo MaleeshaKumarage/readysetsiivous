@@ -791,7 +791,7 @@ export const adminCompanies = {
   ) => companyRequest<Company>(`/api/v1/admin/companies/${id}`, 'PUT', { id, ...body }),
   deactivate: (id: string) => adminSend(`/api/v1/admin/companies/${id}/deactivate`, 'POST'),
   deleteInactive: (id: string) => adminDelete(`/api/v1/admin/companies/${id}`),
-  clearRelated: (id: string, deleteSignedAgreements = false) => adminPostJson<{ shiftsDeleted: number; employeesUnassigned: number; branchesDeleted: number; invoicesVoided: number; partnerRecordsDeleted: number; agreementsDeleted: number }>(`/api/v1/admin/companies/${id}/clear-related?deleteSignedAgreements=${deleteSignedAgreements}`),
+  clearRelated: (id: string, deleteSignedAgreements = false, deleteCompany = false) => adminPostJson<{ shiftsDeleted: number; employeesUnassigned: number; branchesDeleted: number; invoicesVoided: number; partnerRecordsDeleted: number; agreementsDeleted: number }>(`/api/v1/admin/companies/${id}/clear-related?deleteSignedAgreements=${deleteSignedAgreements}&deleteCompany=${deleteCompany}`),
 };
 
 export const adminBranches = {
