@@ -1,6 +1,6 @@
 ---
 name: issue-to-pr
-description: Takes one open GitHub issue from the ReadySetSiivous backlog through brainstorm, auto-approval of its own recommended plan, implementation, backend and Playwright tests, PR creation, code review, comment resolution, and merge once CI is green with no open threads. Use when asked to work an issue end to end.
+description: Takes one open GitHub issue from the ReadySetSiivous backlog through brainstorm, auto-approval of its own recommended plan, implementation, backend and Playwright tests, PR creation, code review, comment resolution, and merge once CI is green with no open threads. Runs autonomously and never waits for user input. Use when asked to work an issue end to end.
 ---
 
 You deliver ONE issue per run, end to end. Follow the repo's CLAUDE.md publishing rule exactly: nothing is pushed for merge until the covering tests pass locally, and tests are run, not inferred from a build.
@@ -19,18 +19,16 @@ You deliver ONE issue per run, end to end. Follow the repo's CLAUDE.md publishin
 
 ## 1. Pick the issue
 
-List open issues with `gh api "repos/$R/issues?state=open&per_page=100"`, dropping entries that have a `pull_request` key. Skip any issue that:
-- carries `product-decision`, `needs-repro`, or `roadmap`, or whose body asks for a product decision first;
-- is a multi-surface epic (e.g. "migrate 21 files"). Split those out of scope and say so.
+List open issues with `gh api "repos/$R/issues?state=open&per_page=100"`, dropping entries that have a `pull_request` key. Prefer small, user-visible requests with a clear acceptance statement. Among those, take the oldest eligible one.
 
-Prefer small, user-visible requests with a clear acceptance statement. If the issue body records a decision that conflicts with the request, skip it.
+Issues labelled `product-decision`, `needs-repro`, or `roadmap`, or whose body asks for a decision first, are still eligible. The agent makes the decision itself (see step 2). Skip only issues that are already fixed on `main` or are plainly duplicates, and comment on those before moving to the next candidate. If an epic is too large for one PR, deliver its first small, self-contained chunk and open a follow-up issue for the rest.
 
 ## 2. Brainstorm and auto-approve
 
 - Read the issue, the relevant code, and the existing specs for that area.
 - Write a short plan: the problem, the chosen approach, files to touch, the tests to add or update (desktop and mobile Playwright, plus backend if the API changes), and risks.
 - Post the plan as an issue comment headed `Agent plan (auto-approved)`. The user has authorised auto-approval of the agent's own recommended plan. Do not dispatch the `agent-pipeline` workflow, because its trusted-approval contract expects a human-approved comment.
-- If the plan needs a decision only a person can make, comment with the options and stop.
+- Never wait for a person. When the issue or code leaves a question open, pick the recommended option (the one with the smallest blast radius that satisfies the issue's stated request), state the choice and the alternatives you rejected in the plan comment, and proceed. Where the issue explicitly records a decision, follow it.
 
 ## 3. Branch
 
@@ -68,12 +66,19 @@ Run the `code-review` skill on the PR number. Fix every verified finding. The `p
 - If `main` moved and the PR shows `mergeable_state=dirty`, merge `origin/main` into the branch (no force-push) and resolve conflicts, then rerun the affected tests.
 - Checks: `gh api "repos/$R/actions/runs?head_sha=$(git rev-parse HEAD)&per_page=50"`. Wait for every run on the latest head to complete, and require `conclusion == success`.
 - Merge only when all of these hold on the latest head: every run is `success`, zero unresolved threads, PR is not draft, `mergeable_state` is clean. Then `gh api -X PUT repos/$R/pulls/<n>/merge -f merge_method=squash`.
-- Merging to `main` triggers deploys. Only merge when the user has authorised merging for this PR or the session's standing instruction covers it.
+- Merging to `main` triggers deploys. The standing instruction for this repo is to merge once the gates above pass, so the agent merges without asking.
 
-## Stop and report when
+## Never stop for input
 
-- A CI check fails and the fix attempt has failed twice. Report the failing job and the log lines.
-- A decision is needed that the plan did not settle.
-- The issue turns out to be out of scope or already fixed. Comment on the issue and stop.
+The agent does not pause to ask a person anything. Each situation has an autonomous path:
+
+- **Ambiguous requirement:** choose the recommended option, record it in the plan comment, continue.
+- **Failing CI or tests:** diagnose from the logs, fix, rerun. Keep iterating while each attempt changes something real. If a check is failing for a reason outside the change (an infrastructure or flaky-environment failure), rerun it once. If it still fails, fix the root cause in this branch or split out the unrelated part into its own issue, and continue.
+- **Review finding:** fix it if it is valid, or reply on the thread with the evidence it is not and resolve it. Never leave a thread open.
+- **Conflict with `main`:** merge `origin/main` and resolve the conflict, keeping both sides' intent.
+- **Issue already done or out of scope:** comment on the issue with the evidence, close nothing, and pick the next eligible issue.
+- **Tooling problem (missing package, service down):** install or start it, as in step 0, and continue.
+
+The only thing the agent reports as blocked is a hard external failure it cannot work around (for example GitHub returning errors on every call for several minutes). Even then it records the state in the issue and the final summary, and retries with backoff first.
 
 End each run with: the issue, the PR number and URL, the local test pass counts, CI state, thread state, and whether it merged.
