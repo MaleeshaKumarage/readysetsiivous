@@ -192,8 +192,38 @@ test('an existing item can be edited from the Items tab', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Edit Keys' }).click();
   await page.getByRole('dialog').getByLabel('Unit', { exact: true }).fill('set');
+  await page.getByRole('dialog').getByText('Active', { exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Save', exact: true }).click();
 
   await expect(page.getByText('Item saved.')).toBeVisible();
-  expect(state.puts.at(-1)?.body).toEqual({ name: 'Keys', unit: 'set', isActive: true, version: 'v1' });
+  expect(state.puts.at(-1)?.body).toEqual({ name: 'Keys', unit: 'set', isActive: false, version: 'v1' });
+});
+
+test('Export CSV downloads the log for the filters currently applied', async ({ page }) => {
+  const state = await setup(page);
+  await page.goto('/admin/inventory/');
+  await expect(page.getByRole('cell', { name: 'Keys', exact: true })).toBeVisible();
+
+  await page.locator('input[aria-label="Employee"]').click();
+  await page.getByRole('option', { name: 'Ana Keeper' }).click();
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await expect.poll(() => state.usageQueries.at(-1)?.searchParams.get('employeeId')).toBe('employee-a');
+
+  const exportRequest = page.waitForRequest(request => request.url().includes('/usage/export'));
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: 'Export CSV', exact: true }).click(),
+  ]);
+  const url = new URL((await exportRequest).url());
+  expect(url.searchParams.get('employeeId')).toBe('employee-a');
+  expect(download.suggestedFilename()).toMatch(/^inventory-\d{4}-\d{2}-\d{2}\.csv$/);
+});
+
+test('a photo that fails to load shows an error instead of spinning', async ({ page }) => {
+  await setup(page);
+  await page.route(/\/api\/v1\/admin\/inventory\/usage\/[^/]+\/photos\/[^/?]+(\?.*)?$/, route => route.fulfill({ status: 503, headers }));
+  await page.goto('/admin/inventory/');
+  await page.getByRole('button', { name: 'View 2' }).click();
+  await expect(page.getByText('Photos could not be loaded.')).toBeVisible();
+  await expect(page.getByRole('dialog').getByRole('img', { name: 'Keys photo 1' })).toHaveCount(0);
 });

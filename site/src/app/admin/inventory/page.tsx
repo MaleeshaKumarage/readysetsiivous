@@ -161,20 +161,23 @@ function LogTab() {
   );
 }
 
+type GalleryState = { status: 'loading' | 'ready' | 'failed'; urls: string[] };
+
 function PhotoGallery({ entry }: { entry: InventoryUsage }) {
-  const [urls, setUrls] = useState<string[]>([]);
-  const [failed, setFailed] = useState(false);
+  const [gallery, setGallery] = useState<GalleryState>({ status: 'loading', urls: [] });
 
   useEffect(() => {
+    // Reset on every entry change, so one failed load does not stick to the entries shown after it.
     let active = true;
     const created: string[] = [];
+    setGallery({ status: 'loading', urls: [] });
     Promise.all(entry.photoIds.map(id => inventoryPhotoUrl(adminInventory.photoPath(entry.id, id))))
       .then(list => {
         if (!active) { list.forEach(url => URL.revokeObjectURL(url)); return; }
         created.push(...list);
-        setUrls(list);
+        setGallery({ status: 'ready', urls: list });
       })
-      .catch(() => { if (active) setFailed(true); });
+      .catch(() => { if (active) setGallery({ status: 'failed', urls: [] }); });
     return () => {
       active = false;
       created.forEach(url => URL.revokeObjectURL(url));
@@ -182,8 +185,10 @@ function PhotoGallery({ entry }: { entry: InventoryUsage }) {
   }, [entry]);
 
   if (entry.photoIds.length === 0) return <Text c="dimmed">No photos were attached to this entry.</Text>;
-  if (failed) return <Text c="red">Photos could not be loaded.</Text>;
-  if (urls.length === 0) return <Loader size="sm" />;
+  if (gallery.status === 'failed') return <Text c="red">Photos could not be loaded.</Text>;
+  if (gallery.status === 'loading') return <Loader size="sm" />;
+  const urls = gallery.urls;
+  if (urls.length === 0) return <Text c="dimmed">No photos could be shown for this entry.</Text>;
   return (
     <Group>
       {urls.map((url, index) => (

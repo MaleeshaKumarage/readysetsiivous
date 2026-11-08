@@ -44,7 +44,7 @@ public class MeInventoryController(InventoryService inventory) : ControllerBase
         {
             if (file.Length == 0) throw new FluentValidation.ValidationException("Choose a non-empty photo.");
             if (file.Length > InventoryService.MaxPhotoBytes)
-                throw new CleaningSuite.Application.Common.UploadPayloadTooLargeException("Inventory photos must be 5 MiB or smaller.");
+                throw new FluentValidation.ValidationException("Each photo must be 5 MiB or smaller.");
             await using var input = file.OpenReadStream();
             using var buffer = new MemoryStream();
             await input.CopyToAsync(buffer, ct);
