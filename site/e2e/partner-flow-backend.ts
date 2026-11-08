@@ -29,7 +29,7 @@ const PEOPLE: Record<ActorKey, Person> = {
 
 export interface BranchRecord { id: string; companyId: string; name: string; street: string | null; postalCode: string | null; city: string | null; country: string | null; contactPhone: string | null; contactEmail: string | null; roomCount: number | null; bedCount: number | null; isActive: boolean; pricingReady: boolean; priceNet: number | null; vatRatePercent: number | null; estimatedDurationMinutes: number | null; quoteRequestedUtc: string | null }
 export interface RequestRecord { id: string; companyId: string; branchId: string; clientRequestId: string; version: number; fromDate: string; toDate: string; exactStartLocalTime: string | null; notes: string | null; priceNet: number; vatRatePercent: number; estimatedDurationMinutes: number; status: string; firstAcceptedAtUtc: string | null; linkedShiftId: string | null; plannedStartUtc: string | null; plannedEndUtc: string | null; acceptedEmployeeId: string | null; offeredEmployeeId: string | null; offerId: string | null; offerPlannedStartUtc: string | null; cancellationReason: string | null }
-export interface ChangeRecord { id: string; companyId: string; branchId: string | null; requestId: string | null; kind: string; message: string; resolvedUtc: string | null; resolution: string | null }
+export interface ChangeRecord { id: string; companyId: string; branchId: string | null; requestId: string | null; kind: string; message: string; resolvedUtc: string | null; resolution: string | null; action?: string; proposedFromDate?: string | null; proposedToDate?: string | null; proposedExactStartLocalTime?: string | null; proposedNotes?: string | null }
 export interface WriteRecord { actor: ActorKey; method: string; path: string; body: any; status: number }
 
 export class ApiError extends Error { constructor(readonly status: number, message: string) { super(message); } }
@@ -213,7 +213,13 @@ export class PartnerFlowBackend {
       return this.dto(request, false);
     }
     match = is(path, /^requests\/([^/]+)\/change-requests$/);
-    if (method === 'POST' && match) { this.ownRequest(match[1], company.id); return this.addChange({ kind: 'CleaningRequest', branchId: this.request(match[1]).branchId, requestId: match[1], message: body?.message }); }
+    if (method === 'POST' && match) {
+      this.ownRequest(match[1], company.id);
+      // Mirrors PartnerService.RequestChange: structured asks carry the proposal the staff will review.
+      return this.addChange({ kind: 'CleaningRequest', branchId: this.request(match[1]).branchId, requestId: match[1], message: body?.message,
+        action: body?.action ?? 'Message', proposedFromDate: body?.fromDate ?? null, proposedToDate: body?.toDate ?? null,
+        proposedExactStartLocalTime: body?.exactStartLocalTime ?? null, proposedNotes: body?.notes ?? null });
+    }
     if (method === 'GET' && path === 'change-requests') return this.changes.filter(item => item.companyId === company.id);
     if (method === 'GET' && path === 'shifts') {
       return this.requests.filter(item => item.companyId === company.id && item.linkedShiftId).map(item => ({ id: item.linkedShiftId, branchId: item.branchId, branchName: this.branchName(item.branchId), name: `Cleaning — ${this.branchName(item.branchId)}`, isActive: Boolean(this.shiftActive[item.linkedShiftId!]), schedule: { type: 'OnCallFlexible' }, validFrom: item.fromDate, validUntil: item.toDate }));
@@ -264,6 +270,20 @@ export class PartnerFlowBackend {
       request.acceptedEmployeeId = null; request.plannedStartUtc = null; request.plannedEndUtc = null;
       this.invalidateOffer(request); request.status = 'Requested'; request.version++;
       return this.dto(request, true);
+    }
+    // Mirrors PartnerService.Apply: the request changes at the version the staff reviewed, then the change is resolved.
+    match = is(path, /^change-requests\/([^/]+)\/apply$/);
+    if (method === 'POST' && match) {
+      const change = this.changes.find(item => item.id === match![1])!;
+      if (change.resolvedUtc) throw new ApiError(409, 'This change request has already been resolved.');
+      const request = this.request(change.requestId!);
+      if (body?.version !== request.version) throw new ApiError(409, 'This request changed. Reload it before making another change.');
+      if (change.action === 'Cancel') { request.status = 'Cancelled'; request.cancellationReason = change.message; }
+      else if (change.action === 'Reschedule') { request.fromDate = change.proposedFromDate!; request.toDate = change.proposedToDate!; request.exactStartLocalTime = change.proposedExactStartLocalTime ?? null; }
+      else if (change.action === 'Instructions') request.notes = change.proposedNotes!;
+      request.version++;
+      Object.assign(change, { resolution: body.resolution, resolvedUtc: '2026-11-03T12:00:00Z' });
+      return change;
     }
     match = is(path, /^change-requests\/([^/]+)\/resolve$/);
     if (method === 'POST' && match) {
@@ -410,8 +430,9 @@ export class PartnerFlowBackend {
     return request;
   }
 
-  private addChange(input: { kind: string; branchId: string | null; requestId: string | null; message: string }): ChangeRecord {
-    const change: ChangeRecord = { id: this.nextId('change'), companyId: OWNER_COMPANY.id, branchId: input.branchId, requestId: input.requestId, kind: input.kind, message: input.message, resolvedUtc: null, resolution: null };
+  private addChange(input: { kind: string; branchId: string | null; requestId: string | null; message: string; action?: string; proposedFromDate?: string | null; proposedToDate?: string | null; proposedExactStartLocalTime?: string | null; proposedNotes?: string | null }): ChangeRecord {
+    const change: ChangeRecord = { id: this.nextId('change'), companyId: OWNER_COMPANY.id, branchId: input.branchId, requestId: input.requestId, kind: input.kind, message: input.message, resolvedUtc: null, resolution: null,
+      action: input.action ?? 'Message', proposedFromDate: input.proposedFromDate ?? null, proposedToDate: input.proposedToDate ?? null, proposedExactStartLocalTime: input.proposedExactStartLocalTime ?? null, proposedNotes: input.proposedNotes ?? null };
     this.changes.push(change);
     return change;
   }

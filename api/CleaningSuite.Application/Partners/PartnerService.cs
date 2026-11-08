@@ -502,6 +502,79 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         await Db.SaveChangesAsync(ct); return MapChange(change);
     }
 
+    private static readonly string[] RequestChangeActions = ["Message", "Reschedule", "Instructions", "Cancel"];
+
+    /// <summary>
+    /// Owner asks for a change to one cleaning request. Reschedule, Instructions and Cancel are structured so staff
+    /// can apply them from the change list; Message only needs a reply.
+    /// </summary>
+    public async Task<PartnerChangeDto> RequestChange(Guid actor, Guid id, PartnerRequestChange body, CancellationToken ct)
+    {
+        await using var lease = await reservation.AcquireAsync(ct);
+        var (_, company) = await Partner(actor, ct);
+        ValidateText(body.Message, 2000, "Change request");
+        var action = string.IsNullOrWhiteSpace(body.Action) ? "Message" : body.Action.Trim();
+        if (!RequestChangeActions.Contains(action)) throw new ValidationException("Choose what you need changed.");
+        // A cancellation reason is stored on the request, which allows 1000 characters.
+        if (action == "Cancel" && body.Message.Trim().Length > 1000) throw new ValidationException("Use at most 1000 characters for the cancellation reason.");
+        var request = await Request(id, company.Id, ct);
+        if (request.Status == PartnerCleaningRequest.StatusCancelled) throw new ShiftConflictException("This request is cancelled.");
+        var change = new PartnerChangeRequest { CompanyId = company.Id, BranchId = request.BranchId, RequestId = request.Id,
+            RequestedByEmployeeId = actor, Kind = "Cleaning", Message = body.Message.Trim(), Action = action };
+        switch (action)
+        {
+            case "Reschedule":
+                if (body.FromDate is not { } from || body.ToDate is not { } to) throw new ValidationException("Choose the new dates for the cleaning.");
+                var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
+                ValidateWindow(from, to, body.ExactStartLocalTime, request.EstimatedDurationMinutes, zone);
+                change.ProposedFromDate = from; change.ProposedToDate = to;
+                change.ProposedExactStartLocalTime = string.IsNullOrWhiteSpace(body.ExactStartLocalTime) ? null : body.ExactStartLocalTime;
+                break;
+            case "Instructions":
+                if (string.IsNullOrWhiteSpace(body.Notes)) throw new ValidationException("Write the new instructions for the cleaner.");
+                if (body.Notes.Trim().Length > 4000) throw new ValidationException("Use at most 4000 characters for cleaning instructions.");
+                change.ProposedNotes = body.Notes.Trim();
+                break;
+        }
+        Db.Store(change); Notify(company.Id, request.BranchId, request.Id, "ChangeRequested", 1, "Staff", null, change.Id);
+        await Db.SaveChangesAsync(ct);
+        return MapChange(change);
+    }
+
+    /// <summary>
+    /// Staff apply a structured request at the request version they reviewed. The operation uses the same rules as
+    /// the cancel and edit screens, then the change is resolved with the staff's note.
+    /// </summary>
+    public async Task<PartnerChangeDto> Apply(Guid actor, Guid id, PartnerChangeApply body, CancellationToken ct)
+    {
+        await RequireManager(actor, ct);
+        ValidateText(body.Resolution, 2000, "Resolution");
+        var change = await Db.LoadAsync<PartnerChangeRequest>(id, ct) ?? throw new NotFoundException("Change request", id);
+        if (change.ResolvedUtc.HasValue) throw new ShiftConflictException("This change request has already been resolved.");
+        if (!change.RequestId.HasValue || change.Action == "Message") throw new ValidationException("This change only needs a reply. Use Resolve instead.");
+        var requestId = change.RequestId.Value;
+        switch (change.Action)
+        {
+            case "Cancel":
+                await Cancel(actor, requestId, body.Version, true, change.Message, ct);
+                break;
+            case "Reschedule":
+                var current = await Request(requestId, null, ct);
+                await StaffEdit(actor, requestId, new EditPartnerRequest(body.Version, change.ProposedFromDate!.Value, change.ProposedToDate!.Value,
+                    change.ProposedExactStartLocalTime, current.Notes), ct);
+                break;
+            case "Instructions":
+                var target = await Request(requestId, null, ct);
+                await StaffEdit(actor, requestId, new EditPartnerRequest(body.Version, target.FromDate, target.ToDate, target.ExactStartLocalTime,
+                    change.ProposedNotes), ct);
+                break;
+        }
+        change.ResolvedUtc = DateTime.UtcNow; change.Resolution = body.Resolution.Trim();
+        Db.Store(change); Notify(change.CompanyId, change.BranchId, change.RequestId, "ChangeResolved", 1, "Company", null, change.Id);
+        await Db.SaveChangesAsync(ct);
+        return MapChange(change);
+    }
+
     public async Task<IReadOnlyList<PartnerChangeDto>> Changes(Guid actor, CancellationToken ct)
     {
         await RequireManager(actor, ct);
@@ -646,7 +719,8 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
     }
 
     private static PartnerChangeDto MapChange(PartnerChangeRequest x) => new(x.Id, x.CompanyId, x.BranchId,
-        x.RequestId, x.Kind, x.Message, x.CreatedUtc, x.ResolvedUtc, x.Resolution);
+        x.RequestId, x.Kind, x.Message, x.CreatedUtc, x.ResolvedUtc, x.Resolution, x.Action,
+        x.ProposedFromDate, x.ProposedToDate, x.ProposedExactStartLocalTime, x.ProposedNotes);
     // Shared by owner property creation and owner property edits, so both accept exactly the same details.
     private static void ValidateBranchDetails(CreatePartnerBranch body)
     {

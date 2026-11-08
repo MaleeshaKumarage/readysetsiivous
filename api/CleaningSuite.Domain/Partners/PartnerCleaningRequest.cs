@@ -50,6 +50,12 @@ public sealed class PartnerChangeRequest : BaseDocument
     public string Message { get; set; } = "";
     public DateTime? ResolvedUtc { get; set; }
     public string? Resolution { get; set; }
+    // What the partner asks for. "Message" only needs a reply; the others can be applied by staff.
+    public string Action { get; set; } = "Message";
+    public DateOnly? ProposedFromDate { get; set; }
+    public DateOnly? ProposedToDate { get; set; }
+    public string? ProposedExactStartLocalTime { get; set; }
+    public string? ProposedNotes { get; set; }
 }
 
 /// <summary>Committed together with the event; contains references, never property access instructions.</summary>

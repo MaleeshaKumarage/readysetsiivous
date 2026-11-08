@@ -1,4 +1,5 @@
 using CleaningSuite.Application.Common;
+using FluentValidation;
 using CleaningSuite.Application.Partners;
 using CleaningSuite.Application.Shifts;
 using CleaningSuite.Application.Tenants;
@@ -108,6 +109,90 @@ public class PartnerCompletionDatabaseTests
         using var _ = session;
 
         await Assert.ThrowsAsync<NotFoundException>(() => service.Completion(seeded.OtherOwner.Id, seeded.Request.Id, default));
+    }
+
+    [QualityCycleDatabaseFact]
+    public async Task Partner_reschedule_request_needs_a_valid_window()
+    {
+        var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
+        using var provider = StoreProvider(connection, out var store);
+        var tenantId = "partner-reschedule-" + Guid.NewGuid().ToString("N");
+        var seeded = await SeedAsync(store, tenantId, finishedForm: false, started: false);
+        var (service, session) = ServiceFor(store, connection, tenantId);
+        using var _ = session;
+
+        await Assert.ThrowsAsync<ValidationException>(() => service.RequestChange(seeded.Owner.Id, seeded.Request.Id,
+            new PartnerRequestChange("Later please", "Reschedule", new DateOnly(2026, 12, 3), new DateOnly(2026, 12, 2)), default));
+    }
+
+    [QualityCycleDatabaseFact]
+    public async Task Staff_apply_a_partner_cancellation_at_the_reviewed_version_and_resolve_it()
+    {
+        var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
+        using var provider = StoreProvider(connection, out var store);
+        var tenantId = "partner-cancel-apply-" + Guid.NewGuid().ToString("N");
+        var seeded = await SeedAsync(store, tenantId, finishedForm: false, started: false);
+        var (service, session) = ServiceFor(store, connection, tenantId);
+        using var _ = session;
+
+        var change = await service.RequestChange(seeded.Owner.Id, seeded.Request.Id, new PartnerRequestChange("Cannot host this week", "Cancel"), default);
+        Assert.Equal("Cancel", change.Action);
+
+        var applied = await service.Apply(seeded.Staff.Id, change.Id, new PartnerChangeApply(seeded.Request.Revision, "Cancelled at the owner's request."), default);
+
+        Assert.NotNull(applied.ResolvedUtc);
+        using var read = store.QuerySession(tenantId);
+        Assert.Equal(PartnerCleaningRequest.StatusCancelled, (await read.LoadAsync<PartnerCleaningRequest>(seeded.Request.Id))!.Status);
+    }
+
+    [QualityCycleDatabaseFact]
+    public async Task Staff_cannot_apply_a_change_to_a_request_that_moved_on()
+    {
+        var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
+        using var provider = StoreProvider(connection, out var store);
+        var tenantId = "partner-stale-apply-" + Guid.NewGuid().ToString("N");
+        var seeded = await SeedAsync(store, tenantId, finishedForm: false, started: false);
+        var (service, session) = ServiceFor(store, connection, tenantId);
+        using var _ = session;
+        var change = await service.RequestChange(seeded.Owner.Id, seeded.Request.Id, new PartnerRequestChange("Cannot host this week", "Cancel"), default);
+
+        await Assert.ThrowsAsync<ShiftConflictException>(() => service.Apply(seeded.Staff.Id, change.Id,
+            new PartnerChangeApply(seeded.Request.Revision + 1, "Stale"), default));
+
+        using var read = store.QuerySession(tenantId);
+        Assert.Null((await read.LoadAsync<PartnerChangeRequest>(change.Id))!.ResolvedUtc);
+    }
+
+    [QualityCycleDatabaseFact]
+    public async Task Staff_apply_new_instructions_to_the_request_and_its_shift()
+    {
+        var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
+        using var provider = StoreProvider(connection, out var store);
+        var tenantId = "partner-instructions-apply-" + Guid.NewGuid().ToString("N");
+        var seeded = await SeedAsync(store, tenantId, finishedForm: false, started: false);
+        var (service, session) = ServiceFor(store, connection, tenantId);
+        using var _ = session;
+        var change = await service.RequestChange(seeded.Owner.Id, seeded.Request.Id, new PartnerRequestChange("Keys changed", "Instructions", Notes: "Keys are in the lockbox"), default);
+
+        await service.Apply(seeded.Staff.Id, change.Id, new PartnerChangeApply(seeded.Request.Revision, "Added to instructions."), default);
+
+        using var read = store.QuerySession(tenantId);
+        Assert.Equal("Keys are in the lockbox", (await read.LoadAsync<PartnerCleaningRequest>(seeded.Request.Id))!.Notes);
+        Assert.Equal("Keys are in the lockbox", (await read.LoadAsync<Shift>(seeded.Request.LinkedShiftId!.Value))!.Notes);
+    }
+
+    [QualityCycleDatabaseFact]
+    public async Task Reply_only_changes_cannot_be_applied()
+    {
+        var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
+        using var provider = StoreProvider(connection, out var store);
+        var tenantId = "partner-reply-only-" + Guid.NewGuid().ToString("N");
+        var seeded = await SeedAsync(store, tenantId, finishedForm: false, started: false);
+        var (service, session) = ServiceFor(store, connection, tenantId);
+        using var _ = session;
+        var change = await service.RequestChange(seeded.Owner.Id, seeded.Request.Id, new PartnerRequestChange("Which entrance?"), default);
+
+        await Assert.ThrowsAsync<ValidationException>(() => service.Apply(seeded.Staff.Id, change.Id, new PartnerChangeApply(seeded.Request.Revision, "Back door."), default));
     }
 
     private sealed record Seeded(Employee Owner, Employee OtherOwner, Employee Staff, Employee Cleaner, PartnerCleaningRequest Request);

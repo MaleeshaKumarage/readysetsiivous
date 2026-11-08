@@ -2,7 +2,10 @@ import { authorizedFetch, type Branch, type ShiftSchedule } from './adminApi';
 
 export interface PartnerIdentity { realm: string; person: { id: string; firstName: string; lastName: string; role: string; isActive: boolean }; company: { id: string; name: string; isActive: boolean; isPartnerEnabled: boolean }; timeZoneId: string }
 export interface CleaningRequest { id: string; version: number; companyId: string; branchId: string; branchName: string; fromDate: string; toDate: string; exactStartLocalTime: string | null; notes: string | null; priceNet: number; vatRatePercent: number; estimatedDurationMinutes: number; status: string; firstAcceptedAtUtc: string | null; linkedShiftId: string | null; plannedStartUtc: string | null; plannedEndUtc: string | null; acceptedCleanerName: string | null; actualStartUtc: string | null; actualEndUtc: string | null; offeredEmployeeId?: string | null; offerId?: string | null }
-export interface PartnerChange { id: string; companyId: string; branchId: string | null; requestId: string | null; kind: string; message: string; createdUtc: string; resolvedUtc: string | null; resolution: string | null }
+// What the owner asks for on a cleaning request. Structured actions can be applied by staff; "Message" needs a reply.
+export type PartnerChangeAction = 'Message' | 'Reschedule' | 'Instructions' | 'Cancel';
+export interface PartnerRequestChangeInput { message: string; action: PartnerChangeAction; fromDate?: string; toDate?: string; exactStartLocalTime?: string | null; notes?: string | null }
+export interface PartnerChange { id: string; companyId: string; branchId: string | null; requestId: string | null; kind: string; message: string; createdUtc: string; resolvedUtc: string | null; resolution: string | null; action?: string; proposedFromDate?: string | null; proposedToDate?: string | null; proposedExactStartLocalTime?: string | null; proposedNotes?: string | null }
 export interface CleanerOffer { id: string; requestId: string; version: number; branchName: string; street: string | null; postalCode: string | null; city: string | null; fromDate: string; toDate: string; exactStartLocalTime: string | null; plannedStartUtc: string | null; estimatedDurationMinutes: number; notes: string | null; timeZoneId: string }
 export interface PartnerShift { id: string; branchId: string; branchName: string; name: string; isActive: boolean; schedule: ShiftSchedule; validFrom: string | null; validUntil: string | null }
 // Partner-safe completed-visit summary. The cleaner is masked to an initial; no employee ids or full names.
@@ -35,7 +38,7 @@ export const partnerApi = {
   createRequest: (body: RequestInput) => partnerSend<CleaningRequest>('partner/requests', 'POST', body),
   updateRequest: (id: string, body: RequestInput) => partnerSend<CleaningRequest>(`partner/requests/${id}`, 'PUT', body),
   cancel: (request: CleaningRequest) => partnerSend<CleaningRequest>(`partner/requests/${request.id}/cancel`, 'POST', { version: request.version }),
-  requestChange: (id: string, message: string) => partnerSend<PartnerChange>(`partner/requests/${id}/change-requests`, 'POST', { message }),
+  requestChange: (id: string, body: PartnerRequestChangeInput) => partnerSend<PartnerChange>(`partner/requests/${id}/change-requests`, 'POST', body),
   shifts: () => partnerSend<PartnerShift[]>('partner/shifts'),
 };
 export const offerApi = {
@@ -56,5 +59,7 @@ export function staffPartnerApi(role: 'admin' | 'manager') {
     update: (request: CleaningRequest, body: RequestInput) => partnerSend<CleaningRequest>(`${base}/requests/${request.id}`, 'PUT', { ...body, version: request.version }),
     cancel: (request: CleaningRequest, reason: string) => partnerSend<CleaningRequest>(`${base}/requests/${request.id}/cancel`, 'POST', { version: request.version, reason }),
     resolve: (id: string, resolution: string) => partnerSend<PartnerChange>(`${base}/change-requests/${id}/resolve`, 'POST', { resolution }),
+    // Applies a structured request to the request at the version staff reviewed, then resolves the change.
+    apply: (id: string, version: number, resolution: string) => partnerSend<PartnerChange>(`${base}/change-requests/${id}/apply`, 'POST', { version, resolution }),
   };
 }

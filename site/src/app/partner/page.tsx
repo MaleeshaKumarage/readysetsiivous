@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { Building2, CalendarClock, MessageSquare, RefreshCw, Plus, ArrowRight, UserRound, LogOut } from 'lucide-react';
 import { Badge, Button, buttonClasses, Card, Dialog, Field, Input, Textarea, fontFamily, palette } from '@/ds';
 import { authTenant, initAuth, isAuthenticated, isPartner, isAdmin, isManager, login, logout } from '@/lib/auth';
-import { partnerApi, type CleaningRequest, type PartnerCompletion, type PartnerIdentity, type PartnerShift, type PartnerChange } from '@/lib/partnerApi';
+import { partnerApi, type CleaningRequest, type PartnerChangeAction, type PartnerCompletion, type PartnerIdentity, type PartnerShift, type PartnerChange } from '@/lib/partnerApi';
 import { partnerCopy, partnerLanguageKey, partnerMessage, partnerStatus, type PartnerLanguage } from '@/lib/partnerLocale';
 import type { Branch } from '@/lib/adminApi';
 import { QuoteRequestedBadge } from '@/components/QuoteRequests';
@@ -40,6 +40,9 @@ export default function PartnerPage() {
   const [cityFilter, setCityFilter] = useState('');
   const [from, setFrom] = useState(''), [to, setTo] = useState(''), [exact, setExact] = useState(false), [time, setTime] = useState(''), [notes, setNotes] = useState('');
   const [change, setChange] = useState<{ kind: 'branch' | 'request'; id: string } | null>(null), [message, setMessage] = useState('');
+  // Structured request changes: what the owner needs, and the proposed dates, time or instructions.
+  const [changeAction, setChangeAction] = useState<PartnerChangeAction>('Message'), [changeFrom, setChangeFrom] = useState(''), [changeTo, setChangeTo] = useState(''), [changeTime, setChangeTime] = useState(''), [changeNotes, setChangeNotes] = useState('');
+  function closeChange() { setChange(null); setChangeAction('Message'); setChangeFrom(''); setChangeTo(''); setChangeTime(''); setChangeNotes(''); }
   // The request whose cancellation is waiting for confirmation on its own card.
   const [cancelling, setCancelling] = useState<string | null>(null);
   // Completed-visit summary for one request, loaded when opened. Photos are large, so the list never carries them.
@@ -217,6 +220,9 @@ export default function PartnerPage() {
               <h3>{branches.find(branch => branch.id === item.branchId)?.name ?? t.property} · {item.kind === 'Property' ? t.kindProperty : item.kind === 'Request' || item.kind === 'CleaningRequest' ? t.kindRequest : t.kindChange}</h3>
               <Badge variant="subtle" className="partner-badge">{item.resolvedUtc ? t.resolved : t.awaitingStaff}</Badge>
               <p className="partner-entered">{item.message}</p>
+              {item.action && item.action !== 'Message' && <p className="partner-requested-change"><strong>{t.requestedChange}:</strong>{' '}
+                {item.action === 'Reschedule' ? `${item.proposedFromDate ? date(item.proposedFromDate) : ''} – ${item.proposedToDate ? date(item.proposedToDate) : ''}${item.proposedExactStartLocalTime ? ` ${t.at} ${item.proposedExactStartLocalTime.slice(0, 5)}` : ''}`
+                  : item.action === 'Instructions' ? item.proposedNotes : t.kindCancel}</p>}
               {item.resolvedUtc && <div className="partner-staff-response"><h4>{t.staffResponse}</h4><p className="partner-entered">{item.resolution}</p></div>}
             </Card></article>)}</div>
           </section>}
@@ -285,12 +291,24 @@ export default function PartnerPage() {
             <div className="partner-form-actions"><Button variant="outline" className="partner-secondary" onClick={() => setVisit(null)}>{t.closeVisit}</Button></div>
           </Card>}
         </Dialog>
-        <Dialog open={change !== null} title={t.staffChanges} onClose={() => setChange(null)} className="partner-form-panel">
+        <Dialog open={change !== null} title={t.staffChanges} onClose={closeChange} className="partner-form-panel">
           <Card className="partner-surface"><form onInvalid={invalid} className="partner-form-grid" onSubmit={event => {
-            event.preventDefault(); void act(async () => { if (change?.kind === 'branch') await partnerApi.branchChange(change?.id ?? "", message); else await partnerApi.requestChange(change?.id ?? "", message); setChange(null); }, base.changeSent);
+            event.preventDefault(); void act(async () => { if (change?.kind === 'branch') await partnerApi.branchChange(change?.id ?? "", message); else await partnerApi.requestChange(change?.id ?? "", { message, action: changeAction, fromDate: changeFrom || undefined, toDate: changeTo || undefined, exactStartLocalTime: changeTime || null, notes: changeAction === 'Instructions' ? changeNotes : null }); closeChange(); }, base.changeSent);
           }}>
+            {change?.kind === 'request' && <>
+              <div className="partner-form-wide"><label htmlFor="partner-change-kind" className="block mb-1.5 text-sm font-semibold">{t.changeKind}</label>
+                <select id="partner-change-kind" className="partner-field partner-select" value={changeAction} onChange={event => setChangeAction(event.target.value as PartnerChangeAction)}>
+                  <option value="Message">{t.kindMessage}</option><option value="Reschedule">{t.kindReschedule}</option><option value="Instructions">{t.kindInstructions}</option><option value="Cancel">{t.kindCancel}</option>
+                </select></div>
+              {changeAction === 'Reschedule' && <>
+                <Field label={t.newFromDate}><Input className="partner-field" type="date" required value={changeFrom} onChange={event => setChangeFrom(event.target.value)} /></Field>
+                <Field label={t.newToDate}><Input className="partner-field" type="date" required min={changeFrom} value={changeTo} onChange={event => setChangeTo(event.target.value)} /></Field>
+                <Field label={t.newTime}><Input className="partner-field" type="time" value={changeTime} onChange={event => setChangeTime(event.target.value)} /></Field>
+              </>}
+              {changeAction === 'Instructions' && <Field label={t.newInstructions} className="partner-form-wide"><Textarea className="partner-field" required maxLength={4000} value={changeNotes} onChange={event => setChangeNotes(event.target.value)} /></Field>}
+            </>}
             <Field label={t.describeChange} className="partner-form-wide"><Textarea className="partner-field" required maxLength={2000} value={message} onChange={event => setMessage(event.target.value)} /></Field>
-            <div className="partner-form-actions"><Button type="submit" disabled={busy || !message.trim()}>{t.sendChange}</Button><Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => setChange(null)}>{t.cancel}</Button></div>
+            <div className="partner-form-actions"><Button type="submit" disabled={busy || !message.trim()}>{t.sendChange}</Button><Button variant="outline" className="partner-secondary" disabled={busy} onClick={closeChange}>{t.cancel}</Button></div>
           </form></Card>
         </Dialog>
       </>}
