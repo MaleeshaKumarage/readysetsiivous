@@ -30,24 +30,27 @@ public class MeInventoryController(InventoryService inventory) : ControllerBase
         return Ok(await inventory.ListUsageAsync(employee.EmployeeId, null, null, Math.Max(0, skip), Math.Clamp(take, 1, 200), ct));
     }
 
+    // Room for the maximum photos at the per-photo limit, plus form overhead. Anything larger is refused before it is read.
     [HttpPost("usage")]
-    [RequestSizeLimit(40 * 1024 * 1024)]
+    [RequestSizeLimit(27 * 1024 * 1024)]
     public async Task<IActionResult> RecordUsage([FromForm] MeUsageForm form, CancellationToken ct)
     {
-        // Check the count before buffering any file, so an oversized request is rejected cheaply.
+        // Authorise before reading any file, so a non-staff caller cannot make the server buffer uploads.
+        var actor = Actor();
         if ((form.Photos?.Count ?? 0) > InventoryService.MaxPhotosPerEntry)
             throw new FluentValidation.ValidationException($"Attach up to {InventoryService.MaxPhotosPerEntry} photos per entry.");
         var photos = new List<byte[]>();
         foreach (var file in form.Photos ?? [])
         {
             if (file.Length == 0) throw new FluentValidation.ValidationException("Choose a non-empty photo.");
-            if (file.Length > InventoryService.MaxPhotoBytes) throw new FluentValidation.ValidationException("Each photo must be 5 MiB or smaller.");
+            if (file.Length > InventoryService.MaxPhotoBytes)
+                throw new CleaningSuite.Application.Common.UploadPayloadTooLargeException("Inventory photos must be 5 MiB or smaller.");
             await using var input = file.OpenReadStream();
             using var buffer = new MemoryStream();
             await input.CopyToAsync(buffer, ct);
             photos.Add(buffer.ToArray());
         }
-        return Ok(await inventory.RecordUsageAsync(Actor(), form.LocationId, form.ItemId, form.Quantity, form.Note, photos, ct));
+        return Ok(await inventory.RecordUsageAsync(actor, form.LocationId, form.ItemId, form.Quantity, form.Note, photos, ct));
     }
 
     [HttpGet("usage/{id:guid}/photos/{photoId:guid}")]
@@ -57,6 +60,8 @@ public class MeInventoryController(InventoryService inventory) : ControllerBase
         var (bytes, contentType) = await inventory.ReadPhotoAsync(id, photoId, employee.EmployeeId, ct);
         Response.Headers["Cache-Control"] = "private, no-store";
         Response.Headers["X-Content-Type-Options"] = "nosniff";
+        // Served as a download, so a stored file is never rendered inline in the application origin.
+        Response.Headers["Content-Disposition"] = "attachment";
         return File(bytes, contentType);
     }
 

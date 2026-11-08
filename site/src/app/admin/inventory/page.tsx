@@ -72,6 +72,7 @@ function LogTab() {
       return;
     }
     setRows(null);
+    // A fresh object, so applying the same filters again still changes state and reloads the log.
     setApplied({ ...draft });
   }
 
@@ -163,7 +164,6 @@ function LogTab() {
 function PhotoGallery({ entry }: { entry: InventoryUsage }) {
   const [urls, setUrls] = useState<string[]>([]);
   const [failed, setFailed] = useState(false);
-  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -173,18 +173,17 @@ function PhotoGallery({ entry }: { entry: InventoryUsage }) {
         if (!active) { list.forEach(url => URL.revokeObjectURL(url)); return; }
         created.push(...list);
         setUrls(list);
-        setLoaded(true);
       })
-      .catch(() => { if (active) { setFailed(true); setLoaded(true); } });
+      .catch(() => { if (active) setFailed(true); });
     return () => {
       active = false;
       created.forEach(url => URL.revokeObjectURL(url));
     };
   }, [entry]);
 
+  if (entry.photoIds.length === 0) return <Text c="dimmed">No photos were attached to this entry.</Text>;
   if (failed) return <Text c="red">Photos could not be loaded.</Text>;
-  if (!loaded) return <Loader size="sm" />;
-  if (urls.length === 0) return <Text c="dimmed">No photos.</Text>;
+  if (urls.length === 0) return <Loader size="sm" />;
   return (
     <Group>
       {urls.map((url, index) => (

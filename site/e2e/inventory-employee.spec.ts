@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
+
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization' };
 const locationId = '33333333-3333-4333-8333-333333333331';
 const keysId = '33333333-3333-4333-8333-333333333332';
@@ -92,10 +93,22 @@ test('quantity must be a whole number of at least one', async ({ page }) => {
 
   await page.getByLabel(/Quantity/).fill('0');
   await expect(page.getByRole('button', { name: 'Save entry' })).toBeDisabled();
+  // A decimal is not a whole number of items, so Save stays disabled.
   await page.getByLabel(/Quantity/).fill('1.5');
   await expect(page.getByRole('button', { name: 'Save entry' })).toBeDisabled();
   await page.getByLabel(/Quantity/).fill('2');
   await expect(page.getByRole('button', { name: 'Save entry' })).toBeEnabled();
+});
+
+test('no more than five photos can be attached, and a sixth is refused with the limit message', async ({ page }) => {
+  await setup(page);
+  await openInventory(page);
+  const input = page.getByLabel('Photos (at least 1, up to 5)');
+  await input.setInputFiles(Array.from({ length: 6 }, (_, index) => ({ ...photo, name: `keys-${index + 1}.png` })));
+
+  await expect(page.getByText('You can attach up to 5 photos per entry.')).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Selected photos' }).getByRole('listitem')).toHaveCount(5);
+  await expect(input).toBeDisabled();
 });
 
 test('employee logs an existing item with a photo and sees it in their history', async ({ page }) => {
@@ -126,11 +139,15 @@ test('employee logs an existing item with a photo and sees it in their history',
   await expect(page.getByRole('button', { name: 'Save entry' })).toBeDisabled();
 });
 
-test('a failed history reload after a successful save is not reported as an unsaved entry', async ({ page }) => {
+test('a failed history reload after a successful save is not reported as an unsaved entry, and Try again recovers', async ({ page }) => {
   const work = await setup(page);
+  let reloadFailures = 0;
   await page.route(/\/api\/v1\/me\/inventory\/usage(\?.*)?$/, route => {
-    // Fail only the reload that follows the save; the first load and the save itself succeed.
-    if (route.request().method() === 'GET' && work.posts.some(p => p.url.includes('/usage'))) return route.fulfill({ status: 503, headers });
+    // Fail only the first reload that follows the save. Later reads succeed, so Try again can recover.
+    if (route.request().method() === 'GET' && work.posts.some(p => p.url.includes('/usage')) && reloadFailures === 0) {
+      reloadFailures++;
+      return route.fulfill({ status: 503, headers });
+    }
     return route.fallback();
   });
   await openInventory(page);
@@ -140,10 +157,14 @@ test('a failed history reload after a successful save is not reported as an unsa
   await page.getByLabel('Photos (at least 1, up to 5)').setInputFiles(photo);
   await page.getByRole('button', { name: 'Save entry' }).click();
 
+  // Wait for the failed reload to render before asserting anything about it.
   await expect(page.getByText('Entry saved.')).toBeVisible();
-  await expect(page.getByText('The entry was not saved')).toHaveCount(0);
   await expect(page.getByText('Could not load your history.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+  await expect(page.getByText('The entry was not saved')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.getByText('Could not load your history.')).toHaveCount(0);
+  await expect(page.locator('section[aria-labelledby="history-heading"]').getByText('Keys: 1 pcs')).toBeVisible();
 });
 
 test('employee adds a new item and it is used for the entry', async ({ page }) => {

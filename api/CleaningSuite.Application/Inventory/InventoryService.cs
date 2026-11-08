@@ -6,10 +6,10 @@ using FluentValidation;
 namespace CleaningSuite.Application.Inventory;
 
 /// <summary>A name or version conflict in the inventory catalog or log. The message says what to do next.</summary>
-public class InventoryConflictException(string message) : Exception(message);
+public class InventoryConflictException(string message, Exception? inner = null) : Exception(message, inner);
 
 /// <summary>The database refused a second catalog entry with the same name (a concurrent create won).</summary>
-public sealed class InventoryDuplicateNameException(string message) : InventoryConflictException(message);
+public sealed class InventoryDuplicateNameException(string message, Exception? inner = null) : InventoryConflictException(message, inner);
 
 public interface IInventoryRepository
 {
@@ -48,12 +48,13 @@ public sealed record InventoryUsageDto(
 public sealed class InventoryService(IInventoryRepository repository, IInventoryFileStore files, IUploadContentValidator uploads, TimeProvider clock)
 {
     public const int MaxPhotosPerEntry = 5;
-    public const int MaxPhotoBytes = 5 * 1024 * 1024;
     public const int MaxQuantity = 10000;
     public const int MaxNoteLength = 500;
     public const int MaxNameLength = 80;
     public const int MaxUnitLength = 20;
     public const int MaxExportRows = 5000;
+    /// <summary>Largest single photo accepted. Matches the image validator's limit; checked before a file is buffered.</summary>
+    public const long MaxPhotoBytes = 5L * 1024 * 1024;
     public const string DefaultUnit = "pcs";
     public const string VersionConflictMessage = "This was changed by someone else. Refresh the page and try again.";
 
@@ -233,8 +234,10 @@ public sealed class InventoryService(IInventoryRepository repository, IInventory
     public async Task<string> ExportCsvAsync(Guid? employeeId, DateOnly? from, DateOnly? to, CancellationToken ct)
     {
         var (fromUtc, toUtc) = DateRange(from, to);
+        // Ask for one row more than the limit, so an export that would be cut short is refused rather than returned incomplete.
         var rows = await repository.ListUsageAsync(new InventoryUsageQuery(employeeId, fromUtc, toUtc, 0, MaxExportRows + 1), ct);
-        if (rows.Count > MaxExportRows) throw new FluentValidation.ValidationException($"The export has more than {MaxExportRows:N0} entries. Narrow the date range or employee filter.");
+        if (rows.Count > MaxExportRows)
+            throw new FluentValidation.ValidationException($"More than {MaxExportRows:N0} entries match. Narrow the date range and export again.");
         var lines = new List<string> { string.Join(',', "Taken (Helsinki)", "Employee", "Location", "Item", "Quantity", "Unit", "Note", "Photos") };
         foreach (var row in rows)
         {
@@ -309,9 +312,10 @@ public sealed class InventoryService(IInventoryRepository repository, IInventory
 
     private static string Csv(string value)
     {
-        // Prefix formula-like values so a spreadsheet does not run them as formulas. Tab and CR also start a
-        // formula/DDE in Excel, so they are treated the same as = + - @.
-        var safe = value.Length > 0 && "=+-@\t\r".Contains(value[0]) ? "'" + value : value;
+        // Spreadsheets treat a cell as a formula when its first visible character is one of these. Leading tabs,
+        // carriage returns and spaces are skipped first, so "\t=cmd" is neutralised like "=cmd".
+        var firstVisible = value.TrimStart(' ', '\t', '\r', '\n');
+        var safe = firstVisible.Length > 0 && "=+-@".Contains(firstVisible[0]) ? "'" + value : value;
         return "\"" + safe.Replace("\"", "\"\"") + "\"";
     }
 
