@@ -59,10 +59,15 @@ public class ShiftRepository : IShiftRepository
 
     public async Task SaveAsync(Shift shift, CancellationToken ct = default)
     {
+        await SaveWithoutCommitAsync(shift, ct);
+        await Session.SaveChangesAsync(ct);
+    }
+
+    public async Task SaveWithoutCommitAsync(Shift shift, CancellationToken ct = default)
+    {
         if (!_shiftSnapshots.TryGetValue(shift.Id, out var before) || before != ScheduleFingerprint(shift))
             await StageChange(shift.Id, [], ct);
         await ShiftTabs.StoreAsync(Session, shift, ct);
-        await Session.SaveChangesAsync(ct);
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
@@ -70,6 +75,12 @@ public class ShiftRepository : IShiftRepository
         // Remove the live shift and roster atomically; keep a separate snapshot
         // so completed QC evidence and historic reports remain meaningful.
         await _tenantSession.BeginReservationAsync(ct);
+        await DeleteWithoutCommitAsync(id, ct);
+        await Session.SaveChangesAsync(ct);
+    }
+
+    public async Task DeleteWithoutCommitAsync(Guid id, CancellationToken ct = default)
+    {
         var shift = await Session.LoadAsync<Shift>(id, ct) ?? throw new NotFoundException("Shift", id);
         if (shift.IsActive) throw new InactiveRecordDeleteConflictException("Deactivate the shift before deleting it.");
         var assignments = await Session.Query<ShiftAssignment>().Where(x => x.ShiftId == id).ToListAsync(ct);
@@ -90,7 +101,6 @@ public class ShiftRepository : IShiftRepository
         }
         await StageChange(id, assignments.Select(x => x.EmployeeId), ct);
         Session.Delete<Shift>(id);
-        await Session.SaveChangesAsync(ct);
     }
 
     public async Task<Shift?> GetDeletedSnapshotAsync(Guid id, CancellationToken ct = default) =>
@@ -136,9 +146,14 @@ public class ShiftRepository : IShiftRepository
 
     public async Task SaveAssignmentAsync(ShiftAssignment assignment, CancellationToken ct = default)
     {
+        await SaveAssignmentWithoutCommitAsync(assignment, ct);
+        await Session.SaveChangesAsync(ct);
+    }
+
+    public async Task SaveAssignmentWithoutCommitAsync(ShiftAssignment assignment, CancellationToken ct = default)
+    {
         await StageChange(assignment.ShiftId, [assignment.EmployeeId], ct);
         Session.Store(assignment);
-        await Session.SaveChangesAsync(ct);
     }
 
     public async Task SaveDeactivationAsync(Shift shift, IReadOnlyList<ShiftAssignment> releasedAssignments, CancellationToken ct = default)

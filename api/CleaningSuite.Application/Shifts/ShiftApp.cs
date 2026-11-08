@@ -70,6 +70,11 @@ public interface IShiftRepository
     Task<IReadOnlyList<Shift>> ListByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct = default);
     Task SaveAsync(Shift shift, CancellationToken ct = default);
     Task DeleteAsync(Guid id, CancellationToken ct = default);
+    // Same writes as the methods above, staged in the current session without committing. For callers that commit several
+    // changes together and hold the work reservation themselves.
+    Task SaveWithoutCommitAsync(Shift shift, CancellationToken ct = default);
+    Task SaveAssignmentWithoutCommitAsync(ShiftAssignment assignment, CancellationToken ct = default);
+    Task DeleteWithoutCommitAsync(Guid id, CancellationToken ct = default);
     Task<ShiftAssignment?> GetAssignmentAsync(Guid shiftId, Guid employeeId, CancellationToken ct = default);
     Task<IReadOnlyList<ShiftAssignment>> ListAssignmentsByEmployeeAsync(Guid employeeId, CancellationToken ct = default);
     Task<IReadOnlyList<ShiftAssignment>> ListAssignmentsByShiftAsync(Guid shiftId, CancellationToken ct = default);

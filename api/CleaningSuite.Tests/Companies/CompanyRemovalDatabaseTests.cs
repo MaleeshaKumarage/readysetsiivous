@@ -221,4 +221,42 @@ public class CompanyRemovalDatabaseTests
 
         await Assert.ThrowsAsync<NotFoundException>(() => summary.Handle(new(Guid.NewGuid()), default));
     }
+
+    [QualityCycleDatabaseFact]
+    public async Task A_failure_in_the_single_commit_rolls_back_every_staged_step()
+    {
+        var (store, context, provider) = await Start(); using var _ = provider as IDisposable;
+        var seeded = await Seed(store, context);
+        // The company delete is the last write in the one commit. Make the database refuse it, so the whole commit must fail.
+        var schema = store.Options.DatabaseSchemaName;
+        await using (var connection = new Npgsql.NpgsqlConnection(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = $@"
+                CREATE OR REPLACE FUNCTION {schema}.refuse_company_delete() RETURNS trigger AS $$
+                BEGIN RAISE EXCEPTION 'simulated commit failure'; END; $$ LANGUAGE plpgsql;
+                CREATE TRIGGER refuse_company_delete BEFORE DELETE ON {schema}.mt_doc_company
+                FOR EACH ROW EXECUTE FUNCTION {schema}.refuse_company_delete();";
+            await command.ExecuteNonQueryAsync();
+        }
+        var handler = Remover(store, seeded.Tenant, out var session); using var disposeSession = session;
+
+        var error = await Assert.ThrowsAnyAsync<Exception>(() =>
+            handler.Handle(new(seeded.Company.Id, true, true, true, ConfirmPaidInvoices: true), default));
+
+        Assert.Contains("simulated commit failure", error.ToString());
+        using var read = store.QuerySession(seeded.Tenant);
+        Assert.NotNull(await read.LoadAsync<Company>(seeded.Company.Id));
+        Assert.True((await read.LoadAsync<Shift>(seeded.Shift.Id))!.IsActive);
+        Assert.NotNull(await read.LoadAsync<Branch>(seeded.Branch.Id));
+        Assert.NotNull(await read.LoadAsync<Invoice>(seeded.InvoiceId));
+        Assert.NotNull(await read.LoadAsync<Invoice>(seeded.PaidInvoiceId));
+        Assert.NotNull(await read.LoadAsync<Agreement>(seeded.AgreementId));
+        Assert.NotNull(await read.LoadAsync<QualityCycleForm>(seeded.FormId));
+        Assert.NotNull(await read.LoadAsync<PartnerCleaningRequest>(seeded.PartnerRequestId));
+        var account = await read.LoadAsync<Employee>(seeded.PartnerAccountId);
+        Assert.True(account!.IsActive);
+        Assert.Equal(seeded.Company.Id, account.PartnerCompanyId);
+    }
 }

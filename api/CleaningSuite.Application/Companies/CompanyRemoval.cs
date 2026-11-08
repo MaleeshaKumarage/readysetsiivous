@@ -77,19 +77,21 @@ public static class CompanyRemoval
     {
         public async Task<RemoveCompanyResultDto> Handle(RemoveCompanyCommand request, CancellationToken ct)
         {
-            // The removal runs under the work reservation. The identity calls run after it is released, under each
+            // The database writes commit together in RemoveAsync. The identity calls run after that commit, under each
             // account's identity lock, which is the order the employee deactivate uses.
             var (result, loginsToDisable) = await RemoveAsync(request, ct);
             foreach (var account in loginsToDisable) await DisableLoginAsync(account, ct);
             return result;
         }
 
+        // Every write is staged in one session and committed by one SaveChanges at the end. A failure before that commit
+        // leaves nothing removed, and a failure during it is rolled back by the database.
         private async Task<(RemoveCompanyResultDto Result, List<CleaningSuite.Domain.Employees.Employee> LoginsToDisable)> RemoveAsync(RemoveCompanyCommand request, CancellationToken ct)
         {
             await using var lease = reservation is null ? null : await reservation.AcquireAsync(ct);
             var company = await companies.GetAsync(request.Id, ct) ?? throw new NotFoundException("Company", request.Id);
 
-            // Refusals are decided before anything is removed.
+            // Refusals are decided before anything is staged.
             if (company.IsActive) throw new InactiveRecordDeleteConflictException("Deactivate the company before deleting it.");
             var companyShifts = await shifts.ListAsync(company.Id, null, ct);
             if (request.Branches && !request.Shifts && companyShifts.Count > 0)
@@ -101,14 +103,13 @@ public static class CompanyRemoval
             if (request.Invoices && paidCount > 0 && !request.ConfirmPaidInvoices)
                 throw new InactiveRecordDeleteConflictException($"This company has {paidCount} paid invoice(s). Confirm their removal to continue.");
 
+            var session = partnerStore.Session;
             var full = request.Branches && request.Shifts && request.Invoices;
             var now = DateTime.UtcNow;
             var shiftsRemoved = 0; var placesRemoved = 0; var invoicesRemoved = 0; var agreementsRemoved = 0;
             var checklistsRemoved = 0; var partnerRemoved = 0; var accountsDeactivated = 0; var templatesUnlinked = 0; var leadsUnlinked = 0;
             var loginsToDisable = new List<CleaningSuite.Domain.Employees.Employee>();
 
-            // Each save commits on its own, so the removal is not one transaction. Refusals are checked above; a failure part way
-            // leaves the finished categories removed and the rest in place, and the same removal can be run again.
             if (request.Shifts)
             {
                 foreach (var shift in companyShifts)
@@ -118,15 +119,15 @@ public static class CompanyRemoval
                         shift.EnsureQualityCycleHistory();
                         shift.Deactivate();
                         shift.RecordQualityCyclePlan(now);
-                        await shifts.SaveAsync(shift, ct);
+                        await shifts.SaveWithoutCommitAsync(shift, ct);
                     }
                     foreach (var assignment in await shifts.ListAssignmentsByShiftAsync(shift.Id, ct))
                     {
                         if (!assignment.IsActive) continue;
                         assignment.EndFrom(now, now);
-                        await shifts.SaveAssignmentAsync(assignment, ct);
+                        await shifts.SaveAssignmentWithoutCommitAsync(assignment, ct);
                     }
-                    await shifts.DeleteAsync(shift.Id, ct);
+                    await shifts.DeleteWithoutCommitAsync(shift.Id, ct);
                     shiftsRemoved++;
                 }
             }
@@ -134,79 +135,67 @@ public static class CompanyRemoval
             if (request.Branches)
             {
                 // Partner requests and notifications for these places go with them.
-                var placeRequests = await partnerStore.Session.Query<PartnerCleaningRequest>().Where(x => branchIds.Contains(x.BranchId)).ToListAsync(ct);
-                var placeChanges = await partnerStore.Session.Query<PartnerChangeRequest>().Where(x => branchIds.Contains(x.BranchId)).ToListAsync(ct);
-                var placeNotes = await partnerStore.Session.Query<PartnerNotification>().Where(x => branchIds.Contains(x.BranchId)).ToListAsync(ct);
-                foreach (var item in placeRequests) partnerStore.Session.Delete(item);
-                foreach (var item in placeChanges) partnerStore.Session.Delete(item);
-                foreach (var item in placeNotes) partnerStore.Session.Delete(item);
+                var placeRequests = await session.Query<PartnerCleaningRequest>().Where(x => branchIds.Contains(x.BranchId)).ToListAsync(ct);
+                var placeChanges = await session.Query<PartnerChangeRequest>().Where(x => branchIds.Contains(x.BranchId)).ToListAsync(ct);
+                var placeNotes = await session.Query<PartnerNotification>().Where(x => branchIds.Contains(x.BranchId)).ToListAsync(ct);
+                foreach (var item in placeRequests) session.Delete(item);
+                foreach (var item in placeChanges) session.Delete(item);
+                foreach (var item in placeNotes) session.Delete(item);
                 partnerRemoved += placeRequests.Count + placeChanges.Count + placeNotes.Count;
-                await partnerStore.Session.SaveChangesAsync(ct);
-
-                foreach (var branch in companyBranches)
-                {
-                    if (branch.IsActive)
-                    {
-                        branch.Deactivate();
-                        await branches.SaveAsync(branch, ct);
-                    }
-                    await branches.DeleteAsync(branch.Id, ct);
-                    placesRemoved++;
-                }
+                foreach (var branch in companyBranches) { session.Delete<Branch>(branch.Id); placesRemoved++; }
             }
 
             if (request.Invoices)
             {
-                foreach (var invoice in companyInvoices) partnerStore.Session.Delete<Invoice>(invoice.Id);
+                foreach (var invoice in companyInvoices) session.Delete<Invoice>(invoice.Id);
                 invoicesRemoved = companyInvoices.Length;
-                await partnerStore.Session.SaveChangesAsync(ct);
             }
 
             if (full)
             {
                 foreach (var agreement in (await agreements.ListAsync(tenant.TenantId, ct)).Where(a => a.CompanyId == company.Id))
                 {
-                    await agreements.DeleteAsync(tenant.TenantId, agreement.Id, ct);
+                    session.Delete<Agreement>(agreement.Id);
                     agreementsRemoved++;
                 }
-                var audits = await partnerStore.Session.Query<AgreementAssociationRepairAudit>().Where(x => x.CompanyId == company.Id || x.PreviousCompanyId == company.Id).ToListAsync(ct);
-                foreach (var audit in audits) partnerStore.Session.Delete(audit);
+                var audits = await session.Query<AgreementAssociationRepairAudit>().Where(x => x.CompanyId == company.Id || x.PreviousCompanyId == company.Id).ToListAsync(ct);
+                foreach (var audit in audits) session.Delete(audit);
 
-                var checklists = await partnerStore.Session.Query<QualityCycleForm>().Where(x => x.CompanyId == company.Id).ToListAsync(ct);
-                foreach (var form in checklists) partnerStore.Session.Delete(form);
+                var checklists = await session.Query<QualityCycleForm>().Where(x => x.CompanyId == company.Id).ToListAsync(ct);
+                foreach (var form in checklists) session.Delete(form);
                 checklistsRemoved = checklists.Count;
 
-                var companyRequests = await partnerStore.Session.Query<PartnerCleaningRequest>().Where(x => x.CompanyId == company.Id).ToListAsync(ct);
-                var companyChanges = await partnerStore.Session.Query<PartnerChangeRequest>().Where(x => x.CompanyId == company.Id).ToListAsync(ct);
-                foreach (var item in companyRequests) partnerStore.Session.Delete(item);
-                foreach (var item in companyChanges) partnerStore.Session.Delete(item);
+                var companyRequests = await session.Query<PartnerCleaningRequest>().Where(x => x.CompanyId == company.Id).ToListAsync(ct);
+                var companyChanges = await session.Query<PartnerChangeRequest>().Where(x => x.CompanyId == company.Id).ToListAsync(ct);
+                foreach (var item in companyRequests) session.Delete(item);
+                foreach (var item in companyChanges) session.Delete(item);
                 partnerRemoved += companyRequests.Count + companyChanges.Count;
 
                 // Partner accounts are deactivated and unlinked from the company. Their login is disabled after the removal commits.
-                var accounts = await partnerStore.Session.Query<CleaningSuite.Domain.Employees.Employee>().Where(x => x.PartnerCompanyId == company.Id).ToListAsync(ct);
+                var accounts = await session.Query<CleaningSuite.Domain.Employees.Employee>().Where(x => x.PartnerCompanyId == company.Id).ToListAsync(ct);
                 foreach (var account in accounts)
                 {
                     account.PartnerCompanyId = null;
                     account.IsActive = false;
                     account.IdentitySyncPending = !string.IsNullOrWhiteSpace(account.KeycloakUserId);
                     account.UpdatedUtc = DateTime.UtcNow;
-                    partnerStore.Session.Store(account);
+                    session.Store(account);
                     if (account.IdentitySyncPending) loginsToDisable.Add(account);
                 }
                 accountsDeactivated = accounts.Count;
 
                 // Templates and leads are kept and unlinked from the company.
-                var templates = await partnerStore.Session.Query<QualityCycleTemplate>().Where(x => x.CompanyId == company.Id).ToListAsync(ct);
-                foreach (var template in templates) { template.CompanyId = null; partnerStore.Session.Store(template); }
+                var templates = await session.Query<QualityCycleTemplate>().Where(x => x.CompanyId == company.Id).ToListAsync(ct);
+                foreach (var template in templates) { template.CompanyId = null; session.Store(template); }
                 templatesUnlinked = templates.Count;
-                var leads = await partnerStore.Session.Query<Lead>().Where(x => x.CompanyId == company.Id).ToListAsync(ct);
-                foreach (var lead in leads) { lead.CompanyId = null; partnerStore.Session.Store(lead); }
+                var leads = await session.Query<Lead>().Where(x => x.CompanyId == company.Id).ToListAsync(ct);
+                foreach (var lead in leads) { lead.CompanyId = null; session.Store(lead); }
                 leadsUnlinked = leads.Count;
 
-                await partnerStore.Session.SaveChangesAsync(ct);
-                await companies.DeleteAsync(company.Id, ct);
+                session.Delete<Company>(company.Id);
             }
 
+            await session.SaveChangesAsync(ct);
             return (new RemoveCompanyResultDto(shiftsRemoved, placesRemoved, invoicesRemoved, agreementsRemoved, checklistsRemoved,
                 partnerRemoved, accountsDeactivated, templatesUnlinked, leadsUnlinked, full), loginsToDisable);
         }
