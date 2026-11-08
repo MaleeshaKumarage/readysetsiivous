@@ -8,7 +8,8 @@ public class QualityCycleFormItem
     public bool IsChecked { get; set; }
 }
 
-public record QualityCyclePhoto(string Url, string Note);
+// Category names the required photo section this image answers (for example "Before"). Null for free photos.
+public record QualityCyclePhoto(string Url, string Note, string? Category = null);
 
 public class QualityCycleForm : BaseDocument
 {
@@ -103,7 +104,7 @@ public class QualityCycleForm : BaseDocument
             throw new ArgumentException("Add a separate note for each photo and submit paired photos rather than photoUrls.", nameof(photos));
         if (photos?.Any(p => p is null || string.IsNullOrWhiteSpace(p.Url) || string.IsNullOrWhiteSpace(p.Note)) == true)
             throw new ArgumentException("Add a separate note for each photo.", nameof(photos));
-        var evidence = photos?.Select(p => new QualityCyclePhoto(p.Url.Trim(), p.Note.Trim())).ToList() ?? new();
+        var evidence = photos?.Select(p => new QualityCyclePhoto(p.Url.Trim(), p.Note.Trim(), string.IsNullOrWhiteSpace(p.Category) ? null : p.Category.Trim())).ToList() ?? new();
 
         if (items.Count > 0)
         {

@@ -1,5 +1,6 @@
 const supportedTypes = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/bmp']);
-export interface ShiftPhoto { url: string; note: string }
+// category names the required photo section this image answers (for example "Before"). Free photos have none.
+export interface ShiftPhoto { url: string; note: string; category?: string }
 export const photoNoteMessage = 'Add a separate note for each photo.';
 const maxPhotos = 10;
 const maxPhotoBytes = 10 * 1024 * 1024;

@@ -196,6 +196,10 @@ test.describe('Finnish browser defaults', () => {
     await page.getByRole('tab', { name: 'Siivouspyynnöt', exact: true }).press('Home');
     await expect(properties).toHaveAttribute('aria-selected', 'true');
     await properties.press('End');
+    const settingsTab = page.getByRole('tab', { name: 'Asetukset', exact: true });
+    await expect(settingsTab).toHaveAttribute('aria-selected', 'true');
+    await expect(settingsTab).toBeFocused();
+    await settingsTab.press('ArrowLeft');
     const changesTab = page.getByRole('tab', { name: 'Muutospyynnöt', exact: true });
     await expect(changesTab).toHaveAttribute('aria-selected', 'true');
     await expect(changesTab).toBeFocused();
@@ -475,7 +479,7 @@ test('cancelled requests page 25 at a time with their own pager, independent of 
 });
 
 test('Finnish cancelled and completed request lists page with Finnish labels and keep the flexible-visit wording', async ({ page }) => {
-  const flexibleAccepted = { ...pending, status: 'Accepted', firstAcceptedAtUtc: '2026-11-01T10:00:00Z', plannedStartUtc: null, plannedEndUtc: null, acceptedCleanerName: 'Test Cleaner' };
+  const flexibleAccepted = { ...pending, status: 'Accepted', firstAcceptedAtUtc: '2026-11-01T10:00:00Z', plannedStartUtc: null, plannedEndUtc: null, acceptedCleanerName: 'T.' };
   const cancelled = Array.from({ length: 27 }, (_, index) => ({ ...pending, id: `fi-cancelled-${index}`, branchName: `Peruutettu kohde ${index}`, status: 'Cancelled', firstAcceptedAtUtc: null }));
   const done = [{ ...flexibleAccepted, id: 'fi-done', branchName: 'Valmis kohde', status: 'Completed' }];
   await owner(page, { requests: [...cancelled, ...done] }); await page.goto('/partner/');

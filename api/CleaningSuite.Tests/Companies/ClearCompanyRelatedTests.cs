@@ -35,6 +35,7 @@ public class ClearCompanyRelatedTests
             Forms.Setup(x => x.ListFormsAsync(It.IsAny<Guid?>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<Guid?>()))
                 .ReturnsAsync([]);
             Agreements.Setup(x => x.ListAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
+            Agreements.Setup(x => x.ListByCompanyAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
             var tenant = new Mock<ITenantContext>();
             tenant.Setup(x => x.TenantId).Returns("readysetsiivous");
             Tenant = tenant.Object;
@@ -93,7 +94,7 @@ public class ClearCompanyRelatedTests
         var fixture = new Fixture();
         var company = fixture.Company;
         var agreement = new Agreement { Id = Guid.NewGuid(), CompanyId = company.Id };
-        fixture.Agreements.Setup(x => x.ListAsync("readysetsiivous", It.IsAny<CancellationToken>())).ReturnsAsync([agreement]);
+        fixture.Agreements.Setup(x => x.ListByCompanyAsync("readysetsiivous", company.Id, It.IsAny<CancellationToken>())).ReturnsAsync([agreement]);
 
         var kept = await fixture.Handler().Handle(new(company.Id), default);
         Assert.Equal(0, kept.AgreementsDeleted);

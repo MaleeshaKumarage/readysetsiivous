@@ -7,7 +7,7 @@ const request = { id: 'request-one', version: 1, companyId: 'company-one', branc
 async function partnerSetup(page: Page, options: { accepted?: boolean; disabled?: boolean; role?: string } = {}) {
   await setupAdminMocks(page);
   await page.addInitScript(role => { (window as any).__MOCK_ROLES__ = [role]; }, options.role ?? 'partner');
-  const writes: { path: string; body: any }[] = []; let requests: any[] = options.accepted ? [{ ...request, status: 'Accepted', firstAcceptedAtUtc: '2026-11-01T08:00:00Z', acceptedCleanerName: 'Test Cleaner' }] : [];
+  const writes: { path: string; body: any }[] = []; let requests: any[] = options.accepted ? [{ ...request, status: 'Accepted', firstAcceptedAtUtc: '2026-11-01T08:00:00Z', acceptedCleanerName: 'T.' }] : [];
   let companyReads = 0;
   await page.route(/\/api\/v1\/partner\//, route => {
     const req = route.request(), path = new URL(req.url()).pathname.split('/partner')[1];
@@ -38,7 +38,7 @@ test('owner sees scoped properties, requests one visit and existing read-only sh
 
 test('accepted request is locked and owner requests staff changes', async ({ page }) => {
   const state = await partnerSetup(page, { accepted: true }); await page.goto('/partner/'); await page.getByRole('tab', { name: 'Cleaning requests', exact: true }).click();
-  await expect(page.getByText('Cleaner: Test Cleaner')).toBeVisible(); await expect(page.getByRole('button', { name: 'Edit request', exact: true })).toHaveCount(0); await expect(page.getByRole('button', { name: 'Cancel request', exact: true })).toHaveCount(0);
+  await expect(page.getByText('Cleaner: T.', { exact: true })).toBeVisible(); await expect(page.getByText('Test Cleaner')).toHaveCount(0); await expect(page.getByRole('button', { name: 'Edit request', exact: true })).toHaveCount(0); await expect(page.getByRole('button', { name: 'Cancel request', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Request a change or cancellation' }).click(); await page.getByLabel('Describe the requested change').fill('Please arrange a later visit.'); await page.getByRole('button', { name: 'Send change request' }).click();
   await expect(page.getByText('Change request sent to staff.')).toBeVisible(); expect(state.writes[0].path).toBe('/requests/request-one/change-requests');
 });

@@ -11,6 +11,8 @@ export const TENANT_TIME_ZONE = 'Europe/Helsinki';
 const HELSINKI_WINTER_OFFSET = '+02:00';
 
 export type ActorKey = 'owner' | 'admin' | 'manager' | 'cleaner' | 'autoCleaner' | 'newCleaner' | 'unlinked';
+// What the cleaner submitted on a visit: Quality Cycle checklists, notes and photos. Mirrors the server's completed-visit view.
+export interface VisitSeed { templateTitle?: string; tasks: { text: string; done: boolean }[]; cleanerNotes?: string | null; photos?: { url: string; note: string }[] }
 interface Person { id: string; firstName: string; lastName: string; role: string; isActive: boolean; autoAcceptWork?: boolean; keycloakUserId?: string | null }
 const ROLE_FOR_ACTOR: Record<ActorKey, string[]> = { owner: ['partner'], admin: ['admin'], manager: ['manager'], cleaner: ['employee'], autoCleaner: ['employee'], newCleaner: ['employee'], unlinked: ['employee'] };
 const PEOPLE: Record<ActorKey, Person> = {
@@ -27,7 +29,7 @@ const PEOPLE: Record<ActorKey, Person> = {
 
 export interface BranchRecord { id: string; companyId: string; name: string; street: string | null; postalCode: string | null; city: string | null; country: string | null; contactPhone: string | null; contactEmail: string | null; roomCount: number | null; bedCount: number | null; isActive: boolean; pricingReady: boolean; priceNet: number | null; vatRatePercent: number | null; estimatedDurationMinutes: number | null; quoteRequestedUtc: string | null }
 export interface RequestRecord { id: string; companyId: string; branchId: string; clientRequestId: string; version: number; fromDate: string; toDate: string; exactStartLocalTime: string | null; notes: string | null; priceNet: number; vatRatePercent: number; estimatedDurationMinutes: number; status: string; firstAcceptedAtUtc: string | null; linkedShiftId: string | null; plannedStartUtc: string | null; plannedEndUtc: string | null; acceptedEmployeeId: string | null; offeredEmployeeId: string | null; offerId: string | null; offerPlannedStartUtc: string | null; cancellationReason: string | null }
-export interface ChangeRecord { id: string; companyId: string; branchId: string | null; requestId: string | null; kind: string; message: string; resolvedUtc: string | null; resolution: string | null }
+export interface ChangeRecord { id: string; companyId: string; branchId: string | null; requestId: string | null; kind: string; message: string; resolvedUtc: string | null; resolution: string | null; action?: string; proposedFromDate?: string | null; proposedToDate?: string | null; proposedExactStartLocalTime?: string | null; proposedNotes?: string | null }
 export interface WriteRecord { actor: ActorKey; method: string; path: string; body: any; status: number }
 
 export class ApiError extends Error { constructor(readonly status: number, message: string) { super(message); } }
@@ -47,7 +49,35 @@ export class PartnerFlowBackend {
   changes: ChangeRecord[] = [];
   preferences: Record<string, boolean> = {};
   shiftActive: Record<string, boolean> = {};
+  visits: Record<string, VisitSeed> = {};
+  // The owner's one-time photo sections (see PartnerPortalSettings).
+  photoLabels: string[] = [];
+  account: Record<string, string | null> = {};
   writes: WriteRecord[] = [];
+
+  // Marks an accepted visit as finished by the cleaner, with the work they recorded.
+  completeVisit(request: RequestRecord, visit: VisitSeed): RequestRecord {
+    request.status = 'Completed'; request.version++;
+    this.visits[request.id] = visit;
+    return request;
+  }
+
+  // Mirrors PartnerService.Completion: only a finished visit is viewable, and only by the owning company.
+  private completion(requestId: string, companyId: string) {
+    const request = this.requests.find(item => item.id === requestId && item.companyId === companyId);
+    if (!request) throw new ApiError(404, 'Request not found.');
+    const visit = this.visits[requestId];
+    if (request.status !== 'Completed' || !visit) throw new ApiError(409, 'This visit has not been completed yet.');
+    const cleaner = request.acceptedEmployeeId ? this.employeeById(request.acceptedEmployeeId) : undefined;
+    return {
+      requestId, branchName: this.branchName(request.branchId), fromDate: request.fromDate, toDate: request.toDate,
+      plannedStartUtc: request.plannedStartUtc, plannedEndUtc: request.plannedEndUtc,
+      actualStartUtc: '2026-12-01T06:05:00Z', actualEndUtc: '2026-12-01T08:10:00Z',
+      cleanerInitial: cleaner ? `${cleaner.firstName.trim().charAt(0).toUpperCase()}.` : null,
+      reports: [{ templateTitle: visit.templateTitle ?? 'Apartment checklist', startedAtUtc: '2026-12-01T06:05:00Z', endedAtUtc: '2026-12-01T08:10:00Z', tasks: visit.tasks, cleanerNotes: visit.cleanerNotes ?? null, photos: visit.photos ?? [] }],
+      messages: this.changes.filter(item => item.requestId === requestId && item.companyId === companyId).map(item => ({ ...item, createdUtc: '2026-11-30T09:00:00Z' })),
+    };
+  }
   // Holds writes open for a moment, so in-progress states can be observed.
   writeDelayMs = 0;
   private sequence = 0;
@@ -58,9 +88,9 @@ export class PartnerFlowBackend {
   }
 
   // ----- seeding helpers (state set up directly, not through the UI) -----
-  addBranch(input: { name: string; companyId: string; priceNet?: number | null; estimatedDurationMinutes?: number | null; isActive?: boolean; quoteRequestedUtc?: string | null }): BranchRecord {
+  addBranch(input: { name: string; companyId: string; city?: string; priceNet?: number | null; estimatedDurationMinutes?: number | null; isActive?: boolean; quoteRequestedUtc?: string | null }): BranchRecord {
     const priced = input.priceNet != null && input.estimatedDurationMinutes != null;
-    const branch: BranchRecord = { id: this.nextId('branch'), companyId: input.companyId, name: input.name, street: 'Lake road 1', postalCode: '33100', city: 'Tampere', country: 'Finland', contactPhone: null, contactEmail: null, roomCount: 2, bedCount: 3, isActive: input.isActive ?? true, pricingReady: priced, priceNet: input.priceNet ?? null, vatRatePercent: priced ? 25.5 : null, estimatedDurationMinutes: input.estimatedDurationMinutes ?? null, quoteRequestedUtc: input.quoteRequestedUtc ?? null };
+    const branch: BranchRecord = { id: this.nextId('branch'), companyId: input.companyId, name: input.name, street: 'Lake road 1', postalCode: '33100', city: input.city ?? 'Tampere', country: 'Finland', contactPhone: null, contactEmail: null, roomCount: 2, bedCount: 3, isActive: input.isActive ?? true, pricingReady: priced, priceNet: input.priceNet ?? null, vatRatePercent: priced ? 25.5 : null, estimatedDurationMinutes: input.estimatedDurationMinutes ?? null, quoteRequestedUtc: input.quoteRequestedUtc ?? null };
     this.branches.push(branch);
     return branch;
   }
@@ -186,11 +216,29 @@ export class PartnerFlowBackend {
       return this.dto(request, false);
     }
     match = is(path, /^requests\/([^/]+)\/change-requests$/);
-    if (method === 'POST' && match) { this.ownRequest(match[1], company.id); return this.addChange({ kind: 'CleaningRequest', branchId: this.request(match[1]).branchId, requestId: match[1], message: body?.message }); }
+    if (method === 'POST' && match) {
+      this.ownRequest(match[1], company.id);
+      // Mirrors PartnerService.RequestChange: structured asks carry the proposal the staff will review.
+      return this.addChange({ kind: 'CleaningRequest', branchId: this.request(match[1]).branchId, requestId: match[1], message: body?.message,
+        action: body?.action ?? 'Message', proposedFromDate: body?.fromDate ?? null, proposedToDate: body?.toDate ?? null,
+        proposedExactStartLocalTime: body?.exactStartLocalTime ?? null, proposedNotes: body?.notes ?? null });
+    }
     if (method === 'GET' && path === 'change-requests') return this.changes.filter(item => item.companyId === company.id);
     if (method === 'GET' && path === 'shifts') {
       return this.requests.filter(item => item.companyId === company.id && item.linkedShiftId).map(item => ({ id: item.linkedShiftId, branchId: item.branchId, branchName: this.branchName(item.branchId), name: `Cleaning — ${this.branchName(item.branchId)}`, isActive: Boolean(this.shiftActive[item.linkedShiftId!]), schedule: { type: 'OnCallFlexible' }, validFrom: item.fromDate, validUntil: item.toDate }));
     }
+    // Mirrors PartnerService.Settings / UpdateSettings: names are trimmed, non-empty and unique ignoring case.
+    if (method === 'GET' && path === 'settings') return { photoLabels: this.photoLabels, account: this.account };
+    if (method === 'PUT' && path === 'settings') {
+      const labels: string[] = (body?.photoLabels ?? []).map((label: string) => label.trim());
+      if (labels.some(label => label.length === 0)) throw new ApiError(400, 'Each photo section needs a name.');
+      if (new Set(labels.map(label => label.toLowerCase())).size !== labels.length) throw new ApiError(400, 'Each photo section can only be listed once.');
+      this.photoLabels = labels;
+      this.account = body?.account ?? {};
+      return { photoLabels: labels, account: this.account };
+    }
+    match = is(path, /^requests\/([^/]+)\/completion$/);
+    if (method === 'GET' && match) return this.completion(match[1], company.id);
     throw new ApiError(404, `No fake partner route for ${method} ${path}.`);
   }
 
@@ -235,6 +283,20 @@ export class PartnerFlowBackend {
       request.acceptedEmployeeId = null; request.plannedStartUtc = null; request.plannedEndUtc = null;
       this.invalidateOffer(request); request.status = 'Requested'; request.version++;
       return this.dto(request, true);
+    }
+    // Mirrors PartnerService.Apply: the request changes at the version the staff reviewed, then the change is resolved.
+    match = is(path, /^change-requests\/([^/]+)\/apply$/);
+    if (method === 'POST' && match) {
+      const change = this.changes.find(item => item.id === match![1])!;
+      if (change.resolvedUtc) throw new ApiError(409, 'This change request has already been resolved.');
+      const request = this.request(change.requestId!);
+      if (body?.version !== request.version) throw new ApiError(409, 'This request changed. Reload it before making another change.');
+      if (change.action === 'Cancel') { request.status = 'Cancelled'; request.cancellationReason = change.message; }
+      else if (change.action === 'Reschedule') { request.fromDate = change.proposedFromDate!; request.toDate = change.proposedToDate!; request.exactStartLocalTime = change.proposedExactStartLocalTime ?? null; }
+      else if (change.action === 'Instructions') request.notes = change.proposedNotes!;
+      request.version++;
+      Object.assign(change, { resolution: body.resolution, resolvedUtc: '2026-11-03T12:00:00Z' });
+      return change;
     }
     match = is(path, /^change-requests\/([^/]+)\/resolve$/);
     if (method === 'POST' && match) {
@@ -381,8 +443,9 @@ export class PartnerFlowBackend {
     return request;
   }
 
-  private addChange(input: { kind: string; branchId: string | null; requestId: string | null; message: string }): ChangeRecord {
-    const change: ChangeRecord = { id: this.nextId('change'), companyId: OWNER_COMPANY.id, branchId: input.branchId, requestId: input.requestId, kind: input.kind, message: input.message, resolvedUtc: null, resolution: null };
+  private addChange(input: { kind: string; branchId: string | null; requestId: string | null; message: string; action?: string; proposedFromDate?: string | null; proposedToDate?: string | null; proposedExactStartLocalTime?: string | null; proposedNotes?: string | null }): ChangeRecord {
+    const change: ChangeRecord = { id: this.nextId('change'), companyId: OWNER_COMPANY.id, branchId: input.branchId, requestId: input.requestId, kind: input.kind, message: input.message, resolvedUtc: null, resolution: null,
+      action: input.action ?? 'Message', proposedFromDate: input.proposedFromDate ?? null, proposedToDate: input.proposedToDate ?? null, proposedExactStartLocalTime: input.proposedExactStartLocalTime ?? null, proposedNotes: input.proposedNotes ?? null };
     this.changes.push(change);
     return change;
   }
@@ -407,7 +470,8 @@ export class PartnerFlowBackend {
       priceNet: request.priceNet, vatRatePercent: request.vatRatePercent, estimatedDurationMinutes: request.estimatedDurationMinutes,
       status: request.status, firstAcceptedAtUtc: request.firstAcceptedAtUtc, linkedShiftId: request.linkedShiftId,
       plannedStartUtc: request.plannedStartUtc, plannedEndUtc: request.plannedEndUtc,
-      acceptedCleanerName: cleaner ? `${cleaner.firstName} ${cleaner.lastName}` : null,
+      // Staff see the full name; partners see only the first initial.
+      acceptedCleanerName: cleaner ? (staff ? `${cleaner.firstName} ${cleaner.lastName}` : `${cleaner.firstName.trim().charAt(0).toUpperCase()}.`) : null,
       actualStartUtc: null, actualEndUtc: null,
       ...(staff ? { offeredEmployeeId: request.offeredEmployeeId, offerId: request.offerId } : {}),
     };

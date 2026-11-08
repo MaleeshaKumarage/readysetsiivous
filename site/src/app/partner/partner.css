@@ -89,6 +89,31 @@
   .partner-tabs button > svg { display: none; }
   .partner-tabs button { gap: 4px; }
 }
+/* Visit photo sections in Settings: one row per section, suggestions wrap on narrow screens. */
+.partner-photo-labels { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.partner-photo-labels li { display: flex; justify-content: space-between; align-items: center; gap: 8px; border: 1px solid var(--partner-border); border-radius: 8px; padding: 8px 12px; }
+.partner-photo-suggestions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Properties as a list: one row per property, with the city filter above it. */
+.partner-filter { max-width: 320px; margin-bottom: 12px; }
+.partner-select { width: 100%; }
+.partner-property-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.partner-property-list > li > article > .partner-property { display: grid; gap: 8px; }
+@media (min-width: 900px) {
+  .partner-property-list > li > article > .partner-property { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr); align-items: start; }
+  .partner-property-list > li > article > .partner-property .partner-card-actions { grid-column: 1 / -1; }
+}
+
+/* Completed-visit summary: photos keep their full aspect ratio and wrap to the dialog width on phones. */
+.partner-visit { display: grid; gap: 12px; }
+.partner-visit-title { font-weight: 600; }
+.partner-visit-report { display: grid; gap: 8px; border-top: 1px solid var(--partner-border); padding-top: 12px; }
+.partner-visit-tasks { display: grid; gap: 6px; list-style: none; padding: 0; margin: 0; }
+.partner-visit-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); gap: 12px; }
+.partner-visit-photos figure { margin: 0; display: grid; gap: 4px; }
+.partner-visit-photos img { width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--partner-border); }
+.partner-visit-photos figcaption { font-size: 0.875rem; color: var(--partner-muted); overflow-wrap: anywhere; }
+.partner-visit-messages { display: grid; gap: 10px; list-style: none; padding: 0; margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   .partner-portal *, .partner-portal *::before, .partner-portal *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }

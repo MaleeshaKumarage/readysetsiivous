@@ -25,6 +25,7 @@ public sealed class PartnerOperationsController(PartnerService service, IMediato
     [HttpPut("branches/{id:guid}/pricing")] public async Task<IActionResult> Price(Guid id, PartnerPricing body, CancellationToken ct) => Ok(await service.Price(Actor, id, body, ct));
     [HttpGet("change-requests")] public async Task<IActionResult> Changes(CancellationToken ct) => Ok(await service.Changes(Actor, ct));
     [HttpPost("change-requests/{id:guid}/resolve")] public async Task<IActionResult> Resolve(Guid id, PartnerResolution body, CancellationToken ct) => Ok(await service.Resolve(Actor, id, body, ct));
+    [HttpPost("change-requests/{id:guid}/apply")] public async Task<IActionResult> Apply(Guid id, PartnerChangeApply body, CancellationToken ct) => Ok(await service.Apply(Actor, id, body, ct));
     [HttpPost("branches/{id:guid}/quote-rejection")] public async Task<IActionResult> RejectQuote(Guid id, PartnerQuoteRejection body, CancellationToken ct) => Ok(await service.RejectQuote(Actor, id, body, ct));
     [HttpPost("requests/{id:guid}/offer")] public async Task<IActionResult> Offer(Guid id, PartnerOffer body, CancellationToken ct) => Ok(await service.Offer(Actor, id, body, ct));
     [HttpPut("requests/{id:guid}")] public async Task<IActionResult> Edit(Guid id, EditPartnerRequest body, CancellationToken ct) => Ok(await service.StaffEdit(Actor, id, body, ct));

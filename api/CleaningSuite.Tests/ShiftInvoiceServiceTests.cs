@@ -243,6 +243,21 @@ public class ShiftInvoiceServiceTests
         Assert.Equal("Partner invoices do not use unstarted visit choices.", Assert.Single(ex.Errors).ErrorMessage);
     }
 
+    [Fact]
+    public async Task Partner_month_still_bills_a_shift_whose_earlier_month_was_already_invoiced()
+    {
+        var source = new Mock<IPartnerInvoiceSource>();
+        source.Setup(x => x.ListCompanyAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<CleaningSuite.Domain.Partners.PartnerCleaningRequest>());
+        var f = new Fixture(completedDays: [2, 9, 16], partnerSource: source.Object);
+        // September was invoiced for this shift. October's completed visits must still be billable.
+        f.Existing.Add(new() { Status = Invoice.StatusIssued, PeriodFrom = new(2026, 9, 1), PeriodTo = new(2026, 9, 30), Lines = [new() { ShiftId = f.Shift.Id }] });
+        var partnerMonth = new ShiftInvoiceRequest(f.Company.Id, [], new(2026, 10, 1), new(2026, 10, 31), PartnerMonth: true);
+
+        var preview = await f.Service.PreviewAsync(partnerMonth, default);
+
+        Assert.Contains(preview.Invoice.Lines, line => line.ShiftId == f.Shift.Id);
+    }
+
     private sealed class Fixture
     {
         public readonly Mock<IInvoiceRepository> Invoices=new();public readonly Mock<IShiftWorkReservation> Reservation=new();
@@ -251,26 +266,29 @@ public class ShiftInvoiceServiceTests
         public readonly TenantProfile Profile=new() { CompanyName="ReadySet",BusinessId="1234567-8",TimeZoneId="Europe/Helsinki",CompanyAddress=new(){Street="Street 1",PostalCode="00100",City="Helsinki"},BankAccountIBAN="FI2112345600000785",BankBic="NDEAFIHH",PaymentTermsDays=14 };
         public readonly ShiftBillingProfile Pricing=new(){Plans=[new("Monthly",150,25.5m,new(2026,10,1))]};
         public readonly List<Shift> Selected=[];public readonly List<Invoice> Existing=[];public readonly ShiftInvoiceRequest Request;public readonly ShiftInvoiceService Service;public readonly ShiftBillingSettingsService Settings;
-        public Fixture(DateTimeOffset? now = null, int[]? completedDays = null, ShiftOccurrenceException[]? exceptions = null)
+        public Fixture(DateTimeOffset? now = null, int[]? completedDays = null, ShiftOccurrenceException[]? exceptions = null, IPartnerInvoiceSource? partnerSource = null)
         {
             var branch=new Branch { Id=Guid.NewGuid(),CompanyId=Company.Id,Name="AAA1" };Shift.CompanyId=Company.Id;Shift.BranchId=branch.Id;Pricing.ShiftId=Shift.Id;Selected.Add(Shift);
             foreach (var exception in exceptions ?? []) exception.ShiftId=Shift.Id;
             Request=new(Company.Id,[Shift.Id],new(2026,10,1),new(2026,10,31),new(){Street="Customer Street",PostalCode="00200",City="Helsinki"});
             var shifts=new Mock<IShiftRepository>();shifts.Setup(x=>x.GetAsync(Shift.Id,It.IsAny<CancellationToken>())).ReturnsAsync(Shift);shifts.Setup(x=>x.ListByIdsAsync(It.IsAny<IReadOnlyCollection<Guid>>(),It.IsAny<CancellationToken>())).ReturnsAsync(()=>Selected);
             shifts.Setup(x=>x.ListOccurrenceExceptionsAsync(Shift.Id,It.IsAny<DateTime>(),It.IsAny<DateTime>(),It.IsAny<CancellationToken>())).ReturnsAsync(exceptions ?? Array.Empty<ShiftOccurrenceException>());
+            shifts.Setup(x=>x.ListIncludingInactiveAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<Shift>{Shift});
             shifts.Setup(x=>x.ListAssignmentHistoryAsync(Shift.Id,It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<ShiftAssignment>());
             shifts.Setup(x=>x.ListOccurrenceAssignmentsAsync(Shift.Id,It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<ShiftOccurrenceAssignment>());
             var billing=new Mock<IShiftBillingRepository>();billing.Setup(x=>x.GetAsync(Shift.Id,It.IsAny<CancellationToken>())).ReturnsAsync(Pricing);
             var companies=new Mock<ICompanyRepository>();companies.Setup(x=>x.GetAsync(Company.Id,It.IsAny<CancellationToken>())).ReturnsAsync(Company);
             var branches=new Mock<IBranchRepository>();branches.Setup(x=>x.GetAsync(branch.Id,It.IsAny<CancellationToken>())).ReturnsAsync(branch);
             var forms=new Mock<IQualityCycleRepository>();// 16:00 Helsinki is 13:00 UTC until the 25 Oct change to standard time, and 14:00 UTC after it.
-var completed=(completedDays ?? [2,9,16,23,30]).Select(d=>new QualityCycleForm{ShiftId=Shift.Id,EmployeeId=Guid.NewGuid(),IsSubmitted=true,ShiftOccurrenceUtc=new DateTime(2026,10,d,d>25?14:13,0,0,DateTimeKind.Utc)}).ToArray();forms.Setup(x=>x.ListFormsAsync(Shift.Id,It.IsAny<DateTime>(),It.IsAny<DateTime>(),It.IsAny<CancellationToken>())).ReturnsAsync(completed);
+var completed=(completedDays ?? [2,9,16,23,30]).Select(d=>new QualityCycleForm{ShiftId=Shift.Id,EmployeeId=Guid.NewGuid(),IsSubmitted=true,ShiftOccurrenceUtc=new DateTime(2026,10,d,d>25?14:13,0,0,DateTimeKind.Utc),EndedAtUtc=new DateTime(2026,10,d,d>25?16:15,0,0,DateTimeKind.Utc)}).ToArray();forms.Setup(x=>x.ListFormsAsync(Shift.Id,It.IsAny<DateTime>(),It.IsAny<DateTime>(),It.IsAny<CancellationToken>())).ReturnsAsync(completed);
+            // Partner-month lookups read the shift's forms without a date window.
+            forms.Setup(x=>x.ListFormsAsync(Shift.Id,null,null,It.IsAny<CancellationToken>())).ReturnsAsync(completed);
             var profiles=new Mock<ITenantProfileRepository>();profiles.Setup(x=>x.GetAsync("test",It.IsAny<CancellationToken>())).ReturnsAsync(Profile);
             var tenant=new Mock<ITenantContext>();tenant.SetupGet(x=>x.TenantId).Returns("test");
             Invoices.Setup(x=>x.ListAsync(null,null,It.IsAny<CancellationToken>())).ReturnsAsync(()=>Existing);Invoices.Setup(x=>x.NextInvoiceNumberForYearAsync(2026, It.IsAny<CancellationToken>())).ReturnsAsync(7L);
             Reservation.Setup(x=>x.AcquireAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new Lease());
             Settings=new(shifts.Object,billing.Object,Invoices.Object,profiles.Object,tenant.Object,Reservation.Object);
-            Service=new(shifts.Object,billing.Object,Invoices.Object,companies.Object,branches.Object,forms.Object,profiles.Object,tenant.Object,Reservation.Object,new Clock(now));
+            Service=new(shifts.Object,billing.Object,Invoices.Object,companies.Object,branches.Object,forms.Object,profiles.Object,tenant.Object,Reservation.Object,new Clock(now),partnerSource);
         }
     }
     private sealed class Lease:IAsyncDisposable { public ValueTask DisposeAsync()=>ValueTask.CompletedTask; }

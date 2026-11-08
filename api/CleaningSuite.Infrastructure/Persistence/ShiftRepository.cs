@@ -203,12 +203,21 @@ public class ShiftRepository : IShiftRepository
     public async Task<IReadOnlyList<Shift>> ListIncludingInactiveAsync(CancellationToken ct = default) =>
         await Session.Query<Shift>().OrderBy(s => s.Name).ToListAsync(ct);
 
+    // Only legacy shifts can lack a tab, and every save since then writes one. So the backfill runs once per tenant
+    // per process instead of scanning the tenant on every admin shift-page load.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> TabBackfillDone = new();
+
     public async Task EnsureTabsAsync(CancellationToken ct = default)
     {
+        var tenant = _tenantSession.TenantId;
+        if (TabBackfillDone.ContainsKey(tenant)) return;
         var missing = await Session.Query<Shift>().Where(x => x.Tab == null || x.Tab == "").ToListAsync(ct);
-        if (missing.Count == 0) return;
-        foreach (var shift in missing) await ShiftTabs.StoreAsync(Session, shift, ct);
-        await Session.SaveChangesAsync(ct);
+        if (missing.Count > 0)
+        {
+            foreach (var shift in missing) await ShiftTabs.StoreAsync(Session, shift, ct);
+            await Session.SaveChangesAsync(ct);
+        }
+        TabBackfillDone[tenant] = true;
     }
 
     public async Task<ShiftTabCounts> CountTabsAsync(Guid? companyId, Guid? branchId, CancellationToken ct = default)

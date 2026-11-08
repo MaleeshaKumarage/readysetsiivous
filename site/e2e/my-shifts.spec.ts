@@ -5,7 +5,7 @@ const shiftId = '11111111-1111-4111-8111-111111111111';
 const formId = '22222222-2222-4222-8222-222222222222';
 const evidencePhoto = { name: 'corridor.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64') };
 
-async function setupWork(page: Page, options: { empty?: boolean; failStart?: boolean; failEnd?: boolean; lostStart?: boolean; lostEnd?: boolean; loadFailure?: boolean; future?: boolean; startAt?: string; role?: 'employee' | 'admin' | 'manager' } = {}) {
+async function setupWork(page: Page, options: { empty?: boolean; failStart?: boolean; failEnd?: boolean; lostStart?: boolean; lostEnd?: boolean; loadFailure?: boolean; future?: boolean; startAt?: string; role?: 'employee' | 'admin' | 'manager'; instructions?: string; photoSections?: string[]; access?: string; contactName?: string; contactPhone?: string } = {}) {
   await setupAdminMocks(page);
   const role = options.role ?? 'employee';
   await page.addInitScript(role => { (window as any).__MOCK_ROLES__ = [role]; }, role);
@@ -18,7 +18,8 @@ async function setupWork(page: Page, options: { empty?: boolean; failStart?: boo
   const start = new Date(now - 3600000).toISOString();
   const scheduledStart = options.startAt ? Date.parse(options.startAt) : options.future ? now + 86400000 : Date.parse(start);
   const occurrence: any = { shiftId, shiftName: 'AAA1 weekday shift', startUtc: new Date(scheduledStart).toISOString(),
-    endUtc: new Date(scheduledStart + (options.startAt ? 8 * 3600000 : options.future ? 3600000 : 2 * 3600000)).toISOString(), timeZoneId: 'Europe/Helsinki', form: null };
+    endUtc: new Date(scheduledStart + (options.startAt ? 8 * 3600000 : options.future ? 3600000 : 2 * 3600000)).toISOString(), timeZoneId: 'Europe/Helsinki', form: null, notes: options.instructions ?? null, requiredPhotoLabels: options.photoSections ?? null,
+    accessInstructions: options.access ?? null, contactName: options.contactName ?? null, contactPhone: options.contactPhone ?? null };
   let startCalls = 0; let endCalls = 0; let loadCalls = 0; let submitted: any = null;
   await page.route(/\/api\/v1\/me\/shifts(?:\/calendar)?(?:\?.*)?$/, route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
@@ -120,6 +121,41 @@ test('changing calendar days preserves activity selections, shift notes and phot
   await expect(page.getByRole('textbox', { name: 'Shift note' })).toHaveValue('Preserve day draft');
   await expect(page.getByRole('textbox', { name: 'Photo 1 note' })).toHaveValue('Corridor evidence');
   await expect(page.getByRole('button', { name: 'Remove photo' })).toHaveCount(1);
+});
+
+test('instructions from the request are shown to the cleaner before the visit starts', async ({ page }) => {
+  await setupWork(page, { future: true, instructions: 'Use the back door.\nKeys are in the lockbox.' });
+  await page.goto('/me/shifts/');
+  const instructions = page.getByRole('region', { name: 'Visit instructions' });
+  await expect(instructions).toBeVisible();
+  await expect(instructions).toContainText('Use the back door.');
+  await expect(instructions).toContainText('Keys are in the lockbox.');
+});
+
+test('access instructions and the contact are shown to the cleaner before the visit starts', async ({ page }) => {
+  await setupWork(page, { future: true, access: 'Key safe, code 4321', contactName: 'Olivia Oy', contactPhone: '+358 40 000 0000' });
+  await page.goto('/me/shifts/');
+  const details = page.getByRole('region', { name: 'Visit instructions' });
+  await expect(details).toContainText('Access: Key safe, code 4321');
+  await expect(details).toContainText('Contact: Olivia Oy · +358 40 000 0000');
+});
+
+test('a partner visit cannot end until each required photo section has a photo', async ({ page }) => {
+  const work = await setupWork(page, { photoSections: ['Before', 'Keys'] });
+  await page.goto('/me/shifts/'); await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  const group = page.getByRole('group', { name: 'Required photos' });
+  const end = page.getByRole('button', { name: 'End shift', exact: true });
+  await expect(group.getByText('Needed')).toHaveCount(2);
+  await expect(end).toBeDisabled();
+  await page.getByLabel('Attach Before photo').setInputFiles(evidencePhoto);
+  await expect(group.getByText('1 attached')).toBeVisible();
+  await expect(end).toBeDisabled();
+  await page.getByLabel('Attach Keys photo').setInputFiles(evidencePhoto);
+  await expect(end).toBeEnabled();
+  await end.click();
+  await expect(page.getByText('Done', { exact: true })).toBeVisible();
+  expect(work.submitted.photos.map((photo: { category?: string }) => photo.category)).toEqual(['Before', 'Keys']);
 });
 
 test('employee can start and end a shift without an assigned checklist', async ({ page }) => {

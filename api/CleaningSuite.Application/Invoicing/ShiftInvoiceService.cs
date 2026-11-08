@@ -105,7 +105,9 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             // Completion-month billing covers every company shift, whoever created it. A shift is a candidate
             // when one of its visits was completed in this month; roster and assignment checks run below.
             // A partner-created shift is a candidate only while its request is live and accepted; a cancelled visit is never billed.
-            var companyShifts = (await shifts.ListIncludingInactiveAsync(ct)).Where(s => s.CompanyId == request.CompanyId && !existing.Any(i => Billed(i, s.Id))
+            // Only an invoice covering these dates blocks a shift. A shift invoiced for an earlier month stays billable.
+            var companyShifts = (await shifts.ListIncludingInactiveAsync(ct)).Where(s => s.CompanyId == request.CompanyId
+                && !existing.Any(i => Billed(i, s.Id) && i.PeriodFrom <= request.To && i.PeriodTo >= request.From)
                 && (s.PartnerRequestId is null || partnerRequests.Any(r => r.Id == s.PartnerRequestId && r.LinkedShiftId == s.Id && r.Status != "Cancelled" && r.FirstAcceptedAtUtc.HasValue))).ToArray();
             foreach (var shift in companyShifts)
             {
