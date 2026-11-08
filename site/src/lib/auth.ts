@@ -48,6 +48,10 @@ export function initAuth(): Promise<boolean> {
     const tenant = new URLSearchParams(window.location.search).get('tenant');
     if (tenant && /^[a-z0-9][a-z0-9-]{2,62}$/.test(tenant)) selectAuthTenant(tenant);
   }
+  // Test-only switch: makes the session check fail, so callers' failure paths can be exercised.
+  if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTH_ERROR__) {
+    return Promise.reject(new Error('Session check failed'));
+  }
   if (isMockAllowed() && typeof window !== 'undefined' && sessionStorage.getItem('__MOCK_LOGGED_OUT__') === 'true') {
     return Promise.resolve(false);
   }
