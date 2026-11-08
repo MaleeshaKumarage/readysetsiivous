@@ -9,7 +9,7 @@ const branch: Branch = { id: '22222222-2222-4222-8222-222222222222', companyId, 
 const pending: CleaningRequest = { id: 'pending-request', version: 3, companyId, branchId: branch.id, branchName: branch.name, fromDate: '2026-12-01', toDate: '2026-12-02', exactStartLocalTime: null, notes: 'Original instructions', priceNet: 70, vatRatePercent: 25.5, estimatedDurationMinutes: 120, status: 'Requested', firstAcceptedAtUtc: null, linkedShiftId: null, plannedStartUtc: null, plannedEndUtc: null, acceptedCleanerName: null, actualStartUtc: null, actualEndUtc: null };
 const identity: PartnerIdentity = { realm: 'readysetsiivous', person: { id: 'owner-profile', firstName: 'Test', lastName: 'Owner', role: 'partner', isActive: true }, company: { id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }, timeZoneId: 'Europe/Helsinki' };
 
-async function fixture(page: Page, options: { staleOnce?: boolean } = {}) {
+async function fixture(page: Page, options: { staleOnce?: boolean; rejectWith?: { status: number; detail: string } } = {}) {
   await setupAdminMocks(page);
   await page.addInitScript(() => { (window as unknown as { __MOCK_ROLES__: string[] }).__MOCK_ROLES__ = ['partner']; });
   const posts: { path: string; body: unknown }[] = [];
@@ -20,6 +20,7 @@ async function fixture(page: Page, options: { staleOnce?: boolean } = {}) {
     if (req.method() === 'OPTIONS') return route.fulfill({ headers });
     if (req.method() === 'POST' && path.endsWith(`/requests/${pending.id}/cancel`)) {
       posts.push({ path, body: req.postDataJSON() });
+      if (options.rejectWith) return route.fulfill({ status: options.rejectWith.status, headers, json: { detail: options.rejectWith.detail } });
       if (options.staleOnce && !stale) { stale = true; version = pending.version + 1; return route.fulfill({ status: 409, headers, json: { detail: 'This request changed. Reload it before making another change.' } }); }
       return route.fulfill({ headers, json: { ...pending, version: version + 1, status: 'Cancelled' } });
     }
@@ -75,6 +76,22 @@ test('a cancellation that hits a changed request reloads it, keeps the reason an
     { path: `/api/v1/partner/requests/${pending.id}/cancel`, body: { version: pending.version, reason: 'Owner travel' } },
     { path: `/api/v1/partner/requests/${pending.id}/cancel`, body: { version: pending.version + 1, reason: 'Owner travel' } },
   ]);
+});
+
+test('a server rejection of the cancellation shows its message, keeps the reason and cancels nothing', async ({ page }) => {
+  const state = await fixture(page, { rejectWith: { status: 400, detail: 'Cancellation reason is required and must be at most 1000 characters.' } });
+  await page.goto('/partner/');
+  await page.getByRole('tab', { name: 'Cleaning requests', exact: true }).click();
+  await page.getByRole('button', { name: 'Cancel request', exact: true }).click();
+
+  const group = page.getByRole('group', { name: 'Cancel this cleaning request?', exact: true });
+  await group.getByRole('textbox', { name: 'Reason for cancellation', exact: true }).fill('Owner travel');
+  await group.getByRole('button', { name: 'Yes, cancel request', exact: true }).click();
+  await expect(page.getByText('Cancellation reason is required and must be at most 1000 characters.', { exact: true })).toBeVisible();
+  await expect(group.getByRole('textbox', { name: 'Reason for cancellation', exact: true })).toHaveValue('Owner travel');
+  await expect(page.getByText('Request cancelled.', { exact: true })).toHaveCount(0);
+  expect(state.posts).toHaveLength(1);
+  expect(state.posts[0].body).toEqual({ version: pending.version, reason: 'Owner travel' });
 });
 
 test('keeping a cleaning request sends nothing, and reopening the cancellation starts with an empty reason', async ({ page }) => {
