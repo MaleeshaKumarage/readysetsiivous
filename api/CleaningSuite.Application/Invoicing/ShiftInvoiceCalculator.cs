@@ -68,7 +68,8 @@ public static class ShiftInvoiceCalculator
                     && Price(date) is { } price && price.EffectiveFrom == group.Key.Price.EffectiveFrom
                     && Active(date) is { } plan && plan.BranchId == group.Key.BranchId;
             });
-            var completedInMonth = visitsInLine.Count(v => v.Completed);
+            var completedInLine = visitsInLine.Where(v => v.Completed).ToArray();
+            var completedInMonth = completedInLine.Length;
             var fraction = scheduledInMonth == 0 ? 0m : (decimal)completedInMonth / scheduledInMonth;
             lines.Add(new() { ShiftId = shift.Id, ShiftName = group.Key.ShiftName, BranchName = Branch(group.Key.BranchId), BranchId = group.Key.BranchId,
                 PricingMode = "Monthly", Month = group.Key.Month, PeriodFrom = first, PeriodTo = last,
@@ -76,7 +77,8 @@ public static class ShiftInvoiceCalculator
                 Description = $"{group.Key.Price.RateNet:0.00} EUR × {completedInMonth}/{scheduledInMonth} completed visits",
                 Quantity = fraction, UnitPriceNet = group.Key.Price.RateNet,
                 NetAmount = Round(group.Key.Price.RateNet * fraction), VatRatePercent = group.Key.Price.VatRatePercent,
-                Hours = visitsInLine.Sum(v => (decimal)(v.EndUtc - v.StartUtc).Ticks / TimeSpan.TicksPerHour), Occurrences = visitsInLine.Length });
+                // Hours and occurrences describe only the completed visits this line bills, matching the quantity.
+                Hours = completedInLine.Sum(v => (decimal)(v.EndUtc - v.StartUtc).Ticks / TimeSpan.TicksPerHour), Occurrences = completedInLine.Length });
         }
         var pricedVisits = visits.Select(v => (Visit: v, Date: DateOnly.FromDateTime(TenantTimeZone.LocalDate(v.StartUtc, zone))))
             .Where(v => v.Date >= from && v.Date <= to).Select(v => (v.Visit, v.Date, Price: Price(v.Date))).ToArray();

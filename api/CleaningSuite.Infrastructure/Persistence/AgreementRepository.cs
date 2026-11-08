@@ -17,6 +17,10 @@ public class AgreementRepository : IAgreementRepository, IDisposable
     public async Task<IReadOnlyList<Agreement>> ListAsync(string tenantId, CancellationToken ct = default) =>
         (await Session(tenantId).Query<Agreement>().OrderByDescending(a => a.CreatedUtc).ToListAsync(ct));
 
+    // Filtered in the database, so a company's clear or removal does not load every agreement in the tenant.
+    public async Task<IReadOnlyList<Agreement>> ListByCompanyAsync(string tenantId, Guid companyId, CancellationToken ct = default) =>
+        (await Session(tenantId).Query<Agreement>().Where(a => a.CompanyId == companyId).OrderByDescending(a => a.CreatedUtc).ToListAsync(ct));
+
     public async Task SaveAsync(string tenantId, Agreement agreement, CancellationToken ct = default)
     {
         Session(tenantId).Store(agreement);
