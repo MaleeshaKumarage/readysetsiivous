@@ -223,6 +223,18 @@ export default function MyShiftsPage() {
     setPhotos((prev) => prev.filter((_, i) => i !== index));
   }
 
+  // A photo for a required section carries the section name as its category and as its note.
+  async function handleSectionPhoto(label: string, input: HTMLInputElement) {
+    const files = Array.from(input.files ?? []);
+    input.value = '';
+    if (files.length === 0) return;
+    setPhotoReading(true);
+    setError(null);
+    try { const uploaded = await readShiftPhotos(files, photos); setPhotos(prev => [...prev, ...uploaded.map(url => ({ url, note: label, category: label }))]); }
+    catch (error) { setError(error instanceof Error ? error.message : 'Could not read the photo. Please select it again.'); }
+    finally { setPhotoReading(false); }
+  }
+
   async function handleEnd(o: MyShiftOccurrence) {
     if (!o.form || photoReading) return;
     const missing = photos.findIndex(p => !p.note.trim());
@@ -375,7 +387,22 @@ export default function MyShiftsPage() {
                           </label>
                         </div>
                         {photoReading && <p role="status">Reading photos...</p>}
-                        <Button size="sm" onClick={() => handleEnd(o)} disabled={submitting || photoReading} fullWidth className="gap-1.5">
+                        {(o.requiredPhotoLabels ?? []).length > 0 && (
+                          <div role="group" aria-label="Required photos" className="space-y-2 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Required photos</p>
+                            {(o.requiredPhotoLabels ?? []).map(label => {
+                              const attached = photos.filter(p => p.category === label).length;
+                              return (
+                                <div key={label} className="flex flex-wrap items-center gap-2 text-sm">
+                                  <span className="font-medium text-gray-900 dark:text-gray-100">{label}</span>
+                                  <span className={attached ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}>{attached ? `${attached} attached` : 'Needed'}</span>
+                                  <input type="file" aria-label={`Attach ${label} photo`} accept="image/png,image/jpeg,image/webp,image/bmp" multiple disabled={submitting || photoReading} onChange={e => void handleSectionPhoto(label, e.currentTarget)} className="text-xs" />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <Button size="sm" onClick={() => handleEnd(o)} disabled={submitting || photoReading || (o.requiredPhotoLabels ?? []).some(label => !photos.some(p => p.category === label))} fullWidth className="gap-1.5">
                           {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                           End shift
                         </Button>

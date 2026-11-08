@@ -10,6 +10,8 @@ public class Shift : BaseDocument
     public string Name { get; set; } = string.Empty;
     public ShiftSchedule Schedule { get; set; } = new();
     public string? Notes { get; set; }
+    // Photo sections the cleaner must attach before ending a partner visit. Copied from the partner's settings at acceptance.
+    public List<string> RequiredPhotoLabels { get; set; } = new();
     public Guid? QualityCycleTemplateId { get; set; }
     public bool IsActive { get; set; }
     /// <summary>Stored list tab (active, completed or inactive). Kept current by ShiftTabs.StoreAsync so the list can page in the database.</summary>

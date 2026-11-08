@@ -112,6 +112,24 @@ public class PartnerCompletionDatabaseTests
     }
 
     [QualityCycleDatabaseFact]
+    public async Task Photo_sections_are_saved_trimmed_and_refuse_duplicates_or_blank_names()
+    {
+        var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
+        using var provider = StoreProvider(connection, out var store);
+        var tenantId = "partner-settings-" + Guid.NewGuid().ToString("N");
+        var seeded = await SeedAsync(store, tenantId, finishedForm: false, started: false);
+        var (service, session) = ServiceFor(store, connection, tenantId);
+        using var _ = session;
+
+        var saved = await service.UpdateSettings(seeded.Owner.Id, new PartnerSettingsInput([" Before ", "After", "Keys"]), default);
+
+        Assert.Equal(new[] { "Before", "After", "Keys" }, saved.PhotoLabels);
+        Assert.Equal(new[] { "Before", "After", "Keys" }, (await service.Settings(seeded.Owner.Id, default)).PhotoLabels);
+        await Assert.ThrowsAsync<ValidationException>(() => service.UpdateSettings(seeded.Owner.Id, new PartnerSettingsInput(["Keys", "keys"]), default));
+        await Assert.ThrowsAsync<ValidationException>(() => service.UpdateSettings(seeded.Owner.Id, new PartnerSettingsInput(["   "]), default));
+    }
+
+    [QualityCycleDatabaseFact]
     public async Task Partner_reschedule_request_needs_a_valid_window()
     {
         var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;

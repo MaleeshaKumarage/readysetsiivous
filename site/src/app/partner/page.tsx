@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Building2, CalendarClock, MessageSquare, RefreshCw, Plus, ArrowRight, UserRound, LogOut } from 'lucide-react';
+import { Building2, CalendarClock, MessageSquare, RefreshCw, Plus, ArrowRight, UserRound, LogOut, Settings } from 'lucide-react';
 import { Badge, Button, buttonClasses, Card, Dialog, Field, Input, Textarea, fontFamily, palette } from '@/ds';
 import { authTenant, initAuth, isAuthenticated, isPartner, isAdmin, isManager, login, logout } from '@/lib/auth';
 import { partnerApi, type CleaningRequest, type PartnerChangeAction, type PartnerCompletion, type PartnerIdentity, type PartnerShift, type PartnerChange } from '@/lib/partnerApi';
@@ -17,6 +17,7 @@ const sections = [
   { key: 'Cleaning requests', label: 'requests', icon: CalendarClock },
   { key: 'Company shifts', label: 'shifts', icon: CalendarClock },
   { key: 'Change requests', label: 'changes', icon: MessageSquare },
+  { key: 'Settings', label: 'settings', icon: Settings },
 ] as const;
 type Section = typeof sections[number]['key'];
 const theme = {
@@ -38,6 +39,8 @@ export default function PartnerPage() {
   const [tab, setTab] = useState<Section>('Properties'), [adding, setAdding] = useState(false), [editingProperty, setEditingProperty] = useState<Branch | null>(null), [target, setTarget] = useState<Branch | null>(null), [editing, setEditing] = useState<CleaningRequest | null>(null);
   // Property list filter: '' shows every city. Cities come from the properties themselves.
   const [cityFilter, setCityFilter] = useState('');
+  // One-time visit setup: the photo sections every requested visit needs. Loaded with the portal data.
+  const [photoLabels, setPhotoLabels] = useState<string[]>([]), [newPhotoLabel, setNewPhotoLabel] = useState('');
   const [from, setFrom] = useState(''), [to, setTo] = useState(''), [exact, setExact] = useState(false), [time, setTime] = useState(''), [notes, setNotes] = useState('');
   const [change, setChange] = useState<{ kind: 'branch' | 'request'; id: string } | null>(null), [message, setMessage] = useState('');
   // Structured request changes: what the owner needs, and the proposed dates, time or instructions.
@@ -76,6 +79,8 @@ export default function PartnerPage() {
       const [properties, work, scheduled, changeHistory] = await Promise.all([partnerApi.branches(), partnerApi.requests(), partnerApi.shifts(), partnerApi.changes()]);
       if (attempt !== generation.current) return;
       setIdentity(person); setBranches(properties); setRequests(work); setShifts(scheduled); setChanges(changeHistory); setAccess('allowed');
+      // Photo sections only shape new requests, so they load alongside the portal and never hold it up.
+      partnerApi.settings().then(photoSettings => { if (attempt === generation.current) setPhotoLabels(photoSettings.photoLabels ?? []); }).catch(() => undefined);
     } catch (e) { if (attempt === generation.current) { setError(e instanceof Error ? e.message : base.loadFailure); setAccess('error'); } }
   }, []);
   useEffect(() => { void refresh(); return () => { generation.current++; }; }, [refresh]);
@@ -123,7 +128,7 @@ export default function PartnerPage() {
   const stamp = (value: string | null) => value && !Number.isNaN(Date.parse(value))
     ? stampFormatter.format(new Date(value)) : t.notRecorded;
   const selectedIndex = sections.findIndex(section => section.key === tab);
-  const counts = [branches.length, requests.length, shifts.length, changes.length];
+  const counts = [branches.length, requests.length, shifts.length, changes.length, undefined];
   const cities = [...new Set(branches.map(branch => branch.city).filter((city): city is string => Boolean(city)))].sort((a, b) => a.localeCompare(b, locale));
   const activeCity = cities.includes(cityFilter) ? cityFilter : '';
   const shownBranches = activeCity ? branches.filter(branch => branch.city === activeCity) : branches;
@@ -226,6 +231,23 @@ export default function PartnerPage() {
               {item.resolvedUtc && <div className="partner-staff-response"><h4>{t.staffResponse}</h4><p className="partner-entered">{item.resolution}</p></div>}
             </Card></article>)}</div>
           </section>}
+          {tab === 'Settings' && <section className="partner-section">
+            <div className="partner-section-heading"><div><h2>{t.visitPhotoSettings}</h2><p>{t.visitPhotoSettingsHint}</p></div></div>
+            <Card className="partner-surface partner-settings">
+              <form className="partner-form-grid" onSubmit={event => { event.preventDefault(); void act(async () => { const saved = await partnerApi.saveSettings(photoLabels); setPhotoLabels(saved.photoLabels); }, base.photoSectionsSaved); }}>
+                <div className="partner-form-wide">
+                  {!photoLabels.length && <p className="partner-muted">{t.noPhotoSections}</p>}
+                  <ul className="partner-photo-labels">{photoLabels.map((label, index) => <li key={label}><span>{label}</span><Button variant="ghost" size="sm" className="partner-quiet" disabled={busy} aria-label={`Remove ${label}`} onClick={() => setPhotoLabels(current => current.filter((_, position) => position !== index))}>{t.removePhotoSection}</Button></li>)}</ul>
+                </div>
+                <div className="partner-form-wide partner-photo-suggestions">{['Before', 'After', 'Keys', 'Entrance'].filter(suggestion => !photoLabels.includes(suggestion)).map(suggestion => <Button key={suggestion} type="button" variant="outline" className="partner-secondary" disabled={busy || photoLabels.length >= 10} aria-label={`Add ${suggestion}`} onClick={() => setPhotoLabels(current => [...current, suggestion])}>{suggestion}</Button>)}</div>
+                <Field label={t.photoSectionName} className="partner-form-wide"><Input className="partner-field" value={newPhotoLabel} maxLength={60} onChange={event => setNewPhotoLabel(event.target.value)} /></Field>
+                <div className="partner-form-actions">
+                  <Button type="button" variant="outline" className="partner-secondary" disabled={busy || !newPhotoLabel.trim() || photoLabels.length >= 10 || photoLabels.some(label => label.toLowerCase() === newPhotoLabel.trim().toLowerCase())} onClick={() => { setPhotoLabels(current => [...current, newPhotoLabel.trim()]); setNewPhotoLabel(''); }}>{t.addPhotoSection}</Button>
+                  <Button type="submit" disabled={busy}>{t.savePhotoSections}</Button>
+                </div>
+              </form>
+            </Card>
+          </section>}
           {tab === 'Company shifts' && <section className="partner-section">
             <div className="partner-section-heading"><div><h2>{t.shifts}</h2><p>{t.shiftsHint}</p></div></div>
             {!shifts.length && <Card className="partner-surface partner-empty">{t.noShifts}</Card>}
@@ -249,6 +271,7 @@ export default function PartnerPage() {
         </Dialog>
         <Dialog open={target !== null} title={`${editing ? t.editCleaning : t.newCleaning} · ${target?.name ?? ""}`} onClose={() => setTarget(null)} className="partner-form-panel">
           <Card className="partner-surface">{alert}<p className="partner-muted">{t.oneVisit} {t.timesUse} {identity?.timeZoneId}.</p>
+          {photoLabels.length > 0 && <p className="partner-muted">{t.photosRequired}: {photoLabels.join(', ')}</p>}
             <form onSubmit={submitRequest} onInvalid={invalid} className="partner-form-grid">
               <Field label={t.fromDate}><Input className="partner-field" name="fromDate" type="date" required value={from} onChange={event => setFrom(event.target.value)} /></Field>
               {exact ? <Field label={t.exactTime}><Input className="partner-field" name="exactTime" type="time" required value={time} onChange={event => setTime(event.target.value)} /></Field> : <Field label={t.toDate}><Input className="partner-field" name="toDate" type="date" min={from} required value={to} onChange={event => setTo(event.target.value)} /></Field>}

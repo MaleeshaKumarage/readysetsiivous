@@ -85,7 +85,7 @@ public record GetQualityCycleSummaryPdfQuery(Guid ShiftId, int Year, int Month) 
 public record StartQualityCycleFormCommand(Guid ShiftId, Guid EmployeeId, DateTime OccurrenceStartUtc, DateTime OccurrenceEndUtc) : IRequest<QualityCycleFormDto>;
 public record EndQualityCycleFormCommand(Guid FormId, Guid EmployeeId, List<QualityCycleFormItemDto> Items, List<string>? PhotoUrls = null, string? CleanerNotes = null, List<QualityCyclePhoto>? Photos = null) : IRequest<QualityCycleFormDto>;
 // Notes carry the visit instructions. The cleaner sees them before starting.
-public record MyShiftOccurrenceDto(Guid ShiftId, string ShiftName, DateTime StartUtc, DateTime EndUtc, QualityCycleFormDto? Form, string TimeZoneId = "Europe/Helsinki", bool IsDeleted = false, string? Notes = null);
+public record MyShiftOccurrenceDto(Guid ShiftId, string ShiftName, DateTime StartUtc, DateTime EndUtc, QualityCycleFormDto? Form, string TimeZoneId = "Europe/Helsinki", bool IsDeleted = false, string? Notes = null, IReadOnlyList<string>? RequiredPhotoLabels = null);
 public record GetMyShiftsQuery(Guid EmployeeId, DateTime FromUtc, DateTime ToUtc) : IRequest<IReadOnlyList<MyShiftOccurrenceDto>>;
 
 // Handlers
@@ -408,6 +408,10 @@ public class QualityCycleHandlers
         private readonly IShiftWorkReservation _reservation;
         private readonly ITenantProfileRepository? _profiles;
         private readonly ITenantContext? _tenant;
+        /// <summary>Required photo sections that no submitted photo answers. Matching ignores case and surrounding spaces.</summary>
+        public static IReadOnlyList<string> MissingRequiredPhotos(IReadOnlyList<string> required, IReadOnlyList<QualityCyclePhoto>? photos) =>
+            required.Where(label => !(photos ?? []).Any(photo => string.Equals(photo.Category?.Trim(), label.Trim(), StringComparison.OrdinalIgnoreCase))).ToArray();
+
         public EndQualityCycleFormCommandHandler(IQualityCycleRepository repository, IUploadContentValidator uploads,
             IShiftRepository shifts, IEmployeeRepository employees, IShiftWorkReservation reservation, TimeProvider? clock = null,
             ITenantProfileRepository? profiles = null, ITenantContext? tenant = null)
@@ -426,6 +430,13 @@ public class QualityCycleHandlers
             await ValidateWorkAccessAsync(form, _shifts, _employees, _profiles, _tenant, ct);
             if (!form.StartedAtUtc.HasValue)
                 throw new QualityCycleConflictException("Start your shift before ending it.");
+
+            // Partner visits cannot end until each required photo section has at least one photo.
+            var required = (await _shifts.GetAsync(form.ShiftId, ct))?.RequiredPhotoLabels ?? new List<string>();
+            var missing = MissingRequiredPhotos(required, request.Photos);
+            if (missing.Count > 0)
+                throw new ValidationException(new[] { new FluentValidation.Results.ValidationFailure("Photos",
+                    $"Attach at least one photo for each required section: {string.Join(", ", missing)}.") });
 
             _uploads.ValidateQualityCyclePhotos(request.Photos, request.PhotoUrls);
             RecordActivity(form, request.Items, request.PhotoUrls, request.CleanerNotes, _clock, request.Photos);
@@ -494,7 +505,7 @@ public class QualityCycleHandlers
                     var form = await _repository.GetFormByShiftOccurrenceAsync(shift.Id, request.EmployeeId, occurrence.StartUtc, ct);
                     if (form is not null && (form.EmployeeId != request.EmployeeId || form.ShiftId != shift.Id || form.ShiftOccurrenceUtc != occurrence.StartUtc || form.ShiftDeletedUtc.HasValue))
                         form = null;
-                    result.Add(new MyShiftOccurrenceDto(shift.Id, shift.Name, occurrence.StartUtc, occurrence.EndUtc, form == null ? null : MapForm(form), zoneId, Notes: shift.Notes));
+                    result.Add(new MyShiftOccurrenceDto(shift.Id, shift.Name, occurrence.StartUtc, occurrence.EndUtc, form == null ? null : MapForm(form), zoneId, Notes: shift.Notes, RequiredPhotoLabels: shift.RequiredPhotoLabels));
                 }
             }
 
@@ -514,7 +525,7 @@ public class QualityCycleHandlers
                 if (liveShift is not { IsActive: true } || form.ShiftDeletedUtc.HasValue) continue;
                 var index = result.FindIndex(x => x.ShiftId == form.ShiftId && x.StartUtc == form.ShiftOccurrenceUtc);
                 var occurrence = new MyShiftOccurrenceDto(form.ShiftId, form.ShiftName, form.ShiftOccurrenceUtc,
-                    form.ShiftOccurrenceEndUtc, MapForm(form), zoneId, form.ShiftDeletedUtc.HasValue, liveShift?.Notes);
+                    form.ShiftOccurrenceEndUtc, MapForm(form), zoneId, form.ShiftDeletedUtc.HasValue, liveShift?.Notes, liveShift?.RequiredPhotoLabels);
                 if (index >= 0) result[index] = occurrence;
                 else result.Add(occurrence);
             }

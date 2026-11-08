@@ -448,6 +448,8 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
             $"Cleaning — {branch.Name}", new ShiftSchedule { Type = ShiftScheduleType.OnCallFlexible }, request.Notes, localFrom, localUntil);
         shift.Id = shiftId; shift.PartnerRequestId = request.Id; shift.IsActive = true;
         shift.ValidFrom = localFrom; shift.ValidUntil = localUntil; shift.Notes = request.Notes;
+        // The visit carries the photo sections in force when the partner's request is accepted.
+        shift.RequiredPhotoLabels = (await Db.LoadAsync<PartnerPortalSettings>(request.CompanyId, ct))?.PhotoLabels.ToList() ?? [];
         var occurrenceId = PartnerCleaningRequest.StableId($"partner-occurrence:{request.Id}");
         var occurrence = await Db.LoadAsync<ShiftOccurrenceException>(occurrenceId, ct)
             ?? ShiftOccurrenceException.Create(shiftId, null, start, end, ShiftOccurrenceExceptionStatus.Extra, "Accepted partner cleaning", actor);
@@ -500,6 +502,31 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
             Message = body.Message.Trim() };
         Db.Store(change); Notify(company.Id, branch.Id, request?.Id, "ChangeRequested", 1, "Staff", null, change.Id);
         await Db.SaveChangesAsync(ct); return MapChange(change);
+    }
+
+    /// <summary>The company's photo sections, from its one-time portal setup.</summary>
+    public async Task<PartnerSettingsDto> Settings(Guid actor, CancellationToken ct)
+    {
+        var (_, company) = await Partner(actor, ct);
+        var settings = await Db.LoadAsync<PartnerPortalSettings>(company.Id, ct);
+        return new(settings?.PhotoLabels.ToArray() ?? []);
+    }
+
+    /// <summary>Replace the company's photo sections. Visits accepted from now on require them.</summary>
+    public async Task<PartnerSettingsDto> UpdateSettings(Guid actor, PartnerSettingsInput body, CancellationToken ct)
+    {
+        await using var lease = await reservation.AcquireAsync(ct);
+        var (_, company) = await Partner(actor, ct);
+        var labels = (body.PhotoLabels ?? []).Select(label => (label ?? "").Trim()).ToList();
+        if (labels.Count > PartnerPortalSettings.MaxPhotoLabels) throw new ValidationException($"Use at most {PartnerPortalSettings.MaxPhotoLabels} photo sections.");
+        if (labels.Any(label => label.Length == 0)) throw new ValidationException("Each photo section needs a name.");
+        if (labels.Any(label => label.Length > PartnerPortalSettings.MaxPhotoLabelLength)) throw new ValidationException($"Use at most {PartnerPortalSettings.MaxPhotoLabelLength} characters for a photo section name.");
+        if (labels.Select(label => label.ToLowerInvariant()).Distinct().Count() != labels.Count) throw new ValidationException("Each photo section can only be listed once.");
+        var settings = await Db.LoadAsync<PartnerPortalSettings>(company.Id, ct) ?? new PartnerPortalSettings { Id = company.Id };
+        settings.PhotoLabels = labels; settings.UpdatedUtc = DateTime.UtcNow;
+        Db.Store(settings);
+        await Db.SaveChangesAsync(ct);
+        return new(labels);
     }
 
     private static readonly string[] RequestChangeActions = ["Message", "Reschedule", "Instructions", "Cancel"];

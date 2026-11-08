@@ -34,6 +34,9 @@ public record PartnerRequestChange(string Message, string? Action = null, DateOn
     string? ExactStartLocalTime = null, string? Notes = null);
 // Staff apply a requested change to the request, at the request version they reviewed.
 public record PartnerChangeApply(int Version, string Resolution);
+// Photo sections the cleaner must attach to each visit, in the order shown to the cleaner.
+public record PartnerSettingsDto(IReadOnlyList<string> PhotoLabels);
+public record PartnerSettingsInput(IReadOnlyList<string>? PhotoLabels);
 public record PartnerCleanerOfferDto(Guid Id, Guid RequestId, int Version, string BranchName,
     string? Street, string? PostalCode, string? City, DateOnly FromDate, DateOnly ToDate,
     string? ExactStartLocalTime, DateTime? PlannedStartUtc, int EstimatedDurationMinutes,

@@ -46,6 +46,8 @@ export interface MyShiftOccurrence {
   isDeleted?: boolean;
   // Visit instructions from the request or shift. Shown before the cleaner starts.
   notes?: string | null;
+  // Photo sections the partner requires. The visit cannot end until each has a photo.
+  requiredPhotoLabels?: string[] | null;
 }
 
 export type ShiftCalendarView = 'past' | 'today' | 'future';
