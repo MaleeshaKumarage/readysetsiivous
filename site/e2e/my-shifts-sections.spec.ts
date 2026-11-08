@@ -70,6 +70,20 @@ test('arrow keys move between sections and focus follows', async ({ page }) => {
   await expect(page.getByRole('tab', { name: 'Schedules', exact: true })).toHaveAttribute('aria-selected', 'true');
 });
 
+test('when the session check fails, the Inventory tab shows the signed-out prompt instead of loading forever', async ({ page }) => {
+  await setup(page);
+  await page.goto('/me/shifts/');
+  await expect(page.getByRole('tab', { name: 'Inventory', exact: true })).toBeVisible();
+
+  // Fail only the check made by the Inventory tab: the shifts page has already signed in.
+  await page.evaluate(() => { (window as any).__MOCK_AUTH_ERROR__ = true; });
+  await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
+
+  await expect(page.getByText('Sign in to log items you have taken.')).toBeVisible();
+  await expect(page.getByText('Loading…')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+});
+
 test('inventory is its own tab and shows the take-log form', async ({ page }) => {
   await setup(page);
   await page.goto('/me/shifts/');

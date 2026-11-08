@@ -20,8 +20,8 @@ namespace CleaningSuite.Infrastructure.Persistence;
 public static class MartenConfig
 {
     public const string CompanyBusinessIdIndexName = "mt_doc_company_uidx_business_id";
-    public const string InventoryLocationNormalizedNameIndexName = "mt_doc_inventorylocation_uidx_normalized_name";
-    public const string InventoryItemNormalizedNameIndexName = "mt_doc_inventoryitem_uidx_normalized_name";
+    public const string InventoryLocationNameIndexName = "mt_doc_inventorylocation_uidx_normalized_name";
+    public const string InventoryItemNameIndexName = "mt_doc_inventoryitem_uidx_normalized_name";
     /// <summary>
     /// Registers Marten with conjoined multi-tenancy. Every document lives in a
     /// tenant partition; the "registry" partition holds TenantRegistration docs.
@@ -61,9 +61,9 @@ public static class MartenConfig
         options.Schema.For<CleaningSuite.Domain.Leads.Lead>().Index(x => x.UpdatedUtc).Index(x => x.Fields.Name).Index(x => x.Fields.BusinessId).Index(x => x.Fields.Status);
         options.Schema.For<CleaningSuite.Domain.Leads.LeadVoiceNote>().Index(x => x.LeadId);
         options.Schema.For<CleaningSuite.Domain.Inventory.InventoryLocation>().Index(x => x.IsActive)
-            .UniqueIndex(Marten.Schema.UniqueIndexType.Computed, InventoryLocationNormalizedNameIndexName, Marten.Schema.Indexing.Unique.TenancyScope.PerTenant, x => x.NormalizedName);
+            .UniqueIndex(Marten.Schema.UniqueIndexType.Computed, InventoryLocationNameIndexName, Marten.Schema.Indexing.Unique.TenancyScope.PerTenant, x => x.NormalizedName);
         options.Schema.For<CleaningSuite.Domain.Inventory.InventoryItem>().Index(x => x.IsActive)
-            .UniqueIndex(Marten.Schema.UniqueIndexType.Computed, InventoryItemNormalizedNameIndexName, Marten.Schema.Indexing.Unique.TenancyScope.PerTenant, x => x.NormalizedName);
+            .UniqueIndex(Marten.Schema.UniqueIndexType.Computed, InventoryItemNameIndexName, Marten.Schema.Indexing.Unique.TenancyScope.PerTenant, x => x.NormalizedName);
         options.Schema.For<CleaningSuite.Domain.Inventory.InventoryUsage>().Index(x => x.EmployeeId).Index(x => x.TakenUtc);
         options.Schema.For<CleaningSuite.Domain.Leads.LeadFollowUp>().Index(x => x.LeadId).Index(x => x.NextCheckUtc).Index(x => x.State);
         options.Schema.For<CleaningSuite.Domain.Leads.LeadFollowUpDelivery>().Index(x => x.LeadId).Index(x => x.FollowUpId);

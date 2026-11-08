@@ -20,7 +20,7 @@ async function setup(page: Page) {
   const state = { usageQueries: [] as string[], posts: [] as { url: string; body: any }[], locations: [{ id: 'loc-1', name: 'Main store', isActive: true, version: 'v1' }], items: [{ id: 'item-3', name: 'Mop heads', unit: 'pcs', isVerified: false, isActive: true, version: 'v7' }] as any[] };
 
   await page.route(/\/api\/v1\/admin\/inventory\/usage\/export(\?.*)?$/, route => route.fulfill({
-    headers: { ...headers, 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="inventory.csv"' },
+    headers: { ...headers, 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="inventory-2026-11-06.csv"' },
     body: '﻿"Taken (Helsinki)","Employee"\r\n"2026-11-03 10:30","Ana Keeper"\r\n',
   }));
   await page.route(/\/api\/v1\/admin\/inventory\/usage\/[^/]+\/photos\/[^/?]+(\?.*)?$/, route => route.fulfill({ headers, contentType: 'image/png', body: png }));
@@ -99,6 +99,8 @@ test('a slow response for an older filter does not overwrite the newer results',
   await page.goto('/admin/inventory/');
   await expect(page.getByRole('cell', { name: 'Keys' })).toBeVisible();
 
+  // Both ends must be valid, or the page refuses the filter before any request, and the stale path is never exercised.
+  await page.getByLabel('To', { exact: true }).fill('2026-11-06');
   await page.getByLabel('From', { exact: true }).fill('2026-01-01');
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByLabel('From', { exact: true }).fill('2026-11-01');

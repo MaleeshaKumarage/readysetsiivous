@@ -91,14 +91,19 @@ export function InventoryPanel() {
 
   useEffect(() => {
     let active = true;
-    initAuth().then(ok => {
-      if (!active) return;
-      setReady(true);
-      setAuthed(ok);
-      if (ok) loadAll();
-    }).catch(() => {
-      if (active) { setReady(true); setAuthed(false); }
-    });
+    initAuth()
+      .then(ok => {
+        if (!active) return;
+        setReady(true);
+        setAuthed(ok);
+        if (ok) loadAll();
+      })
+      .catch(() => {
+        // An offline or failed session check shows the signed-out prompt, rather than loading forever.
+        if (!active) return;
+        setAuthed(false);
+        setReady(true);
+      });
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
