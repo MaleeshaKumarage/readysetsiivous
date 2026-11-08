@@ -88,6 +88,39 @@ test('each admin tab renders its own panel', async ({ page }) => {
   await page.getByRole('tab', { name: 'Items', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Add item' })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'Keys', exact: true })).toBeVisible();
+
+  await page.getByRole('tab', { name: 'Take log', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Export CSV' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Keys', exact: true })).toBeVisible();
+});
+
+test('an entry whose photos were purged shows Deleted and no photo button', async ({ page }) => {
+  await setup(page);
+  await page.goto('/admin/inventory/');
+  const purgedRow = page.getByRole('row').filter({ hasText: 'Bedsheets' });
+  await expect(purgedRow.getByText('Deleted', { exact: true })).toBeVisible();
+  await expect(purgedRow.getByRole('button', { name: /View/ })).toHaveCount(0);
+});
+
+test('after a photo fails to load, opening another entry shows its photos', async ({ page }) => {
+  const tissuesRow = { ...keysRow, id: 'usage-3', itemName: 'Tissues', photoIds: ['photo-9'] };
+  await setup(page, { pageOneRows: [keysRow, tissuesRow] });
+  // Every photo request for the Keys entry fails. Development builds run effects twice, so a single failure
+  // would be discarded; failing all of them keeps the error state stable.
+  await page.route(/\/api\/v1\/admin\/inventory\/usage\/usage-1\/photos\/[^/?]+(\?.*)?$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    return route.fulfill({ status: 503, headers });
+  });
+  await page.goto('/admin/inventory/');
+
+  await page.getByRole('button', { name: 'View 2' }).click();
+  await expect(page.getByText('Photos could not be loaded.')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'View 1' }).click();
+  await expect(page.getByRole('dialog').getByRole('img', { name: 'Tissues photo 1' })).toBeVisible();
+  await expect(page.getByText('Photos could not be loaded.')).toHaveCount(0);
 });
 
 test('the employee filter sends the chosen employee and narrows the log, including a deactivated employee', async ({ page }) => {

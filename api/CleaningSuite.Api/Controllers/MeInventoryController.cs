@@ -33,14 +33,21 @@ public class MeInventoryController(InventoryService inventory) : ControllerBase
     // Room for the maximum photos at the per-photo limit, plus form overhead. Anything larger is refused before it is read.
     [HttpPost("usage")]
     [RequestSizeLimit(27 * 1024 * 1024)]
-    public async Task<IActionResult> RecordUsage([FromForm] MeUsageForm form, CancellationToken ct)
+    public async Task<IActionResult> RecordUsage(CancellationToken ct)
     {
-        // Authorise before reading any file, so a non-staff caller cannot make the server buffer uploads.
+        // The actor is resolved before the body is read. Model binding would buffer every uploaded file first,
+        // so a caller with no employee record could otherwise make the server buffer a full upload.
         var actor = Actor();
-        if ((form.Photos?.Count ?? 0) > InventoryService.MaxPhotosPerEntry)
+        var form = await Request.ReadFormAsync(ct);
+        if (!Guid.TryParse(form["LocationId"].ToString(), out var locationId) || !Guid.TryParse(form["ItemId"].ToString(), out var itemId))
+            throw new FluentValidation.ValidationException("Choose a location and an item.");
+        if (!int.TryParse(form["Quantity"].ToString(), out var quantity))
+            throw new FluentValidation.ValidationException("Quantity must be a whole number.");
+        var files = form.Files.GetFiles("Photos");
+        if (files.Count > InventoryService.MaxPhotosPerEntry)
             throw new FluentValidation.ValidationException($"Attach up to {InventoryService.MaxPhotosPerEntry} photos per entry.");
         var photos = new List<byte[]>();
-        foreach (var file in form.Photos ?? [])
+        foreach (var file in files)
         {
             if (file.Length == 0) throw new FluentValidation.ValidationException("Choose a non-empty photo.");
             if (file.Length > InventoryService.MaxPhotoBytes)
@@ -50,7 +57,7 @@ public class MeInventoryController(InventoryService inventory) : ControllerBase
             await input.CopyToAsync(buffer, ct);
             photos.Add(buffer.ToArray());
         }
-        return Ok(await inventory.RecordUsageAsync(actor, form.LocationId, form.ItemId, form.Quantity, form.Note, photos, ct));
+        return Ok(await inventory.RecordUsageAsync(actor, locationId, itemId, quantity, form["Note"].ToString(), photos, ct));
     }
 
     [HttpGet("usage/{id:guid}/photos/{photoId:guid}")]
@@ -73,12 +80,4 @@ public class MeInventoryController(InventoryService inventory) : ControllerBase
 
     public sealed record AddItemRequest(string Name, string? Unit);
 
-    public sealed class MeUsageForm
-    {
-        public Guid LocationId { get; set; }
-        public Guid ItemId { get; set; }
-        public int Quantity { get; set; }
-        public string? Note { get; set; }
-        public List<IFormFile>? Photos { get; set; }
-    }
 }
