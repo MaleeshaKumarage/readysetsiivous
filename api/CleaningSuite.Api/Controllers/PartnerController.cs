@@ -25,6 +25,7 @@ public sealed class PartnerController(PartnerService service) : ControllerBase
     [HttpGet("requests")] public async Task<IActionResult> Requests(CancellationToken ct) => Ok(await service.Requests(Actor, false, null, ct));
     [HttpGet("change-requests")] public async Task<IActionResult> Changes(CancellationToken ct) => Ok(await service.OwnChanges(Actor, ct));
     [HttpGet("requests/{id:guid}")] public async Task<IActionResult> Get(Guid id, CancellationToken ct) => Ok(await service.Get(Actor, id, ct));
+    [HttpGet("requests/{id:guid}/completion")] public async Task<IActionResult> Completion(Guid id, CancellationToken ct) => Ok(await service.Completion(Actor, id, ct));
     [HttpPost("requests")] public async Task<IActionResult> Create(CreatePartnerRequest body, CancellationToken ct) => Ok(await service.Create(Actor, body, ct));
     [HttpPut("requests/{id:guid}")] public async Task<IActionResult> Edit(Guid id, EditPartnerRequest body, CancellationToken ct) => Ok(await service.Edit(Actor, id, body, ct));
     [HttpPost("requests/{id:guid}/cancel")] public async Task<IActionResult> Cancel(Guid id, PartnerVersion body, CancellationToken ct) => Ok(await service.Cancel(Actor, id, body.Version, false, null, ct));

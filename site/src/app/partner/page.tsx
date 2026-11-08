@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { Building2, CalendarClock, MessageSquare, RefreshCw, Plus, ArrowRight, UserRound, LogOut } from 'lucide-react';
 import { Badge, Button, buttonClasses, Card, Dialog, Field, Input, Textarea, fontFamily, palette } from '@/ds';
 import { authTenant, initAuth, isAuthenticated, isPartner, isAdmin, isManager, login, logout } from '@/lib/auth';
-import { partnerApi, type CleaningRequest, type PartnerIdentity, type PartnerShift, type PartnerChange } from '@/lib/partnerApi';
+import { partnerApi, type CleaningRequest, type PartnerCompletion, type PartnerIdentity, type PartnerShift, type PartnerChange } from '@/lib/partnerApi';
 import { partnerCopy, partnerLanguageKey, partnerMessage, partnerStatus, type PartnerLanguage } from '@/lib/partnerLocale';
 import type { Branch } from '@/lib/adminApi';
 import { QuoteRequestedBadge } from '@/components/QuoteRequests';
@@ -40,6 +40,14 @@ export default function PartnerPage() {
   const [change, setChange] = useState<{ kind: 'branch' | 'request'; id: string } | null>(null), [message, setMessage] = useState('');
   // The request whose cancellation is waiting for confirmation on its own card.
   const [cancelling, setCancelling] = useState<string | null>(null);
+  // Completed-visit summary for one request, loaded when opened. Photos are large, so the list never carries them.
+  const [visit, setVisit] = useState<{ request: CleaningRequest; data: PartnerCompletion | null; error: string } | null>(null);
+  function openVisit(request: CleaningRequest) {
+    setVisit({ request, data: null, error: '' });
+    partnerApi.completion(request.id)
+      .then(data => setVisit(current => current?.request.id === request.id ? { request, data, error: '' } : current))
+      .catch((caught: Error) => setVisit(current => current?.request.id === request.id ? { request, data: null, error: caught.message || 'Request failed.' } : current));
+  }
   const generation = useRef(0), requestKey = useRef('');
   const tabsRef = useRef<HTMLDivElement | null>(null);
 
@@ -182,7 +190,7 @@ export default function PartnerPage() {
                 <p className="partner-price">{t.agreedPrice} <strong>{money(request.priceNet)}</strong> {t.exclVat} ({t.vat} {number(request.vatRatePercent)}%)</p>
                 <div className="partner-request-details"><p>{t.cleaner}: {request.acceptedCleanerName ?? t.awaitingAcceptance}</p><p>{t.planned}: {request.plannedStartUtc ? <>{stamp(request.plannedStartUtc)} – {stamp(request.plannedEndUtc)}</> : request.firstAcceptedAtUtc || request.status === 'Accepted' ? t.flexible : t.notRecorded}</p><p>{t.actualStart}: {stamp(request.actualStartUtc)} · {t.actualEnd}: {stamp(request.actualEndUtc)}</p></div>
                 {request.notes && <p className="partner-entered">{request.notes}</p>}
-                <div className="partner-card-actions">{request.status === 'Completed' ? null : !request.firstAcceptedAtUtc && request.status !== 'Cancelled' ? <>
+                <div className="partner-card-actions">{request.status === 'Completed' ? <Button variant="outline" className="partner-secondary" onClick={() => openVisit(request)}>{t.viewVisit}</Button> : !request.firstAcceptedAtUtc && request.status !== 'Cancelled' ? <>
                   <Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => { const branch = branches.find(item => item.id === request.branchId); if (branch) openRequest(branch, request); }}>{t.editRequest}</Button>
                   <Button variant="ghost" className="partner-danger" disabled={busy} onClick={() => setCancelling(request.id)}>{t.cancelRequest}</Button>
                 </> : request.status !== 'Cancelled' && <Button variant="outline" className="partner-secondary" onClick={() => { setChange({ kind: 'request', id: request.id }); setMessage(''); }}>{t.changeOrCancel}</Button>}</div>
@@ -232,6 +240,39 @@ export default function PartnerPage() {
               <div className="partner-form-actions"><Button type="submit" disabled={busy}>{t.saveRequest}</Button><Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => setTarget(null)}>{t.cancel}</Button></div>
             </form>
           </Card>
+        </Dialog>
+        <Dialog open={visit !== null} title={t.visitTitle} onClose={() => setVisit(null)} className="partner-form-panel">
+          {visit && <Card className="partner-surface partner-visit">
+            {visit.error && <p role="alert" className="partner-alert partner-alert-error">{partnerMessage(visit.error, language)}</p>}
+            {!visit.error && !visit.data && <p role="status" className="partner-muted">{t.visitLoading}</p>}
+            {visit.data && <>
+              <h2 className="partner-visit-title">{visit.data.branchName}</h2>
+              <p className="partner-muted">{date(visit.data.fromDate)} – {date(visit.data.toDate)}</p>
+              <dl className="partner-property-facts">
+                <div><dt>{t.actualStart}</dt><dd>{stamp(visit.data.actualStartUtc)}</dd></div>
+                <div><dt>{t.actualEnd}</dt><dd>{stamp(visit.data.actualEndUtc)}</dd></div>
+                <div><dt>{t.cleaner}</dt><dd>{visit.data.cleanerInitial ?? t.notSet}</dd></div>
+              </dl>
+              <p className="partner-muted">{t.visitCleanerHint}</p>
+              {!visit.data.reports.length && <p className="partner-muted">{t.noTasks}</p>}
+              {visit.data.reports.map((report, index) => <section key={index} aria-label={report.templateTitle} className="partner-visit-report">
+                <h3>{report.templateTitle}</h3>
+                <h4>{t.visitTasks}</h4>
+                {report.tasks.length ? <>
+                  <p className="partner-muted">{t.tasksDone}: {report.tasks.filter(task => task.done).length} / {report.tasks.length}</p>
+                  <ul className="partner-visit-tasks">{report.tasks.map((task, taskIndex) => <li key={taskIndex}><label><input type="checkbox" checked={task.done} disabled /> {task.text}</label></li>)}</ul>
+                </> : <p className="partner-muted">{t.noTasks}</p>}
+                <h4>{t.visitNotes}</h4>
+                {report.cleanerNotes ? <p className="partner-entered">{report.cleanerNotes}</p> : <p className="partner-muted">{t.noNotes}</p>}
+                <h4>{t.visitPhotos}</h4>
+                {report.photos.length ? <div className="partner-visit-photos">{report.photos.map((photo, photoIndex) => <figure key={photoIndex}><img src={photo.url} alt={`${t.photo} ${photoIndex + 1}: ${photo.note || t.noPhotoNote}`} /><figcaption>{photo.note || t.noPhotoNote}</figcaption></figure>)}</div> : <p className="partner-muted">{t.noPhotos}</p>}
+              </section>)}
+              <h3>{t.visitMessages}</h3>
+              {!visit.data.messages.length && <p className="partner-muted">{t.noVisitMessages}</p>}
+              <ul className="partner-visit-messages">{visit.data.messages.map(item => <li key={item.id}><p className="partner-entered">{item.message}</p>{item.resolvedUtc && <p className="partner-staff-response"><strong>{t.staffResponse}:</strong> {item.resolution}</p>}</li>)}</ul>
+            </>}
+            <div className="partner-form-actions"><Button variant="outline" className="partner-secondary" onClick={() => setVisit(null)}>{t.closeVisit}</Button></div>
+          </Card>}
         </Dialog>
         <Dialog open={change !== null} title={t.staffChanges} onClose={() => setChange(null)} className="partner-form-panel">
           <Card className="partner-surface"><form onInvalid={invalid} className="partner-form-grid" onSubmit={event => {

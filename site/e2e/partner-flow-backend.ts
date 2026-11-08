@@ -11,6 +11,8 @@ export const TENANT_TIME_ZONE = 'Europe/Helsinki';
 const HELSINKI_WINTER_OFFSET = '+02:00';
 
 export type ActorKey = 'owner' | 'admin' | 'manager' | 'cleaner' | 'autoCleaner' | 'newCleaner' | 'unlinked';
+// What the cleaner submitted on a visit: Quality Cycle checklists, notes and photos. Mirrors the server's completed-visit view.
+export interface VisitSeed { templateTitle?: string; tasks: { text: string; done: boolean }[]; cleanerNotes?: string | null; photos?: { url: string; note: string }[] }
 interface Person { id: string; firstName: string; lastName: string; role: string; isActive: boolean; autoAcceptWork?: boolean; keycloakUserId?: string | null }
 const ROLE_FOR_ACTOR: Record<ActorKey, string[]> = { owner: ['partner'], admin: ['admin'], manager: ['manager'], cleaner: ['employee'], autoCleaner: ['employee'], newCleaner: ['employee'], unlinked: ['employee'] };
 const PEOPLE: Record<ActorKey, Person> = {
@@ -47,7 +49,32 @@ export class PartnerFlowBackend {
   changes: ChangeRecord[] = [];
   preferences: Record<string, boolean> = {};
   shiftActive: Record<string, boolean> = {};
+  visits: Record<string, VisitSeed> = {};
   writes: WriteRecord[] = [];
+
+  // Marks an accepted visit as finished by the cleaner, with the work they recorded.
+  completeVisit(request: RequestRecord, visit: VisitSeed): RequestRecord {
+    request.status = 'Completed'; request.version++;
+    this.visits[request.id] = visit;
+    return request;
+  }
+
+  // Mirrors PartnerService.Completion: only a finished visit is viewable, and only by the owning company.
+  private completion(requestId: string, companyId: string) {
+    const request = this.requests.find(item => item.id === requestId && item.companyId === companyId);
+    if (!request) throw new ApiError(404, 'Request not found.');
+    const visit = this.visits[requestId];
+    if (request.status !== 'Completed' || !visit) throw new ApiError(409, 'This visit has not been completed yet.');
+    const cleaner = request.acceptedEmployeeId ? this.employeeById(request.acceptedEmployeeId) : undefined;
+    return {
+      requestId, branchName: this.branchName(request.branchId), fromDate: request.fromDate, toDate: request.toDate,
+      plannedStartUtc: request.plannedStartUtc, plannedEndUtc: request.plannedEndUtc,
+      actualStartUtc: '2026-12-01T06:05:00Z', actualEndUtc: '2026-12-01T08:10:00Z',
+      cleanerInitial: cleaner ? `${cleaner.firstName.trim().charAt(0).toUpperCase()}.` : null,
+      reports: [{ templateTitle: visit.templateTitle ?? 'Apartment checklist', startedAtUtc: '2026-12-01T06:05:00Z', endedAtUtc: '2026-12-01T08:10:00Z', tasks: visit.tasks, cleanerNotes: visit.cleanerNotes ?? null, photos: visit.photos ?? [] }],
+      messages: this.changes.filter(item => item.requestId === requestId && item.companyId === companyId).map(item => ({ ...item, createdUtc: '2026-11-30T09:00:00Z' })),
+    };
+  }
   // Holds writes open for a moment, so in-progress states can be observed.
   writeDelayMs = 0;
   private sequence = 0;
@@ -191,6 +218,8 @@ export class PartnerFlowBackend {
     if (method === 'GET' && path === 'shifts') {
       return this.requests.filter(item => item.companyId === company.id && item.linkedShiftId).map(item => ({ id: item.linkedShiftId, branchId: item.branchId, branchName: this.branchName(item.branchId), name: `Cleaning — ${this.branchName(item.branchId)}`, isActive: Boolean(this.shiftActive[item.linkedShiftId!]), schedule: { type: 'OnCallFlexible' }, validFrom: item.fromDate, validUntil: item.toDate }));
     }
+    match = is(path, /^requests\/([^/]+)\/completion$/);
+    if (method === 'GET' && match) return this.completion(match[1], company.id);
     throw new ApiError(404, `No fake partner route for ${method} ${path}.`);
   }
 
@@ -407,7 +436,8 @@ export class PartnerFlowBackend {
       priceNet: request.priceNet, vatRatePercent: request.vatRatePercent, estimatedDurationMinutes: request.estimatedDurationMinutes,
       status: request.status, firstAcceptedAtUtc: request.firstAcceptedAtUtc, linkedShiftId: request.linkedShiftId,
       plannedStartUtc: request.plannedStartUtc, plannedEndUtc: request.plannedEndUtc,
-      acceptedCleanerName: cleaner ? `${cleaner.firstName} ${cleaner.lastName}` : null,
+      // Staff see the full name; partners see only the first initial.
+      acceptedCleanerName: cleaner ? (staff ? `${cleaner.firstName} ${cleaner.lastName}` : `${cleaner.firstName.trim().charAt(0).toUpperCase()}.`) : null,
       actualStartUtc: null, actualEndUtc: null,
       ...(staff ? { offeredEmployeeId: request.offeredEmployeeId, offerId: request.offerId } : {}),
     };

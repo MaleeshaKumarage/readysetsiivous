@@ -128,7 +128,7 @@ test('one visit from owner request to cleaner acceptance and back to the owner',
     // 8. Owner sees the cleaner and planned time, and the request is locked to staff changes.
     await ownerOpenRequests(page);
     await expect(ownerCard(page).getByText('Accepted', { exact: true })).toBeVisible();
-    await expect(ownerCard(page).getByText('Cleaner: Test Cleaner')).toBeVisible();
+    await expect(ownerCard(page).getByText('Cleaner: T.', { exact: true })).toBeVisible();
     await expect(ownerCard(page).getByText(/Planned: .*10:00/)).toBeVisible();
     await expect(ownerCard(page).getByRole('button', { name: 'Edit request', exact: true })).toHaveCount(0);
     await expect(ownerCard(page).getByRole('button', { name: 'Cancel request', exact: true })).toHaveCount(0);

@@ -475,7 +475,7 @@ test('cancelled requests page 25 at a time with their own pager, independent of 
 });
 
 test('Finnish cancelled and completed request lists page with Finnish labels and keep the flexible-visit wording', async ({ page }) => {
-  const flexibleAccepted = { ...pending, status: 'Accepted', firstAcceptedAtUtc: '2026-11-01T10:00:00Z', plannedStartUtc: null, plannedEndUtc: null, acceptedCleanerName: 'Test Cleaner' };
+  const flexibleAccepted = { ...pending, status: 'Accepted', firstAcceptedAtUtc: '2026-11-01T10:00:00Z', plannedStartUtc: null, plannedEndUtc: null, acceptedCleanerName: 'T.' };
   const cancelled = Array.from({ length: 27 }, (_, index) => ({ ...pending, id: `fi-cancelled-${index}`, branchName: `Peruutettu kohde ${index}`, status: 'Cancelled', firstAcceptedAtUtc: null }));
   const done = [{ ...flexibleAccepted, id: 'fi-done', branchName: 'Valmis kohde', status: 'Completed' }];
   await owner(page, { requests: [...cancelled, ...done] }); await page.goto('/partner/');

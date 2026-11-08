@@ -5,6 +5,11 @@ export interface CleaningRequest { id: string; version: number; companyId: strin
 export interface PartnerChange { id: string; companyId: string; branchId: string | null; requestId: string | null; kind: string; message: string; createdUtc: string; resolvedUtc: string | null; resolution: string | null }
 export interface CleanerOffer { id: string; requestId: string; version: number; branchName: string; street: string | null; postalCode: string | null; city: string | null; fromDate: string; toDate: string; exactStartLocalTime: string | null; plannedStartUtc: string | null; estimatedDurationMinutes: number; notes: string | null; timeZoneId: string }
 export interface PartnerShift { id: string; branchId: string; branchName: string; name: string; isActive: boolean; schedule: ShiftSchedule; validFrom: string | null; validUntil: string | null }
+// Partner-safe completed-visit summary. The cleaner is masked to an initial; no employee ids or full names.
+export interface PartnerCompletionTask { text: string; done: boolean }
+export interface PartnerCompletionPhoto { url: string; note: string }
+export interface PartnerCompletionReport { templateTitle: string; startedAtUtc: string | null; endedAtUtc: string | null; tasks: PartnerCompletionTask[]; cleanerNotes: string | null; photos: PartnerCompletionPhoto[] }
+export interface PartnerCompletion { requestId: string; branchName: string; fromDate: string; toDate: string; plannedStartUtc: string | null; plannedEndUtc: string | null; actualStartUtc: string | null; actualEndUtc: string | null; cleanerInitial: string | null; reports: PartnerCompletionReport[]; messages: PartnerChange[] }
 export interface RequestInput { clientRequestId?: string; version?: number; branchId?: string; fromDate: string; toDate: string; exactStartLocalTime: string | null; notes: string }
 export async function partnerSend<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
   const response = await authorizedFetch(`/api/v1/${path}`, { method, cache: 'no-store', signal, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
@@ -25,6 +30,7 @@ export const partnerApi = {
   updateBranch: (id: string, body: unknown) => partnerSend<Branch>(`partner/branches/${id}`, 'PUT', body),
   branchChange: (id: string, message: string) => partnerSend<PartnerChange>(`partner/branches/${id}/change-requests`, 'POST', { message }),
   requests: () => partnerSend<CleaningRequest[]>('partner/requests'),
+  completion: (id: string) => partnerSend<PartnerCompletion>(`partner/requests/${id}/completion`),
   changes: () => partnerSend<PartnerChange[]>('partner/change-requests'),
   createRequest: (body: RequestInput) => partnerSend<CleaningRequest>('partner/requests', 'POST', body),
   updateRequest: (id: string, body: RequestInput) => partnerSend<CleaningRequest>(`partner/requests/${id}`, 'PUT', body),

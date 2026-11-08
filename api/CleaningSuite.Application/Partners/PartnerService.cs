@@ -598,11 +598,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
     {
         var branch = await Db.LoadAsync<Branch>(item.BranchId, ct);
         var employee = item.AcceptedEmployeeId.HasValue ? await Db.LoadAsync<Employee>(item.AcceptedEmployeeId.Value, ct) : null;
-        var forms = item.LinkedShiftId.HasValue
-            ? await Db.Query<QualityCycleForm>().Where(x => x.ShiftId == item.LinkedShiftId.Value && x.ShiftDeletedUtc == null).ToListAsync(ct) : [];
-        // JSON timestamps use the existing repository's UTC convention. Filter the sole linked visit in memory
-        // rather than binding a UTC DateTime to Marten's timestamp-without-time-zone JSON comparison.
-        forms = forms.Where(x => x.EmployeeId == item.AcceptedEmployeeId && x.ShiftOccurrenceUtc == item.PlannedStartUtc).ToList();
+        var forms = await VisitForms(item, ct);
         var started = forms.Where(x => x.StartedAtUtc.HasValue).Select(x => x.StartedAtUtc).Min();
         var ended = forms.Where(x => x.IsSubmitted && x.EndedAtUtc.HasValue).Select(x => x.EndedAtUtc).Max();
         var status = item.Status;
@@ -610,8 +606,37 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         return new(item.Id, item.Revision, item.CompanyId, item.BranchId, branch?.Name ?? "Property", item.FromDate,
             item.ToDate, item.ExactStartLocalTime, item.Notes, item.PriceNet, item.VatRatePercent,
             item.EstimatedDurationMinutes, status, item.FirstAcceptedAtUtc, item.LinkedShiftId, item.PlannedStartUtc,
-            item.PlannedEndUtc, employee is null ? null : $"{employee.FirstName} {employee.LastName}".Trim(), started,
+            item.PlannedEndUtc, employee is null ? null : staff ? $"{employee.FirstName} {employee.LastName}".Trim() : PartnerCompletionView.MaskCleaner(employee.FirstName), started,
             status == "Completed" ? ended : null, staff ? item.OfferedEmployeeId : null, staff ? item.OfferId : null);
+    }
+
+    // Quality Cycle checklists recorded for the accepted cleaner's linked visit occurrence.
+    private async Task<List<QualityCycleForm>> VisitForms(PartnerCleaningRequest item, CancellationToken ct)
+    {
+        if (!item.LinkedShiftId.HasValue) return [];
+        var forms = await Db.Query<QualityCycleForm>().Where(x => x.ShiftId == item.LinkedShiftId.Value && x.ShiftDeletedUtc == null).ToListAsync(ct);
+        // JSON timestamps use the existing repository's UTC convention. Filter the sole linked visit in memory
+        // rather than binding a UTC DateTime to Marten's timestamp-without-time-zone JSON comparison.
+        return forms.Where(x => x.EmployeeId == item.AcceptedEmployeeId && x.ShiftOccurrenceUtc == item.PlannedStartUtc).ToList();
+    }
+
+    /// <summary>Read-only completed-visit summary for the partner owning the request. Cleaner identity is masked.</summary>
+    public async Task<PartnerCompletionDto> Completion(Guid actor, Guid id, CancellationToken ct)
+    {
+        var company = (await Partner(actor, ct)).Company;
+        var request = await Request(id, company.Id, ct);
+        var forms = await VisitForms(request, ct);
+        var started = forms.Where(x => x.StartedAtUtc.HasValue).Select(x => x.StartedAtUtc).Min();
+        var completed = request.Status == PartnerCleaningRequest.StatusAccepted && started.HasValue && forms.Count > 0 && forms.All(x => x.IsSubmitted);
+        if (!completed) throw new ShiftConflictException("This visit has not been completed yet.");
+        var branch = await Db.LoadAsync<Branch>(request.BranchId, ct);
+        var cleaner = request.AcceptedEmployeeId.HasValue ? await Db.LoadAsync<Employee>(request.AcceptedEmployeeId.Value, ct) : null;
+        var messages = await Db.Query<PartnerChangeRequest>().Where(x => x.CompanyId == company.Id && x.RequestId == id).ToListAsync(ct);
+        return new(request.Id, branch?.Name ?? "Property", request.FromDate, request.ToDate, request.PlannedStartUtc, request.PlannedEndUtc,
+            started, forms.Where(x => x.EndedAtUtc.HasValue).Select(x => x.EndedAtUtc).Max(),
+            PartnerCompletionView.MaskCleaner(cleaner?.FirstName),
+            forms.OrderBy(x => x.StartedAtUtc).Select(PartnerCompletionView.Report).ToArray(),
+            messages.OrderByDescending(x => x.CreatedUtc).Select(MapChange).ToArray());
     }
 
     private static PartnerChangeDto MapChange(PartnerChangeRequest x) => new(x.Id, x.CompanyId, x.BranchId,

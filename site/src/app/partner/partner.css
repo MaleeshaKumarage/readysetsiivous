@@ -89,6 +89,16 @@
   .partner-tabs button > svg { display: none; }
   .partner-tabs button { gap: 4px; }
 }
+/* Completed-visit summary: photos keep their full aspect ratio and wrap to the dialog width on phones. */
+.partner-visit { display: grid; gap: 12px; }
+.partner-visit-title { font-weight: 600; }
+.partner-visit-report { display: grid; gap: 8px; border-top: 1px solid var(--partner-border); padding-top: 12px; }
+.partner-visit-tasks { display: grid; gap: 6px; list-style: none; padding: 0; margin: 0; }
+.partner-visit-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); gap: 12px; }
+.partner-visit-photos figure { margin: 0; display: grid; gap: 4px; }
+.partner-visit-photos img { width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--partner-border); }
+.partner-visit-photos figcaption { font-size: 0.875rem; color: var(--partner-muted); overflow-wrap: anywhere; }
+.partner-visit-messages { display: grid; gap: 10px; list-style: none; padding: 0; margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   .partner-portal *, .partner-portal *::before, .partner-portal *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
