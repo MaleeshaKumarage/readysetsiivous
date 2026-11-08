@@ -139,8 +139,9 @@ public class CompaniesAdminController : ControllerBase
         => Ok(await _mediator.Send(new RemoveCompanySummaryQuery(id), ct));
 
     [HttpPost("{id:guid}/remove")]
-    public async Task<IActionResult> Remove(Guid id, [FromBody] RemoveCompanyRequest body, CancellationToken ct)
+    public async Task<IActionResult> Remove(Guid id, [FromBody] RemoveCompanyRequest? body, CancellationToken ct)
     {
+        if (body is null) return BadRequest(new ProblemDetails { Title = "Removal options are required." });
         try
         {
             var result = await _mediator.Send(new RemoveCompanyCommand(id, body.Branches, body.Shifts, body.Invoices, body.ConfirmPaidInvoices), ct);
