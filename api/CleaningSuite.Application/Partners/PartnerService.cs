@@ -309,8 +309,9 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
     {
         await using var lease = await reservation.AcquireAsync(ct);
         Guid? companyId = null;
-        if (staff) { await RequireManager(actor, ct); ValidateText(reason, 1000, "Cancellation reason"); }
+        if (staff) await RequireManager(actor, ct);
         else companyId = (await Partner(actor, ct)).Company.Id;
+        ValidateText(reason, 1000, "Cancellation reason");
         var request = await Request(id, companyId, ct); CheckVersion(request, version);
         if (!staff) EnsurePartnerEditable(request);
         if (request.Status == "Cancelled") return await Map(request, staff, ct);

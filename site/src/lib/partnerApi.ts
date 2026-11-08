@@ -28,7 +28,7 @@ export const partnerApi = {
   changes: () => partnerSend<PartnerChange[]>('partner/change-requests'),
   createRequest: (body: RequestInput) => partnerSend<CleaningRequest>('partner/requests', 'POST', body),
   updateRequest: (id: string, body: RequestInput) => partnerSend<CleaningRequest>(`partner/requests/${id}`, 'PUT', body),
-  cancel: (request: CleaningRequest) => partnerSend<CleaningRequest>(`partner/requests/${request.id}/cancel`, 'POST', { version: request.version }),
+  cancel: (request: CleaningRequest, reason: string) => partnerSend<CleaningRequest>(`partner/requests/${request.id}/cancel`, 'POST', { version: request.version, reason }),
   requestChange: (id: string, message: string) => partnerSend<PartnerChange>(`partner/requests/${id}/change-requests`, 'POST', { message }),
   shifts: () => partnerSend<PartnerShift[]>('partner/shifts'),
 };

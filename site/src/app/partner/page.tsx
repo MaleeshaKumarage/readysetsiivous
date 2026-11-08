@@ -40,6 +40,7 @@ export default function PartnerPage() {
   const [change, setChange] = useState<{ kind: 'branch' | 'request'; id: string } | null>(null), [message, setMessage] = useState('');
   // The request whose cancellation is waiting for confirmation on its own card.
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
   const generation = useRef(0), requestKey = useRef('');
   const tabsRef = useRef<HTMLDivElement | null>(null);
 
@@ -184,9 +185,9 @@ export default function PartnerPage() {
                 {request.notes && <p className="partner-entered">{request.notes}</p>}
                 <div className="partner-card-actions">{request.status === 'Completed' ? null : !request.firstAcceptedAtUtc && request.status !== 'Cancelled' ? <>
                   <Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => { const branch = branches.find(item => item.id === request.branchId); if (branch) openRequest(branch, request); }}>{t.editRequest}</Button>
-                  <Button variant="ghost" className="partner-danger" disabled={busy} onClick={() => setCancelling(request.id)}>{t.cancelRequest}</Button>
+                  <Button variant="ghost" className="partner-danger" disabled={busy} onClick={() => { setCancelReason(''); setCancelling(request.id); }}>{t.cancelRequest}</Button>
                 </> : request.status !== 'Cancelled' && <Button variant="outline" className="partner-secondary" onClick={() => { setChange({ kind: 'request', id: request.id }); setMessage(''); }}>{t.changeOrCancel}</Button>}</div>
-                {cancelling === request.id && <div role="group" aria-label={t.cancelConfirm} className="partner-confirm"><p>{t.cancelConfirm}</p><div className="partner-card-actions"><Button variant="ghost" className="partner-danger" disabled={busy} onClick={() => { setCancelling(null); void act(() => partnerApi.cancel(request), base.requestCancelled); }}>{t.confirmCancel}</Button><Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => setCancelling(null)}>{t.keepRequest}</Button></div></div>}
+                {cancelling === request.id && <div role="group" aria-label={t.cancelConfirm} className="partner-confirm"><p>{t.cancelConfirm}</p><Field label={t.cancelReason} className="partner-form-wide"><Textarea className="partner-field" required maxLength={1000} value={cancelReason} onChange={event => setCancelReason(event.target.value)} /></Field><div className="partner-card-actions"><Button variant="ghost" className="partner-danger" disabled={busy || !cancelReason.trim()} onClick={() => { const reason = cancelReason.trim(); void act(async () => { await partnerApi.cancel(request, reason); setCancelling(null); setCancelReason(''); }, base.requestCancelled); }}>{t.confirmCancel}</Button><Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => { setCancelling(null); setCancelReason(''); }}>{t.keepRequest}</Button></div></div>}
               </Card>
             </article>)}</div>
             <div className="partner-form-actions" role="navigation" aria-label={requestView === 'active' ? t.activeRequests : requestView === 'completed' ? t.completedRequests : t.cancelledRequests}>{requestList.length > 25 && <><Button variant="outline" className="partner-secondary" disabled={currentRequestPage <= 1} onClick={() => setRequestPage(currentRequestPage - 1)}>{t.previousPage}</Button><span className="partner-muted">{currentRequestPage} / {requestPageCount}</span><Button variant="outline" className="partner-secondary" disabled={currentRequestPage >= requestPageCount} onClick={() => setRequestPage(currentRequestPage + 1)}>{t.nextPage}</Button></>}</div>

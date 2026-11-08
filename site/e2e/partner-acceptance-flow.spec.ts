@@ -393,6 +393,7 @@ test('owner cancels an unaccepted request only after confirming, and the cleaner
   expect(backend.writes.filter(write => write.path.endsWith('/cancel'))).toHaveLength(0);
 
   await ownerCard(page).getByRole('button', { name: 'Cancel request', exact: true }).click();
+  await ownerCard(page).getByLabel('Reason for cancellation', { exact: true }).fill('Owner cancelled travel.');
   await ownerCard(page).getByRole('button', { name: 'Yes, cancel request', exact: true }).click();
   await expect(page.getByText('Request cancelled.', { exact: true })).toBeVisible();
   await expect(ownerCard(page)).toHaveCount(0);

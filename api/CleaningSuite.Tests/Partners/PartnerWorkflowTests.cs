@@ -88,8 +88,28 @@ public class PartnerWorkflowTests
         using (var session = fixture.Session())
         {
             var reoffer = await fixture.Service(session).Offer(fixture.Admin.Id, offer.Id, new(accepted.Version, fixture.Cleaner.Id), default);
-            await Assert.ThrowsAsync<ShiftConflictException>(() => fixture.Service(session).Cancel(fixture.Partner.Id, offer.Id, reoffer.Version, false, null, default));
+            await Assert.ThrowsAsync<ShiftConflictException>(() => fixture.Service(session).Cancel(fixture.Partner.Id, offer.Id, reoffer.Version, false, "Owner travel", default));
         }
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Partner_cancellation_requires_a_reason_and_records_it()
+    {
+        using var fixture = await Fixture.Create(); var offer = await fixture.SubmitOffer();
+        using (var session = fixture.Session())
+        {
+            foreach (var blank in new string?[] { null, "", "   " })
+                await Assert.ThrowsAsync<ValidationException>(() => fixture.Service(session).Cancel(fixture.Partner.Id, offer.Id, offer.Version, false, blank, default));
+        }
+        using (var reader = fixture.Store.QuerySession(fixture.Tenant))
+            Assert.NotEqual("Cancelled", (await reader.LoadAsync<PartnerCleaningRequest>(offer.Id))!.Status);
+        using (var session = fixture.Session())
+        {
+            var cancelled = await fixture.Service(session).Cancel(fixture.Partner.Id, offer.Id, offer.Version, false, "  Owner travel  ", default);
+            Assert.Equal("Cancelled", cancelled.Status);
+        }
+        using var check = fixture.Store.QuerySession(fixture.Tenant);
+        Assert.Equal("Owner travel", (await check.LoadAsync<PartnerCleaningRequest>(offer.Id))!.CancellationReason);
     }
 
     [QualityCycle.QualityCycleDatabaseFact]
@@ -283,7 +303,7 @@ public class PartnerWorkflowTests
         async Task<bool> Attempt(Func<Task> action) { try { await action(); return true; }
             catch (Exception ex) when (ex is ShiftConflictException or CleaningSuite.Application.Common.NotFoundException) { return false; } }
         var outcomes = await Task.WhenAll(Attempt(async () => { await fixture.Service(a).Accept(fixture.Cleaner.Id, offer.OfferId!.Value, new(offer.Version), default); }),
-            Attempt(async () => { await fixture.Service(b).Cancel(fixture.Partner.Id, offer.Id, offer.Version, false, null, default); }));
+            Attempt(async () => { await fixture.Service(b).Cancel(fixture.Partner.Id, offer.Id, offer.Version, false, "Owner travel", default); }));
         Assert.Single(outcomes.Where(x => x));
         using var reader = fixture.Store.QuerySession(fixture.Tenant);
         var request = await reader.LoadAsync<PartnerCleaningRequest>(offer.Id);

@@ -127,6 +127,7 @@ test('FI/EN switching preserves a draft, creates and cancels a Finnish request a
   await page.getByRole('button', { name: 'Peruuta pyyntö', exact: true }).click();
   const confirm = page.getByRole('group', { name: 'Haluatko peruuttaa tämän siivouspyynnön?', exact: true });
   await expect(confirm).toBeVisible();
+  await confirm.getByLabel('Peruutuksen syy', { exact: true }).fill('Asiakas peruutti.');
   await confirm.getByRole('button', { name: 'Kyllä, peruuta pyyntö', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Lake apartment · Peruttu', exact: true })).toHaveCount(0);
   await page.getByRole('tab', { name: /^Peruutetut pyynnöt/ }).click();
@@ -277,12 +278,13 @@ test('owner edits a pending request with its revision and cancels the refreshed 
   await page.getByRole('button', { name: 'Cancel request', exact: true }).click();
   await page.getByRole('button', { name: 'Keep request', exact: true }).click(); expect(state.writes).toHaveLength(1);
   await page.getByRole('button', { name: 'Cancel request', exact: true }).click();
+  await page.getByRole('group', { name: 'Cancel this cleaning request?', exact: true }).getByLabel('Reason for cancellation', { exact: true }).fill('Owner travel.');
   await page.getByRole('button', { name: 'Yes, cancel request', exact: true }).click();
   expect(dialogs).toEqual([]);
   await expect(page.getByRole('heading', { name: 'Lake apartment · Cancelled', exact: true })).toHaveCount(0);
   await page.getByRole('tab', { name: /^Cancelled requests/ }).click();
   await expect(page.getByRole('heading', { name: 'Lake apartment · Cancelled', exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: 'Edit request', exact: true })).toHaveCount(0);
-  expect(state.writes[1]).toEqual({ path: `/requests/${pending.id}/cancel`, method: 'POST', body: { version: 6 } });
+  expect(state.writes[1]).toEqual({ path: `/requests/${pending.id}/cancel`, method: 'POST', body: { version: 6, reason: 'Owner travel.' } });
 });
 
 test('enabled partner account links to the verified company portal', async ({ page }) => {

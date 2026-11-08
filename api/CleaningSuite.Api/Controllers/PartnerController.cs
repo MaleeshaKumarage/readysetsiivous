@@ -27,7 +27,7 @@ public sealed class PartnerController(PartnerService service) : ControllerBase
     [HttpGet("requests/{id:guid}")] public async Task<IActionResult> Get(Guid id, CancellationToken ct) => Ok(await service.Get(Actor, id, ct));
     [HttpPost("requests")] public async Task<IActionResult> Create(CreatePartnerRequest body, CancellationToken ct) => Ok(await service.Create(Actor, body, ct));
     [HttpPut("requests/{id:guid}")] public async Task<IActionResult> Edit(Guid id, EditPartnerRequest body, CancellationToken ct) => Ok(await service.Edit(Actor, id, body, ct));
-    [HttpPost("requests/{id:guid}/cancel")] public async Task<IActionResult> Cancel(Guid id, PartnerVersion body, CancellationToken ct) => Ok(await service.Cancel(Actor, id, body.Version, false, null, ct));
+    [HttpPost("requests/{id:guid}/cancel")] public async Task<IActionResult> Cancel(Guid id, PartnerCancellation body, CancellationToken ct) => Ok(await service.Cancel(Actor, id, body.Version, false, body.Reason, ct));
     [HttpPost("requests/{id:guid}/change-requests")] public async Task<IActionResult> Change(Guid id, PartnerMessage body, CancellationToken ct) => Ok(await service.Change(Actor, id, false, body, ct));
     [HttpGet("shifts")] public async Task<IActionResult> Shifts(CancellationToken ct) => Ok(await service.CompanyShifts(Actor, ct));
 }
