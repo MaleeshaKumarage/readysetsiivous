@@ -94,6 +94,38 @@ test('each admin tab renders its own panel', async ({ page }) => {
   await expect(page.getByRole('cell', { name: 'Keys', exact: true })).toBeVisible();
 });
 
+test('the photo dialog closes with its close button', async ({ page }) => {
+  await setup(page);
+  await page.goto('/admin/inventory/');
+  await page.getByRole('button', { name: 'View 2' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('img', { name: 'Keys photo 1' })).toBeVisible();
+  // Mantine's close button has no accessible name, and it is the only button in the photo dialog.
+  await expect(dialog.getByRole('button')).toHaveCount(1);
+  await dialog.getByRole('button').click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('Cancel closes the item dialog without saving', async ({ page }) => {
+  const state = await setup(page);
+  await page.goto('/admin/inventory/');
+  await page.getByRole('tab', { name: 'Items', exact: true }).click();
+
+  await page.getByRole('button', { name: 'Add item', exact: true }).click();
+  await page.getByRole('dialog').getByLabel(/^Name/).fill('Discarded item');
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Edit Keys' }).click();
+  await page.getByRole('dialog').getByLabel('Unit', { exact: true }).fill('box');
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  expect(state.posts).toHaveLength(0);
+  expect(state.puts).toHaveLength(0);
+  await expect(page.getByRole('cell', { name: 'Discarded item', exact: true })).toHaveCount(0);
+});
+
 test('an entry whose photos were purged shows Deleted and no photo button', async ({ page }) => {
   await setup(page);
   await page.goto('/admin/inventory/');
