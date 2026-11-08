@@ -450,6 +450,12 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
             $"Cleaning — {branch.Name}", new ShiftSchedule { Type = ShiftScheduleType.OnCallFlexible }, request.Notes, localFrom, localUntil);
         shift.Id = shiftId; shift.PartnerRequestId = request.Id; shift.IsActive = true;
         shift.ValidFrom = localFrom; shift.ValidUntil = localUntil; shift.Notes = request.Notes;
+        // The visit carries the photo sections in force when the partner's request is accepted.
+        var portalSettings = await Db.LoadAsync<PartnerPortalSettings>(request.CompanyId, ct);
+        shift.RequiredPhotoLabels = portalSettings?.PhotoLabels.ToList() ?? [];
+        shift.PartnerAccessInstructions = portalSettings?.Account.AccessInstructions;
+        shift.PartnerContactName = portalSettings?.Account.ContactName;
+        shift.PartnerContactPhone = portalSettings?.Account.ContactPhone;
         var occurrenceId = PartnerCleaningRequest.StableId($"partner-occurrence:{request.Id}");
         var occurrence = await Db.LoadAsync<ShiftOccurrenceException>(occurrenceId, ct)
             ?? ShiftOccurrenceException.Create(shiftId, null, start, end, ShiftOccurrenceExceptionStatus.Extra, "Accepted partner cleaning", actor);
@@ -504,6 +510,131 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         await Db.SaveChangesAsync(ct); return MapChange(change);
     }
 
+    /// <summary>The company's photo sections, from its one-time portal setup.</summary>
+    public async Task<PartnerSettingsDto> Settings(Guid actor, CancellationToken ct)
+    {
+        var (_, company) = await Partner(actor, ct);
+        var settings = await Db.LoadAsync<PartnerPortalSettings>(company.Id, ct);
+        return new(settings?.PhotoLabels.ToArray() ?? [], settings?.Account ?? new());
+    }
+
+    // Trims blanks to null and enforces field limits. Billing, contact and access details share these rules.
+    private static PartnerAccountDetails CleanAccount(PartnerAccountDetails? account)
+    {
+        account ??= new();
+        static string? Clean(string? value, int max, string field)
+        {
+            var trimmed = value?.Trim();
+            if (trimmed?.Length > max) throw new ValidationException($"Use at most {max} characters for {field}.");
+            return string.IsNullOrEmpty(trimmed) ? null : trimmed;
+        }
+        var email = Clean(account.ContactEmail, PartnerPortalSettings.MaxAccountFieldLength, "the contact email");
+        if (email is not null && !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email))
+            throw new ValidationException("Enter a valid contact email.");
+        return new PartnerAccountDetails
+        {
+            BillingName = Clean(account.BillingName, PartnerPortalSettings.MaxAccountFieldLength, "the billing name"),
+            InvoiceAddress = Clean(account.InvoiceAddress, PartnerPortalSettings.MaxAccountFieldLength, "the invoice address"),
+            BusinessId = Clean(account.BusinessId, PartnerPortalSettings.MaxAccountFieldLength, "the business ID"),
+            InvoiceReference = Clean(account.InvoiceReference, PartnerPortalSettings.MaxAccountFieldLength, "the invoice reference"),
+            ContactName = Clean(account.ContactName, PartnerPortalSettings.MaxAccountFieldLength, "the contact name"),
+            ContactPhone = Clean(account.ContactPhone, PartnerPortalSettings.MaxAccountFieldLength, "the contact phone"),
+            ContactEmail = email,
+            AccessInstructions = Clean(account.AccessInstructions, PartnerPortalSettings.MaxAccessInstructionsLength, "the access instructions"),
+        };
+    }
+
+    /// <summary>Replace the company's photo sections. Visits accepted from now on require them.</summary>
+    public async Task<PartnerSettingsDto> UpdateSettings(Guid actor, PartnerSettingsInput body, CancellationToken ct)
+    {
+        await using var lease = await reservation.AcquireAsync(ct);
+        var (_, company) = await Partner(actor, ct);
+        var labels = (body.PhotoLabels ?? []).Select(label => (label ?? "").Trim()).ToList();
+        if (labels.Count > PartnerPortalSettings.MaxPhotoLabels) throw new ValidationException($"Use at most {PartnerPortalSettings.MaxPhotoLabels} photo sections.");
+        if (labels.Any(label => label.Length == 0)) throw new ValidationException("Each photo section needs a name.");
+        if (labels.Any(label => label.Length > PartnerPortalSettings.MaxPhotoLabelLength)) throw new ValidationException($"Use at most {PartnerPortalSettings.MaxPhotoLabelLength} characters for a photo section name.");
+        if (labels.Select(label => label.ToLowerInvariant()).Distinct().Count() != labels.Count) throw new ValidationException("Each photo section can only be listed once.");
+        var account = CleanAccount(body.Account);
+        var settings = await Db.LoadAsync<PartnerPortalSettings>(company.Id, ct) ?? new PartnerPortalSettings { Id = company.Id };
+        settings.PhotoLabels = labels; settings.Account = account; settings.UpdatedUtc = DateTime.UtcNow;
+        Db.Store(settings);
+        await Db.SaveChangesAsync(ct);
+        return new(labels, account);
+    }
+
+    private static readonly string[] RequestChangeActions = ["Message", "Reschedule", "Instructions", "Cancel"];
+
+    /// <summary>
+    /// Owner asks for a change to one cleaning request. Reschedule, Instructions and Cancel are structured so staff
+    /// can apply them from the change list; Message only needs a reply.
+    /// </summary>
+    public async Task<PartnerChangeDto> RequestChange(Guid actor, Guid id, PartnerRequestChange body, CancellationToken ct)
+    {
+        await using var lease = await reservation.AcquireAsync(ct);
+        var (_, company) = await Partner(actor, ct);
+        ValidateText(body.Message, 2000, "Change request");
+        var action = string.IsNullOrWhiteSpace(body.Action) ? "Message" : body.Action.Trim();
+        if (!RequestChangeActions.Contains(action)) throw new ValidationException("Choose what you need changed.");
+        // A cancellation reason is stored on the request, which allows 1000 characters.
+        if (action == "Cancel" && body.Message.Trim().Length > 1000) throw new ValidationException("Use at most 1000 characters for the cancellation reason.");
+        var request = await Request(id, company.Id, ct);
+        if (request.Status == PartnerCleaningRequest.StatusCancelled) throw new ShiftConflictException("This request is cancelled.");
+        var change = new PartnerChangeRequest { CompanyId = company.Id, BranchId = request.BranchId, RequestId = request.Id,
+            RequestedByEmployeeId = actor, Kind = "Cleaning", Message = body.Message.Trim(), Action = action };
+        switch (action)
+        {
+            case "Reschedule":
+                if (body.FromDate is not { } from || body.ToDate is not { } to) throw new ValidationException("Choose the new dates for the cleaning.");
+                var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
+                ValidateWindow(from, to, body.ExactStartLocalTime, request.EstimatedDurationMinutes, zone);
+                change.ProposedFromDate = from; change.ProposedToDate = to;
+                change.ProposedExactStartLocalTime = string.IsNullOrWhiteSpace(body.ExactStartLocalTime) ? null : body.ExactStartLocalTime;
+                break;
+            case "Instructions":
+                if (string.IsNullOrWhiteSpace(body.Notes)) throw new ValidationException("Write the new instructions for the cleaner.");
+                if (body.Notes.Trim().Length > 4000) throw new ValidationException("Use at most 4000 characters for cleaning instructions.");
+                change.ProposedNotes = body.Notes.Trim();
+                break;
+        }
+        Db.Store(change); Notify(company.Id, request.BranchId, request.Id, "ChangeRequested", 1, "Staff", null, change.Id);
+        await Db.SaveChangesAsync(ct);
+        return MapChange(change);
+    }
+
+    /// <summary>
+    /// Staff apply a structured request at the request version they reviewed. The operation uses the same rules as
+    /// the cancel and edit screens, then the change is resolved with the staff's note.
+    /// </summary>
+    public async Task<PartnerChangeDto> Apply(Guid actor, Guid id, PartnerChangeApply body, CancellationToken ct)
+    {
+        await RequireManager(actor, ct);
+        ValidateText(body.Resolution, 2000, "Resolution");
+        var change = await Db.LoadAsync<PartnerChangeRequest>(id, ct) ?? throw new NotFoundException("Change request", id);
+        if (change.ResolvedUtc.HasValue) throw new ShiftConflictException("This change request has already been resolved.");
+        if (!change.RequestId.HasValue || change.Action == "Message") throw new ValidationException("This change only needs a reply. Use Resolve instead.");
+        var requestId = change.RequestId.Value;
+        switch (change.Action)
+        {
+            case "Cancel":
+                await Cancel(actor, requestId, body.Version, true, change.Message, ct);
+                break;
+            case "Reschedule":
+                var current = await Request(requestId, null, ct);
+                await StaffEdit(actor, requestId, new EditPartnerRequest(body.Version, change.ProposedFromDate!.Value, change.ProposedToDate!.Value,
+                    change.ProposedExactStartLocalTime, current.Notes), ct);
+                break;
+            case "Instructions":
+                var target = await Request(requestId, null, ct);
+                await StaffEdit(actor, requestId, new EditPartnerRequest(body.Version, target.FromDate, target.ToDate, target.ExactStartLocalTime,
+                    change.ProposedNotes), ct);
+                break;
+        }
+        change.ResolvedUtc = DateTime.UtcNow; change.Resolution = body.Resolution.Trim();
+        Db.Store(change); Notify(change.CompanyId, change.BranchId, change.RequestId, "ChangeResolved", 1, "Company", null, change.Id);
+        await Db.SaveChangesAsync(ct);
+        return MapChange(change);
+    }
+
     public async Task<IReadOnlyList<PartnerChangeDto>> Changes(Guid actor, CancellationToken ct)
     {
         await RequireManager(actor, ct);
@@ -555,6 +686,12 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         if (notes?.Length > 4000) throw new ValidationException("Use at most 4000 characters for cleaning instructions.");
         request.FromDate = from; request.ToDate = to; request.ExactStartLocalTime = string.IsNullOrWhiteSpace(exact) ? null : exact;
         request.Notes = notes?.Trim();
+        // The cleaner sees the shift's notes, so an edited request keeps its linked shift's instructions current.
+        if (request.LinkedShiftId is { } shiftId && await Db.LoadAsync<Shift>(shiftId, ct) is { } shift)
+        {
+            shift.Notes = request.Notes;
+            Db.Store(shift);
+        }
     }
 
     public static void ValidateWindow(DateOnly from, DateOnly to, string? exact, int duration, TimeZoneInfo zone)
@@ -600,11 +737,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
     {
         var branch = await Db.LoadAsync<Branch>(item.BranchId, ct);
         var employee = item.AcceptedEmployeeId.HasValue ? await Db.LoadAsync<Employee>(item.AcceptedEmployeeId.Value, ct) : null;
-        var forms = item.LinkedShiftId.HasValue
-            ? await Db.Query<QualityCycleForm>().Where(x => x.ShiftId == item.LinkedShiftId.Value && x.ShiftDeletedUtc == null).ToListAsync(ct) : [];
-        // JSON timestamps use the existing repository's UTC convention. Filter the sole linked visit in memory
-        // rather than binding a UTC DateTime to Marten's timestamp-without-time-zone JSON comparison.
-        forms = forms.Where(x => x.EmployeeId == item.AcceptedEmployeeId && x.ShiftOccurrenceUtc == item.PlannedStartUtc).ToList();
+        var forms = await VisitForms(item, ct);
         var started = forms.Where(x => x.StartedAtUtc.HasValue).Select(x => x.StartedAtUtc).Min();
         var ended = forms.Where(x => x.IsSubmitted && x.EndedAtUtc.HasValue).Select(x => x.EndedAtUtc).Max();
         var status = item.Status;
@@ -612,12 +745,42 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         return new(item.Id, item.Revision, item.CompanyId, item.BranchId, branch?.Name ?? "Property", item.FromDate,
             item.ToDate, item.ExactStartLocalTime, item.Notes, item.PriceNet, item.VatRatePercent,
             item.EstimatedDurationMinutes, status, item.FirstAcceptedAtUtc, item.LinkedShiftId, item.PlannedStartUtc,
-            item.PlannedEndUtc, employee is null ? null : $"{employee.FirstName} {employee.LastName}".Trim(), started,
+            item.PlannedEndUtc, employee is null ? null : staff ? $"{employee.FirstName} {employee.LastName}".Trim() : PartnerCompletionView.MaskCleaner(employee.FirstName), started,
             status == "Completed" ? ended : null, staff ? item.OfferedEmployeeId : null, staff ? item.OfferId : null);
     }
 
+    // Quality Cycle checklists recorded for the accepted cleaner's linked visit occurrence.
+    private async Task<List<QualityCycleForm>> VisitForms(PartnerCleaningRequest item, CancellationToken ct)
+    {
+        if (!item.LinkedShiftId.HasValue) return [];
+        var forms = await Db.Query<QualityCycleForm>().Where(x => x.ShiftId == item.LinkedShiftId.Value && x.ShiftDeletedUtc == null).ToListAsync(ct);
+        // JSON timestamps use the existing repository's UTC convention. Filter the sole linked visit in memory
+        // rather than binding a UTC DateTime to Marten's timestamp-without-time-zone JSON comparison.
+        return forms.Where(x => x.EmployeeId == item.AcceptedEmployeeId && x.ShiftOccurrenceUtc == item.PlannedStartUtc).ToList();
+    }
+
+    /// <summary>Read-only completed-visit summary for the partner owning the request. Cleaner identity is masked.</summary>
+    public async Task<PartnerCompletionDto> Completion(Guid actor, Guid id, CancellationToken ct)
+    {
+        var company = (await Partner(actor, ct)).Company;
+        var request = await Request(id, company.Id, ct);
+        var forms = await VisitForms(request, ct);
+        var started = forms.Where(x => x.StartedAtUtc.HasValue).Select(x => x.StartedAtUtc).Min();
+        var completed = request.Status == PartnerCleaningRequest.StatusAccepted && started.HasValue && forms.Count > 0 && forms.All(x => x.IsSubmitted);
+        if (!completed) throw new ShiftConflictException("This visit has not been completed yet.");
+        var branch = await Db.LoadAsync<Branch>(request.BranchId, ct);
+        var cleaner = request.AcceptedEmployeeId.HasValue ? await Db.LoadAsync<Employee>(request.AcceptedEmployeeId.Value, ct) : null;
+        var messages = await Db.Query<PartnerChangeRequest>().Where(x => x.CompanyId == company.Id && x.RequestId == id).ToListAsync(ct);
+        return new(request.Id, branch?.Name ?? "Property", request.FromDate, request.ToDate, request.PlannedStartUtc, request.PlannedEndUtc,
+            started, forms.Where(x => x.EndedAtUtc.HasValue).Select(x => x.EndedAtUtc).Max(),
+            PartnerCompletionView.MaskCleaner(cleaner?.FirstName),
+            forms.OrderBy(x => x.StartedAtUtc).Select(PartnerCompletionView.Report).ToArray(),
+            messages.OrderByDescending(x => x.CreatedUtc).Select(MapChange).ToArray());
+    }
+
     private static PartnerChangeDto MapChange(PartnerChangeRequest x) => new(x.Id, x.CompanyId, x.BranchId,
-        x.RequestId, x.Kind, x.Message, x.CreatedUtc, x.ResolvedUtc, x.Resolution);
+        x.RequestId, x.Kind, x.Message, x.CreatedUtc, x.ResolvedUtc, x.Resolution, x.Action,
+        x.ProposedFromDate, x.ProposedToDate, x.ProposedExactStartLocalTime, x.ProposedNotes);
     // Shared by owner property creation and owner property edits, so both accept exactly the same details.
     private static void ValidateBranchDetails(CreatePartnerBranch body)
     {

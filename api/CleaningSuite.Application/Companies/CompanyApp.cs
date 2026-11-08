@@ -261,7 +261,7 @@ public class CompanyHandlers
             if ((await shifts.ListForReportingAsync(ct)).Any(s => s.CompanyId == company.Id)
                 || (await forms.ListFormsAsync(null, null, null, ct, null, null, company.Id, null)).Count > 0)
                 throw new InactiveRecordDeleteConflictException("This company has shift or checklist history and must be retained.");
-            if ((await agreements.ListAsync(tenant.TenantId, ct)).Any(a => a.CompanyId == company.Id))
+            if ((await agreements.ListByCompanyAsync(tenant.TenantId, company.Id, ct)).Count > 0)
                 throw new InactiveRecordDeleteConflictException("This company has agreement records and must be retained.");
             await companies.DeleteAsync(company.Id, ct);
         }
@@ -285,7 +285,7 @@ public class CompanyHandlers
             var openInvoices = invoices is null ? [] : (await invoices.ListAsync(null, null, ct))
                 .Where(i => i.CompanyId == company.Id && i.Status != Invoice.StatusVoided).ToArray();
             var agreementsToDelete = request.DeleteSignedAgreements
-                ? (await agreements.ListAsync(tenant.TenantId, ct)).Where(a => a.CompanyId == company.Id).ToArray()
+                ? (await agreements.ListByCompanyAsync(tenant.TenantId, company.Id, ct)).ToArray()
                 : [];
 
             // Refusals are decided before anything is removed.
@@ -615,8 +615,12 @@ public class CompanyValidators
         public UpdateCompanyCommandValidator()
         {
             RuleFor(x => x.Id).NotEqual(Guid.Empty);
+            // Same rules as creation, so an edit cannot store data that creation would refuse.
             RuleFor(x => x.BusinessId).NotEmpty().WithMessage("Business ID is mandatory.");
             RuleFor(x => x.Name).NotEmpty().WithMessage("Name is mandatory.");
+            RuleFor(x => x.BusinessId).Matches(BusinessIdPattern).WithMessage(BusinessIdMessage).When(x => !string.IsNullOrWhiteSpace(x.BusinessId));
+            RuleFor(x => x.Name).MaximumLength(200).WithMessage("Company name can be at most 200 characters. Shorten it, then save again.");
+            RuleFor(x => x.ContactEmail).EmailAddress().WithMessage("Enter a valid contact email, such as name@company.fi, or leave the field empty.").When(x => !string.IsNullOrWhiteSpace(x.ContactEmail));
         }
     }
 

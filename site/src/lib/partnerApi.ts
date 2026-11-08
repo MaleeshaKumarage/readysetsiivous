@@ -2,9 +2,21 @@ import { authorizedFetch, type Branch, type ShiftSchedule } from './adminApi';
 
 export interface PartnerIdentity { realm: string; person: { id: string; firstName: string; lastName: string; role: string; isActive: boolean }; company: { id: string; name: string; isActive: boolean; isPartnerEnabled: boolean }; timeZoneId: string }
 export interface CleaningRequest { id: string; version: number; companyId: string; branchId: string; branchName: string; fromDate: string; toDate: string; exactStartLocalTime: string | null; notes: string | null; priceNet: number; vatRatePercent: number; estimatedDurationMinutes: number; status: string; firstAcceptedAtUtc: string | null; linkedShiftId: string | null; plannedStartUtc: string | null; plannedEndUtc: string | null; acceptedCleanerName: string | null; actualStartUtc: string | null; actualEndUtc: string | null; offeredEmployeeId?: string | null; offerId?: string | null }
-export interface PartnerChange { id: string; companyId: string; branchId: string | null; requestId: string | null; kind: string; message: string; createdUtc: string; resolvedUtc: string | null; resolution: string | null }
+// One-time portal setup. Photo sections are the photos every cleaner must attach before a visit can end.
+// Account details: billing and invoice facts, a contact person, and how the cleaner gets in.
+export interface PartnerAccount { billingName?: string | null; invoiceAddress?: string | null; businessId?: string | null; invoiceReference?: string | null; contactName?: string | null; contactPhone?: string | null; contactEmail?: string | null; accessInstructions?: string | null }
+export interface PartnerSettings { photoLabels: string[]; account: PartnerAccount }
+// What the owner asks for on a cleaning request. Structured actions can be applied by staff; "Message" needs a reply.
+export type PartnerChangeAction = 'Message' | 'Reschedule' | 'Instructions' | 'Cancel';
+export interface PartnerRequestChangeInput { message: string; action: PartnerChangeAction; fromDate?: string; toDate?: string; exactStartLocalTime?: string | null; notes?: string | null }
+export interface PartnerChange { id: string; companyId: string; branchId: string | null; requestId: string | null; kind: string; message: string; createdUtc: string; resolvedUtc: string | null; resolution: string | null; action?: string; proposedFromDate?: string | null; proposedToDate?: string | null; proposedExactStartLocalTime?: string | null; proposedNotes?: string | null }
 export interface CleanerOffer { id: string; requestId: string; version: number; branchName: string; street: string | null; postalCode: string | null; city: string | null; fromDate: string; toDate: string; exactStartLocalTime: string | null; plannedStartUtc: string | null; estimatedDurationMinutes: number; notes: string | null; timeZoneId: string }
 export interface PartnerShift { id: string; branchId: string; branchName: string; name: string; isActive: boolean; schedule: ShiftSchedule; validFrom: string | null; validUntil: string | null }
+// Partner-safe completed-visit summary. The cleaner is masked to an initial; no employee ids or full names.
+export interface PartnerCompletionTask { text: string; done: boolean }
+export interface PartnerCompletionPhoto { url: string; note: string }
+export interface PartnerCompletionReport { templateTitle: string; startedAtUtc: string | null; endedAtUtc: string | null; tasks: PartnerCompletionTask[]; cleanerNotes: string | null; photos: PartnerCompletionPhoto[] }
+export interface PartnerCompletion { requestId: string; branchName: string; fromDate: string; toDate: string; plannedStartUtc: string | null; plannedEndUtc: string | null; actualStartUtc: string | null; actualEndUtc: string | null; cleanerInitial: string | null; reports: PartnerCompletionReport[]; messages: PartnerChange[] }
 export interface RequestInput { clientRequestId?: string; version?: number; branchId?: string; fromDate: string; toDate: string; exactStartLocalTime: string | null; notes: string }
 export async function partnerSend<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
   const response = await authorizedFetch(`/api/v1/${path}`, { method, cache: 'no-store', signal, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
@@ -25,11 +37,14 @@ export const partnerApi = {
   updateBranch: (id: string, body: unknown) => partnerSend<Branch>(`partner/branches/${id}`, 'PUT', body),
   branchChange: (id: string, message: string) => partnerSend<PartnerChange>(`partner/branches/${id}/change-requests`, 'POST', { message }),
   requests: () => partnerSend<CleaningRequest[]>('partner/requests'),
+  completion: (id: string) => partnerSend<PartnerCompletion>(`partner/requests/${id}/completion`),
   changes: () => partnerSend<PartnerChange[]>('partner/change-requests'),
   createRequest: (body: RequestInput) => partnerSend<CleaningRequest>('partner/requests', 'POST', body),
   updateRequest: (id: string, body: RequestInput) => partnerSend<CleaningRequest>(`partner/requests/${id}`, 'PUT', body),
   cancel: (request: CleaningRequest, reason: string) => partnerSend<CleaningRequest>(`partner/requests/${request.id}/cancel`, 'POST', { version: request.version, reason }),
-  requestChange: (id: string, message: string) => partnerSend<PartnerChange>(`partner/requests/${id}/change-requests`, 'POST', { message }),
+  settings: () => partnerSend<PartnerSettings>('partner/settings'),
+  saveSettings: (body: { photoLabels: string[]; account: PartnerAccount }) => partnerSend<PartnerSettings>('partner/settings', 'PUT', body),
+  requestChange: (id: string, body: PartnerRequestChangeInput) => partnerSend<PartnerChange>(`partner/requests/${id}/change-requests`, 'POST', body),
   shifts: () => partnerSend<PartnerShift[]>('partner/shifts'),
 };
 export const offerApi = {
@@ -50,5 +65,7 @@ export function staffPartnerApi(role: 'admin' | 'manager') {
     update: (request: CleaningRequest, body: RequestInput) => partnerSend<CleaningRequest>(`${base}/requests/${request.id}`, 'PUT', { ...body, version: request.version }),
     cancel: (request: CleaningRequest, reason: string) => partnerSend<CleaningRequest>(`${base}/requests/${request.id}/cancel`, 'POST', { version: request.version, reason }),
     resolve: (id: string, resolution: string) => partnerSend<PartnerChange>(`${base}/change-requests/${id}/resolve`, 'POST', { resolution }),
+    // Applies a structured request to the request at the version staff reviewed, then resolves the change.
+    apply: (id: string, version: number, resolution: string) => partnerSend<PartnerChange>(`${base}/change-requests/${id}/apply`, 'POST', { version, resolution }),
   };
 }

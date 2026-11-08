@@ -27,6 +27,16 @@ public class ShiftInvoiceCalculatorTests
         Assert.Equal((decimal)completed/scheduled,line.Quantity);
         Assert.Equal(Math.Round(expected*.255m,2,MidpointRounding.AwayFromZero),line.VatAmount);
     }
+
+    [Fact]
+    public void Monthly_line_reports_hours_and_visits_only_for_the_completed_visits_it_bills()
+    {
+        // Four scheduled visits of two hours each, two completed: the line bills and reports two visits, four hours.
+        var visits=Enumerable.Range(0,4).Select(i=>MonthlyVisit(new DateTime(2026,10,1+i*7),i<2)).ToList();
+        var line=Assert.Single(Calculate(Shift(),Price("Monthly",150,new(2026,10,1)),new(2026,10,1),new(2026,10,31),visits));
+        Assert.Equal(2,line.Occurrences);
+        Assert.Equal(4m,line.Hours);
+    }
     [Fact]
     public void Shift_ending_mid_month_is_billed_only_for_the_visits_it_covered()
     {
@@ -35,7 +45,8 @@ public class ShiftInvoiceCalculatorTests
         var visits=new[]{MonthlyVisit(new DateTime(2026,10,1),true),MonthlyVisit(new DateTime(2026,10,8),true),MonthlyVisit(new DateTime(2026,10,15),false),MonthlyVisit(new DateTime(2026,10,22),false),MonthlyVisit(new DateTime(2026,10,29),true)};
         var line=Assert.Single(Calculate(shift,Price("Monthly",150,new(2026,10,1)),new(2026,10,1),new(2026,10,31),visits));
         Assert.Equal(75m,line.NetAmount);
-        Assert.Equal(4,line.Occurrences);
+        // Only the two completed visits on active days are billed and counted.
+        Assert.Equal(2,line.Occurrences);
     }
     [Fact]
     public void Partial_selection_bills_the_completed_share_of_the_visits_it_covers()

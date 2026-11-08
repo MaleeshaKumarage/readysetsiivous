@@ -44,6 +44,14 @@ export interface MyShiftOccurrence {
   timeZoneId: string;
   form: QualityCycleForm | null;
   isDeleted?: boolean;
+  // Visit instructions from the request or shift. Shown before the cleaner starts.
+  notes?: string | null;
+  // Photo sections the partner requires. The visit cannot end until each has a photo.
+  requiredPhotoLabels?: string[] | null;
+  // How to get in and who to call, from the partner's account setup. Shown before the cleaner starts.
+  accessInstructions?: string | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
 }
 
 export type ShiftCalendarView = 'past' | 'today' | 'future';
