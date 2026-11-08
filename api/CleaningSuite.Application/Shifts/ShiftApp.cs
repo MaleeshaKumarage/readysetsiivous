@@ -70,8 +70,9 @@ public interface IShiftRepository
     Task<IReadOnlyList<Shift>> ListByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct = default);
     Task SaveAsync(Shift shift, CancellationToken ct = default);
     Task DeleteAsync(Guid id, CancellationToken ct = default);
-    // Same writes as the methods above, staged in the current session without committing. For callers that commit several
-    // changes together and hold the work reservation themselves.
+    // Same writes as the methods above, staged in the current session without committing. Only for a caller that holds the
+    // work reservation and commits the same session itself, in one SaveChanges. A staged write that is never committed is lost.
+    // The company removal is the only caller.
     Task SaveWithoutCommitAsync(Shift shift, CancellationToken ct = default);
     Task SaveAssignmentWithoutCommitAsync(ShiftAssignment assignment, CancellationToken ct = default);
     Task DeleteWithoutCommitAsync(Guid id, CancellationToken ct = default);

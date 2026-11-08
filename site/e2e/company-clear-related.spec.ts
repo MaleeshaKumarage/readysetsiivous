@@ -46,6 +46,7 @@ test('clearing a refused deactivation deletes the shifts and places, then deacti
   await dialog.getByRole('button', { name: CLEAR_BUTTON }).click();
   await expect(dialog).toBeHidden();
   expect(clearCalls).toEqual(['POST']);
+  expect(clearUrls).toHaveLength(1);
   expect(deactivateCalls).toBe(2);
 });
 
@@ -339,6 +340,45 @@ test('the name input for paid invoices appears only while invoices is ticked', a
   await expect(name).toBeVisible();
   await dialog.getByRole('checkbox', { name: /^Invoices/ }).uncheck();
   await expect(name).toBeHidden();
+});
+
+test('ticking only invoices sends an invoices-only removal', async ({ page }) => {
+  await setupAdminMocks(page);
+  await routeCompanies(page, inactiveCompany);
+  const bodies: unknown[] = [];
+  await routeRemoval(page, bodies);
+  await routeRefusedDelete(page, BRANCH_REASON);
+  await page.goto('/admin/companies/');
+
+  const dialog = await openRemovalFromDelete(page);
+  await dialog.getByRole('checkbox', { name: /^Invoices/ }).check();
+  await dialog.getByLabel(/Type “Busy Oy” to confirm removing 1 paid invoice/).fill('Busy Oy');
+  await dialog.getByRole('button', { name: 'Remove selected' }).click();
+
+  await expect(dialog).toBeHidden();
+  expect(bodies).toEqual([{ branches: false, shifts: false, invoices: true, confirmPaidInvoices: true }]);
+});
+
+test('with no paid invoices, ticking invoices needs no name and sends no paid confirmation', async ({ page }) => {
+  await setupAdminMocks(page);
+  await routeCompanies(page, inactiveCompany);
+  const bodies: unknown[] = [];
+  await routeRemoval(page, bodies);
+  // Registered after routeRemoval, so this route takes precedence: the summary reports no paid invoices.
+  await page.route(/\/api\/v1\/admin\/companies\/company-a\/removal-summary(?:\?.*)?$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
+    return route.fulfill({ headers, json: { ...SUMMARY, paidInvoices: 0 } });
+  });
+  await routeRefusedDelete(page, BRANCH_REASON);
+  await page.goto('/admin/companies/');
+
+  const dialog = await openRemovalFromDelete(page);
+  await dialog.getByRole('checkbox', { name: /^Invoices \(3, 0 paid\)/ }).check();
+  await expect(dialog.getByLabel(/to confirm removing/)).toBeHidden();
+  await dialog.getByRole('button', { name: 'Remove selected' }).click();
+
+  await expect(dialog).toBeHidden();
+  expect(bodies).toEqual([{ branches: false, shifts: false, invoices: true, confirmPaidInvoices: false }]);
 });
 
 test('the signed-agreements box is off by default and sends its choice with the clear', async ({ page }) => {

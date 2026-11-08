@@ -75,10 +75,12 @@ public class CompanyRemovalDatabaseTests
             partnerAccount.Id, template.Id, lead.Id);
     }
 
-    private static readonly Mock<IEmployeeIdentityProvider> identities = new(MockBehavior.Loose);
-    private static readonly Mock<IEmployeeIdentityLock> identityLocks = new(MockBehavior.Loose) { DefaultValue = DefaultValue.Empty };
+    private static CompanyRemoval.RemoveHandler Remover(IDocumentStore store, string tenant, out TenantSessionFactory session) =>
+        Remover(store, tenant, out session, new Mock<IEmployeeIdentityProvider>(MockBehavior.Loose),
+            new Mock<IEmployeeIdentityLock>(MockBehavior.Loose) { DefaultValue = DefaultValue.Empty });
 
-    private static CompanyRemoval.RemoveHandler Remover(IDocumentStore store, string tenant, out TenantSessionFactory session)
+    private static CompanyRemoval.RemoveHandler Remover(IDocumentStore store, string tenant, out TenantSessionFactory session,
+        Mock<IEmployeeIdentityProvider> identities, Mock<IEmployeeIdentityLock> identityLocks)
     {
         var context = new Mock<ITenantContext>(); context.SetupGet(x => x.TenantId).Returns(tenant);
         session = new TenantSessionFactory(store, context.Object);
@@ -166,7 +168,9 @@ public class CompanyRemovalDatabaseTests
     {
         var (store, context, provider) = await Start(); using var _ = provider as IDisposable;
         var seeded = await Seed(store, context);
-        var handler = Remover(store, seeded.Tenant, out var session); using var disposeSession = session;
+        var identities = new Mock<IEmployeeIdentityProvider>(MockBehavior.Loose);
+        var identityLocks = new Mock<IEmployeeIdentityLock>(MockBehavior.Loose) { DefaultValue = DefaultValue.Empty };
+        var handler = Remover(store, seeded.Tenant, out var session, identities, identityLocks); using var disposeSession = session;
 
         var result = await handler.Handle(new(seeded.Company.Id, true, true, true, ConfirmPaidInvoices: true), default);
 
