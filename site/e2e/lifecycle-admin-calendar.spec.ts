@@ -368,7 +368,7 @@ test('a partner-accepted visit on the admin calendar can be recorded and its sav
   await expect(page.getByLabel('Actual end')).toHaveValue('2026-10-30T12:15');
 });
 
-test('a stray started record does not replace the completed duration or flag the visit for review', async ({ page }) => {
+test('calendar renders the server-chosen completed duration with no review flag (selection rule: RecordedWorkTests and AdminShiftCalendarTests)', async ({ page }) => {
   const state = await setup(page);
   // The server picks the submitted 80-minute record; the calendar shows that duration and no review flag.
   await page.route(/\/api\/v1\/admin\/shifts\/calendar(?:\?|\/|$)/, route => {
