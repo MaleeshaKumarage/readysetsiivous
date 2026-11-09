@@ -15,6 +15,7 @@ using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Shifts;
 using Marten;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace CleaningSuite.Application.Companies;
 
@@ -72,7 +73,8 @@ public static class CompanyRemoval
 
     public sealed class RemoveHandler(ICompanyRepository companies, IBranchRepository branches, IShiftRepository shifts,
         IInvoiceRepository invoices, IAgreementRepository agreements, ITenantContext tenant, IPartnerStore partnerStore,
-        IEmployeeIdentityProvider identities, IEmployeeIdentityLock identityLocks, IShiftWorkReservation? reservation = null)
+        IEmployeeIdentityProvider identities, IEmployeeIdentityLock identityLocks, IShiftWorkReservation? reservation = null,
+        ILogger<CompanyRemoval.RemoveHandler>? logger = null)
         : IRequestHandler<RemoveCompanyCommand, RemoveCompanyResultDto>
     {
         public async Task<RemoveCompanyResultDto> Handle(RemoveCompanyCommand request, CancellationToken ct)
@@ -80,7 +82,13 @@ public static class CompanyRemoval
             // The database writes commit together in RemoveAsync. The identity calls run after that commit, under each
             // account's identity lock, which is the order the employee deactivate uses.
             var (result, loginsToDisable) = await RemoveAsync(request, ct);
-            foreach (var account in loginsToDisable) await DisableLoginAsync(account, ct);
+            // The removal is already committed. A failed login disable is logged and left pending for a later sync; it must not
+            // turn a completed removal into an error the admin would retry.
+            foreach (var account in loginsToDisable)
+            {
+                try { await DisableLoginAsync(account, ct); }
+                catch (Exception error) { logger?.LogWarning(error, "Login disable for partner account {AccountId} is pending a later sync.", account.Id); }
+            }
             return result;
         }
 
@@ -207,6 +215,8 @@ public static class CompanyRemoval
             await using var identityLease = await identityLocks.AcquireAsync(tenantId, account.Email, ct);
             await identities.SynchronizeAccessAsync(tenantId, account.Id, account.KeycloakUserId!, account.Role, false, ct);
             // Reload after the provider call, then clear the pending flag. A failure here leaves the flag set for a later sync.
+            // Eject the tracked instance first, so the reload reads the stored state and not the copy this session just saved.
+            partnerStore.Session.Eject(account);
             var current = await partnerStore.Session.LoadAsync<CleaningSuite.Domain.Employees.Employee>(account.Id, ct);
             if (current is null || current.KeycloakUserId != account.KeycloakUserId || current.IsActive) return;
             current.IdentitySyncPending = false;
