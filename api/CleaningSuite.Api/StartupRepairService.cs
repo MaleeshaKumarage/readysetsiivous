@@ -36,8 +36,17 @@ public sealed class StartupRepairService(IServiceScopeFactory scopes, IConfigura
     {
         var value = configuration["DataCorrections:AutoAcceptDefault:CutoffUtc"];
         if (string.IsNullOrWhiteSpace(value)) return null;
-        return System.DateTimeOffset.Parse(value, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal).UtcDateTime;
+        var parsed = ParseReleaseCutoff(value);
+        if (parsed is null)
+            logger.LogError("DataCorrections:AutoAcceptDefault:CutoffUtc is not a valid timestamp: {Value}. The automatic acceptance default is skipped until it is fixed.", value);
+        return parsed;
     }
+
+    /// <summary>Parses an ISO timestamp (with offset, or taken as UTC) to UTC. Returns null when the text is not a timestamp.</summary>
+    public static DateTime? ParseReleaseCutoff(string? value) =>
+        !string.IsNullOrWhiteSpace(value) && System.DateTimeOffset.TryParse(value, System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal, out var parsed)
+            ? parsed.UtcDateTime : null;
 
     private async Task RunAsync(string repair, CancellationToken ct, Func<IServiceProvider, CancellationToken, Task> run)
     {
