@@ -69,11 +69,13 @@ public sealed class InventoryAcknowledgmentService(IPartnerStore store, IShiftWo
             if (usage.PhotosPurgedUtc.HasValue || usage.Photos.Count == 0 || usage.TakenUtc < InventoryService.PhotoRetentionCutoff(clock.GetUtcNow().UtcDateTime))
                 throw new ValidationException("A selected entry's photos have expired. Choose entries with available photos.");
             var now = clock.GetUtcNow().UtcDateTime;
-            rows.Add(new InventoryAcknowledgment { Id = id, BatchId = body.BatchId, CompanyId = company.Id,
-                CompanyName = company.Name, RequestedBySubject = subject, Message = message,
-                ItemName = usage.ItemName, LocationName = usage.LocationName, Quantity = usage.Quantity,
-                Unit = usage.Unit, Note = usage.Note, TakenUtc = usage.TakenUtc,
-                PhotoIds = usage.Photos.Select(x => x.Id).ToList(), CreatedUtc = now, UpdatedUtc = now });
+            var row = InventoryAcknowledgment.ForUsage(id);
+            row.BatchId = body.BatchId; row.CompanyId = company.Id; row.CompanyName = company.Name;
+            row.RequestedBySubject = subject; row.Message = message; row.ItemName = usage.ItemName;
+            row.LocationName = usage.LocationName; row.Quantity = usage.Quantity; row.Unit = usage.Unit;
+            row.Note = usage.Note; row.TakenUtc = usage.TakenUtc; row.PhotoIds = usage.Photos.Select(x => x.Id).ToList();
+            row.CreatedUtc = now; row.UpdatedUtc = now;
+            rows.Add(row);
         }
         // All rows are validated before any insert; the batch and portal notification are one atomic commit.
         foreach (var row in rows) Db.Insert(row);

@@ -117,15 +117,21 @@ test('admin status button opens the partner acknowledgment details', async ({ pa
   await expect(dialog.getByText('Message: Please confirm collection')).toBeVisible();
 });
 
-test('request modal opens when crypto.randomUUID is unavailable', async ({ page }) => {
-  // Non-secure origins and older browsers lack randomUUID; the modal must still open.
+test('request modal opens and sends when crypto.randomUUID is unavailable', async ({ page }) => {
+  // Non-secure origins and older browsers lack randomUUID; the modal must still open and the send must still work.
   await page.addInitScript(() => {
     Object.defineProperty(Crypto.prototype, 'randomUUID', { value: undefined, configurable: true });
   });
-  await setup(page);
+  const state = await setup(page);
   await page.goto('/admin/inventory/');
   const dialog = await openRequestModal(page, 'Keys');
   await expect(dialog.getByText('Request partner acknowledgment', { exact: true })).toBeVisible();
+  await dialog.getByLabel('Partner company', { exact: true }).click();
+  await page.getByRole('option', { name: 'Partner One' }).click();
+  await dialog.getByRole('checkbox', { name: /I confirm/ }).check();
+  await dialog.getByRole('button', { name: 'Send acknowledgment request' }).click();
+  await expect(page.getByText('Acknowledgment request sent to the partner portal.')).toBeVisible();
+  expect(state.requests[0].batchId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 });
 
 test('partner evidence loads photos, links open in a new tab, and a missing photo is reported', async ({ page }) => {
@@ -294,4 +300,9 @@ test('load more keeps the selection, while a fresh load clears it', async ({ pag
   await expect(page.getByRole('cell', { name: 'Late entry', exact: true })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: 'Select Stock 0 by Private Cleaner' })).toBeChecked();
   await expect(page.getByRole('button', { name: 'Request acknowledgment (1)' })).toBeEnabled();
+
+  // A fresh load (Apply) drops the selection.
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await expect(page.getByRole('checkbox', { name: 'Select Stock 0 by Private Cleaner' })).not.toBeChecked();
+  await expect(page.getByRole('button', { name: 'Request acknowledgment (0)' })).toBeDisabled();
 });

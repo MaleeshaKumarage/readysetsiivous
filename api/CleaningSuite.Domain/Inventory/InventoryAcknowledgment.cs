@@ -6,6 +6,9 @@ namespace CleaningSuite.Domain.Inventory;
 /// preventing a second disclosure/request for the same entry, including concurrent batches.</summary>
 public class InventoryAcknowledgment : BaseDocument
 {
+    /// <summary>The only supported way to start a row: the id is always the usage id, so one entry maps to one row.</summary>
+    public static InventoryAcknowledgment ForUsage(Guid usageId) => new() { Id = usageId };
+
     public Guid BatchId { get; set; }
     public Guid CompanyId { get; set; }
     public string CompanyName { get; set; } = "";

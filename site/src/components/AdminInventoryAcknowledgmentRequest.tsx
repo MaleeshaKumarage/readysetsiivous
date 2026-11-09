@@ -6,6 +6,16 @@ import { adminInventory, takenLabel, type InventoryUsage } from '@/lib/inventory
 import { inventoryAcknowledgments, type InventoryAcknowledgment } from '@/lib/inventoryAcknowledgmentApi';
 import { InventoryEvidence } from './InventoryEvidence';
 
+/** A v4 UUID. Falls back to getRandomValues where crypto.randomUUID is missing (some non-secure origins and older browsers). */
+function newBatchId(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 export function AdminInventoryAcknowledgmentRequest({ rows, onClose, onSent }: { rows: InventoryUsage[]; onClose: () => void; onSent: (rows: InventoryAcknowledgment[]) => void }) {
   const [partners, setPartners] = useState<{ id: string; name: string }[]>([]);
   const [search, setSearch] = useState(''), [partner, setPartner] = useState<string | null>(null);
@@ -14,7 +24,7 @@ export function AdminInventoryAcknowledgmentRequest({ rows, onClose, onSent }: {
   const [searchError, setSearchError] = useState(''), [retry, setRetry] = useState(0);
   const [preview, setPreview] = useState<string | null>(null);
   const [selectedOption, setSelectedOption] = useState<{ id: string; name: string } | null>(null);
-  // Generated lazily on the user's first send, never during render: crypto.randomUUID is unavailable on some non-secure origins.
+  // Generated lazily on the user's first send, never during render.
   const batchId = useRef<string | null>(null);
   const attempted = useRef(false);
   useEffect(() => {
@@ -33,7 +43,7 @@ export function AdminInventoryAcknowledgmentRequest({ rows, onClose, onSent }: {
     if (!partner || !confirmed || saving) return;
     setSaving(true); setError(''); attempted.current = true;
     try {
-      batchId.current ??= crypto.randomUUID();
+      batchId.current ??= newBatchId();
       onSent(await inventoryAcknowledgments.create({ batchId: batchId.current, companyId: partner, usageIds: rows.map(row => row.id), message }));
     }
     catch (error) { setError((error instanceof Error ? error.message : 'Could not send request.') + ' Reload the log to check whether it was saved before changing the request.'); }
