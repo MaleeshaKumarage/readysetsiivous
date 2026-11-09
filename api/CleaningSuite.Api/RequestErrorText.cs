@@ -18,7 +18,7 @@ public static class RequestErrorText
         string.IsNullOrWhiteSpace(message) || message.Contains("could not be converted to", StringComparison.OrdinalIgnoreCase) ? BadValue : message;
 
     /// <summary>Builds the 400 response from model state: field names without the JSON path marker, plain messages, and no body-required noise when a field error explains the problem.</summary>
-    public static ValidationProblemDetails FromModelState(ModelStateDictionary state)
+    public static ValidationProblemDetails FromModelState(ModelStateDictionary state, bool partnerRequest = false)
     {
         var errors = new Dictionary<string, string[]>();
         foreach (var entry in state)
@@ -28,6 +28,16 @@ public static class RequestErrorText
             if (messages.Length > 0) errors[field] = messages;
         }
         if (errors.Count > 1 && errors.TryGetValue("body", out var body) && body.All(m => m == BodyRequired)) errors.Remove("body");
-        return new ValidationProblemDetails(errors) { Status = StatusCodes.Status400BadRequest };
+        if (partnerRequest && errors.Keys.All(k => k is "" or "$" or "body"))
+        {
+            errors = new Dictionary<string, string[]>
+            {
+                ["clientRequestId"] = ["A request identifier is required."],
+                ["branchId"] = ["Choose the property for this cleaning."],
+                ["fromDate"] = ["Choose the first day of the cleaning."],
+                ["toDate"] = ["Choose the last day of the cleaning."]
+            };
+        }
+        return new ValidationProblemDetails(errors) { Status = StatusCodes.Status400BadRequest, Title = "Validation failed", Detail = "Check the request fields and try again." };
     }
 }

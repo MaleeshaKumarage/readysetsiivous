@@ -12,6 +12,7 @@ using Moq;
 
 namespace CleaningSuite.Tests.Shifts;
 
+[Collection("Database integration")]
 public class VisitAssignmentDatabaseTests
 {
     private static readonly DateTime Start = new(2026, 10, 18, 8, 0, 0, DateTimeKind.Utc);
@@ -29,7 +30,7 @@ public class VisitAssignmentDatabaseTests
     public async Task Override_contains_queries_are_tenant_scoped_and_deletion_archives_roster()
     {
         var services = new ServiceCollection(); services.AddLogging();
-        services.AddCleaningMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!, databaseSchemaName: "visit_query_" + Guid.NewGuid().ToString("N"));
+        services.AddTestMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!, databaseSchemaName: "visit_query_" + Guid.NewGuid().ToString("N"));
         using var provider = services.BuildServiceProvider(); var store = provider.GetRequiredService<IDocumentStore>();
         await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
         var shift = new Shift { Id = Guid.NewGuid(), IsActive = false }; var employee = Guid.NewGuid();
@@ -55,7 +56,7 @@ public class VisitAssignmentDatabaseTests
     {
         var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
         var services = new ServiceCollection(); services.AddLogging();
-        services.AddCleaningMarten(connection, databaseSchemaName: "visit_race_" + Guid.NewGuid().ToString("N"));
+        services.AddTestMarten(connection, databaseSchemaName: "visit_race_" + Guid.NewGuid().ToString("N"));
         using var provider = services.BuildServiceProvider(); var store = provider.GetRequiredService<IDocumentStore>();
         await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
         var tenant = "race-" + Guid.NewGuid().ToString("N");

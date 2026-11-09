@@ -33,7 +33,8 @@ builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>
 builder.Services.Configure<CleaningSuite.Api.Middleware.PublicRateLimitOptions>(builder.Configuration.GetSection("PublicRateLimit"));
 
 builder.Services.PostConfigure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(options =>
-    options.InvalidModelStateResponseFactory = context => new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(CleaningSuite.Api.RequestErrorText.FromModelState(context.ModelState)));
+    options.InvalidModelStateResponseFactory = context => new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(CleaningSuite.Api.RequestErrorText.FromModelState(context.ModelState,
+        context.ActionDescriptor.Parameters.Any(p => p.ParameterType == typeof(CleaningSuite.Application.Partners.CreatePartnerRequest)))));
 builder.Services.AddControllers().AddJsonOptions(o =>
 {
     o.JsonSerializerOptions.PropertyNameCaseInsensitive = true;

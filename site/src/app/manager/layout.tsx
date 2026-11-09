@@ -3,12 +3,13 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link';
 import { initAuth, isAuthenticated, isAdmin, isManager, authTenant, refreshToken, login, logout } from '@/lib/auth';
 import { API_URL } from '@/lib/api';
-import { ACCESS_VERIFY_ERROR, ACCESS_RETRY_LABEL } from '@/lib/accessCopy';
+import { ACCESS_VERIFY_ERROR, ACCESS_RETRY_LABEL, AccessVerificationError, verifyIdentity } from '@/lib/accessCopy';
 
 export default function ManagerLayout({ children }: { children: ReactNode }) {
   const [access, setAccess] = useState<'pending' | 'anonymous' | 'allowed' | 'denied' | 'error'>('pending');
   const [tenant, setTenant] = useState('');
   const [hasOwnWorkIdentity, setHasOwnWorkIdentity] = useState(false);
+  const [accessError, setAccessError] = useState(ACCESS_VERIFY_ERROR);
   const version = useRef(0);
   const verify = useCallback(async () => {
     const attempt = ++version.current; setAccess('pending'); setHasOwnWorkIdentity(false);
@@ -19,7 +20,7 @@ export default function ManagerLayout({ children }: { children: ReactNode }) {
       if (!isAdmin() && !isManager()) { setAccess('denied'); return; }
       const bearer = await refreshToken(); if (attempt !== version.current) return;
       if (!bearer) { setAccess('denied'); return; }
-      const response = await fetch(`${API_URL}/api/v1/me`, { headers: { Authorization: `Bearer ${bearer}` }, cache: 'no-store' });
+      const response = await verifyIdentity(`${API_URL}/api/v1/me`, bearer);
       if (attempt !== version.current) return;
       if ([401, 403].includes(response.status)) { setAccess('denied'); return; }
       if (!response.ok) throw new Error();
@@ -33,7 +34,7 @@ export default function ManagerLayout({ children }: { children: ReactNode }) {
         setAccess(allowed ? 'allowed' : 'denied');
         setHasOwnWorkIdentity(allowed && identity.employee?.isActive === true);
       }
-    } catch { if (attempt === version.current) setAccess('error'); }
+    } catch (error) { if (attempt === version.current) { setAccessError(error instanceof AccessVerificationError ? error.message : ACCESS_VERIFY_ERROR); setAccess('error'); } }
   }, []);
   useEffect(() => { void verify(); return () => { version.current++; }; }, [verify]);
   return <main className="min-h-screen bg-gray-50 text-gray-900 p-4 sm:p-8">
@@ -42,7 +43,7 @@ export default function ManagerLayout({ children }: { children: ReactNode }) {
       {access === 'pending' && <p role="status">Checking access…</p>}
       {access === 'anonymous' && <button className="rounded bg-gray-900 text-white px-4 py-2" onClick={() => login()}>Sign in</button>}
       {access === 'denied' && <p role="alert">Access denied. Tenant manager or administrator access is required.</p>}
-      {access === 'error' && <div role="alert"><p>{ACCESS_VERIFY_ERROR}</p><button className="underline" onClick={verify}>{ACCESS_RETRY_LABEL}</button></div>}
+      {access === 'error' && <div role="alert"><p>{accessError}</p><button className="underline" onClick={verify}>{ACCESS_RETRY_LABEL}</button></div>}
       {access === 'allowed' && children}
     </div>
   </main>;

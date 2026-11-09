@@ -17,6 +17,7 @@ using Moq;
 
 namespace CleaningSuite.Tests.Partners;
 
+[Collection("Database integration")]
 public class PartnerWorkflowTests
 {
     [Fact]
@@ -638,7 +639,7 @@ public class PartnerWorkflowTests
         public static async Task<Fixture> Create()
         {
             var services = new ServiceCollection(); services.AddLogging();
-            services.AddCleaningMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!, databaseSchemaName: "partner_" + Guid.NewGuid().ToString("N"));
+            services.AddTestMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!, databaseSchemaName: "partner_" + Guid.NewGuid().ToString("N"));
             var fixture = new Fixture(services.BuildServiceProvider());
             await fixture.Store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
             fixture.Company.IsPartnerEnabled = true;

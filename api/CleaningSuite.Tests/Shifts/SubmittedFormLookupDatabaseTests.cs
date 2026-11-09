@@ -8,13 +8,14 @@ using Moq;
 namespace CleaningSuite.Tests.Shifts;
 
 /// <summary>The batched lookup behind the shift list's Completed tab, read on PostgreSQL.</summary>
+[Collection("Database integration")]
 public class SubmittedFormLookupDatabaseTests
 {
     [QualityCycle.QualityCycleDatabaseFact]
     public async Task Returns_only_requested_shifts_with_a_submitted_checklist_on_a_live_shift()
     {
         var services = new ServiceCollection(); services.AddLogging();
-        services.AddCleaningMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!,
+        services.AddTestMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!,
             databaseSchemaName: "submitted_forms_" + Guid.NewGuid().ToString("N"));
         using var provider = services.BuildServiceProvider();
         var store = provider.GetRequiredService<IDocumentStore>();

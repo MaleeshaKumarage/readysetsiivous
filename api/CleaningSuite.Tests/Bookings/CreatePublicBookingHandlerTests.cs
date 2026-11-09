@@ -12,6 +12,35 @@ namespace CleaningSuite.Tests.Bookings;
 
 public class CreatePublicBookingHandlerTests
 {
+    [Fact]
+    public async Task Lost_success_is_recovered_without_rechecking_price_or_reserving_again()
+    {
+        var handler = Handler();
+        var request = Request() with { IdempotencyKey = new string('A', 64) };
+        Booking? saved = null;
+        _bookings.Setup(x => x.SaveAsync(It.IsAny<Booking>(), It.IsAny<CancellationToken>()))
+            .Callback<Booking, CancellationToken>((b, _) => saved = b).Returns(Task.CompletedTask);
+        _bookings.Setup(x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid id, CancellationToken _) => saved?.Id == id ? saved : null);
+        var first = await handler.Handle(request, default);
+        _service.PriceNet = 999;
+        var recovered = await handler.Handle(request, default);
+        Assert.Equal(first, recovered);
+        _bookings.Verify(x => x.SaveAsync(It.IsAny<Booking>(), It.IsAny<CancellationToken>()), Times.Once);
+        _services.Verify(x => x.GetByIdAsync(_service.Id, It.IsAny<CancellationToken>()), Times.Once);
+        Assert.DoesNotContain(request.IdempotencyKey, System.Text.Json.JsonSerializer.Serialize(saved));
+        Assert.DoesNotContain(request.IdempotencyKey, request.ToString());
+        await Assert.ThrowsAsync<SlotConflictException>(() => handler.Handle(request with { CustomerName = "Changed" }, default));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("guessable")]
+    public async Task Invalid_recovery_keys_are_rejected_before_database_work(string key)
+    {
+        await Assert.ThrowsAsync<FluentValidation.ValidationException>(() => Handler().Handle(Request() with { IdempotencyKey = key }, default));
+        _bookings.Verify(x => x.BeginReservationAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
     private readonly Mock<IBookingRepository> _bookings = new();
     private readonly Mock<IServiceRepository> _services = new();
     private readonly Mock<ITenantProfileRepository> _profiles = new();

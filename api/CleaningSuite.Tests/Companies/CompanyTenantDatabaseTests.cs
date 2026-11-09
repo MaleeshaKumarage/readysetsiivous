@@ -18,12 +18,14 @@ using Weasel.Core.Migrations;
 
 namespace CleaningSuite.Tests.Companies;
 
+[Collection("Database integration")]
 public class CompanyTenantDatabaseTests
 {
     [QualityCycle.QualityCycleDatabaseFact]
     public async Task Legacy_global_index_migrates_without_changing_documents_and_is_idempotent()
     {
         var schema = "company_migration_" + Guid.NewGuid().ToString("N");
+        using var cleanup = new TestSchemaCleanup(ConnectionString, schema);
         var company = Company.Create("1234567-8", "Existing company");
         string originalJson;
         using (var legacy = LegacyStore(schema))
@@ -203,7 +205,7 @@ public class CompanyTenantDatabaseTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddCleaningMarten(ConnectionString, databaseSchemaName: schema);
+        services.AddTestMarten(ConnectionString, databaseSchemaName: schema);
         return services.BuildServiceProvider();
     }
 
@@ -218,6 +220,7 @@ public class CompanyTenantDatabaseTests
         options.Policies.AllDocumentsAreMultiTenanted();
         options.Policies.ForAllDocuments(mapping => mapping.UseOptimisticConcurrency = true);
         options.Schema.For<Company>().UniqueIndex(x => x.BusinessId).Index(x => x.Name);
+        // This store hands its schema to ProductionServices in the same test; the final store owns teardown.
         return new DocumentStore(options);
     }
 

@@ -29,6 +29,13 @@ export default function EmployeeSchedulePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [employeeFilter, setEmployeeFilter] = useState<string | null>(null);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setEmployeeFilter(params.get('employee'));
+    const day = params.get('date');
+    if (day && /^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(Date.parse(day))) setWeekStart(mondayOf(day));
+  }, []);
   const weekEnd = addDays(weekStart, DAYS - 1);
   const days = useMemo(() => Array.from({ length: DAYS }, (_, index) => addDays(weekStart, index)), [weekStart]);
 
@@ -61,7 +68,7 @@ export default function EmployeeSchedulePage() {
   const sameVisit = (a: ScheduleVisit, b: ScheduleVisit) => a.shiftId === b.shiftId && a.startUtc === b.startUtc;
   const overlapFor = (employeeId: string, day: string) => visitsFor(employeeId, day).some(visit => overlaps.some(finding => finding.employeeId === employeeId
     && (sameVisit(finding.earlier, visit) || sameVisit(finding.later, visit))));
-  const staff = (employees ?? []).filter(employee => employee.isActive && employee.role !== 'partner');
+  const staff = (employees ?? []).filter(employee => employee.isActive && employee.role !== 'partner' && (!employeeFilter || employee.id === employeeFilter));
   const visitLabel = (visit: ScheduleVisit) => `${visit.shiftName} ${timeOf(visit.startUtc)}–${timeOf(visit.endUtc)}`;
 
   if (zoneError) return (
@@ -78,6 +85,7 @@ export default function EmployeeSchedulePage() {
     <Stack p="md" gap="md">
       <Title order={2}>Employee schedule</Title>
       <Group align="flex-end">
+        {employeeFilter && <Button variant="subtle" onClick={() => setEmployeeFilter(null)}>Show all cleaners</Button>}
         <TextInput type="date" label="Week starting" value={weekStart} onChange={event => { if (event.currentTarget.value) setWeekStart(mondayOf(event.currentTarget.value)); }} />
         <Button variant="default" onClick={() => setWeekStart(addDays(weekStart, -DAYS))}>Previous week</Button>
         <Button variant="default" onClick={() => setWeekStart(addDays(weekStart, DAYS))}>Next week</Button>

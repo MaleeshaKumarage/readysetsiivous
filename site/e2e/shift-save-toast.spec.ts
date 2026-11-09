@@ -1,3 +1,4 @@
+import { selectDailyScheduleIfEmpty } from './admin-helpers';
 import { test, expect } from '@playwright/test';
 import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
 
@@ -21,7 +22,7 @@ test('a refused shift save explains the fix as a toast and in the dialog, and ke
   await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'AAA1', exact: true }).click();
   await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Morning clean');
   await dialog.getByRole('textbox', { name: 'Start date', exact: true }).fill('2026-11-01');
-  await dialog.getByRole('button', { name: 'Create shift' }).click();
+  await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
   await expect(page.getByText('Shift not created').first()).toBeVisible();
   await expect(dialog.getByText(CONFLICT)).toBeVisible();
   await expect(dialog.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Morning clean');
@@ -45,7 +46,7 @@ test('a field validation failure names the field problem instead of a generic ti
   await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'AAA1', exact: true }).click();
   await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Ranged clean');
   await dialog.getByRole('textbox', { name: 'Start date', exact: true }).fill('2026-11-10');
-  await dialog.getByRole('button', { name: 'Create shift' }).click();
+  await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
   await expect(dialog.getByText(FIELD)).toBeVisible();
   await expect(dialog.getByText('Validation failed')).toHaveCount(0);
 });
@@ -96,7 +97,7 @@ for (const [status, expected] of [
     await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'AAA1', exact: true }).click();
     await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Session clean');
     await dialog.getByRole('textbox', { name: 'Start date', exact: true }).fill('2026-11-11');
-    await dialog.getByRole('button', { name: 'Create shift' }).click();
+    await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
     await expect(dialog.getByText(expected)).toBeVisible();
     await expect(dialog.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Session clean');
   });

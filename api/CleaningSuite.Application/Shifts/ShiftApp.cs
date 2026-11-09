@@ -105,7 +105,8 @@ public interface IShiftRepository
     Task DeleteOccurrenceExceptionAsync(Guid id, CancellationToken ct = default);
 }
 
-public record ShiftConflictDetail(Guid ShiftId, string ShiftName, DateTime StartUtc, DateTime EndUtc);
+public record ShiftConflictDetail(Guid ShiftId, string ShiftName, DateTime StartUtc, DateTime EndUtc,
+    string? Recurrence = null, bool OpenEnded = false);
 
 public class ShiftConflictException : Exception
 {

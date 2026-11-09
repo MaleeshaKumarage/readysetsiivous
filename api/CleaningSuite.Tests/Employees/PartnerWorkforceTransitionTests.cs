@@ -17,6 +17,7 @@ using Moq;
 
 namespace CleaningSuite.Tests.Employees;
 
+[Collection("Database integration")]
 public sealed class PartnerWorkforceTransitionTests
 {
     private static readonly DateTime Now = new(2026, 11, 1, 10, 0, 0, DateTimeKind.Utc);
@@ -137,7 +138,7 @@ public sealed class PartnerWorkforceTransitionTests
         public static async Task<Fixture> Create()
         {
             var services = new ServiceCollection(); services.AddLogging();
-            services.AddCleaningMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!, databaseSchemaName: "partner_transition_" + Guid.NewGuid().ToString("N"));
+            services.AddTestMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!, databaseSchemaName: "partner_transition_" + Guid.NewGuid().ToString("N"));
             var fixture = new Fixture(services.BuildServiceProvider()); await fixture.Store.Storage.ApplyAllConfiguredChangesToDatabaseAsync(); return fixture;
         }
         private ITenantContext Context() { var mock = new Mock<ITenantContext>(); mock.SetupGet(x => x.TenantId).Returns(Tenant); return mock.Object; }

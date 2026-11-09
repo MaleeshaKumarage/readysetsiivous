@@ -27,11 +27,13 @@ export default function BookingFlow({ lang }: { lang: Language }) {
   const [copyState, setCopyState] = useState<'idle' | 'success' | 'failure'>('idle');
   const [submitting, setSubmitting] = useState(false);
   const [failure, setFailure] = useState<PublicFailure | null>(null);
+  const [recovering, setRecovering] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [accepted, setAccepted] = useState(false);
   const [minimum, setMinimum] = useState('');
   const heading = useRef<HTMLHeadingElement>(null);
   const busy = useRef(false);
+  const pendingRequest = useRef<Record<string, unknown> | null>(null);
   useEffect(() => { setMinimum(helsinkiToday()); const timer = setInterval(() => setMinimum(helsinkiToday()), 60000); return () => clearInterval(timer); }, []);
   useEffect(() => { let alive = true; fetchServices(lang).then(data => { if (alive) { setServices(data); setApiError(data === null); } }); return () => { alive = false; }; }, [lang]);
   useEffect(() => { heading.current?.focus(); }, [step]);
@@ -48,28 +50,36 @@ export default function BookingFlow({ lang }: { lang: Language }) {
   }, [step, service, date, slotsRetry]);
   function update(key: keyof typeof form, value: string) { setForm(f => ({ ...f, [key]: value })); setErrors(e => ({ ...e, [key]: '' })); }
   async function submit(event: FormEvent) {
-    event.preventDefault(); if (busy.current || failure === 'uncertain' || !service || !slot || !date) return;
+    event.preventDefault(); if (busy.current || !service || !slot || !date) return;
     const next: Record<string, string> = {};
     for (const key of ['customerName', 'customerPhone', 'street', 'city'] as const) if (!form[key].trim()) next[key] = u.invalid;
     if (form.customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.customerEmail)) next.customerEmail = u.emailInvalid;
     if (!accepted) next.accepted = u.invalid;
-    if (date < helsinkiToday()) { setFailure('validation'); setStep('time'); return; }
+    if (!recovering && date < helsinkiToday()) { setFailure('validation'); setStep('time'); return; }
     setErrors(next);
     if (Object.keys(next).length) { setFailure('validation'); document.getElementById(Object.keys(next)[0])?.focus(); return; }
     busy.current = true; setSubmitting(true); setFailure(null);
-    const response = await publicPost<BookingResult>('/bookings', { localDate: date, startTime: slot, serviceId: service.id, ...Object.fromEntries(Object.entries(form).map(([k,v]) => [k,v.trim()])), notes: form.notes.trim() || null, expectedPriceGross: gross(service) });
+    if (!pendingRequest.current) {
+      const bytes = crypto.getRandomValues(new Uint8Array(32));
+      const idempotencyKey = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+      pendingRequest.current = { localDate: date, startTime: slot, serviceId: service.id, ...Object.fromEntries(Object.entries(form).map(([k,v]) => [k,v.trim()])), notes: form.notes.trim() || null, expectedPriceGross: gross(service), idempotencyKey };
+    }
+    const response = await publicPost<BookingResult>('/bookings', pendingRequest.current);
     busy.current = false; setSubmitting(false);
     if (response.error) {
+      // Definitive refusals permit a new payload. An uncertain write must reuse the original credential and body.
+      if (!recovering && ['validation', 'conflict', 'priceChanged', 'rateLimit'].includes(response.error)) pendingRequest.current = null;
+      if (response.error === 'uncertain') setRecovering(true);
       setFailure(response.error);
       const serverFields: Record<string,string> = {};
       for (const field of response.fields ?? []) { const key = field.charAt(0).toLowerCase() + field.slice(1); if (key in form) serverFields[key] = u.invalid; }
       setErrors(serverFields);
-      if (response.error === 'conflict') { setSlot(''); setSlotsRetry(v => v + 1); setStep('time'); }
-      else if (response.error === 'priceChanged') { setServices(null); setStep('service'); const fresh = await fetchServices(lang); setServices(fresh); setApiError(fresh === null); }
+      if (!recovering && response.error === 'conflict') { setSlot(''); setSlotsRetry(v => v + 1); setStep('time'); }
+      else if (!recovering && response.error === 'priceChanged') { setServices(null); setStep('service'); const fresh = await fetchServices(lang); setServices(fresh); setApiError(fresh === null); }
       else if (Object.keys(serverFields).length) document.getElementById(Object.keys(serverFields)[0])?.focus();
     } else if (!response.value?.bookingNumber || !response.value?.managementKey) {
-      setFailure('uncertain');
-    } else { setResult(response.value); setStep('done'); }
+      setFailure('uncertain'); setRecovering(true);
+    } else { pendingRequest.current = null; setRecovering(false); setResult(response.value); setStep('done'); }
   }
   const summary = service && date && slot ? `${service.name} · ${fullDate(date, lang)} · ${slot} · ${money(result?.priceGross ?? gross(service), lang, result?.currency ?? service.currency ?? 'EUR')}` : '';
   const progress = ['service', 'time', 'details'].indexOf(step);
@@ -95,7 +105,7 @@ export default function BookingFlow({ lang }: { lang: Language }) {
       </div>}
     </div>}
     {step === 'details' && service && <form onSubmit={submit} noValidate>
-      <fieldset disabled={submitting || failure === 'uncertain'}>
+      <fieldset disabled={submitting || recovering}>
       <legend className="sr-only">{t(lang, 'varaus.detailsTitle')}</legend>
       <button type="button" className="mb-4 underline" onClick={() => setStep('time')}>← {t(lang, 'varaus.back')}</button>
       <h2 className="text-xl font-semibold">{t(lang, 'varaus.detailsTitle')}</h2><p className="my-4 rounded-lg border p-4">{summary}<br/>{u.price}{service.durationMinutes ? ` · ${u.duration}: ${service.durationMinutes} ${u.minutes}` : ''}</p>
@@ -112,6 +122,7 @@ export default function BookingFlow({ lang }: { lang: Language }) {
       {failure === 'uncertain' && <a href="mailto:info@readysetsiivous.fi" className="underline">info@readysetsiivous.fi</a>}
       </div>
       </fieldset>
+      {recovering && <button type="submit" disabled={submitting} className={buttonClass}>{u.recover}</button>}
     </form>}
     {step === 'done' && result && <div className="space-y-4">
       <h2 className="text-2xl font-bold">{t(lang, 'varaus.doneTitle')}</h2><p id="booking-result-status">{u.pending}</p><p>{summary}</p><p>{u.zone}</p>

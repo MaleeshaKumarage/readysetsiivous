@@ -20,7 +20,7 @@ import { initAuth, isAuthenticated, isAdmin, authTenant, refreshToken, login, lo
 import { API_URL } from '@/lib/api';
 import { PwaInstallButton } from '@/components/PwaInstallButton';
 import { QuoteRequestBanner, QuoteRequestProvider, PartnerPendingBadge } from '@/components/QuoteRequests';
-import { ACCESS_VERIFY_ERROR, ACCESS_RETRY_LABEL } from '@/lib/accessCopy';
+import { ACCESS_VERIFY_ERROR, ACCESS_RETRY_LABEL, AccessVerificationError, verifyIdentity } from '@/lib/accessCopy';
 
 const NAV_GROUPS = [
   { label: 'Workspace', items: [{ href: '', label: 'Dashboard', icon: LayoutDashboard }] },
@@ -39,6 +39,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const [authed, setAuthed] = useState(false);
   const [access, setAccess] = useState<'pending' | 'allowed' | 'denied' | 'error'>('pending');
   const [hasOwnWorkIdentity, setHasOwnWorkIdentity] = useState(false);
+  const [accessError, setAccessError] = useState(ACCESS_VERIFY_ERROR);
   const [canUseShiftCalendar, setCanUseShiftCalendar] = useState(false);
   const verification = useRef(0);
   // Capture before the child provider's layout effect writes its forced scheme.
@@ -63,7 +64,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       if (!bearer) { setAccess('denied'); return; }
       // Identity verification is deliberately uncached: stale roles and inactive
       // bindings must not mount administrative children or trigger their reads.
-      const response = await fetch(`${API_URL}/api/v1/me`, { headers: { Authorization: `Bearer ${bearer}` }, cache: 'no-store' });
+      const response = await verifyIdentity(`${API_URL}/api/v1/me`, bearer);
       if (attempt !== verification.current) return;
       if (response.status === 401 || response.status === 403) { setAccess('denied'); return; }
       if (!response.ok) throw new Error('Could not verify your admin access right now. Refresh the page to retry.');
@@ -79,8 +80,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         setAccess(allowed ? 'allowed' : 'denied');
         setHasOwnWorkIdentity(allowed && identity.employee?.isActive === true);
       }
-    } catch {
-      if (attempt === verification.current) { setReady(true); setAccess('error'); }
+    } catch (error) {
+      if (attempt === verification.current) { setAccessError(error instanceof AccessVerificationError ? error.message : ACCESS_VERIFY_ERROR); setReady(true); setAccess('error'); }
     }
   }, []);
 
@@ -94,7 +95,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       try {
         const bearer = await refreshToken();
         if (!bearer) { setCanUseShiftCalendar(false); return; }
-        const response = await fetch(`${API_URL}/api/v1/me`, { headers: { Authorization: `Bearer ${bearer}` }, cache: 'no-store' });
+        const response = await verifyIdentity(`${API_URL}/api/v1/me`, bearer);
         setCanUseShiftCalendar(response.ok && (await response.json()).canUseShiftCalendar === true);
       } catch { setCanUseShiftCalendar(false); }
     };
@@ -133,7 +134,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           <Paper p="xl" radius="md" w="100%" maw={420} withBorder>
             <Stack>
               <Text component="h1" fw={600}>{access === 'error' ? 'Could not verify access' : 'Admin access required'}</Text>
-              <Text role="alert">{access === 'error' ? ACCESS_VERIFY_ERROR : 'This account cannot access tenant administration.'}</Text>
+              <Text role="alert">{access === 'error' ? accessError : 'This account cannot access tenant administration.'}</Text>
               {access === 'error' && <Button onClick={() => void verifyAccess()}>{ACCESS_RETRY_LABEL}</Button>}
               <Button component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="light">My account</Button>
               <Button onClick={() => logout()} variant="subtle">Sign out</Button>

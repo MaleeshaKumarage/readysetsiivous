@@ -12,6 +12,7 @@ using MediatR;
 using Moq;
 
 namespace CleaningSuite.Tests.Employees;
+[Collection("Database integration")]
 public class ManagerDatabaseTests
 {
     [EmployeeIdentityDatabaseFact]
@@ -21,7 +22,7 @@ public class ManagerDatabaseTests
         options.DatabaseSchemaName = "fixture_" + Guid.NewGuid().ToString("N"); options.Connection(Environment.GetEnvironmentVariable("INVITE_TEST_DATABASE")!);
         options.Policies.AllDocumentsAreMultiTenanted(); options.Policies.ForAllDocuments(d => d.UseOptimisticConcurrency = true);
         options.Schema.For<Company>(); options.Schema.For<Branch>(); options.Schema.For<Shift>();
-        using var store = new DocumentStore(options); await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
+        using var store = new TestDocumentStore(options, Environment.GetEnvironmentVariable("INVITE_TEST_DATABASE")!); await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
         var tenant = "manager-db-" + Guid.NewGuid().ToString("N");
         var company = Company.Create("MANAGER-TEST-" + Guid.NewGuid().ToString("N"), "Company"); var branch = Branch.Create(company.Id, "Branch");
         var shift = Shift.Create(company.Id, branch.Id, "Original", new() { Type = ShiftScheduleType.DailySameTime,

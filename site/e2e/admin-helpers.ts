@@ -71,6 +71,15 @@ export async function setupAdminMocks(page: Page, options: { authenticated?: boo
 
 export { expect };
 
+/** Existing create-flow tests choose Daily deliberately instead of relying on the old implicit default. */
+export async function selectDailyScheduleIfEmpty(page: Page) {
+  const schedule = page.getByRole('dialog').getByRole('textbox', { name: /^Schedule/ });
+  if (await schedule.count() === 1 && await schedule.inputValue() === '') {
+    await schedule.click();
+    await page.getByRole('option', { name: 'Daily', exact: true }).click();
+  }
+}
+
 /** Opens or closes the phone navigation drawer. The desktop sidebar has no toggle, so this is a no-op there. */
 export async function setNavOpen(page: Page, open: boolean) {
   // Wait for the admin header first, so the toggle's visibility is known before deciding.

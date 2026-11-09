@@ -6,13 +6,14 @@ using Marten;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 namespace CleaningSuite.Tests.Invoicing;
+[Collection("Database integration")]
 public class ShiftInvoiceDatabaseTests
 {
     [QualityCycleDatabaseFact]
     public async Task Pricing_and_invoice_snapshots_roundtrip_in_their_tenant_partition()
     {
         var services=new ServiceCollection();services.AddLogging();
-        services.AddCleaningMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!,databaseSchemaName:"invoice_snapshot_"+Guid.NewGuid().ToString("N"));
+        services.AddTestMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!,databaseSchemaName:"invoice_snapshot_"+Guid.NewGuid().ToString("N"));
         using var provider=services.BuildServiceProvider();var store=provider.GetRequiredService<IDocumentStore>();
         await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
         var partition="invoice-"+Guid.NewGuid().ToString("N");var shiftId=Guid.NewGuid();var invoiceId=Guid.NewGuid();

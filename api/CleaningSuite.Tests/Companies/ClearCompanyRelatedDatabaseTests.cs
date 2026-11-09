@@ -19,6 +19,7 @@ namespace CleaningSuite.Tests.Companies;
 
 // Runs the one-step company clear against a real PostgreSQL database, so the deletes, voids and partner
 // removals are checked in stored state, not only in mocked calls.
+[Collection("Database integration")]
 public class ClearCompanyRelatedDatabaseTests
 {
     private sealed record Seeded(string Tenant, Company Company, Branch Branch, Shift Shift, QualityCycleForm Form, Guid InvoiceId, Guid PartnerRequestId, Guid NotificationId, Guid AgreementId);
@@ -26,7 +27,7 @@ public class ClearCompanyRelatedDatabaseTests
     private static async Task<(IDocumentStore Store, Mock<ITenantContext> Context, IServiceProvider Provider)> Start()
     {
         var services = new ServiceCollection(); services.AddLogging();
-        services.AddCleaningMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!,
+        services.AddTestMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!,
             databaseSchemaName: "clear_company_" + Guid.NewGuid().ToString("N"));
         var provider = services.BuildServiceProvider();
         var store = provider.GetRequiredService<IDocumentStore>();
