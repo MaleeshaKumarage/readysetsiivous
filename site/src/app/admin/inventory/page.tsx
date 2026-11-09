@@ -64,7 +64,8 @@ function LogTab() {
     try {
       const page = await adminInventory.usage({ ...toFilterParams(filters), skip, take: PAGE_SIZE });
       if (request !== latestRequest.current) return;
-      setSelected([]);
+      // Load more appends rows, so keep the selection; only a fresh load clears it.
+      if (skip === 0) setSelected([]);
       try {
         const statuses = page.length ? await inventoryAcknowledgments.lookup(page.map(row => row.id)) : [];
         if (request !== latestRequest.current) return;

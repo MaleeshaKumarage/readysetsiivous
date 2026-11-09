@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
-import { setup, enterPartner, headers, acknowledgment, usage, company } from './inventory-acknowledgment-helpers';
+import { setup, enterPartner, headers, acknowledgment, usage, company, photo } from './inventory-acknowledgment-helpers';
 
 // Coverage for the inventory acknowledgment review threads: column alignment, selection rules, recovery paths,
 // the request modal, the admin status modal, evidence loading, and the partner inbox controls.
@@ -214,4 +214,84 @@ test('partner pending and history views and pagination request the correct pages
   await page.getByRole('button', { name: 'Pending', exact: true }).click();
   await expect(page.getByRole('article', { name: 'Item 0 Main store' })).toBeVisible();
   expect(requests.at(-1)).toEqual({ history: false, skip: 0 });
+});
+
+test('last page of partner entries hides Next and Previous returns to the first page', async ({ page }) => {
+  const pendingRows = Array.from({ length: 26 }, (_, index) => acknowledgment({ ...usage[0], id: `last-${index}`, itemName: `Entry ${index}`, photoIds: [] }));
+  await setup(page);
+  await page.route(/\/api\/v1\/partner\/inventory-acknowledgments(\?.*)?$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    const skip = Number(new URL(route.request().url()).searchParams.get('skip') ?? 0);
+    return json(route, { items: pendingRows.slice(skip, skip + 25), pendingCount: pendingRows.length, hasMore: skip + 25 < pendingRows.length });
+  });
+  await enterPartner(page);
+  await page.getByRole('button', { name: 'Needs acknowledgment (26)' }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(page.getByRole('article', { name: 'Entry 25 Main store' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Next', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Previous', exact: true }).click();
+  await expect(page.getByRole('article', { name: 'Entry 0 Main store' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Previous', exact: true })).toHaveCount(0);
+});
+
+test('partner inbox shows a failed refresh and recovers on the next refresh', async ({ page }) => {
+  const state = await setup(page, { pending: true });
+  let failNext = false;
+  await page.route(/\/api\/v1\/partner\/inventory-acknowledgments(\?.*)?$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    if (failNext) { failNext = false; return json(route, { detail: 'Unavailable' }, 500); }
+    return json(route, { items: state.rows, pendingCount: state.rows.length, hasMore: false });
+  });
+  await enterPartner(page);
+  await page.getByRole('button', { name: 'Needs acknowledgment (1)' }).click();
+  await expect(page.getByRole('article', { name: 'Keys Main store' })).toBeVisible();
+  const failure = page.getByRole('alert').filter({ hasText: 'Acknowledgments could not be loaded' });
+  failNext = true;
+  await page.getByRole('button', { name: 'Refresh acknowledgments' }).click();
+  await expect(failure).toBeVisible();
+  await page.getByRole('button', { name: 'Refresh acknowledgments' }).click();
+  await expect(page.getByRole('article', { name: 'Keys Main store' })).toBeVisible();
+  await expect(failure).toHaveCount(0);
+});
+
+test('partner evidence shows a loading status until the photos arrive', async ({ page }) => {
+  await setup(page, { pending: true });
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route(/\/api\/v1\/partner\/inventory-acknowledgments\/[^/]+\/photos\//, async route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    await gate;
+    return route.fulfill({ headers, contentType: 'image/png', body: photo });
+  });
+  await enterPartner(page);
+  await page.getByRole('button', { name: 'Needs acknowledgment (1)' }).click();
+  await page.getByRole('button', { name: 'Review entry' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Loading photos' })).toBeVisible();
+  release();
+  await expect(page.getByRole('img', { name: 'Keys photo 1' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Loading photos' })).toHaveCount(0);
+});
+
+test('an entry that already has an acknowledgment cannot be selected again', async ({ page }) => {
+  await setup(page, { pending: true });
+  await page.goto('/admin/inventory/');
+  await expect(page.getByRole('checkbox', { name: 'Select Keys by Private Cleaner' })).toBeDisabled();
+  await expect(page.getByRole('checkbox', { name: 'Select Bedsheets by Private Cleaner' })).toBeEnabled();
+});
+
+test('load more keeps the selection, while a fresh load clears it', async ({ page }) => {
+  await setup(page);
+  const first = Array.from({ length: 100 }, (_, index) => ({ ...usage[0], id: `page-a-${index}`, itemName: `Stock ${index}`, photoIds: [`photo-${index}`] }));
+  const second = [{ ...usage[0], id: 'page-b-0', itemName: 'Late entry', photoIds: ['photo-late'] }];
+  await page.route(/\/api\/v1\/admin\/inventory\/usage(\?.*)?$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    const skip = new URL(route.request().url()).searchParams.get('skip');
+    return json(route, skip === '100' ? second : first);
+  });
+  await page.goto('/admin/inventory/');
+  await page.getByRole('checkbox', { name: 'Select Stock 0 by Private Cleaner' }).check();
+  await page.getByRole('button', { name: 'Load more' }).click();
+  await expect(page.getByRole('cell', { name: 'Late entry', exact: true })).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: 'Select Stock 0 by Private Cleaner' })).toBeChecked();
+  await expect(page.getByRole('button', { name: 'Request acknowledgment (1)' })).toBeEnabled();
 });
