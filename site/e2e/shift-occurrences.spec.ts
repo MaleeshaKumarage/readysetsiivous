@@ -259,3 +259,20 @@ test('occurrences open on tenant-local today, not the browser UTC date', async (
   expect(first.get('from')).toBe('2026-11-04T22:00:00.000Z');
   expect(first.get('to')).toBe('2026-12-06T21:59:59.999Z');
 });
+
+test('reopening occurrences for the same shift keeps the range the admin chose', async ({ page }) => {
+  await setup(page);
+  await shiftAction(page, 'Morning clean', 'Occurrences');
+  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  await list.getByLabel('From').fill('2026-12-01');
+  await list.getByLabel('To').fill('2026-12-31');
+  await list.getByRole('button', { name: 'Load' }).click();
+  await page.keyboard.press('Escape');
+  await expect(list).toHaveCount(0);
+  // Reopening the same shift keeps the chosen range; the default range resets only for a different shift.
+  await shiftAction(page, 'Morning clean', 'Occurrences');
+  const reopened = page.getByRole('dialog', { name: /Occurrences/ });
+  await expect(reopened).toBeVisible();
+  await expect(reopened.getByLabel('From')).toHaveValue('2026-12-01');
+  await expect(reopened.getByLabel('To')).toHaveValue('2026-12-31');
+});

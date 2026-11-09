@@ -179,6 +179,7 @@ export default function ShiftsAdminPage() {
   const occurrenceGeneration = useRef(0);
   const [occurrenceError, setOccurrenceError] = useState('');
   const [occurrenceEditError, setOccurrenceEditError] = useState('');
+  const occurrenceRangeShift = useRef<string | null>(null);
   const [occurrenceFrom, setOccurrenceFrom] = useState(new Date().toISOString().slice(0, 10));
   const [occurrenceTo, setOccurrenceTo] = useState(new Date(Date.now() + 31 * 86400000).toISOString().slice(0, 10));
   const [editingOccurrence, setEditingOccurrence] = useState<ShiftOccurrence | null>(null);
@@ -461,11 +462,17 @@ export default function ShiftsAdminPage() {
   const openOccurrences = async (shift: Shift, notice = '') => {
     setShiftNotice(notice);
     setOccurrenceShift(shift); setOccurrences([]); setOccurrenceError('');
-    // Default range is tenant-local today onward, the same day the calendar opens on. The browser's UTC date can be a day behind near midnight.
-    const today = localInputValue(new Date().toISOString(), timeZoneId).slice(0, 10);
-    const until = addCalendarDays(today, 31);
-    setOccurrenceFrom(today); setOccurrenceTo(until);
-    await loadOccurrences(shift, today, until);
+    // A new shift starts from tenant-local today onward, the day the calendar opens on (the browser's UTC date can be a day behind near midnight).
+    // Reopening the same shift keeps the range the admin chose.
+    if (occurrenceRangeShift.current !== shift.id) {
+      occurrenceRangeShift.current = shift.id;
+      const today = localInputValue(new Date().toISOString(), timeZoneId).slice(0, 10);
+      const until = addCalendarDays(today, 31);
+      setOccurrenceFrom(today); setOccurrenceTo(until);
+      await loadOccurrences(shift, today, until);
+      return;
+    }
+    await loadOccurrences(shift);
   };
 
   const openOccurrenceEditor = (occurrence?: ShiftOccurrence, status = '1') => {

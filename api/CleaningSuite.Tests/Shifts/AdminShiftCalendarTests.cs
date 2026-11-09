@@ -82,6 +82,7 @@ public class AdminShiftCalendarTests
     [InlineData(true, true, 120, 30, false, "unusual-duration")]
     [InlineData(true, true, 120, 180, false, null)]
     [InlineData(true, true, 120, 240, true, null)]
+    [InlineData(true, true, 120, -30, false, "missing-completion")]
     [InlineData(false, true, 120, 240, false, null)]
     public void Completion_review_flags_only_eligible_visits_needing_review(bool eligible, bool submitted, int scheduledMinutes,
         int? actualMinutes, bool corrected, string? expected)
