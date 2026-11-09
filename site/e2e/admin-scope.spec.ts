@@ -36,7 +36,9 @@ test('transient identity verification cannot mount children and retry recovers',
   expect(adminReads).toBe(0);
   await page.getByRole('button', { name: 'Retry verification' }).click();
   await expect(page.getByRole('button', { name: 'Add employee' })).toBeVisible();
-  expect(identityCalls).toBe(2); expect(adminReads).toBeGreaterThan(0);
+  expect(identityCalls).toBe(2);
+  // The admin read follows the verified render, so wait for it rather than sampling once.
+  await expect.poll(() => adminReads).toBeGreaterThan(0);
 });
 
 test('session check failure before sign-in state still shows the access error and retry', async ({ page }) => {
