@@ -155,6 +155,11 @@ async function mockClashingShift(page: Page, status = 200) {
 test('overlap refusal links to the clashing shift, whose visit list opens with the overlapping visit to move', async ({ page }) => {
   await setup(page, ['cleaner']);
   await mockClashingShift(page);
+  // A second, non-clashing visit proves the marker is only on the overlapping row.
+  await page.route(/\/shifts\/other\/occurrences/, route => route.fulfill({ headers, json: [
+    { startUtc: clashStart, endUtc: clashEnd, assigneeIds: ['cleaner'], overrideEmployeeIds: ['cleaner'], rosterVersion: 'other-v1', assignmentVersion: 'other-a1', originalStartUtc: clashStart },
+    { startUtc: '2026-11-05T06:00:00.000Z', endUtc: '2026-11-05T08:00:00.000Z', assigneeIds: [], rosterVersion: 'other-v2' },
+  ] }));
   const editor = await openAssignForMorningVisit(page, 'Cover the morning visit');
   await editor.getByRole('button', { name: 'Preview assignment', exact: true }).click();
   await expect(editor.getByText('Overlaps Evening deep clean')).toBeVisible();
@@ -170,8 +175,10 @@ test('overlap refusal links to the clashing shift, whose visit list opens with t
   expect(Date.parse(range.get('from') ?? '')).toBeLessThanOrEqual(Date.parse(clashStart));
   expect(Date.parse(range.get('to') ?? '')).toBeGreaterThanOrEqual(Date.parse(clashEnd));
   // That visit is marked and keeps its own Assign action, so the admin can change it there.
-  await expect(list.getByText('Overlapping visit', { exact: true })).toBeVisible();
-  await expect(list.getByRole('button', { name: 'Assign', exact: true })).toBeVisible();
+  // Only the overlapping row is marked, and its own Assign action is the one that is reachable there.
+  await expect(list.getByText('Overlapping visit', { exact: true })).toHaveCount(1);
+  const clashRow = list.getByRole('row').filter({ hasText: 'Overlapping visit' });
+  await expect(clashRow.getByRole('button', { name: 'Assign', exact: true })).toBeVisible();
 });
 
 test('the clashing-shift link is also offered when the save itself is refused for the overlap', async ({ page }) => {
