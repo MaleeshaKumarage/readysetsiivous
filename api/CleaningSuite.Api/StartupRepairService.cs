@@ -24,6 +24,9 @@ public sealed class StartupRepairService(IServiceScopeFactory scopes, IConfigura
             await services.GetRequiredService<ShiftValidityCorrectionRunner>().RunAsync(mode, ct);
         });
 
+        await RunAsync("automatic acceptance default", stoppingToken, async (services, ct) =>
+            await services.GetRequiredService<AutoAcceptDefaultRunner>().RunAsync(ct));
+
         await RunAsync("stale assignment release", stoppingToken, async (services, ct) =>
             await services.GetRequiredService<StaleAssignmentRepairRunner>().RunAsync(ct));
     }
