@@ -460,10 +460,17 @@ test('dragging photos over the dropzone highlights it and leaving clears the hig
   await openDropForm(page, 'hover-token');
   const zone = page.getByTestId('photo-dropzone');
   await expect(zone).toHaveAttribute('data-drag-active', 'false');
-  await zone.dispatchEvent('dragover', { dataTransfer: await page.evaluateHandle(() => new DataTransfer()) });
+  // A real photo drag carries the image as a file entry, so the hover uses a DataTransfer holding one.
+  const photoDrag = () => page.evaluateHandle((item) => {
+    const transfer = new DataTransfer();
+    const bytes = Uint8Array.from(atob(item.base64), c => c.charCodeAt(0));
+    transfer.items.add(new File([bytes], item.name, { type: item.type }));
+    return transfer;
+  }, pngFile('hover.png'));
+  await zone.dispatchEvent('dragover', { dataTransfer: await photoDrag() });
   await expect(zone).toHaveAttribute('data-drag-active', 'true');
   await expect(zone).toContainText('Drop photos here');
-  await zone.dispatchEvent('dragleave', { dataTransfer: await page.evaluateHandle(() => new DataTransfer()) });
+  await zone.dispatchEvent('dragleave', { dataTransfer: await photoDrag() });
   await expect(zone).toHaveAttribute('data-drag-active', 'false');
 });
 
@@ -481,6 +488,10 @@ test('a drop of eleven photos is refused, while exactly ten are accepted', async
   await expect(page.getByRole('alert', { name: 'Form error' })).toHaveText('A shift submission can include at most 10 photos.');
   await expect(page.getByRole('button', { name: 'Remove photo' })).toHaveCount(0);
   await dropPhotos(page, eleven.slice(0, 10));
+  await expect(page.getByRole('button', { name: 'Remove photo' })).toHaveCount(10);
+  // The limit counts photos already attached, so one more photo is refused and the count stays at ten.
+  await dropPhotos(page, [pngFile('eleventh.png')]);
+  await expect(page.getByRole('alert', { name: 'Form error' })).toHaveText('A shift submission can include at most 10 photos.');
   await expect(page.getByRole('button', { name: 'Remove photo' })).toHaveCount(10);
 });
 
