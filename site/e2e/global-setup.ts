@@ -52,6 +52,10 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
     return;
   }
   const routes = exportedRoutes(outDir);
+  if (routes.length === 0) {
+    console.warn('[global-setup] static export has no routes; skipping route warm-up');
+    return;
+  }
   const started = Date.now();
   let next = 0;
   let answered = 0;
