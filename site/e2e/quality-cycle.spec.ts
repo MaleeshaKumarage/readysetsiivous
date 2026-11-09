@@ -426,7 +426,8 @@ async function openDropForm(page: Page, token: string, onSubmit?: (body: any) =>
   await expect(page.getByTestId('photo-dropzone')).toBeVisible();
 }
 
-// Builds a DataTransfer in the page from named files and dispatches a real drop on the dropzone.
+// Builds a DataTransfer in the page from named files and dispatches a drop on the dropzone.
+// Asserts the drop's default is cancelled, so a real file drop cannot navigate the browser away from the form.
 async function dropPhotos(page: Page, files: { name: string; type: string; base64: string }[]) {
   const dataTransfer = await page.evaluateHandle((items) => {
     const transfer = new DataTransfer();
@@ -436,7 +437,9 @@ async function dropPhotos(page: Page, files: { name: string; type: string; base6
     }
     return transfer;
   }, files);
-  await page.getByTestId('photo-dropzone').dispatchEvent('drop', { dataTransfer });
+  const defaultPrevented = await page.getByTestId('photo-dropzone').evaluate((el, transfer) =>
+    !el.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer })), dataTransfer);
+  expect(defaultPrevented).toBe(true);
 }
 
 const pngFile = (name: string) => ({ name, type: 'image/png', base64: PNG_BASE64 });
