@@ -102,10 +102,20 @@ test('quality cycle option requires a template and persists through create and e
   });
   await page.goto('/admin/companies/'); await page.getByRole('button', { name: 'Add company', exact: true }).click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByLabel('Quality cycle', { exact: true })).not.toBeChecked();
+  // Quality cycle is offered only for partner companies, so the checkbox is absent until partner access is on.
+  await expect(dialog.getByLabel('Quality cycle', { exact: true })).toHaveCount(0);
   await expect(dialog.getByLabel('Quality cycle template')).toHaveCount(0);
   await dialog.getByLabel('Business ID').fill(initialCompany.businessId); await dialog.getByLabel(/^Name/).fill(initialCompany.name);
   await dialog.getByLabel('Enable partner access').check();
+  await expect(dialog.getByLabel('Quality cycle', { exact: true })).not.toBeChecked();
+  await dialog.getByLabel('Quality cycle', { exact: true }).check();
+  await expect(dialog.getByLabel('Quality cycle template')).toBeVisible();
+  // Turning partner access off hides the quality cycle choice and clears it.
+  await dialog.getByLabel('Enable partner access').uncheck();
+  await expect(dialog.getByLabel('Quality cycle', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByLabel('Quality cycle template')).toHaveCount(0);
+  await dialog.getByLabel('Enable partner access').check();
+  await expect(dialog.getByLabel('Quality cycle', { exact: true })).not.toBeChecked();
   await dialog.getByLabel('Quality cycle', { exact: true }).check();
   await expect(dialog.getByLabel('Quality cycle template')).toBeVisible();
   await dialog.getByRole('button', { name: 'Create company' }).click();

@@ -42,7 +42,7 @@ public sealed class CompanyQualityCycleTests
         var handler = new CompanyHandlers.CreateCompanyCommandHandler(companies.Object, new Mock<IQualityCycleRepository>().Object);
 
         await Assert.ThrowsAsync<FluentValidation.ValidationException>(() =>
-            handler.Handle(new CreateCompanyCommand("1234567-8", "Lake Owners Oy", IsQualityCycleEnabled: true), default));
+            handler.Handle(new CreateCompanyCommand("1234567-8", "Lake Owners Oy", IsPartnerEnabled: true, IsQualityCycleEnabled: true), default));
         companies.Verify(r => r.SaveAsync(It.IsAny<Company>(), default), Times.Never);
     }
 
@@ -57,9 +57,9 @@ public sealed class CompanyQualityCycleTests
         var handler = new CompanyHandlers.CreateCompanyCommandHandler(new Mock<ICompanyRepository>().Object, qualityCycles.Object);
 
         await Assert.ThrowsAsync<FluentValidation.ValidationException>(() =>
-            handler.Handle(new CreateCompanyCommand("1234567-8", "Lake Owners Oy", IsQualityCycleEnabled: true, QualityCycleTemplateId: other.Id), default));
+            handler.Handle(new CreateCompanyCommand("1234567-8", "Lake Owners Oy", IsPartnerEnabled: true, IsQualityCycleEnabled: true, QualityCycleTemplateId: other.Id), default));
         await Assert.ThrowsAsync<FluentValidation.ValidationException>(() =>
-            handler.Handle(new CreateCompanyCommand("1234567-8", "Lake Owners Oy", IsQualityCycleEnabled: true, QualityCycleTemplateId: inactive.Id), default));
+            handler.Handle(new CreateCompanyCommand("1234567-8", "Lake Owners Oy", IsPartnerEnabled: true, IsQualityCycleEnabled: true, QualityCycleTemplateId: inactive.Id), default));
     }
 
     [Fact]
@@ -72,7 +72,21 @@ public sealed class CompanyQualityCycleTests
         var handler = new CompanyHandlers.CreateCompanyCommandHandler(companies.Object, qualityCycles.Object);
 
         await Assert.ThrowsAsync<FluentValidation.ValidationException>(() =>
-            handler.Handle(new CreateCompanyCommand("1234567-8", "Lake Owners Oy", IsQualityCycleEnabled: true, QualityCycleTemplateId: branchTemplate.Id), default));
+            handler.Handle(new CreateCompanyCommand("1234567-8", "Lake Owners Oy", IsPartnerEnabled: true, IsQualityCycleEnabled: true, QualityCycleTemplateId: branchTemplate.Id), default));
+        companies.Verify(r => r.SaveAsync(It.IsAny<Company>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task Quality_cycle_is_refused_for_a_company_without_partner_access()
+    {
+        var template = Template(companyId: null);
+        var qualityCycles = new Mock<IQualityCycleRepository>();
+        qualityCycles.Setup(r => r.GetTemplateAsync(template.Id, default)).ReturnsAsync(template);
+        var companies = new Mock<ICompanyRepository>();
+        var handler = new CompanyHandlers.CreateCompanyCommandHandler(companies.Object, qualityCycles.Object);
+
+        await Assert.ThrowsAsync<FluentValidation.ValidationException>(() =>
+            handler.Handle(new CreateCompanyCommand("1234567-8", "Lake Owners Oy", IsQualityCycleEnabled: true, QualityCycleTemplateId: template.Id), default));
         companies.Verify(r => r.SaveAsync(It.IsAny<Company>(), default), Times.Never);
     }
 
