@@ -85,12 +85,12 @@ export default function AccountClient() {
         {account && <>
           <h2 className="text-xl font-medium">Account ready</h2>
           <p>{account.person ? `${account.person.firstName} ${account.person.lastName}` : account.employee ? `${account.employee.firstName} ${account.employee.lastName}` : 'Tenant administrator'} · {account.realm}</p>
-          <nav aria-label="Choose a section" className="flex flex-wrap justify-center gap-6 py-2">
+          {(account.person?.role === 'partner' || (account.employee?.isActive && !isPartner()) || (account.employee?.role === 'manager' && isManager()) || (!isPartner() && isAdmin())) && <nav aria-label="Choose a section" className="flex flex-wrap justify-center gap-6 py-2">
             {account.person?.role === 'partner' && <SectionTile href="/partner/" label="Open partner portal" icon={Building2} />}
             {account.employee?.isActive && !isPartner() && <SectionTile href="/me/shifts/" label="My shifts" icon={CalendarClock} />}
             {account.employee?.role === 'manager' && isManager() && <SectionTile href="/manager/" label="Manage tenant operations" icon={ClipboardList} />}
             {!isPartner() && isAdmin() && <SectionTile href="/admin/" label="Continue to administration" icon={Settings} />}
-          </nav>
+          </nav>}
           {!isPartner() && supportsWorkPreferences(account) && <section aria-label="Work preferences" className="space-y-3">
             <h2 className="text-xl font-medium">Work preferences</h2>
             {preferenceBusy && <p role="status">{preference === null ? 'Loading work preferences...' : 'Saving work preferences...'}</p>}

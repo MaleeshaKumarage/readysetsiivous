@@ -95,3 +95,16 @@ test('settings that fail to load block saving, so stored values are not overwrit
   expect(backend.generalInstructions).toBe('Stored general text');
   expect(backend.photoLabels).toEqual(['Keys']);
 });
+
+test('unsaved general instructions survive a refresh of the portal', async ({ page }) => {
+  const backend = new PartnerFlowBackend({ priced: true });
+  backend.generalInstructions = 'Stored general text';
+  await prepareRolePage(page, backend, 'owner');
+
+  await page.goto('/partner/');
+  await page.getByRole('tab', { name: /^Settings/ }).click();
+  await page.getByRole('textbox', { name: 'General instructions', exact: true }).fill('Typed but not saved yet');
+  await page.getByRole('button', { name: 'Refresh partner data', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'General instructions', exact: true })).toHaveValue('Typed but not saved yet');
+  expect(backend.generalInstructions).toBe('Stored general text');
+});

@@ -71,12 +71,10 @@ export class PartnerFlowBackend {
     if (!request) throw new ApiError(404, 'Request not found.');
     const visit = this.visits[requestId];
     if (request.status !== 'Completed' || !visit) throw new ApiError(409, 'This visit has not been completed yet.');
-    const cleaner = request.acceptedEmployeeId ? this.employeeById(request.acceptedEmployeeId) : undefined;
     return {
       requestId, branchName: this.branchName(request.branchId), fromDate: request.fromDate, toDate: request.toDate,
       plannedStartUtc: request.plannedStartUtc, plannedEndUtc: request.plannedEndUtc,
       actualStartUtc: '2026-12-01T06:05:00Z', actualEndUtc: '2026-12-01T08:10:00Z',
-      cleanerInitial: cleaner ? `${cleaner.firstName.trim().charAt(0).toUpperCase()}.` : null,
       reports: [{ templateTitle: visit.templateTitle ?? 'Apartment checklist', startedAtUtc: '2026-12-01T06:05:00Z', endedAtUtc: '2026-12-01T08:10:00Z', tasks: visit.tasks, cleanerNotes: visit.cleanerNotes ?? null, photos: visit.photos ?? [] }],
       messages: this.changes.filter(item => item.requestId === requestId && item.companyId === companyId).map(item => ({ ...item, createdUtc: '2026-11-30T09:00:00Z' })),
     };

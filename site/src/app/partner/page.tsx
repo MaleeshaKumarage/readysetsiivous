@@ -28,6 +28,8 @@ const theme = {
   fontFamily: fontFamily.sans,
 } as CSSProperties;
 const base = partnerCopy.en;
+// Identifies one settings state: photo sections and general instructions.
+const settingsKey = (labels: string[], instructions: string) => JSON.stringify([labels, instructions]);
 
 export default function PartnerPage() {
   const [language, setLanguage] = useState<PartnerLanguage>('en');
@@ -43,8 +45,11 @@ export default function PartnerPage() {
   const [photoLabels, setPhotoLabels] = useState<string[]>([]), [newPhotoLabel, setNewPhotoLabel] = useState('');
   // Saving is allowed only after the stored settings have loaded, so empty defaults never overwrite them.
   const [settingsReady, setSettingsReady] = useState(false), [settingsFailed, setSettingsFailed] = useState(false);
+  // Last loaded or saved settings, and the current form. A reload applies the stored copy only when the form has no unsaved edits.
+  const settingsSaved = useRef<string | null>(null), settingsDraft = useRef('');
   // General instructions the cleaner reads before every visit. Each visit's own instructions are appended after them.
   const [generalInstructions, setGeneralInstructions] = useState('');
+  useEffect(() => { settingsDraft.current = settingsKey(photoLabels, generalInstructions); }, [photoLabels, generalInstructions]);
   const [from, setFrom] = useState(''), [to, setTo] = useState(''), [exact, setExact] = useState(false), [time, setTime] = useState(''), [notes, setNotes] = useState('');
   const [change, setChange] = useState<{ kind: 'branch' | 'request'; id: string } | null>(null), [message, setMessage] = useState('');
   // Structured request changes: what the owner needs, and the proposed dates, time or instructions.
@@ -86,7 +91,16 @@ export default function PartnerPage() {
       setIdentity(person); setBranches(properties); setRequests(work); setShifts(scheduled); setChanges(changeHistory); setAccess('allowed');
       // Photo sections only shape new requests, so they load alongside the portal and never hold it up.
       partnerApi.settings()
-        .then(photoSettings => { if (attempt === generation.current) { setPhotoLabels(photoSettings.photoLabels ?? []); setGeneralInstructions(photoSettings.generalInstructions ?? ''); setSettingsReady(true); setSettingsFailed(false); } })
+        .then(photoSettings => {
+          if (attempt !== generation.current) return;
+          const labels = photoSettings.photoLabels ?? [], instructions = photoSettings.generalInstructions ?? '';
+          // Unsaved edits win over a reload. Before any load or save, the form is compared with the empty defaults.
+          if (settingsDraft.current === (settingsSaved.current ?? settingsKey([], ''))) {
+            setPhotoLabels(labels); setGeneralInstructions(instructions);
+            settingsSaved.current = settingsDraft.current = settingsKey(labels, instructions);
+          }
+          setSettingsReady(true); setSettingsFailed(false);
+        })
         .catch(() => { if (attempt === generation.current) { setSettingsReady(false); setSettingsFailed(true); } });
     } catch (e) { if (attempt === generation.current) { setError(e instanceof Error ? e.message : base.loadFailure); setAccess('error'); } }
   }, []);
@@ -241,7 +255,7 @@ export default function PartnerPage() {
           {tab === 'Settings' && <section className="partner-section">
             <div className="partner-section-heading"><div><h2>{t.visitPhotoSettings}</h2><p>{t.visitPhotoSettingsHint}</p></div></div>
             <Card className="partner-surface partner-settings">
-              <form className="partner-form-grid" onSubmit={event => { event.preventDefault(); if (!settingsReady) return; void act(async () => { const saved = await partnerApi.saveSettings({ photoLabels, generalInstructions }); setPhotoLabels(saved.photoLabels); setGeneralInstructions(saved.generalInstructions ?? ''); }, base.photoSectionsSaved); }}>
+              <form className="partner-form-grid" onSubmit={event => { event.preventDefault(); if (!settingsReady) return; void act(async () => { const saved = await partnerApi.saveSettings({ photoLabels, generalInstructions }); setPhotoLabels(saved.photoLabels); setGeneralInstructions(saved.generalInstructions ?? ''); settingsSaved.current = settingsDraft.current = settingsKey(saved.photoLabels, saved.generalInstructions ?? ''); }, base.photoSectionsSaved); }}>
                 {settingsFailed && <p role="alert" className="partner-alert partner-alert-error partner-form-wide">{t.settingsLoadFailed}</p>}
                 <div className="partner-form-wide">
                   {!photoLabels.length && <p className="partner-muted">{t.noPhotoSections}</p>}

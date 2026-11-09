@@ -17,7 +17,7 @@ export interface PartnerShift { id: string; branchId: string; branchName: string
 export interface PartnerCompletionTask { text: string; done: boolean }
 export interface PartnerCompletionPhoto { url: string; note: string }
 export interface PartnerCompletionReport { templateTitle: string; startedAtUtc: string | null; endedAtUtc: string | null; tasks: PartnerCompletionTask[]; cleanerNotes: string | null; photos: PartnerCompletionPhoto[] }
-export interface PartnerCompletion { requestId: string; branchName: string; fromDate: string; toDate: string; plannedStartUtc: string | null; plannedEndUtc: string | null; actualStartUtc: string | null; actualEndUtc: string | null; cleanerInitial: string | null; reports: PartnerCompletionReport[]; messages: PartnerChange[] }
+export interface PartnerCompletion { requestId: string; branchName: string; fromDate: string; toDate: string; plannedStartUtc: string | null; plannedEndUtc: string | null; actualStartUtc: string | null; actualEndUtc: string | null; reports: PartnerCompletionReport[]; messages: PartnerChange[] }
 export interface RequestInput { clientRequestId?: string; version?: number; branchId?: string; fromDate: string; toDate: string; exactStartLocalTime: string | null; notes: string }
 export async function partnerSend<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
   const response = await authorizedFetch(`/api/v1/${path}`, { method, cache: 'no-store', signal, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });

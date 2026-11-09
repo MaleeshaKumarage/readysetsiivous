@@ -392,12 +392,15 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         var requests = await Db.Query<PartnerCleaningRequest>().Where(x => x.Status == "Offered" && x.OfferedEmployeeId == actor).ToListAsync(ct);
         var (zoneId, _) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
         var result = new List<PartnerCleanerOfferDto>();
+        // Each company's general instructions are read once, however many offers it has.
+        var generalByCompany = new Dictionary<Guid, string?>();
         foreach (var item in requests)
         {
             var company = await Db.LoadAsync<Company>(item.CompanyId, ct);
             var branch = await Db.LoadAsync<Branch>(item.BranchId, ct);
             if (company is not { IsActive: true, IsPartnerEnabled: true } || branch is not { IsActive: true }) continue;
-            var general = (await Db.LoadAsync<PartnerPortalSettings>(item.CompanyId, ct))?.GeneralInstructions;
+            if (!generalByCompany.TryGetValue(item.CompanyId, out var general))
+                generalByCompany[item.CompanyId] = general = (await Db.LoadAsync<PartnerPortalSettings>(item.CompanyId, ct))?.GeneralInstructions;
             result.Add(new(item.OfferId!.Value, item.Id, item.Revision, branch.Name, branch.Street,
                 branch.PostalCode, branch.City, item.FromDate, item.ToDate, item.ExactStartLocalTime,
                 item.OfferPlannedStartUtc, item.EstimatedDurationMinutes, VisitNotes(general, item.Notes), zoneId));
@@ -794,11 +797,9 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         var completed = request.Status == PartnerCleaningRequest.StatusAccepted && started.HasValue && forms.Count > 0 && forms.All(x => x.IsSubmitted);
         if (!completed) throw new ShiftConflictException("This visit has not been completed yet.");
         var branch = await Db.LoadAsync<Branch>(request.BranchId, ct);
-        var cleaner = request.AcceptedEmployeeId.HasValue ? await Db.LoadAsync<Employee>(request.AcceptedEmployeeId.Value, ct) : null;
         var messages = await Db.Query<PartnerChangeRequest>().Where(x => x.CompanyId == company.Id && x.RequestId == id).ToListAsync(ct);
         return new(request.Id, branch?.Name ?? "Property", request.FromDate, request.ToDate, request.PlannedStartUtc, request.PlannedEndUtc,
             started, forms.Where(x => x.EndedAtUtc.HasValue).Select(x => x.EndedAtUtc).Max(),
-            PartnerCompletionView.MaskCleaner(cleaner?.FirstName),
             forms.OrderBy(x => x.StartedAtUtc).Select(PartnerCompletionView.Report).ToArray(),
             messages.OrderByDescending(x => x.CreatedUtc).Select(MapChange).ToArray());
     }

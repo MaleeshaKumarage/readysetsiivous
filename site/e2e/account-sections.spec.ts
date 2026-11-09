@@ -58,3 +58,11 @@ test('employee without a management role is offered only My shifts', async ({ pa
   await expect(picker.getByRole('link')).toHaveCount(1);
   await expect(picker.getByRole('link', { name: 'My shifts', exact: true })).toHaveAttribute('href', '/me/shifts/');
 });
+
+test('administrator without an employee record is offered only administration', async ({ page }) => {
+  await signIn(page, ['admin'], null);
+
+  const picker = page.getByRole('navigation', { name: 'Choose a section' });
+  await expect(picker.getByRole('link')).toHaveCount(1);
+  await expect(picker.getByRole('link', { name: 'Continue to administration', exact: true })).toHaveAttribute('href', '/admin/');
+});
