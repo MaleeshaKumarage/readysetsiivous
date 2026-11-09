@@ -392,14 +392,18 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         var requests = await Db.Query<PartnerCleaningRequest>().Where(x => x.Status == "Offered" && x.OfferedEmployeeId == actor).ToListAsync(ct);
         var (zoneId, _) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
         var result = new List<PartnerCleanerOfferDto>();
+        // Each company's general instructions are read once, however many offers it has.
+        var generalByCompany = new Dictionary<Guid, string?>();
         foreach (var item in requests)
         {
             var company = await Db.LoadAsync<Company>(item.CompanyId, ct);
             var branch = await Db.LoadAsync<Branch>(item.BranchId, ct);
             if (company is not { IsActive: true, IsPartnerEnabled: true } || branch is not { IsActive: true }) continue;
+            if (!generalByCompany.TryGetValue(item.CompanyId, out var general))
+                generalByCompany[item.CompanyId] = general = (await Db.LoadAsync<PartnerPortalSettings>(item.CompanyId, ct))?.GeneralInstructions;
             result.Add(new(item.OfferId!.Value, item.Id, item.Revision, branch.Name, branch.Street,
                 branch.PostalCode, branch.City, item.FromDate, item.ToDate, item.ExactStartLocalTime,
-                item.OfferPlannedStartUtc, item.EstimatedDurationMinutes, item.Notes, zoneId));
+                item.OfferPlannedStartUtc, item.EstimatedDurationMinutes, VisitNotes(general, item.Notes), zoneId));
         }
         return result;
     }
@@ -445,11 +449,14 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
             : TenantTimeZone.StartOfLocalDay(request.ToDate.ToDateTime(TimeOnly.MinValue).AddDays(1), zone);
         var localFrom = TenantTimeZone.LocalDate(start, zone);
         var localUntil = TenantTimeZone.LocalDate(end.AddTicks(-1), zone);
+        // The visit carries the photo sections and general instructions in force when the partner's request is accepted.
+        var portalSettings = await Db.LoadAsync<PartnerPortalSettings>(request.CompanyId, ct);
+        var visitNotes = VisitNotes(portalSettings?.GeneralInstructions, request.Notes);
         var shiftId = request.LinkedShiftId ?? PartnerCleaningRequest.StableId($"partner-shift:{request.Id}");
         var shift = await Db.LoadAsync<Shift>(shiftId, ct) ?? Shift.Create(request.CompanyId, request.BranchId,
-            $"Cleaning — {branch.Name}", new ShiftSchedule { Type = ShiftScheduleType.OnCallFlexible }, request.Notes, localFrom, localUntil);
+            $"Cleaning — {branch.Name}", new ShiftSchedule { Type = ShiftScheduleType.OnCallFlexible }, visitNotes, localFrom, localUntil);
         shift.Id = shiftId; shift.PartnerRequestId = request.Id; shift.IsActive = true;
-        shift.ValidFrom = localFrom; shift.ValidUntil = localUntil; shift.Notes = request.Notes;
+        shift.ValidFrom = localFrom; shift.ValidUntil = localUntil; shift.Notes = visitNotes;
         // Companies with quality cycle enabled give every accepted visit the checklist; an admin's later choice on the shift is kept.
         if (company.IsQualityCycleEnabled && company.QualityCycleTemplateId is Guid qualityTemplateId && shift.QualityCycleTemplateId is null)
         {
@@ -457,8 +464,6 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
             shift.QualityCycleTemplateId = qualityTemplateId;
             shift.RecordQualityCyclePlan(DateTime.UtcNow);
         }
-        // The visit carries the photo sections in force when the partner's request is accepted.
-        var portalSettings = await Db.LoadAsync<PartnerPortalSettings>(request.CompanyId, ct);
         shift.RequiredPhotoLabels = portalSettings?.PhotoLabels.ToList() ?? [];
         shift.PartnerAccessInstructions = portalSettings?.Account.AccessInstructions;
         shift.PartnerContactName = portalSettings?.Account.ContactName;
@@ -517,12 +522,23 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         await Db.SaveChangesAsync(ct); return MapChange(change);
     }
 
-    /// <summary>The company's photo sections, from its one-time portal setup.</summary>
+    /// <summary>The company's photo sections and general instructions, from its one-time portal setup.</summary>
     public async Task<PartnerSettingsDto> Settings(Guid actor, CancellationToken ct)
     {
         var (_, company) = await Partner(actor, ct);
         var settings = await Db.LoadAsync<PartnerPortalSettings>(company.Id, ct);
-        return new(settings?.PhotoLabels.ToArray() ?? [], settings?.Account ?? new());
+        return new(settings?.PhotoLabels.ToArray() ?? [], settings?.Account ?? new(), settings?.GeneralInstructions);
+    }
+
+    /// <summary>
+    /// The instructions the cleaner reads for a visit: the company's general instructions first, then the
+    /// instructions written for this visit. Either part may be empty.
+    /// </summary>
+    public static string? VisitNotes(string? generalInstructions, string? visitInstructions)
+    {
+        var parts = new[] { generalInstructions?.Trim(), visitInstructions?.Trim() }.Where(part => !string.IsNullOrEmpty(part));
+        var joined = string.Join("\n\n", parts);
+        return joined.Length == 0 ? null : joined;
     }
 
     // Trims blanks to null and enforces field limits. Billing, contact and access details share these rules.
@@ -561,12 +577,16 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         if (labels.Any(label => label.Length == 0)) throw new ValidationException("Each photo section needs a name.");
         if (labels.Any(label => label.Length > PartnerPortalSettings.MaxPhotoLabelLength)) throw new ValidationException($"Use at most {PartnerPortalSettings.MaxPhotoLabelLength} characters for a photo section name.");
         if (labels.Select(label => label.ToLowerInvariant()).Distinct().Count() != labels.Count) throw new ValidationException("Each photo section can only be listed once.");
-        var account = CleanAccount(body.Account);
+        var general = body.GeneralInstructions?.Trim();
+        if (general?.Length > PartnerPortalSettings.MaxGeneralInstructionsLength) throw new ValidationException($"Use at most {PartnerPortalSettings.MaxGeneralInstructionsLength} characters for the general instructions.");
         var settings = await Db.LoadAsync<PartnerPortalSettings>(company.Id, ct) ?? new PartnerPortalSettings { Id = company.Id };
-        settings.PhotoLabels = labels; settings.Account = account; settings.UpdatedUtc = DateTime.UtcNow;
+        // The portal no longer edits account details. A save without them keeps what is stored.
+        var account = body.Account is null ? settings.Account : CleanAccount(body.Account);
+        settings.PhotoLabels = labels; settings.Account = account; settings.GeneralInstructions = string.IsNullOrEmpty(general) ? null : general;
+        settings.UpdatedUtc = DateTime.UtcNow;
         Db.Store(settings);
         await Db.SaveChangesAsync(ct);
-        return new(labels, account);
+        return new(labels, account, settings.GeneralInstructions);
     }
 
     private static readonly string[] RequestChangeActions = ["Message", "Reschedule", "Instructions", "Cancel"];
@@ -696,7 +716,8 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         // The cleaner sees the shift's notes, so an edited request keeps its linked shift's instructions current.
         if (request.LinkedShiftId is { } shiftId && await Db.LoadAsync<Shift>(shiftId, ct) is { } shift)
         {
-            shift.Notes = request.Notes;
+            var general = (await Db.LoadAsync<PartnerPortalSettings>(request.CompanyId, ct))?.GeneralInstructions;
+            shift.Notes = VisitNotes(general, request.Notes);
             Db.Store(shift);
         }
     }
@@ -776,11 +797,9 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         var completed = request.Status == PartnerCleaningRequest.StatusAccepted && started.HasValue && forms.Count > 0 && forms.All(x => x.IsSubmitted);
         if (!completed) throw new ShiftConflictException("This visit has not been completed yet.");
         var branch = await Db.LoadAsync<Branch>(request.BranchId, ct);
-        var cleaner = request.AcceptedEmployeeId.HasValue ? await Db.LoadAsync<Employee>(request.AcceptedEmployeeId.Value, ct) : null;
         var messages = await Db.Query<PartnerChangeRequest>().Where(x => x.CompanyId == company.Id && x.RequestId == id).ToListAsync(ct);
         return new(request.Id, branch?.Name ?? "Property", request.FromDate, request.ToDate, request.PlannedStartUtc, request.PlannedEndUtc,
             started, forms.Where(x => x.EndedAtUtc.HasValue).Select(x => x.EndedAtUtc).Max(),
-            PartnerCompletionView.MaskCleaner(cleaner?.FirstName),
             forms.OrderBy(x => x.StartedAtUtc).Select(PartnerCompletionView.Report).ToArray(),
             messages.OrderByDescending(x => x.CreatedUtc).Select(MapChange).ToArray());
     }
