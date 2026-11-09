@@ -46,6 +46,10 @@ test('session check failure before sign-in state still shows the access error an
   await expect(page.getByRole('heading', { name: 'Could not verify access' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Retry verification' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Admin access required' })).toHaveCount(0);
+  await page.evaluate(() => { delete (window as any).__MOCK_AUTH_ERROR__; });
+  await page.getByRole('button', { name: 'Retry verification' }).click();
+  await expect(page.getByRole('heading', { name: 'Could not verify access' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Add employee' })).toBeVisible();
 });
 
 for (const failure of ['stale-role', 'foreign-realm', 'persisted-employee-role', 'malformed-roles']) {

@@ -108,7 +108,7 @@ class ReviewTests(unittest.TestCase):
                 self.assertEqual(review_diff.review(file_section("x.ts"), "sys", run=run, sleep=lambda s: None), "NO_CRITICAL")
                 self.assertEqual(len(calls), 2)
 
-    def test_retry_receives_format_feedback_without_replaying_invalid_output(self):
+    def test_retry_quotes_the_rejected_output_as_data_for_reformatting(self):
         prompts = []
         def run(args, **kwargs):
             prompts.append(args[-1])
@@ -116,7 +116,22 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(review_diff.review(file_section("x.ts"), "review instructions", run=run, sleep=lambda s: None), "NO_CRITICAL")
         self.assertIn("review instructions", prompts[1])
         self.assertIn("previous response failed format validation", prompts[1])
-        self.assertNotIn("private invalid output", prompts[1])
+        self.assertIn("<previous_response>\nprivate invalid output\n</previous_response>", prompts[1])
+        self.assertNotIn("<previous_response>", prompts[0])
+
+    def test_findings_wrapped_in_prose_are_recovered_when_the_retry_follows_the_contract(self):
+        finding = "### FILE: x.ts\n### LINE: 4\n### FIX: Guard the null case"
+        run, calls = self.fake_run(lambda n: (0, f"Here is my review.\n\n{finding}\n\nHope this helps." if n == 1 else finding))
+        self.assertEqual(review_diff.review(file_section("x.ts"), "sys", run=run, sleep=lambda s: None), finding)
+        self.assertEqual(len(calls), 2)
+
+    def test_oversized_rejected_output_is_truncated_in_the_retry_prompt(self):
+        prompts = []
+        def run(args, **kwargs):
+            prompts.append(args[-1])
+            return subprocess.CompletedProcess(args, 0, stdout="x" * 20_000 if len(prompts) == 1 else "NO_CRITICAL", stderr="")
+        review_diff.review(file_section("x.ts"), "sys", run=run, sleep=lambda s: None)
+        self.assertLess(len(prompts[1]), 9_000)
 
     def test_persistent_malformed_success_fails_closed(self):
         run, calls = self.fake_run(lambda n: (0, "Analysis: NO_CRITICAL"))

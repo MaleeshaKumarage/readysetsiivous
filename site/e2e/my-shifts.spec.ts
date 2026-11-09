@@ -140,6 +140,22 @@ test('access instructions and the contact are shown to the cleaner before the vi
   await expect(details).toContainText('Contact: Olivia Oy · +358 40 000 0000');
 });
 
+test('scheduled date, timezone and actual times are grouped in the job-time block', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-10-16T06:00:00Z') });
+  const work = await setupWork(page, { startAt: '2026-10-16T18:00:00Z', instructions: 'Use the back door.' });
+  await page.goto('/me/shifts/');
+  const times = page.locator('.employee-job-times');
+  const scheduled = times.locator('.employee-scheduled');
+  await expect(scheduled).toContainText('Scheduled: Oct 16, 2026');
+  await expect(scheduled).toContainText('Europe/Helsinki');
+  await expect(page.getByRole('region', { name: 'Visit instructions' })).toContainText('Use the back door.');
+  await expect(times.locator('.employee-actual')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(times.locator('.employee-actual').filter({ hasText: /^Actual start: / })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Visit instructions' })).toHaveCount(1);
+  expect(work.startCalls).toBe(1);
+});
+
 test('a partner visit cannot end until each required photo section has a photo', async ({ page }) => {
   const work = await setupWork(page, { photoSections: ['Before', 'Keys'] });
   await page.goto('/me/shifts/'); await page.getByRole('button', { name: 'Start', exact: true }).click();
