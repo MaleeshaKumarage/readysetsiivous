@@ -73,12 +73,12 @@ export { expect };
 
 /** Existing create-flow tests choose Daily deliberately instead of relying on the old implicit default. */
 export async function selectDailyScheduleIfEmpty(page: Page) {
-  const schedule = page.getByRole('dialog').getByRole('textbox', { name: /^Schedule/ });
-  // Wait for the dialog's picker to mount; reading it too early saw "no picker" on mobile and skipped the selection.
-  await schedule.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
-  if (await schedule.count() === 1 && await schedule.inputValue() === '') {
+  // A missing picker is a test failure, not a silent skip: the create flows must always show the Schedule field.
+  const schedule = page.getByRole('dialog').last().getByRole('textbox', { name: /^Schedule/ });
+  await expect(schedule).toBeVisible();
+  if (await schedule.inputValue() === '') {
     await schedule.click();
-    await page.getByRole('option', { name: 'Daily', exact: true }).click();
+    await page.getByRole('listbox').getByRole('option', { name: 'Daily', exact: true }).click();
   }
 }
 

@@ -90,6 +90,30 @@ public class CreatePublicBookingHandlerTests
     }
 
     [Fact]
+    public async Task A_concurrent_duplicate_insert_for_the_same_key_returns_the_committed_booking()
+    {
+        var handler = Handler();
+        var request = Request() with { IdempotencyKey = new string('C', 64) };
+        Booking? committed = null;
+        var saves = 0;
+        _bookings.Setup(x => x.SaveAsync(It.IsAny<Booking>(), It.IsAny<CancellationToken>()))
+            .Returns<Booking, CancellationToken>((b, _) =>
+            {
+                saves++;
+                if (saves > 1) return Task.CompletedTask;
+                // Another request with the same key committed this booking first; our insert collides with it.
+                committed = b;
+                throw new PostgresException("Duplicate booking", "ERROR", "ERROR", PostgresErrorCodes.UniqueViolation);
+            });
+        _bookings.Setup(x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid id, CancellationToken _) => committed?.Id == id ? committed : null);
+        var result = await handler.Handle(request, default);
+        Assert.Equal(committed!.Id, result.BookingId);
+        Assert.Equal(committed.BookingNumber, result.BookingNumber);
+        Assert.Equal(1, saves);
+    }
+
+    [Fact]
     public async Task Creation_returns_raw_key_once_and_persists_only_its_digest()
     {
         var handler = Handler();

@@ -6,14 +6,17 @@ const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Head
 async function setupShifts(page: Page) {
   await setupAdminMocks(page);
   const writes: Record<string, unknown>[] = [];
+  const created: Record<string, unknown>[] = [];
   await page.route(/\/api\/v1\/admin\//, route => {
     const path = new URL(route.request().url()).pathname;
     if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
     if (path.endsWith('/shifts') && route.request().method() === 'POST') {
       const body = route.request().postDataJSON(); writes.push(body);
+      created.push({ id: 'created', name: body.name, isActive: true, companyId: body.companyId, branchId: body.branchId, schedule: body.schedule });
       return route.fulfill({ headers, status: 201, json: { ...body, id: 'created' } });
     }
     const shifts = [
+      ...created,
       { id: 'past', name: 'Past one-time visit', isActive: true, companyId: 'company', branchId: 'branch', schedule: { type: 6, oneTimeDate: '2020-01-15', oneTimeStart: '08:00', oneTimeEnd: '09:00' } },
       ...[
         { type: 0, dailyStart: '08:00:00', dailyEnd: '09:00:00' },
@@ -53,6 +56,10 @@ test('schedule is explicit and on-call creation does not invent a daily visit', 
   await expect.poll(() => writes.length).toBe(1);
   expect(writes[0].schedule).toEqual({ type: 4 });
   await expect(page.getByRole('dialog', { name: /Occurrences/ })).toBeVisible();
+  // Closing the occurrences window returns to the list, which now includes the shift just created.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: /Occurrences/ })).toHaveCount(0);
+  await expect(page.getByRole('cell', { name: 'On-call cleaning', exact: true })).toBeVisible();
 });
 
 test('past unfinished one-time shift asks the admin to check completion', async ({ page }) => {
@@ -78,6 +85,12 @@ for (const area of ['admin', 'manager']) for (const problem of ['network', 'serv
     } else {
       await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText(problem === 'network' ? 'ACCESS-NETWORK' : 'ACCESS-HTTP-503');
       await expect(page.getByRole('button', { name: 'Retry verification', exact: true })).toBeVisible();
+      // Retry must re-run verification: the next identity read succeeds, the error clears, and the page renders.
+      await page.route('**/api/v1/me', route => route.request().method() === 'OPTIONS' ? route.fulfill({ headers }) : route.fulfill({ headers, json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: ['admin'] })], canUseShiftCalendar: false, employee: null } }));
+      await page.getByRole('button', { name: 'Retry verification', exact: true }).click();
+      await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Retry verification', exact: true })).toHaveCount(0);
+      await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
     }
   });
 }
@@ -103,7 +116,10 @@ test('lost booking response recovers the same request and private key', async ({
   await expect(page.locator('#customerName')).toHaveValue('Synthetic customer');
   await expect(page.locator('#customerName')).toBeDisabled();
   await page.getByRole('button', { name: 'Recover booking result', exact: true }).click();
+  // The 429 is shown to the customer, the form stays locked for recovery, and exactly two writes have been sent.
+  await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText('Too many requests. Wait a moment before trying again.');
   await expect(page.locator('#customerName')).toBeDisabled();
+  expect(writes).toHaveLength(2);
   await page.getByRole('button', { name: 'Recover booking result', exact: true }).click();
   await expect(page.getByText('RSS-2030-000001', { exact: true })).toBeVisible();
   expect(writes).toHaveLength(3); expect(writes[1]).toEqual(writes[0]); expect(writes[2]).toEqual(writes[0]);

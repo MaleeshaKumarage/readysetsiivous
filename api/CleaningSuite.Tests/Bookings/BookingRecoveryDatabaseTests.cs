@@ -41,7 +41,8 @@ public class BookingRecoveryDatabaseTests
         var results = await Task.WhenAll(Send(request), Send(request));
         Assert.Equal(results[0], results[1]);
         Assert.Equal(results[0], await Send(request));
-        await Assert.ThrowsAsync<SlotConflictException>(() => Send(request with { StartTime = "13:00" }));
+        // A different booking needs its own key. 12:30 overlaps the 12:00-13:00 booking, so the slot conflict path runs.
+        await Assert.ThrowsAsync<SlotConflictException>(() => Send(request with { StartTime = "12:30", IdempotencyKey = new string('B', 64) }));
         using var read = store.QuerySession("booking-test");
         var saved = Assert.Single(await read.Query<Booking>().ToListAsync());
         Assert.True(BookingManagementKey.Verify(results[0].ManagementKey, saved.ManagementKeyHash));

@@ -113,7 +113,7 @@ public class CreatePublicBookingHandler : IRequestHandler<CreatePublicBookingCom
                 var booking = new Booking
                 {
                     Id = bookingId,
-                    RequestFingerprint = key is null ? null : fingerprint,
+                    RequestFingerprint = recoveryKey is null ? null : fingerprint,
                     BookingNumber = $"RSS-{startUtc.Year}-{number:D6}",
                     Customer = new Customer
                     {
@@ -154,8 +154,9 @@ public class CreatePublicBookingHandler : IRequestHandler<CreatePublicBookingCom
                 await _bookings.SaveAsync(booking, ct);
                 return new PublicBookingResult(booking.Id, booking.BookingNumber, booking.CustomerReference!, managementKey, booking.Total.Gross, service.Currency);
             }
-            catch (Exception ex) when (IsReservationConflict(ex))
+            catch (Exception ex) when (IsReservationConflict(ex) || (key is not null && IsDuplicateBooking(ex)))
             {
+                // A concurrent retry with the same key committed first. The next attempt re-reads that booking and returns it.
                 if (attempt == 2)
                     throw new SlotConflictException("Booking changed concurrently, please try again");
             }
@@ -163,6 +164,10 @@ public class CreatePublicBookingHandler : IRequestHandler<CreatePublicBookingCom
 
         throw new SlotConflictException("Could not allocate booking number, try again");
     }
+
+    private static bool IsDuplicateBooking(Exception exception) =>
+        exception is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation }
+        || (exception.InnerException is { } inner && IsDuplicateBooking(inner));
 
     private static bool IsReservationConflict(Exception exception) =>
         exception is ConcurrencyException

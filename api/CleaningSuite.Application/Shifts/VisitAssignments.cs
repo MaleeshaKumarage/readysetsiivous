@@ -187,7 +187,7 @@ public static class VisitAssignmentSafety
     internal static string RecurrenceLabel(ShiftSchedule schedule) => schedule.Type switch
     {
         ShiftScheduleType.DailySameTime => "Daily",
-        ShiftScheduleType.DailyDifferentTime => "Weekly: " + string.Join(", ", schedule.DailyTimes.Keys),
+        ShiftScheduleType.DailyDifferentTime => "Daily: " + string.Join(", ", schedule.DailyTimes.Keys),
         ShiftScheduleType.Weekly => "Weekly: " + string.Join(", ", schedule.WeeklyDays.Count > 0 ? schedule.WeeklyDays : schedule.WeeklyDay.HasValue ? [schedule.WeeklyDay.Value] : []),
         ShiftScheduleType.BiWeekly => $"Every other {schedule.BiWeeklyDay} (week parity {schedule.BiWeeklyWeekParity})",
         ShiftScheduleType.Monthly => $"Monthly on day {schedule.MonthlyDay}",

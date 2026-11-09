@@ -50,6 +50,26 @@ public class RequestErrorTextTests
     }
 
     [Fact]
+    public void A_wrong_typed_body_value_under_the_root_key_keeps_its_own_message_and_is_not_masked()
+    {
+        var state = new ModelStateDictionary();
+        state.AddModelError("$", "The JSON value could not be converted to CleaningSuite.Application.Partners.CreatePartnerRequest.");
+        var problem = RequestErrorText.FromModelState(state, partnerRequest: true);
+        Assert.Equal(new[] { "$" }, problem.Errors.Keys.ToArray());
+        Assert.Equal(new[] { RequestErrorText.BadValue }, problem.Errors["$"]);
+    }
+
+    [Fact]
+    public void Generic_validation_keeps_the_framework_title_and_has_no_detail()
+    {
+        var state = new ModelStateDictionary();
+        state.AddModelError("name", "Name is required.");
+        var problem = RequestErrorText.FromModelState(state);
+        Assert.Equal("One or more validation errors occurred.", problem.Title);
+        Assert.Null(problem.Detail);
+    }
+
+    [Fact]
     public void A_body_that_is_missing_alone_still_says_so()
     {
         var state = new ModelStateDictionary();

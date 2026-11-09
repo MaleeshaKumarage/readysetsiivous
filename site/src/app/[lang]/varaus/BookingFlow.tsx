@@ -67,15 +67,17 @@ export default function BookingFlow({ lang }: { lang: Language }) {
     const response = await publicPost<BookingResult>('/bookings', pendingRequest.current);
     busy.current = false; setSubmitting(false);
     if (response.error) {
-      // Definitive refusals permit a new payload. An uncertain write must reuse the original credential and body.
-      if (!recovering && ['validation', 'conflict', 'priceChanged', 'rateLimit'].includes(response.error)) pendingRequest.current = null;
+      // A definitive refusal proves the booking was not created, so the next submit may use a fresh payload and leave recovery.
+      // A rate limit was never processed, so an in-progress recovery may replay the same credential and body.
+      if (['validation', 'conflict', 'priceChanged'].includes(response.error)) { pendingRequest.current = null; setRecovering(false); }
+      else if (response.error === 'rateLimit' && !recovering) pendingRequest.current = null;
       if (response.error === 'uncertain') setRecovering(true);
       setFailure(response.error);
       const serverFields: Record<string,string> = {};
       for (const field of response.fields ?? []) { const key = field.charAt(0).toLowerCase() + field.slice(1); if (key in form) serverFields[key] = u.invalid; }
       setErrors(serverFields);
-      if (!recovering && response.error === 'conflict') { setSlot(''); setSlotsRetry(v => v + 1); setStep('time'); }
-      else if (!recovering && response.error === 'priceChanged') { setServices(null); setStep('service'); const fresh = await fetchServices(lang); setServices(fresh); setApiError(fresh === null); }
+      if (response.error === 'conflict') { setSlot(''); setSlotsRetry(v => v + 1); setStep('time'); }
+      else if (response.error === 'priceChanged') { setServices(null); setStep('service'); const fresh = await fetchServices(lang); setServices(fresh); setApiError(fresh === null); }
       else if (Object.keys(serverFields).length) document.getElementById(Object.keys(serverFields)[0])?.focus();
     } else if (!response.value?.bookingNumber || !response.value?.managementKey) {
       setFailure('uncertain'); setRecovering(true);

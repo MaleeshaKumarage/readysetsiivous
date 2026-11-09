@@ -127,7 +127,8 @@ test('on-call shifts keep scheduling dated visits and remain available for new s
   await create.getByLabel('Schedule', { exact: true }).click();
   await expect(page.getByRole('option', { name: 'One-time', exact: true })).toBeVisible();
   await expect(page.getByRole('option', { name: 'On-call / flexible', exact: true })).toBeVisible();
-  await page.getByRole('option', { name: 'Daily', exact: true }).click();
+  await page.getByRole('option', { name: 'On-call / flexible', exact: true }).click();
+  await expect(create.getByLabel('Schedule', { exact: true })).toHaveValue('On-call / flexible');
   await create.getByRole('button', { name: 'Cancel', exact: true }).click();
   expect(shiftWrites).toHaveLength(0);
   await expect(page.getByRole('cell', { name: 'One-time cleaning', exact: true })).toBeVisible();
