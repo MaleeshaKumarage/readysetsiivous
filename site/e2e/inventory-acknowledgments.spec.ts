@@ -79,10 +79,24 @@ test('expired photo is explained and Finnish inbox stays within phone width', as
 });
 
 test('failed status lookup disables sharing until the log is reloaded', async ({ page }) => {
-  await setup(page, { failLookup: true }); await page.goto('/admin/inventory/');
+  await setup(page, { failLookup: true });
+  let lookups = 0;
+  // The first lookup fails (set up above); later lookups succeed, so Reload log can recover.
+  await page.route(/\/api\/v1\/admin\/inventory\/acknowledgments(\?.*)?$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization' } });
+    lookups += 1;
+    const ok = lookups > 1;
+    return route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization' }, status: ok ? 200 : 500, json: ok ? [] : { detail: 'Unavailable' } });
+  });
+  await page.goto('/admin/inventory/');
   await expect(page.getByText(/Acknowledgment statuses could not be loaded/)).toBeVisible();
   await expect(page.getByRole('checkbox', { name: 'Select Keys by Private Cleaner' })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Request acknowledgment (0)' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Reload log' }).click();
+  await expect(page.getByText(/Acknowledgment statuses could not be loaded/)).toHaveCount(0);
+  await expect(page.getByRole('checkbox', { name: 'Select Keys by Private Cleaner' })).toBeEnabled();
+  await page.getByRole('checkbox', { name: 'Select Keys by Private Cleaner' }).check();
+  await expect(page.getByRole('button', { name: 'Request acknowledgment (1)' })).toBeEnabled();
 });
 
 test('send conflict keeps reviewed entries and confirmation visible', async ({ page }) => {

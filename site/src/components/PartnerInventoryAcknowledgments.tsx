@@ -32,7 +32,7 @@ export function PartnerInventoryAcknowledgments({ language, refreshToken }: { la
   const [loading, setLoading] = useState(true), [saving, setSaving] = useState(false), [failed, setFailed] = useState(false);
   const [responseFailed, setResponseFailed] = useState(false), [notice, setNotice] = useState(false), [note, setNote] = useState(''), [issue, setIssue] = useState(false), [required, setRequired] = useState(false);
   const [reload, setReload] = useState(0);
-  const generation = useRef(0), mounted = useRef(true);
+  const generation = useRef(0), mounted = useRef(true), inFlight = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const refresh = useCallback(() => setReload(value => value + 1), []);
   useEffect(() => {
@@ -46,8 +46,10 @@ export function PartnerInventoryAcknowledgments({ language, refreshToken }: { la
   }, [history, page, reload, refreshToken]);
   function open(row: InventoryAcknowledgment) { setSelected(selected === row.id ? null : row.id); setNote(''); setIssue(false); setRequired(false); setNotice(false); }
   async function respond(row: InventoryAcknowledgment, status: 'Acknowledged' | 'IssueReported') {
-    if (saving || loading || failed || responseFailed) return;
+    // A ref, not state: two clicks before a re-render must not both send.
+    if (inFlight.current || saving || loading || failed || responseFailed) return;
     if (status === 'IssueReported' && !note.trim()) { setRequired(true); return; }
+    inFlight.current = true;
     setSaving(true); setNotice(false);
     try {
       await inventoryAcknowledgments.respond(row, status, note);
@@ -56,7 +58,7 @@ export function PartnerInventoryAcknowledgments({ language, refreshToken }: { la
       setData(previous => previous ? { ...previous, items: previous.items.filter(item => item.id !== row.id), pendingCount: Math.max(0, previous.pendingCount - 1) } : null);
       setPage(0); refresh();
     } catch { if (mounted.current) setResponseFailed(true); }
-    finally { if (mounted.current) setSaving(false); }
+    finally { inFlight.current = false; if (mounted.current) setSaving(false); }
   }
   function switchView(next: boolean) { setHistory(next); setPage(0); setSelected(null); }
   const stamp = (value: string) => new Intl.DateTimeFormat(language === 'fi' ? 'fi-FI' : 'en-GB', { timeZone: 'Europe/Helsinki', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));

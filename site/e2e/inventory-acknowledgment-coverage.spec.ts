@@ -306,3 +306,48 @@ test('load more keeps the selection, while a fresh load clears it', async ({ pag
   await expect(page.getByRole('checkbox', { name: 'Select Stock 0 by Private Cleaner' })).not.toBeChecked();
   await expect(page.getByRole('button', { name: 'Request acknowledgment (0)' })).toBeDisabled();
 });
+
+test('a retry reuses the batch id, and editing the message starts a new batch', async ({ page }) => {
+  const state = await setup(page, { failSend: true });
+  await page.goto('/admin/inventory/');
+  const dialog = await openRequestModal(page, 'Keys');
+  await dialog.getByLabel('Partner company', { exact: true }).click();
+  await page.getByRole('option', { name: 'Partner One' }).click();
+  await dialog.getByRole('checkbox', { name: /I confirm/ }).check();
+
+  const send = dialog.getByRole('button', { name: 'Send acknowledgment request' });
+  await send.click();
+  await expect(dialog.getByRole('alert')).toContainText('already been requested');
+  await send.click();
+  await expect(dialog.getByRole('alert')).toContainText('already been requested');
+  expect(state.requests).toHaveLength(2);
+  expect(state.requests[1].batchId).toBe(state.requests[0].batchId);
+
+  await dialog.getByLabel('Message to partner (optional)').fill('Changed message');
+  await send.click();
+  await expect(dialog.getByRole('alert')).toContainText('already been requested');
+  expect(state.requests).toHaveLength(3);
+  expect(state.requests[2].batchId).not.toBe(state.requests[0].batchId);
+});
+
+test('partner search is sent as the admin types, and unrequested entries show Not requested', async ({ page }) => {
+  const state = await setup(page);
+  await page.goto('/admin/inventory/');
+  await expect(page.getByRole('cell', { name: 'Not requested', exact: true }).first()).toBeVisible();
+  await page.getByRole('checkbox', { name: 'Select Keys by Private Cleaner' }).check();
+  const dialog = await openRequestModal(page, 'Keys');
+  await dialog.getByLabel('Partner company', { exact: true }).click();
+  await dialog.getByLabel('Partner company', { exact: true }).fill('Partner');
+  await expect.poll(() => state.searches).toContain('Partner');
+  await expect(page.getByRole('option', { name: 'Partner One' })).toBeVisible();
+});
+
+test('a double click on Acknowledge entry sends one response', async ({ page }) => {
+  const state = await setup(page, { pending: true });
+  await enterPartner(page);
+  await page.getByRole('button', { name: 'Needs acknowledgment (1)' }).click();
+  await page.getByRole('button', { name: 'Review entry' }).click();
+  await page.getByRole('button', { name: 'Acknowledge entry' }).dblclick();
+  await expect(page.getByText('Your response was recorded.')).toBeVisible();
+  expect(state.responses).toHaveLength(1);
+});

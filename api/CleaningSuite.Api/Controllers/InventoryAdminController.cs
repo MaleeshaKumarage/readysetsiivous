@@ -17,8 +17,8 @@ public class InventoryAdminController(InventoryService inventory, InventoryAckno
         Ok(await acknowledgments.Partners(search, ct));
 
     [HttpGet("acknowledgments")]
-    public async Task<IActionResult> Acknowledgments([FromQuery] Guid[] usageIds, CancellationToken ct) =>
-        Ok(await acknowledgments.Lookup(usageIds, ct));
+    public async Task<IActionResult> Acknowledgments([FromQuery] Guid[]? usageIds, CancellationToken ct) =>
+        Ok(await acknowledgments.Lookup(usageIds ?? [], ct));
 
     [HttpPost("acknowledgments")]
     public async Task<IActionResult> RequestAcknowledgment(InventoryAcknowledgmentInput body, CancellationToken ct) =>
