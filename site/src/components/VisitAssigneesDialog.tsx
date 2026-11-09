@@ -5,9 +5,11 @@ import { Alert, Button, Group, Modal, MultiSelect, Select, Stack, Text, Textarea
 import { showError } from '@/lib/toast';
 import { adminShifts, VisitConflictError, type Employee, type ShiftConflictDetail, type ShiftOccurrence, type VisitAssignmentResult } from '@/lib/adminApi';
 
-export function VisitAssigneesDialog({ shiftId, visit, employees, timeZone, onClose, onSaved }: {
+export function VisitAssigneesDialog({ shiftId, visit, employees, timeZone, onClose, onSaved, onOpenConflict }: {
   shiftId: string; visit: ShiftOccurrence; employees: Employee[]; timeZone: string;
   onClose: () => void; onSaved: () => Promise<void>;
+  // Opens the clashing shift's visits so the admin can move or remove the overlapping cleaner there.
+  onOpenConflict: (shiftId: string, shiftName: string, clashStartUtc: string) => Promise<void>;
 }) {
   const [scope, setScope] = useState('visit');
   const [mode, setMode] = useState('1');
@@ -101,7 +103,10 @@ export function VisitAssigneesDialog({ shiftId, visit, employees, timeZone, onCl
         <Text size="sm">{formatTime(conflict.startUtc)} to {formatEnd(conflict.endUtc)}. Remove the overlapping cleaner from that visit, then assign them here.</Text>
         {conflict.recurrence && <Text size="sm">{conflict.recurrence}{conflict.openEnded ? ' · No end date; this assignment can conflict with future visits.' : ''}</Text>}
         {selected.map(id => <Text key={id} component="a" td="underline" size="sm" display="block" href={`/admin/shifts/employee-schedule/?employee=${encodeURIComponent(id)}&date=${encodeURIComponent(new Date(conflict.startUtc).toLocaleDateString('en-CA', { timeZone }))}`}>Open assignments for {name(id)}</Text>)}
-        <Button mt="sm" size="xs" color="orange" disabled={busy} onClick={() => removeClash(conflict)}>Remove from {conflict.shiftName} and assign here</Button>
+        <Group mt="sm" gap="xs">
+          <Button size="xs" color="orange" disabled={busy} onClick={() => removeClash(conflict)}>Remove from {conflict.shiftName} and assign here</Button>
+          <Button size="xs" variant="subtle" color="orange" disabled={busy} onClick={() => onOpenConflict(conflict.shiftId, conflict.shiftName, conflict.startUtc)}>View {conflict.shiftName} visits</Button>
+        </Group>
       </Alert>)}
       <Group justify="flex-end"><Button variant="default" disabled={busy} onClick={onClose}>Cancel</Button>
         <Button variant="light" loading={busy} onClick={() => submit(true)}>Preview assignment</Button>
