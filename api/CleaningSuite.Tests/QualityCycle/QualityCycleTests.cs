@@ -232,6 +232,36 @@ public class QualityCycleTests
     }
 
     [Fact]
+    public async Task UpdateQualityCycleTemplateCommandHandler_WhenScopeOmitted_KeepsCurrentCompanyAndBranch()
+    {
+        var companyId = Guid.NewGuid(); var branchId = Guid.NewGuid();
+        var repoMock = new Mock<IQualityCycleRepository>();
+        var template = QualityCycleTemplate.Create("Old Title", new List<string> { "Item 1" }, null, companyId, branchId);
+        repoMock.Setup(r => r.GetTemplateAsync(template.Id, It.IsAny<CancellationToken>())).ReturnsAsync(template);
+
+        var handler = new QualityCycleHandlers.UpdateQualityCycleTemplateCommandHandler(repoMock.Object, new Mock<CleaningSuite.Application.Companies.ICompanyRepository>().Object, new Mock<CleaningSuite.Application.Companies.IBranchRepository>().Object);
+        var result = await handler.Handle(new UpdateQualityCycleTemplateCommand(template.Id, "New Title", new List<string> { "Item 1" }), CancellationToken.None);
+
+        Assert.Equal("New Title", result.Title);
+        Assert.Equal(companyId, result.CompanyId);
+        Assert.Equal(branchId, result.BranchId);
+    }
+
+    [Fact]
+    public async Task UpdateQualityCycleTemplateCommandHandler_WhenReplaceScopeSet_ClearsToAllCustomers()
+    {
+        var repoMock = new Mock<IQualityCycleRepository>();
+        var template = QualityCycleTemplate.Create("Old Title", new List<string> { "Item 1" }, null, Guid.NewGuid(), Guid.NewGuid());
+        repoMock.Setup(r => r.GetTemplateAsync(template.Id, It.IsAny<CancellationToken>())).ReturnsAsync(template);
+
+        var handler = new QualityCycleHandlers.UpdateQualityCycleTemplateCommandHandler(repoMock.Object, new Mock<CleaningSuite.Application.Companies.ICompanyRepository>().Object, new Mock<CleaningSuite.Application.Companies.IBranchRepository>().Object);
+        var result = await handler.Handle(new UpdateQualityCycleTemplateCommand(template.Id, "New Title", new List<string> { "Item 1" }, ReplaceScope: true), CancellationToken.None);
+
+        Assert.Null(result.CompanyId);
+        Assert.Null(result.BranchId);
+    }
+
+    [Fact]
     public async Task UpdateQualityCycleTemplateCommandHandler_WhenTemplateNotFound_ThrowsNotFoundException()
     {
         var repoMock = new Mock<IQualityCycleRepository>();
