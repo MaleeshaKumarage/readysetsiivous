@@ -34,6 +34,7 @@ export default function QualityCyclePublicClient() {
   const [cleanerNotes, setCleanerNotes] = useState('');
   const [photoUrls, setPhotoUrls] = useState<ShiftPhoto[]>([]);
   const [photoReading, setPhotoReading] = useState(false);
+  const [photoDragActive, setPhotoDragActive] = useState(false);
   const [noteError, setNoteError] = useState(false);
   const noteRef = useRef<(HTMLTextAreaElement | null)[]>([]);
 
@@ -72,14 +73,42 @@ export default function QualityCyclePublicClient() {
     setItems(current => current.map((item, i) => i === index ? { ...item, isChecked: !item.isChecked } : item));
   }
 
-  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    e.target.value = '';
-    if (files.length === 0) return;
+  async function addPhotoFiles(files: File[]) {
+    if (files.length === 0 || submitting || photoReading) return;
     setPhotoReading(true); setError(null);
     try { const uploaded = await readShiftPhotos(files, photoUrls); setPhotoUrls(prev => [...prev, ...uploaded.map(url => ({ url, note: '' }))]); }
     catch (error) { setError(error instanceof Error ? error.message : 'Could not read the photo. Please select it again.'); }
     finally { setPhotoReading(false); }
+  }
+
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    await addPhotoFiles(files);
+  }
+
+  function handlePhotoDragOver(e: React.DragEvent<HTMLLabelElement>) {
+    // Always cancel dragover: an uncancelled file drop makes the browser open the file and leave the form.
+    e.preventDefault();
+    if (submitting || photoReading) {
+      e.dataTransfer.dropEffect = 'none';
+      setPhotoDragActive(false);
+      return;
+    }
+    e.dataTransfer.dropEffect = 'copy';
+    setPhotoDragActive(true);
+  }
+
+  function handlePhotoDragLeave(e: React.DragEvent<HTMLLabelElement>) {
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+    setPhotoDragActive(false);
+  }
+
+  async function handlePhotoDrop(e: React.DragEvent<HTMLLabelElement>) {
+    e.preventDefault();
+    setPhotoDragActive(false);
+    if (submitting || photoReading) return;
+    await addPhotoFiles(Array.from(e.dataTransfer.files ?? []));
   }
 
   function handleRemovePhoto(index: number) {
@@ -251,10 +280,21 @@ export default function QualityCyclePublicClient() {
                 Attach Photos (Optional)
               </label>
 
-              <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-gray-300 dark:border-gray-700 hover:border-brand-400 dark:hover:border-brand-500 rounded-2xl cursor-pointer bg-gray-50/50 dark:bg-gray-800/50 hover:bg-brand-50/30 transition-colors group">
+              <label
+                data-testid="photo-dropzone"
+                data-drag-active={photoDragActive ? 'true' : 'false'}
+                onDragOver={handlePhotoDragOver}
+                onDragLeave={handlePhotoDragLeave}
+                onDrop={handlePhotoDrop}
+                className={`flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-2xl cursor-pointer transition-colors group ${
+                  photoDragActive
+                    ? 'border-brand-500 bg-brand-50/60 dark:bg-brand-950/40'
+                    : 'border-gray-300 dark:border-gray-700 hover:border-brand-400 dark:hover:border-brand-500 bg-gray-50/50 dark:bg-gray-800/50 hover:bg-brand-50/30'
+                }`}
+              >
                 <Upload className="w-6 h-6 text-gray-400 group-hover:text-brand-600 mb-1 transition-colors" />
                 <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                  Select photos to upload
+                  {photoDragActive ? 'Drop photos here' : 'Select or drop photos to upload'}
                 </span>
                 <span className="text-[11px] text-gray-400">PNG, JPEG, WebP or BMP, up to 10 MB each</span>
                 <input

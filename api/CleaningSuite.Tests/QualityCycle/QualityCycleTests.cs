@@ -350,6 +350,25 @@ public class QualityCycleTests
     }
 
     [Fact]
+    public async Task SubmitQualityCycleFormCommandHandler_RepeatSubmission_ReturnsConflictAndDoesNotSaveAgain()
+    {
+        var repoMock = new Mock<IQualityCycleRepository>();
+        var form = QualityCycleForm.Create(
+            Guid.NewGuid(), "Shift 1", Guid.NewGuid(), "Cleaner 1", Guid.NewGuid(), "Template 1", DateTime.UtcNow.AddHours(-1), new List<string> { "Item 1" });
+        form.Start();
+        repoMock.Setup(x => x.GetFormByTokenAsync(form.Token, It.IsAny<CancellationToken>())).ReturnsAsync(form);
+        var handler = new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(repoMock.Object, NoopUploadContentValidator.Instance, WorkAccessFixtures.ActiveShifts(), WorkAccessFixtures.ActiveEmployees(), WorkAccessFixtures.Reservation);
+        var command = new SubmitQualityCycleFormCommand(form.Token, new List<QualityCycleFormItemDto> { new("Item 1", true) }, null, "First", new() { new("data:image/png;base64,123", "Cleaned floor") });
+
+        await handler.Handle(command, CancellationToken.None);
+        var error = await Assert.ThrowsAsync<QualityCycleConflictException>(() => handler.Handle(command with { CleanerNotes = "Second" }, CancellationToken.None));
+
+        Assert.Equal("This shift task has already been completed.", error.Message);
+        Assert.Equal("First", form.CleanerNotes);
+        repoMock.Verify(x => x.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task SubmitQualityCycleFormCommandHandler_WhenFormNotFound_ThrowsNotFoundException()
     {
         var repoMock = new Mock<IQualityCycleRepository>();

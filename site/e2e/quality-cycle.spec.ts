@@ -410,6 +410,105 @@ test('token form preserves distinct notes for multiple photos', async ({ page })
   expect(submitted.photos.map((p: any) => p.note)).toEqual(['Corridor cleaned', 'Gym cleaned']); expect(submitted.cleanerNotes).toBe('');
 });
 
+const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+
+async function openDropForm(page: Page, token: string, onSubmit?: (body: any) => void) {
+  const form = { id: `${token}-form`, shiftName: 'Daily work', employeeName: 'Cleaner', shiftOccurrenceUtc: '2026-01-01T08:00:00Z',
+    token, items: [{ itemText: 'Corridor', isChecked: false }], photoUrls: [], cleanerNotes: '', isSubmitted: false };
+  await page.route(new RegExp(`/quality-cycle/${token}$`), route => route.fulfill({ json: form, headers: CORS_HEADERS }));
+  await page.route(new RegExp(`/quality-cycle/${token}/submit$`), route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+    const body = route.request().postDataJSON();
+    onSubmit?.(body);
+    return route.fulfill({ json: { ...form, ...body, isSubmitted: true }, headers: CORS_HEADERS });
+  });
+  await page.goto(`/quality-cycle/?token=${token}`);
+  await expect(page.getByTestId('photo-dropzone')).toBeVisible();
+}
+
+// Builds a DataTransfer in the page from named files and dispatches a real drop on the dropzone.
+async function dropPhotos(page: Page, files: { name: string; type: string; base64: string }[]) {
+  const dataTransfer = await page.evaluateHandle((items) => {
+    const transfer = new DataTransfer();
+    for (const item of items) {
+      const bytes = Uint8Array.from(atob(item.base64), c => c.charCodeAt(0));
+      transfer.items.add(new File([bytes], item.name, { type: item.type }));
+    }
+    return transfer;
+  }, files);
+  await page.getByTestId('photo-dropzone').dispatchEvent('drop', { dataTransfer });
+}
+
+const pngFile = (name: string) => ({ name, type: 'image/png', base64: PNG_BASE64 });
+
+test('dropped photos are attached with the same notes rules as the file picker', async ({ page }) => {
+  let submitted: any;
+  await openDropForm(page, 'drop-token', body => { submitted = body; });
+  await dropPhotos(page, [pngFile('corridor.png'), pngFile('gym.png')]);
+  await expect(page.getByRole('button', { name: 'Remove photo' })).toHaveCount(2);
+  await page.getByRole('textbox', { name: 'Photo 1 note' }).fill('Corridor cleaned');
+  await page.getByRole('textbox', { name: 'Photo 2 note' }).fill('Gym cleaned');
+  await page.getByRole('button', { name: 'Submit Quality Cycle Form' }).click();
+  await expect(page.getByRole('heading', { name: 'Thank You!' })).toBeVisible();
+  expect(submitted.photos.map((p: any) => p.note)).toEqual(['Corridor cleaned', 'Gym cleaned']);
+});
+
+test('dragging photos over the dropzone highlights it and leaving clears the highlight', async ({ page }) => {
+  await openDropForm(page, 'hover-token');
+  const zone = page.getByTestId('photo-dropzone');
+  await expect(zone).toHaveAttribute('data-drag-active', 'false');
+  await zone.dispatchEvent('dragover', { dataTransfer: await page.evaluateHandle(() => new DataTransfer()) });
+  await expect(zone).toHaveAttribute('data-drag-active', 'true');
+  await expect(zone).toContainText('Drop photos here');
+  await zone.dispatchEvent('dragleave', { dataTransfer: await page.evaluateHandle(() => new DataTransfer()) });
+  await expect(zone).toHaveAttribute('data-drag-active', 'false');
+});
+
+test('dropping a non-image file shows the photo type error and attaches nothing', async ({ page }) => {
+  await openDropForm(page, 'drop-type-token');
+  await dropPhotos(page, [{ name: 'notes.pdf', type: 'application/pdf', base64: PNG_BASE64 }]);
+  await expect(page.getByRole('alert', { name: 'Form error' })).toHaveText('Choose a PNG, JPEG, WebP or BMP photo.');
+  await expect(page.getByRole('button', { name: 'Remove photo' })).toHaveCount(0);
+});
+
+test('a drop of eleven photos is refused, while exactly ten are accepted', async ({ page }) => {
+  await openDropForm(page, 'drop-limit-token');
+  const eleven = Array.from({ length: 11 }, (_, i) => pngFile(`photo-${i + 1}.png`));
+  await dropPhotos(page, eleven);
+  await expect(page.getByRole('alert', { name: 'Form error' })).toHaveText('A shift submission can include at most 10 photos.');
+  await expect(page.getByRole('button', { name: 'Remove photo' })).toHaveCount(0);
+  await dropPhotos(page, eleven.slice(0, 10));
+  await expect(page.getByRole('button', { name: 'Remove photo' })).toHaveCount(10);
+});
+
+test('a drop is ignored and cancelled while the form is submitting', async ({ page }) => {
+  let releaseSubmit: () => void = () => {};
+  const gate = new Promise<void>(resolve => { releaseSubmit = resolve; });
+  let submitted: any;
+  const form = { id: 'busy-form', shiftName: 'Daily work', employeeName: 'Cleaner', shiftOccurrenceUtc: '2026-01-01T08:00:00Z',
+    token: 'busy-token', items: [], photoUrls: [], cleanerNotes: '', isSubmitted: false };
+  await page.route(/\/quality-cycle\/busy-token$/, route => route.fulfill({ json: form, headers: CORS_HEADERS }));
+  await page.route(/\/quality-cycle\/busy-token\/submit$/, async route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
+    submitted = route.request().postDataJSON();
+    await gate;
+    return route.fulfill({ json: { ...form, ...submitted, isSubmitted: true }, headers: CORS_HEADERS });
+  });
+  await page.goto('/quality-cycle/?token=busy-token');
+  await expect(page.getByTestId('photo-dropzone')).toBeVisible();
+  await page.getByRole('button', { name: 'Submit Quality Cycle Form' }).click();
+  await expect(page.getByRole('button', { name: 'Submitting Form...' })).toBeVisible();
+  const zone = page.getByTestId('photo-dropzone');
+  // A cancelled dragover is what stops the browser from opening a dropped file and leaving the form.
+  const cancelled = await zone.evaluate(el => !el.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: new DataTransfer() })));
+  expect(cancelled).toBe(true);
+  await expect(zone).toHaveAttribute('data-drag-active', 'false');
+  await dropPhotos(page, [pngFile('late.png')]);
+  releaseSubmit();
+  await expect(page.getByRole('heading', { name: 'Thank You!' })).toBeVisible();
+  expect(submitted.photos).toEqual([]);
+});
+
 test('legacy form permits notes without images and removing the final image makes notes optional', async ({ page }) => {
   const form = { id: 'notes-form', shiftName: 'Daily work', employeeName: 'Cleaner', shiftOccurrenceUtc: '2026-01-01T08:00:00Z',
     token: 'notes-token', items: [], photoUrls: [], cleanerNotes: '', isSubmitted: false };
