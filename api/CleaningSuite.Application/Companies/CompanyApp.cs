@@ -163,8 +163,9 @@ public class CompanyHandlers
         if (templates is not null)
         {
             var template = await templates.GetTemplateAsync(id, ct);
-            if (template is null || !template.IsActive || (template.CompanyId.HasValue && template.CompanyId != company.Id))
-                throw new ValidationException([new FluentValidation.Results.ValidationFailure("QualityCycleTemplateId", "Choose an active quality cycle template for this company.")]);
+            // Company-level choice: branch-scoped templates would otherwise reach visits at other properties.
+            if (template is null || !template.IsActive || template.BranchId.HasValue || (template.CompanyId.HasValue && template.CompanyId != company.Id))
+                throw new ValidationException([new FluentValidation.Results.ValidationFailure("QualityCycleTemplateId", "Choose an active company-wide quality cycle template for this company.")]);
         }
         company.IsQualityCycleEnabled = true; company.QualityCycleTemplateId = id;
     }

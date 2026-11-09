@@ -2,12 +2,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import type { LucideIcon } from 'lucide-react';
+import { Building2, CalendarClock, ClipboardList, Settings } from 'lucide-react';
 import { NotificationsPanel } from '@/components/NotificationsPanel';
 import { initAuth, isAuthenticated, isAdmin, isManager, isPartner, login, logout, refreshToken, selectAuthTenant } from '@/lib/auth';
 import { meApi, supportsWorkPreferences } from '@/lib/meApi';
 import { API_URL, TENANT_SLUG } from '@/lib/api';
 
 interface Account { realm: string; person?: { id: string; firstName: string; lastName: string; role: string; isActive: boolean }; company?: { id: string; name: string; isActive: boolean; isPartnerEnabled: boolean }; employee?: { id: string; firstName: string; lastName: string; role: string; isActive: boolean; identitySyncPending?: boolean } | null; }
+// One section the signed-in account can open, shown as a tile in the picker (like the Android TV account chooser).
+function SectionTile({ href, label, icon: Icon }: { href: string; label: string; icon: LucideIcon }) {
+  return <Link href={href} className="group flex w-32 flex-col items-center gap-2 text-center text-gray-900">
+    <span className="flex h-20 w-20 items-center justify-center rounded-full bg-gray-900 text-white transition group-hover:ring-4 group-hover:ring-gray-300 group-focus-visible:ring-4 group-focus-visible:ring-blue-500"><Icon size={32} aria-hidden="true" /></span>
+    <span className="text-sm font-medium">{label}</span>
+  </Link>;
+}
+
 export default function AccountClient() {
   const search = useSearchParams();
   const tenant = search.get('tenant') || TENANT_SLUG;
@@ -75,6 +85,12 @@ export default function AccountClient() {
         {account && <>
           <h2 className="text-xl font-medium">Account ready</h2>
           <p>{account.person ? `${account.person.firstName} ${account.person.lastName}` : account.employee ? `${account.employee.firstName} ${account.employee.lastName}` : 'Tenant administrator'} · {account.realm}</p>
+          {(account.person?.role === 'partner' || (account.employee?.isActive && !isPartner()) || (account.employee?.role === 'manager' && isManager()) || (!isPartner() && isAdmin())) && <nav aria-label="Choose a section" className="flex flex-wrap justify-center gap-6 py-2">
+            {account.person?.role === 'partner' && <SectionTile href="/partner/" label="Open partner portal" icon={Building2} />}
+            {account.employee?.isActive && !isPartner() && <SectionTile href="/me/shifts/" label="My shifts" icon={CalendarClock} />}
+            {account.employee?.role === 'manager' && isManager() && <SectionTile href="/manager/" label="Manage tenant operations" icon={ClipboardList} />}
+            {!isPartner() && isAdmin() && <SectionTile href="/admin/" label="Continue to administration" icon={Settings} />}
+          </nav>}
           {!isPartner() && supportsWorkPreferences(account) && <section aria-label="Work preferences" className="space-y-3">
             <h2 className="text-xl font-medium">Work preferences</h2>
             {preferenceBusy && <p role="status">{preference === null ? 'Loading work preferences...' : 'Saving work preferences...'}</p>}
@@ -84,13 +100,9 @@ export default function AccountClient() {
               <button className="rounded bg-gray-900 text-white px-4 py-2" disabled={preferenceBusy || selected === preference} onClick={() => void savePreference()}>Save work preferences</button>
               {saved && <p role="status">Work preferences saved.</p>}</>}
           </section>}
-          {account.person?.role === 'partner' && <><p>{account.company?.name}</p><Link className="block rounded bg-gray-900 text-white px-4 py-2 text-center" href="/partner/">Open partner portal</Link></>}
-          {account.employee?.isActive && !isPartner() && <Link className="block rounded bg-gray-900 text-white px-4 py-2 text-center" href="/me/shifts/">My shifts</Link>}
+          {account.person?.role === 'partner' && <p>{account.company?.name}</p>}
           {!isPartner() && <><a className="block underline" href="#notifications">Notification settings</a><NotificationsPanel /></>}
           {!account.employee && isAdmin() && <p>To receive shifts, add an Administrator profile in Employees using your verified login email, then use Invite to link that profile to your existing account.</p>}
-          {account.employee?.role === 'manager' && isManager() && <Link className="block underline" href="/manager/">Manage tenant operations</Link>}
-          {isPartner() ? <p>Open your partner portal to manage properties and request cleaning.</p> : isAdmin() ? <Link className="underline" href="/admin/">Continue to administration</Link>
-            : <p>Open My shifts to start your shift, record the activities you did, and end it.</p>}
         </>}
         {authed && <button className="underline" onClick={() => logout().catch(() => setError('Sign-out failed. Please retry.'))}>Sign out</button>}
       </>}

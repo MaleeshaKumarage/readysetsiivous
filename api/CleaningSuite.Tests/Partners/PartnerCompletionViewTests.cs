@@ -59,15 +59,15 @@ public class PartnerCompletionViewTests
     }
 
     [Fact]
-    public void Partner_payload_carries_only_the_masked_cleaner_identity()
+    public void Partner_payload_carries_no_cleaner_identity()
     {
         var dto = new PartnerCompletionDto(Guid.NewGuid(), "Lake apartment", new DateOnly(2026, 12, 1), new DateOnly(2026, 12, 1),
-            null, null, null, null, PartnerCompletionView.MaskCleaner("Test"), [PartnerCompletionView.Report(SubmittedForm(null, ("Vacuum floors", true)))], []);
+            null, null, null, null, [PartnerCompletionView.Report(SubmittedForm(null, ("Vacuum floors", true)))], []);
 
         var json = JsonSerializer.Serialize(dto, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
-        Assert.Contains("\"cleanerInitial\":\"T.\"", json);
-        Assert.DoesNotContain("Test Cleaner", json);
+        Assert.DoesNotContain("cleanerInitial", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Test", json);
         Assert.DoesNotContain("employee", json, StringComparison.OrdinalIgnoreCase);
     }
 

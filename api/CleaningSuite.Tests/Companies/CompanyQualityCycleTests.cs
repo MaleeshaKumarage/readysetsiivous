@@ -8,9 +8,9 @@ namespace CleaningSuite.Tests.Companies;
 
 public sealed class CompanyQualityCycleTests
 {
-    private static QualityCycleTemplate Template(Guid? companyId = null, bool active = true)
+    private static QualityCycleTemplate Template(Guid? companyId = null, bool active = true, Guid? branchId = null)
     {
-        var template = QualityCycleTemplate.Create("Monthly checklist", ["Corridor", "Gym"], companyId: companyId);
+        var template = QualityCycleTemplate.Create("Monthly checklist", ["Corridor", "Gym"], companyId: companyId, branchId: branchId);
         template.Id = Guid.NewGuid(); template.IsActive = active;
         return template;
     }
@@ -60,6 +60,20 @@ public sealed class CompanyQualityCycleTests
             handler.Handle(new CreateCompanyCommand("1234567-8", "Lake Owners Oy", IsQualityCycleEnabled: true, QualityCycleTemplateId: other.Id), default));
         await Assert.ThrowsAsync<FluentValidation.ValidationException>(() =>
             handler.Handle(new CreateCompanyCommand("1234567-8", "Lake Owners Oy", IsQualityCycleEnabled: true, QualityCycleTemplateId: inactive.Id), default));
+    }
+
+    [Fact]
+    public async Task A_branch_scoped_template_is_refused_for_the_company_choice()
+    {
+        var branchTemplate = Template(branchId: Guid.NewGuid());
+        var qualityCycles = new Mock<IQualityCycleRepository>();
+        qualityCycles.Setup(r => r.GetTemplateAsync(branchTemplate.Id, default)).ReturnsAsync(branchTemplate);
+        var companies = new Mock<ICompanyRepository>();
+        var handler = new CompanyHandlers.CreateCompanyCommandHandler(companies.Object, qualityCycles.Object);
+
+        await Assert.ThrowsAsync<FluentValidation.ValidationException>(() =>
+            handler.Handle(new CreateCompanyCommand("1234567-8", "Lake Owners Oy", IsQualityCycleEnabled: true, QualityCycleTemplateId: branchTemplate.Id), default));
+        companies.Verify(r => r.SaveAsync(It.IsAny<Company>(), default), Times.Never);
     }
 
     [Fact]
