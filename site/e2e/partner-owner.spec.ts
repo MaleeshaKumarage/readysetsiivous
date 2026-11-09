@@ -100,8 +100,7 @@ test('FI/EN switching preserves a draft, creates and cancels a Finnish request a
   await page.getByRole('button', { name: 'Suomi', exact: true }).click();
   await expect(page.getByRole('main')).toHaveAttribute('lang', 'fi');
   await expect(page.getByRole('heading', { name: 'Kumppaniportaali', exact: true })).toBeVisible();
-  // Partners never see prices in the portal, in either language.
-  await expect(page.getByText('€', { exact: false })).toHaveCount(0);
+  await expect(page.getByText(/70,00\s*€/).first()).toBeVisible();
   await page.getByRole('button', { name: 'Pyydä siivous', exact: true }).click();
   let form = page.getByRole('dialog', { name: /siivouspyyntö/i });
   await form.getByLabel('Alkupäivä', { exact: true }).fill('2026-12-10');

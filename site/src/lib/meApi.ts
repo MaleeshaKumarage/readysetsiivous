@@ -81,9 +81,11 @@ async function workPreferences(method: 'GET' | 'PUT', value?: boolean): Promise<
 export const meApi = {
   workPreferences: () => workPreferences('GET'),
   saveWorkPreferences: (autoAcceptWork: boolean) => workPreferences('PUT', autoAcceptWork),
-  calendar: async (view: ShiftCalendarView, cursor?: string): Promise<MyShiftCalendar> => {
+  calendar: async (view: ShiftCalendarView, cursor?: string, from?: string, to?: string): Promise<MyShiftCalendar> => {
     const query = new URLSearchParams({ view });
     if (cursor) query.set('cursor', cursor);
+    if (from) query.set('from', from);
+    if (to) query.set('to', to);
     const response = await authorizedFetch(`/api/v1/me/shifts/calendar?${query}`, { cache: 'no-store' });
     if (!response.ok) {
       const problem = await response.json().catch(() => ({}));

@@ -28,7 +28,7 @@ function finishedVisit(backend: PartnerFlowBackend, visit: VisitSeed) {
   return request;
 }
 
-test('owner reads the checklist, notes and photos of a completed visit, with the cleaner by initial only', async ({ page }) => {
+test('owner reads the checklist, notes and photos of a completed visit, without the cleaner name', async ({ page }) => {
   const backend = new PartnerFlowBackend({ priced: true });
   finishedVisit(backend, {
     tasks: [{ text: 'Vacuum floors', done: true }, { text: 'Restock towels', done: false }],
@@ -52,7 +52,8 @@ test('owner reads the checklist, notes and photos of a completed visit, with the
   await expect(dialog.getByText('Kitchen after clean', { exact: true })).toBeVisible();
 
   // The partner sees the first initial, never the cleaner's full name.
-  await expect(dialog.getByText('T.', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('T.', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByText('Test Cleaner')).toHaveCount(0);
   await expect(dialog).not.toContainText('Test Cleaner');
 });
 

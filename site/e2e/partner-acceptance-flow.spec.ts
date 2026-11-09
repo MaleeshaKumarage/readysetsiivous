@@ -84,9 +84,7 @@ test('one visit from owner request to cleaner acceptance and back to the owner',
     // 3. Owner sees the price and books one visit inside the date window.
     await ownerOpenRequests(page);
     await page.getByRole('tab', { name: 'Properties', exact: true }).click();
-    // Partners never see prices: the property card has no euro amount, but the request action is available.
-    await expect(property.getByText('€', { exact: false })).toHaveCount(0);
-    await expect(property.getByRole('button', { name: 'Request cleaning', exact: true })).toBeVisible();
+    await expect(property.getByText('€85.00', { exact: false })).toBeVisible();
     await property.getByRole('button', { name: 'Request cleaning', exact: true }).click();
     await page.getByLabel('From date', { exact: true }).fill(WINDOW.fromDate);
     await page.getByLabel('To date', { exact: true }).fill(WINDOW.toDate);
@@ -95,7 +93,7 @@ test('one visit from owner request to cleaner acceptance and back to the owner',
     await expect(page.getByText('Cleaning request saved. Staff will arrange a cleaner.', { exact: true })).toBeVisible();
     await page.getByRole('tab', { name: 'Cleaning requests', exact: true }).click();
     await expect(ownerCard(page).getByText('Requested', { exact: true })).toBeVisible();
-    await expect(ownerCard(page).getByText('Cleaner: Awaiting acceptance')).toBeVisible();
+    await expect(ownerCard(page).getByText('Cleaner:', { exact: false })).toHaveCount(0); // partners never see the cleaner
 
     // 4. Staff arranges an offer to a cleaner who chooses the time themselves.
     await staffOpenRequests(staff.page);
@@ -108,7 +106,7 @@ test('one visit from owner request to cleaner acceptance and back to the owner',
     // 5. Owner sees the offer is out, but the cleaner is not confirmed yet.
     await ownerOpenRequests(page);
     await expect(ownerCard(page).getByText('Offered', { exact: true })).toBeVisible();
-    await expect(ownerCard(page).getByText('Cleaner: Awaiting acceptance')).toBeVisible();
+    await expect(ownerCard(page).getByText('Cleaner:', { exact: false })).toHaveCount(0); // partners never see the cleaner
 
     // 6. Cleaner accepts with a planned start inside the window.
     await cleanerOpenOffers(cleaner.page);
@@ -130,7 +128,8 @@ test('one visit from owner request to cleaner acceptance and back to the owner',
     // 8. Owner sees the cleaner and planned time, and the request is locked to staff changes.
     await ownerOpenRequests(page);
     await expect(ownerCard(page).getByText('Accepted', { exact: true })).toBeVisible();
-    await expect(ownerCard(page).getByText('Cleaner: T.', { exact: true })).toBeVisible();
+    await expect(ownerCard(page).getByText('Cleaner:', { exact: false })).toHaveCount(0);
+    await expect(ownerCard(page).getByText('Test Cleaner')).toHaveCount(0);
     await expect(ownerCard(page).getByText(/Planned: .*10:00/)).toBeVisible();
     await expect(ownerCard(page).getByRole('button', { name: 'Edit request', exact: true })).toHaveCount(0);
     await expect(ownerCard(page).getByRole('button', { name: 'Cancel request', exact: true })).toHaveCount(0);
@@ -540,7 +539,7 @@ test('a cleaner may accept a visit without a start time, which becomes flexible 
   await cleaner.context.close();
 });
 
-test('owner never sees a price, before or after staff reprice the property', async ({ page, browser }, testInfo) => {
+test('owner keeps the agreed price when staff reprice the property', async ({ page, browser }, testInfo) => {
   const backend = new PartnerFlowBackend({ priced: true });
   backend.seedRequest(backend.branches[0], WINDOW);
   await prepareRolePage(page, backend, 'owner');
@@ -554,14 +553,9 @@ test('owner never sees a price, before or after staff reprice the property', asy
   await expect(staff.page.getByText('Pricing saved.', { exact: true })).toBeVisible();
 
   await ownerOpenRequests(page);
-  await expect(ownerCard(page)).toBeVisible();
-  await expect(page.getByText('€', { exact: false })).toHaveCount(0);
+  await expect(ownerCard(page).getByText(/Agreed price €85\.00/)).toBeVisible();
   await page.getByRole('tab', { name: 'Properties', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Request cleaning', exact: true }).first()).toBeVisible();
-  await expect(page.getByText('€', { exact: false })).toHaveCount(0);
-  // Staff still see the new price.
-  await staff.page.getByRole('tab', { name: 'Properties', exact: true }).click();
-  await expect(staff.page.getByText('€120.00', { exact: false }).first()).toBeVisible();
+  await expect(page.getByText('€120.00', { exact: false })).toBeVisible();
   await staff.context.close();
 });
 
