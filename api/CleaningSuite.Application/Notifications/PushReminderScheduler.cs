@@ -92,6 +92,7 @@ public sealed class PushReminderScheduler(IPartnerStore store, IShiftRepository 
 
     public async Task<bool> IsEligibleAsync(PushIntent intent, CancellationToken ct = default)
     {
+        if (intent.Kind == "PartnerQuoteWithdrawn") return intent.AdminAudience;
         if (intent.Kind == "WorkAutoAccepted")
         {
             if (!intent.PartnerRequestId.HasValue) return false;

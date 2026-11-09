@@ -26,7 +26,8 @@ public record PartnerRequestDto(Guid Id, int Version, Guid CompanyId, Guid Branc
     DateOnly FromDate, DateOnly ToDate, string? ExactStartLocalTime, string? Notes, decimal PriceNet,
     decimal VatRatePercent, int EstimatedDurationMinutes, string Status, DateTime? FirstAcceptedAtUtc,
     Guid? LinkedShiftId, DateTime? PlannedStartUtc, DateTime? PlannedEndUtc, string? AcceptedCleanerName,
-    DateTime? ActualStartUtc, DateTime? ActualEndUtc, Guid? OfferedEmployeeId = null, Guid? OfferId = null);
+    DateTime? ActualStartUtc, DateTime? ActualEndUtc, Guid? OfferedEmployeeId = null, Guid? OfferId = null,
+    string? OfferDeclineReason = null);
 public record PartnerChangeDto(Guid Id, Guid CompanyId, Guid BranchId, Guid? RequestId, string Kind,
     string Message, DateTime CreatedUtc, DateTime? ResolvedUtc, string? Resolution, string Action = "Message",
     DateOnly? ProposedFromDate = null, DateOnly? ProposedToDate = null, string? ProposedExactStartLocalTime = null, string? ProposedNotes = null);

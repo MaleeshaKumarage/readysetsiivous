@@ -126,6 +126,24 @@ public class PartnerWorkflowTests
     }
 
     [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Declining_an_offer_keeps_the_reason_for_staff_only_until_a_new_offer_is_sent()
+    {
+        using var fixture = await Fixture.Create();
+        var offer = await fixture.SubmitOffer();
+        using (var session = fixture.Session())
+            await fixture.Service(session).Decline(fixture.Cleaner.Id, offer.OfferId!.Value, new(offer.Version, "  Locked out of the flat  "), default);
+        using (var staffSession = fixture.Session())
+            Assert.Equal("Locked out of the flat", (await fixture.Service(staffSession).Requests(fixture.Admin.Id, true, null, default)).Single().OfferDeclineReason);
+        using (var partnerSession = fixture.Session())
+            Assert.Null((await fixture.Service(partnerSession).Requests(fixture.Partner.Id, false, null, default)).Single().OfferDeclineReason);
+        var current = (await fixture.Service(fixture.Session()).Requests(fixture.Admin.Id, true, null, default)).Single();
+        using (var session = fixture.Session())
+            await fixture.Service(session).Offer(fixture.Admin.Id, current.Id, new(current.Version, fixture.Cleaner.Id), default);
+        using var check = fixture.Session();
+        Assert.Null((await fixture.Service(check).Requests(fixture.Admin.Id, true, null, default)).Single().OfferDeclineReason);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
     public async Task Overlapping_acceptance_rolls_back_all_materialization()
     {
         using var fixture = await Fixture.Create();
@@ -612,6 +630,51 @@ public class PartnerWorkflowTests
             Assert.Null(priced.QuoteRejectedUtc);
             Assert.Null(priced.QuoteRejectionReason);
         }
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Pricing_is_refused_once_the_partner_has_withdrawn_the_quote()
+    {
+        using var fixture = await Fixture.Create();
+        var branch = await StoreBranch(fixture, fixture.Company.Id, "Withdrawn before pricing", priced: false);
+        using (var session = fixture.Session()) await fixture.Service(session).Quote(fixture.Partner.Id, branch.Id, default);
+        using (var session = fixture.Session()) await fixture.Service(session).WithdrawQuote(fixture.Partner.Id, branch.Id, default);
+        using (var session = fixture.Session())
+            await Assert.ThrowsAsync<ShiftConflictException>(() => fixture.Service(session).Price(fixture.Admin.Id, branch.Id, new(75, 25.5m, 60), default));
+        using var check = fixture.Store.QuerySession(fixture.Tenant);
+        Assert.False((await check.LoadAsync<Branch>(branch.Id))!.PricingReady);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Withdrawing_a_quote_alerts_each_staff_account_by_push()
+    {
+        using var fixture = await Fixture.Create();
+        var branch = await StoreBranch(fixture, fixture.Company.Id, "Withdraw alert", priced: false);
+        // Staff only receive push when a device opted in before the event; without one nothing is staged.
+        using (var writer = fixture.Store.LightweightSession(fixture.Tenant))
+        {
+            writer.Store(new CleaningSuite.Domain.Notifications.PushDevice { EmployeeId = fixture.Admin.Id, Subject = "qa", Endpoint = "https://push.example/qa",
+                P256dh = "p", Auth = "a", VapidKeyId = "v", Enabled = true, OptedInUtc = DateTime.UtcNow.AddDays(-1) });
+            await writer.SaveChangesAsync();
+        }
+        using (var session = fixture.Session()) await fixture.Service(session).Quote(fixture.Partner.Id, branch.Id, default);
+        using (var session = fixture.Session()) await fixture.Service(session, new CleaningSuite.Infrastructure.Notifications.PushOutbox()).WithdrawQuote(fixture.Partner.Id, branch.Id, default);
+        using var check = fixture.Store.QuerySession(fixture.Tenant);
+        var alerts = await check.Query<CleaningSuite.Domain.Notifications.PushIntent>().Where(x => x.Kind == "PartnerQuoteWithdrawn").ToListAsync();
+        Assert.Contains(alerts, x => x.EmployeeId == fixture.Admin.Id && x.AdminAudience);
+        Assert.All(alerts, x => Assert.True(x.AdminAudience));
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Rejecting_a_quote_notifies_the_partner_company()
+    {
+        using var fixture = await Fixture.Create();
+        var branch = await StoreBranch(fixture, fixture.Company.Id, "Rejected notice", priced: false);
+        using (var session = fixture.Session()) await fixture.Service(session).Quote(fixture.Partner.Id, branch.Id, default);
+        using (var session = fixture.Session()) await fixture.Service(session).RejectQuote(fixture.Admin.Id, branch.Id, new("Outside our area"), default);
+        using var check = fixture.Store.QuerySession(fixture.Tenant);
+        var notices = await check.Query<PartnerNotification>().Where(x => x.Kind == "QuoteRejected" && x.Audience == "Company" && x.BranchId == branch.Id).ToListAsync();
+        Assert.Single(notices);
     }
 
     private static async Task<Branch> StoreBranch(Fixture fixture, Guid companyId, string name, bool priced)

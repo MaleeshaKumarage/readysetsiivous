@@ -306,3 +306,32 @@ test('A01 automatic cleaner can take a flexible visit; a start time is optional 
   await page.getByRole('button', { name: 'Send cleaning offer' }).click();
   await expect(page.getByText('Work scheduled automatically.', { exact: true })).toBeVisible(); expect(writes).toHaveLength(4);
 });
+
+test('Staff request card shows the reason a cleaner gave when declining the offer', async ({ page }) => {
+  await setupAdminMocks(page);
+  await companies(page);
+  await page.route(/\/api\/v1\/admin\/employees$/, route => route.fulfill({ headers, json: [] }));
+  const declined: CleaningRequest = { ...cleaning, status: 'Requested', acceptedCleanerName: null, offerDeclineReason: 'Locked out of the flat' };
+  await page.route(/\/api\/v1\/admin\/partner\//, route => {
+    const req = route.request(), path = new URL(req.url()).pathname.split('/partner')[1];
+    if (req.method() === 'OPTIONS') return route.fulfill({ headers });
+    if (req.method() === 'GET') return route.fulfill({ headers, json: path === '/requests' ? [declined] : path === '/branches' ? [branch] : [] });
+    return route.fulfill({ headers, json: declined });
+  });
+  await page.goto('/admin/partner-requests/');
+  await expect(page.getByText('Declined by cleaner: Locked out of the flat', { exact: true })).toBeVisible();
+});
+
+test('Staff request card without a decline reason shows no decline line', async ({ page }) => {
+  await setupAdminMocks(page);
+  await companies(page);
+  await page.route(/\/api\/v1\/admin\/employees$/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/admin\/partner\//, route => {
+    const req = route.request(), path = new URL(req.url()).pathname.split('/partner')[1];
+    if (req.method() === 'OPTIONS') return route.fulfill({ headers });
+    if (req.method() === 'GET') return route.fulfill({ headers, json: path === '/requests' ? [{ ...cleaning, status: 'Requested', acceptedCleanerName: null }] : path === '/branches' ? [branch] : [] });
+    return route.fulfill({ headers, json: cleaning });
+  });
+  await page.goto('/admin/partner-requests/');
+  await expect(page.getByText(/Declined by cleaner/)).toHaveCount(0);
+});

@@ -22,6 +22,14 @@ public sealed class PushOutbox : IPushOutbox
         foreach (var admin in admins)
             await StageAsync(session, new PushIntent { EmployeeId = admin.Id, PartnerRequestId = requestId, RequestRevision = revision, AdminAudience = true, Kind = "PartnerRequest", EventKey = $"partner:{requestId}:{revision}:{admin.Id}", OccurredUtc = occurredAt.UtcDateTime, DueUtc = occurredAt.UtcDateTime, ExpiresUtc = occurredAt.UtcDateTime.AddHours(24) }, ct);
     }
+    public async Task StagePartnerQuoteWithdrawnAsync(IDocumentSession session, Guid branchId, DateTimeOffset occurredAt, CancellationToken ct = default)
+    {
+        var admins = await session.Query<Employee>().Where(e => e.IsActive && !e.IdentitySyncPending && (e.Role == Employee.RoleAdmin || e.Role == Employee.RoleManager)).ToListAsync(ct);
+        foreach (var admin in admins)
+            await StageAsync(session, new PushIntent { EmployeeId = admin.Id, AdminAudience = true, Kind = "PartnerQuoteWithdrawn",
+                EventKey = $"quote-withdrawn:{branchId}:{occurredAt.UtcDateTime.Ticks}:{admin.Id}", OccurredUtc = occurredAt.UtcDateTime,
+                DueUtc = occurredAt.UtcDateTime, ExpiresUtc = occurredAt.UtcDateTime.AddHours(24) }, ct);
+    }
     public Task StagePartnerOfferAsync(IDocumentSession session, Guid requestId, int revision, Guid offerId, Guid employeeId, DateTimeOffset occurredAt, CancellationToken ct = default) =>
         StageAsync(session, new PushIntent { EmployeeId = employeeId, PartnerRequestId = requestId, RequestRevision = revision, OfferId = offerId, Kind = "PartnerOffer",
             EventKey = $"partner-offer:{requestId}:{revision}:{offerId}:{employeeId}", OccurredUtc = occurredAt.UtcDateTime,

@@ -165,6 +165,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         if (!branch.HasPendingQuote) throw new ShiftConflictException("There is no pending quote request to withdraw.");
         branch.WithdrawQuote(DateTime.UtcNow);
         Db.Store(branch);
+        if (push is not null) await push.StagePartnerQuoteWithdrawnAsync(Db, branch.Id, DateTimeOffset.UtcNow, ct);
         await Db.SaveChangesAsync(ct);
         return CompanyHandlers.MapBranch(branch);
     }
@@ -180,6 +181,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         if (!branch.HasPendingQuote) throw new ShiftConflictException("This property has no pending quote request.");
         branch.RejectQuote(body.Reason, DateTime.UtcNow);
         Db.Store(branch);
+        Notify(branch.CompanyId, branch.Id, null, "QuoteRejected", branch.PricingVersion, "Company", null, Guid.NewGuid());
         await Db.SaveChangesAsync(ct);
         return CompanyHandlers.MapBranch(branch);
     }
@@ -214,6 +216,8 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         var branch = await Db.LoadAsync<Branch>(id, ct) ?? throw new NotFoundException("Branch", id);
         await ActiveCompany(branch.CompanyId, ct);
         if (!branch.IsActive) throw new ShiftConflictException("Reactivate the property before pricing it.");
+        // Pricing answers a pending quote. A withdrawn or already answered quote must be refreshed, not priced from a stale screen.
+        if (!branch.HasPendingQuote) throw new ShiftConflictException("This property has no pending quote request. Refresh the page; the partner may have withdrawn it.");
         try { branch.SetPricing(body.PriceNet, body.VatRatePercent, body.EstimatedDurationMinutes); }
         catch (ArgumentException ex) { throw new ValidationException(ex.Message); }
         Db.Store(branch); Notify(branch.CompanyId, id, null, "PropertyPriced", branch.PricingVersion, "Company");
@@ -362,6 +366,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         request.AcceptedEmployeeId = null; request.PlannedStartUtc = null; request.PlannedEndUtc = null;
         Touch(request); request.OfferId = PartnerCleaningRequest.StableId($"offer:{request.Id}:{request.Revision}");
         request.OfferedEmployeeId = employee.Id; request.OfferPlannedStartUtc = planned; request.Status = "Offered";
+        request.OfferDeclineReason = null;
         if (automatic)
         {
             await MaterializeAcceptance(request, employee.Id, planned, ct, automatic: true);
@@ -499,7 +504,9 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         if (request.Status != "Offered") throw new ShiftConflictException("This offer is no longer waiting for your answer, so it cannot be declined. Check your scheduled work for its current status.");
         CheckVersion(request, body.Version);
         if (body.Reason?.Length > 1000) throw new ValidationException("Use at most 1000 characters for the reason.");
-        InvalidateOffer(request); request.Status = "Requested"; Touch(request); Db.Store(request);
+        InvalidateOffer(request); request.Status = "Requested"; Touch(request);
+        request.OfferDeclineReason = string.IsNullOrWhiteSpace(body.Reason) ? null : body.Reason.Trim();
+        Db.Store(request);
         NotifyRequest(request, "OfferDeclined", "Staff"); NotifyRequest(request, "AwaitingAssignment", "Company");
         await Db.SaveChangesAsync(ct);
     }
@@ -753,7 +760,8 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
             item.ToDate, item.ExactStartLocalTime, item.Notes, item.PriceNet, item.VatRatePercent,
             item.EstimatedDurationMinutes, status, item.FirstAcceptedAtUtc, item.LinkedShiftId, item.PlannedStartUtc,
             item.PlannedEndUtc, employee is null ? null : staff ? $"{employee.FirstName} {employee.LastName}".Trim() : PartnerCompletionView.MaskCleaner(employee.FirstName), started,
-            status == "Completed" ? ended : null, staff ? item.OfferedEmployeeId : null, staff ? item.OfferId : null);
+            status == "Completed" ? ended : null, staff ? item.OfferedEmployeeId : null, staff ? item.OfferId : null,
+            staff ? item.OfferDeclineReason : null);
     }
 
     // Quality Cycle checklists recorded for the accepted cleaner's linked visit occurrence.

@@ -36,6 +36,8 @@ public sealed class PartnerCleaningRequest : BaseDocument
     public Guid? OfferId { get; set; }
     public DateTime? OfferPlannedStartUtc { get; set; }
     public string? CancellationReason { get; set; }
+    /// <summary>The reason the cleaner gave when declining the latest offer. Cleared when a new offer is sent.</summary>
+    public string? OfferDeclineReason { get; set; }
 
     public static Guid StableId(string key) => new(SHA256.HashData(Encoding.UTF8.GetBytes(key)).AsSpan(0, 16));
 }
