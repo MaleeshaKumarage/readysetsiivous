@@ -97,6 +97,7 @@ builder.Services.AddScoped<CleaningSuite.Application.Services.IServiceRepository
 builder.Services.AddScoped<CleaningSuite.Application.Bookings.IBookingRepository, CleaningSuite.Infrastructure.Persistence.BookingRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.Bookings.AvailabilityEngine>();
 builder.Services.AddScoped<CleaningSuite.Application.Employees.IEmployeeRepository, CleaningSuite.Infrastructure.Persistence.EmployeeRepository>();
+builder.Services.AddScoped<CleaningSuite.Application.Employees.PayRates.IEmployeePayRateRepository, CleaningSuite.Infrastructure.Persistence.EmployeePayRateRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.Invoicing.IInvoiceRepository, CleaningSuite.Infrastructure.Persistence.InvoiceRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.Invoicing.IShiftBillingRepository, CleaningSuite.Infrastructure.Persistence.ShiftBillingRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.Invoicing.ShiftBillingSettingsService>();
@@ -369,6 +370,7 @@ public class DefaultExceptionHandler : IExceptionHandler
             CleaningSuite.Application.Invoicing.Commands.InvoiceNotFoundException => (404, "Invoice not found"),
             CleaningSuite.Application.QualityCycle.QualityCycleConflictException => (409, "Shift task conflict"),
             CleaningSuite.Application.Employees.EmployeeIdentityConflictException => (409, "Employee identity conflict"),
+            CleaningSuite.Application.Employees.PayRates.EmployeePayRateConflictException => (409, "Pay rate conflict"),
             CleaningSuite.Application.Employees.EmployeeInviteConfigurationException => (503, "Employee invitation configuration incomplete"),
             CleaningSuite.Application.Employees.EmployeeIdentityProviderException => (502, "Employee login provider unavailable"),
             CleaningSuite.Application.Entertainment.EntertainmentGroupNotFoundException => (404, "Group not found"),

@@ -72,6 +72,7 @@ public static class MartenConfig
         options.Schema.For<CleaningSuite.Domain.Partners.PartnerCleaningRequest>().Index(x => x.CompanyId).Index(x => x.BranchId).Index(x => x.OfferedEmployeeId);
         options.Schema.For<CleaningSuite.Domain.Partners.PartnerChangeRequest>().Index(x => x.CompanyId).Index(x => x.BranchId);
         options.Schema.For<CleaningSuite.Domain.Partners.PartnerNotification>().Index(x => x.NextAttemptUtc).Index(x => x.State);
+        options.Schema.For<CleaningSuite.Domain.Employees.EmployeePayRate>().Index(x => x.EmployeeId);
         options.Schema.For<Employee>().Index(x => x.KeycloakUserId).UniqueIndex(Marten.Schema.UniqueIndexType.Computed, "mt_doc_employee_uidx_keycloak_identity_key", Marten.Schema.Indexing.Unique.TenancyScope.PerTenant, x => x.KeycloakIdentityKey!);
 
         options.Schema.For<Company>()

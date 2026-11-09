@@ -7,6 +7,7 @@ import { isAdmin } from '@/lib/auth';
 import { Plus } from 'lucide-react';
 import { adminEmployees, adminCompanies, authorizedFetch, invalidateAdminCache, type Company, type Employee } from '@/lib/adminApi';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
+import { EmployeePayProfile } from '@/components/admin/EmployeePayProfile';
 
 const ROLES = ['admin', 'manager', 'employee', 'partner'];
 
@@ -268,6 +269,7 @@ export default function EmployeesAdminPage() {
             <TagsInput label="Service areas" value={profile.serviceAreas} onChange={serviceAreas => setProfile(current => ({ ...current, serviceAreas }))} />
             <TextInput label="Colour" placeholder="#1a2b3c" value={profile.colorHex} onChange={e => { const colorHex = e.currentTarget.value; setProfile(current => ({ ...current, colorHex })); }} />
             <NumberInput label="Pay rate" decimalScale={2} value={profile.payRate} onChange={payRate => setProfile(current => ({ ...current, payRate: typeof payRate === 'number' ? payRate : '' }))} />
+            <EmployeePayProfile employeeId={editingEmployee.id} />
             <Textarea label="Notes" autosize minRows={2} value={profile.notes} onChange={e => { const notes = e.currentTarget.value; setProfile(current => ({ ...current, notes })); }} />
             <Stack gap="xs">
               <Text size="sm" fw={500}>Certifications</Text>

@@ -1,6 +1,7 @@
 using CleaningSuite.Api.Auth;
 using CleaningSuite.Application.Access;
 using CleaningSuite.Application.Employees.Commands;
+using CleaningSuite.Application.Employees.PayRates;
 using CleaningSuite.Application.Employees.Queries;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -79,6 +80,25 @@ public class EmployeesAdminController : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     { await _mediator.Send(new DeleteEmployeeCommand(id), ct); return NoContent(); }
+
+    /// <summary>Admin-only pay profile: dated hourly rates and the legacy rate's confirmation state.</summary>
+    [HttpGet("{id:guid}/pay-profile")]
+    [OutputCache(NoStore = true)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> PayProfile(Guid id, CancellationToken ct) =>
+        Ok(await _mediator.Send(new GetEmployeePayProfileQuery(id), ct));
+
+    [HttpPost("{id:guid}/pay-rates")]
+    public async Task<IActionResult> AddPayRate(Guid id, AddPayRateBody body, CancellationToken ct) =>
+        Ok(await _mediator.Send(new AddEmployeePayRateCommand(id, body.HourlyRate, body.EffectiveFrom, AdminSubject()), ct));
+    public record AddPayRateBody(decimal HourlyRate, DateOnly EffectiveFrom);
+
+    [HttpPost("{id:guid}/pay-profile/legacy-rate")]
+    public async Task<IActionResult> ConfirmLegacyPayRate(Guid id, ConfirmLegacyPayRateBody body, CancellationToken ct) =>
+        Ok(await _mediator.Send(new ConfirmLegacyPayRateCommand(id, body.EffectiveFrom, AdminSubject()), ct));
+    public record ConfirmLegacyPayRateBody(DateOnly EffectiveFrom);
+
+    private string AdminSubject() => User.FindFirst("sub")?.Value ?? throw new UnauthorizedAccessException();
 
     /// <summary>Links the employee login and sends a secure Keycloak account-setup email; never returns passwords.</summary>
     [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
