@@ -367,3 +367,20 @@ test('the page refresh button refetches the partner inbox', async ({ page }) => 
   await page.getByRole('button', { name: 'Refresh partner data', exact: true }).click();
   await expect.poll(() => listCalls).toBeGreaterThan(before);
 });
+
+test('admin rows show Status unavailable when the acknowledgment lookup fails', async ({ page }) => {
+  await setup(page, { failLookup: true });
+  await page.goto('/admin/inventory/');
+  await expect(page.getByText(/Acknowledgment statuses could not be loaded/)).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Status unavailable', exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Awaiting acknowledgment', exact: true })).toHaveCount(0);
+});
+
+test('partner inbox shows the empty message when nothing needs acknowledgment', async ({ page }) => {
+  await setup(page);
+  await enterPartner(page);
+  const toggle = page.locator('button[aria-controls="inventory-acknowledgment-inbox"]');
+  await expect(toggle).toBeVisible();
+  await toggle.click();
+  await expect(page.getByText('No inventory entries need your acknowledgment.')).toBeVisible();
+});
