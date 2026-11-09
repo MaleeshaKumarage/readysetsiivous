@@ -9,12 +9,25 @@ small. Each chunk is retried once. If any chunk still fails, the whole review
 fails, so a partial review is never reported as clean.
 """
 import os
+import runpy
 import subprocess
 import sys
 import time
 from pathlib import Path
 
 DEEPSEEK = Path(__file__).resolve().parent / "deepseek.py"
+validate_review = runpy.run_path(str(DEEPSEEK.with_name("validate_pr_review.py")))["validate"]
+FORMAT_INSTRUCTIONS = """
+No tools are available. Return only NO_CRITICAL or blank-line-separated blocks
+with exactly these three lines:
+### FILE: <path>
+### LINE: <positive integer>
+### FIX: <single-line explanation>
+Do not add analysis, markdown fences, tool calls, or combine a clean verdict
+with findings.
+You see only part of the diff. Absence from this chunk is not evidence that an
+import, translation, stylesheet, or test is missing from the repository.
+"""
 DEFAULT_CHUNK_BYTES = 4_000
 ATTEMPTS = 2
 RETRY_DELAY_SECONDS = 5
@@ -85,14 +98,19 @@ def make_chunks(diff, limit=None):
 
 def review_chunk(system, chunk, run=subprocess.run, sleep=time.sleep):
     """Return the reviewer's output for one chunk, or None after all attempts fail."""
+    prompt = system + FORMAT_INSTRUCTIONS
     for attempt in range(ATTEMPTS):
         result = run(
-            [sys.executable, str(DEEPSEEK), system],
+            [sys.executable, str(DEEPSEEK), prompt],
             input=chunk, capture_output=True, text=True,
         )
-        if result.returncode == 0:
+        if result.returncode == 0 and validate_review(result.stdout):
             return result.stdout.strip()
-        sys.stderr.write(result.stderr)
+        if result.returncode == 0:
+            prompt += "\nThe previous response failed format validation. Review the chunk again and return only the exact contract above.\n"
+            sys.stderr.write("AI review response did not match the review contract; retrying if attempts remain\n")
+        else:
+            sys.stderr.write(result.stderr)
         if attempt + 1 < ATTEMPTS:
             sleep(RETRY_DELAY_SECONDS)
     return None

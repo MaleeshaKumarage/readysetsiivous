@@ -48,7 +48,7 @@ public class ScaleUsabilityDatabaseTests
         var tenant = "scale-" + Guid.NewGuid().ToString("N");
         var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
         var services = new ServiceCollection(); services.AddLogging();
-        services.AddCleaningMarten(connection, databaseSchemaName: "scale_" + Guid.NewGuid().ToString("N"));
+        services.AddTestMarten(connection, databaseSchemaName: "scale_" + Guid.NewGuid().ToString("N"));
         var context = new Mock<ITenantContext>(); context.SetupGet(t => t.TenantId).Returns(tenant);
         services.AddSingleton(context.Object);
         services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:DefaultConnection"] = connection }).Build());
@@ -147,7 +147,7 @@ public class ScaleUsabilityDatabaseTests
         var connection = Environment.GetEnvironmentVariable("SCALE_SEED_CONNECTION");
         if (string.IsNullOrWhiteSpace(tenant) || string.IsNullOrWhiteSpace(connection)) return;
         var services = new ServiceCollection(); services.AddLogging();
-        services.AddCleaningMarten(connection);
+        services.AddTestMarten(connection);
         await using var provider = services.BuildServiceProvider();
         var store = provider.GetRequiredService<IDocumentStore>();
         await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();

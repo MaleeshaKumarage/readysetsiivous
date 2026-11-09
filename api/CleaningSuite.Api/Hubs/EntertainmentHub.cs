@@ -49,6 +49,8 @@ public class EntertainmentHub(IMediator mediator,IEntertainmentRepository reposi
         if(round.Evaluation is not null){if(!string.Equals(round.SubmittedAnswer,answer?.Trim(),StringComparison.Ordinal))throw new HubException("This answer has already been checked and cannot be changed.");await BroadcastEvaluation(group,round);return;}
         answer=answer?.Trim()??"";
         if(answer.Length is <1 or >2000)throw new HubException("Enter a Finnish answer of 1–2000 characters.");
+        if(round.SubmittedAnswer is not null && !string.Equals(round.SubmittedAnswer,answer,StringComparison.Ordinal))
+            throw new HubException("This answer was already submitted. Retry the same answer to recover its result.");
         var player=await repository.GetPlayerAsync(playerId,Ct)??throw new HubException("Player not found.");
         round.SubmittedAnswer=answer;
         await repository.SaveGameStateAsync(group,round,Ct);

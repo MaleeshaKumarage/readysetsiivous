@@ -25,7 +25,11 @@ public record CreatePublicBookingCommand(
     string PostalCode,
     string City,
     string? Notes,
-    decimal? ExpectedPriceGross = null) : IRequest<PublicBookingResult>;
+    decimal? ExpectedPriceGross = null,
+    string? IdempotencyKey = null) : IRequest<PublicBookingResult>
+{
+    public override string ToString() => nameof(CreatePublicBookingCommand);
+}
 
 public record PublicBookingResult(
     Guid BookingId,
@@ -52,6 +56,7 @@ public class CreatePublicBookingValidator : AbstractValidator<CreatePublicBookin
         RuleFor(x => x.CustomerEmail).MaximumLength(254);
         RuleFor(x => x.PostalCode).MaximumLength(20);
         RuleFor(x => x.Notes).MaximumLength(2000);
+        RuleFor(x => x.IdempotencyKey).Matches("^[A-F0-9]{64}$").When(x => x.IdempotencyKey is not null);
     }
 }
 
@@ -76,6 +81,13 @@ public class CreatePublicBookingHandler : IRequestHandler<CreatePublicBookingCom
 
     public async Task<PublicBookingResult> Handle(CreatePublicBookingCommand request, CancellationToken ct)
     {
+        // The random request key is a recovery credential. Persist only its derived identity and payload digest.
+        var key = request.IdempotencyKey;
+        if (key is not null && (key.Length != 64 || key.Any(c => c is not (>= '0' and <= '9' or >= 'A' and <= 'F'))))
+            throw new ValidationException("Use a valid booking recovery key.");
+        var bookingId = key is null ? Guid.NewGuid() : new Guid(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"booking:{_context.TenantId}:{key}")).AsSpan(0, 16));
+        var fingerprint = BookingManagementKey.Hash(System.Text.Json.JsonSerializer.Serialize(request with { IdempotencyKey = null }));
+        var recoveryKey = key is null ? null : BookingManagementKey.Hash($"booking-management:{_context.TenantId}:{key}");
         // All reads and writes share a serializable transaction. A retry must
         // discard tracked documents and recheck availability against committed bookings.
         for (var attempt = 0; attempt < 3; attempt++)
@@ -83,6 +95,12 @@ public class CreatePublicBookingHandler : IRequestHandler<CreatePublicBookingCom
             try
             {
                 await _bookings.BeginReservationAsync(ct);
+                if (key is not null && await _bookings.GetByIdAsync(bookingId, ct) is { } existing)
+                {
+                    if (existing.RequestFingerprint != fingerprint)
+                        throw new SlotConflictException("This recovery key belongs to a different booking request. Recover the original booking before making another.");
+                    return new PublicBookingResult(existing.Id, existing.BookingNumber, existing.CustomerReference!, recoveryKey!, existing.Total.Gross, existing.Service.Currency);
+                }
                 var service = await _services.GetByIdAsync(request.ServiceId, ct)
                     ?? throw new NotFoundException("Service", request.ServiceId);
                 if (request.ExpectedPriceGross is { } expected && expected != Money.FromNet(service.PriceNet, service.VatRatePercent).Gross)
@@ -91,9 +109,11 @@ public class CreatePublicBookingHandler : IRequestHandler<CreatePublicBookingCom
                     _context.TenantId, request.LocalDate, request.StartTime, service, ct: ct);
                 var number = await _bookings.NextCounterAsync($"booking-{startUtc.Year}", ct);
 
-                var managementKey = BookingManagementKey.Generate();
+                var managementKey = recoveryKey ?? BookingManagementKey.Generate();
                 var booking = new Booking
                 {
+                    Id = bookingId,
+                    RequestFingerprint = recoveryKey is null ? null : fingerprint,
                     BookingNumber = $"RSS-{startUtc.Year}-{number:D6}",
                     Customer = new Customer
                     {
@@ -134,8 +154,9 @@ public class CreatePublicBookingHandler : IRequestHandler<CreatePublicBookingCom
                 await _bookings.SaveAsync(booking, ct);
                 return new PublicBookingResult(booking.Id, booking.BookingNumber, booking.CustomerReference!, managementKey, booking.Total.Gross, service.Currency);
             }
-            catch (Exception ex) when (IsReservationConflict(ex))
+            catch (Exception ex) when (IsReservationConflict(ex) || (key is not null && IsDuplicateBooking(ex)))
             {
+                // A concurrent retry with the same key committed first. The next attempt re-reads that booking and returns it.
                 if (attempt == 2)
                     throw new SlotConflictException("Booking changed concurrently, please try again");
             }
@@ -143,6 +164,10 @@ public class CreatePublicBookingHandler : IRequestHandler<CreatePublicBookingCom
 
         throw new SlotConflictException("Could not allocate booking number, try again");
     }
+
+    private static bool IsDuplicateBooking(Exception exception) =>
+        exception is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation }
+        || (exception.InnerException is { } inner && IsDuplicateBooking(inner));
 
     private static bool IsReservationConflict(Exception exception) =>
         exception is ConcurrencyException

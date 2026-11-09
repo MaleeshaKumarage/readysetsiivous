@@ -11,18 +11,19 @@ using Moq;
 
 namespace CleaningSuite.Tests.Shifts;
 
+[Collection("Database integration")]
 public class ShiftTabStorageDatabaseTests
 {
     private static ShiftSchedule Weekly() => new() { Type = ShiftScheduleType.Weekly, WeeklyDays = [DayOfWeek.Monday], WeeklyStart = TimeSpan.FromHours(6), WeeklyEnd = TimeSpan.FromHours(8) };
     private static ShiftSchedule OneTime() => new() { Type = ShiftScheduleType.OneTime, OneTimeDate = new DateTime(2026, 11, 6), OneTimeStart = TimeSpan.FromHours(8), OneTimeEnd = TimeSpan.FromHours(10) };
 
-    private static (IDocumentStore store, string partition) Setup(string schemaPrefix)
+    private static (ServiceProvider provider, IDocumentStore store, string partition) Setup(string schemaPrefix)
     {
         var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
         var services = new ServiceCollection(); services.AddLogging();
-        services.AddCleaningMarten(connection, databaseSchemaName: schemaPrefix + Guid.NewGuid().ToString("N"));
+        services.AddTestMarten(connection, databaseSchemaName: schemaPrefix + Guid.NewGuid().ToString("N"));
         var provider = services.BuildServiceProvider();
-        return (provider.GetRequiredService<IDocumentStore>(), "tabs-" + Guid.NewGuid().ToString("N")[..8]);
+        return (provider, provider.GetRequiredService<IDocumentStore>(), "tabs-" + Guid.NewGuid().ToString("N")[..8]);
     }
 
     private static TenantSessionFactory Session(IDocumentStore store, string partition)
@@ -34,7 +35,8 @@ public class ShiftTabStorageDatabaseTests
     [QualityCycleDatabaseFact]
     public async Task Stored_tabs_follow_the_list_rules_and_page_in_the_database()
     {
-        var (store, partition) = Setup("shift_tabs_");
+        var (provider, store, partition) = Setup("shift_tabs_");
+        using var resources = provider;
         var company = Guid.NewGuid(); var branch = Guid.NewGuid();
         var recurring = Shift.Create(company, branch, "Weekly clean", Weekly(), null, null, null);
         var visit = Shift.Create(company, branch, "Open visit", OneTime(), null, null, null);
@@ -69,7 +71,8 @@ public class ShiftTabStorageDatabaseTests
     [QualityCycleDatabaseFact]
     public async Task Shifts_saved_before_tabs_existed_get_their_tab_once()
     {
-        var (store, partition) = Setup("shift_tab_backfill_");
+        var (provider, store, partition) = Setup("shift_tab_backfill_");
+        using var resources = provider;
         var company = Guid.NewGuid();
         var legacy = Shift.Create(company, Guid.NewGuid(), "Legacy clean", Weekly(), null, null, null);
         legacy.Tab = string.Empty;

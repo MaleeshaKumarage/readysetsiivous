@@ -16,6 +16,7 @@ public sealed class GameSessionManager
     {
         public SemaphoreSlim Gate { get; } = new(1, 1);
         public Dictionary<Guid, string> Connections { get; } = new();
+        public Dictionary<Guid, Queue<long>> Actions { get; } = new();
         // Includes both the holder and every pending WaitAsync, before leaving the registry lock.
         public int LeaseReferences;
         public long IdleSince = now;
@@ -24,7 +25,6 @@ public sealed class GameSessionManager
     private readonly object _registry = new();
     private readonly Dictionary<Guid, Room> _rooms = new();
     private readonly Dictionary<string, (Guid Group, Guid Player)> _connections = new();
-    private readonly Dictionary<string, Queue<long>> _actions = new();
     private readonly TimeProvider _clock;
     private readonly TimeSpan _idleRetention;
 
@@ -124,7 +124,6 @@ public sealed class GameSessionManager
     }
     private void RemoveConnectionCore(string connectionId)
     {
-        _actions.Remove(connectionId);
         if (!_connections.Remove(connectionId, out var membership) || !_rooms.TryGetValue(membership.Group, out var room)) return;
         if (room.Connections.GetValueOrDefault(membership.Player) == connectionId) room.Connections.Remove(membership.Player);
         MarkIdle(membership.Group, room);
@@ -134,8 +133,10 @@ public sealed class GameSessionManager
         lock (_registry)
         {
             // A disconnected/replaced connection cannot recreate orphaned rate-limit state.
-            if (!_connections.ContainsKey(connectionId)) throw new HubException("Not authorized to act as this player.");
-            if (!_actions.TryGetValue(connectionId, out var queue)) _actions.Add(connectionId, queue = new());
+            if (!_connections.TryGetValue(connectionId, out var membership)) throw new HubException("Not authorized to act as this player.");
+            // Keep the quota with the proven player identity through reconnect and tab takeover.
+            var actions = _rooms[membership.Group].Actions;
+            if (!actions.TryGetValue(membership.Player, out var queue)) actions.Add(membership.Player, queue = new());
             var now = _clock.GetTimestamp();
             while (queue.Count > 0 && _clock.GetElapsedTime(queue.Peek(), now) > TimeSpan.FromMinutes(1)) queue.Dequeue();
             if (queue.Count >= 60) throw new HubException("Too many game actions. Wait a moment and retry.");

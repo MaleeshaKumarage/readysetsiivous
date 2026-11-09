@@ -215,6 +215,18 @@ public class VisitAssignmentTests
         Assert.Equal(s.Shift.Id, conflict.ShiftId);
         Assert.Equal(Start, conflict.StartUtc);
         Assert.Equal(Start.AddHours(2), conflict.EndUtc);
+        Assert.Equal("Daily", conflict.Recurrence);
+        Assert.False(conflict.OpenEnded);
         Assert.Contains("Choose another cleaner or time", ex.Message);
+    }
+
+    [Fact]
+    public async Task An_open_ended_recurring_clash_explicitly_explains_its_future_effect()
+    {
+        var s = new Setup(); s.Shift.ValidUntil = null;
+        s.Exceptions.Add(ShiftOccurrenceException.Create(s.Shift.Id, null, Start, Start.AddHours(2), ShiftOccurrenceExceptionStatus.Extra, "Extra", s.B));
+        var ex = await Assert.ThrowsAsync<ShiftConflictException>(() => s.Run(s.Command()));
+        var clash = Assert.Single(ex.Conflicts);
+        Assert.Equal("Daily", clash.Recurrence); Assert.True(clash.OpenEnded);
     }
 }

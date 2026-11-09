@@ -623,7 +623,7 @@ export interface ShiftOccurrenceExceptionInput {
   employeeId?: string | null;
 }
 
-export interface ShiftConflictDetail { shiftId: string; shiftName: string; startUtc: string; endUtc: string }
+export interface ShiftConflictDetail { shiftId: string; shiftName: string; startUtc: string; endUtc: string; recurrence?: string; openEnded?: boolean }
 
 // Overlap refusals carry the clashing shift so the assignment dialog can offer a fix.
 export class VisitConflictError extends Error {

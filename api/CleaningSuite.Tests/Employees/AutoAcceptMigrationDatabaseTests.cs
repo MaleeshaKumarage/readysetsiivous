@@ -9,6 +9,7 @@ using Npgsql;
 namespace CleaningSuite.Tests.Employees;
 
 // Runs the shipped migration block (between its markers) against a real Marten schema.
+[Collection("Database integration")]
 public class AutoAcceptMigrationDatabaseTests
 {
     [QualityCycleDatabaseFact]
@@ -18,7 +19,7 @@ public class AutoAcceptMigrationDatabaseTests
         var schema = "auto_accept_" + Guid.NewGuid().ToString("N");
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddCleaningMarten(connection, databaseSchemaName: schema);
+        services.AddTestMarten(connection, databaseSchemaName: schema);
         using var provider = services.BuildServiceProvider();
         var store = provider.GetRequiredService<IDocumentStore>();
         await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();

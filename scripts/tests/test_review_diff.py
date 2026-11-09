@@ -101,6 +101,40 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(result, "NO_CRITICAL")
         self.assertEqual(len(calls), 2)
 
+    def test_malformed_success_is_retried_without_salvaging_a_verdict(self):
+        for malformed in ("", "Looks good", "NO_CRITICAL\nBut fix this", "<tool_call>search</tool_call>"):
+            with self.subTest(output=malformed):
+                run, calls = self.fake_run(lambda n: (0, malformed if n == 1 else "NO_CRITICAL"))
+                self.assertEqual(review_diff.review(file_section("x.ts"), "sys", run=run, sleep=lambda s: None), "NO_CRITICAL")
+                self.assertEqual(len(calls), 2)
+
+    def test_retry_receives_format_feedback_without_replaying_invalid_output(self):
+        prompts = []
+        def run(args, **kwargs):
+            prompts.append(args[-1])
+            return subprocess.CompletedProcess(args, 0, stdout="private invalid output" if len(prompts) == 1 else "NO_CRITICAL", stderr="")
+        self.assertEqual(review_diff.review(file_section("x.ts"), "review instructions", run=run, sleep=lambda s: None), "NO_CRITICAL")
+        self.assertIn("review instructions", prompts[1])
+        self.assertIn("previous response failed format validation", prompts[1])
+        self.assertNotIn("private invalid output", prompts[1])
+
+    def test_persistent_malformed_success_fails_closed(self):
+        run, calls = self.fake_run(lambda n: (0, "Analysis: NO_CRITICAL"))
+        self.assertIsNone(review_diff.review(file_section("x.ts"), "sys", run=run, sleep=lambda s: None))
+        self.assertEqual(len(calls), 2)
+
+    def test_valid_findings_before_invalid_chunk_cannot_be_reported_as_complete(self):
+        finding = "### FILE: x.ts\n### LINE: 1\n### FIX: Fix the bug"
+        run, _ = self.fake_run(lambda n: (0, finding if n == 1 else "prose"))
+        with _limit(2_000):
+            self.assertIsNone(review_diff.review("".join(file_section(f"f{i}.ts") for i in range(4)), "sys", run=run, sleep=lambda s: None))
+
+    def test_corrected_retry_retains_findings(self):
+        finding = "### FILE: x.ts\n### LINE: 1\n### FIX: Fix the bug"
+        run, calls = self.fake_run(lambda n: (0, "NO_CRITICAL\n" + finding if n == 1 else finding))
+        self.assertEqual(review_diff.review(file_section("x.ts"), "sys", run=run, sleep=lambda s: None), finding)
+        self.assertEqual(len(calls), 2)
+
     def test_provider_details_are_not_echoed_to_stdout(self):
         run, _ = self.fake_run(lambda n: (1, ""))
         import io, contextlib

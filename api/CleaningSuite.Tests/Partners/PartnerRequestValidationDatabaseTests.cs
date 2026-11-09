@@ -15,6 +15,7 @@ using Moq;
 
 namespace CleaningSuite.Tests.Partners;
 
+[Collection("Database integration")]
 public class PartnerRequestValidationDatabaseTests
 {
     [QualityCycleDatabaseFact]
@@ -22,7 +23,7 @@ public class PartnerRequestValidationDatabaseTests
     {
         var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
         var services = new ServiceCollection(); services.AddLogging();
-        services.AddCleaningMarten(connection, databaseSchemaName: "partner_validation_" + Guid.NewGuid().ToString("N"));
+        services.AddTestMarten(connection, databaseSchemaName: "partner_validation_" + Guid.NewGuid().ToString("N"));
         using var provider = services.BuildServiceProvider();
         var store = provider.GetRequiredService<IDocumentStore>(); await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
         var tenantId = "partner-validation-" + Guid.NewGuid().ToString("N");

@@ -12,6 +12,7 @@ using Moq;
 
 namespace CleaningSuite.Tests.Notifications;
 
+[Collection("Database integration")]
 public class PushDeliveryDatabaseTests
 {
     [QualityCycleDatabaseFact]
@@ -203,7 +204,7 @@ public class PushDeliveryDatabaseTests
         public static async Task<Fixture> Create(string role = Employee.RoleEmployee)
         {
             var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
-            var services = new ServiceCollection(); services.AddLogging(); services.AddCleaningMarten(connection, databaseSchemaName: "push_core_" + Guid.NewGuid().ToString("N"));
+            var services = new ServiceCollection(); services.AddLogging(); services.AddTestMarten(connection, databaseSchemaName: "push_core_" + Guid.NewGuid().ToString("N"));
             var provider = services.BuildServiceProvider(); var store = provider.GetRequiredService<IDocumentStore>(); await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
             var f = new Fixture { Provider = provider, Store = store, Config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?> { ["ConnectionStrings:DefaultConnection"] = connection }).Build() };
             f.Employee.Role = role;

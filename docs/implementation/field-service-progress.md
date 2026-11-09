@@ -1,5 +1,24 @@
 # Field-service workflow delivery ledger
 
+### Critical issue batch — 2026-11-09
+
+- Branch `fix/critical-ten-issues` addresses remaining defects in #126, #127, #79, #320, #285,
+  #333, #295, #296, #292 and #317 in the single PR requested by the user. Scope and verification
+  details are in [the batch record](critical-ten-issues.md). The earlier roadmap checkpoints below remain separate.
+- Booking retries retain one private request identity; game quotas survive reconnects and pending answers
+  cannot be replaced during recovery. Overdue work is visible, inactive future work is cancelled in the queue,
+  generation is bounded, and schedule selection, formatting, conflict context and access diagnostics are explicit.
+- Full backend: 1,616 passed, 2 external Keycloak tests skipped (isolated PostgreSQL 15.18).
+  Final storage-lifetime follow-up: 3 passed, zero fixture schemas remaining. Browser verification covers
+  all 232 selected desktop/mobile cases across the final workflow and corrected manager navigation reruns.
+  TypeScript, 2 frontend unit tests and the production build (53 exported pages) passed.
+- PR [#357](https://github.com/MaleeshaKumarage/readysetsiivous/pull/357) is the review boundary. Main's
+  PR #340 was integrated after it merged during this task; shared overlap, formatting and queue changes
+  are retained. Post-integration: 70 backend checks passed with zero leftover fixture schemas; 114 browser
+  cases verified across the integration run and the focused cold-start rerun; TypeScript and production build passed.
+  Next: review latest-head CI (PostgreSQL 16). No PR merge, production data repair,
+  credential/permission change or deployment was performed by this batch.
+
 Approved design: [design](../superpowers/specs/2026-11-02-field-service-workflows-design.md).
 Reusable implementation checklist: [plan](../superpowers/plans/2026-11-02-field-service-workflows-plan.md).
 
@@ -198,3 +217,10 @@ A01 (employee-owned work autoaccept) follows C01. Start-time question resolved: 
 - The user requested a PR for the completed presentation change. Integrated main `bb66c048efc6544a497646cdc8b7ce59b22b4787` cleanly, retaining its newer agreement-signer and recorded-duration fixes. The PR delta contains no backend, dependency, manifest or service-worker changes.
 - Post-integration verification: 222/222 Playwright checks passed on desktop/mobile, including the 32 new UI/PWA cases, all My shifts cases, employee inventory, shift workspace, agreement signers and admin calendar. TypeScript passed. Production build passed lint/type validation and exported all 53 static pages. Earlier unit checks passed both test files.
 - Screenshots are attached to #377 from an isolated screenshot-assets branch. Source publication is the next step; latest-head GitHub CI/review, merge, deployment and real-device PWA verification remain separate. The local implementation history and its prior verification records are retained.
+
+### Portal UI/PWA CI repair (#385 / #377) — 2026-11-09
+
+- The first published head passed backend CI and the frontend production build. The advisory AI review failed because provider responses mixed prose, tool markup, findings and clean verdicts; aggregate validation correctly rejected that output.
+- The chunk runner now applies the existing strict validator to every provider response, retries malformed responses with explicit format feedback and fails the whole review if any chunk remains invalid. It never extracts a clean verdict from prose or drops an unreviewed chunk. Added five regression tests and included the chunk-runner suite in review-integrity CI. Validator rules, review permissions and advisory status are unchanged.
+- Integrated main `538c62c62008d17c58a007afb966de11920049a9`, including its four-shard Playwright workflow. Resolved the admin layout move by retaining main’s complete access verification implementation in AdminWorkspace, with only the existing safe-area header presentation change. Partner request cards retain main’s cleaner-identity privacy change and the UI timing class. No new business behavior was introduced by the repair.
+- Local review tests passed 21/21; the agent regression command passed 69 tests with its two opt-in integration skips unchanged. TypeScript and frontend unit checks passed. All 96 focused Playwright checks passed on desktop/mobile, including the 32 new UI/PWA checks, main’s access/scheduling/booking recovery regressions, partner workflows and employee calendar. Production build passed with all 53 static pages. Original head aa7c027 also completed full frontend CI (1,807 passed, one existing skip) and backend CI successfully. Latest repair-head GitHub CI remains a separate pending check. The PR remains open; no merge or deployment is authorized by this repair.

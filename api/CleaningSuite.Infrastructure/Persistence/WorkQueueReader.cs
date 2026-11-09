@@ -192,7 +192,9 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
             {
                 var start = visit.Occurrence.StartUtc;
                 var evidence = formsByOccurrence.TryGetValue((shift.Id, start), out var found) ? found : Array.Empty<QualityCycleForm>();
-                var view = WorkQueueRules.ActiveShiftView(shift.IsActive, WorkQueueRules.ShiftView(visit, evidence, now), start, now);
+                var view = WorkQueueRules.ShiftView(visit, evidence, now);
+                if (!evidence.Any(f => f.StartedAtUtc.HasValue || f.IsSubmitted))
+                    view = WorkQueueRules.ActiveShiftView(shift.IsActive, view, start, now);
                 rows.Add(new ShiftRow(view, WorkQueueRules.ShiftLabel(visit, view, now), shift, visit, TimeZoneInfo.ConvertTimeFromUtc(start, zone), StableOccurrenceId(shift.Id, start)));
             }
         }

@@ -1,3 +1,4 @@
+import { selectDailyScheduleIfEmpty } from './admin-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { shiftAction } from './shift-actions';
 import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
@@ -97,7 +98,7 @@ test('shift company search finds a company beyond 100 and uses it for the new sh
   await dialog.getByLabel('Branch', { exact: true }).click();
   await page.getByRole('option', { name: 'Property', exact: true }).click();
   await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('New cleaning');
-  await dialog.getByRole('button', { name: 'Create shift', exact: true }).click();
+  await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift', exact: true }).click();
   await expect(dialog).toHaveCount(0);
   expect(writes[0].companyId).toBe('company-125');
   expect(queries.some(query => query.search === 'B-125' && query.take === 50)).toBe(true);
@@ -192,7 +193,7 @@ test('company changes cannot restore branches from a late previous-company respo
   await expect(page.getByRole('option', { name: 'Property A', exact: true })).toHaveCount(0);
   await page.getByRole('option', { name: 'Property B', exact: true }).click();
   await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Current company work');
-  await dialog.getByRole('button', { name: 'Create shift', exact: true }).click();
+  await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift', exact: true }).click();
   await expect(dialog).toHaveCount(0);
   expect(writes[0].companyId).toBe('company-2');
   expect(writes[0].branchId).toBe('branch');
@@ -229,7 +230,7 @@ test('a new shift cannot select an inactive company returned by server search', 
   await expect(company).toHaveValue('');
   await expect(dialog.getByLabel('Branch', { exact: true })).toBeDisabled();
   await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Blocked inactive assignment');
-  await dialog.getByRole('button', { name: 'Create shift', exact: true }).click();
+  await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift', exact: true }).click();
   await expect(dialog.getByText('Company, branch and name are required.', { exact: true })).toBeVisible();
   expect(writes).toHaveLength(0);
 });

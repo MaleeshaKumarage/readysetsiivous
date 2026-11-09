@@ -93,7 +93,7 @@ test('one visit from owner request to cleaner acceptance and back to the owner',
     await expect(page.getByText('Cleaning request saved. Staff will arrange a cleaner.', { exact: true })).toBeVisible();
     await page.getByRole('tab', { name: 'Cleaning requests', exact: true }).click();
     await expect(ownerCard(page).getByText('Requested', { exact: true })).toBeVisible();
-    await expect(ownerCard(page).getByText('Cleaner: Awaiting acceptance')).toBeVisible();
+    await expect(ownerCard(page).getByText('Cleaner:', { exact: false })).toHaveCount(0); // partners never see the cleaner
 
     // 4. Staff arranges an offer to a cleaner who chooses the time themselves.
     await staffOpenRequests(staff.page);
@@ -106,7 +106,7 @@ test('one visit from owner request to cleaner acceptance and back to the owner',
     // 5. Owner sees the offer is out, but the cleaner is not confirmed yet.
     await ownerOpenRequests(page);
     await expect(ownerCard(page).getByText('Offered', { exact: true })).toBeVisible();
-    await expect(ownerCard(page).getByText('Cleaner: Awaiting acceptance')).toBeVisible();
+    await expect(ownerCard(page).getByText('Cleaner:', { exact: false })).toHaveCount(0); // partners never see the cleaner
 
     // 6. Cleaner accepts with a planned start inside the window.
     await cleanerOpenOffers(cleaner.page);
@@ -128,7 +128,8 @@ test('one visit from owner request to cleaner acceptance and back to the owner',
     // 8. Owner sees the cleaner and planned time, and the request is locked to staff changes.
     await ownerOpenRequests(page);
     await expect(ownerCard(page).getByText('Accepted', { exact: true })).toBeVisible();
-    await expect(ownerCard(page).getByText('Cleaner: T.', { exact: true })).toBeVisible();
+    await expect(ownerCard(page).getByText('Cleaner:', { exact: false })).toHaveCount(0);
+    await expect(ownerCard(page).getByText('Test Cleaner')).toHaveCount(0);
     await expect(ownerCard(page).getByText(/Planned: .*10:00/)).toBeVisible();
     await expect(ownerCard(page).getByRole('button', { name: 'Edit request', exact: true })).toHaveCount(0);
     await expect(ownerCard(page).getByRole('button', { name: 'Cancel request', exact: true })).toHaveCount(0);

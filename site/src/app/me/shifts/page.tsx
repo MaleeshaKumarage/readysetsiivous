@@ -92,6 +92,8 @@ export default function MyShiftsPage() {
   const [view, setView] = useState<ShiftCalendarView>('today');
   const viewRef = useRef<ShiftCalendarView>('today');
   const [range, setRange] = useState<{ fromLocalDate: string; toLocalDate: string } | null>(null);
+  // Completed-visit date filter on the Past tab. Empty means the default recent window.
+  const [pastFilter, setPastFilter] = useState<{ from: string; to: string }>({ from: '', to: '' });
   const [loadingMore, setLoadingMore] = useState(false);
   const drafts = useRef<Record<string, { items: QualityCycleFormItem[]; notes: string; photos: ShiftPhoto[] }>>({});
   const loadVersion = useRef(0);
@@ -130,12 +132,12 @@ export default function MyShiftsPage() {
     return () => { active = false; loadVersion.current++; };
   }, []);
 
-  async function loadShifts(selected: ShiftCalendarView = viewRef.current, cursor?: string, append = false) {
+  async function loadShifts(selected: ShiftCalendarView = viewRef.current, cursor?: string, append = false, filter: { from: string; to: string } = { from: '', to: '' }) {
     const version = ++loadVersion.current;
     if (append) setLoadingMore(true); else setLoading(true);
     setError(null);
     try {
-      const data = await meApi.calendar(selected, cursor);
+      const data = await meApi.calendar(selected, cursor, filter.from || undefined, filter.to || undefined);
       if (version === loadVersion.current) {
         calendarZone.current = data.timeZoneId;
         calendarDay.current = tenantDateKey(new Date(), data.timeZoneId);
@@ -158,7 +160,15 @@ export default function MyShiftsPage() {
     if (busy || submitting || photoReading || selected === viewRef.current) return;
     closeForm(); setView(selected); viewRef.current = selected;
     setOccurrences([]); setRange(null); setLoadingMore(false);
+    setPastFilter({ from: '', to: '' });
     void loadShifts(selected);
+  }
+
+  function applyPastFilter(next: { from: string; to: string }) {
+    if (busy || submitting || photoReading) return;
+    setPastFilter(next);
+    setOccurrences([]); setRange(null); setLoadingMore(false);
+    void loadShifts('past', undefined, false, next);
   }
 
   async function handleStart(o: MyShiftOccurrence) {
@@ -480,6 +490,11 @@ export default function MyShiftsPage() {
             }}>{tab[0].toUpperCase() + tab.slice(1)}</button>)}
         </div>
 
+        {view === 'past' && <div className="mb-4 flex flex-wrap items-end gap-3 text-sm font-semibold text-gray-800 dark:text-gray-100">
+          <label className="flex items-center gap-2">From <input type="date" aria-label="From date" value={pastFilter.from} max={pastFilter.to || calendarDay.current || undefined} disabled={busy || photoReading || submitting} onChange={e => applyPastFilter({ ...pastFilter, from: e.target.value })} className="rounded-lg border px-2 py-1 font-normal" /></label>
+          <label className="flex items-center gap-2">To <input type="date" aria-label="To date" value={pastFilter.to} min={pastFilter.from || undefined} max={calendarDay.current || undefined} disabled={busy || photoReading || submitting} onChange={e => applyPastFilter({ ...pastFilter, to: e.target.value })} className="rounded-lg border px-2 py-1 font-normal" /></label>
+          {(pastFilter.from || pastFilter.to) && <Button variant="outline" disabled={busy || photoReading || submitting} onClick={() => applyPastFilter({ from: '', to: '' })}>Clear dates</Button>}
+        </div>}
         <div id="my-shifts-panel" role="tabpanel" aria-labelledby={`shift-tab-${view}`}>
 
         {loading ? (
@@ -504,7 +519,7 @@ export default function MyShiftsPage() {
           </div>
         )}
         </div>
-        {view !== 'today' && range && !loading && <Button variant="outline" disabled={loadingMore || busy || photoReading || submitting}
+        {view !== 'today' && range && !loading && !(view === 'past' && (pastFilter.from || pastFilter.to)) && <Button variant="outline" disabled={loadingMore || busy || photoReading || submitting}
           onClick={() => void loadShifts(view, view === 'past' ? range.fromLocalDate : range.toLocalDate, true)}>
           {loadingMore ? 'Loading shifts…' : view === 'past' ? 'Load earlier shifts' : 'Load later shifts'}
         </Button>}

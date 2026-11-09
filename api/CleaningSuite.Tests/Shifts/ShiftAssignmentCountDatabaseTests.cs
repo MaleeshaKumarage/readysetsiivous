@@ -8,13 +8,14 @@ using Moq;
 namespace CleaningSuite.Tests.Shifts;
 
 /// <summary>Bulk Employees counts for the shift list, read on PostgreSQL.</summary>
+[Collection("Database integration")]
 public class ShiftAssignmentCountDatabaseTests
 {
     [QualityCycle.QualityCycleDatabaseFact]
     public async Task Counts_only_active_assignments_per_shift_within_the_current_tenant()
     {
         var services = new ServiceCollection(); services.AddLogging();
-        services.AddCleaningMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!,
+        services.AddTestMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!,
             databaseSchemaName: "assignment_counts_" + Guid.NewGuid().ToString("N"));
         using var provider = services.BuildServiceProvider();
         var store = provider.GetRequiredService<IDocumentStore>();
