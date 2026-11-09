@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { PartnerFlowBackend, prepareRolePage } from './partner-flow-backend';
+import { CORS, PartnerFlowBackend, prepareRolePage } from './partner-flow-backend';
 
 // The owner sets the photo sections once, in Settings. Every visit requested afterwards shows them.
 
@@ -68,4 +68,30 @@ test('a photo section cannot be listed twice, even with different capitals', asy
   await page.getByRole('button', { name: 'Add Before', exact: true }).click();
   await page.getByLabel('Photo section name', { exact: true }).fill('before');
   await expect(page.getByRole('button', { name: 'Add section', exact: true })).toBeDisabled();
+});
+
+test('settings that fail to load block saving, so stored values are not overwritten', async ({ page }) => {
+  const backend = new PartnerFlowBackend({ priced: true });
+  backend.generalInstructions = 'Stored general text';
+  backend.photoLabels = ['Keys'];
+  // Fail every settings read until the test lets it through, so the outcome does not depend on how many attempts run.
+  await prepareRolePage(page, backend, 'owner');
+  let failing = true;
+  await page.route(/\/api\/v1\/partner\/settings$/, route => {
+    if (failing && route.request().method() === 'GET') return route.fulfill({ status: 500, headers: CORS, json: { detail: 'Settings unavailable' } });
+    return route.fallback();
+  });
+
+  await page.goto('/partner/');
+  await page.getByRole('tab', { name: /^Settings/ }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'could not be loaded' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save photo sections', exact: true })).toBeDisabled();
+
+  failing = false;
+  await page.getByRole('button', { name: 'Refresh partner data', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'General instructions', exact: true })).toHaveValue('Stored general text');
+  await expect(page.getByRole('alert').filter({ hasText: 'could not be loaded' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Save photo sections', exact: true })).toBeEnabled();
+  expect(backend.generalInstructions).toBe('Stored general text');
+  expect(backend.photoLabels).toEqual(['Keys']);
 });

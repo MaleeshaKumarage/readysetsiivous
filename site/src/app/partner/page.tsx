@@ -41,6 +41,8 @@ export default function PartnerPage() {
   const [cityFilter, setCityFilter] = useState('');
   // One-time visit setup: the photo sections every requested visit needs. Loaded with the portal data.
   const [photoLabels, setPhotoLabels] = useState<string[]>([]), [newPhotoLabel, setNewPhotoLabel] = useState('');
+  // Saving is allowed only after the stored settings have loaded, so empty defaults never overwrite them.
+  const [settingsReady, setSettingsReady] = useState(false), [settingsFailed, setSettingsFailed] = useState(false);
   // General instructions the cleaner reads before every visit. Each visit's own instructions are appended after them.
   const [generalInstructions, setGeneralInstructions] = useState('');
   const [from, setFrom] = useState(''), [to, setTo] = useState(''), [exact, setExact] = useState(false), [time, setTime] = useState(''), [notes, setNotes] = useState('');
@@ -83,7 +85,9 @@ export default function PartnerPage() {
       if (attempt !== generation.current) return;
       setIdentity(person); setBranches(properties); setRequests(work); setShifts(scheduled); setChanges(changeHistory); setAccess('allowed');
       // Photo sections only shape new requests, so they load alongside the portal and never hold it up.
-      partnerApi.settings().then(photoSettings => { if (attempt === generation.current) { setPhotoLabels(photoSettings.photoLabels ?? []); setGeneralInstructions(photoSettings.generalInstructions ?? ''); } }).catch(() => undefined);
+      partnerApi.settings()
+        .then(photoSettings => { if (attempt === generation.current) { setPhotoLabels(photoSettings.photoLabels ?? []); setGeneralInstructions(photoSettings.generalInstructions ?? ''); setSettingsReady(true); setSettingsFailed(false); } })
+        .catch(() => { if (attempt === generation.current) { setSettingsReady(false); setSettingsFailed(true); } });
     } catch (e) { if (attempt === generation.current) { setError(e instanceof Error ? e.message : base.loadFailure); setAccess('error'); } }
   }, []);
   useEffect(() => { void refresh(); return () => { generation.current++; }; }, [refresh]);
@@ -237,7 +241,8 @@ export default function PartnerPage() {
           {tab === 'Settings' && <section className="partner-section">
             <div className="partner-section-heading"><div><h2>{t.visitPhotoSettings}</h2><p>{t.visitPhotoSettingsHint}</p></div></div>
             <Card className="partner-surface partner-settings">
-              <form className="partner-form-grid" onSubmit={event => { event.preventDefault(); void act(async () => { const saved = await partnerApi.saveSettings({ photoLabels, generalInstructions }); setPhotoLabels(saved.photoLabels); setGeneralInstructions(saved.generalInstructions ?? ''); }, base.photoSectionsSaved); }}>
+              <form className="partner-form-grid" onSubmit={event => { event.preventDefault(); if (!settingsReady) return; void act(async () => { const saved = await partnerApi.saveSettings({ photoLabels, generalInstructions }); setPhotoLabels(saved.photoLabels); setGeneralInstructions(saved.generalInstructions ?? ''); }, base.photoSectionsSaved); }}>
+                {settingsFailed && <p role="alert" className="partner-alert partner-alert-error partner-form-wide">{t.settingsLoadFailed}</p>}
                 <div className="partner-form-wide">
                   {!photoLabels.length && <p className="partner-muted">{t.noPhotoSections}</p>}
                   <ul className="partner-photo-labels">{photoLabels.map((label, index) => <li key={label}><span>{label}</span><Button variant="ghost" size="sm" className="partner-quiet" disabled={busy} aria-label={`Remove ${label}`} onClick={() => setPhotoLabels(current => current.filter((_, position) => position !== index))}>{t.removePhotoSection}</Button></li>)}</ul>
@@ -248,7 +253,7 @@ export default function PartnerPage() {
                 <Field label={t.generalInstructions} className="partner-form-wide"><Textarea className="partner-field" maxLength={2000} value={generalInstructions} onChange={event => setGeneralInstructions(event.target.value)} /></Field>
                 <div className="partner-form-actions">
                   <Button type="button" variant="outline" className="partner-secondary" disabled={busy || !newPhotoLabel.trim() || photoLabels.length >= 10 || photoLabels.some(label => label.toLowerCase() === newPhotoLabel.trim().toLowerCase())} onClick={() => { setPhotoLabels(current => [...current, newPhotoLabel.trim()]); setNewPhotoLabel(''); }}>{t.addPhotoSection}</Button>
-                  <Button type="submit" disabled={busy}>{t.savePhotoSections}</Button>
+                  <Button type="submit" disabled={busy || !settingsReady}>{t.savePhotoSections}</Button>
                 </div>
               </form>
             </Card>
