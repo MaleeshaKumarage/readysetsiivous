@@ -27,15 +27,44 @@ class GlobTests(unittest.TestCase):
         self.assertTrue(self.matches("**/Dockerfile", "Dockerfile"))
 
 
-class DeployFilterTests(unittest.TestCase):
-    def test_push_to_main_deploy_workflow_contributes_its_paths(self):
-        filters = guard.deploy_filters("origin/main")
-        self.assertIn(".github/workflows/docker-build-push.yml", filters)
-        self.assertIn("api/**", filters[".github/workflows/docker-build-push.yml"])
+class BranchTests(unittest.TestCase):
+    def test_no_branch_filter_covers_main(self):
+        self.assertTrue(guard.branch_applies({}))
 
-    def test_non_deploy_workflows_are_ignored(self):
-        filters = guard.deploy_filters("origin/main")
-        self.assertNotIn(".github/workflows/proxy-config-tests.yml", filters)
+    def test_branches_list_must_include_main(self):
+        self.assertTrue(guard.branch_applies({"branches": ["main", "release/*"]}))
+        self.assertFalse(guard.branch_applies({"branches": ["release/*"]}))
+
+    def test_branches_ignore_excludes_only_named_branches(self):
+        self.assertFalse(guard.branch_applies({"branches-ignore": ["main"]}))
+        self.assertTrue(guard.branch_applies({"branches-ignore": ["feature/*"]}))
+
+
+class PathTests(unittest.TestCase):
+    files = ["docs/a.md", "api/x.cs"]
+
+    def test_no_path_filter_triggers_on_any_file(self):
+        self.assertEqual(guard.files_triggering({}, self.files), self.files)
+
+    def test_positive_paths(self):
+        self.assertEqual(guard.files_triggering({"paths": ["api/**"]}, self.files), ["api/x.cs"])
+
+    def test_negated_path_excludes_docs_only(self):
+        # "everything except docs" triggers on the API file, not on the docs file
+        self.assertEqual(guard.files_triggering({"paths": ["!docs/**"]}, self.files), ["api/x.cs"])
+
+    def test_paths_ignore_triggers_on_files_not_ignored(self):
+        self.assertEqual(guard.files_triggering({"paths-ignore": ["docs/**"]}, self.files), ["api/x.cs"])
+        self.assertEqual(guard.files_triggering({"paths-ignore": ["**"]}, self.files), [])
+
+
+class DeployWorkflowTests(unittest.TestCase):
+    def test_real_repo_has_the_api_deploy_workflow_on_main(self):
+        workflows = guard.deploy_workflows("origin/main")
+        self.assertIn(".github/workflows/docker-build-push.yml", workflows)
+
+    def test_real_repo_ignores_workflows_without_a_main_push(self):
+        self.assertNotIn(".github/workflows/proxy-config-tests.yml", guard.deploy_workflows("origin/main"))
 
 
 if __name__ == "__main__":

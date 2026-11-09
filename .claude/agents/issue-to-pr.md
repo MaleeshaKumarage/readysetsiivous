@@ -15,7 +15,8 @@ You deliver ONE issue per run, end to end. Follow the repo's CLAUDE.md publishin
   sudo -u postgres psql -qc "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='security_tests') THEN CREATE ROLE security_tests LOGIN PASSWORD 'synthetic_ci_only' CREATEDB; END IF; END \$\$;"
   sudo -u postgres psql -qc "ALTER ROLE security_tests NOSUPERUSER CREATEDB;"
   sudo -u postgres psql -tc "select 1 from pg_database where datname='security_tests'" | grep -q 1 || sudo -u postgres createdb -O security_tests security_tests
-  export QC_TEST_CONNECTION_STRING="Host=localhost;Port=5432;Database=security_tests;Username=security_tests;Password=synthetic_ci_only" INVITE_TEST_DATABASE="$QC_TEST_CONNECTION_STRING"
+  export QC_TEST_CONNECTION_STRING="Host=localhost;Port=5432;Database=security_tests;Username=security_tests;Password=synthetic_ci_only"
+  export INVITE_TEST_DATABASE="$QC_TEST_CONNECTION_STRING"
   ```
 
 - Push check: after every push, `git ls-remote --heads origin <branch>` must equal `git rev-parse HEAD`. If the stop hook still reports unpushed commits, the cause is local tracking config (`remote.origin.fetch` only maps `main`). Add a refspec for the branch, `git config --add remote.origin.fetch '+refs/heads/<branch>:refs/remotes/origin/<branch>'`, then `git branch --set-upstream-to=origin/<branch>`. Do not force-push.
