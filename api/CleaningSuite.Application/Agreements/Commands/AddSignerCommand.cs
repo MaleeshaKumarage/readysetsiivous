@@ -29,7 +29,9 @@ public class AddSignerHandler : IRequestHandler<AddSignerCommand, Unit>
         var a = await _repo.GetAsync(_context.TenantId, request.AgreementId, ct)
             ?? throw new NotFoundException("Agreement", request.AgreementId);
         if (a.Status != Agreement.StatusDraft && a.Status != Agreement.StatusPartiallySigned)
-            throw new InvalidOperationException("Agreement not editable");
+            throw new AgreementConflictException("This agreement is closed, so signers cannot be added. Create a new agreement instead.");
+        if (a.Signers.Any(s => string.Equals(s.Email, request.Email, StringComparison.OrdinalIgnoreCase)))
+            throw new AgreementConflictException($"{request.Email} is already a signer on this agreement. Use a different email address.");
 
         a.Signers.Add(new Signer { Name = request.Name, Email = request.Email, Token = AgreementTokens.New() });
         a.UpdatedUtc = DateTime.UtcNow;

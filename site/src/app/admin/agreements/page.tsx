@@ -4,7 +4,7 @@ import { showError } from '@/lib/toast';
 import { useCallback, useEffect, useState } from 'react';
 import { Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge, ActionIcon, Tooltip, CopyButton, Paper } from '@mantine/core';
 import { Plus, Trash2, Copy, Mail, Check, Eye } from 'lucide-react';
-import { adminAgreements, authorizedFetch, invalidateAdminCache, type AgreementListItem, type AgreementDetail, type LegacyAgreementRepairPreview } from '@/lib/adminApi';
+import { adminAgreements, adminSendResult, authorizedFetch, invalidateAdminCache, type AgreementListItem, type AgreementDetail, type LegacyAgreementRepairPreview } from '@/lib/adminApi';
 import { AgreementEmailCopyButton } from '@/components/AgreementEmailCopyButton';
 import { agreementEmail } from '@/lib/agreementEmail';
 import { CompanyPicker } from '@/components/admin/CompanyPicker';
@@ -27,6 +27,9 @@ export default function AgreementsPage() {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedAgreement, setSelectedAgreement] = useState<AgreementDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [newSigner, setNewSigner] = useState({ name: '', email: '' });
+  const [detailBusy, setDetailBusy] = useState(false);
+  const [detailError, setDetailError] = useState('');
 
   const [createdAgreement, setCreatedAgreement] = useState<AgreementDetail | null>(null);
   const [repairPreview, setRepairPreview] = useState<LegacyAgreementRepairPreview | null>(null);
@@ -117,12 +120,75 @@ export default function AgreementsPage() {
     adminAgreements.downloadDocument(id);
   };
 
+  // Signers can change only while the agreement is open; once it is completed or cancelled the record is final.
+  const canChangeSigners = (status: string) => status === 'Draft' || status === 'PartiallySigned';
+
+  const reloadSelected = async (id: string) => {
+    invalidateAdminCache();
+    const [detail] = await Promise.all([adminAgreements.get(id), load()]);
+    // A failed read comes back as null; keep the last good view and report the refresh failure instead of blanking the dialog.
+    if (!detail) throw new Error('The agreement could not be refreshed.');
+    setSelectedAgreement(detail);
+  };
+
+  // Runs one signer change. The busy flag is always cleared, and a failed reload is shown as a message, not left unhandled.
+  const runDetailChange = async (
+    failureTitle: string,
+    change: () => Promise<{ ok: true } | { ok: false; message: string }>,
+    onSuccess?: () => void,
+  ) => {
+    if (!selectedAgreement) return;
+    const agreementId = selectedAgreement.id;
+    setDetailBusy(true); setDetailError('');
+    try {
+      const result = await change();
+      if (!result.ok) { setDetailError(result.message); showError(result.message, failureTitle); return; }
+      onSuccess?.();
+      await reloadSelected(agreementId);
+    } catch {
+      const message = 'The change may have been saved, but the agreement could not be refreshed. Close and reopen it to check the current signers.';
+      setDetailError(message); showError(message, 'Agreement not refreshed');
+    } finally {
+      setDetailBusy(false);
+    }
+  };
+
+  const addDetailSigner = async () => {
+    if (!selectedAgreement) return;
+    const name = newSigner.name.trim();
+    const email = newSigner.email.trim();
+    if (!name || !email) { setDetailError('Enter a name and an email address for the new signer.'); return; }
+    await runDetailChange('Signer not added',
+      () => adminSendResult(`/api/v1/admin/agreements/${selectedAgreement.id}/signers`, 'POST', { name, email }),
+      () => setNewSigner({ name: '', email: '' }));
+  };
+
+  const removeDetailSigner = async (signerId: string) => {
+    if (!selectedAgreement) return;
+    await runDetailChange('Signer not removed',
+      () => adminSendResult(`/api/v1/admin/agreements/${selectedAgreement.id}/signers/${signerId}`, 'DELETE'));
+  };
+
+  const cancelDetailAgreement = async () => {
+    if (!selectedAgreement) return;
+    if (!window.confirm(`Cancel agreement “${selectedAgreement.title}”? Signers will no longer be able to open or sign it. Signed copies stay on record.`)) return;
+    await runDetailChange('Agreement not cancelled',
+      () => adminSendResult(`/api/v1/admin/agreements/${selectedAgreement.id}/cancel`, 'POST'));
+  };
+
   const openDetail = async (id: string) => {
     setLoadingDetail(true);
+    setDetailError(''); setNewSigner({ name: '', email: '' }); setSelectedAgreement(null);
     setDetailModalOpen(true);
-    const detail = await adminAgreements.get(id);
-    setSelectedAgreement(detail);
-    setLoadingDetail(false);
+    try {
+      const detail = await adminAgreements.get(id);
+      setSelectedAgreement(detail);
+      if (!detail) setDetailError('This agreement could not be loaded. Close it and try again.');
+    } catch {
+      setDetailError('This agreement could not be loaded. Close it and try again.');
+    } finally {
+      setLoadingDetail(false);
+    }
   };
 
   const getSignLink = (token: string) => {
@@ -252,8 +318,10 @@ export default function AgreementsPage() {
 
       {/* Agreement Detail / Signers Modal */}
       <Modal opened={detailModalOpen} onClose={() => { setDetailModalOpen(false); setSelectedAgreement(null); }} title={selectedAgreement?.title ?? 'Agreement Signers'} size="lg" radius="md">
-        {loadingDetail || !selectedAgreement ? (
+        {loadingDetail ? (
           <Loader />
+        ) : !selectedAgreement ? (
+          <Text size="sm" c="red" role="alert">{detailError || 'This agreement could not be loaded. Close it and try again.'}</Text>
         ) : (
           <Stack gap="md">
             <Group justify="space-between" wrap="wrap">
@@ -269,12 +337,35 @@ export default function AgreementsPage() {
                       <Text size="sm" fw={500}>{s.name}</Text>
                       <Text size="xs" c="dimmed">{s.email}</Text>
                     </div>
-                    <Badge size="sm" color={s.status === 'Signed' ? 'green' : 'yellow'}>{s.status}</Badge>
+                    <Group gap="xs">
+                      <Badge size="sm" color={s.status === 'Signed' ? 'green' : 'yellow'}>{s.status}</Badge>
+                      {canChangeSigners(selectedAgreement.status) && s.status !== 'Signed' && (
+                        <ActionIcon variant="subtle" color="red" aria-label={`Remove signer ${s.name}`} disabled={detailBusy} onClick={() => removeDetailSigner(s.id)}><Trash2 size={16} /></ActionIcon>
+                      )}
+                    </Group>
                   </Group>
                   {renderSignerActions(selectedAgreement.title, s.name, s.email, s.token)}
                 </Stack>
               ))}
             </Stack>
+            {canChangeSigners(selectedAgreement.status) ? (
+              <Stack gap="xs">
+                <Text size="sm" fw={500}>Add signer</Text>
+                <Group align="flex-end" wrap="wrap">
+                  <TextInput label="Name" value={newSigner.name} onChange={(e) => setNewSigner({ ...newSigner, name: e.target.value })} style={{ flex: 1, minWidth: 160 }} />
+                  <TextInput label="Email" type="email" value={newSigner.email} onChange={(e) => setNewSigner({ ...newSigner, email: e.target.value })} style={{ flex: 1, minWidth: 200 }} />
+                  <Button size="sm" leftSection={<Plus size={14} />} loading={detailBusy} onClick={addDetailSigner}>Add signer</Button>
+                </Group>
+              </Stack>
+            ) : (
+              <Text size="sm" c="dimmed">Signers cannot be changed on a {selectedAgreement.status.toLowerCase()} agreement.</Text>
+            )}
+            {detailError && <Text size="sm" c="red" role="alert">{detailError}</Text>}
+            {canChangeSigners(selectedAgreement.status) && (
+              <Group justify="flex-end">
+                <Button color="red" variant="light" size="sm" disabled={detailBusy} onClick={cancelDetailAgreement}>Cancel agreement</Button>
+              </Group>
+            )}
           </Stack>
         )}
       </Modal>
