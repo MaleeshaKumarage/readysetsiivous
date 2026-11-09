@@ -43,7 +43,7 @@ public record BranchDto(
     int? RoomCount = null, int? BedCount = null, decimal? PriceNet = null,
     decimal? VatRatePercent = null, int? EstimatedDurationMinutes = null,
     int PricingVersion = 0, bool PricingReady = false, DateTime? QuoteRequestedUtc = null,
-    DateTime? QuoteRejectedUtc = null, string? QuoteRejectionReason = null, IReadOnlyList<BranchPriceVersion>? PriceVersions = null);
+    DateTime? QuoteRejectedUtc = null, string? QuoteRejectionReason = null, IReadOnlyList<BranchPriceVersion>? PriceVersions = null, int? AreaSquareMeters = null);
 
 public record CompanyDetailDto(CompanyDto Company, IReadOnlyList<BranchDto> Branches);
 
@@ -119,7 +119,7 @@ public record CreateBranchCommand(
     int? RoomCount = null, int? BedCount = null, decimal? PriceNet = null,
     decimal? VatRatePercent = null, int? EstimatedDurationMinutes = null,
     // Optional new price version: effective date (default today) and billing mode (default PerOccurrence).
-    DateOnly? PriceEffectiveFrom = null, string? PriceMode = null) : IRequest<BranchDto>;
+    DateOnly? PriceEffectiveFrom = null, string? PriceMode = null, int? AreaSquareMeters = null) : IRequest<BranchDto>;
 
 public record UpdateBranchCommand(
     Guid Id,
@@ -133,7 +133,7 @@ public record UpdateBranchCommand(
     string? ContactEmail = null,
     int? RoomCount = null, int? BedCount = null, decimal? PriceNet = null,
     decimal? VatRatePercent = null, int? EstimatedDurationMinutes = null,
-    DateOnly? PriceEffectiveFrom = null, string? PriceMode = null) : IRequest<BranchDto>
+    DateOnly? PriceEffectiveFrom = null, string? PriceMode = null, int? AreaSquareMeters = null) : IRequest<BranchDto>
 {
     // JSON must distinguish an old client's omitted field from an explicit null
     // clearing an optional count. Keep the positional constructor for existing callers.
@@ -146,6 +146,9 @@ public record UpdateBranchCommand(
     [JsonIgnore] public bool HasBedCount { get; private init; } = BedCount.HasValue;
     public int? RoomCount { get => _roomCount; init { _roomCount = value; HasRoomCount = true; } }
     public int? BedCount { get => _bedCount; init { _bedCount = value; HasBedCount = true; } }
+    private int? _areaSquareMeters = AreaSquareMeters;
+    [JsonIgnore] public bool HasAreaSquareMeters { get; private init; } = AreaSquareMeters.HasValue;
+    public int? AreaSquareMeters { get => _areaSquareMeters; init { _areaSquareMeters = value; HasAreaSquareMeters = true; } }
 }
 
 public record DeactivateBranchCommand(Guid Id) : IRequest;
@@ -494,6 +497,7 @@ public class CompanyHandlers
                     request.ContactPhone);
                 branch.ContactEmail = request.ContactEmail?.Trim();
                 ApplyProperty(branch, request.RoomCount, request.BedCount, request.PriceNet, request.VatRatePercent, request.EstimatedDurationMinutes, request.PriceMode, request.PriceEffectiveFrom);
+                branch.SetArea(request.AreaSquareMeters);
                 await _repository.SaveAsync(branch, ct);
                 return MapBranch(branch);
             }
@@ -528,6 +532,7 @@ public class CompanyHandlers
                     request.HasRoomCount ? request.RoomCount : branch.RoomCount,
                     request.HasBedCount ? request.BedCount : branch.BedCount,
                     request.PriceNet, request.VatRatePercent, request.EstimatedDurationMinutes, request.PriceMode, request.PriceEffectiveFrom);
+                branch.SetArea(request.HasAreaSquareMeters ? request.AreaSquareMeters : branch.AreaSquareMeters);
                 await _repository.SaveAsync(branch, ct);
                 return MapBranch(branch);
             }
@@ -610,7 +615,7 @@ public class CompanyHandlers
             branch.IsActive,
             branch.ContactEmail, branch.RoomCount, branch.BedCount, branch.CurrentPriceNet, branch.CurrentVatRatePercent,
             branch.CurrentEstimatedDurationMinutes, branch.PricingVersion, branch.PricingReady, branch.QuoteRequestedUtc,
-            branch.QuoteRejectedUtc, branch.QuoteRejectionReason, branch.Versions.ToArray());
+            branch.QuoteRejectedUtc, branch.QuoteRejectionReason, branch.Versions.ToArray(), branch.AreaSquareMeters);
     private static void ApplyProperty(Branch branch, int? rooms, int? beds, decimal? price, decimal? vat, int? duration, string? mode = null, DateOnly? effectiveFrom = null)
     {
         try

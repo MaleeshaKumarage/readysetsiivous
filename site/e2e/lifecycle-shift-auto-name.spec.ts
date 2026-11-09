@@ -3,8 +3,8 @@ import { selectDailyScheduleIfEmpty, setupAdminMocks, isShiftsRoute, shiftsRespo
 import { autoShiftName } from '../src/lib/shiftName';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
-const branch = { id: 'branch', companyId: 'company', name: 'AAA1', street: 'Kauppakatu 1', city: 'Imatra', roomCount: 2, bedCount: 3, isActive: true };
-const EXPECTED = 'Kauppakatu 1, Imatra | 2 H | 3 V | - Daily';
+const branch = { id: 'branch', companyId: 'company', name: 'AAA1', street: 'Kauppakatu 1', city: 'Imatra', areaSquareMeters: 45, roomCount: 2, bedCount: 3, isActive: true };
+const EXPECTED = 'Kauppakatu 1, Imatra | 45m2 | 2 H | 3 V | - Daily';
 
 test('Add shift has no Name field and creates the shift with a name built from the property and schedule', async ({ page }) => {
   await setupAdminMocks(page);
