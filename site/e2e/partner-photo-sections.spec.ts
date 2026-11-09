@@ -22,23 +22,41 @@ test('owner sets the photo sections once, and each new visit request shows them'
   await expect(page.getByText('Photos the cleaner must attach: Before, Keys, Balcony', { exact: true })).toBeVisible();
 });
 
-test('owner saves account details once and they are kept for the next visit', async ({ page }) => {
+test('owner sets general instructions once; each new visit request shows that they apply', async ({ page }) => {
   const backend = new PartnerFlowBackend({ priced: true });
   await prepareRolePage(page, backend, 'owner');
 
   await page.goto('/partner/');
   await page.getByRole('tab', { name: /^Settings/ }).click();
-  await page.getByLabel('Billing name').fill('Olivia Oy');
-  await page.getByLabel('Contact email').fill('olivia@example.test');
-  await page.getByLabel('Access instructions for the cleaner').fill('Key safe, code 4321');
+  await expect(page.getByText('Account details', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Billing name')).toHaveCount(0);
+  await page.getByLabel('General instructions', { exact: true }).fill('Use the side door. Key safe code 4321.');
   await page.getByRole('button', { name: 'Save photo sections', exact: true }).click();
   await expect(page.getByText('Photo sections saved. New visits will require them.', { exact: true })).toBeVisible();
-  expect(backend.account).toMatchObject({ billingName: 'Olivia Oy', contactEmail: 'olivia@example.test', accessInstructions: 'Key safe, code 4321' });
+  expect(backend.generalInstructions).toBe('Use the side door. Key safe code 4321.');
 
   await page.reload();
   await page.getByRole('tab', { name: /^Settings/ }).click();
-  await expect(page.getByLabel('Billing name')).toHaveValue('Olivia Oy');
-  await expect(page.getByLabel('Access instructions for the cleaner')).toHaveValue('Key safe, code 4321');
+  await expect(page.getByRole('textbox', { name: 'General instructions', exact: true })).toHaveValue('Use the side door. Key safe code 4321.');
+
+  await page.getByRole('tab', { name: /^Properties/ }).click();
+  await page.getByRole('button', { name: 'Request cleaning', exact: true }).click();
+  await expect(page.getByText('The cleaner reads your general instructions first, then the instructions for this visit.', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Cleaning instructions', { exact: true })).toHaveValue('');
+});
+
+test('saving photo sections keeps the stored account details', async ({ page }) => {
+  const backend = new PartnerFlowBackend({ priced: true });
+  backend.account = { billingName: 'Olivia Oy', contactEmail: 'olivia@example.test' };
+  await prepareRolePage(page, backend, 'owner');
+
+  await page.goto('/partner/');
+  await page.getByRole('tab', { name: /^Settings/ }).click();
+  await page.getByRole('button', { name: 'Add Keys', exact: true }).click();
+  await page.getByRole('button', { name: 'Save photo sections', exact: true }).click();
+  await expect(page.getByText('Photo sections saved. New visits will require them.', { exact: true })).toBeVisible();
+  expect(backend.photoLabels).toEqual(['Keys']);
+  expect(backend.account).toMatchObject({ billingName: 'Olivia Oy', contactEmail: 'olivia@example.test' });
 });
 
 test('a photo section cannot be listed twice, even with different capitals', async ({ page }) => {

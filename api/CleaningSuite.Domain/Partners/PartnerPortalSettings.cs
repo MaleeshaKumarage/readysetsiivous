@@ -12,9 +12,12 @@ public sealed class PartnerPortalSettings : BaseDocument
     public const int MaxPhotoLabelLength = 60;
     public const int MaxAccountFieldLength = 300;
     public const int MaxAccessInstructionsLength = 2000;
+    public const int MaxGeneralInstructionsLength = 2000;
 
     public List<string> PhotoLabels { get; set; } = new();
     public PartnerAccountDetails Account { get; set; } = new();
+    /// <summary>Instructions for every visit the company requests. Each visit's own instructions are appended after them.</summary>
+    public string? GeneralInstructions { get; set; }
 }
 
 /// <summary>Billing, contact and access details kept with the partner's visit setup.</summary>

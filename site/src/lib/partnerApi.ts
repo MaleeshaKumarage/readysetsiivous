@@ -5,7 +5,8 @@ export interface CleaningRequest { id: string; version: number; companyId: strin
 // One-time portal setup. Photo sections are the photos every cleaner must attach before a visit can end.
 // Account details: billing and invoice facts, a contact person, and how the cleaner gets in.
 export interface PartnerAccount { billingName?: string | null; invoiceAddress?: string | null; businessId?: string | null; invoiceReference?: string | null; contactName?: string | null; contactPhone?: string | null; contactEmail?: string | null; accessInstructions?: string | null }
-export interface PartnerSettings { photoLabels: string[]; account: PartnerAccount }
+// General instructions are read by the cleaner before every visit; a visit's own instructions are appended after them.
+export interface PartnerSettings { photoLabels: string[]; generalInstructions?: string | null; account?: PartnerAccount }
 // What the owner asks for on a cleaning request. Structured actions can be applied by staff; "Message" needs a reply.
 export type PartnerChangeAction = 'Message' | 'Reschedule' | 'Instructions' | 'Cancel';
 export interface PartnerRequestChangeInput { message: string; action: PartnerChangeAction; fromDate?: string; toDate?: string; exactStartLocalTime?: string | null; notes?: string | null }
@@ -43,7 +44,7 @@ export const partnerApi = {
   updateRequest: (id: string, body: RequestInput) => partnerSend<CleaningRequest>(`partner/requests/${id}`, 'PUT', body),
   cancel: (request: CleaningRequest, reason: string) => partnerSend<CleaningRequest>(`partner/requests/${request.id}/cancel`, 'POST', { version: request.version, reason }),
   settings: () => partnerSend<PartnerSettings>('partner/settings'),
-  saveSettings: (body: { photoLabels: string[]; account: PartnerAccount }) => partnerSend<PartnerSettings>('partner/settings', 'PUT', body),
+  saveSettings: (body: { photoLabels: string[]; generalInstructions: string }) => partnerSend<PartnerSettings>('partner/settings', 'PUT', body),
   requestChange: (id: string, body: PartnerRequestChangeInput) => partnerSend<PartnerChange>(`partner/requests/${id}/change-requests`, 'POST', body),
   shifts: () => partnerSend<PartnerShift[]>('partner/shifts'),
 };

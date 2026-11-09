@@ -52,6 +52,9 @@ export class PartnerFlowBackend {
   visits: Record<string, VisitSeed> = {};
   // The owner's one-time photo sections (see PartnerPortalSettings).
   photoLabels: string[] = [];
+  // General instructions the cleaner reads before each visit; a visit's own instructions are appended after them.
+  generalInstructions: string | null = null;
+  // Stored account details. The portal no longer edits them, but a save must not erase them.
   account: Record<string, string | null> = {};
   writes: WriteRecord[] = [];
 
@@ -228,14 +231,18 @@ export class PartnerFlowBackend {
       return this.requests.filter(item => item.companyId === company.id && item.linkedShiftId).map(item => ({ id: item.linkedShiftId, branchId: item.branchId, branchName: this.branchName(item.branchId), name: `Cleaning — ${this.branchName(item.branchId)}`, isActive: Boolean(this.shiftActive[item.linkedShiftId!]), schedule: { type: 'OnCallFlexible' }, validFrom: item.fromDate, validUntil: item.toDate }));
     }
     // Mirrors PartnerService.Settings / UpdateSettings: names are trimmed, non-empty and unique ignoring case.
-    if (method === 'GET' && path === 'settings') return { photoLabels: this.photoLabels, account: this.account };
+    if (method === 'GET' && path === 'settings') return { photoLabels: this.photoLabels, generalInstructions: this.generalInstructions, account: this.account };
     if (method === 'PUT' && path === 'settings') {
       const labels: string[] = (body?.photoLabels ?? []).map((label: string) => label.trim());
       if (labels.some(label => label.length === 0)) throw new ApiError(400, 'Each photo section needs a name.');
       if (new Set(labels.map(label => label.toLowerCase())).size !== labels.length) throw new ApiError(400, 'Each photo section can only be listed once.');
+      const general = typeof body?.generalInstructions === 'string' ? body.generalInstructions.trim() : '';
+      if (general.length > 2000) throw new ApiError(400, 'Use at most 2000 characters for the general instructions.');
       this.photoLabels = labels;
-      this.account = body?.account ?? {};
-      return { photoLabels: labels, account: this.account };
+      this.generalInstructions = general || null;
+      // Mirrors the server: a save without account details keeps the stored ones.
+      if (body?.account !== undefined) this.account = body.account ?? {};
+      return { photoLabels: labels, generalInstructions: this.generalInstructions, account: this.account };
     }
     match = is(path, /^requests\/([^/]+)\/completion$/);
     if (method === 'GET' && match) return this.completion(match[1], company.id);
