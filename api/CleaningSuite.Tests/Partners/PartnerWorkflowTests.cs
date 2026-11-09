@@ -237,6 +237,28 @@ public class PartnerWorkflowTests
     }
 
     [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Accepted_partner_visit_carries_the_company_quality_cycle_template()
+    {
+        using var fixture = await Fixture.Create(); PartnerRequestDto offer;
+        var template = QualityCycleTemplate.Create("Monthly checklist", ["Corridor", "Gym"], companyId: fixture.Company.Id);
+        fixture.Company.IsQualityCycleEnabled = true; fixture.Company.QualityCycleTemplateId = template.Id;
+        using (var writer = fixture.Store.LightweightSession(fixture.Tenant)) { writer.Store(template); writer.Store(fixture.Company); await writer.SaveChangesAsync(); }
+        using (var session = fixture.Session())
+        {
+            var service = fixture.Service(session);
+            var request = await service.Create(fixture.Partner.Id, new(Guid.NewGuid(), fixture.Branch.Id, Fixture.Day, Fixture.Day.AddDays(1)), default);
+            offer = await service.Offer(fixture.Admin.Id, request.Id, new(request.Version, fixture.Cleaner.Id), default);
+        }
+        PartnerRequestDto accepted;
+        using (var session = fixture.Session())
+            accepted = await fixture.Service(session).Accept(fixture.Cleaner.Id, offer.OfferId!.Value, new(offer.Version, null), default);
+        Assert.Equal("Accepted", accepted.Status);
+        using var reader = fixture.Store.QuerySession(fixture.Tenant);
+        var shift = await reader.LoadAsync<Shift>(accepted.LinkedShiftId!.Value);
+        Assert.Equal(template.Id, shift!.QualityCycleTemplateId);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
     public async Task Automatic_offer_without_a_time_is_a_flexible_visit_across_the_requested_window()
     {
         using var fixture = await Fixture.Create();

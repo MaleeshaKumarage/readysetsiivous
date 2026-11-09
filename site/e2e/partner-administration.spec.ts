@@ -83,3 +83,41 @@ test('partner employee requires one active partner-enabled company and can be re
   await dialog.getByRole('button', { name: 'Save changes', exact: true }).click(); await expect(dialog).not.toBeVisible(); expect(writes).toHaveLength(3); expect(writes[2]).toMatchObject({ fields: { role: 'employee', partnerCompanyId: null }, isActive: true });
   await expect(row).not.toContainText('Second property owner'); await row.getByRole('button', { name: 'Edit', exact: true }).click(); await expect(dialog.getByLabel('Role', { exact: true })).toHaveValue('employee'); await expect(dialog.getByLabel(/^Partner company/)).toHaveCount(0);
 });
+
+test('quality cycle option requires a template and persists through create and edit', async ({ page }) => {
+  await setupAdminMocks(page);
+  const template = { id: 'template-monthly', title: 'Monthly checklist', description: null, items: ['Corridor'], companyId: null, branchId: null, isActive: true, createdUtc: '2026-11-01T00:00:00Z', updatedUtc: '2026-11-01T00:00:00Z' };
+  let company: any = null; const writes: any[] = [];
+  await page.route(/\/api\/v1\/admin\/quality-cycle\/templates(?:\?.*)?$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    return route.fulfill({ headers, json: [template] });
+  });
+  await page.route(/\/api\/v1\/admin\/companies(?:\/[^/?]+)?(?:\?.*)?$/, route => {
+    const req = route.request();
+    if (req.method() === 'OPTIONS') return route.fulfill({ headers });
+    if (req.method() === 'GET') return route.fulfill({ headers, json: { items: company ? [company] : [], total: company ? 1 : 0 } });
+    const body = req.postDataJSON(); writes.push({ method: req.method(), body });
+    company = { ...initialCompany, ...body }; return route.fulfill({ headers, json: company });
+  });
+  await page.goto('/admin/companies/'); await page.getByRole('button', { name: 'Add company', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Quality cycle', { exact: true })).not.toBeChecked();
+  await expect(dialog.getByLabel('Quality cycle template')).toHaveCount(0);
+  await dialog.getByLabel('Business ID').fill(initialCompany.businessId); await dialog.getByLabel(/^Name/).fill(initialCompany.name);
+  await dialog.getByLabel('Enable partner access').check();
+  await dialog.getByLabel('Quality cycle', { exact: true }).check();
+  await expect(dialog.getByLabel('Quality cycle template')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Create company' }).click();
+  await expect(dialog.getByRole('alert')).toHaveText('Choose a quality cycle template.');
+  expect(writes).toHaveLength(0);
+  await dialog.getByLabel('Quality cycle template').click(); await page.getByRole('option', { name: 'Monthly checklist' }).click();
+  await dialog.getByRole('button', { name: 'Create company' }).click();
+  await expect(dialog).not.toBeVisible();
+  expect(writes[0]).toMatchObject({ method: 'POST', body: { isPartnerEnabled: true, isQualityCycleEnabled: true, qualityCycleTemplateId: template.id } });
+  await page.getByRole('row').filter({ has: page.getByRole('cell', { name: initialCompany.name, exact: true }) }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(dialog.getByLabel('Quality cycle', { exact: true })).toBeChecked();
+  await expect(dialog.getByLabel('Quality cycle template')).toHaveValue('Monthly checklist');
+  await dialog.getByLabel('Quality cycle', { exact: true }).uncheck(); await dialog.getByRole('button', { name: 'Save changes' }).click();
+  await expect(dialog).not.toBeVisible();
+  expect(writes[1]).toMatchObject({ method: 'PUT', body: { id: initialCompany.id, isQualityCycleEnabled: false, qualityCycleTemplateId: null } });
+});
