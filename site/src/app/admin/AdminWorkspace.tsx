@@ -127,7 +127,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  if (authed && access !== 'allowed') {
+  // Verification errors render even when the session check failed before authed was set.
+  if ((authed && access !== 'allowed') || access === 'error') {
     return (
       <MantineProvider theme={adminTheme} forceColorScheme="light">
         <Group justify="center" h="100vh" p="md">

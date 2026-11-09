@@ -148,8 +148,13 @@ test('admin pending counts, request ordering, statuses and quote links keep thei
   backend.addBranch({name:'Harbour studio',companyId:OWNER_COMPANY.id,quoteRequestedUtc:'2026-11-01T10:00:00Z'});
   await prepareRolePage(page,backend,'admin');
   await page.goto('/admin/partner-requests/');
-  await expect(page.getByText('The Requests badge counts requests needing arrangement; this list also includes offers awaiting a cleaner’s response.')).toBeVisible();
+  const requestsHelp = page.getByText('The Requests badge counts requests needing arrangement; this list also includes offers awaiting a cleaner’s response.');
+  await expect(requestsHelp).toBeVisible();
   await expect(page.getByRole('tab',{name:'Requests',exact:true})).toContainText('1');
+  await page.getByRole('tab',{name:'Assigned',exact:true}).click();
+  await expect(requestsHelp).toHaveCount(0);
+  await page.getByRole('tab',{name:'Requests',exact:true}).click();
+  await expect(requestsHelp).toBeVisible();
   await expect(page.locator('.partner-staff-status')).toHaveText(['Requested','Offered']);
   await expect(page.getByRole('status',{name:'Pending quote requests'})).toContainText('1 branch awaiting a quote');
   await expect(page.getByRole('link',{name:'Review quotes'})).toHaveAttribute('href','/admin/partner-requests/?tab=quotes');
