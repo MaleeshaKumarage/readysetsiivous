@@ -61,7 +61,6 @@ async function openAddShift(page: Page) {
 async function fillCommon(page: Page, dialog: Locator, name: string) {
   await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'AAA', exact: true }).click();
   await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'AAA1', exact: true }).click();
-  await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill(name);
 }
 
 async function chooseOneTime(page: Page, dialog: Locator) {
@@ -128,7 +127,6 @@ test('date, start and end errors block the save and keep the draft', async ({ pa
   await expect(dialog.getByText('End time must be after start time.', { exact: true })).toBeVisible();
 
   expect(mock.posts).toHaveLength(0);
-  await expect(dialog.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Past visit');
   await expect(dialog.getByRole('textbox', { name: 'Date', exact: true })).toHaveValue('2026-10-01');
 });
 
@@ -164,7 +162,6 @@ test('a failed save keeps the draft and a retry creates the visit once', async (
 
   await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift', exact: true }).click();
   await expect(dialog.getByText('Synthetic failure', { exact: true }).first()).toBeVisible();
-  await expect(dialog.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Past visit');
   await expect(dialog.getByRole('textbox', { name: 'Date', exact: true })).toHaveValue('2026-10-01');
 
   const retry = dialog.getByRole('button', { name: 'Create shift', exact: true });

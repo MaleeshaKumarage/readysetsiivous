@@ -2,6 +2,8 @@ import { selectDailyScheduleIfEmpty } from './admin-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
 import { shiftAction } from './shift-actions';
+import { autoShiftName } from '../src/lib/shiftName';
+const FLOW_NAME = autoShiftName(undefined, 'Daily');
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const issuer = { companyName: 'Supplier', businessId: '123', companyAddress: { street: 'Street', postalCode: '00100', city: 'Helsinki', country: 'FI' }, email: 'supplier@example.test', phone: '', bankAccountIBAN: 'FI2112345600000785', bankBic: 'NDEAFIHH', paymentTermsDays: 14, defaultVatRatePercent: 25.5 };
@@ -66,7 +68,6 @@ async function fillShiftDialog(page: Page) {
   const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
   await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'Methehe Oy', exact: true }).click();
   await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'Main branch', exact: true }).click();
-  await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Flow clean');
   return dialog;
 }
 
@@ -87,10 +88,9 @@ test('a refused shift save shows the reason in the dialog, keeps the values, and
   await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
   await expect(page.getByText('Shift not created').first()).toBeVisible();
   await expect(dialog.getByText('A shift named Flow clean already exists for this branch.')).toBeVisible();
-  await expect(dialog.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Flow clean');
-  await expect(page.getByRole('cell', { name: 'Flow clean', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('cell', { name: FLOW_NAME, exact: true })).toHaveCount(0);
   await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
-  await expect(page.getByRole('cell', { name: 'Flow clean', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: FLOW_NAME, exact: true })).toBeVisible();
   expect(state.creates).toBe(2);
 });
 
@@ -99,8 +99,8 @@ test('a failed assignment shows an assignment error, nothing is assigned, and a 
   await page.goto('/admin/shifts/');
   const dialog = await fillShiftDialog(page);
   await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
-  await expect(page.getByRole('cell', { name: 'Flow clean', exact: true })).toBeVisible();
-  await shiftAction(page, 'Flow clean', 'Employees');
+  await expect(page.getByRole('cell', { name: FLOW_NAME, exact: true })).toBeVisible();
+  await shiftAction(page, FLOW_NAME, 'Employees');
   await page.getByRole('textbox', { name: 'Assign employees', exact: true }).click();
   await page.getByRole('option', { name: 'Alice Cleaner', exact: true }).click();
   await page.getByRole('textbox', { name: 'Assign employees', exact: true }).press('Escape');

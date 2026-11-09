@@ -93,7 +93,7 @@ test('workspace Edit schedule opens the existing Edit shift dialog for that shif
   await expect(page.getByRole('dialog', { name: 'Manage — Workspace shift', exact: true })).toHaveCount(0);
   const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
   await expect(edit).toBeVisible();
-  await expect(edit.getByRole('textbox', { name: /^Name/ })).toHaveValue('Workspace shift');
+  await expect(edit.getByRole('textbox', { name: /^Name/ })).toHaveCount(0);
 });
 
 test('workspace Checklist template opens the existing template dialog for that shift', async ({ page }) => {
