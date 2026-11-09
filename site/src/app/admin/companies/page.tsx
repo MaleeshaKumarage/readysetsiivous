@@ -159,7 +159,8 @@ export default function CompaniesAdminPage() {
 
   // Company-scoped templates and shared ones; the server re-checks the scope on save.
   const loadQualityTemplates = async (companyId?: string) => {
-    try { setQualityTemplates(((await adminQualityCycle.listTemplates(companyId)) ?? []).filter(template => template.isActive)); }
+    // Company-wide templates only: a property-scoped template cannot be chosen for the whole company.
+    try { setQualityTemplates(((await adminQualityCycle.listTemplates(companyId)) ?? []).filter(template => template.isActive && !template.branchId)); }
     catch { setQualityTemplates([]); }
   };
 

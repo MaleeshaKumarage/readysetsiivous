@@ -88,9 +88,10 @@ test('quality cycle option requires a template and persists through create and e
   await setupAdminMocks(page);
   const template = { id: 'template-monthly', title: 'Monthly checklist', description: null, items: ['Corridor'], companyId: null, branchId: null, isActive: true, createdUtc: '2026-11-01T00:00:00Z', updatedUtc: '2026-11-01T00:00:00Z' };
   let company: any = null; const writes: any[] = [];
+  const propertyTemplate = { ...template, id: 'template-property', title: 'Property only checklist', branchId: 'branch-apartment' };
   await page.route(/\/api\/v1\/admin\/quality-cycle\/templates(?:\?.*)?$/, route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
-    return route.fulfill({ headers, json: [template] });
+    return route.fulfill({ headers, json: [template, propertyTemplate] });
   });
   await page.route(/\/api\/v1\/admin\/companies(?:\/[^/?]+)?(?:\?.*)?$/, route => {
     const req = route.request();
@@ -110,7 +111,8 @@ test('quality cycle option requires a template and persists through create and e
   await dialog.getByRole('button', { name: 'Create company' }).click();
   await expect(dialog.getByRole('alert')).toHaveText('Choose a quality cycle template.');
   expect(writes).toHaveLength(0);
-  await dialog.getByLabel('Quality cycle template').click(); await page.getByRole('option', { name: 'Monthly checklist' }).click();
+  await dialog.getByLabel('Quality cycle template').click(); await expect(page.getByRole('option', { name: 'Property only checklist' })).toHaveCount(0);
+  await page.getByRole('option', { name: 'Monthly checklist' }).click();
   await dialog.getByRole('button', { name: 'Create company' }).click();
   await expect(dialog).not.toBeVisible();
   expect(writes[0]).toMatchObject({ method: 'POST', body: { isPartnerEnabled: true, isQualityCycleEnabled: true, qualityCycleTemplateId: template.id } });
