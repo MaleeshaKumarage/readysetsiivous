@@ -475,6 +475,19 @@ export default function ShiftsAdminPage() {
     await loadOccurrences(shift);
   };
 
+  // Opens the clashing shift's visit list from an overlap refusal. The assignment dialog stays open if that shift
+  // cannot be loaded, so the admin keeps the cleaner and reason they had chosen.
+  const openClashingShift = async (shiftId: string, shiftName: string) => {
+    // adminGet resolves to null on a failed request instead of throwing, so a null shift is the failure case.
+    const clashing = await adminShifts.get(shiftId);
+    if (!clashing) {
+      showError(`${shiftName} could not be loaded. Retry, or find it in the shift list.`, 'Could not open shift');
+      return;
+    }
+    setAssigningVisit(null);
+    await openOccurrences(clashing, `Showing ${shiftName}. Move or remove the overlapping cleaner on that visit.`);
+  };
+
   const openOccurrenceEditor = (occurrence?: ShiftOccurrence, status = '1') => {
     setEditingOccurrence(occurrence ?? { startUtc: '', endUtc: '' });
     setOccurrenceStatus(occurrence?.status ? String(occurrence.status) : status);
@@ -678,7 +691,7 @@ export default function ShiftsAdminPage() {
 
       {assigningVisit && occurrenceShift && <VisitAssigneesDialog key={`${assigningVisit.exceptionId ?? assigningVisit.startUtc}`}
         shiftId={occurrenceShift.id} visit={assigningVisit} employees={employees} timeZone={timeZoneId}
-        onClose={() => setAssigningVisit(null)} onSaved={async () => { await loadOccurrences(); }} />}
+        onClose={() => setAssigningVisit(null)} onSaved={async () => { await loadOccurrences(); }} onOpenConflict={openClashingShift} />}
       <Modal opened={Boolean(editingOccurrence)} onClose={() => { if (!occurrenceSaving) setEditingOccurrence(null); }} closeButtonProps={{ disabled: occurrenceSaving }} closeOnEscape={!occurrenceSaving} closeOnClickOutside={!occurrenceSaving} title="Change occurrence">
         <Stack>
           <Select label="Action" value={occurrenceStatus} onChange={value => setOccurrenceStatus(value ?? '1')} data={OCCURRENCE_STATUSES}
