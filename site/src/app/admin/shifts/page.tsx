@@ -32,11 +32,10 @@ const SCHEDULE_TYPES = [
   { value: '1', label: 'Varied times by weekday' },
   { value: '2', label: 'Specific days' },
   { value: '3', label: 'Bi-weekly' },
+  { value: '4', label: 'On-call / flexible' },
   { value: '5', label: 'Monthly' },
   { value: '6', label: 'One-time' },
 ];
-// Legacy on-call shifts keep their type on edit; new shifts cannot choose it.
-const LEGACY_ON_CALL = { value: '4', label: 'On-call / flexible (legacy)' };
 
 const OCCURRENCE_STATUSES = [
   { value: '1', label: 'Move / change time' },
@@ -142,7 +141,7 @@ export default function ShiftsAdminPage() {
   const [name, setName] = useState('');
   const [validFrom, setValidFrom] = useState('');
   const [validUntil, setValidUntil] = useState('');
-  const [scheduleType, setScheduleType] = useState('0');
+  const [scheduleType, setScheduleType] = useState('');
   const [start, setStart] = useState('08:00');
   const [end, setEnd] = useState('17:00');
   const [weekDays, setWeekDays] = useState<string[]>([]);
@@ -288,7 +287,7 @@ export default function ShiftsAdminPage() {
   };
 
   const closeModal = () => {
-    setName(''); setNotes(''); setWeekDays([]); setCompanyId(null); setBranchId(null); setPriceFrom(null); setQualityCycleTemplateId(null); setScheduleType('0'); setStart('08:00'); setEnd('17:00'); setWeekParity('1'); setMonthlyDay(1); setOneTimeDate(''); setOneTimeStart('08:00'); setOneTimeEnd('17:00'); setDailyTimes({}); setEditingShift(null); setError(''); setModalOpen(false);
+    setName(''); setNotes(''); setWeekDays([]); setCompanyId(null); setBranchId(null); setPriceFrom(null); setQualityCycleTemplateId(null); setScheduleType(''); setStart('08:00'); setEnd('17:00'); setWeekParity('1'); setMonthlyDay(1); setOneTimeDate(''); setOneTimeStart('08:00'); setOneTimeEnd('17:00'); setDailyTimes({}); setEditingShift(null); setError(''); setModalOpen(false);
   };
 
   // A customer workspace link carries ?company= so the create form opens with that customer selected.
@@ -318,6 +317,7 @@ export default function ShiftsAdminPage() {
 
   const submit = async () => {
     if (submitting.current) return;
+    if (!scheduleType) { setError('Choose a schedule type.'); return; }
     const oneTime = scheduleType === '6';
     if (oneTime) {
       if (!oneTimeDate) { setError('One-time visit date is required.'); return; }
@@ -577,7 +577,7 @@ export default function ShiftsAdminPage() {
                     <Table.Td fw={500}>{s.name}</Table.Td>
                     <Table.Td>{scheduleLabel(s)}</Table.Td>
                     <Table.Td>{assignmentCounts ? (assignmentCounts[s.id] ?? 0) : assignments[s.id] ? assignments[s.id].filter(a => a.isActive).length : '—'}</Table.Td>
-                    <Table.Td><Text size="sm">{shiftView(s) === 'inactive' ? 'Inactive' : shiftView(s) === 'completed' ? 'Completed' : 'Active'}</Text></Table.Td>
+                    <Table.Td><Text size="sm">{shiftView(s) === 'inactive' ? 'Inactive' : shiftView(s) === 'completed' ? 'Completed' : s.schedule.type === 6 && s.schedule.oneTimeDate && s.schedule.oneTimeDate.slice(0, 10) < new Date().toLocaleDateString('en-CA', { timeZone: timeZoneId }) ? 'Past visit · check completion' : 'Active'}</Text></Table.Td>
                     <Table.Td>
                       <Group gap={6} wrap="nowrap">
                         <Button size="xs" variant="light" onClick={() => setWorkspaceId(s.id)}>Manage</Button>
@@ -749,7 +749,7 @@ export default function ShiftsAdminPage() {
             <TextInput label="Start date" type="date" required={!editingShift || Boolean(editingShift.validFrom)} value={validFrom} onChange={e => setValidFrom(e.target.value)} />
             <TextInput label="End date (optional)" type="date" min={validFrom || undefined} value={validUntil} onChange={e => setValidUntil(e.target.value)} />
           </Group>}
-          <Select label="Schedule" allowDeselect={false} data={scheduleType === '4' ? [...SCHEDULE_TYPES, LEGACY_ON_CALL] : SCHEDULE_TYPES} value={scheduleType} onChange={(v) => { if (v) setScheduleType(v); }} />
+          <Select label="Schedule" required withAsterisk={false} placeholder="Choose a schedule type" allowDeselect={false} data={SCHEDULE_TYPES} value={scheduleType || null} onChange={(v) => { if (v) setScheduleType(v); }} />
           {scheduleType === '4' && <Text size="sm">On-call is a reusable shift without scheduled dates. After creating it, enter the date, time and cleaner for a one-time visit. Only dated visits appear on calendars.</Text>}
 
           {scheduleType === '2' && (

@@ -152,10 +152,10 @@ public class WorkQueueRulesTests
         var pastUnassigned = Visit(start: now.AddDays(-1), employees: []);
         var futureUnassigned = Visit(start: now.AddDays(1), employees: []);
 
-        Assert.Equal(WorkQueueViews.Scheduled, WorkQueueRules.ShiftView(pastAssigned, [], now));
-        Assert.Equal("Not started", WorkQueueRules.ShiftLabel(pastAssigned, WorkQueueViews.Scheduled, now));
+        Assert.Equal(WorkQueueViews.NeedsAction, WorkQueueRules.ShiftView(pastAssigned, [], now));
+        Assert.Equal("Overdue · not started", WorkQueueRules.ShiftLabel(pastAssigned, WorkQueueViews.NeedsAction, now));
         Assert.Equal("Scheduled", WorkQueueRules.ShiftLabel(futureAssigned, WorkQueueViews.Scheduled, now));
-        Assert.Equal("Not started", WorkQueueRules.ShiftLabel(pastUnassigned, WorkQueueViews.Scheduled, now));
+        Assert.Equal("Overdue · not started", WorkQueueRules.ShiftLabel(pastUnassigned, WorkQueueViews.NeedsAction, now));
         Assert.Equal("Unassigned", WorkQueueRules.ShiftLabel(futureUnassigned, WorkQueueViews.NeedsAction, now));
     }
 
@@ -173,8 +173,8 @@ public class WorkQueueRulesTests
         var now = new DateTime(2026, 11, 4, 8, 0, 0, DateTimeKind.Utc);
         var missed = Visit(start: now.AddDays(-1), employees: []);
 
-        Assert.Equal(WorkQueueViews.Scheduled, WorkQueueRules.ShiftView(missed, [], now));
-        Assert.Equal("Not started", WorkQueueRules.ShiftLabel(missed, WorkQueueViews.Scheduled, now));
+        Assert.Equal(WorkQueueViews.NeedsAction, WorkQueueRules.ShiftView(missed, [], now));
+        Assert.Equal("Overdue · not started", WorkQueueRules.ShiftLabel(missed, WorkQueueViews.NeedsAction, now));
     }
 
     private static ShiftVisitRosterEntry Visit(DateTime start, IReadOnlyList<Guid> employees, bool cancelled = false) =>

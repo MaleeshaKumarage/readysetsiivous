@@ -11,6 +11,7 @@ using Xunit;
 
 namespace CleaningSuite.Tests.Shifts;
 
+[Collection("Database integration")]
 public class StaleAssignmentRepairDatabaseTests
 {
     private static Shift ShiftOf(bool active, Guid? partnerRequestId = null)
@@ -29,7 +30,7 @@ public class StaleAssignmentRepairDatabaseTests
         var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddCleaningMarten(connection, databaseSchemaName: "stale_repair_" + Guid.NewGuid().ToString("N"));
+        services.AddTestMarten(connection, databaseSchemaName: "stale_repair_" + Guid.NewGuid().ToString("N"));
         using var provider = services.BuildServiceProvider();
         var store = provider.GetRequiredService<IDocumentStore>();
         await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();

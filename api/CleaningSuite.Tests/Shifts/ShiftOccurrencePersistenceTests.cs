@@ -6,6 +6,7 @@ using Moq;
 
 namespace CleaningSuite.Tests.Shifts;
 
+[Collection("Database integration")]
 public class ShiftOccurrencePersistenceTests
 {
     [QualityCycle.QualityCycleDatabaseFact]
@@ -13,7 +14,7 @@ public class ShiftOccurrencePersistenceTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddCleaningMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!,
+        services.AddTestMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!,
             databaseSchemaName: "occurrences_" + Guid.NewGuid().ToString("N"));
         using var provider = services.BuildServiceProvider();
         var store = provider.GetRequiredService<IDocumentStore>();

@@ -1,3 +1,4 @@
+import { selectDailyScheduleIfEmpty } from './admin-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
 import { shiftAction } from './shift-actions';
@@ -71,7 +72,7 @@ test('admin creates a shift, assigns a cleaner, and invoices its unstarted visit
   await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'Methehe Oy', exact: true }).click();
   await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'Main branch', exact: true }).click();
   await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Flow clean');
-  await dialog.getByRole('button', { name: 'Create shift' }).click();
+  await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
   await expect(page.getByRole('cell', { name: 'Flow clean', exact: true })).toBeVisible();
   expect(state.shiftWrites).toHaveLength(1); expect(state.shiftWrites[0]).toMatchObject({ companyId: 'company', branchId: 'branch', name: 'Flow clean' });
 

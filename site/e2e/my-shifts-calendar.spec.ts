@@ -14,11 +14,11 @@ function shift(id: string, shiftName: string, startUtc: string, completed = fals
 async function calendar(page: Page) {
   await setupAdminMocks(page);
   await page.clock.install({ time: new Date('2026-10-17T12:00:00Z') });
-  const state = { failEarlier: false, holdPast: null as Promise<void> | null, calls: [] as { view: string; cursor: string | null }[] };
+  const state = { failEarlier: false, holdPast: null as Promise<void> | null, calls: [] as { view: string; cursor: string | null; from: string | null; to: string | null }[] };
   await page.route(/\/api\/v1\/me\/shifts\/calendar\?/, async route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
     const url = new URL(route.request().url()); const view = url.searchParams.get('view')!; const cursor = url.searchParams.get('cursor');
-    state.calls.push({ view, cursor });
+    state.calls.push({ view, cursor, from: url.searchParams.get('from'), to: url.searchParams.get('to') });
     if (view === 'past' && state.holdPast) await state.holdPast;
     if (view === 'past' && cursor && state.failEarlier) return route.fulfill({ status: 503, headers });
     const occurrences = view === 'today' ? [shift('today', 'Today cleaning', '2026-10-17T08:00:00Z')]
@@ -89,7 +89,7 @@ test('calendar loads earlier and later pages, retains history on failure, and re
   await page.getByRole('tab', { name: 'Future', exact: true }).click();
   await page.getByRole('button', { name: 'Load later shifts' }).click();
   await expect(page.getByTestId('shift-week-2026-11-16')).toBeVisible();
-  expect(state.calls.at(-1)).toEqual({ view: 'future', cursor: '2026-11-18' });
+  expect(state.calls.at(-1)).toEqual({ view: 'future', cursor: '2026-11-18', from: null, to: null });
 });
 
 test('future days and visits run nearest first even when the API returns them out of order', async ({ page }) => {
@@ -126,4 +126,17 @@ test('a delayed past response cannot replace the selected future calendar and ta
   await page.keyboard.press('Home');
   await expect(page.getByRole('tab', { name: 'Past', exact: true })).toBeFocused();
   await expect(page.getByTestId('shift-week-2026-10-12')).toBeVisible();
+});
+
+test('Past tab filters completed visits by from and to dates, and clearing returns to the default window', async ({ page }) => {
+  const state = await calendar(page); await page.goto('/me/shifts/');
+  await page.getByRole('tab', { name: 'Past', exact: true }).click();
+  await expect(page.getByTestId('shift-week-2026-10-12')).toBeVisible();
+  await page.getByLabel('From date', { exact: true }).fill('2026-10-10');
+  await page.getByLabel('To date', { exact: true }).fill('2026-10-16');
+  await expect.poll(() => state.calls.at(-1)).toEqual({ view: 'past', cursor: null, from: '2026-10-10', to: '2026-10-16' });
+  await expect(page.getByRole('button', { name: 'Load earlier shifts', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Clear dates', exact: true }).click();
+  await expect.poll(() => state.calls.at(-1)).toEqual({ view: 'past', cursor: null, from: null, to: null });
+  await expect(page.getByLabel('From date', { exact: true })).toHaveValue('');
 });

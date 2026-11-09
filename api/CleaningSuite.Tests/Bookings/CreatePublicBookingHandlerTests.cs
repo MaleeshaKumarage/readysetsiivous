@@ -12,6 +12,35 @@ namespace CleaningSuite.Tests.Bookings;
 
 public class CreatePublicBookingHandlerTests
 {
+    [Fact]
+    public async Task Lost_success_is_recovered_without_rechecking_price_or_reserving_again()
+    {
+        var handler = Handler();
+        var request = Request() with { IdempotencyKey = new string('A', 64) };
+        Booking? saved = null;
+        _bookings.Setup(x => x.SaveAsync(It.IsAny<Booking>(), It.IsAny<CancellationToken>()))
+            .Callback<Booking, CancellationToken>((b, _) => saved = b).Returns(Task.CompletedTask);
+        _bookings.Setup(x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid id, CancellationToken _) => saved?.Id == id ? saved : null);
+        var first = await handler.Handle(request, default);
+        _service.PriceNet = 999;
+        var recovered = await handler.Handle(request, default);
+        Assert.Equal(first, recovered);
+        _bookings.Verify(x => x.SaveAsync(It.IsAny<Booking>(), It.IsAny<CancellationToken>()), Times.Once);
+        _services.Verify(x => x.GetByIdAsync(_service.Id, It.IsAny<CancellationToken>()), Times.Once);
+        Assert.DoesNotContain(request.IdempotencyKey, System.Text.Json.JsonSerializer.Serialize(saved));
+        Assert.DoesNotContain(request.IdempotencyKey, request.ToString());
+        await Assert.ThrowsAsync<SlotConflictException>(() => handler.Handle(request with { CustomerName = "Changed" }, default));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("guessable")]
+    public async Task Invalid_recovery_keys_are_rejected_before_database_work(string key)
+    {
+        await Assert.ThrowsAsync<FluentValidation.ValidationException>(() => Handler().Handle(Request() with { IdempotencyKey = key }, default));
+        _bookings.Verify(x => x.BeginReservationAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
     private readonly Mock<IBookingRepository> _bookings = new();
     private readonly Mock<IServiceRepository> _services = new();
     private readonly Mock<ITenantProfileRepository> _profiles = new();
@@ -58,6 +87,30 @@ public class CreatePublicBookingHandlerTests
         var result = await Handler().Handle(Request() with { ExpectedPriceGross = 62.75m }, default);
         Assert.Equal(62.75m, result.PriceGross);
         Assert.Equal("EUR", result.Currency);
+    }
+
+    [Fact]
+    public async Task A_concurrent_duplicate_insert_for_the_same_key_returns_the_committed_booking()
+    {
+        var handler = Handler();
+        var request = Request() with { IdempotencyKey = new string('C', 64) };
+        Booking? committed = null;
+        var saves = 0;
+        _bookings.Setup(x => x.SaveAsync(It.IsAny<Booking>(), It.IsAny<CancellationToken>()))
+            .Returns<Booking, CancellationToken>((b, _) =>
+            {
+                saves++;
+                if (saves > 1) return Task.CompletedTask;
+                // Another request with the same key committed this booking first; our insert collides with it.
+                committed = b;
+                throw new PostgresException("Duplicate booking", "ERROR", "ERROR", PostgresErrorCodes.UniqueViolation);
+            });
+        _bookings.Setup(x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid id, CancellationToken _) => committed?.Id == id ? committed : null);
+        var result = await handler.Handle(request, default);
+        Assert.Equal(committed!.Id, result.BookingId);
+        Assert.Equal(committed.BookingNumber, result.BookingNumber);
+        Assert.Equal(1, saves);
     }
 
     [Fact]

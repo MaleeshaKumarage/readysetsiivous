@@ -102,7 +102,7 @@ public class GameSessionManagerTests
     }
 
     [Fact]
-    public async Task ReconnectAndLateDisconnectPreserveNewMembershipAndResetActionState()
+    public async Task ReconnectAndLateDisconnectPreserveNewMembershipAndPlayerQuota()
     {
         var clock = new Clock(); var sessions = Create(clock); var group = Guid.NewGuid(); var player = Guid.NewGuid();
         sessions.RegisterConnection(group, player, "old");
@@ -115,13 +115,14 @@ public class GameSessionManagerTests
             Assert.Equal(replacement, sessions.GetConnectionId(group, player));
             Assert.Null(sessions.GetMembership(previous));
             Assert.Throws<HubException>(() => sessions.CheckRate(previous));
-            sessions.CheckRate(replacement);
+            Assert.Throws<HubException>(() => sessions.CheckRate(replacement));
             clock.Advance(TimeSpan.FromDays(1));
+            for (var hit = 0; hit < 60; hit++) sessions.CheckRate(replacement);
             await using var lease = await sessions.AcquireAsync(group);
         }
         sessions.RemoveConnection("99");
         sessions.RegisterConnection(group, player, "old");
-        sessions.CheckRate("old");
+        Assert.Throws<HubException>(() => sessions.CheckRate("old"));
     }
 
     [Fact]

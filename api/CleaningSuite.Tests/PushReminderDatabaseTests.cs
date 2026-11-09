@@ -18,6 +18,7 @@ using Moq;
 
 namespace CleaningSuite.Tests;
 
+[Collection("Database integration")]
 public class PushReminderDatabaseTests
 {
     [QualityCycleDatabaseFact]
@@ -373,7 +374,7 @@ public class PushReminderDatabaseTests
         public static async Task<Fixture> Create()
         {
             var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
-            var services = new ServiceCollection(); services.AddLogging(); services.AddCleaningMarten(connection, databaseSchemaName: "push_reminder_" + Guid.NewGuid().ToString("N"));
+            var services = new ServiceCollection(); services.AddLogging(); services.AddTestMarten(connection, databaseSchemaName: "push_reminder_" + Guid.NewGuid().ToString("N"));
             var provider = services.BuildServiceProvider(); var store = provider.GetRequiredService<IDocumentStore>(); await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
             var f = new Fixture { Provider = provider, Store = store, Config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?> { ["ConnectionStrings:DefaultConnection"] = connection }).Build() };
             f.Device = new() { EmployeeId = f.Employee.Id, Subject = "subject", OptedInUtc = f.Now.UtcDateTime.AddDays(-2), CreatedUtc = f.Now.UtcDateTime.AddDays(-2) };
@@ -391,7 +392,13 @@ public class PushReminderDatabaseTests
         }
         public ShiftOccurrenceException AddExtra(DateTime start, DateTime end)
         { var visit = ShiftOccurrenceException.Create(Shift.Id, null, start, end, ShiftOccurrenceExceptionStatus.Extra, "test", Employee.Id); Exceptions.Add(visit); return visit; }
-        public TenantSessionFactory Session() => new(Store, Context);
+        private readonly System.Collections.Concurrent.ConcurrentBag<TenantSessionFactory> ownedSessions = [];
+        public TenantSessionFactory Session()
+        {
+            var session = new TenantSessionFactory(Store, Context);
+            ownedSessions.Add(session);
+            return session;
+        }
         public PushReminderScheduler Scheduler()
         {
             var session = Session(); var forms = new Mock<IQualityCycleRepository>();
@@ -401,6 +408,10 @@ public class PushReminderDatabaseTests
                 new PushOutbox(), new ShiftWorkReservation(Config, session), clock.Object,
                 Mock.Of<IPushSettings>(x => x.Available == true && x.KeyId == "key"));
         }
-        public void Dispose() => Provider.Dispose();
+        public void Dispose()
+        {
+            foreach (var session in ownedSessions) session.Dispose();
+            Provider.Dispose();
+        }
     }
 }

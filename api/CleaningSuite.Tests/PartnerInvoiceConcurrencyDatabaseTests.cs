@@ -17,13 +17,14 @@ using Microsoft.Extensions.DependencyInjection;
 using Moq;
 namespace CleaningSuite.Tests.Invoicing;
 
+[Collection("Database integration")]
 public class PartnerInvoiceConcurrencyDatabaseTests
 {
     [QualityCycleDatabaseFact]
     public async Task Concurrent_month_issue_cannot_bill_same_partner_visit_twice()
     {
         var connection=Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
-        var services=new ServiceCollection();services.AddLogging();services.AddCleaningMarten(connection,databaseSchemaName:"partner_invoice_"+Guid.NewGuid().ToString("N"));
+        var services=new ServiceCollection();services.AddLogging();services.AddTestMarten(connection,databaseSchemaName:"partner_invoice_"+Guid.NewGuid().ToString("N"));
         using var provider=services.BuildServiceProvider();var store=provider.GetRequiredService<IDocumentStore>();await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
         var tenantId="partner-invoice-"+Guid.NewGuid().ToString("N");var tenant=new Mock<ITenantContext>();tenant.SetupGet(t=>t.TenantId).Returns(tenantId);
         var company=Company.Create("1234567-8","Synthetic owner");company.IsPartnerEnabled=true;

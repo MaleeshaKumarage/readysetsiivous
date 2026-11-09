@@ -14,6 +14,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 namespace CleaningSuite.Tests.Partners;
 
+[Collection("Database integration")]
 public class PartnerNotificationDatabaseTests
 {
     [QualityCycleDatabaseFact]
@@ -149,7 +150,7 @@ public class PartnerNotificationDatabaseTests
         public static async Task<Fixture> Create(bool? emailEnabled = true)
         {
             var connection=Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
-            var services=new ServiceCollection();services.AddLogging();services.AddCleaningMarten(connection,databaseSchemaName:"partner_delivery_"+Guid.NewGuid().ToString("N"));
+            var services=new ServiceCollection();services.AddLogging();services.AddTestMarten(connection,databaseSchemaName:"partner_delivery_"+Guid.NewGuid().ToString("N"));
             var provider=services.BuildServiceProvider();var store=provider.GetRequiredService<IDocumentStore>();await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
             var f=new Fixture{Provider=provider,Store=store,Config=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"ConnectionStrings:DefaultConnection",connection},{"App:FrontendBaseUrl","https://example.test"},{"Notifications:PartnerEmail:Enabled",emailEnabled is null ? null : emailEnabled.Value ? "true" : "false"}}).Build()};
             f.Company.IsPartnerEnabled=true;f.Owner.PartnerCompanyId=f.Company.Id;var branch=Branch.Create(f.Company.Id,"Apartment");

@@ -101,6 +101,8 @@ export function VisitAssigneesDialog({ shiftId, visit, employees, timeZone, onCl
       {error && <Text role="alert" c="red">{error}</Text>}
       {conflicts.map(conflict => <Alert key={`${conflict.shiftId}-${conflict.startUtc}`} color="orange" title={`Overlaps ${conflict.shiftName}`}>
         <Text size="sm">{formatTime(conflict.startUtc)} to {formatEnd(conflict.endUtc)}. Remove the overlapping cleaner from that visit, then assign them here.</Text>
+        {conflict.recurrence && <Text size="sm">{conflict.recurrence}{conflict.openEnded ? ' · No end date; this assignment can conflict with future visits.' : ''}</Text>}
+        {selected.map(id => <Text key={id} component="a" td="underline" size="sm" display="block" href={`/admin/shifts/employee-schedule/?employee=${encodeURIComponent(id)}&date=${encodeURIComponent(new Date(conflict.startUtc).toLocaleDateString('en-CA', { timeZone }))}`}>Open assignments for {name(id)}</Text>)}
         <Group mt="sm" gap="xs">
           <Button size="xs" color="orange" disabled={busy} onClick={() => removeClash(conflict)}>Remove from {conflict.shiftName} and assign here</Button>
           <Button size="xs" variant="subtle" color="orange" disabled={busy} onClick={() => onOpenConflict(conflict.shiftId, conflict.shiftName, conflict.startUtc)}>View {conflict.shiftName} visits</Button>

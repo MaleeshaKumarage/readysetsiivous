@@ -10,13 +10,14 @@ using Microsoft.Extensions.DependencyInjection;
 using Moq;
 namespace CleaningSuite.Tests.Partners;
 
+[Collection("Database integration")]
 public class PartnerCompanyLifecycleDatabaseTests
 {
     [QualityCycleDatabaseFact]
     public async Task Company_and_branch_deactivation_wait_for_the_same_cross_replica_acceptance_reservation()
     {
         var connection=Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
-        var services=new ServiceCollection();services.AddLogging();services.AddCleaningMarten(connection,databaseSchemaName:"partner_lifecycle_"+Guid.NewGuid().ToString("N"));
+        var services=new ServiceCollection();services.AddLogging();services.AddTestMarten(connection,databaseSchemaName:"partner_lifecycle_"+Guid.NewGuid().ToString("N"));
         using var provider=services.BuildServiceProvider();var store=provider.GetRequiredService<IDocumentStore>();await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
         var config=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"ConnectionStrings:DefaultConnection",connection}}).Build();
         foreach(var companyCase in new[]{true,false})

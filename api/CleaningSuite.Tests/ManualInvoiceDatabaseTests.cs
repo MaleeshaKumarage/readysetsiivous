@@ -17,6 +17,7 @@ using Moq;
 
 namespace CleaningSuite.Tests.Invoicing;
 
+[Collection("Database integration")]
 public class ManualInvoiceDatabaseTests
 {
     [QualityCycleDatabaseFact]
@@ -24,7 +25,7 @@ public class ManualInvoiceDatabaseTests
     {
         var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
         var services = new ServiceCollection(); services.AddLogging();
-        services.AddCleaningMarten(connection, databaseSchemaName: "manual_invoice_race_" + Guid.NewGuid().ToString("N"));
+        services.AddTestMarten(connection, databaseSchemaName: "manual_invoice_race_" + Guid.NewGuid().ToString("N"));
         using var provider = services.BuildServiceProvider(); var store = provider.GetRequiredService<IDocumentStore>();
         await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
         var partition = "manual-" + Guid.NewGuid().ToString("N"); var company = Company.Create("1234567-8", "Customer");

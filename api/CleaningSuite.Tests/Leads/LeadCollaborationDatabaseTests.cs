@@ -9,11 +9,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 namespace CleaningSuite.Tests.Leads;
+[Collection("Database integration")]
 public class LeadCollaborationDatabaseTests
 {
     private static IConfiguration Config()=>new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{
         ["ConnectionStrings:DefaultConnection"]=Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING"),["App:FrontendBaseUrl"]="https://app.test"}).Build();
-    private static ServiceProvider Services() { var services=new ServiceCollection();services.AddLogging();services.AddCleaningMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!,databaseSchemaName:"lead_collab_"+Guid.NewGuid().ToString("N"));return services.BuildServiceProvider(); }
+    private static ServiceProvider Services() { var services=new ServiceCollection();services.AddLogging();services.AddTestMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!,databaseSchemaName:"lead_collab_"+Guid.NewGuid().ToString("N"));return services.BuildServiceProvider(); }
     private static TenantSessionFactory Tenant(IDocumentStore store,string slug="tenant-a") { var context=new Mock<ITenantContext>();context.SetupGet(x=>x.TenantId).Returns(slug);return new(store,context.Object); }
     [QualityCycle.QualityCycleDatabaseFact]
     public async Task Conversion_cancels_pending_work_atomically_retains_audio_and_inactive_delete_removes_history()
