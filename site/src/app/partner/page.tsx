@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { Building2, CalendarClock, MessageSquare, RefreshCw, Plus, ArrowRight, UserRound, LogOut, Settings } from 'lucide-react';
 import { Badge, Button, buttonClasses, Card, Dialog, Field, Input, Textarea, fontFamily, palette } from '@/ds';
 import { authTenant, initAuth, isAuthenticated, isPartner, isAdmin, isManager, login, logout } from '@/lib/auth';
-import { partnerApi, type CleaningRequest, type PartnerChangeAction, type PartnerCompletion, type PartnerIdentity, type PartnerShift, type PartnerChange } from '@/lib/partnerApi';
+import { partnerApi, type CleaningRequest, type PartnerAccount, type PartnerChangeAction, type PartnerCompletion, type PartnerIdentity, type PartnerShift, type PartnerChange } from '@/lib/partnerApi';
 import { partnerCopy, partnerLanguageKey, partnerMessage, partnerStatus, type PartnerLanguage } from '@/lib/partnerLocale';
 import type { Branch } from '@/lib/adminApi';
 import { QuoteRequestedBadge } from '@/components/QuoteRequests';
@@ -29,7 +29,7 @@ const theme = {
 } as CSSProperties;
 const base = partnerCopy.en;
 // Identifies one settings state: photo sections and general instructions.
-const settingsKey = (labels: string[], instructions: string) => JSON.stringify([labels, instructions]);
+const settingsKey = (labels: string[], instructions: string, access: string) => JSON.stringify([labels, instructions, access]);
 
 export default function PartnerPage() {
   const [language, setLanguage] = useState<PartnerLanguage>('en');
@@ -49,7 +49,9 @@ export default function PartnerPage() {
   const settingsSaved = useRef<string | null>(null), settingsDraft = useRef('');
   // General instructions the cleaner reads before every visit. Each visit's own instructions are appended after them.
   const [generalInstructions, setGeneralInstructions] = useState('');
-  useEffect(() => { settingsDraft.current = settingsKey(photoLabels, generalInstructions); }, [photoLabels, generalInstructions]);
+  // Access instructions (key-safe or door codes) the cleaner sees before a visit. The rest of the stored account is kept as loaded.
+  const [accessInstructions, setAccessInstructions] = useState(''), [account, setAccount] = useState<PartnerAccount>({});
+  useEffect(() => { settingsDraft.current = settingsKey(photoLabels, generalInstructions, accessInstructions); }, [photoLabels, generalInstructions, accessInstructions]);
   const [from, setFrom] = useState(''), [to, setTo] = useState(''), [exact, setExact] = useState(false), [time, setTime] = useState(''), [notes, setNotes] = useState('');
   const [change, setChange] = useState<{ kind: 'branch' | 'request'; id: string } | null>(null), [message, setMessage] = useState('');
   // Structured request changes: what the owner needs, and the proposed dates, time or instructions.
@@ -93,11 +95,12 @@ export default function PartnerPage() {
       partnerApi.settings()
         .then(photoSettings => {
           if (attempt !== generation.current) return;
-          const labels = photoSettings.photoLabels ?? [], instructions = photoSettings.generalInstructions ?? '';
+          const labels = photoSettings.photoLabels ?? [], instructions = photoSettings.generalInstructions ?? '', stored = photoSettings.account ?? {};
+          const access = stored.accessInstructions ?? '';
           // Unsaved edits win over a reload. Before any load or save, the form is compared with the empty defaults.
-          if (settingsDraft.current === (settingsSaved.current ?? settingsKey([], ''))) {
-            setPhotoLabels(labels); setGeneralInstructions(instructions);
-            settingsSaved.current = settingsDraft.current = settingsKey(labels, instructions);
+          if (settingsDraft.current === (settingsSaved.current ?? settingsKey([], '', ''))) {
+            setPhotoLabels(labels); setGeneralInstructions(instructions); setAccessInstructions(access); setAccount(stored);
+            settingsSaved.current = settingsDraft.current = settingsKey(labels, instructions, access);
           }
           setSettingsReady(true); setSettingsFailed(false);
         })
@@ -255,7 +258,7 @@ export default function PartnerPage() {
           {tab === 'Settings' && <section className="partner-section">
             <div className="partner-section-heading"><div><h2>{t.visitPhotoSettings}</h2><p>{t.visitPhotoSettingsHint}</p></div></div>
             <Card className="partner-surface partner-settings">
-              <form className="partner-form-grid" onSubmit={event => { event.preventDefault(); if (!settingsReady) return; void act(async () => { const saved = await partnerApi.saveSettings({ photoLabels, generalInstructions }); setPhotoLabels(saved.photoLabels); setGeneralInstructions(saved.generalInstructions ?? ''); settingsSaved.current = settingsDraft.current = settingsKey(saved.photoLabels, saved.generalInstructions ?? ''); }, base.photoSectionsSaved); }}>
+              <form className="partner-form-grid" onSubmit={event => { event.preventDefault(); if (!settingsReady) return; void act(async () => { const saved = await partnerApi.saveSettings({ photoLabels, generalInstructions, account: { ...account, accessInstructions: accessInstructions.trim() || null } }); const savedAccess = saved.account?.accessInstructions ?? ''; setPhotoLabels(saved.photoLabels); setGeneralInstructions(saved.generalInstructions ?? ''); setAccessInstructions(savedAccess); setAccount(saved.account ?? {}); settingsSaved.current = settingsDraft.current = settingsKey(saved.photoLabels, saved.generalInstructions ?? '', savedAccess); }, base.photoSectionsSaved); }}>
                 {settingsFailed && <p role="alert" className="partner-alert partner-alert-error partner-form-wide">{t.settingsLoadFailed}</p>}
                 <div className="partner-form-wide">
                   {!photoLabels.length && <p className="partner-muted">{t.noPhotoSections}</p>}
@@ -265,6 +268,8 @@ export default function PartnerPage() {
                 <Field label={t.photoSectionName} className="partner-form-wide"><Input className="partner-field" value={newPhotoLabel} maxLength={60} onChange={event => setNewPhotoLabel(event.target.value)} /></Field>
                 <p className="partner-muted partner-form-wide">{t.generalInstructionsHint}</p>
                 <Field label={t.generalInstructions} className="partner-form-wide"><Textarea className="partner-field" maxLength={2000} value={generalInstructions} onChange={event => setGeneralInstructions(event.target.value)} /></Field>
+                <p className="partner-muted partner-form-wide">{t.accessInstructionsHint}</p>
+                <Field label={t.accessInstructions} className="partner-form-wide"><Textarea className="partner-field" maxLength={2000} value={accessInstructions} onChange={event => setAccessInstructions(event.target.value)} /></Field>
                 <div className="partner-form-actions">
                   <Button type="button" variant="outline" className="partner-secondary" disabled={busy || !newPhotoLabel.trim() || photoLabels.length >= 10 || photoLabels.some(label => label.toLowerCase() === newPhotoLabel.trim().toLowerCase())} onClick={() => { setPhotoLabels(current => [...current, newPhotoLabel.trim()]); setNewPhotoLabel(''); }}>{t.addPhotoSection}</Button>
                   <Button type="submit" disabled={busy || !settingsReady}>{t.savePhotoSections}</Button>

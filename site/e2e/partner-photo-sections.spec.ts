@@ -108,3 +108,24 @@ test('unsaved general instructions survive a refresh of the portal', async ({ pa
   await expect(page.getByRole('textbox', { name: 'General instructions', exact: true })).toHaveValue('Typed but not saved yet');
   expect(backend.generalInstructions).toBe('Stored general text');
 });
+
+test('owner sets access instructions, and clearing them removes them for the cleaner', async ({ page }) => {
+  const backend = new PartnerFlowBackend({ priced: true });
+  await prepareRolePage(page, backend, 'owner');
+
+  await page.goto('/partner/');
+  await page.getByRole('tab', { name: /^Settings/ }).click();
+  await page.getByRole('textbox', { name: 'Access instructions for the cleaner', exact: true }).fill('Key safe 4321');
+  await page.getByRole('button', { name: 'Save photo sections', exact: true }).click();
+  await expect(page.getByText('Photo sections saved. New visits will require them.', { exact: true })).toBeVisible();
+  expect(backend.account.accessInstructions).toBe('Key safe 4321');
+
+  await page.reload();
+  await page.getByRole('tab', { name: /^Settings/ }).click();
+  await expect(page.getByRole('textbox', { name: 'Access instructions for the cleaner', exact: true })).toHaveValue('Key safe 4321');
+
+  await page.getByRole('textbox', { name: 'Access instructions for the cleaner', exact: true }).fill('');
+  await page.getByRole('button', { name: 'Save photo sections', exact: true }).click();
+  await expect(page.getByText('Photo sections saved. New visits will require them.', { exact: true })).toBeVisible();
+  expect(backend.account.accessInstructions).toBeFalsy();
+});

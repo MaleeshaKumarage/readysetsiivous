@@ -665,6 +665,19 @@ public class PartnerWorkflowTests
         }
     }
 
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Clearing_access_instructions_in_settings_removes_them_and_keeps_other_account_details()
+    {
+        using var fixture = await Fixture.Create();
+        using var session = fixture.Session();
+        var service = fixture.Service(session);
+        await service.UpdateSettings(fixture.Partner.Id, new PartnerSettingsInput([], new PartnerAccountDetails { AccessInstructions = "Key safe 4321", BillingName = "Olivia Oy" }), default);
+        var cleared = await service.UpdateSettings(fixture.Partner.Id, new PartnerSettingsInput([], new PartnerAccountDetails { AccessInstructions = "   ", BillingName = "Olivia Oy" }), default);
+        Assert.Null(cleared.Account.AccessInstructions);
+        Assert.Equal("Olivia Oy", cleared.Account.BillingName);
+        Assert.Null((await service.Settings(fixture.Partner.Id, default)).Account.AccessInstructions);
+    }
+
     private sealed class Fixture : IDisposable
     {
         public static DateOnly Day => new(2026, 11, 10);
