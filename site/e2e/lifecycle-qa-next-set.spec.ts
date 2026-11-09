@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { setupAdminMocks } from './admin-helpers';
+import { setupAdminMocks, shiftsResponse } from './admin-helpers';
 import { shiftActionAt } from './shift-actions';
 import type { MyShiftOccurrence } from '../src/lib/meApi';
 
@@ -26,13 +26,13 @@ test('shift list uses one time format for every schedule type and shows monthly 
   await page.route(/\/api\/v1\/admin\//, route => {
     const path = new URL(route.request().url()).pathname;
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
-    const json = path.endsWith('/shifts') ? [
+    const json = (path.endsWith('/shifts') || path.endsWith('/shifts/page')) ? [
       { id: 'daily', name: 'Daily shift', schedule: { type: 0, dailyStart: '08:00:00', dailyEnd: '17:00:00' }, isActive: true },
       { id: 'monthly', name: 'Monthly shift', schedule: { type: 5, monthlyDay: 15, monthlyStart: '13:00:00', monthlyEnd: '14:00:00' }, isActive: true },
     ] : path.endsWith('/assignment-counts') ? {} : path.endsWith('/companies') ? { items: [], total: 0 } : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [];
-    return route.fulfill({ status: 200, headers, json });
+    return route.fulfill({ status: 200, headers, json: path.endsWith('/shifts/page') ? shiftsResponse(json as any[], route.request().url()) : json });
   });
-  const listed = page.waitForResponse(r => /\/api\/v1\/admin\/shifts(\?|$)/.test(r.url()) && r.request().method() === 'GET', { timeout: 150000 });
+  const listed = page.waitForResponse(r => /\/api\/v1\/admin\/shifts(\/page)?(\?|$)/.test(r.url()) && r.request().method() === 'GET', { timeout: 150000 });
   await page.goto('/admin/shifts/');
   await listed;
   await expect(page.getByText('Daily 08:00–17:00', { exact: true })).toBeVisible({ timeout: 30000 });
@@ -52,11 +52,11 @@ test('assignee picker shows each employee email so similar names can be told apa
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
     if (path.endsWith('/assignments') && route.request().method() === 'GET') return route.fulfill({ status: 200, headers, json: [] });
     if (path.endsWith('/assignment-counts')) return route.fulfill({ status: 200, headers, json: {} });
-    const json = path.endsWith('/shifts') ? [{ id: 'one', name: 'Shift one', schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' }, isActive: true }]
+    const json = (path.endsWith('/shifts') || path.endsWith('/shifts/page')) ? [{ id: 'one', name: 'Shift one', schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' }, isActive: true }]
       : path.endsWith('/employees') ? people : path.endsWith('/companies') ? { items: [], total: 0 } : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [];
-    return route.fulfill({ status: 200, headers, json });
+    return route.fulfill({ status: 200, headers, json: path.endsWith('/shifts/page') ? shiftsResponse(json as any[], route.request().url()) : json });
   });
-  const listed = page.waitForResponse(r => /\/api\/v1\/admin\/shifts(\?|$)/.test(r.url()) && r.request().method() === 'GET', { timeout: 150000 });
+  const listed = page.waitForResponse(r => /\/api\/v1\/admin\/shifts(\/page)?(\?|$)/.test(r.url()) && r.request().method() === 'GET', { timeout: 150000 });
   await page.goto('/admin/shifts/');
   await listed;
   await expect(page.getByRole('button', { name: /^More actions for / }).first()).toBeVisible({ timeout: 30000 });
@@ -112,13 +112,13 @@ test('weekly shifts show HH:mm times with no seconds for both day branches', asy
   await page.route(/\/api\/v1\/admin\//, route => {
     const path = new URL(route.request().url()).pathname;
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
-    const json = path.endsWith('/shifts') ? [
+    const json = (path.endsWith('/shifts') || path.endsWith('/shifts/page')) ? [
       { id: 'weekly-days', name: 'Weekly days', schedule: { type: 2, weeklyDays: [1, 3], weeklyStart: '08:00:00', weeklyEnd: '17:00:00' }, isActive: true },
       { id: 'weekly-one', name: 'Weekly one', schedule: { type: 2, weeklyDay: 5, weeklyStart: '09:00:00', weeklyEnd: '12:00:00' }, isActive: true },
     ] : path.endsWith('/assignment-counts') ? {} : path.endsWith('/companies') ? { items: [], total: 0 } : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [];
-    return route.fulfill({ status: 200, headers, json });
+    return route.fulfill({ status: 200, headers, json: path.endsWith('/shifts/page') ? shiftsResponse(json as any[], route.request().url()) : json });
   });
-  const listed = page.waitForResponse(r => /\/api\/v1\/admin\/shifts(\?|$)/.test(r.url()) && r.request().method() === 'GET', { timeout: 150000 });
+  const listed = page.waitForResponse(r => /\/api\/v1\/admin\/shifts(\/page)?(\?|$)/.test(r.url()) && r.request().method() === 'GET', { timeout: 150000 });
   await page.goto('/admin/shifts/');
   await listed;
   await expect(page.getByText('Monday, Wednesday 08:00–17:00', { exact: true })).toBeVisible({ timeout: 30000 });
@@ -169,12 +169,12 @@ test('one-time shifts show their date and HH:mm times with no seconds', async ({
   await page.route(/\/api\/v1\/admin\//, route => {
     const path = new URL(route.request().url()).pathname;
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
-    const json = path.endsWith('/shifts') ? [
+    const json = (path.endsWith('/shifts') || path.endsWith('/shifts/page')) ? [
       { id: 'one-time', name: 'One time', schedule: { type: 6, oneTimeDate: '2026-11-20', oneTimeStart: '09:30:00', oneTimeEnd: '11:00:00' }, isActive: true },
     ] : path.endsWith('/assignment-counts') ? {} : path.endsWith('/companies') ? { items: [], total: 0 } : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [];
-    return route.fulfill({ status: 200, headers, json });
+    return route.fulfill({ status: 200, headers, json: path.endsWith('/shifts/page') ? shiftsResponse(json as any[], route.request().url()) : json });
   });
-  const listed = page.waitForResponse(r => /\/api\/v1\/admin\/shifts(\?|$)/.test(r.url()) && r.request().method() === 'GET', { timeout: 150000 });
+  const listed = page.waitForResponse(r => /\/api\/v1\/admin\/shifts(\/page)?(\?|$)/.test(r.url()) && r.request().method() === 'GET', { timeout: 150000 });
   await page.goto('/admin/shifts/');
   await listed;
   await expect(page.getByText('One-time 2026-11-20 09:30–11:00', { exact: true })).toBeVisible({ timeout: 30000 });
