@@ -18,6 +18,7 @@ import { CompanyPicker } from '@/components/admin/CompanyPicker';
 import { LifecycleTabs, type LifecycleStatus } from '@/components/LifecycleTabs';
 import { ListPager, PAGE_SIZE } from '@/components/ListPager';
 import { ShiftWorkspace, scheduleLabel } from '@/components/admin/ShiftWorkspace';
+import { autoShiftName } from '@/lib/shiftName';
 
 // The price version in force today (or the earliest when all start later): the default billing price for a new shift.
 const defaultPriceVersion = (versions?: { effectiveFrom: string }[] | null) => {
@@ -327,7 +328,7 @@ export default function ShiftsAdminPage() {
       if ((!editingShift || editingShift.validFrom) && !validFrom) { setError('Shift start date is required.'); return; }
       if (validFrom && validUntil && validUntil < validFrom) { setError('End date must be on or after the start date.'); return; }
     }
-    if (!companyId || !branchId || !name.trim()) { setError('Company, branch and name are required.'); return; }
+    if (!companyId || !branchId) { setError('Company and branch are required.'); return; }
     if (scheduleType === '2' && weekDays.length === 0) { setError('Select at least one day.'); return; }
     if (scheduleType === '1' && (!weekDays.length || weekDays.some(day => !dailyTimes[day]?.start || !dailyTimes[day]?.end || dailyTimes[day].end <= dailyTimes[day].start))) { setError('Select at least one day and ensure each end time is after its start time.'); return; }
     if (scheduleType === '3' && weekDays.length === 0) { setError('Select a day.'); return; }
@@ -335,7 +336,9 @@ export default function ShiftsAdminPage() {
     const branchVersions = branches.find(b => b.id === branchId)?.priceVersions;
     const chosenPriceFrom = priceFrom && branchVersions?.some(v => v.effectiveFrom === priceFrom) ? priceFrom : defaultPriceVersion(branchVersions) ?? undefined;
     // A one-time visit is valid only on its date, so the validity dates mirror that date.
-    const fields = { companyId, branchId, name: name.trim(), schedule: buildSchedule(), notes: notes.trim() || undefined, isActive: editingShift?.isActive ?? true, validFrom: oneTime ? oneTimeDate : validFrom || undefined, validUntil: oneTime ? oneTimeDate : validUntil || undefined, qualityCycleTemplateId: qualityCycleTemplateId || undefined,
+    // Create names the shift from its property and schedule; editing keeps the stored name.
+    const shiftName = editingShift ? editingShift.name : autoShiftName(branches.find(b => b.id === branchId), SCHEDULE_TYPES.find(t => t.value === scheduleType)?.label ?? '');
+    const fields = { companyId, branchId, name: shiftName, schedule: buildSchedule(), notes: notes.trim() || undefined, isActive: editingShift?.isActive ?? true, validFrom: oneTime ? oneTimeDate : validFrom || undefined, validUntil: oneTime ? oneTimeDate : validUntil || undefined, qualityCycleTemplateId: qualityCycleTemplateId || undefined,
       // Creating a shift picks the branch price version it bills at; the default is the price in force today.
       priceEffectiveFrom: editingShift ? undefined : chosenPriceFrom };
     const result = await (editingShift ? adminShifts.update(editingShift.id, fields) : adminShifts.create(fields)).finally(() => { submitting.current = false; });
@@ -744,7 +747,6 @@ export default function ShiftsAdminPage() {
           <Select label="Branch" data={branches.filter(b => b.isActive !== false || b.id === editingShift?.branchId).map((b) => ({ value: b.id, label: `${b.name}${b.isActive === false ? ' (inactive)' : ''}` }))} value={branchId} onChange={v => { setBranchId(v); setPriceFrom(null); setQualityCycleTemplateId(null); }} searchable disabled={!companyId} />
           {!editingShift && (branches.find(b => b.id === branchId)?.priceVersions?.length ?? 0) > 1 && <Select label="Price version" description="The property price this shift is billed at. Defaults to the price in force today." allowDeselect={false} value={priceFrom && (branches.find(b => b.id === branchId)?.priceVersions ?? []).some(v => v.effectiveFrom === priceFrom) ? priceFrom : defaultPriceVersion(branches.find(b => b.id === branchId)?.priceVersions)} onChange={setPriceFrom}
             data={(branches.find(b => b.id === branchId)?.priceVersions ?? []).map(v => ({ value: v.effectiveFrom, label: `From ${v.effectiveFrom} · €${v.priceNet.toFixed(2)} excl. VAT` }))} />}
-          <TextInput label="Name" required value={name} onChange={(e) => setName(e.target.value)} />
           {scheduleType !== '6' && <Group grow>
             <TextInput label="Start date" type="date" required={!editingShift || Boolean(editingShift.validFrom)} value={validFrom} onChange={e => setValidFrom(e.target.value)} />
             <TextInput label="End date (optional)" type="date" min={validFrom || undefined} value={validUntil} onChange={e => setValidUntil(e.target.value)} />

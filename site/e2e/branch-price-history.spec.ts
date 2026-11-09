@@ -104,10 +104,9 @@ test('create shift lets the admin pick an older branch price version', async ({ 
   await expect(picker).toHaveValue('From 2020-06-01 · €120.00 excl. VAT');
   await picker.click(); await page.getByRole('option', { name: 'From 2020-01-01 · €100.00 excl. VAT', exact: true }).click();
 
-  await modal.getByRole('textbox', { name: /^Name\s*\*?$/ }).fill('Older price shift');
   await selectDailyScheduleIfEmpty(page); await modal.getByRole('button', { name: 'Create shift' }).click();
   await expect(page.getByRole('dialog', { name: 'Add shift' })).toHaveCount(0);
-  expect(created).toEqual([expect.objectContaining({ name: 'Older price shift', priceEffectiveFrom: '2020-01-01' })]);
+  expect(created).toEqual([expect.objectContaining({ priceEffectiveFrom: '2020-01-01' })]);
 });
 
 test('pricing dialog for a branch-linked shift shows its version and saves a different one', async ({ page }) => {
