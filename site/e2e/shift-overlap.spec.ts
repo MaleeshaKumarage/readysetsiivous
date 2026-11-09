@@ -121,3 +121,28 @@ test('a failed save shows the reason as a toast and keeps the dialog open to ret
   await expect(page.getByText('Assignments could not be saved. Your changes were kept; retry the save.').first()).toBeVisible();
   await expect(editor).toBeVisible();
 });
+
+test('overlap refusal on save shows the server message that names the clashing visit and keeps the editor open', async ({ page }) => {
+  await setup(page, []);
+  let saves = 0;
+  // Preview succeeds; the save is refused with the server's own wording (VisitAssignmentSafety.OverlapMessage).
+  await page.route(/\/visit-assignees$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    const body = route.request().postDataJSON() as { preview: boolean };
+    if (body.preview) return route.fulfill({ headers, json: { employeeIds: ['cleaner'], preview: true, message: 'Only this visit changes.' } });
+    saves++;
+    return route.fulfill({ status: 409, headers, json: {
+      title: 'Shift conflict',
+      detail: 'This cleaner already has a visit that overlaps the visit starting 2 Nov 2026 08:00. It clashes with "Evening deep clean", 2 Nov 2026 08:30 to 2 Nov 2026 10:30. No assignments were saved. Choose another cleaner or time, or remove the cleaner from the other visit first.',
+      conflicts: [{ shiftId: 'other', shiftName: 'Evening deep clean', startUtc: clashStart, endUtc: clashEnd }],
+    } });
+  });
+  const editor = await openAssignForMorningVisit(page, 'Cover the morning visit');
+  await editor.getByRole('button', { name: 'Preview assignment', exact: true }).click();
+  await expect(editor.getByText('Selected visit: Test Cleaner')).toBeVisible();
+  await editor.getByRole('button', { name: 'Save assignment', exact: true }).click();
+  await expect.poll(() => saves).toBe(1);
+  await expect(page.getByText(/It clashes with "Evening deep clean", 2 Nov 2026 08:30 to 2 Nov 2026 10:30\./).first()).toBeVisible();
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('button', { name: 'Save assignment', exact: true })).toBeVisible();
+});

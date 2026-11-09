@@ -167,7 +167,7 @@ test('manager account links to operations and sign out removes operational acces
   await page.route(/\/api\/v1\/me\/shifts(?:\/calendar)?(?:\?.*)?$/, route => route.fulfill({ status: 200, headers, json: { occurrences: [], timeZoneId: 'Europe/Helsinki', fromLocalDate: '2026-10-17', toLocalDate: '2026-10-18' } }));
   await page.getByRole('link', { name: 'My shifts', exact: true }).click();
   await expect(page).toHaveURL(/\/me\/shifts\/$/, { timeout: 15000 });
-  await expect(page.getByText('No shifts scheduled.')).toBeVisible();
+  await expect(page.getByText('No shifts today.')).toBeVisible();
   await page.goto('/manager/'); await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: 'Add shift' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expect(page.getByRole('button', { name: 'Add shift' })).toBeVisible();

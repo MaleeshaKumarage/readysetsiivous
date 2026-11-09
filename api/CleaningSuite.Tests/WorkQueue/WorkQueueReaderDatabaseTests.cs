@@ -373,6 +373,32 @@ public class WorkQueueReaderDatabaseTests
         Assert.Contains(scheduled.Items, item => item.Reference.Contains("Assigned daily") && item.StateLabel == "Scheduled");
     }
 
+    [QualityCycleDatabaseFact]
+    public async Task Deactivated_shift_future_visits_are_cancelled_and_never_need_action()
+    {
+        using var f = await Fixture.Create();
+        var company = new Company { Name = "Retired Co", BusinessId = "WQ-" + Guid.NewGuid().ToString("N")[..8], IsActive = true };
+        var schedule = new ShiftSchedule { Type = ShiftScheduleType.DailySameTime, DailyStart = new TimeSpan(8, 0, 0), DailyEnd = new TimeSpan(10, 0, 0) };
+        var live = Shift.Create(company.Id, Guid.NewGuid(), "Live daily", schedule, null, DateTime.UtcNow.Date.AddDays(3), null);
+        var retired = Shift.Create(company.Id, Guid.NewGuid(), "Retired daily", schedule, null, DateTime.UtcNow.Date.AddDays(3), null);
+        retired.Deactivate();
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(company); db.Store(live, retired);
+            await db.SaveChangesAsync();
+        }
+
+        using var session = f.Session();
+        var reader = Reader(f, session);
+        var needsAction = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.NeedsAction, "shift", null, 0, 200));
+        Assert.Contains(needsAction.Items, item => item.Reference.Contains("Live daily"));
+        Assert.DoesNotContain(needsAction.Items, item => item.Reference.Contains("Retired daily"));
+        var cancelled = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Cancelled, "shift", null, 0, 200));
+        Assert.NotEmpty(cancelled.Items);
+        Assert.All(cancelled.Items, item => Assert.Contains("Retired daily", item.Reference));
+        Assert.All(cancelled.Items, item => Assert.Equal("Cancelled", item.StateLabel));
+    }
+
     private sealed class Fixture : IDisposable
     {
         public required ServiceProvider Provider; public required IDocumentStore Store;

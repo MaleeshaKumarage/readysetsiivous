@@ -12,8 +12,11 @@
   Final storage-lifetime follow-up: 3 passed, zero fixture schemas remaining. Browser verification covers
   all 232 selected desktop/mobile cases across the final workflow and corrected manager navigation reruns.
   TypeScript, 2 frontend unit tests and the production build (53 exported pages) passed.
-- Next: review the PR and latest-head CI (PostgreSQL 16). PR #340 overlaps the shift formatting/inactive
-  queue changes, so reconcile those shared changes before merging both. No merge, production data repair,
+- PR [#357](https://github.com/MaleeshaKumarage/readysetsiivous/pull/357) is the review boundary. Main's
+  PR #340 was integrated after it merged during this task; shared overlap, formatting and queue changes
+  are retained. Post-integration: 70 backend checks passed with zero leftover fixture schemas; 114 browser
+  cases verified across the integration run and the focused cold-start rerun; TypeScript and production build passed.
+  Next: review latest-head CI (PostgreSQL 16). No PR merge, production data repair,
   credential/permission change or deployment was performed by this batch.
 
 Approved design: [design](../superpowers/specs/2026-11-02-field-service-workflows-design.md).

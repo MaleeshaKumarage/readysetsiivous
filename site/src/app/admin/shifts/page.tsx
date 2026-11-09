@@ -571,7 +571,7 @@ export default function ShiftsAdminPage() {
                           <MultiSelect
                             label="Assign employees"
                             placeholder="Select employees"
-                            data={employees.filter(e => e.isActive && !(assignments[s.id] ?? []).some(a => a.isActive && a.employeeId === e.id)).map((e) => ({ value: e.id, label: `${e.firstName} ${e.lastName}` }))}
+                            data={employees.filter(e => e.isActive && !(assignments[s.id] ?? []).some(a => a.isActive && a.employeeId === e.id)).map((e) => ({ value: e.id, label: `${e.firstName} ${e.lastName}${e.email ? ` (${e.email})` : ''}` }))}
                             value={assignSel}
                             onChange={setAssignSel}
                             style={{ flex: 1, minWidth: 200 }}

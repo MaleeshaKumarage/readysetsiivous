@@ -33,6 +33,8 @@ async function setupShifts(page: Page) {
 }
 
 test('schedule is explicit and on-call creation does not invent a daily visit', async ({ page }) => {
+  // This multi-step scenario may be the first request that compiles the admin route in Next dev.
+  test.setTimeout(60000);
   const writes = await setupShifts(page);
   await page.getByRole('button', { name: 'Add shift', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });

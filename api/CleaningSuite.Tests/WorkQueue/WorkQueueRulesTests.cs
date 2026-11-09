@@ -10,6 +10,21 @@ namespace CleaningSuite.Tests.WorkQueue;
 public class WorkQueueRulesTests
 {
     [Theory]
+    [InlineData(true, WorkQueueViews.NeedsAction, true, WorkQueueViews.NeedsAction)]
+    [InlineData(false, WorkQueueViews.NeedsAction, true, WorkQueueViews.Cancelled)]
+    [InlineData(false, WorkQueueViews.Scheduled, true, WorkQueueViews.Cancelled)]
+    [InlineData(false, WorkQueueViews.Scheduled, false, WorkQueueViews.Scheduled)]
+    [InlineData(false, WorkQueueViews.InProgress, true, WorkQueueViews.InProgress)]
+    [InlineData(false, WorkQueueViews.Completed, true, WorkQueueViews.Completed)]
+    public void Deactivated_shift_future_visits_are_cancelled_and_past_visits_keep_their_view(bool shiftIsActive, string view, bool future, string expected)
+    {
+        var now = new DateTime(2026, 11, 6, 9, 0, 0, DateTimeKind.Utc);
+        var start = future ? now.AddDays(1) : now.AddDays(-1);
+
+        Assert.Equal(expected, WorkQueueRules.ActiveShiftView(shiftIsActive, view, start, now));
+    }
+
+    [Theory]
     [InlineData(Booking.StatusNew, false, WorkQueueViews.NeedsAction, "New booking")]
     [InlineData(Booking.StatusConfirmed, false, WorkQueueViews.NeedsAction, "Unassigned")]
     [InlineData(Booking.StatusConfirmed, true, WorkQueueViews.Scheduled, "Confirmed")]

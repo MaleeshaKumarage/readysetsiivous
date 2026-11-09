@@ -174,13 +174,14 @@ public static class VisitAssignmentSafety
         var definitions = others.ToDictionary(x => x.Id);
         definitions[current.Id] = current;
         var conflicts = new List<ShiftConflictDetail>();
+        var otherName = other is null ? null : definitions.GetValueOrDefault(other.ShiftId)?.Name ?? "another shift";
         if (other is not null)
         {
             definitions.TryGetValue(other.ShiftId, out var definition);
             conflicts.Add(new ShiftConflictDetail(other.ShiftId, definition?.Name ?? "Another shift", other.Occurrence.StartUtc, other.Occurrence.EndUtc,
                 definition is null ? null : RecurrenceLabel(definition.Schedule), definition is { ValidUntil: null } && definition.Schedule.Type is not (ShiftScheduleType.OneTime or ShiftScheduleType.OnCallFlexible)));
         }
-        return new ShiftConflictException(OverlapMessage(visit, other, zone), conflicts);
+        return new ShiftConflictException(OverlapMessage(visit, other, otherName, zone), conflicts);
     }
 
     internal static string RecurrenceLabel(ShiftSchedule schedule) => schedule.Type switch
@@ -194,10 +195,10 @@ public static class VisitAssignmentSafety
         _ => "On-call visit"
     };
 
-    private static string OverlapMessage(ShiftVisitRosterEntry visit, ShiftVisitRosterEntry? other, TimeZoneInfo zone)
+    public static string OverlapMessage(ShiftVisitRosterEntry visit, ShiftVisitRosterEntry? other, string? otherName, TimeZoneInfo zone)
     {
         string Local(DateTime utc) => TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), zone).ToString("d MMM yyyy HH:mm", System.Globalization.CultureInfo.InvariantCulture);
-        var clash = other is null ? "" : $" It clashes with the visit from {Local(other.Occurrence.StartUtc)} to {Local(other.Occurrence.EndUtc)}.";
+        var clash = other is null ? "" : $" It clashes with \"{otherName}\", {Local(other.Occurrence.StartUtc)} to {Local(other.Occurrence.EndUtc)}.";
         return $"This cleaner already has a visit that overlaps the visit starting {Local(visit.Occurrence.StartUtc)}.{clash} No assignments were saved. Choose another cleaner or time, or remove the cleaner from the other visit first."; 
     }
 }

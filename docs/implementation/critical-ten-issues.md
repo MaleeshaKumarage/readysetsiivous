@@ -42,3 +42,15 @@ multi-replica verification run. Issue closure is left for review rather than aut
 
 CI uses PostgreSQL 16; its latest-head checks and review remain required before merge. Implementation,
 publication, merge and deployment remain separate states. Review branch: `fix/critical-ten-issues`.
+
+## Main integration
+
+PR [#357](https://github.com/MaleeshaKumarage/readysetsiivous/pull/357) integrates main `4a3c20f`
+(PR #340), which merged during this task. Conflict resolutions preserve both named overlaps and the
+recurrence metadata, the shared inactive-work rule and started/submitted evidence, upstream schedule
+formatting and biweekly times, and the updated empty-Today copy with synchronized manager navigation.
+
+Post-integration verification: 70 backend checks passed with zero fixture schemas remaining. The 114-case
+browser integration run passed 113 cases; the first admin create case exceeded cold dev compilation's
+startup budget, received an explicit scenario budget, and then passed on both projects (2/2). All 114
+integration cases have successful verification across these runs. TypeScript and the production static build passed.
