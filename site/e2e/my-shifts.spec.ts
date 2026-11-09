@@ -474,3 +474,12 @@ test('A01 preference focus refresh preserves manual offer drafts and an in-fligh
   await expect(page.getByLabel('Decline reason (optional)')).toHaveValue('Keep this draft');
   release(); await expect(page.getByText('No pending cleaning offers.', { exact: true })).toBeVisible();
 });
+
+test('general instructions and the visit instructions both reach the cleaner, with the line break kept', async ({ page }) => {
+  await setupWork(page, { future: true, instructions: 'Use the side door.\n\nAfter guest checkout, from 15:00.' });
+  await page.goto('/me/shifts/');
+  const instructions = page.getByRole('region', { name: 'Visit instructions' });
+  await expect(instructions).toContainText('Use the side door.');
+  await expect(instructions).toContainText('After guest checkout, from 15:00.');
+  await expect(instructions.locator('p.whitespace-pre-wrap')).toHaveText('Use the side door.\n\nAfter guest checkout, from 15:00.');
+});

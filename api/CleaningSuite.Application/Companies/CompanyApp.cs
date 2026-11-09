@@ -158,13 +158,17 @@ public class CompanyHandlers
     internal static async Task ApplyQualityCycleAsync(Company company, bool enabled, Guid? templateId, IQualityCycleRepository? templates, CancellationToken ct)
     {
         if (!enabled) { company.IsQualityCycleEnabled = false; company.QualityCycleTemplateId = null; return; }
+        // Quality cycle belongs to partner companies: their company-wide template covers every property they request visits for.
+        if (!company.IsPartnerEnabled)
+            throw new ValidationException([new FluentValidation.Results.ValidationFailure("IsQualityCycleEnabled", "Quality cycle is available for partner companies only. Turn on partner access first.")]);
         if (templateId is not Guid id)
             throw new ValidationException([new FluentValidation.Results.ValidationFailure("QualityCycleTemplateId", "Choose a quality cycle template.")]);
         if (templates is not null)
         {
             var template = await templates.GetTemplateAsync(id, ct);
-            if (template is null || !template.IsActive || (template.CompanyId.HasValue && template.CompanyId != company.Id))
-                throw new ValidationException([new FluentValidation.Results.ValidationFailure("QualityCycleTemplateId", "Choose an active quality cycle template for this company.")]);
+            // Company-level choice: branch-scoped templates would otherwise reach visits at other properties.
+            if (template is null || !template.IsActive || template.BranchId.HasValue || (template.CompanyId.HasValue && template.CompanyId != company.Id))
+                throw new ValidationException([new FluentValidation.Results.ValidationFailure("QualityCycleTemplateId", "Choose an active company-wide quality cycle template for this company.")]);
         }
         company.IsQualityCycleEnabled = true; company.QualityCycleTemplateId = id;
     }
@@ -222,7 +226,12 @@ public class CompanyHandlers
                 request.Notes,
                 request.IsActive);
 
-            if (request.IsPartnerEnabled.HasValue) company.IsPartnerEnabled = request.IsPartnerEnabled.Value;
+            if (request.IsPartnerEnabled.HasValue)
+            {
+                company.IsPartnerEnabled = request.IsPartnerEnabled.Value;
+                // Turning partner access off also turns the company's quality cycle off.
+                if (!company.IsPartnerEnabled) { company.IsQualityCycleEnabled = false; company.QualityCycleTemplateId = null; }
+            }
             // Absent (null) keeps the saved quality-cycle choice, so older clients that omit these fields do not clear it.
             if (request.IsQualityCycleEnabled.HasValue)
                 await ApplyQualityCycleAsync(company, request.IsQualityCycleEnabled.Value, request.QualityCycleTemplateId ?? company.QualityCycleTemplateId, _qualityCycles, ct);

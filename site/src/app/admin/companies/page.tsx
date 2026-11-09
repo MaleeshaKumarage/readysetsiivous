@@ -159,7 +159,8 @@ export default function CompaniesAdminPage() {
 
   // Company-scoped templates and shared ones; the server re-checks the scope on save.
   const loadQualityTemplates = async (companyId?: string) => {
-    try { setQualityTemplates(((await adminQualityCycle.listTemplates(companyId)) ?? []).filter(template => template.isActive)); }
+    // Company-wide templates only: a property-scoped template cannot be chosen for the whole company.
+    try { setQualityTemplates(((await adminQualityCycle.listTemplates(companyId)) ?? []).filter(template => template.isActive && !template.branchId)); }
     catch { setQualityTemplates([]); }
   };
 
@@ -453,9 +454,11 @@ export default function CompaniesAdminPage() {
 
       <Modal opened={modalOpen} onClose={() => { setModalOpen(false); setEditingCompany(null); }} title={editingCompany ? 'Edit company' : 'Add company'} radius="md">
         <Stack gap="sm">
-          <Checkbox label="Enable partner access" checked={form.isPartnerEnabled} onChange={event => { const checked = event.currentTarget.checked; setForm(current => ({ ...current, isPartnerEnabled: checked })); }} description="Partners linked to this company can access its properties and request cleanings. Disabling this removes their portal access." />
+          <Checkbox label="Enable partner access" checked={form.isPartnerEnabled} onChange={event => { const checked = event.currentTarget.checked; setForm(current => ({ ...current, isPartnerEnabled: checked, ...(checked ? {} : { isQualityCycle: false, qualityCycleTemplateId: '' }) })); }} description="Partners linked to this company can access its properties and request cleanings. Disabling this removes their portal access." />
+          {form.isPartnerEnabled && <>
           <Checkbox label="Quality cycle" checked={form.isQualityCycle} onChange={event => { const checked = event.currentTarget.checked; setForm(current => ({ ...current, isQualityCycle: checked })); }} description="Every partner cleaning request accepted for this company gets the quality cycle checklist. Staff cover it through My shifts like a normal cleaning." />
           {form.isQualityCycle && <Select label="Quality cycle template" required searchable data={qualityTemplates.map(template => ({ value: template.id, label: template.title }))} value={form.qualityCycleTemplateId || null} onChange={value => setForm(current => ({ ...current, qualityCycleTemplateId: value ?? '' }))} />}
+          </>}
           <TextInput label="Business ID" required value={form.businessId} onChange={set('businessId')} />
           <TextInput label="Name" required value={form.name} onChange={set('name')} />
           <TextInput label="Contact name" value={form.contactName} onChange={set('contactName')} />

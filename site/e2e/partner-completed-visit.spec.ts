@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { PartnerFlowBackend, prepareRolePage, type VisitSeed } from './partner-flow-backend';
 
 // The owner opens a finished visit from Completed requests and reads what the cleaner recorded.
-// The cleaner is shown by first initial only; the full name stays with staff in the admin panel.
+// The visit view shows what the cleaner recorded, not who the cleaner was.
 
 const PROPERTY = 'Lake apartment';
 const WINDOW = { fromDate: '2026-12-01', toDate: '2026-12-01' };
@@ -28,7 +28,7 @@ function finishedVisit(backend: PartnerFlowBackend, visit: VisitSeed) {
   return request;
 }
 
-test('owner reads the checklist, notes and photos of a completed visit, without the cleaner name', async ({ page }) => {
+test('owner reads the checklist, notes and photos of a completed visit, without the cleaner', async ({ page }) => {
   const backend = new PartnerFlowBackend({ priced: true });
   finishedVisit(backend, {
     tasks: [{ text: 'Vacuum floors', done: true }, { text: 'Restock towels', done: false }],
@@ -51,10 +51,10 @@ test('owner reads the checklist, notes and photos of a completed visit, without 
   await expect.poll(() => photo.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
   await expect(dialog.getByText('Kitchen after clean', { exact: true })).toBeVisible();
 
-  // The partner sees the first initial, never the cleaner's full name.
-  await expect(dialog.getByText('T.', { exact: true })).toHaveCount(0);
-  await expect(dialog.getByText('Test Cleaner')).toHaveCount(0);
+  // The visit view carries no cleaner information: no name, no initial, no cleaner row.
   await expect(dialog).not.toContainText('Test Cleaner');
+  await expect(dialog.getByText('T.', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByText('Cleaner', { exact: true })).toHaveCount(0);
 });
 
 test('a completed visit with no checklist, notes or photos says so', async ({ page }) => {

@@ -4,7 +4,7 @@ namespace CleaningSuite.Application.Partners;
 
 /// <summary>
 /// Partner-facing view of a completed visit. Deliberately omits employee ids and full names, shift internals,
-/// email delivery state, work-time corrections and access tokens. The cleaner appears only as a first initial.
+/// email delivery state, work-time corrections, access tokens and the cleaner's identity.
 /// </summary>
 public sealed record PartnerCompletionDto(
     Guid RequestId,
@@ -15,7 +15,6 @@ public sealed record PartnerCompletionDto(
     DateTime? PlannedEndUtc,
     DateTime? ActualStartUtc,
     DateTime? ActualEndUtc,
-    string? CleanerInitial,
     IReadOnlyList<PartnerCompletionReport> Reports,
     IReadOnlyList<PartnerChangeDto> Messages);
 

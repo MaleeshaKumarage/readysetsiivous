@@ -642,6 +642,61 @@ public class PartnerWorkflowTests
         return branch;
     }
 
+    // The partner's photo sections and general instructions must reach the cleaner's visit once it is offered and accepted.
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Partner_photo_sections_and_instructions_reach_the_cleaner_on_offer_and_on_the_accepted_visit()
+    {
+        using var fixture = await Fixture.Create();
+        using (var session = fixture.Session())
+            await fixture.Service(session).UpdateSettings(fixture.Partner.Id, new PartnerSettingsInput(["Before", "Keys"], null, "Use the side door."), default);
+        PartnerRequestDto request;
+        using (var session = fixture.Session())
+            request = await fixture.Service(session).Create(fixture.Partner.Id, new(Guid.NewGuid(), fixture.Branch.Id, Fixture.Day, Fixture.Day, "08:00", "After guest checkout."), default);
+        PartnerRequestDto offered;
+        using (var session = fixture.Session())
+            offered = await fixture.Service(session).Offer(fixture.Admin.Id, request.Id, new(request.Version, fixture.Cleaner.Id), default);
+        using (var session = fixture.Session())
+        {
+            var offer = Assert.Single(await fixture.Service(session).Offers(fixture.Cleaner.Id, default));
+            Assert.Equal("Use the side door.\n\nAfter guest checkout.", offer.Notes);
+        }
+        PartnerRequestDto accepted;
+        using (var session = fixture.Session())
+            accepted = await fixture.Service(session).Accept(fixture.Cleaner.Id, offered.OfferId!.Value, new(offered.Version), default);
+        using var reader = fixture.Store.QuerySession(fixture.Tenant);
+        var shift = await reader.LoadAsync<Shift>(accepted.LinkedShiftId!.Value);
+        Assert.Equal(new[] { "Before", "Keys" }, shift!.RequiredPhotoLabels);
+        Assert.Equal("Use the side door.\n\nAfter guest checkout.", shift.Notes);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Saving_settings_without_account_details_keeps_the_stored_ones()
+    {
+        using var fixture = await Fixture.Create();
+        using (var session = fixture.Session())
+        {
+            var service = fixture.Service(session);
+            await service.UpdateSettings(fixture.Partner.Id, new PartnerSettingsInput([], new PartnerAccountDetails { BillingName = "Olivia Oy" }), default);
+            var saved = await service.UpdateSettings(fixture.Partner.Id, new PartnerSettingsInput(["Keys"], null, "Use the side door."), default);
+            Assert.Equal("Olivia Oy", saved.Account.BillingName);
+            Assert.Equal("Use the side door.", saved.GeneralInstructions);
+            Assert.Equal("Olivia Oy", (await service.Settings(fixture.Partner.Id, default)).Account.BillingName);
+        }
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Clearing_access_instructions_in_settings_removes_them_and_keeps_other_account_details()
+    {
+        using var fixture = await Fixture.Create();
+        using var session = fixture.Session();
+        var service = fixture.Service(session);
+        await service.UpdateSettings(fixture.Partner.Id, new PartnerSettingsInput([], new PartnerAccountDetails { AccessInstructions = "Key safe 4321", BillingName = "Olivia Oy" }), default);
+        var cleared = await service.UpdateSettings(fixture.Partner.Id, new PartnerSettingsInput([], new PartnerAccountDetails { AccessInstructions = "   ", BillingName = "Olivia Oy" }), default);
+        Assert.Null(cleared.Account.AccessInstructions);
+        Assert.Equal("Olivia Oy", cleared.Account.BillingName);
+        Assert.Null((await service.Settings(fixture.Partner.Id, default)).Account.AccessInstructions);
+    }
+
     private sealed class Fixture : IDisposable
     {
         public static DateOnly Day => new(2026, 11, 10);

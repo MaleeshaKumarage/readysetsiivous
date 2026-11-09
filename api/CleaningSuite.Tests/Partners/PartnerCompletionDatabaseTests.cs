@@ -37,7 +37,6 @@ public class PartnerCompletionDatabaseTests
         var completion = await service.Completion(seeded.Owner.Id, seeded.Request.Id, default);
 
         Assert.Equal("Apartment", completion.BranchName);
-        Assert.Null(completion.CleanerInitial); // Partners never see the cleaner, not even an initial.
         var report = Assert.Single(completion.Reports);
         Assert.Equal(new[] { "Vacuum floors", "Restock towels" }, report.Tasks.Select(task => task.Text));
         Assert.Equal(new[] { true, false }, report.Tasks.Select(task => task.Done));
