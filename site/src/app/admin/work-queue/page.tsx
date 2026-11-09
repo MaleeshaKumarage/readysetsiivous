@@ -260,7 +260,7 @@ export default function WorkQueuePage() {
         </Tabs.List>
       </Tabs>
 
-      <Group mt="md" mb="md" align="flex-end" wrap="wrap" gap="sm">
+      <Group className="work-queue-filters" mt="md" mb="md" align="flex-end" wrap="wrap" gap="sm">
         <Select aria-label="Source" label="Source" data={SOURCES} value={source}
           onChange={value => value && changeSource(value as WorkQueueSource)} allowDeselect={false} w={220} />
         <TextInput label="Search" placeholder="Customer, booking number or company" value={query}

@@ -209,10 +209,12 @@ export default function PartnerPage() {
             {branches.length > 0 && !shownBranches.length && <Card className="partner-surface partner-empty">{t.noPropertiesInCity}</Card>}
             <ul className="partner-property-list">{shownBranches.map(branch => <li key={branch.id}><article aria-label={branch.name}>
               <Card className="partner-surface partner-property">
-                <div className="partner-card-heading"><h3>{branch.name}</h3>{!branch.isActive ? <Badge variant="outline" className="partner-badge">{t.inactive}</Badge> : branch.pricingReady ? <Badge variant="subtle" className="partner-badge">{t.ready}</Badge> : null}</div>
-                <QuoteRequestedBadge branch={branch} label={t.quoteRequested} />
-                {branch.quoteRejectedUtc && !branch.quoteRequestedUtc && !branch.pricingReady && <p role="status" className="partner-muted">{t.quoteRejected}: {branch.quoteRejectionReason}</p>}
-                <p className="partner-muted">{[branch.street, branch.postalCode, branch.city].filter(Boolean).join(', ')}</p>
+                <div className="partner-property-identity">
+                  <div className="partner-card-heading"><h3>{branch.name}</h3>{!branch.isActive ? <Badge variant="outline" className="partner-badge">{t.inactive}</Badge> : branch.pricingReady ? <Badge variant="subtle" className="partner-badge">{t.ready}</Badge> : null}</div>
+                  <QuoteRequestedBadge branch={branch} label={t.quoteRequested} />
+                  {branch.quoteRejectedUtc && !branch.quoteRequestedUtc && !branch.pricingReady && <p role="status" className="partner-muted">{t.quoteRejected}: {branch.quoteRejectionReason}</p>}
+                  <p className="partner-muted">{[branch.street, branch.postalCode, branch.city].filter(Boolean).join(', ')}</p>
+                </div>
                 <dl className="partner-property-facts"><div><dt>{t.rooms}</dt><dd>{branch.roomCount ?? t.notSet}</dd></div><div><dt>{t.beds}</dt><dd>{branch.bedCount ?? t.notSet}</dd></div></dl>
                 <div className="partner-price">{branch.pricingReady ? <><p><strong>{money(branch.priceNet)}</strong> {t.exclVat} ({t.vat} {number(branch.vatRatePercent ?? 0)}%)</p><p className="partner-muted">{t.estimated} {branch.estimatedDurationMinutes} {t.minutes}</p></> : <p>{branch.quoteRequestedUtc ? t.quoteWaiting : t.pricingRequired}</p>}</div>
                 <div className="partner-card-actions"><Button disabled={busy || !branch.isActive || !branch.pricingReady} onClick={() => openRequest(branch)}>{t.requestCleaning}<ArrowRight size={16} aria-hidden="true" /></Button>
@@ -233,9 +235,9 @@ export default function PartnerPage() {
                 <div className="partner-card-heading"><h3>{request.branchName}<span className="sr-only"> · {partnerStatus(request.status, language)}</span></h3>
                   <Badge variant={request.status === 'Completed' ? 'subtle' : 'outline'} className="partner-badge">{partnerStatus(request.status, language)}</Badge>
                 </div>
-                <p>{date(request.fromDate)} – {date(request.toDate)}{request.exactStartLocalTime && ' ' + t.at + ' ' + request.exactStartLocalTime.slice(0, 5)}</p>
+                <p className="partner-request-window">{date(request.fromDate)} – {date(request.toDate)}{request.exactStartLocalTime && ' ' + t.at + ' ' + request.exactStartLocalTime.slice(0, 5)}</p>
                 <p className="partner-price">{t.agreedPrice} <strong>{money(request.priceNet)}</strong> {t.exclVat} ({t.vat} {number(request.vatRatePercent)}%)</p>
-                <div className="partner-request-details"><p>{t.planned}: {request.plannedStartUtc ? <>{stamp(request.plannedStartUtc)} – {stamp(request.plannedEndUtc)}</> : request.firstAcceptedAtUtc || request.status === 'Accepted' ? t.flexible : t.notRecorded}</p><p>{t.actualStart}: {stamp(request.actualStartUtc)} · {t.actualEnd}: {stamp(request.actualEndUtc)}</p></div>
+                <div className="partner-request-details"><p>{t.planned}: {request.plannedStartUtc ? <>{stamp(request.plannedStartUtc)} – {stamp(request.plannedEndUtc)}</> : request.firstAcceptedAtUtc || request.status === 'Accepted' ? t.flexible : t.notRecorded}</p><p className="partner-actual-times">{t.actualStart}: {stamp(request.actualStartUtc)} · {t.actualEnd}: {stamp(request.actualEndUtc)}</p></div>
                 {request.notes && <p className="partner-entered">{request.notes}</p>}
                 <div className="partner-card-actions">{request.status === 'Completed' ? <Button variant="outline" className="partner-secondary" onClick={() => openVisit(request)}>{t.viewVisit}</Button> : !request.firstAcceptedAtUtc && request.status !== 'Cancelled' ? <>
                   <Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => { const branch = branches.find(item => item.id === request.branchId); if (branch) openRequest(branch, request); }}>{t.editRequest}</Button>
@@ -307,8 +309,9 @@ export default function PartnerPage() {
           {photoLabels.length > 0 && <p className="partner-muted">{t.photosRequired}: {photoLabels.join(', ')}</p>}
           {generalInstructions.trim() && <p className="partner-muted">{t.generalInstructionsApplied}</p>}
             <form onSubmit={submitRequest} onInvalid={invalid} className="partner-form-grid">
-              <Field label={t.fromDate}><Input className="partner-field" name="fromDate" type="date" required value={from} onChange={event => setFrom(event.target.value)} /></Field>
-              {exact ? <Field label={t.exactTime}><Input className="partner-field" name="exactTime" type="time" required value={time} onChange={event => setTime(event.target.value)} /></Field> : <Field label={t.toDate}><Input className="partner-field" name="toDate" type="date" min={from} required value={to} onChange={event => setTo(event.target.value)} /></Field>}
+              <Field label={t.fromDate}><Input className="partner-field" name="fromDate" aria-describedby="partner-window-help" type="date" required value={from} onChange={event => setFrom(event.target.value)} /></Field>
+              {exact ? <Field label={t.exactTime}><Input className="partner-field" name="exactTime" type="time" required value={time} onChange={event => setTime(event.target.value)} /></Field> : <Field label={t.toDate}><Input className="partner-field" name="toDate" aria-describedby="partner-window-help" type="date" min={from} required value={to} onChange={event => setTo(event.target.value)} /></Field>}
+              <p className="partner-muted partner-form-wide" id="partner-window-help">{t.windowHint}</p>
               <label className="partner-check"><input type="checkbox" checked={exact} onChange={event => setExact(event.target.checked)} />{t.fixedAppointment}</label>
               <p className="partner-muted partner-form-wide">{t.visitInstructionsHint}</p>
               <Field label={t.instructions} className="partner-form-wide"><Textarea className="partner-field" value={notes} maxLength={4000} onChange={event => setNotes(event.target.value)} /></Field>

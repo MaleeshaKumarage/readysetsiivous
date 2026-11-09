@@ -58,7 +58,7 @@ export type ShiftWorkspaceProps = {
 export function ShiftWorkspace({ shift, employeeCount, templateName, busy, isAdmin, onClose, onEdit, onPricing, onAssign, onOccurrences, onScheduleOneTime, onTemplate, onDeactivate, onReactivate, onDelete }: ShiftWorkspaceProps) {
   const isOnCall = shift.schedule.type === 4;
   return (
-    <Modal opened onClose={onClose} title={`Manage — ${shift.name}`} size="lg" radius="md">
+    <Modal opened onClose={onClose} title={`Manage — ${shift.name}`} size="lg" radius="md" className="shift-workspace">
       <Stack gap="md">
         <Text size="sm" fw={500} role="status">Next step: {nextStep(shift, employeeCount)}</Text>
 

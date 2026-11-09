@@ -30,7 +30,7 @@ export const buttonSizes: Record<ButtonSize, string> = {
 /** Pill button classes — exported so links can wear the exact same styles. */
 export function buttonClasses(variant: ButtonVariant = 'primary', size: ButtonSize = 'md') {
   return cx(
-    'inline-flex items-center justify-center rounded-full font-semibold transition-all',
+    'ds-button inline-flex items-center justify-center rounded-full font-semibold transition-all',
     'hover:-translate-y-0.5 active:translate-y-0 disabled:pointer-events-none disabled:opacity-50',
     buttonVariants[variant],
     buttonSizes[size],

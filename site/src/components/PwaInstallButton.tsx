@@ -133,8 +133,8 @@ export function PwaInstallButton({
   }[lang];
 
   if (audience === 'employee') {
-    if (isStandalone || installed) return <p className="text-sm">My shifts app installed</p>;
-    return <div className="space-y-2"><button className="min-h-11 rounded border border-gray-400 px-4 py-2 text-sm font-medium" onClick={() => void handleInstallClick()}>Install My shifts</button>
+    if (isStandalone || installed) return <p className="pwa-installed text-sm"><Check size={18} aria-hidden="true" />My shifts app installed</p>;
+    return <div className="pwa-employee-install"><button onClick={() => void handleInstallClick()}><Download size={18} aria-hidden="true" />Install My shifts</button>
       {iosModalOpen && <p role="status" className="text-sm">In Safari, tap Share, then Add to Home Screen and Add. Open My shifts from your Home Screen.</p>}
       {!isIos && !deferredPrompt && <p className="text-sm">Use your browser’s Install app or Add to Home Screen menu to install My shifts.</p>}
     </div>;
@@ -191,6 +191,7 @@ export function PwaInstallButton({
         title={copy.title}
         closeButtonProps={{ 'aria-label': copy.close }}
         centered
+        className="pwa-install-dialog"
         radius="md"
       >
         <Stack gap="md">
@@ -198,15 +199,15 @@ export function PwaInstallButton({
             {copy.introduction}
           </Text>
           <Stack gap="xs">
-            <Group gap="xs" align="center">
+            <Group className="pwa-install-step" gap="xs" align="center">
               <Share size={18} color="#4f46e5" />
               <Text size="sm">{copy.share}</Text>
             </Group>
-            <Group gap="xs" align="center">
+            <Group className="pwa-install-step" gap="xs" align="center">
               <Smartphone size={18} color="#4f46e5" />
               <Text size="sm">{copy.home}</Text>
             </Group>
-            <Group gap="xs" align="center">
+            <Group className="pwa-install-step" gap="xs" align="center">
               <Check size={18} color="#16a34a" />
               <Text size="sm">{copy.add}</Text>
             </Group>

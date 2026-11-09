@@ -278,36 +278,39 @@ export default function MyShiftsPage() {
               const today = tenantDateKey(new Date(now), o.timeZoneId);
               const canStart = scheduledDate <= today;
               return (
-                <Card key={key} role="group" aria-label={`${o.shiftName} ${o.startUtc}`} variant="elevated" padding="none" className="overflow-hidden">
+                <Card key={key} role="group" aria-label={`${o.shiftName} ${o.startUtc}`} variant="elevated" padding="none" className="employee-job overflow-hidden">
                   <div className="p-5 space-y-3">
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="employee-job-heading flex items-start justify-between gap-3">
                       <div>
                         <h2 className="font-bold text-gray-900 dark:text-gray-100">{o.shiftName}</h2>
-                        <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 dark:text-gray-400 pt-1">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="w-3.5 h-3.5" />
-                            Scheduled: {formatTenantDate(o.startUtc, o.timeZoneId, 'date')}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5" />
-                            {formatTenantDate(o.startUtc, o.timeZoneId, 'time')}
-                            {' – '}
-                            {formatTenantDate(o.endUtc, o.timeZoneId, 'time')}
-                            {' · '}{o.timeZoneId}
-                          </span>
-                        </div>
-                        {o.form?.startedAtUtc && <p className="text-xs text-gray-600 dark:text-gray-300 pt-1">Actual start: {formatTenantDate(o.form.startedAtUtc, o.timeZoneId, 'datetime')}</p>}
-                        {o.form?.endedAtUtc && <p className="text-xs text-gray-600 dark:text-gray-300">Actual end: {formatTenantDate(o.form.endedAtUtc, o.timeZoneId, 'datetime')}</p>}
                       </div>
                       <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${statusClasses(status)}`}>
                         {statusLabel(status)}
                       </span>
                     </div>
 
+                    <div className="employee-job-times">
+                      <div className="employee-scheduled flex flex-wrap items-center gap-3 text-xs text-gray-500 dark:text-gray-400 pt-1">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5" />
+                          Scheduled: {formatTenantDate(o.startUtc, o.timeZoneId, 'date')}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5" />
+                          {formatTenantDate(o.startUtc, o.timeZoneId, 'time')}
+                          {' – '}
+                          {formatTenantDate(o.endUtc, o.timeZoneId, 'time')}
+                          {' · '}{o.timeZoneId}
+                        </span>
+                      </div>
+                      {o.form?.startedAtUtc && <p className="employee-actual text-xs text-gray-600 dark:text-gray-300 pt-1">Actual start: {formatTenantDate(o.form.startedAtUtc, o.timeZoneId, 'datetime')}</p>}
+                      {o.form?.endedAtUtc && <p className="employee-actual text-xs text-gray-600 dark:text-gray-300">Actual end: {formatTenantDate(o.form.endedAtUtc, o.timeZoneId, 'datetime')}</p>}
+                    </div>
+
                     {(o.notes || o.accessInstructions || o.contactName || o.contactPhone) && !o.isDeleted && (
-                      <section aria-label="Visit instructions" className="rounded-lg bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-gray-800 dark:text-gray-100 space-y-1">
+                      <section aria-label="Visit instructions" className="employee-instructions rounded-lg bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-gray-800 dark:text-gray-100 space-y-1">
                         <h3 className="font-semibold">Instructions</h3>
-                        {o.notes && <p className="whitespace-pre-wrap">{o.notes}</p>}
+                        {o.notes && <div><span className="block font-semibold">Cleaning: </span><p className="whitespace-pre-wrap">{o.notes}</p></div>}
                         {o.accessInstructions && <p className="whitespace-pre-wrap"><span className="font-semibold">Access: </span>{o.accessInstructions}</p>}
                         {(o.contactName || o.contactPhone) && <p><span className="font-semibold">Contact: </span>{[o.contactName, o.contactPhone].filter(Boolean).join(' · ')}</p>}
                       </section>
@@ -369,10 +372,10 @@ export default function MyShiftsPage() {
                         <p id="shift-photo-note-help" className="text-xs text-gray-600 dark:text-gray-300">Each photo needs its own note. General shift notes are optional, with or without photos.</p>
                         <div className="space-y-2">
                           {photos.length > 0 && (
-                            <div className="flex flex-wrap gap-2">
+                            <div className="employee-evidence-grid">
                               {photos.map((p, i) => (
-                                <div key={i} className="relative">
-                                  <img src={p.url} alt={`photo-${i}`} className="w-16 h-16 object-cover rounded-lg border border-gray-200 dark:border-gray-700" />
+                                <div key={i} className="employee-evidence relative">
+                                  <img src={p.url} alt={`photo-${i}`} className="employee-evidence-photo object-contain rounded-lg border border-gray-200 dark:border-gray-700" />
                                   <label className="block text-sm">Photo {i + 1} note (required)
                                     <textarea ref={el => { noteRef.current[i] = el; }} aria-label={`Photo ${i + 1} note`} aria-required="true"
                                       aria-invalid={noteError && !p.note.trim()} value={p.note} disabled={submitting || photoReading}
@@ -383,7 +386,7 @@ export default function MyShiftsPage() {
                                     type="button"
                                     disabled={submitting}
                                     onClick={() => handleRemovePhoto(i)}
-                                    className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-white text-xs leading-none"
+                                    className="employee-photo-remove absolute top-2 right-2 min-h-11 min-w-11 rounded-full bg-red-700 text-white text-xl leading-none"
                                     aria-label="Remove photo"
                                   >
                                     ×
@@ -392,10 +395,10 @@ export default function MyShiftsPage() {
                               ))}
                             </div>
                           )}
-                          <label className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-700 dark:text-brand-400 cursor-pointer">
+                          <label className="employee-photo-add inline-flex items-center gap-1.5 text-sm font-medium text-brand-700 dark:text-brand-400 cursor-pointer">
                             <Upload className="w-4 h-4" />
                             Add photo
-                            <input aria-label="Add shift photos" type="file" accept="image/png,image/jpeg,image/webp,image/bmp" multiple disabled={submitting || photoReading} className="hidden" onChange={handlePhotoUpload} />
+                            <input aria-label="Add shift photos" type="file" accept="image/png,image/jpeg,image/webp,image/bmp" multiple disabled={submitting || photoReading} className="sr-only" onChange={handlePhotoUpload} />
                           </label>
                         </div>
                         {photoReading && <p role="status">Reading photos...</p>}
@@ -445,9 +448,9 @@ export default function MyShiftsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-accent-50 via-white to-brand-50 dark:from-gray-950 dark:via-gray-950 dark:to-gray-900 py-8 px-4 sm:px-6">
-      <div className="max-w-2xl mx-auto space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="employee-portal py-8 px-4 sm:px-6">
+      <div className="employee-content max-w-2xl mx-auto space-y-6">
+        <div className="employee-header flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Logo size="md" />
             <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">My Shifts</h1>

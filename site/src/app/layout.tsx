@@ -1,4 +1,5 @@
 import './globals.css';
+import './workspace.css';
 import { MotionConfig } from 'framer-motion';
 import { Toaster } from 'sonner';
 import { ThemeProvider } from '@/context/ThemeContext';

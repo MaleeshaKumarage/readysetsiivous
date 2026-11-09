@@ -42,7 +42,7 @@ export function Dialog({ open, title, onClose, className, children }: {
   }, [open]);
 
   if (!open) return null;
-  return <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4"
+  return <div className="portal-dialog-overlay fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4"
     // Inline margin beats parent spacing utilities (space-y-*), whose margin would leave an uncovered strip above a fixed overlay.
     style={{ margin: 0 }} onMouseDown={event => {
     // preventDefault stops the browser moving focus to the body after the dialog has returned it to the opener.
