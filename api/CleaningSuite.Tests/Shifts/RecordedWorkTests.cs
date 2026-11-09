@@ -45,6 +45,15 @@ public class RecordedWorkTests
     }
 
     [Fact]
+    public void Representative_orders_by_end_before_start_so_a_later_start_with_an_earlier_end_does_not_win()
+    {
+        var longerEarlier = Form(f => { f.IsSubmitted = true; f.StartedAtUtc = Start; f.EndedAtUtc = Start.AddMinutes(80); });
+        var shorterLater = Form(f => { f.IsSubmitted = true; f.StartedAtUtc = Start.AddMinutes(30); f.EndedAtUtc = Start.AddMinutes(45); });
+
+        Assert.Same(longerEarlier, RecordedWork.Representative(new[] { shorterLater, longerEarlier }));
+    }
+
+    [Fact]
     public void Representative_prefers_the_latest_end_among_submitted_records_and_is_null_when_empty()
     {
         var earlier = Form(f => { f.IsSubmitted = true; f.StartedAtUtc = Start; f.EndedAtUtc = Start.AddMinutes(30); });
