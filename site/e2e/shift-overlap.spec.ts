@@ -158,13 +158,19 @@ test('overlap refusal links to the clashing shift, whose visit list opens with t
   const editor = await openAssignForMorningVisit(page, 'Cover the morning visit');
   await editor.getByRole('button', { name: 'Preview assignment', exact: true }).click();
   await expect(editor.getByText('Overlaps Evening deep clean')).toBeVisible();
+  const occurrenceRequest = page.waitForRequest(request => request.url().includes('/shifts/other/occurrences'));
   await editor.getByRole('button', { name: 'View Evening deep clean visits', exact: true }).click();
   // The assignment dialog closes and the clashing shift's visits open in its place.
   await expect(editor).toHaveCount(0);
   const list = page.getByRole('dialog', { name: 'Occurrences — Evening deep clean', exact: true });
   await expect(list).toBeVisible();
-  await expect(list.getByText('Showing Evening deep clean. Move or remove the overlapping cleaner on that visit.')).toBeVisible();
-  // The overlapping visit is listed with its own Assign action, so the admin can change it there.
+  await expect(list.getByText('Showing Evening deep clean. The overlapping visit is marked below.')).toBeVisible();
+  // The requested range always includes the overlapping visit, even when it falls outside the default 31-day window.
+  const range = new URL((await occurrenceRequest).url()).searchParams;
+  expect(Date.parse(range.get('from') ?? '')).toBeLessThanOrEqual(Date.parse(clashStart));
+  expect(Date.parse(range.get('to') ?? '')).toBeGreaterThanOrEqual(Date.parse(clashEnd));
+  // That visit is marked and keeps its own Assign action, so the admin can change it there.
+  await expect(list.getByText('Overlapping visit', { exact: true })).toBeVisible();
   await expect(list.getByRole('button', { name: 'Assign', exact: true })).toBeVisible();
 });
 

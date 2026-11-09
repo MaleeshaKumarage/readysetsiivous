@@ -695,7 +695,8 @@ export const adminShifts = {
     return adminGet<Shift[]>(`/api/v1/admin/shifts${suffix ? `?${suffix}` : ''}`);
   },
   listForCustomer: (companyId: string) => adminGet<Shift[]>(`/api/v1/admin/shifts?companyId=${encodeURIComponent(companyId)}&includeInactive=true`, false),
-  get: (id: string) => adminGet<Shift>(`/api/v1/admin/shifts/${id}`),
+  // `fresh` bypasses the response cache, for a shift the admin is about to act on.
+  get: (id: string, fresh = false) => adminGet<Shift>(`/api/v1/admin/shifts/${id}`, !fresh),
   create: (fields: unknown) => adminSendJsonResult<Shift>('/api/v1/admin/shifts', 'POST', fields),
   update: (id: string, fields: unknown) =>
     adminSendJsonResult<Shift>(`/api/v1/admin/shifts/${id}`, 'PUT', fields),

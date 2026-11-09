@@ -180,6 +180,7 @@ export default function ShiftsAdminPage() {
   const [occurrenceError, setOccurrenceError] = useState('');
   const [occurrenceEditError, setOccurrenceEditError] = useState('');
   const occurrenceRangeShift = useRef<string | null>(null);
+  const [highlightUtc, setHighlightUtc] = useState<string | null>(null);
   const [occurrenceFrom, setOccurrenceFrom] = useState(new Date().toISOString().slice(0, 10));
   const [occurrenceTo, setOccurrenceTo] = useState(new Date(Date.now() + 31 * 86400000).toISOString().slice(0, 10));
   const [editingOccurrence, setEditingOccurrence] = useState<ShiftOccurrence | null>(null);
@@ -459,33 +460,44 @@ export default function ShiftsAdminPage() {
     finally { if (version === occurrenceGeneration.current) setOccurrenceLoading(false); }
   };
 
-  const openOccurrences = async (shift: Shift, notice = '') => {
+  // Widens a date range just enough to include the tenant-local day of a visit, so that visit is always listed.
+  const rangeIncluding = (from: string, to: string, utc: string | null): [string, string] => {
+    if (!utc) return [from, to];
+    const day = localInputValue(utc, timeZoneId).slice(0, 10);
+    return [day < from ? day : from, day > to ? day : to];
+  };
+
+  // `highlightUtc` marks one visit (the overlapping visit from a refusal) and makes sure the range lists it.
+  const openOccurrences = async (shift: Shift, notice = '', highlightUtc: string | null = null) => {
     setShiftNotice(notice);
+    setHighlightUtc(highlightUtc);
     setOccurrenceShift(shift); setOccurrences([]); setOccurrenceError('');
     // A new shift starts from tenant-local today onward, the day the calendar opens on (the browser's UTC date can be a day behind near midnight).
     // Reopening the same shift keeps the range the admin chose.
     if (occurrenceRangeShift.current !== shift.id) {
       occurrenceRangeShift.current = shift.id;
       const today = localInputValue(new Date().toISOString(), timeZoneId).slice(0, 10);
-      const until = addCalendarDays(today, 31);
-      setOccurrenceFrom(today); setOccurrenceTo(until);
-      await loadOccurrences(shift, today, until);
+      const [from, to] = rangeIncluding(today, addCalendarDays(today, 31), highlightUtc);
+      setOccurrenceFrom(from); setOccurrenceTo(to);
+      await loadOccurrences(shift, from, to);
       return;
     }
-    await loadOccurrences(shift);
+    const [from, to] = rangeIncluding(occurrenceFrom, occurrenceTo, highlightUtc);
+    if (from !== occurrenceFrom || to !== occurrenceTo) { setOccurrenceFrom(from); setOccurrenceTo(to); }
+    await loadOccurrences(shift, from, to);
   };
 
-  // Opens the clashing shift's visit list from an overlap refusal. The assignment dialog stays open if that shift
-  // cannot be loaded, so the admin keeps the cleaner and reason they had chosen.
-  const openClashingShift = async (shiftId: string, shiftName: string) => {
+  // Opens the clashing shift's visit list from an overlap refusal, with the overlapping visit marked. The assignment
+  // dialog stays open if that shift cannot be loaded, so the admin keeps the cleaner and reason they had chosen.
+  const openClashingShift = async (shiftId: string, shiftName: string, clashStartUtc: string) => {
     // adminGet resolves to null on a failed request instead of throwing, so a null shift is the failure case.
-    const clashing = await adminShifts.get(shiftId);
+    const clashing = await adminShifts.get(shiftId, true);
     if (!clashing) {
       showError(`${shiftName} could not be loaded. Retry, or find it in the shift list.`, 'Could not open shift');
       return;
     }
     setAssigningVisit(null);
-    await openOccurrences(clashing, `Showing ${shiftName}. Move or remove the overlapping cleaner on that visit.`);
+    await openOccurrences(clashing, `Showing ${shiftName}. The overlapping visit is marked below.`, clashStartUtc);
   };
 
   const openOccurrenceEditor = (occurrence?: ShiftOccurrence, status = '1') => {
@@ -670,7 +682,8 @@ export default function ShiftsAdminPage() {
             <Table.ScrollContainer minWidth={820}><Table striped withTableBorder>
               <Table.Thead><Table.Tr><Table.Th>Start</Table.Th><Table.Th>End</Table.Th><Table.Th>Status</Table.Th><Table.Th>Assignees</Table.Th><Table.Th>Reason</Table.Th><Table.Th></Table.Th></Table.Tr></Table.Thead>
               <Table.Tbody>{occurrences.map((item) => <Table.Tr key={item.exceptionId ?? item.startUtc}>
-                <Table.Td>{new Date(item.startUtc).toLocaleString(undefined, { timeZone: timeZoneId })}</Table.Td>
+                <Table.Td>{new Date(item.startUtc).toLocaleString(undefined, { timeZone: timeZoneId })}
+                  {highlightUtc && Date.parse(item.startUtc) === Date.parse(highlightUtc) && <Text component="span" size="xs" c="orange" fw={600} ml={6}>Overlapping visit</Text>}</Table.Td>
                 <Table.Td>{new Date(item.endUtc).toLocaleString(undefined, { timeZone: timeZoneId })}</Table.Td>
                 <Table.Td>{item.status ? OCCURRENCE_STATUSES.find(x => x.value === String(item.status))?.label : 'Scheduled'}</Table.Td>
                 <Table.Td><Text size="sm">{(item.assigneeIds ?? []).map(employeeName).join(', ') || 'Unassigned'}</Text>
