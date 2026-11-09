@@ -130,7 +130,7 @@ export default function ServicesAdminPage() {
               {visibleServices.map((s) => (
                 <Table.Tr key={s.id}>
                   <Table.Td fw={500}>{s.name?.values?.fi ?? s.name?.values?.en ?? ''}</Table.Td>
-                  <Table.Td>{s.priceNet?.toFixed(2)} €</Table.Td>
+                  <Table.Td>{s.priceNet?.toFixed(2)} € excl. VAT{s.vatRatePercent != null ? ` (${s.vatRatePercent}%)` : ''}</Table.Td>
                   <Table.Td>{s.durationMinutes} min</Table.Td>
                   <Table.Td>
                     {s.isActive

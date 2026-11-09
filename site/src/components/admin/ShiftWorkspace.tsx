@@ -5,18 +5,21 @@ import type { Shift } from '@/lib/adminApi';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+/** One time format for every schedule type: HH:mm, seconds dropped. */
+const hm = (time?: string | null) => (time ?? '').slice(0, 5);
+
 /** Schedule summary shown in the shift list and workspace. */
 export function scheduleLabel(shift: Shift) {
   const s = shift.schedule;
-  if (s.type === 0) return `Daily ${s.dailyStart}–${s.dailyEnd}`;
+  if (s.type === 0) return `Daily ${hm(s.dailyStart)}–${hm(s.dailyEnd)}`;
   if (s.type === 1) return `Daily by day (${Object.keys(s.dailyTimes ?? {}).length} days)`;
   if (s.type === 2) return s.weeklyDays?.length
-    ? `${s.weeklyDays.map((d) => DAYS[d]).join(', ')} ${s.weeklyStart}–${s.weeklyEnd}`
-    : `${DAYS[s.weeklyDay ?? 0]} ${s.weeklyStart}–${s.weeklyEnd}`;
+    ? `${s.weeklyDays.map((d) => DAYS[d]).join(', ')} ${hm(s.weeklyStart)}–${hm(s.weeklyEnd)}`
+    : `${DAYS[s.weeklyDay ?? 0]} ${hm(s.weeklyStart)}–${hm(s.weeklyEnd)}`;
   if (s.type === 3) return `Bi-weekly ${DAYS[s.biWeeklyDay ?? 0]}`;
-  if (s.type === 5) return `Monthly day ${s.monthlyDay}`;
+  if (s.type === 5) return `Monthly day ${s.monthlyDay}${s.monthlyStart && s.monthlyEnd ? ` ${hm(s.monthlyStart)}–${hm(s.monthlyEnd)}` : ''}`;
   if (s.type === 4) return 'On-call';
-  if (s.type === 6) return `One-time ${s.oneTimeDate?.slice(0, 10)} ${s.oneTimeStart?.slice(0, 5)}–${s.oneTimeEnd?.slice(0, 5)}`;
+  if (s.type === 6) return `One-time ${s.oneTimeDate?.slice(0, 10)} ${hm(s.oneTimeStart)}–${hm(s.oneTimeEnd)}`;
   return '';
 }
 
