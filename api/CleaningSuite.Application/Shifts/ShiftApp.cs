@@ -465,6 +465,9 @@ public class ShiftHandlers
 
             var shift = await _repository.GetAsync(request.ShiftId, ct)
                 ?? throw new NotFoundException("Shift", request.ShiftId);
+            // The admin calendar lists visits only for active shifts. Matching that here keeps the
+            // Occurrences panel and the calendar showing the same visits.
+            if (!shift.IsActive) return [];
             var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
             var localFrom = TenantTimeZone.LocalDate(from, zone);
             var localTo = TenantTimeZone.LocalDate(to, zone);

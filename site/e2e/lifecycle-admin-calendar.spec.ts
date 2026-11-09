@@ -367,3 +367,21 @@ test('a partner-accepted visit on the admin calendar can be recorded and its sav
   await expect(page.getByLabel('Actual start')).toHaveValue('2026-10-30T10:15');
   await expect(page.getByLabel('Actual end')).toHaveValue('2026-10-30T12:15');
 });
+
+test('a stray started record does not replace the completed duration or flag the visit for review', async ({ page }) => {
+  const state = await setup(page);
+  // The server picks the submitted 80-minute record; the calendar shows that duration and no review flag.
+  await page.route(/\/api\/v1\/admin\/shifts\/calendar(?:\?|\/|$)/, route => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    return route.fulfill({ headers, json: { date: '2026-10-30', today: '2026-11-01', timeZoneId: 'Europe/Helsinki', occurrences: [{
+      shiftId: 'shift', shiftName: 'Cleaning 2026-10-30', companyName: 'Test company', branchName: 'Helsinki branch',
+      startUtc: '2026-10-30T08:00:00Z', endUtc: '2026-10-30T10:00:00Z', exceptionId: null, cancelled: false, ambiguous: false, needsReview: false,
+      assignees: [{ employeeId: 'alice', name: 'Alice Cleaner', status: 'Recorded', actualStartUtc: '2026-10-30T08:00:00Z', actualEndUtc: '2026-10-30T09:20:00Z',
+        hours: 80 / 60, version: '11111111-1111-1111-1111-111111111111', canRecord: true, review: null }],
+    }] } });
+  });
+  await page.goto('/admin/shifts/calendar/');
+  await expect(page.getByText('Recorded · 1.33 hours', { exact: true })).toBeVisible();
+  await expect(page.getByText('Unusual time', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Missing completion', { exact: true })).toHaveCount(0);
+});

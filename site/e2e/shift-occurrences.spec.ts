@@ -248,3 +248,14 @@ test('phone occurrence exceptions scroll internally and keep restore actions rea
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(state.writes).toHaveLength(0); expect(state.deletes).toBe(0);
 });
+
+test('occurrences open on tenant-local today, not the browser UTC date', async ({ page }) => {
+  // 23:30 UTC on 4 Nov is already 5 Nov in Helsinki (UTC+2), so the default range must start 5 Nov local.
+  await page.clock.setFixedTime(new Date('2026-11-04T23:30:00Z'));
+  const state = await setup(page);
+  await shiftAction(page, 'Morning clean', 'Occurrences');
+  await expect.poll(() => state.occurrenceQueries.length).toBeGreaterThan(0);
+  const first = state.occurrenceQueries[0];
+  expect(first.get('from')).toBe('2026-11-04T22:00:00.000Z');
+  expect(first.get('to')).toBe('2026-12-06T21:59:59.999Z');
+});

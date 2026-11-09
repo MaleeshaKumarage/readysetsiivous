@@ -461,7 +461,11 @@ export default function ShiftsAdminPage() {
   const openOccurrences = async (shift: Shift, notice = '') => {
     setShiftNotice(notice);
     setOccurrenceShift(shift); setOccurrences([]); setOccurrenceError('');
-    await loadOccurrences(shift);
+    // Default range is tenant-local today onward, the same day the calendar opens on. The browser's UTC date can be a day behind near midnight.
+    const today = localInputValue(new Date().toISOString(), timeZoneId).slice(0, 10);
+    const until = addCalendarDays(today, 31);
+    setOccurrenceFrom(today); setOccurrenceTo(until);
+    await loadOccurrences(shift, today, until);
   };
 
   const openOccurrenceEditor = (occurrence?: ShiftOccurrence, status = '1') => {
