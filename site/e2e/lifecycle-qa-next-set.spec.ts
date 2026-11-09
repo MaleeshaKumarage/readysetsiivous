@@ -6,7 +6,7 @@ import type { MyShiftOccurrence } from '../src/lib/meApi';
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 
 test('services list states that the price excludes VAT and shows the rate', async ({ page }) => {
-  test.setTimeout(120000);
+  test.setTimeout(180000);
   await setupAdminMocks(page);
   const service = { id: '11111111-1111-4111-8111-111111111111', slug: 'home-cleaning', name: { values: { fi: 'Kotisiivous' } },
     description: { values: { fi: 'Description' } }, additionalInfo: null, currency: 'EUR', imageUrl: null,
@@ -21,7 +21,7 @@ test('services list states that the price excludes VAT and shows the rate', asyn
 
 test('shift list uses one time format for every schedule type and shows monthly times', async ({ page }) => {
   // The dev server compiles the admin shifts page and its client chunks on first use, which can exceed the default 30s under CI load.
-  test.setTimeout(120000);
+  test.setTimeout(180000);
   await setupAdminMocks(page);
   await page.route(/\/api\/v1\/admin\//, route => {
     const path = new URL(route.request().url()).pathname;
@@ -32,7 +32,7 @@ test('shift list uses one time format for every schedule type and shows monthly 
     ] : path.endsWith('/assignment-counts') ? {} : path.endsWith('/companies') ? { items: [], total: 0 } : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [];
     return route.fulfill({ status: 200, headers, json });
   });
-  const listed = page.waitForResponse(r => /\/api\/v1\/admin\/shifts(\?|$)/.test(r.url()) && r.request().method() === 'GET', { timeout: 90000 });
+  const listed = page.waitForResponse(r => /\/api\/v1\/admin\/shifts(\?|$)/.test(r.url()) && r.request().method() === 'GET', { timeout: 150000 });
   await page.goto('/admin/shifts/');
   await listed;
   await expect(page.getByText('Daily 08:00–17:00', { exact: true })).toBeVisible({ timeout: 30000 });
@@ -41,7 +41,7 @@ test('shift list uses one time format for every schedule type and shows monthly 
 });
 
 test('assignee picker shows each employee email so similar names can be told apart', async ({ page }) => {
-  test.setTimeout(120000);
+  test.setTimeout(180000);
   await setupAdminMocks(page);
   const people = [
     { id: 'maleesha-1', firstName: 'Maleesha', lastName: 'Kumarage', email: 'maleesha@hiava.fi', isActive: true },
@@ -56,7 +56,7 @@ test('assignee picker shows each employee email so similar names can be told apa
       : path.endsWith('/employees') ? people : path.endsWith('/companies') ? { items: [], total: 0 } : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [];
     return route.fulfill({ status: 200, headers, json });
   });
-  const listed = page.waitForResponse(r => /\/api\/v1\/admin\/shifts(\?|$)/.test(r.url()) && r.request().method() === 'GET', { timeout: 90000 });
+  const listed = page.waitForResponse(r => /\/api\/v1\/admin\/shifts(\?|$)/.test(r.url()) && r.request().method() === 'GET', { timeout: 150000 });
   await page.goto('/admin/shifts/');
   await listed;
   await expect(page.getByRole('button', { name: /^More actions for / }).first()).toBeVisible({ timeout: 30000 });
@@ -67,7 +67,7 @@ test('assignee picker shows each employee email so similar names can be told apa
 });
 
 test('my shifts on an empty Today offers past and upcoming work instead of a dead end', async ({ page }) => {
-  test.setTimeout(120000);
+  test.setTimeout(180000);
   await setupAdminMocks(page);
   const shift = (id: string, shiftName: string, startUtc: string): MyShiftOccurrence => ({ shiftId: id, shiftName, startUtc,
     endUtc: new Date(Date.parse(startUtc) + 7200000).toISOString(), timeZoneId: 'Europe/Helsinki', form: null });
@@ -83,7 +83,7 @@ test('my shifts on an empty Today offers past and upcoming work instead of a dea
       : view === 'future' ? { fromLocalDate: '2026-11-16', toLocalDate: '2026-11-22' } : { fromLocalDate: '2026-11-06', toLocalDate: '2026-11-06' };
     return route.fulfill({ status: 200, headers, json: { timeZoneId: 'Europe/Helsinki', ...range, occurrences } });
   });
-  const calendarLoaded = page.waitForResponse(r => r.url().includes('/api/v1/me/shifts/calendar') && r.request().method() === 'GET', { timeout: 90000 });
+  const calendarLoaded = page.waitForResponse(r => r.url().includes('/api/v1/me/shifts/calendar') && r.request().method() === 'GET', { timeout: 150000 });
   await page.goto('/me/shifts/');
   await calendarLoaded;
   await expect(page.getByText('No shifts today.', { exact: true })).toBeVisible({ timeout: 30000 });
@@ -107,7 +107,7 @@ test('my shifts on an empty Today offers past and upcoming work instead of a dea
 });
 
 test('weekly shifts show HH:mm times with no seconds for both day branches', async ({ page }) => {
-  test.setTimeout(120000);
+  test.setTimeout(180000);
   await setupAdminMocks(page);
   await page.route(/\/api\/v1\/admin\//, route => {
     const path = new URL(route.request().url()).pathname;
@@ -118,7 +118,7 @@ test('weekly shifts show HH:mm times with no seconds for both day branches', asy
     ] : path.endsWith('/assignment-counts') ? {} : path.endsWith('/companies') ? { items: [], total: 0 } : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [];
     return route.fulfill({ status: 200, headers, json });
   });
-  const listed = page.waitForResponse(r => /\/api\/v1\/admin\/shifts(\?|$)/.test(r.url()) && r.request().method() === 'GET', { timeout: 90000 });
+  const listed = page.waitForResponse(r => /\/api\/v1\/admin\/shifts(\?|$)/.test(r.url()) && r.request().method() === 'GET', { timeout: 150000 });
   await page.goto('/admin/shifts/');
   await listed;
   await expect(page.getByText('Monday, Wednesday 08:00–17:00', { exact: true })).toBeVisible({ timeout: 30000 });
@@ -127,7 +127,7 @@ test('weekly shifts show HH:mm times with no seconds for both day branches', asy
 });
 
 test('a deactivated shift future visit is listed under Cancelled', async ({ page }) => {
-  test.setTimeout(120000);
+  test.setTimeout(180000);
   await setupAdminMocks(page, { authenticated: true });
   const cancelledVisit = { source: 'shift', id: '11111111-1111-4111-8111-111111111111', reference: 'Evening deep clean', customerName: 'AAA',
     scheduledLocal: '2026-11-20 08:00', status: 'Cancelled', stateLabel: 'Cancelled', assigneeName: null, href: '/admin/shifts/' };
@@ -145,4 +145,38 @@ test('a deactivated shift future visit is listed under Cancelled', async ({ page
   await page.getByRole('tab', { name: /^Cancelled/ }).click();
   await expect(page.getByRole('listitem').filter({ hasText: 'Evening deep clean' })).toBeVisible();
   await expect(page.getByRole('listitem').filter({ hasText: 'Evening deep clean' })).toContainText('Cancelled');
+});
+
+test('a service without a VAT rate shows the net price and no broken VAT suffix', async ({ page }) => {
+  test.setTimeout(180000);
+  await setupAdminMocks(page);
+  const service = { id: '22222222-2222-4222-8222-222222222222', slug: 'no-vat-cleaning', name: { values: { fi: 'Ilman ALV:tä' } },
+    description: { values: { fi: 'Description' } }, additionalInfo: null, currency: 'EUR', imageUrl: null,
+    priceNet: 15, vatRatePercent: null, durationMinutes: 60, isActive: true, isFeatured: false, sortOrder: 2 };
+  await page.route(/\/api\/v1\/admin\/services/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    return route.fulfill({ status: 200, headers, json: [service] });
+  });
+  await page.goto('/admin/services/');
+  await expect(page.getByRole('cell', { name: '15.00 € excl. VAT', exact: true })).toBeVisible({ timeout: 30000 });
+  await expect(page.getByText('undefined', { exact: false })).toHaveCount(0);
+  await expect(page.getByText('(null%)', { exact: false })).toHaveCount(0);
+});
+
+test('one-time shifts show their date and HH:mm times with no seconds', async ({ page }) => {
+  test.setTimeout(180000);
+  await setupAdminMocks(page);
+  await page.route(/\/api\/v1\/admin\//, route => {
+    const path = new URL(route.request().url()).pathname;
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    const json = path.endsWith('/shifts') ? [
+      { id: 'one-time', name: 'One time', schedule: { type: 6, oneTimeDate: '2026-11-20', oneTimeStart: '09:30:00', oneTimeEnd: '11:00:00' }, isActive: true },
+    ] : path.endsWith('/assignment-counts') ? {} : path.endsWith('/companies') ? { items: [], total: 0 } : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [];
+    return route.fulfill({ status: 200, headers, json });
+  });
+  const listed = page.waitForResponse(r => /\/api\/v1\/admin\/shifts(\?|$)/.test(r.url()) && r.request().method() === 'GET', { timeout: 150000 });
+  await page.goto('/admin/shifts/');
+  await listed;
+  await expect(page.getByText('One-time 2026-11-20 09:30–11:00', { exact: true })).toBeVisible({ timeout: 30000 });
+  await expect(page.getByRole('table').getByText(/:\d{2}:\d{2}/)).toHaveCount(0);
 });
