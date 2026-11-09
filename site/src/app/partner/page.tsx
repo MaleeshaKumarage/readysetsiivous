@@ -10,6 +10,7 @@ import { partnerApi, type CleaningRequest, type PartnerAccount, type PartnerChan
 import { partnerCopy, partnerLanguageKey, partnerMessage, partnerStatus, type PartnerLanguage } from '@/lib/partnerLocale';
 import type { Branch } from '@/lib/adminApi';
 import { QuoteRequestedBadge } from '@/components/QuoteRequests';
+import { PartnerInventoryAcknowledgments } from '@/components/PartnerInventoryAcknowledgments';
 import './partner.css';
 
 const sections = [
@@ -69,6 +70,8 @@ export default function PartnerPage() {
       .catch((caught: Error) => setVisit(current => current?.request.id === request.id ? { request, data: null, error: caught.message || 'Request failed.' } : current));
   }
   const generation = useRef(0), requestKey = useRef('');
+  // A state counter, so each page refresh is a real render the inventory panel can react to.
+  const [inventoryRefresh, setInventoryRefresh] = useState(0);
   const tabsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -81,7 +84,7 @@ export default function PartnerPage() {
     try { localStorage.setItem(partnerLanguageKey, next); } catch { /* The current page still switches. */ }
   }
   const refresh = useCallback(async () => {
-    const attempt = ++generation.current; setError('');
+    const attempt = ++generation.current; setError(''); setInventoryRefresh(value => value + 1);
     try {
       await initAuth(); if (attempt !== generation.current) return;
       if (!isAuthenticated()) { setAccess('anonymous'); return; }
@@ -188,6 +191,7 @@ export default function PartnerPage() {
       {notice && <p role="status" className="partner-alert partner-alert-success">{partnerMessage(notice, language)}</p>}
       {['allowed', 'error'].includes(access) && <div className="partner-toolbar"><p>{t.timeZone} <strong>{identity?.timeZoneId ?? 'Europe/Helsinki'}</strong></p><Button variant="ghost" size="sm" className="partner-quiet" disabled={busy} onClick={() => void refresh()}><RefreshCw size={16} aria-hidden="true" />{t.refresh}</Button></div>}
       {access === 'allowed' && <>
+        <PartnerInventoryAcknowledgments language={language} refreshToken={inventoryRefresh} />
         <div ref={tabsRef} role="tablist" aria-label={t.sections} className="partner-tabs">
           {sections.map((section, index) => <button key={section.key} id={'partner-tab-' + index} type="button" role="tab" aria-label={t[section.label]} aria-selected={tab === section.key} aria-controls="partner-section" tabIndex={tab === section.key ? 0 : -1} onKeyDown={event => navigateTab(event, index)} onClick={() => setTab(section.key)}>
             <section.icon size={18} aria-hidden="true" /><span>{t[section.label]}</span><span className="partner-count" aria-hidden="true">{counts[index]}</span>

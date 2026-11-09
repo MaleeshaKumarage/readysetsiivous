@@ -115,6 +115,7 @@ builder.Services.AddScoped<CleaningSuite.Application.Leads.ILeadFileStore, Clean
 builder.Services.AddScoped<CleaningSuite.Application.Inventory.IInventoryRepository, CleaningSuite.Infrastructure.Persistence.InventoryRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.Inventory.IInventoryFileStore, CleaningSuite.Infrastructure.Inventory.DiskInventoryFileStore>();
 builder.Services.AddScoped<CleaningSuite.Application.Inventory.InventoryService>();
+builder.Services.AddScoped<CleaningSuite.Application.Inventory.InventoryAcknowledgmentService>();
 builder.Services.AddScoped<CleaningSuite.Application.Leads.LeadService>();
 builder.Services.AddScoped<CleaningSuite.Application.Leads.ILeadCollaborationRepository, CleaningSuite.Infrastructure.Persistence.LeadCollaborationRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.Leads.ILeadAudioStore, CleaningSuite.Infrastructure.Leads.DiskLeadAudioStore>();

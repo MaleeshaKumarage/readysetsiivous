@@ -117,3 +117,7 @@
 @media (prefers-reduced-motion: reduce) {
   .partner-portal *, .partner-portal *::before, .partner-portal *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+.partner-acknowledgments { margin-bottom: 1.25rem; }
+.partner-acknowledgment-entry { border-top: 1px solid var(--partner-border); padding: 1rem 0; overflow-wrap: anywhere; }
+.partner-acknowledgment-detail { display: grid; gap: .75rem; margin-top: 1rem; }
+.partner-acknowledgments button { min-height: 44px; white-space: normal; }
