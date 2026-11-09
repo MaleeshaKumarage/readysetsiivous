@@ -65,6 +65,20 @@ class PathTests(unittest.TestCase):
         self.assertEqual(guard.files_triggering({"paths-ignore": ["**"]}, self.files), [])
 
 
+class PushTriggerTests(unittest.TestCase):
+    def test_null_push_key_is_an_unfiltered_push_trigger(self):
+        self.assertEqual(guard.push_trigger({"push": None}), {})
+
+    def test_string_and_list_forms(self):
+        self.assertEqual(guard.push_trigger("push"), {})
+        self.assertEqual(guard.push_trigger(["push", "pull_request"]), {})
+        self.assertIsNone(guard.push_trigger("workflow_dispatch"))
+        self.assertIsNone(guard.push_trigger({"workflow_dispatch": None}))
+
+    def test_mapping_form_keeps_filters(self):
+        self.assertEqual(guard.push_trigger({"push": {"branches": ["main"]}}), {"branches": ["main"]})
+
+
 class DeployWorkflowTests(unittest.TestCase):
     def test_real_repo_has_the_api_deploy_workflow_on_main(self):
         workflows = guard.deploy_workflows("HEAD")

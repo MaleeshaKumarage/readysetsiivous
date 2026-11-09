@@ -79,6 +79,20 @@ def files_triggering(push: dict, files: list[str]) -> list[str]:
     return list(files)  # no path filter: any change triggers
 
 
+def push_trigger(on):
+    """The push trigger config from a workflow's `on:` value, or None if there is no push trigger.
+
+    `on: push` and `on: {push: null}` both mean an unfiltered push trigger, so they return {}.
+    """
+    if isinstance(on, str):
+        return {} if on == "push" else None
+    if isinstance(on, list):
+        return {} if "push" in on else None
+    if isinstance(on, dict) and "push" in on:
+        return on["push"] if isinstance(on["push"], dict) else {}
+    return None
+
+
 def deploy_workflows(base: str) -> dict[str, dict]:
     """Push-to-main trigger config of every deploying workflow in the commit `base`."""
     found: dict[str, dict] = {}
@@ -87,15 +101,7 @@ def deploy_workflows(base: str) -> dict[str, dict]:
         name = doc.get("name") or path
         if not isinstance(name, str) or not (DEPLOY_NAME.search(name) or DEPLOY_NAME.search(path)):
             continue
-        on = doc.get("on", doc.get(True))  # YAML 1.1 reads a bare `on` key as True
-        if isinstance(on, str):
-            on = [on]
-        if isinstance(on, list):
-            push = {} if "push" in on else None
-        elif isinstance(on, dict):
-            push = on.get("push")
-        else:
-            push = None
+        push = push_trigger(doc.get("on", doc.get(True)))
         if not isinstance(push, dict):
             continue
         if branch_applies(push):
