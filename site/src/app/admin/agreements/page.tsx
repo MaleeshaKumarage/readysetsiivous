@@ -38,7 +38,12 @@ export default function AgreementsPage() {
   const [repairBusy, setRepairBusy] = useState<string | null>(null);
   const [repairError, setRepairError] = useState('');
 
-  const load = useCallback(async () => { setItems(await adminAgreements.list()); }, []);
+  // A failed list read comes back as null: keep the rows already on screen and report false.
+  const load = useCallback(async () => {
+    const list = await adminAgreements.list();
+    if (list) setItems(list);
+    return list !== null;
+  }, []);
   const loadRepairPreview = useCallback(async () => {
     setRepairLoading(true);
     try {
@@ -125,10 +130,12 @@ export default function AgreementsPage() {
 
   const reloadSelected = async (id: string) => {
     invalidateAdminCache();
-    const [detail] = await Promise.all([adminAgreements.get(id), load()]);
+    // The dialog's detail is fetched first, so a list-only failure never discards a good refresh.
+    const detail = await adminAgreements.get(id);
     // A failed read comes back as null; keep the last good view and report the refresh failure instead of blanking the dialog.
     if (!detail) throw new Error('The agreement could not be refreshed.');
     setSelectedAgreement(detail);
+    if (!(await load())) showError('The agreement list could not be refreshed. Reload the page to see the latest list.', 'List not refreshed');
   };
 
   // Runs one signer change. The busy flag is always cleared, and a failed reload is shown as a message, not left unhandled.
@@ -165,6 +172,8 @@ export default function AgreementsPage() {
 
   const removeDetailSigner = async (signerId: string) => {
     if (!selectedAgreement) return;
+    const signer = selectedAgreement.signers.find(s => s.id === signerId);
+    if (!window.confirm(`Remove ${signer?.name ?? 'this signer'} (${signer?.email ?? ''}) from “${selectedAgreement.title}”? Their signing link will stop working.`)) return;
     await runDetailChange('Signer not removed',
       () => adminSendResult(`/api/v1/admin/agreements/${selectedAgreement.id}/signers/${signerId}`, 'DELETE'));
   };

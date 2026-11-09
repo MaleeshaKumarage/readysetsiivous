@@ -28,7 +28,7 @@ async function setup(page: Page, initial: Fixture) {
   await page.route('**/api/v1/admin/companies**', route => route.fulfill({ headers, json: { items: [{ id: 'company', name: 'Fixture Oy', isActive: true }], total: 1 } }));
   const agreement: Fixture = structuredClone(initial);
   const calls: string[] = [];
-  const control = { failDetailReads: false, cancelConflict: false };
+  const control: { failDetailReads: boolean; cancelConflict: boolean; failList: boolean; holdDelete: Promise<void> | null } = { failDetailReads: false, cancelConflict: false, failList: false, holdDelete: null };
   let nextId = 100;
 
   await page.route('**/api/v1/admin/agreements**', async route => {
@@ -52,6 +52,7 @@ async function setup(page: Page, initial: Fixture) {
       calls.push(`remove-signer:${signerId}`);
       const target = agreement.signers.find(s => s.id === signerId);
       if (target?.status === 'Signed') return route.fulfill({ headers, status: 409, json: { title: 'Agreement conflict', detail: SIGNED_REMOVAL } });
+      if (control.holdDelete) await control.holdDelete;
       if (agreement.signers.length <= 1) return route.fulfill({ headers, status: 409, json: { title: 'Agreement conflict', detail: LAST_SIGNER } });
       agreement.signers = agreement.signers.filter(s => s.id !== signerId);
       return route.fulfill({ headers, status: 204 });
@@ -66,6 +67,7 @@ async function setup(page: Page, initial: Fixture) {
       if (control.failDetailReads) return route.fulfill({ headers, status: 500, json: { title: 'Server error', detail: 'Temporary failure' } });
       return route.fulfill({ headers, json: { ...summaryOf(agreement), signers: agreement.signers, completedUtc: null } });
     }
+    if (control.failList) return route.fulfill({ headers, status: 500, json: { title: 'Server error', detail: 'Temporary failure' } });
     return route.fulfill({ headers, json: [summaryOf(agreement)] });
   });
   return { calls, agreement, control };
@@ -123,6 +125,7 @@ test('an unsigned signer can be removed from the agreement', async ({ page }) =>
   const { calls, agreement } = await setup(page, fixture);
   await openSigners(page);
   const dialog = page.getByRole('dialog');
+  page.once('dialog', d => d.accept());
   await dialog.getByRole('button', { name: 'Remove signer Ben Remove' }).click();
   await expect(dialog.getByText('Ben Remove')).toHaveCount(0);
   expect(agreement.signers.map(s => s.id)).toEqual(['s1']);
@@ -142,6 +145,7 @@ test('a removal the server refuses shows the reason and keeps the signer listed'
   const { calls, agreement } = await setup(page, draft());
   await openSigners(page);
   const dialog = page.getByRole('dialog');
+  page.once('dialog', d => d.accept());
   await dialog.getByRole('button', { name: 'Remove signer Anna Pending' }).click();
   await expect(dialog.getByRole('alert')).toHaveText(LAST_SIGNER);
   await expect(page.getByText('Signer not removed').first()).toBeVisible();
@@ -162,6 +166,8 @@ test('cancelling an agreement after confirmation closes it to signers and to new
   await expect(dialog.getByRole('button', { name: 'Remove signer Anna Pending' })).toHaveCount(0);
   expect(agreement.status).toBe('Cancelled');
   expect(calls).toEqual(['cancel']);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('row', { name: /Cleaning contract/ }).getByText('Cancelled').first()).toBeVisible();
 });
 
 test('dismissing the cancel confirmation leaves the agreement open', async ({ page }) => {
@@ -198,6 +204,8 @@ test('a signer change that saves but cannot refresh the agreement says it may ha
   await expect(page.getByText('Agreement not refreshed').first()).toBeVisible();
   // The server did save the signer; the controls must come back so the admin can carry on.
   expect(agreement.signers).toHaveLength(2);
+  // The last good view stays on screen, so the admin is not left with an empty dialog.
+  await expect(dialog.getByText('Anna Pending').first()).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Add signer', exact: true })).toBeEnabled();
   await expect(dialog.getByRole('button', { name: 'Cancel agreement', exact: true })).toBeEnabled();
   expect(calls).toEqual(['add-signer']);
@@ -226,4 +234,47 @@ test('cancelling an agreement that was completed meanwhile explains why it canno
   await expect(dialog.getByRole('button', { name: 'Cancel agreement', exact: true })).toBeEnabled();
   expect(agreement.status).toBe('Draft');
   expect(calls).toEqual(['cancel']);
+});
+
+test('dismissing the remove confirmation keeps the signer and sends no request', async ({ page }) => {
+  const fixture = draft();
+  fixture.signers.push(pending('s2', 'Ben Keep', 'ben@example.test'));
+  const { calls, agreement } = await setup(page, fixture);
+  await openSigners(page);
+  const dialog = page.getByRole('dialog');
+  page.once('dialog', d => d.dismiss());
+  await dialog.getByRole('button', { name: 'Remove signer Ben Keep' }).click();
+  await expect(dialog.getByText('Ben Keep').first()).toBeVisible();
+  expect(agreement.signers).toHaveLength(2);
+  expect(calls).toEqual([]);
+});
+
+test('while a removal is in flight its remove control is disabled and cannot be repeated', async ({ page }) => {
+  const fixture = draft();
+  fixture.signers.push(pending('s2', 'Ben Busy', 'ben@example.test'));
+  const { calls, control } = await setup(page, fixture);
+  await openSigners(page);
+  const dialog = page.getByRole('dialog');
+  let release: () => void = () => {};
+  control.holdDelete = new Promise<void>(resolve => { release = resolve; });
+  page.once('dialog', d => d.accept());
+  await dialog.getByRole('button', { name: 'Remove signer Ben Busy' }).click();
+  await expect(dialog.getByRole('button', { name: 'Remove signer Ben Busy' })).toBeDisabled();
+  release();
+  control.holdDelete = null;
+  await expect(dialog.getByText('Ben Busy')).toHaveCount(0);
+  expect(calls).toEqual(['remove-signer:s2']);
+});
+
+test('a change that saves but cannot refresh the list says so and still shows the updated dialog', async ({ page }) => {
+  const { calls, control } = await setup(page, draft());
+  await openSigners(page);
+  const dialog = page.getByRole('dialog');
+  control.failList = true;
+  await dialog.getByLabel('Name').fill('Ben Newsigner');
+  await dialog.getByLabel('Email').fill('ben@example.test');
+  await dialog.getByRole('button', { name: 'Add signer', exact: true }).click();
+  await expect(page.getByText('List not refreshed').first()).toBeVisible();
+  await expect(dialog.getByText('Ben Newsigner').first()).toBeVisible();
+  expect(calls).toEqual(['add-signer']);
 });
