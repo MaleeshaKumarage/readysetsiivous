@@ -351,3 +351,19 @@ test('a double click on Acknowledge entry sends one response', async ({ page }) 
   await expect(page.getByText('Your response was recorded.')).toBeVisible();
   expect(state.responses).toHaveLength(1);
 });
+
+test('the page refresh button refetches the partner inbox', async ({ page }) => {
+  const state = await setup(page, { pending: true });
+  let listCalls = 0;
+  await page.route(/\/api\/v1\/partner\/inventory-acknowledgments(\?.*)?$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    listCalls += 1;
+    return json(route, { items: state.rows, pendingCount: state.rows.length, hasMore: false });
+  });
+  await enterPartner(page);
+  await page.getByRole('button', { name: 'Needs acknowledgment (1)' }).click();
+  await expect(page.getByRole('article', { name: 'Keys Main store' })).toBeVisible();
+  const before = listCalls;
+  await page.getByRole('button', { name: 'Refresh partner data', exact: true }).click();
+  await expect.poll(() => listCalls).toBeGreaterThan(before);
+});
