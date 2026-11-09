@@ -38,7 +38,7 @@ export function Card({
   return (
     <div
       className={cx(
-        'rounded-2xl',
+        'ds-card rounded-2xl',
         cardVariants[variant],
         cardPaddings[padding],
         hoverable && 'transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-accent-900/15',

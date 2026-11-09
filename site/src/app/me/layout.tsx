@@ -1,4 +1,5 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
+export const viewport: Viewport = { viewportFit: 'cover' };
 export const metadata: Metadata = {
   manifest: '/employee-manifest.json',
   appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'ReadySetSiivous My shifts' },

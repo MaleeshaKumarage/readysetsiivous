@@ -12,3 +12,20 @@
 .partner-staff .mantine-Paper-root { background: white; border-color: #e3e7ef; }
 
 .partner-staff-count { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; margin-left: 8px; padding: 2px 6px; border-radius: 999px; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; font-size: 12px; }
+
+.partner-staff-count-help { font-size: .875rem; color: var(--mantine-color-dimmed); max-width: 70ch; }
+.partner-staff-request { box-shadow: 0 2px 8px #20253504; }
+.partner-staff-request h2 { font-size: 1.125rem; }
+.partner-staff-status { display: inline-block; vertical-align: middle; padding: 4px 10px; border: 1px solid #cbd2df; border-radius: 999px; background: #f6f7fb; font-size: .8125rem; line-height: 1.5; font-weight: 600; }
+.partner-staff-status[data-status='Requested'], .partner-staff-status[data-status='Offered'] { color: #7d6220; border-color: #ebdba0; background: #fbf7ec; }
+.partner-staff-status[data-status='Accepted'], .partner-staff-status[data-status='InProgress'] { color: #364fc7; border-color: #c5d0fa; background: #edf2ff; }
+.partner-staff-status[data-status='Completed'] { color: #166534; border-color: #bbf7d0; background: #f0fdf4; }
+.partner-staff-request-summary { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 12px; font-size: .9375rem; }
+.partner-staff-request-summary > p { min-width: 0; }
+.partner-staff-notes { padding: 12px 0; border-top: 1px solid #e3e7ef; color: var(--mantine-color-dimmed); }
+.partner-staff-actions { padding-top: 8px; }
+@media (max-width: 47.99em) {
+  .partner-staff-request-summary { display: grid; gap: 8px; }
+  .partner-staff-request .mantine-Button-root { max-width: 100%; }
+  .partner-staff form :is(input, textarea, select) { font-size: 16px; }
+}
