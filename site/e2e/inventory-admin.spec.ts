@@ -58,9 +58,9 @@ test('log shows every employee entry and sends the chosen date range to the serv
   const state = await setup(page);
   await page.goto('/admin/inventory/');
 
-  await expect(page.getByRole('cell', { name: 'Keys' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Ana Keeper' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Ben Cleaner' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Keys', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Ana Keeper', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Ben Cleaner', exact: true })).toBeVisible();
   await expect(page.getByText('Deleted', { exact: true })).toBeVisible();
 
   await page.getByLabel('From', { exact: true }).fill('2026-11-01');
@@ -80,7 +80,7 @@ test('the employee filter includes deactivated employees', async ({ page }) => {
   });
   await page.route(/\/api\/v1\/admin\/inventory\/usage(\?.*)?$/, route => route.fulfill({ headers, json: usageRows }));
   await page.goto('/admin/inventory/');
-  await expect(page.getByRole('cell', { name: 'Keys' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Keys', exact: true })).toBeVisible();
   expect(employeeRequests.some(url => url.includes('includeInactive=true'))).toBe(true);
 });
 
@@ -97,7 +97,7 @@ test('a slow response for an older filter does not overwrite the newer results',
     return route.fulfill({ headers, json: [usageRows[0]] });
   });
   await page.goto('/admin/inventory/');
-  await expect(page.getByRole('cell', { name: 'Keys' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Keys', exact: true })).toBeVisible();
 
   // Both ends must be valid, or the page refuses the filter before any request, and the stale path is never exercised.
   await page.getByLabel('To', { exact: true }).fill('2026-11-06');
@@ -106,15 +106,15 @@ test('a slow response for an older filter does not overwrite the newer results',
   await page.getByLabel('From', { exact: true }).fill('2026-11-01');
   await page.getByRole('button', { name: 'Apply' }).click();
 
-  await expect(page.getByRole('cell', { name: 'Keys' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Bedsheets' })).toHaveCount(0, { timeout: 5000 });
-  await expect.poll(async () => page.getByRole('cell', { name: 'Bedsheets' }).count(), { timeout: 3000 }).toBe(0);
+  await expect(page.getByRole('cell', { name: 'Keys', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Bedsheets', exact: true })).toHaveCount(0, { timeout: 5000 });
+  await expect.poll(async () => page.getByRole('cell', { name: 'Bedsheets', exact: true }).count(), { timeout: 3000 }).toBe(0);
 });
 
 test('an end date before the start date is refused without a request', async ({ page }) => {
   const state = await setup(page);
   await page.goto('/admin/inventory/');
-  await expect(page.getByRole('cell', { name: 'Keys' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Keys', exact: true })).toBeVisible();
   const before = state.usageQueries.length;
 
   await page.getByLabel('From', { exact: true }).fill('2026-11-06');
@@ -136,7 +136,7 @@ test('admin opens the photos for an entry', async ({ page }) => {
 test('CSV export downloads the filtered log', async ({ page }) => {
   await setup(page);
   await page.goto('/admin/inventory/');
-  await expect(page.getByRole('cell', { name: 'Keys' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Keys', exact: true })).toBeVisible();
   const [download] = await Promise.all([
     page.waitForEvent('download'),
     page.getByRole('button', { name: 'Export CSV' }).click(),
