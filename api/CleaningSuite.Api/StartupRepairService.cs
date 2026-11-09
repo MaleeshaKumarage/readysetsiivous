@@ -25,10 +25,18 @@ public sealed class StartupRepairService(IServiceScopeFactory scopes, IConfigura
         });
 
         await RunAsync("automatic acceptance default", stoppingToken, async (services, ct) =>
-            await services.GetRequiredService<AutoAcceptDefaultRunner>().RunAsync(ct));
+            await services.GetRequiredService<AutoAcceptDefaultRunner>().RunAsync(ReleaseCutoff(), ct));
 
         await RunAsync("stale assignment release", stoppingToken, async (services, ct) =>
             await services.GetRequiredService<StaleAssignmentRepairRunner>().RunAsync(ct));
+    }
+
+    // The release time from configuration. Missing or empty means the automatic acceptance switch does nothing.
+    private DateTime? ReleaseCutoff()
+    {
+        var value = configuration["DataCorrections:AutoAcceptDefault:CutoffUtc"];
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        return System.DateTimeOffset.Parse(value, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal).UtcDateTime;
     }
 
     private async Task RunAsync(string repair, CancellationToken ct, Func<IServiceProvider, CancellationToken, Task> run)

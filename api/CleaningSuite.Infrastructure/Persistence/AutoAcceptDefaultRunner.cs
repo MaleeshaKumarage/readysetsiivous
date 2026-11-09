@@ -11,15 +11,23 @@ namespace CleaningSuite.Infrastructure.Persistence;
 /// One-time release decision: every existing work employee (admin, manager, employee) moves to automatic acceptance,
 /// including people who switched it off. Partner accounts are not touched. Runs once per active tenant. The marker is
 /// written in the same commit as the change, so later starts skip the tenant and keep choices made afterwards.
+/// Only employees created at or before the release cutoff are switched, and never one whose choice was made after it,
+/// so a tenant activated later cannot have new accounts or new choices overwritten. Without a cutoff nothing is switched.
 /// Mirrors api/deploy/employee-auto-accept-migration.sql.
 /// </summary>
 public sealed class AutoAcceptDefaultRunner(IDocumentStore store, ITenantRegistry registry, ILogger<AutoAcceptDefaultRunner> logger)
 {
     public const string Key = "employee-auto-accept-default-r05";
 
-    public async Task<IReadOnlyList<(string Tenant, int Switched)>> RunAsync(CancellationToken ct)
+    public async Task<IReadOnlyList<(string Tenant, int Switched)>> RunAsync(DateTime? cutoffUtc, CancellationToken ct)
     {
         var results = new List<(string, int)>();
+        if (cutoffUtc is null)
+        {
+            logger.LogWarning("Automatic acceptance default skipped: DataCorrections:AutoAcceptDefault:CutoffUtc is not set.");
+            return results;
+        }
+        var cutoff = cutoffUtc.Value;
         foreach (var registration in await registry.ListAsync(ct))
         {
             if (registration.Status != TenantRegistration.StatusActive) continue;
@@ -29,7 +37,8 @@ public sealed class AutoAcceptDefaultRunner(IDocumentStore store, ITenantRegistr
 
             var employees = await session.Query<Employee>().ToListAsync(ct);
             var switched = 0;
-            foreach (var employee in employees.Where(x => Employee.IsWorkRole(x.Role) && !x.AutoAcceptWork))
+            foreach (var employee in employees.Where(x => Employee.IsWorkRole(x.Role) && !x.AutoAcceptWork
+                && x.CreatedUtc <= cutoff && (x.AutoAcceptWorkChosenUtc is null || x.AutoAcceptWorkChosenUtc <= cutoff)))
             {
                 employee.AutoAcceptWork = true;
                 session.Store(employee);
