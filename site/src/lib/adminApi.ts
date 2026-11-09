@@ -483,6 +483,8 @@ export async function downloadInvoicePdf(id: string): Promise<void> {
 // ---------- Companies and Branches ----------
 export interface Company {
   isPartnerEnabled?: boolean;
+  isQualityCycleEnabled?: boolean;
+  qualityCycleTemplateId?: string | null;
   id: string;
   businessId: string;
   name: string;
@@ -776,6 +778,8 @@ export const adminCompanies = {
   get: (id: string) => adminGet<CompanyDetail>(`/api/v1/admin/companies/${id}`),
   create: (body: {
     isPartnerEnabled?: boolean;
+    isQualityCycleEnabled?: boolean;
+    qualityCycleTemplateId?: string | null;
     businessId: string;
     name: string;
     contactName?: string;
@@ -787,6 +791,8 @@ export const adminCompanies = {
     id: string,
     body: {
       isPartnerEnabled?: boolean;
+      isQualityCycleEnabled?: boolean;
+      qualityCycleTemplateId?: string | null;
       businessId: string;
       name: string;
       contactName?: string;

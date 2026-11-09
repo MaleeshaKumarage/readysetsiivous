@@ -12,6 +12,9 @@ public class Company : BaseDocument
     public string? Notes { get; set; }
     public bool IsActive { get; set; }
     public bool IsPartnerEnabled { get; set; }
+    // Partner cleaning requests accepted for this company get this quality-cycle checklist on their shift.
+    public bool IsQualityCycleEnabled { get; set; }
+    public Guid? QualityCycleTemplateId { get; set; }
 
     public static Company Create(
         string businessId,

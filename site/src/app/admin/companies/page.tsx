@@ -11,8 +11,9 @@ import { adminCompanies, adminBranches, type Company, type Branch, type CompanyR
 import { companyLifecycle, branchLifecycle } from '@/lib/reactivationApi';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
 import { QuoteRequestedBadge, useQuoteRequests } from '@/components/QuoteRequests';
+import { adminQualityCycle, type QualityCycleTemplate } from '@/lib/qualityCycleApi';
 
-const emptyForm = { businessId: '', name: '', contactName: '', contactEmail: '', contactPhone: '', notes: '', isPartnerEnabled: false };
+const emptyForm = { businessId: '', name: '', contactName: '', contactEmail: '', contactPhone: '', notes: '', isPartnerEnabled: false, isQualityCycle: false, qualityCycleTemplateId: '' };
 
 export default function CompaniesAdminPage() {
   const quoteRequests = useQuoteRequests();
@@ -48,6 +49,7 @@ export default function CompaniesAdminPage() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [qualityTemplates, setQualityTemplates] = useState<QualityCycleTemplate[]>([]);
 
   const [expanded, setExpanded] = useState<string | null>(null);
   // A deep-linked company is shown above the page so its branches render whichever page it sits on.
@@ -137,12 +139,14 @@ export default function CompaniesAdminPage() {
 
   const submit = async () => {
     if (!form.businessId.trim() || !form.name.trim()) { setError('Business ID and name are required.'); return; }
+    if (form.isQualityCycle && !form.qualityCycleTemplateId) { setError('Choose a quality cycle template.'); return; }
     setSaving(true); setError('');
     try {
       const fields = {
         businessId: form.businessId.trim(), name: form.name.trim(),
         contactName: form.contactName.trim() || undefined, contactEmail: form.contactEmail.trim() || undefined,
         contactPhone: form.contactPhone.trim() || undefined, notes: form.notes.trim() || undefined, isPartnerEnabled: form.isPartnerEnabled,
+        isQualityCycleEnabled: form.isQualityCycle, qualityCycleTemplateId: form.isQualityCycle ? form.qualityCycleTemplateId : null,
       };
       if (editingCompany) await adminCompanies.update(editingCompany.id, { ...fields, isActive: editingCompany.isActive });
       else await adminCompanies.create(fields);
@@ -153,10 +157,16 @@ export default function CompaniesAdminPage() {
     } finally { setSaving(false); }
   };
 
+  // Company-scoped templates and shared ones; the server re-checks the scope on save.
+  const loadQualityTemplates = async (companyId?: string) => {
+    try { setQualityTemplates(((await adminQualityCycle.listTemplates(companyId)) ?? []).filter(template => template.isActive)); }
+    catch { setQualityTemplates([]); }
+  };
+
   const openCompanyEdit = (company: Company) => {
     setEditingCompany(company);
-    setForm({ businessId: company.businessId, name: company.name, contactName: company.contactName ?? '', contactEmail: company.contactEmail ?? '', contactPhone: company.contactPhone ?? '', notes: company.notes ?? '', isPartnerEnabled: company.isPartnerEnabled ?? false });
-    setError(''); setModalOpen(true);
+    setForm({ businessId: company.businessId, name: company.name, contactName: company.contactName ?? '', contactEmail: company.contactEmail ?? '', contactPhone: company.contactPhone ?? '', notes: company.notes ?? '', isPartnerEnabled: company.isPartnerEnabled ?? false, isQualityCycle: company.isQualityCycleEnabled ?? false, qualityCycleTemplateId: company.qualityCycleTemplateId ?? '' });
+    setError(''); setModalOpen(true); void loadQualityTemplates(company.id);
   };
 
   const loadBranches = async (id: string) => {
@@ -340,7 +350,7 @@ export default function CompaniesAdminPage() {
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
         <Title order={2} component="h1">Companies</Title>
-        <Button leftSection={<Plus size={16} />} onClick={() => { setEditingCompany(null); setForm(emptyForm); setError(''); setModalOpen(true); }}>Add company</Button>
+        <Button leftSection={<Plus size={16} />} onClick={() => { setEditingCompany(null); setForm(emptyForm); setError(''); setModalOpen(true); void loadQualityTemplates(); }}>Add company</Button>
       </Group>
 
       {actionError && <Text c="red" role="alert" mb="sm">{actionError}</Text>}
@@ -444,6 +454,8 @@ export default function CompaniesAdminPage() {
       <Modal opened={modalOpen} onClose={() => { setModalOpen(false); setEditingCompany(null); }} title={editingCompany ? 'Edit company' : 'Add company'} radius="md">
         <Stack gap="sm">
           <Checkbox label="Enable partner access" checked={form.isPartnerEnabled} onChange={event => { const checked = event.currentTarget.checked; setForm(current => ({ ...current, isPartnerEnabled: checked })); }} description="Partners linked to this company can access its properties and request cleanings. Disabling this removes their portal access." />
+          <Checkbox label="Quality cycle" checked={form.isQualityCycle} onChange={event => { const checked = event.currentTarget.checked; setForm(current => ({ ...current, isQualityCycle: checked })); }} description="Every partner cleaning request accepted for this company gets the quality cycle checklist. Staff cover it through My shifts like a normal cleaning." />
+          {form.isQualityCycle && <Select label="Quality cycle template" required searchable data={qualityTemplates.map(template => ({ value: template.id, label: template.title }))} value={form.qualityCycleTemplateId || null} onChange={value => setForm(current => ({ ...current, qualityCycleTemplateId: value ?? '' }))} />}
           <TextInput label="Business ID" required value={form.businessId} onChange={set('businessId')} />
           <TextInput label="Name" required value={form.name} onChange={set('name')} />
           <TextInput label="Contact name" value={form.contactName} onChange={set('contactName')} />

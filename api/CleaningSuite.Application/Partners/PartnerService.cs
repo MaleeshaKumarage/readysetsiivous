@@ -435,7 +435,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
     private async Task MaterializeAcceptance(PartnerCleaningRequest request, Guid actor, DateTime? plannedStart, CancellationToken ct, bool automatic = false)
     {
         await Staff(actor, ct);
-        await ActiveCompany(request.CompanyId, ct);
+        var company = await ActiveCompany(request.CompanyId, ct);
         var branch = await Branch(request.BranchId, request.CompanyId, ct);
         await EnsureUnstartedUnbilled(request, ct);
         var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
@@ -450,6 +450,13 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
             $"Cleaning — {branch.Name}", new ShiftSchedule { Type = ShiftScheduleType.OnCallFlexible }, request.Notes, localFrom, localUntil);
         shift.Id = shiftId; shift.PartnerRequestId = request.Id; shift.IsActive = true;
         shift.ValidFrom = localFrom; shift.ValidUntil = localUntil; shift.Notes = request.Notes;
+        // Companies with quality cycle enabled give every accepted visit the checklist; an admin's later choice on the shift is kept.
+        if (company.IsQualityCycleEnabled && company.QualityCycleTemplateId is Guid qualityTemplateId && shift.QualityCycleTemplateId is null)
+        {
+            shift.EnsureQualityCycleHistory();
+            shift.QualityCycleTemplateId = qualityTemplateId;
+            shift.RecordQualityCyclePlan(DateTime.UtcNow);
+        }
         // The visit carries the photo sections in force when the partner's request is accepted.
         var portalSettings = await Db.LoadAsync<PartnerPortalSettings>(request.CompanyId, ct);
         shift.RequiredPhotoLabels = portalSettings?.PhotoLabels.ToList() ?? [];

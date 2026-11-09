@@ -25,7 +25,9 @@ public record CompanyDto(
     string? ContactPhone,
     string? Notes,
     bool IsActive,
-    bool IsPartnerEnabled = false);
+    bool IsPartnerEnabled = false,
+    bool IsQualityCycleEnabled = false,
+    Guid? QualityCycleTemplateId = null);
 
 public record BranchDto(
     Guid Id,
@@ -71,7 +73,9 @@ public record CreateCompanyCommand(
     string? ContactEmail = null,
     string? ContactPhone = null,
     string? Notes = null,
-    bool IsPartnerEnabled = false) : IRequest<CompanyDto>;
+    bool IsPartnerEnabled = false,
+    bool IsQualityCycleEnabled = false,
+    Guid? QualityCycleTemplateId = null) : IRequest<CompanyDto>;
 
 public record UpdateCompanyCommand(
     Guid Id,
@@ -82,7 +86,9 @@ public record UpdateCompanyCommand(
     string? ContactPhone = null,
     string? Notes = null,
     bool IsActive = true,
-    bool? IsPartnerEnabled = null) : IRequest<CompanyDto>;
+    bool? IsPartnerEnabled = null,
+    bool? IsQualityCycleEnabled = null,
+    Guid? QualityCycleTemplateId = null) : IRequest<CompanyDto>;
 
 public record DeactivateCompanyCommand(Guid Id) : IRequest;
 public record ReactivateCompanyCommand(Guid Id) : IRequest;
@@ -148,13 +154,29 @@ public record DeleteBranchCommand(Guid Id) : IRequest;
 
 public class CompanyHandlers
 {
+    // Enabling quality cycle needs an active template the company may use (company-scoped or shared).
+    internal static async Task ApplyQualityCycleAsync(Company company, bool enabled, Guid? templateId, IQualityCycleRepository? templates, CancellationToken ct)
+    {
+        if (!enabled) { company.IsQualityCycleEnabled = false; company.QualityCycleTemplateId = null; return; }
+        if (templateId is not Guid id)
+            throw new ValidationException([new FluentValidation.Results.ValidationFailure("QualityCycleTemplateId", "Choose a quality cycle template.")]);
+        if (templates is not null)
+        {
+            var template = await templates.GetTemplateAsync(id, ct);
+            if (template is null || !template.IsActive || (template.CompanyId.HasValue && template.CompanyId != company.Id))
+                throw new ValidationException([new FluentValidation.Results.ValidationFailure("QualityCycleTemplateId", "Choose an active quality cycle template for this company.")]);
+        }
+        company.IsQualityCycleEnabled = true; company.QualityCycleTemplateId = id;
+    }
+
     public class CreateCompanyCommandHandler : IRequestHandler<CreateCompanyCommand, CompanyDto>
     {
         private readonly ICompanyRepository _repository;
+        private readonly IQualityCycleRepository? _qualityCycles;
 
-        public CreateCompanyCommandHandler(ICompanyRepository repository)
+        public CreateCompanyCommandHandler(ICompanyRepository repository, IQualityCycleRepository? qualityCycles = null)
         {
-            _repository = repository;
+            _repository = repository; _qualityCycles = qualityCycles;
         }
 
         public async Task<CompanyDto> Handle(CreateCompanyCommand request, CancellationToken ct)
@@ -168,6 +190,7 @@ public class CompanyHandlers
                 request.Notes);
 
             company.IsPartnerEnabled = request.IsPartnerEnabled;
+            await ApplyQualityCycleAsync(company, request.IsQualityCycleEnabled, request.QualityCycleTemplateId, _qualityCycles, ct);
             await _repository.SaveAsync(company, ct);
             return MapCompany(company);
         }
@@ -178,10 +201,11 @@ public class CompanyHandlers
         private readonly ICompanyRepository _repository;
 
         private readonly IShiftWorkReservation? _reservation;
+        private readonly IQualityCycleRepository? _qualityCycles;
 
-            public UpdateCompanyCommandHandler(ICompanyRepository repository, IShiftWorkReservation? reservation = null)
+            public UpdateCompanyCommandHandler(ICompanyRepository repository, IShiftWorkReservation? reservation = null, IQualityCycleRepository? qualityCycles = null)
         {
-            _repository = repository; _reservation = reservation;
+            _repository = repository; _reservation = reservation; _qualityCycles = qualityCycles;
         }
 
         public async Task<CompanyDto> Handle(UpdateCompanyCommand request, CancellationToken ct)
@@ -199,6 +223,9 @@ public class CompanyHandlers
                 request.IsActive);
 
             if (request.IsPartnerEnabled.HasValue) company.IsPartnerEnabled = request.IsPartnerEnabled.Value;
+            // Absent (null) keeps the saved quality-cycle choice, so older clients that omit these fields do not clear it.
+            if (request.IsQualityCycleEnabled.HasValue)
+                await ApplyQualityCycleAsync(company, request.IsQualityCycleEnabled.Value, request.QualityCycleTemplateId ?? company.QualityCycleTemplateId, _qualityCycles, ct);
             await _repository.SaveAsync(company, ct);
             return MapCompany(company);
         }
@@ -559,7 +586,7 @@ public class CompanyHandlers
             company.ContactEmail,
             company.ContactPhone,
             company.Notes,
-            company.IsActive, company.IsPartnerEnabled);
+            company.IsActive, company.IsPartnerEnabled, company.IsQualityCycleEnabled, company.QualityCycleTemplateId);
 
     public static BranchDto MapBranch(Branch branch) =>
         new(
