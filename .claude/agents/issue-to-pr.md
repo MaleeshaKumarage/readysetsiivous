@@ -19,7 +19,7 @@ You deliver ONE issue per run, end to end. Follow the repo's CLAUDE.md publishin
   export INVITE_TEST_DATABASE="$QC_TEST_CONNECTION_STRING"
   ```
 
-- Push check: after every push, `git ls-remote --heads origin <branch>` must equal `git rev-parse HEAD`. If the stop hook still reports unpushed commits, the cause is local tracking config (`remote.origin.fetch` only maps `main`). Add a refspec for the branch, `git config --add remote.origin.fetch '+refs/heads/<branch>:refs/remotes/origin/<branch>'`, then `git branch --set-upstream-to=origin/<branch>`. Do not force-push.
+- Push check: after every push, `git ls-remote --heads origin <branch> | cut -f1` must equal `git rev-parse HEAD` (ls-remote prints `<sha>\trefs/heads/<branch>`, so compare the first field only). If the stop hook still reports unpushed commits, the cause is local tracking config (`remote.origin.fetch` only maps `main`). Add a refspec for the branch, `git config --add remote.origin.fetch '+refs/heads/<branch>:refs/remotes/origin/<branch>'`, then `git branch --set-upstream-to=origin/<branch>`. Do not force-push.
 
 ## 1. Pick the issue
 

@@ -53,6 +53,13 @@ class PathTests(unittest.TestCase):
         # "everything except docs" triggers on the API file, not on the docs file
         self.assertEqual(guard.files_triggering({"paths": ["!docs/**"]}, self.files), ["api/x.cs"])
 
+    def test_later_positive_pattern_reincludes_a_file(self):
+        push = {"paths": ["src/**", "!src/**/*.test.ts", "src/critical.test.ts"]}
+        self.assertEqual(guard.files_triggering(push, ["src/critical.test.ts", "src/other.test.ts"]), ["src/critical.test.ts"])
+
+    def test_empty_positive_list_is_conservative(self):
+        self.assertEqual(guard.files_triggering({"paths": ["!docs/**"]}, ["api/x.cs"]), ["api/x.cs"])
+
     def test_paths_ignore_triggers_on_files_not_ignored(self):
         self.assertEqual(guard.files_triggering({"paths-ignore": ["docs/**"]}, self.files), ["api/x.cs"])
         self.assertEqual(guard.files_triggering({"paths-ignore": ["**"]}, self.files), [])

@@ -41,39 +41,46 @@ def glob_to_regex(pattern: str) -> re.Pattern:
     return re.compile("^" + out + "$")
 
 
-def _matches_any(patterns, value: str) -> bool:
-    return any(glob_to_regex(p).match(value) for p in patterns)
+def _included(patterns, value: str) -> bool:
+    """GitHub applies patterns in order: a later match overrides an earlier one, and `!` excludes.
+
+    Ambiguous cases count as included (conservative): an empty list, or a list with only
+    negations that none of them excludes.
+    """
+    if not patterns:
+        return True
+    state = None
+    for pattern in patterns:
+        if pattern.startswith("!"):
+            if glob_to_regex(pattern[1:]).match(value):
+                state = False
+        elif glob_to_regex(pattern).match(value):
+            state = True
+    if state is None:
+        return not any(not p.startswith("!") for p in patterns)
+    return state
 
 
 def branch_applies(push: dict, branch: str = BRANCH) -> bool:
     """`branches` and `branches-ignore` decide whether the push trigger covers `branch`."""
     if push.get("branches") is not None:
-        positive = [b for b in push["branches"] if not b.startswith("!")]
-        negative = [b[1:] for b in push["branches"] if b.startswith("!")]
-        return _matches_any(positive, branch) and not _matches_any(negative, branch)
+        return _included(push["branches"], branch)
     if push.get("branches-ignore") is not None:
-        return not _matches_any(push["branches-ignore"], branch)
+        return not any(glob_to_regex(p).match(branch) for p in push["branches-ignore"])
     return True  # no branch filter: every branch, including main
 
 
 def files_triggering(push: dict, files: list[str]) -> list[str]:
     """Return the changed files that make this push trigger fire."""
     if push.get("paths") is not None:
-        paths = push["paths"]
-        positive = [p for p in paths if not p.startswith("!")]
-        negative = [p[1:] for p in paths if p.startswith("!")]
-        def hit(f):
-            # Negation-only lists are treated as "anything not excluded" (conservative).
-            included = _matches_any(positive, f) if positive else True
-            return included and not _matches_any(negative, f)
-        return [f for f in files if hit(f)]
+        return [f for f in files if _included(push["paths"], f)]
     if push.get("paths-ignore") is not None:
-        return [f for f in files if not _matches_any(push["paths-ignore"], f)]
+        return [f for f in files if not any(glob_to_regex(p).match(f) for p in push["paths-ignore"])]
     return list(files)  # no path filter: any change triggers
 
 
 def deploy_workflows(base: str) -> dict[str, dict]:
-    """Push-to-main trigger config of every deploying workflow on `base`."""
+    """Push-to-main trigger config of every deploying workflow in the commit `base`."""
     found: dict[str, dict] = {}
     for path in run(["git", "ls-tree", "--name-only", base, ".github/workflows/"]).split():
         doc = yaml.safe_load(run(["git", "show", f"{base}:{path}"])) or {}
@@ -105,10 +112,17 @@ def pr_files(repo: str, number: int) -> list[str]:
     return [line for line in raw.splitlines() if line]
 
 
-def evaluate(base: str, repo: str, number: int) -> dict[str, list[str]]:
+def evaluate(base: str, head: str, repo: str, number: int) -> dict[str, list[str]]:
+    """A deploy workflow may come from the base (today) or from the PR head (after the merge).
+
+    Both are checked, so a PR that adds or edits a deploy trigger is inspected too.
+    """
     files = pr_files(repo, number)
+    configs = {}
+    for source in (base, head):
+        configs.update({f"{source}:{path}": push for path, push in deploy_workflows(source).items()})
     hits = {}
-    for workflow, push in deploy_workflows(base).items():
+    for workflow, push in configs.items():
         matched = files_triggering(push, files)
         if matched:
             hits[workflow] = matched
@@ -124,7 +138,8 @@ def main() -> int:
     try:
         repo = args.repo or re.search(r"github\.com[:/](.+?)(?:\.git)?$", run(["git", "remote", "get-url", "origin"]).strip()).group(1)
         run(["git", "fetch", "-q", "origin", BRANCH])
-        hits = evaluate(args.base, repo, args.number)
+        run(["git", "fetch", "-q", "origin", f"pull/{args.number}/head"])
+        hits = evaluate(args.base, "FETCH_HEAD", repo, args.number)
     except (subprocess.CalledProcessError, OSError, AttributeError, yaml.YAMLError, TypeError, ValueError) as error:
         print(json.dumps({"error": str(error)}))
         return 1
