@@ -19,7 +19,7 @@ public class CancelAgreementHandler : IRequestHandler<CancelAgreementCommand, Un
         var a = await _repo.GetAsync(_context.TenantId, request.AgreementId, ct)
             ?? throw new NotFoundException("Agreement", request.AgreementId);
         if (a.Status == Agreement.StatusCompleted)
-            throw new InvalidOperationException("Completed agreement cannot be cancelled");
+            throw new AgreementConflictException("This agreement has been completed, so it can no longer be cancelled. Keep it for the record.");
 
         a.Status = Agreement.StatusCancelled;
         a.UpdatedUtc = DateTime.UtcNow;

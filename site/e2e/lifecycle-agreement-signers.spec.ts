@@ -8,6 +8,7 @@ type Fixture = { id: string; title: string; status: string; signers: Signer[] };
 
 const DUPLICATE = 'ben@example.test is already a signer on this agreement. Use a different email address.';
 const LAST_SIGNER = 'An agreement needs at least one signer. Add another signer before removing this one.';
+const CANCEL_COMPLETED = 'This agreement has been completed, so it can no longer be cancelled. Keep it for the record.';
 const SIGNED_REMOVAL = 'This signer has already signed, so they cannot be removed. Keep the agreement for the record.';
 
 const pending = (id: string, name: string, email: string): Signer => ({ id, name, email, status: 'Pending', token: `tok-${id}` });
@@ -27,7 +28,7 @@ async function setup(page: Page, initial: Fixture) {
   await page.route('**/api/v1/admin/companies**', route => route.fulfill({ headers, json: { items: [{ id: 'company', name: 'Fixture Oy', isActive: true }], total: 1 } }));
   const agreement: Fixture = structuredClone(initial);
   const calls: string[] = [];
-  const control = { failDetailReads: false };
+  const control = { failDetailReads: false, cancelConflict: false };
   let nextId = 100;
 
   await page.route('**/api/v1/admin/agreements**', async route => {
@@ -57,6 +58,7 @@ async function setup(page: Page, initial: Fixture) {
     }
     if (path.endsWith('/cancel') && request.method() === 'POST') {
       calls.push('cancel');
+      if (control.cancelConflict) return route.fulfill({ headers, status: 409, json: { title: 'Agreement conflict', detail: CANCEL_COMPLETED } });
       agreement.status = 'Cancelled';
       return route.fulfill({ headers, status: 204 });
     }
@@ -209,4 +211,19 @@ test('an agreement that cannot be loaded shows a message in the dialog instead o
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByRole('alert')).toHaveText('This agreement could not be loaded. Close it and try again.');
   await expect(dialog.locator('.mantine-Loader-root')).toHaveCount(0);
+});
+
+test('cancelling an agreement that was completed meanwhile explains why it cannot be cancelled', async ({ page }) => {
+  const { calls, agreement, control } = await setup(page, draft());
+  await openSigners(page);
+  const dialog = page.getByRole('dialog');
+  control.cancelConflict = true;
+  page.once('dialog', d => d.accept());
+  await dialog.getByRole('button', { name: 'Cancel agreement', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toHaveText(CANCEL_COMPLETED);
+  await expect(page.getByText('Agreement not cancelled').first()).toBeVisible();
+  // The agreement stays open for changes because the server did not cancel it.
+  await expect(dialog.getByRole('button', { name: 'Cancel agreement', exact: true })).toBeEnabled();
+  expect(agreement.status).toBe('Draft');
+  expect(calls).toEqual(['cancel']);
 });

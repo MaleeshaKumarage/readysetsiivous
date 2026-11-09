@@ -210,6 +210,18 @@ public class AgreementSignerManagementTests
     }
 
     [Fact]
+    public async Task Cancelling_a_completed_agreement_is_a_conflict_message_not_a_server_error()
+    {
+        var agreement = Build(Agreement.StatusCompleted, Signed("Anna", "anna@example.test"));
+        var (repo, context) = Repo(agreement);
+        var ex = await Assert.ThrowsAsync<AgreementConflictException>(() =>
+            new CancelAgreementHandler(context, repo.Object).Handle(new CancelAgreementCommand(agreement.Id), default));
+        Assert.Contains("completed", ex.Message);
+        Assert.Equal(Agreement.StatusCompleted, agreement.Status);
+        repo.Verify(x => x.SaveAsync(Tenant, It.IsAny<Agreement>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Cancelling_keeps_the_signed_evidence_and_the_admin_document_path()
     {
         var anna = Signed("Anna", "anna@example.test");
