@@ -60,11 +60,11 @@ class PathTests(unittest.TestCase):
 
 class DeployWorkflowTests(unittest.TestCase):
     def test_real_repo_has_the_api_deploy_workflow_on_main(self):
-        workflows = guard.deploy_workflows("origin/main")
+        workflows = guard.deploy_workflows("HEAD")
         self.assertIn(".github/workflows/docker-build-push.yml", workflows)
 
     def test_real_repo_ignores_workflows_without_a_main_push(self):
-        self.assertNotIn(".github/workflows/proxy-config-tests.yml", guard.deploy_workflows("origin/main"))
+        self.assertNotIn(".github/workflows/proxy-config-tests.yml", guard.deploy_workflows("HEAD"))
 
 
 if __name__ == "__main__":
