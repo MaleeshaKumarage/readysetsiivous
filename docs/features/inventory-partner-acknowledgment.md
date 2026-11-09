@@ -86,3 +86,39 @@ as separately reviewed increments if needed.
 
 Schema registration is included in `MartenConfig`. Local implementation is not
 a production migration/deployment or a verified production release.
+
+## Local verification — 2026-11-09
+
+The feature branch was rebased onto main `4a3c20f` before verification. Ran the
+actual API on loopback with isolated PostgreSQL 16 and private local upload
+storage, plus the actual Next development server. Test-only RSA-signed identities
+used the API's normal JWT validation, tenant resolution, employee access guard,
+controller authorization, application services, database and disk photo store.
+The browser fixture supplied those identities; no API response was mocked and
+no shared-development or production service was accessed. This verifies the
+feature handoff, not a genuine Keycloak login/PKCE session.
+
+Both desktop and Pixel 5 browser runs passed:
+
+- Employee creates two real inventory takes with uploaded PNG evidence.
+- Admin reviews photos, selects both entries, confirms the partner company and
+  sends one batch; the partner notification shows two pending entries.
+- Partner reads the protected photo, acknowledges one entry, reports an issue
+  on the other, and sees both responses in history. Blank issues are refused.
+- Admin reloads the log and sees both statuses, partner identity and issue note;
+  the original employee records are unchanged.
+- Finnish labels and phone containment work with the real API.
+- Unknown IDs cannot partially share a batch; duplicate batches conflict,
+  identical submission retries are safe, and stale response versions conflict.
+- Anonymous, employee, manager and partner requests fail the relevant role
+  boundaries; another company's partner cannot see, respond to or download
+  evidence from the request. Partner payloads exclude employee identity.
+
+An additional real HTTP single-entry request passed, including invalid-status
+rejection, identical acknowledgment retry preserving its version/timestamp, and
+refusal to overwrite a recorded response. Photo bytes matched the uploaded file
+and used private/no-store response headers. No browser runtime error occurred.
+
+All 32 inventory backend tests passed again against the disposable PostgreSQL
+database with zero skipped tests. The checked-in browser suite separately
+covers failure/retry and expired-photo messaging with API fixtures.
