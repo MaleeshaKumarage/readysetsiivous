@@ -504,6 +504,8 @@ test('a drop is ignored and cancelled while the form is submitting', async ({ pa
   expect(cancelled).toBe(true);
   await expect(zone).toHaveAttribute('data-drag-active', 'false');
   await dropPhotos(page, [pngFile('late.png')]);
+  // The submit body was captured at click time, so check the UI state: the late drop must not attach a photo.
+  await expect(page.getByRole('button', { name: 'Remove photo' })).toHaveCount(0);
   releaseSubmit();
   await expect(page.getByRole('heading', { name: 'Thank You!' })).toBeVisible();
   expect(submitted.photos).toEqual([]);
