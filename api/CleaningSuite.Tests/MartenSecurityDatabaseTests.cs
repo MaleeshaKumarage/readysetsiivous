@@ -8,6 +8,7 @@ using Newtonsoft.Json;
 
 namespace CleaningSuite.Tests;
 
+[Collection("Database integration")]
 public class MartenSecurityDatabaseTests
 {
     public class DictionaryDocument : BaseDocument
@@ -96,7 +97,7 @@ public class MartenSecurityDatabaseTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddCleaningMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!,
+        services.AddTestMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!,
             databaseSchemaName: "security_" + Guid.NewGuid().ToString("N"));
         services.Configure<StoreOptions>(options =>
         {

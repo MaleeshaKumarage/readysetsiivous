@@ -32,6 +32,7 @@ public class EmployeeIdentityKeycloakFactAttribute : FactAttribute
             Skip = "Set isolated INVITE_TEST_KEYCLOAK_URL and INVITE_TEST_DATABASE.";
     }
 }
+[Collection("Database integration")]
 public class EmployeeIdentityIntegrationTests
 {
     [EmployeeIdentityDatabaseFact]
@@ -339,7 +340,7 @@ public class EmployeeIdentityIntegrationTests
         options.Schema.For<TenantRegistration>(); options.Schema.For<Company>(); options.Schema.For<Branch>();
         options.Schema.For<QualityCycleTemplate>(); options.Schema.For<Shift>(); options.Schema.For<ShiftAssignment>(); options.Schema.For<Booking>();
         options.Policies.AllDocumentsAreMultiTenanted(); options.Schema.For<Employee>().Index(x => x.KeycloakUserId).UniqueIndex(Marten.Schema.UniqueIndexType.Computed, "mt_doc_employee_uidx_keycloak_identity_key", Marten.Schema.Indexing.Unique.TenancyScope.PerTenant, x => x.KeycloakIdentityKey!);
-        var fixtureServices = new ServiceCollection(); fixtureServices.AddSingleton<IDocumentStore>(_ => new DocumentStore(options));
+        var fixtureServices = new ServiceCollection(); fixtureServices.AddSingleton<IDocumentStore>(_ => new TestDocumentStore(options, Environment.GetEnvironmentVariable("INVITE_TEST_DATABASE")!));
         return fixtureServices.BuildServiceProvider();
     }
     private static bool Duplicate(Exception error) => error is Npgsql.PostgresException { SqlState: "23505" } || error.InnerException is not null && Duplicate(error.InnerException);

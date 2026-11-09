@@ -7,7 +7,8 @@ const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Head
 function windowDays() {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Helsinki' });
   const end = new Date(Date.parse(`${today}T12:00:00Z`) + 13 * 86_400_000).toISOString().slice(0, 10);
-  return { today, end };
+  const start = new Date(Date.parse(`${today}T12:00:00Z`) - 180 * 86_400_000).toISOString().slice(0, 10);
+  return { today: start, end };
 }
 
 async function setup(page: Page) {
@@ -22,16 +23,16 @@ async function setup(page: Page) {
   return { queries, last: () => queries.at(-1) };
 }
 
-const windowNotice = (page: Page) => page.getByRole('status').filter({ hasText: 'for the next 14 days' });
+const windowNotice = (page: Page) => page.getByRole('status').filter({ hasText: 'Showing overdue and upcoming work' });
 
-test('the first view opens on unassigned work in the next 14 days', async ({ page }) => {
+test('the first view includes assigned overdue work and the next 14 days', async ({ page }) => {
   const { last } = await setup(page);
   const { today, end } = windowDays();
   await page.goto('/admin/work-queue/');
-  await expect(windowNotice(page).filter({ hasText: 'Showing unassigned work' })).toBeVisible();
+  await expect(windowNotice(page)).toBeVisible();
   await expect.poll(() => last()?.get('from')).toBe(today);
   expect(last()?.get('to')).toBe(end);
-  expect(last()?.get('unassigned')).toBe('true');
+  expect(last()?.has('unassigned')).toBe(false);
   expect(last()?.has('assignee')).toBe(false);
 });
 
@@ -79,6 +80,6 @@ test('the 14-day window follows the tenant time zone, not Helsinki', async ({ pa
   const { last } = await setup(page);
   await page.route(/\/api\/v1\/admin\/tenant$/, route => route.fulfill({ headers, json: { companyName: 'QA', timeZoneId: 'Pacific/Honolulu' } }));
   await page.goto('/admin/work-queue/');
-  await expect.poll(() => last()?.get('from')).toBe('2026-11-05');
+  await expect.poll(() => last()?.get('from')).toBe('2026-05-09');
   expect(last()?.get('to')).toBe('2026-11-18');
 });

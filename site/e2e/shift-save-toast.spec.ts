@@ -1,3 +1,4 @@
+import { selectDailyScheduleIfEmpty } from './admin-helpers';
 import { test, expect } from '@playwright/test';
 import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
 
@@ -17,6 +18,7 @@ test('a refused shift save explains the fix as a toast and in the dialog, and ke
   });
   await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'Add shift' }).click();
   const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
+  await selectDailyScheduleIfEmpty(page);
   await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'AAA', exact: true }).click();
   await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'AAA1', exact: true }).click();
   await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Morning clean');
@@ -41,6 +43,7 @@ test('a field validation failure names the field problem instead of a generic ti
   });
   await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'Add shift' }).click();
   const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
+  await selectDailyScheduleIfEmpty(page);
   await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'AAA', exact: true }).click();
   await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'AAA1', exact: true }).click();
   await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Ranged clean');
@@ -92,6 +95,7 @@ for (const [status, expected] of [
     });
     await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'Add shift' }).click();
     const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
+    await selectDailyScheduleIfEmpty(page);
     await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'AAA', exact: true }).click();
     await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'AAA1', exact: true }).click();
     await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Session clean');

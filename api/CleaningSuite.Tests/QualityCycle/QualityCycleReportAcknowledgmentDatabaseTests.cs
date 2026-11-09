@@ -9,13 +9,14 @@ using Moq;
 
 namespace CleaningSuite.Tests.QualityCycle;
 
+[Collection("Database integration")]
 public class QualityCycleReportAcknowledgmentDatabaseTests
 {
     [QualityCycleDatabaseFact]
     public async Task Acknowledgment_is_atomic_first_write_only_and_tenant_scoped_and_delivery_cannot_erase_it()
     {
         var services = new ServiceCollection(); services.AddLogging();
-        services.AddCleaningMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!, databaseSchemaName: "report_receipt_" + Guid.NewGuid().ToString("N"));
+        services.AddTestMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!, databaseSchemaName: "report_receipt_" + Guid.NewGuid().ToString("N"));
         using var provider = services.BuildServiceProvider(); var store = provider.GetRequiredService<IDocumentStore>();
         await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
         var now = new DateTime(2026, 10, 17, 12, 0, 0, DateTimeKind.Utc);

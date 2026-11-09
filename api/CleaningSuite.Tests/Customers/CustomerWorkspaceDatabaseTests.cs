@@ -11,6 +11,7 @@ using Xunit;
 
 namespace CleaningSuite.Tests.Customers;
 
+[Collection("Database integration")]
 public class CustomerWorkspaceDatabaseTests
 {
     [QualityCycleDatabaseFact]
@@ -19,7 +20,7 @@ public class CustomerWorkspaceDatabaseTests
         var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddCleaningMarten(connection, databaseSchemaName: "customer_ws_" + Guid.NewGuid().ToString("N"));
+        services.AddTestMarten(connection, databaseSchemaName: "customer_ws_" + Guid.NewGuid().ToString("N"));
         using var provider = services.BuildServiceProvider();
         var store = provider.GetRequiredService<IDocumentStore>();
         await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();

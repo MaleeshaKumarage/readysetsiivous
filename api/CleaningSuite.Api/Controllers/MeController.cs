@@ -85,11 +85,11 @@ public class MeController : ControllerBase
 
     [HttpGet("shifts/calendar")]
     public async Task<IActionResult> ShiftCalendar([FromQuery] string view = "today", [FromQuery] string? cursor = null,
-        CancellationToken ct = default)
+        [FromQuery] string? from = null, [FromQuery] string? to = null, CancellationToken ct = default)
     {
         var employee = VerifiedEmployee();
         var (zoneId, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
-        var window = ShiftCalendarWindow.Create(view, cursor, DateTime.UtcNow, zone);
+        var window = ShiftCalendarWindow.Create(view, cursor, DateTime.UtcNow, zone, from, to);
         var occurrences = await _mediator.Send(new GetMyShiftsQuery(employee.Id, window.FromUtc, window.ToUtc), ct);
         return Ok(new { occurrences, timeZoneId = zoneId, window.FromLocalDate, window.ToLocalDate });
     }

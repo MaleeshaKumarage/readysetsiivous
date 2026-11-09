@@ -35,7 +35,7 @@ async function setup(page: Page, clashHolders: string[] = ['cleaner'], options: 
     if (!clashCleared) return route.fulfill({ status: 409, headers, json: {
       title: 'Shift conflict',
       detail: 'Test Cleaner is already on Evening deep clean for an overlapping visit. Choose another cleaner or time, or remove the cleaner from the other visit first.',
-      conflicts: [{ shiftId: 'other', shiftName: 'Evening deep clean', startUtc: clashStart, endUtc: clashEnd }],
+      conflicts: [{ shiftId: 'other', shiftName: 'Evening deep clean', startUtc: clashStart, endUtc: clashEnd, recurrence: 'Every other Friday (week parity 1)', openEnded: true }],
     } });
     return route.fulfill({ headers, json: { employeeIds: body.employeeIds, preview: body.preview, message: 'Only this visit changes.' } });
   });
@@ -65,6 +65,8 @@ test('overlap refusal names the clashing visit, removes that cleaner from it, th
   const editor = await openAssignForMorningVisit(page, 'Cover the morning visit');
   await editor.getByRole('button', { name: 'Preview assignment', exact: true }).click();
   await expect(editor.getByText('Overlaps Evening deep clean')).toBeVisible();
+  await expect(editor.getByText(/Every other Friday.*No end date/)).toBeVisible();
+  await expect(editor.getByRole('link', { name: 'Open assignments for Test Cleaner' })).toHaveAttribute('href', /employee=cleaner&date=/);
   await expect(editor.getByText(/Choose another cleaner or time/)).toBeVisible();
   await editor.getByRole('button', { name: 'Remove from Evening deep clean and assign here' }).click();
   await expect(editor.getByText('Selected visit: Test Cleaner')).toBeVisible();
@@ -96,6 +98,8 @@ test('overlap removal explains when the cleaner is no longer on the clashing vis
   const editor = await openAssignForMorningVisit(page, 'Cover the morning visit');
   await editor.getByRole('button', { name: 'Preview assignment', exact: true }).click();
   await expect(editor.getByText('Overlaps Evening deep clean')).toBeVisible();
+  await expect(editor.getByText(/Every other Friday.*No end date/)).toBeVisible();
+  await expect(editor.getByRole('link', { name: 'Open assignments for Test Cleaner' })).toHaveAttribute('href', /employee=cleaner&date=/);
   await editor.getByRole('button', { name: 'Remove from Evening deep clean and assign here' }).click();
   await expect(editor.getByText('The selected cleaners are no longer on the overlapping visit. Preview again to continue.')).toBeVisible();
   await expect(editor.getByRole('button', { name: 'Save assignment', exact: true })).toBeDisabled();

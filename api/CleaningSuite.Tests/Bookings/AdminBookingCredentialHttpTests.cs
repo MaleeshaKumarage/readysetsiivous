@@ -24,6 +24,7 @@ using Moq;
 
 namespace CleaningSuite.Tests.Bookings;
 
+[Collection("Database integration")]
 public class AdminBookingCredentialHttpTests
 {
     [Theory]
@@ -71,7 +72,7 @@ public class AdminBookingCredentialHttpTests
     public async Task Repository_roundtrip_retains_digest_and_never_stores_raw_key()
     {
         var services = new ServiceCollection(); services.AddLogging();
-        services.AddCleaningMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!, databaseSchemaName: "booking_key_" + Guid.NewGuid().ToString("N"));
+        services.AddTestMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!, databaseSchemaName: "booking_key_" + Guid.NewGuid().ToString("N"));
         using var provider = services.BuildServiceProvider(); var store = provider.GetRequiredService<IDocumentStore>();
         await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
         var context = new Mock<ITenantContext>(); context.SetupGet(x => x.TenantId).Returns("synthetic-" + Guid.NewGuid().ToString("N"));

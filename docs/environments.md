@@ -234,6 +234,13 @@ game-flow behavior.
 
 ## Backend runtime and migration rehearsals
 
+Database test fixtures use `AddTestMarten` / `TestDocumentStore` to drop their own
+GUID-suffixed schema on disposal. Dispose fixture-owned sessions before the store;
+an open transaction can block schema teardown. The `Database integration` collection
+keeps separate fixtures from contending for database-level advisory locks, while
+each concurrency test still uses parallel connections. Migration tests that reuse
+a schema across stores retain a `TestSchemaCleanup` scope around the whole test.
+
 Backend projects use .NET10 LTS, SDK10.0.402 (`global.json`), runtime10.0.13,
 and Marten/Marten.Newtonsoft9.50.1. Docker and GitHub CI use the same pinned
 versions. Newtonsoft JSON, GUID optimistic-concurrency versions and tenant sessions

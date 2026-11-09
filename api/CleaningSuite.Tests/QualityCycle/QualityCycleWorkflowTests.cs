@@ -12,6 +12,7 @@ using Moq;
 
 namespace CleaningSuite.Tests.QualityCycle;
 
+[Collection("Database integration")]
 public class QualityCycleWorkflowTests
 {
     private static readonly DateTime Now = new(2026, 10, 31, 23, 0, 0, DateTimeKind.Utc);
@@ -177,6 +178,7 @@ public class QualityCycleDatabaseFactAttribute : FactAttribute
 {
     public QualityCycleDatabaseFactAttribute() { if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING"))) Skip = "Set QC_TEST_CONNECTION_STRING to an isolated PostgreSQL database."; }
 }
+[Collection("Database integration")]
 public class QualityCycleRepositoryIntegrationTests
 {
     [QualityCycleDatabaseFact]
@@ -185,7 +187,7 @@ public class QualityCycleRepositoryIntegrationTests
         var options = new StoreOptions(); options.RestoreV8Defaults(); options.UseNewtonsoftForSerialization();
         options.DatabaseSchemaName = "fixture_" + Guid.NewGuid().ToString("N"); options.Connection(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!);
         options.Policies.AllDocumentsAreMultiTenanted(); options.Schema.For<QualityCycleForm>().UniqueIndex(x => x.Token);
-        using var store = new DocumentStore(options);
+        using var store = new TestDocumentStore(options, Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!);
         await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
         var a = "qc-test-" + Guid.NewGuid().ToString("N"); var b = "qc-test-" + Guid.NewGuid().ToString("N");
         var contextA = new Mock<ITenantContext>(); contextA.SetupGet(x => x.TenantId).Returns(a);

@@ -29,7 +29,7 @@ public static class WorkQueueLimits
     public const int ShiftHistoryDays = 180;
 
     /// <summary>How far ahead company-shift occurrences are read for Scheduled and Needs action.</summary>
-    public const int ShiftFutureDays = 120;
+    public const int ShiftFutureDays = 30;
 }
 
 /// <summary>
@@ -66,7 +66,7 @@ public static class WorkQueueRules
     /// <summary>
     /// The view of one company-shift occurrence. Completed needs a submitted form from every assigned cleaner, the same
     /// rule invoicing uses. A future occurrence without a cleaner is Needs action; one with a cleaner is Scheduled.
-    /// A past occurrence that nobody has started is shown as Scheduled, labelled Not started, so it is not hidden.
+    /// Once its window has ended, an unstarted occurrence needs action even when it has an assignee.
     /// </summary>
     public static string ShiftView(ShiftVisitRosterEntry visit, IReadOnlyList<QualityCycleForm> occurrenceForms, DateTime nowUtc)
     {
@@ -76,7 +76,7 @@ public static class WorkQueueRules
         var done = assigned.Count > 0 ? assigned.All(submitted.Contains) : submitted.Count > 0;
         if (done) return WorkQueueViews.Completed;
         if (occurrenceForms.Any(f => f.StartedAtUtc.HasValue)) return WorkQueueViews.InProgress;
-        if (visit.Occurrence.StartUtc >= nowUtc && assigned.Count == 0) return WorkQueueViews.NeedsAction;
+        if (visit.Occurrence.EndUtc < nowUtc || assigned.Count == 0) return WorkQueueViews.NeedsAction;
         return WorkQueueViews.Scheduled;
     }
 
@@ -92,6 +92,7 @@ public static class WorkQueueRules
     /// <summary>Scheduled work that has already started its window and has no started form reads "Not started".</summary>
     public static string ShiftLabel(ShiftVisitRosterEntry visit, string view, DateTime nowUtc) => view switch
     {
+        WorkQueueViews.NeedsAction when visit.Occurrence.EndUtc < nowUtc => "Overdue · not started",
         WorkQueueViews.NeedsAction => "Unassigned",
         WorkQueueViews.Scheduled when visit.EmployeeIds.Count > 0 && visit.Occurrence.StartUtc >= nowUtc => "Scheduled",
         WorkQueueViews.Scheduled => "Not started",

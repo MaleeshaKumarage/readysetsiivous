@@ -16,12 +16,14 @@ test('the schedule picker cannot be cleared, so a shift never gets a schedule no
   await page.getByRole('button', { name: 'Add shift', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
   const schedule = dialog.getByLabel('Schedule', { exact: true });
-  await expect(schedule).toHaveValue('Daily');
-  // Pick a non-default schedule first. Daily is also the fallback when the value is empty, so re-selecting Daily cannot show the regression.
+  // The schedule is an explicit choice: a new shift starts with no schedule selected.
+  await expect(schedule).toHaveValue('');
+  await dialog.getByRole('button', { name: 'Create shift' }).click();
+  await expect(page.getByText('Choose a schedule type.')).toBeVisible();
+  // Pick a schedule, then re-choose it. Re-choosing the selected option used to clear the picker.
   await schedule.click();
   await page.getByRole('option', { name: 'Monthly', exact: true }).click();
   await expect(schedule).toHaveValue('Monthly');
-  // Re-choosing the selected option used to clear the picker, and the empty value then fell back to Daily.
   await schedule.click();
   await page.getByRole('option', { name: 'Monthly', exact: true }).click();
   await expect(schedule).toHaveValue('Monthly');

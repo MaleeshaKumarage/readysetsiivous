@@ -1,3 +1,4 @@
+import { selectDailyScheduleIfEmpty } from './admin-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
 import { shiftAction } from './shift-actions';
@@ -83,12 +84,12 @@ test('a refused shift save shows the reason in the dialog, keeps the values, and
   const state = await setup(page, { createShift: 'A shift named Flow clean already exists for this branch. Rename it and save again.' });
   await page.goto('/admin/shifts/');
   const dialog = await fillShiftDialog(page);
-  await dialog.getByRole('button', { name: 'Create shift' }).click();
+  await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
   await expect(page.getByText('Shift not created').first()).toBeVisible();
   await expect(dialog.getByText('A shift named Flow clean already exists for this branch.')).toBeVisible();
   await expect(dialog.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Flow clean');
   await expect(page.getByRole('cell', { name: 'Flow clean', exact: true })).toHaveCount(0);
-  await dialog.getByRole('button', { name: 'Create shift' }).click();
+  await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
   await expect(page.getByRole('cell', { name: 'Flow clean', exact: true })).toBeVisible();
   expect(state.creates).toBe(2);
 });
@@ -96,7 +97,8 @@ test('a refused shift save shows the reason in the dialog, keeps the values, and
 test('a failed assignment shows an assignment error, nothing is assigned, and a retry assigns the cleaner', async ({ page }) => {
   const state = await setup(page, { assign: true });
   await page.goto('/admin/shifts/');
-  await fillShiftDialog(page).then(d => d.getByRole('button', { name: 'Create shift' }).click());
+  const dialog = await fillShiftDialog(page);
+  await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
   await expect(page.getByRole('cell', { name: 'Flow clean', exact: true })).toBeVisible();
   await shiftAction(page, 'Flow clean', 'Employees');
   await page.getByRole('textbox', { name: 'Assign employees', exact: true }).click();

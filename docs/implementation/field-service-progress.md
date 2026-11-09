@@ -1,5 +1,24 @@
 # Field-service workflow delivery ledger
 
+### Critical issue batch — 2026-11-09
+
+- Branch `fix/critical-ten-issues` addresses remaining defects in #126, #127, #79, #320, #285,
+  #333, #295, #296, #292 and #317 in the single PR requested by the user. Scope and verification
+  details are in [the batch record](critical-ten-issues.md). The earlier roadmap checkpoints below remain separate.
+- Booking retries retain one private request identity; game quotas survive reconnects and pending answers
+  cannot be replaced during recovery. Overdue work is visible, inactive future work is cancelled in the queue,
+  generation is bounded, and schedule selection, formatting, conflict context and access diagnostics are explicit.
+- Full backend: 1,616 passed, 2 external Keycloak tests skipped (isolated PostgreSQL 15.18).
+  Final storage-lifetime follow-up: 3 passed, zero fixture schemas remaining. Browser verification covers
+  all 232 selected desktop/mobile cases across the final workflow and corrected manager navigation reruns.
+  TypeScript, 2 frontend unit tests and the production build (53 exported pages) passed.
+- PR [#357](https://github.com/MaleeshaKumarage/readysetsiivous/pull/357) is the review boundary. Main's
+  PR #340 was integrated after it merged during this task; shared overlap, formatting and queue changes
+  are retained. Post-integration: 70 backend checks passed with zero leftover fixture schemas; 114 browser
+  cases verified across the integration run and the focused cold-start rerun; TypeScript and production build passed.
+  Next: review latest-head CI (PostgreSQL 16). No PR merge, production data repair,
+  credential/permission change or deployment was performed by this batch.
+
 Approved design: [design](../superpowers/specs/2026-11-02-field-service-workflows-design.md).
 Reusable implementation checklist: [plan](../superpowers/plans/2026-11-02-field-service-workflows-plan.md).
 

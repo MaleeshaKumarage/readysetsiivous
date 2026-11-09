@@ -171,14 +171,29 @@ public static class VisitAssignmentSafety
     // Names the requested visit and the visit it clashes with, in tenant-local time, and says how to recover.
     private static ShiftConflictException OverlapConflict(ShiftVisitRosterEntry visit, ShiftVisitRosterEntry? other, TimeZoneInfo zone, Shift current, IReadOnlyList<Shift> others)
     {
-        var names = others.ToDictionary(x => x.Id, x => x.Name);
-        names[current.Id] = current.Name;
+        var definitions = others.ToDictionary(x => x.Id);
+        definitions[current.Id] = current;
         var conflicts = new List<ShiftConflictDetail>();
-        var otherName = other is null ? null : names.GetValueOrDefault(other.ShiftId, "another shift");
+        var otherName = other is null ? null : definitions.GetValueOrDefault(other.ShiftId)?.Name ?? "another shift";
         if (other is not null)
-            conflicts.Add(new ShiftConflictDetail(other.ShiftId, otherName!, other.Occurrence.StartUtc, other.Occurrence.EndUtc));
+        {
+            definitions.TryGetValue(other.ShiftId, out var definition);
+            conflicts.Add(new ShiftConflictDetail(other.ShiftId, definition?.Name ?? "Another shift", other.Occurrence.StartUtc, other.Occurrence.EndUtc,
+                definition is null ? null : RecurrenceLabel(definition.Schedule), definition is { ValidUntil: null } && definition.Schedule.Type is not (ShiftScheduleType.OneTime or ShiftScheduleType.OnCallFlexible)));
+        }
         return new ShiftConflictException(OverlapMessage(visit, other, otherName, zone), conflicts);
     }
+
+    internal static string RecurrenceLabel(ShiftSchedule schedule) => schedule.Type switch
+    {
+        ShiftScheduleType.DailySameTime => "Daily",
+        ShiftScheduleType.DailyDifferentTime => "Daily: " + string.Join(", ", schedule.DailyTimes.Keys),
+        ShiftScheduleType.Weekly => "Weekly: " + string.Join(", ", schedule.WeeklyDays.Count > 0 ? schedule.WeeklyDays : schedule.WeeklyDay.HasValue ? [schedule.WeeklyDay.Value] : []),
+        ShiftScheduleType.BiWeekly => $"Every other {schedule.BiWeeklyDay} (week parity {schedule.BiWeeklyWeekParity})",
+        ShiftScheduleType.Monthly => $"Monthly on day {schedule.MonthlyDay}",
+        ShiftScheduleType.OneTime => "One-time visit",
+        _ => "On-call visit"
+    };
 
     public static string OverlapMessage(ShiftVisitRosterEntry visit, ShiftVisitRosterEntry? other, string? otherName, TimeZoneInfo zone)
     {

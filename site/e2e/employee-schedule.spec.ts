@@ -165,3 +165,14 @@ test('the Reload button in the time-zone error recovers the schedule once the zo
   await expect(page.getByText('Time zone unavailable')).toHaveCount(0);
   expect(tenantCalls).toBeGreaterThanOrEqual(2);
 });
+
+
+test('conflict deep link opens the selected cleaner and week, with a way back to all cleaners', async ({ page }) => {
+  const state = await setup(page);
+  await page.goto('/admin/shifts/employee-schedule/?employee=cleaner&date=2030-01-15');
+  await expect.poll(() => state.requests.at(-1)).toBe('2030-01-14');
+  await expect(page.getByRole('rowheader', { name: 'Test Cleaner', exact: true })).toBeVisible();
+  await expect(page.getByRole('rowheader', { name: 'Second Cleaner', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Show all cleaners', exact: true }).click();
+  await expect(page.getByRole('rowheader', { name: 'Second Cleaner', exact: true })).toBeVisible();
+});
