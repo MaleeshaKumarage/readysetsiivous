@@ -21,10 +21,14 @@ public class Agreement : BaseDocument
     public DateTime? CompletedUtc { get; set; }
 
     public bool AllSigned => Signers.Count > 0 && Signers.All(s => s.Status == Signer.StatusSigned);
+
+    /// <summary>True once a signer has signed, by any of the signed markers, so the signature is evidence.</summary>
+    public static bool HasSigned(Signer signer) => signer.Status == Signer.StatusSigned || signer.SignedAtUtc.HasValue
+        || !string.IsNullOrWhiteSpace(signer.SignatureImagePath);
+
     public bool HasSignedEvidence => SignedPdfPath is not null
         || Status is StatusPartiallySigned or StatusCompleted
-        || Signers.Any(s => s.Status == Signer.StatusSigned || s.SignedAtUtc.HasValue
-            || !string.IsNullOrWhiteSpace(s.SignatureImagePath));
+        || Signers.Any(HasSigned);
 }
 
 public class Signer
