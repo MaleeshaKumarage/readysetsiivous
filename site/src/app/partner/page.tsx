@@ -298,9 +298,7 @@ export default function PartnerPage() {
               <dl className="partner-property-facts">
                 <div><dt>{t.actualStart}</dt><dd>{stamp(visit.data.actualStartUtc)}</dd></div>
                 <div><dt>{t.actualEnd}</dt><dd>{stamp(visit.data.actualEndUtc)}</dd></div>
-                <div><dt>{t.cleaner}</dt><dd>{visit.data.cleanerInitial ?? t.notSet}</dd></div>
               </dl>
-              <p className="partner-muted">{t.visitCleanerHint}</p>
               {!visit.data.reports.length && <p className="partner-muted">{t.noTasks}</p>}
               {visit.data.reports.map((report, index) => <section key={index} aria-label={report.templateTitle} className="partner-visit-report">
                 <h3>{report.templateTitle}</h3>
