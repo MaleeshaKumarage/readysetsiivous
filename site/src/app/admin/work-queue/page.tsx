@@ -299,6 +299,7 @@ export default function WorkQueuePage() {
                   <Text size="sm" c="dimmed">{item.reference} · {item.scheduledLocal}</Text>
                   <Group gap={6}>
                     <Badge size="sm" variant="light" color={item.stateLabel === 'Not started' ? 'red' : undefined}>{item.stateLabel}</Badge>
+                    {item.source === 'shift' && item.stateLabel === 'Overdue · not started' && !item.assigneeName && <Badge size="sm" variant="light" color="gray">Unassigned</Badge>}
                     <Badge size="sm" variant="outline" color="gray">{item.source === 'booking' ? 'Public booking' : item.source === 'shift' ? 'Company shift' : 'Partner request'}</Badge>
                     {item.assigneeName && <Text size="xs">{item.assigneeName}</Text>}
                   </Group>

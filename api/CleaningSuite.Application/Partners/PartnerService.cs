@@ -122,7 +122,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         var query = Db.Query<Branch>().AsQueryable();
         query = query.Where(x => partnerCompanyIds.Contains(x.CompanyId));
         if (companyId.HasValue) query = query.Where(x => x.CompanyId == companyId.Value);
-        return (await query.ToListAsync(ct)).Select(CompanyHandlers.MapBranch).ToArray();
+        return (await query.ToListAsync(ct)).Select(branch => staff ? CompanyHandlers.MapBranch(branch) : ForPartner(CompanyHandlers.MapBranch(branch))).ToArray();
     }
 
     public async Task<BranchDto> CreateBranch(Guid actor, CreatePartnerBranch body, CancellationToken ct)
@@ -138,7 +138,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         Db.Store(branch);
         Notify(company.Id, branch.Id, null, "PropertyCreated", 1, "Staff");
         await Db.SaveChangesAsync(ct);
-        return CompanyHandlers.MapBranch(branch);
+        return ForPartner(CompanyHandlers.MapBranch(branch));
     }
 
     // Owners correct a property's details (never its price, company or active flag). Same validation as creation.
@@ -154,7 +154,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         branch.ContactEmail = body.ContactEmail?.Trim();
         Db.Store(branch);
         await Db.SaveChangesAsync(ct);
-        return CompanyHandlers.MapBranch(branch);
+        return ForPartner(CompanyHandlers.MapBranch(branch));
     }
 
     public async Task<BranchDto> WithdrawQuote(Guid actor, Guid id, CancellationToken ct)
@@ -166,7 +166,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         branch.WithdrawQuote(DateTime.UtcNow);
         Db.Store(branch);
         await Db.SaveChangesAsync(ct);
-        return CompanyHandlers.MapBranch(branch);
+        return ForPartner(CompanyHandlers.MapBranch(branch));
     }
 
     // Staff decline a quote that cannot be priced. The reason is required and shown to the owner.
@@ -196,7 +196,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
             Db.Store(branch); Notify(company.Id, id, null, "QuoteRequested", branch.PricingVersion + 1, "Staff");
             await Db.SaveChangesAsync(ct);
         }
-        return CompanyHandlers.MapBranch(branch);
+        return ForPartner(CompanyHandlers.MapBranch(branch));
     }
 
     public async Task<IReadOnlyList<BranchDto>> Quotes(Guid actor, CancellationToken ct)
@@ -740,6 +740,9 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         return start;
     }
 
+    // Partners never see prices: the agreed price, VAT rate and price history stay with staff.
+    private static BranchDto ForPartner(BranchDto branch) => branch with { PriceNet = null, VatRatePercent = null, PriceVersions = null };
+
     private async Task<PartnerRequestDto> Map(PartnerCleaningRequest item, bool staff, CancellationToken ct)
     {
         var branch = await Db.LoadAsync<Branch>(item.BranchId, ct);
@@ -750,7 +753,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         var status = item.Status;
         if (status == "Accepted" && started.HasValue) status = forms.Count > 0 && forms.All(x => x.IsSubmitted) ? "Completed" : "InProgress";
         return new(item.Id, item.Revision, item.CompanyId, item.BranchId, branch?.Name ?? "Property", item.FromDate,
-            item.ToDate, item.ExactStartLocalTime, item.Notes, item.PriceNet, item.VatRatePercent,
+            item.ToDate, item.ExactStartLocalTime, item.Notes, staff ? item.PriceNet : null, staff ? item.VatRatePercent : null,
             item.EstimatedDurationMinutes, status, item.FirstAcceptedAtUtc, item.LinkedShiftId, item.PlannedStartUtc,
             item.PlannedEndUtc, employee is null ? null : staff ? $"{employee.FirstName} {employee.LastName}".Trim() : PartnerCompletionView.MaskCleaner(employee.FirstName), started,
             status == "Completed" ? ended : null, staff ? item.OfferedEmployeeId : null, staff ? item.OfferId : null);

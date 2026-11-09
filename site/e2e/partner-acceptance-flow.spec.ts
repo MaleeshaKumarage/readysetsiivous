@@ -84,7 +84,9 @@ test('one visit from owner request to cleaner acceptance and back to the owner',
     // 3. Owner sees the price and books one visit inside the date window.
     await ownerOpenRequests(page);
     await page.getByRole('tab', { name: 'Properties', exact: true }).click();
-    await expect(property.getByText('€85.00', { exact: false })).toBeVisible();
+    // Partners never see prices: the property card has no euro amount, but the request action is available.
+    await expect(property.getByText('€', { exact: false })).toHaveCount(0);
+    await expect(property.getByRole('button', { name: 'Request cleaning', exact: true })).toBeVisible();
     await property.getByRole('button', { name: 'Request cleaning', exact: true }).click();
     await page.getByLabel('From date', { exact: true }).fill(WINDOW.fromDate);
     await page.getByLabel('To date', { exact: true }).fill(WINDOW.toDate);
@@ -538,7 +540,7 @@ test('a cleaner may accept a visit without a start time, which becomes flexible 
   await cleaner.context.close();
 });
 
-test('owner keeps the agreed price when staff reprice the property', async ({ page, browser }, testInfo) => {
+test('owner never sees a price, before or after staff reprice the property', async ({ page, browser }, testInfo) => {
   const backend = new PartnerFlowBackend({ priced: true });
   backend.seedRequest(backend.branches[0], WINDOW);
   await prepareRolePage(page, backend, 'owner');
@@ -552,9 +554,14 @@ test('owner keeps the agreed price when staff reprice the property', async ({ pa
   await expect(staff.page.getByText('Pricing saved.', { exact: true })).toBeVisible();
 
   await ownerOpenRequests(page);
-  await expect(ownerCard(page).getByText(/Agreed price €85\.00/)).toBeVisible();
+  await expect(ownerCard(page)).toBeVisible();
+  await expect(page.getByText('€', { exact: false })).toHaveCount(0);
   await page.getByRole('tab', { name: 'Properties', exact: true }).click();
-  await expect(page.getByText('€120.00', { exact: false })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Request cleaning', exact: true }).first()).toBeVisible();
+  await expect(page.getByText('€', { exact: false })).toHaveCount(0);
+  // Staff still see the new price.
+  await staff.page.getByRole('tab', { name: 'Properties', exact: true }).click();
+  await expect(staff.page.getByText('€120.00', { exact: false }).first()).toBeVisible();
   await staff.context.close();
 });
 

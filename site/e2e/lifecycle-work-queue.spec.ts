@@ -239,8 +239,10 @@ test('an ended visit nobody started needs action as overdue, with or without an 
   await page.goto('/admin/work-queue/');
   await expect(page.getByRole('tab', { name: 'Needs action (2)' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('listitem').filter({ hasText: 'Weekly office clean' }).getByText('Overdue · not started', { exact: true })).toBeVisible();
-  // Past unstarted work needs action with the overdue label whether or not a cleaner is assigned.
+  // Past unstarted work needs action with the overdue label; without a cleaner it also shows an Unassigned badge.
   await expect(page.getByRole('listitem').filter({ hasText: 'Evening lobby clean' }).getByText('Overdue · not started', { exact: true })).toBeVisible();
+  await expect(page.getByRole('listitem').filter({ hasText: 'Evening lobby clean' }).getByText('Unassigned', { exact: true })).toBeVisible();
+  await expect(page.getByRole('listitem').filter({ hasText: 'Weekly office clean' }).getByText('Unassigned', { exact: true })).toHaveCount(0);
 });
 
 test('a past assigned company visit nobody started reads Not started, and Open company shift opens the calendar', async ({ page }) => {
@@ -328,8 +330,9 @@ test('clearing both date fields removes the bounds from the request and the URL'
   await expect(page.getByRole('listitem').filter({ hasText: 'Anna Virtanen' })).toBeVisible();
   await page.getByLabel('From date', { exact: true }).fill('');
   await page.getByLabel('To date', { exact: true }).fill('');
+  // Each cleared field sends its own request, so wait for both to land before checking the last one.
   await expect.poll(() => state.queries.at(-1)?.has('from')).toBe(false);
-  expect(state.queries.at(-1)?.has('to')).toBe(false);
+  await expect.poll(() => state.queries.at(-1)?.has('to')).toBe(false);
   expect(new URL(page.url()).searchParams.has('from')).toBe(false);
   expect(new URL(page.url()).searchParams.has('to')).toBe(false);
 });

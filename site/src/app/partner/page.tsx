@@ -121,11 +121,9 @@ export default function PartnerPage() {
     tabsRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
   }
   const locale = language === 'fi' ? 'fi-FI' : 'en-GB';
-  const moneyFormatter = useMemo(() => new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR' }), [locale]);
   const numberFormatter = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const dateFormatter = useMemo(() => new Intl.DateTimeFormat(locale, { timeZone: 'UTC' }), [locale]);
   const stampFormatter = useMemo(() => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone: identity?.timeZoneId }), [locale, identity?.timeZoneId]);
-  const money = (value?: number | null) => value == null ? t.notSet : moneyFormatter.format(value);
   const number = (value: number) => numberFormatter.format(value);
   const date = (value: string) => language === 'fi' ? dateFormatter.format(new Date(value + 'T12:00:00Z')) : value;
   const stamp = (value: string | null) => value && !Number.isNaN(Date.parse(value))
@@ -189,7 +187,7 @@ export default function PartnerPage() {
                 {branch.quoteRejectedUtc && !branch.quoteRequestedUtc && !branch.pricingReady && <p role="status" className="partner-muted">{t.quoteRejected}: {branch.quoteRejectionReason}</p>}
                 <p className="partner-muted">{[branch.street, branch.postalCode, branch.city].filter(Boolean).join(', ')}</p>
                 <dl className="partner-property-facts"><div><dt>{t.rooms}</dt><dd>{branch.roomCount ?? t.notSet}</dd></div><div><dt>{t.beds}</dt><dd>{branch.bedCount ?? t.notSet}</dd></div></dl>
-                <div className="partner-price">{branch.pricingReady ? <><p><strong>{money(branch.priceNet)}</strong> {t.exclVat} ({t.vat} {number(branch.vatRatePercent ?? 0)}%)</p><p className="partner-muted">{t.estimated} {branch.estimatedDurationMinutes} {t.minutes}</p></> : <p>{branch.quoteRequestedUtc ? t.quoteWaiting : t.pricingRequired}</p>}</div>
+                {branch.pricingReady ? <p className="partner-muted">{t.estimated} {branch.estimatedDurationMinutes} {t.minutes}</p> : <p className="partner-price">{branch.quoteRequestedUtc ? t.quoteWaiting : t.pricingRequired}</p>}
                 <div className="partner-card-actions"><Button disabled={busy || !branch.isActive || !branch.pricingReady} onClick={() => openRequest(branch)}>{t.requestCleaning}<ArrowRight size={16} aria-hidden="true" /></Button>
                   {!branch.pricingReady && <Button variant="outline" className="partner-secondary" disabled={busy || !branch.isActive || Boolean(branch.quoteRequestedUtc)} onClick={() => act(() => partnerApi.quote(branch.id), base.quoteSaved)}>{t.requestQuote}</Button>}
                   {!branch.pricingReady && branch.quoteRequestedUtc && <Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => act(() => partnerApi.withdrawQuote(branch.id), base.quoteWithdrawn)}>{t.withdrawQuote}</Button>}
@@ -209,7 +207,6 @@ export default function PartnerPage() {
                   <Badge variant={request.status === 'Completed' ? 'subtle' : 'outline'} className="partner-badge">{partnerStatus(request.status, language)}</Badge>
                 </div>
                 <p>{date(request.fromDate)} – {date(request.toDate)}{request.exactStartLocalTime && ' ' + t.at + ' ' + request.exactStartLocalTime.slice(0, 5)}</p>
-                <p className="partner-price">{t.agreedPrice} <strong>{money(request.priceNet)}</strong> {t.exclVat} ({t.vat} {number(request.vatRatePercent)}%)</p>
                 <div className="partner-request-details"><p>{t.cleaner}: {request.acceptedCleanerName ?? t.awaitingAcceptance}</p><p>{t.planned}: {request.plannedStartUtc ? <>{stamp(request.plannedStartUtc)} – {stamp(request.plannedEndUtc)}</> : request.firstAcceptedAtUtc || request.status === 'Accepted' ? t.flexible : t.notRecorded}</p><p>{t.actualStart}: {stamp(request.actualStartUtc)} · {t.actualEnd}: {stamp(request.actualEndUtc)}</p></div>
                 {request.notes && <p className="partner-entered">{request.notes}</p>}
                 <div className="partner-card-actions">{request.status === 'Completed' ? <Button variant="outline" className="partner-secondary" onClick={() => openVisit(request)}>{t.viewVisit}</Button> : !request.firstAcceptedAtUtc && request.status !== 'Cancelled' ? <>

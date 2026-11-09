@@ -46,6 +46,24 @@ public class PartnerWorkflowTests
     }
 
     [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Partners_never_receive_prices_while_managers_still_do()
+    {
+        using var fixture = await Fixture.Create();
+        var offer = await fixture.SubmitOffer();
+        using var session = fixture.Session();
+        var service = fixture.Service(session);
+        var partnerRequest = await service.Get(fixture.Partner.Id, offer.Id, default);
+        Assert.Null(partnerRequest.PriceNet);
+        Assert.Null(partnerRequest.VatRatePercent);
+        var partnerBranches = await service.Branches(fixture.Partner.Id, false, null, default);
+        Assert.NotEmpty(partnerBranches);
+        Assert.All(partnerBranches, branch => { Assert.Null(branch.PriceNet); Assert.Null(branch.VatRatePercent); Assert.Null(branch.PriceVersions); });
+        var staffRequest = Assert.Single(await service.Requests(fixture.Admin.Id, true, null, default), x => x.Id == offer.Id);
+        Assert.NotNull(staffRequest.PriceNet);
+        Assert.NotNull(staffRequest.VatRatePercent);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
     public async Task Concurrent_acceptance_materializes_exactly_one_shift_and_financial_snapshot()
     {
         using var fixture = await Fixture.Create();
@@ -191,8 +209,10 @@ public class PartnerWorkflowTests
             var reoffer = await service.Offer(fixture.Admin.Id, offer.Id, new(edited.Version, replacement.Id), default);
             changed = await service.Accept(replacement.Id, reoffer.OfferId!.Value, new(reoffer.Version), default);
         }
-        Assert.Equal(accepted.LinkedShiftId, changed.LinkedShiftId); Assert.Equal(100, changed.PriceNet);
+        Assert.Equal(accepted.LinkedShiftId, changed.LinkedShiftId); Assert.Null(changed.PriceNet);
         Assert.Equal(120, changed.EstimatedDurationMinutes);
+        using (var priceReader = fixture.Store.QuerySession(fixture.Tenant))
+            Assert.Equal(100m, (await priceReader.LoadAsync<PartnerCleaningRequest>(changed.Id))!.PriceNet);
         using (var reader = fixture.Store.QuerySession(fixture.Tenant))
         {
             Assert.Single(await reader.Query<Shift>().ToListAsync());
@@ -525,9 +545,16 @@ public class PartnerWorkflowTests
         Assert.Equal("owner@example.test", updated.ContactEmail);
         Assert.Equal(3, updated.RoomCount);
         Assert.Equal(4, updated.BedCount);
-        Assert.Equal(before.CurrentPriceNet, updated.PriceNet);
-        Assert.Equal(before.CurrentVatRatePercent, updated.VatRatePercent);
+        // The partner response never carries the price, but saving the property keeps the stored price.
+        Assert.Null(updated.PriceNet);
+        Assert.Null(updated.VatRatePercent);
         Assert.Equal(before.CurrentEstimatedDurationMinutes, updated.EstimatedDurationMinutes);
+        using (var reader = fixture.Store.QuerySession(fixture.Tenant))
+        {
+            var stored = await reader.LoadAsync<Branch>(before.Id);
+            Assert.Equal(before.CurrentPriceNet, stored!.CurrentPriceNet);
+            Assert.Equal(before.CurrentVatRatePercent, stored.CurrentVatRatePercent);
+        }
         Assert.Equal(before.PricingVersion, updated.PricingVersion);
         Assert.True(updated.IsActive);
         Assert.Equal(fixture.Company.Id, updated.CompanyId);

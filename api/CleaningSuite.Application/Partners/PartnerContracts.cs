@@ -23,8 +23,8 @@ public record PartnerAcceptance(int Version, string? PlannedStartLocal = null);
 public record PartnerDecline(int Version, string? Reason = null);
 public record PartnerCancellation(int Version, string Reason);
 public record PartnerRequestDto(Guid Id, int Version, Guid CompanyId, Guid BranchId, string BranchName,
-    DateOnly FromDate, DateOnly ToDate, string? ExactStartLocalTime, string? Notes, decimal PriceNet,
-    decimal VatRatePercent, int EstimatedDurationMinutes, string Status, DateTime? FirstAcceptedAtUtc,
+    DateOnly FromDate, DateOnly ToDate, string? ExactStartLocalTime, string? Notes, decimal? PriceNet,
+    decimal? VatRatePercent, int EstimatedDurationMinutes, string Status, DateTime? FirstAcceptedAtUtc,
     Guid? LinkedShiftId, DateTime? PlannedStartUtc, DateTime? PlannedEndUtc, string? AcceptedCleanerName,
     DateTime? ActualStartUtc, DateTime? ActualEndUtc, Guid? OfferedEmployeeId = null, Guid? OfferId = null);
 public record PartnerChangeDto(Guid Id, Guid CompanyId, Guid BranchId, Guid? RequestId, string Kind,
