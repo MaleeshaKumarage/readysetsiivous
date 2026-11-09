@@ -335,3 +335,27 @@ test('Staff request card without a decline reason shows no decline line', async 
   await page.goto('/admin/partner-requests/');
   await expect(page.getByText(/Declined by cleaner/)).toHaveCount(0);
 });
+
+test('Staff pricing a withdrawn quote is refused with a refresh message', async ({ page }) => {
+  await setupAdminMocks(page);
+  await companies(page);
+  await page.route(/\/api\/v1\/admin\/employees$/, route => route.fulfill({ headers, json: [] }));
+  const quoted = { ...branch, id: 'quoted-property', name: 'Quoted property', pricingReady: false, quoteRequestedUtc: '2026-11-01T10:00:00Z' } as Branch;
+  const refusal = 'This property has no pending quote request. Refresh the page; the partner may have withdrawn it.';
+  await page.route(/\/api\/v1\/admin\/partner\//, route => {
+    const req = route.request(), path = new URL(req.url()).pathname.split('/partner')[1];
+    if (req.method() === 'OPTIONS') return route.fulfill({ headers });
+    if (req.method() === 'GET') return route.fulfill({ headers, json: path === '/quotes' ? [quoted] : path === '/branches' ? [quoted] : [] });
+    return route.fulfill({ headers, status: 409, json: { title: 'Conflict', detail: refusal } });
+  });
+  await page.goto('/admin/partner-requests/');
+  await page.getByRole('tab', { name: 'Quote requests', exact: true }).click();
+  await page.getByRole('article').filter({ hasText: 'Quoted property' }).getByRole('button', { name: 'Set cleaning price', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel(/Fixed cleaning price/).fill('75');
+  await dialog.getByLabel('VAT (%)', { exact: true }).fill('25.5');
+  await dialog.getByLabel(/Estimated duration/).fill('60');
+  await dialog.getByRole('button', { name: 'Save pricing', exact: true }).click();
+  await expect(page.getByText(refusal, { exact: true })).toBeVisible();
+  await expect(page.getByText('Pricing saved.', { exact: true })).toHaveCount(0);
+});

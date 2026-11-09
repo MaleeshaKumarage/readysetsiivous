@@ -64,7 +64,7 @@ public class PartnerWorkflowTests
     }
 
     [QualityCycle.QualityCycleDatabaseFact]
-    public async Task Edited_offer_cannot_be_accepted_and_first_acceptance_locks_partner_forever()
+    public async Task Edited_offer_cannot_be_accepted_and_accepted_visits_lock_partner_changes()
     {
         using var fixture = await Fixture.Create();
         var offer = await fixture.SubmitOffer();
@@ -86,9 +86,13 @@ public class PartnerWorkflowTests
         using (var session = fixture.Session())
             await Assert.ThrowsAsync<ShiftConflictException>(() => fixture.Service(session).Edit(fixture.Partner.Id, offer.Id, new(accepted.Version, Fixture.Day, Fixture.Day), default));
         using (var session = fixture.Session())
+            await Assert.ThrowsAsync<ShiftConflictException>(() => fixture.Service(session).Cancel(fixture.Partner.Id, offer.Id, accepted.Version, false, "Owner travel", default));
+        // Once staff re-offer the visit, no cleaner holds it, so the partner may cancel the unanswered request.
+        using (var session = fixture.Session())
         {
             var reoffer = await fixture.Service(session).Offer(fixture.Admin.Id, offer.Id, new(accepted.Version, fixture.Cleaner.Id), default);
-            await Assert.ThrowsAsync<ShiftConflictException>(() => fixture.Service(session).Cancel(fixture.Partner.Id, offer.Id, reoffer.Version, false, "Owner travel", default));
+            var cancelled = await fixture.Service(session).Cancel(fixture.Partner.Id, offer.Id, reoffer.Version, false, "Owner travel", default);
+            Assert.Equal("Cancelled", cancelled.Status);
         }
     }
 
@@ -141,6 +145,35 @@ public class PartnerWorkflowTests
             await fixture.Service(session).Offer(fixture.Admin.Id, current.Id, new(current.Version, fixture.Cleaner.Id), default);
         using var check = fixture.Session();
         Assert.Null((await fixture.Service(check).Requests(fixture.Admin.Id, true, null, default)).Single().OfferDeclineReason);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Partner_can_edit_again_once_staff_have_unassigned_the_accepted_cleaner()
+    {
+        using var fixture = await Fixture.Create();
+        var offer = await fixture.SubmitOffer();
+        using (var session = fixture.Session()) await fixture.Service(session).Accept(fixture.Cleaner.Id, offer.OfferId!.Value, new(offer.Version), default);
+        var accepted = (await fixture.Service(fixture.Session()).Requests(fixture.Admin.Id, true, null, default)).Single();
+        using (var session = fixture.Session())
+            await fixture.Service(session).StaffEdit(fixture.Admin.Id, accepted.Id, new(accepted.Version, Fixture.Day, Fixture.Day, "12:00", null), default);
+        var unassigned = (await fixture.Service(fixture.Session()).Requests(fixture.Admin.Id, true, null, default)).Single();
+        Assert.Equal("Requested", unassigned.Status);
+        using (var session = fixture.Session())
+        {
+            var edited = await fixture.Service(session).Edit(fixture.Partner.Id, unassigned.Id, new(unassigned.Version, Fixture.Day, Fixture.Day.AddDays(1), null, "Updated after unassign"), default);
+            Assert.Equal("Updated after unassign", edited.Notes);
+        }
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Partner_cannot_edit_a_visit_a_cleaner_has_accepted()
+    {
+        using var fixture = await Fixture.Create();
+        var offer = await fixture.SubmitOffer();
+        using (var session = fixture.Session()) await fixture.Service(session).Accept(fixture.Cleaner.Id, offer.OfferId!.Value, new(offer.Version), default);
+        var accepted = (await fixture.Service(fixture.Session()).Requests(fixture.Admin.Id, true, null, default)).Single();
+        using var session2 = fixture.Session();
+        await Assert.ThrowsAsync<ShiftConflictException>(() => fixture.Service(session2).Edit(fixture.Partner.Id, accepted.Id, new(accepted.Version, Fixture.Day, Fixture.Day, null, "Too late"), default));
     }
 
     [QualityCycle.QualityCycleDatabaseFact]

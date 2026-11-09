@@ -93,7 +93,7 @@ test('one visit from owner request to cleaner acceptance and back to the owner',
     await expect(page.getByText('Cleaning request saved. Staff will arrange a cleaner.', { exact: true })).toBeVisible();
     await page.getByRole('tab', { name: 'Cleaning requests', exact: true }).click();
     await expect(ownerCard(page).getByText('Requested', { exact: true })).toBeVisible();
-    await expect(ownerCard(page).getByText('Cleaner: Awaiting acceptance')).toBeVisible();
+    await expect(ownerCard(page).getByText('Cleaner: Not assigned yet')).toBeVisible();
 
     // 4. Staff arranges an offer to a cleaner who chooses the time themselves.
     await staffOpenRequests(staff.page);

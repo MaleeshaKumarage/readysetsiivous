@@ -262,6 +262,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         var (_, company) = await Partner(actor, ct);
         var request = await Request(id, company.Id, ct);
         CheckVersion(request, body.Version); EnsurePartnerEditable(request);
+        await EnsureUnstartedUnbilled(request, ct);
         await Branch(request.BranchId, company.Id, ct);
         await SetWindow(request, body.FromDate, body.ToDate, body.ExactStartLocalTime, body.Notes, ct);
         var previous = request.OfferedEmployeeId;
@@ -808,7 +809,8 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
     private static void CheckVersion(PartnerCleaningRequest request, int version)
     { if (request.Revision != version) throw new ShiftConflictException("This request changed. Reload it before making another change."); }
     private static void EnsurePartnerEditable(PartnerCleaningRequest request)
-    { if (request.FirstAcceptedAtUtc.HasValue || request.Status == "Cancelled") throw new ShiftConflictException("This request can no longer be edited directly. Ask staff for a change."); }
+    // Only unanswered requests (Requested, or Offered and not yet accepted) can be edited by the partner. Accepted visits go through a change request.
+    { if (request.Status is not ("Requested" or "Offered")) throw new ShiftConflictException("This request can no longer be edited directly. Ask staff for a change."); }
     private static void InvalidateOffer(PartnerCleaningRequest request)
     { request.OfferId = null; request.OfferedEmployeeId = null; request.OfferPlannedStartUtc = null; }
     private static void Touch(PartnerCleaningRequest request) { request.Revision++; request.UpdatedUtc = DateTime.UtcNow; }
