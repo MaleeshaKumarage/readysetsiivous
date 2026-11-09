@@ -263,4 +263,26 @@ public class CompanyRemovalDatabaseTests
         Assert.True(account!.IsActive);
         Assert.Equal(seeded.Company.Id, account.PartnerCompanyId);
     }
+
+    [QualityCycleDatabaseFact]
+    public async Task A_failed_login_disable_after_the_commit_still_reports_the_removal_and_leaves_the_sync_pending()
+    {
+        var (store, context, provider) = await Start(); using var _ = provider as IDisposable;
+        var seeded = await Seed(store, context);
+        var identities = new Mock<IEmployeeIdentityProvider>(MockBehavior.Loose);
+        identities.Setup(x => x.SynchronizeAccessAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("identity provider unavailable"));
+        var identityLocks = new Mock<IEmployeeIdentityLock>(MockBehavior.Loose) { DefaultValue = DefaultValue.Empty };
+        var handler = Remover(store, seeded.Tenant, out var session, identities, identityLocks); using var disposeSession = session;
+
+        var result = await handler.Handle(new(seeded.Company.Id, true, true, true, ConfirmPaidInvoices: true), default);
+
+        Assert.True(result.CompanyRemoved);
+        using var read = store.QuerySession(seeded.Tenant);
+        Assert.Null(await read.LoadAsync<Company>(seeded.Company.Id));
+        var account = await read.LoadAsync<Employee>(seeded.PartnerAccountId);
+        Assert.False(account!.IsActive);
+        Assert.Null(account.PartnerCompanyId);
+        Assert.True(account.IdentitySyncPending);
+    }
 }
