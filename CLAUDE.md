@@ -11,5 +11,6 @@
 ## Other conventions
 
 - One small PR per chunk. Merge only after every latest-head CI check is green and no review thread is unresolved.
+- Before saying a PR is ready, merged or done, check that the PR head SHA equals the last commit pushed to its branch. A commit pushed after a PR merged is not on main: open a new PR for it, and do not reuse the merged one.
 - The automated `review` check (AI review job) is advisory, not a required check. Its failure does not block a merge, but any finding it posts still needs a fix or a reply on its thread before the thread is resolved.
 - Preserve tenant and role boundaries and existing financial snapshots.
