@@ -186,13 +186,13 @@ test('owner property creation explains missing and invalid fields and saves exac
   await page.goto('/partner/');
   await page.getByRole('button', { name: 'Add property', exact: true }).click();
   await page.getByRole('button', { name: 'Save property', exact: true }).click();
-  await expect(page.locator('p[role="alert"]')).toContainText('Complete the required fields before saving.');
+  await expect(page.locator('p[role="alert"]').filter({ hasText: 'Complete the required fields before saving.' })).toContainText('Complete the required fields before saving.');
   expect(backend.writes).toHaveLength(0);
 
   await page.getByLabel('Property name', { exact: true }).fill('Harbour flat');
   await page.getByLabel('Contact email', { exact: true }).fill('owner-at-example');
   await page.getByRole('button', { name: 'Save property', exact: true }).click();
-  await expect(page.locator('p[role="alert"]')).toContainText('Enter a valid property contact email.');
+  await expect(page.locator('p[role="alert"]').filter({ hasText: 'Enter a valid property contact email.' })).toContainText('Enter a valid property contact email.');
   expect(backend.writes).toHaveLength(0);
   await expect(page.getByLabel('Property name', { exact: true })).toHaveValue('Harbour flat');
 
@@ -244,7 +244,7 @@ test('a staff offer built on an outdated request is refused and succeeds after r
   await expect(page.getByText('Cleaning request saved. Staff will arrange a cleaner.', { exact: true })).toBeVisible();
 
   await staffArrange(staff.page, 'cleaner');
-  await expect(staff.page.locator('p[role="alert"]')).toContainText('This request changed. Reload it before making another change.');
+  await expect(staff.page.locator('p[role="alert"]').filter({ hasText: 'This request changed. Reload it before making another change.' })).toContainText('This request changed. Reload it before making another change.');
   expect(backend.requests[0]).toMatchObject({ status: 'Requested', offeredEmployeeId: null, version: 2 });
 
   await staffOpenRequests(staff.page);
@@ -293,7 +293,7 @@ test('cleaner declines with a reason; an over-long reason is refused and the vis
 
   await cleanerOffer(cleaner.page).getByLabel('Decline reason (optional)', { exact: true }).fill('x'.repeat(1001));
   await cleanerOffer(cleaner.page).getByRole('button', { name: 'Decline cleaning', exact: true }).click();
-  await expect(cleaner.page.locator('p[role="alert"]')).toContainText('Use at most 1000 characters for the reason.');
+  await expect(cleaner.page.locator('p[role="alert"]').filter({ hasText: 'Use at most 1000 characters for the reason.' })).toContainText('Use at most 1000 characters for the reason.');
   await expect(cleanerOffer(cleaner.page)).toBeVisible();
 
   await cleanerOffer(cleaner.page).getByLabel('Decline reason (optional)', { exact: true }).fill('Already booked that morning.');
@@ -354,7 +354,7 @@ test('a visit that runs past the requested dates is refused by staff and by the 
   const staff = await openActor(browser, testInfo, backend, 'admin');
   await staffOpenRequests(staff.page);
   await staffArrange(staff.page, 'cleaner', OVERRUN);
-  await expect(staff.page.locator('p[role="alert"]')).toContainText('The entire visit must fit within the requested dates.');
+  await expect(staff.page.locator('p[role="alert"]').filter({ hasText: 'The entire visit must fit within the requested dates.' })).toContainText('The entire visit must fit within the requested dates.');
   expect(backend.requests[0].status).toBe('Requested');
 
   // Staff leaves the start open so the cleaner chooses it.
@@ -366,7 +366,7 @@ test('a visit that runs past the requested dates is refused by staff and by the 
   await cleanerOpenOffers(cleaner.page);
   await cleanerOffer(cleaner.page).getByLabel(`Planned start for ${PROPERTY}`, { exact: true }).fill(OVERRUN);
   await cleanerOffer(cleaner.page).getByRole('button', { name: 'Accept cleaning', exact: true }).click();
-  await expect(cleaner.page.locator('p[role="alert"]')).toContainText('The entire visit must fit within the requested dates.');
+  await expect(cleaner.page.locator('p[role="alert"]').filter({ hasText: 'The entire visit must fit within the requested dates.' })).toContainText('The entire visit must fit within the requested dates.');
   await expect(cleanerOffer(cleaner.page)).toBeVisible();
   expect(backend.requests[0].status).toBe('Offered');
 
@@ -496,7 +496,7 @@ test('a failed acceptance is shown, the offer stays open and a single retry book
   await cleanerOpenOffers(cleaner.page);
   await cleanerOffer(cleaner.page).getByLabel(`Planned start for ${PROPERTY}`, { exact: true }).fill(PLANNED);
   await cleanerOffer(cleaner.page).getByRole('button', { name: 'Accept cleaning', exact: true }).click();
-  await expect(cleaner.page.locator('p[role="alert"]')).toContainText('Temporarily unavailable. Try again.');
+  await expect(cleaner.page.locator('p[role="alert"]').filter({ hasText: 'Temporarily unavailable. Try again.' })).toContainText('Temporarily unavailable. Try again.');
   await expect(cleanerOffer(cleaner.page)).toBeVisible();
 
   await cleanerOffer(cleaner.page).getByRole('button', { name: 'Accept cleaning', exact: true }).click();

@@ -14,7 +14,8 @@ export function AdminInventoryAcknowledgmentRequest({ rows, onClose, onSent }: {
   const [searchError, setSearchError] = useState(''), [retry, setRetry] = useState(0);
   const [preview, setPreview] = useState<string | null>(null);
   const [selectedOption, setSelectedOption] = useState<{ id: string; name: string } | null>(null);
-  const batchId = useRef(crypto.randomUUID());
+  // Generated lazily on the user's first send, never during render: crypto.randomUUID is unavailable on some non-secure origins.
+  const batchId = useRef<string | null>(null);
   const attempted = useRef(false);
   useEffect(() => {
     const controller = new AbortController();
@@ -27,11 +28,14 @@ export function AdminInventoryAcknowledgmentRequest({ rows, onClose, onSent }: {
     }, 250);
     return () => { clearTimeout(timer); controller.abort(); };
   }, [search, retry]);
-  function changed() { if (attempted.current) { batchId.current = crypto.randomUUID(); attempted.current = false; } }
+  function changed() { if (attempted.current) { batchId.current = null; attempted.current = false; } }
   async function send() {
     if (!partner || !confirmed || saving) return;
     setSaving(true); setError(''); attempted.current = true;
-    try { onSent(await inventoryAcknowledgments.create({ batchId: batchId.current, companyId: partner, usageIds: rows.map(row => row.id), message })); }
+    try {
+      batchId.current ??= crypto.randomUUID();
+      onSent(await inventoryAcknowledgments.create({ batchId: batchId.current, companyId: partner, usageIds: rows.map(row => row.id), message }));
+    }
     catch (error) { setError((error instanceof Error ? error.message : 'Could not send request.') + ' Reload the log to check whether it was saved before changing the request.'); }
     finally { setSaving(false); }
   }
