@@ -90,8 +90,8 @@ Each run stops making changes when any budget runs out, records the state on the
 - If `main` moved and the PR shows `mergeable_state=dirty`, merge `origin/main` into the branch (no force-push) and resolve conflicts, then rerun the affected tests.
 - Checks: `gh api "repos/$R/actions/runs?head_sha=$(git rev-parse HEAD)&per_page=50"`. Wait for every run on the latest head to complete, and require `conclusion == success`.
 - Merge only when all of these hold on the latest head SHA (not an older one): every run on that SHA is `completed` with conclusion `success` (`pr-review` is advisory and must still not be failing), no run is `in_progress` or `queued`, zero unresolved threads, PR is not draft, `mergeable_state` is `clean`. Then `gh api -X PUT repos/$R/pulls/<n>/merge -f merge_method=squash -f sha=<head-sha>`, so the merge is refused if the head moved.
-- Deploy guard: if the PR changes any deploy-triggering path (`scripts/deploy-api.sh`, `.github/workflows/docker-*.yml`, `.github/workflows/deploy*.yml`, `docker-compose*`, `Dockerfile*`, `api/**/Dockerfile`), do not merge automatically. Comment on the PR with the reason and the files, and finish the run with the PR open. A person merges these. This is a decision made for safety; it is not a request for input.
-- Merging to `main` can trigger deploys. The standing instruction is to merge once the gates above pass, except for deploy-affecting changes (see the deploy guard).
+- Deploy guard: run `python3 scripts/agent_deploy_guard.py <n>` before merging. It reads the push-to-main path filters of the deploy workflows on `origin/main` and tests the PR's files against them. Exit code 2 means the merge would deploy (production API build, or the GitHub Pages site). Do not merge then. Comment on the PR with the JSON output and finish the run with the PR open for a person to merge. Exit code 1 is an error, so do not merge either. The guard's path list comes from the workflows, so it does not go stale when a workflow changes.
+- Merging to `main` can trigger deploys. The standing instruction is to merge once the gates above pass, except when the deploy guard fires (see below).
 
 ## Never stop for input
 
