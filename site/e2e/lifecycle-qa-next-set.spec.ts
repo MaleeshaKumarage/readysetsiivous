@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks, shiftsResponse } from './admin-helpers';
-import { shiftActionAt } from './shift-actions';
+import { openShiftWorkspace, shiftActionAt } from './shift-actions';
 import type { MyShiftOccurrence } from '../src/lib/meApi';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
@@ -179,4 +179,43 @@ test('one-time shifts show their date and HH:mm times with no seconds', async ({
   await listed;
   await expect(page.getByText('One-time 2026-11-20 09:30–11:00', { exact: true })).toBeVisible({ timeout: 30000 });
   await expect(page.getByRole('table').getByText(/:\d{2}:\d{2}/)).toHaveCount(0);
+});
+
+test('workspace schedule shows HH:mm labels for daily, weekly, monthly and one-time shifts', async ({ page }) => {
+  test.setTimeout(180000);
+  await setupAdminMocks(page);
+  const shifts = [
+    { id: 'ws-daily', name: 'WS daily', companyId: 'company', branchId: 'branch', isActive: true, schedule: { type: 0, dailyStart: '08:00:00', dailyEnd: '17:00:00' } },
+    { id: 'ws-weekly', name: 'WS weekly', companyId: 'company', branchId: 'branch', isActive: true, schedule: { type: 2, weeklyDays: [1, 3], weeklyStart: '08:00:00', weeklyEnd: '17:00:00' } },
+    { id: 'ws-monthly', name: 'WS monthly', companyId: 'company', branchId: 'branch', isActive: true, schedule: { type: 5, monthlyDay: 15, monthlyStart: '13:00:00', monthlyEnd: '14:00:00' } },
+    { id: 'ws-one-time', name: 'WS one-time', companyId: 'company', branchId: 'branch', isActive: true, schedule: { type: 6, oneTimeDate: '2026-11-20', oneTimeStart: '09:30:00', oneTimeEnd: '11:00:00' } },
+  ];
+  await page.route(/\/api\/v1\/admin\//, route => {
+    const path = new URL(route.request().url()).pathname;
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    if (path.endsWith('/shifts/page')) return route.fulfill({ status: 200, headers, json: shiftsResponse(shifts, route.request().url()) });
+    const json = path.endsWith('/shifts') ? shifts
+      : path.endsWith('/shifts/assignment-counts') ? {}
+      : path.endsWith('/pricing') ? { plans: [], overrides: [] }
+      : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'Company', isActive: true }], total: 1 }
+      : path.endsWith('/companies/company') ? { company: { id: 'company', name: 'Company', isActive: true }, branches: [{ id: 'branch', name: 'Branch', isActive: true }] }
+      : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [];
+    return route.fulfill({ status: 200, headers, json });
+  });
+  const listed = page.waitForResponse(r => /\/api\/v1\/admin\/shifts(\/page)?(\?|$)/.test(r.url()) && r.request().method() === 'GET', { timeout: 150000 });
+  await page.goto('/admin/shifts/');
+  await listed;
+  for (const [name, label] of [
+    ['WS daily', 'Daily 08:00–17:00'],
+    ['WS weekly', 'Monday, Wednesday 08:00–17:00'],
+    ['WS monthly', 'Monthly day 15 13:00–14:00'],
+    ['WS one-time', 'One-time 2026-11-20 09:30–11:00'],
+  ] as const) {
+    await openShiftWorkspace(page, name);
+    const dialog = page.getByRole('dialog', { name: `Manage — ${name}`, exact: true });
+    await expect(dialog.getByText(label, { exact: true })).toBeVisible({ timeout: 30000 });
+    await expect(dialog.getByText(/:\d{2}:\d{2}/)).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+  }
 });

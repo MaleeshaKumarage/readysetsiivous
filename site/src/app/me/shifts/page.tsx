@@ -490,8 +490,8 @@ export default function MyShiftsPage() {
             <p>{view === 'today' ? 'No shifts today.' : 'No shifts scheduled.'}</p>
             {view === 'today' && (
               <div className="mt-3 flex flex-wrap justify-center gap-3">
-                <Button variant="outline" disabled={busy || submitting || photoReading} onClick={() => changeView('past')}>View past shifts</Button>
-                <Button variant="outline" disabled={busy || submitting || photoReading} onClick={() => changeView('future')}>View upcoming shifts</Button>
+                <Button variant="outline" onClick={() => changeView('past')}>View past shifts</Button>
+                <Button variant="outline" onClick={() => changeView('future')}>View upcoming shifts</Button>
               </div>
             )}
           </Card>
