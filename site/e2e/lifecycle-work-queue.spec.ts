@@ -170,13 +170,8 @@ test('partner request items open the partner requests page', async ({ page }) =>
   state.items = { 'needs-action': [{ source: 'partner', id: 'request-1', reference: 'Lake apartment', customerName: 'Owner company', scheduledLocal: '2026-11-12 10:00', status: 'Offered', stateLabel: 'Awaiting acceptance', assigneeName: null, href: '/admin/partner-requests/' }] };
   await page.goto('/admin/work-queue/');
   await expect(page.getByRole('listitem').filter({ hasText: 'Partner request' })).toBeVisible();
-  const openRequest = page.getByRole('link', { name: 'Open partner request for Owner company' });
-  // The link can render before React attaches its click handler, so a click can be lost.
-  // Retry the click until the navigation happens.
-  await expect(async () => {
-    await openRequest.click();
-    await expect(page).toHaveURL(/\/admin\/partner-requests\/?$/, { timeout: 2000 });
-  }).toPass({ timeout: 15000 });
+  await page.getByRole('link', { name: 'Open partner request for Owner company' }).click();
+  await expect(page).toHaveURL(/\/admin\/partner-requests\/?$/);
 });
 
 test('a ?booking= deep link opens that booking drawer on load', async ({ page }) => {
