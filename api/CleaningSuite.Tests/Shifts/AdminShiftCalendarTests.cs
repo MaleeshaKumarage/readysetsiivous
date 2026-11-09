@@ -82,6 +82,7 @@ public class AdminShiftCalendarTests
     [InlineData(true, true, 120, 30, false, "unusual-duration")]
     [InlineData(true, true, 120, 180, false, null)]
     [InlineData(true, true, 120, 240, true, null)]
+    [InlineData(true, true, 120, -30, false, "missing-completion")]
     [InlineData(false, true, 120, 240, false, null)]
     public void Completion_review_flags_only_eligible_visits_needing_review(bool eligible, bool submitted, int scheduledMinutes,
         int? actualMinutes, bool corrected, string? expected)
@@ -133,6 +134,39 @@ public class AdminShiftCalendarTests
         var after = await VisitAsync(f);
         Assert.Equal(JsonValueKind.Null, after.GetProperty("assignees")[0].GetProperty("review").ValueKind);
         Assert.False(after.GetProperty("needsReview").GetBoolean());
+    }
+
+    [Fact]
+    public async Task A_stray_started_record_does_not_replace_the_completed_visit_duration_or_flag_it()
+    {
+        var f = new Fixture();
+        // A started-only record with a 36-second span used to win over the submitted 80-minute record.
+        var stray = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Cleaner One", Guid.NewGuid(), "Checklist", f.Start, new() { "Floor" }, f.Start.AddHours(2));
+        stray.StartedAtUtc = f.Start; stray.EndedAtUtc = f.Start.AddSeconds(36);
+        var submitted = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Cleaner One", Guid.NewGuid(), "Checklist", f.Start, new() { "Floor" }, f.Start.AddHours(2));
+        submitted.Start(f.Start); submitted.Submit(new() { new() { ItemText = "Floor", IsChecked = true } }, null, null, null, f.Start.AddMinutes(80));
+        f.Forms.Setup(r => r.ListFormsAsync(null, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>())).ReturnsAsync(new[] { stray, submitted });
+
+        var visit = await VisitAsync(f);
+        var person = Assert.Single(visit.GetProperty("assignees").EnumerateArray());
+        Assert.Equal("Recorded", person.GetProperty("status").GetString());
+        Assert.Equal(80.0 / 60.0, person.GetProperty("hours").GetDouble(), 6);
+        Assert.Equal(JsonValueKind.Null, person.GetProperty("review").ValueKind);
+        Assert.False(visit.GetProperty("needsReview").GetBoolean());
+    }
+
+    [Fact]
+    public async Task An_unsubmitted_record_reports_no_duration_even_when_it_has_an_end_time()
+    {
+        var f = new Fixture();
+        var started = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Cleaner One", Guid.NewGuid(), "Checklist", f.Start, new() { "Floor" }, f.Start.AddHours(2));
+        started.StartedAtUtc = f.Start; started.EndedAtUtc = f.Start.AddMinutes(30);
+        f.Forms.Setup(r => r.ListFormsAsync(null, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>())).ReturnsAsync(new[] { started });
+
+        var visit = await VisitAsync(f);
+        var person = Assert.Single(visit.GetProperty("assignees").EnumerateArray());
+        Assert.Equal(JsonValueKind.Null, person.GetProperty("hours").ValueKind);
+        Assert.Equal("missing-completion", person.GetProperty("review").GetProperty("kind").GetString());
     }
 
     [Fact]
