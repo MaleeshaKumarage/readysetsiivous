@@ -17,6 +17,8 @@ public class Branch : BaseDocument
     public bool IsActive { get; set; }
     public int? RoomCount { get; set; }
     public int? BedCount { get; set; }
+    /// <summary>Floor area in square metres, used in the automatic shift name. Optional.</summary>
+    public int? AreaSquareMeters { get; set; }
     /// <summary>Dated price history. The only source of a branch price; shifts pick one version by its effective date.</summary>
     public List<BranchPriceVersion> PriceVersions { get; set; } = [];
     // Pre-history flat price, kept only so documents saved before PriceVersions still load. Read through Versions;
@@ -46,6 +48,13 @@ public class Branch : BaseDocument
 
     public bool HasPendingQuote => QuoteRequestedUtc.HasValue && !PricingReady;
     public bool PricingReady => CurrentPrice is { PriceNet: > 0, VatRatePercent: >= 0 and <= 100, DurationMinutes: > 0 and <= 1440 };
+
+    public void SetArea(int? squareMeters)
+    {
+        if (squareMeters is < 0 or > 100000)
+            throw new ArgumentException("Area must be between zero and 100000 square metres, or empty.");
+        AreaSquareMeters = squareMeters;
+    }
 
     public void SetPropertyCounts(int? rooms, int? beds)
     {

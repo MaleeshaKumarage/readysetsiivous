@@ -91,6 +91,27 @@ public sealed class PartnerUpdateCompatibilityTests
     }
 
     [Fact]
+    public async Task Area_is_set_kept_when_omitted_and_cleared_by_explicit_null()
+    {
+        var branch = PricedBranch();
+        await Update(branch, JsonSerializer.Deserialize<UpdateBranchCommand>("{\"name\":\"Property\",\"areaSquareMeters\":45}", Json)!);
+        Assert.Equal(45, branch.AreaSquareMeters);
+        await Update(branch, JsonSerializer.Deserialize<UpdateBranchCommand>("{\"name\":\"Property\",\"roomCount\":4}", Json)!);
+        Assert.Equal(45, branch.AreaSquareMeters);
+        await Update(branch, JsonSerializer.Deserialize<UpdateBranchCommand>("{\"name\":\"Property\",\"areaSquareMeters\":null}", Json)!);
+        Assert.Null(branch.AreaSquareMeters);
+    }
+
+    [Fact]
+    public void Area_rejects_negative_and_implausible_values()
+    {
+        var branch = PricedBranch();
+        Assert.Throws<ArgumentException>(() => branch.SetArea(-1));
+        Assert.Throws<ArgumentException>(() => branch.SetArea(100001));
+        branch.SetArea(0); Assert.Equal(0, branch.AreaSquareMeters);
+    }
+
+    [Fact]
     public async Task Partner_company_change_uses_current_binding_without_changing_identity_permissions()
     {
         var oldCompany = Company.Create("OLD", "Old customer"); oldCompany.IsPartnerEnabled = true;
