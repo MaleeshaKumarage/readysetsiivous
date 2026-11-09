@@ -23,8 +23,10 @@ test('admin bulk request appears in partner inbox, responses return to admin wit
   await enterPartner(page);
   await page.getByRole('button', { name: 'Needs acknowledgment (2)' }).click();
   const inbox = page.getByRole('region', { name: 'Inventory acknowledgments' });
-  await expect(inbox.getByText('Private Cleaner')).toHaveCount(0);
+  // Wait for the loaded entry before checking the absence, so the check runs against rendered content.
   const entry = inbox.getByRole('article', { name: 'Keys Main store' });
+  await expect(entry).toBeVisible();
+  await expect(inbox.getByText('Private Cleaner')).toHaveCount(0);
   await entry.getByRole('button', { name: 'Review entry' }).click();
   await expect(entry.getByRole('img', { name: 'Keys photo 1' })).toBeVisible();
   await expect(entry.getByText('Please confirm collection')).toBeVisible();

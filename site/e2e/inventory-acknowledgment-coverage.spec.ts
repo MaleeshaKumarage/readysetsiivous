@@ -64,6 +64,7 @@ test('request modal: partner search retries, evidence toggles, send waits for pa
   const state = await setup(page);
   let partnerCalls = 0;
   await page.route(/\/api\/v1\/admin\/inventory\/acknowledgments\/partners(\?.*)?$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
     partnerCalls += 1;
     return partnerCalls === 1 ? json(route, { detail: 'Search unavailable' }, 500) : json(route, [company]);
   });
