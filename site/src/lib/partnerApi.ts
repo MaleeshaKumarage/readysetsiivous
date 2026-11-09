@@ -18,6 +18,10 @@ export interface PartnerCompletionTask { text: string; done: boolean }
 export interface PartnerCompletionPhoto { url: string; note: string }
 export interface PartnerCompletionReport { templateTitle: string; startedAtUtc: string | null; endedAtUtc: string | null; tasks: PartnerCompletionTask[]; cleanerNotes: string | null; photos: PartnerCompletionPhoto[] }
 export interface PartnerCompletion { requestId: string; branchName: string; fromDate: string; toDate: string; plannedStartUtc: string | null; plannedEndUtc: string | null; actualStartUtc: string | null; actualEndUtc: string | null; reports: PartnerCompletionReport[]; messages: PartnerChange[] }
+// Key pickup or handover at one property. The fee is the amount frozen when the request was submitted, excl. VAT.
+export interface KeyRequest { id: string; revision: number; companyId: string; branchId: string; branchName: string; kind: string; date: string; notes: string | null; feeNet: number; vatRatePercent: number; status: string; cancellationReason: string | null }
+export interface KeyRequestList { feeNet: number; vatRatePercent: number; items: KeyRequest[] }
+export interface KeyRequestInput { clientRequestId: string; branchId: string; kind: 'Pickup' | 'Handover'; date: string; notes: string | null }
 export interface RequestInput { clientRequestId?: string; version?: number; branchId?: string; fromDate: string; toDate: string; exactStartLocalTime: string | null; notes: string }
 export async function partnerSend<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
   const response = await authorizedFetch(`/api/v1/${path}`, { method, cache: 'no-store', signal, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
@@ -47,6 +51,9 @@ export const partnerApi = {
   saveSettings: (body: { photoLabels: string[]; generalInstructions: string; account?: PartnerAccount }) => partnerSend<PartnerSettings>('partner/settings', 'PUT', body),
   requestChange: (id: string, body: PartnerRequestChangeInput) => partnerSend<PartnerChange>(`partner/requests/${id}/change-requests`, 'POST', body),
   shifts: () => partnerSend<PartnerShift[]>('partner/shifts'),
+  keyRequests: () => partnerSend<KeyRequestList>('partner/key-requests'),
+  createKeyRequest: (body: KeyRequestInput) => partnerSend<KeyRequest>('partner/key-requests', 'POST', body),
+  cancelKeyRequest: (request: KeyRequest, reason: string) => partnerSend<KeyRequest>(`partner/key-requests/${request.id}/cancel`, 'POST', { version: request.revision, reason }),
 };
 export const offerApi = {
   list: () => partnerSend<CleanerOffer[]>('me/partner-offers'),
@@ -68,5 +75,8 @@ export function staffPartnerApi(role: 'admin' | 'manager') {
     resolve: (id: string, resolution: string) => partnerSend<PartnerChange>(`${base}/change-requests/${id}/resolve`, 'POST', { resolution }),
     // Applies a structured request to the request at the version staff reviewed, then resolves the change.
     apply: (id: string, version: number, resolution: string) => partnerSend<PartnerChange>(`${base}/change-requests/${id}/apply`, 'POST', { version, resolution }),
+    keyRequests: (signal?: AbortSignal) => partnerSend<KeyRequestList>(`${base}/key-requests`, 'GET', undefined, signal),
+    // One fee for every new key request. Existing requests keep the fee they were submitted with.
+    setKeyRequestFee: (feeNet: number) => partnerSend<KeyRequestList>(`${base}/key-request-fee`, 'PUT', { feeNet }),
   };
 }

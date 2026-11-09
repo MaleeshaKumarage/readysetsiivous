@@ -30,6 +30,9 @@ public class TenantProfile : BaseDocument
     public decimal DefaultVatRatePercent { get; set; } = 25.5m;
     public int PaymentTermsDays { get; set; } = 14;
 
+    /// <summary>Net fee (EUR, excl. VAT) charged for each partner key pickup or handover request. Frozen per request.</summary>
+    public decimal KeyRequestFeeNet { get; set; }
+
     /// <summary>Public bookings may be created without an assigned employee.</summary>
     public bool AllowUnstaffedBookings { get; set; } = true;
 

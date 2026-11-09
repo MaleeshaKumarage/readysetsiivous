@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Building2, CalendarClock, MessageSquare, RefreshCw, Plus, ArrowRight, UserRound, LogOut, Settings } from 'lucide-react';
+import { Building2, CalendarClock, KeyRound, MessageSquare, RefreshCw, Plus, ArrowRight, UserRound, LogOut, Settings } from 'lucide-react';
 import { Badge, Button, buttonClasses, Card, Dialog, Field, Input, Textarea, fontFamily, palette } from '@/ds';
 import { authTenant, initAuth, isAuthenticated, isPartner, isAdmin, isManager, login, logout } from '@/lib/auth';
 import { partnerApi, type CleaningRequest, type PartnerAccount, type PartnerChangeAction, type PartnerCompletion, type PartnerIdentity, type PartnerShift, type PartnerChange } from '@/lib/partnerApi';
@@ -11,6 +11,7 @@ import { partnerCopy, partnerLanguageKey, partnerMessage, partnerStatus, type Pa
 import type { Branch } from '@/lib/adminApi';
 import { QuoteRequestedBadge } from '@/components/QuoteRequests';
 import { PartnerInventoryAcknowledgments } from '@/components/PartnerInventoryAcknowledgments';
+import { PartnerKeyRequests } from '@/components/PartnerKeyRequests';
 import './partner.css';
 
 const sections = [
@@ -18,6 +19,7 @@ const sections = [
   { key: 'Cleaning requests', label: 'requests', icon: CalendarClock },
   { key: 'Company shifts', label: 'shifts', icon: CalendarClock },
   { key: 'Change requests', label: 'changes', icon: MessageSquare },
+  { key: 'Key requests', label: 'keys', icon: KeyRound },
   { key: 'Settings', label: 'settings', icon: Settings },
 ] as const;
 type Section = typeof sections[number]['key'];
@@ -155,7 +157,7 @@ export default function PartnerPage() {
   const stamp = (value: string | null) => value && !Number.isNaN(Date.parse(value))
     ? stampFormatter.format(new Date(value)) : t.notRecorded;
   const selectedIndex = sections.findIndex(section => section.key === tab);
-  const counts = [branches.length, requests.length, shifts.length, changes.length, undefined];
+  const counts = [branches.length, requests.length, shifts.length, changes.length, undefined, undefined];
   const cities = [...new Set(branches.map(branch => branch.city).filter((city): city is string => Boolean(city)))].sort((a, b) => a.localeCompare(b, locale));
   const activeCity = cities.includes(cityFilter) ? cityFilter : '';
   const shownBranches = activeCity ? branches.filter(branch => branch.city === activeCity) : branches;
@@ -247,6 +249,9 @@ export default function PartnerPage() {
               </Card>
             </article>)}</div>
             <div className="partner-form-actions" role="navigation" aria-label={requestView === 'active' ? t.activeRequests : requestView === 'completed' ? t.completedRequests : t.cancelledRequests}>{requestList.length > 25 && <><Button variant="outline" className="partner-secondary" disabled={currentRequestPage <= 1} onClick={() => setRequestPage(currentRequestPage - 1)}>{t.previousPage}</Button><span className="partner-muted">{currentRequestPage} / {requestPageCount}</span><Button variant="outline" className="partner-secondary" disabled={currentRequestPage >= requestPageCount} onClick={() => setRequestPage(currentRequestPage + 1)}>{t.nextPage}</Button></>}</div>
+          </section>}
+          {tab === 'Key requests' && <section aria-label={t.keyRequests} className="partner-section">
+            <PartnerKeyRequests t={t} language={language} branches={branches} money={money} date={date} />
           </section>}
           {tab === 'Change requests' && <section aria-label={t.history} className="partner-section">
             <div className="partner-section-heading"><div><h2>{t.changes}</h2><p>{t.changesHint}</p></div></div>

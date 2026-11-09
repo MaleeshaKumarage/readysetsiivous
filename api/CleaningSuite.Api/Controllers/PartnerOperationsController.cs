@@ -13,12 +13,14 @@ namespace CleaningSuite.Api.Controllers;
 [Route("api/v1/manager/partner")]
 [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "operations")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class PartnerOperationsController(PartnerService service, IMediator mediator) : ControllerBase
+public sealed class PartnerOperationsController(PartnerService service, PartnerKeyRequestService keyRequests, IMediator mediator) : ControllerBase
 {
     // The guard permits existing unbound tenant administrators, but denies all unbound managers and partners.
     private Guid Actor => (HttpContext.Items["Employee"] as Employee)?.Id ?? Guid.Empty;
     [HttpGet("requests")] public async Task<IActionResult> Requests([FromQuery] Guid? companyId, CancellationToken ct) => Ok(await service.Requests(Actor, true, companyId, ct));
     [HttpGet("quotes")] public async Task<IActionResult> Quotes(CancellationToken ct) => Ok(await service.Quotes(Actor, ct));
+    [HttpGet("key-requests")] public async Task<IActionResult> KeyRequests([FromQuery] Guid? companyId, CancellationToken ct) => Ok(await keyRequests.List(Actor, true, companyId, ct));
+    [HttpPut("key-request-fee")] public async Task<IActionResult> KeyRequestFee(KeyRequestFeeInput body, CancellationToken ct) => Ok(await keyRequests.SetFee(Actor, body, ct));
     [HttpGet("branches")] public async Task<IActionResult> Branches([FromQuery] Guid? companyId, CancellationToken ct) => Ok(await service.Branches(Actor, true, companyId, ct));
     [HttpPost("branches")] public async Task<IActionResult> CreateBranch(CreateBranchCommand body, CancellationToken ct) => Ok(await mediator.Send(body, ct));
     [HttpPut("branches/{id:guid}")] public async Task<IActionResult> UpdateBranch(Guid id, UpdateBranchCommand body, CancellationToken ct) => Ok(await mediator.Send(body with { Id = id }, ct));

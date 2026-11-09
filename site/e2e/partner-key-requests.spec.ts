@@ -1,0 +1,103 @@
+import { test, expect, type Page } from '@playwright/test';
+import { setupAdminMocks } from './admin-helpers';
+import { partnerCopy, partnerStatus, type PartnerLanguage } from '../src/lib/partnerLocale';
+import type { Branch } from '../src/lib/adminApi';
+import type { PartnerIdentity, KeyRequest } from '../src/lib/partnerApi';
+
+const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
+const companyId = '11111111-1111-4111-8111-111111111111';
+const branch: Branch = { id: '22222222-2222-4222-8222-222222222222', companyId, name: 'Lake apartment', isActive: true, street: 'Lake road 1', city: 'Tampere', roomCount: 2, bedCount: 3, priceNet: 70, vatRatePercent: 25.5, estimatedDurationMinutes: 120, pricingReady: true };
+const identity: PartnerIdentity = { realm: 'readysetsiivous', person: { id: 'owner-profile', firstName: 'Test', lastName: 'Owner', role: 'partner', isActive: true }, company: { id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }, timeZoneId: 'Europe/Helsinki' };
+
+// Stateful fake of the key request endpoints, so a created or cancelled request shows up on the next load.
+async function fixture(page: Page, language: PartnerLanguage, seeded: KeyRequest[] = []) {
+  await setupAdminMocks(page);
+  await page.addInitScript(value => { (window as unknown as { __MOCK_ROLES__: string[] }).__MOCK_ROLES__ = ['partner']; localStorage.setItem('readyset:partner-language', value); }, language);
+  const items = [...seeded];
+  const writes: { method: string; path: string; body: Record<string, unknown> | null }[] = [];
+  await page.route(/\/api\/v1\/(?:admin|partner)\//, route => {
+    const req = route.request(), path = new URL(req.url()).pathname;
+    if (req.method() === 'OPTIONS') return route.fulfill({ headers });
+    if (path === '/api/v1/partner/key-requests' && req.method() === 'GET') return route.fulfill({ headers, json: { feeNet: 15, vatRatePercent: 25.5, items } });
+    if (path === '/api/v1/partner/key-requests' && req.method() === 'POST') {
+      const body = req.postDataJSON() as Record<string, unknown>; writes.push({ method: 'POST', path, body });
+      const created: KeyRequest = { id: `key-${items.length + 1}`, revision: 1, companyId, branchId: String(body.branchId), branchName: branch.name, kind: String(body.kind), date: String(body.date), notes: (body.notes as string | null) ?? null, feeNet: 15, vatRatePercent: 25.5, status: 'Requested', cancellationReason: null };
+      items.unshift(created);
+      return route.fulfill({ headers, json: created });
+    }
+    if (req.method() === 'POST' && /\/api\/v1\/partner\/key-requests\/[^/]+\/cancel$/.test(path)) {
+      const body = req.postDataJSON() as Record<string, unknown>; writes.push({ method: 'POST', path, body });
+      const id = path.split('/')[5], item = items.find(x => x.id === id)!;
+      Object.assign(item, { status: 'Cancelled', cancellationReason: body.reason, revision: item.revision + 1 });
+      return route.fulfill({ headers, json: item });
+    }
+    if (req.method() === 'GET') {
+      const json = path === '/api/v1/partner/me' ? identity
+        : path.endsWith('/companies') ? { items: [{ id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }], total: 1 }
+        : path.endsWith('/branches') || path.endsWith('/quotes') ? [branch]
+        : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [];
+      return route.fulfill({ headers, json });
+    }
+    return route.fulfill({ status: 409, headers, json: { detail: 'Unexpected mutation.' } });
+  });
+  return { writes };
+}
+
+for (const language of ['en', 'fi'] as const) {
+  const copy = partnerCopy[language];
+
+  test(`a partner sends a key pickup request after seeing the fee in ${language}`, async ({ page }) => {
+    const { writes } = await fixture(page, language);
+    await page.goto('/partner/');
+    await page.getByRole('tab', { name: copy.keys, exact: true }).click();
+
+    await expect(page.getByText(/15[.,]00/).first()).toBeVisible();
+    await page.getByLabel(copy.keyDate, { exact: true }).fill('2026-12-01');
+    await page.getByLabel(copy.keyNotes, { exact: true }).fill('Lockbox 1234');
+    await page.getByRole('button', { name: copy.submitKeyRequest, exact: true }).click();
+
+    await expect(page.getByRole('status')).toHaveText(copy.keySaved);
+    expect(writes).toHaveLength(1);
+    expect(writes[0].body).toMatchObject({ branchId: branch.id, kind: 'Pickup', date: '2026-12-01', notes: 'Lockbox 1234' });
+    expect(writes[0].body?.clientRequestId).toMatch(/^[0-9a-f-]{36}$/);
+    await expect(page.getByRole('article', { name: branch.name + ' 2026-12-01' })).toBeVisible();
+  });
+
+  test(`a partner cancels a requested key handover with a reason in ${language}`, async ({ page }) => {
+    const seeded: KeyRequest = { id: 'key-a', revision: 3, companyId, branchId: branch.id, branchName: branch.name, kind: 'Handover', date: '2026-12-05', notes: null, feeNet: 15, vatRatePercent: 25.5, status: 'Requested', cancellationReason: null };
+    const { writes } = await fixture(page, language, [seeded]);
+    await page.goto('/partner/');
+    await page.getByRole('tab', { name: copy.keys, exact: true }).click();
+
+    await page.getByRole('article', { name: branch.name + ' 2026-12-05' }).getByRole('button', { name: copy.cancelKeyRequest, exact: true }).click();
+    await page.getByLabel(copy.keyCancelReason, { exact: true }).fill('Keys already collected');
+    await page.getByRole('button', { name: copy.confirmKeyCancel, exact: true }).click();
+
+    await expect(page.getByRole('status')).toHaveText(copy.keyCancelled);
+    expect(writes).toEqual([{ method: 'POST', path: '/api/v1/partner/key-requests/key-a/cancel', body: { version: 3, reason: 'Keys already collected' } }]);
+    await expect(page.getByRole('article', { name: branch.name + ' 2026-12-05' }).getByText(partnerStatus('Cancelled', language))).toBeVisible();
+  });
+}
+
+test('staff save the key request fee from Partner operations', async ({ page }) => {
+  await setupAdminMocks(page);
+  const writes: Record<string, unknown>[] = [];
+  await page.route(/\/api\/v1\/admin\/companies(?:\?.*)?$/, route => route.fulfill({ headers, json: { items: [{ id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }], total: 1 } }));
+  await page.route(/\/api\/v1\/admin\/employees$/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/admin\/partner\//, route => {
+    const req = route.request(), path = new URL(req.url()).pathname.split('/partner')[1];
+    if (req.method() === 'OPTIONS') return route.fulfill({ headers });
+    if (path === '/key-requests' && req.method() === 'GET') return route.fulfill({ headers, json: { feeNet: 15, vatRatePercent: 25.5, items: [] } });
+    if (path === '/key-request-fee' && req.method() === 'PUT') { writes.push(req.postDataJSON() as Record<string, unknown>); return route.fulfill({ headers, json: { feeNet: 22.5, vatRatePercent: 25.5, items: [] } }); }
+    return route.fulfill({ headers, json: path === '/branches' ? [branch] : [] });
+  });
+
+  await page.goto('/admin/partner-requests/');
+  await page.getByRole('tab', { name: 'Key requests', exact: true }).click();
+  await expect(page.getByText('Current fee 15.00 EUR excl. VAT; VAT 25.5%.')).toBeVisible();
+  await page.getByLabel('Fee per key request, excl. VAT (EUR)', { exact: true }).fill('22.5');
+  await page.getByRole('button', { name: 'Save fee', exact: true }).click();
+
+  await expect(page.getByRole('status')).toHaveText('Key request fee saved. New requests use this fee.');
+  expect(writes).toEqual([{ feeNet: 22.5 }]);
+});

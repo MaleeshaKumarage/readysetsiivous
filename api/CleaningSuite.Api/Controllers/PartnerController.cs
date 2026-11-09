@@ -11,7 +11,7 @@ namespace CleaningSuite.Api.Controllers;
 [Route("api/v1/partner")]
 [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "partner")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class PartnerController(PartnerService service) : ControllerBase
+public sealed class PartnerController(PartnerService service, PartnerKeyRequestService keyRequests) : ControllerBase
 {
     private Guid Actor => (HttpContext.Items["Employee"] as Employee)?.Id
         ?? throw new UnauthorizedAccessException("A verified partner account is required.");
@@ -33,4 +33,7 @@ public sealed class PartnerController(PartnerService service) : ControllerBase
     [HttpGet("settings")] public async Task<IActionResult> Settings(CancellationToken ct) => Ok(await service.Settings(Actor, ct));
     [HttpPut("settings")] public async Task<IActionResult> UpdateSettings(PartnerSettingsInput body, CancellationToken ct) => Ok(await service.UpdateSettings(Actor, body, ct));
     [HttpGet("shifts")] public async Task<IActionResult> Shifts(CancellationToken ct) => Ok(await service.CompanyShifts(Actor, ct));
+    [HttpGet("key-requests")] public async Task<IActionResult> KeyRequests(CancellationToken ct) => Ok(await keyRequests.List(Actor, false, null, ct));
+    [HttpPost("key-requests")] public async Task<IActionResult> CreateKeyRequest(CreatePartnerKeyRequest body, CancellationToken ct) => Ok(await keyRequests.Create(Actor, body, ct));
+    [HttpPost("key-requests/{id:guid}/cancel")] public async Task<IActionResult> CancelKeyRequest(Guid id, PartnerCancellation body, CancellationToken ct) => Ok(await keyRequests.Cancel(Actor, id, body.Version, body.Reason, ct));
 }
