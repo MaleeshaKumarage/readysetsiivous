@@ -83,13 +83,15 @@ for (const language of ['en', 'fi'] as const) {
 test('staff save the key request fee from Partner operations', async ({ page }) => {
   await setupAdminMocks(page);
   const writes: Record<string, unknown>[] = [];
+  // The stored fee changes on save, so the reload shows what the server now holds.
+  let storedFee = 15;
   await page.route(/\/api\/v1\/admin\/companies(?:\?.*)?$/, route => route.fulfill({ headers, json: { items: [{ id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }], total: 1 } }));
   await page.route(/\/api\/v1\/admin\/employees$/, route => route.fulfill({ headers, json: [] }));
   await page.route(/\/api\/v1\/admin\/partner\//, route => {
     const req = route.request(), path = new URL(req.url()).pathname.split('/partner')[1];
     if (req.method() === 'OPTIONS') return route.fulfill({ headers });
-    if (path === '/key-requests' && req.method() === 'GET') return route.fulfill({ headers, json: { feeNet: 15, vatRatePercent: 25.5, items: [] } });
-    if (path === '/key-request-fee' && req.method() === 'PUT') { writes.push(req.postDataJSON() as Record<string, unknown>); return route.fulfill({ headers, json: { feeNet: 22.5, vatRatePercent: 25.5, items: [] } }); }
+    if (path === '/key-requests' && req.method() === 'GET') return route.fulfill({ headers, json: { feeNet: storedFee, vatRatePercent: 25.5, items: [] } });
+    if (path === '/key-request-fee' && req.method() === 'PUT') { const body = req.postDataJSON() as { feeNet: number }; writes.push(body); storedFee = body.feeNet; return route.fulfill({ headers, json: { feeNet: storedFee, vatRatePercent: 25.5, items: [] } }); }
     return route.fulfill({ headers, json: path === '/branches' ? [branch] : [] });
   });
 
@@ -100,6 +102,7 @@ test('staff save the key request fee from Partner operations', async ({ page }) 
   await page.getByRole('button', { name: 'Save fee', exact: true }).click();
 
   await expect(page.getByRole('status')).toHaveText('Key request fee saved. New requests use this fee.');
+  await expect(page.getByText('Current fee 22.50 EUR excl. VAT; VAT 25.5%.')).toBeVisible();
   expect(writes).toEqual([{ feeNet: 22.5 }]);
 });
 
@@ -111,7 +114,7 @@ test('staff assign a cleaner, complete a key request and attach a completion pho
   const cleaner = { id: 'emp-1', firstName: 'Aino', lastName: 'Virtanen', isActive: true, role: 'employee' };
   const retired = { id: 'emp-2', firstName: 'Old', lastName: 'Worker', isActive: false, role: 'employee' };
   const item = { id: 'key-9', revision: 1, companyId, branchId: branch.id, branchName: branch.name, kind: 'Pickup', date: '2026-12-01', notes: null, feeNet: 15, vatRatePercent: 25.5, status: 'Requested', cancellationReason: null, completedUtc: null as string | null, assignedEmployeeId: null as string | null, assignedEmployeeName: null as string | null, photos: [] as { id: string; sizeBytes: number; uploadedUtc: string }[] };
-  const writes: { path: string; body: Record<string, unknown> | null; multipart: boolean }[] = [];
+  const writes: { path: string; body: Record<string, unknown> | null; multipart: boolean; file?: boolean }[] = [];
   await page.route(/\/api\/v1\/admin\/companies(?:\?.*)?$/, route => route.fulfill({ headers, json: { items: [{ id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }], total: 1 } }));
   await page.route(/\/api\/v1\/admin\/employees$/, route => route.fulfill({ headers, json: [cleaner, retired] }));
   await page.route(/\/api\/v1\/admin\/partner\//, route => {
@@ -129,7 +132,7 @@ test('staff assign a cleaner, complete a key request and attach a completion pho
       return route.fulfill({ headers, json: item });
     }
     if (path === `/key-requests/${item.id}/photos` && req.method() === 'POST') {
-      writes.push({ path, body: null, multipart: (req.headers()['content-type'] ?? '').startsWith('multipart/form-data') });
+      writes.push({ path, body: null, multipart: (req.headers()['content-type'] ?? '').startsWith('multipart/form-data'), file: (req.postDataBuffer()?.toString('latin1') ?? '').includes('filename="keys.png"') });
       item.photos.push({ id: photoId, sizeBytes: 70, uploadedUtc: '2026-12-01T10:05:00Z' });
       return route.fulfill({ headers, json: item });
     }
@@ -154,14 +157,14 @@ test('staff assign a cleaner, complete a key request and attach a completion pho
 
   await page.getByLabel(`Add photo for ${branch.name} 2026-12-01`, { exact: true }).setInputFiles({ name: 'keys.png', mimeType: 'image/png', buffer: Buffer.from(pngBase64, 'base64') });
   await expect(page.getByRole('status')).toHaveText('Photo added.');
-  expect(writes[2]).toMatchObject({ path: `/key-requests/${item.id}/photos`, multipart: true });
+  expect(writes[2]).toMatchObject({ path: `/key-requests/${item.id}/photos`, multipart: true, file: true });
   await expect(page.getByRole('img', { name: /Key request photo/ })).toBeVisible();
 });
 
 for (const language of ['en', 'fi'] as const) {
   const copy = partnerCopy[language];
   test(`a partner sees the completion photos of a finished key request in ${language}`, async ({ page }) => {
-    const completed: KeyRequest = { id: 'key-c', revision: 4, companyId, branchId: branch.id, branchName: branch.name, kind: 'Pickup', date: '2026-12-03', notes: null, feeNet: 15, vatRatePercent: 25.5, status: 'Completed', cancellationReason: null, completedUtc: '2026-12-03T10:00:00Z', photos: [{ id: '55555555-5555-4555-8555-555555555555', sizeBytes: 70, uploadedUtc: '2026-12-03T10:05:00Z' }] };
+    const completed: KeyRequest = { id: 'key-c', revision: 4, companyId, branchId: branch.id, branchName: branch.name, kind: 'Pickup', date: '2026-12-03', notes: null, feeNet: 15, vatRatePercent: 25.5, status: 'Completed', cancellationReason: null, completedUtc: '2026-12-03T10:00:00Z', assignedEmployeeId: 'emp-1', assignedEmployeeName: 'Aino Virtanen', photos: [{ id: '55555555-5555-4555-8555-555555555555', sizeBytes: 70, uploadedUtc: '2026-12-03T10:05:00Z' }] };
     await fixture(page, language, [completed]);
     await page.goto('/partner/');
     await page.getByRole('tab', { name: copy.keys, exact: true }).click();
@@ -170,5 +173,25 @@ for (const language of ['en', 'fi'] as const) {
     await expect(page.getByRole('img', { name: `${copy.completionPhoto} 1` })).toBeVisible();
     // The assignee is staff-only and never appears in the partner view.
     await expect(page.getByText('Assigned to')).toHaveCount(0);
+    await expect(page.getByText('Aino Virtanen')).toHaveCount(0);
+    // A finished request offers no cancellation.
+    await expect(page.getByRole('button', { name: copy.cancelKeyRequest, exact: true })).toHaveCount(0);
   });
 }
+
+for (const language of ['en', 'fi'] as const) {
+  const copy = partnerCopy[language];
+  test(`a partner creates a key handover request and the kind is sent in ${language}`, async ({ page }) => {
+    const { writes } = await fixture(page, language);
+    await page.goto('/partner/');
+    await page.getByRole('tab', { name: copy.keys, exact: true }).click();
+    await page.getByRole('radio', { name: copy.keyHandover, exact: true }).check();
+    await page.getByLabel(copy.keyDate, { exact: true }).fill('2026-12-04');
+    await page.getByRole('button', { name: copy.submitKeyRequest, exact: true }).click();
+
+    await expect(page.getByRole('status')).toHaveText(copy.keySaved);
+    expect(writes).toHaveLength(1);
+    expect(writes[0].body).toMatchObject({ branchId: branch.id, kind: 'Handover', date: '2026-12-04' });
+  });
+}
+

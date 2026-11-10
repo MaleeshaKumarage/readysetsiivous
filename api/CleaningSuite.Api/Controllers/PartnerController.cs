@@ -37,6 +37,8 @@ public sealed class PartnerController(PartnerService service, PartnerKeyRequestS
     [HttpGet("key-requests/{id:guid}/photos/{photoId:guid}")] public async Task<IActionResult> KeyRequestPhoto(Guid id, Guid photoId, CancellationToken ct)
     {
         var photo = await keyRequests.PartnerPhoto(Actor, id, photoId, ct);
+        Response.Headers["Content-Disposition"] = "attachment";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
         return File(photo.Content, photo.ContentType);
     }
     [HttpPost("key-requests")] public async Task<IActionResult> CreateKeyRequest(CreatePartnerKeyRequest body, CancellationToken ct) => Ok(await keyRequests.Create(Actor, body, ct));

@@ -74,3 +74,25 @@ test('an assigned employee adds a photo during the visit, before marking the key
   // Still open: completing the request remains a separate step.
   await expect(page.getByRole('button', { name: 'Mark completed', exact: true })).toBeVisible();
 });
+
+test('a refused employee photo keeps its reason on screen after the list reloads', async ({ page }) => {
+  const item = { id: 'key-9', revision: 2, companyId: '11111111-1111-4111-8111-111111111111', branchId: '22222222-2222-4222-8222-222222222222', branchName: 'Lake apartment', kind: 'Pickup', date: '2026-12-05', notes: null, feeNet: 15, vatRatePercent: 25.5, status: 'Requested', cancellationReason: null, completedUtc: null as string | null, assignedEmployeeId: 'employee-a', assignedEmployeeName: 'Test Staff', photos: [] as { id: string; sizeBytes: number; uploadedUtc: string }[] };
+  await setupAdminMocks(page);
+  await page.addInitScript(() => { (window as any).__MOCK_ROLES__ = ['employee']; });
+  await page.route(/\/api\/v1\/me$/, route => route.fulfill({ headers, json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: ['employee'] })], employee: { id: 'employee-a', firstName: 'Test', lastName: 'Staff', role: 'employee', isActive: true } } }));
+  await page.route(/\/api\/v1\/me\/shifts(?:\/calendar)?(?:\?.*)?$/, route => route.fulfill({ headers, json: route.request().url().includes('/calendar') ? { occurrences: [], timeZoneId: 'Europe/Helsinki', fromLocalDate: '2026-11-05', toLocalDate: '2026-11-06' } : [] }));
+  await page.route(/\/api\/v1\/me\/partner-offers(?:\?.*)?$/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/me\/work-preferences$/, route => route.fulfill({ headers, json: { autoAcceptWork: false } }));
+  await page.route(/\/api\/v1\/me\/inventory\/(locations|items)$/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/me\/inventory\/usage(\?.*)?$/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/me\/key-requests\/[^/]+\/photos$/, route => route.fulfill({ status: 400, headers, json: { title: 'Validation failed', errors: { File: ['Key request photos must be JPEG, PNG or WebP.'] } } }));
+  await page.route(/\/api\/v1\/me\/key-requests(?:\?.*)?$/, route => route.fulfill({ headers, json: [item] }));
+
+  await page.goto('/me/shifts/');
+  await page.getByRole('tab', { name: 'Keys', exact: true }).click();
+  await page.getByLabel('Add photo for Lake apartment 2026-12-05', { exact: true }).setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('not an image') });
+
+  // The reload after the refused upload succeeds, but the reason stays visible.
+  await expect(page.getByText('Key request photos must be JPEG, PNG or WebP.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Mark completed', exact: true })).toBeVisible();
+});

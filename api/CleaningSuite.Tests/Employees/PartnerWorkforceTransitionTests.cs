@@ -159,4 +159,21 @@ public sealed class PartnerWorkforceTransitionTests
             new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:DefaultConnection"] = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING") }).Build(), session);
         public void Dispose() => services.Dispose();
     }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task A_key_request_still_to_complete_blocks_the_partner_transition_but_a_completed_one_does_not()
+    {
+        using var fixture = await Fixture.Create();
+        var open = Guid.NewGuid(); var finished = Guid.NewGuid();
+        using (var writer = fixture.Store.LightweightSession(fixture.Tenant))
+        {
+            writer.Store(new PartnerKeyRequest { CompanyId = Guid.NewGuid(), BranchId = Guid.NewGuid(), Date = new DateOnly(2026, 11, 20), AssignedEmployeeId = open, Status = PartnerKeyRequest.StatusRequested });
+            writer.Store(new PartnerKeyRequest { CompanyId = Guid.NewGuid(), BranchId = Guid.NewGuid(), Date = new DateOnly(2026, 11, 2), AssignedEmployeeId = finished, Status = PartnerKeyRequest.StatusCompleted });
+            await writer.SaveChangesAsync();
+        }
+        using var blocked = fixture.Session();
+        await Assert.ThrowsAsync<EmployeeIdentityConflictException>(() => fixture.Guard(blocked).EnsureNoOutstandingWorkAsync(open, default));
+        using var allowed = fixture.Session();
+        await fixture.Guard(allowed).EnsureNoOutstandingWorkAsync(finished, default);
+    }
 }

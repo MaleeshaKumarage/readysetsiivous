@@ -6,28 +6,33 @@ import type { KeyRequestPhoto } from '@/lib/partnerApi';
 const photoLimit = 10;
 const photoTypes = 'image/jpeg,image/png,image/webp';
 
-// Thumbnails for a key request. Each photo is fetched once and its object URL is released on unmount.
-// Passing onUpload adds the file picker, which is hidden once the limit is reached.
+// Thumbnails for a key request. Each effect run owns the object URLs it creates. They are released when the
+// photo set changes or the component unmounts, including URLs that resolve after the cleanup has run.
 export function KeyRequestPhotos({ heading, alt, photos, loadUrl, onUpload, uploadLabel, busy = false }: {
   heading: string; alt: string; photos: KeyRequestPhoto[]; loadUrl: (photoId: string) => Promise<string>;
   onUpload?: (file: File) => void; uploadLabel?: string; busy?: boolean;
 }) {
   const [urls, setUrls] = useState<Record<string, string>>({});
-  const requested = useRef(new Set<string>()), created = useRef<string[]>([]);
   const loader = useRef(loadUrl);
   loader.current = loadUrl;
+  const ids = photos.map(photo => photo.id).join(',');
 
   useEffect(() => {
-    for (const photo of photos) {
-      if (requested.current.has(photo.id)) continue;
-      requested.current.add(photo.id);
-      loader.current(photo.id).then(url => {
-        created.current.push(url);
-        setUrls(previous => ({ ...previous, [photo.id]: url }));
-      }, () => requested.current.delete(photo.id));
+    let active = true;
+    const owned: string[] = [];
+    for (const id of ids ? ids.split(',') : []) {
+      loader.current(id).then(url => {
+        if (!active) { URL.revokeObjectURL(url); return; }
+        owned.push(url);
+        setUrls(previous => ({ ...previous, [id]: url }));
+      }, () => { /* Shown as loading. Reloads when the photo set next changes. */ });
     }
-  }, [photos]);
-  useEffect(() => () => { created.current.forEach(url => URL.revokeObjectURL(url)); }, []);
+    return () => {
+      active = false;
+      owned.forEach(url => URL.revokeObjectURL(url));
+      setUrls({});
+    };
+  }, [ids]);
 
   return <div className="space-y-2">
     <p className="text-sm">{heading}{onUpload ? ` ${photos.length}/${photoLimit}` : ''}</p>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Badge, Button, Card, Field, Input, Textarea } from '@/ds';
 import type { Branch } from '@/lib/adminApi';
 import { partnerApi, type KeyRequest, type KeyRequestList } from '@/lib/partnerApi';
@@ -9,21 +9,31 @@ import { KeyRequestPhotos } from '@/components/KeyRequestPhotos';
 
 type Copy = Record<keyof typeof partnerCopy.en, string>;
 
+// crypto.randomUUID is missing outside secure contexts. The fallback still produces a version 4 UUID, which the API accepts.
+function newRequestId(): string {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  if (uuid) return uuid;
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, character => {
+    const random = Math.random() * 16 | 0;
+    return (character === 'x' ? random : (random & 0x3) | 0x8).toString(16);
+  });
+}
+
 // Partner key pickup and handover requests. Each request keeps the fee it was submitted with.
 export function PartnerKeyRequests({ t, language, branches, money, date }: {
   t: Copy; language: PartnerLanguage; branches: Branch[]; money: (value?: number | null) => string; date: (value: string) => string;
 }) {
   const [list, setList] = useState<KeyRequestList | null>(null);
-  const [error, setError] = useState(''), [notice, setNotice] = useState(''), [busy, setBusy] = useState(false);
+  const [loadError, setLoadError] = useState(''), [error, setError] = useState(''), [notice, setNotice] = useState(''), [busy, setBusy] = useState(false);
   const [branchId, setBranchId] = useState(''), [kind, setKind] = useState<'Pickup' | 'Handover'>('Pickup'), [day, setDay] = useState(''), [notes, setNotes] = useState('');
-  // Reused until a request succeeds, so a retry after a lost response cannot create a second request.
-  const [clientRequestId, setClientRequestId] = useState(() => crypto.randomUUID());
+  // Created on the first send and kept until a request succeeds, so a retry after a lost response cannot create a second request.
+  const clientRequestId = useRef<string | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null), [cancelReason, setCancelReason] = useState('');
   const activeBranches = useMemo(() => branches.filter(branch => branch.isActive), [branches]);
   const selectedBranch = activeBranches.some(branch => branch.id === branchId) ? branchId : activeBranches[0]?.id ?? '';
 
   const refresh = useCallback(async () => {
-    try { setList(await partnerApi.keyRequests()); } catch (e) { setError(e instanceof Error ? e.message : ''); }
+    try { setList(await partnerApi.keyRequests()); setLoadError(''); } catch (e) { setLoadError(e instanceof Error ? e.message : ''); }
   }, []);
   useEffect(() => { void refresh(); }, [refresh]);
 
@@ -32,8 +42,10 @@ export function PartnerKeyRequests({ t, language, branches, money, date }: {
     if (busy || !selectedBranch || !day) return;
     setBusy(true); setError(''); setNotice('');
     try {
-      await partnerApi.createKeyRequest({ clientRequestId, branchId: selectedBranch, kind, date: day, notes: notes.trim() || null });
-      setNotice(t.keySaved); setKind('Pickup'); setDay(''); setNotes(''); setClientRequestId(crypto.randomUUID());
+      clientRequestId.current ??= newRequestId();
+      await partnerApi.createKeyRequest({ clientRequestId: clientRequestId.current, branchId: selectedBranch, kind, date: day, notes: notes.trim() || null });
+      clientRequestId.current = null;
+      setNotice(t.keySaved); setKind('Pickup'); setDay(''); setNotes('');
     } catch (e) { setError(e instanceof Error ? e.message : ''); }
     finally { setBusy(false); await refresh(); }
   }
@@ -54,6 +66,7 @@ export function PartnerKeyRequests({ t, language, branches, money, date }: {
 
   return <>
     <div className="partner-section-heading"><div><h2>{t.keyRequests}</h2><p>{t.keyRequestsHint}</p></div></div>
+    {loadError && <p role="alert" className="partner-alert partner-alert-error">{loadError}</p>}
     {error && <p role="alert" className="partner-alert partner-alert-error">{error}</p>}
     {notice && <p role="status" className="partner-alert">{notice}</p>}
     {!activeBranches.length ? <Card className="partner-surface partner-empty">{t.keyNoProperties}</Card> : <Card className="partner-surface">
@@ -82,7 +95,7 @@ export function PartnerKeyRequests({ t, language, branches, money, date }: {
         {request.notes && <p className="partner-entered">{request.notes}</p>}
         {(request.photos?.length ?? 0) > 0 && <KeyRequestPhotos heading={t.completionPhotos} alt={t.completionPhoto} photos={request.photos ?? []} loadUrl={photoId => partnerApi.keyRequestPhotoUrl(request.id, photoId)} />}
         {request.status === 'Cancelled' && request.cancellationReason && <p className="partner-entered">{request.cancellationReason}</p>}
-        {request.status !== 'Cancelled' && (cancelling === request.id ? <div role="group" aria-label={t.cancelKeyRequest} className="partner-confirm">
+        {request.status === 'Requested' && (cancelling === request.id ? <div role="group" aria-label={t.cancelKeyRequest} className="partner-confirm">
           <Field label={t.keyCancelReason} className="partner-form-wide"><Textarea className="partner-field" required maxLength={1000} value={cancelReason} onChange={event => setCancelReason(event.target.value)} /></Field>
           <div className="partner-card-actions"><Button variant="ghost" className="partner-danger" disabled={busy || !cancelReason.trim()} onClick={() => void cancel(request)}>{t.confirmKeyCancel}</Button><Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => { setCancelling(null); setCancelReason(''); }}>{t.keepKeyRequest}</Button></div>
         </div> : <div className="partner-card-actions"><Button variant="ghost" className="partner-danger" disabled={busy} onClick={() => { setCancelReason(''); setCancelling(request.id); }}>{t.cancelKeyRequest}</Button></div>)}

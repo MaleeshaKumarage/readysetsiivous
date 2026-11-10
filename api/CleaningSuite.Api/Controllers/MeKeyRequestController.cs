@@ -20,6 +20,8 @@ public sealed class MeKeyRequestController(PartnerKeyRequestService keyRequests)
 
     [HttpGet] public async Task<IActionResult> Assigned(CancellationToken ct) => Ok(await keyRequests.Assigned(Actor, ct));
     [HttpPost("{id:guid}/complete")] public async Task<IActionResult> Complete(Guid id, KeyRequestRevision body, CancellationToken ct) => Ok(await keyRequests.Complete(Actor, id, body, ct));
+    [RequestSizeLimit(10 * 1024 * 1024 + 65536)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 10 * 1024 * 1024 + 65536)]
     [HttpPost("{id:guid}/photos")] public async Task<IActionResult> AddPhoto(Guid id, IFormFile? file, CancellationToken ct)
     {
         if (file is null || file.Length == 0) throw new ValidationException([new("File", "Choose a photo to upload.")]);
@@ -33,6 +35,8 @@ public sealed class MeKeyRequestController(PartnerKeyRequestService keyRequests)
     [HttpGet("{id:guid}/photos/{photoId:guid}")] public async Task<IActionResult> Photo(Guid id, Guid photoId, CancellationToken ct)
     {
         var photo = await keyRequests.Photo(Actor, id, photoId, ct);
+        Response.Headers["Content-Disposition"] = "attachment";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
         return File(photo.Content, photo.ContentType);
     }
 }

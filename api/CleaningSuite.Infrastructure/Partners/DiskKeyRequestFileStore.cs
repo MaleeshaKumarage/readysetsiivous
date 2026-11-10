@@ -21,8 +21,18 @@ public sealed class DiskKeyRequestFileStore(IConfiguration config, ITenantContex
     {
         var path = PathFor(requestId, photo);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-        await stream.WriteAsync(content, ct);
+        try
+        {
+            // Create overwrites a leftover from an earlier attempt, so a retried save does not fail.
+            await using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
+            await stream.WriteAsync(content, ct);
+        }
+        catch
+        {
+            // A truncated file must never be read back as a valid photo.
+            try { File.Delete(path); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { logger.LogError(e, "Partial key request photo cleanup failed for {RequestId}/{PhotoId}", requestId, photo.Id); }
+            throw;
+        }
     }
 
     public async Task<byte[]?> ReadAsync(Guid requestId, KeyRequestPhoto photo, CancellationToken ct)

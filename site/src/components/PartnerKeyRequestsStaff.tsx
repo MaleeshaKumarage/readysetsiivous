@@ -12,15 +12,15 @@ type StaffEmployee = { id: string; name: string };
 export function PartnerKeyRequestsStaff({ role }: { role: 'admin' | 'manager' }) {
   const [list, setList] = useState<KeyRequestList | null>(null);
   const [employees, setEmployees] = useState<StaffEmployee[]>([]);
-  const [fee, setFee] = useState(''), [error, setError] = useState(''), [notice, setNotice] = useState(''), [busy, setBusy] = useState(false);
+  const [fee, setFee] = useState(''), [loadError, setLoadError] = useState(''), [error, setError] = useState(''), [notice, setNotice] = useState(''), [busy, setBusy] = useState(false);
   // Employee chosen in each request's dropdown, before Assign is pressed.
   const [choice, setChoice] = useState<Record<string, string>>({});
 
   const refresh = useCallback(async () => {
     try {
       const next = await staffPartnerApi(role).keyRequests();
-      setList(next); setFee(String(next.feeNet ?? 0)); setError('');
-    } catch (e) { setError(e instanceof Error ? e.message : 'Key requests could not be loaded.'); }
+      setList(next); setFee(String(next.feeNet ?? 0)); setLoadError('');
+    } catch (e) { setLoadError(e instanceof Error ? e.message : 'Key requests could not be loaded.'); }
   }, [role]);
   useEffect(() => { void refresh(); }, [refresh]);
 
@@ -54,6 +54,7 @@ export function PartnerKeyRequestsStaff({ role }: { role: 'admin' | 'manager' })
       </label>
       <button className="border rounded px-4 py-2" disabled={busy} type="submit">Save fee</button>
     </form>
+    {loadError && <p role="alert" className="text-red-600">{loadError}</p>}
     {error && <p role="alert" className="text-red-600">{error}</p>}
     {notice && <p role="status">{notice}</p>}
     {list && <p className="text-sm">Current fee {Number(list.feeNet ?? 0).toFixed(2)} EUR excl. VAT; VAT {list.vatRatePercent}%.</p>}

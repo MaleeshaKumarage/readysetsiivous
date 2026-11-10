@@ -23,6 +23,8 @@ public sealed class PartnerOperationsController(PartnerService service, PartnerK
     [HttpPut("key-request-fee")] public async Task<IActionResult> KeyRequestFee(KeyRequestFeeInput body, CancellationToken ct) => Ok(await keyRequests.SetFee(Actor, body, ct));
     [HttpPost("key-requests/{id:guid}/assignment")] public async Task<IActionResult> AssignKeyRequest(Guid id, KeyRequestAssignment body, CancellationToken ct) => Ok(await keyRequests.Assign(Actor, id, body, ct));
     [HttpPost("key-requests/{id:guid}/complete")] public async Task<IActionResult> CompleteKeyRequest(Guid id, KeyRequestRevision body, CancellationToken ct) => Ok(await keyRequests.Complete(Actor, id, body, ct));
+    [RequestSizeLimit(10 * 1024 * 1024 + 65536)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 10 * 1024 * 1024 + 65536)]
     [HttpPost("key-requests/{id:guid}/photos")] public async Task<IActionResult> AddKeyRequestPhoto(Guid id, IFormFile? file, CancellationToken ct)
     {
         if (file is null || file.Length == 0) throw new FluentValidation.ValidationException([new("File", "Choose a photo to upload.")]);
@@ -36,6 +38,8 @@ public sealed class PartnerOperationsController(PartnerService service, PartnerK
     [HttpGet("key-requests/{id:guid}/photos/{photoId:guid}")] public async Task<IActionResult> KeyRequestPhoto(Guid id, Guid photoId, CancellationToken ct)
     {
         var photo = await keyRequests.Photo(Actor, id, photoId, ct);
+        Response.Headers["Content-Disposition"] = "attachment";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
         return File(photo.Content, photo.ContentType);
     }
     [HttpGet("branches")] public async Task<IActionResult> Branches([FromQuery] Guid? companyId, CancellationToken ct) => Ok(await service.Branches(Actor, true, companyId, ct));

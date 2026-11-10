@@ -4,14 +4,16 @@ import { useCallback, useEffect, useState } from 'react';
 import { KeyRequestPhotos } from '@/components/KeyRequestPhotos';
 import { myKeyRequestApi, type KeyRequest } from '@/lib/partnerApi';
 
-// Key pickups and handovers assigned to the signed-in employee. Completing a request unlocks its photos.
+// Key pickups and handovers assigned to the signed-in employee. Photos can be added while the request is open
+// and after completion. Load failures and action failures are shown separately, so a successful reload never hides
+// the reason an upload or completion was refused.
 export function KeyRequestsSection() {
   const [items, setItems] = useState<KeyRequest[] | null>(null);
-  const [error, setError] = useState(''), [notice, setNotice] = useState(''), [busy, setBusy] = useState(false);
+  const [loadError, setLoadError] = useState(''), [error, setError] = useState(''), [notice, setNotice] = useState(''), [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
-    try { setItems(await myKeyRequestApi.assigned()); setError(''); }
-    catch (e) { setError(e instanceof Error ? e.message : 'Key requests could not be loaded.'); }
+    try { setItems(await myKeyRequestApi.assigned()); setLoadError(''); }
+    catch (e) { setLoadError(e instanceof Error ? e.message : 'Key requests could not be loaded.'); }
   }, []);
   useEffect(() => { void refresh(); }, [refresh]);
 
@@ -26,8 +28,9 @@ export function KeyRequestsSection() {
   return <div id="employee-panel-keys" role="tabpanel" aria-labelledby="employee-tab-keys" className="space-y-6">
     <section className="space-y-1">
       <h2 className="text-xl font-semibold">Key requests</h2>
-      <p className="text-sm text-gray-600 dark:text-gray-300">Keys you collect or hand over. Mark each one completed, then add photos.</p>
+      <p className="text-sm text-gray-600 dark:text-gray-300">Keys you collect or hand over. Add photos during the visit, then mark the request completed.</p>
     </section>
+    {loadError && <p role="alert" className="text-red-600">{loadError}</p>}
     {error && <p role="alert" className="text-red-600">{error}</p>}
     {notice && <p role="status">{notice}</p>}
     {items && items.length === 0 && <p>No key requests are assigned to you.</p>}
