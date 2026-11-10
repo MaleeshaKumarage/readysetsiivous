@@ -497,7 +497,7 @@ public class CompanyHandlers
                     request.ContactPhone);
                 branch.ContactEmail = request.ContactEmail?.Trim();
                 ApplyProperty(branch, request.RoomCount, request.BedCount, request.PriceNet, request.VatRatePercent, request.EstimatedDurationMinutes, request.PriceMode, request.PriceEffectiveFrom);
-                branch.SetArea(request.AreaSquareMeters);
+                ApplyArea(branch, request.AreaSquareMeters);
                 await _repository.SaveAsync(branch, ct);
                 return MapBranch(branch);
             }
@@ -532,7 +532,7 @@ public class CompanyHandlers
                     request.HasRoomCount ? request.RoomCount : branch.RoomCount,
                     request.HasBedCount ? request.BedCount : branch.BedCount,
                     request.PriceNet, request.VatRatePercent, request.EstimatedDurationMinutes, request.PriceMode, request.PriceEffectiveFrom);
-                branch.SetArea(request.HasAreaSquareMeters ? request.AreaSquareMeters : branch.AreaSquareMeters);
+                ApplyArea(branch, request.HasAreaSquareMeters ? request.AreaSquareMeters : branch.AreaSquareMeters);
                 await _repository.SaveAsync(branch, ct);
                 return MapBranch(branch);
             }
@@ -616,6 +616,13 @@ public class CompanyHandlers
             branch.ContactEmail, branch.RoomCount, branch.BedCount, branch.CurrentPriceNet, branch.CurrentVatRatePercent,
             branch.CurrentEstimatedDurationMinutes, branch.PricingVersion, branch.PricingReady, branch.QuoteRequestedUtc,
             branch.QuoteRejectedUtc, branch.QuoteRejectionReason, branch.Versions.ToArray(), branch.AreaSquareMeters);
+    // Same conversion as ApplyProperty: an out-of-range area is a validation problem, not a server error.
+    private static void ApplyArea(Branch branch, int? squareMeters)
+    {
+        try { branch.SetArea(squareMeters); }
+        catch (ArgumentException ex) { throw new ValidationException(ex.Message); }
+    }
+
     private static void ApplyProperty(Branch branch, int? rooms, int? beds, decimal? price, decimal? vat, int? duration, string? mode = null, DateOnly? effectiveFrom = null)
     {
         try
