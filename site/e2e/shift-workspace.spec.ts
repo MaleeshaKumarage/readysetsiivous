@@ -93,7 +93,8 @@ test('workspace Edit schedule opens the existing Edit shift dialog for that shif
   await expect(page.getByRole('dialog', { name: 'Manage — Workspace shift', exact: true })).toHaveCount(0);
   const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
   await expect(edit).toBeVisible();
-  await expect(edit.getByRole('textbox', { name: /^Name/ })).toHaveCount(0);
+  // Existing shifts keep an editable name, so a stale generated name can be corrected.
+  await expect(edit.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Workspace shift');
 });
 
 test('workspace Checklist template opens the existing template dialog for that shift', async ({ page }) => {
@@ -198,4 +199,29 @@ test('phone-width workspace has no horizontal overflow and its actions stay insi
       expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
     }
   }
+});
+
+test('editing a shift saves its name, and Reset to generated name rebuilds it from the property', async ({ page }) => {
+  await setup(page);
+  const saved: Record<string, unknown>[] = [];
+  await page.route(/\/api\/v1\/admin\/shifts\/daily$/, route => {
+    if (route.request().method() === 'PUT') { saved.push(route.request().postDataJSON() as Record<string, unknown>); return route.fulfill({ status: 200, headers, json: { id: 'daily', ...saved[saved.length - 1] } }); }
+    return route.fallback();
+  });
+  await page.goto('/admin/shifts/');
+  await openShiftWorkspace(page, 'Workspace shift');
+  await page.getByRole('dialog', { name: 'Manage — Workspace shift', exact: true }).getByRole('button', { name: 'Edit schedule', exact: true }).click();
+  const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
+  const nameField = edit.getByRole('textbox', { name: 'Name', exact: true });
+  await expect(nameField).toHaveValue('Workspace shift');
+
+  await nameField.fill('Custom name');
+  // The test property has no address or area, so the generated name is just rooms, beds and schedule.
+  await edit.getByRole('button', { name: 'Reset to generated name', exact: true }).click();
+  await expect(nameField).toHaveValue('0 H | 0 V | - Daily');
+  await nameField.fill('Custom name');
+  await edit.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(edit).toHaveCount(0);
+  expect(saved).toHaveLength(1);
+  expect(saved[0].name).toBe('Custom name');
 });
