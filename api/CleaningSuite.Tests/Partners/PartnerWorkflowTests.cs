@@ -635,7 +635,7 @@ public class PartnerWorkflowTests
 
     private static async Task<Branch> StoreBranch(Fixture fixture, Guid companyId, string name, bool priced)
     {
-        var branch = Branch.Create(companyId, name);
+        var branch = Branch.Create(companyId, name); branch.SetPropertyDetails(34, "Deep");
         if (priced) branch.SetPricing(100, 25.5m, 120);
         using var writer = fixture.Store.LightweightSession(fixture.Tenant);
         writer.Store(branch); await writer.SaveChangesAsync();
@@ -716,7 +716,7 @@ public class PartnerWorkflowTests
             var fixture = new Fixture(services.BuildServiceProvider());
             await fixture.Store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
             fixture.Company.IsPartnerEnabled = true;
-            fixture.Branch = Branch.Create(fixture.Company.Id, "Apartment"); fixture.Branch.SetPricing(100, 25.5m, 120);
+            fixture.Branch = Branch.Create(fixture.Company.Id, "Apartment"); fixture.Branch.SetPricing(100, 25.5m, 120); fixture.Branch.SetPropertyDetails(34, "Deep");
             fixture.Partner = new Employee { Role = Employee.RolePartner, PartnerCompanyId = fixture.Company.Id };
             using var writer = fixture.Store.LightweightSession(fixture.Tenant);
             writer.Store(fixture.Company); writer.Store(fixture.Branch); writer.Store(fixture.Partner, fixture.Admin, fixture.Cleaner);

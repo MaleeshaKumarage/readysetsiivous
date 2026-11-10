@@ -17,9 +17,9 @@ public class CompanyParentTests
         var handler = new CompanyHandlers.BranchCommands.CreateBranchCommandHandler(branches.Object, companies.Object);
 
         await Assert.ThrowsAsync<FluentValidation.ValidationException>(() =>
-            handler.Handle(new CreateBranchCommand(company.Id, "Branch", AreaSquareMeters: 100001), CancellationToken.None));
+            handler.Handle(new CreateBranchCommand(company.Id, "Branch", SizeM2: 100001), CancellationToken.None));
         await Assert.ThrowsAsync<FluentValidation.ValidationException>(() =>
-            handler.Handle(new CreateBranchCommand(company.Id, "Branch", AreaSquareMeters: -1), CancellationToken.None));
+            handler.Handle(new CreateBranchCommand(company.Id, "Branch", SizeM2: -1), CancellationToken.None));
 
         branches.VerifyNoOtherCalls();
     }

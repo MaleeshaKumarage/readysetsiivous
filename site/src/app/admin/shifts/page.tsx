@@ -339,6 +339,9 @@ export default function ShiftsAdminPage() {
     const branchVersions = branches.find(b => b.id === branchId)?.priceVersions;
     const chosenPriceFrom = priceFrom && branchVersions?.some(v => v.effectiveFrom === priceFrom) ? priceFrom : defaultPriceVersion(branchVersions) ?? undefined;
     // A one-time visit is valid only on its date, so the validity dates mirror that date.
+    // Create names the shift from its property and schedule. Editing saves the name in the field, which starts from the stored name.
+    // The server builds every shift name from the property, so the name sent here is only a placeholder.
+    const shiftName = autoShiftName(branches.find(b => b.id === branchId));
     const fields = { companyId, branchId, name: shiftName, schedule: buildSchedule(), notes: notes.trim() || undefined, isActive: editingShift?.isActive ?? true, validFrom: oneTime ? oneTimeDate : validFrom || undefined, validUntil: oneTime ? oneTimeDate : validUntil || undefined, qualityCycleTemplateId: qualityCycleTemplateId || undefined,
       // Creating a shift picks the branch price version it bills at; the default is the price in force today.
       priceEffectiveFrom: editingShift ? undefined : chosenPriceFrom };
@@ -722,8 +725,7 @@ export default function ShiftsAdminPage() {
           <CompanyPicker allowInactive={false} allowedInactiveCompanyId={editingShift?.companyId} value={companyId} onChange={(v) => { setBranches([]); setCompanyId(v); setBranchId(null); setQualityCycleTemplateId(null); }} />
           <Select label="Branch" data={branches.filter(b => b.isActive !== false || b.id === editingShift?.branchId).map((b) => ({ value: b.id, label: `${b.name}${b.isActive === false ? ' (inactive)' : ''}` }))} value={branchId} onChange={v => { setBranchId(v); setPriceFrom(null); setQualityCycleTemplateId(null); }} searchable disabled={!companyId} />
           {editingShift && <Group align="flex-end" gap="xs" wrap="nowrap">
-            <TextInput label="Name" required style={{ flex: 1 }} value={name} onChange={event => setName(event.currentTarget.value)} description="Created names come from the property and schedule. Edit here, or reset to the generated name." />
-            <Button type="button" variant="subtle" onClick={() => setName(autoShiftName(branches.find(b => b.id === branchId), SCHEDULE_TYPES.find(t => t.value === scheduleType)?.label ?? ''))}>Reset to generated name</Button>
+            <TextInput label="Name" readOnly style={{ flex: 1 }} value={name} description="Generated from the property: cleaning type, address, size, rooms and beds." />
           </Group>}
           {!editingShift && (branches.find(b => b.id === branchId)?.priceVersions?.length ?? 0) > 1 && <Select label="Price version" description="The property price this shift is billed at. Defaults to the price in force today." allowDeselect={false} value={priceFrom && (branches.find(b => b.id === branchId)?.priceVersions ?? []).some(v => v.effectiveFrom === priceFrom) ? priceFrom : defaultPriceVersion(branches.find(b => b.id === branchId)?.priceVersions)} onChange={setPriceFrom}
             data={(branches.find(b => b.id === branchId)?.priceVersions ?? []).map(v => ({ value: v.effectiveFrom, label: `From ${v.effectiveFrom} · €${v.priceNet.toFixed(2)} excl. VAT` }))} />}

@@ -43,7 +43,7 @@ public record BranchDto(
     int? RoomCount = null, int? BedCount = null, decimal? PriceNet = null,
     decimal? VatRatePercent = null, int? EstimatedDurationMinutes = null,
     int PricingVersion = 0, bool PricingReady = false, DateTime? QuoteRequestedUtc = null,
-    DateTime? QuoteRejectedUtc = null, string? QuoteRejectionReason = null, IReadOnlyList<BranchPriceVersion>? PriceVersions = null, int? AreaSquareMeters = null);
+    DateTime? QuoteRejectedUtc = null, string? QuoteRejectionReason = null, IReadOnlyList<BranchPriceVersion>? PriceVersions = null, int? SizeM2 = null, string? CleaningType = null);
 
 public record CompanyDetailDto(CompanyDto Company, IReadOnlyList<BranchDto> Branches);
 
@@ -119,7 +119,7 @@ public record CreateBranchCommand(
     int? RoomCount = null, int? BedCount = null, decimal? PriceNet = null,
     decimal? VatRatePercent = null, int? EstimatedDurationMinutes = null,
     // Optional new price version: effective date (default today) and billing mode (default PerOccurrence).
-    DateOnly? PriceEffectiveFrom = null, string? PriceMode = null, int? AreaSquareMeters = null) : IRequest<BranchDto>;
+    DateOnly? PriceEffectiveFrom = null, string? PriceMode = null, int? SizeM2 = null, string? CleaningType = null) : IRequest<BranchDto>;
 
 public record UpdateBranchCommand(
     Guid Id,
@@ -133,7 +133,7 @@ public record UpdateBranchCommand(
     string? ContactEmail = null,
     int? RoomCount = null, int? BedCount = null, decimal? PriceNet = null,
     decimal? VatRatePercent = null, int? EstimatedDurationMinutes = null,
-    DateOnly? PriceEffectiveFrom = null, string? PriceMode = null, int? AreaSquareMeters = null) : IRequest<BranchDto>
+    DateOnly? PriceEffectiveFrom = null, string? PriceMode = null, int? SizeM2 = null, string? CleaningType = null) : IRequest<BranchDto>
 {
     // JSON must distinguish an old client's omitted field from an explicit null
     // clearing an optional count. Keep the positional constructor for existing callers.
@@ -146,9 +146,9 @@ public record UpdateBranchCommand(
     [JsonIgnore] public bool HasBedCount { get; private init; } = BedCount.HasValue;
     public int? RoomCount { get => _roomCount; init { _roomCount = value; HasRoomCount = true; } }
     public int? BedCount { get => _bedCount; init { _bedCount = value; HasBedCount = true; } }
-    private int? _areaSquareMeters = AreaSquareMeters;
-    [JsonIgnore] public bool HasAreaSquareMeters { get; private init; } = AreaSquareMeters.HasValue;
-    public int? AreaSquareMeters { get => _areaSquareMeters; init { _areaSquareMeters = value; HasAreaSquareMeters = true; } }
+    private int? _sizeM2 = SizeM2;
+    [JsonIgnore] public bool HasSizeM2 { get; private init; } = SizeM2.HasValue;
+    public int? SizeM2 { get => _sizeM2; init { _sizeM2 = value; HasSizeM2 = true; } }
 }
 
 public record DeactivateBranchCommand(Guid Id) : IRequest;
@@ -497,7 +497,7 @@ public class CompanyHandlers
                     request.ContactPhone);
                 branch.ContactEmail = request.ContactEmail?.Trim();
                 ApplyProperty(branch, request.RoomCount, request.BedCount, request.PriceNet, request.VatRatePercent, request.EstimatedDurationMinutes, request.PriceMode, request.PriceEffectiveFrom);
-                ApplyArea(branch, request.AreaSquareMeters);
+                ApplyDetails(branch, request.SizeM2, request.CleaningType);
                 await _repository.SaveAsync(branch, ct);
                 return MapBranch(branch);
             }
@@ -532,7 +532,7 @@ public class CompanyHandlers
                     request.HasRoomCount ? request.RoomCount : branch.RoomCount,
                     request.HasBedCount ? request.BedCount : branch.BedCount,
                     request.PriceNet, request.VatRatePercent, request.EstimatedDurationMinutes, request.PriceMode, request.PriceEffectiveFrom);
-                ApplyArea(branch, request.HasAreaSquareMeters ? request.AreaSquareMeters : branch.AreaSquareMeters);
+                ApplyDetails(branch, request.HasSizeM2 ? request.SizeM2 : branch.SizeM2, request.CleaningType ?? branch.CleaningType);
                 await _repository.SaveAsync(branch, ct);
                 return MapBranch(branch);
             }
@@ -615,12 +615,12 @@ public class CompanyHandlers
             branch.IsActive,
             branch.ContactEmail, branch.RoomCount, branch.BedCount, branch.CurrentPriceNet, branch.CurrentVatRatePercent,
             branch.CurrentEstimatedDurationMinutes, branch.PricingVersion, branch.PricingReady, branch.QuoteRequestedUtc,
-            branch.QuoteRejectedUtc, branch.QuoteRejectionReason, branch.Versions.ToArray(), branch.AreaSquareMeters);
-    // Same conversion as ApplyProperty: an out-of-range area is a validation problem, not a server error.
-    private static void ApplyArea(Branch branch, int? squareMeters)
+            branch.QuoteRejectedUtc, branch.QuoteRejectionReason, branch.Versions.ToArray(), branch.SizeM2, branch.CleaningType);
+    // Size and cleaning type use the same validation conversion as ApplyProperty.
+    internal static void ApplyDetails(Branch branch, int? sizeM2, string? cleaningType)
     {
-        try { branch.SetArea(squareMeters); }
-        catch (ArgumentException ex) { throw new ValidationException(ex.Message); }
+        try { branch.SetPropertyDetails(sizeM2, cleaningType); }
+        catch (ArgumentException ex) { throw new ValidationException([new FluentValidation.Results.ValidationFailure("PropertyDetails", ex.Message)]); }
     }
 
     private static void ApplyProperty(Branch branch, int? rooms, int? beds, decimal? price, decimal? vat, int? duration, string? mode = null, DateOnly? effectiveFrom = null)
