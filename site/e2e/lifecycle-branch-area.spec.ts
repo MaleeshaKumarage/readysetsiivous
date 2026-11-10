@@ -36,10 +36,10 @@ test('admin adds a property with its size and cleaning type, and both are saved 
   expect(writes[0]).toMatchObject({ name: 'Imatra apartment', sizeM2: 45, cleaningType: 'Deep' });
 });
 
-test('admin changes a property area and the new area is saved on the property', async ({ page }) => {
+test('admin changes a property size and the new size is saved on the property', async ({ page }) => {
   await setupAdminMocks(page);
   const writes: Record<string, unknown>[] = [];
-  const existing = { id: 'branch', companyId: 'company', name: 'Imatra apartment', street: null, postalCode: null, city: 'Imatra', country: null, contactPhone: null, contactEmail: null, isActive: true, areaSquareMeters: 45, roomCount: null, bedCount: null, priceNet: null, vatRatePercent: null, estimatedDurationMinutes: null, pricingReady: false, priceVersions: [] };
+  const existing = { id: 'branch', companyId: 'company', name: 'Imatra apartment', street: null, postalCode: null, city: 'Imatra', country: null, contactPhone: null, contactEmail: null, isActive: true, sizeM2: 45, roomCount: null, bedCount: null, priceNet: null, vatRatePercent: null, estimatedDurationMinutes: null, pricingReady: false, priceVersions: [] };
   let branches: Record<string, unknown>[] = [existing];
   await page.route(/\/api\/v1\/admin\//, route => {
     const method = route.request().method(); const path = new URL(route.request().url()).pathname;
@@ -60,16 +60,16 @@ test('admin changes a property area and the new area is saved on the property', 
   // The company's own Edit button comes first; the branch's Edit button is the last one.
   await page.getByRole('button', { name: 'Edit', exact: true }).last().click();
   const modal = page.getByRole('dialog', { name: 'Edit branch' });
-  await expect(modal.getByLabel('Area m² (optional)')).toHaveValue('45');
-  await modal.getByLabel('Area m² (optional)').fill('60');
+  await expect(modal.getByLabel('Size in m² (required to schedule)')).toHaveValue('45');
+  await modal.getByLabel('Size in m² (required to schedule)').fill('60');
   await modal.getByRole('button', { name: 'Save changes', exact: true }).click();
 
   await expect(modal).toHaveCount(0);
   expect(writes).toHaveLength(1);
-  expect(writes[0]).toMatchObject({ areaSquareMeters: 60 });
+  expect(writes[0]).toMatchObject({ sizeM2: 60 });
 });
 
-test('admin adds a property without an area and no area is sent', async ({ page }) => {
+test('admin adds a property without a size and no size is sent', async ({ page }) => {
   await setupAdminMocks(page);
   const writes: Record<string, unknown>[] = []; let branches: Record<string, unknown>[] = [];
   await page.route(/\/api\/v1\/admin\//, route => {
@@ -94,13 +94,13 @@ test('admin adds a property without an area and no area is sent', async ({ page 
 
   await expect(modal).toHaveCount(0);
   expect(writes).toHaveLength(1);
-  expect(writes[0].areaSquareMeters ?? null).toBeNull();
+  expect(writes[0].sizeM2 ?? null).toBeNull();
 });
 
-test('admin clears a property area and the cleared area is saved as empty', async ({ page }) => {
+test('admin clears a property size and the cleared size is saved as empty', async ({ page }) => {
   await setupAdminMocks(page);
   const writes: Record<string, unknown>[] = [];
-  const existing = { id: 'branch', companyId: 'company', name: 'Imatra apartment', street: null, postalCode: null, city: 'Imatra', country: null, contactPhone: null, contactEmail: null, isActive: true, areaSquareMeters: 45, roomCount: null, bedCount: null, priceNet: null, vatRatePercent: null, estimatedDurationMinutes: null, pricingReady: false, priceVersions: [] };
+  const existing = { id: 'branch', companyId: 'company', name: 'Imatra apartment', street: null, postalCode: null, city: 'Imatra', country: null, contactPhone: null, contactEmail: null, isActive: true, sizeM2: 45, roomCount: null, bedCount: null, priceNet: null, vatRatePercent: null, estimatedDurationMinutes: null, pricingReady: false, priceVersions: [] };
   let branches: Record<string, unknown>[] = [existing];
   await page.route(/\/api\/v1\/admin\//, route => {
     const method = route.request().method(); const path = new URL(route.request().url()).pathname;
@@ -119,11 +119,11 @@ test('admin clears a property area and the cleared area is saved as empty', asyn
   await page.locator('button').filter({ has: page.locator('.lucide-chevron-down') }).first().click();
   await page.getByRole('button', { name: 'Edit', exact: true }).last().click();
   const modal = page.getByRole('dialog', { name: 'Edit branch' });
-  await modal.getByLabel('Area m² (optional)').fill('');
+  await modal.getByLabel('Size in m² (required to schedule)').fill('');
   await modal.getByRole('button', { name: 'Save changes', exact: true }).click();
 
   await expect(modal).toHaveCount(0);
   expect(writes).toHaveLength(1);
-  expect(writes[0].areaSquareMeters ?? null).toBeNull();
+  expect(writes[0].sizeM2 ?? null).toBeNull();
 });
 
