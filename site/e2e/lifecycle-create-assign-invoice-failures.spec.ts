@@ -89,6 +89,7 @@ test('a refused shift save shows the reason in the dialog, keeps the company and
   await expect(page.getByText('Shift not created').first()).toBeVisible();
   await expect(dialog.getByText('A shift named Flow clean already exists for this branch.')).toBeVisible();
   // The chosen company and branch are kept for the retry.
+  await expect(dialog.getByLabel('Company', { exact: true })).toHaveValue('Methehe Oy');
   await expect(dialog.getByLabel('Branch', { exact: true })).toHaveValue('Main branch');
   await expect(page.getByRole('cell', { name: FLOW_NAME, exact: true })).toHaveCount(0);
   await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();

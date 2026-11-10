@@ -58,7 +58,7 @@ async function openAddShift(page: Page) {
   return page.getByRole('dialog', { name: 'Add shift', exact: true });
 }
 
-async function fillCommon(page: Page, dialog: Locator, name: string) {
+async function fillCommon(page: Page, dialog: Locator) {
   await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'AAA', exact: true }).click();
   await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'AAA1', exact: true }).click();
 }
@@ -87,7 +87,7 @@ test('one-time and on-call are offered for new shifts and existing on-call shift
 test('admin creates a past one-time visit from one form without a second visit popup', async ({ page }) => {
   const mock = await mockAdmin(page);
   const dialog = await openAddShift(page);
-  await fillCommon(page, dialog, 'Past visit');
+  await fillCommon(page, dialog);
   await chooseOneTime(page, dialog);
   await expect(dialog.getByRole('textbox', { name: 'Start date', exact: true })).toHaveCount(0);
   await dialog.getByRole('textbox', { name: 'Date', exact: true }).fill('2026-10-01');
@@ -110,7 +110,7 @@ test('admin creates a past one-time visit from one form without a second visit p
 test('date, start and end errors block the save and keep the draft', async ({ page }) => {
   const mock = await mockAdmin(page);
   const dialog = await openAddShift(page);
-  await fillCommon(page, dialog, 'Past visit');
+  await fillCommon(page, dialog);
   await chooseOneTime(page, dialog);
 
   await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift', exact: true }).click();
@@ -154,7 +154,7 @@ test('a failed save keeps the draft and a retry creates the visit once', async (
   const held = new Promise<void>(resolve => { release = resolve; });
   const mock = await mockAdmin(page, [], { failFirstCreate: true, holdSecondCreate: held });
   const dialog = await openAddShift(page);
-  await fillCommon(page, dialog, 'Past visit');
+  await fillCommon(page, dialog);
   await chooseOneTime(page, dialog);
   await dialog.getByRole('textbox', { name: 'Date', exact: true }).fill('2026-10-01');
   await dialog.getByRole('textbox', { name: 'Start time', exact: true }).fill('09:00');
