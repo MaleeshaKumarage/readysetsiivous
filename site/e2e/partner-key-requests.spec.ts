@@ -31,6 +31,7 @@ async function fixture(page: Page, language: PartnerLanguage, seeded: KeyRequest
       Object.assign(item, { status: 'Cancelled', cancellationReason: body.reason, revision: item.revision + 1 });
       return route.fulfill({ headers, json: item });
     }
+    if (req.method() === 'GET' && /\/key-requests\/[^/]+\/photos\/[^/]+$/.test(path)) return route.fulfill({ headers, contentType: 'image/png', body: Buffer.from(pngBase64, 'base64') });
     if (req.method() === 'GET') {
       const json = path === '/api/v1/partner/me' ? identity
         : path.endsWith('/companies') ? { items: [{ id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }], total: 1 }
@@ -156,3 +157,18 @@ test('staff assign a cleaner, complete a key request and attach a completion pho
   expect(writes[2]).toMatchObject({ path: `/key-requests/${item.id}/photos`, multipart: true });
   await expect(page.getByRole('img', { name: /Key request photo/ })).toBeVisible();
 });
+
+for (const language of ['en', 'fi'] as const) {
+  const copy = partnerCopy[language];
+  test(`a partner sees the completion photos of a finished key request in ${language}`, async ({ page }) => {
+    const completed: KeyRequest = { id: 'key-c', revision: 4, companyId, branchId: branch.id, branchName: branch.name, kind: 'Pickup', date: '2026-12-03', notes: null, feeNet: 15, vatRatePercent: 25.5, status: 'Completed', cancellationReason: null, completedUtc: '2026-12-03T10:00:00Z', photos: [{ id: '55555555-5555-4555-8555-555555555555', sizeBytes: 70, uploadedUtc: '2026-12-03T10:05:00Z' }] };
+    await fixture(page, language, [completed]);
+    await page.goto('/partner/');
+    await page.getByRole('tab', { name: copy.keys, exact: true }).click();
+
+    await expect(page.getByText(copy.completionPhotos, { exact: false })).toBeVisible();
+    await expect(page.getByRole('img', { name: `${copy.completionPhoto} 1` })).toBeVisible();
+    // The assignee is staff-only and never appears in the partner view.
+    await expect(page.getByText('Assigned to')).toHaveCount(0);
+  });
+}

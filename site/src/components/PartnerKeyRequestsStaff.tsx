@@ -1,12 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { adminEmployees } from '@/lib/adminApi';
 import { managerApi } from '@/lib/managerApi';
+import { KeyRequestPhotos } from '@/components/KeyRequestPhotos';
 import { staffPartnerApi, type KeyRequest, type KeyRequestList } from '@/lib/partnerApi';
 
-const photoLimit = 10;
-const photoTypes = 'image/jpeg,image/png,image/webp';
 type StaffEmployee = { id: string; name: string };
 
 // Staff view of partner key requests: the fee, who collects the keys, completion and completion photos.
@@ -16,8 +15,6 @@ export function PartnerKeyRequestsStaff({ role }: { role: 'admin' | 'manager' })
   const [fee, setFee] = useState(''), [error, setError] = useState(''), [notice, setNotice] = useState(''), [busy, setBusy] = useState(false);
   // Employee chosen in each request's dropdown, before Assign is pressed.
   const [choice, setChoice] = useState<Record<string, string>>({});
-  const [thumbs, setThumbs] = useState<Record<string, string>>({});
-  const thumbRequests = useRef(new Set<string>()), thumbUrls = useRef<string[]>([]);
 
   const refresh = useCallback(async () => {
     try {
@@ -34,19 +31,6 @@ export function PartnerKeyRequestsStaff({ role }: { role: 'admin' | 'manager' })
       : managerApi.employees().then(people => people.filter(person => person.isActive).map(person => ({ id: person.id, name: `${person.firstName} ${person.lastName}`.trim() })));
     load.then(setEmployees, () => setEmployees([]));
   }, [role]);
-
-  // Each photo is fetched once. Object URLs are released when the page leaves.
-  useEffect(() => {
-    for (const item of list?.items ?? []) for (const photo of item.photos ?? []) {
-      if (thumbRequests.current.has(photo.id)) continue;
-      thumbRequests.current.add(photo.id);
-      staffPartnerApi(role).keyRequestPhotoUrl(item.id, photo.id).then(url => {
-        thumbUrls.current.push(url);
-        setThumbs(previous => ({ ...previous, [photo.id]: url }));
-      }, () => thumbRequests.current.delete(photo.id));
-    }
-  }, [list, role]);
-  useEffect(() => () => { thumbUrls.current.forEach(url => URL.revokeObjectURL(url)); }, []);
 
   async function run(work: () => Promise<unknown>, success: string) {
     if (busy) return;
@@ -74,8 +58,8 @@ export function PartnerKeyRequestsStaff({ role }: { role: 'admin' | 'manager' })
     {notice && <p role="status">{notice}</p>}
     {list && <p className="text-sm">Current fee {Number(list.feeNet ?? 0).toFixed(2)} EUR excl. VAT; VAT {list.vatRatePercent}%.</p>}
     {!list?.items?.length ? <p>No key requests yet.</p> : <ul className="space-y-3">
-      {list.items.map(item => <KeyRequestRow key={item.id} item={item} employees={employees} choice={choice[item.id] ?? item.assignedEmployeeId ?? ''} onChoice={value => setChoice(previous => ({ ...previous, [item.id]: value }))}
-        busy={busy} thumbs={thumbs}
+      {list.items.map(item => <KeyRequestRow key={item.id} role={role} item={item} employees={employees} choice={choice[item.id] ?? item.assignedEmployeeId ?? ''} onChoice={value => setChoice(previous => ({ ...previous, [item.id]: value }))}
+        busy={busy}
         onAssign={() => { const employeeId = choice[item.id]; if (employeeId) void run(() => staffPartnerApi(role).assignKeyRequest(item, employeeId), 'Employee assigned.'); }}
         onComplete={() => void run(() => staffPartnerApi(role).completeKeyRequest(item), 'Key request marked completed.')}
         onPhoto={file => void run(() => staffPartnerApi(role).addKeyRequestPhoto(item, file), 'Photo added.')} />)}
@@ -83,8 +67,8 @@ export function PartnerKeyRequestsStaff({ role }: { role: 'admin' | 'manager' })
   </div>;
 }
 
-function KeyRequestRow({ item, employees, choice, onChoice, busy, thumbs, onAssign, onComplete, onPhoto }: {
-  item: KeyRequest; employees: StaffEmployee[]; choice: string; onChoice: (value: string) => void; busy: boolean; thumbs: Record<string, string>;
+function KeyRequestRow({ role, item, employees, choice, onChoice, busy, onAssign, onComplete, onPhoto }: {
+  role: 'admin' | 'manager'; item: KeyRequest; employees: StaffEmployee[]; choice: string; onChoice: (value: string) => void; busy: boolean;
   onAssign: () => void; onComplete: () => void; onPhoto: (file: File) => void;
 }) {
   const open = item.status === 'Requested';
@@ -105,15 +89,7 @@ function KeyRequestRow({ item, employees, choice, onChoice, busy, thumbs, onAssi
       <button className="border rounded px-3 py-2" type="button" disabled={busy || !choice || choice === item.assignedEmployeeId} onClick={onAssign}>Assign</button>
       <button className="border rounded px-3 py-2" type="button" disabled={busy || !item.assignedEmployeeId} onClick={onComplete}>Mark completed</button>
     </div>}
-    {completed && <div className="space-y-2">
-      <p className="text-sm">Photos {photos.length}/{photoLimit}</p>
-      {photos.length < photoLimit && <label className="flex flex-col text-sm">Add photo
-        <input type="file" accept={photoTypes} disabled={busy} aria-label={`Add photo for ${item.branchName} ${item.date}`}
-          onChange={event => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; if (file) onPhoto(file); }} />
-      </label>}
-      {photos.length > 0 && <ul className="flex flex-wrap gap-2">{photos.map(photo => <li key={photo.id}>
-        {thumbs[photo.id] ? <img src={thumbs[photo.id]} alt={`Key request photo ${photo.id.slice(0, 8)}`} className="w-24 h-24 object-cover rounded border" /> : <span className="text-sm">Loading photo…</span>}
-      </li>)}</ul>}
-    </div>}
+    {completed && <KeyRequestPhotos heading="Photos" alt="Key request photo" photos={photos} busy={busy} onUpload={onPhoto}
+      uploadLabel={`Add photo for ${item.branchName} ${item.date}`} loadUrl={photoId => staffPartnerApi(role).keyRequestPhotoUrl(item.id, photoId)} />}
   </li>;
 }

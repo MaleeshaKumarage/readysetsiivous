@@ -35,6 +35,23 @@ export async function partnerSend<T>(path: string, method = 'GET', body?: unknow
   }
   return response.status === 204 ? undefined as T : response.json();
 }
+// Photos need the signed-in token, so they are fetched and shown through an object URL.
+async function photoObjectUrl(path: string): Promise<string> {
+  const response = await authorizedFetch(`/api/v1/${path}`, { cache: 'no-store' });
+  if (!response.ok) throw new Error('The photo could not be loaded.');
+  return URL.createObjectURL(await response.blob());
+}
+// Multipart upload, so the JSON helper is not used. Errors use the same problem-details wording.
+async function uploadKeyRequestPhoto(path: string, file: File): Promise<KeyRequest> {
+  const body = new FormData();
+  body.append('file', file);
+  const response = await authorizedFetch(`/api/v1/${path}`, { method: 'POST', cache: 'no-store', body });
+  if (!response.ok) {
+    const problem = await response.json().catch(() => ({}));
+    throw new Error(Object.values(problem.errors ?? {}).flat().join('\n') || problem.detail || problem.title || 'The photo could not be uploaded. Check the file and try again.');
+  }
+  return response.json();
+}
 export const partnerApi = {
   me: () => partnerSend<PartnerIdentity>('partner/me'),
   branches: () => partnerSend<Branch[]>('partner/branches'),
@@ -56,6 +73,7 @@ export const partnerApi = {
   keyRequests: () => partnerSend<KeyRequestList>('partner/key-requests'),
   createKeyRequest: (body: KeyRequestInput) => partnerSend<KeyRequest>('partner/key-requests', 'POST', body),
   cancelKeyRequest: (request: KeyRequest, reason: string) => partnerSend<KeyRequest>(`partner/key-requests/${request.id}/cancel`, 'POST', { version: request.revision, reason }),
+  keyRequestPhotoUrl: (requestId: string, photoId: string) => photoObjectUrl(`partner/key-requests/${requestId}/photos/${photoId}`),
 };
 export const offerApi = {
   list: () => partnerSend<CleanerOffer[]>('me/partner-offers'),
@@ -83,21 +101,15 @@ export function staffPartnerApi(role: 'admin' | 'manager') {
     assignKeyRequest: (request: KeyRequest, employeeId: string) => partnerSend<KeyRequest>(`${base}/key-requests/${request.id}/assignment`, 'POST', { revision: request.revision, employeeId }),
     completeKeyRequest: (request: KeyRequest) => partnerSend<KeyRequest>(`${base}/key-requests/${request.id}/complete`, 'POST', { revision: request.revision }),
     // Multipart upload, so the JSON helper is not used. Errors use the same problem-details wording.
-    addKeyRequestPhoto: async (request: KeyRequest, file: File): Promise<KeyRequest> => {
-      const body = new FormData();
-      body.append('file', file);
-      const response = await authorizedFetch(`/api/v1/${base}/key-requests/${request.id}/photos`, { method: 'POST', cache: 'no-store', body });
-      if (!response.ok) {
-        const problem = await response.json().catch(() => ({}));
-        throw new Error(Object.values(problem.errors ?? {}).flat().join('\n') || problem.detail || problem.title || 'The photo could not be uploaded. Check the file and try again.');
-      }
-      return response.json();
-    },
-    // Photos need the staff token, so they are fetched and shown through an object URL.
-    keyRequestPhotoUrl: async (requestId: string, photoId: string): Promise<string> => {
-      const response = await authorizedFetch(`/api/v1/${base}/key-requests/${requestId}/photos/${photoId}`, { cache: 'no-store' });
-      if (!response.ok) throw new Error('The photo could not be loaded.');
-      return URL.createObjectURL(await response.blob());
-    },
+    addKeyRequestPhoto: (request: KeyRequest, file: File) => uploadKeyRequestPhoto(`${base}/key-requests/${request.id}/photos`, file),
+    keyRequestPhotoUrl: (requestId: string, photoId: string) => photoObjectUrl(`${base}/key-requests/${requestId}/photos/${photoId}`),
   };
 }
+
+// Key requests assigned to the signed-in employee. Only the assignee can complete them or add photos.
+export const myKeyRequestApi = {
+  assigned: () => partnerSend<KeyRequest[]>('me/key-requests'),
+  complete: (request: KeyRequest) => partnerSend<KeyRequest>(`me/key-requests/${request.id}/complete`, 'POST', { revision: request.revision }),
+  addPhoto: (request: KeyRequest, file: File) => uploadKeyRequestPhoto(`me/key-requests/${request.id}/photos`, file),
+  photoUrl: (requestId: string, photoId: string) => photoObjectUrl(`me/key-requests/${requestId}/photos/${photoId}`),
+};

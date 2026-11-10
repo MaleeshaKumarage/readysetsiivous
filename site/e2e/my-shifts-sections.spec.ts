@@ -60,6 +60,10 @@ test('arrow keys move between sections and focus follows', async ({ page }) => {
   await expect(page.getByRole('tab', { name: 'Offers', exact: true })).toBeFocused();
 
   await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Keys', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: 'Keys', exact: true })).toBeFocused();
+
+  await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('tab', { name: 'Inventory', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('tab', { name: 'Inventory', exact: true })).toBeFocused();
 

@@ -9,11 +9,12 @@ import { NotificationsPanel } from '@/components/NotificationsPanel';
 import { PwaInstallButton } from '@/components/PwaInstallButton';
 import { InventoryPanel } from '@/components/InventoryPanel';
 
-export type EmployeeSection = 'schedules' | 'offers' | 'inventory' | 'settings';
+export type EmployeeSection = 'schedules' | 'offers' | 'keys' | 'inventory' | 'settings';
 
 const SECTIONS: { id: EmployeeSection; label: string }[] = [
   { id: 'schedules', label: 'Schedules' },
   { id: 'offers', label: 'Offers' },
+  { id: 'keys', label: 'Keys' },
   { id: 'inventory', label: 'Inventory' },
   { id: 'settings', label: 'Settings' },
 ];

@@ -29,7 +29,7 @@ public class PartnerKeyRequestDatabaseTests
         public Task DeleteAsync(Guid requestId, KeyRequestPhoto photo) { Stored.Remove((requestId, photo.Id)); return Task.CompletedTask; }
     }
 
-    private sealed record Fixture(PartnerKeyRequestService Service, Employee Partner, Employee OtherPartner, Employee Manager, Employee Cleaner, Employee Inactive, Branch Branch, TenantProfile Profile, Mock<ITenantProfileRepository> Profiles, MemoryKeyRequestFiles Files, Mock<IUploadContentValidator> Uploads, string TenantId);
+    private sealed record Fixture(PartnerKeyRequestService Service, Employee Partner, Employee OtherPartner, Employee Manager, Employee Cleaner, Employee Inactive, Employee Stranger, Branch Branch, TenantProfile Profile, Mock<ITenantProfileRepository> Profiles, MemoryKeyRequestFiles Files, Mock<IUploadContentValidator> Uploads, string TenantId);
 
     private static async Task<Fixture> Create()
     {
@@ -47,10 +47,11 @@ public class PartnerKeyRequestDatabaseTests
         var manager = new Employee { Role = Employee.RoleManager, IsActive = true };
         var cleaner = new Employee { Role = Employee.RoleEmployee, IsActive = true, FirstName = "Aino", LastName = "Virtanen" };
         var inactive = new Employee { Role = Employee.RoleEmployee, IsActive = false };
+        var stranger = new Employee { Role = Employee.RoleEmployee, IsActive = true, FirstName = "Ilkka", LastName = "Korpi" };
         var branch = new Branch { CompanyId = company.Id, Name = "Synthetic lake flat", IsActive = true };
         using (var seed = store.LightweightSession(tenantId))
         {
-            seed.Store(company); seed.Store(otherCompany); seed.Store(partner); seed.Store(otherPartner); seed.Store(manager); seed.Store(cleaner); seed.Store(inactive); seed.Store(branch);
+            seed.Store(company); seed.Store(otherCompany); seed.Store(partner); seed.Store(otherPartner); seed.Store(manager); seed.Store(cleaner); seed.Store(inactive); seed.Store(stranger); seed.Store(branch);
             await seed.SaveChangesAsync();
         }
         var profile = new TenantProfile { Slug = "synthetic", KeyRequestFeeNet = 15m, DefaultVatRatePercent = 25.5m };
@@ -65,7 +66,7 @@ public class PartnerKeyRequestDatabaseTests
         uploads.Setup(v => v.ValidateKeyRequestPhoto(It.IsAny<ReadOnlyMemory<byte>>())).Returns(".jpg");
         uploads.Setup(v => v.ValidateKeyRequestPhoto(It.Is<ReadOnlyMemory<byte>>(m => m.Length == 0))).Throws(new ValidationException("Photo is not an image."));
         var service = new PartnerKeyRequestService(new PartnerStore(session), new ShiftWorkReservation(config, session), profiles.Object, tenant.Object, files, uploads.Object, TimeProvider.System);
-        return new(service, partner, otherPartner, manager, cleaner, inactive, branch, profile, profiles, files, uploads, tenantId);
+        return new(service, partner, otherPartner, manager, cleaner, inactive, stranger, branch, profile, profiles, files, uploads, tenantId);
     }
 
     private static async Task<PartnerKeyRequestDto> Pickup(Fixture f, DateOnly day) =>
@@ -163,7 +164,7 @@ public class PartnerKeyRequestDatabaseTests
         var partnerView = (await f.Service.List(f.Partner.Id, false, null, default)).Items.Single();
         Assert.Null(partnerView.AssignedEmployeeId);
         Assert.Null(partnerView.AssignedEmployeeName);
-        Assert.Null(partnerView.Photos);
+        Assert.Empty(partnerView.Photos!);
     }
 
     [QualityCycleDatabaseFact]
@@ -222,5 +223,55 @@ public class PartnerKeyRequestDatabaseTests
         Assert.Equal(new byte[] { 7, 7 }, file.Content);
         Assert.Equal("image/jpeg", file.ContentType);
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => f.Service.Photo(f.Partner.Id, created.Id, photoId, default));
+    }
+
+    [QualityCycleDatabaseFact]
+    public async Task Partners_see_completion_photos_but_not_the_assignee()
+    {
+        var f = await Create();
+        var created = await Pickup(f, new DateOnly(2026, 12, 1));
+        var assigned = await f.Service.Assign(f.Manager.Id, created.Id, new(created.Revision, f.Cleaner.Id), default);
+        var completed = await f.Service.Complete(f.Manager.Id, created.Id, new(assigned.Revision), default);
+        var withPhoto = await f.Service.AddPhoto(f.Manager.Id, created.Id, [4, 5, 6], default);
+        var photoId = withPhoto.Photos!.Single().Id;
+
+        var partnerView = (await f.Service.List(f.Partner.Id, false, null, default)).Items.Single();
+        Assert.Single(partnerView.Photos!);
+        Assert.Null(partnerView.AssignedEmployeeId);
+        Assert.Null(partnerView.AssignedEmployeeName);
+
+        var file = await f.Service.PartnerPhoto(f.Partner.Id, created.Id, photoId, default);
+        Assert.Equal(new byte[] { 4, 5, 6 }, file.Content);
+        await Assert.ThrowsAsync<NotFoundException>(() => f.Service.PartnerPhoto(f.OtherPartner.Id, created.Id, photoId, default));
+        Assert.Equal("Completed", completed.Status);
+    }
+
+    [QualityCycleDatabaseFact]
+    public async Task The_assigned_employee_completes_and_photographs_their_key_request_and_nobody_else_can()
+    {
+        var f = await Create();
+        var created = await Pickup(f, new DateOnly(2026, 12, 1));
+        var assigned = await f.Service.Assign(f.Manager.Id, created.Id, new(created.Revision, f.Cleaner.Id), default);
+
+        // Someone else's employee account cannot complete or photograph it.
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => f.Service.Complete(f.Stranger.Id, created.Id, new(assigned.Revision), default));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => f.Service.AddPhoto(f.Stranger.Id, created.Id, [1], default));
+
+        var mine = await f.Service.Assigned(f.Cleaner.Id, default);
+        Assert.Single(mine);
+        Assert.Equal(created.Id, mine[0].Id);
+        Assert.Empty(await f.Service.Assigned(f.Stranger.Id, default));
+
+        var completed = await f.Service.Complete(f.Cleaner.Id, created.Id, new(assigned.Revision), default);
+        Assert.Equal("Completed", completed.Status);
+        var withPhoto = await f.Service.AddPhoto(f.Cleaner.Id, created.Id, [8, 9], default);
+        var photoId = withPhoto.Photos!.Single().Id;
+
+        var file = await f.Service.Photo(f.Cleaner.Id, created.Id, photoId, default);
+        Assert.Equal(new byte[] { 8, 9 }, file.Content);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => f.Service.Photo(f.Stranger.Id, created.Id, photoId, default));
+
+        // The assignee cannot reassign the request, only managers can.
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => f.Service.Assign(f.Cleaner.Id, created.Id, new(completed.Revision, f.Stranger.Id), default));
     }
 }

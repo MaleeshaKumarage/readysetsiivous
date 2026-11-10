@@ -15,7 +15,7 @@ public record KeyRequestFeeInput(decimal FeeNet);
 public record KeyRequestAssignment(int Revision, Guid EmployeeId);
 public record KeyRequestRevision(int Revision);
 public record KeyRequestPhotoDto(Guid Id, int SizeBytes, DateTime UploadedUtc);
-// Assignee, assignee name and photos are staff-only: partner responses leave them null.
+// The assignee and assignee name are staff-only: partner responses leave them null. Photos are shared with the partner.
 public record PartnerKeyRequestDto(Guid Id, int Revision, Guid CompanyId, Guid BranchId, string BranchName,
     string Kind, DateOnly Date, string? Notes, decimal FeeNet, decimal VatRatePercent, string Status, string? CancellationReason,
     DateTime? CompletedUtc = null, Guid? AssignedEmployeeId = null, string? AssignedEmployeeName = null,
@@ -137,8 +137,8 @@ public sealed class PartnerKeyRequestService(IPartnerStore store, IShiftWorkRese
     public async Task<PartnerKeyRequestDto> Complete(Guid actor, Guid id, KeyRequestRevision body, CancellationToken ct)
     {
         await using var lease = await reservation.AcquireAsync(ct);
-        await RequireManager(actor, ct);
         var item = await Require(id, ct);
+        await RequireManagerOrAssignee(actor, item, ct);
         CheckRevision(item, body.Revision);
         if (item.Status == PartnerKeyRequest.StatusCompleted) return await Map(item, true, ct);
         EnsureOpen(item);
@@ -155,8 +155,8 @@ public sealed class PartnerKeyRequestService(IPartnerStore store, IShiftWorkRese
     public async Task<PartnerKeyRequestDto> AddPhoto(Guid actor, Guid id, byte[] content, CancellationToken ct)
     {
         await using var lease = await reservation.AcquireAsync(ct);
-        await RequireManager(actor, ct);
         var item = await Require(id, ct);
+        await RequireManagerOrAssignee(actor, item, ct);
         if (item.Status != PartnerKeyRequest.StatusCompleted) throw new ShiftConflictException("Photos can be added once the key request is completed.");
         if (item.Photos.Count >= PartnerKeyRequest.MaxPhotos) throw new ShiftConflictException($"A key request can have at most {PartnerKeyRequest.MaxPhotos} photos.");
         var extension = uploads.ValidateKeyRequestPhoto(content);
@@ -176,10 +176,36 @@ public sealed class PartnerKeyRequestService(IPartnerStore store, IShiftWorkRese
         return await Map(item, true, ct);
     }
 
+    /// <summary>Photo bytes for a manager or the assigned employee.</summary>
     public async Task<KeyRequestPhotoFile> Photo(Guid actor, Guid id, Guid photoId, CancellationToken ct)
     {
-        await RequireManager(actor, ct);
         var item = await Require(id, ct);
+        await RequireManagerOrAssignee(actor, item, ct);
+        return await ReadPhoto(item, photoId, ct);
+    }
+
+    /// <summary>Photo bytes for the partner that owns the request. Other companies get not-found.</summary>
+    public async Task<KeyRequestPhotoFile> PartnerPhoto(Guid actor, Guid id, Guid photoId, CancellationToken ct)
+    {
+        var company = await Partner(actor, ct);
+        var item = await Db.LoadAsync<PartnerKeyRequest>(id, ct);
+        if (item is null || item.CompanyId != company.Id) throw new NotFoundException("Key request", id);
+        return await ReadPhoto(item, photoId, ct);
+    }
+
+    /// <summary>Open and completed requests assigned to the calling staff member.</summary>
+    public async Task<IReadOnlyList<PartnerKeyRequestDto>> Assigned(Guid actor, CancellationToken ct)
+    {
+        await RequireStaff(actor, ct);
+        var items = await Db.Query<PartnerKeyRequest>().Where(x => x.AssignedEmployeeId == actor && x.Status != PartnerKeyRequest.StatusCancelled)
+            .OrderBy(x => x.Date).ToListAsync(ct);
+        var result = new List<PartnerKeyRequestDto>();
+        foreach (var item in items) result.Add(await Map(item, true, ct));
+        return result;
+    }
+
+    private async Task<KeyRequestPhotoFile> ReadPhoto(PartnerKeyRequest item, Guid photoId, CancellationToken ct)
+    {
         var photo = item.Photos.FirstOrDefault(x => x.Id == photoId) ?? throw new NotFoundException("Key request photo", photoId);
         var bytes = await files.ReadAsync(item.Id, photo, ct) ?? throw new NotFoundException("Key request photo", photoId);
         return new(bytes, photo.Extension switch { ".png" => "image/png", ".webp" => "image/webp", _ => "image/jpeg" });
@@ -194,6 +220,23 @@ public sealed class PartnerKeyRequestService(IPartnerStore store, IShiftWorkRese
         if (company is not { IsActive: true, IsPartnerEnabled: true })
             throw new UnauthorizedAccessException("Partner access is disabled for this company.");
         return company;
+    }
+
+    private async Task RequireStaff(Guid actor, CancellationToken ct)
+    {
+        var person = await Db.LoadAsync<Employee>(actor, ct);
+        if (person is not { IsActive: true, IdentitySyncPending: false } || !Employee.IsWorkRole(person.Role))
+            throw new UnauthorizedAccessException("An active staff account is required.");
+    }
+
+    // Completing a request and adding its photos: managers and administrators, or the employee it is assigned to.
+    private async Task RequireManagerOrAssignee(Guid actor, PartnerKeyRequest item, CancellationToken ct)
+    {
+        if (actor == Guid.Empty) return;
+        await RequireStaff(actor, ct);
+        var person = await Db.LoadAsync<Employee>(actor, ct);
+        if (person!.Role is Employee.RoleAdmin or Employee.RoleManager) return;
+        if (item.AssignedEmployeeId != actor) throw new UnauthorizedAccessException("Only the assigned employee or a manager can change this key request.");
     }
 
     private async Task RequireManager(Guid actor, CancellationToken ct)
@@ -244,6 +287,6 @@ public sealed class PartnerKeyRequestService(IPartnerStore store, IShiftWorkRese
         return new(item.Id, item.Revision, item.CompanyId, item.BranchId, branch?.Name ?? "Property", item.Kind,
             item.Date, item.Notes, item.FeeNet, item.VatRatePercent, item.Status, item.CancellationReason,
             item.CompletedUtc, staff ? item.AssignedEmployeeId : null, assigneeName,
-            staff ? item.Photos.Select(p => new KeyRequestPhotoDto(p.Id, p.SizeBytes, p.UploadedUtc)).ToList() : null);
+            item.Photos.Select(p => new KeyRequestPhotoDto(p.Id, p.SizeBytes, p.UploadedUtc)).ToList());
     }
 }

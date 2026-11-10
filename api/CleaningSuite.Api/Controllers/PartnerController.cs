@@ -34,6 +34,11 @@ public sealed class PartnerController(PartnerService service, PartnerKeyRequestS
     [HttpPut("settings")] public async Task<IActionResult> UpdateSettings(PartnerSettingsInput body, CancellationToken ct) => Ok(await service.UpdateSettings(Actor, body, ct));
     [HttpGet("shifts")] public async Task<IActionResult> Shifts(CancellationToken ct) => Ok(await service.CompanyShifts(Actor, ct));
     [HttpGet("key-requests")] public async Task<IActionResult> KeyRequests(CancellationToken ct) => Ok(await keyRequests.List(Actor, false, null, ct));
+    [HttpGet("key-requests/{id:guid}/photos/{photoId:guid}")] public async Task<IActionResult> KeyRequestPhoto(Guid id, Guid photoId, CancellationToken ct)
+    {
+        var photo = await keyRequests.PartnerPhoto(Actor, id, photoId, ct);
+        return File(photo.Content, photo.ContentType);
+    }
     [HttpPost("key-requests")] public async Task<IActionResult> CreateKeyRequest(CreatePartnerKeyRequest body, CancellationToken ct) => Ok(await keyRequests.Create(Actor, body, ct));
     [HttpPost("key-requests/{id:guid}/cancel")] public async Task<IActionResult> CancelKeyRequest(Guid id, PartnerCancellation body, CancellationToken ct) => Ok(await keyRequests.Cancel(Actor, id, body.Version, body.Reason, ct));
 }

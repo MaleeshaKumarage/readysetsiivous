@@ -5,6 +5,7 @@ import { Badge, Button, Card, Field, Input, Textarea } from '@/ds';
 import type { Branch } from '@/lib/adminApi';
 import { partnerApi, type KeyRequest, type KeyRequestList } from '@/lib/partnerApi';
 import { partnerCopy, partnerStatus, type PartnerLanguage } from '@/lib/partnerLocale';
+import { KeyRequestPhotos } from '@/components/KeyRequestPhotos';
 
 type Copy = Record<keyof typeof partnerCopy.en, string>;
 
@@ -79,6 +80,7 @@ export function PartnerKeyRequests({ t, language, branches, money, date }: {
         <p className="partner-request-window">{kindLabel(request.kind)} · {date(request.date)}</p>
         <p className="partner-price">{t.keyRequestFee} <strong>{money(request.feeNet)}</strong> {t.exclVat} ({t.vat} {request.vatRatePercent}%)</p>
         {request.notes && <p className="partner-entered">{request.notes}</p>}
+        {(request.photos?.length ?? 0) > 0 && <KeyRequestPhotos heading={t.completionPhotos} alt={t.completionPhoto} photos={request.photos ?? []} loadUrl={photoId => partnerApi.keyRequestPhotoUrl(request.id, photoId)} />}
         {request.status === 'Cancelled' && request.cancellationReason && <p className="partner-entered">{request.cancellationReason}</p>}
         {request.status !== 'Cancelled' && (cancelling === request.id ? <div role="group" aria-label={t.cancelKeyRequest} className="partner-confirm">
           <Field label={t.keyCancelReason} className="partner-form-wide"><Textarea className="partner-field" required maxLength={1000} value={cancelReason} onChange={event => setCancelReason(event.target.value)} /></Field>
