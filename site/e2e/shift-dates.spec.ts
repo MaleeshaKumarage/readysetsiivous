@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 import { shiftAction } from './shift-actions';
 import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
 import { autoShiftName } from '../src/lib/shiftName';
-const DATED_NAME = autoShiftName(undefined, 'Daily');
+const DATED_NAME = autoShiftName(undefined);
 
 test('admin waits for valid scheduling settings before defaulting a new shift date', async ({ page }) => {
   await setupAdminMocks(page); let zone = 'Invalid/Zone'; let release!: () => void;

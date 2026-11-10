@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks, shiftsResponse, selectDailyScheduleIfEmpty } from './admin-helpers';
 import { shiftAction } from './shift-actions';
 import { autoShiftName } from '../src/lib/shiftName';
-const CREATED_NAME = autoShiftName(undefined, 'Daily');
+const CREATED_NAME = autoShiftName(undefined);
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 async function setup(page: Page) {

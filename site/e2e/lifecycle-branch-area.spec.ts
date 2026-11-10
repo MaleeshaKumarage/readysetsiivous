@@ -4,7 +4,7 @@ import { setupAdminMocks } from './admin-helpers';
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const company = { id: 'company', name: 'AAA', businessId: '1234567-8', isActive: true, isPartnerEnabled: false, billingEmail: null, billingStreet: null, billingPostalCode: null, billingCity: null, billingCountry: null, invoiceNumberPrefix: null, paymentTermDays: 14 };
 
-test('admin adds a property with an area, and the area is saved on the property', async ({ page }) => {
+test('admin adds a property with its size and cleaning type, and both are saved on the property', async ({ page }) => {
   await setupAdminMocks(page);
   const writes: Record<string, unknown>[] = []; let branches: Record<string, unknown>[] = [];
   await page.route(/\/api\/v1\/admin\//, route => {
@@ -27,12 +27,13 @@ test('admin adds a property with an area, and the area is saved on the property'
   const modal = page.getByRole('dialog', { name: 'Add branch' });
   await modal.getByRole('textbox', { name: 'Name', exact: true }).fill('Imatra apartment');
   await modal.getByRole('textbox', { name: 'City', exact: true }).fill('Imatra');
-  await modal.getByLabel('Area m² (optional)').fill('45');
+  await modal.getByLabel('Size in m² (required to schedule)').fill('45');
+  await modal.getByLabel('Cleaning type (required to schedule)').selectOption('Deep').catch(async () => { await modal.getByRole('textbox', { name: 'Cleaning type (required to schedule)' }).click(); await page.getByRole('option', { name: 'Deep', exact: true }).click(); });
   await modal.getByRole('button', { name: 'Add branch', exact: true }).click();
 
   await expect(modal).toHaveCount(0);
   expect(writes).toHaveLength(1);
-  expect(writes[0]).toMatchObject({ name: 'Imatra apartment', areaSquareMeters: 45 });
+  expect(writes[0]).toMatchObject({ name: 'Imatra apartment', sizeM2: 45, cleaningType: 'Deep' });
 });
 
 test('admin changes a property area and the new area is saved on the property', async ({ page }) => {
