@@ -234,7 +234,8 @@ public sealed class PartnerKeyRequestService(IPartnerStore store, IShiftWorkRese
     // Completing a request and adding its photos: managers and administrators, or the employee it is assigned to.
     private async Task RequireManagerOrAssignee(Guid actor, PartnerKeyRequest item, CancellationToken ct)
     {
-        if (actor == Guid.Empty) return;
+        // Every change needs a real, active staff account: the tenant owner must have an employee record too.
+        if (actor == Guid.Empty) throw new UnauthorizedAccessException("An active staff account is required.");
         await RequireStaff(actor, ct);
         var person = await Db.LoadAsync<Employee>(actor, ct);
         if (person!.Role is Employee.RoleAdmin or Employee.RoleManager) return;
@@ -243,8 +244,7 @@ public sealed class PartnerKeyRequestService(IPartnerStore store, IShiftWorkRese
 
     private async Task RequireManager(Guid actor, CancellationToken ct)
     {
-        // Only the authenticated operations controller can supply the legacy, unbound tenant-owner sentinel.
-        if (actor == Guid.Empty) return;
+        if (actor == Guid.Empty) throw new UnauthorizedAccessException("An active staff account is required.");
         var person = await Db.LoadAsync<Employee>(actor, ct);
         if (person is not { IsActive: true, IdentitySyncPending: false } || !Employee.IsWorkRole(person.Role))
             throw new UnauthorizedAccessException("An active staff account is required.");
