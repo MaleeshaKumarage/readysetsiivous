@@ -10,5 +10,6 @@ internal sealed class NoopUploadContentValidator : IUploadContentValidator
     public void ValidateGeneratedAgreementPdf(ReadOnlyMemory<byte> content) { }
     public void ValidateSignaturePng(ReadOnlyMemory<byte> content) { }
     public string ValidateServiceImage(ReadOnlyMemory<byte> content) => ".png";
+    public string ValidateKeyRequestPhoto(ReadOnlyMemory<byte> content) => ".png";
     public int ValidateQualityCyclePhotos(IReadOnlyList<QualityCyclePhoto>? photos, IReadOnlyList<string>? photoUrls) => 0;
 }

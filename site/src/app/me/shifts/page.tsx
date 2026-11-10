@@ -17,6 +17,7 @@ import { initAuth, isAuthenticated, authTenant, login, logout } from '@/lib/auth
 import { meApi, MyShiftOccurrence, QualityCycleFormItem, type ShiftCalendarView } from '@/lib/meApi';
 import ShiftCalendar from './ShiftCalendar';
 import { EmployeeTabs, InventorySection, OffersSection, SettingsSection, type EmployeeSection } from '@/components/EmployeeSections';
+import { KeyRequestsSection } from '@/components/MyKeyRequests';
 import { Logo } from '@/ds/Logo';
 import { Button } from '@/ds/Button';
 import { Card } from '@/ds/Card';
@@ -463,6 +464,7 @@ export default function MyShiftsPage() {
 
         <EmployeeTabs section={section} onChange={setSection} />
         {section === 'offers' && <OffersSection autoAcceptWork={autoAcceptWork} preferenceError={preferenceError} onRetryPreference={() => void loadPreference()} onAccepted={() => void loadShifts()} />}
+        {section === 'keys' && <KeyRequestsSection />}
         {section === 'inventory' && <InventorySection />}
         {section === 'settings' && <SettingsSection autoAcceptWork={autoAcceptWork} />}
         {section === 'schedules' && <div id="employee-panel-schedules" role="tabpanel" aria-labelledby="employee-tab-schedules" className="space-y-6">

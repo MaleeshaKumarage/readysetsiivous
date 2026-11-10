@@ -140,6 +140,8 @@ builder.Services.AddScoped<CleaningSuite.Application.Shifts.IShiftRepository, Cl
 builder.Services.AddScoped<CleaningSuite.Application.Shifts.IShiftWorkReservation, CleaningSuite.Infrastructure.Persistence.ShiftWorkReservation>();
 builder.Services.AddScoped<CleaningSuite.Application.Partners.IPartnerStore, CleaningSuite.Infrastructure.Persistence.PartnerStore>();
 builder.Services.AddScoped<CleaningSuite.Application.Partners.PartnerService>();
+builder.Services.AddScoped<CleaningSuite.Application.Partners.PartnerKeyRequestService>();
+builder.Services.AddScoped<CleaningSuite.Application.Partners.IKeyRequestFileStore, CleaningSuite.Infrastructure.Partners.DiskKeyRequestFileStore>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<CleaningSuite.Infrastructure.Notifications.PushSettings>();
 builder.Services.AddSingleton<CleaningSuite.Application.Notifications.IPushSettings>(sp => sp.GetRequiredService<CleaningSuite.Infrastructure.Notifications.PushSettings>());

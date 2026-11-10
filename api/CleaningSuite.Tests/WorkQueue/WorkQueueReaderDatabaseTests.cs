@@ -21,12 +21,13 @@ public class WorkQueueReaderDatabaseTests
     public async Task Overdue_unstarted_visits_need_action_and_inactive_future_work_is_cancelled_with_a_bounded_horizon()
     {
         using var f = await Fixture.Create();
-        var day = DateTime.UtcNow.Date;
+        // Start from tomorrow so the daily series never begins in the past, whatever the time of day in the tenant zone.
+        var day = DateTime.UtcNow.Date.AddDays(1);
         var company = Guid.NewGuid(); var branch = Guid.NewGuid();
         var daily = Shift.Create(company, branch, "Bounded daily", new() { Type = ShiftScheduleType.DailySameTime, DailyStart = TimeSpan.FromHours(8), DailyEnd = TimeSpan.FromHours(10) }, null, day, null);
         var inactive = Shift.Create(company, branch, "Inactive future", new() { Type = ShiftScheduleType.DailySameTime, DailyStart = TimeSpan.FromHours(8), DailyEnd = TimeSpan.FromHours(10) }, null, day.AddDays(1), null);
         inactive.IsActive = false;
-        var past = Shift.Create(company, branch, "Missed visit", new() { Type = ShiftScheduleType.OneTime, OneTimeDate = day.AddDays(-1), OneTimeStart = TimeSpan.FromHours(8), OneTimeEnd = TimeSpan.FromHours(10) }, null, day.AddDays(-1), day.AddDays(-1));
+        var past = Shift.Create(company, branch, "Missed visit", new() { Type = ShiftScheduleType.OneTime, OneTimeDate = day.AddDays(-2), OneTimeStart = TimeSpan.FromHours(8), OneTimeEnd = TimeSpan.FromHours(10) }, null, day.AddDays(-2), day.AddDays(-2));
         using (var writer = f.Store.LightweightSession(f.Tenant)) { writer.Store(daily, inactive, past); await writer.SaveChangesAsync(); }
         using var session = new TenantSessionFactory(f.Store, TenantContext(f.Tenant));
         var reader = Reader(f, session);

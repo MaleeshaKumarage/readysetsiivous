@@ -14,6 +14,7 @@ the returned tenant time zone. Versions are integer request revisions.
   `quoteRequestedUtc: string|null`. Existing branch address/contact fields remain.
 - Partner identity: `{realm, person:{id,firstName,lastName,role,isActive}, company:{id,name,isActive,isPartnerEnabled}, timeZoneId}`.
 - Cleaning request: `{id,version,companyId,branchId,branchName,fromDate,toDate,exactStartLocalTime,notes,priceNet,vatRatePercent,estimatedDurationMinutes,status,firstAcceptedAtUtc,linkedShiftId,plannedStartUtc,plannedEndUtc,acceptedCleanerName,actualStartUtc,actualEndUtc}`.
+- Key request: `{id,revision,companyId,branchId,branchName,kind,date,notes,feeNet,vatRatePercent,status,cancellationReason}`; `kind` is `Pickup` or `Handover`, `feeNet` is frozen at submission. Lists return `{feeNet,vatRatePercent,items}` with the current fee.
 - Change request: `{id,companyId,branchId,requestId,kind,message,createdUtc,resolvedUtc,resolution}`.
 - Cleaner offer: `{id,requestId,version,branchName,street,postalCode,city,fromDate,toDate,exactStartLocalTime,plannedStartUtc,estimatedDurationMinutes,notes,timeZoneId}`. No customer price or staff-private data.
 - Safe company shift: `{id,branchId,branchName,name,isActive,schedule,validFrom,validUntil}`. Internal shift notes are omitted.
@@ -40,6 +41,9 @@ role synchronization or grant access to the previous company through a cached to
 - `GET /requests` => cleaning request[]. `POST /requests` body `{clientRequestId,branchId,fromDate,toDate,exactStartLocalTime?,notes?}` => cleaning request.
 - `PUT /requests/{id}` body `{version,fromDate,toDate,exactStartLocalTime?,notes?}` => cleaning request.
 - `POST /requests/{id}/cancel` body `{version}` => cleaning request.
+- `GET /key-requests` => key request list. `POST /key-requests` body `{clientRequestId,branchId,kind,date,notes?}` => key request (retries with the same `clientRequestId` return the stored request). `POST /key-requests/{id}/cancel` body `{version,reason}` => key request.
+- Staff: `GET /api/v1/admin/partner/key-requests?companyId=` => key request list; `PUT /api/v1/admin/partner/key-request-fee` body `{feeNet}` sets the fee for new requests (manager or admin).
+- Staff key request workflow (admin or manager): `POST /api/v1/admin/partner/key-requests/{id}/assignment` body `{revision,employeeId}` picks an active staff member; `POST .../complete` body `{revision}` marks it completed and requires an assignee; `POST .../photos` multipart `file` adds a JPEG, PNG or WebP photo (up to 10 MiB, 10 per request) once an employee is assigned and the request is not cancelled; `GET .../photos/{photoId}` returns the image. Assignee is never included in partner responses; completion photos are shared with the owning partner via `GET /api/v1/partner/key-requests/{id}/photos/{photoId}`. The assigned employee can list `GET /api/v1/me/key-requests`, complete with `POST .../complete` and add photos with `POST .../photos` (or read them with `GET .../photos/{photoId}`); managers and administrators can do the same.
 - `POST /requests/{id}/change-requests` body `{message}` => change request.
 - `GET /shifts` => safe company shift[].
 - `GET /change-requests` => own-company change request[] including staff resolutions.

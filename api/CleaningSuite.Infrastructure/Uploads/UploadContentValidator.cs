@@ -65,6 +65,16 @@ public sealed class UploadContentValidator : IUploadContentValidator
             Invalid("SignaturePng", "Signature must be a valid PNG image.");
     }
 
+    public string ValidateKeyRequestPhoto(ReadOnlyMemory<byte> content)
+    {
+        if (content.Length > MaxQualityPhotoBytes)
+            throw new UploadPayloadTooLargeException("Key request photos must be 10 MiB or smaller.");
+        var format = GetEncodedFormat(content.Span, "Photo", ["image/jpeg", "image/png", "image/webp"]);
+        ValidateImageBytes(content.Span, "Photo", MaxServiceImageDimension,
+            MaxServiceImageDimension, MaxServiceImagePixels, format.Format);
+        return format.MimeType switch { "image/jpeg" => ".jpg", "image/png" => ".png", _ => ".webp" };
+    }
+
     public string ValidateServiceImage(ReadOnlyMemory<byte> content)
     {
         if (content.Length > MaxServiceImageBytes)

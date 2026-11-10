@@ -23,6 +23,9 @@ public sealed class PartnerWorkforceTransitionGuard(IPartnerStore store, IShiftR
         var employeeKey = employeeId.ToString();
         var bookings = await db.Query<Booking>().Where(b => b.EmployeeId == employeeKey).ToListAsync(ct);
         if (bookings.Any(b => b.Status is not (Booking.StatusCancelled or Booking.StatusCompleted))) Deny();
+        // A key pickup or handover still waiting for completion is outstanding work for this person too.
+        var keyRequests = await db.Query<PartnerKeyRequest>().Where(k => k.AssignedEmployeeId == employeeId && k.Status == PartnerKeyRequest.StatusRequested).ToListAsync(ct);
+        if (keyRequests.Count > 0) Deny();
         var requests = await db.Query<PartnerCleaningRequest>()
             .Where(r => r.OfferedEmployeeId == employeeId || r.AcceptedEmployeeId == employeeId).ToListAsync(ct);
         if (requests.Any(r => r.Status == "Offered" && r.OfferedEmployeeId == employeeId

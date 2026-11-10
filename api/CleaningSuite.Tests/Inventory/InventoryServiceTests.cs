@@ -20,6 +20,7 @@ public class InventoryServiceTests
     private sealed class FakeValidator : IUploadContentValidator
     {
         public string ValidateServiceImage(ReadOnlyMemory<byte> content) => ".png";
+        public string ValidateKeyRequestPhoto(ReadOnlyMemory<byte> content) => ".png";
         public void ValidateAgreementPdf(ReadOnlyMemory<byte> content) { }
         public void ValidateGeneratedAgreementPdf(ReadOnlyMemory<byte> content) { }
         public void ValidateSignaturePng(ReadOnlyMemory<byte> content) { }
