@@ -167,6 +167,8 @@ public sealed class PartnerKeyRequestService(IPartnerStore store, IShiftWorkRese
         try
         {
             item.Photos.Add(photo);
+            // A new photo changes what the partner and staff see, so stale clients must refresh before acting again.
+            item.Revision++;
             Db.Store(item);
             await Db.SaveChangesAsync(ct);
         }

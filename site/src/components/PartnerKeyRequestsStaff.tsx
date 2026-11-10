@@ -50,9 +50,9 @@ export function PartnerKeyRequestsStaff({ role }: { role: 'admin' | 'manager' })
   return <div className="space-y-4">
     <form onSubmit={save} aria-label="Key request fee" className="border rounded p-4 flex flex-wrap items-end gap-3">
       <label className="flex flex-col text-sm">Fee per key request, excl. VAT (EUR)
-        <input className="border rounded px-3 py-2 w-40" type="number" min={0} max={10000} step="0.01" required value={fee} onChange={event => setFee(event.target.value)} />
+        <input className="border rounded px-3 py-2 w-40" type="number" min={0} max={10000} step="0.01" required disabled={!list} value={fee} onChange={event => setFee(event.target.value)} />
       </label>
-      <button className="border rounded px-4 py-2" disabled={busy} type="submit">Save fee</button>
+      <button className="border rounded px-4 py-2" disabled={busy || !list} type="submit">Save fee</button>
     </form>
     {loadError && <p role="alert" className="text-red-600">{loadError}</p>}
     {error && <p role="alert" className="text-red-600">{error}</p>}
@@ -61,7 +61,7 @@ export function PartnerKeyRequestsStaff({ role }: { role: 'admin' | 'manager' })
     {!list?.items?.length ? <p>No key requests yet.</p> : <ul className="space-y-3">
       {list.items.map(item => <KeyRequestRow key={item.id} role={role} item={item} employees={employees} choice={choice[item.id] ?? item.assignedEmployeeId ?? ''} onChoice={value => setChoice(previous => ({ ...previous, [item.id]: value }))}
         busy={busy}
-        onAssign={() => { const employeeId = choice[item.id]; if (employeeId) void run(() => staffPartnerApi(role).assignKeyRequest(item, employeeId), 'Employee assigned.'); }}
+        onAssign={() => { const employeeId = choice[item.id] ?? item.assignedEmployeeId; if (employeeId) void run(() => staffPartnerApi(role).assignKeyRequest(item, employeeId), 'Employee assigned.'); }}
         onComplete={() => void run(() => staffPartnerApi(role).completeKeyRequest(item), 'Key request marked completed.')}
         onPhoto={file => void run(() => staffPartnerApi(role).addKeyRequestPhoto(item, file), 'Photo added.')} />)}
     </ul>}

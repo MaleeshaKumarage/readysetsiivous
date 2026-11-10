@@ -200,7 +200,7 @@ public class PartnerKeyRequestDatabaseTests
         Assert.Equal(3, withPhoto.Photos![0].SizeBytes);
         Assert.Equal("Requested", withPhoto.Status);
 
-        var completed = await f.Service.Complete(f.Cleaner.Id, created.Id, new(assigned.Revision), default);
+        var completed = await f.Service.Complete(f.Cleaner.Id, created.Id, new(withPhoto.Revision), default);
         for (var i = 1; i < PartnerKeyRequest.MaxPhotos; i++) await f.Service.AddPhoto(f.Cleaner.Id, created.Id, [1, (byte)i], default);
         await Assert.ThrowsAsync<ShiftConflictException>(() => f.Service.AddPhoto(f.Cleaner.Id, created.Id, [9], default));
         Assert.Equal(PartnerKeyRequest.MaxPhotos, f.Files.Stored.Count);
