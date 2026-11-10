@@ -31,7 +31,7 @@ export function PartnerKeyRequestsStaff({ role }: { role: 'admin' | 'manager' })
   useEffect(() => {
     const load = role === 'admin'
       ? adminEmployees.list().then(people => (people ?? []).filter(person => person.isActive && person.role !== 'partner').map(person => ({ id: person.id, name: `${person.firstName} ${person.lastName}`.trim() })))
-      : managerApi.employees().then(people => people.filter(person => person.isActive).map(person => ({ id: person.id, name: `${person.firstName} ${person.lastName}`.trim() })));
+      : managerApi.employees().then(people => people.filter(person => person.isActive && person.role !== 'partner').map(person => ({ id: person.id, name: `${person.firstName} ${person.lastName}`.trim() })));
     load.then(setEmployees, () => setEmployees([]));
   }, [role]);
 
