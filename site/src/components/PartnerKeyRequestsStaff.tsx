@@ -89,7 +89,7 @@ function KeyRequestRow({ role, item, employees, choice, onChoice, busy, onAssign
       <button className="border rounded px-3 py-2" type="button" disabled={busy || !choice || choice === item.assignedEmployeeId} onClick={onAssign}>Assign</button>
       <button className="border rounded px-3 py-2" type="button" disabled={busy || !item.assignedEmployeeId} onClick={onComplete}>Mark completed</button>
     </div>}
-    {completed && <KeyRequestPhotos heading="Photos" alt="Key request photo" photos={photos} busy={busy} onUpload={onPhoto}
+    {item.assignedEmployeeId && item.status !== 'Cancelled' && <KeyRequestPhotos heading="Photos" alt="Key request photo" photos={photos} busy={busy} onUpload={onPhoto}
       uploadLabel={`Add photo for ${item.branchName} ${item.date}`} loadUrl={photoId => staffPartnerApi(role).keyRequestPhotoUrl(item.id, photoId)} />}
   </li>;
 }

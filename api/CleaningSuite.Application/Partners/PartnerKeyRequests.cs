@@ -157,7 +157,9 @@ public sealed class PartnerKeyRequestService(IPartnerStore store, IShiftWorkRese
         await using var lease = await reservation.AcquireAsync(ct);
         var item = await Require(id, ct);
         await RequireManagerOrAssignee(actor, item, ct);
-        if (item.Status != PartnerKeyRequest.StatusCompleted) throw new ShiftConflictException("Photos can be added once the key request is completed.");
+        // Photos can be taken from the moment someone is assigned, during the visit, and stay addable after completion.
+        if (item.Status == PartnerKeyRequest.StatusCancelled) throw new ShiftConflictException("Photos cannot be added to a cancelled key request.");
+        if (!item.AssignedEmployeeId.HasValue) throw new ShiftConflictException("Assign an employee before adding photos.");
         if (item.Photos.Count >= PartnerKeyRequest.MaxPhotos) throw new ShiftConflictException($"A key request can have at most {PartnerKeyRequest.MaxPhotos} photos.");
         var extension = uploads.ValidateKeyRequestPhoto(content);
         var photo = new KeyRequestPhoto { Id = Guid.NewGuid(), Extension = extension, SizeBytes = content.Length, UploadedUtc = clock.GetUtcNow().UtcDateTime };

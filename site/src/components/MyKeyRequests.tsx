@@ -38,9 +38,9 @@ export function KeyRequestsSection() {
         {item.notes && <p className="text-sm">{item.notes}</p>}
         {item.status === 'Requested' && <button className="border rounded px-3 py-2" type="button" disabled={busy}
           onClick={() => void run(() => myKeyRequestApi.complete(item), 'Key request marked completed.')}>Mark completed</button>}
-        {item.status === 'Completed' && <KeyRequestPhotos heading="Photos" alt="Key request photo" photos={item.photos ?? []} busy={busy}
+        <KeyRequestPhotos heading="Photos" alt="Key request photo" photos={item.photos ?? []} busy={busy}
           uploadLabel={`Add photo for ${item.branchName} ${item.date}`} loadUrl={photoId => myKeyRequestApi.photoUrl(item.id, photoId)}
-          onUpload={file => void run(() => myKeyRequestApi.addPhoto(item, file), 'Photo added.')} />}
+          onUpload={file => void run(() => myKeyRequestApi.addPhoto(item, file), 'Photo added.')} />
       </li>)}
     </ul>
   </div>;

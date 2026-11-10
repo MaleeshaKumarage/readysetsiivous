@@ -43,3 +43,34 @@ test('an assigned employee completes a key request and adds completion photos', 
   expect(writes[1]).toMatchObject({ path: '/api/v1/me/key-requests/key-7/photos', multipart: true });
   await expect(page.getByRole('img', { name: 'Key request photo 1' })).toBeVisible();
 });
+
+test('an assigned employee adds a photo during the visit, before marking the key request completed', async ({ page }) => {
+  const item = { id: 'key-8', revision: 2, companyId: '11111111-1111-4111-8111-111111111111', branchId: '22222222-2222-4222-8222-222222222222', branchName: 'Lake apartment', kind: 'Handover', date: '2026-12-04', notes: null, feeNet: 15, vatRatePercent: 25.5, status: 'Requested', cancellationReason: null, completedUtc: null as string | null, assignedEmployeeId: 'employee-a', assignedEmployeeName: 'Test Staff', photos: [] as { id: string; sizeBytes: number; uploadedUtc: string }[] };
+  const writes: { path: string; multipart: boolean }[] = [];
+  await setupAdminMocks(page);
+  await page.addInitScript(() => { (window as any).__MOCK_ROLES__ = ['employee']; });
+  await page.route(/\/api\/v1\/me$/, route => route.fulfill({ headers, json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: ['employee'] })], employee: { id: 'employee-a', firstName: 'Test', lastName: 'Staff', role: 'employee', isActive: true } } }));
+  await page.route(/\/api\/v1\/me\/shifts(?:\/calendar)?(?:\?.*)?$/, route => route.fulfill({ headers, json: route.request().url().includes('/calendar') ? { occurrences: [], timeZoneId: 'Europe/Helsinki', fromLocalDate: '2026-11-05', toLocalDate: '2026-11-06' } : [] }));
+  await page.route(/\/api\/v1\/me\/partner-offers(?:\?.*)?$/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/me\/work-preferences$/, route => route.fulfill({ headers, json: { autoAcceptWork: false } }));
+  await page.route(/\/api\/v1\/me\/inventory\/(locations|items)$/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/me\/inventory\/usage(\?.*)?$/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/me\/key-requests\/[^/]+\/photos\/[^/]+$/, route => route.fulfill({ headers, contentType: 'image/png', body: Buffer.from(pngBase64, 'base64') }));
+  await page.route(/\/api\/v1\/me\/key-requests\/[^/]+\/photos$/, route => {
+    writes.push({ path: new URL(route.request().url()).pathname, multipart: (route.request().headers()['content-type'] ?? '').startsWith('multipart/form-data') });
+    item.photos.push({ id: photoId, sizeBytes: 70, uploadedUtc: '2026-12-04T09:30:00Z' });
+    return route.fulfill({ headers, json: item });
+  });
+  await page.route(/\/api\/v1\/me\/key-requests(?:\?.*)?$/, route => route.fulfill({ headers, json: [item] }));
+
+  await page.goto('/me/shifts/');
+  await page.getByRole('tab', { name: 'Keys', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Mark completed', exact: true })).toBeVisible();
+
+  await page.getByLabel('Add photo for Lake apartment 2026-12-04', { exact: true }).setInputFiles({ name: 'handover.png', mimeType: 'image/png', buffer: Buffer.from(pngBase64, 'base64') });
+  await expect(page.getByRole('status')).toHaveText('Photo added.');
+  expect(writes[0]).toMatchObject({ path: '/api/v1/me/key-requests/key-8/photos', multipart: true });
+  await expect(page.getByRole('img', { name: 'Key request photo 1' })).toBeVisible();
+  // Still open: completing the request remains a separate step.
+  await expect(page.getByRole('button', { name: 'Mark completed', exact: true })).toBeVisible();
+});

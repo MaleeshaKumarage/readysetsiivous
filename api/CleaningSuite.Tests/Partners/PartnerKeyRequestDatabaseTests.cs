@@ -186,23 +186,36 @@ public class PartnerKeyRequestDatabaseTests
     }
 
     [QualityCycleDatabaseFact]
-    public async Task Photos_wait_for_completion_and_stop_at_the_limit()
+    public async Task Photos_need_an_assignee_and_stop_at_the_limit()
+    {
+        var f = await Create();
+        var created = await Pickup(f, new DateOnly(2026, 12, 1));
+
+        await Assert.ThrowsAsync<ShiftConflictException>(() => f.Service.AddPhoto(f.Manager.Id, created.Id, [1, 2, 3], default));
+
+        // Once assigned, the employee can photograph the visit before completing it.
+        var assigned = await f.Service.Assign(f.Manager.Id, created.Id, new(created.Revision, f.Cleaner.Id), default);
+        var withPhoto = await f.Service.AddPhoto(f.Cleaner.Id, created.Id, [1, 2, 3], default);
+        Assert.Single(withPhoto.Photos!);
+        Assert.Equal(3, withPhoto.Photos![0].SizeBytes);
+        Assert.Equal("Requested", withPhoto.Status);
+
+        var completed = await f.Service.Complete(f.Cleaner.Id, created.Id, new(assigned.Revision), default);
+        for (var i = 1; i < PartnerKeyRequest.MaxPhotos; i++) await f.Service.AddPhoto(f.Cleaner.Id, created.Id, [1, (byte)i], default);
+        await Assert.ThrowsAsync<ShiftConflictException>(() => f.Service.AddPhoto(f.Cleaner.Id, created.Id, [9], default));
+        Assert.Equal(PartnerKeyRequest.MaxPhotos, f.Files.Stored.Count);
+        Assert.Equal("Completed", completed.Status);
+    }
+
+    [QualityCycleDatabaseFact]
+    public async Task Photos_cannot_be_added_to_a_cancelled_request()
     {
         var f = await Create();
         var created = await Pickup(f, new DateOnly(2026, 12, 1));
         var assigned = await f.Service.Assign(f.Manager.Id, created.Id, new(created.Revision, f.Cleaner.Id), default);
+        await f.Service.Cancel(f.Partner.Id, created.Id, assigned.Revision, "Not needed", default);
 
-        await Assert.ThrowsAsync<ShiftConflictException>(() => f.Service.AddPhoto(f.Manager.Id, created.Id, [1, 2, 3], default));
-
-        var completed = await f.Service.Complete(f.Manager.Id, created.Id, new(assigned.Revision), default);
-        var withPhoto = await f.Service.AddPhoto(f.Manager.Id, created.Id, [1, 2, 3], default);
-        Assert.Single(withPhoto.Photos!);
-        Assert.Equal(3, withPhoto.Photos![0].SizeBytes);
-
-        for (var i = 1; i < PartnerKeyRequest.MaxPhotos; i++) await f.Service.AddPhoto(f.Manager.Id, created.Id, [1, (byte)i], default);
-        await Assert.ThrowsAsync<ShiftConflictException>(() => f.Service.AddPhoto(f.Manager.Id, created.Id, [9], default));
-        Assert.Equal(PartnerKeyRequest.MaxPhotos, f.Files.Stored.Count);
-        Assert.Equal("Completed", completed.Status);
+        await Assert.ThrowsAsync<ShiftConflictException>(() => f.Service.AddPhoto(f.Cleaner.Id, created.Id, [1], default));
     }
 
     [QualityCycleDatabaseFact]
