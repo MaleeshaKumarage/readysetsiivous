@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
 import { autoShiftName } from '../src/lib/shiftName';
-const ONCALL_NAME = autoShiftName(undefined, 'On-call / flexible');
+const ONCALL_NAME = autoShiftName(undefined);
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization,Content-Type', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS' };
 

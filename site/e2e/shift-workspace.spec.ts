@@ -201,7 +201,7 @@ test('phone-width workspace has no horizontal overflow and its actions stay insi
   }
 });
 
-test('editing a shift saves its name, and Reset to generated name rebuilds it from the property', async ({ page }) => {
+test('editing a shift keeps its generated name read-only, and saving sends the name the server builds', async ({ page }) => {
   await setup(page);
   const saved: Record<string, unknown>[] = [];
   await page.route(/\/api\/v1\/admin\/shifts\/daily$/, route => {
@@ -214,14 +214,9 @@ test('editing a shift saves its name, and Reset to generated name rebuilds it fr
   const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
   const nameField = edit.getByRole('textbox', { name: 'Name', exact: true });
   await expect(nameField).toHaveValue('Workspace shift');
-
-  await nameField.fill('Custom name');
-  // The test property has no address or area, so the generated name is just rooms, beds and schedule.
-  await edit.getByRole('button', { name: 'Reset to generated name', exact: true }).click();
-  await expect(nameField).toHaveValue('0 H | 0 V | - Daily');
-  await nameField.fill('Custom name');
+  await expect(nameField).toHaveAttribute('readonly', '');
+  await expect(edit.getByRole('button', { name: 'Reset to generated name', exact: true })).toHaveCount(0);
   await edit.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(edit).toHaveCount(0);
   expect(saved).toHaveLength(1);
-  expect(saved[0].name).toBe('Custom name');
 });

@@ -333,9 +333,6 @@ export default function ShiftsAdminPage() {
     if (scheduleType === '2' && weekDays.length === 0) { setError('Select at least one day.'); return; }
     if (scheduleType === '1' && (!weekDays.length || weekDays.some(day => !dailyTimes[day]?.start || !dailyTimes[day]?.end || dailyTimes[day].end <= dailyTimes[day].start))) { setError('Select at least one day and ensure each end time is after its start time.'); return; }
     if (scheduleType === '3' && weekDays.length === 0) { setError('Select a day.'); return; }
-    // Create names the shift from its property and schedule. Editing saves the name in the field.
-    const shiftName = editingShift ? name.trim() : autoShiftName(branches.find(b => b.id === branchId), SCHEDULE_TYPES.find(t => t.value === scheduleType)?.label ?? '');
-    if (!shiftName) { setError('Could not name this shift. Choose a property and schedule, then save again.'); return; }
     submitting.current = true; setSaving(true); setError('');
     const branchVersions = branches.find(b => b.id === branchId)?.priceVersions;
     const chosenPriceFrom = priceFrom && branchVersions?.some(v => v.effectiveFrom === priceFrom) ? priceFrom : defaultPriceVersion(branchVersions) ?? undefined;
@@ -343,6 +340,7 @@ export default function ShiftsAdminPage() {
     // Create names the shift from its property and schedule. Editing saves the name in the field, which starts from the stored name.
     // The server builds every shift name from the property, so the name sent here is only a placeholder.
     const shiftName = autoShiftName(branches.find(b => b.id === branchId));
+    if (!shiftName) { setError('Could not name this shift. Choose a property and schedule, then save again.'); return; }
     const fields = { companyId, branchId, name: shiftName, schedule: buildSchedule(), notes: notes.trim() || undefined, isActive: editingShift?.isActive ?? true, validFrom: oneTime ? oneTimeDate : validFrom || undefined, validUntil: oneTime ? oneTimeDate : validUntil || undefined, qualityCycleTemplateId: qualityCycleTemplateId || undefined,
       // Creating a shift picks the branch price version it bills at; the default is the price in force today.
       priceEffectiveFrom: editingShift ? undefined : chosenPriceFrom };
