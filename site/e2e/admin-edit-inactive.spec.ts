@@ -9,7 +9,7 @@ test('company and branch can be edited in Inactive without reactivating', async 
   const company = { id: 'company-old', businessId: 'OLD-1', name: 'Old company', contactName: 'Admin', contactEmail: 'admin@example.test', contactPhone: '123', notes: 'Old notes', isActive: false };
   const branch = { id: 'branch-old', companyId: company.id, name: 'Old branch', street: 'Old road', postalCode: '00100', city: 'Helsinki', country: 'Finland', contactPhone: '456', isActive: false };
   const updates: { path: string; body: Record<string, unknown> }[] = [];
-  await page.route(/\/api\/v1\/admin\/companies(?:\/.*)?$/, async route => {
+  await page.route(/\/api\/v1\/admin\/companies(?:\/.*)?(?:\?.*)?$/, async route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
     const url = new URL(route.request().url());
     if (route.request().method() === 'PUT') {
@@ -27,18 +27,18 @@ test('company and branch can be edited in Inactive without reactivating', async 
   const companyRow = page.getByRole('row').filter({ hasText: 'OLD-1' });
   await companyRow.getByRole('button', { name: 'Edit' }).click();
   const companyDialog = page.getByRole('dialog', { name: 'Edit company' });
-  await companyDialog.getByLabel('Name').fill('Updated company');
+  await companyDialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Updated company');
   await companyDialog.getByRole('button', { name: 'Save changes' }).click();
   await expect(companyRow).toContainText('Updated company');
   await page.getByRole('button', { name: 'Branches' }).click();
   await page.getByRole('tablist', { name: 'Branch activity' }).getByRole('tab', { name: /^Inactive/ }).click();
-  await page.getByText('Old branch', { exact: true }).locator('..').getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('group', { name: 'Branch Old branch', exact: true }).getByRole('button', { name: 'Edit', exact: true }).click();
   const branchDialog = page.getByRole('dialog', { name: 'Edit branch' });
-  await branchDialog.getByLabel('Name').fill('Updated branch');
+  await branchDialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Updated branch');
   await branchDialog.getByRole('button', { name: 'Save changes' }).click();
   expect(updates).toHaveLength(2);
   expect(updates.every(update => update.body.isActive === false)).toBe(true);
-  await expect(page.getByText('Updated branch', { exact: true })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Branch Updated branch', exact: true })).toBeVisible();
 });
 
 test('inactive shift and employee edits keep their existing activity state', async ({ page }) => {
@@ -46,7 +46,7 @@ test('inactive shift and employee edits keep their existing activity state', asy
   const shift = { id: 'shift-old', companyId: 'company-old', branchId: 'branch-old', name: 'Old shift', isActive: false, schedule: { type: 2, weeklyDay: 1, weeklyDays: [1, 3], weeklyStart: '09:00', weeklyEnd: '11:00' }, notes: 'Old shift notes' };
   const employee = { id: 'employee-old', email: 'old@example.test', firstName: 'Old', lastName: 'Cleaner', phone: '', role: 'employee', isActive: false, skills: [], serviceAreas: [], certifications: [], defaultHours: {} };
   const changes: { path: string; body: Record<string, any> }[] = [];
-  await page.route(/\/api\/v1\/admin\/(?:shifts|companies|employees|tenant|quality-cycle)(?:\/.*)?$/, async route => {
+  await page.route(/\/api\/v1\/admin\/(?:shifts|companies|employees|tenant|quality-cycle)(?:\/.*)?(?:\?.*)?$/, async route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
     const url = new URL(route.request().url()); const path = url.pathname;
     if (path.endsWith('/shifts/shift-old') && route.request().method() === 'PUT') {
@@ -68,7 +68,7 @@ test('inactive shift and employee edits keep their existing activity state', asy
   await page.getByRole('tab', { name: /^Inactive/ }).click();
   await shiftAction(page, 'Old shift', 'Edit');
   const shiftDialog = page.getByRole('dialog', { name: 'Edit shift' });
-  await shiftDialog.getByLabel('Name').fill('Updated shift');
+  await shiftDialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Updated shift');
   await shiftDialog.getByRole('button', { name: 'Save changes' }).click();
   expect(changes[0].body.isActive).toBe(false);
   await expect(page.getByRole('row').filter({ hasText: 'Updated shift' })).toBeVisible();
