@@ -43,6 +43,7 @@ role synchronization or grant access to the previous company through a cached to
 - `POST /requests/{id}/cancel` body `{version}` => cleaning request.
 - `GET /key-requests` => key request list. `POST /key-requests` body `{clientRequestId,branchId,kind,date,notes?}` => key request (retries with the same `clientRequestId` return the stored request). `POST /key-requests/{id}/cancel` body `{version,reason}` => key request.
 - Staff: `GET /api/v1/admin/partner/key-requests?companyId=` => key request list; `PUT /api/v1/admin/partner/key-request-fee` body `{feeNet}` sets the fee for new requests (manager or admin).
+- Staff key request workflow (admin or manager): `POST /api/v1/admin/partner/key-requests/{id}/assignment` body `{revision,employeeId}` picks an active staff member; `POST .../complete` body `{revision}` marks it completed and requires an assignee; `POST .../photos` multipart `file` adds a JPEG, PNG or WebP photo (up to 10 MiB, 10 per request) only after completion; `GET .../photos/{photoId}` returns the image. Assignee and photos are never included in partner responses.
 - `POST /requests/{id}/change-requests` body `{message}` => change request.
 - `GET /shifts` => safe company shift[].
 - `GET /change-requests` => own-company change request[] including staff resolutions.

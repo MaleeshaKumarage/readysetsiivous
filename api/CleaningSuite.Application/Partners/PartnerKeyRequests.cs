@@ -12,14 +12,29 @@ namespace CleaningSuite.Application.Partners;
 
 public record CreatePartnerKeyRequest(Guid ClientRequestId, Guid BranchId, string Kind, DateOnly Date, string? Notes = null);
 public record KeyRequestFeeInput(decimal FeeNet);
+public record KeyRequestAssignment(int Revision, Guid EmployeeId);
+public record KeyRequestRevision(int Revision);
+public record KeyRequestPhotoDto(Guid Id, int SizeBytes, DateTime UploadedUtc);
+// Assignee, assignee name and photos are staff-only: partner responses leave them null.
 public record PartnerKeyRequestDto(Guid Id, int Revision, Guid CompanyId, Guid BranchId, string BranchName,
-    string Kind, DateOnly Date, string? Notes, decimal FeeNet, decimal VatRatePercent, string Status, string? CancellationReason);
+    string Kind, DateOnly Date, string? Notes, decimal FeeNet, decimal VatRatePercent, string Status, string? CancellationReason,
+    DateTime? CompletedUtc = null, Guid? AssignedEmployeeId = null, string? AssignedEmployeeName = null,
+    IReadOnlyList<KeyRequestPhotoDto>? Photos = null);
 // The current fee applies to new requests; each listed request keeps the fee it was submitted with.
 public record PartnerKeyRequestList(decimal FeeNet, decimal VatRatePercent, IReadOnlyList<PartnerKeyRequestDto> Items);
+public sealed record KeyRequestPhotoFile(byte[] Content, string ContentType);
+
+/// <summary>Stores key request photo bytes outside the document.</summary>
+public interface IKeyRequestFileStore
+{
+    Task SaveAsync(Guid requestId, KeyRequestPhoto photo, byte[] content, CancellationToken ct);
+    Task<byte[]?> ReadAsync(Guid requestId, KeyRequestPhoto photo, CancellationToken ct);
+    Task DeleteAsync(Guid requestId, KeyRequestPhoto photo);
+}
 
 /// <summary>Key pickup and handover requests. Shares the work reservation so requests serialize with other mutations.</summary>
 public sealed class PartnerKeyRequestService(IPartnerStore store, IShiftWorkReservation reservation,
-    ITenantProfileRepository profiles, ITenantContext tenant)
+    ITenantProfileRepository profiles, ITenantContext tenant, IKeyRequestFileStore files, IUploadContentValidator uploads, TimeProvider clock)
 {
     private IDocumentSession Db => store.Session;
 
@@ -31,7 +46,7 @@ public sealed class PartnerKeyRequestService(IPartnerStore store, IShiftWorkRese
         if (companyId.HasValue) query = query.Where(x => x.CompanyId == companyId.Value);
         var items = await query.OrderByDescending(x => x.CreatedUtc).ToListAsync(ct);
         var result = new List<PartnerKeyRequestDto>();
-        foreach (var item in items) result.Add(await Map(item, ct));
+        foreach (var item in items) result.Add(await Map(item, staff, ct));
         return new(profile.KeyRequestFeeNet, profile.DefaultVatRatePercent, result);
     }
 
@@ -55,7 +70,7 @@ public sealed class PartnerKeyRequestService(IPartnerStore store, IShiftWorkRese
         if (existing is not null)
         {
             if (existing.CompanyId != company.Id) throw new ShiftConflictException("This request identifier has already been used.");
-            return await Map(existing, ct);
+            return await Map(existing, false, ct);
         }
         var branch = await Branch(body.BranchId, company.Id, ct);
         var profile = await Profile(ct);
@@ -64,7 +79,7 @@ public sealed class PartnerKeyRequestService(IPartnerStore store, IShiftWorkRese
             FeeNet = profile.KeyRequestFeeNet, VatRatePercent = profile.DefaultVatRatePercent };
         Db.Store(item);
         await Db.SaveChangesAsync(ct);
-        return await Map(item, ct);
+        return await Map(item, false, ct);
     }
 
     public async Task<PartnerKeyRequestDto> Cancel(Guid actor, Guid id, int revision, string? reason, CancellationToken ct)
@@ -76,14 +91,15 @@ public sealed class PartnerKeyRequestService(IPartnerStore store, IShiftWorkRese
         if (trimmed.Length > PartnerKeyRequest.MaxNotesLength) throw new ValidationException([new("Reason", $"Keep the reason to {PartnerKeyRequest.MaxNotesLength} characters or fewer.")]);
         var item = await Db.LoadAsync<PartnerKeyRequest>(id, ct);
         if (item is null || item.CompanyId != company.Id) throw new NotFoundException("Key request", id);
-        if (item.Revision != revision) throw new ShiftConflictException("This request changed. Reload it before making another change.");
-        if (item.Status == PartnerKeyRequest.StatusCancelled) return await Map(item, ct);
+        CheckRevision(item, revision);
+        if (item.Status == PartnerKeyRequest.StatusCancelled) return await Map(item, false, ct);
+        if (item.Status == PartnerKeyRequest.StatusCompleted) throw new ShiftConflictException("Completed key requests cannot be cancelled.");
         item.Status = PartnerKeyRequest.StatusCancelled;
         item.CancellationReason = trimmed;
         item.Revision++;
         Db.Store(item);
         await Db.SaveChangesAsync(ct);
-        return await Map(item, ct);
+        return await Map(item, false, ct);
     }
 
     /// <summary>Staff set the one fee every new key request is charged. Existing requests keep their snapshot.</summary>
@@ -97,6 +113,76 @@ public sealed class PartnerKeyRequestService(IPartnerStore store, IShiftWorkRese
         profile.KeyRequestFeeNet = decimal.Round(body.FeeNet, 2);
         await profiles.SaveAsync(tenant.TenantId, profile, ct);
         return await List(actor, true, null, ct);
+    }
+
+    /// <summary>Staff choose who collects or hands over the keys. Allowed until the request is completed or cancelled.</summary>
+    public async Task<PartnerKeyRequestDto> Assign(Guid actor, Guid id, KeyRequestAssignment body, CancellationToken ct)
+    {
+        await using var lease = await reservation.AcquireAsync(ct);
+        await RequireManager(actor, ct);
+        var item = await Require(id, ct);
+        CheckRevision(item, body.Revision);
+        EnsureOpen(item);
+        var employee = await Db.LoadAsync<Employee>(body.EmployeeId, ct);
+        if (employee is not { IsActive: true, IdentitySyncPending: false } || !Employee.IsWorkRole(employee.Role))
+            throw new ValidationException([new("EmployeeId", "Choose an active staff member.")]);
+        item.AssignedEmployeeId = employee.Id;
+        item.Revision++;
+        Db.Store(item);
+        await Db.SaveChangesAsync(ct);
+        return await Map(item, true, ct);
+    }
+
+    /// <summary>Marks the keys collected or handed over. Needs an assigned employee; photos can be added afterwards.</summary>
+    public async Task<PartnerKeyRequestDto> Complete(Guid actor, Guid id, KeyRequestRevision body, CancellationToken ct)
+    {
+        await using var lease = await reservation.AcquireAsync(ct);
+        await RequireManager(actor, ct);
+        var item = await Require(id, ct);
+        CheckRevision(item, body.Revision);
+        if (item.Status == PartnerKeyRequest.StatusCompleted) return await Map(item, true, ct);
+        EnsureOpen(item);
+        if (!item.AssignedEmployeeId.HasValue) throw new ShiftConflictException("Assign an employee before completing this key request.");
+        item.Status = PartnerKeyRequest.StatusCompleted;
+        item.CompletedUtc = clock.GetUtcNow().UtcDateTime;
+        item.Revision++;
+        Db.Store(item);
+        await Db.SaveChangesAsync(ct);
+        return await Map(item, true, ct);
+    }
+
+    /// <summary>Adds one photo to a completed key request. The bytes are validated before anything is stored.</summary>
+    public async Task<PartnerKeyRequestDto> AddPhoto(Guid actor, Guid id, byte[] content, CancellationToken ct)
+    {
+        await using var lease = await reservation.AcquireAsync(ct);
+        await RequireManager(actor, ct);
+        var item = await Require(id, ct);
+        if (item.Status != PartnerKeyRequest.StatusCompleted) throw new ShiftConflictException("Photos can be added once the key request is completed.");
+        if (item.Photos.Count >= PartnerKeyRequest.MaxPhotos) throw new ShiftConflictException($"A key request can have at most {PartnerKeyRequest.MaxPhotos} photos.");
+        var extension = uploads.ValidateKeyRequestPhoto(content);
+        var photo = new KeyRequestPhoto { Id = Guid.NewGuid(), Extension = extension, SizeBytes = content.Length, UploadedUtc = clock.GetUtcNow().UtcDateTime };
+        await files.SaveAsync(item.Id, photo, content, ct);
+        try
+        {
+            item.Photos.Add(photo);
+            Db.Store(item);
+            await Db.SaveChangesAsync(ct);
+        }
+        catch
+        {
+            await files.DeleteAsync(item.Id, photo);
+            throw;
+        }
+        return await Map(item, true, ct);
+    }
+
+    public async Task<KeyRequestPhotoFile> Photo(Guid actor, Guid id, Guid photoId, CancellationToken ct)
+    {
+        await RequireManager(actor, ct);
+        var item = await Require(id, ct);
+        var photo = item.Photos.FirstOrDefault(x => x.Id == photoId) ?? throw new NotFoundException("Key request photo", photoId);
+        var bytes = await files.ReadAsync(item.Id, photo, ct) ?? throw new NotFoundException("Key request photo", photoId);
+        return new(bytes, photo.Extension switch { ".png" => "image/png", ".webp" => "image/webp", _ => "image/jpeg" });
     }
 
     private async Task<Company> Partner(Guid actor, CancellationToken ct)
@@ -121,6 +207,20 @@ public sealed class PartnerKeyRequestService(IPartnerStore store, IShiftWorkRese
             throw new UnauthorizedAccessException("Administrator or manager access is required.");
     }
 
+    private async Task<PartnerKeyRequest> Require(Guid id, CancellationToken ct) =>
+        await Db.LoadAsync<PartnerKeyRequest>(id, ct) ?? throw new NotFoundException("Key request", id);
+
+    private static void CheckRevision(PartnerKeyRequest item, int revision)
+    {
+        if (item.Revision != revision) throw new ShiftConflictException("This request changed. Reload it before making another change.");
+    }
+
+    private static void EnsureOpen(PartnerKeyRequest item)
+    {
+        if (item.Status is PartnerKeyRequest.StatusCompleted or PartnerKeyRequest.StatusCancelled)
+            throw new ShiftConflictException("This key request is already finished.");
+    }
+
     private async Task<Branch> Branch(Guid id, Guid companyId, CancellationToken ct)
     {
         var branch = await Db.LoadAsync<Branch>(id, ct);
@@ -132,10 +232,18 @@ public sealed class PartnerKeyRequestService(IPartnerStore store, IShiftWorkRese
     private async Task<CleaningSuite.Domain.Tenants.TenantProfile> Profile(CancellationToken ct) =>
         await profiles.GetAsync(tenant.TenantId, ct) ?? throw new NotFoundException("TenantProfile", Guid.Empty);
 
-    private async Task<PartnerKeyRequestDto> Map(PartnerKeyRequest item, CancellationToken ct)
+    private async Task<PartnerKeyRequestDto> Map(PartnerKeyRequest item, bool staff, CancellationToken ct)
     {
         var branch = await Db.LoadAsync<Branch>(item.BranchId, ct);
+        string? assigneeName = null;
+        if (staff && item.AssignedEmployeeId.HasValue)
+        {
+            var employee = await Db.LoadAsync<Employee>(item.AssignedEmployeeId.Value, ct);
+            assigneeName = employee is null ? null : $"{employee.FirstName} {employee.LastName}".Trim();
+        }
         return new(item.Id, item.Revision, item.CompanyId, item.BranchId, branch?.Name ?? "Property", item.Kind,
-            item.Date, item.Notes, item.FeeNet, item.VatRatePercent, item.Status, item.CancellationReason);
+            item.Date, item.Notes, item.FeeNet, item.VatRatePercent, item.Status, item.CancellationReason,
+            item.CompletedUtc, staff ? item.AssignedEmployeeId : null, assigneeName,
+            staff ? item.Photos.Select(p => new KeyRequestPhotoDto(p.Id, p.SizeBytes, p.UploadedUtc)).ToList() : null);
     }
 }

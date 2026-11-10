@@ -19,7 +19,9 @@ export interface PartnerCompletionPhoto { url: string; note: string }
 export interface PartnerCompletionReport { templateTitle: string; startedAtUtc: string | null; endedAtUtc: string | null; tasks: PartnerCompletionTask[]; cleanerNotes: string | null; photos: PartnerCompletionPhoto[] }
 export interface PartnerCompletion { requestId: string; branchName: string; fromDate: string; toDate: string; plannedStartUtc: string | null; plannedEndUtc: string | null; actualStartUtc: string | null; actualEndUtc: string | null; reports: PartnerCompletionReport[]; messages: PartnerChange[] }
 // Key pickup or handover at one property. The fee is the amount frozen when the request was submitted, excl. VAT.
-export interface KeyRequest { id: string; revision: number; companyId: string; branchId: string; branchName: string; kind: string; date: string; notes: string | null; feeNet: number; vatRatePercent: number; status: string; cancellationReason: string | null }
+export interface KeyRequestPhoto { id: string; sizeBytes: number; uploadedUtc: string }
+// Assignee, assignee name and photos are staff-only: partners never receive them.
+export interface KeyRequest { id: string; revision: number; companyId: string; branchId: string; branchName: string; kind: string; date: string; notes: string | null; feeNet: number; vatRatePercent: number; status: string; cancellationReason: string | null; completedUtc?: string | null; assignedEmployeeId?: string | null; assignedEmployeeName?: string | null; photos?: KeyRequestPhoto[] | null }
 export interface KeyRequestList { feeNet: number; vatRatePercent: number; items: KeyRequest[] }
 export interface KeyRequestInput { clientRequestId: string; branchId: string; kind: 'Pickup' | 'Handover'; date: string; notes: string | null }
 export interface RequestInput { clientRequestId?: string; version?: number; branchId?: string; fromDate: string; toDate: string; exactStartLocalTime: string | null; notes: string }
@@ -78,5 +80,24 @@ export function staffPartnerApi(role: 'admin' | 'manager') {
     keyRequests: (signal?: AbortSignal) => partnerSend<KeyRequestList>(`${base}/key-requests`, 'GET', undefined, signal),
     // One fee for every new key request. Existing requests keep the fee they were submitted with.
     setKeyRequestFee: (feeNet: number) => partnerSend<KeyRequestList>(`${base}/key-request-fee`, 'PUT', { feeNet }),
+    assignKeyRequest: (request: KeyRequest, employeeId: string) => partnerSend<KeyRequest>(`${base}/key-requests/${request.id}/assignment`, 'POST', { revision: request.revision, employeeId }),
+    completeKeyRequest: (request: KeyRequest) => partnerSend<KeyRequest>(`${base}/key-requests/${request.id}/complete`, 'POST', { revision: request.revision }),
+    // Multipart upload, so the JSON helper is not used. Errors use the same problem-details wording.
+    addKeyRequestPhoto: async (request: KeyRequest, file: File): Promise<KeyRequest> => {
+      const body = new FormData();
+      body.append('file', file);
+      const response = await authorizedFetch(`/api/v1/${base}/key-requests/${request.id}/photos`, { method: 'POST', cache: 'no-store', body });
+      if (!response.ok) {
+        const problem = await response.json().catch(() => ({}));
+        throw new Error(Object.values(problem.errors ?? {}).flat().join('\n') || problem.detail || problem.title || 'The photo could not be uploaded. Check the file and try again.');
+      }
+      return response.json();
+    },
+    // Photos need the staff token, so they are fetched and shown through an object URL.
+    keyRequestPhotoUrl: async (requestId: string, photoId: string): Promise<string> => {
+      const response = await authorizedFetch(`/api/v1/${base}/key-requests/${requestId}/photos/${photoId}`, { cache: 'no-store' });
+      if (!response.ok) throw new Error('The photo could not be loaded.');
+      return URL.createObjectURL(await response.blob());
+    },
   };
 }

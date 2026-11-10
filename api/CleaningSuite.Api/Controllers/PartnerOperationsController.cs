@@ -21,6 +21,23 @@ public sealed class PartnerOperationsController(PartnerService service, PartnerK
     [HttpGet("quotes")] public async Task<IActionResult> Quotes(CancellationToken ct) => Ok(await service.Quotes(Actor, ct));
     [HttpGet("key-requests")] public async Task<IActionResult> KeyRequests([FromQuery] Guid? companyId, CancellationToken ct) => Ok(await keyRequests.List(Actor, true, companyId, ct));
     [HttpPut("key-request-fee")] public async Task<IActionResult> KeyRequestFee(KeyRequestFeeInput body, CancellationToken ct) => Ok(await keyRequests.SetFee(Actor, body, ct));
+    [HttpPost("key-requests/{id:guid}/assignment")] public async Task<IActionResult> AssignKeyRequest(Guid id, KeyRequestAssignment body, CancellationToken ct) => Ok(await keyRequests.Assign(Actor, id, body, ct));
+    [HttpPost("key-requests/{id:guid}/complete")] public async Task<IActionResult> CompleteKeyRequest(Guid id, KeyRequestRevision body, CancellationToken ct) => Ok(await keyRequests.Complete(Actor, id, body, ct));
+    [HttpPost("key-requests/{id:guid}/photos")] public async Task<IActionResult> AddKeyRequestPhoto(Guid id, IFormFile? file, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0) throw new FluentValidation.ValidationException([new("File", "Choose a photo to upload.")]);
+        // Rejecting oversized files before reading keeps the buffer bounded at 10 MiB.
+        if (file.Length > 10 * 1024 * 1024) throw new CleaningSuite.Application.Common.UploadPayloadTooLargeException("Key request photos must be 10 MiB or smaller.");
+        await using var stream = file.OpenReadStream();
+        using var buffer = new MemoryStream();
+        await stream.CopyToAsync(buffer, ct);
+        return Ok(await keyRequests.AddPhoto(Actor, id, buffer.ToArray(), ct));
+    }
+    [HttpGet("key-requests/{id:guid}/photos/{photoId:guid}")] public async Task<IActionResult> KeyRequestPhoto(Guid id, Guid photoId, CancellationToken ct)
+    {
+        var photo = await keyRequests.Photo(Actor, id, photoId, ct);
+        return File(photo.Content, photo.ContentType);
+    }
     [HttpGet("branches")] public async Task<IActionResult> Branches([FromQuery] Guid? companyId, CancellationToken ct) => Ok(await service.Branches(Actor, true, companyId, ct));
     [HttpPost("branches")] public async Task<IActionResult> CreateBranch(CreateBranchCommand body, CancellationToken ct) => Ok(await mediator.Send(body, ct));
     [HttpPut("branches/{id:guid}")] public async Task<IActionResult> UpdateBranch(Guid id, UpdateBranchCommand body, CancellationToken ct) => Ok(await mediator.Send(body with { Id = id }, ct));
