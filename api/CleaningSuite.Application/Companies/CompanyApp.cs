@@ -532,7 +532,9 @@ public class CompanyHandlers
                     request.HasRoomCount ? request.RoomCount : branch.RoomCount,
                     request.HasBedCount ? request.BedCount : branch.BedCount,
                     request.PriceNet, request.VatRatePercent, request.EstimatedDurationMinutes, request.PriceMode, request.PriceEffectiveFrom);
-                ApplyDetails(branch, request.HasSizeM2 ? request.SizeM2 : branch.SizeM2, request.CleaningType ?? branch.CleaningType);
+                // Only validate size and cleaning type when this update changes them, so unrelated edits never fail on legacy values.
+                if (request.HasSizeM2 || request.CleaningType is not null)
+                    ApplyDetails(branch, request.HasSizeM2 ? request.SizeM2 : branch.SizeM2, request.CleaningType ?? branch.CleaningType);
                 await _repository.SaveAsync(branch, ct);
                 return MapBranch(branch);
             }
