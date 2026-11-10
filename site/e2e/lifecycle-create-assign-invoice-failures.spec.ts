@@ -81,7 +81,7 @@ async function fillInvoice(page: Page) {
   await page.getByRole('textbox', { name: 'Billing city', exact: true }).fill('Helsinki');
 }
 
-test('a refused shift save shows the reason in the dialog, keeps the values, and a retry creates the shift', async ({ page }) => {
+test('a refused shift save shows the reason in the dialog, keeps the company and branch, and a retry creates the shift', async ({ page }) => {
   const state = await setup(page, { createShift: 'A shift named Flow clean already exists for this branch. Rename it and save again.' });
   await page.goto('/admin/shifts/');
   const dialog = await fillShiftDialog(page);
