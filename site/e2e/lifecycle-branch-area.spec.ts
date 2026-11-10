@@ -32,3 +32,34 @@ test('admin adds a property with an area, and the area is saved on the property'
   expect(writes).toHaveLength(1);
   expect(writes[0]).toMatchObject({ name: 'Imatra apartment', areaSquareMeters: 45 });
 });
+
+test('admin changes a property area and the new area is saved on the property', async ({ page }) => {
+  await setupAdminMocks(page);
+  const writes: Record<string, unknown>[] = [];
+  const existing = { id: 'branch', companyId: 'company', name: 'Imatra apartment', street: null, postalCode: null, city: 'Imatra', country: null, contactPhone: null, contactEmail: null, isActive: true, areaSquareMeters: 45, roomCount: null, bedCount: null, priceNet: null, vatRatePercent: null, estimatedDurationMinutes: null, pricingReady: false, priceVersions: [] };
+  let branches: Record<string, unknown>[] = [existing];
+  await page.route(/\/api\/v1\/admin\//, route => {
+    const method = route.request().method(); const path = new URL(route.request().url()).pathname;
+    if (method === 'OPTIONS') return route.fulfill({ headers });
+    if (method === 'PUT' && path.endsWith('/branches/branch')) {
+      const body = route.request().postDataJSON() as Record<string, unknown>; writes.push(body);
+      branches = [{ ...existing, ...body }]; return route.fulfill({ headers, json: branches[0] });
+    }
+    return route.fulfill({ headers, json: path.endsWith('/companies/company') ? { company, branches }
+      : path.endsWith('/companies') ? { items: [company], total: 1 }
+      : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
+  });
+
+  await page.goto('/admin/companies/');
+  await page.locator('button').filter({ has: page.locator('.lucide-chevron-down') }).first().click();
+  // The company's own Edit button comes first; the branch's Edit button is the last one.
+  await page.getByRole('button', { name: 'Edit', exact: true }).last().click();
+  const modal = page.getByRole('dialog', { name: 'Edit branch' });
+  await expect(modal.getByLabel('Area m² (optional)')).toHaveValue('45');
+  await modal.getByLabel('Area m² (optional)').fill('60');
+  await modal.getByRole('button', { name: 'Save changes', exact: true }).click();
+
+  await expect(modal).toHaveCount(0);
+  expect(writes).toHaveLength(1);
+  expect(writes[0]).toMatchObject({ areaSquareMeters: 60 });
+});
