@@ -93,7 +93,7 @@ test('workspace Edit schedule opens the existing Edit shift dialog for that shif
   await expect(page.getByRole('dialog', { name: 'Manage — Workspace shift', exact: true })).toHaveCount(0);
   const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
   await expect(edit).toBeVisible();
-  // Existing shifts keep an editable name, so a stale generated name can be corrected.
+  // Shift names are generated from the property, so a shift opened for editing shows its name read-only.
   await expect(edit.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Workspace shift');
 });
 
@@ -219,4 +219,6 @@ test('editing a shift keeps its generated name read-only, and saving sends the n
   await edit.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(edit).toHaveCount(0);
   expect(saved).toHaveLength(1);
+  // The name is the generated one, never a blank or stale value.
+  expect(String(saved[0].name)).toMatch(/Cleaning/);
 });

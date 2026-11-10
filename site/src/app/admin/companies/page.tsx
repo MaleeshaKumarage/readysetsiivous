@@ -211,7 +211,7 @@ export default function CompaniesAdminPage() {
         postalCode: branchForm.postalCode.trim() || undefined, city: branchForm.city.trim() || undefined,
         country: branchForm.country.trim() || undefined, contactPhone: branchForm.contactPhone.trim() || undefined, contactEmail: branchForm.contactEmail.trim() || undefined,
         priceEffectiveFrom: branchForm.priceEffectiveFrom || undefined, priceMode: branchForm.priceMode,
-        roomCount: branchForm.roomCount === '' ? null : Number(branchForm.roomCount), bedCount: branchForm.bedCount === '' ? null : Number(branchForm.bedCount), sizeM2: branchForm.sizeM2 === '' ? null : Number(branchForm.sizeM2), cleaningType: branchForm.cleaningType || null, priceNet: branchForm.priceNet === '' ? null : Number(branchForm.priceNet), vatRatePercent: branchForm.priceNet === '' ? null : Number(branchForm.vatRatePercent), estimatedDurationMinutes: branchForm.estimatedDurationMinutes === '' ? null : Number(branchForm.estimatedDurationMinutes),
+        roomCount: branchForm.roomCount === '' ? null : Number(branchForm.roomCount), bedCount: branchForm.bedCount === '' ? null : Number(branchForm.bedCount), sizeM2: branchForm.sizeM2 === '' ? null : Number(branchForm.sizeM2), cleaningType: branchForm.cleaningType || null, priceNet: branchForm.priceNet === '' ? null : Number(branchForm.priceNet), vatRatePercent: branchForm.vatRatePercent === '' ? null : Number(branchForm.vatRatePercent), estimatedDurationMinutes: branchForm.estimatedDurationMinutes === '' ? null : Number(branchForm.estimatedDurationMinutes),
       };
       if (editingBranch) {
         const updated = await adminBranches.update(editingBranch.id, { ...fields, isActive: editingBranch.isActive });
