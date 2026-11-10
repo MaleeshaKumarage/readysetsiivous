@@ -77,9 +77,11 @@ test('admin requires a start date, supports an open end date, and edits the rang
   await shiftAction(page, 'Legacy cleaning', 'Edit');
   await expect(edit.getByRole('textbox', { name: 'Start date', exact: true })).toHaveValue('');
   await expect(edit.getByRole('textbox', { name: 'Start date', exact: true })).not.toHaveAttribute('required');
+  // A real edit before saving, so the save is not a no-op.
+  await edit.getByLabel('Notes', { exact: true }).fill('Legacy note');
   await edit.getByRole('button', { name: 'Save changes' }).click();
   await expect(edit).toHaveCount(0);
-  expect(writes[3].validFrom).toBeUndefined(); expect(writes[3].validUntil).toBeUndefined();
+  expect(writes[3].validFrom).toBeUndefined(); expect(writes[3].validUntil).toBeUndefined(); expect(writes[3].notes).toBe('Legacy note');
 });
 
 test('on-call shifts keep scheduling dated visits and remain available for new shifts', async ({ page }) => {
