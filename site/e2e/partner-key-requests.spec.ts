@@ -161,6 +161,61 @@ test('staff assign a cleaner, complete a key request and attach a completion pho
   await expect(page.getByRole('img', { name: /Key request photo/ })).toBeVisible();
 });
 
+test('manager assigns a cleaner, completes a key request and attaches a photo through manager routes', async ({ page }) => {
+  await page.addInitScript(() => { (window as unknown as { __MOCK_ROLES__: string[] }).__MOCK_ROLES__ = ['manager']; });
+  await setupAdminMocks(page);
+  await page.route(/\/api\/v1\/me$/, route => route.fulfill({ headers, json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: ['manager'] })], employee: { id: 'manager', firstName: 'Tenant', lastName: 'Manager', role: 'manager', isActive: true } } }));
+  await page.route(/\/api\/v1\/admin\//, route => route.fulfill({ status: 403, headers }));
+  const cleaner = { id: 'emp-1', firstName: 'Aino', lastName: 'Virtanen', isActive: true, role: 'employee' };
+  const retired = { id: 'emp-2', firstName: 'Old', lastName: 'Worker', isActive: false, role: 'employee' };
+  const item = { id: 'key-9', revision: 1, companyId, branchId: branch.id, branchName: branch.name, kind: 'Pickup', date: '2026-12-01', notes: null, feeNet: 15, vatRatePercent: 25.5, status: 'Requested', cancellationReason: null, completedUtc: null as string | null, assignedEmployeeId: null as string | null, assignedEmployeeName: null as string | null, photos: [] as { id: string; sizeBytes: number; uploadedUtc: string }[] };
+  const writes: { path: string; body: Record<string, unknown> | null; multipart: boolean; file?: boolean }[] = [];
+  await page.route(/\/api\/v1\/manager\/companies(?:\?.*)?$/, route => route.fulfill({ headers, json: { items: [{ id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }], total: 1 } }));
+  await page.route(/\/api\/v1\/manager\/employees$/, route => route.fulfill({ headers, json: [cleaner, retired] }));
+  await page.route(/\/api\/v1\/manager\/partner\//, route => {
+    const req = route.request(), path = new URL(req.url()).pathname.split('/partner')[1];
+    if (req.method() === 'OPTIONS') return route.fulfill({ headers });
+    if (path === '/key-requests' && req.method() === 'GET') return route.fulfill({ headers, json: { feeNet: 15, vatRatePercent: 25.5, items: [item] } });
+    if (path === `/key-requests/${item.id}/assignment`) {
+      writes.push({ path, body: req.postDataJSON(), multipart: false });
+      Object.assign(item, { revision: 2, assignedEmployeeId: cleaner.id, assignedEmployeeName: 'Aino Virtanen' });
+      return route.fulfill({ headers, json: item });
+    }
+    if (path === `/key-requests/${item.id}/complete`) {
+      writes.push({ path, body: req.postDataJSON(), multipart: false });
+      Object.assign(item, { revision: 3, status: 'Completed', completedUtc: '2026-12-01T10:00:00Z' });
+      return route.fulfill({ headers, json: item });
+    }
+    if (path === `/key-requests/${item.id}/photos` && req.method() === 'POST') {
+      writes.push({ path, body: null, multipart: (req.headers()['content-type'] ?? '').startsWith('multipart/form-data'), file: (req.postDataBuffer()?.toString('latin1') ?? '').includes('filename="keys.png"') });
+      item.photos.push({ id: photoId, sizeBytes: 70, uploadedUtc: '2026-12-01T10:05:00Z' });
+      return route.fulfill({ headers, json: item });
+    }
+    if (path === `/key-requests/${item.id}/photos/${photoId}`) return route.fulfill({ headers, contentType: 'image/png', body: Buffer.from(pngBase64, 'base64') });
+    return route.fulfill({ headers, json: path === '/branches' ? [branch] : [] });
+  });
+
+  await page.goto('/manager/partner-requests/?tenant=readysetsiivous');
+  await page.getByRole('tab', { name: 'Key requests', exact: true }).click();
+  // Retired staff are not offered for assignment.
+  const picker = page.getByRole('combobox', { name: 'Collected or handed over by', exact: true });
+  await expect(picker.locator('option', { hasText: 'Old Worker' })).toHaveCount(0);
+
+  await picker.selectOption(cleaner.id);
+  await page.getByRole('button', { name: 'Assign', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Employee assigned.');
+  expect(writes[0]).toMatchObject({ path: `/key-requests/${item.id}/assignment`, body: { revision: 1, employeeId: cleaner.id } });
+
+  await page.getByRole('button', { name: 'Mark completed', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Key request marked completed.');
+  expect(writes[1]).toMatchObject({ path: `/key-requests/${item.id}/complete`, body: { revision: 2 } });
+
+  await page.getByLabel(`Add photo for ${branch.name} 2026-12-01`, { exact: true }).setInputFiles({ name: 'keys.png', mimeType: 'image/png', buffer: Buffer.from(pngBase64, 'base64') });
+  await expect(page.getByRole('status')).toHaveText('Photo added.');
+  expect(writes[2]).toMatchObject({ path: `/key-requests/${item.id}/photos`, multipart: true, file: true });
+  await expect(page.getByRole('img', { name: /Key request photo/ })).toBeVisible();
+});
+
 for (const language of ['en', 'fi'] as const) {
   const copy = partnerCopy[language];
   test(`a partner sees the completion photos of a finished key request in ${language}`, async ({ page }) => {
