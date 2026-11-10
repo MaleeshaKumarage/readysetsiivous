@@ -90,9 +90,34 @@ test('a refused employee photo keeps its reason on screen after the list reloads
 
   await page.goto('/me/shifts/');
   await page.getByRole('tab', { name: 'Keys', exact: true }).click();
+  // Wait for the list reload that follows the refused upload, so the check below covers it.
+  const reloaded = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/v1/me/key-requests');
   await page.getByLabel('Add photo for Lake apartment 2026-12-05', { exact: true }).setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('not an image') });
+  await reloaded;
 
   // The reload after the refused upload succeeds, but the reason stays visible.
   await expect(page.getByText('Key request photos must be JPEG, PNG or WebP.', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Mark completed', exact: true })).toBeVisible();
 });
+
+test('an employee with ten photos on a request cannot add an eleventh', async ({ page }) => {
+  const photos = Array.from({ length: 10 }, (_, index) => ({ id: `00000000-0000-4000-8000-0000000000${(index + 10).toString(16)}`, sizeBytes: 70, uploadedUtc: '2026-12-05T09:00:00Z' }));
+  const item = { id: 'key-10', revision: 3, companyId: '11111111-1111-4111-8111-111111111111', branchId: '22222222-2222-4222-8222-222222222222', branchName: 'Lake apartment', kind: 'Pickup', date: '2026-12-05', notes: null, feeNet: 15, vatRatePercent: 25.5, status: 'Requested', cancellationReason: null, completedUtc: null, assignedEmployeeId: 'employee-a', assignedEmployeeName: 'Test Staff', photos };
+  await setupAdminMocks(page);
+  await page.addInitScript(() => { (window as any).__MOCK_ROLES__ = ['employee']; });
+  await page.route(/\/api\/v1\/me$/, route => route.fulfill({ headers, json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: ['employee'] })], employee: { id: 'employee-a', firstName: 'Test', lastName: 'Staff', role: 'employee', isActive: true } } }));
+  await page.route(/\/api\/v1\/me\/shifts(?:\/calendar)?(?:\?.*)?$/, route => route.fulfill({ headers, json: route.request().url().includes('/calendar') ? { occurrences: [], timeZoneId: 'Europe/Helsinki', fromLocalDate: '2026-11-05', toLocalDate: '2026-11-06' } : [] }));
+  await page.route(/\/api\/v1\/me\/partner-offers(?:\?.*)?$/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/me\/work-preferences$/, route => route.fulfill({ headers, json: { autoAcceptWork: false } }));
+  await page.route(/\/api\/v1\/me\/inventory\/(locations|items)$/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/me\/inventory\/usage(\?.*)?$/, route => route.fulfill({ headers, json: [] }));
+  await page.route(/\/api\/v1\/me\/key-requests\/[^/]+\/photos\/[^/]+$/, route => route.fulfill({ headers, contentType: 'image/png', body: Buffer.from(pngBase64, 'base64') }));
+  await page.route(/\/api\/v1\/me\/key-requests(?:\?.*)?$/, route => route.fulfill({ headers, json: [item] }));
+
+  await page.goto('/me/shifts/');
+  await page.getByRole('tab', { name: 'Keys', exact: true }).click();
+  await expect(page.getByText('Photos 10/10')).toBeVisible();
+  await expect(page.getByLabel('Add photo for Lake apartment 2026-12-05', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('img', { name: /Key request photo/ })).toHaveCount(10);
+});
+

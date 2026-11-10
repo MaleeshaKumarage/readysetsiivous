@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { adminEmployees } from '@/lib/adminApi';
 import { managerApi } from '@/lib/managerApi';
 import { KeyRequestPhotos } from '@/components/KeyRequestPhotos';
@@ -15,11 +15,14 @@ export function PartnerKeyRequestsStaff({ role }: { role: 'admin' | 'manager' })
   const [fee, setFee] = useState(''), [loadError, setLoadError] = useState(''), [error, setError] = useState(''), [notice, setNotice] = useState(''), [busy, setBusy] = useState(false);
   // Employee chosen in each request's dropdown, before Assign is pressed.
   const [choice, setChoice] = useState<Record<string, string>>({});
+  // The fee input is loaded once. Later reloads must not overwrite a value the admin is typing.
+  const feeLoaded = useRef(false);
 
   const refresh = useCallback(async () => {
     try {
       const next = await staffPartnerApi(role).keyRequests();
-      setList(next); setFee(String(next.feeNet ?? 0)); setLoadError('');
+      setList(next); setLoadError('');
+      if (!feeLoaded.current) { setFee(String(next.feeNet ?? 0)); feeLoaded.current = true; }
     } catch (e) { setLoadError(e instanceof Error ? e.message : 'Key requests could not be loaded.'); }
   }, [role]);
   useEffect(() => { void refresh(); }, [refresh]);
@@ -61,7 +64,7 @@ export function PartnerKeyRequestsStaff({ role }: { role: 'admin' | 'manager' })
     {!list?.items?.length ? <p>No key requests yet.</p> : <ul className="space-y-3">
       {list.items.map(item => <KeyRequestRow key={item.id} role={role} item={item} employees={employees} choice={choice[item.id] ?? item.assignedEmployeeId ?? ''} onChoice={value => setChoice(previous => ({ ...previous, [item.id]: value }))}
         busy={busy}
-        onAssign={() => { const employeeId = choice[item.id] ?? item.assignedEmployeeId; if (employeeId) void run(() => staffPartnerApi(role).assignKeyRequest(item, employeeId), 'Employee assigned.'); }}
+        onAssign={employeeId => { if (employeeId) void run(() => staffPartnerApi(role).assignKeyRequest(item, employeeId), 'Employee assigned.'); }}
         onComplete={() => void run(() => staffPartnerApi(role).completeKeyRequest(item), 'Key request marked completed.')}
         onPhoto={file => void run(() => staffPartnerApi(role).addKeyRequestPhoto(item, file), 'Photo added.')} />)}
     </ul>}
@@ -70,7 +73,7 @@ export function PartnerKeyRequestsStaff({ role }: { role: 'admin' | 'manager' })
 
 function KeyRequestRow({ role, item, employees, choice, onChoice, busy, onAssign, onComplete, onPhoto }: {
   role: 'admin' | 'manager'; item: KeyRequest; employees: StaffEmployee[]; choice: string; onChoice: (value: string) => void; busy: boolean;
-  onAssign: () => void; onComplete: () => void; onPhoto: (file: File) => void;
+  onAssign: (employeeId: string) => void; onComplete: () => void; onPhoto: (file: File) => void;
 }) {
   const open = item.status === 'Requested';
   const completed = item.status === 'Completed';
@@ -87,7 +90,7 @@ function KeyRequestRow({ role, item, employees, choice, onChoice, busy, onAssign
           {employees.map(person => <option key={person.id} value={person.id}>{person.name}</option>)}
         </select>
       </label>
-      <button className="border rounded px-3 py-2" type="button" disabled={busy || !choice || choice === item.assignedEmployeeId} onClick={onAssign}>Assign</button>
+      <button className="border rounded px-3 py-2" type="button" disabled={busy || !choice || choice === item.assignedEmployeeId} onClick={() => onAssign(choice)}>Assign</button>
       <button className="border rounded px-3 py-2" type="button" disabled={busy || !item.assignedEmployeeId} onClick={onComplete}>Mark completed</button>
     </div>}
     {item.assignedEmployeeId && item.status !== 'Cancelled' && <KeyRequestPhotos heading="Photos" alt="Key request photo" photos={photos} busy={busy} onUpload={onPhoto}
