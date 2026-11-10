@@ -17,8 +17,10 @@ public class Branch : BaseDocument
     public bool IsActive { get; set; }
     public int? RoomCount { get; set; }
     public int? BedCount { get; set; }
-    /// <summary>Floor area in square metres, used in the automatic shift name. Optional.</summary>
-    public int? AreaSquareMeters { get; set; }
+    /// <summary>Size in square metres, used in every shift name. Required before a shift can be scheduled.</summary>
+    public int? SizeM2 { get; set; }
+    /// <summary>"Deep" or "Normal". Required before a shift can be scheduled.</summary>
+    public string? CleaningType { get; set; }
     /// <summary>Dated price history. The only source of a branch price; shifts pick one version by its effective date.</summary>
     public List<BranchPriceVersion> PriceVersions { get; set; } = [];
     // Pre-history flat price, kept only so documents saved before PriceVersions still load. Read through Versions;
@@ -49,12 +51,17 @@ public class Branch : BaseDocument
     public bool HasPendingQuote => QuoteRequestedUtc.HasValue && !PricingReady;
     public bool PricingReady => CurrentPrice is { PriceNet: > 0, VatRatePercent: >= 0 and <= 100, DurationMinutes: > 0 and <= 1440 };
 
-    public void SetArea(int? squareMeters)
+    /// <summary>Size and cleaning type, needed before a shift can be scheduled for this property.</summary>
+    public void SetPropertyDetails(int? sizeM2, string? cleaningType)
     {
-        if (squareMeters is < 0 or > 100000)
-            throw new ArgumentException("Area must be between zero and 100000 square metres, or empty.");
-        AreaSquareMeters = squareMeters;
+        if (sizeM2 is < 1 or > 100000)
+            throw new ArgumentException("Size must be between 1 and 100000 m², or empty.");
+        if (cleaningType is not null && cleaningType != CleaningTypes.Deep && cleaningType != CleaningTypes.Normal)
+            throw new ArgumentException("Cleaning type must be Deep or Normal.");
+        SizeM2 = sizeM2; CleaningType = cleaningType;
     }
+
+    public bool HasNameDetails => SizeM2 is > 0 && CleaningType is CleaningTypes.Deep or CleaningTypes.Normal;
 
     public void SetPropertyCounts(int? rooms, int? beds)
     {
@@ -162,4 +169,10 @@ public class Branch : BaseDocument
         IsActive = false;
         UpdatedUtc = DateTime.UtcNow;
     }
+}
+
+public static class CleaningTypes
+{
+    public const string Deep = "Deep";
+    public const string Normal = "Normal";
 }

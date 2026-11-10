@@ -60,7 +60,7 @@ export default function CompaniesAdminPage() {
   const [companyBranchesMap, setCompanyBranchesMap] = useState<Record<string, Branch[]>>({});
   const [branchModal, setBranchModal] = useState(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
-  const [branchForm, setBranchForm] = useState({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '', contactEmail: '', roomCount: '' as number | string, bedCount: '' as number | string, areaSquareMeters: '' as number | string, priceNet: '' as number | string, vatRatePercent: 25.5 as number | string, estimatedDurationMinutes: '' as number | string, priceEffectiveFrom: '', priceMode: 'PerOccurrence' });
+  const [branchForm, setBranchForm] = useState({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '', contactEmail: '', roomCount: '' as number | string, bedCount: '' as number | string, sizeM2: '' as number | string, cleaningType: '', priceNet: '' as number | string, vatRatePercent: 25.5 as number | string, estimatedDurationMinutes: '' as number | string, priceEffectiveFrom: '', priceMode: 'PerOccurrence' });
   const [branchSaving, setBranchSaving] = useState(false);
   const [branchError, setBranchError] = useState('');
 
@@ -211,13 +211,13 @@ export default function CompaniesAdminPage() {
         postalCode: branchForm.postalCode.trim() || undefined, city: branchForm.city.trim() || undefined,
         country: branchForm.country.trim() || undefined, contactPhone: branchForm.contactPhone.trim() || undefined, contactEmail: branchForm.contactEmail.trim() || undefined,
         priceEffectiveFrom: branchForm.priceEffectiveFrom || undefined, priceMode: branchForm.priceMode,
-        roomCount: branchForm.roomCount === '' ? null : Number(branchForm.roomCount), bedCount: branchForm.bedCount === '' ? null : Number(branchForm.bedCount), areaSquareMeters: branchForm.areaSquareMeters === '' ? null : Number(branchForm.areaSquareMeters), priceNet: branchForm.priceNet === '' ? null : Number(branchForm.priceNet), vatRatePercent: branchForm.priceNet === '' ? null : Number(branchForm.vatRatePercent), estimatedDurationMinutes: branchForm.estimatedDurationMinutes === '' ? null : Number(branchForm.estimatedDurationMinutes),
+        roomCount: branchForm.roomCount === '' ? null : Number(branchForm.roomCount), bedCount: branchForm.bedCount === '' ? null : Number(branchForm.bedCount), sizeM2: branchForm.sizeM2 === '' ? null : Number(branchForm.sizeM2), cleaningType: branchForm.cleaningType || null, priceNet: branchForm.priceNet === '' ? null : Number(branchForm.priceNet), vatRatePercent: branchForm.priceNet === '' ? null : Number(branchForm.vatRatePercent), estimatedDurationMinutes: branchForm.estimatedDurationMinutes === '' ? null : Number(branchForm.estimatedDurationMinutes),
       };
       if (editingBranch) {
         const updated = await adminBranches.update(editingBranch.id, { ...fields, isActive: editingBranch.isActive });
         if (!updated) throw new Error('Could not update branch. Please retry.');
       } else await adminBranches.create(expanded, fields);
-      setBranchForm({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '', contactEmail: '', roomCount: '' as number | string, bedCount: '' as number | string, areaSquareMeters: '' as number | string, priceNet: '' as number | string, vatRatePercent: 25.5 as number | string, estimatedDurationMinutes: '' as number | string, priceEffectiveFrom: '', priceMode: 'PerOccurrence' });
+      setBranchForm({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '', contactEmail: '', roomCount: '' as number | string, bedCount: '' as number | string, sizeM2: '' as number | string, cleaningType: '', priceNet: '' as number | string, vatRatePercent: 25.5 as number | string, estimatedDurationMinutes: '' as number | string, priceEffectiveFrom: '', priceMode: 'PerOccurrence' });
       setEditingBranch(null);
       setBranchModal(false);
       if (!editingBranch) setBranchStatus('active');
@@ -230,7 +230,7 @@ export default function CompaniesAdminPage() {
 
   const openBranchEdit = (branch: Branch) => {
     setEditingBranch(branch);
-    setBranchForm({ name: branch.name, street: branch.street ?? '', postalCode: branch.postalCode ?? '', city: branch.city ?? '', country: branch.country ?? '', contactPhone: branch.contactPhone ?? '', contactEmail: branch.contactEmail ?? '', roomCount: branch.roomCount ?? '', bedCount: branch.bedCount ?? '', areaSquareMeters: branch.areaSquareMeters ?? '', priceNet: branch.priceNet ?? '', vatRatePercent: branch.vatRatePercent ?? 25.5, estimatedDurationMinutes: branch.estimatedDurationMinutes ?? '', priceEffectiveFrom: '', priceMode: [...(branch.priceVersions ?? [])].sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom)).filter(v => v.effectiveFrom <= new Date().toISOString().slice(0, 10)).pop()?.mode ?? 'PerOccurrence' });
+    setBranchForm({ name: branch.name, street: branch.street ?? '', postalCode: branch.postalCode ?? '', city: branch.city ?? '', country: branch.country ?? '', contactPhone: branch.contactPhone ?? '', contactEmail: branch.contactEmail ?? '', roomCount: branch.roomCount ?? '', bedCount: branch.bedCount ?? '', sizeM2: branch.sizeM2 ?? '', cleaningType: branch.cleaningType ?? '', priceNet: branch.priceNet ?? '', vatRatePercent: branch.vatRatePercent ?? 25.5, estimatedDurationMinutes: branch.estimatedDurationMinutes ?? '', priceEffectiveFrom: '', priceMode: [...(branch.priceVersions ?? [])].sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom)).filter(v => v.effectiveFrom <= new Date().toISOString().slice(0, 10)).pop()?.mode ?? 'PerOccurrence' });
     setBranchError(''); setBranchModal(true);
   };
 
@@ -406,7 +406,7 @@ export default function CompaniesAdminPage() {
                         <Table.Td colSpan={6} p="sm">
                           <Group justify="space-between" align="center" mb="xs" wrap="wrap" gap="xs">
                             <Text size="sm" fw={600}>Branches</Text>
-                            <Button size="xs" variant="light" leftSection={<Plus size={14} />} onClick={() => { setEditingBranch(null); setBranchForm({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '', contactEmail: '', roomCount: '' as number | string, bedCount: '' as number | string, areaSquareMeters: '' as number | string, priceNet: '' as number | string, vatRatePercent: 25.5 as number | string, estimatedDurationMinutes: '' as number | string, priceEffectiveFrom: '', priceMode: 'PerOccurrence' }); setBranchError(''); setBranchModal(true); }}>Add branch</Button>
+                            <Button size="xs" variant="light" leftSection={<Plus size={14} />} onClick={() => { setEditingBranch(null); setBranchForm({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '', contactEmail: '', roomCount: '' as number | string, bedCount: '' as number | string, sizeM2: '' as number | string, cleaningType: '', priceNet: '' as number | string, vatRatePercent: 25.5 as number | string, estimatedDurationMinutes: '' as number | string, priceEffectiveFrom: '', priceMode: 'PerOccurrence' }); setBranchError(''); setBranchModal(true); }}>Add branch</Button>
                           </Group>
                           <LifecycleTabs value={branchStatus} onChange={setBranchStatus} label="Branch activity"
                             activeCount={branchLoading === c.id || branchLoadError ? undefined : currentBranches.filter(b => b.isActive).length}
@@ -535,7 +535,8 @@ export default function CompaniesAdminPage() {
           <TextInput label="Contact email" type="email" value={branchForm.contactEmail} onChange={setB('contactEmail')} />
           <TextInput label="Phone" value={branchForm.contactPhone} onChange={setB('contactPhone')} />
           <Group grow><NumberInput label="Rooms (optional)" min={0} allowDecimal={false} value={branchForm.roomCount} onChange={value => setBranchForm(current => ({ ...current, roomCount: value }))} /><NumberInput label="Beds (optional)" min={0} allowDecimal={false} value={branchForm.bedCount} onChange={value => setBranchForm(current => ({ ...current, bedCount: value }))} /></Group>
-          <NumberInput label="Area m² (optional)" min={0} max={100000} allowDecimal={false} value={branchForm.areaSquareMeters} onChange={value => setBranchForm(current => ({ ...current, areaSquareMeters: value }))} />
+          <NumberInput label="Size in m² (required to schedule)" min={1} max={100000} allowDecimal={false} value={branchForm.sizeM2} onChange={value => setBranchForm(current => ({ ...current, sizeM2: value }))} />
+          <Select label="Cleaning type (required to schedule)" placeholder="Choose" clearable value={branchForm.cleaningType || null} onChange={value => setBranchForm(current => ({ ...current, cleaningType: value ?? '' }))} data={[{ value: 'Deep', label: 'Deep' }, { value: 'Normal', label: 'Normal' }]} />
           <Group grow><TextInput label="Price effective from (blank = today)" type="date" value={branchForm.priceEffectiveFrom} onChange={event => setBranchForm(current => ({ ...current, priceEffectiveFrom: event.target.value }))} /><Select label="Pricing basis" allowDeselect={false} value={branchForm.priceMode} onChange={value => setBranchForm(current => ({ ...current, priceMode: value ?? 'PerOccurrence' }))} data={[{ value: 'PerOccurrence', label: 'Per completed visit' }, { value: 'Monthly', label: 'Fixed monthly fee' }, { value: 'Hourly', label: 'Per scheduled hour' }]} /></Group>
           <NumberInput label="Fixed cleaning price, excl. VAT (€)" min={0} decimalScale={2} value={branchForm.priceNet} onChange={value => setBranchForm(current => ({ ...current, priceNet: value }))} description="Leave blank until a quote has been agreed. New requests use this price; existing requests keep their agreed price." />
           <Group grow><NumberInput label="VAT (%)" min={0} max={50} decimalScale={2} value={branchForm.vatRatePercent} onChange={value => setBranchForm(current => ({ ...current, vatRatePercent: value }))} /><NumberInput label="Estimated cleaning duration (minutes)" min={1} allowDecimal={false} value={branchForm.estimatedDurationMinutes} onChange={value => setBranchForm(current => ({ ...current, estimatedDurationMinutes: value }))} /></Group>

@@ -94,21 +94,22 @@ public sealed class PartnerUpdateCompatibilityTests
     public async Task Area_is_set_kept_when_omitted_and_cleared_by_explicit_null()
     {
         var branch = PricedBranch();
-        await Update(branch, JsonSerializer.Deserialize<UpdateBranchCommand>("{\"name\":\"Property\",\"areaSquareMeters\":45}", Json)!);
-        Assert.Equal(45, branch.AreaSquareMeters);
+        await Update(branch, JsonSerializer.Deserialize<UpdateBranchCommand>("{\"name\":\"Property\",\"sizeM2\":45}", Json)!);
+        Assert.Equal(45, branch.SizeM2);
         await Update(branch, JsonSerializer.Deserialize<UpdateBranchCommand>("{\"name\":\"Property\",\"roomCount\":4}", Json)!);
-        Assert.Equal(45, branch.AreaSquareMeters);
-        await Update(branch, JsonSerializer.Deserialize<UpdateBranchCommand>("{\"name\":\"Property\",\"areaSquareMeters\":null}", Json)!);
-        Assert.Null(branch.AreaSquareMeters);
+        Assert.Equal(45, branch.SizeM2);
+        await Update(branch, JsonSerializer.Deserialize<UpdateBranchCommand>("{\"name\":\"Property\",\"sizeM2\":null}", Json)!);
+        Assert.Null(branch.SizeM2);
     }
 
     [Fact]
     public void Area_rejects_negative_and_implausible_values()
     {
         var branch = PricedBranch();
-        Assert.Throws<ArgumentException>(() => branch.SetArea(-1));
-        Assert.Throws<ArgumentException>(() => branch.SetArea(100001));
-        branch.SetArea(0); Assert.Equal(0, branch.AreaSquareMeters);
+        Assert.Throws<ArgumentException>(() => branch.SetPropertyDetails(-1, "Deep"));
+        Assert.Throws<ArgumentException>(() => branch.SetPropertyDetails(100001, "Deep"));
+        Assert.Throws<ArgumentException>(() => branch.SetPropertyDetails(34, "Pool"));
+        branch.SetPropertyDetails(34, "Deep"); Assert.Equal(34, branch.SizeM2);
     }
 
     [Fact]

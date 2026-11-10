@@ -28,7 +28,7 @@ public class PartnerInvoiceConcurrencyDatabaseTests
         using var provider=services.BuildServiceProvider();var store=provider.GetRequiredService<IDocumentStore>();await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
         var tenantId="partner-invoice-"+Guid.NewGuid().ToString("N");var tenant=new Mock<ITenantContext>();tenant.SetupGet(t=>t.TenantId).Returns(tenantId);
         var company=Company.Create("1234567-8","Synthetic owner");company.IsPartnerEnabled=true;
-        var branch=Branch.Create(company.Id,"Apartment");branch.SetPricing(100,25.5m,120);
+        var branch=Branch.Create(company.Id,"Apartment");branch.SetPricing(100,25.5m,120);branch.SetPropertyDetails(34, "Deep");
         var partner=new Employee{Role=Employee.RolePartner,PartnerCompanyId=company.Id};var admin=new Employee{Role=Employee.RoleAdmin};var cleaner=new Employee{Role=Employee.RoleEmployee};
         using(var seed=store.LightweightSession(tenantId)){seed.Store(company);seed.Store(branch);seed.Store(partner,admin,cleaner);await seed.SaveChangesAsync();}
         var config=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"ConnectionStrings:DefaultConnection",connection}}).Build();
