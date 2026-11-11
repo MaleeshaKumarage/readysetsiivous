@@ -132,10 +132,11 @@ public static class BranchShiftMerge
             // The price the shift is billed at today, compared with what the main shift would charge on that date.
             var date = DateOnly.FromDateTime(shift.Schedule.OneTimeDate!.Value.Date);
             var profile = billingByShift[shift.Id].FirstOrDefault();
-            var versions = branchesById.TryGetValue(shift.BranchId, out var branch) ? branch.Versions : [];
+            var branchOf = branchesById.TryGetValue(shift.BranchId, out var branch) ? branch : null;
+            var versions = branchOf?.Versions ?? [];
             var inherited = versions.LastOrDefault(v => v.EffectiveFrom <= date) ?? versions.FirstOrDefault();
             (string Mode, decimal Rate, decimal Vat)? own = profile?.BranchPriceEffectiveFrom is { } from
-                ? versions.Where(v => v.EffectiveFrom == from).Select(v => ((string, decimal, decimal)?)(v.Mode, v.PriceNet, v.VatRatePercent)).FirstOrDefault()
+                ? branchOf?.VersionFrom(from) is { } found ? ((string, decimal, decimal)?)(found.Mode, found.PriceNet, found.VatRatePercent) : null
                 : profile?.Plans.Where(p => p.EffectiveFrom <= date).OrderByDescending(p => p.EffectiveFrom)
                     .Select(p => ((string, decimal, decimal)?)(p.Mode, p.RateNet, p.VatRatePercent)).FirstOrDefault();
             var special = profile?.Overrides.FirstOrDefault(o => o.OccurrenceStartUtc == visit.StartUtc);

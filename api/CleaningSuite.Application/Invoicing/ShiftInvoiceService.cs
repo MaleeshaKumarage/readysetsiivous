@@ -145,7 +145,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             if (partnerRequest is null && pricing.BranchPriceEffectiveFrom is { } branchFrom)
             {
                 var branchForPrice = await branches.GetAsync(shift.BranchId, ct);
-                var version = branchForPrice?.Versions.FirstOrDefault(v => v.EffectiveFrom == branchFrom);
+                var version = branchForPrice?.VersionFrom(branchFrom);
                 if (version is null) ShiftBillingSettingsService.Invalid($"{shift.Name}: the branch price from {branchFrom:yyyy-MM-dd} is missing. Restore the branch price history before invoicing.");
                 pricing = new() { Id = shift.Id, ShiftId = shift.Id, CreatedUtc = pricing.CreatedUtc, UpdatedUtc = pricing.UpdatedUtc,
                     BranchPriceEffectiveFrom = branchFrom, Overrides = pricing.Overrides,
