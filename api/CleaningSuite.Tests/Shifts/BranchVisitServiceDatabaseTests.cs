@@ -219,6 +219,34 @@ public class BranchVisitServiceDatabaseTests
     }
 
     [QualityCycle.QualityCycleDatabaseFact]
+    public async Task A_staff_visit_can_be_deleted_until_work_starts_on_it()
+    {
+        using var f = await Fixture.Create();
+        BranchVisitDto idle, worked;
+        using (var session = f.Session()) idle = await f.Visits(session).Add(OnDay(f), default);
+        using (var session = f.Session()) worked = await f.Visits(session).Add(OnDay(f, "12:00", "14:00"), default);
+        using (var writer = f.Store.LightweightSession(f.Tenant))
+        {
+            writer.Store(new QualityCycleForm { Id = Guid.NewGuid(), Token = Guid.NewGuid().ToString("N"), ShiftId = worked.ShiftId, CompanyId = f.Company.Id,
+                BranchId = f.Branch.Id, EmployeeId = f.Cleaner.Id, ShiftOccurrenceUtc = worked.StartUtc, ShiftOccurrenceEndUtc = worked.EndUtc, StartedAtUtc = worked.StartUtc });
+            await writer.SaveChangesAsync();
+        }
+        using (var session = f.Session())
+        {
+            var delete = new ShiftHandlers.DeleteShiftOccurrenceExceptionCommandHandler(new ShiftRepository(session), f.Profiles.Object, Fixture.Context(f.Tenant),
+                new QualityCycleRepository(session, f.Store));
+            var error = await Assert.ThrowsAsync<ShiftConflictException>(() => delete.Handle(new(worked.ShiftId, worked.Id), default));
+            Assert.Contains("Work has started", error.Message);
+            await delete.Handle(new(idle.ShiftId, idle.Id), default);
+        }
+        using var reader = f.Reader();
+        Assert.Equal(worked.Id, Assert.Single(await reader.Query<ShiftOccurrenceException>().ToListAsync()).Id);
+        // The deleted visit's number is not given out again.
+        using var next = f.Session();
+        Assert.Equal(3, (await f.Visits(next).Add(OnDay(f, "16:00", "17:00"), default)).Number);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
     public async Task Invalid_visits_are_refused_with_a_reason()
     {
         using var f = await Fixture.Create();

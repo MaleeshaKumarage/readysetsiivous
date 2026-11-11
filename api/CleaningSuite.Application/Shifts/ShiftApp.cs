@@ -581,7 +581,8 @@ public class ShiftHandlers
         }
     }
 
-    public sealed class DeleteShiftOccurrenceExceptionCommandHandler(IShiftRepository shifts, ITenantProfileRepository? profiles = null, ITenantContext? tenant = null)
+    public sealed class DeleteShiftOccurrenceExceptionCommandHandler(IShiftRepository shifts, ITenantProfileRepository? profiles = null, ITenantContext? tenant = null,
+        IQualityCycleRepository? forms = null)
         : IRequestHandler<DeleteShiftOccurrenceExceptionCommand>
     {
         public async Task Handle(DeleteShiftOccurrenceExceptionCommand request, CancellationToken ct)
@@ -591,6 +592,10 @@ public class ShiftHandlers
             var item = await shifts.GetOccurrenceExceptionAsync(request.Id, ct);
             if (item is null || item.ShiftId != request.ShiftId) throw new NotFoundException("ShiftOccurrenceException", request.Id);
             CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(item);
+            // A main shift's visit is the only record of that work: once started it stays, with its work records.
+            if (shift.IsBranchMain && forms is not null && (await forms.ListFormsAsync(shift.Id, null, null, ct) ?? [])
+                .Any(f => f.ShiftOccurrenceUtc == item.StartUtc && f.ShiftDeletedUtc is null && (f.IsSubmitted || f.StartedAtUtc.HasValue)))
+                throw new ShiftConflictException("Work has started on this visit, so it cannot be deleted.");
             if (item.OriginalStartUtc.HasValue)
             {
                 var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);

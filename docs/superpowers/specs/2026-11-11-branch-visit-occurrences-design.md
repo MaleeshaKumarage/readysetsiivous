@@ -118,3 +118,31 @@ One PR per chunk, in this order, each green before the next:
 
 ### Decision (2026-11-11)
 - Confirmed by the product owner: a user who holds both employee and manager roles may see manager responses, including partner prices. No change to price visibility rules for this case.
+
+## As built (2026-11-11)
+
+### How it works
+- **Main shift:** `Shift.IsBranchMain`, with an id derived from the branch (`Shift.BranchMainId`). Created on the first booking or added visit. Callers hold the tenant work reservation, so a branch cannot get two.
+- **Visit:** an `Extra` `ShiftOccurrenceException` on the main shift carrying `Sequence`, `Source`, `Notes`, `RequiredPhotoLabels`, `PartnerRequestId`, and its offer (`OfferedEmployeeId`, `OfferId`, `OfferRevision`). The cleaner is the visit's `EmployeeId`. Main shifts take no whole-shift assignment.
+- **Numbering:** `Shift.OccurrenceCounter` only goes up. A booking keeps its number when it is moved (`PartnerCleaningRequest.OccurrenceSequence`).
+- **Same start time:** work records and invoice lines find a visit by shift and start. Two visits of one main shift therefore never share a start: the later one is stored one second later. The planned time shown to the partner is unchanged.
+- **Partner bookings:** `PartnerService` writes, moves and removes only the booking's own visit. Bookings that already own a shift keep it until the startup merge.
+- **Staff visits:** `BranchVisitService` and `api/v1/{admin|manager}/branch-visits`. One date or a date range is one visit. A property needs a price before it can take a visit.
+- **Offers:** the chosen cleaner, or the shift's default cleaner (`Shift.DefaultEmployeeId`), gets an offer. Automatic acceptance assigns at once. Cleaners see and answer these offers through the existing `me/partner-offers` endpoints, so the cleaner app needed no new screen.
+- **Invoicing:** a main shift is priced per visit. A partner booking uses the price and VAT frozen on its request; a staff visit uses the property price in force on its date. Each invoice line records the visit starts and numbers it bills (`InvoiceLine.OccurrenceStartsUtc`, `VisitNumbers`), and a main shift is blocked per visit, not per period.
+- **Reports and PDFs:** the invoice PDF prints "Visit numbers: #n". The quality report and its photo appendix print "Visit: #n · source".
+- **Price visibility:** `BranchVisitDto`, `BranchMainDto`, `ShiftOccurrenceDto` and `MyShiftOccurrenceDto` are covered by the reflection test that forbids money fields. Cleaner pages are checked in Playwright.
+
+### Startup merge
+- `BranchShiftMergeRunner`, run by `StartupRepairService` on every API start.
+- **Default mode is Report:** it logs the plan and changes nothing. Set `DataCorrections:BranchShiftMerge:Mode=Apply` to perform the merge on the next start. `Off` skips it.
+- Merges accepted partner bookings that own a shift. Removes leftover shifts of cancelled or re-opened bookings that have no work and no invoice. Keeps and logs anything unusual: work recorded at another time, two bookings at exactly the same start, hand-made roster changes, a property without size and cleaning type.
+- One shift is one commit under the tenant work reservation, with a `BranchShiftMergeRecord` backup under the old shift's id.
+- A visit invoiced before the merge stays billed through `ShiftOccurrenceException.LegacyShiftId`. Issued invoices are not rewritten. Moved work records keep `OriginalShiftId`.
+
+### Differences from the plan
+- **Admin-created one-time shifts are not merged.** The merge covers partner booking shifts only. Existing one-time shifts stay as they are and remain editable.
+- **One-time is retired in the Add shift form only.** The API still accepts a one-time shift, so existing clients and data keep working.
+- **No alias map.** Work records are re-pointed to the main shift and remember their original shift, which keeps every reader unchanged.
+- **The manager page has no Add visit screen yet.** The manager API routes exist and are covered by the permission test.
+- **Per-occurrence auto-accept was not built.** Automatic acceptance stays a setting of each cleaner.
