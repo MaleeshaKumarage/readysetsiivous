@@ -88,3 +88,30 @@ One PR per chunk, in this order, each green before the next:
 - **Pending offer, admin changes employee:** the first employee's pending offer is withdrawn, and the new employee receives a fresh offer. Only the accepting employee holds the visit.
 - **Accepted, not started, admin changes employee:** allowed. The former employee is released and notified. Once work has started, reassignment is blocked, as today.
 - Offers and reassignments run through the existing shift reservation and version checks, so concurrent accept and reassign cannot both succeed.
+
+## Deep check: invoicing, migration, PDFs and price visibility (2026-11-11)
+
+### Invoicing
+- Billing profiles, price plans and per-visit overrides are keyed by `ShiftId` (`ShiftBillingProfile`). Overrides match on `OccurrenceStartUtc`. Two visits with the same start on one main would collide. Merge must check for this.
+- The duplicate-invoice guard (`ShiftInvoiceService`, `Billed(i, id)`) compares shift IDs only. If a visit billed under an old shift is re-billed under the main, it is billed twice. Fix: a shift alias map (old ID -> main ID) that the guard and the billing lookups resolve through.
+- Legacy shifts keep their own `Plans`. Merging shifts with different rates needs a per-occurrence price, or the merge must refuse. The dry run has to list these.
+- Completion evidence (`QualityCycleForm` keyed by `ShiftId` + `ShiftOccurrenceUtc`) must not be rewritten. Completed forms are evidence. Reads go through the alias map instead.
+- `PartnerCleaningRequest.LinkedShiftId` and the stable occurrence IDs must resolve through the same alias map.
+
+### Migration (startup, not a manual script)
+- Use the existing `StartupRepairService` pattern: a runner with a mode setting (`DataCorrections:BranchShiftMerge:Mode` = Off / Report / Apply). Report logs the planned merge on each start. Apply performs it.
+- Each repair is isolated and idempotent. A failure is logged and retried on the next start.
+- Apply writes a backup document for every affected record in the same unit of work as the change, and records each merge in a mapping document. A second start finds the mapping and does nothing.
+- Every replica runs startup repairs. Apply must take the tenant reservation (`IShiftWorkReservation`) so two replicas cannot merge at once.
+- Mode is switched to Apply only after the Report output has been reviewed.
+
+### Shift PDFs
+- Quality-cycle report PDF: shows shift name and evidence by date. No price fields. Needs the occurrence number and source tag added to each evidence card. The sequence number must be stored on the form or joined from the occurrence.
+- Invoice PDF: lines show shift name, occurrences and scheduled dates. Add the occurrence numbers (#n) to each line so the customer can match visits. Prices are customer-facing here by design.
+- Shared report links and their references use the old shift ID. Existing shares keep their snapshots; new ones use the main.
+
+### Price visibility to employees (must hold)
+- Audited employee-reachable responses: `ShiftDto` (Schedule has no price fields), `ShiftOccurrenceDto`, `MyShiftOccurrenceDto` (quality-cycle form, notes, photo labels, access instructions, contact), `OwnWorkResponse`, `PartnerCleanerOfferDto` (no price), and the employee accept route `/api/v1/me/partner-offers/{id}/accept`, which returns only Id, Version, Status, LinkedShiftId and planned times.
+- Not visible to employees: `PartnerRequestDto` (PriceNet, VatRatePercent), `ShiftBillingProfile`, invoices, and branch pricing. These are served only by operations routes (`/api/v1/admin/partner/*`, `/api/v1/manager/partner/*`).
+- Rule for this change: occurrence and main-shift DTOs must never gain billing fields. Add a test that calls each employee route and asserts no `price`, `rate`, `vat` or `net` keys appear in the JSON.
+- Caveat: a user who holds both an employee and a manager role receives manager responses. Confirm this is acceptable before build.
