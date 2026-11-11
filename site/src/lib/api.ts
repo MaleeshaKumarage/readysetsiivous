@@ -38,6 +38,8 @@ export interface BookingRequest {
   city: string;
   notes?: string | null;
   expectedPriceGross?: number;
+  /** Private 256-bit recovery credential; reuse with the identical payload after an uncertain result. */
+  idempotencyKey?: string;
 }
 
 export interface BookingResult {

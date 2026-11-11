@@ -25,6 +25,7 @@ using Xunit;
 namespace CleaningSuite.Tests.Companies;
 
 // The company removal dialog, run against a real PostgreSQL database: what each ticked category removes and keeps.
+[Collection("Database integration")]
 public class CompanyRemovalDatabaseTests
 {
     private sealed record Seeded(string Tenant, Company Company, Branch Branch, Shift Shift, Guid InvoiceId, Guid PaidInvoiceId,
@@ -33,7 +34,7 @@ public class CompanyRemovalDatabaseTests
     private static async Task<(IDocumentStore Store, Mock<ITenantContext> Context, IServiceProvider Provider)> Start()
     {
         var services = new ServiceCollection(); services.AddLogging();
-        services.AddCleaningMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!,
+        services.AddTestMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!,
             databaseSchemaName: "company_removal_" + Guid.NewGuid().ToString("N"));
         var provider = services.BuildServiceProvider();
         var store = provider.GetRequiredService<IDocumentStore>();

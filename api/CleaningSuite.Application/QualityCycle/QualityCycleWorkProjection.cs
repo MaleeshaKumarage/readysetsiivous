@@ -10,11 +10,12 @@ public static class QualityCycleWorkProjection
 {
     public static QualityCycleWorkTotals FromForms(IEnumerable<QualityCycleFormDto> source)
     {
-        var records = source.GroupBy(x => x.Id).Select(g => g.OrderByDescending(x => x.IsSubmitted).ThenByDescending(x => x.EndedAtUtc).First())
+        var records = source.GroupBy(x => x.Id)
+            .Select(g => CleaningSuite.Application.Shifts.RecordedWork.Representative(g, x => x.IsSubmitted, x => x.StartedAtUtc, x => x.EndedAtUtc)!)
             .Where(x => x.IsSubmitted || x.StartedAtUtc.HasValue).Select(x => {
-                var valid = x.IsSubmitted && x.StartedAtUtc.HasValue && x.EndedAtUtc.HasValue && x.EndedAtUtc.Value >= x.StartedAtUtc.Value;
+                var duration = CleaningSuite.Application.Shifts.RecordedWork.Duration(x.IsSubmitted, x.StartedAtUtc, x.EndedAtUtc);
                 return new QualityCycleWorkTiming(x.ShiftOccurrenceUtc, x.ShiftOccurrenceEndUtc,
-                    x.StartedAtUtc, x.EndedAtUtc, valid ? (decimal)(x.EndedAtUtc!.Value - x.StartedAtUtc!.Value).TotalHours : null);
+                    x.StartedAtUtc, x.EndedAtUtc, duration is { } d ? (decimal)d.TotalHours : null);
             }).OrderBy(x => x.ScheduledStartUtc).ThenBy(x => x.ActualStartUtc).ToList();
         var valid = records.Where(x => x.StaffHours.HasValue).ToList();
         return new(records, valid.Count > 0 ? valid.Sum(x => x.StaffHours!.Value) : null,

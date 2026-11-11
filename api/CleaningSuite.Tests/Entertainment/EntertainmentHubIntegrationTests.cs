@@ -115,7 +115,12 @@ public class EntertainmentHubIntegrationTests
         await owner.Connection.InvokeAsync("StartGame",game.GroupId,game.CreatorPlayerId);var round=await owner.Next();
         await owner.Connection.InvokeAsync("NextRound",game.GroupId,game.CreatorPlayerId,round.RoundId);Assert.Contains("AI must",await owner.Errors.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(8)));Assert.Equal(1,host.GenerationCalls);
         host.FailEvaluation=true;await owner.Connection.InvokeAsync("CheckAnswer",game.GroupId,game.CreatorPlayerId,round.RoundId,"Keep my Finnish answer");Assert.Contains("Keep your answer",await owner.Errors.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(8)));Assert.Contains("HTTP 429",await owner.ErrorDetails.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(8)));Assert.Equal("Keep my Finnish answer",host.Rounds[round.RoundId].SubmittedAnswer);Assert.Null(host.Rounds[round.RoundId].Evaluation);
-        host.FailEvaluation=false;await owner.Connection.InvokeAsync("CheckAnswer",game.GroupId,game.CreatorPlayerId,round.RoundId,"Keep my Finnish answer");Assert.Equal(10,host.Groups[game.GroupId].Scores[game.CreatorPlayerId]);
+        host.FailEvaluation=false;
+        await owner.Connection.InvokeAsync("CheckAnswer",game.GroupId,game.CreatorPlayerId,round.RoundId,"Changed answer");
+        Assert.Contains("Retry the same answer",await owner.Errors.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(8)));
+        Assert.Equal(1,host.EvaluationCalls);
+        Assert.Equal("Keep my Finnish answer",host.Rounds[round.RoundId].SubmittedAnswer);
+        await owner.Connection.InvokeAsync("CheckAnswer",game.GroupId,game.CreatorPlayerId,round.RoundId,"Keep my Finnish answer");Assert.Equal(10,host.Groups[game.GroupId].Scores[game.CreatorPlayerId]);
         host.FailGeneration=true;await owner.Connection.InvokeAsync("NextRound",game.GroupId,game.CreatorPlayerId,round.RoundId);Assert.Contains("generation unavailable",await owner.Errors.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(8)));Assert.Equal(round.RoundId,host.Groups[game.GroupId].CurrentRoundId);Assert.Single(host.Rounds);
         host.FailGeneration=false;await owner.Connection.InvokeAsync("NextRound",game.GroupId,game.CreatorPlayerId,round.RoundId);Assert.Equal(2,host.Rounds.Count);Assert.Equal(10,host.Groups[game.GroupId].Scores[game.CreatorPlayerId]);
     }

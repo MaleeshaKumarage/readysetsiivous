@@ -62,7 +62,9 @@ public record UpdateQualityCycleTemplateCommand(
     string? Description = null,
     bool IsActive = true,
     Guid? CompanyId = null,
-    Guid? BranchId = null) : IRequest<QualityCycleTemplateDto>;
+    Guid? BranchId = null,
+    // Omitted scope keeps the template's current company and branch. Set this to clear the scope to all customers.
+    bool ReplaceScope = false) : IRequest<QualityCycleTemplateDto>;
 
 public record DeleteQualityCycleTemplateCommand(Guid Id) : IRequest;
 public record SetQualityCycleTemplateActiveCommand(Guid Id, bool Active) : IRequest;
@@ -155,8 +157,13 @@ public class QualityCycleHandlers
             var template = await _repository.GetTemplateAsync(request.Id, ct)
                 ?? throw new NotFoundException("QualityCycleTemplate", request.Id);
 
-            await ValidateTemplateScopeAsync(_companies, _branches, request.CompanyId, request.BranchId, ct);
-            template.Update(request.Title, request.Items, request.Description, request.IsActive, request.CompanyId, request.BranchId);
+            // A sent company or branch replaces the scope; ReplaceScope clears it; otherwise the current scope is kept.
+            var sendsScope = request.CompanyId.HasValue || request.BranchId.HasValue;
+            var companyId = sendsScope || request.ReplaceScope ? request.CompanyId : template.CompanyId;
+            var branchId = sendsScope || request.ReplaceScope ? request.BranchId : template.BranchId;
+            if (sendsScope || request.ReplaceScope)
+                await ValidateTemplateScopeAsync(_companies, _branches, companyId, branchId, ct);
+            template.Update(request.Title, request.Items, request.Description, request.IsActive, companyId, branchId);
             await _repository.SaveTemplateAsync(template, ct);
             return MapTemplate(template);
         }

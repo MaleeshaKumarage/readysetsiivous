@@ -6,13 +6,14 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CleaningSuite.Tests.Entertainment;
 
+[Collection("Database integration")]
 public class EntertainmentPersistenceTests
 {
     private static ServiceProvider Services()
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddCleaningMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!, databaseSchemaName: "game_" + Guid.NewGuid().ToString("N"));
+        services.AddTestMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!, databaseSchemaName: "game_" + Guid.NewGuid().ToString("N"));
         return services.BuildServiceProvider();
     }
 

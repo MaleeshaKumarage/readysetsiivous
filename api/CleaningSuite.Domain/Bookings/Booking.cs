@@ -37,6 +37,7 @@ public class Booking : BaseDocument
     public string? CustomerReference { get; set; }
 
     public string? ManagementKeyHash { get; set; }
+    public string? RequestFingerprint { get; set; }
 
     public string? Notes { get; set; }
     public List<StatusEvent> History { get; set; } = [];

@@ -29,6 +29,8 @@ public static class CompletionReview
         if (!submitted)
             return new(MissingCompletion, actualStartUtc.HasValue ? "Started, not ended" : "No completion recorded");
         if (hasReasonedCorrection || actualStartUtc is null || actualEndUtc is null) return null;
+        // An end before the start is not a duration (RecordedWork.Duration rejects it), so it needs the same correction.
+        if (actualEndUtc < actualStartUtc) return new(MissingCompletion, "Recorded end is before start");
 
         var scheduled = (scheduledEndUtc - scheduledStartUtc).TotalMinutes;
         var actual = (actualEndUtc.Value - actualStartUtc.Value).TotalMinutes;

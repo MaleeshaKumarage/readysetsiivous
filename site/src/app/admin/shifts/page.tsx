@@ -18,6 +18,7 @@ import { CompanyPicker } from '@/components/admin/CompanyPicker';
 import { LifecycleTabs, type LifecycleStatus } from '@/components/LifecycleTabs';
 import { ListPager, PAGE_SIZE } from '@/components/ListPager';
 import { ShiftWorkspace, scheduleLabel } from '@/components/admin/ShiftWorkspace';
+import { autoShiftName } from '@/lib/shiftName';
 
 // The price version in force today (or the earliest when all start later): the default billing price for a new shift.
 const defaultPriceVersion = (versions?: { effectiveFrom: string }[] | null) => {
@@ -32,11 +33,10 @@ const SCHEDULE_TYPES = [
   { value: '1', label: 'Varied times by weekday' },
   { value: '2', label: 'Specific days' },
   { value: '3', label: 'Bi-weekly' },
+  { value: '4', label: 'On-call / flexible' },
   { value: '5', label: 'Monthly' },
   { value: '6', label: 'One-time' },
 ];
-// Legacy on-call shifts keep their type on edit; new shifts cannot choose it.
-const LEGACY_ON_CALL = { value: '4', label: 'On-call / flexible (legacy)' };
 
 const OCCURRENCE_STATUSES = [
   { value: '1', label: 'Move / change time' },
@@ -142,7 +142,7 @@ export default function ShiftsAdminPage() {
   const [name, setName] = useState('');
   const [validFrom, setValidFrom] = useState('');
   const [validUntil, setValidUntil] = useState('');
-  const [scheduleType, setScheduleType] = useState('0');
+  const [scheduleType, setScheduleType] = useState('');
   const [start, setStart] = useState('08:00');
   const [end, setEnd] = useState('17:00');
   const [weekDays, setWeekDays] = useState<string[]>([]);
@@ -179,6 +179,8 @@ export default function ShiftsAdminPage() {
   const occurrenceGeneration = useRef(0);
   const [occurrenceError, setOccurrenceError] = useState('');
   const [occurrenceEditError, setOccurrenceEditError] = useState('');
+  const occurrenceRangeShift = useRef<string | null>(null);
+  const [highlightUtc, setHighlightUtc] = useState<string | null>(null);
   const [occurrenceFrom, setOccurrenceFrom] = useState(new Date().toISOString().slice(0, 10));
   const [occurrenceTo, setOccurrenceTo] = useState(new Date(Date.now() + 31 * 86400000).toISOString().slice(0, 10));
   const [editingOccurrence, setEditingOccurrence] = useState<ShiftOccurrence | null>(null);
@@ -286,7 +288,7 @@ export default function ShiftsAdminPage() {
   };
 
   const closeModal = () => {
-    setName(''); setNotes(''); setWeekDays([]); setCompanyId(null); setBranchId(null); setPriceFrom(null); setQualityCycleTemplateId(null); setScheduleType('0'); setStart('08:00'); setEnd('17:00'); setWeekParity('1'); setMonthlyDay(1); setOneTimeDate(''); setOneTimeStart('08:00'); setOneTimeEnd('17:00'); setDailyTimes({}); setEditingShift(null); setError(''); setModalOpen(false);
+    setName(''); setNotes(''); setWeekDays([]); setCompanyId(null); setBranchId(null); setPriceFrom(null); setQualityCycleTemplateId(null); setScheduleType(''); setStart('08:00'); setEnd('17:00'); setWeekParity('1'); setMonthlyDay(1); setOneTimeDate(''); setOneTimeStart('08:00'); setOneTimeEnd('17:00'); setDailyTimes({}); setEditingShift(null); setError(''); setModalOpen(false);
   };
 
   // A customer workspace link carries ?company= so the create form opens with that customer selected.
@@ -316,6 +318,7 @@ export default function ShiftsAdminPage() {
 
   const submit = async () => {
     if (submitting.current) return;
+    if (!scheduleType) { setError('Choose a schedule type.'); return; }
     const oneTime = scheduleType === '6';
     if (oneTime) {
       if (!oneTimeDate) { setError('One-time visit date is required.'); return; }
@@ -325,7 +328,8 @@ export default function ShiftsAdminPage() {
       if ((!editingShift || editingShift.validFrom) && !validFrom) { setError('Shift start date is required.'); return; }
       if (validFrom && validUntil && validUntil < validFrom) { setError('End date must be on or after the start date.'); return; }
     }
-    if (!companyId || !branchId || !name.trim()) { setError('Company, branch and name are required.'); return; }
+    if (!companyId || !branchId) { setError('Company and branch are required.'); return; }
+    if (editingShift && !name.trim()) { setError('Enter a shift name.'); return; }
     if (scheduleType === '2' && weekDays.length === 0) { setError('Select at least one day.'); return; }
     if (scheduleType === '1' && (!weekDays.length || weekDays.some(day => !dailyTimes[day]?.start || !dailyTimes[day]?.end || dailyTimes[day].end <= dailyTimes[day].start))) { setError('Select at least one day and ensure each end time is after its start time.'); return; }
     if (scheduleType === '3' && weekDays.length === 0) { setError('Select a day.'); return; }
@@ -333,7 +337,11 @@ export default function ShiftsAdminPage() {
     const branchVersions = branches.find(b => b.id === branchId)?.priceVersions;
     const chosenPriceFrom = priceFrom && branchVersions?.some(v => v.effectiveFrom === priceFrom) ? priceFrom : defaultPriceVersion(branchVersions) ?? undefined;
     // A one-time visit is valid only on its date, so the validity dates mirror that date.
-    const fields = { companyId, branchId, name: name.trim(), schedule: buildSchedule(), notes: notes.trim() || undefined, isActive: editingShift?.isActive ?? true, validFrom: oneTime ? oneTimeDate : validFrom || undefined, validUntil: oneTime ? oneTimeDate : validUntil || undefined, qualityCycleTemplateId: qualityCycleTemplateId || undefined,
+    // Create names the shift from its property and schedule. Editing saves the name in the field, which starts from the stored name.
+    // The server builds every shift name from the property, so the name sent here is only a placeholder.
+    const shiftName = autoShiftName(branches.find(b => b.id === branchId));
+    if (!shiftName) { setError('Could not name this shift. Choose a property and schedule, then save again.'); return; }
+    const fields = { companyId, branchId, name: shiftName, schedule: buildSchedule(), notes: notes.trim() || undefined, isActive: editingShift?.isActive ?? true, validFrom: oneTime ? oneTimeDate : validFrom || undefined, validUntil: oneTime ? oneTimeDate : validUntil || undefined, qualityCycleTemplateId: qualityCycleTemplateId || undefined,
       // Creating a shift picks the branch price version it bills at; the default is the price in force today.
       priceEffectiveFrom: editingShift ? undefined : chosenPriceFrom };
     const result = await (editingShift ? adminShifts.update(editingShift.id, fields) : adminShifts.create(fields)).finally(() => { submitting.current = false; });
@@ -458,10 +466,44 @@ export default function ShiftsAdminPage() {
     finally { if (version === occurrenceGeneration.current) setOccurrenceLoading(false); }
   };
 
-  const openOccurrences = async (shift: Shift, notice = '') => {
+  // Widens a date range just enough to include the tenant-local day of a visit, so that visit is always listed.
+  const rangeIncluding = (from: string, to: string, utc: string | null): [string, string] => {
+    if (!utc) return [from, to];
+    const day = localInputValue(utc, timeZoneId).slice(0, 10);
+    return [day < from ? day : from, day > to ? day : to];
+  };
+
+  // `highlightUtc` marks one visit (the overlapping visit from a refusal) and makes sure the range lists it.
+  const openOccurrences = async (shift: Shift, notice = '', highlightUtc: string | null = null) => {
     setShiftNotice(notice);
+    setHighlightUtc(highlightUtc);
     setOccurrenceShift(shift); setOccurrences([]); setOccurrenceError('');
-    await loadOccurrences(shift);
+    // A new shift starts from tenant-local today onward, the day the calendar opens on (the browser's UTC date can be a day behind near midnight).
+    // Reopening the same shift keeps the range the admin chose.
+    if (occurrenceRangeShift.current !== shift.id) {
+      occurrenceRangeShift.current = shift.id;
+      const today = localInputValue(new Date().toISOString(), timeZoneId).slice(0, 10);
+      const [from, to] = rangeIncluding(today, addCalendarDays(today, 31), highlightUtc);
+      setOccurrenceFrom(from); setOccurrenceTo(to);
+      await loadOccurrences(shift, from, to);
+      return;
+    }
+    const [from, to] = rangeIncluding(occurrenceFrom, occurrenceTo, highlightUtc);
+    if (from !== occurrenceFrom || to !== occurrenceTo) { setOccurrenceFrom(from); setOccurrenceTo(to); }
+    await loadOccurrences(shift, from, to);
+  };
+
+  // Opens the clashing shift's visit list from an overlap refusal, with the overlapping visit marked. The assignment
+  // dialog stays open if that shift cannot be loaded, so the admin keeps the cleaner and reason they had chosen.
+  const openClashingShift = async (shiftId: string, shiftName: string, clashStartUtc: string) => {
+    // adminGet resolves to null on a failed request instead of throwing, so a null shift is the failure case.
+    const clashing = await adminShifts.get(shiftId, true);
+    if (!clashing) {
+      showError(`${shiftName} could not be loaded. Retry, or find it in the shift list.`, 'Could not open shift');
+      return;
+    }
+    setAssigningVisit(null);
+    await openOccurrences(clashing, `Showing ${shiftName}. The overlapping visit is marked below.`, clashStartUtc);
   };
 
   const openOccurrenceEditor = (occurrence?: ShiftOccurrence, status = '1') => {
@@ -541,7 +583,7 @@ export default function ShiftsAdminPage() {
                     <Table.Td fw={500}>{s.name}</Table.Td>
                     <Table.Td>{scheduleLabel(s)}</Table.Td>
                     <Table.Td>{assignmentCounts ? (assignmentCounts[s.id] ?? 0) : assignments[s.id] ? assignments[s.id].filter(a => a.isActive).length : '—'}</Table.Td>
-                    <Table.Td><Text size="sm">{shiftView(s) === 'inactive' ? 'Inactive' : shiftView(s) === 'completed' ? 'Completed' : 'Active'}</Text></Table.Td>
+                    <Table.Td><Text size="sm">{shiftView(s) === 'inactive' ? 'Inactive' : shiftView(s) === 'completed' ? 'Completed' : s.schedule.type === 6 && s.schedule.oneTimeDate && s.schedule.oneTimeDate.slice(0, 10) < new Date().toLocaleDateString('en-CA', { timeZone: timeZoneId }) ? 'Past visit · check completion' : 'Active'}</Text></Table.Td>
                     <Table.Td>
                       <Group gap={6} wrap="nowrap">
                         <Button size="xs" variant="light" onClick={() => setWorkspaceId(s.id)}>Manage</Button>
@@ -646,7 +688,8 @@ export default function ShiftsAdminPage() {
             <Table.ScrollContainer minWidth={820}><Table striped withTableBorder>
               <Table.Thead><Table.Tr><Table.Th>Start</Table.Th><Table.Th>End</Table.Th><Table.Th>Status</Table.Th><Table.Th>Assignees</Table.Th><Table.Th>Reason</Table.Th><Table.Th></Table.Th></Table.Tr></Table.Thead>
               <Table.Tbody>{occurrences.map((item) => <Table.Tr key={item.exceptionId ?? item.startUtc}>
-                <Table.Td>{new Date(item.startUtc).toLocaleString(undefined, { timeZone: timeZoneId })}</Table.Td>
+                <Table.Td>{new Date(item.startUtc).toLocaleString(undefined, { timeZone: timeZoneId })}
+                  {highlightUtc && Date.parse(item.startUtc) === Date.parse(highlightUtc) && <Text component="span" size="xs" c="orange" fw={600} ml={6}>Overlapping visit</Text>}</Table.Td>
                 <Table.Td>{new Date(item.endUtc).toLocaleString(undefined, { timeZone: timeZoneId })}</Table.Td>
                 <Table.Td>{item.status ? OCCURRENCE_STATUSES.find(x => x.value === String(item.status))?.label : 'Scheduled'}</Table.Td>
                 <Table.Td><Text size="sm">{(item.assigneeIds ?? []).map(employeeName).join(', ') || 'Unassigned'}</Text>
@@ -667,7 +710,7 @@ export default function ShiftsAdminPage() {
 
       {assigningVisit && occurrenceShift && <VisitAssigneesDialog key={`${assigningVisit.exceptionId ?? assigningVisit.startUtc}`}
         shiftId={occurrenceShift.id} visit={assigningVisit} employees={employees} timeZone={timeZoneId}
-        onClose={() => setAssigningVisit(null)} onSaved={async () => { await loadOccurrences(); }} />}
+        onClose={() => setAssigningVisit(null)} onSaved={async () => { await loadOccurrences(); }} onOpenConflict={openClashingShift} />}
       <Modal opened={Boolean(editingOccurrence)} onClose={() => { if (!occurrenceSaving) setEditingOccurrence(null); }} closeButtonProps={{ disabled: occurrenceSaving }} closeOnEscape={!occurrenceSaving} closeOnClickOutside={!occurrenceSaving} title="Change occurrence">
         <Stack>
           <Select label="Action" value={occurrenceStatus} onChange={value => setOccurrenceStatus(value ?? '1')} data={OCCURRENCE_STATUSES}
@@ -705,14 +748,16 @@ export default function ShiftsAdminPage() {
           <Text size="sm" c="dimmed">Schedule times use the tenant time zone: {timeZoneId}.</Text>
           <CompanyPicker allowInactive={false} allowedInactiveCompanyId={editingShift?.companyId} value={companyId} onChange={(v) => { setBranches([]); setCompanyId(v); setBranchId(null); setQualityCycleTemplateId(null); }} />
           <Select label="Branch" data={branches.filter(b => b.isActive !== false || b.id === editingShift?.branchId).map((b) => ({ value: b.id, label: `${b.name}${b.isActive === false ? ' (inactive)' : ''}` }))} value={branchId} onChange={v => { setBranchId(v); setPriceFrom(null); setQualityCycleTemplateId(null); }} searchable disabled={!companyId} />
+          {editingShift && <Group align="flex-end" gap="xs" wrap="nowrap">
+            <TextInput label="Name" readOnly style={{ flex: 1 }} value={name} description="Generated from the property: cleaning type, address, size, rooms and beds." />
+          </Group>}
           {!editingShift && (branches.find(b => b.id === branchId)?.priceVersions?.length ?? 0) > 1 && <Select label="Price version" description="The property price this shift is billed at. Defaults to the price in force today." allowDeselect={false} value={priceFrom && (branches.find(b => b.id === branchId)?.priceVersions ?? []).some(v => v.effectiveFrom === priceFrom) ? priceFrom : defaultPriceVersion(branches.find(b => b.id === branchId)?.priceVersions)} onChange={setPriceFrom}
             data={(branches.find(b => b.id === branchId)?.priceVersions ?? []).map(v => ({ value: v.effectiveFrom, label: `From ${v.effectiveFrom} · €${v.priceNet.toFixed(2)} excl. VAT` }))} />}
-          <TextInput label="Name" required value={name} onChange={(e) => setName(e.target.value)} />
           {scheduleType !== '6' && <Group grow>
             <TextInput label="Start date" type="date" required={!editingShift || Boolean(editingShift.validFrom)} value={validFrom} onChange={e => setValidFrom(e.target.value)} />
             <TextInput label="End date (optional)" type="date" min={validFrom || undefined} value={validUntil} onChange={e => setValidUntil(e.target.value)} />
           </Group>}
-          <Select label="Schedule" allowDeselect={false} data={scheduleType === '4' ? [...SCHEDULE_TYPES, LEGACY_ON_CALL] : SCHEDULE_TYPES} value={scheduleType} onChange={(v) => { if (v) setScheduleType(v); }} />
+          <Select label="Schedule" required withAsterisk={false} placeholder="Choose a schedule type" allowDeselect={false} data={SCHEDULE_TYPES} value={scheduleType || null} onChange={(v) => { if (v) setScheduleType(v); }} />
           {scheduleType === '4' && <Text size="sm">On-call is a reusable shift without scheduled dates. After creating it, enter the date, time and cleaner for a one-time visit. Only dated visits appear on calendars.</Text>}
 
           {scheduleType === '2' && (

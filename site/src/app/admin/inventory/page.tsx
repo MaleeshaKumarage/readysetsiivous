@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Title, Tabs, Table, Button, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge, Switch } from '@mantine/core';
+import { Title, Tabs, Table, Button, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge, Switch, Checkbox, Alert } from '@mantine/core';
+import { inventoryAcknowledgments, type InventoryAcknowledgment } from '@/lib/inventoryAcknowledgmentApi';
+import { AdminInventoryAcknowledgmentRequest } from '@/components/AdminInventoryAcknowledgmentRequest';
 import { Download } from 'lucide-react';
 import { showError, showSuccess } from '@/lib/toast';
 import { adminEmployees, type Employee } from '@/lib/adminApi';
@@ -39,6 +41,11 @@ function LogTab() {
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [photoView, setPhotoView] = useState<InventoryUsage | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [requesting, setRequesting] = useState(false);
+  const [acknowledgments, setAcknowledgments] = useState<Record<string, InventoryAcknowledgment>>({});
+  const [ackError, setAckError] = useState('');
+  const [responseView, setResponseView] = useState<InventoryAcknowledgment | null>(null);
 
   useEffect(() => {
     // Include inactive employees so their past entries can still be filtered.
@@ -57,6 +64,18 @@ function LogTab() {
     try {
       const page = await adminInventory.usage({ ...toFilterParams(filters), skip, take: PAGE_SIZE });
       if (request !== latestRequest.current) return;
+      // Load more appends rows, so keep the selection; only a fresh load clears it.
+      if (skip === 0) setSelected([]);
+      try {
+        const statuses = page.length ? await inventoryAcknowledgments.lookup(page.map(row => row.id)) : [];
+        if (request !== latestRequest.current) return;
+        const mapped = Object.fromEntries(statuses.map(row => [row.id, row]));
+        setAcknowledgments(previous => skip === 0 ? mapped : { ...previous, ...mapped });
+        setAckError('');
+      } catch {
+        if (request !== latestRequest.current) return;
+        setAckError('Acknowledgment statuses could not be loaded. Reload the log before requesting acknowledgment.');
+      }
       setRows(prev => (skip === 0 || !prev ? page : [...prev, ...page]));
       setHasMore(page.length === PAGE_SIZE);
     } catch (err) {
@@ -94,6 +113,11 @@ function LogTab() {
 
   return (
     <Stack>
+      <Text size="sm" c="dimmed">Select up to 50 entries with available photos to request partner acknowledgment. Responses do not change the inventory log.</Text>
+      {ackError && <Alert color="red">{ackError}<Button variant="subtle" onClick={() => load(applied, 0)}>Reload log</Button></Alert>}
+      <Group><Button style={{ minHeight: 44 }} disabled={!selected.length || loading || !!ackError} onClick={() => setRequesting(true)}>Request acknowledgment ({selected.length})</Button>
+        {selected.length > 0 && <Button variant="subtle" onClick={() => setSelected([])}>Clear selection</Button>}
+      </Group>
       <Group align="flex-end" wrap="wrap">
         <Select
           label="Employee"
@@ -119,6 +143,7 @@ function LogTab() {
           <Table striped withTableBorder>
             <Table.Thead>
               <Table.Tr>
+                <Table.Th>Select</Table.Th>
                 <Table.Th>Taken</Table.Th>
                 <Table.Th>Employee</Table.Th>
                 <Table.Th>Location</Table.Th>
@@ -126,11 +151,15 @@ function LogTab() {
                 <Table.Th>Quantity</Table.Th>
                 <Table.Th>Note</Table.Th>
                 <Table.Th>Photos</Table.Th>
+                <Table.Th>Acknowledgment</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
               {rows.map(row => (
                 <Table.Tr key={row.id}>
+                  <Table.Td><Checkbox styles={{ root: { minHeight: 44, display: 'flex', alignItems: 'center' } }} aria-label={`Select ${row.itemName} by ${row.employeeName}`} checked={selected.includes(row.id)}
+                    disabled={loading || !!ackError || !!acknowledgments[row.id] || row.photosPurged || row.photoIds.length === 0 || (!selected.includes(row.id) && selected.length >= 50)}
+                    onChange={event => { const checked = event.currentTarget.checked; setSelected(previous => checked ? [...previous, row.id] : previous.filter(id => id !== row.id)); }} /></Table.Td>
                   <Table.Td>{takenLabel(row.takenUtc)}</Table.Td>
                   <Table.Td>{row.employeeName}</Table.Td>
                   <Table.Td>{row.locationName}</Table.Td>
@@ -142,6 +171,9 @@ function LogTab() {
                       <Button size="xs" variant="subtle" onClick={() => setPhotoView(row)}>View {row.photoIds.length}</Button>
                     )}
                   </Table.Td>
+                  <Table.Td>{ackError ? <Text size="sm" c="dimmed">Status unavailable</Text> : acknowledgments[row.id] ? <Button variant="subtle" size="xs" onClick={() => setResponseView(acknowledgments[row.id])}>
+                    {acknowledgments[row.id].status === 'Pending' ? 'Awaiting acknowledgment' : acknowledgments[row.id].status === 'Acknowledged' ? 'Acknowledged' : 'Issue reported'}
+                  </Button> : <Text size="sm" c="dimmed">Not requested</Text>}</Table.Td>
                 </Table.Tr>
               ))}
             </Table.Tbody>
@@ -156,6 +188,20 @@ function LogTab() {
 
       <Modal opened={photoView !== null} onClose={() => setPhotoView(null)} title={photoView ? `${photoView.itemName}, ${photoView.employeeName}` : ''} size="lg">
         {photoView && <PhotoGallery entry={photoView} />}
+      </Modal>
+      {requesting && rows && <AdminInventoryAcknowledgmentRequest rows={rows.filter(row => selected.includes(row.id))}
+        onClose={() => setRequesting(false)} onSent={sent => {
+          setAcknowledgments(previous => ({ ...previous, ...Object.fromEntries(sent.map(row => [row.id, row])) }));
+          setSelected([]); setRequesting(false); showSuccess('Acknowledgment request sent to the partner portal.');
+        }} />}
+      <Modal opened={responseView !== null} onClose={() => setResponseView(null)} title="Partner acknowledgment">
+        {responseView && <Stack><Text fw={600}>{responseView.itemName} · {responseView.companyName}</Text>
+          <Text>{responseView.status === 'Pending' ? 'Awaiting acknowledgment' : responseView.status === 'Acknowledged' ? 'Acknowledged' : 'Issue reported'}</Text>
+          <Text>Requested {takenLabel(responseView.createdUtc)}</Text>
+          {responseView.message && <Text style={{ whiteSpace: 'pre-wrap' }}>Message: {responseView.message}</Text>}
+          {responseView.respondedUtc && <Text>{responseView.respondedByName} · {takenLabel(responseView.respondedUtc)}</Text>}
+          {responseView.responseNote && <Text style={{ whiteSpace: 'pre-wrap' }}>Response: {responseView.responseNote}</Text>}
+        </Stack>}
       </Modal>
     </Stack>
   );

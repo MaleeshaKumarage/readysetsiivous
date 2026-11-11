@@ -13,6 +13,7 @@ namespace CleaningSuite.Tests.Shifts;
 
 // Recreates the reported production path: a shift created for one month through the real create command,
 // stored in Marten, then read for the months after its end. Nothing is mocked except the tenant id.
+[Collection("Database integration")]
 public class ShiftValidityWindowDatabaseTests
 {
     [QualityCycle.QualityCycleDatabaseFact]
@@ -20,7 +21,7 @@ public class ShiftValidityWindowDatabaseTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddCleaningMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!,
+        services.AddTestMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!,
             databaseSchemaName: "shift_window_" + Guid.NewGuid().ToString("N"));
         using var provider = services.BuildServiceProvider();
         var store = provider.GetRequiredService<IDocumentStore>();
@@ -31,7 +32,7 @@ public class ShiftValidityWindowDatabaseTests
 
         var company = Company.Create("1234567-8", "Owner company");
         company.IsPartnerEnabled = false;
-        var branch = Branch.Create(company.Id, "Main branch");
+        var branch = Branch.Create(company.Id, "Main branch"); branch.SetPropertyDetails(34, "Deep");
         using (var writer = store.LightweightSession(tenant)) { writer.Store(company); writer.Store(branch); await writer.SaveChangesAsync(); }
 
         using var session = new TenantSessionFactory(store, context.Object);

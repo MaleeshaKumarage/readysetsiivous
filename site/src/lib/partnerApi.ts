@@ -18,6 +18,12 @@ export interface PartnerCompletionTask { text: string; done: boolean }
 export interface PartnerCompletionPhoto { url: string; note: string }
 export interface PartnerCompletionReport { templateTitle: string; startedAtUtc: string | null; endedAtUtc: string | null; tasks: PartnerCompletionTask[]; cleanerNotes: string | null; photos: PartnerCompletionPhoto[] }
 export interface PartnerCompletion { requestId: string; branchName: string; fromDate: string; toDate: string; plannedStartUtc: string | null; plannedEndUtc: string | null; actualStartUtc: string | null; actualEndUtc: string | null; reports: PartnerCompletionReport[]; messages: PartnerChange[] }
+// Key pickup or handover at one property. The fee is the amount frozen when the request was submitted, excl. VAT.
+export interface KeyRequestPhoto { id: string; sizeBytes: number; uploadedUtc: string }
+// Assignee, assignee name and photos are staff-only: partners never receive them.
+export interface KeyRequest { id: string; revision: number; companyId: string; branchId: string; branchName: string; kind: string; date: string; notes: string | null; feeNet: number; vatRatePercent: number; status: string; cancellationReason: string | null; completedUtc?: string | null; assignedEmployeeId?: string | null; assignedEmployeeName?: string | null; photos?: KeyRequestPhoto[] | null }
+export interface KeyRequestList { feeNet: number; vatRatePercent: number; items: KeyRequest[] }
+export interface KeyRequestInput { clientRequestId: string; branchId: string; kind: 'Pickup' | 'Handover'; date: string; notes: string | null }
 export interface RequestInput { clientRequestId?: string; version?: number; branchId?: string; fromDate: string; toDate: string; exactStartLocalTime: string | null; notes: string }
 export async function partnerSend<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
   const response = await authorizedFetch(`/api/v1/${path}`, { method, cache: 'no-store', signal, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
@@ -28,6 +34,23 @@ export async function partnerSend<T>(path: string, method = 'GET', body?: unknow
     throw new Error(errors || problem.detail || problem.title || `Request failed (${response.status}). Refresh to check whether your change was saved before retrying.`);
   }
   return response.status === 204 ? undefined as T : response.json();
+}
+// Photos need the signed-in token, so they are fetched and shown through an object URL.
+async function photoObjectUrl(path: string): Promise<string> {
+  const response = await authorizedFetch(`/api/v1/${path}`, { cache: 'no-store' });
+  if (!response.ok) throw new Error('The photo could not be loaded.');
+  return URL.createObjectURL(await response.blob());
+}
+// Multipart upload, so the JSON helper is not used. Errors use the same problem-details wording.
+async function uploadKeyRequestPhoto(path: string, file: File): Promise<KeyRequest> {
+  const body = new FormData();
+  body.append('file', file);
+  const response = await authorizedFetch(`/api/v1/${path}`, { method: 'POST', cache: 'no-store', body });
+  if (!response.ok) {
+    const problem = await response.json().catch(() => ({}));
+    throw new Error(Object.values(problem.errors ?? {}).flat().join('\n') || problem.detail || problem.title || 'The photo could not be uploaded. Check the file and try again.');
+  }
+  return response.json();
 }
 export const partnerApi = {
   me: () => partnerSend<PartnerIdentity>('partner/me'),
@@ -47,6 +70,10 @@ export const partnerApi = {
   saveSettings: (body: { photoLabels: string[]; generalInstructions: string; account?: PartnerAccount }) => partnerSend<PartnerSettings>('partner/settings', 'PUT', body),
   requestChange: (id: string, body: PartnerRequestChangeInput) => partnerSend<PartnerChange>(`partner/requests/${id}/change-requests`, 'POST', body),
   shifts: () => partnerSend<PartnerShift[]>('partner/shifts'),
+  keyRequests: () => partnerSend<KeyRequestList>('partner/key-requests'),
+  createKeyRequest: (body: KeyRequestInput) => partnerSend<KeyRequest>('partner/key-requests', 'POST', body),
+  cancelKeyRequest: (request: KeyRequest, reason: string) => partnerSend<KeyRequest>(`partner/key-requests/${request.id}/cancel`, 'POST', { version: request.revision, reason }),
+  keyRequestPhotoUrl: (requestId: string, photoId: string) => photoObjectUrl(`partner/key-requests/${requestId}/photos/${photoId}`),
 };
 export const offerApi = {
   list: () => partnerSend<CleanerOffer[]>('me/partner-offers'),
@@ -68,5 +95,21 @@ export function staffPartnerApi(role: 'admin' | 'manager') {
     resolve: (id: string, resolution: string) => partnerSend<PartnerChange>(`${base}/change-requests/${id}/resolve`, 'POST', { resolution }),
     // Applies a structured request to the request at the version staff reviewed, then resolves the change.
     apply: (id: string, version: number, resolution: string) => partnerSend<PartnerChange>(`${base}/change-requests/${id}/apply`, 'POST', { version, resolution }),
+    keyRequests: (signal?: AbortSignal) => partnerSend<KeyRequestList>(`${base}/key-requests`, 'GET', undefined, signal),
+    // One fee for every new key request. Existing requests keep the fee they were submitted with.
+    setKeyRequestFee: (feeNet: number) => partnerSend<KeyRequestList>(`${base}/key-request-fee`, 'PUT', { feeNet }),
+    assignKeyRequest: (request: KeyRequest, employeeId: string) => partnerSend<KeyRequest>(`${base}/key-requests/${request.id}/assignment`, 'POST', { revision: request.revision, employeeId }),
+    completeKeyRequest: (request: KeyRequest) => partnerSend<KeyRequest>(`${base}/key-requests/${request.id}/complete`, 'POST', { revision: request.revision }),
+    // Multipart upload, so the JSON helper is not used. Errors use the same problem-details wording.
+    addKeyRequestPhoto: (request: KeyRequest, file: File) => uploadKeyRequestPhoto(`${base}/key-requests/${request.id}/photos`, file),
+    keyRequestPhotoUrl: (requestId: string, photoId: string) => photoObjectUrl(`${base}/key-requests/${requestId}/photos/${photoId}`),
   };
 }
+
+// Key requests assigned to the signed-in employee. Only the assignee can complete them or add photos.
+export const myKeyRequestApi = {
+  assigned: () => partnerSend<KeyRequest[]>('me/key-requests'),
+  complete: (request: KeyRequest) => partnerSend<KeyRequest>(`me/key-requests/${request.id}/complete`, 'POST', { revision: request.revision }),
+  addPhoto: (request: KeyRequest, file: File) => uploadKeyRequestPhoto(`me/key-requests/${request.id}/photos`, file),
+  photoUrl: (requestId: string, photoId: string) => photoObjectUrl(`me/key-requests/${requestId}/photos/${photoId}`),
+};

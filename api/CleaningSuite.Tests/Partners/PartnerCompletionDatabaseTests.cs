@@ -19,6 +19,7 @@ using System.Text.Json;
 namespace CleaningSuite.Tests.Partners;
 
 // Exercises PartnerService.Completion against real documents: visit matching, completion gating and company scope.
+[Collection("Database integration")]
 public class PartnerCompletionDatabaseTests
 {
     private static readonly DateTime Start = new(2026, 12, 1, 8, 0, 0, DateTimeKind.Utc);
@@ -62,7 +63,7 @@ public class PartnerCompletionDatabaseTests
         var partnerView = await service.Get(seeded.Owner.Id, seeded.Request.Id, default);
         var staffView = await service.Requests(seeded.Staff.Id, true, null, default);
 
-        Assert.Equal("T.", partnerView.AcceptedCleanerName);
+        Assert.Null(partnerView.AcceptedCleanerName);
         Assert.Equal("Test Cleaner", staffView.Single(item => item.Id == seeded.Request.Id).AcceptedCleanerName);
     }
 
@@ -240,7 +241,7 @@ public class PartnerCompletionDatabaseTests
     private static ServiceProvider StoreProvider(string connection, out IDocumentStore store)
     {
         var services = new ServiceCollection(); services.AddLogging();
-        services.AddCleaningMarten(connection, databaseSchemaName: "partner_completion_" + Guid.NewGuid().ToString("N"));
+        services.AddTestMarten(connection, databaseSchemaName: "partner_completion_" + Guid.NewGuid().ToString("N"));
         var provider = services.BuildServiceProvider();
         store = provider.GetRequiredService<IDocumentStore>();
         store.Storage.ApplyAllConfiguredChangesToDatabaseAsync().GetAwaiter().GetResult();
@@ -260,7 +261,7 @@ public class PartnerCompletionDatabaseTests
     {
         var company = Company.Create("1234567-8", "Synthetic owner"); company.IsPartnerEnabled = true;
         var otherCompany = Company.Create("7654321-0", "Other synthetic owner"); otherCompany.IsPartnerEnabled = true;
-        var branch = Branch.Create(company.Id, "Apartment");
+        var branch = Branch.Create(company.Id, "Apartment"); branch.SetPropertyDetails(34, "Deep");
         var owner = new Employee { Role = Employee.RolePartner, PartnerCompanyId = company.Id };
         var otherOwner = new Employee { Role = Employee.RolePartner, PartnerCompanyId = otherCompany.Id };
         var staff = new Employee { Role = Employee.RoleAdmin, FirstName = "Ada", LastName = "Admin", IsActive = true };

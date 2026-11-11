@@ -1,6 +1,9 @@
+import { selectDailyScheduleIfEmpty } from './admin-helpers';
 import { test, expect } from '@playwright/test';
 import { shiftAction } from './shift-actions';
 import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
+import { autoShiftName } from '../src/lib/shiftName';
+const DATED_NAME = autoShiftName(undefined);
 
 test('admin waits for valid scheduling settings before defaulting a new shift date', async ({ page }) => {
   await setupAdminMocks(page); let zone = 'Invalid/Zone'; let release!: () => void;
@@ -40,20 +43,19 @@ test('admin requires a start date, supports an open end date, and edits the rang
   const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
   await expect(dialog.getByRole('textbox', { name: 'Start date', exact: true })).toHaveValue('2026-10-18');
   await dialog.getByRole('textbox', { name: 'Start date', exact: true }).fill('');
-  await dialog.getByRole('button', { name: 'Create shift' }).click();
+  await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
   await expect(dialog.getByText('Shift start date is required.')).toBeVisible(); expect(writes).toHaveLength(0);
   await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'AAA', exact: true }).click();
   await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'AAA1', exact: true }).click();
-  await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Dated cleaning');
   await dialog.getByRole('textbox', { name: 'Start date', exact: true }).fill('2026-11-01');
   await dialog.getByLabel('End date (optional)', { exact: true }).fill('2026-10-31');
-  await dialog.getByRole('button', { name: 'Create shift' }).click();
+  await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
   await expect(dialog.getByText('End date must be on or after the start date.')).toBeVisible(); expect(writes).toHaveLength(0);
   await dialog.getByLabel('End date (optional)', { exact: true }).fill('');
-  await dialog.getByRole('button', { name: 'Create shift' }).click();
-  await expect(page.getByRole('cell', { name: 'Dated cleaning', exact: true })).toBeVisible();
+  await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
+  await expect(page.getByRole('cell', { name: DATED_NAME, exact: true })).toBeVisible();
   expect(writes[0].validFrom).toBe('2026-11-01'); expect(writes[0].validUntil).toBeUndefined();
-  await shiftAction(page, 'Dated cleaning', 'Edit');
+  await shiftAction(page, DATED_NAME, 'Edit');
   const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
   await expect(edit.getByRole('textbox', { name: 'Start date', exact: true })).toHaveValue('2026-11-01');
   await edit.getByRole('textbox', { name: 'Start date', exact: true }).fill('');
@@ -64,7 +66,7 @@ test('admin requires a start date, supports an open end date, and edits the rang
   await edit.getByLabel('End date (optional)', { exact: true }).fill('2026-11-30');
   await edit.getByRole('button', { name: 'Save changes' }).click();
   await expect(edit).toHaveCount(0); expect(writes[1].validUntil).toBe('2026-11-30');
-  await shiftAction(page, 'Dated cleaning', 'Edit');
+  await shiftAction(page, DATED_NAME, 'Edit');
   await expect(edit.getByLabel('End date (optional)', { exact: true })).toHaveValue('2026-11-30');
   await edit.getByLabel('End date (optional)', { exact: true }).fill('');
   await edit.getByRole('button', { name: 'Save changes' }).click();
@@ -75,13 +77,14 @@ test('admin requires a start date, supports an open end date, and edits the rang
   await shiftAction(page, 'Legacy cleaning', 'Edit');
   await expect(edit.getByRole('textbox', { name: 'Start date', exact: true })).toHaveValue('');
   await expect(edit.getByRole('textbox', { name: 'Start date', exact: true })).not.toHaveAttribute('required');
-  await edit.getByRole('textbox', { name: 'Name', exact: true }).fill('Legacy cleaning updated');
+  // A real edit before saving, so the save is not a no-op.
+  await edit.getByLabel('Notes', { exact: true }).fill('Legacy note');
   await edit.getByRole('button', { name: 'Save changes' }).click();
   await expect(edit).toHaveCount(0);
-  expect(writes[3].validFrom).toBeUndefined(); expect(writes[3].validUntil).toBeUndefined();
+  expect(writes[3].validFrom).toBeUndefined(); expect(writes[3].validUntil).toBeUndefined(); expect(writes[3].notes).toBe('Legacy note');
 });
 
-test('legacy on-call shifts keep scheduling dated visits while new shifts cannot choose on-call', async ({ page }) => {
+test('on-call shifts keep scheduling dated visits and remain available for new shifts', async ({ page }) => {
   await setupAdminMocks(page);
   const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
   const shiftWrites: any[] = [], visitWrites: any[] = [], occurrenceQueries: URLSearchParams[] = [];
@@ -125,8 +128,9 @@ test('legacy on-call shifts keep scheduling dated visits while new shifts cannot
   const create = page.getByRole('dialog', { name: 'Add shift', exact: true });
   await create.getByLabel('Schedule', { exact: true }).click();
   await expect(page.getByRole('option', { name: 'One-time', exact: true })).toBeVisible();
-  await expect(page.getByRole('option', { name: /On-call/ })).toHaveCount(0);
-  await page.getByRole('option', { name: 'Daily', exact: true }).click();
+  await expect(page.getByRole('option', { name: 'On-call / flexible', exact: true })).toBeVisible();
+  await page.getByRole('option', { name: 'On-call / flexible', exact: true }).click();
+  await expect(create.getByLabel('Schedule', { exact: true })).toHaveValue('On-call / flexible');
   await create.getByRole('button', { name: 'Cancel', exact: true }).click();
   expect(shiftWrites).toHaveLength(0);
   await expect(page.getByRole('cell', { name: 'One-time cleaning', exact: true })).toBeVisible();

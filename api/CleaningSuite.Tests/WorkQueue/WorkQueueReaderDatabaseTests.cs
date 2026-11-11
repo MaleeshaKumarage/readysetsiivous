@@ -14,8 +14,31 @@ using Moq;
 namespace CleaningSuite.Tests.WorkQueue;
 
 /// <summary>Runs the merged work queue query against PostgreSQL, including case-insensitive search.</summary>
+[Collection("Database integration")]
 public class WorkQueueReaderDatabaseTests
 {
+    [QualityCycleDatabaseFact]
+    public async Task Overdue_unstarted_visits_need_action_and_inactive_future_work_is_cancelled_with_a_bounded_horizon()
+    {
+        using var f = await Fixture.Create();
+        // Start from tomorrow so the daily series never begins in the past, whatever the time of day in the tenant zone.
+        var day = DateTime.UtcNow.Date.AddDays(1);
+        var company = Guid.NewGuid(); var branch = Guid.NewGuid();
+        var daily = Shift.Create(company, branch, "Bounded daily", new() { Type = ShiftScheduleType.DailySameTime, DailyStart = TimeSpan.FromHours(8), DailyEnd = TimeSpan.FromHours(10) }, null, day, null);
+        var inactive = Shift.Create(company, branch, "Inactive future", new() { Type = ShiftScheduleType.DailySameTime, DailyStart = TimeSpan.FromHours(8), DailyEnd = TimeSpan.FromHours(10) }, null, day.AddDays(1), null);
+        inactive.IsActive = false;
+        var past = Shift.Create(company, branch, "Missed visit", new() { Type = ShiftScheduleType.OneTime, OneTimeDate = day.AddDays(-2), OneTimeStart = TimeSpan.FromHours(8), OneTimeEnd = TimeSpan.FromHours(10) }, null, day.AddDays(-2), day.AddDays(-2));
+        using (var writer = f.Store.LightweightSession(f.Tenant)) { writer.Store(daily, inactive, past); await writer.SaveChangesAsync(); }
+        using var session = new TenantSessionFactory(f.Store, TenantContext(f.Tenant));
+        var reader = Reader(f, session);
+        var needs = await reader.ReadAsync(new(WorkQueueViews.NeedsAction, "shift", null, 0, 100));
+        Assert.Contains(needs.Items, x => x.Reference == "Missed visit" && x.StateLabel == "Overdue · not started");
+        Assert.DoesNotContain(needs.Items, x => x.Reference == "Inactive future");
+        Assert.InRange(needs.Items.Count(x => x.Reference == "Bounded daily"), 1, 31);
+        Assert.Equal(30, WorkQueueLimits.ShiftFutureDays);
+        var cancelled = await reader.ReadAsync(new(WorkQueueViews.Cancelled, "shift", null, 0, 100));
+        Assert.Contains(cancelled.Items, x => x.Reference == "Inactive future");
+    }
     private static WorkQueueReader Reader(Fixture f, ITenantSession session) =>
         new(session, new TenantProfileRepository(f.Store), TenantContext(f.Tenant));
 
@@ -385,7 +408,7 @@ public class WorkQueueReaderDatabaseTests
         {
             var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
             var services = new ServiceCollection(); services.AddLogging();
-            services.AddCleaningMarten(connection, databaseSchemaName: "work_queue_" + Guid.NewGuid().ToString("N"));
+            services.AddTestMarten(connection, databaseSchemaName: "work_queue_" + Guid.NewGuid().ToString("N"));
             var provider = services.BuildServiceProvider(); var store = provider.GetRequiredService<IDocumentStore>();
             await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
             return new Fixture { Provider = provider, Store = store };

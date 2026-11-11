@@ -1,6 +1,9 @@
+import { selectDailyScheduleIfEmpty } from './admin-helpers';
 import { test, expect } from '@playwright/test';
 import { shiftAction } from './shift-actions';
 import { setupAdminMocks, shiftsResponse } from './admin-helpers';
+import { autoShiftName } from '../src/lib/shiftName';
+const AAMUVUORO_NAME = autoShiftName({ street: null, city: null, roomCount: null, bedCount: null });
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -723,7 +726,8 @@ test.describe('Admin Panel - Shifts Page', () => {
     await modal.getByLabel('Branch').click();
     await page.getByRole('option', { name: 'HQ Branch' }).click();
 
-    await modal.getByLabel('Name').fill('Aamuvuoro');
+    // Shifts are named automatically on create, so the form has no Name field.
+    await expect(modal.getByRole('textbox', { name: 'Name', exact: true })).toHaveCount(0);
 
     // Test switching schedule types
     await modal.getByLabel('Schedule').click();
@@ -742,13 +746,13 @@ test.describe('Admin Panel - Shifts Page', () => {
     await page.getByRole('option', { name: 'Daily' }).click();
 
     // Submit shift creation
-    await modal.getByRole('button', { name: 'Create shift' }).click();
+    await selectDailyScheduleIfEmpty(page); await modal.getByRole('button', { name: 'Create shift' }).click();
 
     await expect(modal).not.toBeVisible();
-    await expect(page.getByRole('cell', { name: 'Aamuvuoro', exact: true })).toBeVisible();
+    await expect(page.getByRole('cell', { name: AAMUVUORO_NAME, exact: true })).toBeVisible();
 
     // Assign employee
-    await shiftAction(page, 'Aamuvuoro', 'Employees');
+    await shiftAction(page, AAMUVUORO_NAME, 'Employees');
     await expect(page.getByText('No employees assigned.')).toBeVisible();
 
     await page.locator('input[placeholder="Select employees"]').click();
@@ -762,8 +766,8 @@ test.describe('Admin Panel - Shifts Page', () => {
     await expect(page.getByText('No employees assigned.')).toBeVisible();
 
     // Deactivate shift
-    await shiftAction(page, 'Aamuvuoro', 'Deactivate');
-    await expect(page.getByRole('button', { name: 'More actions for Aamuvuoro', exact: true })).not.toBeVisible();
+    await shiftAction(page, AAMUVUORO_NAME, 'Deactivate');
+    await expect(page.getByRole('button', { name: `More actions for ${AAMUVUORO_NAME}`, exact: true })).not.toBeVisible();
   });
 
   test('worst path: required fields missing & specific days validation', async ({ page }) => {
@@ -786,8 +790,8 @@ test.describe('Admin Panel - Shifts Page', () => {
     await page.getByRole('button', { name: 'Add shift' }).click();
 
     // Submit empty fields
-    await page.getByRole('button', { name: 'Create shift' }).click();
-    await expect(page.getByText('Company, branch and name are required.')).toBeVisible();
+    await selectDailyScheduleIfEmpty(page); await page.getByRole('button', { name: 'Create shift' }).click();
+    await expect(page.getByText('Company and branch are required.')).toBeVisible();
 
     // Select company, branch, name, but choose Specific Days without selecting any day
     const modal = page.getByRole('dialog', { name: 'Add shift' });
@@ -800,11 +804,10 @@ test.describe('Admin Panel - Shifts Page', () => {
     await modal.getByLabel('Branch').click();
     await page.getByRole('option', { name: 'Main Branch' }).click();
 
-    await modal.getByLabel('Name').fill('Iltavuoro');
     await modal.getByLabel('Schedule').click();
     await page.getByRole('option', { name: 'Specific days' }).click();
 
-    await modal.getByRole('button', { name: 'Create shift' }).click();
+    await selectDailyScheduleIfEmpty(page); await modal.getByRole('button', { name: 'Create shift' }).click();
     await expect(page.getByText('Select at least one day.')).toBeVisible();
   });
 
@@ -862,19 +865,18 @@ test.describe('Admin Panel - Shifts Page', () => {
     await modal.getByLabel('Branch').click();
     await page.getByRole('option', { name: 'Main Branch' }).click();
 
-    await modal.getByLabel('Name').fill('BiWeekly Shift');
     await modal.getByLabel('Schedule').click();
     await page.getByRole('option', { name: 'Bi-weekly' }).click();
 
     // Submit bi-weekly without selecting day -> validation error
-    await modal.getByRole('button', { name: 'Create shift' }).click();
+    await selectDailyScheduleIfEmpty(page); await modal.getByRole('button', { name: 'Create shift' }).click();
     await expect(page.getByText('Select a day.')).toBeVisible();
 
     // Select day (e.g., Monday = 1)
     await modal.getByLabel('Day').click();
     await page.getByRole('option', { name: 'Monday' }).click();
 
-    await modal.getByRole('button', { name: 'Create shift' }).click();
+    await selectDailyScheduleIfEmpty(page); await modal.getByRole('button', { name: 'Create shift' }).click();
     await expect(modal).not.toBeVisible();
 
     // Verify created bi-weekly shift
@@ -891,11 +893,10 @@ test.describe('Admin Panel - Shifts Page', () => {
     await modal.getByLabel('Branch').click();
     await page.getByRole('option', { name: 'Main Branch' }).click();
 
-    await modal.getByLabel('Name').fill('Monthly Shift');
     await modal.getByLabel('Schedule').click();
     await page.getByRole('option', { name: 'Monthly' }).click();
 
-    await modal.getByRole('button', { name: 'Create shift' }).click();
+    await selectDailyScheduleIfEmpty(page); await modal.getByRole('button', { name: 'Create shift' }).click();
     await expect(modal).not.toBeVisible();
 
     expect(createdShifts.length).toBe(2);

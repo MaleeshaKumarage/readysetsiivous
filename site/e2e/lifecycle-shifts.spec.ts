@@ -1,6 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
-import { setupAdminMocks, shiftsResponse } from './admin-helpers';
+import { setupAdminMocks, shiftsResponse, selectDailyScheduleIfEmpty } from './admin-helpers';
 import { shiftAction } from './shift-actions';
+import { autoShiftName } from '../src/lib/shiftName';
+const CREATED_NAME = autoShiftName(undefined);
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 async function setup(page: Page) {
@@ -60,12 +62,12 @@ test('admin creating from Inactive returns to Active and deactivation moves the 
   const modal = page.getByRole('dialog', { name: 'Add shift' });
   await modal.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'Company', exact: true }).click();
   await modal.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'Branch', exact: true }).click();
-  await modal.getByRole('textbox', { name: /^Name\s*\*?$/ }).fill('Created shift'); await modal.getByRole('button', { name: 'Create shift' }).click();
+  await selectDailyScheduleIfEmpty(page); await modal.getByRole('button', { name: 'Create shift' }).click();
   await expect(page.getByRole('tab', { name: 'Active (2)', exact: true })).toHaveAttribute('aria-selected', 'true');
-  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Created shift', exact: true }) });
-  await expect(row).toBeVisible(); await shiftAction(page, 'Created shift', 'Deactivate');
+  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: CREATED_NAME, exact: true }) });
+  await expect(row).toBeVisible(); await shiftAction(page, CREATED_NAME, 'Deactivate');
   await expect(row).toHaveCount(0); await page.getByRole('tab', { name: 'Inactive (2)', exact: true }).click();
-  await expect(row).toBeVisible(); await row.getByRole('button', { name: 'More actions for Created shift', exact: true }).click(); await expect(page.getByRole('menuitem', { name: 'Reactivate', exact: true })).toBeVisible(); await page.keyboard.press('Escape');
+  await expect(row).toBeVisible(); await row.getByRole('button', { name: `More actions for ${CREATED_NAME}`, exact: true }).click(); await expect(page.getByRole('menuitem', { name: 'Reactivate', exact: true })).toBeVisible(); await page.keyboard.press('Escape');
 });
 
 test('late admin assignment response is discarded when lifecycle tabs change', async ({ page }) => {

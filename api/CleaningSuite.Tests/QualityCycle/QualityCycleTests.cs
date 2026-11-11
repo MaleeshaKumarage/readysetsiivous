@@ -232,6 +232,36 @@ public class QualityCycleTests
     }
 
     [Fact]
+    public async Task UpdateQualityCycleTemplateCommandHandler_WhenScopeOmitted_KeepsCurrentCompanyAndBranch()
+    {
+        var companyId = Guid.NewGuid(); var branchId = Guid.NewGuid();
+        var repoMock = new Mock<IQualityCycleRepository>();
+        var template = QualityCycleTemplate.Create("Old Title", new List<string> { "Item 1" }, null, companyId, branchId);
+        repoMock.Setup(r => r.GetTemplateAsync(template.Id, It.IsAny<CancellationToken>())).ReturnsAsync(template);
+
+        var handler = new QualityCycleHandlers.UpdateQualityCycleTemplateCommandHandler(repoMock.Object, new Mock<CleaningSuite.Application.Companies.ICompanyRepository>().Object, new Mock<CleaningSuite.Application.Companies.IBranchRepository>().Object);
+        var result = await handler.Handle(new UpdateQualityCycleTemplateCommand(template.Id, "New Title", new List<string> { "Item 1" }), CancellationToken.None);
+
+        Assert.Equal("New Title", result.Title);
+        Assert.Equal(companyId, result.CompanyId);
+        Assert.Equal(branchId, result.BranchId);
+    }
+
+    [Fact]
+    public async Task UpdateQualityCycleTemplateCommandHandler_WhenReplaceScopeSet_ClearsToAllCustomers()
+    {
+        var repoMock = new Mock<IQualityCycleRepository>();
+        var template = QualityCycleTemplate.Create("Old Title", new List<string> { "Item 1" }, null, Guid.NewGuid(), Guid.NewGuid());
+        repoMock.Setup(r => r.GetTemplateAsync(template.Id, It.IsAny<CancellationToken>())).ReturnsAsync(template);
+
+        var handler = new QualityCycleHandlers.UpdateQualityCycleTemplateCommandHandler(repoMock.Object, new Mock<CleaningSuite.Application.Companies.ICompanyRepository>().Object, new Mock<CleaningSuite.Application.Companies.IBranchRepository>().Object);
+        var result = await handler.Handle(new UpdateQualityCycleTemplateCommand(template.Id, "New Title", new List<string> { "Item 1" }, ReplaceScope: true), CancellationToken.None);
+
+        Assert.Null(result.CompanyId);
+        Assert.Null(result.BranchId);
+    }
+
+    [Fact]
     public async Task UpdateQualityCycleTemplateCommandHandler_WhenTemplateNotFound_ThrowsNotFoundException()
     {
         var repoMock = new Mock<IQualityCycleRepository>();
@@ -346,6 +376,25 @@ public class QualityCycleTests
 
         Assert.True(result.IsSubmitted);
         Assert.Equal("Done!", result.CleanerNotes);
+        repoMock.Verify(x => x.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SubmitQualityCycleFormCommandHandler_RepeatSubmission_ReturnsConflictAndDoesNotSaveAgain()
+    {
+        var repoMock = new Mock<IQualityCycleRepository>();
+        var form = QualityCycleForm.Create(
+            Guid.NewGuid(), "Shift 1", Guid.NewGuid(), "Cleaner 1", Guid.NewGuid(), "Template 1", DateTime.UtcNow.AddHours(-1), new List<string> { "Item 1" });
+        form.Start();
+        repoMock.Setup(x => x.GetFormByTokenAsync(form.Token, It.IsAny<CancellationToken>())).ReturnsAsync(form);
+        var handler = new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(repoMock.Object, NoopUploadContentValidator.Instance, WorkAccessFixtures.ActiveShifts(), WorkAccessFixtures.ActiveEmployees(), WorkAccessFixtures.Reservation);
+        var command = new SubmitQualityCycleFormCommand(form.Token, new List<QualityCycleFormItemDto> { new("Item 1", true) }, null, "First", new() { new("data:image/png;base64,123", "Cleaned floor") });
+
+        await handler.Handle(command, CancellationToken.None);
+        var error = await Assert.ThrowsAsync<QualityCycleConflictException>(() => handler.Handle(command with { CleanerNotes = "Second" }, CancellationToken.None));
+
+        Assert.Equal("This shift task has already been completed.", error.Message);
+        Assert.Equal("First", form.CleanerNotes);
         repoMock.Verify(x => x.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 

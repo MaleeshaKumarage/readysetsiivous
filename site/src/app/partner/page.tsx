@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Building2, CalendarClock, MessageSquare, RefreshCw, Plus, ArrowRight, UserRound, LogOut, Settings } from 'lucide-react';
+import { Building2, CalendarClock, KeyRound, MessageSquare, RefreshCw, Plus, ArrowRight, UserRound, LogOut, Settings } from 'lucide-react';
 import { Badge, Button, buttonClasses, Card, Dialog, Field, Input, Textarea, fontFamily, palette } from '@/ds';
 import { authTenant, initAuth, isAuthenticated, isPartner, isAdmin, isManager, login, logout } from '@/lib/auth';
 import { partnerApi, type CleaningRequest, type PartnerAccount, type PartnerChangeAction, type PartnerCompletion, type PartnerIdentity, type PartnerShift, type PartnerChange } from '@/lib/partnerApi';
 import { partnerCopy, partnerLanguageKey, partnerMessage, partnerStatus, type PartnerLanguage } from '@/lib/partnerLocale';
 import type { Branch } from '@/lib/adminApi';
 import { QuoteRequestedBadge } from '@/components/QuoteRequests';
+import { PartnerInventoryAcknowledgments } from '@/components/PartnerInventoryAcknowledgments';
+import { PartnerKeyRequests } from '@/components/PartnerKeyRequests';
 import './partner.css';
 
 const sections = [
@@ -17,6 +19,7 @@ const sections = [
   { key: 'Cleaning requests', label: 'requests', icon: CalendarClock },
   { key: 'Company shifts', label: 'shifts', icon: CalendarClock },
   { key: 'Change requests', label: 'changes', icon: MessageSquare },
+  { key: 'Key requests', label: 'keys', icon: KeyRound },
   { key: 'Settings', label: 'settings', icon: Settings },
 ] as const;
 type Section = typeof sections[number]['key'];
@@ -69,6 +72,8 @@ export default function PartnerPage() {
       .catch((caught: Error) => setVisit(current => current?.request.id === request.id ? { request, data: null, error: caught.message || 'Request failed.' } : current));
   }
   const generation = useRef(0), requestKey = useRef('');
+  // A state counter, so each page refresh is a real render the inventory panel can react to.
+  const [inventoryRefresh, setInventoryRefresh] = useState(0);
   const tabsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -81,7 +86,7 @@ export default function PartnerPage() {
     try { localStorage.setItem(partnerLanguageKey, next); } catch { /* The current page still switches. */ }
   }
   const refresh = useCallback(async () => {
-    const attempt = ++generation.current; setError('');
+    const attempt = ++generation.current; setError(''); setInventoryRefresh(value => value + 1);
     try {
       await initAuth(); if (attempt !== generation.current) return;
       if (!isAuthenticated()) { setAccess('anonymous'); return; }
@@ -152,7 +157,7 @@ export default function PartnerPage() {
   const stamp = (value: string | null) => value && !Number.isNaN(Date.parse(value))
     ? stampFormatter.format(new Date(value)) : t.notRecorded;
   const selectedIndex = sections.findIndex(section => section.key === tab);
-  const counts = [branches.length, requests.length, shifts.length, changes.length, undefined];
+  const counts = [branches.length, requests.length, shifts.length, changes.length, undefined, undefined];
   const cities = [...new Set(branches.map(branch => branch.city).filter((city): city is string => Boolean(city)))].sort((a, b) => a.localeCompare(b, locale));
   const activeCity = cities.includes(cityFilter) ? cityFilter : '';
   const shownBranches = activeCity ? branches.filter(branch => branch.city === activeCity) : branches;
@@ -188,6 +193,7 @@ export default function PartnerPage() {
       {notice && <p role="status" className="partner-alert partner-alert-success">{partnerMessage(notice, language)}</p>}
       {['allowed', 'error'].includes(access) && <div className="partner-toolbar"><p>{t.timeZone} <strong>{identity?.timeZoneId ?? 'Europe/Helsinki'}</strong></p><Button variant="ghost" size="sm" className="partner-quiet" disabled={busy} onClick={() => void refresh()}><RefreshCw size={16} aria-hidden="true" />{t.refresh}</Button></div>}
       {access === 'allowed' && <>
+        <PartnerInventoryAcknowledgments language={language} refreshToken={inventoryRefresh} />
         <div ref={tabsRef} role="tablist" aria-label={t.sections} className="partner-tabs">
           {sections.map((section, index) => <button key={section.key} id={'partner-tab-' + index} type="button" role="tab" aria-label={t[section.label]} aria-selected={tab === section.key} aria-controls="partner-section" tabIndex={tab === section.key ? 0 : -1} onKeyDown={event => navigateTab(event, index)} onClick={() => setTab(section.key)}>
             <section.icon size={18} aria-hidden="true" /><span>{t[section.label]}</span><span className="partner-count" aria-hidden="true">{counts[index]}</span>
@@ -205,10 +211,12 @@ export default function PartnerPage() {
             {branches.length > 0 && !shownBranches.length && <Card className="partner-surface partner-empty">{t.noPropertiesInCity}</Card>}
             <ul className="partner-property-list">{shownBranches.map(branch => <li key={branch.id}><article aria-label={branch.name}>
               <Card className="partner-surface partner-property">
-                <div className="partner-card-heading"><h3>{branch.name}</h3>{!branch.isActive ? <Badge variant="outline" className="partner-badge">{t.inactive}</Badge> : branch.pricingReady ? <Badge variant="subtle" className="partner-badge">{t.ready}</Badge> : null}</div>
-                <QuoteRequestedBadge branch={branch} label={t.quoteRequested} />
-                {branch.quoteRejectedUtc && !branch.quoteRequestedUtc && !branch.pricingReady && <p role="status" className="partner-muted">{t.quoteRejected}: {branch.quoteRejectionReason}</p>}
-                <p className="partner-muted">{[branch.street, branch.postalCode, branch.city].filter(Boolean).join(', ')}</p>
+                <div className="partner-property-identity">
+                  <div className="partner-card-heading"><h3>{branch.name}</h3>{!branch.isActive ? <Badge variant="outline" className="partner-badge">{t.inactive}</Badge> : branch.pricingReady ? <Badge variant="subtle" className="partner-badge">{t.ready}</Badge> : null}</div>
+                  <QuoteRequestedBadge branch={branch} label={t.quoteRequested} />
+                  {branch.quoteRejectedUtc && !branch.quoteRequestedUtc && !branch.pricingReady && <p role="status" className="partner-muted">{t.quoteRejected}: {branch.quoteRejectionReason}</p>}
+                  <p className="partner-muted">{[branch.street, branch.postalCode, branch.city].filter(Boolean).join(', ')}</p>
+                </div>
                 <dl className="partner-property-facts"><div><dt>{t.rooms}</dt><dd>{branch.roomCount ?? t.notSet}</dd></div><div><dt>{t.beds}</dt><dd>{branch.bedCount ?? t.notSet}</dd></div></dl>
                 <div className="partner-price">{branch.pricingReady ? <><p><strong>{money(branch.priceNet)}</strong> {t.exclVat} ({t.vat} {number(branch.vatRatePercent ?? 0)}%)</p><p className="partner-muted">{t.estimated} {branch.estimatedDurationMinutes} {t.minutes}</p></> : <p>{branch.quoteRequestedUtc ? t.quoteWaiting : t.pricingRequired}</p>}</div>
                 <div className="partner-card-actions"><Button disabled={busy || !branch.isActive || !branch.pricingReady} onClick={() => openRequest(branch)}>{t.requestCleaning}<ArrowRight size={16} aria-hidden="true" /></Button>
@@ -229,9 +237,9 @@ export default function PartnerPage() {
                 <div className="partner-card-heading"><h3>{request.branchName}<span className="sr-only"> · {partnerStatus(request.status, language)}</span></h3>
                   <Badge variant={request.status === 'Completed' ? 'subtle' : 'outline'} className="partner-badge">{partnerStatus(request.status, language)}</Badge>
                 </div>
-                <p>{date(request.fromDate)} – {date(request.toDate)}{request.exactStartLocalTime && ' ' + t.at + ' ' + request.exactStartLocalTime.slice(0, 5)}</p>
+                <p className="partner-request-window">{date(request.fromDate)} – {date(request.toDate)}{request.exactStartLocalTime && ' ' + t.at + ' ' + request.exactStartLocalTime.slice(0, 5)}</p>
                 <p className="partner-price">{t.agreedPrice} <strong>{money(request.priceNet)}</strong> {t.exclVat} ({t.vat} {number(request.vatRatePercent)}%)</p>
-                <div className="partner-request-details"><p>{t.cleaner}: {request.acceptedCleanerName ?? t.awaitingAcceptance}</p><p>{t.planned}: {request.plannedStartUtc ? <>{stamp(request.plannedStartUtc)} – {stamp(request.plannedEndUtc)}</> : request.firstAcceptedAtUtc || request.status === 'Accepted' ? t.flexible : t.notRecorded}</p><p>{t.actualStart}: {stamp(request.actualStartUtc)} · {t.actualEnd}: {stamp(request.actualEndUtc)}</p></div>
+                <div className="partner-request-details"><p>{t.planned}: {request.plannedStartUtc ? <>{stamp(request.plannedStartUtc)} – {stamp(request.plannedEndUtc)}</> : request.firstAcceptedAtUtc || request.status === 'Accepted' ? t.flexible : t.notRecorded}</p><p className="partner-actual-times">{t.actualStart}: {stamp(request.actualStartUtc)} · {t.actualEnd}: {stamp(request.actualEndUtc)}</p></div>
                 {request.notes && <p className="partner-entered">{request.notes}</p>}
                 <div className="partner-card-actions">{request.status === 'Completed' ? <Button variant="outline" className="partner-secondary" onClick={() => openVisit(request)}>{t.viewVisit}</Button> : !request.firstAcceptedAtUtc && request.status !== 'Cancelled' ? <>
                   <Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => { const branch = branches.find(item => item.id === request.branchId); if (branch) openRequest(branch, request); }}>{t.editRequest}</Button>
@@ -241,6 +249,9 @@ export default function PartnerPage() {
               </Card>
             </article>)}</div>
             <div className="partner-form-actions" role="navigation" aria-label={requestView === 'active' ? t.activeRequests : requestView === 'completed' ? t.completedRequests : t.cancelledRequests}>{requestList.length > 25 && <><Button variant="outline" className="partner-secondary" disabled={currentRequestPage <= 1} onClick={() => setRequestPage(currentRequestPage - 1)}>{t.previousPage}</Button><span className="partner-muted">{currentRequestPage} / {requestPageCount}</span><Button variant="outline" className="partner-secondary" disabled={currentRequestPage >= requestPageCount} onClick={() => setRequestPage(currentRequestPage + 1)}>{t.nextPage}</Button></>}</div>
+          </section>}
+          {tab === 'Key requests' && <section aria-label={t.keyRequests} className="partner-section">
+            <PartnerKeyRequests t={t} language={language} branches={branches} money={money} date={date} />
           </section>}
           {tab === 'Change requests' && <section aria-label={t.history} className="partner-section">
             <div className="partner-section-heading"><div><h2>{t.changes}</h2><p>{t.changesHint}</p></div></div>
@@ -303,8 +314,9 @@ export default function PartnerPage() {
           {photoLabels.length > 0 && <p className="partner-muted">{t.photosRequired}: {photoLabels.join(', ')}</p>}
           {generalInstructions.trim() && <p className="partner-muted">{t.generalInstructionsApplied}</p>}
             <form onSubmit={submitRequest} onInvalid={invalid} className="partner-form-grid">
-              <Field label={t.fromDate}><Input className="partner-field" name="fromDate" type="date" required value={from} onChange={event => setFrom(event.target.value)} /></Field>
-              {exact ? <Field label={t.exactTime}><Input className="partner-field" name="exactTime" type="time" required value={time} onChange={event => setTime(event.target.value)} /></Field> : <Field label={t.toDate}><Input className="partner-field" name="toDate" type="date" min={from} required value={to} onChange={event => setTo(event.target.value)} /></Field>}
+              <Field label={t.fromDate}><Input className="partner-field" name="fromDate" aria-describedby="partner-window-help" type="date" required value={from} onChange={event => setFrom(event.target.value)} /></Field>
+              {exact ? <Field label={t.exactTime}><Input className="partner-field" name="exactTime" type="time" required value={time} onChange={event => setTime(event.target.value)} /></Field> : <Field label={t.toDate}><Input className="partner-field" name="toDate" aria-describedby="partner-window-help" type="date" min={from} required value={to} onChange={event => setTo(event.target.value)} /></Field>}
+              <p className="partner-muted partner-form-wide" id="partner-window-help">{t.windowHint}</p>
               <label className="partner-check"><input type="checkbox" checked={exact} onChange={event => setExact(event.target.checked)} />{t.fixedAppointment}</label>
               <p className="partner-muted partner-form-wide">{t.visitInstructionsHint}</p>
               <Field label={t.instructions} className="partner-form-wide"><Textarea className="partner-field" value={notes} maxLength={4000} onChange={event => setNotes(event.target.value)} /></Field>

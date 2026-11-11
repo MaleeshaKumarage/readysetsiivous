@@ -53,7 +53,8 @@ const DEFAULT_ZONE = 'Europe/Helsinki';
 function defaultWindow(zone: string): { dateFrom: string; dateTo: string } {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: zone });
   const end = new Date(Date.parse(`${today}T12:00:00Z`) + (DEFAULT_WINDOW_DAYS - 1) * 86_400_000).toISOString().slice(0, 10);
-  return { dateFrom: today, dateTo: end };
+  const start = new Date(Date.parse(`${today}T12:00:00Z`) - 180 * 86_400_000).toISOString().slice(0, 10);
+  return { dateFrom: start, dateTo: end };
 }
 /** Accepts real yyyy-MM-dd bounds only; a reversed range is dropped rather than sent to the server. */
 function readDates(from: string | null, to: string | null): { dateFrom: string; dateTo: string } {
@@ -115,8 +116,8 @@ export default function WorkQueuePage() {
     const dates = chosenQueue ? readDates(params.get('from'), params.get('to'))
       : view === 'needs-action' ? defaultWindow(zone ?? DEFAULT_ZONE) : { dateFrom: '', dateTo: '' };
     const rawAssignee = (params.get('assignee') ?? '').trim();
-    // A fresh Needs-action link opens on unassigned work. 'all' means Anyone, and a named employee is kept as chosen.
-    const assignee = chosenQueue ? (rawAssignee === 'all' ? '' : rawAssignee) : view === 'needs-action' ? UNASSIGNED : '';
+    // Include assigned overdue work on a fresh Needs-action link. Explicit assignee filters remain unchanged.
+    const assignee = chosenQueue ? (rawAssignee === 'all' ? '' : rawAssignee) : '';
     return {
       view,
       source: requestedSource && SOURCE_VALUES.includes(requestedSource) ? requestedSource : 'all' as WorkQueueSource,
@@ -259,7 +260,7 @@ export default function WorkQueuePage() {
         </Tabs.List>
       </Tabs>
 
-      <Group mt="md" mb="md" align="flex-end" wrap="wrap" gap="sm">
+      <Group className="work-queue-filters" mt="md" mb="md" align="flex-end" wrap="wrap" gap="sm">
         <Select aria-label="Source" label="Source" data={SOURCES} value={source}
           onChange={value => value && changeSource(value as WorkQueueSource)} allowDeselect={false} w={220} />
         <TextInput label="Search" placeholder="Customer, booking number or company" value={query}
@@ -274,7 +275,7 @@ export default function WorkQueuePage() {
       </Group>
       {defaultWindowActive && (
         <Group gap="xs" mb="md" role="status">
-          <Text size="sm">{assignee === UNASSIGNED ? 'Showing unassigned work' : 'Showing'} for the next {DEFAULT_WINDOW_DAYS} days ({dateFrom} to {dateTo}).{assignee === UNASSIGNED ? ' Assigned work is hidden.' : ''}</Text>
+          <Text size="sm">Showing overdue and upcoming work ({dateFrom} to {dateTo}).{assignee === UNASSIGNED ? ' Assigned work is hidden.' : ''}</Text>
           <Button size="xs" variant="subtle" onClick={showEverything}>Show all work</Button>
         </Group>
       )}
@@ -298,6 +299,7 @@ export default function WorkQueuePage() {
                   <Text size="sm" c="dimmed">{item.reference} · {item.scheduledLocal}</Text>
                   <Group gap={6}>
                     <Badge size="sm" variant="light" color={item.stateLabel === 'Not started' ? 'red' : undefined}>{item.stateLabel}</Badge>
+                    {item.source === 'shift' && item.stateLabel === 'Overdue · not started' && !item.assigneeName && <Badge size="sm" variant="light" color="gray">Unassigned</Badge>}
                     <Badge size="sm" variant="outline" color="gray">{item.source === 'booking' ? 'Public booking' : item.source === 'shift' ? 'Company shift' : 'Partner request'}</Badge>
                     {item.assigneeName && <Text size="xs">{item.assigneeName}</Text>}
                   </Group>

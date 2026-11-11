@@ -17,13 +17,14 @@ using System.Text.Json;
 
 namespace CleaningSuite.Tests.Shifts;
 
+[Collection("Database integration")]
 public class ShiftDeletionDatabaseTests
 {
     [QualityCycle.QualityCycleDatabaseFact]
     public async Task Deletion_unlinks_roster_preserves_QC_evidence_reports_and_other_tenants()
     {
         var services = new ServiceCollection(); services.AddLogging();
-        services.AddCleaningMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!,
+        services.AddTestMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!,
             databaseSchemaName: "deleted_shifts_" + Guid.NewGuid().ToString("N"));
         using var provider = services.BuildServiceProvider();
         var store = provider.GetRequiredService<IDocumentStore>();

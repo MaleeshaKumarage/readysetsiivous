@@ -33,7 +33,8 @@ builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>
 builder.Services.Configure<CleaningSuite.Api.Middleware.PublicRateLimitOptions>(builder.Configuration.GetSection("PublicRateLimit"));
 
 builder.Services.PostConfigure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(options =>
-    options.InvalidModelStateResponseFactory = context => new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(CleaningSuite.Api.RequestErrorText.FromModelState(context.ModelState)));
+    options.InvalidModelStateResponseFactory = context => new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(CleaningSuite.Api.RequestErrorText.FromModelState(context.ModelState,
+        context.ActionDescriptor.Parameters.Any(p => p.ParameterType == typeof(CleaningSuite.Application.Partners.CreatePartnerRequest)))));
 builder.Services.AddControllers().AddJsonOptions(o =>
 {
     o.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
@@ -58,6 +59,7 @@ builder.Services.AddCleaningMarten(connectionString, autoCreate);
 builder.Services.AddHostedService<MartenSchemaInitializer>();
 builder.Services.AddScoped<CleaningSuite.Infrastructure.Persistence.ShiftValidityCorrectionRunner>();
 builder.Services.AddScoped<CleaningSuite.Infrastructure.Persistence.StaleAssignmentRepairRunner>();
+builder.Services.AddScoped<CleaningSuite.Infrastructure.Persistence.AutoAcceptDefaultRunner>();
 builder.Services.AddHostedService<CleaningSuite.Api.StartupRepairService>();
 if (builder.Configuration.GetValue("BackgroundWorkers:Enabled", true))
     builder.Services.AddHostedService<CleaningSuite.Api.Services.EntertainmentGroupCleanupService>();
@@ -115,6 +117,7 @@ builder.Services.AddScoped<CleaningSuite.Application.Leads.ILeadFileStore, Clean
 builder.Services.AddScoped<CleaningSuite.Application.Inventory.IInventoryRepository, CleaningSuite.Infrastructure.Persistence.InventoryRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.Inventory.IInventoryFileStore, CleaningSuite.Infrastructure.Inventory.DiskInventoryFileStore>();
 builder.Services.AddScoped<CleaningSuite.Application.Inventory.InventoryService>();
+builder.Services.AddScoped<CleaningSuite.Application.Inventory.InventoryAcknowledgmentService>();
 builder.Services.AddScoped<CleaningSuite.Application.Leads.LeadService>();
 builder.Services.AddScoped<CleaningSuite.Application.Leads.ILeadCollaborationRepository, CleaningSuite.Infrastructure.Persistence.LeadCollaborationRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.Leads.ILeadAudioStore, CleaningSuite.Infrastructure.Leads.DiskLeadAudioStore>();
@@ -137,6 +140,8 @@ builder.Services.AddScoped<CleaningSuite.Application.Shifts.IShiftRepository, Cl
 builder.Services.AddScoped<CleaningSuite.Application.Shifts.IShiftWorkReservation, CleaningSuite.Infrastructure.Persistence.ShiftWorkReservation>();
 builder.Services.AddScoped<CleaningSuite.Application.Partners.IPartnerStore, CleaningSuite.Infrastructure.Persistence.PartnerStore>();
 builder.Services.AddScoped<CleaningSuite.Application.Partners.PartnerService>();
+builder.Services.AddScoped<CleaningSuite.Application.Partners.PartnerKeyRequestService>();
+builder.Services.AddScoped<CleaningSuite.Application.Partners.IKeyRequestFileStore, CleaningSuite.Infrastructure.Partners.DiskKeyRequestFileStore>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<CleaningSuite.Infrastructure.Notifications.PushSettings>();
 builder.Services.AddSingleton<CleaningSuite.Application.Notifications.IPushSettings>(sp => sp.GetRequiredService<CleaningSuite.Infrastructure.Notifications.PushSettings>());

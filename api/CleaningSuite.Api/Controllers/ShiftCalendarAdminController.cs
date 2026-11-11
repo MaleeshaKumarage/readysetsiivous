@@ -61,7 +61,7 @@ public class ShiftCalendarAdminController(IShiftRepository shifts, IEmployeeRepo
                 var ambiguous = visits.Count(v => v.Occurrence.StartUtc == occurrence.StartUtc) > 1;
                 var assignees = visit.EmployeeIds.Concat(recorded.Select(f => f.EmployeeId)).Distinct().Select(id => {
                     staff.TryGetValue(id, out var person);
-                    var form = recorded.FirstOrDefault(f => f.EmployeeId == id);
+                    var form = RecordedWork.Representative(recorded.Where(f => f.EmployeeId == id));
                     // Same boundary as correction: every review flag has an available action; today/future never flag.
                     var correctable = day < today && !visit.IsCancelled && !ambiguous && person?.IsActive == true && Employee.IsWorkRole(person.Role);
                     var lastCorrection = form?.WorkTimeCorrections is { Count: > 0 } corrections ? corrections[^1] : null;
@@ -70,7 +70,7 @@ public class ShiftCalendarAdminController(IShiftRepository shifts, IEmployeeRepo
                         form?.StartedAtUtc, form?.EndedAtUtc, corrected);
                     return new { employeeId = id, name = person is null ? form?.EmployeeName ?? "Unknown employee" : $"{person.FirstName} {person.LastName}",
                         actualStartUtc = form?.StartedAtUtc, actualEndUtc = form?.EndedAtUtc,
-                        hours = form?.StartedAtUtc is DateTime start && form.EndedAtUtc is DateTime end ? (double?)(end - start).TotalHours : null,
+                        hours = RecordedWork.Duration(form) is { } duration ? (double?)duration.TotalHours : null,
                         status = form?.IsSubmitted == true ? "Recorded" : form?.StartedAtUtc is not null ? "Started" : "Not started",
                         version = form?.Version, canRecord = correctable,
                         review = flag is null ? (object?)null : new { kind = flag.Kind, label = flag.Label } };

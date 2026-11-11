@@ -70,7 +70,7 @@ test('owner and cleaner see a readable message when the server gives no detail',
   await page.getByLabel('Describe the requested change', { exact: true }).fill('Check the window.');
   backend.failNext('POST', /^partner\/branches\/.+\/change-requests$/, 500, '');
   await page.getByRole('button', { name: 'Send change request', exact: true }).click();
-  await expect(page.locator('p[role="alert"]')).toContainText('Request failed (500). Refresh to check whether your change was saved before retrying.');
+  await expect(page.locator('p[role="alert"]').filter({ hasText: 'Request failed (500). Refresh to check whether your change was saved before retrying.' })).toContainText('Request failed (500). Refresh to check whether your change was saved before retrying.');
 
   backend.seedOffer(backend.seedRequest(backend.branches[0], WINDOW), 'cleaner');
   const cleaner = await openActor(browser, testInfo, backend, 'cleaner');
@@ -79,7 +79,7 @@ test('owner and cleaner see a readable message when the server gives no detail',
   await expect(cleaner.page.getByRole('article', { name: `${PROPERTY} offer`, exact: true })).toBeVisible();
   backend.failNext('POST', /^me\/partner-offers\/.+\/decline$/, 500, '');
   await cleaner.page.getByRole('article', { name: `${PROPERTY} offer`, exact: true }).getByRole('button', { name: 'Decline cleaning', exact: true }).click();
-  await expect(cleaner.page.locator('p[role="alert"]')).toContainText('Request failed (500).');
+  await expect(cleaner.page.locator('p[role="alert"]').filter({ hasText: 'Request failed (500).' })).toContainText('Request failed (500).');
   await cleaner.context.close();
 });
 
@@ -145,7 +145,7 @@ test('staff edit refuses a window that ends before it starts with a readable mes
   await editor.getByLabel('From date', { exact: true }).fill('2026-12-05');
   await editor.getByLabel('To date', { exact: true }).fill('2026-12-03');
   await editor.getByRole('button', { name: 'Save request changes', exact: true }).click();
-  await expect(staff.page.locator('p[role="alert"]')).toContainText('The end date must be on or after the start date.');
+  await expect(staff.page.locator('p[role="alert"]').filter({ hasText: 'The end date must be on or after the start date.' })).toContainText('The end date must be on or after the start date.');
   expect(backend.writes.filter(write => write.path.endsWith(backend.requests[0].id))).toHaveLength(0);
   await expect(editor).toBeVisible();
   await staff.context.close();

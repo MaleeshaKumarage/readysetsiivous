@@ -105,7 +105,8 @@ public interface IShiftRepository
     Task DeleteOccurrenceExceptionAsync(Guid id, CancellationToken ct = default);
 }
 
-public record ShiftConflictDetail(Guid ShiftId, string ShiftName, DateTime StartUtc, DateTime EndUtc);
+public record ShiftConflictDetail(Guid ShiftId, string ShiftName, DateTime StartUtc, DateTime EndUtc,
+    string? Recurrence = null, bool OpenEnded = false);
 
 public class ShiftConflictException : Exception
 {
@@ -209,6 +210,7 @@ public class ShiftHandlers
             {
                 throw new NotFoundException("Branch", request.BranchId);
             }
+            ShiftNaming.EnsureDetails(branch);
 
             await ValidateTemplateAsync(_qualityCycles, request.QualityCycleTemplateId, request.CompanyId, request.BranchId, ct);
             var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
@@ -218,7 +220,7 @@ public class ShiftHandlers
             var shift = Shift.Create(
                 request.CompanyId,
                 request.BranchId,
-                request.Name,
+                ShiftNaming.Build(branch),
                 request.Schedule,
                 request.Notes,
                 request.ValidFrom,
@@ -256,9 +258,12 @@ public class ShiftHandlers
                 ?? throw new NotFoundException("Shift", request.Id);
             CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
             if (_companies is not null) _ = await _companies.GetAsync(request.CompanyId, ct) ?? throw new NotFoundException("Company", request.CompanyId);
+            var name = request.Name;
             if (_branches is not null) {
                 var branch = await _branches.GetAsync(request.BranchId, ct) ?? throw new NotFoundException("Branch", request.BranchId);
                 if (branch.CompanyId != request.CompanyId) throw new NotFoundException("Branch", request.BranchId);
+                ShiftNaming.EnsureDetails(branch);
+                name = ShiftNaming.Build(branch);
             }
             await ValidateTemplateAsync(_qualityCycles, request.QualityCycleTemplateId, request.CompanyId, request.BranchId, ct);
             var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
@@ -267,7 +272,7 @@ public class ShiftHandlers
             shift.Update(
                 request.CompanyId,
                 request.BranchId,
-                request.Name,
+                name,
                 request.Schedule,
                 request.Notes,
                 request.IsActive,

@@ -8,6 +8,23 @@ namespace CleaningSuite.Tests.Companies;
 public class CompanyParentTests
 {
     [Fact]
+    public async Task CreateBranch_AreaOutOfRange_is_a_validation_error_not_a_server_error()
+    {
+        var company = Company.Create("1234567-8", "Synthetic owner");
+        var companies = new Mock<ICompanyRepository>();
+        companies.Setup(c => c.GetAsync(company.Id, CancellationToken.None)).ReturnsAsync(company);
+        var branches = new Mock<IBranchRepository>();
+        var handler = new CompanyHandlers.BranchCommands.CreateBranchCommandHandler(branches.Object, companies.Object);
+
+        await Assert.ThrowsAsync<FluentValidation.ValidationException>(() =>
+            handler.Handle(new CreateBranchCommand(company.Id, "Branch", SizeM2: 100001), CancellationToken.None));
+        await Assert.ThrowsAsync<FluentValidation.ValidationException>(() =>
+            handler.Handle(new CreateBranchCommand(company.Id, "Branch", SizeM2: -1), CancellationToken.None));
+
+        branches.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task CreateBranch_MissingCompany_DoesNotWriteBranch()
     {
         var companies = new Mock<ICompanyRepository>();

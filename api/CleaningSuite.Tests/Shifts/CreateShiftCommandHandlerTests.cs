@@ -40,7 +40,7 @@ public class CreateShiftCommandHandlerTests
             .ReturnsAsync(Company.Create("1234567-8", "Test Company", null, null, null));
 
         _branchRepoMock.Setup(r => r.GetAsync(branchId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Branch { Id = branchId, CompanyId = companyId, Name = "Branch 1" });
+            .ReturnsAsync(new Branch { Id = branchId, CompanyId = companyId, Name = "Branch 1", SizeM2 = 34, CleaningType = "Deep" });
 
         _shiftRepoMock.Setup(r => r.SaveAsync(It.IsAny<Shift>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -52,7 +52,7 @@ public class CreateShiftCommandHandlerTests
         var result = await handler.Handle(command, CancellationToken.None);
 
         Assert.NotNull(result);
-        Assert.Equal("Morning Shift", result.Name);
+        Assert.Equal("Deep Cleaning |34m2|-H|-V", result.Name);
         Assert.Equal(companyId, result.CompanyId);
         Assert.Equal(branchId, result.BranchId);
         _shiftRepoMock.Verify(r => r.SaveAsync(It.IsAny<Shift>(), It.IsAny<CancellationToken>()), Times.Once);

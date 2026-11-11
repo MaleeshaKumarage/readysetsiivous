@@ -12,6 +12,7 @@ using Moq;
 
 namespace CleaningSuite.Tests.Shifts;
 
+[Collection("Database integration")]
 public class OneTimeAssignmentDatabaseTests
 {
     private static Mock<ITenantContext> Context(string id) { var mock = new Mock<ITenantContext>(); mock.SetupGet(x => x.TenantId).Returns(id); return mock; }
@@ -20,7 +21,7 @@ public class OneTimeAssignmentDatabaseTests
     public async Task A_cleaner_can_be_assigned_to_a_one_time_shift_once()
     {
         var services = new ServiceCollection(); services.AddLogging();
-        services.AddCleaningMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!, databaseSchemaName: "one_time_assign_" + Guid.NewGuid().ToString("N"));
+        services.AddTestMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!, databaseSchemaName: "one_time_assign_" + Guid.NewGuid().ToString("N"));
         using var provider = services.BuildServiceProvider(); var store = provider.GetRequiredService<IDocumentStore>();
         await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
         var tenant = "one-time-" + Guid.NewGuid().ToString("N");

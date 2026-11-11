@@ -498,6 +498,8 @@ export interface Company {
 export interface Branch {
   roomCount?: number | null;
   bedCount?: number | null;
+  sizeM2?: number | null;
+  cleaningType?: string | null;
   priceNet?: number | null;
   vatRatePercent?: number | null;
   estimatedDurationMinutes?: number | null;
@@ -623,7 +625,7 @@ export interface ShiftOccurrenceExceptionInput {
   employeeId?: string | null;
 }
 
-export interface ShiftConflictDetail { shiftId: string; shiftName: string; startUtc: string; endUtc: string }
+export interface ShiftConflictDetail { shiftId: string; shiftName: string; startUtc: string; endUtc: string; recurrence?: string; openEnded?: boolean }
 
 // Overlap refusals carry the clashing shift so the assignment dialog can offer a fix.
 export class VisitConflictError extends Error {
@@ -695,7 +697,8 @@ export const adminShifts = {
     return adminGet<Shift[]>(`/api/v1/admin/shifts${suffix ? `?${suffix}` : ''}`);
   },
   listForCustomer: (companyId: string) => adminGet<Shift[]>(`/api/v1/admin/shifts?companyId=${encodeURIComponent(companyId)}&includeInactive=true`, false),
-  get: (id: string) => adminGet<Shift>(`/api/v1/admin/shifts/${id}`),
+  // `fresh` bypasses the response cache, for a shift the admin is about to act on.
+  get: (id: string, fresh = false) => adminGet<Shift>(`/api/v1/admin/shifts/${id}`, !fresh),
   create: (fields: unknown) => adminSendJsonResult<Shift>('/api/v1/admin/shifts', 'POST', fields),
   update: (id: string, fields: unknown) =>
     adminSendJsonResult<Shift>(`/api/v1/admin/shifts/${id}`, 'PUT', fields),
@@ -825,7 +828,7 @@ export const adminBranches = {
       country?: string;
       contactPhone?: string;
       contactEmail?: string;
-      roomCount?: number | null; bedCount?: number | null; priceNet?: number | null; vatRatePercent?: number | null; estimatedDurationMinutes?: number | null;
+      roomCount?: number | null; bedCount?: number | null; sizeM2?: number | null; cleaningType?: string | null; priceNet?: number | null; vatRatePercent?: number | null; estimatedDurationMinutes?: number | null;
     }
   ) => companyRequest<Branch>(`/api/v1/admin/companies/${companyId}/branches`, 'POST', { companyId, ...body }),
   update: (
@@ -838,7 +841,7 @@ export const adminBranches = {
       country?: string;
       contactPhone?: string;
       contactEmail?: string;
-      roomCount?: number | null; bedCount?: number | null; priceNet?: number | null; vatRatePercent?: number | null; estimatedDurationMinutes?: number | null;
+      roomCount?: number | null; bedCount?: number | null; sizeM2?: number | null; cleaningType?: string | null; priceNet?: number | null; vatRatePercent?: number | null; estimatedDurationMinutes?: number | null;
       isActive: boolean;
     }
   ) => adminSendJson<Branch>(`/api/v1/admin/companies/branches/${id}`, 'PUT', { id, ...body }),

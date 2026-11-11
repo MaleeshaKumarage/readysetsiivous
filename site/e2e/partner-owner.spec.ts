@@ -201,6 +201,10 @@ test.describe('Finnish browser defaults', () => {
     await expect(settingsTab).toHaveAttribute('aria-selected', 'true');
     await expect(settingsTab).toBeFocused();
     await settingsTab.press('ArrowLeft');
+    const keysTab = page.getByRole('tab', { name: 'Avaimet', exact: true });
+    await expect(keysTab).toHaveAttribute('aria-selected', 'true');
+    await expect(keysTab).toBeFocused();
+    await keysTab.press('ArrowLeft');
     const changesTab = page.getByRole('tab', { name: 'Muutospyynnöt', exact: true });
     await expect(changesTab).toHaveAttribute('aria-selected', 'true');
     await expect(changesTab).toBeFocused();

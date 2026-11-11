@@ -248,3 +248,58 @@ test('phone occurrence exceptions scroll internally and keep restore actions rea
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(state.writes).toHaveLength(0); expect(state.deletes).toBe(0);
 });
+
+test('occurrences open on tenant-local today, not the browser UTC date', async ({ page }) => {
+  // 23:30 UTC on 4 Nov is already 5 Nov in Helsinki (UTC+2), so the default range must start 5 Nov local.
+  await page.clock.setFixedTime(new Date('2026-11-04T23:30:00Z'));
+  const state = await setup(page);
+  await shiftAction(page, 'Morning clean', 'Occurrences');
+  await expect.poll(() => state.occurrenceQueries.length).toBeGreaterThan(0);
+  const first = state.occurrenceQueries[0];
+  expect(first.get('from')).toBe('2026-11-04T22:00:00.000Z');
+  expect(first.get('to')).toBe('2026-12-06T21:59:59.999Z');
+  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  await expect(list.getByLabel('From')).toHaveValue('2026-11-05');
+  await expect(list.getByLabel('To')).toHaveValue('2026-12-06');
+});
+
+test('reopening occurrences for the same shift keeps the range the admin chose', async ({ page }) => {
+  await setup(page);
+  await shiftAction(page, 'Morning clean', 'Occurrences');
+  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  await list.getByLabel('From').fill('2026-12-01');
+  await list.getByLabel('To').fill('2026-12-31');
+  await list.getByRole('button', { name: 'Load' }).click();
+  await page.keyboard.press('Escape');
+  await expect(list).toHaveCount(0);
+  // Reopening the same shift keeps the chosen range; the default range resets only for a different shift.
+  await shiftAction(page, 'Morning clean', 'Occurrences');
+  const reopened = page.getByRole('dialog', { name: /Occurrences/ });
+  await expect(reopened).toBeVisible();
+  await expect(reopened.getByLabel('From')).toHaveValue('2026-12-01');
+  await expect(reopened.getByLabel('To')).toHaveValue('2026-12-31');
+});
+
+test('a different shift resets the occurrence range to the defaults', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-11-04T23:30:00Z'));
+  await setup(page);
+  // Add a second shift to the list so the range can be compared across shifts.
+  await page.route(/\/api\/v1\/admin\/shifts(?:\/page)?(?:\?|$)/, route => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    const second = { id: 'evening', name: 'Evening clean', companyId: 'company', branchId: 'branch', isActive: true, schedule: { type: 0, dailyStart: '16:00', dailyEnd: '18:00' } };
+    const first = { id: 'shift', name: 'Morning clean', companyId: 'company', branchId: 'branch', isActive: true, schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' } };
+    const path = new URL(route.request().url()).pathname;
+    return route.fulfill({ status: 200, headers, json: path.endsWith('/page') ? { items: [first, second], total: 2, counts: { active: 2, completed: 0, inactive: 0 } } : [first, second] });
+  });
+  await page.goto('/admin/shifts/');
+  await shiftAction(page, 'Morning clean', 'Occurrences');
+  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  await list.getByLabel('From').fill('2026-12-01');
+  await list.getByRole('button', { name: 'Load' }).click();
+  await page.keyboard.press('Escape');
+  await expect(list).toHaveCount(0);
+  await shiftAction(page, 'Evening clean', 'Occurrences');
+  const other = page.getByRole('dialog', { name: /Occurrences/ });
+  await expect(other.getByLabel('From')).toHaveValue('2026-11-05');
+  await expect(other.getByLabel('To')).toHaveValue('2026-12-06');
+});

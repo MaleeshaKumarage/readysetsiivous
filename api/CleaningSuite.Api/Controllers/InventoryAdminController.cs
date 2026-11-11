@@ -9,8 +9,21 @@ namespace CleaningSuite.Api.Controllers;
 [ApiController]
 [Route("api/v1/admin/inventory")]
 [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
-public class InventoryAdminController(InventoryService inventory) : ControllerBase
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+public class InventoryAdminController(InventoryService inventory, InventoryAcknowledgmentService acknowledgments) : ControllerBase
 {
+    [HttpGet("acknowledgments/partners")]
+    public async Task<IActionResult> Partners([FromQuery] string? search, CancellationToken ct) =>
+        Ok(await acknowledgments.Partners(search, ct));
+
+    [HttpGet("acknowledgments")]
+    public async Task<IActionResult> Acknowledgments([FromQuery] Guid[]? usageIds, CancellationToken ct) =>
+        Ok(await acknowledgments.Lookup(usageIds ?? [], ct));
+
+    [HttpPost("acknowledgments")]
+    public async Task<IActionResult> RequestAcknowledgment(InventoryAcknowledgmentInput body, CancellationToken ct) =>
+        Ok(await acknowledgments.Create(User.FindFirst("sub")?.Value ?? throw new UnauthorizedAccessException("An authenticated admin identity is required."), body, ct));
+
     [HttpGet("locations")]
     public async Task<IActionResult> Locations([FromQuery] bool includeInactive = true, CancellationToken ct = default) =>
         Ok(await inventory.ListLocationsAsync(includeInactive, ct));

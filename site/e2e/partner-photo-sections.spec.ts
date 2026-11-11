@@ -84,13 +84,13 @@ test('settings that fail to load block saving, so stored values are not overwrit
 
   await page.goto('/partner/');
   await page.getByRole('tab', { name: /^Settings/ }).click();
-  await expect(page.getByRole('alert').filter({ hasText: 'could not be loaded' })).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: 'Your visit photos and general instructions could not be loaded' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Save photo sections', exact: true })).toBeDisabled();
 
   failing = false;
   await page.getByRole('button', { name: 'Refresh partner data', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'General instructions', exact: true })).toHaveValue('Stored general text');
-  await expect(page.getByRole('alert').filter({ hasText: 'could not be loaded' })).toHaveCount(0);
+  await expect(page.getByRole('alert').filter({ hasText: 'Your visit photos and general instructions could not be loaded' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Save photo sections', exact: true })).toBeEnabled();
   expect(backend.generalInstructions).toBe('Stored general text');
   expect(backend.photoLabels).toEqual(['Keys']);

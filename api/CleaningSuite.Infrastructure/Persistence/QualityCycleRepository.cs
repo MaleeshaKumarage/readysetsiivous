@@ -65,8 +65,11 @@ public class QualityCycleRepository : IQualityCycleRepository
     public async Task<QualityCycleForm?> GetFormByShiftOccurrenceAsync(Guid shiftId, Guid employeeId, DateTime shiftOccurrenceUtc, CancellationToken ct = default)
     {
         var start = DateTime.SpecifyKind(shiftOccurrenceUtc, DateTimeKind.Unspecified);
-        return await _session.Query<QualityCycleForm>()
-            .FirstOrDefaultAsync(x => x.ShiftId == shiftId && x.EmployeeId == employeeId && x.ShiftOccurrenceUtc == start, ct);
+        // Same record the admin calendar shows: deleted records are excluded and duplicates resolve by the shared rule.
+        var records = await _session.Query<QualityCycleForm>()
+            .Where(x => x.ShiftId == shiftId && x.EmployeeId == employeeId && x.ShiftOccurrenceUtc == start && x.ShiftDeletedUtc == null)
+            .ToListAsync(ct);
+        return CleaningSuite.Application.Shifts.RecordedWork.Representative(records);
     }
 
     public Task<IReadOnlyList<QualityCycleForm>> ListFormsAsync(Guid? shiftId, DateTime? fromUtc, DateTime? toUtc, CancellationToken ct = default) =>

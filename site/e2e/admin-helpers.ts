@@ -2,6 +2,10 @@ import { test as baseTest, expect, Page } from '@playwright/test';
 
 export async function setupAdminMocks(page: Page, options: { authenticated?: boolean } = {}) {
   const authed = options.authenticated ?? true;
+  await page.route(/\/api\/v1\/admin\/inventory\/acknowledgments(?:\?.*)?$/, route => route.fulfill({
+    headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' },
+    json: [],
+  }));
   await page.route(/\/api\/v1\/admin\/partner\/(?:quotes|requests|change-requests)$/, route => route.fulfill({
     headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' },
     json: [],
@@ -70,6 +74,17 @@ export async function setupAdminMocks(page: Page, options: { authenticated?: boo
 }
 
 export { expect };
+
+/** Existing create-flow tests choose Daily deliberately instead of relying on the old implicit default. */
+export async function selectDailyScheduleIfEmpty(page: Page) {
+  // A missing picker is a test failure, not a silent skip: the create flows must always show the Schedule field.
+  const schedule = page.getByRole('dialog').last().getByRole('textbox', { name: /^Schedule/ });
+  await expect(schedule).toBeVisible();
+  if (await schedule.inputValue() === '') {
+    await schedule.click();
+    await page.getByRole('listbox').getByRole('option', { name: 'Daily', exact: true }).click();
+  }
+}
 
 /** Opens or closes the phone navigation drawer. The desktop sidebar has no toggle, so this is a no-op there. */
 export async function setNavOpen(page: Page, open: boolean) {

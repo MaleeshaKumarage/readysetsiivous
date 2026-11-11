@@ -18,6 +18,7 @@ using Moq;
 
 namespace CleaningSuite.Tests;
 
+[Collection("Database integration")]
 public class PushReminderDatabaseTests
 {
     [QualityCycleDatabaseFact]
@@ -163,7 +164,7 @@ public class PushReminderDatabaseTests
         var pending = new Employee { Role = Employee.RoleAdmin, KeycloakUserId = "pending", IdentitySyncPending = true };
         var company = new Company { IsActive = true, IsPartnerEnabled = true, BusinessId = "1234567-1" };
         var partner = new Employee { Role = Employee.RolePartner, KeycloakUserId = "partner", PartnerCompanyId = company.Id };
-        var branch = new Branch { CompanyId = company.Id, IsActive = true, PriceNet = 100, VatRatePercent = 25.5m, EstimatedDurationMinutes = 60 };
+        var branch = new Branch { CompanyId = company.Id, IsActive = true, PriceNet = 100, VatRatePercent = 25.5m, EstimatedDurationMinutes = 60, SizeM2 = 34, CleaningType = "Deep" };
         using (var db = f.Store.LightweightSession(f.Tenant))
         {
             db.Store(admin, manager, pending, partner); db.Store(company); db.Store(branch);
@@ -245,7 +246,7 @@ public class PushReminderDatabaseTests
         f.Employee.AutoAcceptWork = automatic;
         var admin = new Employee { Role = Employee.RoleAdmin, KeycloakUserId = "admin" };
         var company = new Company { IsActive = true, IsPartnerEnabled = true };
-        var branch = new Branch { CompanyId = company.Id, IsActive = true };
+        var branch = new Branch { CompanyId = company.Id, IsActive = true, SizeM2 = 34, CleaningType = "Deep" };
         var request = new CleaningSuite.Domain.Partners.PartnerCleaningRequest
         {
             CompanyId = company.Id, BranchId = branch.Id,
@@ -277,7 +278,7 @@ public class PushReminderDatabaseTests
     {
         using var f = await Fixture.Create();
         var company = new Company { IsActive = true, IsPartnerEnabled = true };
-        var branch = new Branch { CompanyId = company.Id, IsActive = true };
+        var branch = new Branch { CompanyId = company.Id, IsActive = true, SizeM2 = 34, CleaningType = "Deep" };
         var request = new CleaningSuite.Domain.Partners.PartnerCleaningRequest { CompanyId = company.Id, BranchId = branch.Id, Status = "Offered", OfferedEmployeeId = f.Employee.Id, OfferId = Guid.NewGuid() };
         using (var db = f.Store.LightweightSession(f.Tenant))
         {
@@ -373,7 +374,7 @@ public class PushReminderDatabaseTests
         public static async Task<Fixture> Create()
         {
             var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
-            var services = new ServiceCollection(); services.AddLogging(); services.AddCleaningMarten(connection, databaseSchemaName: "push_reminder_" + Guid.NewGuid().ToString("N"));
+            var services = new ServiceCollection(); services.AddLogging(); services.AddTestMarten(connection, databaseSchemaName: "push_reminder_" + Guid.NewGuid().ToString("N"));
             var provider = services.BuildServiceProvider(); var store = provider.GetRequiredService<IDocumentStore>(); await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
             var f = new Fixture { Provider = provider, Store = store, Config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?> { ["ConnectionStrings:DefaultConnection"] = connection }).Build() };
             f.Device = new() { EmployeeId = f.Employee.Id, Subject = "subject", OptedInUtc = f.Now.UtcDateTime.AddDays(-2), CreatedUtc = f.Now.UtcDateTime.AddDays(-2) };
@@ -391,7 +392,13 @@ public class PushReminderDatabaseTests
         }
         public ShiftOccurrenceException AddExtra(DateTime start, DateTime end)
         { var visit = ShiftOccurrenceException.Create(Shift.Id, null, start, end, ShiftOccurrenceExceptionStatus.Extra, "test", Employee.Id); Exceptions.Add(visit); return visit; }
-        public TenantSessionFactory Session() => new(Store, Context);
+        private readonly System.Collections.Concurrent.ConcurrentBag<TenantSessionFactory> ownedSessions = [];
+        public TenantSessionFactory Session()
+        {
+            var session = new TenantSessionFactory(Store, Context);
+            ownedSessions.Add(session);
+            return session;
+        }
         public PushReminderScheduler Scheduler()
         {
             var session = Session(); var forms = new Mock<IQualityCycleRepository>();
@@ -401,6 +408,10 @@ public class PushReminderDatabaseTests
                 new PushOutbox(), new ShiftWorkReservation(Config, session), clock.Object,
                 Mock.Of<IPushSettings>(x => x.Available == true && x.KeyId == "key"));
         }
-        public void Dispose() => Provider.Dispose();
+        public void Dispose()
+        {
+            foreach (var session in ownedSessions) session.Dispose();
+            Provider.Dispose();
+        }
     }
 }

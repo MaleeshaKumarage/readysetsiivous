@@ -17,6 +17,7 @@ import { initAuth, isAuthenticated, authTenant, login, logout } from '@/lib/auth
 import { meApi, MyShiftOccurrence, QualityCycleFormItem, type ShiftCalendarView } from '@/lib/meApi';
 import ShiftCalendar from './ShiftCalendar';
 import { EmployeeTabs, InventorySection, OffersSection, SettingsSection, type EmployeeSection } from '@/components/EmployeeSections';
+import { KeyRequestsSection } from '@/components/MyKeyRequests';
 import { Logo } from '@/ds/Logo';
 import { Button } from '@/ds/Button';
 import { Card } from '@/ds/Card';
@@ -92,6 +93,8 @@ export default function MyShiftsPage() {
   const [view, setView] = useState<ShiftCalendarView>('today');
   const viewRef = useRef<ShiftCalendarView>('today');
   const [range, setRange] = useState<{ fromLocalDate: string; toLocalDate: string } | null>(null);
+  // Completed-visit date filter on the Past tab. Empty means the default recent window.
+  const [pastFilter, setPastFilter] = useState<{ from: string; to: string }>({ from: '', to: '' });
   const [loadingMore, setLoadingMore] = useState(false);
   const drafts = useRef<Record<string, { items: QualityCycleFormItem[]; notes: string; photos: ShiftPhoto[] }>>({});
   const loadVersion = useRef(0);
@@ -130,12 +133,12 @@ export default function MyShiftsPage() {
     return () => { active = false; loadVersion.current++; };
   }, []);
 
-  async function loadShifts(selected: ShiftCalendarView = viewRef.current, cursor?: string, append = false) {
+  async function loadShifts(selected: ShiftCalendarView = viewRef.current, cursor?: string, append = false, filter: { from: string; to: string } = { from: '', to: '' }) {
     const version = ++loadVersion.current;
     if (append) setLoadingMore(true); else setLoading(true);
     setError(null);
     try {
-      const data = await meApi.calendar(selected, cursor);
+      const data = await meApi.calendar(selected, cursor, filter.from || undefined, filter.to || undefined);
       if (version === loadVersion.current) {
         calendarZone.current = data.timeZoneId;
         calendarDay.current = tenantDateKey(new Date(), data.timeZoneId);
@@ -158,7 +161,15 @@ export default function MyShiftsPage() {
     if (busy || submitting || photoReading || selected === viewRef.current) return;
     closeForm(); setView(selected); viewRef.current = selected;
     setOccurrences([]); setRange(null); setLoadingMore(false);
+    setPastFilter({ from: '', to: '' });
     void loadShifts(selected);
+  }
+
+  function applyPastFilter(next: { from: string; to: string }) {
+    if (busy || submitting || photoReading) return;
+    setPastFilter(next);
+    setOccurrences([]); setRange(null); setLoadingMore(false);
+    void loadShifts('past', undefined, false, next);
   }
 
   async function handleStart(o: MyShiftOccurrence) {
@@ -268,36 +279,39 @@ export default function MyShiftsPage() {
               const today = tenantDateKey(new Date(now), o.timeZoneId);
               const canStart = scheduledDate <= today;
               return (
-                <Card key={key} role="group" aria-label={`${o.shiftName} ${o.startUtc}`} variant="elevated" padding="none" className="overflow-hidden">
+                <Card key={key} role="group" aria-label={`${o.shiftName} ${o.startUtc}`} variant="elevated" padding="none" className="employee-job overflow-hidden">
                   <div className="p-5 space-y-3">
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="employee-job-heading flex items-start justify-between gap-3">
                       <div>
                         <h2 className="font-bold text-gray-900 dark:text-gray-100">{o.shiftName}</h2>
-                        <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 dark:text-gray-400 pt-1">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="w-3.5 h-3.5" />
-                            Scheduled: {formatTenantDate(o.startUtc, o.timeZoneId, 'date')}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5" />
-                            {formatTenantDate(o.startUtc, o.timeZoneId, 'time')}
-                            {' – '}
-                            {formatTenantDate(o.endUtc, o.timeZoneId, 'time')}
-                            {' · '}{o.timeZoneId}
-                          </span>
-                        </div>
-                        {o.form?.startedAtUtc && <p className="text-xs text-gray-600 dark:text-gray-300 pt-1">Actual start: {formatTenantDate(o.form.startedAtUtc, o.timeZoneId, 'datetime')}</p>}
-                        {o.form?.endedAtUtc && <p className="text-xs text-gray-600 dark:text-gray-300">Actual end: {formatTenantDate(o.form.endedAtUtc, o.timeZoneId, 'datetime')}</p>}
                       </div>
                       <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${statusClasses(status)}`}>
                         {statusLabel(status)}
                       </span>
                     </div>
 
+                    <div className="employee-job-times">
+                      <div className="employee-scheduled flex flex-wrap items-center gap-3 text-xs text-gray-500 dark:text-gray-400 pt-1">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5" />
+                          Scheduled: {formatTenantDate(o.startUtc, o.timeZoneId, 'date')}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5" />
+                          {formatTenantDate(o.startUtc, o.timeZoneId, 'time')}
+                          {' – '}
+                          {formatTenantDate(o.endUtc, o.timeZoneId, 'time')}
+                          {' · '}{o.timeZoneId}
+                        </span>
+                      </div>
+                      {o.form?.startedAtUtc && <p className="employee-actual text-xs text-gray-600 dark:text-gray-300 pt-1">Actual start: {formatTenantDate(o.form.startedAtUtc, o.timeZoneId, 'datetime')}</p>}
+                      {o.form?.endedAtUtc && <p className="employee-actual text-xs text-gray-600 dark:text-gray-300">Actual end: {formatTenantDate(o.form.endedAtUtc, o.timeZoneId, 'datetime')}</p>}
+                    </div>
+
                     {(o.notes || o.accessInstructions || o.contactName || o.contactPhone) && !o.isDeleted && (
-                      <section aria-label="Visit instructions" className="rounded-lg bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-gray-800 dark:text-gray-100 space-y-1">
+                      <section aria-label="Visit instructions" className="employee-instructions rounded-lg bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-gray-800 dark:text-gray-100 space-y-1">
                         <h3 className="font-semibold">Instructions</h3>
-                        {o.notes && <p className="whitespace-pre-wrap">{o.notes}</p>}
+                        {o.notes && <div><span className="block font-semibold">Cleaning: </span><p className="whitespace-pre-wrap">{o.notes}</p></div>}
                         {o.accessInstructions && <p className="whitespace-pre-wrap"><span className="font-semibold">Access: </span>{o.accessInstructions}</p>}
                         {(o.contactName || o.contactPhone) && <p><span className="font-semibold">Contact: </span>{[o.contactName, o.contactPhone].filter(Boolean).join(' · ')}</p>}
                       </section>
@@ -359,10 +373,10 @@ export default function MyShiftsPage() {
                         <p id="shift-photo-note-help" className="text-xs text-gray-600 dark:text-gray-300">Each photo needs its own note. General shift notes are optional, with or without photos.</p>
                         <div className="space-y-2">
                           {photos.length > 0 && (
-                            <div className="flex flex-wrap gap-2">
+                            <div className="employee-evidence-grid">
                               {photos.map((p, i) => (
-                                <div key={i} className="relative">
-                                  <img src={p.url} alt={`photo-${i}`} className="w-16 h-16 object-cover rounded-lg border border-gray-200 dark:border-gray-700" />
+                                <div key={i} className="employee-evidence relative">
+                                  <img src={p.url} alt={`photo-${i}`} className="employee-evidence-photo object-contain rounded-lg border border-gray-200 dark:border-gray-700" />
                                   <label className="block text-sm">Photo {i + 1} note (required)
                                     <textarea ref={el => { noteRef.current[i] = el; }} aria-label={`Photo ${i + 1} note`} aria-required="true"
                                       aria-invalid={noteError && !p.note.trim()} value={p.note} disabled={submitting || photoReading}
@@ -373,7 +387,7 @@ export default function MyShiftsPage() {
                                     type="button"
                                     disabled={submitting}
                                     onClick={() => handleRemovePhoto(i)}
-                                    className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-white text-xs leading-none"
+                                    className="employee-photo-remove absolute top-2 right-2 min-h-11 min-w-11 rounded-full bg-red-700 text-white text-xl leading-none"
                                     aria-label="Remove photo"
                                   >
                                     ×
@@ -382,10 +396,10 @@ export default function MyShiftsPage() {
                               ))}
                             </div>
                           )}
-                          <label className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-700 dark:text-brand-400 cursor-pointer">
+                          <label className="employee-photo-add inline-flex items-center gap-1.5 text-sm font-medium text-brand-700 dark:text-brand-400 cursor-pointer">
                             <Upload className="w-4 h-4" />
                             Add photo
-                            <input aria-label="Add shift photos" type="file" accept="image/png,image/jpeg,image/webp,image/bmp" multiple disabled={submitting || photoReading} className="hidden" onChange={handlePhotoUpload} />
+                            <input aria-label="Add shift photos" type="file" accept="image/png,image/jpeg,image/webp,image/bmp" multiple disabled={submitting || photoReading} className="sr-only" onChange={handlePhotoUpload} />
                           </label>
                         </div>
                         {photoReading && <p role="status">Reading photos...</p>}
@@ -435,9 +449,9 @@ export default function MyShiftsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-accent-50 via-white to-brand-50 dark:from-gray-950 dark:via-gray-950 dark:to-gray-900 py-8 px-4 sm:px-6">
-      <div className="max-w-2xl mx-auto space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="employee-portal py-8 px-4 sm:px-6">
+      <div className="employee-content max-w-2xl mx-auto space-y-6">
+        <div className="employee-header flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Logo size="md" />
             <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">My Shifts</h1>
@@ -450,6 +464,7 @@ export default function MyShiftsPage() {
 
         <EmployeeTabs section={section} onChange={setSection} />
         {section === 'offers' && <OffersSection autoAcceptWork={autoAcceptWork} preferenceError={preferenceError} onRetryPreference={() => void loadPreference()} onAccepted={() => void loadShifts()} />}
+        {section === 'keys' && <KeyRequestsSection />}
         {section === 'inventory' && <InventorySection />}
         {section === 'settings' && <SettingsSection autoAcceptWork={autoAcceptWork} />}
         {section === 'schedules' && <div id="employee-panel-schedules" role="tabpanel" aria-labelledby="employee-tab-schedules" className="space-y-6">
@@ -477,6 +492,11 @@ export default function MyShiftsPage() {
             }}>{tab[0].toUpperCase() + tab.slice(1)}</button>)}
         </div>
 
+        {view === 'past' && <div className="mb-4 flex flex-wrap items-end gap-3 text-sm font-semibold text-gray-800 dark:text-gray-100">
+          <label className="flex items-center gap-2">From <input type="date" aria-label="From date" value={pastFilter.from} max={pastFilter.to || calendarDay.current || undefined} disabled={busy || photoReading || submitting} onChange={e => applyPastFilter({ ...pastFilter, from: e.target.value })} className="rounded-lg border px-2 py-1 font-normal" /></label>
+          <label className="flex items-center gap-2">To <input type="date" aria-label="To date" value={pastFilter.to} min={pastFilter.from || undefined} max={calendarDay.current || undefined} disabled={busy || photoReading || submitting} onChange={e => applyPastFilter({ ...pastFilter, to: e.target.value })} className="rounded-lg border px-2 py-1 font-normal" /></label>
+          {(pastFilter.from || pastFilter.to) && <Button variant="outline" disabled={busy || photoReading || submitting} onClick={() => applyPastFilter({ from: '', to: '' })}>Clear dates</Button>}
+        </div>}
         <div id="my-shifts-panel" role="tabpanel" aria-labelledby={`shift-tab-${view}`}>
 
         {loading ? (
@@ -501,7 +521,7 @@ export default function MyShiftsPage() {
           </div>
         )}
         </div>
-        {view !== 'today' && range && !loading && <Button variant="outline" disabled={loadingMore || busy || photoReading || submitting}
+        {view !== 'today' && range && !loading && !(view === 'past' && (pastFilter.from || pastFilter.to)) && <Button variant="outline" disabled={loadingMore || busy || photoReading || submitting}
           onClick={() => void loadShifts(view, view === 'past' ? range.fromLocalDate : range.toLocalDate, true)}>
           {loadingMore ? 'Loading shifts…' : view === 'past' ? 'Load earlier shifts' : 'Load later shifts'}
         </Button>}

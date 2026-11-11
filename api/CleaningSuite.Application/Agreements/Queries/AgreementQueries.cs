@@ -107,6 +107,9 @@ public class GetAgreementFileHandler : IRequestHandler<GetAgreementFileQuery, st
     {
         var a = await _repo.FindBySignerTokenAsync(_context.TenantId, request.Token, ct);
         if (a is null) return null;
+        // A cancelled agreement revokes public viewing for every signer. The stored files stay
+        // on the record, and the admin document endpoint still serves them.
+        if (a.Status == Agreement.StatusCancelled) return null;
 
         var signer = a.Signers.FirstOrDefault(s => s.Token == request.Token);
         // A deactivated agreement blocks unsigned signers; those who already signed may

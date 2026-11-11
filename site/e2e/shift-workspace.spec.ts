@@ -93,7 +93,8 @@ test('workspace Edit schedule opens the existing Edit shift dialog for that shif
   await expect(page.getByRole('dialog', { name: 'Manage — Workspace shift', exact: true })).toHaveCount(0);
   const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
   await expect(edit).toBeVisible();
-  await expect(edit.getByRole('textbox', { name: /^Name/ })).toHaveValue('Workspace shift');
+  // Shift names are generated from the property, so a shift opened for editing shows its name read-only.
+  await expect(edit.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Workspace shift');
 });
 
 test('workspace Checklist template opens the existing template dialog for that shift', async ({ page }) => {
@@ -198,4 +199,26 @@ test('phone-width workspace has no horizontal overflow and its actions stay insi
       expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
     }
   }
+});
+
+test('editing a shift keeps its generated name read-only, and saving sends the name the server builds', async ({ page }) => {
+  await setup(page);
+  const saved: Record<string, unknown>[] = [];
+  await page.route(/\/api\/v1\/admin\/shifts\/daily$/, route => {
+    if (route.request().method() === 'PUT') { saved.push(route.request().postDataJSON() as Record<string, unknown>); return route.fulfill({ status: 200, headers, json: { id: 'daily', ...saved[saved.length - 1] } }); }
+    return route.fallback();
+  });
+  await page.goto('/admin/shifts/');
+  await openShiftWorkspace(page, 'Workspace shift');
+  await page.getByRole('dialog', { name: 'Manage — Workspace shift', exact: true }).getByRole('button', { name: 'Edit schedule', exact: true }).click();
+  const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
+  const nameField = edit.getByRole('textbox', { name: 'Name', exact: true });
+  await expect(nameField).toHaveValue('Workspace shift');
+  await expect(nameField).toHaveAttribute('readonly', '');
+  await expect(edit.getByRole('button', { name: 'Reset to generated name', exact: true })).toHaveCount(0);
+  await edit.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(edit).toHaveCount(0);
+  expect(saved).toHaveLength(1);
+  // The name is the generated one, never a blank or stale value.
+  expect(String(saved[0].name)).toMatch(/Cleaning/);
 });

@@ -35,7 +35,7 @@ async function setup(page: Page, clashHolders: string[] = ['cleaner'], options: 
     if (!clashCleared) return route.fulfill({ status: 409, headers, json: {
       title: 'Shift conflict',
       detail: 'Test Cleaner is already on Evening deep clean for an overlapping visit. Choose another cleaner or time, or remove the cleaner from the other visit first.',
-      conflicts: [{ shiftId: 'other', shiftName: 'Evening deep clean', startUtc: clashStart, endUtc: clashEnd }],
+      conflicts: [{ shiftId: 'other', shiftName: 'Evening deep clean', startUtc: clashStart, endUtc: clashEnd, recurrence: 'Every other Friday (week parity 1)', openEnded: true }],
     } });
     return route.fulfill({ headers, json: { employeeIds: body.employeeIds, preview: body.preview, message: 'Only this visit changes.' } });
   });
@@ -65,6 +65,8 @@ test('overlap refusal names the clashing visit, removes that cleaner from it, th
   const editor = await openAssignForMorningVisit(page, 'Cover the morning visit');
   await editor.getByRole('button', { name: 'Preview assignment', exact: true }).click();
   await expect(editor.getByText('Overlaps Evening deep clean')).toBeVisible();
+  await expect(editor.getByText(/Every other Friday.*No end date/)).toBeVisible();
+  await expect(editor.getByRole('link', { name: 'Open assignments for Test Cleaner' })).toHaveAttribute('href', /employee=cleaner&date=/);
   await expect(editor.getByText(/Choose another cleaner or time/)).toBeVisible();
   await editor.getByRole('button', { name: 'Remove from Evening deep clean and assign here' }).click();
   await expect(editor.getByText('Selected visit: Test Cleaner')).toBeVisible();
@@ -96,6 +98,8 @@ test('overlap removal explains when the cleaner is no longer on the clashing vis
   const editor = await openAssignForMorningVisit(page, 'Cover the morning visit');
   await editor.getByRole('button', { name: 'Preview assignment', exact: true }).click();
   await expect(editor.getByText('Overlaps Evening deep clean')).toBeVisible();
+  await expect(editor.getByText(/Every other Friday.*No end date/)).toBeVisible();
+  await expect(editor.getByRole('link', { name: 'Open assignments for Test Cleaner' })).toHaveAttribute('href', /employee=cleaner&date=/);
   await editor.getByRole('button', { name: 'Remove from Evening deep clean and assign here' }).click();
   await expect(editor.getByText('The selected cleaners are no longer on the overlapping visit. Preview again to continue.')).toBeVisible();
   await expect(editor.getByRole('button', { name: 'Save assignment', exact: true })).toBeDisabled();
@@ -141,4 +145,80 @@ test('overlap refusal on save shows the server message that names the clashing v
   await expect(page.getByText(/It clashes with "Evening deep clean", 2 Nov 2026 08:30 to 2 Nov 2026 10:30\./).first()).toBeVisible();
   await expect(editor).toBeVisible();
   await expect(editor.getByRole('button', { name: 'Save assignment', exact: true })).toBeVisible();
+});
+
+// The clashing shift is loaded by id, so it can be on another page of the shift list.
+async function mockClashingShift(page: Page, status = 200) {
+  await page.route(/\/api\/v1\/admin\/shifts\/other$/, route => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    if (status !== 200) return route.fulfill({ status, headers, json: { detail: 'Shift not found.' } });
+    return route.fulfill({ headers, json: { id: 'other', name: 'Evening deep clean', companyId: 'company', branchId: 'branch', isActive: true, schedule: { type: 0, dailyStart: '08:30', dailyEnd: '10:30' } } });
+  });
+}
+
+test('overlap refusal links to the clashing shift, whose visit list opens with the overlapping visit to move', async ({ page }) => {
+  await setup(page, ['cleaner']);
+  await mockClashingShift(page);
+  // A second, non-clashing visit proves the marker is only on the overlapping row.
+  await page.route(/\/shifts\/other\/occurrences/, route => route.fulfill({ headers, json: [
+    { startUtc: clashStart, endUtc: clashEnd, assigneeIds: ['cleaner'], overrideEmployeeIds: ['cleaner'], rosterVersion: 'other-v1', assignmentVersion: 'other-a1', originalStartUtc: clashStart },
+    { startUtc: '2026-11-05T06:00:00.000Z', endUtc: '2026-11-05T08:00:00.000Z', assigneeIds: [], rosterVersion: 'other-v2' },
+  ] }));
+  const editor = await openAssignForMorningVisit(page, 'Cover the morning visit');
+  await editor.getByRole('button', { name: 'Preview assignment', exact: true }).click();
+  await expect(editor.getByText('Overlaps Evening deep clean')).toBeVisible();
+  const occurrenceRequest = page.waitForRequest(request => request.url().includes('/shifts/other/occurrences'));
+  await editor.getByRole('button', { name: 'View Evening deep clean visits', exact: true }).click();
+  // The assignment dialog closes and the clashing shift's visits open in its place.
+  await expect(editor).toHaveCount(0);
+  const list = page.getByRole('dialog', { name: 'Occurrences — Evening deep clean', exact: true });
+  await expect(list).toBeVisible();
+  await expect(list.getByText('Showing Evening deep clean. The overlapping visit is marked below.')).toBeVisible();
+  // The requested range always includes the overlapping visit, even when it falls outside the default 31-day window.
+  const range = new URL((await occurrenceRequest).url()).searchParams;
+  expect(Date.parse(range.get('from') ?? '')).toBeLessThanOrEqual(Date.parse(clashStart));
+  expect(Date.parse(range.get('to') ?? '')).toBeGreaterThanOrEqual(Date.parse(clashEnd));
+  // That visit is marked and keeps its own Assign action, so the admin can change it there.
+  // Only the overlapping row is marked, and its own Assign action is the one that is reachable there.
+  await expect(list.getByText('Overlapping visit', { exact: true })).toHaveCount(1);
+  const clashRow = list.getByRole('row').filter({ hasText: 'Overlapping visit' });
+  await expect(clashRow.getByRole('button', { name: 'Assign', exact: true })).toBeVisible();
+});
+
+test('the clashing-shift link is also offered when the save itself is refused for the overlap', async ({ page }) => {
+  await setup(page, []);
+  await mockClashingShift(page);
+  await page.route(/\/visit-assignees$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    const body = route.request().postDataJSON() as { preview: boolean };
+    if (body.preview) return route.fulfill({ headers, json: { employeeIds: ['cleaner'], preview: true, message: 'Only this visit changes.' } });
+    return route.fulfill({ status: 409, headers, json: {
+      title: 'Shift conflict',
+      detail: 'This cleaner already has a visit that overlaps the visit starting 2 Nov 2026 08:00. It clashes with "Evening deep clean", 2 Nov 2026 08:30 to 2 Nov 2026 10:30. No assignments were saved. Choose another cleaner or time, or remove the cleaner from the other visit first.',
+      conflicts: [{ shiftId: 'other', shiftName: 'Evening deep clean', startUtc: clashStart, endUtc: clashEnd }],
+    } });
+  });
+  const editor = await openAssignForMorningVisit(page, 'Cover the morning visit');
+  await editor.getByRole('button', { name: 'Preview assignment', exact: true }).click();
+  await expect(editor.getByText('Selected visit: Test Cleaner')).toBeVisible();
+  await editor.getByRole('button', { name: 'Save assignment', exact: true }).click();
+  await expect(editor.getByRole('button', { name: 'View Evening deep clean visits', exact: true })).toBeVisible();
+  await editor.getByRole('button', { name: 'View Evening deep clean visits', exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'Occurrences — Evening deep clean', exact: true })).toBeVisible();
+});
+
+test('when the clashing shift cannot be loaded, the assignment stays open with the cleaner and reason kept', async ({ page }) => {
+  await setup(page, ['cleaner']);
+  await mockClashingShift(page, 404);
+  const editor = await openAssignForMorningVisit(page, 'Cover the morning visit');
+  await editor.getByRole('button', { name: 'Preview assignment', exact: true }).click();
+  await editor.getByRole('button', { name: 'View Evening deep clean visits', exact: true }).click();
+  await expect(page.getByText('Could not open shift').first()).toBeVisible();
+  // The refusal stays on screen, so the admin can still remove the cleaner from that visit or retry.
+  await expect(editor).toBeVisible();
+  await expect(editor.getByText('Overlaps Evening deep clean')).toBeVisible();
+  await expect(editor.getByRole('button', { name: 'Remove from Evening deep clean and assign here' })).toBeVisible();
+  await expect(editor.getByLabel('Assignment reason')).toHaveValue('Cover the morning visit');
+  await expect(page.getByRole('dialog', { name: /Occurrences — Evening deep clean/ })).toHaveCount(0);
 });

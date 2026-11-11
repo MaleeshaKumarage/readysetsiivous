@@ -17,6 +17,7 @@ using Moq;
 
 namespace CleaningSuite.Tests.Partners;
 
+[Collection("Database integration")]
 public class PartnerWorkflowTests
 {
     [Fact]
@@ -42,6 +43,24 @@ public class PartnerWorkflowTests
     {
         PartnerShiftGuard.EnsureOrdinary(new Shift());
         Assert.Throws<ShiftConflictException>(() => PartnerShiftGuard.EnsureOrdinary(new Shift { PartnerRequestId = Guid.NewGuid() }));
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Partners_see_price_and_duration_but_never_the_cleaner_name()
+    {
+        using var fixture = await Fixture.Create();
+        var request = await fixture.SubmitOffer();
+        using (var session = fixture.Session())
+            await fixture.Service(session).Accept(fixture.Cleaner.Id, request.OfferId!.Value, new(request.Version), default);
+        using var session2 = fixture.Session();
+        var service = fixture.Service(session2);
+        var partnerView = await service.Get(fixture.Partner.Id, request.Id, default);
+        Assert.Equal(100m, partnerView.PriceNet);
+        Assert.Equal(25.5m, partnerView.VatRatePercent);
+        Assert.Equal(120, partnerView.EstimatedDurationMinutes);
+        Assert.Null(partnerView.AcceptedCleanerName);
+        var staffView = Assert.Single(await service.Requests(fixture.Admin.Id, true, null, default), x => x.Id == request.Id);
+        Assert.False(string.IsNullOrWhiteSpace(staffView.AcceptedCleanerName));
     }
 
     [QualityCycle.QualityCycleDatabaseFact]
@@ -616,7 +635,7 @@ public class PartnerWorkflowTests
 
     private static async Task<Branch> StoreBranch(Fixture fixture, Guid companyId, string name, bool priced)
     {
-        var branch = Branch.Create(companyId, name);
+        var branch = Branch.Create(companyId, name); branch.SetPropertyDetails(34, "Deep");
         if (priced) branch.SetPricing(100, 25.5m, 120);
         using var writer = fixture.Store.LightweightSession(fixture.Tenant);
         writer.Store(branch); await writer.SaveChangesAsync();
@@ -693,11 +712,11 @@ public class PartnerWorkflowTests
         public static async Task<Fixture> Create()
         {
             var services = new ServiceCollection(); services.AddLogging();
-            services.AddCleaningMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!, databaseSchemaName: "partner_" + Guid.NewGuid().ToString("N"));
+            services.AddTestMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!, databaseSchemaName: "partner_" + Guid.NewGuid().ToString("N"));
             var fixture = new Fixture(services.BuildServiceProvider());
             await fixture.Store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
             fixture.Company.IsPartnerEnabled = true;
-            fixture.Branch = Branch.Create(fixture.Company.Id, "Apartment"); fixture.Branch.SetPricing(100, 25.5m, 120);
+            fixture.Branch = Branch.Create(fixture.Company.Id, "Apartment"); fixture.Branch.SetPricing(100, 25.5m, 120); fixture.Branch.SetPropertyDetails(34, "Deep");
             fixture.Partner = new Employee { Role = Employee.RolePartner, PartnerCompanyId = fixture.Company.Id };
             using var writer = fixture.Store.LightweightSession(fixture.Tenant);
             writer.Store(fixture.Company); writer.Store(fixture.Branch); writer.Store(fixture.Partner, fixture.Admin, fixture.Cleaner);

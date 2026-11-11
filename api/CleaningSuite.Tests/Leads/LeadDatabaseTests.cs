@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 namespace CleaningSuite.Tests.Leads;
+[Collection("Database integration")]
 public class LeadDatabaseTests
 {
     [QualityCycle.QualityCycleDatabaseFact]
@@ -65,7 +66,7 @@ public class LeadDatabaseTests
         Assert.Single(outcomes.Where(x=>x));using var reader=store.QuerySession("a");Assert.Equal(3,(await reader.LoadAsync<Lead>(lead.Lead.Id))!.Images.Count);
     }
     private static IConfiguration Config()=>new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{["ConnectionStrings:DefaultConnection"]=Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")}).Build();
-    private static ServiceProvider Services(){var s=new ServiceCollection();s.AddLogging();s.AddCleaningMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!,databaseSchemaName:"leads_"+Guid.NewGuid().ToString("N"));return s.BuildServiceProvider();}
+    private static ServiceProvider Services(){var s=new ServiceCollection();s.AddLogging();s.AddTestMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!,databaseSchemaName:"leads_"+Guid.NewGuid().ToString("N"));return s.BuildServiceProvider();}
     private static TenantSessionFactory Tenant(IDocumentStore store,string id){var tenant=new Mock<ITenantContext>();tenant.SetupGet(x=>x.TenantId).Returns(id);return new(store,tenant.Object);}
     private static LeadService Service(ITenantSession session)=>new(new LeadRepository(session,Config()),new Mock<ILeadFileStore>().Object,NoopUploadContentValidator.Instance,TimeProvider.System);
 }
