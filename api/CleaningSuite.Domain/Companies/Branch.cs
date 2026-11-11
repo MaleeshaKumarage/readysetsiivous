@@ -200,6 +200,8 @@ public static class CleaningTypes
 {
     public const string Deep = "Deep";
     public const string Normal = "Normal";
+    /// <summary>Net, excl. VAT, added to each completed Deep visit on invoices.</summary>
+    public const decimal DeepSurchargeNet = 15m;
 
     /// <summary>A missing type is Normal. Anything other than Deep or Normal is refused.</summary>
     public static string Normalize(string? value) => value switch

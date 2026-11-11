@@ -1,4 +1,5 @@
 using CleaningSuite.Application.Shifts;
+using CleaningSuite.Domain.Companies;
 using CleaningSuite.Domain.Invoicing;
 using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Shifts;
@@ -7,7 +8,8 @@ using static CleaningSuite.Application.Invoicing.ShiftBillingSettingsService;
 namespace CleaningSuite.Application.Invoicing;
 
 public record MonthlyInvoiceOverride(Guid ShiftId, string Month, decimal AmountNet, string Reason);
-public record BillableShiftVisit(DateTime StartUtc, DateTime EndUtc, Guid BranchId, string ShiftName, bool Completed, bool Unstarted = false);
+public record BillableShiftVisit(DateTime StartUtc, DateTime EndUtc, Guid BranchId, string ShiftName, bool Completed, bool Unstarted = false,
+    string CleaningType = CleaningTypes.Normal);
 
 /// <summary>Pure decimal calculation; consumes schedule/completion facts, never changes work evidence.</summary>
 public static class ShiftInvoiceCalculator
@@ -134,6 +136,19 @@ public static class ShiftInvoiceCalculator
                 Quantity = 1, UnitPriceNet = adjustment.AmountNet, NetAmount = adjustment.AmountNet, VatRatePercent = first.VatRatePercent,
                 Hours = affected.Sum(l => l.Hours), Occurrences = affected.Sum(l => l.Occurrences), OverrideReason = adjustment.Reason.Trim(),
                 OccurrenceStartsUtc = affected.SelectMany(l => l.OccurrenceStartsUtc).Order().ToList() });
+        }
+        // Deep cleaning is a surcharge per completed Deep visit, on its own line, so the visit's agreed price stays unchanged.
+        foreach (var group in pricedVisits.Where(v => v.Visit.Completed && v.Visit.CleaningType == CleaningTypes.Deep)
+            .GroupBy(v => (v.Price!.VatRatePercent, v.Visit.BranchId)))
+        {
+            var count = group.Count();
+            lines.Add(new InvoiceLine { ShiftId = shift.Id, ShiftName = group.First().Visit.ShiftName, BranchName = Branch(group.Key.BranchId), BranchId = group.Key.BranchId,
+                PricingMode = "DeepCleaning", PeriodFrom = group.Min(v => v.Date), PeriodTo = group.Max(v => v.Date),
+                LineKey = $"{shift.Id:N}:deep:{group.Key.BranchId:N}:{group.Key.VatRatePercent:0.###}",
+                Description = $"Deep cleaning surcharge {CleaningTypes.DeepSurchargeNet:0.00} EUR × {count}",
+                Quantity = count, UnitPriceNet = CleaningTypes.DeepSurchargeNet, NetAmount = Round(CleaningTypes.DeepSurchargeNet * count),
+                VatRatePercent = group.Key.VatRatePercent, Occurrences = count,
+                OccurrenceStartsUtc = group.Select(v => v.Visit.StartUtc).Order().ToList() });
         }
         foreach (var line in lines) line.VatAmount = Round(line.NetAmount!.Value * line.VatRatePercent / 100);
         return lines.OrderBy(l => l.PeriodFrom).ThenBy(l => l.BranchName).ToList();

@@ -7,6 +7,7 @@ using CleaningSuite.Application.QualityCycle;
 using CleaningSuite.Application.Shifts;
 using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Common;
+using CleaningSuite.Domain.Companies;
 using CleaningSuite.Domain.Invoicing;
 using CleaningSuite.Domain.Partners;
 using CleaningSuite.Domain.QualityCycle;
@@ -189,6 +190,10 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             if (resolved.Count > 10000) Invalid("Too many scheduled visits in this period. Select a shorter range.");
             var submitted = request.PartnerMonth ? monthEvidence[shift.Id] : await forms.ListFormsAsync(shift.Id, from, to, ct);
             var completionTimes = new Dictionary<DateTime, DateTime>();
+            // Each visit's cleaning type, from its occurrence exception. Visits without one are Normal.
+            var cleaningByStart = (await shifts.ListOccurrenceExceptionsAsync(shift.Id, new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                new DateTime(2200, 1, 1, 0, 0, 0, DateTimeKind.Utc), ct) ?? []).Where(x => x.CleaningType is not null)
+                .GroupBy(x => x.StartUtc).ToDictionary(g => g.Key, g => g.First().CleaningType!);
             var visits = resolved.Where(v => v.Plan.CompanyId == request.CompanyId && !billedStarts.Contains(v.Occurrence.StartUtc)
                 ).Select(v =>
             {
@@ -206,7 +211,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
                 if (isUnstarted && !unstarted.Any(u => u.ShiftId == shift.Id && u.StartUtc == v.Occurrence.StartUtc))
                     unstarted.Add(new(shift.Id, shift.Name, v.Occurrence.StartUtc, v.Occurrence.EndUtc, decision?.Include == true));
                 return new BillableShiftVisit(v.Occurrence.StartUtc, v.Occurrence.EndUtc, v.Plan.BranchId, v.Plan.ShiftName,
-                    completed || (isUnstarted && decision?.Include == true), isUnstarted);
+                    completed || (isUnstarted && decision?.Include == true), isUnstarted, cleaningByStart.GetValueOrDefault(v.Occurrence.StartUtc) ?? CleaningTypes.Normal);
             }).GroupBy(v => v.StartUtc).Select(g => g.First()).ToArray();
             if (request.PartnerMonth)
             {
