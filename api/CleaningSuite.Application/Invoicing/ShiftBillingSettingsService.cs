@@ -40,6 +40,7 @@ public class ShiftBillingSettingsService(IShiftRepository shifts, IShiftBillingR
     {
         await using var lease = await reservation.AcquireAsync(ct);
         var shift = await shifts.GetAsync(id, ct) ?? throw new NotFoundException("Shift", id);
+        if (shift.IsBranchMain) throw new ShiftConflictException("This is the property's main visit shift. Each visit uses the property price in force on its date. Change the property price instead.");
         if (shift.PartnerRequestId.HasValue) throw new ShiftConflictException("Partner visit pricing is frozen when requested. Update branch pricing for future requests instead.");
         if (plan.Mode is not ("Monthly" or "Hourly" or "PerOccurrence")) Invalid("Choose monthly, hourly or per-occurrence pricing.");
         if (plan.Mode == "PerOccurrence" && !shift.Schedule.IsVisitPriced) Invalid("Per-occurrence pricing is for on-call and one-time shifts.");
@@ -62,6 +63,7 @@ public class ShiftBillingSettingsService(IShiftRepository shifts, IShiftBillingR
     {
         await using var lease = await reservation.AcquireAsync(ct);
         var shift = await shifts.GetAsync(id, ct) ?? throw new NotFoundException("Shift", id);
+        if (shift.IsBranchMain) throw new ShiftConflictException("This is the property's main visit shift. Each visit uses the property price in force on its date. Change the property price instead.");
         if (shift.PartnerRequestId.HasValue) throw new ShiftConflictException("Partner visit pricing is frozen when requested. Update branch pricing for future requests instead.");
         if (branches is null) Invalid("Branch prices are unavailable right now. Reload the page and try again.");
         var branch = await branches!.GetAsync(shift.BranchId, ct) ?? throw new NotFoundException("Branch", shift.BranchId);
@@ -105,11 +107,30 @@ public class ShiftBillingSettingsService(IShiftRepository shifts, IShiftBillingR
         var date = DateOnly.FromDateTime(TenantTimeZone.LocalDate(price.OccurrenceStartUtc, zone));
         if ((await invoices.ListAsync(null, null, ct)).Any(i => Billed(i, id) && i.PeriodFrom <= date && i.PeriodTo >= date))
             throw new ShiftConflictException("This visit has already been invoiced. Void the invoice before changing its price.");
-        var visits = await CleaningSuite.Application.QualityCycle.QualityCycleOccurrences.ResolvedInWindowAsync(shifts, ShiftContractSchedule.Snapshot(shift, zone),
-            price.OccurrenceStartUtc, price.OccurrenceStartUtc.AddTicks(1), zone, ct, true);
-        if (!visits.Any(v => v.Occurrence.StartUtc == price.OccurrenceStartUtc)) Invalid("The selected visit no longer exists or was cancelled. Reload occurrences.");
+        // Every visit of a main shift is a stored extra visit, so it is looked up directly.
+        var mainVisit = await BranchMainVisits.FindAsync(shifts, shift, price.OccurrenceStartUtc, ct);
+        if (shift.IsBranchMain)
+        {
+            if (mainVisit is null) Invalid("The selected visit no longer exists or was cancelled. Reload occurrences.");
+            // A partner booking keeps the price frozen on its request.
+            if (mainVisit!.PartnerRequestId is not null)
+                throw new ShiftConflictException("Partner visit pricing is frozen when requested. Update branch pricing for future requests instead.");
+        }
+        else
+        {
+            var visits = await CleaningSuite.Application.QualityCycle.QualityCycleOccurrences.ResolvedInWindowAsync(shifts, ShiftContractSchedule.Snapshot(shift, zone),
+                price.OccurrenceStartUtc, price.OccurrenceStartUtc.AddTicks(1), zone, ct, true);
+            if (!visits.Any(v => v.Occurrence.StartUtc == price.OccurrenceStartUtc)) Invalid("The selected visit no longer exists or was cancelled. Reload occurrences.");
+        }
         var profile = await billing.GetAsync(id, ct) ?? new() { Id = id, ShiftId = id };
-        if (profile.Plans.Where(p => p.EffectiveFrom <= date).OrderByDescending(p => p.EffectiveFrom).FirstOrDefault()?.Mode != "PerOccurrence")
+        if (shift.IsBranchMain)
+        {
+            // A main shift's visits are priced from the property.
+            var versions = branches is null ? [] : (await branches.GetAsync(shift.BranchId, ct))?.Versions ?? [];
+            if ((versions.LastOrDefault(v => v.EffectiveFrom <= date) ?? versions.FirstOrDefault())?.Mode != "PerOccurrence")
+                Invalid("Set a per-visit price on the property before adding a visit price override.");
+        }
+        else if (profile.Plans.Where(p => p.EffectiveFrom <= date).OrderByDescending(p => p.EffectiveFrom).FirstOrDefault()?.Mode != "PerOccurrence")
             Invalid("Configure per-completed-visit pricing effective on this visit's date before adding a visit price override.");
         profile.Overrides.RemoveAll(p => p.OccurrenceStartUtc == price.OccurrenceStartUtc);
         profile.Overrides.Add(price with { Reason = price.Reason.Trim() });

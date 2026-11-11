@@ -78,7 +78,8 @@ public static class ShiftInvoiceCalculator
                 Quantity = fraction, UnitPriceNet = group.Key.Price.RateNet,
                 NetAmount = Round(group.Key.Price.RateNet * fraction), VatRatePercent = group.Key.Price.VatRatePercent,
                 // Hours and occurrences describe only the completed visits this line bills, matching the quantity.
-                Hours = completedInLine.Sum(v => (decimal)(v.EndUtc - v.StartUtc).Ticks / TimeSpan.TicksPerHour), Occurrences = completedInLine.Length });
+                Hours = completedInLine.Sum(v => (decimal)(v.EndUtc - v.StartUtc).Ticks / TimeSpan.TicksPerHour), Occurrences = completedInLine.Length,
+                OccurrenceStartsUtc = completedInLine.Select(v => v.StartUtc).Order().ToList() });
         }
         var pricedVisits = visits.Select(v => (Visit: v, Date: DateOnly.FromDateTime(TenantTimeZone.LocalDate(v.StartUtc, zone))))
             .Where(v => v.Date >= from && v.Date <= to).Select(v => (v.Visit, v.Date, Price: Price(v.Date))).ToArray();
@@ -86,8 +87,9 @@ public static class ShiftInvoiceCalculator
         // Unstarted visits are billed only when the user ticked them in (Completed); unticked ones bill nothing.
         foreach (var group in pricedVisits.Where(v => v.Price!.Mode != "Monthly" && (v.Price.Mode != "PerOccurrence" ? (v.Visit.Completed || !v.Visit.Unstarted) : v.Visit.Completed))
             .Select(v => { var special = v.Price!.Mode == "PerOccurrence" ? profile.Overrides.FirstOrDefault(o => o.OccurrenceStartUtc == v.Visit.StartUtc) : null;
-                return (v.Visit, v.Date, Price: v.Price!, Rate: special?.RateNet ?? v.Price!.RateNet, Reason: special?.Reason); })
-            .GroupBy(v => (v.Price, v.Rate, v.Reason, v.Visit.BranchId, v.Visit.ShiftName,
+                return (v.Visit, v.Date, Price: v.Price!, Rate: special?.RateNet ?? v.Price!.RateNet, Reason: special?.Reason,
+                    Vat: special?.VatRatePercent ?? v.Price!.VatRatePercent); })
+            .GroupBy(v => (v.Price, v.Rate, v.Reason, v.Vat, v.Visit.BranchId, v.Visit.ShiftName,
                 // Per-occurrence billing keeps each completed visit on its own line, with its own completion time.
                 Start: completedAtByStart is null ? (DateTime?)null : v.Visit.StartUtc)))
         {
@@ -97,7 +99,8 @@ public static class ShiftInvoiceCalculator
                 PricingMode = group.Key.Price.Mode, PeriodFrom = group.Min(v => v.Date), PeriodTo = group.Max(v => v.Date),
                 LineKey = $"{shift.Id:N}:{group.Key.Price.EffectiveFrom:yyyyMMdd}:{group.Key.BranchId:N}:{lines.Count}",
                 Quantity = quantity, UnitPriceNet = group.Key.Rate, NetAmount = Round(quantity * group.Key.Rate),
-                VatRatePercent = group.Key.Price.VatRatePercent, Hours = hours, Occurrences = group.Count(), OverrideReason = group.Key.Reason };
+                VatRatePercent = group.Key.Vat, Hours = hours, Occurrences = group.Count(), OverrideReason = group.Key.Reason,
+                OccurrenceStartsUtc = group.Select(v => v.Visit.StartUtc).Order().ToList() };
             if (group.Key.Start is { } start && completedAtByStart!.TryGetValue(start, out var completedAt))
             {
                 line.CompletedAtUtc = completedAt;
@@ -116,7 +119,8 @@ public static class ShiftInvoiceCalculator
                 PricingMode = "Monthly", Month = adjustment.Month, PeriodFrom = affected.Min(l => l.PeriodFrom), PeriodTo = affected.Max(l => l.PeriodTo),
                 LineKey = $"{shift.Id:N}:{adjustment.Month}:override", Description = string.Join(" + ", affected.Select(l => l.Description)),
                 Quantity = 1, UnitPriceNet = adjustment.AmountNet, NetAmount = adjustment.AmountNet, VatRatePercent = first.VatRatePercent,
-                Hours = affected.Sum(l => l.Hours), Occurrences = affected.Sum(l => l.Occurrences), OverrideReason = adjustment.Reason.Trim() });
+                Hours = affected.Sum(l => l.Hours), Occurrences = affected.Sum(l => l.Occurrences), OverrideReason = adjustment.Reason.Trim(),
+                OccurrenceStartsUtc = affected.SelectMany(l => l.OccurrenceStartsUtc).Order().ToList() });
         }
         foreach (var line in lines) line.VatAmount = Round(line.NetAmount!.Value * line.VatRatePercent / 100);
         return lines.OrderBy(l => l.PeriodFrom).ThenBy(l => l.BranchName).ToList();

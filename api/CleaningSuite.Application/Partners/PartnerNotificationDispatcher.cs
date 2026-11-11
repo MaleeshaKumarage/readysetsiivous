@@ -199,9 +199,20 @@ public sealed class PartnerNotificationDispatcher(IPartnerStore store, IShiftWor
                 var request = await Db.LoadAsync<PartnerCleaningRequest>(id, ct);
                 if (request is null || request.Status != "Accepted" || !request.LinkedShiftId.HasValue) continue;
                 var forms = await Db.Query<QualityCycleForm>().Where(f => f.ShiftId == request.LinkedShiftId.Value && f.ShiftDeletedUtc == null).ToListAsync(ct);
-                var assignments = await Db.Query<ShiftAssignment>().Where(a => a.ShiftId == request.LinkedShiftId.Value && a.IsActive).ToListAsync(ct);
-                var started = forms.Any(f => f.StartedAtUtc.HasValue);
-                var complete = assignments.Count > 0 && assignments.All(a => forms.Any(f => f.EmployeeId == a.EmployeeId && f.IsSubmitted));
+                bool started, complete;
+                if (request.OccurrenceStartUtc is { } visitStart)
+                {
+                    // A visit on a branch main shift: only its own records count, and its cleaner is the one who accepted it.
+                    var own = forms.Where(f => f.ShiftOccurrenceUtc == visitStart).ToList();
+                    started = own.Any(f => f.StartedAtUtc.HasValue);
+                    complete = request.AcceptedEmployeeId is { } cleaner && own.Any(f => f.EmployeeId == cleaner && f.IsSubmitted);
+                }
+                else
+                {
+                    var assignments = await Db.Query<ShiftAssignment>().Where(a => a.ShiftId == request.LinkedShiftId.Value && a.IsActive).ToListAsync(ct);
+                    started = forms.Any(f => f.StartedAtUtc.HasValue);
+                    complete = assignments.Count > 0 && assignments.All(a => forms.Any(f => f.EmployeeId == a.EmployeeId && f.IsSubmitted));
+                }
                 foreach (var kind in new[] { started ? "WorkStarted" : null, complete ? "WorkCompleted" : null }.OfType<string>())
                     foreach (var audience in new[] { "Company" })
                     {

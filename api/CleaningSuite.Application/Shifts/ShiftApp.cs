@@ -257,6 +257,7 @@ public class ShiftHandlers
             var shift = await _repository.GetAsync(request.Id, ct)
                 ?? throw new NotFoundException("Shift", request.Id);
             CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
+            CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureMainStaysPut(shift, request.CompanyId, request.BranchId, request.Schedule);
             if (_companies is not null) _ = await _companies.GetAsync(request.CompanyId, ct) ?? throw new NotFoundException("Company", request.CompanyId);
             var name = request.Name;
             if (_branches is not null) {
@@ -301,6 +302,7 @@ public class ShiftHandlers
             var shift = await _repository.GetAsync(request.Id, ct)
                 ?? throw new NotFoundException("Shift", request.Id);
             CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
+            await CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureNoBookingsAsync(_repository, shift, ct);
             shift.EnsureQualityCycleHistory();
             shift.Deactivate();
             shift.RecordQualityCyclePlan(DateTime.UtcNow);
@@ -398,6 +400,7 @@ public class ShiftHandlers
         {
             var shift = await shifts.GetAsync(request.Id, ct) ?? throw new NotFoundException("Shift", request.Id);
             CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
+            await CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureNoBookingsAsync(shifts, shift, ct);
             if (shift.IsActive) throw new InactiveRecordDeleteConflictException("Deactivate the shift before deleting it.");
             // Started or submitted visit records carry completed work that may not be invoiced yet; deleting the shift would remove it.
             if ((await forms.ListFormsAsync(shift.Id, null, null, ct)).Any(f => f.IsSubmitted || f.StartedAtUtc.HasValue))
@@ -523,6 +526,7 @@ public class ShiftHandlers
             {
                 item = await shifts.GetOccurrenceExceptionAsync(request.Id.Value, ct);
                 if (item is null || item.ShiftId != shift.Id) throw new NotFoundException("ShiftOccurrenceException", request.Id.Value);
+                CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(item);
             }
             else if (original.HasValue)
                 item = await shifts.GetOccurrenceExceptionByOriginalAsync(shift.Id, original.Value, ct);
@@ -556,6 +560,7 @@ public class ShiftHandlers
             CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
             var item = await shifts.GetOccurrenceExceptionAsync(request.Id, ct);
             if (item is null || item.ShiftId != request.ShiftId) throw new NotFoundException("ShiftOccurrenceException", request.Id);
+            CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(item);
             if (item.OriginalStartUtc.HasValue)
             {
                 var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);

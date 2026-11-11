@@ -30,7 +30,7 @@ public sealed class PartnerWorkforceTransitionGuard(IPartnerStore store, IShiftR
             .Where(r => r.OfferedEmployeeId == employeeId || r.AcceptedEmployeeId == employeeId).ToListAsync(ct);
         if (requests.Any(r => r.Status == "Offered" && r.OfferedEmployeeId == employeeId
             || r.Status == "Accepted" && r.AcceptedEmployeeId == employeeId
-                && !forms.Any(f => f.ShiftId == r.LinkedShiftId && f.ShiftOccurrenceUtc == r.PlannedStartUtc && f.IsSubmitted))) Deny();
+                && !forms.Any(f => f.ShiftId == r.LinkedShiftId && f.ShiftOccurrenceUtc == (r.OccurrenceStartUtc ?? r.PlannedStartUtc) && f.IsSubmitted))) Deny();
 
         var assignments = await db.Query<ShiftAssignment>().Where(a => a.EmployeeId == employeeId).ToListAsync(ct);
         var overrides = await db.Query<ShiftOccurrenceAssignment>().Where(a => a.EmployeeIds.Contains(employeeId)).ToListAsync(ct);

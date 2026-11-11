@@ -72,4 +72,9 @@ public class InvoiceLine
     public string LineKey { get; set; } = "";
     public string? Month { get; set; }
     public string? OverrideReason { get; set; }
+    /// <summary>
+    /// Start of each visit this line bills, for per-visit and hourly lines. A branch main shift is checked against
+    /// these, so one invoiced visit does not block the shift's other visits in the same period.
+    /// </summary>
+    public List<DateTime> OccurrenceStartsUtc { get; set; } = [];
 }

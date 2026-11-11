@@ -188,7 +188,9 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
             var visits = ShiftRosterReader.ResolveRoster(shift, fromUtc, toUtc, zone,
                 exceptions.GetValueOrDefault(shift.Id) ?? none, history.GetValueOrDefault(shift.Id) ?? noHistory,
                 overrides.GetValueOrDefault(shift.Id) ?? noOverrides, includeCancelled: true);
-            foreach (var visit in visits)
+            // A partner booking on a branch main shift is listed as its partner request, not a second time as a shift visit.
+            var booked = (exceptions.GetValueOrDefault(shift.Id) ?? none).Where(x => x.PartnerRequestId.HasValue).Select(x => x.Id).ToHashSet();
+            foreach (var visit in visits.Where(v => v.ExtraExceptionId is not { } extra || !booked.Contains(extra)))
             {
                 var start = visit.Occurrence.StartUtc;
                 var evidence = formsByOccurrence.TryGetValue((shift.Id, start), out var found) ? found : Array.Empty<QualityCycleForm>();
@@ -217,6 +219,8 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
         foreach (var request in requests)
         {
             var visitForms = request.LinkedShiftId is { } shift && formsByShift.TryGetValue(shift, out var found) ? found : Array.Empty<QualityCycleForm>();
+            // A branch main shift holds many visits; a request is judged by its own visit's records only.
+            if (request.OccurrenceStartUtc is { } visitStart) visitForms = visitForms.Where(f => f.ShiftOccurrenceUtc == visitStart).ToArray();
             var view = WorkQueueRules.PartnerView(request, visitForms);
             if (view is not null) classified.Add(new PartnerView(view, request));
         }

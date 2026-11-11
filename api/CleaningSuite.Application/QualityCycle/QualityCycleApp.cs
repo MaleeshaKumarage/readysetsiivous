@@ -440,7 +440,9 @@ public class QualityCycleHandlers
                 throw new QualityCycleConflictException("Start your shift before ending it.");
 
             // Partner visits cannot end until each required photo section has at least one photo.
-            var required = (await _shifts.GetAsync(form.ShiftId, ct))?.RequiredPhotoLabels ?? new List<string>();
+            var photoShift = await _shifts.GetAsync(form.ShiftId, ct);
+            var required = photoShift is null ? new List<string>()
+                : (await BranchMainVisits.FindAsync(_shifts, photoShift, form.ShiftOccurrenceUtc, ct))?.RequiredPhotoLabels ?? photoShift.RequiredPhotoLabels;
             var missing = MissingRequiredPhotos(required, request.Photos);
             if (missing.Count > 0)
                 throw new ValidationException(new[] { new FluentValidation.Results.ValidationFailure("Photos",
@@ -510,10 +512,12 @@ public class QualityCycleHandlers
                 foreach (var entry in occurrences.Where(o => o.EmployeeIds.Contains(request.EmployeeId)))
                 {
                     var occurrence = entry.Occurrence;
+                    // On a branch main shift, instructions and photo sections belong to the visit.
+                    var visit = await BranchMainVisits.FindAsync(_shiftRepository, shift, occurrence.StartUtc, ct);
                     var form = await _repository.GetFormByShiftOccurrenceAsync(shift.Id, request.EmployeeId, occurrence.StartUtc, ct);
                     if (form is not null && (form.EmployeeId != request.EmployeeId || form.ShiftId != shift.Id || form.ShiftOccurrenceUtc != occurrence.StartUtc || form.ShiftDeletedUtc.HasValue))
                         form = null;
-                    result.Add(new MyShiftOccurrenceDto(shift.Id, shift.Name, occurrence.StartUtc, occurrence.EndUtc, form == null ? null : MapForm(form), zoneId, Notes: shift.Notes, RequiredPhotoLabels: shift.RequiredPhotoLabels,
+                    result.Add(new MyShiftOccurrenceDto(shift.Id, shift.Name, occurrence.StartUtc, occurrence.EndUtc, form == null ? null : MapForm(form), zoneId, Notes: visit?.Notes ?? shift.Notes, RequiredPhotoLabels: visit?.RequiredPhotoLabels ?? shift.RequiredPhotoLabels,
                         AccessInstructions: shift.PartnerAccessInstructions, ContactName: shift.PartnerContactName, ContactPhone: shift.PartnerContactPhone));
                 }
             }
@@ -533,8 +537,9 @@ public class QualityCycleHandlers
                 }
                 if (liveShift is not { IsActive: true } || form.ShiftDeletedUtc.HasValue) continue;
                 var index = result.FindIndex(x => x.ShiftId == form.ShiftId && x.StartUtc == form.ShiftOccurrenceUtc);
+                var recordedVisit = await BranchMainVisits.FindAsync(_shiftRepository, liveShift, form.ShiftOccurrenceUtc, ct);
                 var occurrence = new MyShiftOccurrenceDto(form.ShiftId, form.ShiftName, form.ShiftOccurrenceUtc,
-                    form.ShiftOccurrenceEndUtc, MapForm(form), zoneId, form.ShiftDeletedUtc.HasValue, liveShift?.Notes, liveShift?.RequiredPhotoLabels,
+                    form.ShiftOccurrenceEndUtc, MapForm(form), zoneId, form.ShiftDeletedUtc.HasValue, recordedVisit?.Notes ?? liveShift?.Notes, recordedVisit?.RequiredPhotoLabels ?? liveShift?.RequiredPhotoLabels,
                     liveShift?.PartnerAccessInstructions, liveShift?.PartnerContactName, liveShift?.PartnerContactPhone);
                 if (index >= 0) result[index] = occurrence;
                 else result.Add(occurrence);
