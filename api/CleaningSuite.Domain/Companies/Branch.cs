@@ -19,8 +19,6 @@ public class Branch : BaseDocument
     public int? BedCount { get; set; }
     /// <summary>Size in square metres, used in every shift name. Required before a shift can be scheduled.</summary>
     public int? SizeM2 { get; set; }
-    /// <summary>"Deep" or "Normal". Required before a shift can be scheduled.</summary>
-    public string? CleaningType { get; set; }
     /// <summary>Dated price history. The only source of a branch price; shifts pick one version by its effective date.</summary>
     public List<BranchPriceVersion> PriceVersions { get; set; } = [];
     // Pre-history flat price, kept only so documents saved before PriceVersions still load. Read through Versions;
@@ -33,11 +31,36 @@ public class Branch : BaseDocument
     public DateTime? QuoteRejectedUtc { get; set; }
     public string? QuoteRejectionReason { get; set; }
 
-    /// <summary>All price versions, oldest first. A pre-history branch is presented as one version from 2000-01-01.</summary>
-    public IReadOnlyList<BranchPriceVersion> Versions =>
+    /// <summary>
+    /// Start date shown for a branch's old flat price, and for every price the tenant records from then on as history.
+    /// </summary>
+    public static readonly DateOnly LegacyPriceStart = new(2026, 10, 1);
+
+    /// <summary>
+    /// Date billing stores for the old flat price. Shifts billed under it keep this date, so it is read back as the
+    /// earliest version and never rewritten in storage.
+    /// </summary>
+    public static readonly DateOnly LegacyStoredDate = new(2000, 1, 1);
+
+    /// <summary>All price versions, oldest first. A pre-history branch's flat price starts on <see cref="LegacyPriceStart"/>.</summary>
+    public IReadOnlyList<BranchPriceVersion> Versions => Present(StoredVersions);
+
+    private IReadOnlyList<BranchPriceVersion> StoredVersions =>
         PriceVersions.Count > 0 ? PriceVersions.OrderBy(v => v.EffectiveFrom).ToArray()
-        : PriceNet is { } legacy ? [new BranchPriceVersion(new DateOnly(2000, 1, 1), "PerOccurrence", legacy, VatRatePercent ?? 0, EstimatedDurationMinutes ?? 0)]
+        : PriceNet is { } legacy ? [new BranchPriceVersion(LegacyStoredDate, "PerOccurrence", legacy, VatRatePercent ?? 0, EstimatedDurationMinutes ?? 0)]
         : [];
+
+    private static IReadOnlyList<BranchPriceVersion> Present(IReadOnlyList<BranchPriceVersion> stored) =>
+        stored.Select(v => v.EffectiveFrom == LegacyStoredDate ? v with { EffectiveFrom = LegacyPriceStart } : v)
+            .OrderBy(v => v.EffectiveFrom).ToArray();
+
+    /// <summary>
+    /// The version a billing date points at. Accepts the date as shown, or the stored date a shift billed under the
+    /// old flat price keeps (2000-01-01), which resolves to that same version.
+    /// </summary>
+    public BranchPriceVersion? VersionFrom(DateOnly date) =>
+        Versions.FirstOrDefault(v => v.EffectiveFrom == date)
+        ?? Present(StoredVersions.Where(v => v.EffectiveFrom == date).ToArray()).FirstOrDefault();
 
     /// <summary>The version in force on a date: the latest one starting on or before it.</summary>
     public BranchPriceVersion? PriceOn(DateOnly date) => Versions.LastOrDefault(v => v.EffectiveFrom <= date);
@@ -51,13 +74,6 @@ public class Branch : BaseDocument
     public bool HasPendingQuote => QuoteRequestedUtc.HasValue && !PricingReady;
     public bool PricingReady => CurrentPrice is { PriceNet: > 0, VatRatePercent: >= 0 and <= 100, DurationMinutes: > 0 and <= 1440 };
 
-    /// <summary>Size and cleaning type, needed before a shift can be scheduled for this property.</summary>
-    public void SetPropertyDetails(int? sizeM2, string? cleaningType)
-    {
-        SetSizeM2(sizeM2);
-        SetCleaningType(cleaningType);
-    }
-
     /// <summary>Validates and sets only the size, so a cleaning type stored before validation existed is left alone.</summary>
     public void SetSizeM2(int? sizeM2)
     {
@@ -66,15 +82,8 @@ public class Branch : BaseDocument
         SizeM2 = sizeM2;
     }
 
-    /// <summary>Validates and sets only the cleaning type.</summary>
-    public void SetCleaningType(string? cleaningType)
-    {
-        if (cleaningType is not null && cleaningType != CleaningTypes.Deep && cleaningType != CleaningTypes.Normal)
-            throw new ArgumentException("Cleaning type must be Deep or Normal.");
-        CleaningType = cleaningType;
-    }
-
-    public bool HasNameDetails => SizeM2 is > 0 && CleaningType is CleaningTypes.Deep or CleaningTypes.Normal;
+    /// <summary>Whether the size needed to schedule a shift for this property is set. Cleaning type is per visit.</summary>
+    public bool HasNameDetails => SizeM2 is > 0;
 
     public void SetPropertyCounts(int? rooms, int? beds)
     {
@@ -101,10 +110,13 @@ public class Branch : BaseDocument
             throw new ArgumentException("Choose monthly, hourly or per-occurrence pricing.");
         var date = effectiveFrom ?? DateOnly.FromDateTime(DateTime.UtcNow);
         if (date.Year is < 2000 or > 2100) throw new ArgumentException("Enter a valid effective date between 2000 and 2100.");
-        var versions = Versions.ToList();
+        var versions = StoredVersions.ToList();
         var wanted = new BranchPriceVersion(date, mode, priceNet, vatRatePercent, durationMinutes);
         // Re-saving the price already in force (for example an unchanged form) adds nothing to history.
         if (PriceOn(date) is { } inForce && inForce with { EffectiveFrom = date } == wanted) return;
+        // The first price on this branch starts on LegacyPriceStart, so a new price cannot be dated before it or on it.
+        if (StoredVersions.Any(v => v.EffectiveFrom == LegacyStoredDate) && date <= LegacyPriceStart)
+            throw new ArgumentException("Prices start on 01/10/2026. Choose a later effective date for a new price.");
         versions.RemoveAll(v => v.EffectiveFrom == date);
         versions.Add(wanted);
         PriceVersions = versions.OrderBy(v => v.EffectiveFrom).ToList();
@@ -188,4 +200,14 @@ public static class CleaningTypes
 {
     public const string Deep = "Deep";
     public const string Normal = "Normal";
+    /// <summary>Net, excl. VAT, added to each completed Deep visit on invoices.</summary>
+    public const decimal DeepSurchargeNet = 15m;
+
+    /// <summary>True for Deep or Normal. Null is not a known type.</summary>
+    public static bool IsKnown(string? value) => value is Deep or Normal;
+
+    /// <summary>A missing type is Normal. Anything other than Deep or Normal is refused.</summary>
+    public static string Normalize(string? value) => string.IsNullOrEmpty(value) ? Normal
+        : IsKnown(value) ? value!
+        : throw new ArgumentException("Cleaning type must be Deep or Normal.");
 }

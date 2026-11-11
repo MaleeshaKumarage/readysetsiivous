@@ -67,7 +67,7 @@ public class ShiftBillingSettingsService(IShiftRepository shifts, IShiftBillingR
         if (shift.PartnerRequestId.HasValue) throw new ShiftConflictException("Partner visit pricing is frozen when requested. Update branch pricing for future requests instead.");
         if (branches is null) Invalid("Branch prices are unavailable right now. Reload the page and try again.");
         var branch = await branches!.GetAsync(shift.BranchId, ct) ?? throw new NotFoundException("Branch", shift.BranchId);
-        if (!branch.Versions.Any(v => v.EffectiveFrom == effectiveFrom)) Invalid("Choose a price version from this shift's branch.");
+        if (branch.VersionFrom(effectiveFrom) is null) Invalid("Choose a price version from this shift's branch.");
         if ((await invoices.ListAsync(null, null, ct)).Any(i => Billed(i, id)))
             throw new ShiftConflictException("This shift already has an issued invoice, so its price cannot change. Void the invoice first.");
         var profile = await billing.GetAsync(id, ct) ?? new() { Id = id, ShiftId = id };
@@ -89,7 +89,7 @@ public class ShiftBillingSettingsService(IShiftRepository shifts, IShiftBillingR
             return null;
         }
         if (requested is { } date)
-            return versions.FirstOrDefault(v => v.EffectiveFrom == date)
+            return branch.VersionFrom(date)
                 ?? throw new ValidationException([new ValidationFailure("Billing", "Choose a price version from this property.")]);
         return branch.PriceOn(today) ?? versions[0];
     }

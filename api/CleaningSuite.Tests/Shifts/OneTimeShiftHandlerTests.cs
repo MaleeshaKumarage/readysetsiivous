@@ -32,7 +32,7 @@ public class OneTimeShiftHandlerTests
         _companies.Setup(c => c.GetAsync(_companyId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Company.Create("1234567-8", "Test Company", null, null, null));
         _branches.Setup(b => b.GetAsync(_branchId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Branch { Id = _branchId, CompanyId = _companyId, Name = "Branch 1", SizeM2 = 34, CleaningType = "Deep" });
+            .ReturnsAsync(new Branch { Id = _branchId, CompanyId = _companyId, Name = "Branch 1", SizeM2 = 34 });
         _shifts.Setup(s => s.SaveAsync(It.IsAny<Shift>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
     }
 

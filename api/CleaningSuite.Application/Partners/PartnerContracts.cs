@@ -10,9 +10,9 @@ public record CreatePartnerBranch(string Name, string? Street = null, string? Po
     string? City = null, string? Country = null, string? ContactPhone = null, string? ContactEmail = null,
     int? RoomCount = null, int? BedCount = null);
 public record CreatePartnerRequest(Guid ClientRequestId, Guid BranchId, DateOnly FromDate, DateOnly ToDate,
-    string? ExactStartLocalTime = null, string? Notes = null);
+    string? ExactStartLocalTime = null, string? Notes = null, string? CleaningType = null);
 public record EditPartnerRequest(int Version, DateOnly FromDate, DateOnly ToDate,
-    string? ExactStartLocalTime = null, string? Notes = null);
+    string? ExactStartLocalTime = null, string? Notes = null, string? CleaningType = null);
 public record PartnerVersion(int Version);
 public record PartnerQuoteRejection(string Reason);
 public record PartnerMessage(string Message);
@@ -26,7 +26,7 @@ public record PartnerRequestDto(Guid Id, int Version, Guid CompanyId, Guid Branc
     DateOnly FromDate, DateOnly ToDate, string? ExactStartLocalTime, string? Notes, decimal PriceNet,
     decimal VatRatePercent, int EstimatedDurationMinutes, string Status, DateTime? FirstAcceptedAtUtc,
     Guid? LinkedShiftId, DateTime? PlannedStartUtc, DateTime? PlannedEndUtc, string? AcceptedCleanerName,
-    DateTime? ActualStartUtc, DateTime? ActualEndUtc, Guid? OfferedEmployeeId = null, Guid? OfferId = null);
+    DateTime? ActualStartUtc, DateTime? ActualEndUtc, Guid? OfferedEmployeeId = null, Guid? OfferId = null, string CleaningType = "Normal");
 public record PartnerChangeDto(Guid Id, Guid CompanyId, Guid BranchId, Guid? RequestId, string Kind,
     string Message, DateTime CreatedUtc, DateTime? ResolvedUtc, string? Resolution, string Action = "Message",
     DateOnly? ProposedFromDate = null, DateOnly? ProposedToDate = null, string? ProposedExactStartLocalTime = null, string? ProposedNotes = null);

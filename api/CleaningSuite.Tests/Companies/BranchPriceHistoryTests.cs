@@ -44,14 +44,15 @@ public class BranchPriceHistoryTests
 
         Assert.True(branch.PricingReady);
         Assert.Equal(90m, branch.CurrentPriceNet);
-        Assert.Single(branch.Versions);
+        var flat = Assert.Single(branch.Versions);
+        Assert.Equal(new DateOnly(2026, 10, 1), flat.EffectiveFrom);
 
-        branch.SetPricing(95, 25.5m, 60, "PerOccurrence", new DateOnly(2026, 2, 1));
+        branch.SetPricing(95, 25.5m, 60, "PerOccurrence", new DateOnly(2026, 11, 1));
 
         Assert.Equal(2, branch.Versions.Count);
         Assert.Null(branch.PriceNet);
-        Assert.Equal(90m, branch.PriceOn(new DateOnly(2026, 1, 31))!.PriceNet);
-        Assert.Equal(95m, branch.PriceOn(new DateOnly(2026, 2, 1))!.PriceNet);
+        Assert.Equal(90m, branch.PriceOn(new DateOnly(2026, 10, 31))!.PriceNet);
+        Assert.Equal(95m, branch.PriceOn(new DateOnly(2026, 11, 1))!.PriceNet);
     }
 
     [Fact]
@@ -80,12 +81,12 @@ public class BranchPriceHistoryTests
         Assert.Equal(90m, branch.CurrentPriceNet);
 
         // Saving it again moves the price into history and reads back the same from the new document.
-        branch.SetPricing(95, 25.5m, 60, "PerOccurrence", new DateOnly(2026, 2, 1));
+        branch.SetPricing(95, 25.5m, 60, "PerOccurrence", new DateOnly(2026, 11, 1));
         var saved = JsonConvert.DeserializeObject<Branch>(JsonConvert.SerializeObject(branch, settings), settings)!;
 
         Assert.Equal(2, saved.Versions.Count);
-        Assert.Equal(90m, saved.PriceOn(new DateOnly(2026, 1, 31))!.PriceNet);
-        Assert.Equal(95m, saved.PriceOn(new DateOnly(2026, 2, 1))!.PriceNet);
+        Assert.Equal(90m, saved.PriceOn(new DateOnly(2026, 10, 31))!.PriceNet);
+        Assert.Equal(95m, saved.PriceOn(new DateOnly(2026, 11, 1))!.PriceNet);
         Assert.Null(saved.PriceNet);
     }
 
@@ -133,5 +134,50 @@ public class BranchPriceHistoryTests
         future.SetPricing(120, 25.5m, 60, "Monthly", new DateOnly(2027, 6, 1));
 
         Assert.Equal(100m, ShiftBillingSettingsService.ChooseBranchPrice(future, null, new DateOnly(2026, 10, 19))!.PriceNet);
+    }
+
+    [Fact]
+    public void The_old_flat_price_starts_on_01_10_2026_and_no_price_can_start_before_it()
+    {
+        var branch = NewBranch();
+        branch.PriceNet = 90; branch.VatRatePercent = 25.5m; branch.EstimatedDurationMinutes = 60;
+
+        Assert.Equal(new DateOnly(2026, 10, 1), Assert.Single(branch.Versions).EffectiveFrom);
+        Assert.Null(branch.PriceOn(new DateOnly(2026, 9, 30)));
+
+        // Dated on or before 01/10/2026, the new price would collide with the flat price's start.
+        Assert.Throws<ArgumentException>(() => branch.SetPricing(95, 25.5m, 60, "PerOccurrence", new DateOnly(2026, 10, 1)));
+        Assert.Throws<ArgumentException>(() => branch.SetPricing(95, 25.5m, 60, "PerOccurrence", new DateOnly(2026, 9, 1)));
+        Assert.Equal(90m, branch.PriceOn(new DateOnly(2026, 10, 1))!.PriceNet);
+        Assert.Single(branch.Versions);
+    }
+
+    [Fact]
+    public void Re_saving_the_old_flat_price_on_its_start_date_is_not_a_collision()
+    {
+        var branch = NewBranch();
+        branch.PriceNet = 90; branch.VatRatePercent = 25.5m; branch.EstimatedDurationMinutes = 60;
+        var before = branch.PricingVersion;
+
+        branch.SetPricing(90, 25.5m, 60, "PerOccurrence", new DateOnly(2026, 10, 1));
+
+        Assert.Equal(before, branch.PricingVersion);
+        Assert.Single(branch.Versions);
+    }
+
+    [Fact]
+    public void A_shift_billed_at_the_old_flat_price_keeps_resolving_after_a_later_price_is_added()
+    {
+        // Shifts store the flat price under 2000-01-01; that date must keep finding the same price.
+        var branch = NewBranch();
+        branch.PriceNet = 90; branch.VatRatePercent = 25.5m; branch.EstimatedDurationMinutes = 60;
+        branch.SetPricing(95, 25.5m, 60, "PerOccurrence", new DateOnly(2026, 11, 1));
+
+        var legacy = branch.VersionFrom(new DateOnly(2000, 1, 1));
+        Assert.NotNull(legacy);
+        Assert.Equal(90m, legacy!.PriceNet);
+        Assert.Equal(new DateOnly(2026, 10, 1), legacy.EffectiveFrom);
+        Assert.Equal(95m, branch.VersionFrom(new DateOnly(2026, 11, 1))!.PriceNet);
+        Assert.Null(branch.VersionFrom(new DateOnly(2026, 6, 1)));
     }
 }

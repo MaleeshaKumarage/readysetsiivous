@@ -32,7 +32,7 @@ public class ShiftValidityWindowDatabaseTests
 
         var company = Company.Create("1234567-8", "Owner company");
         company.IsPartnerEnabled = false;
-        var branch = Branch.Create(company.Id, "Main branch"); branch.SetPropertyDetails(34, "Deep");
+        var branch = Branch.Create(company.Id, "Main branch"); branch.SetSizeM2(34);
         using (var writer = store.LightweightSession(tenant)) { writer.Store(company); writer.Store(branch); await writer.SaveChangesAsync(); }
 
         using var session = new TenantSessionFactory(store, context.Object);

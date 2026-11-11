@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Button, Group, Modal, Select, Stack, Text, Textarea, TextInput } from '@mantine/core';
 import { adminBranchVisits, adminCompanies, type Branch, type BranchVisit, type Employee } from '@/lib/adminApi';
 import { CompanyPicker } from '@/components/admin/CompanyPicker';
+import { DEEP_SURCHARGE_EUR } from '@/lib/cleaningPricing';
 
 const DEFAULT_CLEANER = 'default';
 const NO_CLEANER = 'none';
@@ -30,13 +31,14 @@ export function AddVisitDialog({ opened, onClose, onAdded, employees, timeZoneId
   const [endTime, setEndTime] = useState('10:00');
   const [notes, setNotes] = useState('');
   const [cleaner, setCleaner] = useState<string>(DEFAULT_CLEANER);
+  const [cleaningType, setCleaningType] = useState<string>('Normal');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (!opened) return;
     setCompanyId(preset?.companyId ?? null); setBranchId(preset?.branchId ?? null); setBranches([]);
-    setFromDate(''); setToDate(''); setStartTime('08:00'); setEndTime('10:00'); setNotes(''); setCleaner(DEFAULT_CLEANER); setError('');
+    setFromDate(''); setToDate(''); setStartTime('08:00'); setEndTime('10:00'); setNotes(''); setCleaner(DEFAULT_CLEANER); setCleaningType('Normal'); setError('');
   }, [opened, preset?.companyId, preset?.branchId]);
 
   useEffect(() => {
@@ -59,7 +61,7 @@ export function AddVisitDialog({ opened, onClose, onAdded, employees, timeZoneId
     if (lastDay === fromDate && endTime <= startTime) { setError('The end time must be after the start time.'); return; }
     setSaving(true); setError('');
     const result = await adminBranchVisits.add({
-      branchId, fromDate, toDate: lastDay, startTime, endTime, notes: notes.trim() || null,
+      branchId, fromDate, toDate: lastDay, startTime, endTime, notes: notes.trim() || null, cleaningType,
       employeeId: cleaner === DEFAULT_CLEANER || cleaner === NO_CLEANER ? null : cleaner,
       useDefaultEmployee: cleaner === DEFAULT_CLEANER,
     });
@@ -88,6 +90,9 @@ export function AddVisitDialog({ opened, onClose, onAdded, employees, timeZoneId
           <TextInput label="End time" type="time" required value={endTime} onChange={event => setEndTime(event.target.value)} />
         </Group>
         {days > 1 && <Text size="sm" role="status">One visit covering {days} days, from {fromDate} {startTime} to {lastDay} {endTime}.</Text>}
+        <Select label="Cleaning type" allowDeselect={false} value={cleaningType} onChange={value => setCleaningType(value ?? 'Normal')}
+          description={cleaningType === 'Deep' ? `Deep cleaning adds €${DEEP_SURCHARGE_EUR} excl. VAT to this visit.` : 'Every visit starts as Normal. You can change it later, including after the cleaning is done.'}
+          data={[{ value: 'Normal', label: 'Normal' }, { value: 'Deep', label: 'Deep' }]} />
         <Select label="Cleaner" allowDeselect={false} searchable value={cleaner} onChange={value => setCleaner(value ?? DEFAULT_CLEANER)}
           description="The cleaner gets an offer. It is theirs once accepted, or at once if they accept work automatically."
           data={[{ value: DEFAULT_CLEANER, label: "Shift's default cleaner" }, { value: NO_CLEANER, label: 'Leave unassigned' },

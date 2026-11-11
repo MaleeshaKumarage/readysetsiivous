@@ -1,23 +1,27 @@
 name: pr-review
 
+# Automatic review is off: it runs only when started by hand (Actions > pr-review > Run workflow).
 on:
-  pull_request:
-    branches: [main]
-    types: [opened, reopened, ready_for_review, synchronize]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Pull request number to review"
+        required: true
+        type: number
 
 permissions:
   contents: read
   pull-requests: write
 
 concurrency:
-  group: pr-review-${{ github.event.pull_request.number }}
+  group: pr-review-${{ inputs.pr_number }}
   cancel-in-progress: true
 
 jobs:
   review:
     # Skip draft PRs: review fires when the PR is opened as ready, reopened, or
     # a draft is marked ready_for_review.
-    if: github.event.pull_request.draft == false
+    if: github.event_name == 'workflow_dispatch'
     # Non-blocking: a provider outage must not hold a PR. The job still runs and
     # its failure is still visible, but it does not fail the PR's checks.
     continue-on-error: true
@@ -31,8 +35,8 @@ jobs:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          PR=${{ github.event.pull_request.number }}
-          HEAD_SHA=${{ github.event.pull_request.head.sha }}
+          PR=${{ inputs.pr_number }}
+          HEAD_SHA=$(gh pr view "$PR" --json headRefOid -q .headRefOid)
           gh pr diff "$PR" > /tmp/diff.txt
           if [ ! -s /tmp/diff.txt ]; then
             echo "no diff to review"

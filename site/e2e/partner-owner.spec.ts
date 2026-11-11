@@ -21,7 +21,7 @@ async function owner(page: Page, options: { enabled?: boolean; pending?: boolean
     if (path === '/branches' && body) { const added: Branch = { id: 'new-property', companyId, isActive: true, name: String(body.name), street: String(body.street), postalCode: String(body.postalCode), city: String(body.city), country: String(body.country), contactEmail: String(body.contactEmail), contactPhone: String(body.contactPhone), roomCount: body.roomCount === null ? null : Number(body.roomCount), bedCount: body.bedCount === null ? null : Number(body.bedCount), priceNet: null, pricingReady: false }; branches = [...branches, added]; return route.fulfill({ headers, json: added }); }
     if (path.endsWith('/quote-request')) { const id = path.split('/')[2]; branches = branches.map(branch => branch.id === id ? { ...branch, quoteRequestedUtc: '2026-11-01T10:00:00Z' } : branch); return route.fulfill({ headers, json: branches.find(branch => branch.id === id) }); }
     if (path.endsWith('/change-requests') && body) { const change: PartnerChange = { id: 'property-change', companyId, branchId: path.split('/')[2], requestId: null, kind: 'Property', message: String(body.message), createdUtc: '2026-11-01T10:00:00Z', resolvedUtc: null, resolution: null }; changes = [...changes, change]; return route.fulfill({ headers, json: change }); }
-    if (path === '/requests' && body) { const added: CleaningRequest = { ...pending, version: 1, fromDate: String(body.fromDate), toDate: String(body.toDate), exactStartLocalTime: body.exactStartLocalTime === null ? null : String(body.exactStartLocalTime), notes: String(body.notes) }; requests = [added]; return route.fulfill({ headers, json: added }); }
+    if (path === '/requests' && body) { const added: CleaningRequest = { ...pending, version: 1, fromDate: String(body.fromDate), toDate: String(body.toDate), exactStartLocalTime: body.exactStartLocalTime === null ? null : String(body.exactStartLocalTime), notes: String(body.notes), cleaningType: String(body.cleaningType ?? 'Normal') }; requests = [added]; return route.fulfill({ headers, json: added }); }
     if (path === `/requests/${pending.id}` && body) { requests = [{ ...requests[0], version: requests[0].version + 1, fromDate: String(body.fromDate), toDate: String(body.toDate), exactStartLocalTime: body.exactStartLocalTime === null ? null : String(body.exactStartLocalTime), notes: String(body.notes) }]; return route.fulfill({ headers, json: requests[0] }); }
     if (path === `/requests/${pending.id}/cancel`) { requests = [{ ...requests[0], version: requests[0].version + 1, status: 'Cancelled' }]; return route.fulfill({ headers, json: requests[0] }); }
     return route.fulfill({ status: 404, headers });
@@ -84,6 +84,19 @@ test('owner creates a fixed appointment with one date and immutable pricing supp
   await expect(page.getByText('2026-12-15 – 2026-12-15 at 10:30', { exact: true })).toBeVisible();
   expect(state.writes[0]).toMatchObject({ path: '/requests', method: 'POST', body: { branchId: priced.id, fromDate: '2026-12-15', toDate: '2026-12-15', exactStartLocalTime: '10:30', notes: 'After guest checkout.' } });
   expect(state.writes[0].body?.clientRequestId).toMatch(/^[a-f0-9-]{36}$/); expect(state.writes[0].body).not.toHaveProperty('companyId'); expect(state.writes[0].body).not.toHaveProperty('priceNet');
+});
+
+test('owner picks Deep or Normal when requesting a cleaning, and the choice is sent and shown on the request', async ({ page }) => {
+  const state = await owner(page); await page.goto('/partner/'); const property = page.getByRole('article', { name: priced.name, exact: true });
+  await property.getByRole('button', { name: 'Request cleaning', exact: true }).click(); const form = page.getByRole('dialog', { name: /cleaning request/i });
+  await expect(form.getByLabel('Cleaning type', { exact: true })).toHaveValue('Normal');
+  await expect(form.getByRole('note')).toHaveCount(0);
+  await form.getByLabel('Cleaning type', { exact: true }).selectOption('Deep');
+  await expect(form.getByRole('note')).toHaveText('Deep cleaning adds €15.00 excl. VAT to each visit.');
+  await form.getByLabel('From date', { exact: true }).fill('2026-12-16'); await form.getByLabel('Fixed appointment on this date').check(); await form.getByLabel('Exact start time').fill('09:00');
+  await form.getByRole('button', { name: 'Save cleaning request', exact: true }).click();
+  await expect(page.getByText('Cleaning type: Deep', { exact: true })).toBeVisible();
+  expect(state.writes[0]).toMatchObject({ path: '/requests', method: 'POST', body: { branchId: priced.id, cleaningType: 'Deep' } });
 });
 
 test('Request cleaning visibly opens and focuses the form even below a long property list', async ({ page }) => {
@@ -281,7 +294,7 @@ test('owner edits a pending request with its revision and cancels the refreshed 
   await page.getByRole('button', { name: 'Edit request', exact: true }).click(); const form = page.getByRole('dialog', { name: /cleaning request/i });
   await expect(form.getByLabel('From date', { exact: true })).toHaveValue('2026-12-01'); await expect(form.getByLabel('Cleaning instructions')).toHaveValue(pending.notes!);
   await form.getByLabel('From date', { exact: true }).fill('2026-12-05'); await form.getByLabel('To date', { exact: true }).fill('2026-12-06'); await form.getByLabel('Cleaning instructions').fill('Updated checkout instructions.'); await form.getByRole('button', { name: 'Save cleaning request', exact: true }).click();
-  await expect(page.getByText('2026-12-05 – 2026-12-06', { exact: true })).toBeVisible(); expect(state.writes[0]).toEqual({ path: `/requests/${pending.id}`, method: 'PUT', body: { version: 5, fromDate: '2026-12-05', toDate: '2026-12-06', exactStartLocalTime: null, notes: 'Updated checkout instructions.' } });
+  await expect(page.getByText('2026-12-05 – 2026-12-06', { exact: true })).toBeVisible(); expect(state.writes[0]).toEqual({ path: `/requests/${pending.id}`, method: 'PUT', body: { version: 5, fromDate: '2026-12-05', toDate: '2026-12-06', exactStartLocalTime: null, cleaningType: 'Normal', notes: 'Updated checkout instructions.' } });
   const dialogs: string[] = []; page.on('dialog', dialog => { dialogs.push(dialog.message()); void dialog.dismiss(); });
   await page.getByRole('button', { name: 'Cancel request', exact: true }).click();
   await page.getByRole('button', { name: 'Keep request', exact: true }).click(); expect(state.writes).toHaveLength(1);

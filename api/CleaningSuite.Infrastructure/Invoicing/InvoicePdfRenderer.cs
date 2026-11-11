@@ -181,7 +181,7 @@ public static class InvoicePdfRenderer
     private static string Text(string key, string language)
     {
         if (language == "en") return key switch {
-            "Monthly" => "Fixed monthly rate", "Hourly" => "Hourly rate", "PerOccurrence" => "Per completed visit",
+            "Monthly" => "Fixed monthly rate", "Hourly" => "Hourly rate", "PerOccurrence" => "Per completed visit", "DeepCleaning" => "Deep cleaning surcharge",
             "Sample payment notice" => "Sample details: enter real bank details before payment. No payment barcode is generated.",
             "Credit transfer terms" => "The payment will be cleared for the recipient in accordance with the general terms for payment transmission and only on the basis of the account number given by the payer.",
             _ => key };
@@ -209,6 +209,7 @@ public static class InvoicePdfRenderer
             "Amount due" => ("Maksettavaa", "Att betala"), "Payment details" => ("Maksutiedot", "Betalningsuppgifter"),
             "Monthly" => ("Kiinteä kuukausihinta", "Fast månadspris"), "Hourly" => ("Tuntihinta", "Timpris"),
             "PerOccurrence" => ("Hinta toteutuneelta käynniltä", "Pris per genomfört besök"),
+            "DeepCleaning" => ("Syväsiivouksen lisämaksu", "Tillägg för djupstädning"),
             _ => throw new ArgumentException("Missing invoice translation: " + key)
         };
         return language == "fi" ? pair.Item1 : pair.Item2;

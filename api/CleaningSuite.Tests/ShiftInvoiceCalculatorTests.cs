@@ -114,4 +114,48 @@ public class ShiftInvoiceCalculatorTests
         var lines=Calculate(s,p,new(2026,10,1),new(2026,10,31),[new(start,start.AddHours(2),BranchId,s.Name,true),new(start.AddDays(1),start.AddDays(1).AddHours(2),BranchId,s.Name,true),new(start.AddDays(2),start.AddDays(2).AddHours(2),BranchId,s.Name,false)]);
         Assert.Equal(75,lines.Sum(l=>l.NetAmount));Assert.Equal(2,lines.Sum(l=>l.Occurrences));Assert.Contains(lines,l=>l.OverrideReason=="Extra work"&&l.NetAmount==45);
     }
+
+    [Fact]
+    public void A_completed_Deep_visit_adds_a_15_euro_surcharge_line_and_leaves_its_visit_price_unchanged()
+    {
+        var s=Shift();var deep=new DateTime(2026,10,2,8,0,0,DateTimeKind.Utc);var normal=deep.AddDays(1);
+        var lines=Calculate(s,Price("PerOccurrence",30,new(2026,10,1)),new(2026,10,1),new(2026,10,31),
+            [new(deep,deep.AddHours(2),BranchId,s.Name,true,false,"Deep"),new(normal,normal.AddHours(2),BranchId,s.Name,true,false,"Normal")]);
+        var surcharge=Assert.Single(lines,l=>l.PricingMode=="DeepCleaning");
+        Assert.Equal(15,surcharge.NetAmount);Assert.Equal(1,surcharge.Quantity);Assert.Equal(15,surcharge.UnitPriceNet);Assert.Equal(25.5m,surcharge.VatRatePercent);
+        // The visit price lines are untouched: two normal per-visit lines at 30 each, the Deep one included.
+        Assert.Equal(60,lines.Where(l=>l.PricingMode=="PerOccurrence").Sum(l=>l.NetAmount));
+    }
+
+    [Fact]
+    public void A_Deep_visit_that_is_not_completed_adds_no_surcharge()
+    {
+        var s=Shift();var start=new DateTime(2026,10,2,8,0,0,DateTimeKind.Utc);
+        var lines=Calculate(s,Price("PerOccurrence",30,new(2026,10,1)),new(2026,10,1),new(2026,10,31),
+            [new(start,start.AddHours(2),BranchId,s.Name,false,false,"Deep")]);
+        Assert.DoesNotContain(lines,l=>l.PricingMode=="DeepCleaning");
+    }
+
+    [Fact]
+    public void A_monthly_fee_property_keeps_its_fee_and_gets_one_surcharge_line_for_its_completed_Deep_visits()
+    {
+        var s=Shift();var first=new DateTime(2026,10,6,8,0,0,DateTimeKind.Utc);var second=first.AddDays(7);var third=first.AddDays(14);
+        var lines=Calculate(s,Price("Monthly",100,new(2026,10,1)),new(2026,10,1),new(2026,10,31),
+            [new(first,first.AddHours(2),BranchId,s.Name,true,false,"Deep"),new(second,second.AddHours(2),BranchId,s.Name,true,false,"Deep"),
+             new(third,third.AddHours(2),BranchId,s.Name,true,false,"Normal")]);
+        Assert.Contains(lines,l=>l.PricingMode=="Monthly"&&l.NetAmount>0);
+        var surcharge=Assert.Single(lines,l=>l.PricingMode=="DeepCleaning");
+        Assert.Equal(2,surcharge.Quantity);Assert.Equal(30,surcharge.NetAmount);
+    }
+
+    [Fact]
+    public void A_Deep_visit_on_an_hourly_property_adds_15_euro_once_however_many_hours_it_lasts()
+    {
+        var s=Shift();var start=new DateTime(2026,10,2,8,0,0,DateTimeKind.Utc);
+        var lines=Calculate(s,Price("Hourly",20,new(2026,10,1)),new(2026,10,1),new(2026,10,31),
+            [new(start,start.AddHours(3),BranchId,s.Name,true,false,"Deep")]);
+        Assert.Equal(60,lines.Where(l=>l.PricingMode=="Hourly").Sum(l=>l.NetAmount));
+        var surcharge=Assert.Single(lines,l=>l.PricingMode=="DeepCleaning");
+        Assert.Equal(1,surcharge.Quantity);Assert.Equal(15,surcharge.NetAmount);
+    }
 }

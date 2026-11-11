@@ -344,7 +344,7 @@ public class BranchMainShiftDatabaseTests
             await fixture.Store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
             fixture.Company.IsPartnerEnabled = true;
             fixture.Branch = Branch.Create(fixture.Company.Id, "Apartment");
-            fixture.Branch.SetPricing(100, 25.5m, 120, effectiveFrom: new DateOnly(2026, 1, 1)); fixture.Branch.SetPropertyDetails(34, "Deep");
+            fixture.Branch.SetPricing(100, 25.5m, 120, effectiveFrom: new DateOnly(2026, 1, 1)); fixture.Branch.SetSizeM2(34);
             fixture.Partner = new Employee { Role = Employee.RolePartner, PartnerCompanyId = fixture.Company.Id, IsActive = true };
             fixture.Profiles.Setup(p => p.GetAsync(fixture.Tenant, It.IsAny<CancellationToken>())).ReturnsAsync(new TenantProfile { TimeZoneId = "Europe/Helsinki",
                 CompanyName = "Sample supplier", BusinessId = "1234567-8", CompanyAddress = new() { Street = "Sample 1", City = "Helsinki", PostalCode = "00100" },

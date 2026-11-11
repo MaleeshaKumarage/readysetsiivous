@@ -1,4 +1,5 @@
 using CleaningSuite.Domain.Common;
+using CleaningSuite.Domain.Companies;
 using System.Security.Cryptography;
 
 namespace CleaningSuite.Domain.Shifts;
@@ -30,6 +31,8 @@ public class ShiftOccurrenceException : BaseDocument
     public int? Sequence { get; set; }
     /// <summary>Where the visit came from: <see cref="SourceAdminPanel"/> or <see cref="SourcePartnerPortal"/>.</summary>
     public string? Source { get; set; }
+    /// <summary>"Deep" or "Normal". A visit starts Normal and can change at any time, including after it is cleaned. Null reads as Normal.</summary>
+    public string? CleaningType { get; set; }
     /// <summary>Instructions for this visit only. The shift's own notes apply when this is null.</summary>
     public string? Notes { get; set; }
     /// <summary>Photo sections required for this visit only. The shift's own list applies when this is null.</summary>

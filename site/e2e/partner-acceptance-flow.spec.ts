@@ -171,7 +171,7 @@ test('one visit from owner request to cleaner acceptance and back to the owner',
     ]);
     expect(backend.writes.every(write => write.status === 200)).toBe(true);
     expect(Object.keys(backend.writes.find(write => write.path === 'partner/requests')!.body).sort())
-      .toEqual(['branchId', 'clientRequestId', 'exactStartLocalTime', 'fromDate', 'notes', 'toDate']);
+      .toEqual(['branchId', 'cleaningType', 'clientRequestId', 'exactStartLocalTime', 'fromDate', 'notes', 'toDate']);
     expect(backend.writes.find(write => write.path.endsWith('/offer'))!.body).toEqual({ version: 1, employeeId: 'cleaner', plannedStartLocal: null });
   } finally {
     await staff.context.close();
