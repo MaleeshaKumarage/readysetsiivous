@@ -1,7 +1,7 @@
 import { authorizedFetch, type Branch, type ShiftSchedule } from './adminApi';
 
 export interface PartnerIdentity { realm: string; person: { id: string; firstName: string; lastName: string; role: string; isActive: boolean }; company: { id: string; name: string; isActive: boolean; isPartnerEnabled: boolean }; timeZoneId: string }
-export interface CleaningRequest { id: string; version: number; companyId: string; branchId: string; branchName: string; fromDate: string; toDate: string; exactStartLocalTime: string | null; notes: string | null; priceNet: number; vatRatePercent: number; estimatedDurationMinutes: number; status: string; firstAcceptedAtUtc: string | null; linkedShiftId: string | null; plannedStartUtc: string | null; plannedEndUtc: string | null; acceptedCleanerName: string | null; actualStartUtc: string | null; actualEndUtc: string | null; offeredEmployeeId?: string | null; offerId?: string | null }
+export interface CleaningRequest { id: string; version: number; companyId: string; branchId: string; branchName: string; fromDate: string; toDate: string; exactStartLocalTime: string | null; notes: string | null; cleaningType?: string; priceNet: number; vatRatePercent: number; estimatedDurationMinutes: number; status: string; firstAcceptedAtUtc: string | null; linkedShiftId: string | null; plannedStartUtc: string | null; plannedEndUtc: string | null; acceptedCleanerName: string | null; actualStartUtc: string | null; actualEndUtc: string | null; offeredEmployeeId?: string | null; offerId?: string | null }
 // One-time portal setup. Photo sections are the photos every cleaner must attach before a visit can end.
 // Account details: billing and invoice facts, a contact person, and how the cleaner gets in.
 export interface PartnerAccount { billingName?: string | null; invoiceAddress?: string | null; businessId?: string | null; invoiceReference?: string | null; contactName?: string | null; contactPhone?: string | null; contactEmail?: string | null; accessInstructions?: string | null }
@@ -24,7 +24,7 @@ export interface KeyRequestPhoto { id: string; sizeBytes: number; uploadedUtc: s
 export interface KeyRequest { id: string; revision: number; companyId: string; branchId: string; branchName: string; kind: string; date: string; notes: string | null; feeNet: number; vatRatePercent: number; status: string; cancellationReason: string | null; completedUtc?: string | null; assignedEmployeeId?: string | null; assignedEmployeeName?: string | null; photos?: KeyRequestPhoto[] | null }
 export interface KeyRequestList { feeNet: number; vatRatePercent: number; items: KeyRequest[] }
 export interface KeyRequestInput { clientRequestId: string; branchId: string; kind: 'Pickup' | 'Handover'; date: string; notes: string | null }
-export interface RequestInput { clientRequestId?: string; version?: number; branchId?: string; fromDate: string; toDate: string; exactStartLocalTime: string | null; notes: string }
+export interface RequestInput { clientRequestId?: string; version?: number; branchId?: string; fromDate: string; toDate: string; exactStartLocalTime: string | null; notes: string; cleaningType?: string }
 export async function partnerSend<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
   const response = await authorizedFetch(`/api/v1/${path}`, { method, cache: 'no-store', signal, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   if (!response.ok) {

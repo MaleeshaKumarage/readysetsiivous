@@ -49,4 +49,18 @@ public class CleaningTypePerVisitTests
         visit.CleaningType = CleaningTypes.Deep;
         Assert.Equal(CleaningTypes.Deep, BranchVisitService.Map(visit, shift, zone, "Europe/Helsinki").CleaningType);
     }
+
+    [Theory]
+    [InlineData(null, "Normal")]
+    [InlineData("", "Normal")]
+    [InlineData("Normal", "Normal")]
+    [InlineData("Deep", "Deep")]
+    public void A_missing_or_known_cleaning_type_is_kept_as_Normal_or_Deep(string? value, string expected) =>
+        Assert.Equal(expected, CleaningTypes.Normalize(value));
+
+    [Theory]
+    [InlineData("Pool")]
+    [InlineData("deep")]
+    public void Any_other_cleaning_type_is_refused(string value) =>
+        Assert.Throws<ArgumentException>(() => CleaningTypes.Normalize(value));
 }

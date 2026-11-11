@@ -200,4 +200,12 @@ public static class CleaningTypes
 {
     public const string Deep = "Deep";
     public const string Normal = "Normal";
+
+    /// <summary>A missing type is Normal. Anything other than Deep or Normal is refused.</summary>
+    public static string Normalize(string? value) => value switch
+    {
+        null or "" => Normal,
+        Deep or Normal => value,
+        _ => throw new ArgumentException("Cleaning type must be Deep or Normal.")
+    };
 }

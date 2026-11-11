@@ -7,6 +7,7 @@ using CleaningSuite.Domain.Companies;
 using CleaningSuite.Domain.Employees;
 using CleaningSuite.Domain.Invoicing;
 using CleaningSuite.Domain.Notifications;
+using CleaningSuite.Domain.Partners;
 using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Shifts;
 using FluentValidation;
@@ -146,10 +147,15 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
         await using var lease = await reservation.AcquireAsync(ct);
         var shift = await Main(shiftId, ct);
         var visit = await Visit(shift, visitId, ct);
-        if (!IsCleaningType(body.CleaningType))
+        if (body.CleaningType is not (CleaningTypes.Deep or CleaningTypes.Normal))
             throw new ValidationException([new ValidationFailure("CleaningType", "Cleaning type must be Deep or Normal.")]);
         var (zoneId, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
         visit.CleaningType = body.CleaningType; visit.UpdatedUtc = DateTime.UtcNow; Db.Store(visit);
+        // A partner visit keeps its booking in step, so accepting the booking again does not undo this choice.
+        if (visit.PartnerRequestId is { } requestId && await Db.LoadAsync<PartnerCleaningRequest>(requestId, ct) is { } booking)
+        {
+            booking.CleaningType = body.CleaningType; booking.UpdatedUtc = DateTime.UtcNow; Db.Store(booking);
+        }
         await Db.SaveChangesAsync(ct);
         return Map(visit, shift, zone, zoneId);
     }

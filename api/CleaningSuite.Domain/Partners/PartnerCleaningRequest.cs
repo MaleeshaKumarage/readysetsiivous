@@ -22,6 +22,8 @@ public sealed class PartnerCleaningRequest : BaseDocument
     public DateOnly ToDate { get; set; }
     public string? ExactStartLocalTime { get; set; }
     public string? Notes { get; set; }
+    /// <summary>"Deep" or "Normal". Null reads as Normal. Copied to the visit when the request is accepted.</summary>
+    public string? CleaningType { get; set; }
     public decimal PriceNet { get; set; }
     public decimal VatRatePercent { get; set; }
     public int EstimatedDurationMinutes { get; set; }

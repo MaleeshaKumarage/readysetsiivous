@@ -12,7 +12,7 @@ const MAIN = 'Cleaning - Testikatu 1, 00100 Helsinki |34m2|2H|1V';
 const adminVisit = { startUtc: '2026-11-10T06:00:00.000Z', endUtc: '2026-11-10T08:00:00.000Z', exceptionId: 'visit-1', status: 4, reason: 'Added from the admin panel',
   assigneeIds: [], rosterVersion: 'v1', canAssign: true, visitNumber: 1, visitSource: 'AdminPanel', visitCleaningType: 'Normal', offeredEmployeeId: 'cleaner', offerRevision: 1, isPartnerBooking: false };
 const partnerVisit = { startUtc: '2026-11-10T10:00:00.000Z', endUtc: '2026-11-14T14:00:00.000Z', exceptionId: 'visit-2', status: 4, reason: 'Accepted partner cleaning',
-  employeeId: 'second', assigneeIds: ['second'], rosterVersion: 'v1', canAssign: true, visitNumber: 2, visitSource: 'PartnerPortal', offerRevision: 0, isPartnerBooking: true };
+  employeeId: 'second', assigneeIds: ['second'], rosterVersion: 'v1', canAssign: true, visitNumber: 2, visitSource: 'PartnerPortal', visitCleaningType: 'Normal', offerRevision: 0, isPartnerBooking: true };
 
 async function setup(page: Page, options: { addFailures?: number; cleanerConflict?: boolean } = {}) {
   await setupAdminMocks(page);
@@ -166,7 +166,9 @@ test('the visit list names each visit with its number, dates and source', async 
   const booked = list.getByRole('row').filter({ hasText: '#2 ·' });
   await expect(booked).toContainText('Second Cleaner');
   await expect(booked).toContainText('Managed under Partner requests');
-  await expect(booked.getByRole('button')).toHaveCount(0);
+  // A partner booking's cleaner is managed through its request, but its cleaning type can be set by staff.
+  await expect(booked.getByRole('button')).toHaveCount(1);
+  await expect(booked.getByRole('button', { name: 'Change cleaning type', exact: true })).toBeVisible();
   // No price is shown in the visit list.
   await expect(list).not.toContainText('€');
 });
@@ -313,5 +315,26 @@ test('a visit that is already cleaned can be changed from Normal to Deep', async
   await expect(modal).toHaveCount(0);
   expect(state.cleaningTypeWrites).toEqual([expect.objectContaining({ visitId: 'visit-done', cleaningType: 'Deep' })]);
   await expect(list.getByRole('row').filter({ hasText: '#3 ·' })).toContainText('Deep cleaning');
+});
+
+test('staff set Deep or Normal on a partner visit from the visit list, and the booking follows', async ({ page }) => {
+  const state = await setup(page);
+  await shiftAction(page, MAIN, 'Occurrences');
+  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  const booked = list.getByRole('row').filter({ hasText: '#2 ·' });
+  await expect(booked).toContainText('Normal cleaning');
+  await booked.getByRole('button', { name: 'Change cleaning type', exact: true }).click();
+
+  const modal = page.getByRole('dialog', { name: 'Cleaning type', exact: true });
+  // The booking's cleaner is not changed from here: only the cleaning type is offered.
+  await expect(modal.getByRole('textbox', { name: 'Cleaner', exact: true })).toHaveCount(0);
+  await modal.getByRole('textbox', { name: 'Cleaning type', exact: true }).click();
+  await page.getByRole('option', { name: 'Deep', exact: true }).click();
+  await modal.getByRole('button', { name: 'Save cleaning type', exact: true }).click();
+
+  await expect(modal).toHaveCount(0);
+  expect(state.cleaningTypeWrites).toEqual([expect.objectContaining({ visitId: 'visit-2', cleaningType: 'Deep' })]);
+  expect(state.cleanerWrites).toHaveLength(0);
+  await expect(list.getByRole('row').filter({ hasText: '#2 ·' })).toContainText('Deep cleaning');
 });
 

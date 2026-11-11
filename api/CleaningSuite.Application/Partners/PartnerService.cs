@@ -246,6 +246,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
             CompanyId = company.Id, BranchId = branch.Id, RequestedByEmployeeId = actor,
             PriceNet = branch.CurrentPriceNet!.Value, VatRatePercent = branch.CurrentVatRatePercent!.Value,
             EstimatedDurationMinutes = branch.CurrentEstimatedDurationMinutes!.Value, PricingVersion = branch.PricingVersion };
+        request.CleaningType = CleaningOf(body.CleaningType);
         await SetWindow(request, body.FromDate, body.ToDate, body.ExactStartLocalTime, body.Notes, ct);
         Db.Store(request); NotifyRequest(request, "Requested", "Staff");
         if (push is not null) await push.StagePartnerRequestAsync(Db, request.Id, request.Revision, DateTimeOffset.UtcNow, ct);
@@ -260,6 +261,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         var request = await Request(id, company.Id, ct);
         CheckVersion(request, body.Version); EnsurePartnerEditable(request);
         await Branch(request.BranchId, company.Id, ct);
+        if (body.CleaningType is not null) request.CleaningType = CleaningOf(body.CleaningType);
         await SetWindow(request, body.FromDate, body.ToDate, body.ExactStartLocalTime, body.Notes, ct);
         var previous = request.OfferedEmployeeId;
         InvalidateOffer(request); request.Status = "Requested"; Touch(request);
@@ -288,6 +290,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         if (request.Status == "Cancelled") throw new ShiftConflictException("Cancelled requests cannot be rescheduled.");
         await ActiveCompany(request.CompanyId, ct); await Branch(request.BranchId, request.CompanyId, ct);
         await EnsureUnstartedUnbilled(request, ct);
+        if (body.CleaningType is not null) request.CleaningType = CleaningOf(body.CleaningType);
         await SetWindow(request, body.FromDate, body.ToDate, body.ExactStartLocalTime, body.Notes, ct);
         await ReleaseVisit(request, notifyAccepted: true, removeOccurrence: true, ct);
         var previous = request.OfferedEmployeeId ?? request.AcceptedEmployeeId;
@@ -521,6 +524,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         request.OccurrenceSequence ??= shift.NextOccurrenceSequence();
         occurrence.PartnerRequestId = request.Id; occurrence.Sequence = request.OccurrenceSequence;
         occurrence.Source = ShiftOccurrenceException.SourcePartnerPortal; occurrence.Notes = visitNotes;
+        occurrence.CleaningType = request.CleaningType ?? CleaningTypes.Normal;
         occurrence.RequiredPhotoLabels = portalSettings?.PhotoLabels.ToList() ?? [];
         var roster = ShiftVisitRoster.Resolve(shift.Id, [], [occurrence], [], []);
         await VisitAssignmentSafety.CheckConflicts(shifts, shift, roster, zone, ct);
@@ -789,6 +793,12 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
             throw new ShiftConflictException("This visit has already been invoiced and cannot be changed.");
     }
 
+    private static string CleaningOf(string? value)
+    {
+        try { return CleaningTypes.Normalize(value); }
+        catch (ArgumentException ex) { throw new ValidationException([new FluentValidation.Results.ValidationFailure("CleaningType", ex.Message)]); }
+    }
+
     private async Task SetWindow(PartnerCleaningRequest request, DateOnly from, DateOnly to, string? exact, string? notes, CancellationToken ct)
     {
         var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
@@ -866,7 +876,8 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
             item.ToDate, item.ExactStartLocalTime, item.Notes, item.PriceNet, item.VatRatePercent,
             item.EstimatedDurationMinutes, status, item.FirstAcceptedAtUtc, item.LinkedShiftId, item.PlannedStartUtc,
             item.PlannedEndUtc, employee is null ? null : staff ? $"{employee.FirstName} {employee.LastName}".Trim() : null, started,
-            status == "Completed" ? ended : null, staff ? item.OfferedEmployeeId : null, staff ? item.OfferId : null);
+            status == "Completed" ? ended : null, staff ? item.OfferedEmployeeId : null, staff ? item.OfferId : null,
+            item.CleaningType ?? CleaningTypes.Normal);
     }
 
     // Quality Cycle checklists recorded for the accepted cleaner's linked visit occurrence.

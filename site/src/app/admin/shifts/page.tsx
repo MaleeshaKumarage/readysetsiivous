@@ -759,7 +759,7 @@ export default function ShiftsAdminPage() {
                   <Text size="xs" c="dimmed">{item.visitNumber ? (item.isPartnerBooking ? 'Partner booking' : item.offeredEmployeeId ? 'Waiting for the cleaner to accept' : (item.assigneeIds ?? []).length ? 'Accepted' : 'No cleaner yet') : item.assignmentSource ?? 'Recurring'}</Text>{item.visitNumber ? <Text size="xs" c="dimmed">{item.visitCleaningType ?? 'Normal'} cleaning</Text> : null}{item.assignmentLockReason && <Text size="xs" c="dimmed">{item.assignmentLockReason}</Text>}</Table.Td>
                 <Table.Td>{item.reason ?? '—'}</Table.Td>
                 <Table.Td><Group gap={4} wrap="nowrap">
-                  {item.isPartnerBooking ? <Text size="xs" c="dimmed">Managed under Partner requests</Text> : <>
+                  {item.isPartnerBooking ? <><Text size="xs" c="dimmed">Managed under Partner requests</Text><Button size="xs" variant="light" onClick={() => { setCleanerVisit(item); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Change cleaning type</Button></> : <>
                   {isAdmin() && (occurrenceShift?.schedule.type === 4 || occurrenceShift?.schedule.type === 6) && <Button size="xs" variant="light" onClick={() => { setPricingShift(occurrenceShift); setPricingOccurrence(item); }}>Visit price</Button>}
                   {occurrenceShift?.isBranchMain
                     ? <Button size="xs" variant="light" disabled={item.canAssign === false} onClick={() => { setCleanerVisit(item); setCleanerChoice(item.assigneeIds?.[0] ?? item.offeredEmployeeId ?? null); setCleanerError(''); }}>Change cleaner</Button>
@@ -777,14 +777,16 @@ export default function ShiftsAdminPage() {
 
       <AddVisitDialog opened={Boolean(visitDialog)} preset={visitDialog?.preset ?? null} employees={employees} timeZoneId={timeZoneId}
         onClose={() => setVisitDialog(null)} onAdded={(visit, propertyName) => { void visitAdded(visit, propertyName); }} />
-      <Modal opened={Boolean(cleanerVisit)} onClose={() => { if (!cleanerSaving) setCleanerVisit(null); }} closeButtonProps={{ disabled: cleanerSaving }} title="Change cleaner">
+      <Modal opened={Boolean(cleanerVisit)} onClose={() => { if (!cleanerSaving) setCleanerVisit(null); }} closeButtonProps={{ disabled: cleanerSaving }} title={cleanerVisit?.isPartnerBooking ? 'Cleaning type' : 'Change cleaner'}>
         <Stack>
           <Text size="sm">{cleanerVisit && visitLabel(cleanerVisit, timeZoneId)}</Text>
+          {!cleanerVisit?.isPartnerBooking && <>
           <Select label="Cleaner" placeholder="Unassigned" clearable searchable value={cleanerChoice} onChange={setCleanerChoice}
             description="The cleaner gets an offer and holds the visit once accepted. A cleaner who already holds it is released."
             data={employees.filter(e => e.isActive && e.role !== 'partner').map(e => ({ value: e.id, label: `${e.firstName} ${e.lastName}` }))} />
           {cleanerError && <Text role="alert" c="red">{cleanerError}</Text>}
           <Group justify="flex-end"><Button variant="default" disabled={cleanerSaving} onClick={() => setCleanerVisit(null)}>Cancel</Button><Button loading={cleanerSaving} onClick={saveCleaner}>Save cleaner</Button></Group>
+          </>}
           <Select label="Cleaning type" allowDeselect={false} value={cleaningTypeChoice ?? cleanerVisit?.visitCleaningType ?? 'Normal'} onChange={setCleaningTypeChoice}
             description="Every visit starts as Normal. You can change it at any time, including after the cleaning is done."
             data={[{ value: 'Normal', label: 'Normal' }, { value: 'Deep', label: 'Deep' }]} />
