@@ -70,7 +70,7 @@ for(const fixed of [false,true]) {
     await expect(page.getByRole('tab',{name:'Cleaning requests',exact:true})).toHaveAttribute('aria-selected','true');
     const write = backend.writes.find(w => w.path === 'partner/requests');
     expect(write).toMatchObject({method:'POST',status:200});
-    expect(write!.body).toEqual({clientRequestId:expect.stringMatching(/^[a-f0-9-]{36}$/),branchId:backend.branches[0].id,fromDate:'2026-12-01',toDate:fixed?'2026-12-01':'2026-12-02',exactStartLocalTime:fixed?'10:30':null,notes:'Prepare fresh linen.'});
+    expect(write!.body).toEqual({clientRequestId:expect.stringMatching(/^[a-f0-9-]{36}$/),branchId:backend.branches[0].id,fromDate:'2026-12-01',toDate:fixed?'2026-12-01':'2026-12-02',exactStartLocalTime:fixed?'10:30':null,cleaningType:'Normal',notes:'Prepare fresh linen.'});
   });
 }
 
