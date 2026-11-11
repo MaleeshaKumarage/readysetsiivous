@@ -107,6 +107,8 @@ test('create shift lets the admin pick an older branch price version', async ({ 
   await selectDailyScheduleIfEmpty(page); await modal.getByRole('button', { name: 'Create shift' }).click();
   await expect(page.getByRole('dialog', { name: 'Add shift' })).toHaveCount(0);
   expect(created).toEqual([expect.objectContaining({ priceEffectiveFrom: '2020-01-01' })]);
+  // The shift is named from the property, so the name sent is the generated one.
+  expect(String(created[0].name)).toMatch(/Cleaning/);
 });
 
 test('pricing dialog for a branch-linked shift shows its version and saves a different one', async ({ page }) => {
