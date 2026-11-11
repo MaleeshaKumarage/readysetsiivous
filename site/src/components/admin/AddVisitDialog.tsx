@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Button, Group, Modal, Select, Stack, Text, Textarea, TextInput } from '@mantine/core';
 import { adminBranchVisits, adminCompanies, type Branch, type BranchVisit, type Employee } from '@/lib/adminApi';
 import { CompanyPicker } from '@/components/admin/CompanyPicker';
+import { DEEP_SURCHARGE_EUR } from '@/lib/cleaningPricing';
 
 const DEFAULT_CLEANER = 'default';
 const NO_CLEANER = 'none';
@@ -90,7 +91,7 @@ export function AddVisitDialog({ opened, onClose, onAdded, employees, timeZoneId
         </Group>
         {days > 1 && <Text size="sm" role="status">One visit covering {days} days, from {fromDate} {startTime} to {lastDay} {endTime}.</Text>}
         <Select label="Cleaning type" allowDeselect={false} value={cleaningType} onChange={value => setCleaningType(value ?? 'Normal')}
-          description="Every visit starts as Normal. You can change it later, including after the cleaning is done."
+          description={cleaningType === 'Deep' ? `Deep cleaning adds €${DEEP_SURCHARGE_EUR} excl. VAT to this visit.` : 'Every visit starts as Normal. You can change it later, including after the cleaning is done.'}
           data={[{ value: 'Normal', label: 'Normal' }, { value: 'Deep', label: 'Deep' }]} />
         <Select label="Cleaner" allowDeselect={false} searchable value={cleaner} onChange={value => setCleaner(value ?? DEFAULT_CLEANER)}
           description="The cleaner gets an offer. It is theirs once accepted, or at once if they accept work automatically."

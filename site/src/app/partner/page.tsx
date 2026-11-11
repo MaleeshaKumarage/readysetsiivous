@@ -320,7 +320,7 @@ export default function PartnerPage() {
               <p className="partner-muted partner-form-wide" id="partner-window-help">{t.windowHint}</p>
               <label className="partner-check"><input type="checkbox" checked={exact} onChange={event => setExact(event.target.checked)} />{t.fixedAppointment}</label>
               <p className="partner-muted partner-form-wide">{t.visitInstructionsHint}</p>
-              <Field label={t.cleaningType}><select className="partner-field" name="cleaningType" aria-label={t.cleaningType} value={cleaningType} onChange={event => setCleaningType(event.target.value)}><option value="Normal">{t.normalCleaning}</option><option value="Deep">{t.deepCleaning}</option></select></Field>
+              <Field label={t.cleaningType}><select className="partner-field" name="cleaningType" aria-label={t.cleaningType} value={cleaningType} onChange={event => setCleaningType(event.target.value)}><option value="Normal">{t.normalCleaning}</option><option value="Deep">{t.deepCleaning}</option></select>{cleaningType === 'Deep' && <span className="partner-muted" role="note">{t.deepSurchargeNote}</span>}</Field>
               <Field label={t.instructions} className="partner-form-wide"><Textarea className="partner-field" value={notes} maxLength={4000} onChange={event => setNotes(event.target.value)} /></Field>
               <div className="partner-form-actions"><Button type="submit" disabled={busy}>{t.saveRequest}</Button><Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => setTarget(null)}>{t.cancel}</Button></div>
             </form>

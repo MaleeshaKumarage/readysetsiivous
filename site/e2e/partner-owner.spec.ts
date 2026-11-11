@@ -90,7 +90,9 @@ test('owner picks Deep or Normal when requesting a cleaning, and the choice is s
   const state = await owner(page); await page.goto('/partner/'); const property = page.getByRole('article', { name: priced.name, exact: true });
   await property.getByRole('button', { name: 'Request cleaning', exact: true }).click(); const form = page.getByRole('dialog', { name: /cleaning request/i });
   await expect(form.getByLabel('Cleaning type', { exact: true })).toHaveValue('Normal');
+  await expect(form.getByRole('note')).toHaveCount(0);
   await form.getByLabel('Cleaning type', { exact: true }).selectOption('Deep');
+  await expect(form.getByRole('note')).toHaveText('Deep cleaning adds €15.00 excl. VAT to each visit.');
   await form.getByLabel('From date', { exact: true }).fill('2026-12-16'); await form.getByLabel('Fixed appointment on this date').check(); await form.getByLabel('Exact start time').fill('09:00');
   await form.getByRole('button', { name: 'Save cleaning request', exact: true }).click();
   await expect(page.getByText('Cleaning type: Deep', { exact: true })).toBeVisible();

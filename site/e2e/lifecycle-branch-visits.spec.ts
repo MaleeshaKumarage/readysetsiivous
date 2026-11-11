@@ -290,6 +290,7 @@ test('a new visit is Normal unless Deep is chosen, and the choice is sent with i
   await expect(dialog.getByRole('textbox', { name: 'Cleaning type', exact: true })).toHaveValue('Normal');
   await dialog.getByRole('textbox', { name: 'Cleaning type', exact: true }).click();
   await page.getByRole('option', { name: 'Deep', exact: true }).click();
+  await expect(dialog.getByText('Deep cleaning adds €15.00 excl. VAT to this visit.', { exact: true })).toBeVisible();
   await dialog.getByRole('button', { name: 'Add visit', exact: true }).click();
 
   await expect(dialog).toHaveCount(0);
@@ -310,6 +311,7 @@ test('a visit that is already cleaned can be changed from Normal to Deep', async
   const modal = page.getByRole('dialog', { name: 'Change cleaner', exact: true });
   await modal.getByRole('textbox', { name: 'Cleaning type', exact: true }).click();
   await page.getByRole('option', { name: 'Deep', exact: true }).click();
+  await expect(modal.getByText('Deep cleaning adds €15.00 excl. VAT to this visit.', { exact: true })).toBeVisible();
   await modal.getByRole('button', { name: 'Save cleaning type', exact: true }).click();
 
   await expect(modal).toHaveCount(0);

@@ -21,6 +21,7 @@ import { LifecycleTabs, type LifecycleStatus } from '@/components/LifecycleTabs'
 import { ListPager, PAGE_SIZE } from '@/components/ListPager';
 import { ShiftWorkspace, scheduleLabel } from '@/components/admin/ShiftWorkspace';
 import { autoShiftName } from '@/lib/shiftName';
+import { DEEP_SURCHARGE_EUR } from '@/lib/cleaningPricing';
 
 // The price version in force today (or the earliest when all start later): the default billing price for a new shift.
 const defaultPriceVersion = (versions?: { effectiveFrom: string }[] | null) => {
@@ -788,7 +789,7 @@ export default function ShiftsAdminPage() {
           <Group justify="flex-end"><Button variant="default" disabled={cleanerSaving} onClick={() => setCleanerVisit(null)}>Cancel</Button><Button loading={cleanerSaving} onClick={saveCleaner}>Save cleaner</Button></Group>
           </>}
           <Select label="Cleaning type" allowDeselect={false} value={cleaningTypeChoice ?? cleanerVisit?.visitCleaningType ?? 'Normal'} onChange={setCleaningTypeChoice}
-            description="Every visit starts as Normal. You can change it at any time, including after the cleaning is done."
+            description={cleaningTypeChoice === 'Deep' || (!cleaningTypeChoice && cleanerVisit?.visitCleaningType === 'Deep') ? `Deep cleaning adds €${DEEP_SURCHARGE_EUR} excl. VAT to this visit.` : 'Every visit starts as Normal. You can change it at any time, including after the cleaning is done.'}
             data={[{ value: 'Normal', label: 'Normal' }, { value: 'Deep', label: 'Deep' }]} />
           {cleaningTypeError && <Text role="alert" c="red">{cleaningTypeError}</Text>}
           <Group justify="flex-end"><Button variant="default" loading={cleaningTypeSaving} onClick={saveCleaningType}>Save cleaning type</Button></Group>
