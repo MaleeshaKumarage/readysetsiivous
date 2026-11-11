@@ -49,9 +49,20 @@ Employees still see the shift name, the visit date/time and the request state. T
 3. **One-time visits retired for new records.** Admin one-time visits become occurrences on the branch main. The `OneTime` schedule type is no longer offered for new records. This supersedes the 2026-11-03 one-time design for new visits; existing one-time shifts are kept and readable.
 4. **Per-visit details on the occurrence.** Notes and required photo sections live on each occurrence. Company access and contact details stay on the branch main.
 
+## Occurrence naming and source (user request, 2026-11-11)
+
+- Each occurrence has a generated **name** so people can tell visits apart. The address, size and service details stay on the main shift name and are not repeated per occurrence.
+- Name format: `#<sequence> · <date or date range> · <source>`, for example `#3 · Mon 21 Apr · Admin panel` or `#5 · 25–27 Apr · Partner portal`.
+- **Sequence** is a counter per branch main, starting at 1 and increasing with each new occurrence in the order they are created. It is not reset per month or per week. Stored on the occurrence when created so the name stays stable.
+- **Source tag** is `Admin panel` or `Partner portal`, recording where the occurrence came from.
+- A date range creates one occurrence with one sequence number that covers the whole range. Exact dates use the same format with a single date. Date-range creation from the admin side is one occurrence per day under the earlier plan; this needs confirming (see Open items).
+- Names are shown to admins and employees alike. Employees still see the shift name as the main title, with the occurrence name and their visit time underneath.
+
 ## Open items
 
-- None of the four questions remain open. Build order below still applies, with the merge of historical shifts moved to the final chunk.
+- **Date range = one occurrence or one per day?** The request reads as one numbered occurrence for a range ("like a date range or exact date"), but the earlier plan made one occurrence per day. Needs confirmation before build.
+- **Sequence after cancel or delete:** assumed the number is never reused, so `#4` stays `#4` even if removed.
+- Build order below still applies, with the merge of historical shifts moved to the final chunk.
 
 ## Test plan (required by CLAUDE.md publishing rule)
 
