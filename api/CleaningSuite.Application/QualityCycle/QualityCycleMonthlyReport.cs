@@ -10,10 +10,16 @@ using MediatR;
 namespace CleaningSuite.Application.QualityCycle;
 
 public record QualityCycleOccurrenceReport(DateTime StartUtc, DateTime EndUtc, int ExpectedTasks,
-    int SubmittedTasks, string Status);
+    int SubmittedTasks, string Status)
+{
+    /// <summary>On a branch main shift: the visit's number and origin, such as "#3 · Admin panel". Null on other shifts.</summary>
+    public string? VisitLabel { get; init; }
+}
 public record QualityCycleEvidenceReport(DateTime StartUtc, DateTime EndUtc, string? Note, IReadOnlyList<string> PhotoUrls)
 {
     public IReadOnlyList<QualityCyclePhoto> Photos { get; init; } = Array.Empty<QualityCyclePhoto>();
+    /// <summary>On a branch main shift: the visit's number and origin, such as "#3 · Admin panel". Null on other shifts.</summary>
+    public string? VisitLabel { get; init; }
 }
 public record QualityCycleShiftReport(Guid ShiftId, string ShiftName, Guid CompanyId, string CompanyName,
     Guid BranchId, string BranchName, int ScheduledOccurrences, decimal ScheduledHours,
@@ -104,6 +110,10 @@ public class QualityCycleMonthlyReportService(IShiftRepository shifts, IQualityC
         foreach (var shift in candidates)
         {
             var saved = await forms.ListFormsAsync(shift.Id, from, to, ct);
+            // A branch main shift's visits are numbered; the report names each one so it can be told apart from the others.
+            var visitLabels = !shift.IsBranchMain ? new Dictionary<DateTime, string>()
+                : (await shifts.ListOccurrenceExceptionsAsync(shift.Id, from, to, ct) ?? []).Where(x => x.Sequence.HasValue)
+                    .GroupBy(x => x.StartUtc).ToDictionary(g => g.Key, g => BranchMainVisits.Label(g.First()));
             var reportingShift = request.ShiftIds is not null ? ShiftContractSchedule.Snapshot(shift, zone) : shift;
             var planned = await QualityCycleOccurrences.ResolvedInWindowAsync(shifts, reportingShift, from, to, zone, ct, includeWithoutChecklist: request.ShiftIds is not null);
             // Submitted historical evidence remains visible even after a shift/template is removed.
@@ -149,7 +159,7 @@ public class QualityCycleMonthlyReportService(IShiftRepository shifts, IQualityC
                         var status = completed ? "Recorded" : end <= now ? "Missing" : "Pending";
                         if (status == "Missing") missingTasks += remaining;
                         if (status == "Pending") pendingTasks += remaining;
-                        rows.Add(new(time, end, employees.Count, submitted, status));
+                        rows.Add(new(time, end, employees.Count, submitted, status) { VisitLabel = visitLabels.GetValueOrDefault(time) });
                         workByVisit.Add(matching);
                     }
                 }
@@ -183,7 +193,8 @@ public class QualityCycleMonthlyReportService(IShiftRepository shifts, IQualityC
                         (!string.IsNullOrWhiteSpace(f.CleanerNotes) || f.PhotoUrls.Count > 0))
                         .OrderBy(f => f.ShiftOccurrenceUtc).ThenBy(f => f.Id)
                         .Select(f => new QualityCycleEvidenceReport(f.ShiftOccurrenceUtc, f.ShiftOccurrenceEndUtc,
-                            f.CleanerNotes, f.Photos.Count > 0 ? Array.Empty<string>() : f.PhotoUrls.ToArray()) { Photos = f.Photos.ToArray() }).ToList()
+                            f.CleanerNotes, f.Photos.Count > 0 ? Array.Empty<string>() : f.PhotoUrls.ToArray())
+                            { Photos = f.Photos.ToArray(), VisitLabel = visitLabels.GetValueOrDefault(f.ShiftOccurrenceUtc) }).ToList()
                 });
             }
         }

@@ -86,6 +86,7 @@ public static class InvoicePdfRenderer
                             {
                                 detail.Item().Text(T("Scheduled hours") + ": " + Number(line.Hours));
                                 detail.Item().Text(T("Occurrences") + ": " + line.Occurrences);
+                                if (line.VisitNumbers.Count > 0) detail.Item().Text(T("Visit numbers") + ": " + string.Join(", ", line.VisitNumbers.Select(number => "#" + number)));
                                 if (!string.IsNullOrWhiteSpace(line.PricingMode)) detail.Item().Text(T("Pricing") + ": " + T(line.PricingMode));
                                 if (line.PeriodFrom.HasValue) detail.Item().Text(T(line.CompletedOn.HasValue ? "Scheduled date" : "Billing period") + ": " + Period(line.PeriodFrom, line.PeriodTo));
                             }
@@ -203,7 +204,7 @@ public static class InvoicePdfRenderer
             "Branch" => ("Toimipiste", "Verksamhetsställe"), "Scheduled hours" => ("Suunnitellut tunnit", "Planerade timmar"),
             "Scheduled date" => ("Suunniteltu päivä", "Planerat datum"),
             "Completed on" => ("Valmistumispäivä", "Slutförd den"),
-            "Occurrences" => ("Käynnit", "Besök"), "Pricing" => ("Hinnoittelu", "Prissättning"),
+            "Occurrences" => ("Käynnit", "Besök"), "Visit numbers" => ("Käyntinumerot", "Besöksnummer"), "Pricing" => ("Hinnoittelu", "Prissättning"),
             "Adjustment reason" => ("Muutoksen peruste", "Orsak till justering"), "Net amount" => ("Veroton summa", "Belopp exkl. moms"),
             "Amount due" => ("Maksettavaa", "Att betala"), "Payment details" => ("Maksutiedot", "Betalningsuppgifter"),
             "Monthly" => ("Kiinteä kuukausihinta", "Fast månadspris"), "Hourly" => ("Tuntihinta", "Timpris"),

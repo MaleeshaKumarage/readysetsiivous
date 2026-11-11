@@ -31,7 +31,10 @@ public static class QualityCycleOccurrences
                 plan = shift.QualityCyclePlans.Where(x => x.EffectiveFromUtc <= visit.Occurrence.StartUtc)
                     .OrderByDescending(x => x.EffectiveFromUtc).FirstOrDefault()
                     ?? (shift.QualityCyclePlans.Count == 0 ? new QualityCyclePlan { CompanyId = shift.CompanyId,
-                        BranchId = shift.BranchId, ShiftName = shift.Name, TemplateId = shift.QualityCycleTemplateId, IsActive = shift.IsActive } : null);
+                        BranchId = shift.BranchId, ShiftName = shift.Name, TemplateId = shift.QualityCycleTemplateId, IsActive = shift.IsActive }
+                    // A branch main shift exists only to hold its visits, so a visit entered for a date before the
+                    // shift's first plan is planned under that first plan. No plan timestamp is backdated.
+                    : shift.IsBranchMain ? shift.QualityCyclePlans.OrderBy(x => x.EffectiveFromUtc).First() : null);
             if (plan is null || !plan.IsActive || (!includeWithoutChecklist && !plan.TemplateId.HasValue)) continue;
             result.Add((plan, new ShiftOccurrence { StartUtc = visit.Occurrence.StartUtc, EndUtc = visit.Occurrence.EndUtc }, visit.EmployeeIds));
         }

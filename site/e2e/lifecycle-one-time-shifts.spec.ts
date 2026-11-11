@@ -15,17 +15,28 @@ const legacyOnCallShift = {
   validFrom: '2026-10-01T00:00:00', validUntil: null, schedule: { type: 4 },
 };
 
-type AdminMock = { writes: any[]; posts: any[] };
+type AdminMock = { writes: any[]; posts: any[]; visitPosts: any[]; visitsAdded: number };
 
 async function mockAdmin(page: Page, seeded: any[] = [], options: { failFirstCreate?: boolean; holdSecondCreate?: Promise<void> } = {}): Promise<AdminMock> {
   await setupAdminMocks(page);
   await page.clock.install({ time: new Date('2026-11-03T10:00:00Z') });
-  const mock: AdminMock = { writes: [], posts: [] };
+  const mock: AdminMock = { writes: [], posts: [], visitPosts: [], visitsAdded: 0 };
   let shifts = seeded;
   await page.route(/\/api\/v1\/admin\//, async route => {
     const method = route.request().method();
     const path = new URL(route.request().url()).pathname;
     if (method === 'OPTIONS') return route.fulfill({ headers });
+    // One-time visits are no longer created as shifts: Add visit posts them to the property's main shift.
+    if (path.endsWith('/branch-visits') && method === 'POST') {
+      const body = route.request().postDataJSON();
+      mock.visitPosts.push(body);
+      if (options.failFirstCreate && mock.visitPosts.length === 1) return route.fulfill({ status: 409, headers, json: { detail: 'Synthetic failure' } });
+      if (options.holdSecondCreate && mock.visitPosts.length === 2) await options.holdSecondCreate;
+      mock.visitsAdded++;
+      return route.fulfill({ headers, json: { id: `visit-${mock.visitsAdded}`, shiftId: 'main', branchId: body.branchId, number: mock.visitsAdded, source: 'AdminPanel',
+        startUtc: `${body.fromDate}T06:00:00.000Z`, endUtc: `${body.toDate}T08:30:00.000Z`, fromDate: body.fromDate, toDate: body.toDate,
+        offerRevision: 0, status: 'Unassigned', timeZoneId: 'Europe/Helsinki' } });
+    }
     if (path.endsWith('/shifts') && method === 'POST') {
       const body = route.request().postDataJSON();
       mock.posts.push(body);
@@ -65,16 +76,21 @@ async function fillCommon(page: Page, dialog: Locator) {
   await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'AAA1', exact: true }).click();
 }
 
-async function chooseOneTime(page: Page, dialog: Locator) {
-  await dialog.getByLabel('Schedule', { exact: true }).click();
-  await page.getByRole('option', { name: 'One-time', exact: true }).click();
+// A single visit is added to the property's shift with Add visit; only the property, date and times are asked for.
+async function openAddVisit(page: Page) {
+  await page.goto('/admin/shifts/');
+  await page.getByRole('button', { name: 'Add visit', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add visit', exact: true });
+  await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'AAA', exact: true }).click();
+  await dialog.getByLabel('Property', { exact: true }).click(); await page.getByRole('option', { name: 'AAA1', exact: true }).click();
+  return dialog;
 }
 
-test('one-time and on-call are offered for new shifts and existing on-call shifts retain their schedule', async ({ page }) => {
+test('one-time is retired for new shifts, on-call stays, and existing on-call shifts retain their schedule', async ({ page }) => {
   await mockAdmin(page, [legacyOnCallShift]);
   const dialog = await openAddShift(page);
   await dialog.getByLabel('Schedule', { exact: true }).click();
-  await expect(page.getByRole('option', { name: 'One-time', exact: true })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'One-time', exact: true })).toHaveCount(0);
   await expect(page.getByRole('option', { name: 'On-call / flexible', exact: true })).toBeVisible();
   await page.getByRole('option', { name: 'Daily', exact: true }).click();
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -86,50 +102,43 @@ test('one-time and on-call are offered for new shifts and existing on-call shift
   await page.getByRole('row').filter({ hasText: 'Legacy on-call' }).getByRole('button', { name: /^More actions for / }).click(); await expect(page.getByRole('menuitem', { name: 'Schedule one-time visit', exact: true })).toBeVisible(); await page.keyboard.press('Escape');
 });
 
-test('admin creates a past one-time visit from one form without a second visit popup', async ({ page }) => {
+test('admin adds a past visit from one form without a second visit popup', async ({ page }) => {
   const mock = await mockAdmin(page);
-  const dialog = await openAddShift(page);
-  await fillCommon(page, dialog);
-  await chooseOneTime(page, dialog);
-  await expect(dialog.getByRole('textbox', { name: 'Start date', exact: true })).toHaveCount(0);
-  await dialog.getByRole('textbox', { name: 'Date', exact: true }).fill('2026-10-01');
-  await dialog.getByRole('textbox', { name: 'Start time', exact: true }).fill('09:00');
-  await dialog.getByRole('textbox', { name: 'End time', exact: true }).fill('11:30');
-  await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift', exact: true }).click();
+  const dialog = await openAddVisit(page);
+  // The clock is 3 November 2026: a visit on 1 October is in the past and is still accepted.
+  await dialog.getByLabel(/^Date/).fill('2026-10-01');
+  await dialog.getByLabel(/^Start time/).fill('09:00');
+  await dialog.getByLabel(/^End time/).fill('11:30');
+  await dialog.getByRole('button', { name: 'Add visit', exact: true }).click();
 
   await expect(dialog).toHaveCount(0);
-  expect(mock.writes).toHaveLength(1);
-  expect(mock.writes[0]).toMatchObject({
-    schedule: { type: 6, oneTimeDate: '2026-10-01', oneTimeStart: '09:00', oneTimeEnd: '11:30' },
-    validFrom: '2026-10-01', validUntil: '2026-10-01',
-  });
-  const row = page.getByRole('row').filter({ hasText: 'Past visit' });
-  await expect(row).toContainText('One-time 2026-10-01 09:00–11:30');
-  await row.getByRole('button', { name: /^More actions for / }).click(); await expect(page.getByRole('menuitem', { name: 'Schedule one-time visit', exact: true })).toHaveCount(0); await page.keyboard.press('Escape');
+  expect(mock.visitPosts).toEqual([{ branchId: 'branch', fromDate: '2026-10-01', toDate: '2026-10-01', startTime: '09:00', endTime: '11:30',
+    notes: null, employeeId: null, useDefaultEmployee: true }]);
+  // The visit is not a shift of its own, and no second popup asks for its date again.
+  expect(mock.posts).toHaveLength(0);
   await expect(page.getByRole('dialog', { name: /^Occurrences/ })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'Change occurrence', exact: true })).toHaveCount(0);
 });
 
 test('date, start and end errors block the save and keep the draft', async ({ page }) => {
   const mock = await mockAdmin(page);
-  const dialog = await openAddShift(page);
-  await fillCommon(page, dialog);
-  await chooseOneTime(page, dialog);
+  const dialog = await openAddVisit(page);
 
-  await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift', exact: true }).click();
-  await expect(dialog.getByText('One-time visit date is required.', { exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Add visit', exact: true }).click();
+  await expect(dialog.getByText('Choose the date of the visit.', { exact: true })).toBeVisible();
 
-  await dialog.getByRole('textbox', { name: 'Date', exact: true }).fill('2026-10-01');
-  await dialog.getByRole('textbox', { name: 'Start time', exact: true }).fill('');
-  await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift', exact: true }).click();
-  await expect(dialog.getByText('One-time visit start and end times are required.', { exact: true })).toBeVisible();
+  await dialog.getByLabel(/^Date/).fill('2026-10-01');
+  await dialog.getByLabel(/^Start time/).fill('');
+  await dialog.getByRole('button', { name: 'Add visit', exact: true }).click();
+  await expect(dialog.getByText('Enter the start and end time.', { exact: true })).toBeVisible();
 
-  await dialog.getByRole('textbox', { name: 'Start time', exact: true }).fill('12:00');
-  await dialog.getByRole('textbox', { name: 'End time', exact: true }).fill('11:00');
-  await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift', exact: true }).click();
-  await expect(dialog.getByText('End time must be after start time.', { exact: true })).toBeVisible();
+  await dialog.getByLabel(/^Start time/).fill('12:00');
+  await dialog.getByLabel(/^End time/).fill('11:00');
+  await dialog.getByRole('button', { name: 'Add visit', exact: true }).click();
+  await expect(dialog.getByText('The end time must be after the start time.', { exact: true })).toBeVisible();
 
-  expect(mock.posts).toHaveLength(0);
-  await expect(dialog.getByRole('textbox', { name: 'Date', exact: true })).toHaveValue('2026-10-01');
+  expect(mock.visitPosts).toHaveLength(0);
+  await expect(dialog.getByLabel(/^Date/)).toHaveValue('2026-10-01');
 });
 
 test('edit restores the one-time date and times and saves a changed end time', async ({ page }) => {
@@ -155,26 +164,24 @@ test('a failed save keeps the draft and a retry creates the visit once', async (
   let release!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
   const mock = await mockAdmin(page, [], { failFirstCreate: true, holdSecondCreate: held });
-  const dialog = await openAddShift(page);
-  await fillCommon(page, dialog);
-  await chooseOneTime(page, dialog);
-  await dialog.getByRole('textbox', { name: 'Date', exact: true }).fill('2026-10-01');
-  await dialog.getByRole('textbox', { name: 'Start time', exact: true }).fill('09:00');
-  await dialog.getByRole('textbox', { name: 'End time', exact: true }).fill('11:30');
+  const dialog = await openAddVisit(page);
+  await dialog.getByLabel(/^Date/).fill('2026-10-01');
+  await dialog.getByLabel(/^Start time/).fill('09:00');
+  await dialog.getByLabel(/^End time/).fill('11:30');
 
-  await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Add visit', exact: true }).click();
   await expect(dialog.getByText('Synthetic failure', { exact: true }).first()).toBeVisible();
-  await expect(dialog.getByRole('textbox', { name: 'Date', exact: true })).toHaveValue('2026-10-01');
+  await expect(dialog.getByLabel(/^Date/)).toHaveValue('2026-10-01');
 
-  const retry = dialog.getByRole('button', { name: 'Create shift', exact: true });
+  // A double click while the retry is in flight must not add the visit twice.
+  const retry = dialog.getByRole('button', { name: 'Add visit', exact: true });
   await retry.click();
   await retry.click({ force: true });
   release();
 
   await expect(dialog).toHaveCount(0);
-  expect(mock.posts).toHaveLength(2);
-  expect(mock.writes).toHaveLength(1);
-  await expect(page.getByRole('row').filter({ hasText: 'Past visit' })).toHaveCount(1);
+  expect(mock.visitPosts).toHaveLength(2);
+  expect(mock.visitsAdded).toBe(1);
 });
 
 test('one-time visit price saves only that visit from the occurrences dialog', async ({ page }) => {

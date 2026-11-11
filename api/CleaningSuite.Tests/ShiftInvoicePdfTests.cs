@@ -110,6 +110,23 @@ public class ShiftInvoicePdfTests
         Assert.Contains(completedLabel, text); Assert.DoesNotContain("partner",text,StringComparison.OrdinalIgnoreCase);
         Save("completed-cleaning-"+language,pdf);
     }
+    [Theory]
+    [InlineData("en", "Visit numbers: #3, #5")] [InlineData("fi", "Käyntinumerot: #3, #5")] [InlineData("sv", "Besöksnummer: #3, #5")]
+    public void A_main_shift_line_names_the_visits_it_bills_and_other_lines_do_not(string language, string expected)
+    {
+        var invoice = Sample(language);
+        invoice.Lines = [
+            new() { ShiftId = Guid.NewGuid(), ShiftName = "Deep Cleaning - Testikatu 1", BranchName = "Apartment", PricingMode = "PerOccurrence", Quantity = 2, UnitPriceNet = 100,
+                NetAmount = 200, VatRatePercent = 25.5m, VatAmount = 51, Occurrences = 2, PeriodFrom = new(2026, 10, 3), PeriodTo = new(2026, 10, 9), VisitNumbers = [3, 5] },
+            new() { ShiftId = Guid.NewGuid(), ShiftName = "Weekly office clean", BranchName = "Office", PricingMode = "Hourly", Quantity = 4, UnitPriceNet = 30,
+                NetAmount = 120, VatRatePercent = 25.5m, VatAmount = 30.6m, Occurrences = 2, PeriodFrom = new(2026, 10, 1), PeriodTo = new(2026, 10, 31) }];
+        invoice.Total = new() { Net = 320, Vat = 81.6m };
+        var text = Extract(InvoicePdfRenderer.Render(invoice));
+        Assert.Contains(expected, text);
+        // Only the main shift line carries visit numbers.
+        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(text, "#\\d").Count);
+    }
+
     private static Invoice Sample(string language) => new()
     {
         CompanyId = Guid.NewGuid(), Language = language, InvoiceNumber = "RSS-2026-001", BookingNumber = "DO-NOT-SHOW-BOOKING",

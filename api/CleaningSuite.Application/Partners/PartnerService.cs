@@ -98,8 +98,9 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         await using var lease = await reservation.AcquireAsync(ct);
         // Reservation refreshes the tenant session; never use middleware's earlier employee snapshot.
         var employee = await PreferenceOwner(actor, ct);
-        if (autoAcceptWork && await Db.Query<PartnerCleaningRequest>()
-            .AnyAsync(x => x.Status == "Offered" && x.OfferedEmployeeId == actor, ct))
+        if (autoAcceptWork && (await Db.Query<PartnerCleaningRequest>()
+            .AnyAsync(x => x.Status == "Offered" && x.OfferedEmployeeId == actor, ct)
+            || await Db.Query<ShiftOccurrenceException>().AnyAsync(x => x.OfferedEmployeeId == actor && x.OfferId != null, ct)))
             throw new ShiftConflictException("Accept or decline your pending offers before enabling automatic acceptance.");
         employee.AutoAcceptWork = autoAcceptWork;
         employee.AutoAcceptWorkChosenUtc = DateTime.UtcNow;
@@ -288,12 +289,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         await ActiveCompany(request.CompanyId, ct); await Branch(request.BranchId, request.CompanyId, ct);
         await EnsureUnstartedUnbilled(request, ct);
         await SetWindow(request, body.FromDate, body.ToDate, body.ExactStartLocalTime, body.Notes, ct);
-        if (request.LinkedShiftId.HasValue)
-        {
-            var shift = await Db.LoadAsync<Shift>(request.LinkedShiftId.Value, ct);
-            if (shift is not null) { shift.Deactivate(); await ShiftTabs.StoreAsync(Db, shift, ct); await ReleaseShiftAssignments(shift.Id, ct);
-                if (push is not null && request.AcceptedEmployeeId.HasValue) await push.StageScheduleChangeAsync(Db, shift.Id, [request.AcceptedEmployeeId.Value], DateTimeOffset.UtcNow, ct); }
-        }
+        await ReleaseVisit(request, notifyAccepted: true, removeOccurrence: true, ct);
         var previous = request.OfferedEmployeeId ?? request.AcceptedEmployeeId;
         request.AcceptedEmployeeId = null; request.PlannedStartUtc = null; request.PlannedEndUtc = null;
         InvalidateOffer(request); request.Status = "Requested"; Touch(request); Db.Store(request);
@@ -317,12 +313,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         if (!staff) EnsurePartnerEditable(request);
         if (request.Status == "Cancelled") return await Map(request, staff, ct);
         await EnsureUnstartedUnbilled(request, ct);
-        if (request.LinkedShiftId.HasValue)
-        {
-            var shift = await Db.LoadAsync<Shift>(request.LinkedShiftId.Value, ct);
-            if (shift is not null) { shift.Deactivate(); await ShiftTabs.StoreAsync(Db, shift, ct); await ReleaseShiftAssignments(shift.Id, ct);
-                if (push is not null && request.AcceptedEmployeeId.HasValue) await push.StageScheduleChangeAsync(Db, shift.Id, [request.AcceptedEmployeeId.Value], DateTimeOffset.UtcNow, ct); }
-        }
+        await ReleaseVisit(request, notifyAccepted: true, removeOccurrence: true, ct);
         request.Status = "Cancelled"; request.CancellationReason = reason?.Trim();
         var oldEmployee = request.OfferedEmployeeId ?? request.AcceptedEmployeeId;
         InvalidateOffer(request); Touch(request); Db.Store(request);
@@ -352,12 +343,8 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         // A stored clock time on a multi-day window needs an explicit date before work is accepted automatically.
         if (automatic && !planned.HasValue && request.ExactStartLocalTime is not null)
             throw new ShiftConflictException("Choose the exact date and time before automatic acceptance.");
-        if (request.LinkedShiftId.HasValue)
-        {
-            var shift = await Db.LoadAsync<Shift>(request.LinkedShiftId.Value, ct);
-            if (shift is not null) { shift.Deactivate(); await ShiftTabs.StoreAsync(Db, shift, ct); await ReleaseShiftAssignments(shift.Id, ct);
-                if (push is not null && request.AcceptedEmployeeId.HasValue && (!automatic || request.AcceptedEmployeeId != employee.Id)) await push.StageScheduleChangeAsync(Db, shift.Id, [request.AcceptedEmployeeId.Value], DateTimeOffset.UtcNow, ct); }
-        }
+        // Automatic acceptance writes the visit again straight away, so its occurrence is updated in place, not removed.
+        await ReleaseVisit(request, notifyAccepted: !automatic || request.AcceptedEmployeeId != employee.Id, removeOccurrence: !automatic, ct);
         var previousEmployee = request.OfferedEmployeeId ?? request.AcceptedEmployeeId;
         request.AcceptedEmployeeId = null; request.PlannedStartUtc = null; request.PlannedEndUtc = null;
         Touch(request); request.OfferId = PartnerCleaningRequest.StableId($"offer:{request.Id}:{request.Revision}");
@@ -452,8 +439,14 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         // The visit carries the photo sections and general instructions in force when the partner's request is accepted.
         var portalSettings = await Db.LoadAsync<PartnerPortalSettings>(request.CompanyId, ct);
         var visitNotes = VisitNotes(portalSettings?.GeneralInstructions, request.Notes);
-        // Details are needed only to name a new visit; re-accepting an existing shift keeps its name.
-        if (request.LinkedShiftId is null || await Db.LoadAsync<Shift>(request.LinkedShiftId.Value, ct) is null) ShiftNaming.EnsureDetails(branch);
+        // A request accepted before branch main shifts existed owns a whole shift and keeps it. Every other
+        // request becomes one visit on its branch's main shift.
+        var ownShift = request.LinkedShiftId is { } linkedId && !request.OccurrenceStartUtc.HasValue ? await Db.LoadAsync<Shift>(linkedId, ct) : null;
+        if (ownShift is not { IsBranchMain: false } || ownShift.PartnerRequestId != request.Id)
+        {
+            await MaterializeOnBranchMain(request, actor, plannedStart, start, end, zone, company, branch, portalSettings, visitNotes, automatic, ct);
+            return;
+        }
         var shiftId = request.LinkedShiftId ?? PartnerCleaningRequest.StableId($"partner-shift:{request.Id}");
         var shift = await Db.LoadAsync<Shift>(shiftId, ct) ?? Shift.Create(request.CompanyId, request.BranchId,
             ShiftNaming.Build(branch), new ShiftSchedule { Type = ShiftScheduleType.OnCallFlexible }, visitNotes, localFrom, localUntil);
@@ -493,6 +486,82 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         await ShiftTabs.StoreAsync(Db, shift, ct); Db.Store(occurrence); Db.Store(assignment); Db.Store(billing); Db.Store(request);
         if (push is not null) await push.StageScheduleChangeAsync(Db, shiftId, assignments.Select(x => x.EmployeeId).Append(actor).Where(id => !automatic || id != actor), DateTimeOffset.UtcNow, ct);
         NotifyRequest(request, "RequestAccepted", "Company"); NotifyRequest(request, "RequestAccepted", "Staff");
+    }
+
+    /// <summary>
+    /// Writes the accepted request as one visit on its branch's main shift, creating that shift on first use.
+    /// The caller holds the tenant work reservation, so two acceptances cannot create two main shifts.
+    /// </summary>
+    private async Task MaterializeOnBranchMain(PartnerCleaningRequest request, Guid actor, DateTime? plannedStart, DateTime start, DateTime end,
+        TimeZoneInfo zone, Company company, Branch branch, PartnerPortalSettings? portalSettings, string? visitNotes, bool automatic, CancellationToken ct)
+    {
+        var shift = await BranchMainShifts.FindOrCreateAsync(Db, branch, TenantTimeZone.LocalDate(start, zone), ct);
+        // Companies with quality cycle enabled give every accepted visit the checklist; an admin's later choice on the shift is kept.
+        if (company.IsQualityCycleEnabled && company.QualityCycleTemplateId is Guid qualityTemplateId && shift.QualityCycleTemplateId is null)
+        {
+            shift.EnsureQualityCycleHistory();
+            shift.QualityCycleTemplateId = qualityTemplateId;
+            shift.RecordQualityCyclePlan(DateTime.UtcNow);
+            shift.CoverVisitDate(TenantTimeZone.LocalDate(start, zone));
+        }
+        // Company access and contact details belong to the main shift; notes and photo sections belong to the visit.
+        shift.PartnerAccessInstructions = portalSettings?.Account.AccessInstructions;
+        shift.PartnerContactName = portalSettings?.Account.ContactName;
+        shift.PartnerContactPhone = portalSettings?.Account.ContactPhone;
+        var occurrenceId = PartnerCleaningRequest.StableId($"partner-occurrence:{request.Id}");
+        var others = await Db.Query<ShiftOccurrenceException>().Where(x => x.ShiftId == shift.Id).ToListAsync(ct);
+        // A colliding start moves the visit without shortening it; the booking's own planned times stay as booked.
+        var bookedEnd = end;
+        var freeStart = BranchMainShifts.FreeStart(start, end, others.Where(x => x.Id != occurrenceId));
+        end = end.Add(freeStart - start); start = freeStart;
+        var occurrence = others.FirstOrDefault(x => x.Id == occurrenceId)
+            ?? ShiftOccurrenceException.Create(shift.Id, null, start, end, ShiftOccurrenceExceptionStatus.Extra, "Accepted partner cleaning", actor);
+        occurrence.Id = occurrenceId;
+        occurrence.Update(shift.Id, null, start, end, ShiftOccurrenceExceptionStatus.Extra, "Accepted partner cleaning", actor);
+        request.OccurrenceSequence ??= shift.NextOccurrenceSequence();
+        occurrence.PartnerRequestId = request.Id; occurrence.Sequence = request.OccurrenceSequence;
+        occurrence.Source = ShiftOccurrenceException.SourcePartnerPortal; occurrence.Notes = visitNotes;
+        occurrence.RequiredPhotoLabels = portalSettings?.PhotoLabels.ToList() ?? [];
+        var roster = ShiftVisitRoster.Resolve(shift.Id, [], [occurrence], [], []);
+        await VisitAssignmentSafety.CheckConflicts(shifts, shift, roster, zone, ct);
+        // An earlier hand-made roster change for this visit would hide the cleaner who has just accepted it.
+        Db.Delete<ShiftOccurrenceAssignment>(ShiftOccurrenceAssignment.Identity(shift.Id, null, occurrenceId));
+        var previousEmployee = request.AcceptedEmployeeId;
+        request.LinkedShiftId = shift.Id; request.OccurrenceStartUtc = start; request.AcceptedEmployeeId = actor;
+        request.PlannedStartUtc = plannedStart; request.PlannedEndUtc = plannedStart.HasValue ? bookedEnd : null;
+        request.FirstAcceptedAtUtc ??= DateTime.UtcNow; request.Status = "Accepted"; Touch(request);
+        // A single Marten commit owns every document. Repository methods that commit individually are deliberately avoided.
+        await ShiftTabs.StoreAsync(Db, shift, ct); Db.Store(occurrence); Db.Store(request);
+        if (push is not null) await push.StageScheduleChangeAsync(Db, shift.Id,
+            new[] { previousEmployee, actor }.OfType<Guid>().Distinct().Where(id => !automatic || id != actor), DateTimeOffset.UtcNow, ct);
+        NotifyRequest(request, "RequestAccepted", "Company"); NotifyRequest(request, "RequestAccepted", "Staff");
+    }
+
+    /// <summary>
+    /// Takes an accepted request's visit off the schedule before it is offered again, moved or cancelled.
+    /// A visit on a branch main shift is removed on its own; the main shift and its other visits are untouched.
+    /// A request that owns a whole shift (accepted before main shifts existed) deactivates that shift, as it always has.
+    /// </summary>
+    private async Task ReleaseVisit(PartnerCleaningRequest request, bool notifyAccepted, bool removeOccurrence, CancellationToken ct)
+    {
+        if (!request.LinkedShiftId.HasValue) return;
+        var shiftId = request.LinkedShiftId.Value;
+        if (request.OccurrenceStartUtc.HasValue)
+        {
+            if (push is not null && notifyAccepted && request.AcceptedEmployeeId.HasValue)
+                await push.StageScheduleChangeAsync(Db, shiftId, [request.AcceptedEmployeeId.Value], DateTimeOffset.UtcNow, ct);
+            if (!removeOccurrence) return;
+            var occurrenceId = PartnerCleaningRequest.StableId($"partner-occurrence:{request.Id}");
+            Db.Delete<ShiftOccurrenceException>(occurrenceId);
+            Db.Delete<ShiftOccurrenceAssignment>(ShiftOccurrenceAssignment.Identity(shiftId, null, occurrenceId));
+            request.LinkedShiftId = null; request.OccurrenceStartUtc = null;
+            return;
+        }
+        var shift = await Db.LoadAsync<Shift>(shiftId, ct);
+        if (shift is null) return;
+        shift.Deactivate(); await ShiftTabs.StoreAsync(Db, shift, ct); await ReleaseShiftAssignments(shift.Id, ct);
+        if (push is not null && notifyAccepted && request.AcceptedEmployeeId.HasValue)
+            await push.StageScheduleChangeAsync(Db, shift.Id, [request.AcceptedEmployeeId.Value], DateTimeOffset.UtcNow, ct);
     }
 
     public async Task Decline(Guid actor, Guid offerId, PartnerDecline body, CancellationToken ct)
@@ -701,9 +770,21 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
     {
         if (!request.LinkedShiftId.HasValue) return;
         var id = request.LinkedShiftId.Value;
+        var invoices = await Db.Query<Invoice>().Where(x => x.CompanyId == request.CompanyId).ToListAsync(ct);
+        if (request.OccurrenceStartUtc is { } visitStart)
+        {
+            // A branch main shift holds many visits: only this request's own visit decides.
+            var forms = await Db.Query<QualityCycleForm>().Where(x => x.ShiftId == id).ToListAsync(ct);
+            // A visit merged in from a shift of its own was invoiced under that shift's id.
+            var legacyId = (await Db.LoadAsync<ShiftOccurrenceException>(PartnerCleaningRequest.StableId($"partner-occurrence:{request.Id}"), ct))?.LegacyShiftId;
+            var lockReason = BranchMainShifts.VisitLockReason(forms, invoices, id, visitStart)
+                ?? (legacyId is { } old ? BranchMainShifts.VisitLockReason(await Db.Query<QualityCycleForm>().Where(x => x.ShiftId == old).ToListAsync(ct), invoices, old, visitStart) : null);
+            if (lockReason is not null)
+                throw new ShiftConflictException($"{lockReason}. This visit cannot be reassigned, moved or cancelled.");
+            return;
+        }
         if (await Db.Query<QualityCycleForm>().AnyAsync(x => x.ShiftId == id && x.ShiftDeletedUtc == null && (x.StartedAtUtc != null || x.IsSubmitted), ct))
             throw new ShiftConflictException("Work has started. Use a separate staff correction process; this visit cannot be reassigned, moved or cancelled.");
-        var invoices = await Db.Query<Invoice>().Where(x => x.CompanyId == request.CompanyId).ToListAsync(ct);
         if (invoices.Any(x => x.Status is "Issued" or "Paid" && x.Lines.Any(l => l.ShiftId == id)))
             throw new ShiftConflictException("This visit has already been invoiced and cannot be changed.");
     }
@@ -716,7 +797,16 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         request.FromDate = from; request.ToDate = to; request.ExactStartLocalTime = string.IsNullOrWhiteSpace(exact) ? null : exact;
         request.Notes = notes?.Trim();
         // The cleaner sees the shift's notes, so an edited request keeps its linked shift's instructions current.
-        if (request.LinkedShiftId is { } shiftId && await Db.LoadAsync<Shift>(shiftId, ct) is { } shift)
+        if (request.OccurrenceStartUtc.HasValue)
+        {
+            // On a branch main shift the instructions belong to this request's visit, not to the shared shift.
+            if (await Db.LoadAsync<ShiftOccurrenceException>(PartnerCleaningRequest.StableId($"partner-occurrence:{request.Id}"), ct) is { } visit)
+            {
+                visit.Notes = VisitNotes((await Db.LoadAsync<PartnerPortalSettings>(request.CompanyId, ct))?.GeneralInstructions, request.Notes);
+                Db.Store(visit);
+            }
+        }
+        else if (request.LinkedShiftId is { } shiftId && await Db.LoadAsync<Shift>(shiftId, ct) is { } shift)
         {
             var general = (await Db.LoadAsync<PartnerPortalSettings>(request.CompanyId, ct))?.GeneralInstructions;
             shift.Notes = VisitNotes(general, request.Notes);
@@ -786,7 +876,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         var forms = await Db.Query<QualityCycleForm>().Where(x => x.ShiftId == item.LinkedShiftId.Value && x.ShiftDeletedUtc == null).ToListAsync(ct);
         // JSON timestamps use the existing repository's UTC convention. Filter the sole linked visit in memory
         // rather than binding a UTC DateTime to Marten's timestamp-without-time-zone JSON comparison.
-        return forms.Where(x => x.EmployeeId == item.AcceptedEmployeeId && x.ShiftOccurrenceUtc == item.PlannedStartUtc).ToList();
+        return forms.Where(x => x.EmployeeId == item.AcceptedEmployeeId && x.ShiftOccurrenceUtc == (item.OccurrenceStartUtc ?? item.PlannedStartUtc)).ToList();
     }
 
     /// <summary>Read-only completed-visit summary for the partner owning the request. Cleaner identity is masked.</summary>

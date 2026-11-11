@@ -59,15 +59,24 @@ public sealed class PartnerOperationsController(PartnerService service, PartnerK
 [Route("api/v1/me/partner-offers")]
 [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "staff")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class PartnerOffersController(PartnerService service) : ControllerBase
+public sealed class PartnerOffersController(PartnerService service, CleaningSuite.Application.Shifts.BranchVisitService visits) : ControllerBase
 {
     private Guid Actor => (HttpContext.Items["Employee"] as Employee)?.Id
         ?? throw new UnauthorizedAccessException("An active linked staff account is required.");
-    [HttpGet] public async Task<IActionResult> Offers(CancellationToken ct) => Ok(await service.Offers(Actor, ct));
+    // A cleaner's offers are partner bookings and staff-added visits together; both are answered the same way.
+    [HttpGet] public async Task<IActionResult> Offers(CancellationToken ct) =>
+        Ok((await service.Offers(Actor, ct)).Concat(await visits.Offers(Actor, ct)).ToArray());
     [HttpPost("{id:guid}/accept")] public async Task<IActionResult> Accept(Guid id, PartnerAcceptance body, CancellationToken ct)
     {
+        if (await visits.Accept(Actor, id, body.Version, ct) is { } visit)
+            return Ok(new { visit.Id, Version = visit.OfferRevision, Status = "Accepted", LinkedShiftId = (Guid?)visit.ShiftId,
+                PlannedStartUtc = (DateTime?)visit.StartUtc, PlannedEndUtc = (DateTime?)visit.EndUtc });
         var result = await service.Accept(Actor, id, body, ct);
         return Ok(new { result.Id, result.Version, result.Status, result.LinkedShiftId, result.PlannedStartUtc, result.PlannedEndUtc });
     }
-    [HttpPost("{id:guid}/decline")] public async Task<IActionResult> Decline(Guid id, PartnerDecline body, CancellationToken ct) { await service.Decline(Actor, id, body, ct); return NoContent(); }
+    [HttpPost("{id:guid}/decline")] public async Task<IActionResult> Decline(Guid id, PartnerDecline body, CancellationToken ct)
+    {
+        if (!await visits.Decline(Actor, id, body.Version, ct)) await service.Decline(Actor, id, body, ct);
+        return NoContent();
+    }
 }

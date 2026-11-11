@@ -110,6 +110,14 @@ public sealed class PushReminderScheduler(IPartnerStore store, IShiftRepository 
             return branch is { IsActive: true } && branch.CompanyId == request.CompanyId
                 && company is { IsActive: true, IsPartnerEnabled: true };
         }
+        if (intent.Kind == "VisitOffer")
+        {
+            // Sent only while the visit is still waiting on this cleaner's answer to this offer.
+            if (!intent.ExtraExceptionId.HasValue || !intent.OfferId.HasValue) return false;
+            var offered = await store.Session.LoadAsync<CleaningSuite.Domain.Shifts.ShiftOccurrenceException>(intent.ExtraExceptionId.Value, ct);
+            return offered is not null && offered.OfferedEmployeeId == intent.EmployeeId && offered.OfferId == intent.OfferId
+                && await shifts.GetAsync(offered.ShiftId, ct) is { IsActive: true };
+        }
         if (intent.Kind is not ("Upcoming" or "Unfinished") && !IsUnstartedKind(intent.Kind)) return true;
         if (!intent.ShiftId.HasValue || !intent.OccurrenceStartUtc.HasValue) return false;
         var now = clock.GetUtcNow().UtcDateTime;

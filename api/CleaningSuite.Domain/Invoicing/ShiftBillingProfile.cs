@@ -17,4 +17,5 @@ public class ShiftBillingProfile : BaseDocument
 }
 
 public record ShiftPricingPlan(string Mode, decimal RateNet, decimal VatRatePercent, DateOnly EffectiveFrom);
-public record ShiftOccurrencePrice(DateTime OccurrenceStartUtc, decimal RateNet, string Reason);
+/// <summary>A price for one visit. VatRatePercent is set only for a partner booking, which freezes its own VAT rate.</summary>
+public record ShiftOccurrencePrice(DateTime OccurrenceStartUtc, decimal RateNet, string? Reason, decimal? VatRatePercent = null);

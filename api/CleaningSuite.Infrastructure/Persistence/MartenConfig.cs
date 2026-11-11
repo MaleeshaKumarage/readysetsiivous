@@ -89,6 +89,7 @@ public static class MartenConfig
             .Index(x => x.Tab);
 
         options.Schema.For<DeletedShift>();
+        options.Schema.For<BranchShiftMergeRecord>();
         options.Schema.For<ShiftOccurrenceAssignment>().Index(x => x.ShiftId);
 
         options.Schema.For<ShiftAssignment>()

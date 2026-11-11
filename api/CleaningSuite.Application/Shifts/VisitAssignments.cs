@@ -34,6 +34,8 @@ public sealed class SetVisitAssigneesHandler(IShiftRepository shifts, IEmployeeR
         var shift = await shifts.GetAsync(request.ShiftId, ct) ?? throw new NotFoundException("Shift", request.ShiftId);
         CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
         if (!shift.IsActive) throw new ShiftConflictException("Activate the shift before assigning visits.");
+        if (request.ExtraExceptionId is { } bookedId)
+            CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(await shifts.GetOccurrenceExceptionAsync(bookedId, ct));
         var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
         var now = (clock ?? TimeProvider.System).GetUtcNow().UtcDateTime;
         var anchor = request.OriginalStartUtc.HasValue ? Utc(request.OriginalStartUtc.Value)

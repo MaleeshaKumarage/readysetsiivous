@@ -22,6 +22,7 @@ import { Logo } from '@/ds/Logo';
 import { Button } from '@/ds/Button';
 import { Card } from '@/ds/Card';
 import { photoNoteMessage, readShiftPhotos, type ShiftPhoto } from '@/lib/shiftPhotos';
+import { visitLabel } from '@/lib/visitLabel';
 
 type Status = 'not-started' | 'in-progress' | 'submitted';
 
@@ -284,6 +285,7 @@ export default function MyShiftsPage() {
                     <div className="employee-job-heading flex items-start justify-between gap-3">
                       <div>
                         <h2 className="font-bold text-gray-900 dark:text-gray-100">{o.shiftName}</h2>
+                        {o.visitNumber ? <p className="text-sm font-medium text-gray-700 dark:text-gray-300" data-testid="visit-name">{visitLabel(o, o.timeZoneId)}</p> : null}
                       </div>
                       <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${statusClasses(status)}`}>
                         {statusLabel(status)}

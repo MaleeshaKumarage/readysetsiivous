@@ -7,6 +7,33 @@ public class Shift : BaseDocument
     public Guid CompanyId { get; set; }
     public Guid BranchId { get; set; }
     public Guid? PartnerRequestId { get; set; }
+    /// <summary>
+    /// True for the one shift per branch that collects its on-call visits. Each partner booking or admin-added visit
+    /// is an extra occurrence on it, not a shift of its own.
+    /// </summary>
+    public bool IsBranchMain { get; set; }
+    /// <summary>The last visit number given out on a branch main shift. Numbers only go up and are never reused.</summary>
+    public int OccurrenceCounter { get; set; }
+    /// <summary>On a branch main shift: the cleaner each new visit is offered to. Null leaves new visits unassigned.</summary>
+    public Guid? DefaultEmployeeId { get; set; }
+
+    /// <summary>The id of a branch's main shift. Derived from the branch, so two writers can never create two mains.</summary>
+    public static Guid BranchMainId(Guid branchId) => new(System.Security.Cryptography.SHA256.HashData(
+        System.Text.Encoding.UTF8.GetBytes($"branch-main:{branchId:N}")).AsSpan(0, 16));
+
+    public int NextOccurrenceSequence() => ++OccurrenceCounter;
+
+    /// <summary>
+    /// Widens a main shift's start so a visit on this local date is inside it. The first checklist plan follows,
+    /// so a visit entered for an earlier date is still planned and billed.
+    /// </summary>
+    public void CoverVisitDate(DateTime localDate)
+    {
+        var date = localDate.Date;
+        if (!ValidFrom.HasValue || ValidFrom.Value.Date > date) ValidFrom = date;
+        var first = QualityCyclePlans.OrderBy(p => p.EffectiveFromUtc).FirstOrDefault();
+        if (first is not null && (!first.ValidFrom.HasValue || first.ValidFrom.Value.Date > date)) first.ValidFrom = date;
+    }
     public string Name { get; set; } = string.Empty;
     public ShiftSchedule Schedule { get; set; } = new();
     public string? Notes { get; set; }

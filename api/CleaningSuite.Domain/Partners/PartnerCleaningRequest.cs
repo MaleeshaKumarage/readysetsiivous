@@ -36,6 +36,13 @@ public sealed class PartnerCleaningRequest : BaseDocument
     public Guid? OfferId { get; set; }
     public DateTime? OfferPlannedStartUtc { get; set; }
     public string? CancellationReason { get; set; }
+    /// <summary>
+    /// Start of this request's visit on a branch main shift. Null while the request has no visit, and for
+    /// requests accepted before main shifts existed (those own a whole shift, found through LinkedShiftId).
+    /// </summary>
+    public DateTime? OccurrenceStartUtc { get; set; }
+    /// <summary>The visit number this request holds on its branch main shift. Kept when the visit is rescheduled.</summary>
+    public int? OccurrenceSequence { get; set; }
 
     public static Guid StableId(string key) => new(SHA256.HashData(Encoding.UTF8.GetBytes(key)).AsSpan(0, 16));
 }

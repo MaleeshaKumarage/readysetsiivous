@@ -30,6 +30,7 @@ export function scheduleLabel(shift: Shift) {
 export function nextStep(shift: Shift, employeeCount: number | undefined) {
   if (!shift.isActive) return 'Admin: reactivate to schedule again, or delete if permanent removal is intended.';
   if (shift.isCompleted) return 'Completed. No further visits.';
+  if (shift.isBranchMain) return 'Admin: add a visit. It is offered to the default cleaner, or to the cleaner you choose.';
   if (shift.schedule.type === 4) return 'Admin: schedule a dated visit, then assign a cleaner.';
   if (employeeCount === undefined) return 'Assignments loading.';
   if (employeeCount === 0) return 'Admin: assign employees to this shift.';
@@ -48,6 +49,8 @@ export type ShiftWorkspaceProps = {
   onAssign: () => void;
   onOccurrences: () => void;
   onScheduleOneTime: () => void;
+  /** Opens Add visit for a property's main visit shift. */
+  onAddVisit?: () => void;
   onTemplate: () => void;
   onDeactivate: () => void;
   onReactivate: () => void;
@@ -55,8 +58,9 @@ export type ShiftWorkspaceProps = {
 };
 
 /** Per-shift workspace: each section opens the existing editor, dialog or panel for that task. */
-export function ShiftWorkspace({ shift, employeeCount, templateName, busy, isAdmin, onClose, onEdit, onPricing, onAssign, onOccurrences, onScheduleOneTime, onTemplate, onDeactivate, onReactivate, onDelete }: ShiftWorkspaceProps) {
-  const isOnCall = shift.schedule.type === 4;
+export function ShiftWorkspace({ shift, employeeCount, templateName, busy, isAdmin, onClose, onEdit, onPricing, onAssign, onOccurrences, onScheduleOneTime, onAddVisit, onTemplate, onDeactivate, onReactivate, onDelete }: ShiftWorkspaceProps) {
+  const isMain = Boolean(shift.isBranchMain);
+  const isOnCall = shift.schedule.type === 4 && !isMain;
   return (
     <Modal opened onClose={onClose} title={`Manage — ${shift.name}`} size="lg" radius="md" className="shift-workspace">
       <Stack gap="md">
@@ -70,15 +74,19 @@ export function ShiftWorkspace({ shift, employeeCount, templateName, busy, isAdm
 
         <Stack gap={4} component="section" aria-labelledby={`ws-assignees-${shift.id}`}>
           <Title order={5} id={`ws-assignees-${shift.id}`}>Assignees</Title>
+          {isMain ? <Text size="sm">Each visit has its own cleaner. Set the default cleaner for new visits under Occurrences.</Text> : <>
           <Text size="sm">{employeeCount === undefined ? 'Loading assignments…' : `${employeeCount} assigned`}</Text>
           {shift.isActive && <Group><Button size="xs" variant="light" disabled={busy} onClick={onAssign}>Assign employees</Button></Group>}
+          </>}
         </Stack>
 
         <Stack gap={4} component="section" aria-labelledby={`ws-visits-${shift.id}`}>
           <Title order={5} id={`ws-visits-${shift.id}`}>Visits</Title>
           {isOnCall && <Text size="sm">On-call shifts have no automatic visits. Schedule each one with a date, time and cleaner.</Text>}
+          {isMain && <Text size="sm">Every booking and every added visit for this property is a numbered visit on this shift.</Text>}
           {shift.isActive && <Group gap="xs">
             <Button size="xs" variant="light" onClick={onOccurrences}>Occurrences</Button>
+            {isMain && onAddVisit && <Button size="xs" variant="light" onClick={onAddVisit}>Add visit</Button>}
             {isOnCall && <Button size="xs" variant="light" onClick={onScheduleOneTime}>Schedule one-time visit</Button>}
           </Group>}
         </Stack>
@@ -91,7 +99,8 @@ export function ShiftWorkspace({ shift, employeeCount, templateName, busy, isAdm
 
         <Stack gap={4} component="section" aria-labelledby={`ws-pricing-${shift.id}`}>
           <Title order={5} id={`ws-pricing-${shift.id}`}>Pricing</Title>
-          {isAdmin && <Group><Button size="xs" variant="light" onClick={onPricing}>Pricing</Button></Group>}
+          {isMain ? <Text size="sm">Each visit uses the property price in force on its date. A partner booking keeps the price it was booked at.</Text>
+            : isAdmin && <Group><Button size="xs" variant="light" onClick={onPricing}>Pricing</Button></Group>}
         </Stack>
 
         <Group gap="xs" justify="flex-end">

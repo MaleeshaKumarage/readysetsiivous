@@ -107,7 +107,8 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             // A partner-created shift is a candidate only while its request is live and accepted; a cancelled visit is never billed.
             // Only an invoice covering these dates blocks a shift. A shift invoiced for an earlier month stays billable.
             var companyShifts = (await shifts.ListIncludingInactiveAsync(ct)).Where(s => s.CompanyId == request.CompanyId
-                && !existing.Any(i => Billed(i, s.Id) && i.PeriodFrom <= request.To && i.PeriodTo >= request.From)
+                // A branch main shift is checked visit by visit below, so one invoiced visit does not hide the others.
+                && (s.IsBranchMain || !existing.Any(i => Billed(i, s.Id) && i.PeriodFrom <= request.To && i.PeriodTo >= request.From))
                 && (s.PartnerRequestId is null || partnerRequests.Any(r => r.Id == s.PartnerRequestId && r.LinkedShiftId == s.Id && r.Status != "Cancelled" && r.FirstAcceptedAtUtc.HasValue))).ToArray();
             foreach (var shift in companyShifts)
             {
@@ -125,7 +126,8 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
         var selected = new List<Shift>();
         foreach (var batch in ids.Chunk(50)) selected.AddRange(await shifts.ListByIdsAsync(batch, ct));
         if (selected.Count != ids.Length || selected.Any(s => s.CompanyId != request.CompanyId)) Invalid("One or more selected shifts are missing or belong to another company. Refresh the selection.");
-        if (existing.Any(i => ids.Any(id => Billed(i, id)) && i.PeriodFrom <= request.To && i.PeriodTo >= request.From))
+        var wholeShiftIds = selected.Where(s => !s.IsBranchMain).Select(s => s.Id).ToArray();
+        if (existing.Any(i => wholeShiftIds.Any(id => Billed(i, id)) && i.PeriodFrom <= request.To && i.PeriodTo >= request.From))
             throw new ShiftConflictException("A selected shift already has an invoice covering these dates. Select an unbilled period or void the existing invoice first.");
         var lines = new List<InvoiceLine>(); var fingerprints = new List<string>(); var unstarted = new List<UnstartedVisit>();
         foreach (var shift in selected.OrderBy(s => s.Id))
@@ -149,6 +151,28 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
                     BranchPriceEffectiveFrom = branchFrom, Overrides = pricing.Overrides,
                     Plans = [new(version!.Mode, version.PriceNet, version.VatRatePercent, new(2000, 1, 1))] };
             }
+            // A branch main shift inherits the branch price in force on each visit's date. A partner booking keeps the
+            // price and VAT frozen on its request. Visits already on an issued or paid invoice are never billed again.
+            var billedStarts = new HashSet<DateTime>();
+            if (shift.IsBranchMain)
+            {
+                var versions = (await branches.GetAsync(shift.BranchId, ct))?.Versions ?? [];
+                var booked = partnerRequests.Where(r => r.LinkedShiftId == shift.Id && r.OccurrenceStartUtc.HasValue
+                    && r.Status != "Cancelled" && r.FirstAcceptedAtUtc.HasValue).OrderBy(r => r.Id).ToArray();
+                // Timestamps come from stored documents only, so two previews of the same data give the same token.
+                var stored = await billing.GetAsync(shift.Id, ct);
+                pricing = new() { Id = shift.Id, ShiftId = shift.Id, CreatedUtc = stored?.CreatedUtc ?? shift.CreatedUtc, UpdatedUtc = stored?.UpdatedUtc ?? shift.CreatedUtc,
+                    // The earliest version also prices visits entered for dates before it.
+                    Plans = versions.Select((v, index) => new ShiftPricingPlan(v.Mode, v.PriceNet, v.VatRatePercent, index == 0 ? new DateOnly(2000, 1, 1) : v.EffectiveFrom)).ToList(),
+                    Overrides = booked.Select(r => new ShiftOccurrencePrice(r.OccurrenceStartUtc!.Value, r.PriceNet, null, r.VatRatePercent))
+                        .Concat(pricing.Overrides.Where(o => !booked.Any(r => r.OccurrenceStartUtc == o.OccurrenceStartUtc))).ToList() };
+                billedStarts = existing.Where(i => Billed(i, shift.Id)).SelectMany(i => i.Lines)
+                    .Where(l => l.ShiftId == shift.Id).SelectMany(l => l.OccurrenceStartsUtc).ToHashSet();
+                // A visit merged in from a shift of its own was invoiced under that shift's id, before visit starts were recorded.
+                var merged = (await shifts.ListOccurrenceExceptionsAsync(shift.Id, new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                    new DateTime(2200, 1, 1, 0, 0, 0, DateTimeKind.Utc), ct) ?? []).Where(x => x.LegacyShiftId.HasValue).ToArray();
+                billedStarts.UnionWith(merged.Where(x => existing.Any(i => Billed(i, x.LegacyShiftId!.Value))).Select(x => x.StartUtc));
+            }
             var schedule = ShiftContractSchedule.Snapshot(shift, zone);
             // Completion-month billing must resolve the original visit even when scheduled
             // outside the invoice month. Never select it by its scheduled month.
@@ -165,7 +189,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             if (resolved.Count > 10000) Invalid("Too many scheduled visits in this period. Select a shorter range.");
             var submitted = request.PartnerMonth ? monthEvidence[shift.Id] : await forms.ListFormsAsync(shift.Id, from, to, ct);
             var completionTimes = new Dictionary<DateTime, DateTime>();
-            var visits = resolved.Where(v => v.Plan.CompanyId == request.CompanyId
+            var visits = resolved.Where(v => v.Plan.CompanyId == request.CompanyId && !billedStarts.Contains(v.Occurrence.StartUtc)
                 ).Select(v =>
             {
                 var evidence = submitted.Where(f => f.ShiftOccurrenceUtc == v.Occurrence.StartUtc && f.IsSubmitted && !f.ShiftDeletedUtc.HasValue
@@ -215,6 +239,15 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             var billingPeriod = request.PartnerMonth ? (request.From, request.To) : (ValueTuple<DateOnly, DateOnly>?)null;
             var calculated = ShiftInvoiceCalculator.Calculate(schedule, pricing, visits, calculationFrom, calculationTo, zone, names, adjustments,
                 request.PartnerMonth ? completionTimes : null, billingPeriod, monthVisits);
+            if (shift.IsBranchMain)
+            {
+                // Each line names the visits it bills by their numbers on the main shift.
+                var numbers = (await shifts.ListOccurrenceExceptionsAsync(shift.Id, new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                    new DateTime(2200, 1, 1, 0, 0, 0, DateTimeKind.Utc), ct) ?? []).Where(x => x.Sequence.HasValue)
+                    .GroupBy(x => x.StartUtc).ToDictionary(g => g.Key, g => g.First().Sequence!.Value);
+                foreach (var line in calculated)
+                    line.VisitNumbers = line.OccurrenceStartsUtc.Where(numbers.ContainsKey).Select(start => numbers[start]).Order().ToList();
+            }
             if (partnerRequest is not null)
             {
                 foreach (var line in calculated)

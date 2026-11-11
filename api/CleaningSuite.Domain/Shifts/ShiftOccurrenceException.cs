@@ -24,6 +24,30 @@ public class ShiftOccurrenceException : BaseDocument
     public ShiftOccurrenceExceptionStatus Status { get; set; }
     public string Reason { get; set; } = string.Empty;
     public Guid? EmployeeId { get; set; }
+    /// <summary>The partner booking this visit was created for, when it sits on a branch main shift.</summary>
+    public Guid? PartnerRequestId { get; set; }
+    /// <summary>Visit number on its branch main shift. Given once, never reused.</summary>
+    public int? Sequence { get; set; }
+    /// <summary>Where the visit came from: <see cref="SourceAdminPanel"/> or <see cref="SourcePartnerPortal"/>.</summary>
+    public string? Source { get; set; }
+    /// <summary>Instructions for this visit only. The shift's own notes apply when this is null.</summary>
+    public string? Notes { get; set; }
+    /// <summary>Photo sections required for this visit only. The shift's own list applies when this is null.</summary>
+    public List<string>? RequiredPhotoLabels { get; set; }
+
+    /// <summary>
+    /// The shift this visit lived on before it was merged into its branch's main shift. Invoices issued before the
+    /// merge name that shift, so the visit is still recognised as billed.
+    /// </summary>
+    public Guid? LegacyShiftId { get; set; }
+    /// <summary>The cleaner this visit is waiting on. The visit is nobody's work until the offer is accepted.</summary>
+    public Guid? OfferedEmployeeId { get; set; }
+    public Guid? OfferId { get; set; }
+    /// <summary>Counts every offer change, so an answer to an older offer is refused.</summary>
+    public int OfferRevision { get; set; }
+
+    public const string SourceAdminPanel = "AdminPanel";
+    public const string SourcePartnerPortal = "PartnerPortal";
 
     public static ShiftOccurrenceException Create(Guid shiftId, DateTime? originalStartUtc,
         DateTime startUtc, DateTime endUtc, ShiftOccurrenceExceptionStatus status,

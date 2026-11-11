@@ -148,6 +148,7 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
                         {
                             content.Spacing(5);
                             content.Item().Text($"{T("Shift date")}: {localStart:yyyy-MM-dd}").SemiBold();
+                            if (!string.IsNullOrWhiteSpace(entry.VisitLabel)) content.Item().Text($"{T("Visit")}: {entry.VisitLabel}").FontSize(8);
                             content.Item().Text($"{localStart:HH:mm} - {localEnd:yyyy-MM-dd HH:mm} ({zoneName})").FontSize(8);
                             if (card.Photo is not null)
                             {

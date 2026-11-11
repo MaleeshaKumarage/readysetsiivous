@@ -14,6 +14,8 @@ public record QualityCyclePhoto(string Url, string Note, string? Category = null
 public class QualityCycleForm : BaseDocument
 {
     public Guid ShiftId { get; set; }
+    /// <summary>The shift this record was written under, when its visit was later merged into a branch main shift.</summary>
+    public Guid? OriginalShiftId { get; set; }
     public string ShiftName { get; set; } = string.Empty;
     public Guid EmployeeId { get; set; }
     public string EmployeeName { get; set; } = string.Empty;

@@ -73,12 +73,18 @@ public class PartnerWorkflowTests
             fixture.Service(two).Accept(fixture.Cleaner.Id, request.OfferId.Value, new(request.Version), default));
         Assert.Equal(results[0].LinkedShiftId, results[1].LinkedShiftId);
         using var reader = fixture.Store.QuerySession(fixture.Tenant);
+        // The booking is one visit on the branch's main shift: no shift of its own, no whole-shift assignment.
         var shift = Assert.Single(await reader.Query<Shift>().ToListAsync());
-        Assert.Equal(request.Id, shift.PartnerRequestId);
-        Assert.Single(await reader.Query<ShiftAssignment>().Where(x => x.IsActive).ToListAsync());
-        Assert.Single(await reader.Query<ShiftOccurrenceException>().ToListAsync());
-        var plan = Assert.Single(Assert.Single(await reader.Query<ShiftBillingProfile>().ToListAsync()).Plans);
-        Assert.Equal(100m, plan.RateNet); Assert.Equal(25.5m, plan.VatRatePercent);
+        Assert.True(shift.IsBranchMain); Assert.Null(shift.PartnerRequestId);
+        Assert.Equal(Shift.BranchMainId(fixture.Branch.Id), shift.Id);
+        Assert.Empty(await reader.Query<ShiftAssignment>().ToListAsync());
+        var visit = Assert.Single(await reader.Query<ShiftOccurrenceException>().ToListAsync());
+        Assert.Equal(request.Id, visit.PartnerRequestId); Assert.Equal(fixture.Cleaner.Id, visit.EmployeeId);
+        Assert.Equal(1, visit.Sequence); Assert.Equal(ShiftOccurrenceException.SourcePartnerPortal, visit.Source);
+        // The price stays frozen on the request; the main shift keeps no copy of it.
+        Assert.Empty(await reader.Query<ShiftBillingProfile>().ToListAsync());
+        var stored = await reader.LoadAsync<PartnerCleaningRequest>(request.Id);
+        Assert.Equal(100m, stored!.PriceNet); Assert.Equal(25.5m, stored.VatRatePercent); Assert.Equal(visit.StartUtc, stored.OccurrenceStartUtc);
         Assert.Contains(await reader.Query<PartnerNotification>().ToListAsync(), x => x.Kind == "RequestAccepted" && x.Audience == "Company");
     }
 
@@ -157,7 +163,8 @@ public class PartnerWorkflowTests
         Assert.Single(await reader.Query<Shift>().ToListAsync());
         var request = await reader.LoadAsync<PartnerCleaningRequest>(second.Id);
         Assert.Null(request!.LinkedShiftId); Assert.Equal("Offered", request.Status);
-        Assert.Single(await reader.Query<ShiftBillingProfile>().ToListAsync());
+        Assert.Equal(first.Id, Assert.Single(await reader.Query<ShiftOccurrenceException>().ToListAsync()).PartnerRequestId);
+        Assert.Equal(1, (await reader.Query<Shift>().SingleAsync()).OccurrenceCounter);
     }
 
     [QualityCycle.QualityCycleDatabaseFact]
@@ -214,9 +221,10 @@ public class PartnerWorkflowTests
         using (var reader = fixture.Store.QuerySession(fixture.Tenant))
         {
             Assert.Single(await reader.Query<Shift>().ToListAsync());
-            var old = await reader.Query<ShiftAssignment>().SingleAsync(x => x.EmployeeId == fixture.Cleaner.Id);
-            Assert.False(old.IsActive); Assert.DoesNotContain(old.Periods, x => x.ToUtc is null);
-            Assert.Equal(replacement.Id, Assert.Single(await reader.Query<ShiftOccurrenceException>().ToListAsync()).EmployeeId);
+            Assert.Empty(await reader.Query<ShiftAssignment>().ToListAsync());
+            // The moved visit keeps its number and now belongs to the replacement cleaner only.
+            var visit = Assert.Single(await reader.Query<ShiftOccurrenceException>().ToListAsync());
+            Assert.Equal(replacement.Id, visit.EmployeeId); Assert.Equal(1, visit.Sequence);
         }
         var form = QualityCycleForm.Create(changed.LinkedShiftId!.Value, "Cleaning", replacement.Id, "Replacement", Guid.Empty,
             "Shift activities", changed.PlannedStartUtc!.Value, [], changed.PlannedEndUtc!.Value);
@@ -294,8 +302,13 @@ public class PartnerWorkflowTests
         Assert.Null(accepted.PlannedEndUtc);
         using var reader = fixture.Store.QuerySession(fixture.Tenant);
         var shift = await reader.LoadAsync<Shift>(accepted.LinkedShiftId!.Value);
+        // The main shift stays open-ended; the visit itself spans the requested days.
         Assert.Equal(Fixture.Day.ToDateTime(TimeOnly.MinValue), shift!.ValidFrom);
-        Assert.Equal(Fixture.Day.AddDays(1).ToDateTime(TimeOnly.MinValue), shift.ValidUntil);
+        Assert.Null(shift.ValidUntil);
+        var zone = TenantTimeZone.Resolve("Europe/Helsinki");
+        var visit = Assert.Single(await reader.Query<ShiftOccurrenceException>().ToListAsync());
+        Assert.Equal(TenantTimeZone.StartOfLocalDay(Fixture.Day.ToDateTime(TimeOnly.MinValue), zone), visit.StartUtc);
+        Assert.Equal(TenantTimeZone.StartOfLocalDay(Fixture.Day.AddDays(2).ToDateTime(TimeOnly.MinValue), zone), visit.EndUtc);
     }
 
     [QualityCycle.QualityCycleDatabaseFact]
@@ -366,9 +379,7 @@ public class PartnerWorkflowTests
                 new(accepted.Version - 2, fixture.Cleaner.Id), default));
         using var reader = fixture.Store.QuerySession(fixture.Tenant);
         Assert.Single(await reader.Query<Shift>().ToListAsync());
-        Assert.Single(await reader.Query<ShiftOccurrenceException>().ToListAsync());
-        Assert.Single(await reader.Query<ShiftAssignment>().Where(x => x.IsActive).ToListAsync());
-        Assert.Single(await reader.Query<ShiftBillingProfile>().ToListAsync());
+        Assert.Equal(fixture.Cleaner.Id, Assert.Single(await reader.Query<ShiftOccurrenceException>().ToListAsync()).EmployeeId);
         var notices = await reader.Query<PartnerNotification>().Where(x => x.RequestId == accepted.Id).ToListAsync();
         Assert.DoesNotContain(notices, x => x.Kind is "OfferCreated" or "AwaitingAcceptance");
         Assert.Single(notices.Where(x => x.Kind == "WorkAutoAccepted"));
@@ -400,8 +411,7 @@ public class PartnerWorkflowTests
         await Assert.ThrowsAsync<ShiftConflictException>(() => fixture.SubmitOffer());
         using var reader = fixture.Store.QuerySession(fixture.Tenant);
         Assert.Single(await reader.Query<Shift>().ToListAsync());
-        Assert.Single(await reader.Query<ShiftAssignment>().Where(x => x.IsActive).ToListAsync());
-        Assert.Single(await reader.Query<ShiftBillingProfile>().ToListAsync());
+        Assert.Equal(first.Id, Assert.Single(await reader.Query<ShiftOccurrenceException>().ToListAsync()).PartnerRequestId);
         Assert.Single((await reader.Query<PartnerCleaningRequest>().ToListAsync()).Where(x => x.Status == "Accepted"));
         Assert.DoesNotContain(await reader.Query<PartnerCleaningRequest>().ToListAsync(), x => x.Status == "Offered");
     }
@@ -664,9 +674,11 @@ public class PartnerWorkflowTests
         using (var session = fixture.Session())
             accepted = await fixture.Service(session).Accept(fixture.Cleaner.Id, offered.OfferId!.Value, new(offered.Version), default);
         using var reader = fixture.Store.QuerySession(fixture.Tenant);
-        var shift = await reader.LoadAsync<Shift>(accepted.LinkedShiftId!.Value);
-        Assert.Equal(new[] { "Before", "Keys" }, shift!.RequiredPhotoLabels);
-        Assert.Equal("Use the side door.\n\nAfter guest checkout.", shift.Notes);
+        // Photo sections and instructions belong to the visit, not to the branch's shared main shift.
+        var visit = Assert.Single(await reader.Query<ShiftOccurrenceException>().Where(x => x.ShiftId == accepted.LinkedShiftId!.Value).ToListAsync());
+        Assert.Equal(new[] { "Before", "Keys" }, visit.RequiredPhotoLabels);
+        Assert.Equal("Use the side door.\n\nAfter guest checkout.", visit.Notes);
+        Assert.Null((await reader.LoadAsync<Shift>(accepted.LinkedShiftId!.Value))!.Notes);
     }
 
     [QualityCycle.QualityCycleDatabaseFact]

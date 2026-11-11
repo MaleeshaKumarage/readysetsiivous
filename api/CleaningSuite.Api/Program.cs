@@ -59,6 +59,7 @@ builder.Services.AddCleaningMarten(connectionString, autoCreate);
 builder.Services.AddHostedService<MartenSchemaInitializer>();
 builder.Services.AddScoped<CleaningSuite.Infrastructure.Persistence.ShiftValidityCorrectionRunner>();
 builder.Services.AddScoped<CleaningSuite.Infrastructure.Persistence.StaleAssignmentRepairRunner>();
+builder.Services.AddScoped<CleaningSuite.Infrastructure.Persistence.BranchShiftMergeRunner>();
 builder.Services.AddScoped<CleaningSuite.Infrastructure.Persistence.AutoAcceptDefaultRunner>();
 builder.Services.AddHostedService<CleaningSuite.Api.StartupRepairService>();
 if (builder.Configuration.GetValue("BackgroundWorkers:Enabled", true))
@@ -140,6 +141,7 @@ builder.Services.AddScoped<CleaningSuite.Application.Shifts.IShiftRepository, Cl
 builder.Services.AddScoped<CleaningSuite.Application.Shifts.IShiftWorkReservation, CleaningSuite.Infrastructure.Persistence.ShiftWorkReservation>();
 builder.Services.AddScoped<CleaningSuite.Application.Partners.IPartnerStore, CleaningSuite.Infrastructure.Persistence.PartnerStore>();
 builder.Services.AddScoped<CleaningSuite.Application.Partners.PartnerService>();
+builder.Services.AddScoped<CleaningSuite.Application.Shifts.BranchVisitService>();
 builder.Services.AddScoped<CleaningSuite.Application.Partners.PartnerKeyRequestService>();
 builder.Services.AddScoped<CleaningSuite.Application.Partners.IKeyRequestFileStore, CleaningSuite.Infrastructure.Partners.DiskKeyRequestFileStore>();
 builder.Services.AddSingleton(TimeProvider.System);

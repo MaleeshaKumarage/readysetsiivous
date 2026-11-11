@@ -19,6 +19,10 @@ public class EmployeeResponsePriceTests
     [InlineData(typeof(MyShiftOccurrenceDto))]
     [InlineData(typeof(QualityCycleFormDto))]
     [InlineData(typeof(PartnerCleanerOfferDto))]
+    // Branch visits are shown to managers too, and the occurrence list reaches manager screens: neither carries a price.
+    [InlineData(typeof(CleaningSuite.Application.Shifts.BranchVisitDto))]
+    [InlineData(typeof(CleaningSuite.Application.Shifts.BranchMainDto))]
+    [InlineData(typeof(CleaningSuite.Application.Shifts.ShiftOccurrenceDto))]
     public void Employee_facing_responses_carry_no_price_or_pay_fields(Type response)
     {
         var names = response.GetProperties(BindingFlags.Public | BindingFlags.Instance).Select(p => p.Name).ToArray();
