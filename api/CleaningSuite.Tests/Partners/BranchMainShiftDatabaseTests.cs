@@ -54,6 +54,23 @@ public class BranchMainShiftDatabaseTests
     }
 
     [QualityCycle.QualityCycleDatabaseFact]
+    public async Task A_booking_that_collides_on_start_keeps_its_duration()
+    {
+        using var f = await Fixture.Create();
+        await f.Accepted("08:00", f.Cleaner);
+        var second = await f.Accepted("08:00", f.Second);
+
+        using var reader = f.Reader();
+        var visits = (await reader.Query<ShiftOccurrenceException>().ToListAsync()).OrderBy(x => x.Sequence).ToArray();
+        Assert.Equal(2, visits.Length);
+        // The collision moves the second visit's start, and its end moves with it; the length stays the booked 120 minutes.
+        Assert.NotEqual(visits[0].StartUtc, visits[1].StartUtc);
+        Assert.All(visits, x => Assert.Equal(TimeSpan.FromMinutes(120), x.EndUtc - x.StartUtc));
+        Assert.Equal(second.PlannedStartUtc, (await reader.LoadAsync<PartnerCleaningRequest>(second.Id))!.PlannedStartUtc);
+        Assert.Equal(second.PlannedEndUtc, (await reader.LoadAsync<PartnerCleaningRequest>(second.Id))!.PlannedEndUtc);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
     public async Task A_second_cleaner_accepting_keeps_the_first_cleaners_visit()
     {
         using var f = await Fixture.Create();

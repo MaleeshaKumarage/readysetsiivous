@@ -510,7 +510,10 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         shift.PartnerContactPhone = portalSettings?.Account.ContactPhone;
         var occurrenceId = PartnerCleaningRequest.StableId($"partner-occurrence:{request.Id}");
         var others = await Db.Query<ShiftOccurrenceException>().Where(x => x.ShiftId == shift.Id).ToListAsync(ct);
-        start = BranchMainShifts.FreeStart(start, end, others.Where(x => x.Id != occurrenceId));
+        // A colliding start moves the visit without shortening it; the booking's own planned times stay as booked.
+        var bookedEnd = end;
+        var freeStart = BranchMainShifts.FreeStart(start, end, others.Where(x => x.Id != occurrenceId));
+        end = end.Add(freeStart - start); start = freeStart;
         var occurrence = others.FirstOrDefault(x => x.Id == occurrenceId)
             ?? ShiftOccurrenceException.Create(shift.Id, null, start, end, ShiftOccurrenceExceptionStatus.Extra, "Accepted partner cleaning", actor);
         occurrence.Id = occurrenceId;
@@ -525,7 +528,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         Db.Delete<ShiftOccurrenceAssignment>(ShiftOccurrenceAssignment.Identity(shift.Id, null, occurrenceId));
         var previousEmployee = request.AcceptedEmployeeId;
         request.LinkedShiftId = shift.Id; request.OccurrenceStartUtc = start; request.AcceptedEmployeeId = actor;
-        request.PlannedStartUtc = plannedStart; request.PlannedEndUtc = plannedStart.HasValue ? end : null;
+        request.PlannedStartUtc = plannedStart; request.PlannedEndUtc = plannedStart.HasValue ? bookedEnd : null;
         request.FirstAcceptedAtUtc ??= DateTime.UtcNow; request.Status = "Accepted"; Touch(request);
         // A single Marten commit owns every document. Repository methods that commit individually are deliberately avoided.
         await ShiftTabs.StoreAsync(Db, shift, ct); Db.Store(occurrence); Db.Store(request);
@@ -771,14 +774,13 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         if (request.OccurrenceStartUtc is { } visitStart)
         {
             // A branch main shift holds many visits: only this request's own visit decides.
-            var worked = await Db.Query<QualityCycleForm>().Where(x => x.ShiftId == id && x.ShiftDeletedUtc == null && (x.StartedAtUtc != null || x.IsSubmitted)).ToListAsync(ct);
-            if (worked.Any(x => x.ShiftOccurrenceUtc == visitStart))
-                throw new ShiftConflictException("Work has started. Use a separate staff correction process; this visit cannot be reassigned, moved or cancelled.");
+            var forms = await Db.Query<QualityCycleForm>().Where(x => x.ShiftId == id).ToListAsync(ct);
             // A visit merged in from a shift of its own was invoiced under that shift's id.
             var legacyId = (await Db.LoadAsync<ShiftOccurrenceException>(PartnerCleaningRequest.StableId($"partner-occurrence:{request.Id}"), ct))?.LegacyShiftId;
-            if (invoices.Any(x => x.Status is "Issued" or "Paid" && x.Lines.Any(l => (l.ShiftId == id && l.OccurrenceStartsUtc.Contains(visitStart))
-                || (legacyId.HasValue && l.ShiftId == legacyId))))
-                throw new ShiftConflictException("This visit has already been invoiced and cannot be changed.");
+            var lockReason = BranchMainShifts.VisitLockReason(forms, invoices, id, visitStart)
+                ?? (legacyId is { } old ? BranchMainShifts.VisitLockReason(await Db.Query<QualityCycleForm>().Where(x => x.ShiftId == old).ToListAsync(ct), invoices, old, visitStart) : null);
+            if (lockReason is not null)
+                throw new ShiftConflictException($"{lockReason}. This visit cannot be reassigned, moved or cancelled.");
             return;
         }
         if (await Db.Query<QualityCycleForm>().AnyAsync(x => x.ShiftId == id && x.ShiftDeletedUtc == null && (x.StartedAtUtc != null || x.IsSubmitted), ct))

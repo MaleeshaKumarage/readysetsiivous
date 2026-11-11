@@ -71,7 +71,9 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
 
         var shift = await BranchMainShifts.FindOrCreateAsync(Db, branch, TenantTimeZone.LocalDate(start, zone), ct);
         var others = await Db.Query<ShiftOccurrenceException>().Where(x => x.ShiftId == shift.Id).ToListAsync(ct);
-        start = BranchMainShifts.FreeStart(start, end, others);
+        // A colliding start moves the visit without shortening it.
+        var freeStart = BranchMainShifts.FreeStart(start, end, others);
+        end = end.Add(freeStart - start); start = freeStart;
         var visit = ShiftOccurrenceException.Create(shift.Id, null, start, end, ShiftOccurrenceExceptionStatus.Extra, AddedReason);
         visit.Id = Guid.NewGuid();
         visit.Sequence = shift.NextOccurrenceSequence(); visit.Source = ShiftOccurrenceException.SourceAdminPanel;
@@ -214,12 +216,10 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
 
     private async Task EnsureUnstarted(Guid shiftId, DateTime startUtc, CancellationToken ct)
     {
-        var worked = await Db.Query<QualityCycleForm>().Where(x => x.ShiftId == shiftId && x.ShiftDeletedUtc == null && (x.StartedAtUtc != null || x.IsSubmitted)).ToListAsync(ct);
-        if (worked.Any(x => x.ShiftOccurrenceUtc == startUtc))
-            throw new ShiftConflictException("Work has started on this visit, so its cleaner cannot be changed.");
-        var invoices = await Db.Query<Invoice>().Where(x => x.Status == Invoice.StatusIssued || x.Status == Invoice.StatusPaid).ToListAsync(ct);
-        if (invoices.Any(x => x.Lines.Any(l => l.ShiftId == shiftId && l.OccurrenceStartsUtc.Contains(startUtc))))
-            throw new ShiftConflictException("This visit has already been invoiced and cannot be changed.");
+        var forms = await Db.Query<QualityCycleForm>().Where(x => x.ShiftId == shiftId).ToListAsync(ct);
+        var invoices = await Db.Query<Invoice>().Where(x => x.Lines.Any(l => l.ShiftId == shiftId)).ToListAsync(ct);
+        if (BranchMainShifts.VisitLockReason(forms, invoices, shiftId, startUtc) is { } reason)
+            throw new ShiftConflictException($"{reason}, so its cleaner cannot be changed.");
     }
 
     private async Task<Shift> Main(Guid shiftId, CancellationToken ct)

@@ -142,7 +142,7 @@ public class BranchShiftMergeDatabaseTests
     }
 
     [QualityCycle.QualityCycleDatabaseFact]
-    public async Task Work_records_move_with_their_visit_and_an_invoiced_visit_is_never_billed_again()
+    public async Task Work_records_move_with_their_visit_and_an_invoiced_shift_stays_linked_to_its_invoice()
     {
         using var f = await Fixture.Create();
         var invoiced = await Legacy(f, "08:00", f.Cleaner);
@@ -160,16 +160,19 @@ public class BranchShiftMergeDatabaseTests
 
         var result = await Runner(f).RunTenantAsync(f.Tenant, apply: true, default);
 
-        Assert.Equal(2, result.Merged); Assert.Equal(0, result.Failed);
+        // The invoiced shift is kept as it is, so its invoice line still points at a shift that exists.
+        Assert.Equal(1, result.Merged); Assert.Equal(1, result.Kept); Assert.Equal(0, result.Failed);
         Guid mainId;
         using (var reader = f.Reader())
         {
-            mainId = Assert.Single(await reader.Query<Shift>().ToListAsync()).Id;
+            var shifts = await reader.Query<Shift>().ToListAsync();
+            var main = Assert.Single(shifts, x => x.IsBranchMain);
+            mainId = main.Id;
+            Assert.Contains(shifts, x => x.Id == invoiced.Shift.Id && !x.IsBranchMain);
             var forms = await reader.Query<QualityCycleForm>().ToListAsync();
-            Assert.Equal(2, forms.Count);
-            Assert.All(forms, form => { Assert.Equal(mainId, form.ShiftId); Assert.True(form.IsSubmitted); Assert.NotNull(form.EndedAtUtc); });
-            Assert.Equal(new[] { invoiced.Shift.Id, unbilled.Shift.Id }.Order(), forms.Select(x => x.OriginalShiftId!.Value).Order());
-            // The issued invoice is a snapshot and is not rewritten.
+            var moved = Assert.Single(forms, x => x.OriginalShiftId == unbilled.Shift.Id);
+            Assert.Equal(mainId, moved.ShiftId); Assert.True(moved.IsSubmitted);
+            Assert.Equal(invoiced.Shift.Id, Assert.Single(forms, x => x.ShiftId == invoiced.Shift.Id).ShiftId);
             Assert.Equal(invoiced.Shift.Id, Assert.Single(Assert.Single(await reader.Query<Invoice>().ToListAsync()).Lines).ShiftId);
         }
         using (var session = f.Session())
@@ -186,8 +189,9 @@ public class BranchShiftMergeDatabaseTests
             var preview = await invoices.PreviewAsync(month, default);
             // Only the visit that was never invoiced is offered, at the price frozen on its booking, with its visit number.
             var line = Assert.Single(preview.Invoice.Lines);
+            Assert.Equal(mainId, line.ShiftId);
             Assert.Equal(new[] { unbilled.Request.PlannedStartUtc!.Value }, line.OccurrenceStartsUtc);
-            Assert.Equal(100m, line.NetAmount); Assert.Equal(25.5m, line.VatRatePercent); Assert.Equal(new[] { 2 }, line.VisitNumbers);
+            Assert.Equal(100m, line.NetAmount); Assert.Equal(25.5m, line.VatRatePercent); Assert.Equal(new[] { 1 }, line.VisitNumbers);
             await invoices.IssueAsync(month with { PreviewToken = preview.PreviewToken }, default);
         }
         using (var session = f.Session())
@@ -319,7 +323,7 @@ public class BranchShiftMergeDatabaseTests
     }
 
     [QualityCycle.QualityCycleDatabaseFact]
-    public async Task A_one_time_shifts_own_price_is_kept_and_an_invoiced_one_is_not_billed_again()
+    public async Task A_one_time_shifts_own_price_is_kept_and_an_invoiced_one_stays_linked_to_its_invoice()
     {
         using var f = await Fixture.Create();
         // The property charges 100 EUR at 25.5 %. This visit was agreed at 55 EUR at 14 %.
@@ -337,14 +341,19 @@ public class BranchShiftMergeDatabaseTests
 
         var result = await Runner(f).RunTenantAsync(f.Tenant, apply: true, default);
 
-        Assert.Equal(2, result.Merged); Assert.Equal(0, result.Kept);
+        // The invoiced one-time shift is kept, so its invoice line still points at a shift that exists.
+        Assert.Equal(1, result.Merged); Assert.Equal(1, result.Kept); Assert.Equal(0, result.Failed);
         Guid mainId;
         using (var reader = f.Reader())
         {
-            mainId = Assert.Single(await reader.Query<Shift>().ToListAsync()).Id;
-            var kept = Assert.Single(Assert.Single(await reader.Query<ShiftBillingProfile>().ToListAsync()).Overrides);
+            var shifts = await reader.Query<Shift>().ToListAsync();
+            mainId = Assert.Single(shifts, x => x.IsBranchMain).Id;
+            Assert.Contains(shifts, x => x.Id == invoiced.Id);
+            var kept = Assert.Single((await reader.Query<ShiftBillingProfile>().ToListAsync()).Single(x => x.ShiftId == mainId).Overrides);
             Assert.Equal(55m, kept.RateNet); Assert.Equal(14m, kept.VatRatePercent); Assert.Equal(Fixture.DayStart.AddHours(8), kept.OccurrenceStartUtc);
-            Assert.All(await reader.Query<QualityCycleForm>().ToListAsync(), form => Assert.Equal(mainId, form.ShiftId));
+            var forms = await reader.Query<QualityCycleForm>().ToListAsync();
+            Assert.Equal(mainId, Assert.Single(forms, x => x.OriginalShiftId == special.Id).ShiftId);
+            Assert.Equal(invoiced.Id, Assert.Single(forms, x => x.ShiftId == invoiced.Id).ShiftId);
         }
         var request = new ShiftInvoiceRequest(f.Company.Id, [mainId], new(2026, 11, 1), new(2026, 11, 30),
             new Address { Street = "Customer 1", PostalCode = "00100", City = "Helsinki" });

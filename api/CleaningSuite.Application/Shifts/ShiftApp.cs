@@ -517,6 +517,12 @@ public class ShiftHandlers
         IQualityCycleRepository? forms = null, IInvoiceRepository? invoices = null, IShiftWorkReservation? reservation = null)
         : IRequestHandler<SaveShiftOccurrenceExceptionCommand, ShiftOccurrenceDto>
     {
+        private async Task<string?> LockReason(Guid shiftId, DateTime startUtc, CancellationToken ct) =>
+            BranchMainShifts.VisitLockReason(
+                forms is null ? Array.Empty<QualityCycleForm>() : await forms.ListFormsAsync(shiftId, null, null, ct) ?? Array.Empty<QualityCycleForm>(),
+                invoices is null ? Array.Empty<Invoice>() : await invoices.ListAsync(null, null, ct) ?? Array.Empty<Invoice>(),
+                shiftId, startUtc);
+
         public async Task<ShiftOccurrenceDto> Handle(SaveShiftOccurrenceExceptionCommand request, CancellationToken ct)
         {
             // Changes to a main shift's visits are serialised with work, invoicing and offers.
@@ -561,17 +567,9 @@ public class ShiftHandlers
                 item = ShiftOccurrenceException.Create(shift.Id, original, start, end, request.Status, request.Reason, request.EmployeeId);
             else
             {
-                if (shift.IsBranchMain && (item.StartUtc != start || item.EndUtc != end))
-                {
-                    // Work records and invoice lines are keyed by the visit's start, so a visit that has work or an
-                    // invoice keeps its time. Only an unworked, uninvoiced visit can be moved.
-                    if (forms is not null && (await forms.ListFormsAsync(shift.Id, null, null, ct) ?? []).Any(f => f.ShiftDeletedUtc is null
-                        && f.ShiftOccurrenceUtc == item.StartUtc && (f.IsSubmitted || f.StartedAtUtc.HasValue)))
-                        throw new ShiftConflictException("Work has started on this visit, so its time cannot be changed.");
-                    if (invoices is not null && (await invoices.ListAsync(null, null, ct) ?? []).Any(i => (i.Status == Invoice.StatusIssued || i.Status == Invoice.StatusPaid)
-                        && i.Lines.Any(l => l.ShiftId == shift.Id && l.OccurrenceStartsUtc.Contains(item.StartUtc))))
-                        throw new ShiftConflictException("This visit has already been invoiced, so its time cannot be changed.");
-                }
+                // Work records and invoice lines are keyed by the visit's start, so a visit with work or an invoice keeps its time.
+                if (shift.IsBranchMain && (item.StartUtc != start || item.EndUtc != end) && await LockReason(shift.Id, item.StartUtc, ct) is { } lockReason)
+                    throw new ShiftConflictException($"{lockReason}, so its time cannot be changed.");
                 // Two visits of a main shift never share a start: work records and invoice lines find a visit by it.
                 if (shift.IsBranchMain && (await shifts.ListOccurrenceExceptionsAsync(shift.Id, start, start.AddSeconds(1), ct) ?? [])
                     .Any(x => x.Id != item.Id && x.StartUtc == start))
@@ -596,9 +594,15 @@ public class ShiftHandlers
     }
 
     public sealed class DeleteShiftOccurrenceExceptionCommandHandler(IShiftRepository shifts, ITenantProfileRepository? profiles = null, ITenantContext? tenant = null,
-        IQualityCycleRepository? forms = null)
+        IQualityCycleRepository? forms = null, IInvoiceRepository? invoices = null)
         : IRequestHandler<DeleteShiftOccurrenceExceptionCommand>
     {
+        private async Task<string?> LockReason(Guid shiftId, DateTime startUtc, CancellationToken ct) =>
+            BranchMainShifts.VisitLockReason(
+                forms is null ? Array.Empty<QualityCycleForm>() : await forms.ListFormsAsync(shiftId, null, null, ct) ?? Array.Empty<QualityCycleForm>(),
+                invoices is null ? Array.Empty<Invoice>() : await invoices.ListAsync(null, null, ct) ?? Array.Empty<Invoice>(),
+                shiftId, startUtc);
+
         public async Task Handle(DeleteShiftOccurrenceExceptionCommand request, CancellationToken ct)
         {
             var shift = await shifts.GetAsync(request.ShiftId, ct) ?? throw new NotFoundException("Shift", request.ShiftId);
@@ -607,9 +611,8 @@ public class ShiftHandlers
             if (item is null || item.ShiftId != request.ShiftId) throw new NotFoundException("ShiftOccurrenceException", request.Id);
             CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(item);
             // A main shift's visit is the only record of that work: once started it stays, with its work records.
-            if (shift.IsBranchMain && forms is not null && (await forms.ListFormsAsync(shift.Id, null, null, ct) ?? [])
-                .Any(f => f.ShiftOccurrenceUtc == item.StartUtc && f.ShiftDeletedUtc is null && (f.IsSubmitted || f.StartedAtUtc.HasValue)))
-                throw new ShiftConflictException("Work has started on this visit, so it cannot be deleted.");
+            if (shift.IsBranchMain && await LockReason(shift.Id, item.StartUtc, ct) is { } lockReason)
+                throw new ShiftConflictException($"{lockReason}, so it cannot be deleted.");
             if (item.OriginalStartUtc.HasValue)
             {
                 var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);

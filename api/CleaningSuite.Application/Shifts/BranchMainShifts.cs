@@ -1,4 +1,7 @@
+using CleaningSuite.Application.Common;
 using CleaningSuite.Domain.Companies;
+using CleaningSuite.Domain.Invoicing;
+using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Shifts;
 using Marten;
 
@@ -25,10 +28,24 @@ public static class BranchMainShifts
                 new ShiftSchedule { Type = ShiftScheduleType.OnCallFlexible }, null, visitLocalDate.Date, null);
             shift.Id = id; shift.IsBranchMain = true;
         }
-        // New work on a deactivated main shift makes it live again; its earlier visits were kept.
-        shift.IsActive = true; shift.ValidUntil = null;
+        // A deactivated main shift takes no new visits until an admin reactivates it, so new work never revives it silently.
+        if (!shift.IsActive) throw new ShiftConflictException("This property's visit shift is deactivated. Reactivate it before adding visits.");
         shift.CoverVisitDate(visitLocalDate);
         return shift;
+    }
+
+    /// <summary>
+    /// The one rule for changing or removing a visit that work or an invoice already refers to. Returns the reason the
+    /// visit is locked, or null when it may change. Every caller uses this, so the rule cannot drift between paths.
+    /// </summary>
+    public static string? VisitLockReason(IEnumerable<QualityCycleForm> forms, IEnumerable<Invoice> invoices, Guid shiftId, DateTime startUtc)
+    {
+        if (forms.Any(f => f.ShiftId == shiftId && f.ShiftDeletedUtc is null && f.ShiftOccurrenceUtc == startUtc && (f.IsSubmitted || f.StartedAtUtc.HasValue)))
+            return "Work has started on this visit";
+        if (invoices.Any(i => i.Status is Invoice.StatusIssued or Invoice.StatusPaid
+            && i.Lines.Any(l => l.ShiftId == shiftId && l.OccurrenceStartsUtc.Contains(startUtc))))
+            return "This visit has already been invoiced";
+        return null;
     }
 
     /// <summary>

@@ -342,6 +342,33 @@ public class BranchVisitServiceDatabaseTests
     }
 
     [QualityCycle.QualityCycleDatabaseFact]
+    public async Task A_deactivated_main_shift_takes_no_new_visits_until_an_admin_reactivates_it()
+    {
+        using var f = await Fixture.Create();
+        BranchVisitDto first;
+        using (var session = f.Session()) first = await f.Visits(session).Add(OnDay(f), default);
+        using (var writer = f.Store.LightweightSession(f.Tenant))
+        {
+            var main = await writer.LoadAsync<Shift>(first.ShiftId);
+            main!.Deactivate(); writer.Store(main); await writer.SaveChangesAsync();
+        }
+        using (var session = f.Session())
+        {
+            var refused = await Assert.ThrowsAsync<ShiftConflictException>(() => f.Visits(session).Add(OnDay(f, "12:00", "14:00"), default));
+            Assert.Contains("deactivated", refused.Message);
+        }
+        using (var writer = f.Store.LightweightSession(f.Tenant))
+        {
+            // The visit added before deactivation is kept, and the shift stays inactive until reactivated.
+            Assert.False((await writer.LoadAsync<Shift>(first.ShiftId))!.IsActive);
+            Assert.Equal(first.Id, (await writer.Query<ShiftOccurrenceException>().SingleAsync()).Id);
+            var main = await writer.LoadAsync<Shift>(first.ShiftId);
+            main!.IsActive = true; writer.Store(main); await writer.SaveChangesAsync();
+        }
+        using (var session = f.Session()) Assert.Equal(2, (await f.Visits(session).Add(OnDay(f, "12:00", "14:00"), default)).Number);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
     public async Task A_staff_visit_time_is_locked_once_work_or_an_invoice_exists()
     {
         using var f = await Fixture.Create();

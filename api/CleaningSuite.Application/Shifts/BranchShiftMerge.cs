@@ -56,6 +56,8 @@ public static class BranchShiftMerge
         // Starts already taken on each branch's main shift; planned merges add to them, in visit order.
         var taken = mains.Values.ToDictionary(x => x.BranchId, x => exceptionsByShift[x.Id].Select(e => e.StartUtc).ToHashSet());
         bool CanName(Guid branchId) => mains.ContainsKey(branchId) || (branchesById.TryGetValue(branchId, out var branch) && branch.HasNameDetails);
+        // A deactivated main shift takes no visits until an admin reactivates it; the merge never revives it.
+        bool MainInactive(Guid branchId) => mains.TryGetValue(branchId, out var main) && !main.IsActive;
         bool Claim(Guid branchId, DateTime start)
         {
             if (!taken.TryGetValue(branchId, out var starts)) taken[branchId] = starts = [];
@@ -84,6 +86,9 @@ public static class BranchShiftMerge
 
             if (request.Status == PartnerCleaningRequest.StatusAccepted && shift.IsActive && visit is not null)
             {
+                // An invoice names this shift; moving it would leave the invoice pointing at a shift that no longer exists.
+                if (billed.Contains(shift.Id)) { findings.Add(Keep("Its booking is invoiced, so its shift stays linked to the invoice.")); continue; }
+                if (MainInactive(shift.BranchId)) { findings.Add(Keep("The property's visit shift is deactivated.")); continue; }
                 if (work.Any(f => f.ShiftOccurrenceUtc != visit.StartUtc)) { findings.Add(Keep("It has work records at another time than the booking's visit.")); continue; }
                 if (!CanName(shift.BranchId)) { findings.Add(Keep("The property needs its size and cleaning type before a main shift can be named.")); continue; }
                 if (!Claim(shift.BranchId, visit.StartUtc)) { findings.Add(Keep("Another visit of the same property starts at exactly the same time.")); continue; }
@@ -111,6 +116,9 @@ public static class BranchShiftMerge
                 if (billed.Contains(shift.Id)) return Keep("It is deactivated, yet it has been invoiced.");
                 return new(shift.Id, shift.BranchId, null, BranchShiftMergeAction.Remove, "Deactivated one-time shift with no work and no invoice.") { Kind = KindOneTime };
             }
+            // An invoice names this shift; moving it would leave the invoice pointing at a shift that no longer exists.
+            if (billed.Contains(shift.Id)) return Keep("It has been invoiced, so its shift stays linked to the invoice.");
+            if (MainInactive(shift.BranchId)) return Keep("The property's visit shift is deactivated.");
             var visit = OneTimeVisit(shift);
             if (visit is null) return Keep("Its one-time date and times do not produce a visit.");
             if (work.Any(f => f.ShiftOccurrenceUtc != visit.StartUtc)) return Keep("It has work records at another time than its visit.");

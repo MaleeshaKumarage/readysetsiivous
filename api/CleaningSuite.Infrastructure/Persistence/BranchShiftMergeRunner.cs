@@ -102,7 +102,9 @@ public sealed class BranchShiftMergeRunner(IDocumentStore store, ITenantRegistry
         var billing = await session.Query<ShiftBillingProfile>().Where(x => x.ShiftId == shift.Id).ToListAsync(ct);
         var current = BranchShiftMerge.Plan(related, requests, exceptions,
             await session.Query<ShiftOccurrenceAssignment>().Where(x => x.ShiftId == shift.Id).ToListAsync(ct), forms,
-            await session.Query<Invoice>().Where(x => x.Status == Invoice.StatusIssued || x.Status == Invoice.StatusPaid).ToListAsync(ct),
+            // Only this shift's invoices are needed, so each apply reads a small set rather than every invoice in the tenant.
+            await session.Query<Invoice>().Where(x => (x.Status == Invoice.StatusIssued || x.Status == Invoice.StatusPaid)
+                && x.Lines.Any(l => l.ShiftId == shift.Id)).ToListAsync(ct),
             branch is null ? [] : [branch], assignments, billing, zone).SingleOrDefault(x => x.ShiftId == shift.Id);
         if (current is null || current.Action != planned.Action)
         {
