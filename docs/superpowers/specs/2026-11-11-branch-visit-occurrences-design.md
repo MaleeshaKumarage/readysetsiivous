@@ -115,3 +115,6 @@ One PR per chunk, in this order, each green before the next:
 - Not visible to employees: `PartnerRequestDto` (PriceNet, VatRatePercent), `ShiftBillingProfile`, invoices, and branch pricing. These are served only by operations routes (`/api/v1/admin/partner/*`, `/api/v1/manager/partner/*`).
 - Rule for this change: occurrence and main-shift DTOs must never gain billing fields. Add a test that calls each employee route and asserts no `price`, `rate`, `vat` or `net` keys appear in the JSON.
 - Caveat: a user who holds both an employee and a manager role receives manager responses. Confirm this is acceptable before build.
+
+### Decision (2026-11-11)
+- Confirmed by the product owner: a user who holds both employee and manager roles may see manager responses, including partner prices. No change to price visibility rules for this case.
