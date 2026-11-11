@@ -259,7 +259,7 @@ public class BranchVisitServiceDatabaseTests
         await Assert.ThrowsAsync<NotFoundException>(() => visits.Add(new(Guid.NewGuid(), Fixture.Day, Fixture.Day, "08:00", "10:00"), default));
         await Assert.ThrowsAsync<ValidationException>(() => visits.Add(OnDay(f, employee: f.Partner.Id), default));
         // A visit must be billable: a property without a price cannot take one.
-        var unpriced = Branch.Create(f.Company.Id, "No price yet"); unpriced.SetPropertyDetails(20, "Normal");
+        var unpriced = Branch.Create(f.Company.Id, "No price yet"); unpriced.SetSizeM2(20);
         using (var writer = f.Store.LightweightSession(f.Tenant)) { writer.Store(unpriced); await writer.SaveChangesAsync(); }
         var noPrice = await Assert.ThrowsAsync<ShiftConflictException>(() => visits.Add(new(unpriced.Id, Fixture.Day, Fixture.Day, "08:00", "10:00"), default));
         Assert.Contains("no cleaning price", noPrice.Message);

@@ -164,7 +164,7 @@ public class PushReminderDatabaseTests
         var pending = new Employee { Role = Employee.RoleAdmin, KeycloakUserId = "pending", IdentitySyncPending = true };
         var company = new Company { IsActive = true, IsPartnerEnabled = true, BusinessId = "1234567-1" };
         var partner = new Employee { Role = Employee.RolePartner, KeycloakUserId = "partner", PartnerCompanyId = company.Id };
-        var branch = new Branch { CompanyId = company.Id, IsActive = true, PriceNet = 100, VatRatePercent = 25.5m, EstimatedDurationMinutes = 60, SizeM2 = 34, CleaningType = "Deep" };
+        var branch = new Branch { CompanyId = company.Id, IsActive = true, PriceNet = 100, VatRatePercent = 25.5m, EstimatedDurationMinutes = 60, SizeM2 = 34 };
         using (var db = f.Store.LightweightSession(f.Tenant))
         {
             db.Store(admin, manager, pending, partner); db.Store(company); db.Store(branch);
@@ -246,7 +246,7 @@ public class PushReminderDatabaseTests
         f.Employee.AutoAcceptWork = automatic;
         var admin = new Employee { Role = Employee.RoleAdmin, KeycloakUserId = "admin" };
         var company = new Company { IsActive = true, IsPartnerEnabled = true };
-        var branch = new Branch { CompanyId = company.Id, IsActive = true, SizeM2 = 34, CleaningType = "Deep" };
+        var branch = new Branch { CompanyId = company.Id, IsActive = true, SizeM2 = 34 };
         var request = new CleaningSuite.Domain.Partners.PartnerCleaningRequest
         {
             CompanyId = company.Id, BranchId = branch.Id,
@@ -278,7 +278,7 @@ public class PushReminderDatabaseTests
     {
         using var f = await Fixture.Create();
         var company = new Company { IsActive = true, IsPartnerEnabled = true };
-        var branch = new Branch { CompanyId = company.Id, IsActive = true, SizeM2 = 34, CleaningType = "Deep" };
+        var branch = new Branch { CompanyId = company.Id, IsActive = true, SizeM2 = 34 };
         var request = new CleaningSuite.Domain.Partners.PartnerCleaningRequest { CompanyId = company.Id, BranchId = branch.Id, Status = "Offered", OfferedEmployeeId = f.Employee.Id, OfferId = Guid.NewGuid() };
         using (var db = f.Store.LightweightSession(f.Tenant))
         {

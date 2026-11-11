@@ -17,14 +17,15 @@ namespace CleaningSuite.Application.Shifts;
 
 /// <summary>Adds one visit to a branch's main shift. Dates and times are local to the tenant.</summary>
 public record AddBranchVisit(Guid BranchId, DateOnly FromDate, DateOnly ToDate, string StartTime, string EndTime,
-    string? Notes = null, Guid? EmployeeId = null, bool UseDefaultEmployee = true);
+    string? Notes = null, Guid? EmployeeId = null, bool UseDefaultEmployee = true, string? CleaningType = null);
 public record SetVisitEmployee(Guid? EmployeeId, int OfferRevision);
+public record SetVisitCleaningType(string CleaningType);
 public record SetDefaultEmployee(Guid? EmployeeId);
 
 /// <summary>A visit of a branch main shift, as staff see it. It carries no price: the price comes from the property.</summary>
 public record BranchVisitDto(Guid Id, Guid ShiftId, Guid BranchId, int Number, string Source, DateTime StartUtc, DateTime EndUtc,
     DateOnly FromDate, DateOnly ToDate, string? Notes, Guid? EmployeeId, Guid? OfferedEmployeeId, int OfferRevision,
-    Guid? PartnerRequestId, string Status, string TimeZoneId);
+    Guid? PartnerRequestId, string Status, string CleaningType, string TimeZoneId);
 
 public record BranchMainDto(Guid ShiftId, Guid BranchId, string Name, bool IsActive, Guid? DefaultEmployeeId, IReadOnlyList<BranchVisitDto> Visits);
 
@@ -55,6 +56,7 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
         if (!TimeOnly.TryParseExact(body.EndTime, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var endTime))
             failures.Add(new("EndTime", "Enter the end time as HH:mm."));
         if (body.Notes?.Length > 4000) failures.Add(new("Notes", "Use at most 4000 characters for the visit notes."));
+        if (!IsCleaningType(body.CleaningType)) failures.Add(new("CleaningType", "Cleaning type must be Deep or Normal."));
         if (failures.Count > 0) throw new ValidationException(failures);
         if (body.FromDate.Year < 2000 || body.ToDate.Year > 2099 || body.ToDate < body.FromDate || body.ToDate.DayNumber - body.FromDate.DayNumber > 366)
             throw new ValidationException([new ValidationFailure("ToDate", "Choose a last day on or after the first day, at most 366 days later.")]);
@@ -78,6 +80,7 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
         visit.Id = Guid.NewGuid();
         visit.Sequence = shift.NextOccurrenceSequence(); visit.Source = ShiftOccurrenceException.SourceAdminPanel;
         visit.Notes = string.IsNullOrWhiteSpace(body.Notes) ? null : body.Notes.Trim();
+        visit.CleaningType = body.CleaningType ?? CleaningTypes.Normal;
         var employeeId = body.EmployeeId ?? (body.UseDefaultEmployee ? shift.DefaultEmployeeId : null);
         if (employeeId.HasValue) await OfferTo(shift, visit, employeeId.Value, zone, ct);
         await ShiftTabs.StoreAsync(Db, shift, ct); Db.Store(visit);
@@ -133,6 +136,25 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
         await Db.SaveChangesAsync(ct);
         return Map(visit, shift, zone, zoneId);
     }
+
+    /// <summary>
+    /// Sets whether a visit is a Deep or Normal clean. Any visit can change, including after it has been cleaned;
+    /// the price does not change with it.
+    /// </summary>
+    public async Task<BranchVisitDto> SetCleaningType(Guid shiftId, Guid visitId, SetVisitCleaningType body, CancellationToken ct)
+    {
+        await using var lease = await reservation.AcquireAsync(ct);
+        var shift = await Main(shiftId, ct);
+        var visit = await Visit(shift, visitId, ct);
+        if (!IsCleaningType(body.CleaningType))
+            throw new ValidationException([new ValidationFailure("CleaningType", "Cleaning type must be Deep or Normal.")]);
+        var (zoneId, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
+        visit.CleaningType = body.CleaningType; visit.UpdatedUtc = DateTime.UtcNow; Db.Store(visit);
+        await Db.SaveChangesAsync(ct);
+        return Map(visit, shift, zone, zoneId);
+    }
+
+    private static bool IsCleaningType(string? value) => value is null or CleaningTypes.Deep or CleaningTypes.Normal;
 
     /// <summary>Visit offers waiting for this cleaner's answer, in the shape cleaners already see offers in.</summary>
     public async Task<IReadOnlyList<PartnerCleanerOfferDto>> Offers(Guid actor, CancellationToken ct)
@@ -250,5 +272,6 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
             DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(visit.StartUtc, zone)),
             DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(visit.EndUtc.AddTicks(-1), zone)),
             visit.Notes, visit.EmployeeId, visit.OfferedEmployeeId, visit.OfferRevision, visit.PartnerRequestId,
-            visit.EmployeeId.HasValue ? StatusAssigned : visit.OfferedEmployeeId.HasValue ? StatusOffered : StatusUnassigned, zoneId);
+            visit.EmployeeId.HasValue ? StatusAssigned : visit.OfferedEmployeeId.HasValue ? StatusOffered : StatusUnassigned,
+            visit.CleaningType ?? CleaningTypes.Normal, zoneId);
 }

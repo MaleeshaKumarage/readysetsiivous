@@ -7,17 +7,17 @@ import { shiftAction } from './shift-actions';
 // covered by the backend database tests (BranchVisitServiceDatabaseTests, BranchMainShiftDatabaseTests).
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
-const MAIN = 'Deep Cleaning - Testikatu 1, 00100 Helsinki |34m2|2H|1V';
+const MAIN = 'Cleaning - Testikatu 1, 00100 Helsinki |34m2|2H|1V';
 
 const adminVisit = { startUtc: '2026-11-10T06:00:00.000Z', endUtc: '2026-11-10T08:00:00.000Z', exceptionId: 'visit-1', status: 4, reason: 'Added from the admin panel',
-  assigneeIds: [], rosterVersion: 'v1', canAssign: true, visitNumber: 1, visitSource: 'AdminPanel', offeredEmployeeId: 'cleaner', offerRevision: 1, isPartnerBooking: false };
+  assigneeIds: [], rosterVersion: 'v1', canAssign: true, visitNumber: 1, visitSource: 'AdminPanel', visitCleaningType: 'Normal', offeredEmployeeId: 'cleaner', offerRevision: 1, isPartnerBooking: false };
 const partnerVisit = { startUtc: '2026-11-10T10:00:00.000Z', endUtc: '2026-11-14T14:00:00.000Z', exceptionId: 'visit-2', status: 4, reason: 'Accepted partner cleaning',
   employeeId: 'second', assigneeIds: ['second'], rosterVersion: 'v1', canAssign: true, visitNumber: 2, visitSource: 'PartnerPortal', offerRevision: 0, isPartnerBooking: true };
 
 async function setup(page: Page, options: { addFailures?: number; cleanerConflict?: boolean } = {}) {
   await setupAdminMocks(page);
   await page.clock.install({ time: new Date('2026-11-03T10:00:00Z') });
-  const state = { adds: [] as any[], cleanerWrites: [] as any[], defaultWrites: [] as any[], extraWrites: 0,
+  const state = { adds: [] as any[], cleanerWrites: [] as any[], cleaningTypeWrites: [] as any[], defaultWrites: [] as any[], extraWrites: 0,
     occurrences: [adminVisit, partnerVisit] as any[], addFailures: options.addFailures ?? 0, defaultEmployeeId: null as string | null };
   const shifts = () => [
     { id: 'main', name: MAIN, companyId: 'company', branchId: 'branch', isActive: true, isBranchMain: true, defaultEmployeeId: state.defaultEmployeeId, schedule: { type: 4 } },
@@ -48,6 +48,12 @@ async function setup(page: Page, options: { addFailures?: number; cleanerConflic
       if (options.cleanerConflict) return route.fulfill({ status: 409, headers, json: { detail: 'Work has started on this visit, so its cleaner cannot be changed.' } });
       state.occurrences = state.occurrences.map(item => item.exceptionId === 'visit-1' ? { ...item, offeredEmployeeId: body.employeeId, offerRevision: body.offerRevision + 2 } : item);
       return route.fulfill({ status: 200, headers, json: { id: 'visit-1', shiftId: 'main', number: 1, status: 'Offered', offeredEmployeeId: body.employeeId, offerRevision: body.offerRevision + 2 } });
+    }
+    const cleaningType = /\/visits\/([^/]+)\/cleaning-type$/.exec(path);
+    if (cleaningType) {
+      const body = request.postDataJSON(); state.cleaningTypeWrites.push({ visitId: cleaningType[1], ...body });
+      state.occurrences = state.occurrences.map(item => item.exceptionId === cleaningType[1] ? { ...item, visitCleaningType: body.cleaningType } : item);
+      return route.fulfill({ status: 200, headers, json: { id: cleaningType[1], shiftId: 'main', cleaningType: body.cleaningType } });
     }
     if (path.includes('/occurrence-exceptions')) { state.extraWrites++; return route.fulfill({ status: 409, headers, json: { detail: 'Add visits to this shift with Add visit.' } }); }
     if (path.endsWith('/occurrences')) return route.fulfill({ status: 200, headers, json: path.includes('/shifts/main/') ? state.occurrences : [] });
@@ -88,7 +94,7 @@ test('admin adds a single-day visit by choosing only the property, date and time
 
   await expect(dialog).toHaveCount(0);
   expect(state.adds).toEqual([{ branchId: 'branch', fromDate: '2026-11-12', toDate: '2026-11-12', startTime: '09:00', endTime: '11:30',
-    notes: 'Ring the bell at the back door', employeeId: null, useDefaultEmployee: true }]);
+    notes: 'Ring the bell at the back door', employeeId: null, useDefaultEmployee: true, cleaningType: 'Normal' }]);
 });
 
 test('a date range is one visit, and a chosen cleaner is sent an offer', async ({ page }) => {
@@ -273,3 +279,39 @@ test('the Manage dialog of an ordinary shift keeps its assignment and pricing ac
   await expect(workspace.getByRole('button', { name: 'Pricing', exact: true })).toBeVisible();
   await expect(workspace.getByRole('button', { name: 'Add visit', exact: true })).toHaveCount(0);
 });
+
+test('a new visit is Normal unless Deep is chosen, and the choice is sent with it', async ({ page }) => {
+  const state = await setup(page);
+  await shiftAction(page, MAIN, 'Add visit');
+  const dialog = page.getByRole('dialog', { name: 'Add visit', exact: true });
+  await dialog.getByLabel(/^Date/).fill('2026-11-21');
+  await expect(dialog.getByRole('textbox', { name: 'Cleaning type', exact: true })).toHaveValue('Normal');
+  await dialog.getByRole('textbox', { name: 'Cleaning type', exact: true }).click();
+  await page.getByRole('option', { name: 'Deep', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Add visit', exact: true }).click();
+
+  await expect(dialog).toHaveCount(0);
+  expect(state.adds).toHaveLength(1);
+  expect(state.adds[0]).toMatchObject({ fromDate: '2026-11-21', cleaningType: 'Deep' });
+});
+
+test('a visit that is already cleaned can be changed from Normal to Deep', async ({ page }) => {
+  const state = await setup(page);
+  // A visit whose cleaning is already done (the clock is set to 3 November 2026).
+  state.occurrences = [{ ...adminVisit, exceptionId: 'visit-done', startUtc: '2026-10-20T06:00:00.000Z', endUtc: '2026-10-20T08:00:00.000Z', visitNumber: 3, visitCleaningType: 'Normal' }];
+  await shiftAction(page, MAIN, 'Occurrences');
+  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  const row = list.getByRole('row').filter({ hasText: '#3 ·' });
+  await expect(row).toContainText('Normal cleaning');
+
+  await row.getByRole('button', { name: 'Change cleaner', exact: true }).click();
+  const modal = page.getByRole('dialog', { name: 'Change cleaner', exact: true });
+  await modal.getByRole('textbox', { name: 'Cleaning type', exact: true }).click();
+  await page.getByRole('option', { name: 'Deep', exact: true }).click();
+  await modal.getByRole('button', { name: 'Save cleaning type', exact: true }).click();
+
+  await expect(modal).toHaveCount(0);
+  expect(state.cleaningTypeWrites).toEqual([expect.objectContaining({ visitId: 'visit-done', cleaningType: 'Deep' })]);
+  await expect(list.getByRole('row').filter({ hasText: '#3 ·' })).toContainText('Deep cleaning');
+});
+

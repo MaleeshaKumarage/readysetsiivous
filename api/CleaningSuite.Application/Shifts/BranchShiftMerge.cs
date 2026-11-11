@@ -90,7 +90,7 @@ public static class BranchShiftMerge
                 if (billed.Contains(shift.Id)) { findings.Add(Keep("Its booking is invoiced, so its shift stays linked to the invoice.")); continue; }
                 if (MainInactive(shift.BranchId)) { findings.Add(Keep("The property's visit shift is deactivated.")); continue; }
                 if (work.Any(f => f.ShiftOccurrenceUtc != visit.StartUtc)) { findings.Add(Keep("It has work records at another time than the booking's visit.")); continue; }
-                if (!CanName(shift.BranchId)) { findings.Add(Keep("The property needs its size and cleaning type before a main shift can be named.")); continue; }
+                if (!CanName(shift.BranchId)) { findings.Add(Keep("The property needs its size before a main shift can be named.")); continue; }
                 if (!Claim(shift.BranchId, visit.StartUtc)) { findings.Add(Keep("Another visit of the same property starts at exactly the same time.")); continue; }
                 findings.Add(new(shift.Id, shift.BranchId, requestId, BranchShiftMergeAction.Merge, "Accepted booking becomes a visit on the property's main shift.", visit.StartUtc));
                 continue;
@@ -122,7 +122,7 @@ public static class BranchShiftMerge
             var visit = OneTimeVisit(shift);
             if (visit is null) return Keep("Its one-time date and times do not produce a visit.");
             if (work.Any(f => f.ShiftOccurrenceUtc != visit.StartUtc)) return Keep("It has work records at another time than its visit.");
-            if (!CanName(shift.BranchId)) return Keep("The property needs its size and cleaning type before a main shift can be named.");
+            if (!CanName(shift.BranchId)) return Keep("The property needs its size before a main shift can be named.");
             // A visit still to be done would switch to the main shift's checklist; a different one is a decision for a person.
             var done = work.Any(f => f.IsSubmitted);
             if (!done && mains.TryGetValue(shift.BranchId, out var main) && main.QualityCycleTemplateId is Guid mainTemplate

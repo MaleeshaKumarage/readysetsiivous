@@ -499,7 +499,6 @@ export interface Branch {
   roomCount?: number | null;
   bedCount?: number | null;
   sizeM2?: number | null;
-  cleaningType?: string | null;
   priceNet?: number | null;
   vatRatePercent?: number | null;
   estimatedDurationMinutes?: number | null;
@@ -618,7 +617,7 @@ export interface ShiftOccurrence {
   assignmentVersion?: string | null; overrideEmployeeIds?: string[];
   assignmentReason?: string | null; rosterVersion?: string; canAssign?: boolean; assignmentLockReason?: string | null;
   // Set for visits of a property's main visit shift only.
-  visitNumber?: number | null; visitSource?: string | null; visitNotes?: string | null;
+  visitNumber?: number | null; visitSource?: string | null; visitNotes?: string | null; visitCleaningType?: string | null;
   offeredEmployeeId?: string | null; offerRevision?: number | null; isPartnerBooking?: boolean;
 }
 
@@ -626,11 +625,11 @@ export interface ShiftOccurrence {
 export interface BranchVisit {
   id: string; shiftId: string; branchId: string; number: number; source: string; startUtc: string; endUtc: string;
   fromDate: string; toDate: string; notes?: string | null; employeeId?: string | null; offeredEmployeeId?: string | null;
-  offerRevision: number; partnerRequestId?: string | null; status: 'Unassigned' | 'Offered' | 'Assigned'; timeZoneId: string;
+  offerRevision: number; partnerRequestId?: string | null; status: 'Unassigned' | 'Offered' | 'Assigned'; cleaningType: string; timeZoneId: string;
 }
 export interface AddBranchVisitInput {
   branchId: string; fromDate: string; toDate: string; startTime: string; endTime: string;
-  notes: string | null; employeeId: string | null; useDefaultEmployee: boolean;
+  notes: string | null; employeeId: string | null; useDefaultEmployee: boolean; cleaningType: string;
 }
 
 export interface ShiftOccurrenceExceptionInput {
@@ -753,6 +752,8 @@ export const adminBranchVisits = {
     adminSendJsonResult<{ shiftId: string; defaultEmployeeId?: string | null }>(`/api/v1/admin/branch-visits/shifts/${shiftId}/default-employee`, 'PUT', { employeeId }),
   setEmployee: (shiftId: string, visitId: string, employeeId: string | null, offerRevision: number) =>
     adminSendJsonResult<BranchVisit>(`/api/v1/admin/branch-visits/shifts/${shiftId}/visits/${visitId}/employee`, 'PUT', { employeeId, offerRevision }),
+  setCleaningType: (shiftId: string, visitId: string, cleaningType: string) =>
+    adminSendJsonResult<BranchVisit>(`/api/v1/admin/branch-visits/shifts/${shiftId}/visits/${visitId}/cleaning-type`, 'PUT', { cleaningType }),
 };
 
 // Keep company/branch failures visible without changing legacy helper semantics.
@@ -854,7 +855,7 @@ export const adminBranches = {
       country?: string;
       contactPhone?: string;
       contactEmail?: string;
-      roomCount?: number | null; bedCount?: number | null; sizeM2?: number | null; cleaningType?: string | null; priceNet?: number | null; vatRatePercent?: number | null; estimatedDurationMinutes?: number | null;
+      roomCount?: number | null; bedCount?: number | null; sizeM2?: number | null; priceNet?: number | null; vatRatePercent?: number | null; estimatedDurationMinutes?: number | null;
     }
   ) => companyRequest<Branch>(`/api/v1/admin/companies/${companyId}/branches`, 'POST', { companyId, ...body }),
   update: (
@@ -867,7 +868,7 @@ export const adminBranches = {
       country?: string;
       contactPhone?: string;
       contactEmail?: string;
-      roomCount?: number | null; bedCount?: number | null; sizeM2?: number | null; cleaningType?: string | null; priceNet?: number | null; vatRatePercent?: number | null; estimatedDurationMinutes?: number | null;
+      roomCount?: number | null; bedCount?: number | null; sizeM2?: number | null; priceNet?: number | null; vatRatePercent?: number | null; estimatedDurationMinutes?: number | null;
       isActive: boolean;
     }
   ) => adminSendJson<Branch>(`/api/v1/admin/companies/branches/${id}`, 'PUT', { id, ...body }),

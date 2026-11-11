@@ -36,7 +36,7 @@ public class BranchVisitContractTests
     {
         var start = new DateTime(2026, 11, 10, 6, 0, 0, DateTimeKind.Utc);
         var visit = new BranchVisitDto(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 3, "AdminPanel", start, start.AddHours(2), new(2026, 11, 10), new(2026, 11, 10),
-            "Notes", null, Guid.NewGuid(), 1, null, BranchVisitService.StatusOffered, "Europe/Helsinki");
+            "Notes", null, Guid.NewGuid(), 1, null, BranchVisitService.StatusOffered, "Normal", "Europe/Helsinki");
         using var written = JsonDocument.Parse(JsonSerializer.Serialize(visit, Api));
         foreach (var name in new[] { "id", "shiftId", "branchId", "number", "source", "startUtc", "endUtc", "fromDate", "toDate", "offeredEmployeeId", "offerRevision", "status" })
             Assert.True(written.RootElement.TryGetProperty(name, out _), name);

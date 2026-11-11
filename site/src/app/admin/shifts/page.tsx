@@ -197,6 +197,7 @@ export default function ShiftsAdminPage() {
   const [visitDialog, setVisitDialog] = useState<{ preset: { companyId: string; branchId: string; propertyName: string } | null } | null>(null);
   const [cleanerVisit, setCleanerVisit] = useState<ShiftOccurrence | null>(null);
   const [cleanerChoice, setCleanerChoice] = useState<string | null>(null);
+  const [cleaningTypeChoice, setCleaningTypeChoice] = useState<string | null>(null), [cleaningTypeSaving, setCleaningTypeSaving] = useState(false), [cleaningTypeError, setCleaningTypeError] = useState('');
   const [cleanerSaving, setCleanerSaving] = useState(false);
   const [cleanerError, setCleanerError] = useState('');
   const [defaultCleanerError, setDefaultCleanerError] = useState('');
@@ -578,6 +579,15 @@ export default function ShiftsAdminPage() {
     setCleanerVisit(null);
     await loadOccurrences();
   };
+  const saveCleaningType = async () => {
+    if (!occurrenceShift || !cleanerVisit?.exceptionId || cleaningTypeSaving) return;
+    setCleaningTypeSaving(true); setCleaningTypeError('');
+    const result = await adminBranchVisits.setCleaningType(occurrenceShift.id, cleanerVisit.exceptionId, cleaningTypeChoice ?? cleanerVisit.visitCleaningType ?? 'Normal');
+    setCleaningTypeSaving(false);
+    if (!result.ok) { setCleaningTypeError(result.message); return; }
+    setCleaningTypeChoice(null); setCleanerVisit(null);
+    await loadOccurrences();
+  };
   const restoreOccurrence = async (occurrence: ShiftOccurrence) => {
     if (!occurrenceShift || !occurrence.exceptionId) return;
     setOccurrenceSaving(true); setOccurrenceError('');
@@ -746,7 +756,7 @@ export default function ShiftsAdminPage() {
                 <Table.Td>{new Date(item.endUtc).toLocaleString(undefined, { timeZone: timeZoneId })}</Table.Td>
                 <Table.Td>{item.status ? OCCURRENCE_STATUSES.find(x => x.value === String(item.status))?.label : 'Scheduled'}</Table.Td>
                 <Table.Td><Text size="sm">{(item.assigneeIds ?? []).map(employeeName).join(', ') || (item.offeredEmployeeId ? `Offer sent to ${employeeName(item.offeredEmployeeId)}` : 'Unassigned')}</Text>
-                  <Text size="xs" c="dimmed">{item.visitNumber ? (item.isPartnerBooking ? 'Partner booking' : item.offeredEmployeeId ? 'Waiting for the cleaner to accept' : (item.assigneeIds ?? []).length ? 'Accepted' : 'No cleaner yet') : item.assignmentSource ?? 'Recurring'}</Text>{item.assignmentLockReason && <Text size="xs" c="dimmed">{item.assignmentLockReason}</Text>}</Table.Td>
+                  <Text size="xs" c="dimmed">{item.visitNumber ? (item.isPartnerBooking ? 'Partner booking' : item.offeredEmployeeId ? 'Waiting for the cleaner to accept' : (item.assigneeIds ?? []).length ? 'Accepted' : 'No cleaner yet') : item.assignmentSource ?? 'Recurring'}</Text>{item.visitNumber ? <Text size="xs" c="dimmed">{item.visitCleaningType ?? 'Normal'} cleaning</Text> : null}{item.assignmentLockReason && <Text size="xs" c="dimmed">{item.assignmentLockReason}</Text>}</Table.Td>
                 <Table.Td>{item.reason ?? '—'}</Table.Td>
                 <Table.Td><Group gap={4} wrap="nowrap">
                   {item.isPartnerBooking ? <Text size="xs" c="dimmed">Managed under Partner requests</Text> : <>
@@ -775,6 +785,11 @@ export default function ShiftsAdminPage() {
             data={employees.filter(e => e.isActive && e.role !== 'partner').map(e => ({ value: e.id, label: `${e.firstName} ${e.lastName}` }))} />
           {cleanerError && <Text role="alert" c="red">{cleanerError}</Text>}
           <Group justify="flex-end"><Button variant="default" disabled={cleanerSaving} onClick={() => setCleanerVisit(null)}>Cancel</Button><Button loading={cleanerSaving} onClick={saveCleaner}>Save cleaner</Button></Group>
+          <Select label="Cleaning type" allowDeselect={false} value={cleaningTypeChoice ?? cleanerVisit?.visitCleaningType ?? 'Normal'} onChange={setCleaningTypeChoice}
+            description="Every visit starts as Normal. You can change it at any time, including after the cleaning is done."
+            data={[{ value: 'Normal', label: 'Normal' }, { value: 'Deep', label: 'Deep' }]} />
+          {cleaningTypeError && <Text role="alert" c="red">{cleaningTypeError}</Text>}
+          <Group justify="flex-end"><Button variant="default" loading={cleaningTypeSaving} onClick={saveCleaningType}>Save cleaning type</Button></Group>
         </Stack>
       </Modal>
       {assigningVisit && occurrenceShift && <VisitAssigneesDialog key={`${assigningVisit.exceptionId ?? assigningVisit.startUtc}`}

@@ -19,8 +19,6 @@ public class Branch : BaseDocument
     public int? BedCount { get; set; }
     /// <summary>Size in square metres, used in every shift name. Required before a shift can be scheduled.</summary>
     public int? SizeM2 { get; set; }
-    /// <summary>"Deep" or "Normal". Required before a shift can be scheduled.</summary>
-    public string? CleaningType { get; set; }
     /// <summary>Dated price history. The only source of a branch price; shifts pick one version by its effective date.</summary>
     public List<BranchPriceVersion> PriceVersions { get; set; } = [];
     // Pre-history flat price, kept only so documents saved before PriceVersions still load. Read through Versions;
@@ -76,13 +74,6 @@ public class Branch : BaseDocument
     public bool HasPendingQuote => QuoteRequestedUtc.HasValue && !PricingReady;
     public bool PricingReady => CurrentPrice is { PriceNet: > 0, VatRatePercent: >= 0 and <= 100, DurationMinutes: > 0 and <= 1440 };
 
-    /// <summary>Size and cleaning type, needed before a shift can be scheduled for this property.</summary>
-    public void SetPropertyDetails(int? sizeM2, string? cleaningType)
-    {
-        SetSizeM2(sizeM2);
-        SetCleaningType(cleaningType);
-    }
-
     /// <summary>Validates and sets only the size, so a cleaning type stored before validation existed is left alone.</summary>
     public void SetSizeM2(int? sizeM2)
     {
@@ -91,15 +82,8 @@ public class Branch : BaseDocument
         SizeM2 = sizeM2;
     }
 
-    /// <summary>Validates and sets only the cleaning type.</summary>
-    public void SetCleaningType(string? cleaningType)
-    {
-        if (cleaningType is not null && cleaningType != CleaningTypes.Deep && cleaningType != CleaningTypes.Normal)
-            throw new ArgumentException("Cleaning type must be Deep or Normal.");
-        CleaningType = cleaningType;
-    }
-
-    public bool HasNameDetails => SizeM2 is > 0 && CleaningType is CleaningTypes.Deep or CleaningTypes.Normal;
+    /// <summary>Whether the size needed to schedule a shift for this property is set. Cleaning type is per visit.</summary>
+    public bool HasNameDetails => SizeM2 is > 0;
 
     public void SetPropertyCounts(int? rooms, int? beds)
     {
