@@ -42,6 +42,18 @@ public static class ShiftInvoiceCalculator
                 && (!plan.ValidUntil.HasValue || date <= DateOnly.FromDateTime(plan.ValidUntil.Value)) ? plan : null;
         }
         string Branch(Guid id) => branches.TryGetValue(id, out var name) ? name : throw new ShiftConflictException("A shift branch is missing. Restore its company/branch association before invoicing.");
+        // A booking whose price was frozen when it was requested carries its own price and VAT. It is billed per visit at
+        // that price whatever the property charges on its date, and it never counts toward a monthly fee.
+        bool Frozen(DateTime startUtc) => profile.Overrides.Any(o => o.OccurrenceStartUtc == startUtc && o.VatRatePercent is not null);
+        ShiftPricingPlan VisitPlan(BillableShiftVisit visit, DateOnly date)
+        {
+            if (Frozen(visit.StartUtc))
+            {
+                var frozen = profile.Overrides.First(o => o.OccurrenceStartUtc == visit.StartUtc);
+                return new("PerOccurrence", frozen.RateNet, frozen.VatRatePercent!.Value, date);
+            }
+            return Price(date)!;
+        }
         var monthlyDays = new List<(DateOnly Date, ShiftPricingPlan Price, QualityCyclePlan Plan)>();
         var billFrom = billingPeriod?.From ?? from; var billTo = billingPeriod?.To ?? to;
         for (var day = billFrom; day <= billTo; day = day.AddDays(1))
@@ -55,7 +67,7 @@ public static class ShiftInvoiceCalculator
         foreach (var group in monthlyDays.GroupBy(d => (Month: d.Date.ToString("yyyy-MM"), d.Price, d.Plan.BranchId, d.Plan.ShiftName)))
         {
             var days = group.Select(d => d.Date).ToHashSet(); var first = days.Min(); var last = days.Max();
-            var visitsInLine = visits.Where(v => v.BranchId == group.Key.BranchId && days.Contains(DateOnly.FromDateTime(TenantTimeZone.LocalDate(v.StartUtc, zone)))).ToArray();
+            var visitsInLine = visits.Where(v => !Frozen(v.StartUtc) && v.BranchId == group.Key.BranchId && days.Contains(DateOnly.FromDateTime(TenantTimeZone.LocalDate(v.StartUtc, zone)))).ToArray();
             // The monthly fee is earned by completed visits: fee x completed / scheduled visits in the calendar month.
             // Each invoice bills the completed visits it covers, so partial invoices for one month add up to the full fee.
             // A shift that ends mid-month has fewer scheduled visits, so it is billed only for what it covered.
@@ -63,6 +75,7 @@ public static class ShiftInvoiceCalculator
             var monthKey = group.Key.Month;
             var scheduledInMonth = (monthVisits ?? visits).Count(v =>
             {
+                if (Frozen(v.StartUtc)) return false;
                 var date = DateOnly.FromDateTime(TenantTimeZone.LocalDate(v.StartUtc, zone));
                 return v.BranchId == group.Key.BranchId && date.ToString("yyyy-MM") == monthKey
                     && Price(date) is { } price && price.EffectiveFrom == group.Key.Price.EffectiveFrom
@@ -82,7 +95,7 @@ public static class ShiftInvoiceCalculator
                 OccurrenceStartsUtc = completedInLine.Select(v => v.StartUtc).Order().ToList() });
         }
         var pricedVisits = visits.Select(v => (Visit: v, Date: DateOnly.FromDateTime(TenantTimeZone.LocalDate(v.StartUtc, zone))))
-            .Where(v => v.Date >= from && v.Date <= to).Select(v => (v.Visit, v.Date, Price: Price(v.Date))).ToArray();
+            .Where(v => v.Date >= from && v.Date <= to).Select(v => (v.Visit, v.Date, Price: VisitPlan(v.Visit, DateOnly.FromDateTime(TenantTimeZone.LocalDate(v.Visit.StartUtc, zone))))).ToArray();
         if (pricedVisits.Any(v => v.Price is null)) Invalid($"{shift.Name}: a scheduled visit has no effective price. Add pricing before invoicing.");
         // Unstarted visits are billed only when the user ticked them in (Completed); unticked ones bill nothing.
         foreach (var group in pricedVisits.Where(v => v.Price!.Mode != "Monthly" && (v.Price.Mode != "PerOccurrence" ? (v.Visit.Completed || !v.Visit.Unstarted) : v.Visit.Completed))

@@ -6,6 +6,7 @@ using CleaningSuite.Application.Shifts;
 using CleaningSuite.Domain.Common;
 using CleaningSuite.Domain.Companies;
 using CleaningSuite.Domain.Employees;
+using CleaningSuite.Domain.Invoicing;
 using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Shifts;
 using CleaningSuite.Infrastructure.Persistence;
@@ -338,6 +339,75 @@ public class BranchVisitServiceDatabaseTests
         var json = System.Text.Json.JsonSerializer.Serialize(report);
         // No money field of any kind is in the report data.
         Assert.DoesNotMatch("Price|Vat|RateNet|NetAmount|Gross", json);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task A_staff_visit_time_is_locked_once_work_or_an_invoice_exists()
+    {
+        using var f = await Fixture.Create();
+        BranchVisitDto worked, invoiced, free;
+        using (var session = f.Session()) worked = await f.Visits(session).Add(OnDay(f, "08:00", "10:00", f.Cleaner.Id), default);
+        using (var session = f.Session()) invoiced = await f.Visits(session).Add(OnDay(f, "12:00", "14:00", f.Cleaner.Id), default);
+        using (var session = f.Session()) free = await f.Visits(session).Add(OnDay(f, "16:00", "17:00"), default);
+        using (var writer = f.Store.LightweightSession(f.Tenant))
+        {
+            writer.Store(new QualityCycleForm { Id = Guid.NewGuid(), Token = Guid.NewGuid().ToString("N"), ShiftId = worked.ShiftId, CompanyId = f.Company.Id,
+                BranchId = f.Branch.Id, EmployeeId = f.Cleaner.Id, ShiftOccurrenceUtc = worked.StartUtc, ShiftOccurrenceEndUtc = worked.EndUtc, StartedAtUtc = worked.StartUtc });
+            writer.Store(new Invoice { Id = Guid.NewGuid(), CompanyId = f.Company.Id, Status = Invoice.StatusIssued, InvoiceNumber = "2026-0002",
+                PeriodFrom = new(2026, 11, 1), PeriodTo = new(2026, 11, 30), Total = new() { Net = 100, Vat = 25.5m },
+                Lines = [new() { ShiftId = invoiced.ShiftId, ShiftName = "Main", Quantity = 1, UnitPriceNet = 100, NetAmount = 100, VatRatePercent = 25.5m,
+                    VatAmount = 25.5m, OccurrenceStartsUtc = [invoiced.StartUtc] }] });
+            await writer.SaveChangesAsync();
+        }
+        using var session2 = f.Session();
+        var repository = new ShiftRepository(session2);
+        var save = new ShiftHandlers.SaveShiftOccurrenceExceptionCommandHandler(repository, new EmployeeRepository(session2), f.Profiles.Object, Fixture.Context(f.Tenant),
+            null, new QualityCycleRepository(session2, f.Store), new InvoiceRepository(session2), new ShiftWorkReservation(Fixture.Config(), session2));
+        SaveShiftOccurrenceExceptionCommand Move(BranchVisitDto visit) => new(visit.ShiftId, visit.Id, null, visit.StartUtc.AddHours(1), visit.EndUtc.AddHours(1),
+            ShiftOccurrenceExceptionStatus.Extra, "Moved by admin");
+
+        var started = await Assert.ThrowsAsync<ShiftConflictException>(() => save.Handle(Move(worked), default));
+        Assert.Contains("Work has started", started.Message);
+        var billed = await Assert.ThrowsAsync<ShiftConflictException>(() => save.Handle(Move(invoiced), default));
+        Assert.Contains("already been invoiced", billed.Message);
+        // A visit with no work and no invoice can still be moved.
+        var moved = await save.Handle(Move(free), default);
+        Assert.Equal(free.StartUtc.AddHours(1), moved.StartUtc);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task A_cleaner_with_a_pending_staff_visit_offer_cannot_switch_on_automatic_acceptance()
+    {
+        using var f = await Fixture.Create();
+        BranchVisitDto visit;
+        using (var session = f.Session()) visit = await f.Visits(session).Add(OnDay(f, employee: f.Cleaner.Id), default);
+        using (var session = f.Session())
+            await Assert.ThrowsAsync<ShiftConflictException>(() => f.Service(session).SetWorkPreferences(f.Cleaner.Id, true, default));
+        PartnerCleanerOfferDto offer;
+        using (var session = f.Session()) offer = Assert.Single(await f.Visits(session).Offers(f.Cleaner.Id, default));
+        using (var session = f.Session()) await f.Visits(session).Accept(f.Cleaner.Id, offer.Id, offer.Version, default);
+        using (var session = f.Session()) Assert.True((await f.Service(session).SetWorkPreferences(f.Cleaner.Id, true, default)).AutoAcceptWork);
+        Assert.NotEqual(Guid.Empty, visit.Id);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task A_frozen_booking_keeps_its_price_when_the_property_later_switches_to_hourly()
+    {
+        using var f = await Fixture.Create();
+        var booked = await f.Accepted("08:00", f.Cleaner);
+        using (var writer = f.Store.LightweightSession(f.Tenant))
+        {
+            // From 1 November the property bills hourly at 40 EUR. The booking made earlier keeps 100 EUR at 25.5 %.
+            var branch = await writer.LoadAsync<Branch>(f.Branch.Id);
+            branch!.SetPricing(40, 25.5m, 60, mode: "Hourly", effectiveFrom: new DateOnly(2026, 11, 1)); writer.Store(branch); await writer.SaveChangesAsync();
+        }
+        await f.Record(booked, f.Cleaner, submitted: true);
+        var month = new ShiftInvoiceRequest(f.Company.Id, [], new(2026, 11, 1), new(2026, 11, 30),
+            new Address { Street = "Customer 1", PostalCode = "00100", City = "Helsinki" }, PartnerMonth: true);
+        using var session = f.Session();
+        var line = Assert.Single((await f.Invoices(session).PreviewAsync(month, default)).Invoice.Lines);
+        Assert.Equal(100m, line.NetAmount); Assert.Equal(25.5m, line.VatRatePercent);
+        Assert.Equal(new[] { booked.PlannedStartUtc!.Value }, line.OccurrenceStartsUtc);
     }
 
     private static async Task<IReadOnlyList<MyShiftOccurrenceDto>> Mine(Fixture f, Employee cleaner)

@@ -98,8 +98,9 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         await using var lease = await reservation.AcquireAsync(ct);
         // Reservation refreshes the tenant session; never use middleware's earlier employee snapshot.
         var employee = await PreferenceOwner(actor, ct);
-        if (autoAcceptWork && await Db.Query<PartnerCleaningRequest>()
-            .AnyAsync(x => x.Status == "Offered" && x.OfferedEmployeeId == actor, ct))
+        if (autoAcceptWork && (await Db.Query<PartnerCleaningRequest>()
+            .AnyAsync(x => x.Status == "Offered" && x.OfferedEmployeeId == actor, ct)
+            || await Db.Query<ShiftOccurrenceException>().AnyAsync(x => x.OfferedEmployeeId == actor && x.OfferId != null, ct)))
             throw new ShiftConflictException("Accept or decline your pending offers before enabling automatic acceptance.");
         employee.AutoAcceptWork = autoAcceptWork;
         employee.AutoAcceptWorkChosenUtc = DateTime.UtcNow;

@@ -513,11 +513,14 @@ public class ShiftHandlers
 
     public sealed class SaveShiftOccurrenceExceptionCommandHandler(IShiftRepository shifts,
         IEmployeeRepository employees, ITenantProfileRepository? profiles = null,
-        ITenantContext? tenant = null, IQualityCycleDispatcher? dispatcher = null)
+        ITenantContext? tenant = null, IQualityCycleDispatcher? dispatcher = null,
+        IQualityCycleRepository? forms = null, IInvoiceRepository? invoices = null, IShiftWorkReservation? reservation = null)
         : IRequestHandler<SaveShiftOccurrenceExceptionCommand, ShiftOccurrenceDto>
     {
         public async Task<ShiftOccurrenceDto> Handle(SaveShiftOccurrenceExceptionCommand request, CancellationToken ct)
         {
+            // Changes to a main shift's visits are serialised with work, invoicing and offers.
+            await using var lease = reservation is null ? null : await reservation.AcquireAsync(ct);
             var shift = await shifts.GetAsync(request.ShiftId, ct)
                 ?? throw new NotFoundException("Shift", request.ShiftId);
             CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
@@ -558,6 +561,17 @@ public class ShiftHandlers
                 item = ShiftOccurrenceException.Create(shift.Id, original, start, end, request.Status, request.Reason, request.EmployeeId);
             else
             {
+                if (shift.IsBranchMain && (item.StartUtc != start || item.EndUtc != end))
+                {
+                    // Work records and invoice lines are keyed by the visit's start, so a visit that has work or an
+                    // invoice keeps its time. Only an unworked, uninvoiced visit can be moved.
+                    if (forms is not null && (await forms.ListFormsAsync(shift.Id, null, null, ct) ?? []).Any(f => f.ShiftDeletedUtc is null
+                        && f.ShiftOccurrenceUtc == item.StartUtc && (f.IsSubmitted || f.StartedAtUtc.HasValue)))
+                        throw new ShiftConflictException("Work has started on this visit, so its time cannot be changed.");
+                    if (invoices is not null && (await invoices.ListAsync(null, null, ct) ?? []).Any(i => (i.Status == Invoice.StatusIssued || i.Status == Invoice.StatusPaid)
+                        && i.Lines.Any(l => l.ShiftId == shift.Id && l.OccurrenceStartsUtc.Contains(item.StartUtc))))
+                        throw new ShiftConflictException("This visit has already been invoiced, so its time cannot be changed.");
+                }
                 // Two visits of a main shift never share a start: work records and invoice lines find a visit by it.
                 if (shift.IsBranchMain && (await shifts.ListOccurrenceExceptionsAsync(shift.Id, start, start.AddSeconds(1), ct) ?? [])
                     .Any(x => x.Id != item.Id && x.StartUtc == start))
