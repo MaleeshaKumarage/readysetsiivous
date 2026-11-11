@@ -140,6 +140,7 @@ builder.Services.AddScoped<CleaningSuite.Application.Shifts.IShiftRepository, Cl
 builder.Services.AddScoped<CleaningSuite.Application.Shifts.IShiftWorkReservation, CleaningSuite.Infrastructure.Persistence.ShiftWorkReservation>();
 builder.Services.AddScoped<CleaningSuite.Application.Partners.IPartnerStore, CleaningSuite.Infrastructure.Persistence.PartnerStore>();
 builder.Services.AddScoped<CleaningSuite.Application.Partners.PartnerService>();
+builder.Services.AddScoped<CleaningSuite.Application.Shifts.BranchVisitService>();
 builder.Services.AddScoped<CleaningSuite.Application.Partners.PartnerKeyRequestService>();
 builder.Services.AddScoped<CleaningSuite.Application.Partners.IKeyRequestFileStore, CleaningSuite.Infrastructure.Partners.DiskKeyRequestFileStore>();
 builder.Services.AddSingleton(TimeProvider.System);

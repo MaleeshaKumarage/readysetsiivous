@@ -29,7 +29,7 @@ namespace CleaningSuite.Tests.Partners;
 [Collection("Database integration")]
 public class BranchMainShiftDatabaseTests
 {
-    private static readonly TimeZoneInfo Zone = TenantTimeZone.Resolve("Europe/Helsinki");
+    internal static readonly TimeZoneInfo Zone = TenantTimeZone.Resolve("Europe/Helsinki");
 
     [QualityCycle.QualityCycleDatabaseFact]
     public async Task Two_bookings_for_one_branch_are_two_numbered_visits_on_one_main_shift()
@@ -303,7 +303,7 @@ public class BranchMainShiftDatabaseTests
         await PartnerShiftGuard.EnsureNoBookingsAsync(new ShiftRepository(after), shift, default);
     }
 
-    private sealed class Fixture : IDisposable
+    internal sealed class Fixture : IDisposable
     {
         public static DateOnly Day => new(2026, 11, 10);
         public static DateTime DayStart => TenantTimeZone.StartOfLocalDay(Day.ToDateTime(TimeOnly.MinValue), Zone);
@@ -343,6 +343,8 @@ public class BranchMainShiftDatabaseTests
         public TenantSessionFactory Session() => new(Store, Context(Tenant));
         public IQuerySession Reader() => Store.QuerySession(Tenant);
         public PartnerService Service(ITenantSession session) => new(new PartnerStore(session), new ShiftWorkReservation(Config(), session),
+            new ShiftRepository(session), Profiles.Object, Context(session.TenantId));
+        public BranchVisitService Visits(ITenantSession session) => new(new PartnerStore(session), new ShiftWorkReservation(Config(), session),
             new ShiftRepository(session), Profiles.Object, Context(session.TenantId));
         public ShiftInvoiceService Invoices(TenantSessionFactory session) => new(new ShiftRepository(session), new ShiftBillingRepository(session),
             new InvoiceRepository(session), new CompanyRepository(session), new BranchRepository(session), new QualityCycleRepository(session, Store),

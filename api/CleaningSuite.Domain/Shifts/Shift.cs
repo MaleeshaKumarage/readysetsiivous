@@ -14,6 +14,8 @@ public class Shift : BaseDocument
     public bool IsBranchMain { get; set; }
     /// <summary>The last visit number given out on a branch main shift. Numbers only go up and are never reused.</summary>
     public int OccurrenceCounter { get; set; }
+    /// <summary>On a branch main shift: the cleaner each new visit is offered to. Null leaves new visits unassigned.</summary>
+    public Guid? DefaultEmployeeId { get; set; }
 
     /// <summary>The id of a branch's main shift. Derived from the branch, so two writers can never create two mains.</summary>
     public static Guid BranchMainId(Guid branchId) => new(System.Security.Cryptography.SHA256.HashData(

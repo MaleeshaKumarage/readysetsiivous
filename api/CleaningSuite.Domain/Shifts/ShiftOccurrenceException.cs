@@ -35,6 +35,12 @@ public class ShiftOccurrenceException : BaseDocument
     /// <summary>Photo sections required for this visit only. The shift's own list applies when this is null.</summary>
     public List<string>? RequiredPhotoLabels { get; set; }
 
+    /// <summary>The cleaner this visit is waiting on. The visit is nobody's work until the offer is accepted.</summary>
+    public Guid? OfferedEmployeeId { get; set; }
+    public Guid? OfferId { get; set; }
+    /// <summary>Counts every offer change, so an answer to an older offer is refused.</summary>
+    public int OfferRevision { get; set; }
+
     public const string SourceAdminPanel = "AdminPanel";
     public const string SourcePartnerPortal = "PartnerPortal";
 

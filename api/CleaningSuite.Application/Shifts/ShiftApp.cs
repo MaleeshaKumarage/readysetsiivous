@@ -25,7 +25,13 @@ public record ShiftDto(
     DateTime? ValidFrom,
     DateTime? ValidUntil,
     Guid? QualityCycleTemplateId = null,
-    bool IsCompleted = false);
+    bool IsCompleted = false)
+{
+    /// <summary>True for a property's main visit shift: its visits are added with Add visit, each with a number.</summary>
+    public bool IsBranchMain { get; init; }
+    /// <summary>On a main visit shift: the cleaner each new visit is offered to.</summary>
+    public Guid? DefaultEmployeeId { get; init; }
+}
 
 public record ShiftAssignmentDto(
     Guid Id,
@@ -49,6 +55,13 @@ public record ShiftOccurrenceDto(DateTime StartUtc, DateTime EndUtc,
     public string RosterVersion { get; init; } = "";
     public bool CanAssign { get; init; } = true;
     public string? AssignmentLockReason { get; init; }
+    // Set for visits of a branch main shift only.
+    public int? VisitNumber { get; init; }
+    public string? VisitSource { get; init; }
+    public string? VisitNotes { get; init; }
+    public Guid? OfferedEmployeeId { get; init; }
+    public int? OfferRevision { get; init; }
+    public bool IsPartnerBooking { get; init; }
 }
 
 public record SaveShiftOccurrenceExceptionCommand(Guid ShiftId, Guid? Id,
@@ -480,13 +493,20 @@ public class ShiftHandlers
                 TenantTimeZone.StartOfLocalDay(localTo.AddDays(1), zone), zone, ct, includeCancelled: true);
             var saved = _forms is null ? [] : await _forms.ListFormsAsync(shift.Id, null, null, ct) ?? [];
             var today = TenantTimeZone.LocalDate(_clock.GetUtcNow().UtcDateTime, zone);
+            var mainVisits = !shift.IsBranchMain ? new Dictionary<Guid, ShiftOccurrenceException>()
+                : (await _repository.ListOccurrenceExceptionsAsync(shift.Id, TenantTimeZone.StartOfLocalDay(localFrom, zone),
+                    TenantTimeZone.StartOfLocalDay(localTo.AddDays(1), zone), ct) ?? []).ToDictionary(x => x.Id);
             return roster.Select(entry => {
                 var reason = entry.IsCancelled ? "Restore the cancelled visit before assigning employees."
                     : TenantTimeZone.LocalDate(entry.Occurrence.StartUtc, zone) < today ? "Past visits cannot be reassigned."
                     : saved.Any(f => (f.IsSubmitted || f.StartedAtUtc.HasValue)
                         && (f.ShiftOccurrenceUtc == entry.Occurrence.StartUtc || f.ShiftOccurrenceUtc == entry.OriginalStartUtc))
                         ? "Started or completed work cannot be reassigned." : null;
-                return ShiftRosterReader.ToDto(entry) with { CanAssign = reason is null, AssignmentLockReason = reason };
+                var dto = ShiftRosterReader.ToDto(entry) with { CanAssign = reason is null, AssignmentLockReason = reason };
+                return entry.ExtraExceptionId is { } visitId && mainVisits.TryGetValue(visitId, out var visit)
+                    ? dto with { VisitNumber = visit.Sequence, VisitSource = visit.Source, VisitNotes = visit.Notes,
+                        OfferedEmployeeId = visit.OfferedEmployeeId, OfferRevision = visit.OfferRevision, IsPartnerBooking = visit.PartnerRequestId.HasValue }
+                    : dto;
             }).ToList();
         }
     }
@@ -502,6 +522,9 @@ public class ShiftHandlers
                 ?? throw new NotFoundException("Shift", request.ShiftId);
             CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
             if (!shift.IsActive) throw new ShiftConflictException("Activate the shift before changing its occurrences.");
+            // A main shift's visits are numbered and offered to a cleaner, which only Add visit does.
+            if (shift.IsBranchMain && request.Status == ShiftOccurrenceExceptionStatus.Extra && !request.Id.HasValue)
+                throw new ShiftConflictException("Add visits to this shift with Add visit, so each one gets its number and its cleaner's offer.");
 
             var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
             var start = NormalizeUtc(request.StartUtc); var end = NormalizeUtc(request.EndUtc);
@@ -534,7 +557,14 @@ public class ShiftHandlers
             if (item is null)
                 item = ShiftOccurrenceException.Create(shift.Id, original, start, end, request.Status, request.Reason, request.EmployeeId);
             else
-                item.Update(shift.Id, original, start, end, request.Status, request.Reason, request.EmployeeId);
+            {
+                // Two visits of a main shift never share a start: work records and invoice lines find a visit by it.
+                if (shift.IsBranchMain && (await shifts.ListOccurrenceExceptionsAsync(shift.Id, start, start.AddSeconds(1), ct) ?? [])
+                    .Any(x => x.Id != item.Id && x.StartUtc == start))
+                    throw new ShiftConflictException("Another visit on this shift starts at the same time. Choose a different start time.");
+                // On a main shift the cleaner is set through the visit's offer, so a time change keeps whoever holds it.
+                item.Update(shift.Id, original, start, end, request.Status, request.Reason, shift.IsBranchMain ? item.EmployeeId : request.EmployeeId);
+            }
             var (rangeFrom, rangeTo) = TenantTimeZone.LocalDatesForUtcRange(start, end, zone);
             var changes = (await shifts.ListOccurrenceExceptionsAsync(shift.Id,
                 TenantTimeZone.StartOfLocalDay(rangeFrom, zone), TenantTimeZone.StartOfLocalDay(rangeTo.AddDays(1), zone), ct) ?? [])
@@ -625,6 +655,8 @@ public class ShiftHandlers
             var shift = await _repository.GetAsync(request.ShiftId, ct)
                 ?? throw new NotFoundException("Shift", request.ShiftId);
             CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
+            // A whole-shift assignment would give every unanswered visit of a main shift to this cleaner, skipping its offer.
+            if (shift.IsBranchMain) throw new ShiftConflictException("This is the property's main visit shift. Set its default cleaner under Occurrences, or choose a cleaner on each visit.");
 
             // Resolve the employee before doing anything else, so a typo or stale id fails fast
             // instead of persisting a ShiftAssignment that points at a non-existent employee.
@@ -751,7 +783,8 @@ public class ShiftHandlers
     }
 
     private static ShiftDto MapShift(Shift shift) =>
-        new(shift.Id, shift.CompanyId, shift.BranchId, shift.Name, shift.Schedule, shift.Notes, shift.IsActive, shift.ValidFrom, shift.ValidUntil, shift.QualityCycleTemplateId);
+        new(shift.Id, shift.CompanyId, shift.BranchId, shift.Name, shift.Schedule, shift.Notes, shift.IsActive, shift.ValidFrom, shift.ValidUntil, shift.QualityCycleTemplateId)
+            { IsBranchMain = shift.IsBranchMain, DefaultEmployeeId = shift.DefaultEmployeeId };
 
     private static ShiftAssignmentDto MapAssignment(ShiftAssignment assignment) =>
         new(assignment.Id, assignment.ShiftId, assignment.EmployeeId, assignment.AssignedAtUtc, assignment.IsActive, assignment.Note);
