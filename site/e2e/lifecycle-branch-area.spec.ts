@@ -39,7 +39,7 @@ test('admin adds a property with its size and cleaning type, and both are saved 
 test('admin changes a property size and the new size is saved on the property', async ({ page }) => {
   await setupAdminMocks(page);
   const writes: Record<string, unknown>[] = [];
-  const existing = { id: 'branch', companyId: 'company', name: 'Imatra apartment', street: null, postalCode: null, city: 'Imatra', country: null, contactPhone: null, contactEmail: null, isActive: true, sizeM2: 45, roomCount: null, bedCount: null, priceNet: null, vatRatePercent: null, estimatedDurationMinutes: null, pricingReady: false, priceVersions: [] };
+  const existing = { id: 'branch', companyId: 'company', name: 'Imatra apartment', street: null, postalCode: null, city: 'Imatra', country: null, contactPhone: null, contactEmail: null, isActive: true, sizeM2: 45, cleaningType: 'Deep', roomCount: null, bedCount: null, priceNet: null, vatRatePercent: null, estimatedDurationMinutes: null, pricingReady: false, priceVersions: [] };
   let branches: Record<string, unknown>[] = [existing];
   await page.route(/\/api\/v1\/admin\//, route => {
     const method = route.request().method(); const path = new URL(route.request().url()).pathname;
@@ -58,7 +58,7 @@ test('admin changes a property size and the new size is saved on the property', 
   await page.goto('/admin/companies/');
   await page.locator('button').filter({ has: page.locator('.lucide-chevron-down') }).first().click();
   // The company's own Edit button comes first; the branch's Edit button is the last one.
-  await page.getByRole('button', { name: 'Edit', exact: true }).last().click();
+  await page.getByRole('group', { name: 'Branch Imatra apartment' }).getByRole('button', { name: 'Edit', exact: true }).click();
   const modal = page.getByRole('dialog', { name: 'Edit branch' });
   await expect(modal.getByLabel('Size in m² (required to schedule)')).toHaveValue('45');
   await modal.getByLabel('Size in m² (required to schedule)').fill('60');
@@ -66,7 +66,7 @@ test('admin changes a property size and the new size is saved on the property', 
 
   await expect(modal).toHaveCount(0);
   expect(writes).toHaveLength(1);
-  expect(writes[0]).toMatchObject({ sizeM2: 60 });
+  expect(writes[0]).toMatchObject({ sizeM2: 60, cleaningType: 'Deep' });
 });
 
 test('admin adds a property without a size and no size is sent', async ({ page }) => {
@@ -117,7 +117,7 @@ test('admin clears a property size and the cleared size is saved as empty', asyn
 
   await page.goto('/admin/companies/');
   await page.locator('button').filter({ has: page.locator('.lucide-chevron-down') }).first().click();
-  await page.getByRole('button', { name: 'Edit', exact: true }).last().click();
+  await page.getByRole('group', { name: 'Branch Imatra apartment' }).getByRole('button', { name: 'Edit', exact: true }).click();
   const modal = page.getByRole('dialog', { name: 'Edit branch' });
   await modal.getByLabel('Size in m² (required to schedule)').fill('');
   await modal.getByRole('button', { name: 'Save changes', exact: true }).click();
@@ -127,3 +127,60 @@ test('admin clears a property size and the cleared size is saved as empty', asyn
   expect(writes[0].sizeM2 ?? null).toBeNull();
 });
 
+test('a saved size survives a reload and is shown again in the branch form', async ({ page }) => {
+  await setupAdminMocks(page);
+  let branches: Record<string, unknown>[] = [{ id: 'branch', companyId: 'company', name: 'Imatra apartment', city: 'Imatra', isActive: true, sizeM2: 45, cleaningType: 'Normal', priceVersions: [] }];
+  await page.route(/\/api\/v1\/admin\//, route => {
+    const path = new URL(route.request().url()).pathname;
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers });
+    const json = path.endsWith('/companies/company') ? { company, branches }
+      : path.endsWith('/companies') ? { items: [company], total: 1 }
+      : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : undefined;
+    return json === undefined ? route.fallback() : route.fulfill({ headers, json });
+  });
+  await page.goto('/admin/companies/');
+  await page.locator('button').filter({ has: page.locator('.lucide-chevron-down') }).first().click();
+  await page.getByRole('group', { name: 'Branch Imatra apartment' }).getByRole('button', { name: 'Edit', exact: true }).click();
+  const modal = page.getByRole('dialog', { name: 'Edit branch' });
+  await expect(modal.getByLabel('Size in m² (required to schedule)')).toHaveValue('45');
+  await expect(modal.getByRole('textbox', { name: 'Cleaning type (required to schedule)' })).toHaveValue('Normal');
+  await modal.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(modal).toHaveCount(0);
+});
+
+test('the cleaning type can be chosen and each saved choice is sent to the server', async ({ page }) => {
+  await setupAdminMocks(page);
+  const writes: Record<string, unknown>[] = [];
+  let branches: Record<string, unknown>[] = [{ id: 'branch', companyId: 'company', name: 'Imatra apartment', city: 'Imatra', isActive: true, priceVersions: [] }];
+  await page.route(/\/api\/v1\/admin\//, route => {
+    const method = route.request().method(); const path = new URL(route.request().url()).pathname;
+    if (method === 'OPTIONS') return route.fulfill({ headers });
+    if (method === 'PUT' && path.endsWith('/branches/branch')) {
+      const body = route.request().postDataJSON() as Record<string, unknown>; writes.push(body);
+      branches = [{ ...branches[0], ...body }]; return route.fulfill({ headers, json: branches[0] });
+    }
+    const json = path.endsWith('/companies/company') ? { company, branches }
+      : path.endsWith('/companies') ? { items: [company], total: 1 }
+      : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : undefined;
+    return json === undefined ? route.fallback() : route.fulfill({ headers, json });
+  });
+  await page.goto('/admin/companies/');
+  await page.locator('button').filter({ has: page.locator('.lucide-chevron-down') }).first().click();
+  const openEdit = async () => { await page.getByRole('group', { name: 'Branch Imatra apartment' }).getByRole('button', { name: 'Edit', exact: true }).click(); return page.getByRole('dialog', { name: 'Edit branch' }); };
+  const cleaning = (modal: import('@playwright/test').Locator) => modal.getByRole('textbox', { name: 'Cleaning type (required to schedule)' });
+
+  let modal = await openEdit();
+  await cleaning(modal).click(); await page.getByRole('option', { name: 'Deep', exact: true }).click();
+  await modal.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(modal).toHaveCount(0);
+  expect(writes[0]).toMatchObject({ cleaningType: 'Deep' });
+
+  modal = await openEdit();
+  await expect(cleaning(modal)).toHaveValue('Deep');
+  await cleaning(modal).click(); await page.getByRole('option', { name: 'Normal', exact: true }).click();
+  await modal.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(modal).toHaveCount(0);
+  expect(writes[1]).toMatchObject({ cleaningType: 'Normal' });
+
+  modal = await openEdit();
+});

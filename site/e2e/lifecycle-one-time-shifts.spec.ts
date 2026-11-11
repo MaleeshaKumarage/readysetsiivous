@@ -59,6 +59,8 @@ async function openAddShift(page: Page) {
 }
 
 async function fillCommon(page: Page, dialog: Locator) {
+  // Names are generated from the property, so the create form has no Name field to fill.
+  await expect(dialog.getByRole('textbox', { name: 'Name', exact: true })).toHaveCount(0);
   await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'AAA', exact: true }).click();
   await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'AAA1', exact: true }).click();
 }

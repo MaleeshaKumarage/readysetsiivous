@@ -535,11 +535,9 @@ public class CompanyHandlers
                     request.HasRoomCount ? request.RoomCount : branch.RoomCount,
                     request.HasBedCount ? request.BedCount : branch.BedCount,
                     request.PriceNet, request.VatRatePercent, request.EstimatedDurationMinutes, request.PriceMode, request.PriceEffectiveFrom);
-                // Only validate size and cleaning type when this update changes them, so unrelated edits never fail on legacy values.
                 // Validate only the fields this request changes, so an unchanged legacy value never blocks the update.
-                if (request.HasSizeM2 && !request.HasCleaningType) ApplyDetails(branch, request.SizeM2, branch.CleaningType);
-                else if (request.HasCleaningType && !request.HasSizeM2) ApplyDetails(branch, branch.SizeM2, request.CleaningType);
-                else if (request.HasSizeM2 && request.HasCleaningType) ApplyDetails(branch, request.SizeM2, request.CleaningType);
+                if (request.HasSizeM2) ApplySize(branch, request.SizeM2);
+                if (request.HasCleaningType) ApplyCleaningType(branch, request.CleaningType);
                 await _repository.SaveAsync(branch, ct);
                 return MapBranch(branch);
             }
@@ -624,6 +622,16 @@ public class CompanyHandlers
             branch.CurrentEstimatedDurationMinutes, branch.PricingVersion, branch.PricingReady, branch.QuoteRequestedUtc,
             branch.QuoteRejectedUtc, branch.QuoteRejectionReason, branch.Versions.ToArray(), branch.SizeM2, branch.CleaningType);
     // Size and cleaning type use the same validation conversion as ApplyProperty.
+    internal static void ApplySize(Branch branch, int? sizeM2)
+    {
+        try { branch.SetSizeM2(sizeM2); }
+        catch (ArgumentException ex) { throw new ValidationException([new FluentValidation.Results.ValidationFailure("SizeM2", ex.Message)]); }
+    }
+    internal static void ApplyCleaningType(Branch branch, string? cleaningType)
+    {
+        try { branch.SetCleaningType(cleaningType); }
+        catch (ArgumentException ex) { throw new ValidationException([new FluentValidation.Results.ValidationFailure("CleaningType", ex.Message)]); }
+    }
     internal static void ApplyDetails(Branch branch, int? sizeM2, string? cleaningType)
     {
         try { branch.SetPropertyDetails(sizeM2, cleaningType); }

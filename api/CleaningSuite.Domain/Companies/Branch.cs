@@ -54,11 +54,24 @@ public class Branch : BaseDocument
     /// <summary>Size and cleaning type, needed before a shift can be scheduled for this property.</summary>
     public void SetPropertyDetails(int? sizeM2, string? cleaningType)
     {
+        SetSizeM2(sizeM2);
+        SetCleaningType(cleaningType);
+    }
+
+    /// <summary>Validates and sets only the size, so a cleaning type stored before validation existed is left alone.</summary>
+    public void SetSizeM2(int? sizeM2)
+    {
         if (sizeM2 is < 1 or > 100000)
             throw new ArgumentException("Size must be between 1 and 100000 m², or empty.");
+        SizeM2 = sizeM2;
+    }
+
+    /// <summary>Validates and sets only the cleaning type.</summary>
+    public void SetCleaningType(string? cleaningType)
+    {
         if (cleaningType is not null && cleaningType != CleaningTypes.Deep && cleaningType != CleaningTypes.Normal)
             throw new ArgumentException("Cleaning type must be Deep or Normal.");
-        SizeM2 = sizeM2; CleaningType = cleaningType;
+        CleaningType = cleaningType;
     }
 
     public bool HasNameDetails => SizeM2 is > 0 && CleaningType is CleaningTypes.Deep or CleaningTypes.Normal;
