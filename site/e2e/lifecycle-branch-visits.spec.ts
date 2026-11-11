@@ -340,3 +340,24 @@ test('staff set Deep or Normal on a partner visit from the visit list, and the b
   await expect(list.getByRole('row').filter({ hasText: '#2 ·' })).toContainText('Deep cleaning');
 });
 
+test('a cleaning type picked and cancelled on one visit is not carried to the next visit', async ({ page }) => {
+  const state = await setup(page);
+  // Two Normal visits, so the same modal opens for each in turn.
+  state.occurrences = [adminVisit, { ...adminVisit, exceptionId: 'visit-3', visitNumber: 3, startUtc: '2026-11-12T06:00:00.000Z', endUtc: '2026-11-12T08:00:00.000Z' }];
+  await shiftAction(page, MAIN, 'Occurrences');
+  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  const modal = page.getByRole('dialog', { name: 'Change cleaner', exact: true });
+
+  await list.getByRole('row').filter({ hasText: '#1 ·' }).getByRole('button', { name: 'Change cleaner', exact: true }).click();
+  await modal.getByRole('textbox', { name: 'Cleaning type', exact: true }).click();
+  await page.getByRole('option', { name: 'Deep', exact: true }).click();
+  await modal.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(modal).toHaveCount(0);
+
+  await list.getByRole('row').filter({ hasText: '#3 ·' }).getByRole('button', { name: 'Change cleaner', exact: true }).click();
+  await expect(modal.getByRole('textbox', { name: 'Cleaning type', exact: true })).toHaveValue('Normal');
+  await modal.getByRole('button', { name: 'Save cleaning type', exact: true }).click();
+  await expect(modal).toHaveCount(0);
+  expect(state.cleaningTypeWrites).toEqual([expect.objectContaining({ visitId: 'visit-3', cleaningType: 'Normal' })]);
+});
+

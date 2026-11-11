@@ -57,7 +57,7 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
         if (!TimeOnly.TryParseExact(body.EndTime, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var endTime))
             failures.Add(new("EndTime", "Enter the end time as HH:mm."));
         if (body.Notes?.Length > 4000) failures.Add(new("Notes", "Use at most 4000 characters for the visit notes."));
-        if (!IsCleaningType(body.CleaningType)) failures.Add(new("CleaningType", "Cleaning type must be Deep or Normal."));
+        if (body.CleaningType is not null && !CleaningTypes.IsKnown(body.CleaningType)) failures.Add(new("CleaningType", "Cleaning type must be Deep or Normal."));
         if (failures.Count > 0) throw new ValidationException(failures);
         if (body.FromDate.Year < 2000 || body.ToDate.Year > 2099 || body.ToDate < body.FromDate || body.ToDate.DayNumber - body.FromDate.DayNumber > 366)
             throw new ValidationException([new ValidationFailure("ToDate", "Choose a last day on or after the first day, at most 366 days later.")]);
@@ -147,7 +147,7 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
         await using var lease = await reservation.AcquireAsync(ct);
         var shift = await Main(shiftId, ct);
         var visit = await Visit(shift, visitId, ct);
-        if (body.CleaningType is not (CleaningTypes.Deep or CleaningTypes.Normal))
+        if (!CleaningTypes.IsKnown(body.CleaningType))
             throw new ValidationException([new ValidationFailure("CleaningType", "Cleaning type must be Deep or Normal.")]);
         var (zoneId, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
         visit.CleaningType = body.CleaningType; visit.UpdatedUtc = DateTime.UtcNow; Db.Store(visit);
@@ -159,8 +159,6 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
         await Db.SaveChangesAsync(ct);
         return Map(visit, shift, zone, zoneId);
     }
-
-    private static bool IsCleaningType(string? value) => value is null or CleaningTypes.Deep or CleaningTypes.Normal;
 
     /// <summary>Visit offers waiting for this cleaner's answer, in the shape cleaners already see offers in.</summary>
     public async Task<IReadOnlyList<PartnerCleanerOfferDto>> Offers(Guid actor, CancellationToken ct)

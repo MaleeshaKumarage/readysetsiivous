@@ -763,7 +763,7 @@ export default function ShiftsAdminPage() {
                   {item.isPartnerBooking ? <><Text size="xs" c="dimmed">Managed under Partner requests</Text><Button size="xs" variant="light" onClick={() => { setCleanerVisit(item); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Change cleaning type</Button></> : <>
                   {isAdmin() && (occurrenceShift?.schedule.type === 4 || occurrenceShift?.schedule.type === 6) && <Button size="xs" variant="light" onClick={() => { setPricingShift(occurrenceShift); setPricingOccurrence(item); }}>Visit price</Button>}
                   {occurrenceShift?.isBranchMain
-                    ? <Button size="xs" variant="light" disabled={item.canAssign === false} onClick={() => { setCleanerVisit(item); setCleanerChoice(item.assigneeIds?.[0] ?? item.offeredEmployeeId ?? null); setCleanerError(''); }}>Change cleaner</Button>
+                    ? <Button size="xs" variant="light" disabled={item.canAssign === false} onClick={() => { setCleanerVisit(item); setCleanerChoice(item.assigneeIds?.[0] ?? item.offeredEmployeeId ?? null); setCleanerError(''); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Change cleaner</Button>
                     : <Button size="xs" variant="light" disabled={item.canAssign === false || item.status === 2 || item.status === 3} onClick={() => setAssigningVisit(item)}>Assign</Button>}
                   <Button size="xs" variant="subtle" onClick={() => openOccurrenceEditor(item)}>Change</Button>
                   {!item.exceptionId && <Button size="xs" variant="subtle" color="orange" onClick={() => openOccurrenceEditor(item, '2')}>Cancel</Button>}

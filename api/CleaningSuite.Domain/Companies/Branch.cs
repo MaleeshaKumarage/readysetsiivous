@@ -203,11 +203,11 @@ public static class CleaningTypes
     /// <summary>Net, excl. VAT, added to each completed Deep visit on invoices.</summary>
     public const decimal DeepSurchargeNet = 15m;
 
+    /// <summary>True for Deep or Normal. Null is not a known type.</summary>
+    public static bool IsKnown(string? value) => value is Deep or Normal;
+
     /// <summary>A missing type is Normal. Anything other than Deep or Normal is refused.</summary>
-    public static string Normalize(string? value) => value switch
-    {
-        null or "" => Normal,
-        Deep or Normal => value,
-        _ => throw new ArgumentException("Cleaning type must be Deep or Normal.")
-    };
+    public static string Normalize(string? value) => string.IsNullOrEmpty(value) ? Normal
+        : IsKnown(value) ? value!
+        : throw new ArgumentException("Cleaning type must be Deep or Normal.");
 }

@@ -7,6 +7,7 @@ using CleaningSuite.Domain.Common;
 using CleaningSuite.Domain.Companies;
 using CleaningSuite.Domain.Employees;
 using CleaningSuite.Domain.Invoicing;
+using CleaningSuite.Domain.Partners;
 using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Shifts;
 using CleaningSuite.Infrastructure.Persistence;
@@ -217,6 +218,24 @@ public class BranchVisitServiceDatabaseTests
         var error = await Assert.ThrowsAsync<ShiftConflictException>(() => save.Handle(new(visit.ShiftId, null, null,
             Fixture.DayStart.AddHours(18), Fixture.DayStart.AddHours(19), ShiftOccurrenceExceptionStatus.Extra, "Extra"), default));
         Assert.Contains("Add visit", error.Message);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Staff_can_set_a_partner_visit_to_Deep_and_the_booking_keeps_the_same_choice()
+    {
+        using var f = await Fixture.Create();
+        var booked = await f.Accepted("08:00", f.Cleaner);
+        using var session = f.Session();
+        var repository = new ShiftRepository(session);
+        var visit = Assert.Single(await repository.ListOccurrenceExceptionsAsync(booked.LinkedShiftId!.Value, Fixture.DayStart, Fixture.DayStart.AddDays(1), default));
+        Assert.Equal(CleaningTypes.Normal, visit.CleaningType ?? CleaningTypes.Normal);
+
+        var changed = await f.Visits(session).SetCleaningType(visit.ShiftId, visit.Id, new(CleaningTypes.Deep), default);
+
+        Assert.Equal(CleaningTypes.Deep, changed.CleaningType);
+        using var reader = f.Reader();
+        var request = await reader.LoadAsync<PartnerCleaningRequest>(booked.Id);
+        Assert.Equal(CleaningTypes.Deep, request!.CleaningType);
     }
 
     [QualityCycle.QualityCycleDatabaseFact]
