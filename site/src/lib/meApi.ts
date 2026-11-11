@@ -44,6 +44,9 @@ export interface MyShiftOccurrence {
   timeZoneId: string;
   form: QualityCycleForm | null;
   isDeleted?: boolean;
+  // On a property's main visit shift: the visit's number and where it came from ("AdminPanel" or "PartnerPortal").
+  visitNumber?: number | null;
+  visitSource?: string | null;
   // Visit instructions from the request or shift. Shown before the cleaner starts.
   notes?: string | null;
   // Photo sections the partner requires. The visit cannot end until each has a photo.

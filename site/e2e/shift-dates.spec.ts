@@ -127,7 +127,8 @@ test('on-call shifts keep scheduling dated visits and remain available for new s
   await page.getByRole('button', { name: 'Add shift', exact: true }).click();
   const create = page.getByRole('dialog', { name: 'Add shift', exact: true });
   await create.getByLabel('Schedule', { exact: true }).click();
-  await expect(page.getByRole('option', { name: 'One-time', exact: true })).toBeVisible();
+  // One-time is retired for new shifts: a single visit is added to the property's shift with Add visit.
+  await expect(page.getByRole('option', { name: 'One-time', exact: true })).toHaveCount(0);
   await expect(page.getByRole('option', { name: 'On-call / flexible', exact: true })).toBeVisible();
   await page.getByRole('option', { name: 'On-call / flexible', exact: true }).click();
   await expect(create.getByLabel('Schedule', { exact: true })).toHaveValue('On-call / flexible');

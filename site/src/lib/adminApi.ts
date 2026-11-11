@@ -582,6 +582,10 @@ export interface Shift {
   qualityCycleTemplateId?: string | null;
   /** One-time visit whose checklist has been submitted. */
   isCompleted?: boolean;
+  /** A property's main visit shift: visits are added with Add visit and numbered. */
+  isBranchMain?: boolean;
+  /** On a main visit shift: the cleaner each new visit is offered to. */
+  defaultEmployeeId?: string | null;
 }
 
 export interface ShiftAssignment {
@@ -613,6 +617,20 @@ export interface ShiftOccurrence {
   assigneeIds?: string[]; assignmentSource?: string; assignmentMode?: number | null;
   assignmentVersion?: string | null; overrideEmployeeIds?: string[];
   assignmentReason?: string | null; rosterVersion?: string; canAssign?: boolean; assignmentLockReason?: string | null;
+  // Set for visits of a property's main visit shift only.
+  visitNumber?: number | null; visitSource?: string | null; visitNotes?: string | null;
+  offeredEmployeeId?: string | null; offerRevision?: number | null; isPartnerBooking?: boolean;
+}
+
+/** A visit on a property's main shift. It carries no price: the price comes from the property. */
+export interface BranchVisit {
+  id: string; shiftId: string; branchId: string; number: number; source: string; startUtc: string; endUtc: string;
+  fromDate: string; toDate: string; notes?: string | null; employeeId?: string | null; offeredEmployeeId?: string | null;
+  offerRevision: number; partnerRequestId?: string | null; status: 'Unassigned' | 'Offered' | 'Assigned'; timeZoneId: string;
+}
+export interface AddBranchVisitInput {
+  branchId: string; fromDate: string; toDate: string; startTime: string; endTime: string;
+  notes: string | null; employeeId: string | null; useDefaultEmployee: boolean;
 }
 
 export interface ShiftOccurrenceExceptionInput {
@@ -727,6 +745,14 @@ export const adminShifts = {
     occurrenceRequest<ShiftOccurrence>(`/api/v1/admin/shifts/${id}/occurrence-exceptions`, 'PUT', fields),
   deleteOccurrenceException: (id: string, exceptionId: string) =>
     occurrenceRequest<void>(`/api/v1/admin/shifts/${id}/occurrence-exceptions/${exceptionId}`, 'DELETE'),
+};
+
+export const adminBranchVisits = {
+  add: (fields: AddBranchVisitInput) => adminSendJsonResult<BranchVisit>('/api/v1/admin/branch-visits', 'POST', fields),
+  setDefaultEmployee: (shiftId: string, employeeId: string | null) =>
+    adminSendJsonResult<{ shiftId: string; defaultEmployeeId?: string | null }>(`/api/v1/admin/branch-visits/shifts/${shiftId}/default-employee`, 'PUT', { employeeId }),
+  setEmployee: (shiftId: string, visitId: string, employeeId: string | null, offerRevision: number) =>
+    adminSendJsonResult<BranchVisit>(`/api/v1/admin/branch-visits/shifts/${shiftId}/visits/${visitId}/employee`, 'PUT', { employeeId, offerRevision }),
 };
 
 // Keep company/branch failures visible without changing legacy helper semantics.
