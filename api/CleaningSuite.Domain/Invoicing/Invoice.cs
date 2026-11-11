@@ -77,4 +77,6 @@ public class InvoiceLine
     /// these, so one invoiced visit does not block the shift's other visits in the same period.
     /// </summary>
     public List<DateTime> OccurrenceStartsUtc { get; set; } = [];
+    /// <summary>The visit numbers this line bills on a branch main shift, so the customer can match visits to the invoice.</summary>
+    public List<int> VisitNumbers { get; set; } = [];
 }

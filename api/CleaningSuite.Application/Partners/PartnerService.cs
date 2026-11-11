@@ -773,7 +773,10 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
             var worked = await Db.Query<QualityCycleForm>().Where(x => x.ShiftId == id && x.ShiftDeletedUtc == null && (x.StartedAtUtc != null || x.IsSubmitted)).ToListAsync(ct);
             if (worked.Any(x => x.ShiftOccurrenceUtc == visitStart))
                 throw new ShiftConflictException("Work has started. Use a separate staff correction process; this visit cannot be reassigned, moved or cancelled.");
-            if (invoices.Any(x => x.Status is "Issued" or "Paid" && x.Lines.Any(l => l.ShiftId == id && l.OccurrenceStartsUtc.Contains(visitStart))))
+            // A visit merged in from a shift of its own was invoiced under that shift's id.
+            var legacyId = (await Db.LoadAsync<ShiftOccurrenceException>(PartnerCleaningRequest.StableId($"partner-occurrence:{request.Id}"), ct))?.LegacyShiftId;
+            if (invoices.Any(x => x.Status is "Issued" or "Paid" && x.Lines.Any(l => (l.ShiftId == id && l.OccurrenceStartsUtc.Contains(visitStart))
+                || (legacyId.HasValue && l.ShiftId == legacyId))))
                 throw new ShiftConflictException("This visit has already been invoiced and cannot be changed.");
             return;
         }

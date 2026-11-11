@@ -5,6 +5,10 @@ namespace CleaningSuite.Application.Shifts;
 /// <summary>Reads one visit of a branch main shift. Other shifts have no per-visit details, so they return null.</summary>
 public static class BranchMainVisits
 {
+    /// <summary>A visit's number and origin for reports, such as "#3 · Admin panel". The date is printed beside it.</summary>
+    public static string Label(ShiftOccurrenceException visit) =>
+        $"#{visit.Sequence} · {(visit.Source == ShiftOccurrenceException.SourcePartnerPortal ? "Partner portal" : "Admin panel")}";
+
     public static async Task<ShiftOccurrenceException?> FindAsync(IShiftRepository shifts, Shift shift, DateTime startUtc, CancellationToken ct)
     {
         if (!shift.IsBranchMain) return null;

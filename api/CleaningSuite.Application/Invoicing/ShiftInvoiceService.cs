@@ -168,6 +168,10 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
                         .Concat(pricing.Overrides.Where(o => !booked.Any(r => r.OccurrenceStartUtc == o.OccurrenceStartUtc))).ToList() };
                 billedStarts = existing.Where(i => Billed(i, shift.Id)).SelectMany(i => i.Lines)
                     .Where(l => l.ShiftId == shift.Id).SelectMany(l => l.OccurrenceStartsUtc).ToHashSet();
+                // A visit merged in from a shift of its own was invoiced under that shift's id, before visit starts were recorded.
+                var merged = (await shifts.ListOccurrenceExceptionsAsync(shift.Id, new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                    new DateTime(2200, 1, 1, 0, 0, 0, DateTimeKind.Utc), ct) ?? []).Where(x => x.LegacyShiftId.HasValue).ToArray();
+                billedStarts.UnionWith(merged.Where(x => existing.Any(i => Billed(i, x.LegacyShiftId!.Value))).Select(x => x.StartUtc));
             }
             var schedule = ShiftContractSchedule.Snapshot(shift, zone);
             // Completion-month billing must resolve the original visit even when scheduled
@@ -235,6 +239,15 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             var billingPeriod = request.PartnerMonth ? (request.From, request.To) : (ValueTuple<DateOnly, DateOnly>?)null;
             var calculated = ShiftInvoiceCalculator.Calculate(schedule, pricing, visits, calculationFrom, calculationTo, zone, names, adjustments,
                 request.PartnerMonth ? completionTimes : null, billingPeriod, monthVisits);
+            if (shift.IsBranchMain)
+            {
+                // Each line names the visits it bills by their numbers on the main shift.
+                var numbers = (await shifts.ListOccurrenceExceptionsAsync(shift.Id, new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                    new DateTime(2200, 1, 1, 0, 0, 0, DateTimeKind.Utc), ct) ?? []).Where(x => x.Sequence.HasValue)
+                    .GroupBy(x => x.StartUtc).ToDictionary(g => g.Key, g => g.First().Sequence!.Value);
+                foreach (var line in calculated)
+                    line.VisitNumbers = line.OccurrenceStartsUtc.Where(numbers.ContainsKey).Select(start => numbers[start]).Order().ToList();
+            }
             if (partnerRequest is not null)
             {
                 foreach (var line in calculated)

@@ -86,6 +86,18 @@ public class QualityCyclePdfLocalizationTests
         "No Quality Cycle form submissions recorded for this month.", "Date:", "Cleaner:", "COMPLETED", "PENDING",
         "Checklist Items:", "Cleaner Notes:", "Attached Photos:", "photo(s) attached", "Not available", "Not recorded",
     ];
+    [Theory]
+    [InlineData("en", "Visit: #3 · Admin panel")] [InlineData("fi", "Käynti: #3 · Admin panel")] [InlineData("sv", "Besök: #3 · Admin panel")]
+    public void Evidence_of_a_numbered_visit_names_the_visit_and_other_evidence_does_not(string language, string expected)
+    {
+        var numbered = new QualityCycleEvidenceReport(Start, Start.AddHours(2), "Windows cleaned", []) { VisitLabel = "#3 · Admin panel" };
+        var plain = new QualityCycleEvidenceReport(Start.AddDays(1), Start.AddDays(1).AddHours(2), "Floors mopped", []);
+        var text = Extract(AppendixPdf(language, [numbered, plain]));
+        Assert.Contains(expected, text);
+        Assert.Contains("Windows cleaned", text); Assert.Contains("Floors mopped", text);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(text, "#\\d"));
+    }
+
     private static string Extract(byte[] pdf) {
         using var document = PdfDocument.Open(pdf);
         return string.Join("\n", document.GetPages().Select(p => string.Join(" ", p.GetWords().Select(w => w.Text))));

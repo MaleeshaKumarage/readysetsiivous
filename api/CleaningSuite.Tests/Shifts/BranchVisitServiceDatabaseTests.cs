@@ -279,6 +279,39 @@ public class BranchVisitServiceDatabaseTests
             await Assert.ThrowsAsync<ValidationException>(() => f.Invoices(session).PreviewAsync(request, default));
     }
 
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task The_monthly_quality_report_names_each_numbered_visit_and_carries_no_price()
+    {
+        using var f = await Fixture.Create();
+        // The quality report covers shifts that have a checklist; the company's template gives the main shift one.
+        var template = QualityCycleTemplate.Create("Visit checklist", ["Kitchen", "Bathroom"], companyId: f.Company.Id);
+        f.Company.IsQualityCycleEnabled = true; f.Company.QualityCycleTemplateId = template.Id;
+        using (var writer = f.Store.LightweightSession(f.Tenant)) { writer.Store(template); writer.Store(f.Company); await writer.SaveChangesAsync(); }
+        var booked = await f.Accepted("08:00", f.Cleaner);
+        BranchVisitDto added;
+        using (var session = f.Session()) added = await f.Visits(session).Add(OnDay(f, "13:00", "15:00"), default);
+        using (var writer = f.Store.LightweightSession(f.Tenant))
+        {
+            writer.Store(new QualityCycleForm { Id = Guid.NewGuid(), Token = Guid.NewGuid().ToString("N"), ShiftId = added.ShiftId, CompanyId = f.Company.Id, BranchId = f.Branch.Id,
+                EmployeeId = f.Cleaner.Id, EmployeeName = "First Cleaner", ShiftName = "Visit", ShiftOccurrenceUtc = booked.PlannedStartUtc!.Value,
+                ShiftOccurrenceEndUtc = booked.PlannedEndUtc!.Value, StartedAtUtc = booked.PlannedStartUtc, IsSubmitted = true, EndedAtUtc = booked.PlannedEndUtc,
+                SubmittedUtc = booked.PlannedEndUtc, CleanerNotes = "All rooms done" });
+            await writer.SaveChangesAsync();
+        }
+        using var read = f.Session();
+        var service = new QualityCycleMonthlyReportService(new ShiftRepository(read), new QualityCycleRepository(read, f.Store), new CompanyRepository(read),
+            new BranchRepository(read), f.Profiles.Object, Fixture.Context(f.Tenant), TimeProvider.System);
+        var report = await service.BuildAsync(new(2026, 11, ShiftId: added.ShiftId), default);
+
+        // One row for the property's main shift, with both visits listed under it by number and source.
+        var shift = Assert.Single(report.Shifts);
+        Assert.Equal(new[] { "#1 · Partner portal", "#2 · Admin panel" }, shift.Occurrences.Select(x => x.VisitLabel).ToArray());
+        Assert.Equal("#1 · Partner portal", Assert.Single(shift.Evidence).VisitLabel);
+        var json = System.Text.Json.JsonSerializer.Serialize(report);
+        // No money field of any kind is in the report data.
+        Assert.DoesNotMatch("Price|Vat|RateNet|NetAmount|Gross", json);
+    }
+
     private static async Task<IReadOnlyList<MyShiftOccurrenceDto>> Mine(Fixture f, Employee cleaner)
     {
         using var read = f.Session();

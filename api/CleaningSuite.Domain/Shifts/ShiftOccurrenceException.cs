@@ -35,6 +35,11 @@ public class ShiftOccurrenceException : BaseDocument
     /// <summary>Photo sections required for this visit only. The shift's own list applies when this is null.</summary>
     public List<string>? RequiredPhotoLabels { get; set; }
 
+    /// <summary>
+    /// The shift this visit lived on before it was merged into its branch's main shift. Invoices issued before the
+    /// merge name that shift, so the visit is still recognised as billed.
+    /// </summary>
+    public Guid? LegacyShiftId { get; set; }
     /// <summary>The cleaner this visit is waiting on. The visit is nobody's work until the offer is accepted.</summary>
     public Guid? OfferedEmployeeId { get; set; }
     public Guid? OfferId { get; set; }

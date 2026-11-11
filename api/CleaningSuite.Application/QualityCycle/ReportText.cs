@@ -45,7 +45,7 @@ public static class ReportText
         ["Actual end"] = ("Todellinen lopetus", "Faktiskt slut"), ["Staff hours"] = ("Työtunnit", "Personaltimmar"),
         ["Photos & Notes"] = ("Kuvat ja muistiinpanot", "Foton och anteckningar"),
         ["Appendix - shift photos and notes"] = ("Liite - vuorojen kuvat ja muistiinpanot", "Bilaga - foton och anteckningar från arbetspass"),
-        ["Shift date"] = ("Vuoron päivämäärä", "Arbetspassets datum"), ["Photo"] = ("Kuva", "Foto"),
+        ["Shift date"] = ("Vuoron päivämäärä", "Arbetspassets datum"), ["Visit"] = ("Käynti", "Besök"), ["Photo"] = ("Kuva", "Foto"),
         ["of"] = ("/", "av"), ["Photo note"] = ("Kuvan muistiinpano", "Fotoanteckning"), ["Shift note"] = ("Vuoron muistiinpano", "Anteckning för arbetspasset"),
         ["No note recorded for this historical entry."] = ("Tähän aiempaan kirjaukseen ei ole lisätty muistiinpanoa.", "Ingen anteckning finns för denna historiska post."),
         ["Photo unavailable: the saved image is unsupported, invalid or exceeds the report image limit."] = ("Kuva ei ole saatavilla: tallennettu kuva on virheellinen, sen muotoa ei tueta tai se ylittää raportin kuvarajan.", "Fotot är inte tillgängligt: bilden är ogiltig, formatet stöds inte eller bilden överskrider rapportens bildgräns."),
