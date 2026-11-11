@@ -42,12 +42,16 @@ Employees still see the shift name, the visit date/time and the request state. T
 - Partner portal and employee views: no change to wording or layout.
 - Shift list / report pages: one row per branch main, occurrences listed under it.
 
-## Open decisions **[decide]**
+## Decisions (answered by user, 2026-11-11)
 
-1. **Historical data**: forward-only (recommended) or consolidate existing shifts?
-2. **One main per branch strictly**, or allow an admin to create a second on-call shift for the same branch when they need different terms? Recommend: one by default, second allowed only by explicit admin action.
-3. **One-time family**: the 2026-11-03 one-time design creates a separate shift per admin-entered visit. Should admin one-time visits now become occurrences on the main (recommended, matches your request) and the `OneTime` schedule type be retired for new records? That supersedes part of the approved one-time design and needs your explicit OK.
-4. **Visit-level fields**: confirm that per-visit notes, photo sections and request-specific instructions should live on the occurrence (recommended), while company access/contact details stay on the main.
+1. **Historical data: merge existing shifts into one per branch.** Needs a read-only dry run, a private backup and verification before any production write. Completed forms, invoices and report snapshots reference old shift IDs, so they must be re-pointed or preserved. This is a separate, later PR, gated on the dry run.
+2. **One main shift per branch by default.** A second on-call shift for the same branch is allowed only when an admin creates it on purpose.
+3. **One-time visits retired for new records.** Admin one-time visits become occurrences on the branch main. The `OneTime` schedule type is no longer offered for new records. This supersedes the 2026-11-03 one-time design for new visits; existing one-time shifts are kept and readable.
+4. **Per-visit details on the occurrence.** Notes and required photo sections live on each occurrence. Company access and contact details stay on the branch main.
+
+## Open items
+
+- None of the four questions remain open. Build order below still applies, with the merge of historical shifts moved to the final chunk.
 
 ## Test plan (required by CLAUDE.md publishing rule)
 
