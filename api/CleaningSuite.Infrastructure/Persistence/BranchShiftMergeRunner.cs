@@ -37,11 +37,14 @@ public sealed class BranchShiftMergeRunner(IDocumentStore store, ITenantRegistry
 
     public async Task<Result> RunTenantAsync(string tenant, bool apply, CancellationToken ct)
     {
+        var profile = await new TenantProfileRepository(store).GetAsync(tenant, ct);
+        // The same default the rest of the application uses when a tenant has no profile yet.
+        var zone = TenantTimeZone.Resolve(string.IsNullOrWhiteSpace(profile?.TimeZoneId) ? TenantTimeZone.DefaultId : profile.TimeZoneId);
         IReadOnlyList<BranchShiftMergeFinding> findings;
         using (var reader = store.QuerySession(tenant))
         {
-            var shifts = await reader.Query<Shift>().Where(x => x.PartnerRequestId != null || x.IsBranchMain).ToListAsync(ct);
-            if (!shifts.Any(x => x.PartnerRequestId.HasValue && !x.IsBranchMain)) return new(tenant, 0, 0, 0, 0, apply);
+            var shifts = (await reader.Query<Shift>().ToListAsync(ct)).Where(x => x.IsBranchMain || x.PartnerRequestId.HasValue || x.Schedule.IsOneTime).ToList();
+            if (!shifts.Any(x => !x.IsBranchMain)) return new(tenant, 0, 0, 0, 0, apply);
             var ids = shifts.Select(x => x.Id).ToArray();
             findings = BranchShiftMerge.Plan(shifts,
                 await reader.Query<PartnerCleaningRequest>().Where(x => x.LinkedShiftId != null).ToListAsync(ct),
@@ -49,19 +52,18 @@ public sealed class BranchShiftMergeRunner(IDocumentStore store, ITenantRegistry
                 await reader.Query<ShiftOccurrenceAssignment>().Where(x => ids.Contains(x.ShiftId)).ToListAsync(ct),
                 await reader.Query<QualityCycleForm>().Where(x => ids.Contains(x.ShiftId)).ToListAsync(ct),
                 await reader.Query<Invoice>().Where(x => x.Status == Invoice.StatusIssued || x.Status == Invoice.StatusPaid).ToListAsync(ct),
-                await reader.Query<Branch>().ToListAsync(ct));
+                await reader.Query<Branch>().ToListAsync(ct),
+                await reader.Query<ShiftAssignment>().Where(x => ids.Contains(x.ShiftId)).ToListAsync(ct),
+                await reader.Query<ShiftBillingProfile>().Where(x => ids.Contains(x.ShiftId)).ToListAsync(ct), zone);
         }
         foreach (var finding in findings)
-            logger.LogInformation("Branch shift merge {Mode} tenant {Tenant} shift {ShiftId} branch {BranchId} {Action}: {Reason}",
-                apply ? "apply" : "report", tenant, finding.ShiftId, finding.BranchId, finding.Action, finding.Reason);
+            logger.LogInformation("Branch shift merge {Mode} tenant {Tenant} {Kind} shift {ShiftId} branch {BranchId} {Action}: {Reason}",
+                apply ? "apply" : "report", tenant, finding.Kind, finding.ShiftId, finding.BranchId, finding.Action, finding.Reason);
 
         int merged = 0, removed = 0, failed = 0;
         var kept = findings.Count(x => x.Action == BranchShiftMergeAction.Keep);
         if (apply)
         {
-            var profile = await new TenantProfileRepository(store).GetAsync(tenant, ct);
-            // The same default the rest of the application uses when a tenant has no profile yet.
-            var zone = TenantTimeZone.Resolve(string.IsNullOrWhiteSpace(profile?.TimeZoneId) ? TenantTimeZone.DefaultId : profile.TimeZoneId);
             foreach (var finding in findings.Where(x => x.Action != BranchShiftMergeAction.Keep))
             {
                 try
@@ -90,59 +92,86 @@ public sealed class BranchShiftMergeRunner(IDocumentStore store, ITenantRegistry
         var session = factory.Session;
         var shift = await session.LoadAsync<Shift>(planned.ShiftId, ct);
         if (shift is null) return false;
-        var related = await session.Query<Shift>().Where(x => x.Id == shift.Id || (x.BranchId == shift.BranchId && x.IsBranchMain)).ToListAsync(ct);
+        var related = (await session.Query<Shift>().Where(x => x.BranchId == shift.BranchId).ToListAsync(ct)).Where(x => x.Id == shift.Id || x.IsBranchMain).ToList();
         var ids = related.Select(x => x.Id).ToArray();
         var requests = await session.Query<PartnerCleaningRequest>().Where(x => x.LinkedShiftId == shift.Id).ToListAsync(ct);
         var exceptions = await session.Query<ShiftOccurrenceException>().Where(x => ids.Contains(x.ShiftId)).ToListAsync(ct);
         var forms = await session.Query<QualityCycleForm>().Where(x => x.ShiftId == shift.Id).ToListAsync(ct);
         var branch = await session.LoadAsync<Branch>(shift.BranchId, ct);
+        var assignments = await session.Query<ShiftAssignment>().Where(x => x.ShiftId == shift.Id).ToListAsync(ct);
+        var billing = await session.Query<ShiftBillingProfile>().Where(x => x.ShiftId == shift.Id).ToListAsync(ct);
         var current = BranchShiftMerge.Plan(related, requests, exceptions,
             await session.Query<ShiftOccurrenceAssignment>().Where(x => x.ShiftId == shift.Id).ToListAsync(ct), forms,
             await session.Query<Invoice>().Where(x => x.Status == Invoice.StatusIssued || x.Status == Invoice.StatusPaid).ToListAsync(ct),
-            branch is null ? [] : [branch]).SingleOrDefault(x => x.ShiftId == shift.Id);
+            branch is null ? [] : [branch], assignments, billing, zone).SingleOrDefault(x => x.ShiftId == shift.Id);
         if (current is null || current.Action != planned.Action)
         {
-            logger.LogInformation("Branch shift merge tenant {Tenant} shift {ShiftId} changed since it was planned and was kept: {Reason}", tenant, planned.ShiftId, current?.Reason ?? "no longer a booking's own shift");
+            logger.LogInformation("Branch shift merge tenant {Tenant} shift {ShiftId} changed since it was planned and was kept: {Reason}", tenant, planned.ShiftId, current?.Reason ?? "no longer a single-visit shift");
             return false;
         }
-        var request = requests.Single(x => x.Id == shift.PartnerRequestId);
-        var visit = exceptions.SingleOrDefault(x => x.ShiftId == shift.Id);
-        var assignments = await session.Query<ShiftAssignment>().Where(x => x.ShiftId == shift.Id).ToListAsync(ct);
-        var billing = await session.Query<ShiftBillingProfile>().Where(x => x.ShiftId == shift.Id).ToListAsync(ct);
-        var moved = current.Action == BranchShiftMergeAction.Merge ? forms.Where(f => f.ShiftOccurrenceUtc == visit!.StartUtc).ToList() : [];
-        var record = new BranchShiftMergeRecord { Id = shift.Id, BranchId = shift.BranchId, PartnerRequestId = request.Id, Reason = current.Reason,
+        var oneTime = current.Kind == BranchShiftMerge.KindOneTime;
+        var request = oneTime ? null : requests.Single(x => x.Id == shift.PartnerRequestId);
+        var visit = oneTime ? null : exceptions.SingleOrDefault(x => x.ShiftId == shift.Id);
+        var visitStart = current.VisitStartUtc;
+        var moved = current.Action == BranchShiftMergeAction.Merge ? forms.Where(f => f.ShiftOccurrenceUtc == visitStart).ToList() : [];
+        var record = new BranchShiftMergeRecord { Id = shift.Id, BranchId = shift.BranchId, PartnerRequestId = request?.Id, Reason = current.Reason,
             CreatedUtc = DateTime.UtcNow, UpdatedUtc = DateTime.UtcNow, AppliedUtc = DateTime.UtcNow,
             // Taken before anything is changed.
             BackupJson = JsonSerializer.Serialize(new { Shift = shift, Visit = visit, Request = request, Assignments = assignments, Billing = billing, WorkRecords = moved }) };
 
         if (current.Action == BranchShiftMergeAction.Merge)
         {
-            var main = await BranchMainShifts.FindOrCreateAsync(session, branch!, TenantTimeZone.LocalDate(visit!.StartUtc, zone), ct);
+            var localDate = TenantTimeZone.LocalDate(visitStart!.Value, zone);
+            var main = await BranchMainShifts.FindOrCreateAsync(session, branch!, localDate, ct);
             if (main.QualityCycleTemplateId is null && shift.QualityCycleTemplateId is Guid template)
             {
                 main.EnsureQualityCycleHistory(); main.QualityCycleTemplateId = template; main.RecordQualityCyclePlan(DateTime.UtcNow);
             }
-            main.CoverVisitDate(TenantTimeZone.LocalDate(visit.StartUtc, zone));
-            main.PartnerAccessInstructions ??= shift.PartnerAccessInstructions;
-            main.PartnerContactName ??= shift.PartnerContactName;
-            main.PartnerContactPhone ??= shift.PartnerContactPhone;
-            request.OccurrenceSequence ??= main.NextOccurrenceSequence();
-            visit.ShiftId = main.Id; visit.LegacyShiftId = shift.Id; visit.PartnerRequestId = request.Id;
-            visit.Sequence = request.OccurrenceSequence; visit.Source = ShiftOccurrenceException.SourcePartnerPortal;
-            visit.Notes = shift.Notes; visit.RequiredPhotoLabels = shift.RequiredPhotoLabels.ToList();
-            visit.EmployeeId = request.AcceptedEmployeeId ?? visit.EmployeeId; visit.UpdatedUtc = DateTime.UtcNow;
+            main.CoverVisitDate(localDate);
+            if (oneTime)
+            {
+                // The one-time shift's generated visit becomes a stored visit on the main shift, held by the same cleaners.
+                visit = ShiftOccurrenceException.Create(main.Id, null, visitStart.Value, current.VisitEndUtc!.Value, ShiftOccurrenceExceptionStatus.Extra,
+                    "Merged from a one-time shift", current.EmployeeIds.Count == 1 ? current.EmployeeIds[0] : null);
+                visit.Id = BranchShiftMerge.OneTimeVisitId(shift.Id);
+                visit.Sequence = main.NextOccurrenceSequence(); visit.Source = ShiftOccurrenceException.SourceAdminPanel;
+                visit.Notes = shift.Notes; visit.RequiredPhotoLabels = shift.RequiredPhotoLabels.Count > 0 ? shift.RequiredPhotoLabels.ToList() : null;
+                visit.LegacyShiftId = shift.Id;
+                if (current.EmployeeIds.Count > 1)
+                    session.Store(ShiftOccurrenceAssignment.Create(main.Id, null, visit.Id, OccurrenceAssignmentMode.Replace, current.EmployeeIds, "Merged from a one-time shift"));
+                if (current.KeptPrice is { } keptPrice)
+                {
+                    // The visit keeps the price it was agreed at, as a visit price on the main shift.
+                    var mainBilling = await session.Query<ShiftBillingProfile>().FirstOrDefaultAsync(x => x.ShiftId == main.Id, ct)
+                        ?? new ShiftBillingProfile { Id = main.Id, ShiftId = main.Id, CreatedUtc = DateTime.UtcNow };
+                    mainBilling.Overrides.RemoveAll(x => x.OccurrenceStartUtc == keptPrice.OccurrenceStartUtc);
+                    mainBilling.Overrides.Add(keptPrice); mainBilling.UpdatedUtc = DateTime.UtcNow;
+                    session.Store(mainBilling);
+                }
+            }
+            else
+            {
+                main.PartnerAccessInstructions ??= shift.PartnerAccessInstructions;
+                main.PartnerContactName ??= shift.PartnerContactName;
+                main.PartnerContactPhone ??= shift.PartnerContactPhone;
+                request!.OccurrenceSequence ??= main.NextOccurrenceSequence();
+                visit!.ShiftId = main.Id; visit.LegacyShiftId = shift.Id; visit.PartnerRequestId = request.Id;
+                visit.Sequence = request.OccurrenceSequence; visit.Source = ShiftOccurrenceException.SourcePartnerPortal;
+                visit.Notes = shift.Notes; visit.RequiredPhotoLabels = shift.RequiredPhotoLabels.ToList();
+                visit.EmployeeId = request.AcceptedEmployeeId ?? visit.EmployeeId; visit.UpdatedUtc = DateTime.UtcNow;
+                request.LinkedShiftId = main.Id; request.OccurrenceStartUtc = visit.StartUtc;
+            }
             foreach (var form in moved) { form.OriginalShiftId = shift.Id; form.ShiftId = main.Id; session.Store(form); }
-            request.LinkedShiftId = main.Id; request.OccurrenceStartUtc = visit.StartUtc;
             record.MainShiftId = main.Id; record.VisitNumber = visit.Sequence; record.Outcome = BranchShiftMergeRecord.OutcomeMerged;
             await ShiftTabs.StoreAsync(session, main, ct); session.Store(visit);
         }
         else
         {
             if (visit is not null) session.Delete(visit);
-            request.LinkedShiftId = null;
+            if (request is not null) request.LinkedShiftId = null;
             record.Outcome = BranchShiftMergeRecord.OutcomeRemoved;
         }
-        session.Store(request);
+        if (request is not null) session.Store(request);
         foreach (var assignment in assignments) session.Delete(assignment);
         foreach (var profile in billing) session.Delete(profile);
         session.Delete(shift);

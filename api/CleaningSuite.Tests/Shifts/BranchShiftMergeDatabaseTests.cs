@@ -256,6 +256,158 @@ public class BranchShiftMergeDatabaseTests
         Assert.Single(shifts, x => x.IsBranchMain);
     }
 
+    /// <summary>A one-time shift as staff created them before Add visit: its own shift, whole-shift cleaners and price.</summary>
+    private static async Task<Shift> OneTime(Fixture f, string start, string end, Employee[] cleaners, ShiftBillingProfile? billing = null,
+        bool active = true, string? notes = null, Guid? template = null)
+    {
+        var day = Fixture.Day.ToDateTime(TimeOnly.MinValue);
+        var shift = Shift.Create(f.Company.Id, f.Branch.Id, $"One-time {start}", new ShiftSchedule { Type = ShiftScheduleType.OneTime, OneTimeDate = day,
+            OneTimeStart = TimeSpan.Parse(start), OneTimeEnd = TimeSpan.Parse(end) }, notes, day, day, template);
+        if (!active) shift.Deactivate();
+        using var writer = f.Store.LightweightSession(f.Tenant);
+        writer.Store(shift);
+        foreach (var cleaner in cleaners) writer.Store(ShiftAssignment.Create(shift.Id, cleaner.Id, "Assigned"));
+        if (billing is not null) { billing.Id = Guid.NewGuid(); billing.ShiftId = shift.Id; writer.Store(billing); }
+        await writer.SaveChangesAsync();
+        return shift;
+    }
+
+    private static async Task<IReadOnlyList<MyShiftOccurrenceDto>> Mine(Fixture f, Employee cleaner)
+    {
+        using var read = f.Session();
+        var handler = new QualityCycleHandlers.GetMyShiftsQueryHandler(new ShiftRepository(read), new QualityCycleRepository(read, f.Store),
+            new EmployeeRepository(read), new ShiftWorkReservation(Fixture.Config(), read), f.Profiles.Object, Fixture.Context(f.Tenant));
+        return await handler.Handle(new(cleaner.Id, Fixture.DayStart, Fixture.DayStart.AddDays(1)), default);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task One_time_shifts_become_numbered_visits_held_by_the_same_cleaners()
+    {
+        using var f = await Fixture.Create();
+        var solo = await OneTime(f, "08:00", "10:00", [f.Cleaner], new ShiftBillingProfile { BranchPriceEffectiveFrom = f.Branch.Versions[0].EffectiveFrom }, notes: "Bring the ladder");
+        var team = await OneTime(f, "12:00", "14:00", [f.Cleaner, f.Second]);
+        var nobody = await OneTime(f, "16:00", "17:00", []);
+        Assert.Equal(2, (await Mine(f, f.Cleaner)).Count);
+
+        var result = await Runner(f).RunTenantAsync(f.Tenant, apply: true, default);
+
+        Assert.Equal(new BranchShiftMergeRunner.Result(f.Tenant, 3, 0, 0, 0, true), result);
+        using (var reader = f.Reader())
+        {
+            var main = Assert.Single(await reader.Query<Shift>().ToListAsync());
+            Assert.True(main.IsBranchMain); Assert.Equal(3, main.OccurrenceCounter);
+            var visits = (await reader.Query<ShiftOccurrenceException>().ToListAsync()).OrderBy(x => x.Sequence).ToArray();
+            Assert.Equal(new[] { solo.Id, team.Id, nobody.Id }, visits.Select(x => x.LegacyShiftId!.Value).ToArray());
+            Assert.All(visits, x => { Assert.Equal("AdminPanel", x.Source); Assert.Equal(ShiftOccurrenceExceptionStatus.Extra, x.Status); Assert.Null(x.OfferedEmployeeId); });
+            Assert.Equal(Fixture.DayStart.AddHours(8), visits[0].StartUtc); Assert.Equal(Fixture.DayStart.AddHours(10), visits[0].EndUtc);
+            Assert.Equal(f.Cleaner.Id, visits[0].EmployeeId); Assert.Equal("Bring the ladder", visits[0].Notes);
+            // A team keeps every member through a roster record for that visit.
+            Assert.Null(visits[1].EmployeeId);
+            var roster = Assert.Single(await reader.Query<ShiftOccurrenceAssignment>().ToListAsync());
+            Assert.Equal(visits[1].Id, roster.ExtraExceptionId); Assert.Equal(new[] { f.Cleaner.Id, f.Second.Id }.Order(), roster.EmployeeIds.Order());
+            Assert.Null(visits[2].EmployeeId);
+            Assert.Empty(await reader.Query<ShiftAssignment>().ToListAsync());
+            // The property price already applies, so no separate visit price is kept.
+            Assert.Empty(await reader.Query<ShiftBillingProfile>().ToListAsync());
+            Assert.Equal(BranchShiftMergeRecord.OutcomeMerged, (await reader.LoadAsync<BranchShiftMergeRecord>(solo.Id))!.Outcome);
+        }
+        // The cleaners see exactly the visits they had before.
+        var mine = await Mine(f, f.Cleaner);
+        Assert.Equal(new int?[] { 1, 2 }, mine.Select(x => x.VisitNumber).ToArray());
+        Assert.Equal(2, Assert.Single(await Mine(f, f.Second)).VisitNumber);
+        Assert.Equal(new BranchShiftMergeRunner.Result(f.Tenant, 0, 0, 0, 0, true), await Runner(f).RunTenantAsync(f.Tenant, apply: true, default));
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task A_one_time_shifts_own_price_is_kept_and_an_invoiced_one_is_not_billed_again()
+    {
+        using var f = await Fixture.Create();
+        // The property charges 100 EUR at 25.5 %. This visit was agreed at 55 EUR at 14 %.
+        var special = await OneTime(f, "08:00", "10:00", [f.Cleaner], new ShiftBillingProfile { Plans = [new("PerOccurrence", 55, 14, new DateOnly(2026, 1, 1))] });
+        var invoiced = await OneTime(f, "12:00", "14:00", [f.Cleaner], new ShiftBillingProfile { BranchPriceEffectiveFrom = f.Branch.Versions[0].EffectiveFrom });
+        await Worked(f, special.Id, f.Cleaner, Fixture.DayStart.AddHours(8));
+        await Worked(f, invoiced.Id, f.Cleaner, Fixture.DayStart.AddHours(12));
+        using (var writer = f.Store.LightweightSession(f.Tenant))
+        {
+            writer.Store(new Invoice { Id = Guid.NewGuid(), CompanyId = f.Company.Id, Status = Invoice.StatusPaid, InvoiceNumber = "2026-0001",
+                PeriodFrom = new(2026, 11, 1), PeriodTo = new(2026, 11, 30), Total = new() { Net = 100, Vat = 25.5m },
+                Lines = [new() { ShiftId = invoiced.Id, ShiftName = "One-time 12:00", Quantity = 1, UnitPriceNet = 100, NetAmount = 100, VatRatePercent = 25.5m, VatAmount = 25.5m }] });
+            await writer.SaveChangesAsync();
+        }
+
+        var result = await Runner(f).RunTenantAsync(f.Tenant, apply: true, default);
+
+        Assert.Equal(2, result.Merged); Assert.Equal(0, result.Kept);
+        Guid mainId;
+        using (var reader = f.Reader())
+        {
+            mainId = Assert.Single(await reader.Query<Shift>().ToListAsync()).Id;
+            var kept = Assert.Single(Assert.Single(await reader.Query<ShiftBillingProfile>().ToListAsync()).Overrides);
+            Assert.Equal(55m, kept.RateNet); Assert.Equal(14m, kept.VatRatePercent); Assert.Equal(Fixture.DayStart.AddHours(8), kept.OccurrenceStartUtc);
+            Assert.All(await reader.Query<QualityCycleForm>().ToListAsync(), form => Assert.Equal(mainId, form.ShiftId));
+        }
+        var request = new ShiftInvoiceRequest(f.Company.Id, [mainId], new(2026, 11, 1), new(2026, 11, 30),
+            new Address { Street = "Customer 1", PostalCode = "00100", City = "Helsinki" });
+        using var session = f.Session();
+        var line = Assert.Single((await f.Invoices(session).PreviewAsync(request, default)).Invoice.Lines);
+        // Only the visit that was never invoiced, at its own agreed price and VAT.
+        Assert.Equal(55m, line.NetAmount); Assert.Equal(14m, line.VatRatePercent); Assert.Equal(new[] { 1 }, line.VisitNumbers);
+        Assert.Equal(BranchShiftMerge.KeptPriceReason, line.OverrideReason);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task A_deactivated_one_time_shift_is_removed_and_unusual_ones_are_kept()
+    {
+        using var f = await Fixture.Create();
+        var dropped = await OneTime(f, "06:00", "07:00", [f.Cleaner], active: false);
+        // Priced by the hour, unlike the property: the main shift cannot charge it the same way.
+        var hourly = await OneTime(f, "08:00", "10:00", [f.Cleaner], new ShiftBillingProfile { Plans = [new("Hourly", 30, 25.5m, new DateOnly(2026, 1, 1))] });
+        // Its visit was moved by hand.
+        var moved = await OneTime(f, "12:00", "14:00", [f.Cleaner]);
+        // Deactivated, but work was recorded.
+        var worked = await OneTime(f, "16:00", "17:00", [f.Cleaner], active: false);
+        await Worked(f, worked.Id, f.Cleaner, Fixture.DayStart.AddHours(16));
+        using (var writer = f.Store.LightweightSession(f.Tenant))
+        {
+            writer.Store(ShiftOccurrenceException.Create(moved.Id, Fixture.DayStart.AddHours(12), Fixture.DayStart.AddHours(13), Fixture.DayStart.AddHours(15),
+                ShiftOccurrenceExceptionStatus.Moved, "Customer asked"));
+            await writer.SaveChangesAsync();
+        }
+
+        var result = await Runner(f).RunTenantAsync(f.Tenant, apply: true, default);
+
+        Assert.Equal(new BranchShiftMergeRunner.Result(f.Tenant, 0, 1, 3, 0, true), result);
+        using var reader = f.Reader();
+        Assert.Equal(new[] { hourly.Id, moved.Id, worked.Id }.Order(), (await reader.Query<Shift>().ToListAsync()).Select(x => x.Id).Order());
+        Assert.Equal(BranchShiftMergeRecord.OutcomeRemoved, (await reader.LoadAsync<BranchShiftMergeRecord>(dropped.Id))!.Outcome);
+        // Kept shifts keep their cleaners, price and work records exactly as they were.
+        Assert.Equal(3, (await reader.Query<ShiftAssignment>().ToListAsync()).Count);
+        Assert.Equal("Hourly", Assert.Single(Assert.Single(await reader.Query<ShiftBillingProfile>().ToListAsync()).Plans).Mode);
+        Assert.Equal(worked.Id, Assert.Single(await reader.Query<QualityCycleForm>().ToListAsync()).ShiftId);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task An_unfinished_one_time_visit_with_another_checklist_than_the_main_shift_is_kept()
+    {
+        using var f = await Fixture.Create();
+        var mainTemplate = QualityCycleTemplate.Create("Property checklist", ["Kitchen"], companyId: f.Company.Id);
+        var otherTemplate = QualityCycleTemplate.Create("Deep clean checklist", ["Oven"], companyId: f.Company.Id);
+        f.Company.IsQualityCycleEnabled = true; f.Company.QualityCycleTemplateId = mainTemplate.Id;
+        using (var writer = f.Store.LightweightSession(f.Tenant)) { writer.Store(mainTemplate, otherTemplate); writer.Store(f.Company); await writer.SaveChangesAsync(); }
+        await f.Accepted("06:00", f.Second);
+        var pending = await OneTime(f, "12:00", "14:00", [f.Cleaner], template: otherTemplate.Id);
+        var finished = await OneTime(f, "16:00", "17:00", [f.Cleaner], template: otherTemplate.Id);
+        await Worked(f, finished.Id, f.Cleaner, Fixture.DayStart.AddHours(16));
+
+        var result = await Runner(f).RunTenantAsync(f.Tenant, apply: true, default);
+
+        // The finished visit already has its checklist recorded, so it merges; the pending one would change checklist.
+        Assert.Equal(1, result.Merged); Assert.Equal(1, result.Kept);
+        using var reader = f.Reader();
+        Assert.Equal(pending.Id, Assert.Single(await reader.Query<Shift>().ToListAsync(), x => !x.IsBranchMain).Id);
+        Assert.Equal(mainTemplate.Id, (await reader.Query<Shift>().ToListAsync()).Single(x => x.IsBranchMain).QualityCycleTemplateId);
+    }
+
     [Fact]
     public void The_plan_only_looks_at_bookings_that_own_a_shift()
     {
