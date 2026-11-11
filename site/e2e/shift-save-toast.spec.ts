@@ -21,12 +21,12 @@ test('a refused shift save explains the fix as a toast and in the dialog, and ke
   await selectDailyScheduleIfEmpty(page);
   await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'AAA', exact: true }).click();
   await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'AAA1', exact: true }).click();
-  await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Morning clean');
   await dialog.getByRole('textbox', { name: 'Start date', exact: true }).fill('2026-11-01');
   await dialog.getByRole('button', { name: 'Create shift' }).click();
   await expect(page.getByText('Shift not created').first()).toBeVisible();
   await expect(dialog.getByText(CONFLICT)).toBeVisible();
-  await expect(dialog.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Morning clean');
+  // The entered values are kept for the retry.
+  await expect(dialog.getByRole('textbox', { name: 'Start date', exact: true })).toHaveValue('2026-11-01');
 });
 
 test('a field validation failure names the field problem instead of a generic title', async ({ page }) => {
@@ -46,7 +46,6 @@ test('a field validation failure names the field problem instead of a generic ti
   await selectDailyScheduleIfEmpty(page);
   await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'AAA', exact: true }).click();
   await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'AAA1', exact: true }).click();
-  await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Ranged clean');
   await dialog.getByRole('textbox', { name: 'Start date', exact: true }).fill('2026-11-10');
   await dialog.getByRole('button', { name: 'Create shift' }).click();
   await expect(dialog.getByText(FIELD)).toBeVisible();
@@ -71,11 +70,12 @@ test('a refused shift update says it was not updated, keeps the edited values an
   await page.getByRole('button', { name: 'More actions for Morning clean' }).click();
   await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Edit shift', exact: true });
-  await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Morning clean edited');
+  // Edit a real field before saving, so the refused save carries a change.
+  await dialog.getByRole('textbox', { name: 'Start date', exact: true }).fill('2026-12-01');
   await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(page.getByText('Shift not updated').first()).toBeVisible();
   await expect(dialog.getByText(UPDATE_REFUSED)).toBeVisible();
-  await expect(dialog.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Morning clean edited');
+  await expect(dialog.getByRole('textbox', { name: 'Start date', exact: true })).toHaveValue('2026-12-01');
   expect(puts).toBe(1);
 });
 for (const [status, expected] of [
@@ -98,10 +98,10 @@ for (const [status, expected] of [
     await selectDailyScheduleIfEmpty(page);
     await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'AAA', exact: true }).click();
     await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'AAA1', exact: true }).click();
-    await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Session clean');
     await dialog.getByRole('textbox', { name: 'Start date', exact: true }).fill('2026-11-11');
     await dialog.getByRole('button', { name: 'Create shift' }).click();
     await expect(dialog.getByText(expected)).toBeVisible();
-    await expect(dialog.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Session clean');
+    // The entered start date is kept after the refused save.
+    await expect(dialog.getByRole('textbox', { name: 'Start date', exact: true })).toHaveValue('2026-11-11');
   });
 }

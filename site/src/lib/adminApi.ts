@@ -498,6 +498,8 @@ export interface Company {
 export interface Branch {
   roomCount?: number | null;
   bedCount?: number | null;
+  sizeM2?: number | null;
+  cleaningType?: string | null;
   priceNet?: number | null;
   vatRatePercent?: number | null;
   estimatedDurationMinutes?: number | null;
@@ -826,7 +828,7 @@ export const adminBranches = {
       country?: string;
       contactPhone?: string;
       contactEmail?: string;
-      roomCount?: number | null; bedCount?: number | null; priceNet?: number | null; vatRatePercent?: number | null; estimatedDurationMinutes?: number | null;
+      roomCount?: number | null; bedCount?: number | null; sizeM2?: number | null; cleaningType?: string | null; priceNet?: number | null; vatRatePercent?: number | null; estimatedDurationMinutes?: number | null;
     }
   ) => companyRequest<Branch>(`/api/v1/admin/companies/${companyId}/branches`, 'POST', { companyId, ...body }),
   update: (
@@ -839,7 +841,7 @@ export const adminBranches = {
       country?: string;
       contactPhone?: string;
       contactEmail?: string;
-      roomCount?: number | null; bedCount?: number | null; priceNet?: number | null; vatRatePercent?: number | null; estimatedDurationMinutes?: number | null;
+      roomCount?: number | null; bedCount?: number | null; sizeM2?: number | null; cleaningType?: string | null; priceNet?: number | null; vatRatePercent?: number | null; estimatedDurationMinutes?: number | null;
       isActive: boolean;
     }
   ) => adminSendJson<Branch>(`/api/v1/admin/companies/branches/${id}`, 'PUT', { id, ...body }),

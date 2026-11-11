@@ -97,7 +97,6 @@ test('shift company search finds a company beyond 100 and uses it for the new sh
   await page.getByRole('textbox', { name: 'Search companies' }).press('Enter');
   await dialog.getByLabel('Branch', { exact: true }).click();
   await page.getByRole('option', { name: 'Property', exact: true }).click();
-  await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('New cleaning');
   await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift', exact: true }).click();
   await expect(dialog).toHaveCount(0);
   expect(writes[0].companyId).toBe('company-125');
@@ -192,7 +191,6 @@ test('company changes cannot restore branches from a late previous-company respo
   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   await expect(page.getByRole('option', { name: 'Property A', exact: true })).toHaveCount(0);
   await page.getByRole('option', { name: 'Property B', exact: true }).click();
-  await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Current company work');
   await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift', exact: true }).click();
   await expect(dialog).toHaveCount(0);
   expect(writes[0].companyId).toBe('company-2');
@@ -229,9 +227,8 @@ test('a new shift cannot select an inactive company returned by server search', 
   await page.getByRole('textbox', { name: 'Search companies' }).press('Escape');
   await expect(company).toHaveValue('');
   await expect(dialog.getByLabel('Branch', { exact: true })).toBeDisabled();
-  await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Blocked inactive assignment');
   await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift', exact: true }).click();
-  await expect(dialog.getByText('Company, branch and name are required.', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('Company and branch are required.', { exact: true })).toBeVisible();
   expect(writes).toHaveLength(0);
 });
 

@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
+import { autoShiftName } from '../src/lib/shiftName';
+const ONCALL_NAME = autoShiftName(undefined);
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization,Content-Type', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS' };
 
@@ -46,7 +48,6 @@ test('schedule is explicit and on-call creation does not invent a daily visit', 
   await page.getByRole('option', { name: 'Synthetic company', exact: true }).click();
   await dialog.getByLabel('Branch', { exact: true }).click();
   await page.getByRole('option', { name: 'Synthetic branch', exact: true }).click();
-  await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('On-call cleaning');
   await dialog.getByRole('button', { name: 'Create shift', exact: true }).click();
   await expect(dialog.getByText('Choose a schedule type.')).toBeVisible();
   expect(writes).toHaveLength(0);
@@ -59,7 +60,7 @@ test('schedule is explicit and on-call creation does not invent a daily visit', 
   // Closing the occurrences window returns to the list, which now includes the shift just created.
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: /Occurrences/ })).toHaveCount(0);
-  await expect(page.getByRole('cell', { name: 'On-call cleaning', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: ONCALL_NAME, exact: true })).toBeVisible();
 });
 
 test('past unfinished one-time shift asks the admin to check completion', async ({ page }) => {

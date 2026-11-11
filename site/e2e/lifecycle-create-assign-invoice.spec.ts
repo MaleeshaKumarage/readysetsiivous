@@ -2,6 +2,8 @@ import { selectDailyScheduleIfEmpty } from './admin-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
 import { shiftAction } from './shift-actions';
+import { autoShiftName } from '../src/lib/shiftName';
+const FLOW_NAME = autoShiftName(undefined);
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const issuer = { companyName: 'Supplier', businessId: '123', companyAddress: { street: 'Street', postalCode: '00100', city: 'Helsinki', country: 'FI' }, email: 'supplier@example.test', phone: '', bankAccountIBAN: 'FI2112345600000785', bankBic: 'NDEAFIHH', paymentTermsDays: 14, defaultVatRatePercent: 25.5 };
@@ -71,13 +73,12 @@ test('admin creates a shift, assigns a cleaner, and invoices its unstarted visit
   const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
   await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'Methehe Oy', exact: true }).click();
   await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'Main branch', exact: true }).click();
-  await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Flow clean');
   await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
-  await expect(page.getByRole('cell', { name: 'Flow clean', exact: true })).toBeVisible();
-  expect(state.shiftWrites).toHaveLength(1); expect(state.shiftWrites[0]).toMatchObject({ companyId: 'company', branchId: 'branch', name: 'Flow clean' });
+  await expect(page.getByRole('cell', { name: FLOW_NAME, exact: true })).toBeVisible();
+  expect(state.shiftWrites).toHaveLength(1); expect(state.shiftWrites[0]).toMatchObject({ companyId: 'company', branchId: 'branch', name: FLOW_NAME });
 
   // 2. Assign a cleaner from the row's More actions.
-  await shiftAction(page, 'Flow clean', 'Employees');
+  await shiftAction(page, FLOW_NAME, 'Employees');
   await page.getByRole('textbox', { name: 'Assign employees', exact: true }).click();
   await page.getByRole('option', { name: 'Alice Cleaner', exact: true }).click();
   await page.getByRole('textbox', { name: 'Assign employees', exact: true }).press('Escape');
@@ -89,7 +90,7 @@ test('admin creates a shift, assigns a cleaner, and invoices its unstarted visit
   await page.goto('/admin/invoices/');
   await page.getByRole('button', { name: 'New invoice', exact: true }).click();
   await page.getByRole('textbox', { name: 'Company', exact: true }).click(); await page.getByRole('option', { name: 'Methehe Oy', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Invoice shifts', exact: true }).click(); await page.getByRole('option', { name: 'Flow clean', exact: true }).click(); await page.keyboard.press('Escape');
+  await page.getByRole('textbox', { name: 'Invoice shifts', exact: true }).click(); await page.getByRole('option', { name: FLOW_NAME, exact: true }).click(); await page.keyboard.press('Escape');
   await page.getByLabel('Invoice from', { exact: true }).fill('2026-11-01'); await page.getByLabel('Invoice to (inclusive)', { exact: true }).fill('2026-11-30');
   await page.getByRole('textbox', { name: 'Billing street', exact: true }).fill('Customer street');
   await page.getByRole('textbox', { name: 'Billing postalCode', exact: true }).fill('00100');

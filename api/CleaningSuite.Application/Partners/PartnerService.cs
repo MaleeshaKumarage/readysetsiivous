@@ -452,9 +452,11 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         // The visit carries the photo sections and general instructions in force when the partner's request is accepted.
         var portalSettings = await Db.LoadAsync<PartnerPortalSettings>(request.CompanyId, ct);
         var visitNotes = VisitNotes(portalSettings?.GeneralInstructions, request.Notes);
+        // Details are needed only to name a new visit; re-accepting an existing shift keeps its name.
+        if (request.LinkedShiftId is null || await Db.LoadAsync<Shift>(request.LinkedShiftId.Value, ct) is null) ShiftNaming.EnsureDetails(branch);
         var shiftId = request.LinkedShiftId ?? PartnerCleaningRequest.StableId($"partner-shift:{request.Id}");
         var shift = await Db.LoadAsync<Shift>(shiftId, ct) ?? Shift.Create(request.CompanyId, request.BranchId,
-            $"Cleaning — {branch.Name}", new ShiftSchedule { Type = ShiftScheduleType.OnCallFlexible }, visitNotes, localFrom, localUntil);
+            ShiftNaming.Build(branch), new ShiftSchedule { Type = ShiftScheduleType.OnCallFlexible }, visitNotes, localFrom, localUntil);
         shift.Id = shiftId; shift.PartnerRequestId = request.Id; shift.IsActive = true;
         shift.ValidFrom = localFrom; shift.ValidUntil = localUntil; shift.Notes = visitNotes;
         // Companies with quality cycle enabled give every accepted visit the checklist; an admin's later choice on the shift is kept.

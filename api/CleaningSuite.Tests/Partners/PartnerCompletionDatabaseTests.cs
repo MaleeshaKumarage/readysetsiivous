@@ -261,7 +261,7 @@ public class PartnerCompletionDatabaseTests
     {
         var company = Company.Create("1234567-8", "Synthetic owner"); company.IsPartnerEnabled = true;
         var otherCompany = Company.Create("7654321-0", "Other synthetic owner"); otherCompany.IsPartnerEnabled = true;
-        var branch = Branch.Create(company.Id, "Apartment");
+        var branch = Branch.Create(company.Id, "Apartment"); branch.SetPropertyDetails(34, "Deep");
         var owner = new Employee { Role = Employee.RolePartner, PartnerCompanyId = company.Id };
         var otherOwner = new Employee { Role = Employee.RolePartner, PartnerCompanyId = otherCompany.Id };
         var staff = new Employee { Role = Employee.RoleAdmin, FirstName = "Ada", LastName = "Admin", IsActive = true };
