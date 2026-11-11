@@ -25,6 +25,8 @@ test('a refused shift save explains the fix as a toast and in the dialog, and ke
   await dialog.getByRole('button', { name: 'Create shift' }).click();
   await expect(page.getByText('Shift not created').first()).toBeVisible();
   await expect(dialog.getByText(CONFLICT)).toBeVisible();
+  // The entered values are kept for the retry.
+  await expect(dialog.getByRole('textbox', { name: 'Start date', exact: true })).toHaveValue('2026-11-01');
 });
 
 test('a field validation failure names the field problem instead of a generic title', async ({ page }) => {
@@ -99,5 +101,7 @@ for (const [status, expected] of [
     await dialog.getByRole('textbox', { name: 'Start date', exact: true }).fill('2026-11-11');
     await dialog.getByRole('button', { name: 'Create shift' }).click();
     await expect(dialog.getByText(expected)).toBeVisible();
+    // The entered start date is kept after the refused save.
+    await expect(dialog.getByRole('textbox', { name: 'Start date', exact: true })).toHaveValue('2026-11-11');
   });
 }

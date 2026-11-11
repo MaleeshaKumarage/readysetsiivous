@@ -149,6 +149,9 @@ public record UpdateBranchCommand(
     private int? _sizeM2 = SizeM2;
     [JsonIgnore] public bool HasSizeM2 { get; private init; } = SizeM2.HasValue;
     public int? SizeM2 { get => _sizeM2; init { _sizeM2 = value; HasSizeM2 = true; } }
+    private string? _cleaningType = CleaningType;
+    [JsonIgnore] public bool HasCleaningType { get; private init; } = CleaningType is not null;
+    public string? CleaningType { get => _cleaningType; init { _cleaningType = value; HasCleaningType = true; } }
 }
 
 public record DeactivateBranchCommand(Guid Id) : IRequest;
@@ -533,8 +536,10 @@ public class CompanyHandlers
                     request.HasBedCount ? request.BedCount : branch.BedCount,
                     request.PriceNet, request.VatRatePercent, request.EstimatedDurationMinutes, request.PriceMode, request.PriceEffectiveFrom);
                 // Only validate size and cleaning type when this update changes them, so unrelated edits never fail on legacy values.
-                if (request.HasSizeM2 || request.CleaningType is not null)
-                    ApplyDetails(branch, request.HasSizeM2 ? request.SizeM2 : branch.SizeM2, request.CleaningType ?? branch.CleaningType);
+                // Validate only the fields this request changes, so an unchanged legacy value never blocks the update.
+                if (request.HasSizeM2 && !request.HasCleaningType) ApplyDetails(branch, request.SizeM2, branch.CleaningType);
+                else if (request.HasCleaningType && !request.HasSizeM2) ApplyDetails(branch, branch.SizeM2, request.CleaningType);
+                else if (request.HasSizeM2 && request.HasCleaningType) ApplyDetails(branch, request.SizeM2, request.CleaningType);
                 await _repository.SaveAsync(branch, ct);
                 return MapBranch(branch);
             }

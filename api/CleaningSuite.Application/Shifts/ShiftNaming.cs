@@ -21,7 +21,8 @@ public static class ShiftNaming
     {
         var address = string.Join(", ", new[] { branch.Street?.Trim(), $"{branch.PostalCode} {branch.City}".Trim() }
             .Where(part => !string.IsNullOrWhiteSpace(part)));
-        var heading = $"{branch.CleaningType} Cleaning - {address}".TrimEnd();
+        // No address: the heading is just "{Type} Cleaning", with no dangling separator.
+        var heading = address.Length == 0 ? $"{branch.CleaningType} Cleaning" : $"{branch.CleaningType} Cleaning - {address}";
         return $"{heading} |{branch.SizeM2}m2|{Count(branch.RoomCount)}H|{Count(branch.BedCount)}V";
     }
 

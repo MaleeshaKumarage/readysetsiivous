@@ -52,7 +52,7 @@ public class CreateShiftCommandHandlerTests
         var result = await handler.Handle(command, CancellationToken.None);
 
         Assert.NotNull(result);
-        Assert.Equal("Deep Cleaning - |34m2|-H|-V", result.Name);
+        Assert.Equal("Deep Cleaning |34m2|-H|-V", result.Name);
         Assert.Equal(companyId, result.CompanyId);
         Assert.Equal(branchId, result.BranchId);
         _shiftRepoMock.Verify(r => r.SaveAsync(It.IsAny<Shift>(), It.IsAny<CancellationToken>()), Times.Once);
