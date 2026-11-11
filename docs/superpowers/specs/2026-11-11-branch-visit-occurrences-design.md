@@ -78,3 +78,13 @@ One PR per chunk, in this order, each green before the next:
 3. Admin "add visit to branch" with date range (backend + Playwright).
 4. Reporting/list grouping and invoice verification.
 5. Optional: historical consolidation, only if approved after a dry run.
+
+## Employee assignment and offers (user request + answers, 2026-11-11)
+
+- A branch main shift has **one default employee**. Teams are set on individual occurrences, not on the main.
+- Creating an occurrence on a shift with a default employee **creates an offer** to that employee for the new occurrence. Automatic acceptance (existing A01 feature) adds it directly, with no action. Otherwise the employee accepts the offer, and the visit then appears under their name as a normal shift.
+- A shift with **no default employee** creates occurrences unassigned. Nobody is added automatically.
+- An admin can **change the employee on an occurrence** at any time. The occurrence's own assignee overrides the shift default. Changing it later does not change the shift default.
+- **Pending offer, admin changes employee:** the first employee's pending offer is withdrawn, and the new employee receives a fresh offer. Only the accepting employee holds the visit.
+- **Accepted, not started, admin changes employee:** allowed. The former employee is released and notified. Once work has started, reassignment is blocked, as today.
+- Offers and reassignments run through the existing shift reservation and version checks, so concurrent accept and reassign cannot both succeed.
