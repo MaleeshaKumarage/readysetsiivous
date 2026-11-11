@@ -55,13 +55,13 @@ Employees still see the shift name, the visit date/time and the request state. T
 - Name format: `#<sequence> · <date or date range> · <source>`, for example `#3 · Mon 21 Apr · Admin panel` or `#5 · 25–27 Apr · Partner portal`.
 - **Sequence** is a counter per branch main, starting at 1 and increasing with each new occurrence in the order they are created. It is not reset per month or per week. Stored on the occurrence when created so the name stays stable.
 - **Source tag** is `Admin panel` or `Partner portal`, recording where the occurrence came from.
-- A date range creates one occurrence with one sequence number that covers the whole range. Exact dates use the same format with a single date. Date-range creation from the admin side is one occurrence per day under the earlier plan; this needs confirming (see Open items).
+- A date range creates **one occurrence with one sequence number** covering the whole range (confirmed 2026-11-11). Exact dates use the same format with a single date. This replaces the earlier "one occurrence per day" plan for admin date ranges.
 - Names are shown to admins and employees alike. Employees still see the shift name as the main title, with the occurrence name and their visit time underneath.
 
 ## Open items
 
-- **Date range = one occurrence or one per day?** The request reads as one numbered occurrence for a range ("like a date range or exact date"), but the earlier plan made one occurrence per day. Needs confirmation before build.
-- **Sequence after cancel or delete:** assumed the number is never reused, so `#4` stays `#4` even if removed.
+- **Sequence after cancel or delete:** numbers are never reused (confirmed 2026-11-11). A removed `#4` leaves a gap, and the next new occurrence takes the next number above the highest one used.
+- No open questions remain on naming.
 - Build order below still applies, with the merge of historical shifts moved to the final chunk.
 
 ## Test plan (required by CLAUDE.md publishing rule)
