@@ -22,7 +22,7 @@ for (const savedLanguage of ['fi', 'sv', 'en']) {
       };
     }, savedLanguage);
     await page.goto('/admin/');
-    await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Office portal', exact: true })).toBeVisible();
     await page.locator('#mock-test-style').evaluate(element => element.remove());
     const burger = page.getByRole('button', { name: 'Toggle navigation' });
     if (await burger.isVisible()) await burger.click();
