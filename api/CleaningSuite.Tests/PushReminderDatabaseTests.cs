@@ -184,6 +184,33 @@ public class PushReminderDatabaseTests
     }
 
     [QualityCycleDatabaseFact]
+    public async Task Staff_alerts_reach_only_opted_in_synced_administrators_and_managers_once_per_event()
+    {
+        using var f = await Fixture.Create();
+        var admin = new Employee { Role = Employee.RoleAdmin, KeycloakUserId = "admin-alert" };
+        var manager = new Employee { Role = Employee.RoleManager, KeycloakUserId = "manager-alert" };
+        var pending = new Employee { Role = Employee.RoleAdmin, KeycloakUserId = "pending-alert", IdentitySyncPending = true };
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(admin, manager, pending);
+            foreach (var person in new[] { admin, manager, pending }) db.Store(new PushDevice { EmployeeId = person.Id, Subject = person.KeycloakUserId, OptedInUtc = DateTime.UtcNow.AddDays(-1) });
+            await db.SaveChangesAsync();
+        }
+        using (var session = f.Store.LightweightSession(f.Tenant))
+        {
+            await new PushOutbox().StageStaffAlertAsync(session, "StaffPartnerAccepted", "request-1:2", DateTimeOffset.UtcNow);
+            await session.SaveChangesAsync();
+            // The same event staged again is not sent twice.
+            await new PushOutbox().StageStaffAlertAsync(session, "StaffPartnerAccepted", "request-1:2", DateTimeOffset.UtcNow);
+            await session.SaveChangesAsync();
+        }
+        using var q = f.Store.QuerySession(f.Tenant);
+        var intents = await q.Query<PushIntent>().Where(i => i.Kind == "StaffPartnerAccepted").ToListAsync();
+        Assert.Equal(new[] { admin.Id, manager.Id }.Order(), intents.Select(x => x.EmployeeId).Order());
+        Assert.All(intents, x => Assert.True(x.AdminAudience));
+    }
+
+    [QualityCycleDatabaseFact]
     public async Task Original_key_reassignment_notifies_previous_exception_only_assignee()
     { await VerifyExceptionReassignment(false); await VerifyExceptionReassignment(true); }
 

@@ -27,6 +27,14 @@ public sealed class PushOutbox : IPushOutbox
             EventKey = $"partner-offer:{requestId}:{revision}:{offerId}:{employeeId}", OccurredUtc = occurredAt.UtcDateTime,
             DueUtc = occurredAt.UtcDateTime, ExpiresUtc = occurredAt.UtcDateTime.AddHours(24) }, ct);
 
+    public async Task StageStaffAlertAsync(IDocumentSession session, string kind, string key, DateTimeOffset occurredAt, CancellationToken ct = default)
+    {
+        var admins = await session.Query<Employee>().Where(e => e.IsActive && !e.IdentitySyncPending && (e.Role == Employee.RoleAdmin || e.Role == Employee.RoleManager)).ToListAsync(ct);
+        foreach (var admin in admins)
+            await StageAsync(session, new PushIntent { EmployeeId = admin.Id, AdminAudience = true, Kind = kind, EventKey = $"staff:{kind}:{key}:{admin.Id}",
+                OccurredUtc = occurredAt.UtcDateTime, DueUtc = occurredAt.UtcDateTime, ExpiresUtc = occurredAt.UtcDateTime.AddHours(24) }, ct);
+    }
+
     public async Task StageAsync(IDocumentSession session, PushIntent intent, CancellationToken ct = default)
     {
         // No device at commit means no event to backfill when a user opts in later.

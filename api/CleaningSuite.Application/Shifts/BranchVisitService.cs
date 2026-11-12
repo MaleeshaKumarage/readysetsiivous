@@ -208,7 +208,9 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
         if (visit is null) return false;
         if (visit.OfferRevision != version) throw new ShiftConflictException("This offer changed. Reload your offers and try again.");
         visit.OfferedEmployeeId = null; visit.OfferId = null; visit.OfferRevision++; visit.UpdatedUtc = DateTime.UtcNow;
-        Db.Store(visit); await Db.SaveChangesAsync(ct);
+        Db.Store(visit);
+        if (push is not null) await push.StageStaffAlertAsync(Db, "StaffVisitOfferDeclined", $"{visit.Id}:{visit.OfferRevision}", DateTimeOffset.UtcNow, ct);
+        await Db.SaveChangesAsync(ct);
         return true;
     }
 
