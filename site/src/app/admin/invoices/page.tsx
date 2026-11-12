@@ -69,7 +69,7 @@ export default function InvoicesPage() {
       .catch(failure => { if (active) { setError(failure.message); setLoadFailed(true); } });
     return () => { active = false; version.current++; };
   }, [loadAttempt]);
-  const run = async (action: () => Promise<void>, failureTitle = 'Invoice not created. The reason is shown in the form.') => {
+  const run = async (action: () => Promise<void>, failureTitle = 'Invoice action not completed') => {
     if (pending.current) return; pending.current = true; setBusy(true); setError(''); setStatus('');
     try { await action(); } catch (failure) {
       const message = failure instanceof Error ? failure.message : 'Request failed. Please retry.';
@@ -124,7 +124,7 @@ export default function InvoicesPage() {
     setStatus(`Invoice ${result.invoiceNumber} issued.`);
     // A failed history refresh must not invite a new issue after a confirmed write.
     try { await loadInvoices(); } catch { setError('Invoice issued, but history could not refresh. Reload the page to see the latest list.'); }
-  }, 'Invoice not confirmed. Check the invoice list before issuing again, it may already exist.');
+  });
   const patchAddress = (key: keyof BillingAddress, value: string) => { invalidate(); setAddress(current => ({ ...current, [key]: value })); };
   const patchIssuer = <K extends keyof InvoiceIssuer>(key: K, value: InvoiceIssuer[K]) => { invalidate(); setIssuer(current => current && ({ ...current, [key]: value })); };
   // Closing without saving drops the unsaved edits, so reopening shows and saves only the last saved details.
@@ -148,7 +148,7 @@ export default function InvoicesPage() {
       <Button loading={busy} onClick={() => run(async () => { const value = await invoiceBillingApi.saveIssuer(issuer); if (value) { setIssuer(value); setSavedIssuer(value); setSavedVat(value.defaultVatRatePercent); } invalidate(); setShowIssuer(false); setStatus('Company and payment details saved.'); })}>Save company details</Button>
     </Stack>}</Modal>
 
-    <Modal opened={createOpen} onClose={() => { if (!busy) setCreateOpen(false); }} closeOnClickOutside={!busy} closeOnEscape={!busy} withCloseButton={!busy} title={manual ? 'Create manual invoice' : 'Create shift invoice'} size="lg" radius="md"><fieldset disabled={issuing || uncertain} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><Stack>{error && <Text role="alert" c="red">{error}</Text>}
+    <Modal opened={createOpen} onClose={() => { if (!busy) setCreateOpen(false); }} closeOnClickOutside={!busy} closeOnEscape={!busy} withCloseButton={!busy} title={manual ? 'Create manual invoice' : 'Create shift invoice'} size="lg" radius="md"><fieldset disabled={issuing || uncertain} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><Stack>
       <Select label="Invoice type" allowDeselect={false} value={manual ? 'manual' : 'shift'} data={[{ value: 'shift', label: 'Shift invoice' }, { value: 'manual', label: 'Manual invoice' }]} onChange={value => { invalidate(); setManual(value === 'manual'); }} />
       {!manual && <Checkbox label="Completed cleaning month" checked={partnerMonth} onChange={event => { invalidate(); setPartnerMonth(event.currentTarget.checked); setFrom(''); setTo(''); setMonth(''); setShiftIds([]); setMonthlyOverrides([]); }} />}
       <Select label="Company" searchable data={companies.map(company => ({ value: company.id, label: company.name }))} value={companyId} onChange={value => { invalidate(); setCompanyId(value); setPartnerMonth(Boolean(companies.find(company => company.id === value)?.isPartnerEnabled)); setFrom(''); setTo(''); setMonth(''); setShiftIds([]); setMonthlyOverrides([]); }} />
