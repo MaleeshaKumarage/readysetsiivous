@@ -17,7 +17,9 @@ public class OverlapMessageTests
 
         var message = VisitAssignmentSafety.OverlapMessage(requested, clashing, "QA Specific days Branch B", Helsinki);
 
-        Assert.Contains("It clashes with \"QA Specific days Branch B\", 6 Nov 2026 10:00 to 6 Nov 2026 12:00.", message);
+        Assert.Contains("The clashing visit is \"QA Specific days Branch B\", 6 Nov 2026 10:00 to 6 Nov 2026 12:00.", message);
+        Assert.Contains("at the same time as this one, 6 Nov 2026 11:00 to 6 Nov 2026 13:00.", message);
+        Assert.Contains("set a planned start that does not clash", message);
         Assert.Contains("No assignments were saved.", message);
     }
 
@@ -28,6 +30,6 @@ public class OverlapMessageTests
 
         var message = VisitAssignmentSafety.OverlapMessage(requested, null, null, Helsinki);
 
-        Assert.DoesNotContain("clashes with", message);
+        Assert.DoesNotContain("clashing visit is", message);
     }
 }

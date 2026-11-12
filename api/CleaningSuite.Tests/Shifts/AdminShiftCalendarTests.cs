@@ -210,6 +210,44 @@ public class AdminShiftCalendarTests
         Assert.Single(form.WorkTimeCorrections);
     }
 
+    [Fact]
+    public async Task Photos_an_admin_receives_are_attached_to_the_visit_with_who_when_and_why()
+    {
+        var f = new Fixture(); var v1 = Guid.NewGuid();
+        var form = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Cleaner One", Guid.NewGuid(), "Checklist", f.Start, new() { "Floor" }, f.Start.AddHours(2));
+        form.Start(f.Start); form.Version = v1; form.IsSubmitted = true;
+        f.Forms.Setup(r => r.GetFormByShiftOccurrenceAsync(f.Shift.Id, f.Person.Id, f.Start, It.IsAny<CancellationToken>())).ReturnsAsync(form);
+        f.Forms.Setup(r => r.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        var photos = new List<QualityCyclePhoto> { new("data:image/png;base64,AAAA", "Kitchen after cleaning") };
+
+        Assert.IsType<OkObjectResult>(await f.Controller.AddWorkPhotos(f.PhotosBody(photos, v1), default));
+
+        var photo = Assert.Single(form.Photos);
+        Assert.Equal("Kitchen after cleaning", photo.Note);
+        var addition = Assert.Single(form.WorkPhotoAdditions);
+        Assert.Equal("admin-subject", addition.AdminSubject);
+        Assert.Equal("Cleaner sent these by chat", addition.Reason);
+        Assert.Equal(1, addition.PhotoCount);
+    }
+
+    [Fact]
+    public async Task Photos_are_refused_when_the_visit_has_no_work_record_yet()
+    {
+        var f = new Fixture();
+        f.Forms.Setup(r => r.GetFormByShiftOccurrenceAsync(f.Shift.Id, f.Person.Id, f.Start, It.IsAny<CancellationToken>())).ReturnsAsync((QualityCycleForm?)null);
+
+        Assert.IsType<ConflictObjectResult>(await f.Controller.AddWorkPhotos(f.PhotosBody([new("data:image/png;base64,AAAA", "Hall")], null), default));
+        f.Forms.Verify(r => r.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task A_photo_without_its_own_note_is_refused()
+    {
+        var f = new Fixture();
+
+        Assert.IsType<BadRequestObjectResult>(await f.Controller.AddWorkPhotos(f.PhotosBody([new("data:image/png;base64,AAAA", " ")], null), default));
+    }
+
     private static async Task<JsonElement> VisitAsync(Fixture f)
     {
         var result = Assert.IsType<OkObjectResult>(await f.Controller.Get(f.Start.ToString("yyyy-MM-dd"), default));
@@ -242,10 +280,11 @@ public class AdminShiftCalendarTests
             var reservation = new Mock<IShiftWorkReservation>();
             reservation.Setup(r => r.AcquireAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new Lease());
             Controller = new(Shifts.Object, Employees.Object, Forms.Object, Mock.Of<ICompanyRepository>(), Mock.Of<IBranchRepository>(),
-                null!, null!, reservation.Object);
+                null!, null!, reservation.Object, Mock.Of<CleaningSuite.Application.Common.IUploadContentValidator>());
             Controller.ControllerContext = new() { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity(new[] {
                 new Claim("sub", "admin-subject"), new Claim("email_verified", "true") }, "test")) } };
         }
+        public ShiftCalendarAdminController.WorkPhotosBody PhotosBody(List<QualityCyclePhoto> photos, Guid? version) => new(Shift.Id, Person.Id, Start, null, "Cleaner sent these by chat", photos, version);
         public ShiftCalendarAdminController.WorkTimeBody Body(Guid? version = null) => new(Shift.Id, Person.Id, Start, null,
             Start.ToString("yyyy-MM-dd'T'HH:mm"), Start.AddHours(2).ToString("yyyy-MM-dd'T'HH:mm"), "Recorded from timesheet", version);
     }

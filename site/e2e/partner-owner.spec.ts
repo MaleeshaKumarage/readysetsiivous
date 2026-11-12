@@ -151,7 +151,7 @@ test('FI/EN switching preserves a draft, creates and cancels a Finnish request a
   await expect(page.getByRole('button', { name: 'Suomi', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('link', { name: 'Tili', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Account ready', exact: true })).toBeVisible();
-  await page.getByRole('link', { name: 'Open partner portal', exact: true }).click();
+  await page.getByRole('link', { name: 'Partner portal', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Kumppaniportaali', exact: true })).toBeVisible();
 });
 
@@ -310,13 +310,13 @@ test('owner edits a pending request with its revision and cancels the refreshed 
 
 test('enabled partner account links to the verified company portal', async ({ page }) => {
   const state = await owner(page); await page.goto('/account/?tenant=readysetsiivous'); await expect(page.getByRole('heading', { name: 'Account ready', exact: true })).toBeVisible();
-  const portal = page.getByRole('link', { name: 'Open partner portal', exact: true }); await expect(portal).toHaveAttribute('href', '/partner/'); await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveCount(0);
+  const portal = page.getByRole('link', { name: 'Partner portal', exact: true }); await expect(portal).toHaveAttribute('href', '/partner/'); await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveCount(0);
   expect(state.reads).toEqual(['/me']); await portal.click(); await expect(page).toHaveURL(/\/partner\/$/); await expect(page.getByRole('article', { name: priced.name, exact: true })).toBeVisible(); expect(state.reads).toContain('/branches');
 });
 
 test('disabled company account cannot show a portal link or fetch company data', async ({ page }) => {
   const state = await owner(page, { enabled: false }); await page.goto('/account/?tenant=readysetsiivous'); await expect(page.getByText('Partner access is unavailable. Contact your tenant administrator.', { exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Open partner portal', exact: true })).toHaveCount(0); await expect(page.getByRole('heading', { name: 'Account ready', exact: true })).toHaveCount(0); expect(state.reads).toEqual(['/me']);
+  await expect(page.getByRole('link', { name: 'Partner portal', exact: true })).toHaveCount(0); await expect(page.getByRole('heading', { name: 'Account ready', exact: true })).toHaveCount(0); expect(state.reads).toEqual(['/me']);
   await page.goto('/partner/'); await expect(page.getByText('Access denied.', { exact: false })).toBeVisible(); expect(state.reads).toEqual(['/me', '/me']);
 });
 
@@ -377,7 +377,7 @@ test('cleaner refreshes a failed offer read and a stale preplanned acceptance wi
     accepted = true; return route.fulfill({ headers, json: { id: pending.id, version: 7, status: 'Accepted', linkedShiftId: 'linked-shift', plannedStartUtc: offer.plannedStartUtc, plannedEndUtc: '2026-12-01T10:30:00Z' } });
   });
   await page.goto('/me/shifts/'); await page.getByRole('tab', { name: 'Offers', exact: true }).click(); await expect(page.getByText('Offers are temporarily unavailable.', { exact: true })).toBeVisible(); await expect(page.getByText('No pending cleaning offers.', { exact: true })).toHaveCount(0); expect(decisions).toHaveLength(0);
-  await page.getByRole('button', { name: 'Refresh offers', exact: true }).click(); await expect(page.getByText(/^Planned start:/)).toContainText('10:30'); await expect(page.getByLabel('Planned start for Lake apartment', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Refresh offers', exact: true }).click(); await expect(page.getByTestId('offer-fixed-time')).toContainText('10:30'); await expect(page.getByLabel('Planned start for Lake apartment', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Accept cleaning', exact: true }).click(); await expect(page.getByText('Offer changed. Refresh before accepting.', { exact: true })).toBeVisible(); expect(decisions).toHaveLength(1);
   await page.getByRole('button', { name: 'Refresh offers', exact: true }).click(); await expect(page.getByText('Offer changed. Refresh before accepting.', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Refresh offers', exact: true })).toBeEnabled();

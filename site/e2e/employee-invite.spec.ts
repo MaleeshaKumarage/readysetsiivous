@@ -30,8 +30,8 @@ test('employee account landing confirms binding without admin link', async ({ pa
   await page.goto('/account/?tenant=tenant-a');
   await expect(page.getByRole('heading', { name: 'Account ready' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Choose a section' }).getByRole('link')).toHaveCount(1);
-  await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveAttribute('href', '/me/shifts/');
-  await expect(page.getByRole('link', { name: 'Continue to administration' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Employee portal', exact: true })).toHaveAttribute('href', '/me/shifts/');
+  await expect(page.getByRole('link', { name: 'Office portal' })).toHaveCount(0);
   expect(await page.evaluate(() => sessionStorage.getItem('__AUTH_TENANT__'))).toBe('tenant-a');
 });
 
@@ -39,8 +39,8 @@ test('admin account landing offers valid administration route', async ({ page })
   await setupAdminMocks(page, { authenticated: true });
   await page.route(/\/api\/v1\/me$/, route => route.fulfill({ status: 200, headers, json: { realm: 'tenant-a', employee: null } }));
   await page.goto('/account/?tenant=tenant-a');
-  await expect(page.getByRole('link', { name: 'Continue to administration' })).toHaveAttribute('href', '/admin/');
-  await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Office portal' })).toHaveAttribute('href', '/admin/');
+  await expect(page.getByRole('link', { name: 'Employee portal', exact: true })).toHaveCount(0);
   await expect(page.getByText('To receive shifts, add an Administrator profile', { exact: false })).toBeVisible();
 });
 
@@ -96,14 +96,14 @@ test('A01 account preference persists, rejects pending offers and retries withou
     } else gets++;
     return route.fulfill({ headers: preferenceHeaders, json: { autoAcceptWork: stored } });
   });
-  await page.goto('/account/?tenant=tenant-a');
+  await page.goto('/account/profile/?tenant=tenant-a');
   const toggle = page.getByRole('checkbox', { name: 'Automatically accept cleaning offers' });
   await expect(toggle).not.toBeChecked(); await toggle.check();
   await page.getByRole('button', { name: 'Save work preferences', exact: true }).click();
   await expect(page.getByText('Saving work preferences...', { exact: true })).toBeVisible();
   await expect(toggle).toBeDisabled(); await expect(page.getByRole('button', { name: 'Save work preferences', exact: true })).toBeDisabled();
   finishPending();
-  await expect(page.locator('p[role="alert"]')).toContainText('Accept or decline');
+  await expect(page.getByRole('alert').filter({ hasText: 'Accept or decline' })).toHaveCount(1);
   expect(stored).toBe(false); await expect(page.getByText('Work preferences saved.', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Retry work preferences', exact: true }).click();
   await expect(page.getByText('Work preferences saved.', { exact: true })).toBeVisible();
@@ -119,7 +119,7 @@ for (const profile of [null, { id: 'employee-a', firstName: 'Test', lastName: 'S
     let requests = 0;
     await page.route(/\/api\/v1\/me$/, route => route.fulfill({ headers, json: { realm: 'tenant-a', employee: profile } }));
     await page.route(/\/api\/v1\/me\/work-preferences$/, route => { requests++; return route.fulfill({ headers, json: { autoAcceptWork: false } }); });
-    await page.goto('/account/?tenant=tenant-a'); await expect(page.getByRole('heading', { name: 'Account ready' })).toBeVisible();
+    await page.goto('/account/profile/?tenant=tenant-a'); await expect(page.getByRole('heading', { name: 'Details', exact: true })).toBeVisible();
     await expect(page.getByRole('checkbox', { name: 'Automatically accept cleaning offers' })).toHaveCount(0); expect(requests).toBe(0);
   });
 }
@@ -132,7 +132,7 @@ test('A01 account retries failed preference loading for verified manager and adm
     if (failed) { failed = false; return route.fulfill({ status: 503, headers, json: { detail: 'Preferences temporarily unavailable.' } }); }
     return route.fulfill({ headers, json: { autoAcceptWork: false } });
   });
-  await page.goto('/account/?tenant=tenant-a'); await expect(page.locator('p[role="alert"]')).toContainText('temporarily unavailable');
+  await page.goto('/account/profile/?tenant=tenant-a'); await expect(page.locator('p[role="alert"]')).toContainText('temporarily unavailable');
   await expect(page.getByRole('checkbox')).toHaveCount(0);
   await page.getByRole('button', { name: 'Retry work preferences' }).click();
   await expect(page.getByRole('checkbox', { name: 'Automatically accept cleaning offers' })).not.toBeChecked();

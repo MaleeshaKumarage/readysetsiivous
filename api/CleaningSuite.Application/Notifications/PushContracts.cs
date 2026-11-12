@@ -19,10 +19,12 @@ public interface IPushSubscriptions
 }
 public interface IPushOutbox
 {
-    Task StageScheduleChangeAsync(IDocumentSession session, Guid shiftId, IEnumerable<Guid> employeeIds, DateTimeOffset occurredAt, CancellationToken ct = default);
+    Task StageScheduleChangeAsync(IDocumentSession session, Guid shiftId, IEnumerable<Guid> employeeIds, DateTimeOffset occurredAt, CancellationToken ct = default, string kind = "ShiftUpdated", string? detail = null);
     Task StagePartnerRequestAsync(IDocumentSession session, Guid requestId, int revision, DateTimeOffset occurredAt, CancellationToken ct = default);
     Task StagePartnerOfferAsync(IDocumentSession session, Guid requestId, int revision, Guid offerId, Guid employeeId, DateTimeOffset occurredAt, CancellationToken ct = default);
     Task StageAsync(IDocumentSession session, PushIntent intent, CancellationToken ct = default);
+    /// <summary>Tells every opted-in admin and manager about an event that needs staff attention (partner or visit change).</summary>
+    Task StageStaffAlertAsync(IDocumentSession session, string kind, string key, DateTimeOffset occurredAt, CancellationToken ct = default, string? detail = null);
 }
 public interface IPushDeliveryService { Task ProcessAsync(CancellationToken ct = default); }
 public interface IPushDeliveryReservation { Task<IAsyncDisposable?> TryAcquireAsync(Guid id, CancellationToken ct = default); }

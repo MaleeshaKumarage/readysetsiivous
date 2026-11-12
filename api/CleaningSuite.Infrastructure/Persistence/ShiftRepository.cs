@@ -32,6 +32,9 @@ public class ShiftRepository : IShiftRepository
         return shift;
     }
 
+    public async Task<IReadOnlyList<Shift>> ListAllAsync(CancellationToken ct = default) =>
+        await Session.Query<Shift>().OrderBy(s => s.Name).ToListAsync(ct);
+
     public async Task<IReadOnlyList<Shift>> ListAsync(
         Guid? companyId,
         Guid? branchId,
@@ -388,7 +391,15 @@ public class ShiftRepository : IShiftRepository
                 .Where(x => x.OriginalStartUtc == original && x.ExtraExceptionId == extra)
                 .SelectMany(x => x.EmployeeIds).Distinct().ToArray();
         }
-        await _push.StageScheduleChangeAsync(Session, shiftId, Resolve(false).Concat(Resolve(true)), DateTimeOffset.UtcNow, ct);
+        await _push.StageScheduleChangeAsync(Session, shiftId, Resolve(false).Concat(Resolve(true)), DateTimeOffset.UtcNow, ct, detail: await ShiftDetail(shiftId, ct));
+    }
+
+    // The property the shift is for, shown in the alert.
+    private async Task<string?> ShiftDetail(Guid shiftId, CancellationToken ct)
+    {
+        var shift = await Session.LoadAsync<CleaningSuite.Domain.Shifts.Shift>(shiftId, ct);
+        var branch = shift is null ? null : await Session.LoadAsync<CleaningSuite.Domain.Companies.Branch>(shift.BranchId, ct);
+        return CleaningSuite.Application.Notifications.VisitDetail.Describe(branch?.Name, null, null);
     }
 
     private async Task StageChange(Guid shiftId, IEnumerable<Guid> additional, CancellationToken ct)
@@ -399,7 +410,7 @@ public class ShiftRepository : IShiftRepository
         var overrides = await Session.Query<ShiftOccurrenceAssignment>().Where(x => x.ShiftId == shiftId).ToListAsync(ct);
         var exceptions = await Session.Query<ShiftOccurrenceException>().Where(x => x.ShiftId == shiftId).ToListAsync(ct);
         var recipients = FutureRecipients(assignments, overrides, exceptions, DateTime.UtcNow).Concat(additional).Distinct();
-        await _push.StageScheduleChangeAsync(Session, shiftId, recipients, DateTimeOffset.UtcNow, ct);
+        await _push.StageScheduleChangeAsync(Session, shiftId, recipients, DateTimeOffset.UtcNow, ct, detail: await ShiftDetail(shiftId, ct));
     }
     public static IReadOnlyList<Guid> FutureRecipients(IEnumerable<ShiftAssignment> assignments,
         IEnumerable<ShiftOccurrenceAssignment> overrides, IEnumerable<ShiftOccurrenceException> exceptions, DateTime now)

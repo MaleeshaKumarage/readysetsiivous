@@ -110,6 +110,25 @@ public class WorkQueueRulesTests
     }
 
     [Fact]
+    public void Occurrence_work_status_is_null_for_a_cancelled_visit()
+    {
+        var visit = Visit(start: new DateTime(2026, 12, 1, 8, 0, 0, DateTimeKind.Utc), cancelled: true, employees: [Guid.NewGuid()]);
+
+        Assert.Null(WorkQueueRules.OccurrenceWorkStatus(visit, [], DateTime.UtcNow));
+    }
+
+    [Fact]
+    public void Occurrence_work_status_reads_completed_and_in_progress_work_from_its_forms()
+    {
+        var cleaner = Guid.NewGuid();
+        var visit = Visit(start: new DateTime(2026, 12, 1, 8, 0, 0, DateTimeKind.Utc), employees: [cleaner]);
+        var now = new DateTime(2026, 12, 1, 9, 0, 0, DateTimeKind.Utc);
+
+        Assert.Equal(WorkQueueViews.Completed, WorkQueueRules.OccurrenceWorkStatus(visit, [SubmittedForm(cleaner)], now));
+        Assert.Equal(WorkQueueViews.InProgress, WorkQueueRules.OccurrenceWorkStatus(visit, [StartedForm(cleaner)], now));
+    }
+
+    [Fact]
     public void Cancelled_occurrence_is_cancelled_even_when_its_form_was_submitted()
     {
         var visit = Visit(start: new DateTime(2026, 12, 1, 8, 0, 0, DateTimeKind.Utc), cancelled: true, employees: [Guid.NewGuid()]);

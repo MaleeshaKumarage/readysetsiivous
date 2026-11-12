@@ -619,6 +619,8 @@ export interface ShiftOccurrence {
   // Set for visits of a property's main visit shift only.
   visitNumber?: number | null; visitSource?: string | null; visitNotes?: string | null; visitCleaningType?: string | null;
   offeredEmployeeId?: string | null; offerRevision?: number | null; isPartnerBooking?: boolean;
+  // Work state from the visit's quality forms: Completed, InProgress, Scheduled or NeedsAction. Null when cancelled.
+  workStatus?: string | null;
 }
 
 /** A visit on a property's main shift. It carries no price: the price comes from the property. */

@@ -606,7 +606,7 @@ test('a new employee defaults to automatic approval, and automatic only applies 
   const backend = new PartnerFlowBackend({ priced: true });
   backend.seedRequest(backend.branches[0], WINDOW);
   const newcomer = await openActor(browser, testInfo, backend, 'newCleaner');
-  await newcomer.page.goto('/account/?tenant=readysetsiivous');
+  await newcomer.page.goto('/account/profile/?tenant=readysetsiivous');
   await expect(newcomer.page.getByRole('checkbox', { name: 'Automatically accept cleaning offers' })).toBeChecked();
   await newcomer.context.close();
 

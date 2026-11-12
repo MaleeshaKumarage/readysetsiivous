@@ -185,7 +185,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         </div>)}
       </Stack>
     </Box>
-    <Box className="admin-sidebar-footer" pt="md"><Stack gap="xs"><Button component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}#notifications`} variant="subtle">Notifications</Button><PwaInstallButton variant="light" size="sm" language="en" /></Stack></Box>
+    <Box className="admin-sidebar-footer" pt="md"><Stack gap="xs"><Button component={Link} href={`/account/profile/?tenant=${encodeURIComponent(authTenant())}#notifications`} variant="subtle">Notifications</Button><PwaInstallButton variant="light" size="sm" language="en" /></Stack></Box>
   </>);
   return (
     <MantineProvider theme={adminTheme} forceColorScheme="light">

@@ -184,6 +184,38 @@ public class PushReminderDatabaseTests
     }
 
     [QualityCycleDatabaseFact]
+    public async Task Staff_alerts_reach_only_opted_in_synced_administrators_and_managers_once_per_event()
+    {
+        using var f = await Fixture.Create();
+        var admin = new Employee { Role = Employee.RoleAdmin, KeycloakUserId = "admin-alert" };
+        var manager = new Employee { Role = Employee.RoleManager, KeycloakUserId = "manager-alert" };
+        var pending = new Employee { Role = Employee.RoleAdmin, KeycloakUserId = "pending-alert", IdentitySyncPending = true };
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(admin, manager, pending);
+            foreach (var person in new[] { admin, manager, pending }) db.Store(new PushDevice { EmployeeId = person.Id, Subject = person.KeycloakUserId, OptedInUtc = DateTime.UtcNow.AddDays(-1) });
+            await db.SaveChangesAsync();
+        }
+        using (var session = f.Store.LightweightSession(f.Tenant))
+        {
+            await new PushOutbox().StageStaffAlertAsync(session, "StaffPartnerAccepted", "request-1:2", DateTimeOffset.UtcNow);
+            await session.SaveChangesAsync();
+            // The same event staged again is not sent twice.
+            await new PushOutbox().StageStaffAlertAsync(session, "StaffPartnerAccepted", "request-1:2", DateTimeOffset.UtcNow);
+            await session.SaveChangesAsync();
+        }
+        using var q = f.Store.QuerySession(f.Tenant);
+        var intents = await q.Query<PushIntent>().Where(i => i.Kind == "StaffPartnerAccepted").ToListAsync();
+        Assert.Equal(new[] { admin.Id, manager.Id }.Order(), intents.Select(x => x.EmployeeId).Order());
+        Assert.All(intents, x => Assert.True(x.AdminAudience));
+        // The inbox keeps the same event for the same people, once, even without push enabled.
+        using var inboxQuery = f.Store.QuerySession(f.Tenant);
+        var inbox = await inboxQuery.Query<CleaningSuite.Domain.Notifications.StaffInboxItem>().Where(i => i.Kind == "StaffPartnerAccepted").ToListAsync();
+        Assert.Equal(new[] { admin.Id, manager.Id }.Order(), inbox.Select(x => x.EmployeeId).Order());
+        Assert.All(inbox, x => Assert.Equal("Cleaner accepted partner work", x.Title));
+    }
+
+    [QualityCycleDatabaseFact]
     public async Task Original_key_reassignment_notifies_previous_exception_only_assignee()
     { await VerifyExceptionReassignment(false); await VerifyExceptionReassignment(true); }
 
@@ -200,8 +232,8 @@ public class PushReminderDatabaseTests
         using (var db = f.Store.LightweightSession(f.Tenant)) { db.Store(f.Shift); db.Store(exception); await db.SaveChangesAsync(); }
         using var session = f.Session(); var outbox = new Mock<IPushOutbox>();
         Guid[] recipients = [];
-        outbox.Setup(x => x.StageScheduleChangeAsync(It.IsAny<IDocumentSession>(), f.Shift.Id, It.IsAny<IEnumerable<Guid>>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
-            .Callback<IDocumentSession, Guid, IEnumerable<Guid>, DateTimeOffset, CancellationToken>((_, _, ids, _, _) => recipients = ids.ToArray()).Returns(Task.CompletedTask);
+        outbox.Setup(x => x.StageScheduleChangeAsync(It.IsAny<IDocumentSession>(), f.Shift.Id, It.IsAny<IEnumerable<Guid>>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>(), It.IsAny<string>(), It.IsAny<string?>()))
+            .Callback<IDocumentSession, Guid, IEnumerable<Guid>, DateTimeOffset, CancellationToken, string, string?>((_, _, ids, _, _, _, _) => recipients = ids.ToArray()).Returns(Task.CompletedTask);
         var repository = new ShiftRepository(session, outbox.Object);
         var tracked = loadByList
             ? (await repository.ListOccurrenceExceptionsAsync(f.Shift.Id, start.AddDays(-1), start.AddDays(2))).Single()
@@ -224,8 +256,8 @@ public class PushReminderDatabaseTests
         using (var db = f.Store.LightweightSession(f.Tenant))
         { db.Store(f.Shift); db.Store(visit, elsewhere); db.Store(change); db.Store(f.Assignments.ToArray()); await db.SaveChangesAsync(); }
         using var session = f.Session(); var outbox = new Mock<IPushOutbox>(); Guid[] recipients = [];
-        outbox.Setup(x => x.StageScheduleChangeAsync(It.IsAny<IDocumentSession>(), f.Shift.Id, It.IsAny<IEnumerable<Guid>>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
-            .Callback<IDocumentSession, Guid, IEnumerable<Guid>, DateTimeOffset, CancellationToken>((_, _, ids, _, _) => recipients = ids.Distinct().ToArray()).Returns(Task.CompletedTask);
+        outbox.Setup(x => x.StageScheduleChangeAsync(It.IsAny<IDocumentSession>(), f.Shift.Id, It.IsAny<IEnumerable<Guid>>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>(), It.IsAny<string>(), It.IsAny<string?>()))
+            .Callback<IDocumentSession, Guid, IEnumerable<Guid>, DateTimeOffset, CancellationToken, string, string?>((_, _, ids, _, _, _, _) => recipients = ids.Distinct().ToArray()).Returns(Task.CompletedTask);
         var repository = new ShiftRepository(session, outbox.Object);
         var tracked = (await repository.ListOccurrenceAssignmentsAsync(f.Shift.Id)).Single();
         tracked.Update(OccurrenceAssignmentMode.Replace, [newEmployee], "after");
@@ -359,7 +391,7 @@ public class PushReminderDatabaseTests
         Assert.False(await f.Scheduler().IsEligibleAsync(intent));
     }
 
-    private sealed class Fixture : IDisposable
+    internal sealed class Fixture : IDisposable
     {
         public required ServiceProvider Provider; public required IDocumentStore Store; public required IConfiguration Config;
         public string Tenant = "push-reminder-" + Guid.NewGuid().ToString("N");

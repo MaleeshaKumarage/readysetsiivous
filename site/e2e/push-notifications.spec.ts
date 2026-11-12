@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import path from 'node:path';
 import { setupAdminMocks } from './admin-helpers';
 
-async function setup(page: Page, mode = 'normal') {
+async function setup(page: Page, mode = 'normal', path = '/account/profile/') {
   await setupAdminMocks(page);
   await page.route(/\/api\/v1\/me$/, r => r.fulfill({ json: { realm: 'readysetsiivous', employee: { id: 'e', firstName: 'Test', lastName: 'Staff', role: 'employee', isActive: true } } }));
   await page.route(/\/api\/v1\/me\/partner-request-preferences$/, r => r.fulfill({ json: { autoAcceptPartnerRequests: false } }));
@@ -25,7 +25,7 @@ async function setup(page: Page, mode = 'normal') {
     Object.defineProperty(window, 'Notification', { configurable: true, value: { permission: mode === 'denied' ? 'denied' : 'default', requestPermission: () => { (window as any).__permissionCalls++; return Promise.resolve('granted'); } } });
     if (mode === 'ios') Object.defineProperty(navigator, 'userAgent', { value: 'iPhone OS 17_0' });
   }, mode);
-  await page.goto('/account/');
+  await page.goto(path);
   return methods;
 }
 test('permission is opt-in, test feedback is honest, disabling affects this device', async ({ page }) => {
@@ -77,9 +77,10 @@ test('service worker uses visible malformed fallback and rejects external clicks
 });
 
 test('account notification settings anchor reveals the panel', async ({ page }) => {
-  await setup(page);
-  await page.getByRole('link', { name: 'Notification settings', exact: true }).click();
-  await expect(page).toHaveURL(/\/account\/#notifications$/);
+  await setup(page, 'normal', '/account/');
+  await page.getByRole('button', { name: /^Notifications/ }).click();
+  await page.getByRole('dialog', { name: 'Notifications', exact: true }).getByRole('link', { name: 'Notification settings', exact: true }).click();
+  await expect(page).toHaveURL(/\/account\/profile\/.*#notifications$/);
   await expect(page.getByRole('region', { name: 'Notifications', exact: true })).toBeVisible();
 });
 
@@ -111,7 +112,7 @@ test('logout invalidates browser endpoint when server cleanup fails', async ({ p
   await expect(page.getByText('Notifications are enabled on this device.')).toBeVisible();
   await page.route(/\/api\/v1\/me\/notifications\/subscription\/device-a$/, r => r.fulfill({ status: 503 }));
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Go to your account', exact: true })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('readyset-push-device-v1'))).toBeNull();
 });
 test('account change invalidates previous browser subscription before opt-in', async ({ page }) => {
@@ -168,7 +169,7 @@ for (const code of ['ownership_conflict', 'device_limit']) test(`enrollment conf
 });
 
 test('admin Notifications navigation opens account notification settings', async ({page,isMobile}) => {
- await setup(page);await page.route(/\/api\/v1\/me$/,r=>r.fulfill({json:{realm:'readysetsiivous',roles:[JSON.stringify({roles:['admin']})],employee:null}}));await page.goto('/admin/');if(isMobile){await page.evaluate(()=>document.getElementById('mock-test-style')?.remove());await page.getByRole('button',{name:'Toggle navigation',exact:true}).click();}await page.getByRole('link',{name:'Notifications',exact:true}).click();await expect(page).toHaveURL(/\/account\/\?tenant=readysetsiivous#notifications$/);await expect(page.getByRole('region',{name:'Notifications',exact:true})).toBeVisible();
+ await setup(page);await page.route(/\/api\/v1\/me$/,r=>r.fulfill({json:{realm:'readysetsiivous',roles:[JSON.stringify({roles:['admin']})],employee:null}}));await page.goto('/admin/');if(isMobile){await page.evaluate(()=>document.getElementById('mock-test-style')?.remove());await page.getByRole('button',{name:'Toggle navigation',exact:true}).click();}await page.getByRole('link',{name:'Notifications',exact:true}).click();await expect(page).toHaveURL(/\/account\/profile\/\?tenant=readysetsiivous#notifications$/);await expect(page.getByRole('region',{name:'Notifications',exact:true})).toBeVisible();
 });
 for(const installMode of ['ios','desktop','installed'])test(`My shifts install action: ${installMode}`,async({page})=>{
  await setup(page);await page.addInitScript(mode=>{if(mode==='ios')Object.defineProperty(navigator,'userAgent',{configurable:true,value:'iPhone OS 17_0'});if(mode==='desktop')Object.defineProperty(navigator,'userAgent',{configurable:true,value:'Desktop Chrome'});if(mode==='installed')Object.defineProperty(navigator,'standalone',{configurable:true,value:true});},installMode);

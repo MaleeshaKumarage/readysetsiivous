@@ -28,7 +28,9 @@ public sealed class PushIntent : BaseDocument
     public DateTime? OccurrenceStartUtc { get; set; }
     public DateTime? OccurrenceEndUtc { get; set; }
     public string EventKey { get; set; } = "";
-    public string Kind { get; set; } = "ScheduleChanged";
+    public string Kind { get; set; } = "ShiftUpdated";
+    // Which visit the alert is about, shown in the push text. Null when not known.
+    public string? Detail { get; set; }
     public bool AdminAudience { get; set; }
     public DateTime OccurredUtc { get; set; }
     public DateTime DueUtc { get; set; }

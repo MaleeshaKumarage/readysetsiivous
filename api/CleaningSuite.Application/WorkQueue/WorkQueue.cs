@@ -80,6 +80,10 @@ public static class WorkQueueRules
         return WorkQueueViews.Scheduled;
     }
 
+    /// <summary>The work state shown on an occurrence: the same view the queue uses, or null for a cancelled visit.</summary>
+    public static string? OccurrenceWorkStatus(ShiftVisitRosterEntry visit, IReadOnlyList<QualityCycleForm> occurrenceForms, DateTime nowUtc) =>
+        visit.IsCancelled ? null : ShiftView(visit, occurrenceForms, nowUtc);
+
     /// <summary>
     /// A deactivated shift's future occurrences that are still waiting for work are cancelled, so they no longer count as
     /// Needs action or Scheduled work. Work already in progress or completed keeps its view, and past occurrences keep

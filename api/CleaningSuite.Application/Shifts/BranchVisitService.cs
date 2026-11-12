@@ -133,7 +133,7 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
         if (body.EmployeeId is { } next) await OfferTo(shift, visit, next, zone, ct);
         visit.UpdatedUtc = DateTime.UtcNow; Db.Store(visit);
         if (push is not null && released.HasValue && released != visit.EmployeeId)
-            await push.StageScheduleChangeAsync(Db, shift.Id, [released.Value], DateTimeOffset.UtcNow, ct);
+            await push.StageScheduleChangeAsync(Db, shift.Id, [released.Value], DateTimeOffset.UtcNow, ct, kind: "ShiftRemoved", detail: await VisitText(shift, visit.StartUtc, zone, ct));
         await Db.SaveChangesAsync(ct);
         return Map(visit, shift, zone, zoneId);
     }
@@ -178,7 +178,7 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
             var localEnd = TimeZoneInfo.ConvertTimeFromUtc(visit.EndUtc.AddTicks(-1), zone);
             result.Add(new(visit.OfferId!.Value, visit.Id, visit.OfferRevision, branch.Name, branch.Street, branch.PostalCode, branch.City,
                 DateOnly.FromDateTime(localStart), DateOnly.FromDateTime(localEnd), localStart.ToString("HH:mm", CultureInfo.InvariantCulture),
-                visit.StartUtc, (int)Math.Min(1440, Math.Round((visit.EndUtc - visit.StartUtc).TotalMinutes)), visit.Notes ?? shift.Notes, zoneId));
+                visit.StartUtc, (int)Math.Min(1440, Math.Round((visit.EndUtc - visit.StartUtc).TotalMinutes)), visit.Notes ?? shift.Notes, zoneId, visit.CleaningType ?? "Normal"));
         }
         return result;
     }
@@ -201,6 +201,14 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
     }
 
     /// <summary>Declines a visit offer. Returns false when the id is not a visit offer for this cleaner.</summary>
+    // "Which visit" text for an alert: the property and the local start time.
+    private async Task<string?> VisitText(Shift shift, DateTime? start, TimeZoneInfo zone, CancellationToken ct)
+    {
+        var branch = await Db.LoadAsync<Branch>(shift.BranchId, ct);
+        return VisitDetail.Describe(branch?.Name, start, zone);
+    }
+
+    /// <summary>Declines a visit offer. Returns false when the id is not a visit offer for this cleaner.</summary>
     public async Task<bool> Decline(Guid actor, Guid offerId, int version, CancellationToken ct)
     {
         await using var lease = await reservation.AcquireAsync(ct);
@@ -208,7 +216,15 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
         if (visit is null) return false;
         if (visit.OfferRevision != version) throw new ShiftConflictException("This offer changed. Reload your offers and try again.");
         visit.OfferedEmployeeId = null; visit.OfferId = null; visit.OfferRevision++; visit.UpdatedUtc = DateTime.UtcNow;
-        Db.Store(visit); await Db.SaveChangesAsync(ct);
+        Db.Store(visit);
+        if (push is not null)
+        {
+            var declinedShift = await Db.LoadAsync<Shift>(visit.ShiftId, ct);
+            var (_, declinedZone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
+            var detail = declinedShift is null ? null : await VisitText(declinedShift, visit.StartUtc, declinedZone, ct);
+            await push.StageStaffAlertAsync(Db, "StaffVisitOfferDeclined", $"{visit.Id}:{visit.OfferRevision}", DateTimeOffset.UtcNow, ct, detail);
+        }
+        await Db.SaveChangesAsync(ct);
         return true;
     }
 
@@ -237,7 +253,7 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
         visit.EmployeeId = employeeId; visit.OfferedEmployeeId = null; visit.OfferId = null; visit.OfferRevision++;
         var roster = ShiftVisitRoster.Resolve(shift.Id, [], [visit], [], []);
         await VisitAssignmentSafety.CheckConflicts(shifts, shift, roster, zone, ct);
-        if (push is not null) await push.StageScheduleChangeAsync(Db, shift.Id, [employeeId], DateTimeOffset.UtcNow, ct);
+        if (push is not null) await push.StageScheduleChangeAsync(Db, shift.Id, [employeeId], DateTimeOffset.UtcNow, ct, kind: "ShiftAssigned", detail: await VisitText(shift, visit.StartUtc, zone, ct));
     }
 
     private async Task EnsureUnstarted(Guid shiftId, DateTime startUtc, CancellationToken ct)

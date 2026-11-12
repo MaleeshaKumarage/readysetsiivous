@@ -1,0 +1,60 @@
+/* Account and profile pages use the partner portal theme (see partner/partner.css) so the look matches. */
+.account-grid { display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 1024px) { .account-grid { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); } }
+
+.account-tile { display: flex; align-items: center; gap: 16px; min-height: 72px; padding: 20px; border: 1px solid var(--partner-border); border-radius: 18px; background: white; color: var(--partner-ink); font-size: 17px; font-weight: 650; text-decoration: none; box-shadow: 0 2px 8px #0a174106; transition: background-color .15s ease, border-color .15s ease; }
+.account-tile:hover { background: var(--partner-gold-light); border-color: var(--partner-gold); }
+.account-tile:focus-visible { outline: 3px solid var(--partner-focus); outline-offset: 2px; }
+.account-tile-icon { display: flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; height: 44px; border-radius: 9999px; background: var(--partner-ink); color: white; }
+
+.account-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.account-section-heading h2, .account-section h2 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
+.account-section { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.account-link { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; font-weight: 650; color: var(--partner-ink); text-decoration: underline; }
+.account-link:focus-visible { outline: 3px solid var(--partner-focus); outline-offset: 2px; }
+
+/* Notification bell and drawer */
+.notify-bell { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 9999px; border: 1px solid var(--partner-border); background: white; color: var(--partner-ink); cursor: pointer; }
+.notify-bell:hover { background: var(--partner-gold-light); }
+.notify-bell:focus-visible, .notify-item:focus-visible, .notify-close:focus-visible, .notify-foot a:focus-visible { outline: 3px solid var(--partner-focus); outline-offset: 2px; }
+.notify-badge { position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 9999px; background: #b91c1c; color: white; font-size: 12px; font-weight: 700; line-height: 20px; text-align: center; }
+.notify-overlay { position: fixed; inset: 0; z-index: 40; background: #0a174066; }
+.notify-drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 50; display: flex; flex-direction: column; width: min(420px, 100%); background: white; color: var(--partner-ink); box-shadow: -8px 0 24px #0a174133; }
+.notify-drawer-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 20px; border-bottom: 1px solid var(--partner-border); }
+.notify-drawer-head h2 { margin: 0; font-size: 20px; font-weight: 700; }
+.notify-count { margin: 2px 0 0; font-size: 14px; color: var(--partner-muted); }
+.notify-close { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; border: 0; border-radius: 9999px; background: transparent; color: inherit; cursor: pointer; }
+.notify-empty { padding: 20px; color: var(--partner-muted); }
+.notify-list { flex: 1; margin: 0; padding: 0; list-style: none; overflow-y: auto; }
+.notify-item { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; min-height: 44px; padding: 16px 20px; border-bottom: 1px solid var(--partner-border); color: inherit; text-decoration: none; }
+.notify-item:hover { background: var(--partner-gold-light); }
+.notify-unread { border-left: 4px solid var(--partner-gold); }
+.notify-title { font-size: 16px; font-weight: 650; overflow-wrap: anywhere; grid-column: 1; }
+.notify-unread .notify-title { font-weight: 800; }
+.notify-body { grid-column: 1; font-size: 14px; color: var(--partner-muted); overflow-wrap: anywhere; }
+.notify-time { grid-column: 1; font-size: 12px; color: var(--partner-muted); }
+.notify-open { grid-column: 2; grid-row: 1 / span 3; align-self: center; color: var(--partner-muted); }
+.notify-foot { padding: 16px 20px; border-top: 1px solid var(--partner-border); }
+
+/* Portal picker: one round icon per portal, label underneath (like the TV account chooser). */
+.account-circles { display: flex; flex-wrap: wrap; justify-content: center; gap: 24px; padding: 8px 0; }
+.account-circle { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 150px; min-width: 0; color: var(--partner-ink); font-size: 16px; font-weight: 650; text-align: center; white-space: nowrap; text-decoration: none; }
+.account-circle-icon { display: flex; align-items: center; justify-content: center; width: 96px; height: 96px; border-radius: 9999px; background: var(--partner-ink); color: white; transition: box-shadow .15s ease; }
+.account-circle:hover .account-circle-icon { box-shadow: 0 0 0 4px var(--partner-gold-light), 0 0 0 7px var(--partner-gold); }
+.account-circle:focus-visible { outline: none; }
+.account-circle:focus-visible .account-circle-icon { outline: 3px solid var(--partner-focus); outline-offset: 4px; }
+@media (prefers-reduced-motion: reduce) { .account-circle-icon { transition: none; } }
+
+/* Notification event settings on the profile page */
+.account-muted { font-size: 14px; color: var(--partner-muted); margin: 0; }
+.account-event-group { display: flex; flex-direction: column; gap: 8px; }
+.account-event-group h3 { margin: 8px 0 0; font-size: 15px; font-weight: 700; }
+.account-event-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.account-event { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--partner-border); }
+.account-event-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.account-event-label { font-weight: 650; }
+.account-event-switches { display: flex; gap: 16px; flex-wrap: wrap; }
+.account-switch { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.account-switch input { width: 20px; height: 20px; accent-color: var(--partner-ink); }
+.account-switch input:focus-visible { outline: 3px solid var(--partner-focus); outline-offset: 2px; }
+.account-switch-disabled { opacity: .55; cursor: not-allowed; }

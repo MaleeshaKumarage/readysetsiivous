@@ -69,11 +69,11 @@ export default function InvoicesPage() {
       .catch(failure => { if (active) { setError(failure.message); setLoadFailed(true); } });
     return () => { active = false; version.current++; };
   }, [loadAttempt]);
-  const run = async (action: () => Promise<void>) => {
+  const run = async (action: () => Promise<void>, failureTitle = 'Invoice action not completed') => {
     if (pending.current) return; pending.current = true; setBusy(true); setError(''); setStatus('');
     try { await action(); } catch (failure) {
       const message = failure instanceof Error ? failure.message : 'Request failed. Please retry.';
-      setError(message); showError(message, 'Invoice action not completed');
+      setError(message); showError(message, failureTitle);
     }
     finally { pending.current = false; setBusy(false); }
   };
@@ -148,7 +148,7 @@ export default function InvoicesPage() {
       <Button loading={busy} onClick={() => run(async () => { const value = await invoiceBillingApi.saveIssuer(issuer); if (value) { setIssuer(value); setSavedIssuer(value); setSavedVat(value.defaultVatRatePercent); } invalidate(); setShowIssuer(false); setStatus('Company and payment details saved.'); })}>Save company details</Button>
     </Stack>}</Modal>
 
-    <Modal opened={createOpen} onClose={() => { if (!busy) setCreateOpen(false); }} closeOnClickOutside={!busy} closeOnEscape={!busy} withCloseButton={!busy} title={manual ? 'Create manual invoice' : 'Create shift invoice'} size="lg" radius="md"><fieldset disabled={issuing || uncertain} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><Stack>{error && <Text role="alert" c="red">{error}</Text>}
+    <Modal opened={createOpen} onClose={() => { if (!busy) setCreateOpen(false); }} closeOnClickOutside={!busy} closeOnEscape={!busy} withCloseButton={!busy} title={manual ? 'Create manual invoice' : 'Create shift invoice'} size="lg" radius="md"><fieldset disabled={issuing || uncertain} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><Stack>
       <Select label="Invoice type" allowDeselect={false} value={manual ? 'manual' : 'shift'} data={[{ value: 'shift', label: 'Shift invoice' }, { value: 'manual', label: 'Manual invoice' }]} onChange={value => { invalidate(); setManual(value === 'manual'); }} />
       {!manual && <Checkbox label="Completed cleaning month" checked={partnerMonth} onChange={event => { invalidate(); setPartnerMonth(event.currentTarget.checked); setFrom(''); setTo(''); setMonth(''); setShiftIds([]); setMonthlyOverrides([]); }} />}
       <Select label="Company" searchable data={companies.map(company => ({ value: company.id, label: company.name }))} value={companyId} onChange={value => { invalidate(); setCompanyId(value); setPartnerMonth(Boolean(companies.find(company => company.id === value)?.isPartnerEnabled)); setFrom(''); setTo(''); setMonth(''); setShiftIds([]); setMonthlyOverrides([]); }} />
@@ -165,6 +165,7 @@ export default function InvoicesPage() {
         <Button variant="light" disabled={!overrideShift || !overrideMonth || !overrideReason.trim() || overrideAmount === ''} onClick={() => { invalidate(); setMonthlyOverrides(current => [...current.filter(item => item.shiftId !== overrideShift || item.month !== overrideMonth), { shiftId: overrideShift!, month: overrideMonth, amountNet: Number(overrideAmount), reason: overrideReason.trim() }]); }}>Apply monthly override</Button>
         {monthlyOverrides.map(item => <Group key={`${item.shiftId}-${item.month}`}><Text>{shifts.find(shift => shift.id === item.shiftId)?.name} · {item.month} · {money(item.amountNet)} · {item.reason}</Text><Button size="xs" variant="subtle" onClick={() => { invalidate(); setMonthlyOverrides(current => current.filter(value => value !== item)); }}>Remove override</Button></Group>)}
       </Stack></details>}
+      {error && createOpen && <Text role="alert" c="red" data-testid="create-invoice-error">{error}</Text>}
       <Button loading={busy} disabled={!issuer || (!manual && ((!partnerMonth && !shiftIds.length) || (partnerMonth && !month)))} onClick={buildPreview}>Preview invoice</Button>
     </Stack></fieldset></Modal>
     </Stack>

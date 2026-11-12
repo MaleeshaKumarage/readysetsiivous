@@ -150,6 +150,7 @@ builder.Services.AddSingleton<CleaningSuite.Application.Notifications.IPushSetti
 builder.Services.AddSingleton<CleaningSuite.Application.Notifications.IPushTransport, CleaningSuite.Infrastructure.Notifications.WebPushTransport>();
 builder.Services.AddScoped<CleaningSuite.Application.Notifications.IPushSubscriptions, CleaningSuite.Infrastructure.Notifications.PushSubscriptions>();
 builder.Services.AddScoped<CleaningSuite.Application.Notifications.IPushOutbox, CleaningSuite.Infrastructure.Notifications.PushOutbox>();
+builder.Services.AddScoped<CleaningSuite.Application.Notifications.IStaffInbox, CleaningSuite.Infrastructure.Notifications.StaffInbox>();
 builder.Services.AddScoped<CleaningSuite.Application.Notifications.IPushDeliveryService, CleaningSuite.Infrastructure.Notifications.PushDeliveryService>();
 builder.Services.AddScoped<CleaningSuite.Application.Notifications.IPushDeliveryReservation, CleaningSuite.Infrastructure.Notifications.PushDeliveryReservation>();
 builder.Services.AddScoped<CleaningSuite.Application.Notifications.PushReminderScheduler>();

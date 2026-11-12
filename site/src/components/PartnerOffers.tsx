@@ -48,9 +48,10 @@ export function PartnerOffers({ onAccepted }: { onAccepted: () => void }) {
         <h3 className="text-lg font-semibold break-words">{offer.branchName}</h3>
         <p className="text-sm text-gray-600 dark:text-gray-300 break-words">{[offer.street, offer.postalCode, offer.city].filter(Boolean).join(', ')}</p>
         <p className="text-sm text-gray-600 dark:text-gray-300">{offer.fromDate} – {offer.toDate} · Estimated {offer.estimatedDurationMinutes} minutes · {offer.timeZoneId}</p>
+        <p data-testid="offer-cleaning-type" className="text-sm font-semibold">{offer.cleaningType === 'Deep' ? 'Deep cleaning' : 'Normal cleaning'}</p>
         {offer.notes && <p className="whitespace-pre-wrap break-words">{offer.notes}</p>}
         {offer.plannedStartUtc
-          ? <p>Planned start: {new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: offer.timeZoneId }).format(new Date(offer.plannedStartUtc))}</p>
+          ? <div className="space-y-1"><p data-testid="offer-fixed-time">Fixed time: {new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: offer.timeZoneId }).format(new Date(offer.plannedStartUtc))}</p><p className="text-sm text-gray-600 dark:text-gray-300">This time is set by the office. If you cannot attend, decline with a reason and the office will choose another cleaner or time.</p></div>
           : <><Field label={`Planned start (${offer.timeZoneId}, optional)`}><Input aria-label={`Planned start for ${offer.branchName}`} type="datetime-local" min={`${offer.fromDate}T00:00`} max={`${offer.toDate}T23:59`} value={times[offer.id] ?? ''} onChange={e => setTimes(current => ({ ...current, [offer.id]: e.target.value }))} /></Field><p className="text-sm text-gray-600 dark:text-gray-300">Accept cleaning saves this start time. Leave it blank to choose any time from {offer.fromDate} to {offer.toDate}. The visit takes {offer.estimatedDurationMinutes} minutes and must finish by the end of {offer.toDate}.</p></>}
         <Field label="Decline reason (optional)"><Input value={reasons[offer.id] ?? ''} onChange={e => setReasons(current => ({ ...current, [offer.id]: e.target.value }))} /></Field>
         <div className="flex flex-wrap gap-3">

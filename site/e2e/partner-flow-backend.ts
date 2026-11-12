@@ -28,7 +28,7 @@ const PEOPLE: Record<ActorKey, Person> = {
 };
 
 export interface BranchRecord { id: string; companyId: string; name: string; street: string | null; postalCode: string | null; city: string | null; country: string | null; contactPhone: string | null; contactEmail: string | null; roomCount: number | null; bedCount: number | null; isActive: boolean; pricingReady: boolean; priceNet: number | null; vatRatePercent: number | null; estimatedDurationMinutes: number | null; quoteRequestedUtc: string | null }
-export interface RequestRecord { id: string; companyId: string; branchId: string; clientRequestId: string; version: number; fromDate: string; toDate: string; exactStartLocalTime: string | null; notes: string | null; priceNet: number; vatRatePercent: number; estimatedDurationMinutes: number; status: string; firstAcceptedAtUtc: string | null; linkedShiftId: string | null; plannedStartUtc: string | null; plannedEndUtc: string | null; acceptedEmployeeId: string | null; offeredEmployeeId: string | null; offerId: string | null; offerPlannedStartUtc: string | null; cancellationReason: string | null }
+export interface RequestRecord { cleaningType?: string; id: string; companyId: string; branchId: string; clientRequestId: string; version: number; fromDate: string; toDate: string; exactStartLocalTime: string | null; notes: string | null; priceNet: number; vatRatePercent: number; estimatedDurationMinutes: number; status: string; firstAcceptedAtUtc: string | null; linkedShiftId: string | null; plannedStartUtc: string | null; plannedEndUtc: string | null; acceptedEmployeeId: string | null; offeredEmployeeId: string | null; offerId: string | null; offerPlannedStartUtc: string | null; cancellationReason: string | null }
 export interface ChangeRecord { id: string; companyId: string; branchId: string | null; requestId: string | null; kind: string; message: string; resolvedUtc: string | null; resolution: string | null; action?: string; proposedFromDate?: string | null; proposedToDate?: string | null; proposedExactStartLocalTime?: string | null; proposedNotes?: string | null }
 export interface WriteRecord { actor: ActorKey; method: string; path: string; body: any; status: number }
 
@@ -325,7 +325,7 @@ export class PartnerFlowBackend {
       return { autoAcceptWork: this.preferences[me.id] };
     }
     if (method === 'GET' && path === 'partner-offers') {
-      return this.pendingOffersFor(me.id).map(item => ({ id: item.offerId, requestId: item.id, version: item.version, branchName: this.branchName(item.branchId), street: this.branch(item.branchId).street, postalCode: this.branch(item.branchId).postalCode, city: this.branch(item.branchId).city, fromDate: item.fromDate, toDate: item.toDate, exactStartLocalTime: item.exactStartLocalTime, plannedStartUtc: item.offerPlannedStartUtc, estimatedDurationMinutes: item.estimatedDurationMinutes, notes: item.notes, timeZoneId: TENANT_TIME_ZONE }));
+      return this.pendingOffersFor(me.id).map(item => ({ cleaningType: item.cleaningType ?? 'Normal', id: item.offerId, requestId: item.id, version: item.version, branchName: this.branchName(item.branchId), street: this.branch(item.branchId).street, postalCode: this.branch(item.branchId).postalCode, city: this.branch(item.branchId).city, fromDate: item.fromDate, toDate: item.toDate, exactStartLocalTime: item.exactStartLocalTime, plannedStartUtc: item.offerPlannedStartUtc, estimatedDurationMinutes: item.estimatedDurationMinutes, notes: item.notes, timeZoneId: TENANT_TIME_ZONE }));
     }
     let match = is(path, /^partner-offers\/([^/]+)\/accept$/);
     if (method === 'POST' && match) {
@@ -473,7 +473,7 @@ export class PartnerFlowBackend {
       id: request.id, version: request.version, companyId: request.companyId, branchId: request.branchId, branchName: this.branchName(request.branchId),
       fromDate: request.fromDate, toDate: request.toDate, exactStartLocalTime: request.exactStartLocalTime, notes: request.notes,
       priceNet: request.priceNet, vatRatePercent: request.vatRatePercent, estimatedDurationMinutes: request.estimatedDurationMinutes,
-      status: request.status, firstAcceptedAtUtc: request.firstAcceptedAtUtc, linkedShiftId: request.linkedShiftId,
+      cleaningType: request.cleaningType ?? 'Normal', status: request.status, firstAcceptedAtUtc: request.firstAcceptedAtUtc, linkedShiftId: request.linkedShiftId,
       plannedStartUtc: request.plannedStartUtc, plannedEndUtc: request.plannedEndUtc,
       // Staff see the full name; partners see only the first initial.
       acceptedCleanerName: cleaner ? (staff ? `${cleaner.firstName} ${cleaner.lastName}` : `${cleaner.firstName.trim().charAt(0).toUpperCase()}.`) : null,

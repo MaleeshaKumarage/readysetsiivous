@@ -1,111 +1,85 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
+import type { CSSProperties } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Building2, CalendarClock, ClipboardList, Settings } from 'lucide-react';
-import { NotificationsPanel } from '@/components/NotificationsPanel';
-import { initAuth, isAuthenticated, isAdmin, isManager, isPartner, login, logout, refreshToken, selectAuthTenant } from '@/lib/auth';
-import { meApi, supportsWorkPreferences } from '@/lib/meApi';
-import { API_URL, TENANT_SLUG } from '@/lib/api';
+import { Building2, CalendarClock, ClipboardList, Settings, LogOut, UserRound } from 'lucide-react';
+import { NotificationBell } from '@/components/NotificationBell';
+import { Button, Card, fontFamily, palette } from '@/ds';
+import { isAdmin, isManager, isPartner, login, logout } from '@/lib/auth';
+import { TENANT_SLUG } from '@/lib/api';
+import { accountName, useAccountSession } from './useAccountSession';
+import '../partner/partner.css';
+import './account.css';
 
-interface Account { realm: string; person?: { id: string; firstName: string; lastName: string; role: string; isActive: boolean }; company?: { id: string; name: string; isActive: boolean; isPartnerEnabled: boolean }; employee?: { id: string; firstName: string; lastName: string; role: string; isActive: boolean; identitySyncPending?: boolean } | null; }
-// One section the signed-in account can open, shown as a tile in the picker (like the Android TV account chooser).
-function SectionTile({ href, label, icon: Icon }: { href: string; label: string; icon: LucideIcon }) {
-  return <Link href={href} className="group flex w-32 flex-col items-center gap-2 text-center text-gray-900">
-    <span className="flex h-20 w-20 items-center justify-center rounded-full bg-gray-900 text-white transition group-hover:ring-4 group-hover:ring-gray-300 group-focus-visible:ring-4 group-focus-visible:ring-blue-500"><Icon size={32} aria-hidden="true" /></span>
-    <span className="text-sm font-medium">{label}</span>
+// Same theme as the partner portal, so the account screens look like the rest of the product.
+export const accountTheme = {
+  '--partner-ink': palette.navy.logo, '--partner-muted': palette.navy[600],
+  '--partner-background': palette.navy[50], '--partner-border': palette.navy[100],
+  '--partner-gold': palette.gold[500], '--partner-gold-light': palette.gold[50],
+  '--partner-focus': palette.gold[700],
+  fontFamily: fontFamily.sans,
+} as CSSProperties;
+
+// One portal or page the signed-in account can open. Tiles are large touch targets (44px+) with a visible focus ring.
+function PortalCircle({ href, label, icon: Icon }: { href: string; label: string; icon: LucideIcon }) {
+  return <Link href={href} className="account-circle">
+    <span className="account-circle-icon"><Icon size={34} aria-hidden="true" /></span>
+    <span>{label}</span>
   </Link>;
 }
 
 export default function AccountClient() {
   const search = useSearchParams();
   const tenant = search.get('tenant') || TENANT_SLUG;
-  const [loading, setLoading] = useState(true);
-  const [authed, setAuthed] = useState(false);
-  const [account, setAccount] = useState<Account | null>(null);
-  const [error, setError] = useState('');
-  const [preference, setPreference] = useState<boolean | null>(null);
-  const [selected, setSelected] = useState(false);
-  const [preferenceBusy, setPreferenceBusy] = useState(false);
-  const [preferenceError, setPreferenceError] = useState('');
-  const [saved, setSaved] = useState(false);
-  const preferenceVersion = useRef(0);
-  async function loadPreference() {
-    const version = ++preferenceVersion.current;
-    setPreferenceBusy(true); setPreferenceError('');
-    try { const result = await meApi.workPreferences(); if (version !== preferenceVersion.current) return; setPreference(result.autoAcceptWork); setSelected(result.autoAcceptWork); }
-    catch (error) { if (version !== preferenceVersion.current) return; setPreferenceError(error instanceof Error ? error.message : 'Could not load work preferences.'); }
-    finally { if (version === preferenceVersion.current) setPreferenceBusy(false); }
-  }
-  async function savePreference() {
-    const version = ++preferenceVersion.current;
-    setPreferenceBusy(true); setPreferenceError(''); setSaved(false);
-    try { const result = await meApi.saveWorkPreferences(selected); if (version !== preferenceVersion.current) return; setPreference(result.autoAcceptWork); setSelected(result.autoAcceptWork); setSaved(true); }
-    catch (error) { if (version !== preferenceVersion.current) return; setPreferenceError(error instanceof Error ? error.message : 'Could not save work preferences.'); }
-    finally { if (version === preferenceVersion.current) setPreferenceBusy(false); }
-  }
-  useEffect(() => {
-    let cancelled = false;
-    preferenceVersion.current++; setPreference(null); setSaved(false); setPreferenceError('');
-    setLoading(true); setAuthed(false); setAccount(null); setError('');
-    async function load() {
-      try {
-        selectAuthTenant(tenant);
-        await initAuth();
-        if (cancelled) return;
-        if (!isAuthenticated()) { setAuthed(false); return; }
-        setAuthed(true);
-        const jwt = await refreshToken();
-        if (!jwt) throw new Error('Please sign in again.');
-        const response = await fetch(`${API_URL}/api/v1/${isPartner() ? 'partner/me' : 'me'}`, { headers: { Authorization: `Bearer ${jwt}` }, cache: 'no-store' });
-        if (!response.ok) {
-          const problem = await response.json().catch(() => ({})) as { detail?: string; title?: string };
-          throw new Error(problem.detail || problem.title || 'Could not verify your account. Please try again.');
-        }
-        const identity = await response.json() as Account;
-        if (identity.realm !== tenant) throw new Error('This login belongs to a different tenant. Sign out and open your invitation again.');
-        if (isPartner() && (!identity.person?.isActive || identity.person.role !== 'partner' || !identity.company?.isActive || !identity.company.isPartnerEnabled)) throw new Error('Partner access is unavailable. Contact your tenant administrator.');
-        if (!isPartner() && !identity.employee && !isAdmin()) throw new Error('Your login is not linked to an employee. Contact your tenant administrator.');
-        if (!cancelled) { setAccount(identity); if (!isPartner() && supportsWorkPreferences(identity)) void loadPreference(); }
-      } catch (error) { if (!cancelled) setError(error instanceof Error ? error.message : 'Account setup could not be confirmed.'); }
-      finally { if (!cancelled) setLoading(false); }
-    }
-    load(); return () => { cancelled = true; preferenceVersion.current++; };
-  }, [tenant]);
-  return <main className="min-h-screen flex items-center justify-center p-6 bg-gray-50 text-gray-900">
-    <section className="w-full max-w-lg rounded-xl bg-white shadow p-6 space-y-4">
-      <h1 className="text-2xl font-semibold">Your ReadySetSiivous account</h1>
-      {loading ? <p role="status">Checking your account...</p> : <>
-        {error && <p role="alert" className="text-red-700">{error}</p>}
-        {!authed && !error && <>
-          <p>After setting your password in the invitation email, sign in to confirm your account.</p>
-          <button className="rounded bg-gray-900 text-white px-4 py-2" onClick={() => login().catch(() => setError('Sign-in could not be started. Please retry.'))}>Sign in</button>
-        </>}
-        {account && <>
-          <h2 className="text-xl font-medium">Account ready</h2>
-          <p>{account.person ? `${account.person.firstName} ${account.person.lastName}` : account.employee ? `${account.employee.firstName} ${account.employee.lastName}` : 'Tenant administrator'} · {account.realm}</p>
-          {(account.person?.role === 'partner' || (account.employee?.isActive && !isPartner()) || (account.employee?.role === 'manager' && isManager()) || (!isPartner() && isAdmin())) && <nav aria-label="Choose a section" className="flex flex-wrap justify-center gap-6 py-2">
-            {account.person?.role === 'partner' && <SectionTile href="/partner/" label="Open partner portal" icon={Building2} />}
-            {account.employee?.isActive && !isPartner() && <SectionTile href="/me/shifts/" label="My shifts" icon={CalendarClock} />}
-            {account.employee?.role === 'manager' && isManager() && <SectionTile href="/manager/" label="Manage tenant operations" icon={ClipboardList} />}
-            {!isPartner() && isAdmin() && <SectionTile href="/admin/" label="Continue to administration" icon={Settings} />}
-          </nav>}
-          {!isPartner() && supportsWorkPreferences(account) && <section aria-label="Work preferences" className="space-y-3">
-            <h2 className="text-xl font-medium">Work preferences</h2>
-            {preferenceBusy && <p role="status">{preference === null ? 'Loading work preferences...' : 'Saving work preferences...'}</p>}
-            {preferenceError && <><p role="alert" className="text-red-700">{preferenceError}</p><button className="underline" disabled={preferenceBusy} onClick={() => preference === null ? void loadPreference() : void savePreference()}>Retry work preferences</button></>}
-            {preference !== null && <><label className="flex gap-2 items-center"><input type="checkbox" checked={selected} disabled={preferenceBusy} onChange={event => { setSelected(event.target.checked); setSaved(false); }} />Automatically accept cleaning offers</label>
-              <p>Automatically scheduled work appears in My shifts. Resolve pending offers before enabling. Turning this off affects future offers only.</p>
-              <button className="rounded bg-gray-900 text-white px-4 py-2" disabled={preferenceBusy || selected === preference} onClick={() => void savePreference()}>Save work preferences</button>
-              {saved && <p role="status">Work preferences saved.</p>}</>}
-          </section>}
-          {account.person?.role === 'partner' && <p>{account.company?.name}</p>}
-          {!isPartner() && <><a className="block underline" href="#notifications">Notification settings</a><NotificationsPanel /></>}
-          {!account.employee && isAdmin() && <p>To receive shifts, add an Administrator profile in Employees using your verified login email, then use Invite to link that profile to your existing account.</p>}
-        </>}
-        {authed && <button className="underline" onClick={() => logout().catch(() => setError('Sign-out failed. Please retry.'))}>Sign out</button>}
+  const { loading, authed, account, error, setError } = useAccountSession(tenant);
+  const profileHref = `/account/profile/?tenant=${encodeURIComponent(tenant)}`;
+  const portals = account ? [
+    account.person?.role === 'partner' && { href: '/partner/', label: 'Partner portal', icon: Building2 },
+    account.employee?.isActive && !isPartner() && { href: '/me/shifts/', label: 'Employee portal', icon: CalendarClock },
+    account.employee?.role === 'manager' && isManager() && { href: '/manager/', label: 'Manager portal', icon: ClipboardList },
+    !isPartner() && isAdmin() && { href: '/admin/', label: 'Office portal', icon: Settings },
+  ].filter(Boolean) as { href: string; label: string; icon: LucideIcon }[] : [];
+
+  return <main lang="en" className="partner-portal" style={accountTheme}>
+    <header className="partner-header"><div className="partner-shell partner-header-inner">
+      <div className="partner-brand">
+        <Image src="/brand/readyset-primary-logo.png" alt="ReadySetSiivous" width={56} height={56} priority />
+        <div>
+          <h1>Your account</h1>
+          <p>{account ? `${accountName(account)} · ${account.realm}` : tenant}</p>
+        </div>
+      </div>
+      <div className="partner-header-actions">
+        {account && <Link href={profileHref} className="notify-bell" aria-label="Profile" title="Profile"><UserRound size={22} aria-hidden="true" /></Link>}
+        {!isPartner() && account && <NotificationBell settingsHref={`${profileHref}#notifications`} />}
+        {authed && <Button variant="ghost" size="sm" className="partner-quiet" onClick={() => logout().catch(() => setError('Sign-out failed. Please retry.'))}><LogOut size={17} aria-hidden="true" />Sign out</Button>}
+      </div>
+    </div></header>
+
+    <div className="partner-shell partner-main">
+      {loading && <p role="status" className="partner-alert">Checking your account...</p>}
+      {error && <p role="alert" className="partner-alert partner-alert-error">{error}</p>}
+      {!loading && !authed && !error && <Card className="partner-surface">
+        <p>After setting your password in the invitation email, sign in to confirm your account.</p>
+        <Button onClick={() => login().catch(() => setError('Sign-in could not be started. Please retry.'))}>Sign in</Button>
+      </Card>}
+
+      {account && <>
+        <section aria-label="Account ready" className="account-section">
+          <h2>Account ready</h2>
+          <nav aria-label="Choose a section" className="account-circles">
+            {portals.map(portal => <PortalCircle key={portal.href} href={portal.href} label={portal.label} icon={portal.icon} />)}
+          </nav>
+        </section>
+
+        <div className="account-grid">
+          {!account.employee && isAdmin() && <Card className="partner-surface">
+            <p>To receive shifts, add an Administrator profile in Employees using your verified login email, then use Invite to link that profile to your existing account.</p>
+          </Card>}
+        </div>
       </>}
-    </section>
+    </div>
   </main>;
 }

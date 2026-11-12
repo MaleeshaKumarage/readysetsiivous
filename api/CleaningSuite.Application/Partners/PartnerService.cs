@@ -272,7 +272,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         await SetWindow(request, body.FromDate, body.ToDate, body.ExactStartLocalTime, body.Notes, ct);
         var previous = request.OfferedEmployeeId;
         InvalidateOffer(request); request.Status = "Requested"; Touch(request);
-        Db.Store(request); NotifyRequest(request, "RequestChanged", "Staff");
+        Db.Store(request); NotifyRequest(request, "RequestChanged", "Staff"); await StageStaff(request, "StaffPartnerRequestChanged", ct);
         if (previous.HasValue) NotifyRequest(request, "OfferWithdrawn", "Employee", previous);
         await Db.SaveChangesAsync(ct);
         return await Map(request, false, ct);
@@ -327,7 +327,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         request.Status = "Cancelled"; request.CancellationReason = reason?.Trim();
         var oldEmployee = request.OfferedEmployeeId ?? request.AcceptedEmployeeId;
         InvalidateOffer(request); Touch(request); Db.Store(request);
-        NotifyRequest(request, "RequestCancelled", staff ? "Company" : "Staff");
+        NotifyRequest(request, "RequestCancelled", staff ? "Company" : "Staff"); if (!staff) await StageStaff(request, "StaffPartnerRequestCancelled", ct);
         if (oldEmployee.HasValue) NotifyRequest(request, "RequestCancelled", "Employee", oldEmployee);
         await Db.SaveChangesAsync(ct);
         return await Map(request, staff, ct);
@@ -400,7 +400,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
                 generalByCompany[item.CompanyId] = general = (await Db.LoadAsync<PartnerPortalSettings>(item.CompanyId, ct))?.GeneralInstructions;
             result.Add(new(item.OfferId!.Value, item.Id, item.Revision, branch.Name, branch.Street,
                 branch.PostalCode, branch.City, item.FromDate, item.ToDate, item.ExactStartLocalTime,
-                item.OfferPlannedStartUtc, item.EstimatedDurationMinutes, VisitNotes(general, item.Notes), zoneId));
+                item.OfferPlannedStartUtc, item.EstimatedDurationMinutes, VisitNotes(general, item.Notes), zoneId, item.CleaningType ?? "Normal"));
         }
         return result;
     }
@@ -494,8 +494,8 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         request.FirstAcceptedAtUtc ??= DateTime.UtcNow; request.Status = "Accepted"; Touch(request);
         // A single Marten commit owns every document. Repository methods that commit individually are deliberately avoided.
         await ShiftTabs.StoreAsync(Db, shift, ct); Db.Store(occurrence); Db.Store(assignment); Db.Store(billing); Db.Store(request);
-        if (push is not null) await push.StageScheduleChangeAsync(Db, shiftId, assignments.Select(x => x.EmployeeId).Append(actor).Where(id => !automatic || id != actor), DateTimeOffset.UtcNow, ct);
-        NotifyRequest(request, "RequestAccepted", "Company"); NotifyRequest(request, "RequestAccepted", "Staff");
+        if (push is not null) await push.StageScheduleChangeAsync(Db, shiftId, assignments.Select(x => x.EmployeeId).Append(actor).Where(id => !automatic || id != actor), DateTimeOffset.UtcNow, ct, kind: "ShiftAssigned", detail: await RequestDetail(request, ct));
+        NotifyRequest(request, "RequestAccepted", "Company"); NotifyRequest(request, "RequestAccepted", "Staff"); await StageStaff(request, "StaffPartnerAccepted", ct);
     }
 
     /// <summary>
@@ -543,9 +543,14 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         request.FirstAcceptedAtUtc ??= DateTime.UtcNow; request.Status = "Accepted"; Touch(request);
         // A single Marten commit owns every document. Repository methods that commit individually are deliberately avoided.
         await ShiftTabs.StoreAsync(Db, shift, ct); Db.Store(occurrence); Db.Store(request);
-        if (push is not null) await push.StageScheduleChangeAsync(Db, shift.Id,
-            new[] { previousEmployee, actor }.OfType<Guid>().Distinct().Where(id => !automatic || id != actor), DateTimeOffset.UtcNow, ct);
-        NotifyRequest(request, "RequestAccepted", "Company"); NotifyRequest(request, "RequestAccepted", "Staff");
+        if (push is not null)
+        {
+            // The previous cleaner is removed; the person who accepted is assigned (not when accepted automatically).
+            var removed = previousEmployee is { } previous && previous != actor ? new[] { previous } : Array.Empty<Guid>();
+            await push.StageScheduleChangeAsync(Db, shift.Id, removed, DateTimeOffset.UtcNow, ct, kind: "ShiftRemoved", detail: await RequestDetail(request, ct));
+            await push.StageScheduleChangeAsync(Db, shift.Id, automatic ? Array.Empty<Guid>() : new[] { actor }, DateTimeOffset.UtcNow, ct, kind: "ShiftAssigned", detail: await RequestDetail(request, ct));
+        }
+        NotifyRequest(request, "RequestAccepted", "Company"); NotifyRequest(request, "RequestAccepted", "Staff"); await StageStaff(request, "StaffPartnerAccepted", ct);
     }
 
     /// <summary>
@@ -560,7 +565,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         if (request.OccurrenceStartUtc.HasValue)
         {
             if (push is not null && notifyAccepted && request.AcceptedEmployeeId.HasValue)
-                await push.StageScheduleChangeAsync(Db, shiftId, [request.AcceptedEmployeeId.Value], DateTimeOffset.UtcNow, ct);
+                await push.StageScheduleChangeAsync(Db, shiftId, [request.AcceptedEmployeeId.Value], DateTimeOffset.UtcNow, ct, kind: "ShiftRemoved", detail: await RequestDetail(request, ct));
             if (!removeOccurrence) return;
             var occurrenceId = PartnerCleaningRequest.StableId($"partner-occurrence:{request.Id}");
             Db.Delete<ShiftOccurrenceException>(occurrenceId);
@@ -572,7 +577,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         if (shift is null) return;
         shift.Deactivate(); await ShiftTabs.StoreAsync(Db, shift, ct); await ReleaseShiftAssignments(shift.Id, ct);
         if (push is not null && notifyAccepted && request.AcceptedEmployeeId.HasValue)
-            await push.StageScheduleChangeAsync(Db, shift.Id, [request.AcceptedEmployeeId.Value], DateTimeOffset.UtcNow, ct);
+            await push.StageScheduleChangeAsync(Db, shift.Id, [request.AcceptedEmployeeId.Value], DateTimeOffset.UtcNow, ct, kind: "ShiftRemoved", detail: await RequestDetail(request, ct));
     }
 
     public async Task Decline(Guid actor, Guid offerId, PartnerDecline body, CancellationToken ct)
@@ -587,7 +592,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         CheckVersion(request, body.Version);
         if (body.Reason?.Length > 1000) throw new ValidationException("Use at most 1000 characters for the reason.");
         InvalidateOffer(request); request.Status = "Requested"; Touch(request); Db.Store(request);
-        NotifyRequest(request, "OfferDeclined", "Staff"); NotifyRequest(request, "AwaitingAssignment", "Company");
+        NotifyRequest(request, "OfferDeclined", "Staff"); NotifyRequest(request, "AwaitingAssignment", "Company"); await StageStaff(request, "StaffPartnerOfferDeclined", ct);
         await Db.SaveChangesAsync(ct);
     }
 
@@ -933,6 +938,18 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
     private static void InvalidateOffer(PartnerCleaningRequest request)
     { request.OfferId = null; request.OfferedEmployeeId = null; request.OfferPlannedStartUtc = null; }
     private static void Touch(PartnerCleaningRequest request) { request.Revision++; request.UpdatedUtc = DateTime.UtcNow; }
+    // "Which visit" text for a request: its property and the local start time once planned.
+    private async Task<string?> RequestDetail(PartnerCleaningRequest request, CancellationToken ct)
+    {
+        var branch = await Db.LoadAsync<Branch>(request.BranchId, ct);
+        var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
+        return VisitDetail.Describe(branch?.Name, request.OccurrenceStartUtc ?? request.PlannedStartUtc, zone);
+    }
+    // Staff alerts are web push to admins and managers; they are staged in the same commit as the change.
+    private async Task StageStaff(PartnerCleaningRequest request, string kind, CancellationToken ct)
+    {
+        if (push is not null) await push.StageStaffAlertAsync(Db, kind, $"{request.Id}:{request.Revision}", DateTimeOffset.UtcNow, ct, await RequestDetail(request, ct));
+    }
     private void NotifyRequest(PartnerCleaningRequest request, string kind, string audience, Guid? employee = null) =>
         Notify(request.CompanyId, request.BranchId, request.Id, kind, request.Revision, audience, employee);
     private void Notify(Guid company, Guid branch, Guid? request, string kind, int revision, string audience,

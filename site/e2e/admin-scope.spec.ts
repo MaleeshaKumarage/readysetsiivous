@@ -79,6 +79,6 @@ test('unbound tenant owner keeps administration without a personal shift shortcu
   await page.getByRole('link', { name: 'My account', exact: true }).click();
   await expect(page).toHaveURL(/account\/\?tenant=readysetsiivous/);
   await expect(page.getByText('To receive shifts, add an Administrator profile', { exact: false })).toBeVisible();
-  await page.getByRole('link', { name: 'Continue to administration' }).click();
+  await page.getByRole('link', { name: 'Office portal' }).click();
   await expect(page.getByRole('link', { name: 'My account', exact: true })).toBeVisible();
 });

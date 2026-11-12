@@ -378,3 +378,34 @@ test('a cleaning type picked and cancelled on one visit is not carried to the ne
   expect(state.cleaningTypeWrites).toEqual([expect.objectContaining({ visitId: 'visit-3', cleaningType: 'Normal' })]);
 });
 
+
+test('a visit that has already ended with a waiting offer says the cleaner can still accept it', async ({ page }) => {
+  const state = await setup(page);
+  state.occurrences = [{ ...adminVisit, startUtc: '2026-11-02T06:00:00.000Z', endUtc: '2026-11-02T08:00:00.000Z' }];
+  await shiftAction(page, MAIN, 'Occurrences');
+  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  await expect(list.getByTestId('past-offer-note')).toContainText('The cleaner can still accept the offer. To change the cleaner, delete this visit and add it again.');
+});
+
+test('a visit row shows what its work is doing: Done once the cleaner has finished', async ({ page }) => {
+  const state = await setup(page);
+  state.occurrences = [{ ...adminVisit, workStatus: 'Completed' }, { ...partnerVisit, workStatus: 'Scheduled' }];
+  await shiftAction(page, MAIN, 'Occurrences');
+  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  await expect(list.getByRole('row').filter({ hasText: '#1 ·' }).getByTestId('occurrence-status')).toHaveText('Done');
+  await expect(list.getByRole('row').filter({ hasText: '#2 ·' }).getByTestId('occurrence-status')).toHaveText('Scheduled');
+});
+
+test('admin changes the cleaning type of a finished visit it added', async ({ page }) => {
+  const state = await setup(page);
+  state.occurrences = [{ ...adminVisit, startUtc: '2026-11-02T06:00:00.000Z', endUtc: '2026-11-02T08:00:00.000Z', offeredEmployeeId: null, assigneeIds: ['cleaner'], employeeId: 'cleaner' }];
+  await shiftAction(page, MAIN, 'Occurrences');
+  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  await list.getByRole('button', { name: 'Change cleaning type' }).click();
+  const editor = page.getByRole('dialog', { name: /Change|Cleaner|Occurrence/ }).last();
+  await editor.getByRole('textbox', { name: 'Cleaning type', exact: true }).click();
+  await page.getByRole('option', { name: 'Deep', exact: true }).click();
+  await editor.getByRole('button', { name: 'Save cleaning type', exact: true }).click();
+  await expect(page.getByRole('dialog').filter({ hasText: 'Save cleaning type' })).toHaveCount(0);
+  expect(state.cleaningTypeWrites).toEqual([expect.objectContaining({ cleaningType: 'Deep' })]);
+});

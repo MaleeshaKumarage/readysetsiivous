@@ -370,7 +370,7 @@ for (const role of ['admin', 'manager'] as const) {
     await page.getByRole('link', { name: 'My account', exact: true }).click();
     await expect(page).toHaveURL(/account\/\?tenant=readysetsiivous/);
     await expect(page.getByRole('heading', { name: 'Account ready' })).toBeVisible();
-    await page.getByRole('link', { name: role === 'admin' ? 'Continue to administration' : 'Manage tenant operations' }).click();
+    await page.getByRole('link', { name: role === 'admin' ? 'Office portal' : 'Manager portal' }).click();
     await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toBeVisible();
     if (role === 'admin') {
       await page.getByRole('link', { name: 'My account', exact: true }).click();
@@ -382,7 +382,7 @@ for (const role of ['admin', 'manager'] as const) {
     await setupWork(page, { role });
     await page.route(/\/api\/v1\/me\/shifts(?:\/calendar)?(?:\?.*)?$/, route => route.fulfill({ status: 200, headers, json: { occurrences: [], timeZoneId: 'Europe/Helsinki', fromLocalDate: '2026-10-17', toLocalDate: '2026-10-18' } }));
     await page.goto('/account/?tenant=readysetsiivous');
-    await page.getByRole('link', { name: 'My shifts', exact: true }).click();
+    await page.getByRole('link', { name: 'Employee portal', exact: true }).click();
     await expect(page.getByText('No shifts today.')).toBeVisible();
   });
 }

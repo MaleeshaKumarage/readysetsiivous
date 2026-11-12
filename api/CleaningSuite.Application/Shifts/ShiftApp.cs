@@ -4,6 +4,7 @@ using CleaningSuite.Application.Companies;
 using CleaningSuite.Application.Employees;
 using CleaningSuite.Application.QualityCycle;
 using CleaningSuite.Application.Tenants;
+using CleaningSuite.Application.WorkQueue;
 using CleaningSuite.Domain.Companies;
 using CleaningSuite.Domain.Invoicing;
 using CleaningSuite.Domain.Employees;
@@ -60,6 +61,8 @@ public record ShiftOccurrenceDto(DateTime StartUtc, DateTime EndUtc,
     public int? VisitNumber { get; init; }
     public string? VisitSource { get; init; }
     public string? VisitNotes { get; init; }
+    // The work state of the occurrence, from its quality forms: Completed, InProgress, Scheduled or NeedsAction. Null when cancelled.
+    public string? WorkStatus { get; init; }
     public string? VisitCleaningType { get; init; }
     public Guid? OfferedEmployeeId { get; init; }
     public int? OfferRevision { get; init; }
@@ -77,6 +80,8 @@ public sealed record ShiftRosterInputs(IReadOnlyDictionary<Guid, IReadOnlyList<S
 
 public interface IShiftRepository
 {
+    /// <summary>Every shift, including deactivated ones, so past months keep their visits and hours.</summary>
+    Task<IReadOnlyList<Shift>> ListAllAsync(CancellationToken ct = default);
     /// <summary>Roster inputs for many shifts in one load per collection, keyed by shift id.</summary>
     Task<ShiftRosterInputs> ListRosterInputsAsync(IReadOnlyCollection<Guid> shiftIds, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default);
     Task<Shift?> GetAsync(Guid id, CancellationToken ct = default);
@@ -494,7 +499,8 @@ public class ShiftHandlers
             var roster = await _repository.ResolveRosterAsync(shift, TenantTimeZone.StartOfLocalDay(localFrom, zone),
                 TenantTimeZone.StartOfLocalDay(localTo.AddDays(1), zone), zone, ct, includeCancelled: true);
             var saved = _forms is null ? [] : await _forms.ListFormsAsync(shift.Id, null, null, ct) ?? [];
-            var today = TenantTimeZone.LocalDate(_clock.GetUtcNow().UtcDateTime, zone);
+            var nowUtc = _clock.GetUtcNow().UtcDateTime;
+            var today = TenantTimeZone.LocalDate(nowUtc, zone);
             var mainVisits = !shift.IsBranchMain ? new Dictionary<Guid, ShiftOccurrenceException>()
                 : (await _repository.ListOccurrenceExceptionsAsync(shift.Id, TenantTimeZone.StartOfLocalDay(localFrom, zone),
                     TenantTimeZone.StartOfLocalDay(localTo.AddDays(1), zone), ct) ?? []).ToDictionary(x => x.Id);
@@ -504,7 +510,10 @@ public class ShiftHandlers
                     : saved.Any(f => (f.IsSubmitted || f.StartedAtUtc.HasValue)
                         && (f.ShiftOccurrenceUtc == entry.Occurrence.StartUtc || f.ShiftOccurrenceUtc == entry.OriginalStartUtc))
                         ? "Started or completed work cannot be reassigned." : null;
-                var dto = ShiftRosterReader.ToDto(entry) with { CanAssign = reason is null, AssignmentLockReason = reason };
+                var occurrenceForms = saved.Where(f => f.ShiftDeletedUtc is null
+                    && (f.ShiftOccurrenceUtc == entry.Occurrence.StartUtc || f.ShiftOccurrenceUtc == entry.OriginalStartUtc)).ToArray();
+                var workStatus = WorkQueueRules.OccurrenceWorkStatus(entry, occurrenceForms, nowUtc);
+                var dto = ShiftRosterReader.ToDto(entry) with { CanAssign = reason is null, AssignmentLockReason = reason, WorkStatus = workStatus };
                 return entry.ExtraExceptionId is { } visitId && mainVisits.TryGetValue(visitId, out var visit)
                     ? dto with { VisitNumber = visit.Sequence, VisitSource = visit.Source, VisitNotes = visit.Notes, VisitCleaningType = visit.CleaningType ?? CleaningTypes.Normal,
                         OfferedEmployeeId = visit.OfferedEmployeeId, OfferRevision = visit.OfferRevision, IsPartnerBooking = visit.PartnerRequestId.HasValue }

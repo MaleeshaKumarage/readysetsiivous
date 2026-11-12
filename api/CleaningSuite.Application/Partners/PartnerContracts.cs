@@ -42,4 +42,4 @@ public record PartnerSettingsInput(IReadOnlyList<string>? PhotoLabels, PartnerAc
 public record PartnerCleanerOfferDto(Guid Id, Guid RequestId, int Version, string BranchName,
     string? Street, string? PostalCode, string? City, DateOnly FromDate, DateOnly ToDate,
     string? ExactStartLocalTime, DateTime? PlannedStartUtc, int EstimatedDurationMinutes,
-    string? Notes, string TimeZoneId);
+    string? Notes, string TimeZoneId, string CleaningType = "Normal");
