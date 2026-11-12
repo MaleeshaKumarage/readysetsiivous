@@ -73,7 +73,7 @@ export default function InvoicesPage() {
     if (pending.current) return; pending.current = true; setBusy(true); setError(''); setStatus('');
     try { await action(); } catch (failure) {
       const message = failure instanceof Error ? failure.message : 'Request failed. Please retry.';
-      setError(message); showError(message, 'Invoice action not completed');
+      setError(message); showError(message, 'Invoice not created. The reason is shown in the form.');
     }
     finally { pending.current = false; setBusy(false); }
   };
@@ -165,6 +165,7 @@ export default function InvoicesPage() {
         <Button variant="light" disabled={!overrideShift || !overrideMonth || !overrideReason.trim() || overrideAmount === ''} onClick={() => { invalidate(); setMonthlyOverrides(current => [...current.filter(item => item.shiftId !== overrideShift || item.month !== overrideMonth), { shiftId: overrideShift!, month: overrideMonth, amountNet: Number(overrideAmount), reason: overrideReason.trim() }]); }}>Apply monthly override</Button>
         {monthlyOverrides.map(item => <Group key={`${item.shiftId}-${item.month}`}><Text>{shifts.find(shift => shift.id === item.shiftId)?.name} · {item.month} · {money(item.amountNet)} · {item.reason}</Text><Button size="xs" variant="subtle" onClick={() => { invalidate(); setMonthlyOverrides(current => current.filter(value => value !== item)); }}>Remove override</Button></Group>)}
       </Stack></details>}
+      {error && createOpen && <Text role="alert" c="red" data-testid="create-invoice-error">{error}</Text>}
       <Button loading={busy} disabled={!issuer || (!manual && ((!partnerMonth && !shiftIds.length) || (partnerMonth && !month)))} onClick={buildPreview}>Preview invoice</Button>
     </Stack></fieldset></Modal>
     </Stack>

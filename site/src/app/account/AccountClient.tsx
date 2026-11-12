@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
 import { Building2, CalendarClock, ClipboardList, Settings } from 'lucide-react';
 import { NotificationsPanel } from '@/components/NotificationsPanel';
+import { StaffInboxPanel } from '@/components/StaffInboxPanel';
 import { initAuth, isAuthenticated, isAdmin, isManager, isPartner, login, logout, refreshToken, selectAuthTenant } from '@/lib/auth';
 import { meApi, supportsWorkPreferences } from '@/lib/meApi';
 import { API_URL, TENANT_SLUG } from '@/lib/api';
@@ -101,7 +102,7 @@ export default function AccountClient() {
               {saved && <p role="status">Work preferences saved.</p>}</>}
           </section>}
           {account.person?.role === 'partner' && <p>{account.company?.name}</p>}
-          {!isPartner() && <><a className="block underline" href="#notifications">Notification settings</a><NotificationsPanel /></>}
+          {!isPartner() && <><StaffInboxPanel /><a className="block underline" href="#notifications">Notification settings</a><NotificationsPanel /></>}
           {!account.employee && isAdmin() && <p>To receive shifts, add an Administrator profile in Employees using your verified login email, then use Invite to link that profile to your existing account.</p>}
         </>}
         {authed && <button className="underline" onClick={() => logout().catch(() => setError('Sign-out failed. Please retry.'))}>Sign out</button>}

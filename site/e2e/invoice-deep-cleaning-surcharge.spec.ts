@@ -52,3 +52,19 @@ test('a completed Deep visit appears on the invoice as its own 15 EUR surcharge 
   await expect(page.getByRole('row').filter({ hasText: 'Per completed visit' }).first()).toContainText('60');
   await expect(page.getByText('Net €75.00 · VAT €19.13 · Total €94.13')).toBeVisible();
 });
+
+test('a rejected invoice preview shows the reason inside the open form, not only in a toast', async ({ page }) => {
+  await setup(page);
+  await page.route(/\/api\/v1\/admin\/invoices\/shift-preview$/, route => route.fulfill({ status: 400, headers, json: {
+    title: 'Validation failed', status: 400, errors: { Billing: ['Reinonkatu 6 B 14: no price is configured for 2026-10-19. Add an effective price before invoicing.'] } } }));
+  await page.goto('/admin/invoices/');
+  await page.getByRole('button', { name: 'New invoice', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Company', exact: true }).click(); await page.getByRole('option', { name: 'Methehe', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Invoice shifts', exact: true }).click(); await page.getByRole('option', { name: 'Biweekly', exact: true }).click(); await page.keyboard.press('Escape');
+  await page.getByLabel('Invoice from', { exact: true }).fill('2026-10-01'); await page.getByLabel('Invoice to (inclusive)', { exact: true }).fill('2026-10-31');
+  await page.getByRole('textbox', { name: 'Billing street', exact: true }).fill('Customer street'); await page.getByRole('textbox', { name: 'Billing postalCode', exact: true }).fill('00100'); await page.getByRole('textbox', { name: 'Billing city', exact: true }).fill('Helsinki');
+  await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
+  const reason = page.getByTestId('create-invoice-error');
+  await expect(reason).toContainText('no price is configured for 2026-10-19');
+  await expect(page.getByRole('heading', { name: 'Invoice preview' })).toHaveCount(0);
+});

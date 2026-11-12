@@ -74,4 +74,44 @@ public class ShiftInvoiceConcurrencyDatabaseTests
         Assert.Empty(await new InvoiceRepository(foreign).ListAsync(null, null));
         Assert.Null(await new ShiftBillingRepository(foreign).GetAsync(shift.Id));
     }
+
+    [QualityCycleDatabaseFact]
+    public async Task A_one_time_shift_without_its_own_billing_profile_gives_the_same_preview_token_twice()
+    {
+        var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
+        var services = new ServiceCollection(); services.AddLogging();
+        services.AddTestMarten(connection, databaseSchemaName: "shift_invoice_race_" + Guid.NewGuid().ToString("N"));
+        using var provider = services.BuildServiceProvider(); var store = provider.GetRequiredService<IDocumentStore>();
+        await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
+        var partition = "invoice-" + Guid.NewGuid().ToString("N");
+        var company = Company.Create("1234567-8", "Customer");
+        var branch = Branch.Create(company.Id, "Branch"); branch.SetPricing(150, 25.5m, 120, effectiveFrom: new DateOnly(2026, 10, 1));
+        var shift = Shift.Create(company.Id, branch.Id, "One-time shift", new() { Type = ShiftScheduleType.OneTime, OneTimeDate = new DateTime(2026, 10, 9), OneTimeStart = TimeSpan.FromHours(16), OneTimeEnd = TimeSpan.FromHours(18) }, null, new(2026, 10, 9), null);
+        shift.CreatedUtc = new(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
+        var profile = new TenantProfile { CompanyName = "Sample supplier", BusinessId = "1234567-8", CompanyAddress = new() { Street = "Sample 1", City = "Helsinki", PostalCode = "00100" }, BankAccountIBAN = "FI2112345600000785", BankBic = "NDEAFIHH", InvoiceIssuerIsSample = true };
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:DefaultConnection"] = connection }).Build();
+        var clock = new Mock<TimeProvider>(); clock.Setup(c => c.GetUtcNow()).Returns(new DateTimeOffset(2026, 10, 18, 10, 0, 0, TimeSpan.Zero));
+        var shifts = new Mock<IShiftRepository>(); shifts.Setup(r => r.ListByIdsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>())).ReturnsAsync([shift]);
+        shifts.Setup(r => r.ListOccurrenceExceptionsAsync(shift.Id, It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        shifts.Setup(r => r.ListAssignmentHistoryAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        shifts.Setup(r => r.ListOccurrenceAssignmentsAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        var companies = new Mock<ICompanyRepository>(); companies.Setup(r => r.GetAsync(company.Id, It.IsAny<CancellationToken>())).ReturnsAsync(company);
+        var branches = new Mock<IBranchRepository>(); branches.Setup(r => r.GetAsync(branch.Id, It.IsAny<CancellationToken>())).ReturnsAsync(branch);
+        var forms = new Mock<IQualityCycleRepository>(); forms.Setup(r => r.ListFormsAsync(shift.Id, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>())).ReturnsAsync([new QualityCycleForm { ShiftId = shift.Id, EmployeeId = Guid.NewGuid(), IsSubmitted = true, ShiftOccurrenceUtc = new DateTime(2026, 10, 2, 13, 0, 0, DateTimeKind.Utc) }]);
+        var profiles = new Mock<ITenantProfileRepository>(); profiles.Setup(r => r.GetAsync(partition, It.IsAny<CancellationToken>())).ReturnsAsync(profile);
+        TenantSessionFactory Session(string id) { var context = new Mock<ITenantContext>(); context.SetupGet(c => c.TenantId).Returns(id); return new(store, context.Object); }
+        ShiftInvoiceService Service(TenantSessionFactory session)
+        {
+            var context = new Mock<ITenantContext>(); context.SetupGet(c => c.TenantId).Returns(partition);
+            return new(shifts.Object, new ShiftBillingRepository(session), new InvoiceRepository(session), companies.Object, branches.Object,
+                forms.Object, profiles.Object, context.Object, new ShiftWorkReservation(config, session), clock.Object);
+        }
+        using var firstSession = Session(partition); using var secondSession = Session(partition);
+        var first = Service(firstSession); var second = Service(secondSession);
+        var input = new ShiftInvoiceRequest(company.Id, [shift.Id], new(2026, 10, 9), new(2026, 10, 9), new() { Street = "Customer 2", PostalCode = "00100", City = "Helsinki" });
+        var preview = await first.PreviewAsync(input, default);
+        var otherPreview = await second.PreviewAsync(input, default);
+        Assert.Equal(preview.PreviewToken, otherPreview.PreviewToken);
+        return;
+    }
 }

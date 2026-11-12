@@ -133,7 +133,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
         var lines = new List<InvoiceLine>(); var fingerprints = new List<string>(); var unstarted = new List<UnstartedVisit>();
         foreach (var shift in selected.OrderBy(s => s.Id))
         {
-            var pricing = await billing.GetAsync(shift.Id, ct) ?? new ShiftBillingProfile { Id = shift.Id, ShiftId = shift.Id };
+            var pricing = await billing.GetAsync(shift.Id, ct) ?? new ShiftBillingProfile { Id = shift.Id, ShiftId = shift.Id, CreatedUtc = shift.CreatedUtc, UpdatedUtc = shift.CreatedUtc };
             PartnerCleaningRequest? partnerRequest = null;
             if (shift.PartnerRequestId.HasValue)
             {

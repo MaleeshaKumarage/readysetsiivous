@@ -208,6 +208,11 @@ public class PushReminderDatabaseTests
         var intents = await q.Query<PushIntent>().Where(i => i.Kind == "StaffPartnerAccepted").ToListAsync();
         Assert.Equal(new[] { admin.Id, manager.Id }.Order(), intents.Select(x => x.EmployeeId).Order());
         Assert.All(intents, x => Assert.True(x.AdminAudience));
+        // The inbox keeps the same event for the same people, once, even without push enabled.
+        using var inboxQuery = f.Store.QuerySession(f.Tenant);
+        var inbox = await inboxQuery.Query<CleaningSuite.Domain.Notifications.StaffInboxItem>().Where(i => i.Kind == "StaffPartnerAccepted").ToListAsync();
+        Assert.Equal(new[] { admin.Id, manager.Id }.Order(), inbox.Select(x => x.EmployeeId).Order());
+        Assert.All(inbox, x => Assert.Equal("Cleaner accepted partner work", x.Title));
     }
 
     [QualityCycleDatabaseFact]

@@ -95,3 +95,20 @@ test('a Normal request on the owner card shows no surcharge line', async ({ page
   await expect(page.getByText('Agreed price').first()).toBeVisible();
   await expect(page.getByTestId('owner-deep-breakdown')).toHaveCount(0);
 });
+
+test('a cleaner offer with a set time says it is fixed and how to decline', async ({ page, browser }, testInfo) => {
+  const { backend, branch } = pricedBackend();
+  const request = backend.seedRequest(branch, WINDOW);
+  backend.seedOffer(request, 'cleaner', '2026-12-01T10:00');
+  const cleaner = await openActor(browser, testInfo, backend, 'cleaner');
+  try {
+    await cleaner.page.goto('/me/shifts/');
+    await cleaner.page.getByRole('tab', { name: 'Offers', exact: true }).click();
+    const offer = cleaner.page.getByRole('article', { name: 'Lake apartment offer', exact: true });
+    await expect(offer.getByTestId('offer-fixed-time')).toContainText('Fixed time:');
+    await expect(offer.getByText('If you cannot attend, decline with a reason', { exact: false })).toBeVisible();
+    await expect(offer.getByLabel(/^Planned start for/)).toHaveCount(0);
+  } finally { await cleaner.context.close(); }
+  void page;
+});
+

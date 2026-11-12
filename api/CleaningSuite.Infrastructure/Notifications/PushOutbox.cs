@@ -30,9 +30,16 @@ public sealed class PushOutbox : IPushOutbox
     public async Task StageStaffAlertAsync(IDocumentSession session, string kind, string key, DateTimeOffset occurredAt, CancellationToken ct = default)
     {
         var admins = await session.Query<Employee>().Where(e => e.IsActive && !e.IdentitySyncPending && (e.Role == Employee.RoleAdmin || e.Role == Employee.RoleManager)).ToListAsync(ct);
+        var copy = CleaningSuite.Application.Notifications.StaffAlertCopy.For(kind);
         foreach (var admin in admins)
+        {
+            // The in-app inbox keeps the event even when push is off or not yet enabled on a device.
+            var inboxId = PushValidation.Id($"inbox:{kind}:{key}:{admin.Id}");
+            if (await session.LoadAsync<CleaningSuite.Domain.Notifications.StaffInboxItem>(inboxId, ct) is null)
+                session.Store(new CleaningSuite.Domain.Notifications.StaffInboxItem { Id = inboxId, EmployeeId = admin.Id, Kind = kind, Title = copy.Title, Body = copy.Body, Link = copy.Link, CreatedUtc = occurredAt.UtcDateTime, UpdatedUtc = occurredAt.UtcDateTime });
             await StageAsync(session, new PushIntent { EmployeeId = admin.Id, AdminAudience = true, Kind = kind, EventKey = $"staff:{kind}:{key}:{admin.Id}",
                 OccurredUtc = occurredAt.UtcDateTime, DueUtc = occurredAt.UtcDateTime, ExpiresUtc = occurredAt.UtcDateTime.AddHours(24) }, ct);
+        }
     }
 
     public async Task StageAsync(IDocumentSession session, PushIntent intent, CancellationToken ct = default)
