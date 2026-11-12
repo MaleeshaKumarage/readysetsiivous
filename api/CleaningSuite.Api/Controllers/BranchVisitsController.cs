@@ -32,4 +32,8 @@ public sealed class BranchVisitsController(BranchVisitService service) : Control
     [HttpPut("shifts/{shiftId:guid}/visits/{visitId:guid}/employee")]
     public async Task<IActionResult> SetEmployee(Guid shiftId, Guid visitId, SetVisitEmployee body, CancellationToken ct) =>
         Ok(await service.SetEmployee(shiftId, visitId, body, ct));
+
+    [HttpPut("shifts/{shiftId:guid}/visits/{visitId:guid}/cleaning-type")]
+    public async Task<IActionResult> SetCleaningType(Guid shiftId, Guid visitId, SetVisitCleaningType body, CancellationToken ct) =>
+        Ok(await service.SetCleaningType(shiftId, visitId, body, ct));
 }

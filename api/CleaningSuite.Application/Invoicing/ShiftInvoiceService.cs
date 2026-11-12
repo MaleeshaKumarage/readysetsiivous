@@ -7,6 +7,7 @@ using CleaningSuite.Application.QualityCycle;
 using CleaningSuite.Application.Shifts;
 using CleaningSuite.Application.Tenants;
 using CleaningSuite.Domain.Common;
+using CleaningSuite.Domain.Companies;
 using CleaningSuite.Domain.Invoicing;
 using CleaningSuite.Domain.Partners;
 using CleaningSuite.Domain.QualityCycle;
@@ -145,7 +146,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             if (partnerRequest is null && pricing.BranchPriceEffectiveFrom is { } branchFrom)
             {
                 var branchForPrice = await branches.GetAsync(shift.BranchId, ct);
-                var version = branchForPrice?.Versions.FirstOrDefault(v => v.EffectiveFrom == branchFrom);
+                var version = branchForPrice?.VersionFrom(branchFrom);
                 if (version is null) ShiftBillingSettingsService.Invalid($"{shift.Name}: the branch price from {branchFrom:yyyy-MM-dd} is missing. Restore the branch price history before invoicing.");
                 pricing = new() { Id = shift.Id, ShiftId = shift.Id, CreatedUtc = pricing.CreatedUtc, UpdatedUtc = pricing.UpdatedUtc,
                     BranchPriceEffectiveFrom = branchFrom, Overrides = pricing.Overrides,
@@ -153,6 +154,9 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             }
             // A branch main shift inherits the branch price in force on each visit's date. A partner booking keeps the
             // price and VAT frozen on its request. Visits already on an issued or paid invoice are never billed again.
+            // One read of this shift's visit exceptions serves the merged-visit check, cleaning types and visit numbers.
+            var exceptions = (await shifts.ListOccurrenceExceptionsAsync(shift.Id, new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                new DateTime(2200, 1, 1, 0, 0, 0, DateTimeKind.Utc), ct) ?? []).ToArray();
             var billedStarts = new HashSet<DateTime>();
             if (shift.IsBranchMain)
             {
@@ -169,8 +173,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
                 billedStarts = existing.Where(i => Billed(i, shift.Id)).SelectMany(i => i.Lines)
                     .Where(l => l.ShiftId == shift.Id).SelectMany(l => l.OccurrenceStartsUtc).ToHashSet();
                 // A visit merged in from a shift of its own was invoiced under that shift's id, before visit starts were recorded.
-                var merged = (await shifts.ListOccurrenceExceptionsAsync(shift.Id, new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-                    new DateTime(2200, 1, 1, 0, 0, 0, DateTimeKind.Utc), ct) ?? []).Where(x => x.LegacyShiftId.HasValue).ToArray();
+                var merged = exceptions.Where(x => x.LegacyShiftId.HasValue).ToArray();
                 billedStarts.UnionWith(merged.Where(x => existing.Any(i => Billed(i, x.LegacyShiftId!.Value))).Select(x => x.StartUtc));
             }
             var schedule = ShiftContractSchedule.Snapshot(shift, zone);
@@ -189,6 +192,9 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             if (resolved.Count > 10000) Invalid("Too many scheduled visits in this period. Select a shorter range.");
             var submitted = request.PartnerMonth ? monthEvidence[shift.Id] : await forms.ListFormsAsync(shift.Id, from, to, ct);
             var completionTimes = new Dictionary<DateTime, DateTime>();
+            // Each visit's cleaning type, from its occurrence exception. Visits without one are Normal.
+            var cleaningByStart = exceptions.Where(x => x.CleaningType is not null)
+                .GroupBy(x => x.StartUtc).ToDictionary(g => g.Key, g => g.First().CleaningType!);
             var visits = resolved.Where(v => v.Plan.CompanyId == request.CompanyId && !billedStarts.Contains(v.Occurrence.StartUtc)
                 ).Select(v =>
             {
@@ -206,7 +212,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
                 if (isUnstarted && !unstarted.Any(u => u.ShiftId == shift.Id && u.StartUtc == v.Occurrence.StartUtc))
                     unstarted.Add(new(shift.Id, shift.Name, v.Occurrence.StartUtc, v.Occurrence.EndUtc, decision?.Include == true));
                 return new BillableShiftVisit(v.Occurrence.StartUtc, v.Occurrence.EndUtc, v.Plan.BranchId, v.Plan.ShiftName,
-                    completed || (isUnstarted && decision?.Include == true), isUnstarted);
+                    completed || (isUnstarted && decision?.Include == true), isUnstarted, cleaningByStart.GetValueOrDefault(v.Occurrence.StartUtc) ?? CleaningTypes.Normal);
             }).GroupBy(v => v.StartUtc).Select(g => g.First()).ToArray();
             if (request.PartnerMonth)
             {
@@ -242,8 +248,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             if (shift.IsBranchMain)
             {
                 // Each line names the visits it bills by their numbers on the main shift.
-                var numbers = (await shifts.ListOccurrenceExceptionsAsync(shift.Id, new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-                    new DateTime(2200, 1, 1, 0, 0, 0, DateTimeKind.Utc), ct) ?? []).Where(x => x.Sequence.HasValue)
+                var numbers = exceptions.Where(x => x.Sequence.HasValue)
                     .GroupBy(x => x.StartUtc).ToDictionary(g => g.Key, g => g.First().Sequence!.Value);
                 foreach (var line in calculated)
                     line.VisitNumbers = line.OccurrenceStartsUtc.Where(numbers.ContainsKey).Select(start => numbers[start]).Order().ToList();

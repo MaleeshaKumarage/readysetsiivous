@@ -7,6 +7,7 @@ using CleaningSuite.Domain.Common;
 using CleaningSuite.Domain.Companies;
 using CleaningSuite.Domain.Employees;
 using CleaningSuite.Domain.Invoicing;
+using CleaningSuite.Domain.Partners;
 using CleaningSuite.Domain.QualityCycle;
 using CleaningSuite.Domain.Shifts;
 using CleaningSuite.Infrastructure.Persistence;
@@ -220,6 +221,24 @@ public class BranchVisitServiceDatabaseTests
     }
 
     [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Staff_can_set_a_partner_visit_to_Deep_and_the_booking_keeps_the_same_choice()
+    {
+        using var f = await Fixture.Create();
+        var booked = await f.Accepted("08:00", f.Cleaner);
+        using var session = f.Session();
+        var repository = new ShiftRepository(session);
+        var visit = Assert.Single(await repository.ListOccurrenceExceptionsAsync(booked.LinkedShiftId!.Value, Fixture.DayStart, Fixture.DayStart.AddDays(1), default));
+        Assert.Equal(CleaningTypes.Normal, visit.CleaningType ?? CleaningTypes.Normal);
+
+        var changed = await f.Visits(session).SetCleaningType(visit.ShiftId, visit.Id, new(CleaningTypes.Deep), default);
+
+        Assert.Equal(CleaningTypes.Deep, changed.CleaningType);
+        using var reader = f.Reader();
+        var request = await reader.LoadAsync<PartnerCleaningRequest>(booked.Id);
+        Assert.Equal(CleaningTypes.Deep, request!.CleaningType);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
     public async Task A_staff_visit_can_be_deleted_until_work_starts_on_it()
     {
         using var f = await Fixture.Create();
@@ -259,7 +278,7 @@ public class BranchVisitServiceDatabaseTests
         await Assert.ThrowsAsync<NotFoundException>(() => visits.Add(new(Guid.NewGuid(), Fixture.Day, Fixture.Day, "08:00", "10:00"), default));
         await Assert.ThrowsAsync<ValidationException>(() => visits.Add(OnDay(f, employee: f.Partner.Id), default));
         // A visit must be billable: a property without a price cannot take one.
-        var unpriced = Branch.Create(f.Company.Id, "No price yet"); unpriced.SetPropertyDetails(20, "Normal");
+        var unpriced = Branch.Create(f.Company.Id, "No price yet"); unpriced.SetSizeM2(20);
         using (var writer = f.Store.LightweightSession(f.Tenant)) { writer.Store(unpriced); await writer.SaveChangesAsync(); }
         var noPrice = await Assert.ThrowsAsync<ShiftConflictException>(() => visits.Add(new(unpriced.Id, Fixture.Day, Fixture.Day, "08:00", "10:00"), default));
         Assert.Contains("no cleaning price", noPrice.Message);

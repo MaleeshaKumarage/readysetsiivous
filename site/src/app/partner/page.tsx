@@ -55,7 +55,7 @@ export default function PartnerPage() {
   // Access instructions (key-safe or door codes) the cleaner sees before a visit. The rest of the stored account is kept as loaded.
   const [accessInstructions, setAccessInstructions] = useState(''), [account, setAccount] = useState<PartnerAccount>({});
   useEffect(() => { settingsDraft.current = settingsKey(photoLabels, generalInstructions, accessInstructions); }, [photoLabels, generalInstructions, accessInstructions]);
-  const [from, setFrom] = useState(''), [to, setTo] = useState(''), [exact, setExact] = useState(false), [time, setTime] = useState(''), [notes, setNotes] = useState('');
+  const [from, setFrom] = useState(''), [to, setTo] = useState(''), [exact, setExact] = useState(false), [time, setTime] = useState(''), [notes, setNotes] = useState(''), [cleaningType, setCleaningType] = useState('Normal');
   const [change, setChange] = useState<{ kind: 'branch' | 'request'; id: string } | null>(null), [message, setMessage] = useState('');
   // Structured request changes: what the owner needs, and the proposed dates, time or instructions.
   const [changeAction, setChangeAction] = useState<PartnerChangeAction>('Message'), [changeFrom, setChangeFrom] = useState(''), [changeTo, setChangeTo] = useState(''), [changeTime, setChangeTime] = useState(''), [changeNotes, setChangeNotes] = useState('');
@@ -122,12 +122,12 @@ export default function PartnerPage() {
   function openRequest(branch: Branch, request?: CleaningRequest) {
     setTarget({ ...branch }); setEditing(request ?? null); setFrom(request?.fromDate ?? ''); setTo(request?.toDate ?? '');
     setExact(Boolean(request?.exactStartLocalTime)); setTime(request?.exactStartLocalTime?.slice(0, 5) ?? '');
-    setNotes(request?.notes ?? ''); requestKey.current = crypto.randomUUID(); setError('');
+    setNotes(request?.notes ?? ''); setCleaningType(request?.cleaningType ?? 'Normal'); requestKey.current = crypto.randomUUID(); setError('');
   }
   async function submitRequest(e: FormEvent) {
     e.preventDefault(); if (!target) return;
     await act(async () => {
-      const body = { fromDate: from, toDate: exact ? from : to || from, exactStartLocalTime: exact ? time : null, notes };
+      const body = { fromDate: from, toDate: exact ? from : to || from, exactStartLocalTime: exact ? time : null, notes, cleaningType };
       if (editing) await partnerApi.updateRequest(editing.id, { ...body, version: editing.version });
       else await partnerApi.createRequest({ ...body, branchId: target.id, clientRequestId: requestKey.current });
       setTarget(null); setEditing(null); setTab('Cleaning requests');
@@ -239,6 +239,7 @@ export default function PartnerPage() {
                 </div>
                 <p className="partner-request-window">{date(request.fromDate)} – {date(request.toDate)}{request.exactStartLocalTime && ' ' + t.at + ' ' + request.exactStartLocalTime.slice(0, 5)}</p>
                 <p className="partner-price">{t.agreedPrice} <strong>{money(request.priceNet)}</strong> {t.exclVat} ({t.vat} {number(request.vatRatePercent)}%)</p>
+                <p className="partner-muted">{t.cleaningType}: {request.cleaningType === 'Deep' ? t.deepCleaning : t.normalCleaning}</p>
                 <div className="partner-request-details"><p>{t.planned}: {request.plannedStartUtc ? <>{stamp(request.plannedStartUtc)} – {stamp(request.plannedEndUtc)}</> : request.firstAcceptedAtUtc || request.status === 'Accepted' ? t.flexible : t.notRecorded}</p><p className="partner-actual-times">{t.actualStart}: {stamp(request.actualStartUtc)} · {t.actualEnd}: {stamp(request.actualEndUtc)}</p></div>
                 {request.notes && <p className="partner-entered">{request.notes}</p>}
                 <div className="partner-card-actions">{request.status === 'Completed' ? <Button variant="outline" className="partner-secondary" onClick={() => openVisit(request)}>{t.viewVisit}</Button> : !request.firstAcceptedAtUtc && request.status !== 'Cancelled' ? <>
@@ -319,6 +320,7 @@ export default function PartnerPage() {
               <p className="partner-muted partner-form-wide" id="partner-window-help">{t.windowHint}</p>
               <label className="partner-check"><input type="checkbox" checked={exact} onChange={event => setExact(event.target.checked)} />{t.fixedAppointment}</label>
               <p className="partner-muted partner-form-wide">{t.visitInstructionsHint}</p>
+              <Field label={t.cleaningType}><select className="partner-field" name="cleaningType" aria-label={t.cleaningType} value={cleaningType} onChange={event => setCleaningType(event.target.value)}><option value="Normal">{t.normalCleaning}</option><option value="Deep">{t.deepCleaning}</option></select>{cleaningType === 'Deep' && <span className="partner-muted" role="note">{t.deepSurchargeNote}</span>}</Field>
               <Field label={t.instructions} className="partner-form-wide"><Textarea className="partner-field" value={notes} maxLength={4000} onChange={event => setNotes(event.target.value)} /></Field>
               <div className="partner-form-actions"><Button type="submit" disabled={busy}>{t.saveRequest}</Button><Button variant="outline" className="partner-secondary" disabled={busy} onClick={() => setTarget(null)}>{t.cancel}</Button></div>
             </form>

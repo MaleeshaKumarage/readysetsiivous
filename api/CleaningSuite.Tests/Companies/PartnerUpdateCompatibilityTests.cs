@@ -106,10 +106,9 @@ public sealed class PartnerUpdateCompatibilityTests
     public void Area_rejects_negative_and_implausible_values()
     {
         var branch = PricedBranch();
-        Assert.Throws<ArgumentException>(() => branch.SetPropertyDetails(-1, "Deep"));
-        Assert.Throws<ArgumentException>(() => branch.SetPropertyDetails(100001, "Deep"));
-        Assert.Throws<ArgumentException>(() => branch.SetPropertyDetails(34, "Pool"));
-        branch.SetPropertyDetails(34, "Deep"); Assert.Equal(34, branch.SizeM2);
+        Assert.Throws<ArgumentException>(() => branch.SetSizeM2(-1));
+        Assert.Throws<ArgumentException>(() => branch.SetSizeM2(100001));
+        branch.SetSizeM2(34); Assert.Equal(34, branch.SizeM2);
     }
 
     [Fact]

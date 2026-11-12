@@ -4,6 +4,7 @@ using CleaningSuite.Application.Companies;
 using CleaningSuite.Application.Employees;
 using CleaningSuite.Application.QualityCycle;
 using CleaningSuite.Application.Tenants;
+using CleaningSuite.Domain.Companies;
 using CleaningSuite.Domain.Invoicing;
 using CleaningSuite.Domain.Employees;
 using CleaningSuite.Domain.QualityCycle;
@@ -59,6 +60,7 @@ public record ShiftOccurrenceDto(DateTime StartUtc, DateTime EndUtc,
     public int? VisitNumber { get; init; }
     public string? VisitSource { get; init; }
     public string? VisitNotes { get; init; }
+    public string? VisitCleaningType { get; init; }
     public Guid? OfferedEmployeeId { get; init; }
     public int? OfferRevision { get; init; }
     public bool IsPartnerBooking { get; init; }
@@ -504,7 +506,7 @@ public class ShiftHandlers
                         ? "Started or completed work cannot be reassigned." : null;
                 var dto = ShiftRosterReader.ToDto(entry) with { CanAssign = reason is null, AssignmentLockReason = reason };
                 return entry.ExtraExceptionId is { } visitId && mainVisits.TryGetValue(visitId, out var visit)
-                    ? dto with { VisitNumber = visit.Sequence, VisitSource = visit.Source, VisitNotes = visit.Notes,
+                    ? dto with { VisitNumber = visit.Sequence, VisitSource = visit.Source, VisitNotes = visit.Notes, VisitCleaningType = visit.CleaningType ?? CleaningTypes.Normal,
                         OfferedEmployeeId = visit.OfferedEmployeeId, OfferRevision = visit.OfferRevision, IsPartnerBooking = visit.PartnerRequestId.HasValue }
                     : dto;
             }).ToList();

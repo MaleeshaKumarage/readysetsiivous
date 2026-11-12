@@ -236,7 +236,7 @@ public class BranchShiftMergeDatabaseTests
         var odd = await Legacy(f, "15:00", f.Cleaner, "Cancelled");
         await Worked(f, odd.Shift.Id, f.Cleaner, Fixture.DayStart.AddHours(15), submitted: false);
         // A property without size and cleaning type cannot name a main shift yet.
-        var bare = Branch.Create(f.Company.Id, "Bare property"); bare.SetPricing(80, 25.5m, 60, effectiveFrom: new DateOnly(2026, 1, 1)); bare.SetPropertyDetails(20, "Normal");
+        var bare = Branch.Create(f.Company.Id, "Bare property"); bare.SetPricing(80, 25.5m, 60, effectiveFrom: new DateOnly(2026, 1, 1)); bare.SetSizeM2(20);
         using (var writer = f.Store.LightweightSession(f.Tenant)) { writer.Store(bare); await writer.SaveChangesAsync(); }
         var unnamed = await Legacy(f, "17:00", f.Second, property: bare);
         using (var writer = f.Store.LightweightSession(f.Tenant))

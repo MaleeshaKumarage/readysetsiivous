@@ -90,7 +90,7 @@ public static class BranchShiftMerge
                 if (billed.Contains(shift.Id)) { findings.Add(Keep("Its booking is invoiced, so its shift stays linked to the invoice.")); continue; }
                 if (MainInactive(shift.BranchId)) { findings.Add(Keep("The property's visit shift is deactivated.")); continue; }
                 if (work.Any(f => f.ShiftOccurrenceUtc != visit.StartUtc)) { findings.Add(Keep("It has work records at another time than the booking's visit.")); continue; }
-                if (!CanName(shift.BranchId)) { findings.Add(Keep("The property needs its size and cleaning type before a main shift can be named.")); continue; }
+                if (!CanName(shift.BranchId)) { findings.Add(Keep("The property needs its size before a main shift can be named.")); continue; }
                 if (!Claim(shift.BranchId, visit.StartUtc)) { findings.Add(Keep("Another visit of the same property starts at exactly the same time.")); continue; }
                 findings.Add(new(shift.Id, shift.BranchId, requestId, BranchShiftMergeAction.Merge, "Accepted booking becomes a visit on the property's main shift.", visit.StartUtc));
                 continue;
@@ -122,7 +122,7 @@ public static class BranchShiftMerge
             var visit = OneTimeVisit(shift);
             if (visit is null) return Keep("Its one-time date and times do not produce a visit.");
             if (work.Any(f => f.ShiftOccurrenceUtc != visit.StartUtc)) return Keep("It has work records at another time than its visit.");
-            if (!CanName(shift.BranchId)) return Keep("The property needs its size and cleaning type before a main shift can be named.");
+            if (!CanName(shift.BranchId)) return Keep("The property needs its size before a main shift can be named.");
             // A visit still to be done would switch to the main shift's checklist; a different one is a decision for a person.
             var done = work.Any(f => f.IsSubmitted);
             if (!done && mains.TryGetValue(shift.BranchId, out var main) && main.QualityCycleTemplateId is Guid mainTemplate
@@ -132,10 +132,11 @@ public static class BranchShiftMerge
             // The price the shift is billed at today, compared with what the main shift would charge on that date.
             var date = DateOnly.FromDateTime(shift.Schedule.OneTimeDate!.Value.Date);
             var profile = billingByShift[shift.Id].FirstOrDefault();
-            var versions = branchesById.TryGetValue(shift.BranchId, out var branch) ? branch.Versions : [];
+            var branchOf = branchesById.TryGetValue(shift.BranchId, out var branch) ? branch : null;
+            var versions = branchOf?.Versions ?? [];
             var inherited = versions.LastOrDefault(v => v.EffectiveFrom <= date) ?? versions.FirstOrDefault();
             (string Mode, decimal Rate, decimal Vat)? own = profile?.BranchPriceEffectiveFrom is { } from
-                ? versions.Where(v => v.EffectiveFrom == from).Select(v => ((string, decimal, decimal)?)(v.Mode, v.PriceNet, v.VatRatePercent)).FirstOrDefault()
+                ? branchOf?.VersionFrom(from) is { } found ? ((string, decimal, decimal)?)(found.Mode, found.PriceNet, found.VatRatePercent) : null
                 : profile?.Plans.Where(p => p.EffectiveFrom <= date).OrderByDescending(p => p.EffectiveFrom)
                     .Select(p => ((string, decimal, decimal)?)(p.Mode, p.RateNet, p.VatRatePercent)).FirstOrDefault();
             var special = profile?.Overrides.FirstOrDefault(o => o.OccurrenceStartUtc == visit.StartUtc);

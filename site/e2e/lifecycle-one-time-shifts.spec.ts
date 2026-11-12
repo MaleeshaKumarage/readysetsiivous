@@ -113,7 +113,7 @@ test('admin adds a past visit from one form without a second visit popup', async
 
   await expect(dialog).toHaveCount(0);
   expect(mock.visitPosts).toEqual([{ branchId: 'branch', fromDate: '2026-10-01', toDate: '2026-10-01', startTime: '09:00', endTime: '11:30',
-    notes: null, employeeId: null, useDefaultEmployee: true }]);
+    notes: null, employeeId: null, useDefaultEmployee: true, cleaningType: 'Normal' }]);
   // The visit is not a shift of its own, and no second popup asks for its date again.
   expect(mock.posts).toHaveLength(0);
   await expect(page.getByRole('dialog', { name: /^Occurrences/ })).toHaveCount(0);

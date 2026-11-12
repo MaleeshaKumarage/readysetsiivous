@@ -5,7 +5,7 @@ import { setupAdminMocks } from './admin-helpers';
 // under it: number, dates and where it came from. Nothing about the price reaches the cleaner.
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization' };
-const MAIN = 'Deep Cleaning - Testikatu 1, 00100 Helsinki |34m2|2H|1V';
+const MAIN = 'Cleaning - Testikatu 1, 00100 Helsinki |34m2|2H|1V';
 const base = { shiftId: '33333333-3333-4333-8333-333333333333', shiftName: MAIN, timeZoneId: 'Europe/Helsinki', form: null };
 const adminVisit = { ...base, startUtc: '2026-11-10T06:00:00.000Z', endUtc: '2026-11-10T08:00:00.000Z', visitNumber: 3, visitSource: 'AdminPanel', notes: 'Ring the bell at the back door' };
 const partnerRange = { ...base, startUtc: '2026-11-21T06:00:00.000Z', endUtc: '2026-11-25T14:00:00.000Z', visitNumber: 5, visitSource: 'PartnerPortal' };
