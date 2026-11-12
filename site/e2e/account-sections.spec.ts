@@ -23,7 +23,7 @@ test('partner account is offered only the partner portal', async ({ page }, test
   await expect(page.getByRole('heading', { name: 'Account ready' })).toBeVisible();
 
   const picker = page.getByRole('navigation', { name: 'Choose a section' });
-  await expect(picker.getByRole('link')).toHaveCount(1);
+  await expect(picker.getByRole('link')).toHaveCount(2);
   await expect(picker.getByRole('link', { name: 'Open partner portal', exact: true })).toHaveAttribute('href', '/partner/');
   await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Manage tenant operations', exact: true })).toHaveCount(0);
@@ -35,7 +35,7 @@ test('manager who is also an employee is offered My shifts and tenant operations
   await signIn(page, ['manager', 'employee'], { role: 'manager' });
 
   const picker = page.getByRole('navigation', { name: 'Choose a section' });
-  await expect(picker.getByRole('link')).toHaveCount(2);
+  await expect(picker.getByRole('link')).toHaveCount(3);
   await expect(picker.getByRole('link', { name: 'My shifts', exact: true })).toHaveAttribute('href', '/me/shifts/');
   await expect(picker.getByRole('link', { name: 'Manage tenant operations', exact: true })).toHaveAttribute('href', '/manager/');
   await expect(picker.getByRole('link', { name: 'Open partner portal', exact: true })).toHaveCount(0);
@@ -46,7 +46,7 @@ test('administrator who is also an employee is offered My shifts and administrat
   await signIn(page, ['admin', 'employee'], { role: 'admin' });
 
   const picker = page.getByRole('navigation', { name: 'Choose a section' });
-  await expect(picker.getByRole('link')).toHaveCount(2);
+  await expect(picker.getByRole('link')).toHaveCount(3);
   await expect(picker.getByRole('link', { name: 'My shifts', exact: true })).toHaveAttribute('href', '/me/shifts/');
   await expect(picker.getByRole('link', { name: 'Continue to administration', exact: true })).toHaveAttribute('href', '/admin/');
   await expect(picker.getByRole('link', { name: 'Manage tenant operations', exact: true })).toHaveCount(0);
@@ -57,7 +57,7 @@ test('employee without a management role is offered only My shifts', async ({ pa
   await signIn(page, ['employee'], { role: 'employee' });
 
   const picker = page.getByRole('navigation', { name: 'Choose a section' });
-  await expect(picker.getByRole('link')).toHaveCount(1);
+  await expect(picker.getByRole('link')).toHaveCount(2);
   await expect(picker.getByRole('link', { name: 'My shifts', exact: true })).toHaveAttribute('href', '/me/shifts/');
 });
 
@@ -65,34 +65,46 @@ test('administrator without an employee record is offered only administration', 
   await signIn(page, ['admin'], null);
 
   const picker = page.getByRole('navigation', { name: 'Choose a section' });
-  await expect(picker.getByRole('link')).toHaveCount(1);
+  await expect(picker.getByRole('link')).toHaveCount(2);
   await expect(picker.getByRole('link', { name: 'Continue to administration', exact: true })).toHaveAttribute('href', '/admin/');
 });
 
-test('signed-in employee sees notifications first, profile beside them, and sign-out without horizontal scroll', async ({ page, isMobile }) => {
+test('signed-in employee sees notifications first, a Profile tile, and sign-out without horizontal scroll', async ({ page, isMobile }) => {
   await signIn(page, ['employee'], { role: 'employee' });
 
   const notifications = page.getByRole('heading', { name: 'Your notifications', exact: true });
-  const profile = page.getByRole('heading', { name: 'Profile', exact: true });
-  const preferences = page.getByRole('heading', { name: 'Work preferences', exact: true });
   await expect(notifications).toBeVisible();
-  await expect(profile).toBeVisible();
-  await expect(preferences).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+  const profileTile = page.getByRole('navigation', { name: 'Choose a section' }).getByRole('link', { name: 'Profile', exact: true });
+  await expect(profileTile).toHaveAttribute('href', '/account/profile/?tenant=tenant-a');
+  // Profile details and work preferences are not on the account page any more.
+  await expect(page.getByRole('heading', { name: 'Work preferences', exact: true })).toHaveCount(0);
 
-  const n = await notifications.boundingBox();
-  const p = await profile.boundingBox();
-  if (!n || !p) throw new Error('layout boxes missing');
-  if (isMobile) expect(n.y).toBeLessThan(p.y); // phone: notifications first, then profile
-  else expect(n.x).toBeLessThan(p.x); // wide screen: notifications in the main column, profile beside it
-
-  // Portal tiles and the sign-out control are at least 44px tall (touch target).
   const tile = await page.getByRole('navigation', { name: 'Choose a section' }).getByRole('link', { name: 'My shifts', exact: true }).boundingBox();
   expect(tile?.height ?? 0).toBeGreaterThanOrEqual(44);
   const signOut = await page.getByRole('button', { name: 'Sign out', exact: true }).boundingBox();
   expect(signOut?.height ?? 0).toBeGreaterThanOrEqual(44);
+  const n = await notifications.boundingBox();
+  const t = await profileTile.boundingBox();
+  if (!n || !t) throw new Error('layout boxes missing');
+  expect(n.y).toBeGreaterThan(t.y); // notifications sit below the portal tiles on both sizes
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
   if (process.env.PORTAL_SHOT_DIR) await page.screenshot({ path: `${process.env.PORTAL_SHOT_DIR}/account-employee-${isMobile ? 'mobile' : 'desktop'}.png`, fullPage: true });
+});
+
+test('profile page shows details and work preferences and links back to the account', async ({ page, isMobile }) => {
+  await signIn(page, ['employee'], { role: 'employee' });
+  await page.goto('/account/profile/?tenant=tenant-a');
+
+  await expect(page.getByRole('heading', { name: 'Details', exact: true })).toBeVisible();
+  await expect(page.getByText('Tenant: tenant-a')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Work preferences', exact: true })).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: 'Automatically accept cleaning offers' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Back to your account', exact: true }).click();
+  await expect(page).toHaveURL(/\/account\/\?tenant=tenant-a$/);
+  await expect(page.getByRole('heading', { name: 'Account ready' })).toBeVisible();
+  if (process.env.PORTAL_SHOT_DIR) await page.goto('/account/profile/?tenant=tenant-a'); if (process.env.PORTAL_SHOT_DIR) await page.screenshot({ path: `${process.env.PORTAL_SHOT_DIR}/profile-${isMobile ? 'mobile' : 'desktop'}.png`, fullPage: true });
 });
