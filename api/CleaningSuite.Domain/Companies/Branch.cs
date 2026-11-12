@@ -95,9 +95,9 @@ public class Branch : BaseDocument
     /// <summary>
     /// Records a price effective from a date. A new date adds a version to the history. Correcting the price already
     /// recorded for a date replaces that version in place, as the branch price always has; a new price from a later
-    /// date keeps the earlier history.
+    /// date keeps the earlier history. Returns false when the price already in force is re-saved unchanged.
     /// </summary>
-    public void SetPricing(decimal priceNet, decimal vatRatePercent, int durationMinutes,
+    public bool SetPricing(decimal priceNet, decimal vatRatePercent, int durationMinutes,
         string mode = "PerOccurrence", DateOnly? effectiveFrom = null)
     {
         if (priceNet <= 0 || priceNet > 1000000 || decimal.Round(priceNet, 2) != priceNet)
@@ -113,7 +113,7 @@ public class Branch : BaseDocument
         var versions = StoredVersions.ToList();
         var wanted = new BranchPriceVersion(date, mode, priceNet, vatRatePercent, durationMinutes);
         // Re-saving the price already in force (for example an unchanged form) adds nothing to history.
-        if (PriceOn(date) is { } inForce && inForce with { EffectiveFrom = date } == wanted) return;
+        if (PriceOn(date) is { } inForce && inForce with { EffectiveFrom = date } == wanted) return false;
         // The first price on this branch starts on LegacyPriceStart, so a new price cannot be dated before it or on it.
         if (StoredVersions.Any(v => v.EffectiveFrom == LegacyStoredDate) && date <= LegacyPriceStart)
             throw new ArgumentException("Prices start on 01/10/2026. Choose a later effective date for a new price.");
@@ -123,6 +123,7 @@ public class Branch : BaseDocument
         PriceNet = null; VatRatePercent = null; EstimatedDurationMinutes = null;
         PricingVersion++;
         QuoteRequestedUtc = null; QuoteRejectedUtc = null; QuoteRejectionReason = null; UpdatedUtc = DateTime.UtcNow;
+        return true;
     }
 
     /// <summary>The owner withdraws a pending quote request. Staff queues drop it because it is no longer requested.</summary>
