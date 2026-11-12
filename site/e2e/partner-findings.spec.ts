@@ -75,3 +75,23 @@ test('the owner request form explains how to book one exact time', async ({ page
   await page.getByRole('article', { name: 'Lake apartment', exact: true }).getByRole('button', { name: 'Request cleaning', exact: true }).click();
   await expect(page.getByText('Choose the first and last day the cleaning can happen. To book one exact time, tick Fixed appointment, pick that day and enter its start time.', { exact: true })).toBeVisible();
 });
+
+test('the owner sees the Deep surcharge and the total under the agreed price', async ({ page }) => {
+  const { backend, branch } = pricedBackend();
+  const deep = backend.seedRequest(branch, WINDOW);
+  deep.cleaningType = 'Deep';
+  await prepareRolePage(page, backend, 'owner');
+  await page.goto('/partner/');
+  await page.getByRole('tab', { name: 'Cleaning requests', exact: true }).click();
+  await expect(page.getByTestId('owner-deep-breakdown')).toHaveText('Deep cleaning surcharge €15.00 excl. VAT · Total €100.00 excl. VAT');
+});
+
+test('a Normal request on the owner card shows no surcharge line', async ({ page }) => {
+  const { backend, branch } = pricedBackend();
+  backend.seedRequest(branch, WINDOW);
+  await prepareRolePage(page, backend, 'owner');
+  await page.goto('/partner/');
+  await page.getByRole('tab', { name: 'Cleaning requests', exact: true }).click();
+  await expect(page.getByText('Agreed price').first()).toBeVisible();
+  await expect(page.getByTestId('owner-deep-breakdown')).toHaveCount(0);
+});

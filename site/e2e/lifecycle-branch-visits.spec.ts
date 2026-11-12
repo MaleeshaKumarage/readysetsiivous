@@ -386,3 +386,12 @@ test('a visit that has already ended with a waiting offer says the cleaner can s
   const list = page.getByRole('dialog', { name: /Occurrences/ });
   await expect(list.getByTestId('past-offer-note')).toContainText('The cleaner can still accept the offer. To change the cleaner, delete this visit and add it again.');
 });
+
+test('a visit row shows what its work is doing: Done once the cleaner has finished', async ({ page }) => {
+  const state = await setup(page);
+  state.occurrences = [{ ...adminVisit, workStatus: 'Completed' }, { ...partnerVisit, workStatus: 'Scheduled' }];
+  await shiftAction(page, MAIN, 'Occurrences');
+  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  await expect(list.getByRole('row').filter({ hasText: '#1 ·' }).getByTestId('occurrence-status')).toHaveText('Done');
+  await expect(list.getByRole('row').filter({ hasText: '#2 ·' }).getByTestId('occurrence-status')).toHaveText('Scheduled');
+});

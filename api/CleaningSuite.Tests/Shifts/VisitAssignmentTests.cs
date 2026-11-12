@@ -217,7 +217,8 @@ public class VisitAssignmentTests
         Assert.Equal(Start.AddHours(2), conflict.EndUtc);
         Assert.Equal("Daily", conflict.Recurrence);
         Assert.False(conflict.OpenEnded);
-        Assert.Contains("Choose another cleaner or time", ex.Message);
+        Assert.Contains("Choose another cleaner, change the time", ex.Message);
+        Assert.Contains("No assignments were saved.", ex.Message);
     }
 
     [Fact]

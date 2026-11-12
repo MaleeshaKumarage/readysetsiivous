@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Claims;
 using CleaningSuite.Api.Auth;
 using CleaningSuite.Application;
+using CleaningSuite.Application.Common;
 using CleaningSuite.Application.Companies;
 using CleaningSuite.Application.Employees;
 using CleaningSuite.Application.QualityCycle;
@@ -19,7 +20,8 @@ namespace CleaningSuite.Api.Controllers;
 [Authorize(Policy = RealmRoleAuthorization.PolicyPrefix + "admin")]
 public class ShiftCalendarAdminController(IShiftRepository shifts, IEmployeeRepository employees,
     IQualityCycleRepository forms, ICompanyRepository companies, IBranchRepository branches,
-    ITenantProfileRepository profiles, ITenantContext tenant, IShiftWorkReservation reservation) : ControllerBase
+    ITenantProfileRepository profiles, ITenantContext tenant, IShiftWorkReservation reservation,
+    IUploadContentValidator uploads) : ControllerBase
 {
     // Explain the refusal so the admin knows to ask for calendar access instead of seeing a blank 403.
     private ObjectResult CalendarForbidden() => StatusCode(StatusCodes.Status403Forbidden,
@@ -86,6 +88,9 @@ public class ShiftCalendarAdminController(IShiftRepository shifts, IEmployeeRepo
     public record WorkTimeBody(Guid ShiftId, Guid EmployeeId, DateTime OccurrenceStartUtc, Guid? ExceptionId,
         string ActualStartLocal, string ActualEndLocal, string Reason, Guid? Version);
 
+    public record WorkPhotosBody(Guid ShiftId, Guid EmployeeId, DateTime OccurrenceStartUtc, Guid? ExceptionId,
+        string Reason, List<QualityCyclePhoto> Photos, Guid? Version);
+
     // Local date/time strings are interpreted by the server, never the browser's time zone.
     public static DateTime ParseLocal(string value, TimeZoneInfo zone)
     {
@@ -145,5 +150,31 @@ public class ShiftCalendarAdminController(IShiftRepository shifts, IEmployeeRepo
         form.SubmittedUtc ??= now; form.UpdatedUtc = now;
         if (isNew) await forms.CreateStartedFormAsync(form, ct); else await forms.SaveFormAsync(form, ct);
         return Ok(new { form.Id, form.Version, actualStartUtc = actualStart, actualEndUtc = actualEnd });
+    }
+
+    /// <summary>Attaches photos an admin received after the visit (for example from the cleaner by chat). Needs a work record, which "Record work" creates.</summary>
+    [HttpPost("work-photos")]
+    public async Task<IActionResult> AddWorkPhotos(WorkPhotosBody body, CancellationToken ct)
+    {
+        if (!await Allowed(ct)) return CalendarForbidden();
+        await using var lease = await reservation.AcquireAsync(ct);
+        if (!await Allowed(ct)) return CalendarForbidden();
+        var now = DateTime.UtcNow;
+        var scheduled = DateTime.SpecifyKind(body.OccurrenceStartUtc, DateTimeKind.Utc);
+        if (string.IsNullOrWhiteSpace(body.Reason) || body.Reason.Length > 2000) return BadRequest(new { detail = "Enter a reason (up to 2000 characters)." });
+        if (body.Photos is null || body.Photos.Count == 0) return BadRequest(new { detail = "Choose at least one photo." });
+        if (body.Photos.Any(photo => string.IsNullOrWhiteSpace(photo.Note))) return BadRequest(new { detail = "Add a separate note for each photo." });
+        var shift = await shifts.GetAsync(body.ShiftId, ct);
+        if (shift is null) return BadRequest(new { detail = "Choose an active shift." });
+        var form = await forms.GetFormByShiftOccurrenceAsync(shift.Id, body.EmployeeId, scheduled, ct);
+        if (form is null || form.ShiftDeletedUtc is not null)
+            return Conflict(new { detail = "Record the work times for this visit first, then add its photos." });
+        if (form.Version != body.Version) return Conflict(new { detail = "The visit changed. Reload the calendar before adding photos." });
+        uploads.ValidateQualityCyclePhotos(body.Photos, null);
+        form.Photos.AddRange(body.Photos.Select(photo => new QualityCyclePhoto(photo.Url, photo.Note.Trim(), photo.Category)));
+        form.WorkPhotoAdditions.Add(new(User.FindFirstValue("sub")!, now, body.Reason.Trim(), body.Photos.Count));
+        form.UpdatedUtc = now;
+        await forms.SaveFormAsync(form, ct);
+        return Ok(new { form.Id, form.Version, photoCount = form.Photos.Count });
     }
 }

@@ -13,6 +13,7 @@ import { QuoteRequestedBadge } from '@/components/QuoteRequests';
 import { PartnerInventoryAcknowledgments } from '@/components/PartnerInventoryAcknowledgments';
 import { PartnerKeyRequests } from '@/components/PartnerKeyRequests';
 import './partner.css';
+import { DEEP_SURCHARGE_EUR } from '@/lib/cleaningPricing';
 
 const sections = [
   { key: 'Properties', label: 'properties', icon: Building2 },
@@ -239,6 +240,7 @@ export default function PartnerPage() {
                 </div>
                 <p className="partner-request-window">{date(request.fromDate)} – {date(request.toDate)}{request.exactStartLocalTime && ' ' + t.at + ' ' + request.exactStartLocalTime.slice(0, 5)}</p>
                 <p className="partner-price">{t.agreedPrice} <strong>{money(request.priceNet)}</strong> {t.exclVat} ({t.vat} {number(request.vatRatePercent)}%)</p>
+                {request.cleaningType === 'Deep' && <p className="partner-muted" data-testid="owner-deep-breakdown">{t.deepSurcharge} {money(Number(DEEP_SURCHARGE_EUR))} {t.exclVat} · {t.totalExclVat} {money(request.priceNet + Number(DEEP_SURCHARGE_EUR))} {t.exclVat}</p>}
                 <p className="partner-muted">{t.cleaningType}: {request.cleaningType === 'Deep' ? t.deepCleaning : t.normalCleaning}</p>
                 <div className="partner-request-details"><p>{t.planned}: {request.plannedStartUtc ? <>{stamp(request.plannedStartUtc)} – {stamp(request.plannedEndUtc)}</> : request.firstAcceptedAtUtc || request.status === 'Accepted' ? t.flexible : t.notRecorded}</p><p className="partner-actual-times">{t.actualStart}: {stamp(request.actualStartUtc)} · {t.actualEnd}: {stamp(request.actualEndUtc)}</p></div>
                 {request.notes && <p className="partner-entered">{request.notes}</p>}

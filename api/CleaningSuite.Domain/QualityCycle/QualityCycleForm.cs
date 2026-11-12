@@ -41,6 +41,8 @@ public class QualityCycleForm : BaseDocument
     public DateTime? EndedAtUtc { get; set; }
     public DateTime? ShiftDeletedUtc { get; set; }
     public List<WorkTimeCorrection> WorkTimeCorrections { get; set; } = new();
+    /// <summary>Photos an admin added after the visit, each with who, when and why. The cleaner's own photos stay in Photos.</summary>
+    public List<WorkPhotoAddition> WorkPhotoAdditions { get; set; } = new();
 
     public static QualityCycleForm Create(
         Guid shiftId,
@@ -136,6 +138,8 @@ public class QualityCycleForm : BaseDocument
         _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
     };
 }
+
+public record WorkPhotoAddition(string AdminSubject, DateTime AddedAtUtc, string Reason, int PhotoCount);
 
 public record WorkTimeCorrection(string AdminSubject, DateTime ChangedAtUtc, string Reason,
     DateTime? PreviousStartUtc, DateTime? PreviousEndUtc, DateTime StartUtc, DateTime EndUtc);

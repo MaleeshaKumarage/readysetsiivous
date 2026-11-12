@@ -42,6 +42,14 @@ const SCHEDULE_TYPES = [
   { value: '6', label: 'One-time' },
 ];
 
+/** What a visit's work is doing now, in words an admin can act on. */
+const WORK_STATUS_LABEL: Record<string, string> = {
+  Completed: 'Done',
+  InProgress: 'In progress',
+  Scheduled: 'Scheduled',
+  NeedsAction: 'Not started',
+};
+
 const OCCURRENCE_STATUSES = [
   { value: '1', label: 'Move / change time' },
   { value: '2', label: 'Customer cancelled' },
@@ -757,7 +765,7 @@ export default function ShiftsAdminPage() {
                   {new Date(item.startUtc).toLocaleString(undefined, { timeZone: timeZoneId })}
                   {highlightUtc && Date.parse(item.startUtc) === Date.parse(highlightUtc) && <Text component="span" size="xs" c="orange" fw={600} ml={6}>Overlapping visit</Text>}</Table.Td>
                 <Table.Td>{new Date(item.endUtc).toLocaleString(undefined, { timeZone: timeZoneId })}</Table.Td>
-                <Table.Td>{item.status ? OCCURRENCE_STATUSES.find(x => x.value === String(item.status))?.label : 'Scheduled'}</Table.Td>
+                <Table.Td data-testid="occurrence-status">{item.visitNumber && item.workStatus ? WORK_STATUS_LABEL[item.workStatus] ?? item.workStatus : item.status ? OCCURRENCE_STATUSES.find(x => x.value === String(item.status))?.label : 'Scheduled'}</Table.Td>
                 <Table.Td><Text size="sm">{(item.assigneeIds ?? []).map(employeeName).join(', ') || (item.offeredEmployeeId ? `Offer sent to ${employeeName(item.offeredEmployeeId)}` : 'Unassigned')}</Text>
                   <Text size="xs" c="dimmed">{item.visitNumber ? (item.isPartnerBooking ? 'Partner booking' : item.offeredEmployeeId ? 'Waiting for the cleaner to accept' : (item.assigneeIds ?? []).length ? 'Accepted' : 'No cleaner yet') : item.assignmentSource ?? 'Recurring'}</Text>{item.visitNumber ? <Text size="xs" c="dimmed">{item.visitCleaningType ?? 'Normal'} cleaning</Text> : null}{item.visitNumber && item.offeredEmployeeId && Date.parse(item.endUtc) < Date.now() ? <Text size="xs" c="orange" data-testid="past-offer-note">This visit has already ended. The cleaner can still accept the offer. To change the cleaner, delete this visit and add it again.</Text> : null}{item.assignmentLockReason && <Text size="xs" c="dimmed">{item.assignmentLockReason}</Text>}</Table.Td>
                 <Table.Td>{item.reason ?? '—'}</Table.Td>
