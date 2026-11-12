@@ -343,7 +343,8 @@ export default function ShiftsAdminPage() {
     if (!companyId || !branchId) { setError('Company and branch are required.'); return; }
     if (editingShift && !name.trim()) { setError('Enter a shift name.'); return; }
     if (scheduleType === '2' && weekDays.length === 0) { setError('Select at least one day.'); return; }
-    if (scheduleType === '1' && (!weekDays.length || weekDays.some(day => !dailyTimes[day]?.start || !dailyTimes[day]?.end || dailyTimes[day].end <= dailyTimes[day].start))) { setError('Select at least one day and ensure each end time is after its start time.'); return; }
+    // A weekday without its own times uses the shown default (the same fallback the saved schedule uses).
+    if (scheduleType === '1' && (!weekDays.length || weekDays.some(day => { const range = dailyTimes[day] ?? { start, end }; return !range.start || !range.end || range.end <= range.start; }))) { setError('Select at least one day and ensure each end time is after its start time.'); return; }
     if (scheduleType === '3' && weekDays.length === 0) { setError('Select a day.'); return; }
     submitting.current = true; setSaving(true); setError('');
     const branchVersions = branches.find(b => b.id === branchId)?.priceVersions;
@@ -860,8 +861,8 @@ export default function ShiftsAdminPage() {
             <MultiSelect label="Days" data={DAYS.map((d, i) => ({ value: String(i), label: d }))} value={weekDays} onChange={setWeekDays} />
             {weekDays.map(day => <Group key={day} wrap="wrap" grow gap="xs">
               <Text size="sm" fw={500}>{DAYS[Number(day)]}</Text>
-              <TextInput label="Start" type="time" value={dailyTimes[day]?.start ?? '08:00'} onChange={e => setDailyTimes(current => ({ ...current, [day]: { ...(current[day] ?? { start: '08:00', end: '17:00' }), start: e.target.value } }))} />
-              <TextInput label="End" type="time" value={dailyTimes[day]?.end ?? '17:00'} onChange={e => setDailyTimes(current => ({ ...current, [day]: { ...(current[day] ?? { start: '08:00', end: '17:00' }), end: e.target.value } }))} />
+              <TextInput label="Start" type="time" value={(dailyTimes[day] ?? { start, end }).start} onChange={e => setDailyTimes(current => ({ ...current, [day]: { ...(current[day] ?? { start: '08:00', end: '17:00' }), start: e.target.value } }))} />
+              <TextInput label="End" type="time" value={(dailyTimes[day] ?? { start, end }).end} onChange={e => setDailyTimes(current => ({ ...current, [day]: { ...(current[day] ?? { start: '08:00', end: '17:00' }), end: e.target.value } }))} />
             </Group>)}
           </>}
           {scheduleType === '3' && (
