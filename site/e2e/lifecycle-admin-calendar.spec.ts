@@ -385,3 +385,27 @@ test('calendar renders the server-chosen completed duration with no review flag 
   await expect(page.getByText('Unusual time', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Missing completion', { exact: true })).toHaveCount(0);
 });
+
+test('an admin attaches photos the cleaner sent outside the app to a recorded visit, with a note and a reason', async ({ page }) => {
+  const state = await setup(page); state.settled = true; await page.goto('/admin/shifts/calendar/');
+  const posted: any[] = [];
+  await page.route(/\/api\/v1\/admin\/shifts\/calendar\/work-photos$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
+    posted.push(route.request().postDataJSON());
+    return route.fulfill({ headers, json: { id: 'photos', version: '33333333-3333-3333-3333-333333333333', photoCount: 1 } });
+  });
+  await page.getByRole('button', { name: 'Add photos for Carol Done' }).click();
+  await page.getByLabel('Choose photos').setInputFiles({ name: 'kitchen.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgo=', 'base64') });
+  await expect(page.getByAltText('Photo 1')).toBeVisible();
+  await page.getByRole('button', { name: 'Save photos' }).click();
+  await expect(page.getByRole('dialog').getByRole('alert')).toContainText('Add a separate note for each photo.');
+  expect(posted).toHaveLength(0);
+  await page.getByLabel('Note for photo 1').fill('Kitchen after cleaning');
+  await page.getByRole('textbox', { name: 'Reason', exact: true }).fill('Cleaner sent these by chat');
+  await page.getByRole('button', { name: 'Save photos' }).click();
+  await expect(page.getByRole('status')).toContainText('Photos added to the visit');
+  expect(posted).toHaveLength(1);
+  expect(posted[0]).toMatchObject({ employeeId: 'carol', reason: 'Cleaner sent these by chat', version: '22222222-2222-2222-2222-222222222222',
+    photos: [{ note: 'Kitchen after cleaning' }] });
+  expect(posted[0].photos[0].url).toMatch(/^data:image\/png;base64,/);
+});
