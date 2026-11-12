@@ -643,6 +643,47 @@ public class PartnerWorkflowTests
         }
     }
 
+    // Issue #392: re-saving an unchanged price must succeed without a concurrency conflict or a duplicate notification,
+    // and a real price change must still create its revision and notification.
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Unchanged_price_resave_succeeds_without_duplicate_notification_and_changed_price_notifies_once()
+    {
+        using var fixture = await Fixture.Create();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        using (var session = fixture.Session())
+            await fixture.Service(session).Price(fixture.Admin.Id, fixture.Branch.Id, new(75, 25.5m, 60), default);
+        using (var session = fixture.Session())
+        {
+            var repeated = await fixture.Service(session).Price(fixture.Admin.Id, fixture.Branch.Id, new(75, 25.5m, 60), default);
+            Assert.Equal(75m, repeated.PriceNet);
+        }
+        using (var session = fixture.Session())
+            await fixture.Service(session).Price(fixture.Admin.Id, fixture.Branch.Id, new(75, 25.5m, 60), default);
+
+        using (var reader = fixture.Store.QuerySession(fixture.Tenant))
+        {
+            var branch = (await reader.LoadAsync<Branch>(fixture.Branch.Id))!;
+            Assert.Equal(75m, branch.PriceOn(today)!.PriceNet);
+            Assert.Equal(2, branch.PricingVersion);
+            var notices = await reader.Query<PartnerNotification>().Where(x => x.BranchId == fixture.Branch.Id && x.Kind == "PropertyPriced").ToListAsync();
+            Assert.Single(notices);
+        }
+
+        using (var session = fixture.Session())
+        {
+            var changed = await fixture.Service(session).Price(fixture.Admin.Id, fixture.Branch.Id, new(80, 25.5m, 60), default);
+            Assert.Equal(80m, changed.PriceNet);
+        }
+        using (var reader = fixture.Store.QuerySession(fixture.Tenant))
+        {
+            var branch = (await reader.LoadAsync<Branch>(fixture.Branch.Id))!;
+            Assert.Equal(80m, branch.PriceOn(today)!.PriceNet);
+            Assert.Equal(3, branch.PricingVersion);
+            var notices = await reader.Query<PartnerNotification>().Where(x => x.BranchId == fixture.Branch.Id && x.Kind == "PropertyPriced").ToListAsync();
+            Assert.Equal(2, notices.Count);
+        }
+    }
+
     private static async Task<Branch> StoreBranch(Fixture fixture, Guid companyId, string name, bool priced)
     {
         var branch = Branch.Create(companyId, name); branch.SetPropertyDetails(34, "Deep");
