@@ -65,7 +65,8 @@ test('a failed save puts the switch back and says why', async ({ page }) => {
   state.failNext = true;
   const assigned = page.getByRole('switch', { name: 'Assigned to a shift: in the app' });
   await expect(assigned).toBeEnabled();
-  await assigned.uncheck();
+  // The switch flips straight back when the save fails, so assert the outcome rather than the flip (uncheck() would race it).
+  await assigned.click();
   await expect(page.getByRole('alert').filter({ hasText: 'Could not save notification settings' })).toHaveCount(1);
   await expect(assigned).toBeChecked();
 });
