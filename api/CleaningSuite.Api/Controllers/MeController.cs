@@ -52,6 +52,16 @@ public class MeController : ControllerBase
         [FromServices] CleaningSuite.Application.Partners.PartnerService service, CancellationToken ct) =>
         Ok(await service.SetWorkPreferences(ActorVerifiedEmployee().Id, body.AutoAcceptWork, ct));
 
+    [HttpGet("notification-preferences")]
+    public async Task<IActionResult> NotificationPreferences([FromServices] CleaningSuite.Application.Notifications.NotificationPreferenceService service, CancellationToken ct) =>
+        Ok(await service.Get(ActorVerifiedEmployee(), ct));
+
+    // Switches the app (inbox and push) on or off for one event. The event must apply to this person's role.
+    [HttpPut("notification-preferences/{key}")]
+    public async Task<IActionResult> SetNotificationPreference(string key, [FromBody] NotificationPreferenceRequest body,
+        [FromServices] CleaningSuite.Application.Notifications.NotificationPreferenceService service, CancellationToken ct) =>
+        Ok(await service.SetApp(ActorVerifiedEmployee(), key, body.App, ct));
+
     private Employee ActorVerifiedEmployee() => StaffActor.RequireActive(HttpContext);
 
     [HttpGet("work")]
@@ -136,4 +146,11 @@ public sealed record WorkPreferenceRequest
 {
     [System.Text.Json.Serialization.JsonRequired]
     public bool AutoAcceptWork { get; init; }
+}
+
+[System.Text.Json.Serialization.JsonUnmappedMemberHandling(System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow)]
+public sealed record NotificationPreferenceRequest
+{
+    [System.Text.Json.Serialization.JsonRequired]
+    public bool App { get; init; }
 }

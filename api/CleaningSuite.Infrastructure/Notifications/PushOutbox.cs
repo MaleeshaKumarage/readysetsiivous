@@ -7,13 +7,16 @@ namespace CleaningSuite.Infrastructure.Notifications;
 
 public sealed class PushOutbox : IPushOutbox
 {
-    public async Task StageScheduleChangeAsync(IDocumentSession session, Guid shiftId, IEnumerable<Guid> employeeIds, DateTimeOffset occurredAt, CancellationToken ct = default)
+    // A newer shift change replaces any not-yet-sent change for the same shift and person, whatever its kind.
+    private static readonly string[] ScheduleKinds = ["ShiftAssigned", "ShiftRemoved", "ShiftUpdated", "ScheduleChanged"];
+
+    public async Task StageScheduleChangeAsync(IDocumentSession session, Guid shiftId, IEnumerable<Guid> employeeIds, DateTimeOffset occurredAt, CancellationToken ct = default, string kind = "ShiftUpdated")
     {
         foreach (var employeeId in employeeIds.Distinct())
         {
-            var pending = await session.Query<PushIntent>().Where(i => i.EmployeeId == employeeId && i.ShiftId == shiftId && i.Kind == "ScheduleChanged" && !i.Materialized && !i.Cancelled).ToListAsync(ct);
+            var pending = await session.Query<PushIntent>().Where(i => i.EmployeeId == employeeId && i.ShiftId == shiftId && ScheduleKinds.Contains(i.Kind) && !i.Materialized && !i.Cancelled).ToListAsync(ct);
             foreach (var previous in pending) { previous.Cancelled = true; session.Store(previous); }
-            await StageAsync(session, new PushIntent { EmployeeId = employeeId, ShiftId = shiftId, EventKey = $"schedule:{shiftId}:{employeeId}:{Guid.NewGuid()}", OccurredUtc = occurredAt.UtcDateTime, DueUtc = occurredAt.UtcDateTime, ExpiresUtc = occurredAt.UtcDateTime.AddHours(24) }, ct);
+            await StageAsync(session, new PushIntent { EmployeeId = employeeId, ShiftId = shiftId, Kind = kind, EventKey = $"schedule:{shiftId}:{employeeId}:{Guid.NewGuid()}", OccurredUtc = occurredAt.UtcDateTime, DueUtc = occurredAt.UtcDateTime, ExpiresUtc = occurredAt.UtcDateTime.AddHours(24) }, ct);
         }
     }
     public async Task StagePartnerRequestAsync(IDocumentSession session, Guid requestId, int revision, DateTimeOffset occurredAt, CancellationToken ct = default)
@@ -33,6 +36,8 @@ public sealed class PushOutbox : IPushOutbox
         var copy = CleaningSuite.Application.Notifications.StaffAlertCopy.For(kind);
         foreach (var admin in admins)
         {
+            // Switched off in the person's notification settings: nothing is kept or sent for this event.
+            if (NotificationPreferenceService.AppTurnedOff(await session.Query<NotificationPreference>().FirstOrDefaultAsync(x => x.EmployeeId == admin.Id, ct), kind)) continue;
             // The in-app inbox keeps the event even when push is off or not yet enabled on a device.
             var inboxId = PushValidation.Id($"inbox:{kind}:{key}:{admin.Id}");
             if (await session.LoadAsync<CleaningSuite.Domain.Notifications.StaffInboxItem>(inboxId, ct) is null)
@@ -44,6 +49,8 @@ public sealed class PushOutbox : IPushOutbox
 
     public async Task StageAsync(IDocumentSession session, PushIntent intent, CancellationToken ct = default)
     {
+        // Switched off in the person's notification settings: nothing is queued.
+        if (NotificationPreferenceService.AppTurnedOff(await session.Query<NotificationPreference>().FirstOrDefaultAsync(x => x.EmployeeId == intent.EmployeeId, ct), intent.Kind)) return;
         // No device at commit means no event to backfill when a user opts in later.
         var devices = await session.Query<PushDevice>().Where(d => d.EmployeeId == intent.EmployeeId && d.Enabled).ToListAsync(ct);
         if (!devices.Any(d => d.OptedInUtc <= intent.OccurredUtc)) return;

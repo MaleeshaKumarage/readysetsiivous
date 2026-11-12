@@ -7,6 +7,7 @@ import { LogOut } from 'lucide-react';
 import { Button, Card } from '@/ds';
 import { isPartner, logout } from '@/lib/auth';
 import { NotificationsPanel } from '@/components/NotificationsPanel';
+import { NotificationEventSettings } from '@/components/NotificationEventSettings';
 import { meApi, supportsWorkPreferences } from '@/lib/meApi';
 import { TENANT_SLUG } from '@/lib/api';
 import { accountName, accountRoles, useAccountSession } from '../useAccountSession';
@@ -101,7 +102,8 @@ export default function ProfileClient() {
           </Card>}
         </div>
 
-        {!isPartner() && <Card className="partner-surface">
+        {!isPartner() && <Card className="partner-surface account-section">
+          <NotificationEventSettings />
           <NotificationsPanel />
         </Card>}
       </div>}

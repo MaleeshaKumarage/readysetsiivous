@@ -232,8 +232,8 @@ public class PushReminderDatabaseTests
         using (var db = f.Store.LightweightSession(f.Tenant)) { db.Store(f.Shift); db.Store(exception); await db.SaveChangesAsync(); }
         using var session = f.Session(); var outbox = new Mock<IPushOutbox>();
         Guid[] recipients = [];
-        outbox.Setup(x => x.StageScheduleChangeAsync(It.IsAny<IDocumentSession>(), f.Shift.Id, It.IsAny<IEnumerable<Guid>>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
-            .Callback<IDocumentSession, Guid, IEnumerable<Guid>, DateTimeOffset, CancellationToken>((_, _, ids, _, _) => recipients = ids.ToArray()).Returns(Task.CompletedTask);
+        outbox.Setup(x => x.StageScheduleChangeAsync(It.IsAny<IDocumentSession>(), f.Shift.Id, It.IsAny<IEnumerable<Guid>>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
+            .Callback<IDocumentSession, Guid, IEnumerable<Guid>, DateTimeOffset, CancellationToken, string>((_, _, ids, _, _, _) => recipients = ids.ToArray()).Returns(Task.CompletedTask);
         var repository = new ShiftRepository(session, outbox.Object);
         var tracked = loadByList
             ? (await repository.ListOccurrenceExceptionsAsync(f.Shift.Id, start.AddDays(-1), start.AddDays(2))).Single()
@@ -256,8 +256,8 @@ public class PushReminderDatabaseTests
         using (var db = f.Store.LightweightSession(f.Tenant))
         { db.Store(f.Shift); db.Store(visit, elsewhere); db.Store(change); db.Store(f.Assignments.ToArray()); await db.SaveChangesAsync(); }
         using var session = f.Session(); var outbox = new Mock<IPushOutbox>(); Guid[] recipients = [];
-        outbox.Setup(x => x.StageScheduleChangeAsync(It.IsAny<IDocumentSession>(), f.Shift.Id, It.IsAny<IEnumerable<Guid>>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
-            .Callback<IDocumentSession, Guid, IEnumerable<Guid>, DateTimeOffset, CancellationToken>((_, _, ids, _, _) => recipients = ids.Distinct().ToArray()).Returns(Task.CompletedTask);
+        outbox.Setup(x => x.StageScheduleChangeAsync(It.IsAny<IDocumentSession>(), f.Shift.Id, It.IsAny<IEnumerable<Guid>>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
+            .Callback<IDocumentSession, Guid, IEnumerable<Guid>, DateTimeOffset, CancellationToken, string>((_, _, ids, _, _, _) => recipients = ids.Distinct().ToArray()).Returns(Task.CompletedTask);
         var repository = new ShiftRepository(session, outbox.Object);
         var tracked = (await repository.ListOccurrenceAssignmentsAsync(f.Shift.Id)).Single();
         tracked.Update(OccurrenceAssignmentMode.Replace, [newEmployee], "after");
@@ -391,7 +391,7 @@ public class PushReminderDatabaseTests
         Assert.False(await f.Scheduler().IsEligibleAsync(intent));
     }
 
-    private sealed class Fixture : IDisposable
+    internal sealed class Fixture : IDisposable
     {
         public required ServiceProvider Provider; public required IDocumentStore Store; public required IConfiguration Config;
         public string Tenant = "push-reminder-" + Guid.NewGuid().ToString("N");

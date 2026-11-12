@@ -44,3 +44,17 @@
 .account-circle:focus-visible { outline: none; }
 .account-circle:focus-visible .account-circle-icon { outline: 3px solid var(--partner-focus); outline-offset: 4px; }
 @media (prefers-reduced-motion: reduce) { .account-circle-icon { transition: none; } }
+
+/* Notification event settings on the profile page */
+.account-muted { font-size: 14px; color: var(--partner-muted); margin: 0; }
+.account-event-group { display: flex; flex-direction: column; gap: 8px; }
+.account-event-group h3 { margin: 8px 0 0; font-size: 15px; font-weight: 700; }
+.account-event-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.account-event { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--partner-border); }
+.account-event-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.account-event-label { font-weight: 650; }
+.account-event-switches { display: flex; gap: 16px; flex-wrap: wrap; }
+.account-switch { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.account-switch input { width: 20px; height: 20px; accent-color: var(--partner-ink); }
+.account-switch input:focus-visible { outline: 3px solid var(--partner-focus); outline-offset: 2px; }
+.account-switch-disabled { opacity: .55; cursor: not-allowed; }

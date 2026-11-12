@@ -133,7 +133,7 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
         if (body.EmployeeId is { } next) await OfferTo(shift, visit, next, zone, ct);
         visit.UpdatedUtc = DateTime.UtcNow; Db.Store(visit);
         if (push is not null && released.HasValue && released != visit.EmployeeId)
-            await push.StageScheduleChangeAsync(Db, shift.Id, [released.Value], DateTimeOffset.UtcNow, ct);
+            await push.StageScheduleChangeAsync(Db, shift.Id, [released.Value], DateTimeOffset.UtcNow, ct, kind: "ShiftRemoved");
         await Db.SaveChangesAsync(ct);
         return Map(visit, shift, zone, zoneId);
     }
@@ -239,7 +239,7 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
         visit.EmployeeId = employeeId; visit.OfferedEmployeeId = null; visit.OfferId = null; visit.OfferRevision++;
         var roster = ShiftVisitRoster.Resolve(shift.Id, [], [visit], [], []);
         await VisitAssignmentSafety.CheckConflicts(shifts, shift, roster, zone, ct);
-        if (push is not null) await push.StageScheduleChangeAsync(Db, shift.Id, [employeeId], DateTimeOffset.UtcNow, ct);
+        if (push is not null) await push.StageScheduleChangeAsync(Db, shift.Id, [employeeId], DateTimeOffset.UtcNow, ct, kind: "ShiftAssigned");
     }
 
     private async Task EnsureUnstarted(Guid shiftId, DateTime startUtc, CancellationToken ct)
