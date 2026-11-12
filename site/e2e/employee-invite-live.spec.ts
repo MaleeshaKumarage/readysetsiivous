@@ -26,7 +26,7 @@ test('real employee and tenant manager login, clocking, isolation, reinvite and 
     }
   }
   await expect(page.getByRole('heading', { name: 'Account ready' })).toBeVisible({ timeout: 20000 });
-  await expect(page.getByRole('link', { name: 'Continue to administration' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Office portal' })).toHaveCount(0);
   const employeeTokenResponse = await request.post(`${fixture.keycloakUrl}/realms/${fixture.realm}/protocol/openid-connect/token`, { form: { grant_type: 'password', client_id: 'cleaning-suite-web', username: fixture.email, password, scope: 'openid email' } });
   expect(employeeTokenResponse.status()).toBe(200);
   const employeeJwt = (await employeeTokenResponse.json()).access_token;
@@ -121,7 +121,7 @@ test('real employee and tenant manager login, clocking, isolation, reinvite and 
   await managerPage.goto(`${fixture.frontend}/account/?tenant=${fixture.realm}`);
   await managerPage.getByRole('button', { name: 'Sign in', exact: true }).click();
   await managerPage.locator('#username').fill(fixture.email); await managerPage.locator('#password').fill(password); await managerPage.locator('#kc-login').click();
-  await managerPage.getByRole('link', { name: 'Manage tenant operations' }).click();
+  await managerPage.getByRole('link', { name: 'Manager portal' }).click();
   await expect(managerPage.getByRole('article', { name: 'Managed original shift' })).toBeVisible();
   await expect(managerPage.getByRole('article', { name: 'Second branch shift' })).toBeVisible();
   await managerPage.getByRole('button', { name: 'Add shift' }).click(); await managerPage.getByLabel('Shift name', { exact: true }).fill('Live managed shift');
