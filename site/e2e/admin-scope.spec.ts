@@ -12,7 +12,7 @@ for (const role of ['employee', 'manager', 'staff', 'no-role']) {
     for (const path of ['employees', 'agreements', 'services', 'companies', 'shifts', 'quality-cycle']) {
       await page.goto(`/admin/${path}/`);
       await expect(page.getByRole('heading', { name: 'Admin access required' })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'My account' })).toHaveAttribute('href', '/account/?tenant=readysetsiivous');
+      await expect(page.getByRole('link', { name: 'Portals' })).toHaveAttribute('href', '/account/?tenant=readysetsiivous');
       await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
       expect(adminReads).toBe(0);
     }
@@ -76,9 +76,9 @@ test('unbound tenant owner keeps administration without a personal shift shortcu
   await page.goto('/admin/employees/');
   await expect(page.getByRole('button', { name: 'Add employee' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveCount(0);
-  await page.getByRole('link', { name: 'My account', exact: true }).click();
+  await page.getByRole('link', { name: 'Portals', exact: true }).click();
   await expect(page).toHaveURL(/account\/\?tenant=readysetsiivous/);
   await expect(page.getByText('To receive shifts, add an Administrator profile', { exact: false })).toBeVisible();
   await page.getByRole('link', { name: 'Office portal' }).click();
-  await expect(page.getByRole('link', { name: 'My account', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Portals', exact: true })).toBeVisible();
 });

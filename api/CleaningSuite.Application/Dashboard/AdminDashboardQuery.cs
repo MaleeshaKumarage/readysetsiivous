@@ -22,14 +22,8 @@ public class GetAdminDashboardMonthlyHandler(IShiftRepository shifts, ICompanyRe
         var fromUtc = TenantTimeZone.StartOfLocalDay(firstMonth.ToDateTime(TimeOnly.MinValue), zone);
         var toUtc = TenantTimeZone.StartOfLocalDay(nextAfter.ToDateTime(TimeOnly.MinValue), zone);
 
-        var visits = new List<DashboardVisitInput>();
-        var shiftCompany = new Dictionary<Guid, Guid>();
-        foreach (var shift in await shifts.ListAllAsync(ct))
-        {
-            shiftCompany[shift.Id] = shift.CompanyId;
-            foreach (var entry in await shifts.ResolveRosterAsync(shift, fromUtc, toUtc, zone, ct))
-                if (!entry.IsCancelled) visits.Add(new(shift.CompanyId, entry.Occurrence.StartUtc, entry.Occurrence.EndUtc));
-        }
+        var (roster, shiftCompany) = await DashboardRoster.LoadAsync(shifts, fromUtc, toUtc, zone, ct);
+        var visits = roster.Where(v => !v.Cancelled).Select(v => new DashboardVisitInput(v.CompanyId, v.StartUtc, v.EndUtc)).ToList();
         var work = (await forms.ListFormsAsync(null, fromUtc, toUtc, ct) ?? [])
             .Where(f => f.ShiftDeletedUtc is null && shiftCompany.ContainsKey(f.ShiftId))
             .Select(f => new DashboardWorkInput(shiftCompany[f.ShiftId], f.ShiftOccurrenceUtc, f.StartedAtUtc, f.EndedAtUtc, f.IsSubmitted)).ToList();

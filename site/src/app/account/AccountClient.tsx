@@ -2,25 +2,18 @@
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import type { CSSProperties } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Building2, CalendarClock, ClipboardList, Settings, LogOut, UserRound } from 'lucide-react';
 import { NotificationBell } from '@/components/NotificationBell';
-import { Button, Card, fontFamily, palette } from '@/ds';
+import { Button, Card } from '@/ds';
 import { isAdmin, isManager, isPartner, login, logout } from '@/lib/auth';
 import { TENANT_SLUG } from '@/lib/api';
 import { accountName, useAccountSession } from './useAccountSession';
+import { portalTheme } from '@/lib/portalTheme';
 import '../partner/partner.css';
 import './account.css';
 
-// Same theme as the partner portal, so the account screens look like the rest of the product.
-export const accountTheme = {
-  '--partner-ink': palette.navy.logo, '--partner-muted': palette.navy[600],
-  '--partner-background': palette.navy[50], '--partner-border': palette.navy[100],
-  '--partner-gold': palette.gold[500], '--partner-gold-light': palette.gold[50],
-  '--partner-focus': palette.gold[700],
-  fontFamily: fontFamily.sans,
-} as CSSProperties;
+export const accountTheme = portalTheme;
 
 // One portal or page the signed-in account can open. Tiles are large touch targets (44px+) with a visible focus ring.
 function PortalCircle({ href, label, icon: Icon }: { href: string; label: string; icon: LucideIcon }) {

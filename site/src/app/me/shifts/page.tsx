@@ -12,11 +12,15 @@ import {
   ChevronDown,
   ChevronUp,
   Upload,
+  LayoutGrid,
+  UserRound,
 } from 'lucide-react';
-import { initAuth, isAuthenticated, authTenant, login, logout } from '@/lib/auth';
+import { initAuth, isAuthenticated, authTenant, login, logout, isAdmin, isManager } from '@/lib/auth';
 import { meApi, MyShiftOccurrence, QualityCycleFormItem, type ShiftCalendarView } from '@/lib/meApi';
 import ShiftCalendar from './ShiftCalendar';
 import { EmployeeTabs, InventorySection, OffersSection, SettingsSection, type EmployeeSection } from '@/components/EmployeeSections';
+import { NotificationBell } from '@/components/NotificationBell';
+import { PortalSwitch } from '@/components/PortalSwitch';
 import { KeyRequestsSection } from '@/components/MyKeyRequests';
 import { Logo } from '@/ds/Logo';
 import { Button } from '@/ds/Button';
@@ -68,6 +72,8 @@ function tenantDateKey(instant: string | Date, timeZoneId: string) {
 
 export default function MyShiftsPage() {
   const [authed, setAuthed] = useState(false);
+  // Where the office switch goes for this login, decided once sign-in is confirmed (null: no office role).
+  const [officeTarget, setOfficeTarget] = useState<{ href: string; label: string } | null>(null);
   const [autoAcceptWork, setAutoAcceptWork] = useState<boolean | null>(null);
   const [preferenceError, setPreferenceError] = useState('');
   const [section, setSection] = useState<EmployeeSection>('schedules');
@@ -129,6 +135,7 @@ export default function MyShiftsPage() {
       setReady(true);
       setAuthed(ok);
       if (!ok) return;
+      setOfficeTarget(isAdmin() ? { href: '/admin/', label: 'Office' } : isManager() ? { href: '/manager/', label: 'Manager' } : null);
       loadShifts();
     });
     return () => { active = false; loadVersion.current++; };
@@ -459,7 +466,10 @@ export default function MyShiftsPage() {
             <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">My Shifts</h1>
           </div>
           <nav className="flex items-center gap-3">
-            <Link className="text-sm underline text-gray-900 dark:text-gray-100" href={`/account/?tenant=${encodeURIComponent(authTenant())}`}>My account</Link>
+            {officeTarget && <PortalSwitch current="employee" officeHref={officeTarget.href} officeLabel={officeTarget.label} tenant={authTenant()} />}
+            <NotificationBell settingsHref={`/account/profile/?tenant=${encodeURIComponent(authTenant())}#notifications`} />
+            <Link href={`/account/profile/?tenant=${encodeURIComponent(authTenant())}`} className="notify-bell" aria-label="Profile" title="Profile"><UserRound size={22} aria-hidden="true" /></Link>
+            <Link className="inline-flex items-center gap-1 text-sm underline text-gray-900 dark:text-gray-100" href={`/account/?tenant=${encodeURIComponent(authTenant())}`}><LayoutGrid size={16} aria-hidden="true" />Portals</Link>
             <Button variant="ghost" size="sm" onClick={() => logout()}>Sign out</Button>
           </nav>
         </div>

@@ -1,0 +1,9 @@
+.office-hero { display: flex; align-items: center; gap: 16px; padding: 18px 20px; background: white; border: 1px solid var(--partner-border, #dde3ee); border-radius: 18px; box-shadow: 0 2px 8px #0a174106; }
+.office-hero img { width: 56px; height: 56px; object-fit: contain; flex: 0 0 56px; }
+.office-hero h1 { margin: 0; color: var(--partner-ink, #0b1a3a); letter-spacing: -.02em; }
+/* Office cards: the partner portal look for the dashboard panels */
+.office-card { background: white !important; border: 1px solid var(--partner-border, #dde3ee) !important; border-radius: 18px !important; box-shadow: 0 2px 8px #0a174106; }
+.office-card .mantine-Text-root[data-fw="650"], .office-card h2 { color: var(--partner-ink, #0b1a3a); }
+.office-card .mantine-Button-root { border-color: var(--partner-border, #dde3ee); color: var(--partner-ink, #0b1a3a); }
+.office-card .mantine-Button-root:hover { background: var(--partner-gold-light, #fbf6ea); }
+.office-card .mantine-Button-root:focus-visible { outline: 3px solid var(--partner-focus, #8a6d1f); outline-offset: 2px; }

@@ -1,11 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
+import { ChevronDown, Menu } from 'lucide-react';
 import { authTenant, logout } from '@/lib/auth';
 import { Button } from '@/ds/Button';
 import { Card } from '@/ds/Card';
 import { PartnerOffers } from '@/components/PartnerOffers';
-import { NotificationsPanel } from '@/components/NotificationsPanel';
 import { PwaInstallButton } from '@/components/PwaInstallButton';
 import { InventoryPanel } from '@/components/InventoryPanel';
 
@@ -21,8 +22,31 @@ const SECTIONS: { id: EmployeeSection; label: string }[] = [
 
 /** Top-level sections of the employee portal. Arrow keys, Home and End move between tabs. */
 export function EmployeeTabs({ section, onChange }: { section: EmployeeSection; onChange: (next: EmployeeSection) => void }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const current = SECTIONS.find(item => item.id === section)?.label ?? '';
   return (
-    <div role="tablist" aria-label="My account sections" className="employee-tabs grid grid-cols-2 sm:flex gap-2 rounded-xl bg-white/70 p-1 dark:bg-gray-900/60">
+    <>
+    {/* Phones: one button shows the current section and opens the full list. */}
+    <div className="sm:hidden relative">
+      <button type="button" id="employee-section-menu-button" aria-expanded={menuOpen} aria-controls="employee-section-menu"
+        onClick={() => setMenuOpen(open => !open)}
+        className="min-h-11 w-full flex items-center justify-between gap-3 rounded-xl bg-white/80 px-4 font-semibold text-gray-900 shadow-sm dark:bg-gray-900/60 dark:text-gray-100">
+        <span className="flex items-center gap-2"><Menu size={20} aria-hidden="true" />{current}</span>
+        <ChevronDown size={20} aria-hidden="true" className={menuOpen ? 'rotate-180 transition' : 'transition'} />
+      </button>
+      {menuOpen && <nav id="employee-section-menu" aria-label="My account sections" className="mt-2 grid gap-1 rounded-xl bg-white p-2 shadow-lg dark:bg-gray-900">
+        {SECTIONS.map(item => {
+          const selected = section === item.id;
+          return <button key={item.id} type="button" aria-current={selected ? 'page' : undefined}
+            onClick={() => { onChange(item.id); setMenuOpen(false); }}
+            className={`min-h-11 rounded-lg px-4 text-left font-semibold ${selected ? 'bg-accent-900 text-white dark:bg-brand-400' : 'text-gray-900 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800'}`}>
+            {item.label}
+          </button>;
+        })}
+      </nav>}
+    </div>
+    {/* Larger screens: the tabs in one row. */}
+    <div role="tablist" aria-label="My account sections" className="employee-tabs hidden sm:flex gap-2 rounded-xl bg-white/70 p-1 dark:bg-gray-900/60">
       {SECTIONS.map((item, index) => {
         const selected = section === item.id;
         return (
@@ -53,6 +77,7 @@ export function EmployeeTabs({ section, onChange }: { section: EmployeeSection; 
         );
       })}
     </div>
+    </>
   );
 }
 
@@ -64,7 +89,6 @@ export function OffersSection({ autoAcceptWork, preferenceError, onRetryPreferen
 }) {
   return (
     <div id="employee-panel-offers" role="tabpanel" aria-labelledby="employee-tab-offers" className="space-y-6">
-      <NotificationsPanel />
       {preferenceError ? (
         <div className="space-y-2">
           <p role="alert" className="text-sm text-red-700 dark:text-red-300">{preferenceError}</p>

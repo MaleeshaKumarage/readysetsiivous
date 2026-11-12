@@ -1,3 +1,5 @@
+:root { --partner-ink: #0b1a3a; --partner-muted: #55607a; --partner-border: #dde3ee; --partner-background: #f5f7fb; --partner-gold: #c9a24a; --partner-gold-light: #fbf6ea; --partner-focus: #8a6d1f; }
+
 /* Account and profile pages use the partner portal theme (see partner/partner.css) so the look matches. */
 .account-grid { display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr); align-items: start; }
 @media (min-width: 1024px) { .account-grid { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); } }

@@ -5,6 +5,9 @@ import { Sparkles, FileSignature, Users, Building2, CalendarClock, Receipt, Chec
 import { Title, SimpleGrid, Paper, Group, Text, ThemeIcon, Stack } from '@mantine/core';
 import { DashboardStatus } from '@/components/admin/DashboardStatus';
 import { DashboardCharts } from '@/components/admin/DashboardCharts';
+import { portalTheme } from '@/lib/portalTheme';
+import Image from 'next/image';
+import './office.css';
 
 const SECTIONS = [
   { title: 'Operations', description: 'Plan the work and keep service quality on track.', items: [
@@ -24,15 +27,18 @@ const SECTIONS = [
 ];
 
 export default function AdminDashboardPage() {
-  return <Stack gap="xl">
-    <div><Title order={1}>Dashboard</Title><Text c="dimmed" mt={6}>Your workspace for customers, people and daily operations.</Text></div>
+  return <Stack gap="xl" style={portalTheme}>
+    <div className="office-hero" style={portalTheme}>
+      <Image src="/brand/readyset-primary-logo.png" alt="ReadySetSiivous" width={56} height={56} />
+      <div><Title order={1}>Office portal</Title><Text c="dimmed" mt={4}>Your workspace for customers, people and daily operations.</Text></div>
+    </div>
     <DashboardStatus />
     <DashboardCharts />
     {SECTIONS.map(section => <section key={section.title} aria-labelledby={`section-${section.title.replaceAll(' ', '-').toLowerCase()}`}>
       <Title order={2} size="h3" id={`section-${section.title.replaceAll(' ', '-').toLowerCase()}`}>{section.title}</Title>
       <Text c="dimmed" size="sm" mt={4} mb="md">{section.description}</Text>
       <SimpleGrid cols={{ base: 1, sm: 2, lg: Math.min(3, section.items.length) }} spacing="md">
-        {section.items.map(item => <Paper key={item.href} component={Link} href={`/admin/${item.href}/`} p={{ base: 'md', sm: 'lg' }} withBorder className="admin-destination">
+        {section.items.map(item => <Paper key={item.href} component={Link} href={`/admin/${item.href}/`} p={{ base: 'md', sm: 'lg' }} withBorder className="admin-destination office-card">
           <Group justify="space-between" mb="md"><ThemeIcon size={42} variant="light" radius="md"><item.icon size={21} aria-hidden="true" /></ThemeIcon><ArrowUpRight size={18} aria-hidden="true" className="admin-destination-arrow" /></Group>
           <Text fw={650} mb={6}>{item.title}</Text><Text size="sm" c="dimmed">{item.description}</Text>
         </Paper>)}

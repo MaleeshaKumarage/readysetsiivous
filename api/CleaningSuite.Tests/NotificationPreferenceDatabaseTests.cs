@@ -78,8 +78,8 @@ public class NotificationPreferenceDatabaseTests
         Assert.All(before.Events, e => Assert.Equal(NotificationEvents.CleanerGroup, e.Group));
 
         // A cleaner cannot switch off a staff-only event, and an unknown key is not found.
-        await Assert.ThrowsAsync<NotFoundException>(() => service.SetApp(cleaner, "StaffPartnerAccepted", false, default));
-        await Assert.ThrowsAsync<NotFoundException>(() => service.SetApp(cleaner, "NoSuchEvent", false, default));
+        await Assert.ThrowsAsync<NotificationEventNotFoundException>(() => service.SetApp(cleaner, "StaffPartnerAccepted", false, default));
+        await Assert.ThrowsAsync<NotificationEventNotFoundException>(() => service.SetApp(cleaner, "NoSuchEvent", false, default));
 
         var after = await service.SetApp(cleaner, "ShiftRemoved", false, default);
         Assert.False(after.Events.Single(e => e.Key == "ShiftRemoved").App);
