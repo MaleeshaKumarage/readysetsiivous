@@ -2,12 +2,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
+import { LogOut } from 'lucide-react';
+import { Button, Card } from '@/ds';
 import { isPartner, logout } from '@/lib/auth';
+import { NotificationsPanel } from '@/components/NotificationsPanel';
 import { meApi, supportsWorkPreferences } from '@/lib/meApi';
 import { TENANT_SLUG } from '@/lib/api';
 import { accountName, accountRoles, useAccountSession } from '../useAccountSession';
+import { accountTheme } from '../AccountClient';
+import '../../partner/partner.css';
+import '../account.css';
 
-// Profile page: the signed-in person's details and work preferences. Reached from the Profile tile on the account page.
+// Profile page: the signed-in person's details, work preferences and notification settings. Reached from the Profile tile on the account page.
 export default function ProfileClient() {
   const search = useSearchParams();
   const tenant = search.get('tenant') || TENANT_SLUG;
@@ -46,49 +53,58 @@ export default function ProfileClient() {
   const roles = accountRoles(account);
   const backHref = `/account/?tenant=${encodeURIComponent(tenant)}`;
 
-  return <main className="min-h-screen bg-gray-50 text-gray-900">
-    <header className="border-b border-gray-200 bg-white">
-      <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
-        <div className="min-w-0">
-          <Link href={backHref} className="inline-flex min-h-[44px] items-center text-sm font-medium underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500">Back to your account</Link>
-          <h1 className="text-xl font-semibold">Profile</h1>
+  return <main lang="en" className="partner-portal" style={accountTheme}>
+    <header className="partner-header"><div className="partner-shell partner-header-inner">
+      <div className="partner-brand">
+        <Image src="/brand/readyset-primary-logo.png" alt="ReadySetSiivous" width={56} height={56} priority />
+        <div>
+          <h1>Profile</h1>
+          <p><Link className="account-link" href={backHref}>Back to your account</Link></p>
         </div>
-        {authed && <button className="min-h-[44px] rounded-full border border-gray-400 px-4 text-sm font-medium hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500" onClick={() => logout().catch(() => setError('Sign-out failed. Please retry.'))}>Sign out</button>}
       </div>
-    </header>
+      <div className="partner-header-actions">
+        {authed && <Button variant="ghost" size="sm" className="partner-quiet" onClick={() => logout().catch(() => setError('Sign-out failed. Please retry.'))}><LogOut size={17} aria-hidden="true" />Sign out</Button>}
+      </div>
+    </div></header>
 
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
-      {loading && <p role="status" className="text-gray-700">Checking your account...</p>}
-      {error && <p role="alert" className="rounded-lg border border-red-300 bg-red-50 p-4 text-red-800">{error}</p>}
-      {!loading && !authed && !error && <section className="rounded-xl bg-white p-6 shadow-sm">
+    <div className="partner-shell partner-main">
+      {loading && <p role="status" className="partner-alert">Checking your account...</p>}
+      {error && <p role="alert" className="partner-alert partner-alert-error">{error}</p>}
+      {!loading && !authed && !error && <Card className="partner-surface">
         <p>Sign in from your account page to see your profile.</p>
-        <Link href={backHref} className="mt-4 inline-flex min-h-[44px] items-center underline">Go to your account</Link>
-      </section>}
+        <Link className="account-link" href={backHref}>Go to your account</Link>
+      </Card>}
 
-      {account && <>
-        <section aria-labelledby="profile-details-heading" className="space-y-2 rounded-xl bg-white p-5 shadow-sm sm:p-6">
-          <h2 id="profile-details-heading" className="text-lg font-semibold">Details</h2>
-          <p className="font-medium">{accountName(account)}</p>
-          <p className="text-sm text-gray-700">Tenant: {account.realm}</p>
-          {account.person?.role === 'partner' && <p className="text-sm text-gray-700">Company: {account.company?.name}</p>}
-          {roles.length > 0 && <p className="text-sm text-gray-700">Roles: {roles.join(', ')}</p>}
-        </section>
+      {account && <div className="account-grid">
+        <div className="account-section">
+          <Card className="partner-surface account-section" aria-labelledby="profile-details-heading">
+            <h2 id="profile-details-heading">Details</h2>
+            <p><strong>{accountName(account)}</strong></p>
+            <p>Tenant: {account.realm}</p>
+            {account.person?.role === 'partner' && <p>Company: {account.company?.name}</p>}
+            {roles.length > 0 && <p>Roles: {roles.join(', ')}</p>}
+          </Card>
 
-        {showPreferences && <section aria-labelledby="preferences-heading" className="space-y-3 rounded-xl bg-white p-5 shadow-sm sm:p-6">
-          <h2 id="preferences-heading" className="text-lg font-semibold">Work preferences</h2>
-          {preferenceBusy && <p role="status" className="text-gray-700">{preference === null ? 'Loading work preferences...' : 'Saving work preferences...'}</p>}
-          {preferenceError && <><p role="alert" className="text-red-700">{preferenceError}</p><button className="min-h-[44px] underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500" disabled={preferenceBusy} onClick={() => preference === null ? void loadPreference() : void savePreference()}>Retry work preferences</button></>}
-          {preference !== null && <>
-            <label className="flex min-h-[44px] items-center gap-3">
-              <input type="checkbox" className="h-5 w-5" checked={selected} disabled={preferenceBusy} onChange={event => { setSelected(event.target.checked); setSaved(false); }} />
-              <span>Automatically accept cleaning offers</span>
-            </label>
-            <p className="text-sm text-gray-700">Automatically scheduled work appears in My shifts. Resolve pending offers before enabling. Turning this off affects future offers only.</p>
-            <button className="min-h-[44px] rounded-full bg-gray-900 px-5 text-white disabled:opacity-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500" disabled={preferenceBusy || selected === preference} onClick={() => void savePreference()}>Save work preferences</button>
-            {saved && <p role="status">Work preferences saved.</p>}
-          </>}
-        </section>}
-      </>}
+          {showPreferences && <Card className="partner-surface account-section" aria-labelledby="preferences-heading">
+            <h2 id="preferences-heading">Work preferences</h2>
+            {preferenceBusy && <p role="status">{preference === null ? 'Loading work preferences...' : 'Saving work preferences...'}</p>}
+            {preferenceError && <><p role="alert" className="partner-alert partner-alert-error">{preferenceError}</p><Button variant="ghost" size="sm" disabled={preferenceBusy} onClick={() => preference === null ? void loadPreference() : void savePreference()}>Retry work preferences</Button></>}
+            {preference !== null && <>
+              <label className="account-link" style={{ gap: 12 }}>
+                <input type="checkbox" style={{ width: 20, height: 20 }} checked={selected} disabled={preferenceBusy} onChange={event => { setSelected(event.target.checked); setSaved(false); }} />
+                <span>Automatically accept cleaning offers</span>
+              </label>
+              <p>Automatically scheduled work appears in My shifts. Resolve pending offers before enabling. Turning this off affects future offers only.</p>
+              <Button disabled={preferenceBusy || selected === preference} onClick={() => void savePreference()}>Save work preferences</Button>
+              {saved && <p role="status">Work preferences saved.</p>}
+            </>}
+          </Card>}
+        </div>
+
+        {!isPartner() && <Card className="partner-surface">
+          <NotificationsPanel />
+        </Card>}
+      </div>}
     </div>
   </main>;
 }

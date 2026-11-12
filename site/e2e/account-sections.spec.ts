@@ -69,11 +69,11 @@ test('administrator without an employee record is offered only administration', 
   await expect(picker.getByRole('link', { name: 'Continue to administration', exact: true })).toHaveAttribute('href', '/admin/');
 });
 
-test('signed-in employee sees notifications first, a Profile tile, and sign-out without horizontal scroll', async ({ page, isMobile }) => {
+test('signed-in employee sees the notification bell, a Profile tile, and sign-out without horizontal scroll', async ({ page, isMobile }) => {
   await signIn(page, ['employee'], { role: 'employee' });
 
-  const notifications = page.getByRole('heading', { name: 'Your notifications', exact: true });
-  await expect(notifications).toBeVisible();
+  const bell = page.getByRole('button', { name: /^Notifications/ });
+  await expect(bell).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
   const profileTile = page.getByRole('navigation', { name: 'Choose a section' }).getByRole('link', { name: 'Profile', exact: true });
   await expect(profileTile).toHaveAttribute('href', '/account/profile/?tenant=tenant-a');
@@ -84,10 +84,8 @@ test('signed-in employee sees notifications first, a Profile tile, and sign-out 
   expect(tile?.height ?? 0).toBeGreaterThanOrEqual(44);
   const signOut = await page.getByRole('button', { name: 'Sign out', exact: true }).boundingBox();
   expect(signOut?.height ?? 0).toBeGreaterThanOrEqual(44);
-  const n = await notifications.boundingBox();
-  const t = await profileTile.boundingBox();
-  if (!n || !t) throw new Error('layout boxes missing');
-  expect(n.y).toBeGreaterThan(t.y); // notifications sit below the portal tiles on both sizes
+  const b = await bell.boundingBox();
+  expect(b?.height ?? 0).toBeGreaterThanOrEqual(44); // the bell is a 44px touch target
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
