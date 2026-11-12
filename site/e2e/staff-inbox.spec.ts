@@ -6,7 +6,7 @@ import { setupAdminMocks } from './admin-helpers';
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const items = [
   { id: 'a1', kind: 'StaffPartnerAccepted', title: 'Cleaner accepted partner work', body: 'A cleaner accepted a partner cleaning.', link: '/admin/partner-requests/', createdUtc: '2026-11-12T09:00:00Z', read: false },
-  { id: 'a2', kind: 'StaffVisitOfferDeclined', title: 'Cleaner declined a visit', body: 'A cleaner declined a visit offer.', link: '/admin/shifts/', createdUtc: '2026-11-11T09:00:00Z', read: true },
+  { id: 'a2', kind: 'StaffVisitOfferDeclined', title: 'Cleaner declined a visit', body: 'A cleaner declined a visit offer. Assign another cleaner. Visit: Lakeside Villa, 14 Nov 08:00.', link: '/admin/shifts/', createdUtc: '2026-11-11T09:00:00Z', read: true },
 ];
 
 async function mockInbox(page: Page) {
@@ -42,6 +42,7 @@ test('opening a notification goes to the page it is about and marks it read', as
   await setupAdminMocks(page);
   const state = await mockInbox(page);
   await page.goto('/account/');
+  await page.waitForLoadState('networkidle');
 
   await page.getByRole('button', { name: 'Notifications, 1 unread', exact: true }).click();
   await page.getByRole('dialog', { name: 'Notifications', exact: true }).getByRole('link', { name: /Cleaner accepted partner work/ }).click();

@@ -10,13 +10,13 @@ public sealed class PushOutbox : IPushOutbox
     // A newer shift change replaces any not-yet-sent change for the same shift and person, whatever its kind.
     private static readonly string[] ScheduleKinds = ["ShiftAssigned", "ShiftRemoved", "ShiftUpdated", "ScheduleChanged"];
 
-    public async Task StageScheduleChangeAsync(IDocumentSession session, Guid shiftId, IEnumerable<Guid> employeeIds, DateTimeOffset occurredAt, CancellationToken ct = default, string kind = "ShiftUpdated")
+    public async Task StageScheduleChangeAsync(IDocumentSession session, Guid shiftId, IEnumerable<Guid> employeeIds, DateTimeOffset occurredAt, CancellationToken ct = default, string kind = "ShiftUpdated", string? detail = null)
     {
         foreach (var employeeId in employeeIds.Distinct())
         {
             var pending = await session.Query<PushIntent>().Where(i => i.EmployeeId == employeeId && i.ShiftId == shiftId && ScheduleKinds.Contains(i.Kind) && !i.Materialized && !i.Cancelled).ToListAsync(ct);
             foreach (var previous in pending) { previous.Cancelled = true; session.Store(previous); }
-            await StageAsync(session, new PushIntent { EmployeeId = employeeId, ShiftId = shiftId, Kind = kind, EventKey = $"schedule:{shiftId}:{employeeId}:{Guid.NewGuid()}", OccurredUtc = occurredAt.UtcDateTime, DueUtc = occurredAt.UtcDateTime, ExpiresUtc = occurredAt.UtcDateTime.AddHours(24) }, ct);
+            await StageAsync(session, new PushIntent { EmployeeId = employeeId, ShiftId = shiftId, Kind = kind, Detail = detail, EventKey = $"schedule:{shiftId}:{employeeId}:{Guid.NewGuid()}", OccurredUtc = occurredAt.UtcDateTime, DueUtc = occurredAt.UtcDateTime, ExpiresUtc = occurredAt.UtcDateTime.AddHours(24) }, ct);
         }
     }
     public async Task StagePartnerRequestAsync(IDocumentSession session, Guid requestId, int revision, DateTimeOffset occurredAt, CancellationToken ct = default)
@@ -30,10 +30,11 @@ public sealed class PushOutbox : IPushOutbox
             EventKey = $"partner-offer:{requestId}:{revision}:{offerId}:{employeeId}", OccurredUtc = occurredAt.UtcDateTime,
             DueUtc = occurredAt.UtcDateTime, ExpiresUtc = occurredAt.UtcDateTime.AddHours(24) }, ct);
 
-    public async Task StageStaffAlertAsync(IDocumentSession session, string kind, string key, DateTimeOffset occurredAt, CancellationToken ct = default)
+    public async Task StageStaffAlertAsync(IDocumentSession session, string kind, string key, DateTimeOffset occurredAt, CancellationToken ct = default, string? detail = null)
     {
         var admins = await session.Query<Employee>().Where(e => e.IsActive && !e.IdentitySyncPending && (e.Role == Employee.RoleAdmin || e.Role == Employee.RoleManager)).ToListAsync(ct);
         var copy = CleaningSuite.Application.Notifications.StaffAlertCopy.For(kind);
+        var text = detail is null ? copy.Body : $"{copy.Body} {detail}";
         foreach (var admin in admins)
         {
             // Switched off in the person's notification settings: nothing is kept or sent for this event.
@@ -41,8 +42,8 @@ public sealed class PushOutbox : IPushOutbox
             // The in-app inbox keeps the event even when push is off or not yet enabled on a device.
             var inboxId = PushValidation.Id($"inbox:{kind}:{key}:{admin.Id}");
             if (await session.LoadAsync<CleaningSuite.Domain.Notifications.StaffInboxItem>(inboxId, ct) is null)
-                session.Store(new CleaningSuite.Domain.Notifications.StaffInboxItem { Id = inboxId, EmployeeId = admin.Id, Kind = kind, Title = copy.Title, Body = copy.Body, Link = copy.Link, CreatedUtc = occurredAt.UtcDateTime, UpdatedUtc = occurredAt.UtcDateTime });
-            await StageAsync(session, new PushIntent { EmployeeId = admin.Id, AdminAudience = true, Kind = kind, EventKey = $"staff:{kind}:{key}:{admin.Id}",
+                session.Store(new CleaningSuite.Domain.Notifications.StaffInboxItem { Id = inboxId, EmployeeId = admin.Id, Kind = kind, Title = copy.Title, Body = text, Link = copy.Link, CreatedUtc = occurredAt.UtcDateTime, UpdatedUtc = occurredAt.UtcDateTime });
+            await StageAsync(session, new PushIntent { EmployeeId = admin.Id, AdminAudience = true, Kind = kind, Detail = detail, EventKey = $"staff:{kind}:{key}:{admin.Id}",
                 OccurredUtc = occurredAt.UtcDateTime, DueUtc = occurredAt.UtcDateTime, ExpiresUtc = occurredAt.UtcDateTime.AddHours(24) }, ct);
         }
     }
