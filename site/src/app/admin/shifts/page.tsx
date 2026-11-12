@@ -21,6 +21,7 @@ import { LifecycleTabs, type LifecycleStatus } from '@/components/LifecycleTabs'
 import { ListPager, PAGE_SIZE } from '@/components/ListPager';
 import { ShiftWorkspace, scheduleLabel } from '@/components/admin/ShiftWorkspace';
 import { autoShiftName } from '@/lib/shiftName';
+import { employeeLabel } from '@/lib/employeeLabel';
 import { DEEP_SURCHARGE_EUR } from '@/lib/cleaningPricing';
 
 // The price version in force today (or the earliest when all start later): the default billing price for a new shift.
@@ -459,7 +460,7 @@ export default function ShiftsAdminPage() {
 
   const employeeName = (id: string) => {
     const e = employees.find((x) => x.id === id);
-    return e ? `${e.firstName} ${e.lastName}` : id.slice(0, 8);
+    return e ? employeeLabel(e, employees) : id.slice(0, 8);
   };
 
   const loadOccurrences = async (shift = occurrenceShift, fromDate = occurrenceFrom, toDate = occurrenceTo) => {
@@ -743,7 +744,7 @@ export default function ShiftsAdminPage() {
           {occurrenceShift?.isBranchMain && <>
             <Select label="Default cleaner" description="Each new visit is offered to this cleaner. Visits already added keep their cleaner." placeholder="None: new visits start unassigned"
               clearable searchable value={occurrenceShift.defaultEmployeeId ?? null} onChange={value => { void saveDefaultCleaner(value); }}
-              data={employees.filter(e => e.isActive && e.role !== 'partner').map(e => ({ value: e.id, label: `${e.firstName} ${e.lastName}` }))} />
+              data={employees.filter(e => e.isActive && e.role !== 'partner').map(e => ({ value: e.id, label: employeeLabel(e, employees) }))} />
             {defaultCleanerError && <Text role="alert" c="red">{defaultCleanerError}</Text>}
           </>}
           {occurrenceError && <Text role="alert" c="red">{occurrenceError}</Text>}
@@ -784,7 +785,7 @@ export default function ShiftsAdminPage() {
           {!cleanerVisit?.isPartnerBooking && <>
           <Select label="Cleaner" placeholder="Unassigned" clearable searchable value={cleanerChoice} onChange={setCleanerChoice}
             description="The cleaner gets an offer and holds the visit once accepted. A cleaner who already holds it is released."
-            data={employees.filter(e => e.isActive && e.role !== 'partner').map(e => ({ value: e.id, label: `${e.firstName} ${e.lastName}` }))} />
+            data={employees.filter(e => e.isActive && e.role !== 'partner').map(e => ({ value: e.id, label: employeeLabel(e, employees) }))} />
           {cleanerError && <Text role="alert" c="red">{cleanerError}</Text>}
           <Group justify="flex-end"><Button variant="default" disabled={cleanerSaving} onClick={() => setCleanerVisit(null)}>Cancel</Button><Button loading={cleanerSaving} onClick={saveCleaner}>Save cleaner</Button></Group>
           </>}

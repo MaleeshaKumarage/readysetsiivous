@@ -14,7 +14,7 @@ const adminVisit = { startUtc: '2026-11-10T06:00:00.000Z', endUtc: '2026-11-10T0
 const partnerVisit = { startUtc: '2026-11-10T10:00:00.000Z', endUtc: '2026-11-14T14:00:00.000Z', exceptionId: 'visit-2', status: 4, reason: 'Accepted partner cleaning',
   employeeId: 'second', assigneeIds: ['second'], rosterVersion: 'v1', canAssign: true, visitNumber: 2, visitSource: 'PartnerPortal', visitCleaningType: 'Normal', offerRevision: 0, isPartnerBooking: true };
 
-async function setup(page: Page, options: { addFailures?: number; cleanerConflict?: boolean } = {}) {
+async function setup(page: Page, options: { addFailures?: number; cleanerConflict?: boolean; sameNameCleaners?: boolean } = {}) {
   await setupAdminMocks(page);
   await page.clock.install({ time: new Date('2026-11-03T10:00:00Z') });
   const state = { adds: [] as any[], cleanerWrites: [] as any[], cleaningTypeWrites: [] as any[], defaultWrites: [] as any[], extraWrites: 0,
@@ -60,7 +60,9 @@ async function setup(page: Page, options: { addFailures?: number; cleanerConflic
     const json = isShiftsRoute(path) ? shiftsResponse(shifts(), request.url())
       : path.endsWith('/companies/company') ? { company: { id: 'company', name: 'Acme Hotels', isActive: true }, branches: [{ id: 'branch', companyId: 'company', name: 'Helsinki Office', isActive: true }, { id: 'closed', companyId: 'company', name: 'Closed Office', isActive: false }] }
       : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'Acme Hotels', isActive: true }], total: 1 }
-      : path.endsWith('/employees') ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true }, { id: 'second', firstName: 'Second', lastName: 'Cleaner', role: 'employee', isActive: true }, { id: 'partner', firstName: 'Active', lastName: 'Partner', role: 'partner', isActive: true }]
+      : path.endsWith('/employees') ? (options.sameNameCleaners
+        ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', email: 'test.cleaner@example.com', role: 'employee', isActive: true }, { id: 'second', firstName: 'Test', lastName: 'Cleaner', email: 'second.cleaner@example.com', role: 'employee', isActive: true }]
+        : [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true }, { id: 'second', firstName: 'Second', lastName: 'Cleaner', role: 'employee', isActive: true }, { id: 'partner', firstName: 'Active', lastName: 'Partner', role: 'partner', isActive: true }])
       : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [];
     return route.fulfill({ status: 200, headers, json });
   });
@@ -95,6 +97,21 @@ test('admin adds a single-day visit by choosing only the property, date and time
   await expect(dialog).toHaveCount(0);
   expect(state.adds).toEqual([{ branchId: 'branch', fromDate: '2026-11-12', toDate: '2026-11-12', startTime: '09:00', endTime: '11:30',
     notes: 'Ring the bell at the back door', employeeId: null, useDefaultEmployee: true, cleaningType: 'Normal' }]);
+});
+
+test('two cleaners with the same name are told apart by email in the cleaner list', async ({ page }) => {
+  const state = await setup(page, { sameNameCleaners: true });
+  await shiftAction(page, MAIN, 'Add visit');
+  const dialog = page.getByRole('dialog', { name: 'Add visit', exact: true });
+  await dialog.getByLabel(/^Date/).fill('2026-11-12');
+  await dialog.getByRole('textbox', { name: 'Cleaner', exact: true }).click();
+  await expect(page.getByRole('option', { name: 'Test Cleaner (test.cleaner@example.com)', exact: true })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'Test Cleaner (second.cleaner@example.com)', exact: true })).toBeVisible();
+  await page.getByRole('option', { name: 'Test Cleaner (second.cleaner@example.com)', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Add visit', exact: true }).click();
+
+  await expect(dialog).toHaveCount(0);
+  expect(state.adds[0]).toMatchObject({ fromDate: '2026-11-12', employeeId: 'second', useDefaultEmployee: false });
 });
 
 test('a date range is one visit, and a chosen cleaner is sent an offer', async ({ page }) => {
