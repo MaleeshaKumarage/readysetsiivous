@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Sparkles, FileSignature, Users, Building2, CalendarClock, Receipt, CheckSquare, ArrowUpRight } from 'lucide-react';
 import { Title, SimpleGrid, Paper, Group, Text, ThemeIcon, Stack } from '@mantine/core';
 import { DashboardStatus } from '@/components/admin/DashboardStatus';
+import { DashboardCharts } from '@/components/admin/DashboardCharts';
 
 const SECTIONS = [
   { title: 'Operations', description: 'Plan the work and keep service quality on track.', items: [
@@ -26,6 +27,7 @@ export default function AdminDashboardPage() {
   return <Stack gap="xl">
     <div><Title order={1}>Dashboard</Title><Text c="dimmed" mt={6}>Your workspace for customers, people and daily operations.</Text></div>
     <DashboardStatus />
+    <DashboardCharts />
     {SECTIONS.map(section => <section key={section.title} aria-labelledby={`section-${section.title.replaceAll(' ', '-').toLowerCase()}`}>
       <Title order={2} size="h3" id={`section-${section.title.replaceAll(' ', '-').toLowerCase()}`}>{section.title}</Title>
       <Text c="dimmed" size="sm" mt={4} mb="md">{section.description}</Text>
