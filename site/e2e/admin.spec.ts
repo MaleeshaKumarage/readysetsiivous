@@ -69,7 +69,17 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
     await expect(signOut).toBeInViewport();
     await signOut.click();
     // Sign-out ends with a redirect that can take longer than the default 5 s on a loaded runner.
-    await expect(page.getByText('Sign in with your ReadySetSiivous admin account.')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('Sign in with your ReadySetSiivous admin account.')).toBeVisible({ timeout: 15_000 }).catch(async failure => {
+      // Diagnostic for a CI-only sign-out failure: record what the page shows and which mock flags are set.
+      const state = await page.evaluate(() => ({
+        url: location.href,
+        loggedOutFlag: sessionStorage.getItem('__MOCK_LOGGED_OUT__'),
+        mockAuthed: (window as unknown as { __MOCK_AUTHED__?: boolean }).__MOCK_AUTHED__ ?? null,
+        bodyText: document.body.innerText.slice(0, 300),
+      })).catch(() => null);
+      console.log('SIGNOUT_STATE ' + JSON.stringify(state));
+      throw failure;
+    });
     await expect.poll(() => page.evaluate(() => sessionStorage.getItem('__MOCK_LOGGED_OUT__')), { timeout: 15_000 }).toBe('true');
     await expect.poll(() => page.evaluate(() => (window as unknown as { __MOCK_AUTHED__: boolean }).__MOCK_AUTHED__), { timeout: 15_000 }).toBe(false);
     await expect(page.getByText('Sign in with your ReadySetSiivous admin account.')).toBeVisible({ timeout: 15_000 });
