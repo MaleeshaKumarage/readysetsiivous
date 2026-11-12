@@ -103,7 +103,7 @@ test('A01 account preference persists, rejects pending offers and retries withou
   await expect(page.getByText('Saving work preferences...', { exact: true })).toBeVisible();
   await expect(toggle).toBeDisabled(); await expect(page.getByRole('button', { name: 'Save work preferences', exact: true })).toBeDisabled();
   finishPending();
-  await expect(page.locator('p[role="alert"]')).toContainText('Accept or decline');
+  await expect(page.getByRole('alert').filter({ hasText: 'Accept or decline' })).toHaveCount(1);
   expect(stored).toBe(false); await expect(page.getByText('Work preferences saved.', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Retry work preferences', exact: true }).click();
   await expect(page.getByText('Work preferences saved.', { exact: true })).toBeVisible();
