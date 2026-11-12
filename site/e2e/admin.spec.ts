@@ -34,7 +34,7 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
     await page.goto('/admin/');
 
     // Dashboard heading and navigation cards
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Office portal' })).toBeVisible();
     await expect(page.getByText('Manage cleaning services, prices and descriptions.')).toBeVisible();
     await expect(page.getByText('Upload agreements and collect e-signatures.')).toBeVisible();
     await expect(page.getByText('Manage staff profiles, availability, skills and certifications.')).toBeVisible();
@@ -63,7 +63,7 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
     await setupAdminMocks(page, { authenticated: true });
     await page.goto('/admin/');
 
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Office portal' })).toBeVisible();
     const signOut = page.getByRole('banner').getByRole('button', { name: 'Sign out', exact: true });
     await expect(signOut).toBeVisible();
     await expect(signOut).toBeInViewport();
