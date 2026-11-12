@@ -35,6 +35,7 @@ test('the bell shows the unread count and opens a drawer listing notifications',
   await expect(drawer.getByText('1 unread')).toBeVisible();
   await expect(drawer.getByText('A cleaner declined a visit offer.')).toBeVisible();
   await expect(drawer.getByRole('link', { name: /Cleaner accepted partner work/ })).toHaveAttribute('href', '/admin/partner-requests/');
+  if (process.env.PORTAL_SHOT_DIR) await page.screenshot({ path: `${process.env.PORTAL_SHOT_DIR}/notification-drawer.png` });
 });
 
 test('opening a notification goes to the page it is about and marks it read', async ({ page }) => {
