@@ -21,7 +21,7 @@ export function DashboardStatus() {
   const load = useCallback(async () => {
     setFailed(false);
     const [work, inbox] = await Promise.all([
-      adminWorkQueue.page({ view: 'needs-action', source: 'all', skip: 0, take: 1 }),
+      adminWorkQueue.page({ view: 'needs-action', source: 'all', skip: 0, take: 1 }).catch(() => null),
       staffInboxApi.list().catch(() => null),
     ]);
     if (!work || !inbox) { setFailed(true); return; }

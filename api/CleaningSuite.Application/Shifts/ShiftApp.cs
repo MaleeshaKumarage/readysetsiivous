@@ -80,6 +80,8 @@ public sealed record ShiftRosterInputs(IReadOnlyDictionary<Guid, IReadOnlyList<S
 
 public interface IShiftRepository
 {
+    /// <summary>Every shift, including deactivated ones, so past months keep their visits and hours.</summary>
+    Task<IReadOnlyList<Shift>> ListAllAsync(CancellationToken ct = default);
     /// <summary>Roster inputs for many shifts in one load per collection, keyed by shift id.</summary>
     Task<ShiftRosterInputs> ListRosterInputsAsync(IReadOnlyCollection<Guid> shiftIds, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default);
     Task<Shift?> GetAsync(Guid id, CancellationToken ct = default);

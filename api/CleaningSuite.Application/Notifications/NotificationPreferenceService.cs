@@ -23,8 +23,8 @@ public sealed class NotificationPreferenceService(IPartnerStore store)
     public async Task<NotificationPreferencesResponse> SetApp(Employee employee, string key, bool enabled, CancellationToken ct)
     {
         var definition = Applicable(employee).FirstOrDefault(e => e.Key == key) ?? throw new NotFoundException("Notification event", Guid.Empty);
-        var preference = await Db.Query<NotificationPreference>().FirstOrDefaultAsync(x => x.EmployeeId == employee.Id, ct)
-            ?? new NotificationPreference { EmployeeId = employee.Id };
+        var preference = await Db.LoadAsync<NotificationPreference>(NotificationPreference.IdFor(employee.Id), ct)
+            ?? new NotificationPreference { Id = NotificationPreference.IdFor(employee.Id), EmployeeId = employee.Id };
         preference.AppOff = enabled
             ? preference.AppOff.Where(x => x != definition.Key).ToList()
             : preference.AppOff.Append(definition.Key).Distinct().ToList();
@@ -45,5 +45,5 @@ public sealed class NotificationPreferenceService(IPartnerStore store)
         new(Applicable(employee).Select(e => new NotificationEventItem(e.Key, e.Group, e.Label, e.Description, !off.Contains(e.Key), e.EmailAvailable)).ToList());
 
     private async Task<IReadOnlyCollection<string>> AppOff(Guid employeeId, CancellationToken ct) =>
-        (await Db.Query<NotificationPreference>().FirstOrDefaultAsync(x => x.EmployeeId == employeeId, ct))?.AppOff ?? [];
+        (await Db.LoadAsync<NotificationPreference>(NotificationPreference.IdFor(employeeId), ct))?.AppOff ?? [];
 }

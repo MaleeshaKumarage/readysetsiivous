@@ -64,6 +64,7 @@ test('a failed save puts the switch back and says why', async ({ page }) => {
   const state = await setup(page, ['employee'], 'employee', cleanerEvents);
   state.failNext = true;
   const assigned = page.getByRole('switch', { name: 'Assigned to a shift: in the app' });
+  await expect(assigned).toBeEnabled();
   await assigned.uncheck();
   await expect(page.getByRole('alert').filter({ hasText: 'Could not save notification settings' })).toHaveCount(1);
   await expect(assigned).toBeChecked();

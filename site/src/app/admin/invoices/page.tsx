@@ -69,11 +69,11 @@ export default function InvoicesPage() {
       .catch(failure => { if (active) { setError(failure.message); setLoadFailed(true); } });
     return () => { active = false; version.current++; };
   }, [loadAttempt]);
-  const run = async (action: () => Promise<void>) => {
+  const run = async (action: () => Promise<void>, failureTitle = 'Invoice not created. The reason is shown in the form.') => {
     if (pending.current) return; pending.current = true; setBusy(true); setError(''); setStatus('');
     try { await action(); } catch (failure) {
       const message = failure instanceof Error ? failure.message : 'Request failed. Please retry.';
-      setError(message); showError(message, 'Invoice not created. The reason is shown in the form.');
+      setError(message); showError(message, failureTitle);
     }
     finally { pending.current = false; setBusy(false); }
   };
@@ -124,7 +124,7 @@ export default function InvoicesPage() {
     setStatus(`Invoice ${result.invoiceNumber} issued.`);
     // A failed history refresh must not invite a new issue after a confirmed write.
     try { await loadInvoices(); } catch { setError('Invoice issued, but history could not refresh. Reload the page to see the latest list.'); }
-  });
+  }, 'Invoice not confirmed. Check the invoice list before issuing again, it may already exist.');
   const patchAddress = (key: keyof BillingAddress, value: string) => { invalidate(); setAddress(current => ({ ...current, [key]: value })); };
   const patchIssuer = <K extends keyof InvoiceIssuer>(key: K, value: InvoiceIssuer[K]) => { invalidate(); setIssuer(current => current && ({ ...current, [key]: value })); };
   // Closing without saving drops the unsaved edits, so reopening shows and saves only the last saved details.

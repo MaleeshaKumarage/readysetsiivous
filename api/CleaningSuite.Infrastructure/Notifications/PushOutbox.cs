@@ -35,23 +35,37 @@ public sealed class PushOutbox : IPushOutbox
         var admins = await session.Query<Employee>().Where(e => e.IsActive && !e.IdentitySyncPending && (e.Role == Employee.RoleAdmin || e.Role == Employee.RoleManager)).ToListAsync(ct);
         var copy = CleaningSuite.Application.Notifications.StaffAlertCopy.For(kind);
         var text = detail is null ? copy.Body : $"{copy.Body} {detail}";
+        // One query for everyone's choices, instead of one per recipient.
+        var ids = admins.Select(a => a.Id).ToArray();
+        var preferences = ids.Length == 0 ? [] : await session.Query<NotificationPreference>().Where(x => ids.Contains(x.EmployeeId)).ToListAsync(ct);
+        var switchedOff = preferences.Where(p => NotificationPreferenceService.AppTurnedOff(p, kind)).Select(p => p.EmployeeId).ToHashSet();
         foreach (var admin in admins)
         {
             // Switched off in the person's notification settings: nothing is kept or sent for this event.
-            if (NotificationPreferenceService.AppTurnedOff(await session.Query<NotificationPreference>().FirstOrDefaultAsync(x => x.EmployeeId == admin.Id, ct), kind)) continue;
+            if (switchedOff.Contains(admin.Id)) continue;
             // The in-app inbox keeps the event even when push is off or not yet enabled on a device.
             var inboxId = PushValidation.Id($"inbox:{kind}:{key}:{admin.Id}");
             if (await session.LoadAsync<CleaningSuite.Domain.Notifications.StaffInboxItem>(inboxId, ct) is null)
-                session.Store(new CleaningSuite.Domain.Notifications.StaffInboxItem { Id = inboxId, EmployeeId = admin.Id, Kind = kind, Title = copy.Title, Body = text, Link = copy.Link, CreatedUtc = occurredAt.UtcDateTime, UpdatedUtc = occurredAt.UtcDateTime });
-            await StageAsync(session, new PushIntent { EmployeeId = admin.Id, AdminAudience = true, Kind = kind, Detail = detail, EventKey = $"staff:{kind}:{key}:{admin.Id}",
+                session.Store(new CleaningSuite.Domain.Notifications.StaffInboxItem { Id = inboxId, EmployeeId = admin.Id, Kind = kind, Title = copy.Title, Body = text, Link = LinkFor(admin, copy.Link), CreatedUtc = occurredAt.UtcDateTime, UpdatedUtc = occurredAt.UtcDateTime });
+            // The preference was checked above for this whole batch, so only the device and duplicate checks remain.
+            await StageUnchecked(session, new PushIntent { EmployeeId = admin.Id, AdminAudience = true, Kind = kind, Detail = detail, EventKey = $"staff:{kind}:{key}:{admin.Id}",
                 OccurredUtc = occurredAt.UtcDateTime, DueUtc = occurredAt.UtcDateTime, ExpiresUtc = occurredAt.UtcDateTime.AddHours(24) }, ct);
         }
     }
 
+    // Managers do not use the admin partner pages; their alerts open the manager page instead, as push already does.
+    private static string LinkFor(Employee admin, string link) =>
+        admin.Role == Employee.RoleManager && link.StartsWith("/admin/partner-requests") ? "/manager/partner-requests/" : link;
+
     public async Task StageAsync(IDocumentSession session, PushIntent intent, CancellationToken ct = default)
     {
         // Switched off in the person's notification settings: nothing is queued.
-        if (NotificationPreferenceService.AppTurnedOff(await session.Query<NotificationPreference>().FirstOrDefaultAsync(x => x.EmployeeId == intent.EmployeeId, ct), intent.Kind)) return;
+        if (NotificationPreferenceService.AppTurnedOff(await session.LoadAsync<NotificationPreference>(NotificationPreference.IdFor(intent.EmployeeId), ct), intent.Kind)) return;
+        await StageUnchecked(session, intent, ct);
+    }
+
+    private async Task StageUnchecked(IDocumentSession session, PushIntent intent, CancellationToken ct)
+    {
         // No device at commit means no event to backfill when a user opts in later.
         var devices = await session.Query<PushDevice>().Where(d => d.EmployeeId == intent.EmployeeId && d.Enabled).ToListAsync(ct);
         if (!devices.Any(d => d.OptedInUtc <= intent.OccurredUtc)) return;

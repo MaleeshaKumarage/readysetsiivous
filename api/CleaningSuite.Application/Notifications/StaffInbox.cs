@@ -3,6 +3,8 @@ namespace CleaningSuite.Application.Notifications;
 /// <summary>The words an admin sees for each staff alert, in the inbox and in push.</summary>
 public static class StaffAlertCopy
 {
+    public static bool Knows(string kind) => kind is "StaffPartnerAccepted" or "StaffPartnerOfferDeclined" or "StaffPartnerRequestChanged" or "StaffPartnerRequestCancelled" or "StaffVisitOfferDeclined";
+
     public static (string Title, string Body, string Link) For(string kind) => kind switch
     {
         "StaffPartnerAccepted" => ("Cleaner accepted partner work", "A cleaner accepted a partner cleaning. Open partner requests to check the plan.", "/admin/partner-requests/"),

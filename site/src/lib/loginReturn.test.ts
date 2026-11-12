@@ -18,4 +18,7 @@ test('anything that could leave the site falls back to the portal screen', () =>
   assert.equal(loginReturnPath('//evil.example/'), '/account/');
   assert.equal(loginReturnPath('/\\evil.example'), '/account/');
   assert.equal(loginReturnPath('javascript:alert(1)'), '/account/');
+  // A tab or newline is stripped by the browser URL parser, which would make '/\t/' protocol-relative.
+  assert.equal(loginReturnPath('/\t/evil.example'), '/account/');
+  assert.equal(loginReturnPath('/\n/evil.example'), '/account/');
 });

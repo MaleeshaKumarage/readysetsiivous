@@ -32,6 +32,9 @@ public class ShiftRepository : IShiftRepository
         return shift;
     }
 
+    public async Task<IReadOnlyList<Shift>> ListAllAsync(CancellationToken ct = default) =>
+        await Session.Query<Shift>().OrderBy(s => s.Name).ToListAsync(ct);
+
     public async Task<IReadOnlyList<Shift>> ListAsync(
         Guid? companyId,
         Guid? branchId,

@@ -24,7 +24,7 @@ public class GetAdminDashboardMonthlyHandler(IShiftRepository shifts, ICompanyRe
 
         var visits = new List<DashboardVisitInput>();
         var shiftCompany = new Dictionary<Guid, Guid>();
-        foreach (var shift in await shifts.ListAsync(null, null, ct))
+        foreach (var shift in await shifts.ListAllAsync(ct))
         {
             shiftCompany[shift.Id] = shift.CompanyId;
             foreach (var entry in await shifts.ResolveRosterAsync(shift, fromUtc, toUtc, zone, ct))

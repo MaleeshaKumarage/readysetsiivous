@@ -24,7 +24,7 @@ public class NotificationPreferenceDatabaseTests
         {
             db.Store(cleaner);
             db.Store(new PushDevice { EmployeeId = cleaner.Id, Subject = cleaner.KeycloakUserId, OptedInUtc = DateTime.UtcNow.AddDays(-1) });
-            db.Store(new NotificationPreference { EmployeeId = cleaner.Id, AppOff = ["ShiftRemoved"] });
+            db.Store(new NotificationPreference { Id = NotificationPreference.IdFor(cleaner.Id), EmployeeId = cleaner.Id, AppOff = ["ShiftRemoved"] });
             await db.SaveChangesAsync();
         }
         using (var session = f.Store.LightweightSession(f.Tenant))
@@ -49,7 +49,7 @@ public class NotificationPreferenceDatabaseTests
         {
             db.Store(admin, manager);
             foreach (var person in new[] { admin, manager }) db.Store(new PushDevice { EmployeeId = person.Id, Subject = person.KeycloakUserId, OptedInUtc = DateTime.UtcNow.AddDays(-1) });
-            db.Store(new NotificationPreference { EmployeeId = admin.Id, AppOff = ["StaffVisitOfferDeclined"] });
+            db.Store(new NotificationPreference { Id = NotificationPreference.IdFor(admin.Id), EmployeeId = admin.Id, AppOff = ["StaffVisitOfferDeclined"] });
             await db.SaveChangesAsync();
         }
         using (var session = f.Store.LightweightSession(f.Tenant))

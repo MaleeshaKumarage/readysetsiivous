@@ -8,4 +8,8 @@ public sealed class NotificationPreference : BaseDocument
 {
     public Guid EmployeeId { get; set; }
     public List<string> AppOff { get; set; } = [];
+
+    // One fixed id per employee, so two first-time saves update the same row instead of creating two.
+    public static Guid IdFor(Guid employeeId) =>
+        new(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes($"notification-preference:{employeeId:N}")));
 }

@@ -377,7 +377,7 @@ test('cleaner refreshes a failed offer read and a stale preplanned acceptance wi
     accepted = true; return route.fulfill({ headers, json: { id: pending.id, version: 7, status: 'Accepted', linkedShiftId: 'linked-shift', plannedStartUtc: offer.plannedStartUtc, plannedEndUtc: '2026-12-01T10:30:00Z' } });
   });
   await page.goto('/me/shifts/'); await page.getByRole('tab', { name: 'Offers', exact: true }).click(); await expect(page.getByText('Offers are temporarily unavailable.', { exact: true })).toBeVisible(); await expect(page.getByText('No pending cleaning offers.', { exact: true })).toHaveCount(0); expect(decisions).toHaveLength(0);
-  await page.getByRole('button', { name: 'Refresh offers', exact: true }).click(); await expect(page.getByText(/^Planned start:/)).toContainText('10:30'); await expect(page.getByLabel('Planned start for Lake apartment', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Refresh offers', exact: true }).click(); await expect(page.getByTestId('offer-fixed-time')).toContainText('10:30'); await expect(page.getByLabel('Planned start for Lake apartment', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Accept cleaning', exact: true }).click(); await expect(page.getByText('Offer changed. Refresh before accepting.', { exact: true })).toBeVisible(); expect(decisions).toHaveLength(1);
   await page.getByRole('button', { name: 'Refresh offers', exact: true }).click(); await expect(page.getByText('Offer changed. Refresh before accepting.', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Refresh offers', exact: true })).toBeEnabled();
