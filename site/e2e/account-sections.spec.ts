@@ -23,7 +23,7 @@ test('partner account is offered only the partner portal', async ({ page }, test
   await expect(page.getByRole('heading', { name: 'Account ready' })).toBeVisible();
 
   const picker = page.getByRole('navigation', { name: 'Choose a section' });
-  await expect(picker.getByRole('link')).toHaveCount(2);
+  await expect(picker.getByRole('link')).toHaveCount(1);
   await expect(picker.getByRole('link', { name: 'Open partner portal', exact: true })).toHaveAttribute('href', '/partner/');
   await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Manage tenant operations', exact: true })).toHaveCount(0);
@@ -35,7 +35,7 @@ test('manager who is also an employee is offered My shifts and tenant operations
   await signIn(page, ['manager', 'employee'], { role: 'manager' });
 
   const picker = page.getByRole('navigation', { name: 'Choose a section' });
-  await expect(picker.getByRole('link')).toHaveCount(3);
+  await expect(picker.getByRole('link')).toHaveCount(2);
   await expect(picker.getByRole('link', { name: 'My shifts', exact: true })).toHaveAttribute('href', '/me/shifts/');
   await expect(picker.getByRole('link', { name: 'Manage tenant operations', exact: true })).toHaveAttribute('href', '/manager/');
   await expect(picker.getByRole('link', { name: 'Open partner portal', exact: true })).toHaveCount(0);
@@ -46,7 +46,7 @@ test('administrator who is also an employee is offered My shifts and administrat
   await signIn(page, ['admin', 'employee'], { role: 'admin' });
 
   const picker = page.getByRole('navigation', { name: 'Choose a section' });
-  await expect(picker.getByRole('link')).toHaveCount(3);
+  await expect(picker.getByRole('link')).toHaveCount(2);
   await expect(picker.getByRole('link', { name: 'My shifts', exact: true })).toHaveAttribute('href', '/me/shifts/');
   await expect(picker.getByRole('link', { name: 'Continue to administration', exact: true })).toHaveAttribute('href', '/admin/');
   await expect(picker.getByRole('link', { name: 'Manage tenant operations', exact: true })).toHaveCount(0);
@@ -57,7 +57,7 @@ test('employee without a management role is offered only My shifts', async ({ pa
   await signIn(page, ['employee'], { role: 'employee' });
 
   const picker = page.getByRole('navigation', { name: 'Choose a section' });
-  await expect(picker.getByRole('link')).toHaveCount(2);
+  await expect(picker.getByRole('link')).toHaveCount(1);
   await expect(picker.getByRole('link', { name: 'My shifts', exact: true })).toHaveAttribute('href', '/me/shifts/');
 });
 
@@ -65,17 +65,17 @@ test('administrator without an employee record is offered only administration', 
   await signIn(page, ['admin'], null);
 
   const picker = page.getByRole('navigation', { name: 'Choose a section' });
-  await expect(picker.getByRole('link')).toHaveCount(2);
+  await expect(picker.getByRole('link')).toHaveCount(1);
   await expect(picker.getByRole('link', { name: 'Continue to administration', exact: true })).toHaveAttribute('href', '/admin/');
 });
 
-test('signed-in employee sees the notification bell, a Profile tile, and sign-out without horizontal scroll', async ({ page, isMobile }) => {
+test('signed-in employee sees the notification bell, a Profile link, and sign-out without horizontal scroll', async ({ page, isMobile }) => {
   await signIn(page, ['employee'], { role: 'employee' });
 
   const bell = page.getByRole('button', { name: /^Notifications/ });
   await expect(bell).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
-  const profileTile = page.getByRole('navigation', { name: 'Choose a section' }).getByRole('link', { name: 'Profile', exact: true });
+  const profileTile = page.getByRole('link', { name: 'Profile', exact: true });
   await expect(profileTile).toHaveAttribute('href', '/account/profile/?tenant=tenant-a');
   // Profile details and work preferences are not on the account page any more.
   await expect(page.getByRole('heading', { name: 'Work preferences', exact: true })).toHaveCount(0);

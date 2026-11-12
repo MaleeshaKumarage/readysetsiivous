@@ -4,7 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import type { CSSProperties } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Building2, CalendarClock, ClipboardList, Settings, UserRound, LogOut } from 'lucide-react';
+import { Building2, CalendarClock, ClipboardList, Settings, LogOut } from 'lucide-react';
 import { NotificationBell } from '@/components/NotificationBell';
 import { Button, Card, fontFamily, palette } from '@/ds';
 import { isAdmin, isManager, isPartner, login, logout } from '@/lib/auth';
@@ -23,9 +23,9 @@ export const accountTheme = {
 } as CSSProperties;
 
 // One portal or page the signed-in account can open. Tiles are large touch targets (44px+) with a visible focus ring.
-function PortalTile({ href, label, icon: Icon }: { href: string; label: string; icon: LucideIcon }) {
-  return <Link href={href} className="account-tile">
-    <span className="account-tile-icon"><Icon size={22} aria-hidden="true" /></span>
+function PortalCircle({ href, label, icon: Icon }: { href: string; label: string; icon: LucideIcon }) {
+  return <Link href={href} className="account-circle">
+    <span className="account-circle-icon"><Icon size={34} aria-hidden="true" /></span>
     <span>{label}</span>
   </Link>;
 }
@@ -41,7 +41,6 @@ export default function AccountClient() {
     account.employee?.isActive && !isPartner() && { href: '/me/shifts/', label: 'My shifts', icon: CalendarClock },
     account.employee?.role === 'manager' && isManager() && { href: '/manager/', label: 'Manage tenant operations', icon: ClipboardList },
     !isPartner() && isAdmin() && { href: '/admin/', label: 'Continue to administration', icon: Settings },
-    { href: profileHref, label: 'Profile', icon: UserRound },
   ].filter(Boolean) as { href: string; label: string; icon: LucideIcon }[] : [];
 
   return <main lang="en" className="partner-portal" style={accountTheme}>
@@ -54,6 +53,7 @@ export default function AccountClient() {
         </div>
       </div>
       <div className="partner-header-actions">
+        {account && <Link className="account-link" href={profileHref}>Profile</Link>}
         {!isPartner() && account && <NotificationBell settingsHref={`${profileHref}#notifications`} />}
         {roles.map(role => <span key={role} className="partner-count">{role}</span>)}
         {authed && <Button variant="ghost" size="sm" className="partner-quiet" onClick={() => logout().catch(() => setError('Sign-out failed. Please retry.'))}><LogOut size={17} aria-hidden="true" />Sign out</Button>}
@@ -71,8 +71,8 @@ export default function AccountClient() {
       {account && <>
         <section aria-label="Account ready" className="account-section">
           <h2>Account ready</h2>
-          <nav aria-label="Choose a section" className="partner-grid">
-            {portals.map(portal => <PortalTile key={portal.href} href={portal.href} label={portal.label} icon={portal.icon} />)}
+          <nav aria-label="Choose a section" className="account-circles">
+            {portals.map(portal => <PortalCircle key={portal.href} href={portal.href} label={portal.label} icon={portal.icon} />)}
           </nav>
         </section>
 
