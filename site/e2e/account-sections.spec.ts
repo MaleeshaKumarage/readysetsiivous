@@ -16,7 +16,7 @@ async function signIn(page: Page, roles: string[], employee: { role: string } | 
   await expect(page.getByRole('heading', { name: 'Account ready' })).toBeVisible();
 }
 
-test('partner account is offered only the partner portal', async ({ page }) => {
+test('partner account is offered only the partner portal', async ({ page }, testInfo) => {
   const backend = new PartnerFlowBackend({ priced: true });
   await prepareRolePage(page, backend, 'owner');
   await page.goto('/account/?tenant=readysetsiivous');
@@ -28,6 +28,7 @@ test('partner account is offered only the partner portal', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Manage tenant operations', exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Continue to administration', exact: true })).toHaveCount(0);
+  if (process.env.PORTAL_SHOT_DIR) await page.screenshot({ path: `${process.env.PORTAL_SHOT_DIR}/portal-partner-only.png`, fullPage: true });
 });
 
 test('manager who is also an employee is offered My shifts and tenant operations', async ({ page }) => {
@@ -41,7 +42,7 @@ test('manager who is also an employee is offered My shifts and tenant operations
   await expect(picker.getByRole('link', { name: 'Continue to administration', exact: true })).toHaveCount(0);
 });
 
-test('administrator who is also an employee is offered My shifts and administration', async ({ page }) => {
+test('administrator who is also an employee is offered My shifts and administration', async ({ page }, testInfo) => {
   await signIn(page, ['admin', 'employee'], { role: 'admin' });
 
   const picker = page.getByRole('navigation', { name: 'Choose a section' });
@@ -49,6 +50,7 @@ test('administrator who is also an employee is offered My shifts and administrat
   await expect(picker.getByRole('link', { name: 'My shifts', exact: true })).toHaveAttribute('href', '/me/shifts/');
   await expect(picker.getByRole('link', { name: 'Continue to administration', exact: true })).toHaveAttribute('href', '/admin/');
   await expect(picker.getByRole('link', { name: 'Manage tenant operations', exact: true })).toHaveCount(0);
+  if (process.env.PORTAL_SHOT_DIR) await page.screenshot({ path: `${process.env.PORTAL_SHOT_DIR}/portal-admin-employee.png`, fullPage: true });
 });
 
 test('employee without a management role is offered only My shifts', async ({ page }) => {
