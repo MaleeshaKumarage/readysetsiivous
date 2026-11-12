@@ -2,8 +2,6 @@ import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
 import type { MyShiftOccurrence } from '../src/lib/meApi';
 
-// Temporary: this file's mobile test hit an intermittent pointer overlap on CI only (not reproduced locally). Remove once the cause is fixed.
-test.describe.configure({ retries: 1 });
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 function shift(id: string, shiftName: string, startUtc: string, completed = false, isDeleted = false): MyShiftOccurrence {
   const endUtc = new Date(Date.parse(startUtc) + 7200000).toISOString();
@@ -56,7 +54,29 @@ test('Today is default; past weeks show daily counts while folded, with only one
   await recent.getByRole('button', { name: /15\/10\/2026 Thursday.*1 shift/ }).click();
   await expect(page.getByRole('heading', { name: 'Past corridor' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Previous day' })).toBeVisible();
-  await older.getByRole('button', { name: /08\/10\/2026 Thursday.*1 shift/ }).click();
+  const olderDay = older.getByRole('button', { name: /08\/10\/2026 Thursday.*1 shift/ });
+  try {
+    await olderDay.click({ timeout: 10_000 });
+  } catch (failure) {
+    // Diagnostic for a CI-only pointer overlap: keep a screenshot and the boxes involved so the layout cause can be read from the report.
+    await testInfo.attach('overlap-screenshot.png', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
+    const layout = await page.evaluate(() => {
+      const box = (element: Element | null) => { if (!element) return null; const r = element.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; };
+      const day = [...document.querySelectorAll('button[aria-controls^="day-"]')].find(b => (b.getAttribute('aria-label') ?? '').startsWith('08/10/2026')) ?? null;
+      const center = day ? day.getBoundingClientRect() : null;
+      const hit = center ? document.elementFromPoint(center.x + center.width / 2, center.y + center.height / 2) : null;
+      return {
+        viewport: { w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio },
+        olderDay: box(day),
+        recentSection: box(document.querySelector('[data-testid="shift-week-2026-10-12"]')),
+        olderSection: box(document.querySelector('[data-testid="shift-week-2026-10-05"]')),
+        hitTag: hit?.tagName, hitClass: (hit?.className ?? '').toString().slice(0, 160), hitText: (hit?.textContent ?? '').slice(0, 80),
+      };
+    });
+    console.log('OVERLAP_LAYOUT ' + JSON.stringify(layout));
+    await testInfo.attach('overlap-layout.json', { body: JSON.stringify(layout, null, 2), contentType: 'application/json' });
+    throw failure;
+  }
   await expect(recent.getByRole('button', { name: /Week of/ })).toHaveAttribute('aria-expanded', 'false');
   await expect(page.getByRole('region', { name: /^Shifts on / })).toHaveCount(1);
   await expect(page.getByText('In progress', { exact: true })).toBeVisible();
