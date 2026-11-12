@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { chooseEmployeeSection } from './employee-section';
 import { OWNER_COMPANY, PartnerFlowBackend, openActor, prepareRolePage } from './partner-flow-backend';
 
 // Deep cleaning is visible to every role that books, staffs or does the visit.
@@ -43,7 +44,7 @@ test('the cleaner sees Deep cleaning on the visit offer', async ({ page, browser
   const cleaner = await openActor(browser, testInfo, backend, 'cleaner');
   try {
     await cleaner.page.goto('/me/shifts/');
-    await cleaner.page.getByRole('tab', { name: 'Offers', exact: true }).click();
+    await chooseEmployeeSection(cleaner.page, 'Offers');
     const offer = cleaner.page.getByRole('article', { name: 'Lake apartment offer', exact: true });
     await expect(offer.getByTestId('offer-cleaning-type')).toHaveText('Deep cleaning');
   } finally { await cleaner.context.close(); }
@@ -103,7 +104,7 @@ test('a cleaner offer with a set time says it is fixed and how to decline', asyn
   const cleaner = await openActor(browser, testInfo, backend, 'cleaner');
   try {
     await cleaner.page.goto('/me/shifts/');
-    await cleaner.page.getByRole('tab', { name: 'Offers', exact: true }).click();
+    await chooseEmployeeSection(cleaner.page, 'Offers');
     const offer = cleaner.page.getByRole('article', { name: 'Lake apartment offer', exact: true });
     await expect(offer.getByTestId('offer-fixed-time')).toContainText('Fixed time:');
     await expect(offer.getByText('If you cannot attend, decline with a reason', { exact: false })).toBeVisible();

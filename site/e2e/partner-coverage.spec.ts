@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { chooseEmployeeSection } from './employee-section';
 import { PartnerFlowBackend, openActor, prepareRolePage } from './partner-flow-backend';
 
 // Coverage for the partner portal states that the flow does not visit: empty lists,
@@ -75,7 +76,7 @@ test('owner and cleaner see a readable message when the server gives no detail',
   backend.seedOffer(backend.seedRequest(backend.branches[0], WINDOW), 'cleaner');
   const cleaner = await openActor(browser, testInfo, backend, 'cleaner');
   await cleaner.page.goto('/me/shifts/');
-  await cleaner.page.getByRole('tab', { name: 'Offers', exact: true }).click();
+  await chooseEmployeeSection(cleaner.page, 'Offers');
   await expect(cleaner.page.getByRole('article', { name: `${PROPERTY} offer`, exact: true })).toBeVisible();
   backend.failNext('POST', /^me\/partner-offers\/.+\/decline$/, 500, '');
   await cleaner.page.getByRole('article', { name: `${PROPERTY} offer`, exact: true }).getByRole('button', { name: 'Decline cleaning', exact: true }).click();
