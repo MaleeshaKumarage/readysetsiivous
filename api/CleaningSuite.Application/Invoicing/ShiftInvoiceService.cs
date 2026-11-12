@@ -155,6 +155,15 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
             // A branch main shift inherits the branch price in force on each visit's date. A partner booking keeps the
             // price and VAT frozen on its request. Visits already on an issued or paid invoice are never billed again.
             // One read of this shift's visit exceptions serves the merged-visit check, cleaning types and visit numbers.
+            // A one-time shift with no price of its own bills at the property's price history, as a visit shift does.
+            // Legacy one-time shifts were created before the property price history, so they have no plan of their own.
+            if (partnerRequest is null && pricing.Plans.Count == 0 && pricing.BranchPriceEffectiveFrom is null && shift.Schedule.Type == ShiftScheduleType.OneTime)
+            {
+                var propertyVersions = (await branches.GetAsync(shift.BranchId, ct))?.Versions ?? [];
+                if (propertyVersions.Count > 0)
+                    pricing = new() { Id = shift.Id, ShiftId = shift.Id, CreatedUtc = pricing.CreatedUtc, UpdatedUtc = pricing.UpdatedUtc,
+                        Overrides = pricing.Overrides, Plans = PropertyPricePlans.From(propertyVersions) };
+            }
             var exceptions = (await shifts.ListOccurrenceExceptionsAsync(shift.Id, new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc),
                 new DateTime(2200, 1, 1, 0, 0, 0, DateTimeKind.Utc), ct) ?? []).ToArray();
             var billedStarts = new HashSet<DateTime>();
@@ -167,7 +176,7 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
                 var stored = await billing.GetAsync(shift.Id, ct);
                 pricing = new() { Id = shift.Id, ShiftId = shift.Id, CreatedUtc = stored?.CreatedUtc ?? shift.CreatedUtc, UpdatedUtc = stored?.UpdatedUtc ?? shift.CreatedUtc,
                     // The earliest version also prices visits entered for dates before it.
-                    Plans = versions.Select((v, index) => new ShiftPricingPlan(v.Mode, v.PriceNet, v.VatRatePercent, index == 0 ? new DateOnly(2000, 1, 1) : v.EffectiveFrom)).ToList(),
+                    Plans = PropertyPricePlans.From(versions),
                     Overrides = booked.Select(r => new ShiftOccurrencePrice(r.OccurrenceStartUtc!.Value, r.PriceNet, null, r.VatRatePercent))
                         .Concat(pricing.Overrides.Where(o => !booked.Any(r => r.OccurrenceStartUtc == o.OccurrenceStartUtc))).ToList() };
                 billedStarts = existing.Where(i => Billed(i, shift.Id)).SelectMany(i => i.Lines)
@@ -286,4 +295,11 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
         var tokenPayload = JsonSerializer.Serialize(new { Invoice = invoice, PartnerMonth = request.PartnerMonth, Inputs = adjustments.OrderBy(a => a.ShiftId).ThenBy(a => a.Month), Unstarted = unstartedVisits, Sources = fingerprints });
         return new(invoice, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(tokenPayload))), unstartedVisits);
     }
+}
+
+/// <summary>A property's price history as billing plans. The earliest version also prices visits dated before it.</summary>
+public static class PropertyPricePlans
+{
+    public static List<ShiftPricingPlan> From(IEnumerable<BranchPriceVersion> versions) =>
+        versions.Select((v, index) => new ShiftPricingPlan(v.Mode, v.PriceNet, v.VatRatePercent, index == 0 ? new DateOnly(2000, 1, 1) : v.EffectiveFrom)).ToList();
 }
