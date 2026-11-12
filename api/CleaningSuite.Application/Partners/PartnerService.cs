@@ -215,9 +215,16 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         var branch = await Db.LoadAsync<Branch>(id, ct) ?? throw new NotFoundException("Branch", id);
         await ActiveCompany(branch.CompanyId, ct);
         if (!branch.IsActive) throw new ShiftConflictException("Reactivate the property before pricing it.");
-        try { branch.SetPricing(body.PriceNet, body.VatRatePercent, body.EstimatedDurationMinutes); }
+        bool changed;
+        try { changed = branch.SetPricing(body.PriceNet, body.VatRatePercent, body.EstimatedDurationMinutes); }
         catch (ArgumentException ex) { throw new ValidationException(ex.Message); }
-        Db.Store(branch); Notify(branch.CompanyId, id, null, "PropertyPriced", branch.PricingVersion, "Company");
+        // An unchanged re-save is a successful no-op: no write, no new revision and no repeated notice.
+        if (!changed) return CompanyHandlers.MapBranch(branch);
+        // A notice already stored for this revision keeps its delivery state; only a genuinely new revision adds one.
+        var noticeId = NoticeId(id, null, "PropertyPriced", branch.PricingVersion, "Company", null);
+        Db.Store(branch);
+        if (await Db.LoadAsync<PartnerNotification>(noticeId, ct) is null)
+            Notify(branch.CompanyId, id, null, "PropertyPriced", branch.PricingVersion, "Company");
         await Db.SaveChangesAsync(ct);
         return CompanyHandlers.MapBranch(branch);
     }
@@ -950,8 +957,12 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
     {
         // Staff alerts are app push notifications (PartnerRequest intents), never email outbox rows.
         if (audience == "Staff") return;
-        Db.Store(new PartnerNotification { Id = PartnerCleaningRequest.StableId($"notice:{eventId ?? request ?? branch}:{kind}:{revision}:{audience}:{employee}"),
+        Db.Store(new PartnerNotification { Id = NoticeId(branch, request, kind, revision, audience, employee, eventId),
             CompanyId = company, BranchId = branch, RequestId = request, Kind = kind, Revision = revision,
             Audience = audience, RecipientEmployeeId = employee });
     }
+    // A notice is keyed by its intent, so the same intent always maps to the same row.
+    private static Guid NoticeId(Guid branch, Guid? request, string kind, int revision, string audience,
+        Guid? employee, Guid? eventId = null) =>
+        PartnerCleaningRequest.StableId($"notice:{eventId ?? request ?? branch}:{kind}:{revision}:{audience}:{employee}");
 }

@@ -5,12 +5,14 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "node scripts/localize-static-html.mjs",
     "start": "next start",
     "export": "next build",
     "test:e2e": "playwright test",
     "storybook": "node scripts/run-storybook.cjs dev -p 6006",
     "build-storybook": "node scripts/run-storybook.cjs build",
-    "test:unit": "node --test --experimental-strip-types src/lib/*.test.ts"
+    "test:unit": "node --test --experimental-strip-types src/lib/*.test.ts",
+    "test:static-html": "node --test scripts/localize-static-html.test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

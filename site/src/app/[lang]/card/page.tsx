@@ -1,5 +1,6 @@
 import { type Language, DEFAULT_LANGUAGE, getDictionary } from '@/i18n';
 import type { Metadata } from 'next';
+import { localizedAlternates } from '@/lib/seo';
 import CardPageClient from './CardPageClient';
 
 export function generateStaticParams() {
@@ -21,6 +22,7 @@ export function generateMetadata({
   return {
     title: `ReadySetSiivous — ${lang === 'fi' ? 'Digitaalinen käyntikortti' : lang === 'sv' ? 'Digitalt visitkort' : 'Digital Business Card'}`,
     description: dict.site.description,
+    alternates: localizedAlternates(lang, '/card/'),
   };
 }
 
