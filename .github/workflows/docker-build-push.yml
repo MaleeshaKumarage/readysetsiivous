@@ -1,3 +1,4 @@
+# Production image build and push. Runs on pushes to main that change the paths below.
 name: docker-build-push
 
 on:
