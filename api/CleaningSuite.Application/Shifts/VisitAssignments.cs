@@ -200,7 +200,7 @@ public static class VisitAssignmentSafety
     public static string OverlapMessage(ShiftVisitRosterEntry visit, ShiftVisitRosterEntry? other, string? otherName, TimeZoneInfo zone)
     {
         string Local(DateTime utc) => TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), zone).ToString("d MMM yyyy HH:mm", System.Globalization.CultureInfo.InvariantCulture);
-        var clash = other is null ? "" : $" It clashes with \"{otherName}\", {Local(other.Occurrence.StartUtc)} to {Local(other.Occurrence.EndUtc)}.";
-        return $"This cleaner already has a visit that overlaps the visit starting {Local(visit.Occurrence.StartUtc)}.{clash} No assignments were saved. Choose another cleaner or time, or remove the cleaner from the other visit first."; 
+        var clash = other is null ? "" : $" The clashing visit is \"{otherName}\", {Local(other.Occurrence.StartUtc)} to {Local(other.Occurrence.EndUtc)}.";
+        return $"This cleaner already has a visit at the same time as this one, {Local(visit.Occurrence.StartUtc)} to {Local(visit.Occurrence.EndUtc)}.{clash} No assignments were saved. Choose another cleaner, change the time, or remove the cleaner from the clashing visit first. For a flexible visit, set a planned start that does not clash.";
     }
 }

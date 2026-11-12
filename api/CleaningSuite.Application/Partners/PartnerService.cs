@@ -393,7 +393,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
                 generalByCompany[item.CompanyId] = general = (await Db.LoadAsync<PartnerPortalSettings>(item.CompanyId, ct))?.GeneralInstructions;
             result.Add(new(item.OfferId!.Value, item.Id, item.Revision, branch.Name, branch.Street,
                 branch.PostalCode, branch.City, item.FromDate, item.ToDate, item.ExactStartLocalTime,
-                item.OfferPlannedStartUtc, item.EstimatedDurationMinutes, VisitNotes(general, item.Notes), zoneId));
+                item.OfferPlannedStartUtc, item.EstimatedDurationMinutes, VisitNotes(general, item.Notes), zoneId, item.CleaningType ?? "Normal"));
         }
         return result;
     }

@@ -48,6 +48,7 @@ export function PartnerOffers({ onAccepted }: { onAccepted: () => void }) {
         <h3 className="text-lg font-semibold break-words">{offer.branchName}</h3>
         <p className="text-sm text-gray-600 dark:text-gray-300 break-words">{[offer.street, offer.postalCode, offer.city].filter(Boolean).join(', ')}</p>
         <p className="text-sm text-gray-600 dark:text-gray-300">{offer.fromDate} – {offer.toDate} · Estimated {offer.estimatedDurationMinutes} minutes · {offer.timeZoneId}</p>
+        <p data-testid="offer-cleaning-type" className="text-sm font-semibold">{offer.cleaningType === 'Deep' ? 'Deep cleaning' : 'Normal cleaning'}</p>
         {offer.notes && <p className="whitespace-pre-wrap break-words">{offer.notes}</p>}
         {offer.plannedStartUtc
           ? <p>Planned start: {new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: offer.timeZoneId }).format(new Date(offer.plannedStartUtc))}</p>

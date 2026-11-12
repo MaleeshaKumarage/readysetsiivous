@@ -178,7 +178,7 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
             var localEnd = TimeZoneInfo.ConvertTimeFromUtc(visit.EndUtc.AddTicks(-1), zone);
             result.Add(new(visit.OfferId!.Value, visit.Id, visit.OfferRevision, branch.Name, branch.Street, branch.PostalCode, branch.City,
                 DateOnly.FromDateTime(localStart), DateOnly.FromDateTime(localEnd), localStart.ToString("HH:mm", CultureInfo.InvariantCulture),
-                visit.StartUtc, (int)Math.Min(1440, Math.Round((visit.EndUtc - visit.StartUtc).TotalMinutes)), visit.Notes ?? shift.Notes, zoneId));
+                visit.StartUtc, (int)Math.Min(1440, Math.Round((visit.EndUtc - visit.StartUtc).TotalMinutes)), visit.Notes ?? shift.Notes, zoneId, visit.CleaningType ?? "Normal"));
         }
         return result;
     }
