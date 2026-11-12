@@ -24,10 +24,10 @@ test('partner account is offered only the partner portal', async ({ page }, test
 
   const picker = page.getByRole('navigation', { name: 'Choose a section' });
   await expect(picker.getByRole('link')).toHaveCount(1);
-  await expect(picker.getByRole('link', { name: 'Open partner portal', exact: true })).toHaveAttribute('href', '/partner/');
-  await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Manage tenant operations', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Continue to administration', exact: true })).toHaveCount(0);
+  await expect(picker.getByRole('link', { name: 'Partner portal', exact: true })).toHaveAttribute('href', '/partner/');
+  await expect(page.getByRole('link', { name: 'Employee portal', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Manager portal', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Office portal', exact: true })).toHaveCount(0);
   if (process.env.PORTAL_SHOT_DIR) await page.screenshot({ path: `${process.env.PORTAL_SHOT_DIR}/portal-partner-only.png`, fullPage: true });
 });
 
@@ -36,10 +36,10 @@ test('manager who is also an employee is offered My shifts and tenant operations
 
   const picker = page.getByRole('navigation', { name: 'Choose a section' });
   await expect(picker.getByRole('link')).toHaveCount(2);
-  await expect(picker.getByRole('link', { name: 'My shifts', exact: true })).toHaveAttribute('href', '/me/shifts/');
-  await expect(picker.getByRole('link', { name: 'Manage tenant operations', exact: true })).toHaveAttribute('href', '/manager/');
-  await expect(picker.getByRole('link', { name: 'Open partner portal', exact: true })).toHaveCount(0);
-  await expect(picker.getByRole('link', { name: 'Continue to administration', exact: true })).toHaveCount(0);
+  await expect(picker.getByRole('link', { name: 'Employee portal', exact: true })).toHaveAttribute('href', '/me/shifts/');
+  await expect(picker.getByRole('link', { name: 'Manager portal', exact: true })).toHaveAttribute('href', '/manager/');
+  await expect(picker.getByRole('link', { name: 'Partner portal', exact: true })).toHaveCount(0);
+  await expect(picker.getByRole('link', { name: 'Office portal', exact: true })).toHaveCount(0);
 });
 
 test('administrator who is also an employee is offered My shifts and administration', async ({ page }, testInfo) => {
@@ -47,9 +47,9 @@ test('administrator who is also an employee is offered My shifts and administrat
 
   const picker = page.getByRole('navigation', { name: 'Choose a section' });
   await expect(picker.getByRole('link')).toHaveCount(2);
-  await expect(picker.getByRole('link', { name: 'My shifts', exact: true })).toHaveAttribute('href', '/me/shifts/');
-  await expect(picker.getByRole('link', { name: 'Continue to administration', exact: true })).toHaveAttribute('href', '/admin/');
-  await expect(picker.getByRole('link', { name: 'Manage tenant operations', exact: true })).toHaveCount(0);
+  await expect(picker.getByRole('link', { name: 'Employee portal', exact: true })).toHaveAttribute('href', '/me/shifts/');
+  await expect(picker.getByRole('link', { name: 'Office portal', exact: true })).toHaveAttribute('href', '/admin/');
+  await expect(picker.getByRole('link', { name: 'Manager portal', exact: true })).toHaveCount(0);
   if (process.env.PORTAL_SHOT_DIR) await page.screenshot({ path: `${process.env.PORTAL_SHOT_DIR}/portal-admin-employee.png`, fullPage: true });
 });
 
@@ -58,7 +58,7 @@ test('employee without a management role is offered only My shifts', async ({ pa
 
   const picker = page.getByRole('navigation', { name: 'Choose a section' });
   await expect(picker.getByRole('link')).toHaveCount(1);
-  await expect(picker.getByRole('link', { name: 'My shifts', exact: true })).toHaveAttribute('href', '/me/shifts/');
+  await expect(picker.getByRole('link', { name: 'Employee portal', exact: true })).toHaveAttribute('href', '/me/shifts/');
 });
 
 test('administrator without an employee record is offered only administration', async ({ page }) => {
@@ -66,7 +66,7 @@ test('administrator without an employee record is offered only administration', 
 
   const picker = page.getByRole('navigation', { name: 'Choose a section' });
   await expect(picker.getByRole('link')).toHaveCount(1);
-  await expect(picker.getByRole('link', { name: 'Continue to administration', exact: true })).toHaveAttribute('href', '/admin/');
+  await expect(picker.getByRole('link', { name: 'Office portal', exact: true })).toHaveAttribute('href', '/admin/');
 });
 
 test('signed-in employee sees the notification bell, a Profile link, and sign-out without horizontal scroll', async ({ page, isMobile }) => {
@@ -80,7 +80,7 @@ test('signed-in employee sees the notification bell, a Profile link, and sign-ou
   // Profile details and work preferences are not on the account page any more.
   await expect(page.getByRole('heading', { name: 'Work preferences', exact: true })).toHaveCount(0);
 
-  const tile = await page.getByRole('navigation', { name: 'Choose a section' }).getByRole('link', { name: 'My shifts', exact: true }).boundingBox();
+  const tile = await page.getByRole('navigation', { name: 'Choose a section' }).getByRole('link', { name: 'Employee portal', exact: true }).boundingBox();
   expect(tile?.height ?? 0).toBeGreaterThanOrEqual(44);
   const signOut = await page.getByRole('button', { name: 'Sign out', exact: true }).boundingBox();
   expect(signOut?.height ?? 0).toBeGreaterThanOrEqual(44);

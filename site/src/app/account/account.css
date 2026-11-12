@@ -37,8 +37,8 @@
 .notify-foot { padding: 16px 20px; border-top: 1px solid var(--partner-border); }
 
 /* Portal picker: one round icon per portal, label underneath (like the TV account chooser). */
-.account-circles { display: flex; flex-wrap: wrap; justify-content: center; gap: 32px; padding: 8px 0; }
-.account-circle { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 140px; min-width: 0; color: var(--partner-ink); font-size: 16px; font-weight: 650; text-align: center; text-decoration: none; }
+.account-circles { display: flex; flex-wrap: wrap; justify-content: center; gap: 24px; padding: 8px 0; }
+.account-circle { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 150px; min-width: 0; color: var(--partner-ink); font-size: 16px; font-weight: 650; text-align: center; white-space: nowrap; text-decoration: none; }
 .account-circle-icon { display: flex; align-items: center; justify-content: center; width: 96px; height: 96px; border-radius: 9999px; background: var(--partner-ink); color: white; transition: box-shadow .15s ease; }
 .account-circle:hover .account-circle-icon { box-shadow: 0 0 0 4px var(--partner-gold-light), 0 0 0 7px var(--partner-gold); }
 .account-circle:focus-visible { outline: none; }

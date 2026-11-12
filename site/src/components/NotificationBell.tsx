@@ -66,7 +66,7 @@ export function NotificationBell({ settingsHref }: { settingsHref: string }) {
         {items && items.length === 0 && <p className="notify-empty">Nothing needs your attention right now.</p>}
         {items && items.length > 0 && <ul className="notify-list">
           {items.map(entry => <li key={entry.id}>
-            <Link href={entry.link} className={`notify-item${entry.read ? '' : ' notify-unread'}`} onClick={() => { openEntry(entry); setOpen(false); }}>
+            <Link href={entry.link} className={`notify-item${entry.read ? '' : ' notify-unread'}`} onClick={() => openEntry(entry)}>
               <span className="notify-title">{entry.title}</span>
               <span className="notify-body">{entry.body}</span>
               <span className="notify-time">{new Date(entry.createdUtc).toLocaleString()}{entry.read ? ' · read' : ''}</span>

@@ -4,12 +4,12 @@ import Link from 'next/link';
 import Image from 'next/image';
 import type { CSSProperties } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Building2, CalendarClock, ClipboardList, Settings, LogOut } from 'lucide-react';
+import { Building2, CalendarClock, ClipboardList, Settings, LogOut, UserRound } from 'lucide-react';
 import { NotificationBell } from '@/components/NotificationBell';
 import { Button, Card, fontFamily, palette } from '@/ds';
 import { isAdmin, isManager, isPartner, login, logout } from '@/lib/auth';
 import { TENANT_SLUG } from '@/lib/api';
-import { accountName, accountRoles, useAccountSession } from './useAccountSession';
+import { accountName, useAccountSession } from './useAccountSession';
 import '../partner/partner.css';
 import './account.css';
 
@@ -34,13 +34,12 @@ export default function AccountClient() {
   const search = useSearchParams();
   const tenant = search.get('tenant') || TENANT_SLUG;
   const { loading, authed, account, error, setError } = useAccountSession(tenant);
-  const roles = accountRoles(account);
   const profileHref = `/account/profile/?tenant=${encodeURIComponent(tenant)}`;
   const portals = account ? [
-    account.person?.role === 'partner' && { href: '/partner/', label: 'Open partner portal', icon: Building2 },
-    account.employee?.isActive && !isPartner() && { href: '/me/shifts/', label: 'My shifts', icon: CalendarClock },
-    account.employee?.role === 'manager' && isManager() && { href: '/manager/', label: 'Manage tenant operations', icon: ClipboardList },
-    !isPartner() && isAdmin() && { href: '/admin/', label: 'Continue to administration', icon: Settings },
+    account.person?.role === 'partner' && { href: '/partner/', label: 'Partner portal', icon: Building2 },
+    account.employee?.isActive && !isPartner() && { href: '/me/shifts/', label: 'Employee portal', icon: CalendarClock },
+    account.employee?.role === 'manager' && isManager() && { href: '/manager/', label: 'Manager portal', icon: ClipboardList },
+    !isPartner() && isAdmin() && { href: '/admin/', label: 'Office portal', icon: Settings },
   ].filter(Boolean) as { href: string; label: string; icon: LucideIcon }[] : [];
 
   return <main lang="en" className="partner-portal" style={accountTheme}>
@@ -53,9 +52,8 @@ export default function AccountClient() {
         </div>
       </div>
       <div className="partner-header-actions">
-        {account && <Link className="account-link" href={profileHref}>Profile</Link>}
+        {account && <Link href={profileHref} className="notify-bell" aria-label="Profile" title="Profile"><UserRound size={22} aria-hidden="true" /></Link>}
         {!isPartner() && account && <NotificationBell settingsHref={`${profileHref}#notifications`} />}
-        {roles.map(role => <span key={role} className="partner-count">{role}</span>)}
         {authed && <Button variant="ghost" size="sm" className="partner-quiet" onClick={() => logout().catch(() => setError('Sign-out failed. Please retry.'))}><LogOut size={17} aria-hidden="true" />Sign out</Button>}
       </div>
     </div></header>

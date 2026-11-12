@@ -30,8 +30,8 @@ test('employee account landing confirms binding without admin link', async ({ pa
   await page.goto('/account/?tenant=tenant-a');
   await expect(page.getByRole('heading', { name: 'Account ready' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Choose a section' }).getByRole('link')).toHaveCount(1);
-  await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveAttribute('href', '/me/shifts/');
-  await expect(page.getByRole('link', { name: 'Continue to administration' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Employee portal', exact: true })).toHaveAttribute('href', '/me/shifts/');
+  await expect(page.getByRole('link', { name: 'Office portal' })).toHaveCount(0);
   expect(await page.evaluate(() => sessionStorage.getItem('__AUTH_TENANT__'))).toBe('tenant-a');
 });
 
@@ -39,8 +39,8 @@ test('admin account landing offers valid administration route', async ({ page })
   await setupAdminMocks(page, { authenticated: true });
   await page.route(/\/api\/v1\/me$/, route => route.fulfill({ status: 200, headers, json: { realm: 'tenant-a', employee: null } }));
   await page.goto('/account/?tenant=tenant-a');
-  await expect(page.getByRole('link', { name: 'Continue to administration' })).toHaveAttribute('href', '/admin/');
-  await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Office portal' })).toHaveAttribute('href', '/admin/');
+  await expect(page.getByRole('link', { name: 'Employee portal', exact: true })).toHaveCount(0);
   await expect(page.getByText('To receive shifts, add an Administrator profile', { exact: false })).toBeVisible();
 });
 

@@ -158,10 +158,10 @@ test('manager overlap is visible, selection survives and inactive employees are 
 });
 
 test('manager account links to operations and sign out removes operational access', async ({ page }) => {
-  await setup(page); await page.goto('/account/?tenant=readysetsiivous'); await page.getByRole('link', { name: 'Manage tenant operations' }).click();
+  await setup(page); await page.goto('/account/?tenant=readysetsiivous'); await page.getByRole('link', { name: 'Manager portal' }).click();
   await expect(page.getByRole('button', { name: 'Add shift' })).toBeVisible();
   await page.getByRole('link', { name: 'Account', exact: true }).click(); await expect(page).toHaveURL(/account\/\?tenant=readysetsiivous/);
-  await page.getByRole('link', { name: 'Manage tenant operations' }).click();
+  await page.getByRole('link', { name: 'Manager portal' }).click();
   await expect(page).toHaveURL(/\/manager\/$/);
   await expect(page.getByRole('button', { name: 'Add shift' })).toBeVisible();
   await page.route(/\/api\/v1\/me\/shifts(?:\/calendar)?(?:\?.*)?$/, route => route.fulfill({ status: 200, headers, json: { occurrences: [], timeZoneId: 'Europe/Helsinki', fromLocalDate: '2026-10-17', toLocalDate: '2026-10-18' } }));

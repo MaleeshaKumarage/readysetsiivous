@@ -120,12 +120,12 @@ for (const width of [375, 768, 1440]) test(`workspace navigation and surfaces at
 for (const priorScheme of [null, 'dark'] as const) test(`leaving admin restores prior Mantine scheme ${priorScheme}`, async ({ page }) => {
   await setupAdminMocks(page); await standaloneDarkSite(page);
   await page.goto('/account/');
-  await expect(page.getByRole('link', { name: 'Continue to administration' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Office portal' })).toBeVisible();
   await page.evaluate(prior => {
     if (prior === null) document.documentElement.removeAttribute('data-mantine-color-scheme');
     else document.documentElement.setAttribute('data-mantine-color-scheme', prior);
   }, priorScheme);
-  await page.getByRole('link', { name: 'Continue to administration' }).click();
+  await page.getByRole('link', { name: 'Office portal' }).click();
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-mantine-color-scheme', 'light');
   await page.getByRole('link', { name: 'My account', exact: true }).filter({ visible: true }).click();
@@ -156,8 +156,8 @@ test('phone header with own shifts and invoice form remain within viewport', asy
   await expect(accountLink).toHaveAttribute('href', '/account/?tenant=readysetsiivous');
   await accountLink.click();
   await expect(page).toHaveURL(/\/account\/\?tenant=readysetsiivous$/);
-  await expect(page.getByRole('heading', { name: 'Your ReadySetSiivous account', exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Continue to administration', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your account', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Office portal', exact: true })).toBeVisible();
 });
 
 // Shapes mirror lifecycle-companies-services, lifecycle-agreements-employees,
