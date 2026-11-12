@@ -68,3 +68,31 @@ test('administrator without an employee record is offered only administration', 
   await expect(picker.getByRole('link')).toHaveCount(1);
   await expect(picker.getByRole('link', { name: 'Continue to administration', exact: true })).toHaveAttribute('href', '/admin/');
 });
+
+test('signed-in employee sees notifications first, profile beside them, and sign-out without horizontal scroll', async ({ page, isMobile }) => {
+  await signIn(page, ['employee'], { role: 'employee' });
+
+  const notifications = page.getByRole('heading', { name: 'Your notifications', exact: true });
+  const profile = page.getByRole('heading', { name: 'Profile', exact: true });
+  const preferences = page.getByRole('heading', { name: 'Work preferences', exact: true });
+  await expect(notifications).toBeVisible();
+  await expect(profile).toBeVisible();
+  await expect(preferences).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+
+  const n = await notifications.boundingBox();
+  const p = await profile.boundingBox();
+  if (!n || !p) throw new Error('layout boxes missing');
+  if (isMobile) expect(n.y).toBeLessThan(p.y); // phone: notifications first, then profile
+  else expect(n.x).toBeLessThan(p.x); // wide screen: notifications in the main column, profile beside it
+
+  // Portal tiles and the sign-out control are at least 44px tall (touch target).
+  const tile = await page.getByRole('navigation', { name: 'Choose a section' }).getByRole('link', { name: 'My shifts', exact: true }).boundingBox();
+  expect(tile?.height ?? 0).toBeGreaterThanOrEqual(44);
+  const signOut = await page.getByRole('button', { name: 'Sign out', exact: true }).boundingBox();
+  expect(signOut?.height ?? 0).toBeGreaterThanOrEqual(44);
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+  if (process.env.PORTAL_SHOT_DIR) await page.screenshot({ path: `${process.env.PORTAL_SHOT_DIR}/account-employee-${isMobile ? 'mobile' : 'desktop'}.png`, fullPage: true });
+});
