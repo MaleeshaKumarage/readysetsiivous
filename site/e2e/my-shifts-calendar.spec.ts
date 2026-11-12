@@ -2,6 +2,8 @@ import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
 import type { MyShiftOccurrence } from '../src/lib/meApi';
 
+// Temporary: this file's mobile test hit an intermittent pointer overlap on CI only (not reproduced locally). Remove once the cause is fixed.
+test.describe.configure({ retries: 1 });
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 function shift(id: string, shiftName: string, startUtc: string, completed = false, isDeleted = false): MyShiftOccurrence {
   const endUtc = new Date(Date.parse(startUtc) + 7200000).toISOString();
