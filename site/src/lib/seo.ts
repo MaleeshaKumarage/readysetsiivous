@@ -17,3 +17,8 @@ export function localizedAlternates(lang: string, path: string): NonNullable<Met
     languages: { fi: at('fi'), en: at('en'), sv: at('sv'), 'x-default': at('fi') },
   };
 }
+
+/** Unique title plus canonical and language alternates for a public sub-page. */
+export function localizedPageMetadata(lang: string, path: string, title: string): Metadata {
+  return { title: `${title} | ReadySetSiivous`, alternates: localizedAlternates(lang, path) };
+}

@@ -1,8 +1,10 @@
 import type { Metadata } from 'next';
-import { localizedAlternates } from '@/lib/seo';
+import { localizedPageMetadata } from '@/lib/seo';
+import { getDictionary, type Language, DEFAULT_LANGUAGE } from '@/i18n';
 
 export function generateMetadata({ params }: { params: { lang: string } }): Metadata {
-  return { alternates: localizedAlternates(params.lang, '/privacy/') };
+  const lang = (params.lang as Language) ?? DEFAULT_LANGUAGE;
+  return localizedPageMetadata(lang, '/privacy/', getDictionary(lang).privacy.title);
 }
 
 export default function PrivacyLayout({ children }: { children: React.ReactNode }) {

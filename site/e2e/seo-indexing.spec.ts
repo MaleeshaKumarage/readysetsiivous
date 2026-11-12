@@ -1,4 +1,6 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const SITE = 'https://readysetsiivous.fi';
 const LANGS = ['fi', 'en', 'sv'] as const;
@@ -35,6 +37,34 @@ test.describe('SEO: canonical and language alternates', () => {
     test(`${lang}/ homepage canonical is the language homepage`, async ({ request }) => {
       const html = await head(request, `/${lang}/`);
       expect(canonicalOf(html)).toBe(`${SITE}/${lang}/`);
+    });
+  }
+});
+
+test.describe('SEO: unique page titles', () => {
+  const titles: Record<string, Record<string, string>> = {
+    fi: { 'varaus/': 'Pyydä siivousta', 'privacy/': 'Tietosuojaseloste', 'terms/': 'Käyttöehdot' },
+    en: { 'varaus/': 'Request a cleaning', 'privacy/': 'Privacy Policy', 'terms/': 'Terms of Service' },
+    sv: { 'varaus/': 'Begär städning', 'privacy/': 'Integritetspolicy', 'terms/': 'Användarvillkor' },
+  };
+  for (const lang of LANGS) {
+    for (const [path, title] of Object.entries(titles[lang])) {
+      test(`${lang}/${path} has its own title`, async ({ request }) => {
+        const html = await head(request, `/${lang}/${path}`);
+        expect(html).toContain(`<title>${title} | ReadySetSiivous</title>`);
+      });
+    }
+  }
+});
+
+test.describe('SEO: html lang on prerendered pages', () => {
+  // Reads the built export, so it runs after `npm run build` (postbuild rewrites the lang attribute).
+  for (const lang of ['en', 'sv'] as const) {
+    test(`out/${lang}/ declares lang="${lang}"`, async () => {
+      const file = path.join(__dirname, '..', 'out', lang, 'index.html');
+      test.skip(!fs.existsSync(file), 'Run `npm run build` first: the export is missing.');
+      const html = fs.readFileSync(file, 'utf8');
+      expect(html).toMatch(new RegExp(`<html lang="${lang}"`));
     });
   }
 });
