@@ -111,12 +111,16 @@ test('cleaner sections remain fully visible at 320px, with keyboard navigation a
       await expect(option).toBeInViewport(); await touchTarget(option);
     }
     await page.keyboard.press('Escape');
+    // Escape may leave the menu open; close it so the next step starts from a closed menu.
+    if (await page.locator('#employee-section-menu-button').getAttribute('aria-expanded') === 'true') await page.locator('#employee-section-menu-button').click();
   }
   // The tab row is shown from the small-screen breakpoint up; phones use the section menu instead.
   if (await page.getByRole('tab',{name:'Schedules',exact:true}).isVisible()) {
     await page.getByRole('tab',{name:'Schedules',exact:true}).focus();
     await page.keyboard.press('End'); await expect(page.getByRole('tab',{name:'Settings',exact:true})).toBeFocused();
   }
+  // The link lives in Settings, which is not the default section, so open it first (on phones the menu is closed).
+  await chooseEmployeeSection(page,'Settings');
   await expect(page.getByRole('link',{name:'Change work preferences in My account'})).toBeVisible();
   expect(await page.locator('.employee-portal').evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgb(3, 7, 18)');
   await noOverflow(page);
