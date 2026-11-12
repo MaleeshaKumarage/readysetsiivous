@@ -1,3 +1,4 @@
+import { loginReturnPath } from './loginReturn';
 // Keycloak client-side auth (PKCE, public client). Token kept in memory only.
 
 import Keycloak from 'keycloak-js';
@@ -82,8 +83,9 @@ export async function login(): Promise<void> {
     window.location.reload();
     return;
   }
-  await getKeycloak().login({ redirectUri: window.location.href });
+  await getKeycloak().login({ redirectUri: new URL(loginReturnPath(), window.location.origin).toString() });
 }
+
 
 export async function logout(): Promise<void> {
   try {
