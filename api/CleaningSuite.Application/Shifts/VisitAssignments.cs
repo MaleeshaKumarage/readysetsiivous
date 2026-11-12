@@ -163,7 +163,8 @@ public static class VisitAssignmentSafety
             {
                 var isChanged = changed.Contains(visit);
                 if (visit.Occurrence.StartUtc < (isChanged ? allEnd : changedEnd))
-                    throw OverlapConflict(visit, latest, zone, current, others);
+                    // Always name the visit being offered against the visit the cleaner already holds, whichever sorts first.
+                    throw isChanged ? OverlapConflict(visit, latest, zone, current, others) : OverlapConflict(latest ?? visit, visit, zone, current, others);
                 if (visit.Occurrence.EndUtc > allEnd) { allEnd = visit.Occurrence.EndUtc; latest = visit; }
                 if (isChanged && visit.Occurrence.EndUtc > changedEnd) changedEnd = visit.Occurrence.EndUtc;
             }

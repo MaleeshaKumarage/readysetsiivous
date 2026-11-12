@@ -29,6 +29,43 @@ public class BranchVisitServiceDatabaseTests
         new(f.Branch.Id, Fixture.Day, Fixture.Day, start, end, notes, employee, useDefault);
 
     [QualityCycle.QualityCycleDatabaseFact]
+    public async Task An_unassigned_recurring_shift_at_the_same_time_does_not_block_accepting_a_visit()
+    {
+        using var f = await Fixture.Create();
+        using (var writer = f.Store.LightweightSession(f.Tenant))
+        {
+            // A daily shift nobody is assigned to, at the same time as the visit.
+            writer.Store(Shift.Create(f.Company.Id, f.Branch.Id, "Daily unassigned", new ShiftSchedule { Type = ShiftScheduleType.DailySameTime, DailyStart = TimeSpan.FromHours(8), DailyEnd = TimeSpan.FromHours(10) },
+                null, Fixture.Day.ToDateTime(TimeOnly.MinValue), null));
+            await writer.SaveChangesAsync();
+        }
+        using (var session = f.Session()) await f.Visits(session).Add(OnDay(f, employee: f.Cleaner.Id, useDefault: false), default);
+        PartnerCleanerOfferDto offer;
+        using (var session = f.Session()) offer = Assert.Single(await f.Visits(session).Offers(f.Cleaner.Id, default));
+        using (var session = f.Session()) Assert.NotNull(await f.Visits(session).Accept(f.Cleaner.Id, offer.Id, offer.Version, default));
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task A_clash_names_the_shift_the_cleaner_is_already_on_not_the_visit_being_offered()
+    {
+        using var f = await Fixture.Create();
+        var daily = Shift.Create(f.Company.Id, f.Branch.Id, "Daily already held", new ShiftSchedule { Type = ShiftScheduleType.DailySameTime, DailyStart = TimeSpan.FromHours(8), DailyEnd = TimeSpan.FromHours(10) },
+            null, Fixture.Day.ToDateTime(TimeOnly.MinValue), null);
+        using (var writer = f.Store.LightweightSession(f.Tenant))
+        {
+            writer.Store(daily);
+            writer.Store(ShiftAssignment.Create(daily.Id, f.Cleaner.Id, null));
+            await writer.SaveChangesAsync();
+        }
+        using (var session = f.Session()) await f.Visits(session).Add(OnDay(f, employee: f.Cleaner.Id, useDefault: false), default);
+        PartnerCleanerOfferDto offer;
+        using (var session = f.Session()) offer = Assert.Single(await f.Visits(session).Offers(f.Cleaner.Id, default));
+        using var accept = f.Session();
+        var ex = await Assert.ThrowsAsync<ShiftConflictException>(() => f.Visits(accept).Accept(f.Cleaner.Id, offer.Id, offer.Version, default));
+        Assert.Contains("\"Daily already held\"", ex.Message);
+    }
+
+    [QualityCycle.QualityCycleDatabaseFact]
     public async Task The_first_visit_creates_the_main_shift_and_numbers_continue_across_admin_and_partner_visits()
     {
         using var f = await Fixture.Create();
