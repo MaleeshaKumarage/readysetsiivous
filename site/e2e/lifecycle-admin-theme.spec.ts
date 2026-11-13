@@ -30,7 +30,7 @@ for (const scheme of ['light', 'dark'] as const) test.describe(`admin with ${sch
     await page.goto('/admin/');
     expect(await page.evaluate(() => matchMedia('(display-mode: standalone)').matches)).toBe(true);
     await expect(page.locator('html')).toHaveAttribute('data-mantine-color-scheme', 'light');
-    await readable(page.getByRole('heading', { name: 'Dashboard', exact: true }));
+    await readable(page.getByRole('heading', { name: 'Office portal', exact: true }));
     await readable(page.getByRole('link', { name: 'Services Manage cleaning services, prices and descriptions.' }).getByText('Services', { exact: true }));
     await page.getByRole('link', { name: 'Leads Manage prospects, contact details and customer conversion.' }).click();
     await expect(page).toHaveURL(/\/admin\/leads\//, { timeout: 15000 });
@@ -73,7 +73,7 @@ for (const width of [375, 768, 1440]) test(`workspace navigation and surfaces at
   await setupAdminMocks(page); await standaloneDarkSite(page);
   await page.route('**/api/v1/admin/leads**', route => route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' }, json: { items: [{ id: 'theme-lead', fields: { name: 'Workspace preview company', businessId: '1234567-8', emails: ['preview@example.test'], primaryEmail: 'preview@example.test', branches: [] }, status: 'New', imageCount: 0, isActive: true }], total: 1 } }));
   await page.goto('/admin/');
-  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Office portal', exact: true })).toBeVisible();
   const header = page.getByRole('banner');
   await expect(header.getByText('Tenant administration', { exact: true })).toBeVisible();
   await expect(header.getByText('Dashboard', { exact: true })).toBeVisible();
@@ -126,9 +126,9 @@ for (const priorScheme of [null, 'dark'] as const) test(`leaving admin restores 
     else document.documentElement.setAttribute('data-mantine-color-scheme', prior);
   }, priorScheme);
   await page.getByRole('link', { name: 'Office portal' }).click();
-  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Office portal', exact: true })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-mantine-color-scheme', 'light');
-  await page.getByRole('link', { name: 'My account', exact: true }).filter({ visible: true }).click();
+  await page.getByRole('link', { name: 'Portals', exact: true }).filter({ visible: true }).click();
   await expect(page).toHaveURL(/\/account\//);
   await expect.poll(() => page.locator('html').getAttribute('data-mantine-color-scheme')).toBe(priorScheme);
   await expect(page.locator('html')).not.toHaveAttribute('data-admin-theme');
@@ -142,16 +142,16 @@ test('phone header with own shifts and invoice form remain within viewport', asy
   await page.route('**/api/v1/admin/**', route => route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' }, json: new URL(route.request().url()).pathname.endsWith('/issuer') ? null : [] }));
   await page.goto('/admin/invoices/');
   await expect(page.getByRole('heading', { name: 'Invoices', exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Switch portal' }).getByRole('link', { name: 'Employee', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole('button', { name: 'New invoice', exact: true }).click();
   const fields = page.getByRole('textbox', { name: 'Billing street', exact: true });
   await expect(fields).toBeVisible(); expect((await fields.boundingBox())!.width).toBeGreaterThan(160);
-  await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(246, 247, 251)');
-  await expect.poll(() => page.getByText('No invoices yet.', { exact: true }).evaluate(element => getComputedStyle(element).color)).toBe('rgb(89, 100, 119)');
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(243, 245, 250)');
+  await expect.poll(() => page.getByText('No invoices yet.', { exact: true }).evaluate(element => getComputedStyle(element).color)).toBe('rgb(70, 84, 139)');
   await page.screenshot({ path: testInfo.outputPath('invoices-own-shifts-375.png'), fullPage: true });
   await page.keyboard.press('Escape'); await expect(page.getByRole('dialog', { name: 'Create shift invoice' })).toHaveCount(0);
-  const accountLink = page.getByRole('banner').getByRole('link', { name: 'My account', exact: true }).filter({ visible: true });
+  const accountLink = page.getByRole('banner').getByRole('link', { name: 'Portals', exact: true }).filter({ visible: true });
   await expect(accountLink).toBeVisible();
   await expect(accountLink).toHaveAttribute('href', '/account/?tenant=readysetsiivous');
   await accountLink.click();
@@ -202,7 +202,7 @@ test('dashboard groups link to workspaces and sidebar brand returns home on phon
     const brand = page.getByRole('navigation', { name: 'Administration' }).getByRole('link', { name: 'ReadySetSiivous', exact: true });
     await expect(brand).toHaveAttribute('href', '/admin/'); await brand.click();
     await expect(page).toHaveURL(/\/admin\/$/);
-    await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Office portal', exact: true })).toBeVisible();
     await expect(burger).toHaveAttribute('aria-expanded', 'false');
   }
 });

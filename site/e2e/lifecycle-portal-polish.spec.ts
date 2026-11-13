@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { chooseEmployeeSection } from './employee-section';
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { CORS, PartnerFlowBackend, OWNER_COMPANY, prepareRolePage } from './partner-flow-backend';
 
@@ -97,12 +98,29 @@ test('cleaner sections remain fully visible at 320px, with keyboard navigation a
   await page.addInitScript(() => localStorage.setItem('theme','dark'));
   await page.goto('/me/shifts/');
   await page.setViewportSize({width:320,height:667});
-  for(const name of ['Schedules','Offers','Inventory','Settings']) {
-    const tab = page.getByRole('tab',{name,exact:true});
-    await expect(tab).toBeInViewport(); await touchTarget(tab);
+  if (await page.getByRole('tab',{name:'Schedules',exact:true}).isVisible()) {
+    for(const name of ['Schedules','Offers','Inventory','Settings']) {
+      const tab = page.getByRole('tab',{name,exact:true});
+      await expect(tab).toBeInViewport(); await touchTarget(tab);
+    }
+  } else {
+    // Phones: the sections open from the menu button, and each option is a full touch target.
+    await page.locator('#employee-section-menu-button').click();
+    for(const name of ['Schedules','Offers','Inventory','Settings']) {
+      const option = page.getByRole('navigation',{name:'My account sections'}).getByRole('button',{name,exact:true});
+      await expect(option).toBeInViewport(); await touchTarget(option);
+    }
+    await page.keyboard.press('Escape');
+    // Escape may leave the menu open; close it so the next step starts from a closed menu.
+    if (await page.locator('#employee-section-menu-button').getAttribute('aria-expanded') === 'true') await page.locator('#employee-section-menu-button').click();
   }
-  await page.getByRole('tab',{name:'Schedules',exact:true}).focus();
-  await page.keyboard.press('End'); await expect(page.getByRole('tab',{name:'Settings',exact:true})).toBeFocused();
+  // The tab row is shown from the small-screen breakpoint up; phones use the section menu instead.
+  if (await page.getByRole('tab',{name:'Schedules',exact:true}).isVisible()) {
+    await page.getByRole('tab',{name:'Schedules',exact:true}).focus();
+    await page.keyboard.press('End'); await expect(page.getByRole('tab',{name:'Settings',exact:true})).toBeFocused();
+  }
+  // The link lives in Settings, which is not the default section, so open it first (on phones the menu is closed).
+  await chooseEmployeeSection(page,'Settings');
   await expect(page.getByRole('link',{name:'Change work preferences in My account'})).toBeVisible();
   expect(await page.locator('.employee-portal').evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgb(3, 7, 18)');
   await noOverflow(page);
@@ -163,7 +181,7 @@ test('admin pending counts, request ordering, statuses and quote links keep thei
 
 test('employee PWA preserves native prompt dismissal, iOS instructions and installed state', async ({page}) => {
   await cleaner(page);
-  await page.goto('/me/shifts/'); await page.getByRole('tab',{name:'Settings',exact:true}).click();
+  await page.goto('/me/shifts/'); await chooseEmployeeSection(page, 'Settings');
   const install = page.getByRole('button',{name:'Install My shifts',exact:true});
   await touchTarget(install);
   await page.evaluate(() => {
@@ -177,7 +195,7 @@ test('employee PWA preserves native prompt dismissal, iOS instructions and insta
   await expect(page.getByText('My shifts app installed',{exact:true})).toBeVisible(); await expect(install).toHaveCount(0);
   // Same user-initiated iOS guidance; browser emulation does not prove physical-device install.
   await page.addInitScript(()=>Object.defineProperty(navigator,'userAgent',{configurable:true,value:'iPhone'}));
-  await page.reload(); await page.getByRole('tab',{name:'Settings',exact:true}).click();
+  await page.reload(); await chooseEmployeeSection(page, 'Settings');
   await page.getByRole('button',{name:'Install My shifts',exact:true}).click();
   await expect(page.getByRole('status').filter({hasText:'In Safari, tap Share'})).toBeVisible();
 });
@@ -192,7 +210,7 @@ test('standalone cleaner retains app identity, safe layout and preference conten
   await page.setViewportSize({width:390,height:667});
   await page.goto('/me/shifts/');
   await expect(page.locator('link[rel=manifest]')).toHaveAttribute('href','/employee-manifest.json');
-  await page.getByRole('tab',{name:'Settings',exact:true}).click();
+  await chooseEmployeeSection(page, 'Settings');
   await expect(page.getByText('My shifts app installed',{exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'Install My shifts'})).toHaveCount(0);
   await expect(page.getByText('Automatic acceptance is off. You review each offer yourself.')).toBeVisible();

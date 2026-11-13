@@ -1,5 +1,5 @@
 // Service Worker for ReadySetSiivous Admin PWA
-const CACHE_NAME = 'readysetsiivous-admin-v1';
+const CACHE_NAME = 'readysetsiivous-admin-v2';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

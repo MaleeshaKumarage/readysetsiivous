@@ -65,7 +65,19 @@ test('a failed save puts the switch back and says why', async ({ page }) => {
   state.failNext = true;
   const assigned = page.getByRole('switch', { name: 'Assigned to a shift: in the app' });
   await expect(assigned).toBeEnabled();
-  await assigned.uncheck();
+  // The switch flips straight back when the save fails, so assert the outcome rather than the flip (uncheck() would race it).
+  await assigned.click();
   await expect(page.getByRole('alert').filter({ hasText: 'Could not save notification settings' })).toHaveCount(1);
   await expect(assigned).toBeChecked();
+});
+
+test('the office portal header has notifications and the profile', async ({ page }) => {
+  await setupAdminMocks(page);
+  await page.route(/\/api\/v1\/me\/inbox(\/[^/]+\/read)?$/, route => route.fulfill({ status: 200, headers, json: { unread: 0, items: [] } }));
+  await page.goto('/admin/');
+  await expect(page.getByRole('button', { name: 'Notifications', exact: true })).toBeVisible();
+  const profile = page.getByRole('link', { name: 'Profile', exact: true });
+  await expect(profile).toHaveAttribute('href', '/account/profile/?tenant=readysetsiivous');
+  await profile.click();
+  await expect(page).toHaveURL(/\/account\/profile\/\?tenant=readysetsiivous$/);
 });

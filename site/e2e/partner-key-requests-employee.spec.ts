@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
+import { chooseEmployeeSection } from './employee-section';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization' };
 const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
@@ -30,7 +31,7 @@ test('an assigned employee completes a key request and adds completion photos', 
   await page.route(/\/api\/v1\/me\/key-requests(?:\?.*)?$/, route => route.fulfill({ headers, json: [item] }));
 
   await page.goto('/me/shifts/');
-  await page.getByRole('tab', { name: 'Keys', exact: true }).click();
+  await chooseEmployeeSection(page, 'Keys');
   await expect(page.getByRole('heading', { name: 'Key requests' })).toBeVisible();
   await expect(page.getByText('Lockbox 1234')).toBeVisible();
 
@@ -64,7 +65,7 @@ test('an assigned employee adds a photo during the visit, before marking the key
   await page.route(/\/api\/v1\/me\/key-requests(?:\?.*)?$/, route => route.fulfill({ headers, json: [item] }));
 
   await page.goto('/me/shifts/');
-  await page.getByRole('tab', { name: 'Keys', exact: true }).click();
+  await chooseEmployeeSection(page, 'Keys');
   await expect(page.getByRole('button', { name: 'Mark completed', exact: true })).toBeVisible();
 
   await page.getByLabel('Add photo for Lake apartment 2026-12-04', { exact: true }).setInputFiles({ name: 'handover.png', mimeType: 'image/png', buffer: Buffer.from(pngBase64, 'base64') });
@@ -89,7 +90,7 @@ test('a refused employee photo keeps its reason on screen after the list reloads
   await page.route(/\/api\/v1\/me\/key-requests(?:\?.*)?$/, route => route.fulfill({ headers, json: [item] }));
 
   await page.goto('/me/shifts/');
-  await page.getByRole('tab', { name: 'Keys', exact: true }).click();
+  await chooseEmployeeSection(page, 'Keys');
   // Wait for the list reload that follows the refused upload, so the check below covers it.
   const reloaded = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/v1/me/key-requests');
   await page.getByLabel('Add photo for Lake apartment 2026-12-05', { exact: true }).setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('not an image') });
@@ -115,7 +116,7 @@ test('an employee with ten photos on a request cannot add an eleventh', async ({
   await page.route(/\/api\/v1\/me\/key-requests(?:\?.*)?$/, route => route.fulfill({ headers, json: [item] }));
 
   await page.goto('/me/shifts/');
-  await page.getByRole('tab', { name: 'Keys', exact: true }).click();
+  await chooseEmployeeSection(page, 'Keys');
   await expect(page.getByText('Photos 10/10')).toBeVisible();
   await expect(page.getByLabel('Add photo for Lake apartment 2026-12-05', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('img', { name: /Key request photo/ })).toHaveCount(10);

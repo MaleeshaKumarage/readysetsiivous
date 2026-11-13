@@ -87,12 +87,23 @@ export async function login(): Promise<void> {
 }
 
 
+// Push-device cleanup must not hold sign-out indefinitely: a stalled service worker or request would otherwise leave the user signed in.
+const PUSH_CLEANUP_LIMIT_MS = 5000;
+class PushCleanupTimedOut extends Error {}
+
+function withLimit<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const limit = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new PushCleanupTimedOut('Push cleanup timed out')), ms); });
+  return Promise.race([work, limit]).finally(() => clearTimeout(timer));
+}
+
 export async function logout(): Promise<void> {
   try {
-    const { removePushDevice } = await import('./pushNotifications');
-    await removePushDevice();
+    await withLimit((async () => { const { removePushDevice } = await import('./pushNotifications'); await removePushDevice(); })(), PUSH_CLEANUP_LIMIT_MS);
   } catch (error) {
-    if (typeof window === 'undefined' || !window.confirm('Notification cleanup failed. This device may still receive generic alerts. Sign out anyway?')) throw error;
+    // A stalled cleanup is not a refusal, so sign-out continues. The device stays registered until it is removed another way.
+    if (error instanceof PushCleanupTimedOut) { /* continue signing out */ }
+    else if (typeof window === 'undefined' || !window.confirm('Notification cleanup failed. This device may still receive generic alerts. Sign out anyway?')) throw error;
   }
   if (isMockAllowed() && typeof window !== 'undefined' && (window as any).__MOCK_AUTHED__ !== undefined) {
     (window as any).__MOCK_AUTHED__ = false;

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import path from 'node:path';
 import { setupAdminMocks } from './admin-helpers';
+import { chooseEmployeeSection } from './employee-section';
 
 async function setup(page: Page, mode = 'normal', path = '/account/profile/') {
   await setupAdminMocks(page);
@@ -89,7 +90,7 @@ test('My shifts invokes the browser installation prompt', async ({ page }) => {
   await page.route(/\/api\/v1\/me\/shifts(?:\?.*)?$/, r => r.fulfill({ json: [] }));
   await page.route(/\/api\/v1\/me\/partner-offers(?:\?.*)?$/, r => r.fulfill({ json: [] }));
   await page.goto('/me/shifts/');
-  await page.getByRole('tab', { name: 'Settings', exact: true }).click();
+  await chooseEmployeeSection(page, 'Settings');
   await expect(page.getByRole('button', { name: 'Install My shifts', exact: true })).toBeVisible();
   await page.evaluate(() => {
     const event = new Event('beforeinstallprompt', { cancelable: true });
@@ -139,10 +140,11 @@ test('My shifts renders employee installation and manifest without an admin prov
   await page.route(/\/api\/v1\/me\/partner-offers(?:\?.*)?$/, r => r.fulfill({ json: [] }));
   await page.goto('/me/shifts/');
   await expect(page.getByRole('heading', { name: 'My Shifts', exact: true })).toBeVisible();
-  await page.getByRole('tab', { name: 'Settings', exact: true }).click();
+  await chooseEmployeeSection(page, 'Settings');
   await expect(page.getByRole('button', { name: 'Install My shifts', exact: true })).toBeVisible();
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/employee-manifest.json');
-  await page.getByRole('tab', { name: 'Offers', exact: true }).click();
+  // The notification settings live on the profile page, not in the Offers tab.
+  await page.goto('/account/profile/?tenant=readysetsiivous');
   const panel = page.getByRole('region', { name: 'Notifications', exact: true });
   await panel.getByRole('button', { name: 'Enable notifications' }).click();
   await expect(panel.getByRole('status')).toContainText('enabled on this device');
@@ -174,7 +176,7 @@ test('admin Notifications navigation opens account notification settings', async
 for(const installMode of ['ios','desktop','installed'])test(`My shifts install action: ${installMode}`,async({page})=>{
  await setup(page);await page.addInitScript(mode=>{if(mode==='ios')Object.defineProperty(navigator,'userAgent',{configurable:true,value:'iPhone OS 17_0'});if(mode==='desktop')Object.defineProperty(navigator,'userAgent',{configurable:true,value:'Desktop Chrome'});if(mode==='installed')Object.defineProperty(navigator,'standalone',{configurable:true,value:true});},installMode);
  await page.route(/\/api\/v1\/me\/shifts(?:\?.*)?$/,r=>r.fulfill({json:[]}));await page.route(/\/api\/v1\/me\/partner-offers(?:\?.*)?$/,r=>r.fulfill({json:[]}));await page.goto('/me/shifts/');
- await page.getByRole('tab',{name:'Settings',exact:true}).click();
+ await chooseEmployeeSection(page, 'Settings');
  if(installMode==='installed'){await expect(page.getByText('My shifts app installed',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Install My shifts',exact:true})).toHaveCount(0);return;}
  await page.getByRole('button',{name:'Install My shifts',exact:true}).click();await expect(page.getByText(installMode==='ios'?'In Safari, tap Share, then Add to Home Screen and Add. Open My shifts from your Home Screen.':'Use your browser’s Install app or Add to Home Screen menu to install My shifts.',{exact:true})).toBeVisible();
 });

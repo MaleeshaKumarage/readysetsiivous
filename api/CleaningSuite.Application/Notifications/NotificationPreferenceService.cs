@@ -6,6 +6,12 @@ using Marten;
 
 namespace CleaningSuite.Application.Notifications;
 
+/// <summary>The event key is not one this person's role can switch.</summary>
+public sealed class NotificationEventNotFoundException(string key) : Exception($"Notification event '{key}' is not available for this account.")
+{
+    public string Key { get; } = key;
+}
+
 public sealed record NotificationEventItem(string Key, string Group, string Label, string Description, bool App, bool EmailAvailable);
 public sealed record NotificationPreferencesResponse(IReadOnlyList<NotificationEventItem> Events);
 
@@ -22,7 +28,7 @@ public sealed class NotificationPreferenceService(IPartnerStore store)
 
     public async Task<NotificationPreferencesResponse> SetApp(Employee employee, string key, bool enabled, CancellationToken ct)
     {
-        var definition = Applicable(employee).FirstOrDefault(e => e.Key == key) ?? throw new NotFoundException("Notification event", Guid.Empty);
+        var definition = Applicable(employee).FirstOrDefault(e => e.Key == key) ?? throw new NotificationEventNotFoundException(key);
         var preference = await Db.LoadAsync<NotificationPreference>(NotificationPreference.IdFor(employee.Id), ct)
             ?? new NotificationPreference { Id = NotificationPreference.IdFor(employee.Id), EmployeeId = employee.Id };
         preference.AppOff = enabled

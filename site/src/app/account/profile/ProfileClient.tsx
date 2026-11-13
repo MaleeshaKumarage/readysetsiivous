@@ -103,7 +103,8 @@ export default function ProfileClient() {
         </div>
 
         {!isPartner() && <Card className="partner-surface account-section">
-          <NotificationEventSettings />
+          {/* The event settings belong to an active employee record; the API refuses them for any other login. */}
+          {account?.employee?.isActive && <NotificationEventSettings />}
           <NotificationsPanel />
         </Card>}
       </div>}

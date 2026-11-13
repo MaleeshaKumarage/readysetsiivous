@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { chooseEmployeeSection } from './employee-section';
 import { OTHER_COMPANY, PartnerFlowBackend, openActor, prepareRolePage, type WriteRecord } from './partner-flow-backend';
 
 // One visit travels through every role: owner portal → staff partner operations → cleaner offers.
@@ -30,7 +31,7 @@ async function staffOpenAssigned(page: Page) {
 }
 async function cleanerOpenOffers(page: Page) {
   await page.goto('/me/shifts/');
-  await page.getByRole('tab', { name: 'Offers', exact: true }).click();
+  await chooseEmployeeSection(page, 'Offers');
   await expect(page.getByRole('region', { name: 'Cleaning offers' })).toBeVisible();
 }
 async function staffArrange(page: Page, employeeId: string, plannedStartLocal?: string) {
@@ -337,7 +338,7 @@ test('an automatic-acceptance cleaner takes a flexible visit with no start time,
 
   const autoCleaner = await openActor(browser, testInfo, backend, 'autoCleaner');
   await autoCleaner.page.goto('/me/shifts/');
-  await autoCleaner.page.getByRole('tab', { name: 'Offers', exact: true }).click();
+  await chooseEmployeeSection(autoCleaner.page, 'Offers');
   await autoCleaner.page.waitForLoadState('networkidle');
   await expect(autoCleaner.page.getByRole('region', { name: 'Cleaning offers' })).toHaveCount(0);
 

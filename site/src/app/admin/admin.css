@@ -74,3 +74,14 @@ html[data-admin-theme='light'] :is(input, textarea, select) { scroll-margin-bloc
 .admin-sidebar.mantine-AppShell-navbar { padding-left: max(16px, env(safe-area-inset-left, 0px)); }
 .admin-sidebar-footer { padding-bottom: env(safe-area-inset-bottom, 0px); }
 .admin-sidebar .mantine-Drawer-content { padding-left: env(safe-area-inset-left, 0px); padding-top: env(safe-area-inset-top, 0px); }
+
+/* Office portal shell: the partner portal palette (navy ink, gold accents) */
+html:root[data-admin-theme='light'] { --mantine-color-body: #f3f5fa; --mantine-color-text: #0a1741; --mantine-color-dimmed: #46548b; }
+.admin-header { border-color: #e4e8f2; box-shadow: 0 2px 8px #0a174106; }
+.admin-header .mantine-Text-root[data-fw="600"] { color: #0a1741; }
+.admin-eyebrow { color: #9c7c26 !important; font-weight: 700; }
+.admin-sidebar { border-color: #e4e8f2; }
+.admin-sidebar .mantine-NavLink-root[data-active] { background: #fbf7ec; color: #0a1741; box-shadow: inset 3px 0 0 #c9a340; }
+.admin-sidebar .mantine-NavLink-root[data-active] .mantine-NavLink-label { color: #0a1741; font-weight: 700; }
+.admin-sidebar .mantine-NavLink-root:hover { background: #f3f5fa; }
+.admin-sidebar .mantine-NavLink-root:focus-visible, .admin-header button:focus-visible { outline: 3px solid #9c7c26; outline-offset: 2px; }

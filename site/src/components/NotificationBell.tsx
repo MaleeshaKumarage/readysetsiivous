@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Bell, ChevronRight, X } from 'lucide-react';
 import { staffInboxApi, type StaffInboxEntry } from '@/lib/staffInboxApi';
+import '@/app/account/account.css';
 
 /**
  * Bell with an unread count. Opens a side drawer listing staff notifications.

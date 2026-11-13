@@ -34,7 +34,7 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
     await page.goto('/admin/');
 
     // Dashboard heading and navigation cards
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Office portal' })).toBeVisible();
     await expect(page.getByText('Manage cleaning services, prices and descriptions.')).toBeVisible();
     await expect(page.getByText('Upload agreements and collect e-signatures.')).toBeVisible();
     await expect(page.getByText('Manage staff profiles, availability, skills and certifications.')).toBeVisible();
@@ -58,20 +58,62 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
     await expect(page.getByRole('heading', { name: 'Shifts' })).toBeVisible();
   });
 
+  test('sign-out completes when removing the push device stalls', async ({ page, isMobile }) => {
+    if (isMobile) await page.setViewportSize({ width: 375, height: 1000 });
+    await page.addInitScript(() => localStorage.setItem('readyset-push-device-v1', JSON.stringify({ identity: 'readysetsiivous:mock-subject', id: 'device-1' })));
+    // The removal request never gets a response, so only the sign-out time limit can let sign-out finish.
+    await page.route(/\/api\/v1\/me\/notifications\/subscription\/device-1$/, () => new Promise<void>(() => {}));
+    await setupAdminMocks(page, { authenticated: true });
+    await page.goto('/admin/');
+
+    await expect(page.getByRole('heading', { name: 'Office portal' })).toBeVisible();
+    await page.getByRole('banner').getByRole('button', { name: 'Sign out', exact: true }).click();
+    await expect(page.getByText('Sign in with your ReadySetSiivous admin account.')).toBeVisible({ timeout: 20_000 });
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('__MOCK_LOGGED_OUT__'))).toBe('true');
+  });
+
+  test('a failed sign-out says so and keeps the user signed in', async ({ page, isMobile }) => {
+    if (isMobile) await page.setViewportSize({ width: 375, height: 1000 });
+    // A saved push device makes sign-out try to remove it first; refusing that removal makes sign-out fail.
+    await page.addInitScript(() => localStorage.setItem('readyset-push-device-v1', JSON.stringify({ identity: 'readysetsiivous:mock-subject', id: 'device-1' })));
+    await page.route(/\/api\/v1\/me\/notifications\/subscription\/device-1$/, route => route.fulfill({ status: 500, headers: CORS_HEADERS, json: { title: 'Unavailable' } }));
+    await setupAdminMocks(page, { authenticated: true });
+    await page.goto('/admin/');
+
+    await expect(page.getByRole('heading', { name: 'Office portal' })).toBeVisible();
+    await page.getByRole('banner').getByRole('button', { name: 'Sign out', exact: true }).click();
+    await expect(page.getByText('Sign-out failed. Please retry.', { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: 'Office portal' })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('__MOCK_LOGGED_OUT__'))).toBeNull();
+  });
+
   test('sign out button returns user to unauthenticated login view', async ({ page, isMobile }) => {
     if (isMobile) await page.setViewportSize({ width: 375, height: 1000 });
     await setupAdminMocks(page, { authenticated: true });
     await page.goto('/admin/');
 
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Office portal' })).toBeVisible();
+    // A header wider than the phone makes mobile emulation zoom out, which moves the Sign out target.
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     const signOut = page.getByRole('banner').getByRole('button', { name: 'Sign out', exact: true });
     await expect(signOut).toBeVisible();
     await expect(signOut).toBeInViewport();
     await signOut.click();
-    await expect(page.getByText('Sign in with your ReadySetSiivous admin account.')).toBeVisible();
-    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('__MOCK_LOGGED_OUT__'))).toBe('true');
-    await expect.poll(() => page.evaluate(() => (window as unknown as { __MOCK_AUTHED__: boolean }).__MOCK_AUTHED__)).toBe(false);
-    await expect(page.getByText('Sign in with your ReadySetSiivous admin account.')).toBeVisible();
+    // Sign-out ends with a redirect that can take longer than the default 5 s on a loaded runner.
+    await expect(page.getByText('Sign in with your ReadySetSiivous admin account.')).toBeVisible({ timeout: 15_000 }).catch(async failure => {
+      // Diagnostic for a CI-only sign-out failure: record what the page shows and which mock flags are set.
+      const state = await page.evaluate(() => ({
+        url: location.href,
+        loggedOutFlag: sessionStorage.getItem('__MOCK_LOGGED_OUT__'),
+        mockAuthed: (window as unknown as { __MOCK_AUTHED__?: boolean }).__MOCK_AUTHED__ ?? null,
+        bodyText: document.body.innerText.slice(0, 300),
+      })).catch(() => null);
+      console.log('SIGNOUT_STATE ' + JSON.stringify(state));
+      throw failure;
+    });
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('__MOCK_LOGGED_OUT__')), { timeout: 15_000 }).toBe('true');
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __MOCK_AUTHED__: boolean }).__MOCK_AUTHED__), { timeout: 15_000 }).toBe(false);
+    await expect(page.getByText('Sign in with your ReadySetSiivous admin account.')).toBeVisible({ timeout: 15_000 });
     await page.reload();
     await expect(page.getByText('Sign in with your ReadySetSiivous admin account.')).toBeVisible();
     expect(await page.evaluate(() => sessionStorage.getItem('__MOCK_LOGGED_OUT__'))).toBe('true');

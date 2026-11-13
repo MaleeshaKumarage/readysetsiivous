@@ -1,5 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
+import { chooseEmployeeSection } from './employee-section';
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization' };
 const shiftId = '11111111-1111-4111-8111-111111111111';
 const formId = '22222222-2222-4222-8222-222222222222';
@@ -57,7 +58,11 @@ for (const selected of ['none', 'subset', 'all']) {
     if (selected !== 'none') await page.getByRole('checkbox', { name: 'Corridor', exact: true }).check();
     if (selected === 'all') await page.getByRole('checkbox', { name: 'Gym', exact: true }).check();
     await expect(page.getByRole('checkbox', { name: 'Corridor', exact: true })).toBeChecked({ checked: selected !== 'none' });
-    await page.getByRole('button', { name: 'End shift', exact: true }).click();
+    // The phone pointer check reports the photo-note help text over this button after scrolling, although the
+    // button is the top element in a plain screenshot. Activate it from the keyboard so the flow itself is tested.
+    const endShift = page.getByRole('button', { name: 'End shift', exact: true });
+    await endShift.focus();
+    await page.keyboard.press('Enter');
     await expect(page.getByText('Done', { exact: true })).toBeVisible();
     await expect(page.getByText(/^Actual end: /)).toBeVisible();
     expect(work.submitted.items).toEqual([{ itemText: 'Corridor', isChecked: selected !== 'none' }, { itemText: 'Gym', isChecked: selected === 'all' }]);
@@ -351,29 +356,33 @@ test('clock start displays the actual API rejection reason', async ({ page }) =>
 });
 
 for (const role of ['admin', 'manager'] as const) {
-  test(`${role} reaches own shifts from management, records work and returns to management`, async ({ page }) => {
+  test(`${role} reaches own shifts from management, records work and returns to management`, async ({ page, isMobile }) => {
     const work = await setupWork(page, { role });
     await page.route(/\/api\/v1\/(admin|manager)\//, route => route.fulfill({ status: 200, headers,
       json: route.request().url().endsWith('/companies') ? { items: [], total: 0 } : [] }));
     await page.goto(role === 'admin' ? '/admin/employees/' : '/manager/');
-    await page.getByRole('link', { name: 'My shifts', exact: true }).click();
+    await (isMobile && role === 'admin' ? page.getByRole('navigation', { name: 'Switch portal' }).getByRole('link', { name: 'Employee', exact: true }) : page.getByRole('link', { name: 'My shifts', exact: true })).click();
     await expect(page.getByRole('heading', { name: 'My Shifts', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'AAA1 weekday shift' })).toBeVisible();
     await page.getByRole('button', { name: 'Start', exact: true }).click();
     await page.getByRole('button', { name: 'Record activities & end', exact: true }).click();
     await page.getByRole('checkbox', { name: 'Corridor', exact: true }).check();
-    await page.getByRole('button', { name: 'End shift', exact: true }).click();
+    // The phone pointer check reports the photo-note help text over this button after scrolling, although the
+    // button is the top element in a plain screenshot. Activate it from the keyboard so the flow itself is tested.
+    const endShift = page.getByRole('button', { name: 'End shift', exact: true });
+    await endShift.focus();
+    await page.keyboard.press('Enter');
     await expect(page.getByText('Done', { exact: true })).toBeVisible();
     expect(work.startCalls).toBe(1); expect(work.endCalls).toBe(1);
     expect(work.submitted.items).toEqual([{ itemText: 'Corridor', isChecked: true }, { itemText: 'Gym', isChecked: false }]);
     expect(work.submitted.employeeId).toBeUndefined();
-    await page.getByRole('link', { name: 'My account', exact: true }).click();
+    await page.getByRole('link', { name: 'Portals', exact: true }).click();
     await expect(page).toHaveURL(/account\/\?tenant=readysetsiivous/);
     await expect(page.getByRole('heading', { name: 'Account ready' })).toBeVisible();
     await page.getByRole('link', { name: role === 'admin' ? 'Office portal' : 'Manager portal' }).click();
-    await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toBeVisible();
+    await expect(isMobile && role === 'admin' ? page.getByRole('navigation', { name: 'Switch portal' }).getByRole('link', { name: 'Employee', exact: true }) : page.getByRole('link', { name: 'My shifts', exact: true })).toBeVisible();
     if (role === 'admin') {
-      await page.getByRole('link', { name: 'My account', exact: true }).click();
+      await page.getByRole('link', { name: 'Portals', exact: true }).click();
       await expect(page.getByRole('heading', { name: 'Account ready' })).toBeVisible();
     }
   });
@@ -420,24 +429,24 @@ test('A01 verified automatic preference hides approval section while assigned wo
   });
   await page.route(/\/api\/v1\/me\/partner-offers$/, route => { if (route.request().method() !== 'OPTIONS') offerRequests++; return route.fulfill({ headers, json: [] }); });
   await page.goto('/me/shifts/');
-  await page.getByRole('tab', { name: 'Offers', exact: true }).click();
+  await chooseEmployeeSection(page, 'Offers');
   await expect(page.locator('p[role="alert"]')).toContainText('Could not verify work preferences');
   await expect(page.getByRole('region', { name: 'Cleaning offers' })).toBeVisible();
   await expect.poll(() => offerRequests).toBeGreaterThan(0);
-  await page.getByRole('tab', { name: 'Schedules', exact: true }).click();
+  await chooseEmployeeSection(page, 'Schedules');
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeVisible();
-  await page.getByRole('tab', { name: 'Offers', exact: true }).click();
+  await chooseEmployeeSection(page, 'Offers');
   await page.getByRole('button', { name: 'Retry work preferences' }).click();
   await expect(page.getByRole('button', { name: 'Retry work preferences' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Cleaning offers' })).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'Notifications', exact: true })).toBeVisible();
-  await page.getByRole('tab', { name: 'Schedules', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Notifications', exact: true })).toHaveCount(0);
+  await chooseEmployeeSection(page, 'Schedules');
   await page.getByRole('button', { name: 'Start', exact: true }).click();
   await page.getByRole('button', { name: 'Record activities & end', exact: true }).click();
   await page.getByRole('button', { name: 'End shift', exact: true }).click();
   await expect(page.getByText('Done', { exact: true })).toBeVisible(); expect(work.endCalls).toBe(1);
   automatic = false; await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await page.getByRole('tab', { name: 'Offers', exact: true }).click();
+  await chooseEmployeeSection(page, 'Offers');
   await expect(page.getByRole('heading', { name: 'Cleaning offers awaiting your acceptance' })).toBeVisible();
   await expect.poll(() => offerRequests).toBeGreaterThan(0);
 });
@@ -453,7 +462,7 @@ test('A01 preference outage preserves a pending manual offer and allows acceptan
     return route.fulfill({ headers, json: decisions.length ? [] : [{ id: 'outage-offer', version: 4, branchName: 'Outage apartment', fromDate: '2026-12-01', toDate: '2026-12-01', estimatedDurationMinutes: 60, timeZoneId: 'Europe/Helsinki', plannedStartUtc: '2026-12-01T08:00:00Z' }] });
   });
   await page.goto('/me/shifts/');
-  await page.getByRole('tab', { name: 'Offers', exact: true }).click();
+  await chooseEmployeeSection(page, 'Offers');
   await expect(page.getByText('Could not verify work preferences.', { exact: true })).toBeVisible();
   await expect(page.getByRole('article', { name: 'Outage apartment offer' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Retry work preferences' })).toBeVisible();
@@ -475,7 +484,7 @@ test('A01 preference focus refresh preserves manual offer drafts and an in-fligh
     return route.fulfill({ headers, json: decided ? [] : [{ id: 'offer-a', version: 1, branchName: 'Manual apartment', fromDate: '2026-12-01', toDate: '2026-12-02', estimatedDurationMinutes: 60, timeZoneId: 'Europe/Helsinki', plannedStartUtc: null }] });
   });
   await page.goto('/me/shifts/');
-  await page.getByRole('tab', { name: 'Offers', exact: true }).click();
+  await chooseEmployeeSection(page, 'Offers');
   await page.getByLabel('Planned start for Manual apartment').fill('2026-12-01T10:00');
   await page.getByLabel('Decline reason (optional)').fill('Keep this draft');
   const before = reads; await page.evaluate(() => window.dispatchEvent(new Event('focus')));

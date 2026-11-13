@@ -3,6 +3,8 @@
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import { Notifications } from '@mantine/notifications';
+import { NotificationBell } from '@/components/NotificationBell';
+import { PortalSwitch } from '@/components/PortalSwitch';
 import './admin.css';
 import { adminTheme } from '@/lib/adminTheme';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
@@ -14,9 +16,10 @@ import {
 } from '@mantine/core';
 import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 import {
-  LayoutDashboard, ListChecks, Sparkles, FileSignature, Users, Building2, CalendarClock, CalendarCheck2, CheckSquare, Receipt, LogOut, LogIn, UserRound, Package,
+  LayoutDashboard, ListChecks, Sparkles, FileSignature, Users, Building2, CalendarClock, CalendarCheck2, CheckSquare, Receipt, LogOut, LogIn, UserRound, Package, LayoutGrid,
 } from 'lucide-react';
 import { initAuth, isAuthenticated, isAdmin, authTenant, refreshToken, login, logout } from '@/lib/auth';
+import { showError } from '@/lib/toast';
 import { API_URL } from '@/lib/api';
 import { PwaInstallButton } from '@/components/PwaInstallButton';
 import { QuoteRequestBanner, QuoteRequestProvider, PartnerPendingBadge } from '@/components/QuoteRequests';
@@ -33,6 +36,11 @@ const NAV_GROUPS = [
 ];
 
 
+
+// Sign-out that reports a failure instead of leaving the user signed in with no explanation.
+function signOut() {
+  logout().catch(() => showError('Sign-out failed. Please retry.', 'Not signed out'));
+}
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -137,8 +145,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               <Text component="h1" fw={600}>{access === 'error' ? 'Could not verify access' : 'Admin access required'}</Text>
               <Text role="alert">{access === 'error' ? accessError : 'This account cannot access tenant administration.'}</Text>
               {access === 'error' && <Button onClick={() => void verifyAccess()}>{ACCESS_RETRY_LABEL}</Button>}
-              <Button component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="light">My account</Button>
-              <Button onClick={() => logout()} variant="subtle">Sign out</Button>
+              <Button component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="light"><LayoutGrid size={16} aria-hidden="true" />Portals</Button>
+              <Button onClick={signOut} variant="subtle">Sign out</Button>
             </Stack>
           </Paper>
         </Group>
@@ -198,15 +206,18 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       >
         <AppShell.Header className="admin-header">
           <Group h="100%" justify="space-between" wrap="nowrap" gap="xs">
-            <Group gap="xs" wrap="nowrap" className="admin-context">
+            <Group gap="xs" wrap="nowrap" className="admin-context" style={{ minWidth: 0, flexShrink: 1 }}>
               <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" aria-label="Toggle navigation" aria-expanded={opened} aria-controls="admin-navigation" />
-              <div><Text size="xs" c="dimmed" className="admin-eyebrow">Tenant administration</Text><Text fw={600}>{NAV_GROUPS.flatMap(group => group.items).filter(item => item.href ? pathname.startsWith(base + item.href) : pathname === '/admin' || pathname === '/admin/').sort((a, b) => b.href.length - a.href.length)[0]?.label ?? 'Workspace'}</Text></div>
+              <div style={{ minWidth: 0 }}><Text size="xs" c="dimmed" className="admin-eyebrow" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Tenant administration</Text><Text fw={600} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{NAV_GROUPS.flatMap(group => group.items).filter(item => item.href ? pathname.startsWith(base + item.href) : pathname === '/admin' || pathname === '/admin/').sort((a, b) => b.href.length - a.href.length)[0]?.label ?? 'Workspace'}</Text></div>
             </Group>
-            <Group gap={4} wrap="nowrap">
-              {hasOwnWorkIdentity && <Button component={Link} href="/me/shifts/" variant="light" size="xs">My shifts</Button>}
-              <Button component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="subtle" size="xs" visibleFrom="xs">My account</Button>
-              <ActionIcon component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="subtle" hiddenFrom="xs" aria-label="My account"><UserRound size={20} /></ActionIcon>
-              <Tooltip label="Sign out" withArrow><ActionIcon variant="subtle" color="gray" onClick={() => logout()} aria-label="Sign out"><LogOut size={20} /></ActionIcon></Tooltip>
+            <Group gap={4} wrap="wrap" justify="flex-end" className="admin-actions" style={{ minWidth: 0 }}>
+              {hasOwnWorkIdentity && <PortalSwitch current="office" officeHref={isAdmin() ? '/admin/' : '/manager/'} officeLabel={isAdmin() ? 'Office' : 'Manager'} tenant={authTenant()} />}
+              {hasOwnWorkIdentity && <Box visibleFrom="sm"><Button component={Link} href="/me/shifts/" variant="light" size="xs">My shifts</Button></Box>}
+              <NotificationBell settingsHref={`/account/profile/?tenant=${encodeURIComponent(authTenant())}#notifications`} />
+              <Button component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="subtle" size="xs" visibleFrom="xs"><LayoutGrid size={16} aria-hidden="true" />Portals</Button>
+              <ActionIcon component={Link} href={`/account/profile/?tenant=${encodeURIComponent(authTenant())}`} variant="subtle" aria-label="Profile"><UserRound size={20} /></ActionIcon>
+              <ActionIcon component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="subtle" hiddenFrom="xs" aria-label="Portals"><LayoutGrid size={20} /></ActionIcon>
+              <Tooltip label="Sign out" withArrow><ActionIcon variant="subtle" color="gray" onClick={signOut} aria-label="Sign out"><LogOut size={20} /></ActionIcon></Tooltip>
             </Group>
           </Group>
         </AppShell.Header>

@@ -37,8 +37,8 @@ export const metadata: Metadata = {
     title: 'ReadySetSiivous Admin',
   },
   icons: {
-    icon: '/brand/readyset-logo-badge.png',
-    apple: '/brand/readyset-logo-badge.png',
+    icon: '/icon-192.png',
+    apple: '/apple-touch-icon.png',
   },
   robots: {
     index: true,

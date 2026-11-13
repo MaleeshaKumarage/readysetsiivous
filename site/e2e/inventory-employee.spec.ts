@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
+import { chooseEmployeeSection } from './employee-section';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization' };
 const locationId = '33333333-3333-4333-8333-333333333331';
@@ -65,7 +66,7 @@ async function setup(page: Page, options: { history?: unknown[] } = {}) {
 
 async function openInventory(page: Page) {
   await page.goto('/me/shifts/');
-  await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
+  await chooseEmployeeSection(page, 'Inventory');
 }
 
 test('save stays disabled until a photo is attached', async ({ page }) => {
