@@ -39,6 +39,7 @@ const NAV_GROUPS = [
 
 // Sign-out that reports a failure instead of leaving the user signed in with no explanation.
 function signOut() {
+  console.warn('[diag] signOut handler ran');
   logout().catch(() => showError('Sign-out failed. Please retry.', 'Not signed out'));
 }
 
@@ -97,6 +98,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     void verifyAccess();
     return () => { verification.current++; };
   }, [verifyAccess]);
+
+  // TEMPORARY diagnostics for the sign-out CI failure; remove before merge.
+  useEffect(() => {
+    if (access !== 'allowed') return;
+    console.warn('[diag] header mounted');
+    return () => { console.warn('[diag] header unmounted'); };
+  }, [access]);
 
   useEffect(() => {
     const refreshAccess = async () => {

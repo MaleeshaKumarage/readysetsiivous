@@ -98,6 +98,7 @@ function withLimit<T>(work: Promise<T>, ms: number): Promise<T> {
 }
 
 export async function logout(): Promise<void> {
+  console.warn('[diag] logout start');
   try {
     await withLimit((async () => { const { removePushDevice } = await import('./pushNotifications'); await removePushDevice(); })(), PUSH_CLEANUP_LIMIT_MS);
   } catch (error) {
