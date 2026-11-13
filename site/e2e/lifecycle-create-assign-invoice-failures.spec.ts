@@ -104,7 +104,7 @@ test('a failed assignment shows an assignment error, nothing is assigned, and a 
   const dialog = await fillShiftDialog(page);
   await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
   await expect(page.getByRole('cell', { name: FLOW_NAME, exact: true })).toBeVisible();
-  await shiftAction(page, FLOW_NAME, 'Employees');
+  await shiftAction(page, FLOW_NAME, 'Assign employees');
   await page.getByRole('textbox', { name: 'Assign employees', exact: true }).click();
   await page.getByRole('option', { name: 'Alice Cleaner', exact: true }).click();
   await page.getByRole('textbox', { name: 'Assign employees', exact: true }).press('Escape');

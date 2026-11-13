@@ -78,7 +78,7 @@ test('admin creates a shift, assigns a cleaner, and invoices its unstarted visit
   expect(state.shiftWrites).toHaveLength(1); expect(state.shiftWrites[0]).toMatchObject({ companyId: 'company', branchId: 'branch', name: FLOW_NAME });
 
   // 2. Assign a cleaner from the row's More actions.
-  await shiftAction(page, FLOW_NAME, 'Employees');
+  await shiftAction(page, FLOW_NAME, 'Assign employees');
   await page.getByRole('textbox', { name: 'Assign employees', exact: true }).click();
   await page.getByRole('option', { name: 'Alice Cleaner', exact: true }).click();
   await page.getByRole('textbox', { name: 'Assign employees', exact: true }).press('Escape');
