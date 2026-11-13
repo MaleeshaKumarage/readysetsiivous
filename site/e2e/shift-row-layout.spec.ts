@@ -37,6 +37,15 @@ test('shift rows show the address with size, rooms and beds as tags, and a row c
   await expect(visits).toBeVisible();
   await expect(visits.getByRole('cell', { name: 'Deep cleaning', exact: true })).toBeVisible();
   await expect(visits.getByRole('cell', { name: 'Unassigned', exact: true })).toBeVisible();
+  // The date filter reloads the visits for the chosen range.
+  const requests: string[] = [];
+  await page.route(/\/api\/v1\/admin\/shifts\/shift-layout\/occurrences/, route => { requests.push(route.request().url()); return route.continue(); });
+  const to = visits.getByLabel('To');
+  const newTo = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+  await to.fill(newTo);
+  await expect.poll(() => requests.length).toBeGreaterThan(0);
+  expect(decodeURIComponent(requests.at(-1) ?? '')).toContain(newTo);
+  await expect(page.getByText('Next 31 days')).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('shift-rows-expanded.png'), fullPage: true });
   // The visits section collapses on its own header without collapsing the row.
   await visits.getByRole('button', { name: /Visits/ }).click();

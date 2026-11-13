@@ -156,25 +156,39 @@ export default function ShiftsAdminPage() {
   const [expandedLoading, setExpandedLoading] = useState(false);
   const [visitsOpen, setVisitsOpen] = useState(true);
   const [expandedFrom, setExpandedFrom] = useState('');
+  const [expandedTo, setExpandedTo] = useState('');
   const [expandedError, setExpandedError] = useState('');
   const expandGeneration = useRef(0);
-  const toggleExpanded = async (shift: Shift) => {
-    if (expandedId === shift.id) { setExpandedId(null); expandGeneration.current++; return; }
+  const expandedShift = useRef<Shift | null>(null);
+  // Loads the visits of one shift for a date range (tenant-local dates, both inclusive).
+  const loadExpandedVisits = async (shift: Shift, from: string, to: string) => {
     const version = ++expandGeneration.current;
-    setExpandedId(shift.id); setExpandedVisits([]); setExpandedError(''); setExpandedLoading(true); setVisitsOpen(true);
+    setExpandedLoading(true); setExpandedError('');
     try {
-      const today = localInputValue(new Date().toISOString(), timeZoneId).slice(0, 10);
-      setExpandedFrom(today);
-      const fromUtc = tenantLocalToUtc(`${today}T00:00`, timeZoneId);
-      const nextDayUtc = tenantLocalToUtc(`${addCalendarDays(today, 32)}T00:00`, timeZoneId);
+      const fromUtc = tenantLocalToUtc(`${from}T00:00`, timeZoneId);
+      const nextDayUtc = tenantLocalToUtc(`${addCalendarDays(to, 1)}T00:00`, timeZoneId);
       const result = await adminShifts.occurrences(shift.id, fromUtc, new Date(Date.parse(nextDayUtc) - 1).toISOString());
-      if (!result) throw new Error('The visits could not be loaded. Collapse the row and expand it again to retry.');
+      if (!result) throw new Error('The visits could not be loaded. Change the dates to retry.');
       if (version === expandGeneration.current) setExpandedVisits(result);
     } catch (failure) {
       if (version === expandGeneration.current) setExpandedError(failure instanceof Error ? failure.message : 'The visits could not be loaded.');
     } finally {
       if (version === expandGeneration.current) setExpandedLoading(false);
     }
+  };
+  const toggleExpanded = async (shift: Shift) => {
+    if (expandedId === shift.id) { setExpandedId(null); expandGeneration.current++; return; }
+    const today = localInputValue(new Date().toISOString(), timeZoneId).slice(0, 10);
+    const to = addCalendarDays(today, 31);
+    setExpandedId(shift.id); setExpandedVisits([]); setVisitsOpen(true);
+    setExpandedFrom(today); setExpandedTo(to);
+    expandedShift.current = shift;
+    await loadExpandedVisits(shift, today, to);
+  };
+  const changeExpandedRange = (from: string, to: string) => {
+    setExpandedFrom(from); setExpandedTo(to);
+    const shift = expandedShift.current;
+    if (shift && from && to && from <= to) void loadExpandedVisits(shift, from, to);
   };
   const [tabCounts, setTabCounts] = useState<{ active: number; completed: number; inactive: number } | null>(null);
   const [workspaceFetched, setWorkspaceFetched] = useState<Shift | null>(null);
@@ -772,11 +786,16 @@ export default function ShiftsAdminPage() {
                           <CalendarDays size={16} aria-hidden />
                           <span>Visits</span>
                           {!expandedLoading && <Badge variant="subtle">{expandedVisits.length}</Badge>}
-                          <span style={{ fontWeight: 600, fontSize: 'var(--mantine-font-size-sm)' }}>{`Next 31 days from ${expandedFrom}`}</span>
                         </button>
                         {expandedLoading && <Text size="sm" c="dimmed">Loading visits…</Text>}
                         {expandedError && <Text size="sm" c="red" role="alert">{expandedError}</Text>}
                         {!expandedLoading && !expandedError && expandedVisits.length === 0 && <Text size="sm" c="dimmed">No visits in the next 31 days.</Text>}
+                        {visitsOpen && (
+                          <Group gap="sm" mb="xs" align="flex-end" wrap="wrap" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                            <TextInput type="date" label="From" size="xs" value={expandedFrom} onChange={(e) => changeExpandedRange(e.currentTarget.value, expandedTo)} />
+                            <TextInput type="date" label="To" size="xs" value={expandedTo} onChange={(e) => changeExpandedRange(expandedFrom, e.currentTarget.value)} />
+                          </Group>
+                        )}
                         {visitsOpen && expandedVisits.length > 0 && (
                           <Table withTableBorder>
                             <Table.Thead style={{ background: 'var(--mantine-color-gray-2)' }}><Table.Tr>
