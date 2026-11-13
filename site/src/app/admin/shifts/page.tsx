@@ -150,13 +150,12 @@ export default function ShiftsAdminPage() {
     }
     return () => { live = false; };
   }, [pageRows]);
-  // The visits shown under an expanded row: the next 31 days from today, in tenant time. Separate from the visits popup.
+  // The visits shown under an expanded row, for one calendar month in tenant time. Separate from the visits popup.
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedVisits, setExpandedVisits] = useState<ShiftOccurrence[]>([]);
   const [expandedLoading, setExpandedLoading] = useState(false);
   const [visitsOpen, setVisitsOpen] = useState(true);
-  const [expandedFrom, setExpandedFrom] = useState('');
-  const [expandedTo, setExpandedTo] = useState('');
+  const [expandedMonth, setExpandedMonth] = useState('');
   const [expandedError, setExpandedError] = useState('');
   const expandGeneration = useRef(0);
   const expandedShift = useRef<Shift | null>(null);
@@ -176,19 +175,36 @@ export default function ShiftsAdminPage() {
       if (version === expandGeneration.current) setExpandedLoading(false);
     }
   };
+  // First and last day of a month (YYYY-MM), as tenant-local dates.
+  const monthRange = (ym: string): [string, string] => {
+    const [year, month] = ym.split('-').map(Number);
+    const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return [`${ym}-01`, `${ym}-${String(days).padStart(2, '0')}`];
+  };
+  // Two months back to nine months ahead of the current tenant-local month.
+  const monthChoices = (): { value: string; label: string }[] => {
+    const [year, month] = localInputValue(new Date().toISOString(), timeZoneId).slice(0, 7).split('-').map(Number);
+    return Array.from({ length: 12 }, (_, i) => {
+      const date = new Date(Date.UTC(year, month - 1 - 2 + i, 1));
+      return { value: date.toISOString().slice(0, 7), label: date.toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' }) };
+    });
+  };
   const toggleExpanded = async (shift: Shift) => {
     if (expandedId === shift.id) { setExpandedId(null); expandGeneration.current++; return; }
-    const today = localInputValue(new Date().toISOString(), timeZoneId).slice(0, 10);
-    const to = addCalendarDays(today, 31);
+    const month = localInputValue(new Date().toISOString(), timeZoneId).slice(0, 7);
+    const [from, to] = monthRange(month);
     setExpandedId(shift.id); setExpandedVisits([]); setVisitsOpen(true);
-    setExpandedFrom(today); setExpandedTo(to);
+    setExpandedMonth(month);
     expandedShift.current = shift;
-    await loadExpandedVisits(shift, today, to);
+    await loadExpandedVisits(shift, from, to);
   };
-  const changeExpandedRange = (from: string, to: string) => {
-    setExpandedFrom(from); setExpandedTo(to);
+  const changeExpandedMonth = (month: string | null) => {
+    if (!month) return;
+    setExpandedMonth(month);
     const shift = expandedShift.current;
-    if (shift && from && to && from <= to) void loadExpandedVisits(shift, from, to);
+    if (!shift) return;
+    const [from, to] = monthRange(month);
+    void loadExpandedVisits(shift, from, to);
   };
   const [tabCounts, setTabCounts] = useState<{ active: number; completed: number; inactive: number } | null>(null);
   const [workspaceFetched, setWorkspaceFetched] = useState<Shift | null>(null);
@@ -776,6 +792,7 @@ export default function ShiftsAdminPage() {
                   {expandedId === s.id && (
                     <Table.Tr>
                       <Table.Td colSpan={5} data-testid="row-visits">
+                        <Group justify="space-between" wrap="nowrap" align="center" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
                           aria-expanded={visitsOpen}
@@ -787,15 +804,11 @@ export default function ShiftsAdminPage() {
                           <span>Visits</span>
                           {!expandedLoading && <Badge variant="subtle">{expandedVisits.length}</Badge>}
                         </button>
+                          <Select aria-label="Month" size="xs" w={220} allowDeselect={false} data={monthChoices()} value={expandedMonth} onChange={changeExpandedMonth} />
+                        </Group>
                         {expandedLoading && <Text size="sm" c="dimmed">Loading visits…</Text>}
                         {expandedError && <Text size="sm" c="red" role="alert">{expandedError}</Text>}
-                        {!expandedLoading && !expandedError && expandedVisits.length === 0 && <Text size="sm" c="dimmed">No visits in the next 31 days.</Text>}
-                        {visitsOpen && (
-                          <Group gap="sm" mb="xs" align="flex-end" wrap="wrap" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-                            <TextInput type="date" label="From" size="xs" value={expandedFrom} onChange={(e) => changeExpandedRange(e.currentTarget.value, expandedTo)} />
-                            <TextInput type="date" label="To" size="xs" value={expandedTo} onChange={(e) => changeExpandedRange(expandedFrom, e.currentTarget.value)} />
-                          </Group>
-                        )}
+                        {!expandedLoading && !expandedError && expandedVisits.length === 0 && <Text size="sm" c="dimmed">No visits in this month.</Text>}
                         {visitsOpen && expandedVisits.length > 0 && (
                           <Table withTableBorder>
                             <Table.Thead style={{ background: 'var(--mantine-color-gray-2)' }}><Table.Tr>
