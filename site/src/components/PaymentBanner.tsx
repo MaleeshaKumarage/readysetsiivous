@@ -17,7 +17,7 @@ export default function PaymentBanner() {
           <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6">
             {/* MobilePay */}
             <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-              <span className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center text-white text-xs font-bold">
+              <span className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white text-xs font-bold">
                 MP
               </span>
               <span>{t('paymentBanner.mobilepay')}</span>

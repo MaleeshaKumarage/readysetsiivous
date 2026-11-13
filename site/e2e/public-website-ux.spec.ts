@@ -206,10 +206,10 @@ test('booking header and localized footer open the management journey',async ({p
 
 test('language disclosure preserves equivalent route and returns keyboard focus',async ({page})=>{
   await page.goto('/en/privacy/');
-  await page.getByRole('button',{name:'Switch language',exact:true}).click();
+  await page.getByRole('button',{name:/^EN\b/}).click();
   await page.getByRole('button',{name:/Suomi/}).click();
   await expect(page).toHaveURL(/\/fi\/privacy\/$/);
-  await expect(page.getByRole('button',{name:'Vaihda kieltä',exact:true})).toBeFocused();
+  await expect(page.getByRole('button',{name:/^FI\b/})).toBeFocused();
   expect(await page.evaluate(()=>localStorage.getItem('lang'))).toBe('fi');
 });
 
