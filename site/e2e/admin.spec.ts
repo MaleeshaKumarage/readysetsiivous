@@ -58,6 +58,20 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
     await expect(page.getByRole('heading', { name: 'Shifts' })).toBeVisible();
   });
 
+  test('sign-out completes when removing the push device stalls', async ({ page, isMobile }) => {
+    if (isMobile) await page.setViewportSize({ width: 375, height: 1000 });
+    await page.addInitScript(() => localStorage.setItem('readyset-push-device-v1', JSON.stringify({ identity: 'readysetsiivous:mock-subject', id: 'device-1' })));
+    // The removal request never gets a response, so only the sign-out time limit can let sign-out finish.
+    await page.route(/\/api\/v1\/me\/notifications\/subscription\/device-1$/, () => new Promise<void>(() => {}));
+    await setupAdminMocks(page, { authenticated: true });
+    await page.goto('/admin/');
+
+    await expect(page.getByRole('heading', { name: 'Office portal' })).toBeVisible();
+    await page.getByRole('banner').getByRole('button', { name: 'Sign out', exact: true }).click();
+    await expect(page.getByText('Sign in with your ReadySetSiivous admin account.')).toBeVisible({ timeout: 20_000 });
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('__MOCK_LOGGED_OUT__'))).toBe('true');
+  });
+
   test('a failed sign-out says so and keeps the user signed in', async ({ page, isMobile }) => {
     if (isMobile) await page.setViewportSize({ width: 375, height: 1000 });
     // A saved push device makes sign-out try to remove it first; refusing that removal makes sign-out fail.
