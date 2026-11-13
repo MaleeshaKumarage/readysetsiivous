@@ -109,7 +109,8 @@ public interface IShiftRepository
     /// <summary>Stores the tab on every shift that does not have one yet (shifts saved before tabs were stored).</summary>
     Task EnsureTabsAsync(CancellationToken ct = default);
     Task<ShiftTabCounts> CountTabsAsync(Guid? companyId, Guid? branchId, CancellationToken ct = default);
-    Task<(IReadOnlyList<Shift> Items, int Total)> ListTabPageAsync(string tab, Guid? companyId, Guid? branchId, string? search, int skip, int take, CancellationToken ct = default);
+    Task<IReadOnlyList<ShiftAssignment>> ListActiveAssignmentsAsync(IReadOnlyCollection<Guid> shiftIds, CancellationToken ct = default);
+    Task<(IReadOnlyList<Shift> Items, int Total)> ListTabPageAsync(string tab, Guid? companyId, Guid? branchId, string? search, int skip, int take, CancellationToken ct = default, ShiftScheduleType? scheduleType = null);
     Task<ShiftOccurrenceAssignment?> GetOccurrenceAssignmentAsync(Guid id, CancellationToken ct = default);
     Task<IReadOnlyList<ShiftOccurrenceAssignment>> ListOccurrenceAssignmentsAsync(Guid shiftId, CancellationToken ct = default);
     Task<IReadOnlyList<ShiftOccurrenceAssignment>> ListOccurrenceAssignmentsByEmployeeAsync(Guid employeeId, CancellationToken ct = default);
@@ -166,7 +167,7 @@ public record DeleteShiftCommand(Guid Id) : IRequest;
 public record ListShiftsQuery(Guid? CompanyId, Guid? BranchId, bool IncludeInactive = false) : IRequest<IReadOnlyList<ShiftDto>>;
 
 /// <summary>One page of the shift list for one tab. Counts cover every tab in the same company and branch scope, ignoring search.</summary>
-public record ListShiftPageQuery(string Tab, Guid? CompanyId, Guid? BranchId, string? Search, int Skip, int Take) : IRequest<ShiftPage>;
+public record ListShiftPageQuery(string Tab, Guid? CompanyId, Guid? BranchId, string? Search, int Skip, int Take, ShiftScheduleType? ScheduleType = null) : IRequest<ShiftPage>;
 public record ShiftTabCounts(int Active, int Completed, int Inactive);
 public record ShiftPage(IReadOnlyList<ShiftDto> Items, int Total, ShiftTabCounts Counts);
 
@@ -176,6 +177,9 @@ public record ListShiftAssignmentsQuery(Guid ShiftId) : IRequest<IReadOnlyList<S
 
 /// <summary>Active assignment count per shift for the tenant, so list views avoid one request per shift.</summary>
 public record ListShiftAssignmentCountsQuery : IRequest<IReadOnlyDictionary<Guid, int>>;
+
+/// <summary>Names of the active employees on each of the given shifts, so the shift list can show who is assigned.</summary>
+public record ListShiftAssigneeNamesQuery(IReadOnlyCollection<Guid> ShiftIds) : IRequest<IReadOnlyDictionary<Guid, IReadOnlyList<string>>>;
 
 public record GetShiftOccurrencesQuery(Guid ShiftId, DateTime From, DateTime To) : IRequest<IReadOnlyList<ShiftOccurrenceDto>>;
 
@@ -385,7 +389,7 @@ public class ShiftHandlers
             await _repository.EnsureTabsAsync(ct);
             var counts = await _repository.CountTabsAsync(request.CompanyId, request.BranchId, ct);
             var search = string.IsNullOrWhiteSpace(request.Search) ? null : request.Search.Trim();
-            var (shifts, total) = await _repository.ListTabPageAsync(request.Tab, request.CompanyId, request.BranchId, search, request.Skip, request.Take, ct);
+            var (shifts, total) = await _repository.ListTabPageAsync(request.Tab, request.CompanyId, request.BranchId, search, request.Skip, request.Take, ct, request.ScheduleType);
             return new ShiftPage(shifts.Select(s => MapShift(s) with { IsCompleted = s.ChecklistCompleted }).ToList(), total, counts);
         }
     }
@@ -442,6 +446,20 @@ public class ShiftHandlers
         {
             var assignments = await _repository.ListAssignmentsByShiftAsync(request.ShiftId, ct);
             return assignments.Select(MapAssignment).ToList();
+        }
+    }
+
+    public sealed class ListShiftAssigneeNamesQueryHandler(IShiftRepository shifts, IEmployeeRepository employees)
+        : IRequestHandler<ListShiftAssigneeNamesQuery, IReadOnlyDictionary<Guid, IReadOnlyList<string>>>
+    {
+        public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<string>>> Handle(ListShiftAssigneeNamesQuery request, CancellationToken ct)
+        {
+            var assignments = await shifts.ListActiveAssignmentsAsync(request.ShiftIds, ct);
+            var names = (await employees.ListAsync(includeInactive: true, ct)).ToDictionary(e => e.Id, e => $"{e.FirstName} {e.LastName}".Trim());
+            return assignments
+                .Where(a => names.ContainsKey(a.EmployeeId))
+                .GroupBy(a => a.ShiftId)
+                .ToDictionary(g => g.Key, g => (IReadOnlyList<string>)g.Select(a => names[a.EmployeeId]).OrderBy(n => n).ToList());
         }
     }
 

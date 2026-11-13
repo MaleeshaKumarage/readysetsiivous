@@ -62,7 +62,13 @@ html[data-admin-theme='light'] .mantine-Modal-inner {
   padding-left: max(16px, env(safe-area-inset-left, 0px));
 }
 html[data-admin-theme='light'] :is(input, textarea, select) { scroll-margin-block: 24px; }
-.shift-workspace section { padding: 16px; border: 1px solid #e3e7ef; border-radius: 12px; background: #f6f7fb; }
+/* Manage shift: office palette (navy ink, gold accent), 44px touch targets, visible focus. */
+.shift-workspace section { padding: 16px; border: 1px solid #e4e8f2; border-radius: 12px; background: #ffffff; box-shadow: 0 1px 2px #0a174108; }
+.shift-workspace section:hover { border-color: #c9a340; }
+.shift-workspace .shift-section-icon { color: #9c7c26; margin-right: 8px; vertical-align: -2px; }
+.shift-workspace .shift-next-step { background: #fbf7ec; border: 1px solid #e4e8f2; border-left: 4px solid #c9a340; color: #0a1741; }
+.shift-workspace .mantine-Button-root { min-height: 44px; }
+.shift-workspace .mantine-Button-root:focus-visible { outline: 3px solid #8a6d1f; outline-offset: 2px; }
 .work-queue-filters { padding: 16px; border: 1px solid #e3e7ef; border-radius: 14px; background: white; }
 .work-queue-filters > * { min-width: 0; max-width: 100%; }
 .admin-content [aria-label='Pending quote requests'] { border-radius: 14px; }

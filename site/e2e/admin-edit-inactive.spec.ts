@@ -66,7 +66,7 @@ test('inactive shift and employee edits keep their existing activity state', asy
 
   await page.goto('/admin/shifts/');
   await page.getByRole('tab', { name: /^Inactive/ }).click();
-  await shiftAction(page, 'Old shift', 'Edit');
+  await shiftAction(page, 'Old shift', 'Edit schedule');
   const shiftDialog = page.getByRole('dialog', { name: 'Edit shift' });
   await shiftDialog.getByLabel('Name').fill('Updated shift');
   await shiftDialog.getByRole('button', { name: 'Save changes' }).click();

@@ -1,6 +1,6 @@
 import { selectDailyScheduleIfEmpty } from './admin-helpers';
 import { test, expect } from '@playwright/test';
-import { shiftAction } from './shift-actions';
+import { shiftAction, confirmShiftPopup } from './shift-actions';
 import { setupAdminMocks, shiftsResponse } from './admin-helpers';
 import { autoShiftName } from '../src/lib/shiftName';
 const AAMUVUORO_NAME = autoShiftName({ street: null, city: null, roomCount: null, bedCount: null });
@@ -90,6 +90,8 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
   test('sign out button returns user to unauthenticated login view', async ({ page, isMobile }) => {
     if (isMobile) await page.setViewportSize({ width: 375, height: 1000 });
     await setupAdminMocks(page, { authenticated: true });
+    // The office dashboard also loads its daily charts; answer them locally so no request leaves the test.
+    await page.route(/\/api\/v1\/admin\/dashboard\/daily/, route => route.fulfill({ status: 200, headers: CORS_HEADERS, json: { month: '2026-11', days: [] } }));
     await page.goto('/admin/');
 
     await expect(page.getByRole('heading', { name: 'Office portal' })).toBeVisible();
@@ -106,10 +108,10 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
     const box = await signOut.boundingBox();
     trace.push('button box: ' + JSON.stringify(box));
     await signOut.click();
-    trace.push('clicks: ' + JSON.stringify(await page.evaluate(() => (window as unknown as { __CLICKS__: string[] }).__CLICKS__)));
     // Sign-out ends with a redirect that can take longer than the default 5 s on a loaded runner.
     await expect(page.getByText('Sign in with your ReadySetSiivous admin account.')).toBeVisible({ timeout: 15_000 }).catch(async failure => {
       // Diagnostic for a CI-only sign-out failure: record what the page shows and which mock flags are set.
+      trace.push('clicks: ' + JSON.stringify(await page.evaluate(() => (window as unknown as { __CLICKS__?: string[] }).__CLICKS__ ?? null).catch(() => 'unreadable during navigation')));
       const state = await page.evaluate(() => ({
         url: location.href,
         loggedOutFlag: sessionStorage.getItem('__MOCK_LOGGED_OUT__'),
@@ -121,6 +123,8 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
       throw failure;
     });
     console.log('SIGNOUT_TRACE_OK ' + JSON.stringify(trace));
+    // Sign-out reloads the page. Wait for that reload to finish before reading the page's state.
+    await page.waitForLoadState('load');
     await expect.poll(() => page.evaluate(() => sessionStorage.getItem('__MOCK_LOGGED_OUT__')), { timeout: 15_000 }).toBe('true');
     await expect.poll(() => page.evaluate(() => (window as unknown as { __MOCK_AUTHED__: boolean }).__MOCK_AUTHED__), { timeout: 15_000 }).toBe(false);
     await expect(page.getByText('Sign in with your ReadySetSiivous admin account.')).toBeVisible({ timeout: 15_000 });
@@ -804,7 +808,7 @@ test.describe('Admin Panel - Shifts Page', () => {
     await expect(page.getByRole('cell', { name: AAMUVUORO_NAME, exact: true })).toBeVisible();
 
     // Assign employee
-    await shiftAction(page, AAMUVUORO_NAME, 'Employees');
+    await shiftAction(page, AAMUVUORO_NAME, 'Assign employees');
     await expect(page.getByText('No employees assigned.')).toBeVisible();
 
     await page.locator('input[placeholder="Select employees"]').click();
@@ -817,8 +821,10 @@ test.describe('Admin Panel - Shifts Page', () => {
     await page.getByRole('button', { name: 'Unassign' }).first().click({ force: true });
     await expect(page.getByText('No employees assigned.')).toBeVisible();
 
+    // Close the assignment popup before using the row menu.
+    await page.keyboard.press('Escape');
     // Deactivate shift
-    await shiftAction(page, AAMUVUORO_NAME, 'Deactivate');
+    await shiftAction(page, AAMUVUORO_NAME, 'Deactivate'); await confirmShiftPopup(page, 'Deactivate');
     await expect(page.getByRole('button', { name: `More actions for ${AAMUVUORO_NAME}`, exact: true })).not.toBeVisible();
   });
 

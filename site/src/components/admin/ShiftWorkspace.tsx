@@ -1,6 +1,8 @@
 'use client';
 
-import { Button, Group, Modal, Stack, Text, Title } from '@mantine/core';
+import { Group, Modal, Paper, Stack, Text, Title } from '@mantine/core';
+import { CalendarClock, ListChecks, Receipt, Users } from 'lucide-react';
+import { Badge } from '@/ds';
 import type { Shift } from '@/lib/adminApi';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -41,73 +43,55 @@ export type ShiftWorkspaceProps = {
   shift: Shift;
   employeeCount: number | undefined;
   templateName: string | null;
-  busy: boolean;
-  isAdmin: boolean;
   onClose: () => void;
-  onEdit: () => void;
-  onPricing: () => void;
-  onAssign: () => void;
-  onOccurrences: () => void;
-  onScheduleOneTime: () => void;
-  /** Opens Add visit for a property's main visit shift. */
-  onAddVisit?: () => void;
-  onTemplate: () => void;
-  onDeactivate: () => void;
-  onReactivate: () => void;
-  onDelete: () => void;
 };
 
-/** Per-shift workspace: each section opens the existing editor, dialog or panel for that task. */
-export function ShiftWorkspace({ shift, employeeCount, templateName, busy, isAdmin, onClose, onEdit, onPricing, onAssign, onOccurrences, onScheduleOneTime, onAddVisit, onTemplate, onDeactivate, onReactivate, onDelete }: ShiftWorkspaceProps) {
+/**
+ * Per-shift overview: status, the next step and each section's details. Every action lives in the
+ * "More actions" menu on the shift row, so the modal never repeats a button from that menu.
+ */
+export function ShiftWorkspace({ shift, employeeCount, templateName, onClose }: ShiftWorkspaceProps) {
   const isMain = Boolean(shift.isBranchMain);
   const isOnCall = shift.schedule.type === 4 && !isMain;
+  const status = !shift.isActive ? { label: 'Inactive', variant: 'subtle' as const } : shift.isCompleted ? { label: 'Completed', variant: 'navy' as const } : { label: 'Active', variant: 'green' as const };
   return (
     <Modal opened onClose={onClose} title={`Manage — ${shift.name}`} size="lg" radius="md" className="shift-workspace">
       <Stack gap="md">
-        <Text size="sm" fw={500} role="status">Next step: {nextStep(shift, employeeCount)}</Text>
+        <Group gap="xs" wrap="wrap" aria-label="Shift status">
+          <Badge variant={status.variant} size="md">{status.label}</Badge>
+        </Group>
+        <Paper className="shift-next-step" p="sm" radius="md" role="status">
+          <Text size="sm"><strong>Next step:</strong> {nextStep(shift, employeeCount)}</Text>
+        </Paper>
+        <Text size="xs" c="dimmed">To change this shift, use the More actions menu on its row.</Text>
 
         <Stack gap={4} component="section" aria-labelledby={`ws-schedule-${shift.id}`}>
-          <Title order={5} id={`ws-schedule-${shift.id}`}>Schedule</Title>
+          <Title order={5} id={`ws-schedule-${shift.id}`}><CalendarClock size={16} aria-hidden="true" className="shift-section-icon" />Schedule</Title>
           <Text size="sm">{scheduleLabel(shift)}</Text>
-          {isAdmin && <Group><Button size="xs" variant="light" onClick={onEdit}>Edit schedule</Button></Group>}
         </Stack>
 
         <Stack gap={4} component="section" aria-labelledby={`ws-assignees-${shift.id}`}>
-          <Title order={5} id={`ws-assignees-${shift.id}`}>Assignees</Title>
-          {isMain ? <Text size="sm">Each visit has its own cleaner. Set the default cleaner for new visits under Occurrences.</Text> : <>
-          <Text size="sm">{employeeCount === undefined ? 'Loading assignments…' : `${employeeCount} assigned`}</Text>
-          {shift.isActive && <Group><Button size="xs" variant="light" disabled={busy} onClick={onAssign}>Assign employees</Button></Group>}
-          </>}
+          <Title order={5} id={`ws-assignees-${shift.id}`}><Users size={16} aria-hidden="true" className="shift-section-icon" />Assignees</Title>
+          {isMain ? <Text size="sm">Each visit has its own cleaner. Set the default cleaner for new visits under Occurrences.</Text>
+            : <Text size="sm">{employeeCount === undefined ? 'Loading assignments…' : `${employeeCount} assigned`}</Text>}
         </Stack>
 
         <Stack gap={4} component="section" aria-labelledby={`ws-visits-${shift.id}`}>
-          <Title order={5} id={`ws-visits-${shift.id}`}>Visits</Title>
+          <Title order={5} id={`ws-visits-${shift.id}`}><ListChecks size={16} aria-hidden="true" className="shift-section-icon" />Visits</Title>
           {isOnCall && <Text size="sm">On-call shifts have no automatic visits. Schedule each one with a date, time and cleaner.</Text>}
           {isMain && <Text size="sm">Every booking and every added visit for this property is a numbered visit on this shift.</Text>}
-          {shift.isActive && <Group gap="xs">
-            <Button size="xs" variant="light" onClick={onOccurrences}>Occurrences</Button>
-            {isMain && onAddVisit && <Button size="xs" variant="light" onClick={onAddVisit}>Add visit</Button>}
-            {isOnCall && <Button size="xs" variant="light" onClick={onScheduleOneTime}>Schedule one-time visit</Button>}
-          </Group>}
+          {!isMain && !isOnCall && <Text size="sm">Visits follow the schedule above.</Text>}
         </Stack>
 
         <Stack gap={4} component="section" aria-labelledby={`ws-checklist-${shift.id}`}>
-          <Title order={5} id={`ws-checklist-${shift.id}`}>Checklist</Title>
+          <Title order={5} id={`ws-checklist-${shift.id}`}><ListChecks size={16} aria-hidden="true" className="shift-section-icon" />Checklist</Title>
           <Text size="sm">{templateName ?? 'No checklist template'}</Text>
-          {isAdmin && shift.isActive && <Group><Button size="xs" variant="light" onClick={onTemplate}>Checklist template</Button></Group>}
         </Stack>
 
         <Stack gap={4} component="section" aria-labelledby={`ws-pricing-${shift.id}`}>
-          <Title order={5} id={`ws-pricing-${shift.id}`}>Pricing</Title>
-          {isMain ? <Text size="sm">Each visit uses the property price in force on its date. A partner booking keeps the price it was booked at.</Text>
-            : isAdmin && <Group><Button size="xs" variant="light" onClick={onPricing}>Pricing</Button></Group>}
+          <Title order={5} id={`ws-pricing-${shift.id}`}><Receipt size={16} aria-hidden="true" className="shift-section-icon" />Pricing</Title>
+          <Text size="sm">{isMain ? 'Each visit uses the property price in force on its date. A partner booking keeps the price it was booked at.' : 'Pricing is set from the More actions menu.'}</Text>
         </Stack>
-
-        <Group gap="xs" justify="flex-end">
-          {shift.isActive && <Button size="xs" variant="subtle" color="red" disabled={busy} onClick={onDeactivate}>Deactivate</Button>}
-          {!shift.isActive && <Button size="xs" disabled={busy} onClick={onReactivate}>Reactivate</Button>}
-          {!shift.isActive && <Button size="xs" color="red" variant="subtle" disabled={busy} onClick={onDelete}>Delete</Button>}
-        </Group>
       </Stack>
     </Modal>
   );

@@ -136,6 +136,13 @@ public class ShiftRepository : IShiftRepository
             .ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyList<ShiftAssignment>> ListActiveAssignmentsAsync(IReadOnlyCollection<Guid> shiftIds, CancellationToken ct = default)
+    {
+        var ids = shiftIds.Distinct().ToArray();
+        if (ids.Length == 0) return [];
+        return await Session.Query<ShiftAssignment>().Where(x => ids.Contains(x.ShiftId) && x.IsActive).ToListAsync(ct);
+    }
+
     public async Task<IReadOnlyDictionary<Guid, int>> CountActiveAssignmentsByShiftAsync(CancellationToken ct = default)
     {
         // The session is tenant-scoped (all documents are multi-tenanted), so this never sees another tenant's rows.
@@ -232,9 +239,10 @@ public class ShiftRepository : IShiftRepository
             await scope.CountAsync(x => x.Tab == ShiftTabs.Inactive, ct));
     }
 
-    public async Task<(IReadOnlyList<Shift> Items, int Total)> ListTabPageAsync(string tab, Guid? companyId, Guid? branchId, string? search, int skip, int take, CancellationToken ct = default)
+    public async Task<(IReadOnlyList<Shift> Items, int Total)> ListTabPageAsync(string tab, Guid? companyId, Guid? branchId, string? search, int skip, int take, CancellationToken ct = default, ShiftScheduleType? scheduleType = null)
     {
         var query = ShiftScope(companyId, branchId).Where(x => x.Tab == tab);
+        if (scheduleType is not null) query = query.Where(x => x.Schedule.Type == scheduleType.Value);
         if (search is not null)
         {
             var term = search.ToLowerInvariant();

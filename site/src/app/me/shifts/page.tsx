@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import {
+import { LogOut,
   Calendar,
   Clock,
   Play,
@@ -12,7 +12,6 @@ import {
   ChevronDown,
   ChevronUp,
   Upload,
-  LayoutGrid,
   UserRound,
 } from 'lucide-react';
 import { initAuth, isAuthenticated, authTenant, login, logout, isAdmin, isManager } from '@/lib/auth';
@@ -469,8 +468,7 @@ export default function MyShiftsPage() {
             {officeTarget && <PortalSwitch current="employee" officeHref={officeTarget.href} officeLabel={officeTarget.label} tenant={authTenant()} />}
             <NotificationBell settingsHref={`/account/profile/?tenant=${encodeURIComponent(authTenant())}#notifications`} />
             <Link href={`/account/profile/?tenant=${encodeURIComponent(authTenant())}`} className="notify-bell" aria-label="Profile" title="Profile"><UserRound size={22} aria-hidden="true" /></Link>
-            <Link className="inline-flex items-center gap-1 text-sm underline text-gray-900 dark:text-gray-100" href={`/account/?tenant=${encodeURIComponent(authTenant())}`}><LayoutGrid size={16} aria-hidden="true" />Portals</Link>
-            <Button variant="ghost" size="sm" onClick={() => logout()}>Sign out</Button>
+            <button type="button" className="notify-bell" aria-label="Sign out" title="Sign out" onClick={() => logout()}><LogOut size={22} aria-hidden="true" /></button>
           </nav>
         </div>
 

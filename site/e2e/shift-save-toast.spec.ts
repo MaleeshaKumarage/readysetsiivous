@@ -68,7 +68,7 @@ test('a refused shift update says it was not updated, keeps the edited values an
   });
   await page.goto('/admin/shifts/');
   await page.getByRole('button', { name: 'More actions for Morning clean' }).click();
-  await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Edit schedule', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Edit shift', exact: true });
   // Edit a real field before saving, so the refused save carries a change.
   await dialog.getByRole('textbox', { name: 'Start date', exact: true }).fill('2026-12-01');

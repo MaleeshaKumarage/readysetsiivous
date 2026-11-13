@@ -18,7 +18,7 @@ export function LineChart({ labels, series, label, labelEvery = 1 }: { labels: s
   const ticks = [0, max / 2, max];
 
   return <div>
-    <svg role="img" aria-label={label} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" style={{ display: 'block', maxWidth: WIDTH }}>
+    <svg role="img" aria-label={label} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" style={{ display: 'block', width: '100%', height: 'auto' }}>
       {ticks.map(tick => <g key={tick}>
         <line x1={PAD.left} x2={WIDTH - PAD.right} y1={y(tick)} y2={y(tick)} stroke="#e5e7eb" />
         <text x={PAD.left - 6} y={y(tick) + 4} fontSize="11" textAnchor="end" fill="#6b7280">{Number.isInteger(tick) ? tick : tick.toFixed(1)}</text>

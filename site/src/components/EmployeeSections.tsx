@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { ChevronDown, Menu } from 'lucide-react';
+import { ChevronDown, LogOut, Menu } from 'lucide-react';
 import { authTenant, logout } from '@/lib/auth';
 import { Button } from '@/ds/Button';
 import { Card } from '@/ds/Card';
@@ -136,7 +136,7 @@ export function SettingsSection({ autoAcceptWork }: { autoAcceptWork: boolean | 
         <h2 className="font-semibold text-gray-900 dark:text-gray-100">Account</h2>
         <div className="flex flex-wrap gap-3">
           <Link className="rounded-lg border border-gray-900 px-4 py-2 text-sm text-gray-900 dark:border-gray-100 dark:text-gray-100" href={account}>My account</Link>
-          <Button variant="ghost" size="sm" onClick={() => logout()}>Sign out</Button>
+          <button type="button" className="notify-bell" aria-label="Sign out" title="Sign out" onClick={() => logout()}><LogOut size={22} aria-hidden="true" /></button>
         </div>
       </Card>
     </div>

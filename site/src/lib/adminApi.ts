@@ -690,6 +690,14 @@ async function shiftAssignmentRequest<T>(path: string, method = 'GET', body?: un
 }
 
 // One request for every shift's active assignment count, so the shift list never fans out per shift.
+// Active assignee names for the shifts on one page, so the Employees column can name them.
+async function shiftAssigneeNames(shiftIds: string[]): Promise<Record<string, string[]>> {
+  if (shiftIds.length === 0) return {};
+  const response = await authorizedFetch(`/api/v1/admin/shifts/assignee-names?shiftIds=${encodeURIComponent(shiftIds.join(','))}`, { cache: 'no-store' });
+  if (!response.ok) throw new Error('Could not load assignees. Refresh the page to retry.');
+  return (await response.json()) as Record<string, string[]>;
+}
+
 async function shiftAssignmentCounts(): Promise<Record<string, number>> {
   let response: Response;
   try { response = await authorizedFetch('/api/v1/admin/shifts/assignment-counts', { cache: 'no-store' }); }
@@ -705,8 +713,12 @@ export type ShiftTab = 'active' | 'completed' | 'inactive';
 export interface ShiftPageResult { items: Shift[]; total: number; counts: { active: number; completed: number; inactive: number } }
 export const adminShifts = {
   // One page of one tab, with counts for every tab. Never cached, so a save is visible in the counts at once.
-  page: (params: { tab: ShiftTab; skip: number; take: number }) =>
-    adminGet<ShiftPageResult>(`/api/v1/admin/shifts/page?${new URLSearchParams({ tab: params.tab, skip: String(params.skip), take: String(params.take) }).toString()}`, false),
+  page: (params: { tab: ShiftTab; skip: number; take: number; companyId?: string | null; scheduleType?: string | null }) => {
+    const query = new URLSearchParams({ tab: params.tab, skip: String(params.skip), take: String(params.take) });
+    if (params.companyId) query.set('companyId', params.companyId);
+    if (params.scheduleType) query.set('scheduleType', params.scheduleType);
+    return adminGet<ShiftPageResult>(`/api/v1/admin/shifts/page?${query.toString()}`, false);
+  },
   list: (companyId?: string, branchId?: string, includeInactive = false) => {
     const query = new URLSearchParams();
     if (companyId) query.set('companyId', companyId);
@@ -726,6 +738,7 @@ export const adminShifts = {
   reactivate: (id: string) => adminSendJson<Shift>(`/api/v1/admin/shifts/${id}/reactivate`, 'POST'),
   deleteInactive: (id: string) => adminDelete(`/api/v1/admin/shifts/${id}`),
   assignmentCounts: shiftAssignmentCounts,
+  assigneeNames: shiftAssigneeNames,
   employeeSchedule: (fromDate: string, toDate: string) =>
     adminGet<EmployeeDaySchedule[]>(`/api/v1/admin/shifts/employee-schedule?from=${fromDate}T00:00:00Z&to=${toDate}T00:00:00Z`, false),
   overlapAudit: (fromDate: string, toDate: string) =>
