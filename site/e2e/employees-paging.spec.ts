@@ -22,7 +22,7 @@ async function setup(page: Page) {
 test('the active list shows 25 employees a page with Previous and Next controls', async ({ page }) => {
   await setup(page);
   const nav = page.getByRole('navigation', { name: 'Employee pages' });
-  await expect(page.getByRole('cell', { name: 'Active00', exact: false }).first()).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Active00', exact: false }).first()).toBeVisible();
   await expect(page.getByText('Active24', { exact: false }).first()).toBeVisible();
   await expect(page.getByText('Active25', { exact: false })).toHaveCount(0);
   await expect(nav.getByRole('button', { name: 'Previous page' })).toBeDisabled();

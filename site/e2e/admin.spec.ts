@@ -203,10 +203,10 @@ test.describe('Admin Panel - Services Page', () => {
 
     // Verify modal closes and service appears in table
     await expect(page.getByRole('dialog', { name: 'Add service' })).not.toBeVisible();
-    await expect(page.getByRole('cell', { name: 'Syväsiivous' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: '120.00 €' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: '180 min' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'Active', exact: true })).toBeVisible();
+    await expect(page.getByRole('gridcell', { name: 'Syväsiivous' })).toBeVisible();
+    await expect(page.getByRole('gridcell', { name: '120.00 €' })).toBeVisible();
+    await expect(page.getByRole('gridcell', { name: '180 min' })).toBeVisible();
+    await expect(page.getByRole('gridcell', { name: 'Active', exact: true })).toBeVisible();
   });
 
   test('worst path: form validation errors and creation failure', async ({ page }) => {
@@ -492,15 +492,15 @@ test.describe('Admin Panel - Employees Page', () => {
     await page.getByRole('button', { name: 'Create employee' }).click();
 
     await expect(page.getByRole('dialog', { name: 'Add employee' })).not.toBeVisible();
-    await expect(page.getByRole('cell', { name: 'Lauri Siivooja' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'lauri@siivous.fi' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'Active', exact: true })).toBeVisible();
+    await expect(page.getByRole('gridcell', { name: 'Lauri Siivooja' })).toBeVisible();
+    await expect(page.getByRole('gridcell', { name: 'lauri@siivous.fi' })).toBeVisible();
+    await expect(page.getByRole('gridcell', { name: 'Active', exact: true })).toBeVisible();
 
     // Deactivate employee
     const deactivateBtn = page.getByRole('button', { name: 'Deactivate' });
     await deactivateBtn.click({ force: true });
     await page.getByRole('tab', { name: /^Inactive/ }).click();
-    await expect(page.getByRole('cell', { name: 'Inactive', exact: true })).toBeVisible();
+    await expect(page.getByRole('gridcell', { name: 'Inactive', exact: true })).toBeVisible();
   });
 
   test('invite, resend, and registration status', async ({ page }) => {
