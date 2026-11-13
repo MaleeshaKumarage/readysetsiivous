@@ -214,16 +214,29 @@ for (const [section, record, actionName] of [
 ]) test(`populated ${section} table keeps actions reachable at 375px`, async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 1000 }); await setupPopulatedWorkspace(page);
   await page.goto(`/admin/${section}/`);
-  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: record, exact: true }) });
+  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: record, exact: true }).or(page.getByRole('gridcell', { name: record, exact: true })) });
   await expect(row).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  const viewport = page.locator('.mantine-ScrollArea-viewport').filter({ has: row });
-  expect(await viewport.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
-  await viewport.evaluate(element => { element.scrollLeft = element.scrollWidth; });
+  // The nearest scrollable ancestor of the row is the table's horizontal scroller (Mantine or AG Grid).
+  const scrollable = await row.evaluate(el => {
+    let p: HTMLElement | null = el.parentElement;
+    while (p) { const o = getComputedStyle(p).overflowX; if ((o === 'auto' || o === 'scroll' || o === 'hidden') && p.scrollWidth > p.clientWidth) return true; p = p.parentElement; }
+    return false;
+  });
+  expect(scrollable).toBe(true);
+  await row.evaluate(el => {
+    let p: HTMLElement | null = el.parentElement;
+    while (p) { const o = getComputedStyle(p).overflowX; if ((o === 'auto' || o === 'scroll' || o === 'hidden') && p.scrollWidth > p.clientWidth) { p.scrollLeft = p.scrollWidth; return; } p = p.parentElement; }
+  });
   const action = row.getByRole('button', { name: actionName, exact: true });
   await action.scrollIntoViewIfNeeded(); await expect(action).toBeInViewport();
   await action.click({ trial: true });
-  expect(await viewport.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+  const moved = await row.evaluate(el => {
+    let p: HTMLElement | null = el.parentElement;
+    while (p) { const o = getComputedStyle(p).overflowX; if ((o === 'auto' || o === 'scroll' || o === 'hidden') && p.scrollWidth > p.clientWidth) return p.scrollLeft; p = p.parentElement; }
+    return 0;
+  });
+  expect(moved).toBeGreaterThan(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
