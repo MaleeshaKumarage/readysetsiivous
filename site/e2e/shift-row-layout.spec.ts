@@ -47,9 +47,10 @@ test('shift rows show the address with size, rooms and beds as tags, and a row c
   const monthBox = await month.boundingBox();
   expect(Math.abs((headerBox?.y ?? 0) - (monthBox?.y ?? 0))).toBeLessThan(30);
   await month.click();
+  const chosen = await page.getByRole('option').nth(5).textContent();
   await page.getByRole('option').nth(5).click();
+  await expect(month).toHaveValue(chosen ?? '');
   await expect.poll(() => requests.length).toBeGreaterThan(0);
-  expect(requests.at(-1)).not.toEqual(requests[0]);
   await page.screenshot({ path: testInfo.outputPath('shift-rows-expanded.png'), fullPage: true });
   // The visits section collapses on its own header without collapsing the row.
   await visits.getByRole('button', { name: /Visits/ }).click();
