@@ -37,7 +37,9 @@ async function createShift(page: Page, property: Record<string, unknown>) {
 test('Add shift has no Name field and names the shift from the property in the decided format', async ({ page }) => {
   const name = await createShift(page, fullProperty);
   expect(name).toBe('Cleaning - Kauppakatu 1, 55100 Imatra |34m2|2H|3V');
-  await expect(page.getByRole('cell', { name: 'Cleaning - Kauppakatu 1, 55100 Imatra |34m2|2H|3V', exact: true })).toBeVisible();
+  // The row shows the property address on its first line; the shift name is still on the row for screen readers.
+  await expect(page.getByRole('row').filter({ hasText: name })).toBeVisible();
+  await expect(page.getByText('Kauppakatu 1, 55100 Imatra', { exact: true })).toBeVisible();
 });
 
 test('a property without size is refused, and the dialog says why', async ({ page }) => {

@@ -759,7 +759,7 @@ export default function ShiftsAdminPage() {
                           <Stack gap={4}>
                             <Text fw={500} size="sm">{address || s.name}</Text>
                             {chips.length > 0 && <Group gap={6}>{chips.map(c => <Badge key={c} variant="outline">{c}</Badge>)}</Group>}
-                            <span className="sr-only">{s.name}</span>
+                            {address && <span className="sr-only">{s.name}</span>}
                           </Stack>
                         );
                       })()}
