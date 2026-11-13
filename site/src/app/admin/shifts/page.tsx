@@ -5,7 +5,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import {
   Title, Button, Table, Modal, TextInput, Select, MultiSelect, Group, Stack, Text, Loader, ActionIcon, NumberInput, Menu,
 } from '@mantine/core';
-import { Plus, Trash2, Pencil, MoreHorizontal, Eye, UserPlus, CalendarDays, CalendarPlus, ListChecks, Receipt, PauseCircle, PlayCircle } from 'lucide-react';
+import { Plus, Trash2, Pencil, MoreHorizontal, Eye, UserPlus, CalendarDays, CalendarPlus, ListChecks, Receipt, PauseCircle, PlayCircle, ChevronDown, ChevronRight, Sparkles, UserRound, CircleCheck, Clock } from 'lucide-react';
 import {
   adminShifts, adminBranchVisits, adminCompanies, adminEmployees, adminTenant,
   type Shift, type Branch, type Employee, type ShiftAssignment, type ShiftOccurrence,
@@ -24,6 +24,7 @@ import { ShiftWorkspace, scheduleLabel } from '@/components/admin/ShiftWorkspace
 import { autoShiftName } from '@/lib/shiftName';
 import { employeeLabel } from '@/lib/employeeLabel';
 import { DEEP_SURCHARGE_EUR } from '@/lib/cleaningPricing';
+import { Badge } from '@/ds';
 
 // The price version in force today (or the earliest when all start later): the default billing price for a new shift.
 const defaultPriceVersion = (versions?: { effectiveFrom: string }[] | null) => {
@@ -137,6 +138,75 @@ export default function ShiftsAdminPage() {
   const [filterType, setFilterType] = useState<string | null>(null);
   const [companyChoices, setCompanyChoices] = useState<{ value: string; label: string }[]>([]);
   const [pageTotal, setPageTotal] = useState(0);
+  // Property details for the rows on this page, keyed by branch id. A failed load leaves the row on its shift name.
+  const [propertyById, setPropertyById] = useState<Record<string, Branch>>({});
+  useEffect(() => {
+    let live = true;
+    for (const companyId of new Set(pageRows.map(s => s.companyId))) {
+      adminCompanies.get(companyId).then((d) => {
+        if (!live || !Array.isArray(d?.branches)) return;
+        const branches = d.branches;
+        setPropertyById(prev => ({ ...prev, ...Object.fromEntries(branches.map(b => [b.id, b])) }));
+      }).catch(() => { /* the row keeps its shift name */ });
+    }
+    return () => { live = false; };
+  }, [pageRows]);
+  // The visits shown under an expanded row, for one calendar month in tenant time. Separate from the visits popup.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedVisits, setExpandedVisits] = useState<ShiftOccurrence[]>([]);
+  const [expandedLoading, setExpandedLoading] = useState(false);
+  const [visitsOpen, setVisitsOpen] = useState(true);
+  const [expandedMonth, setExpandedMonth] = useState('');
+  const [expandedError, setExpandedError] = useState('');
+  const expandGeneration = useRef(0);
+  const expandedShift = useRef<Shift | null>(null);
+  // Loads the visits of one shift for a date range (tenant-local dates, both inclusive).
+  const loadExpandedVisits = async (shift: Shift, from: string, to: string) => {
+    const version = ++expandGeneration.current;
+    setExpandedLoading(true); setExpandedError('');
+    try {
+      const fromUtc = tenantLocalToUtc(`${from}T00:00`, timeZoneId);
+      const nextDayUtc = tenantLocalToUtc(`${addCalendarDays(to, 1)}T00:00`, timeZoneId);
+      const result = await adminShifts.occurrences(shift.id, fromUtc, new Date(Date.parse(nextDayUtc) - 1).toISOString());
+      if (!result) throw new Error('The visits could not be loaded. Change the dates to retry.');
+      if (version === expandGeneration.current) setExpandedVisits(result);
+    } catch (failure) {
+      if (version === expandGeneration.current) setExpandedError(failure instanceof Error ? failure.message : 'The visits could not be loaded.');
+    } finally {
+      if (version === expandGeneration.current) setExpandedLoading(false);
+    }
+  };
+  // First and last day of a month (YYYY-MM), as tenant-local dates.
+  const monthRange = (ym: string): [string, string] => {
+    const [year, month] = ym.split('-').map(Number);
+    const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return [`${ym}-01`, `${ym}-${String(days).padStart(2, '0')}`];
+  };
+  // Two months back to nine months ahead of the current tenant-local month.
+  const monthChoices = (): { value: string; label: string }[] => {
+    const [year, month] = localInputValue(new Date().toISOString(), timeZoneId).slice(0, 7).split('-').map(Number);
+    return Array.from({ length: 12 }, (_, i) => {
+      const date = new Date(Date.UTC(year, month - 1 - 2 + i, 1));
+      return { value: date.toISOString().slice(0, 7), label: date.toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' }) };
+    });
+  };
+  const toggleExpanded = async (shift: Shift) => {
+    if (expandedId === shift.id) { setExpandedId(null); expandGeneration.current++; return; }
+    const month = localInputValue(new Date().toISOString(), timeZoneId).slice(0, 7);
+    const [from, to] = monthRange(month);
+    setExpandedId(shift.id); setExpandedVisits([]); setVisitsOpen(true);
+    setExpandedMonth(month);
+    expandedShift.current = shift;
+    await loadExpandedVisits(shift, from, to);
+  };
+  const changeExpandedMonth = (month: string | null) => {
+    if (!month) return;
+    setExpandedMonth(month);
+    const shift = expandedShift.current;
+    if (!shift) return;
+    const [from, to] = monthRange(month);
+    void loadExpandedVisits(shift, from, to);
+  };
   const [tabCounts, setTabCounts] = useState<{ active: number; completed: number; inactive: number } | null>(null);
   const [workspaceFetched, setWorkspaceFetched] = useState<Shift | null>(null);
   const [loading, setLoading] = useState(true);
@@ -663,18 +733,41 @@ export default function ShiftsAdminPage() {
         <Text size="xs" c="dimmed" hiddenFrom="sm" mb={6}>Scroll sideways to see all columns.</Text>
         <Table.ScrollContainer minWidth={600} tabIndex={0} role="region" aria-label="Shifts table">
           <Table striped highlightOnHover withTableBorder>
-            <Table.Thead>
-              <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Schedule</Table.Th><Table.Th>Employee names</Table.Th><Table.Th>Status</Table.Th><Table.Th w={200}>Actions</Table.Th></Table.Tr>
+            <Table.Thead style={{ background: 'var(--mantine-color-gray-2)' }}>
+              <Table.Tr><Table.Th fw={700}>Name</Table.Th><Table.Th fw={700}>Schedule</Table.Th><Table.Th fw={700}>Employee names</Table.Th><Table.Th fw={700}>Status</Table.Th><Table.Th w={200} fw={700}>Actions</Table.Th></Table.Tr>
             </Table.Thead>
             <Table.Tbody>
               {pageRows.map((s) => (
                 <Fragment key={s.id}>
-                  <Table.Tr>
-                    <Table.Td fw={500}>{s.name}</Table.Td>
+                  <Table.Tr
+                    tabIndex={0}
+                    aria-expanded={expandedId === s.id}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => void toggleExpanded(s)}
+                    onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); void toggleExpanded(s); } }}
+                  >
+                    <Table.Td>
+                      {(() => {
+                        const branch = propertyById[s.branchId];
+                        const address = branch ? [branch.street?.trim(), [branch.postalCode?.trim(), branch.city?.trim()].filter(Boolean).join(' ')].filter(Boolean).join(', ') : '';
+                        const chips = branch ? [
+                          branch.sizeM2 != null ? `${branch.sizeM2} m²` : null,
+                          branch.roomCount != null ? `${branch.roomCount} ${branch.roomCount === 1 ? 'room' : 'rooms'}` : null,
+                          branch.bedCount != null ? `${branch.bedCount} ${branch.bedCount === 1 ? 'bed' : 'beds'}` : null,
+                        ].filter((c): c is string => !!c) : [];
+                        return (
+                          <Stack gap={4}>
+                            <Text fw={500} size="sm">{address || s.name}</Text>
+                            {chips.length > 0 && <Group gap={6}>{chips.map(c => <Badge key={c} variant="outline">{c}</Badge>)}</Group>}
+                            {address && <span className="sr-only">{s.name}</span>}
+                          </Stack>
+                        );
+                      })()}
+                    </Table.Td>
                     <Table.Td>{scheduleLabel(s)}</Table.Td>
                     <Table.Td>{assigneeNames[s.id] ? (assigneeNames[s.id].length === 0 ? 'None' : assigneeNames[s.id].join(', ')) : assignmentCounts ? `${assignmentCounts[s.id] ?? 0} assigned` : '—'}</Table.Td>
                     <Table.Td><Text size="sm">{shiftView(s) === 'inactive' ? 'Inactive' : shiftView(s) === 'completed' ? 'Completed' : s.schedule.type === 6 && s.schedule.oneTimeDate && s.schedule.oneTimeDate.slice(0, 10) < new Date().toLocaleDateString('en-CA', { timeZone: timeZoneId }) ? 'Past visit · check completion' : 'Active'}</Text></Table.Td>
-                    <Table.Td>
+                    <Table.Td onClick={(e) => e.stopPropagation()}>
                       <Group gap={6} wrap="nowrap">
                         <Menu shadow="md" width={230} position="bottom-end" withinPortal>
                           <Menu.Target>
@@ -697,6 +790,51 @@ export default function ShiftsAdminPage() {
                       </Group>
                     </Table.Td>
                   </Table.Tr>
+                  {expandedId === s.id && (
+                    <Table.Tr>
+                      <Table.Td colSpan={5} data-testid="row-visits">
+                        <Group justify="space-between" wrap="nowrap" align="center" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          aria-expanded={visitsOpen}
+                          onClick={(e) => { e.stopPropagation(); setVisitsOpen(open => !open); }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 0, padding: '6px 0', cursor: 'pointer', font: 'inherit', fontWeight: 600, color: 'inherit', minHeight: 44 }}
+                        >
+                          {visitsOpen ? <ChevronDown size={16} aria-hidden /> : <ChevronRight size={16} aria-hidden />}
+                          <CalendarDays size={16} aria-hidden />
+                          <span>Visits</span>
+                          {!expandedLoading && <Badge variant="subtle">{expandedVisits.length}</Badge>}
+                        </button>
+                          <Select aria-label="Month" size="xs" w={220} allowDeselect={false} data={monthChoices()} value={expandedMonth} onChange={changeExpandedMonth} />
+                        </Group>
+                        {expandedLoading && <Text size="sm" c="dimmed">Loading visits…</Text>}
+                        {expandedError && <Text size="sm" c="red" role="alert">{expandedError}</Text>}
+                        {!expandedLoading && !expandedError && expandedVisits.length === 0 && <Text size="sm" c="dimmed">No visits in this month.</Text>}
+                        {visitsOpen && expandedVisits.length > 0 && (
+                          <Table withTableBorder>
+                            <Table.Thead style={{ background: 'var(--mantine-color-gray-2)' }}><Table.Tr>
+                              <Table.Th fw={700}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><ListChecks size={14} aria-hidden />Visit</span></Table.Th>
+                              <Table.Th fw={700}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Clock size={14} aria-hidden />Starts</span></Table.Th>
+                              <Table.Th fw={700}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Sparkles size={14} aria-hidden />Type</span></Table.Th>
+                              <Table.Th fw={700}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><UserRound size={14} aria-hidden />Cleaner</span></Table.Th>
+                              <Table.Th fw={700}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><CircleCheck size={14} aria-hidden />Status</span></Table.Th>
+                            </Table.Tr></Table.Thead>
+                            <Table.Tbody>
+                              {expandedVisits.map((item) => (
+                                <Table.Tr key={item.exceptionId ?? item.startUtc}>
+                                  <Table.Td>{visitLabel(item, timeZoneId) || s.name}</Table.Td>
+                                  <Table.Td>{new Date(item.startUtc).toLocaleString(undefined, { timeZone: timeZoneId })}</Table.Td>
+                                  <Table.Td>{item.visitNumber ? <Badge variant={item.visitCleaningType === 'Deep' ? 'navy' : 'subtle'}>{`${item.visitCleaningType ?? 'Normal'} cleaning`}</Badge> : '—'}</Table.Td>
+                                  <Table.Td>{(item.assigneeIds ?? []).map(employeeName).join(', ') || (item.offeredEmployeeId ? `Offer sent to ${employeeName(item.offeredEmployeeId)}` : 'Unassigned')}</Table.Td>
+                                  <Table.Td><Badge variant="outline">{item.visitNumber && item.workStatus ? WORK_STATUS_LABEL[item.workStatus] ?? item.workStatus : item.status ? OCCURRENCE_STATUSES.find(x => x.value === String(item.status))?.label : 'Scheduled'}</Badge></Table.Td>
+                                </Table.Tr>
+                              ))}
+                            </Table.Tbody>
+                          </Table>
+                        )}
+                      </Table.Td>
+                    </Table.Tr>
+                  )}
                 </Fragment>
               ))}
             </Table.Tbody>
