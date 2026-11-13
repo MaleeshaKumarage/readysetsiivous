@@ -108,10 +108,10 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
     const box = await signOut.boundingBox();
     trace.push('button box: ' + JSON.stringify(box));
     await signOut.click();
-    trace.push('clicks: ' + JSON.stringify(await page.evaluate(() => (window as unknown as { __CLICKS__: string[] }).__CLICKS__)));
     // Sign-out ends with a redirect that can take longer than the default 5 s on a loaded runner.
     await expect(page.getByText('Sign in with your ReadySetSiivous admin account.')).toBeVisible({ timeout: 15_000 }).catch(async failure => {
       // Diagnostic for a CI-only sign-out failure: record what the page shows and which mock flags are set.
+      trace.push('clicks: ' + JSON.stringify(await page.evaluate(() => (window as unknown as { __CLICKS__?: string[] }).__CLICKS__ ?? null).catch(() => 'unreadable during navigation')));
       const state = await page.evaluate(() => ({
         url: location.href,
         loggedOutFlag: sessionStorage.getItem('__MOCK_LOGGED_OUT__'),
@@ -123,9 +123,10 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
       throw failure;
     });
     console.log('SIGNOUT_TRACE_OK ' + JSON.stringify(trace));
-    // Reads during the sign-out reload can land between documents; a failed read is retried by the poll.
-    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('__MOCK_LOGGED_OUT__')).catch(() => null), { timeout: 15_000 }).toBe('true');
-    await expect.poll(() => page.evaluate(() => (window as unknown as { __MOCK_AUTHED__: boolean }).__MOCK_AUTHED__).catch(() => null), { timeout: 15_000 }).toBe(false);
+    // Sign-out reloads the page. Wait for that reload to finish before reading the page's state.
+    await page.waitForLoadState('load');
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('__MOCK_LOGGED_OUT__')), { timeout: 15_000 }).toBe('true');
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __MOCK_AUTHED__: boolean }).__MOCK_AUTHED__), { timeout: 15_000 }).toBe(false);
     await expect(page.getByText('Sign in with your ReadySetSiivous admin account.')).toBeVisible({ timeout: 15_000 });
     await page.reload();
     await expect(page.getByText('Sign in with your ReadySetSiivous admin account.')).toBeVisible();
