@@ -171,9 +171,8 @@ test('pending assignment locks mutations and row navigation', async ({ page }) =
 test('late failed roster read does not overwrite another opened row', async ({ page }) => {
   await setup(page); let release!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
-  await shiftActionAt(page, 'Assign employees', 0);
-  // Close the first popup before its row is reopened, so the reopened popup is the only one open.
-  await page.getByRole('dialog', { name: /^Assign employees — / }).getByRole('button', { name: 'Close', exact: true }).click();
+  // Setup has already opened shift one's popup; close it before its row is reopened, so the reopened popup is the only one open.
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: /^Assign employees — / })).toHaveCount(0);
   await page.route(/\/shifts\/one\/assignments$/, async route => {
     if (route.request().method() !== 'GET') return route.fallback();
@@ -182,7 +181,9 @@ test('late failed roster read does not overwrite another opened row', async ({ p
   await shiftActionAt(page, 'Assign employees', 0);
   await expect(page.getByText('Loading assignments…')).toBeVisible();
   // Closing the popup while its read is held makes that read stale.
-  await page.getByRole('dialog', { name: /^Assign employees — / }).getByRole('button', { name: 'Close', exact: true }).click();
+  await page.keyboard.press('Escape');
+  // A closing menu keeps its item in the DOM, which makes the next lookup ambiguous; wait for it to close first.
+  await expect(page.getByRole('menu')).toHaveCount(0);
   await shiftActionAt(page, 'Assign employees', 1);
   await expect(page.getByText('No employees assigned.')).toBeVisible();
   const response = page.waitForResponse(r => r.url().endsWith('/shifts/one/assignments') && r.status() === 500);
