@@ -22,6 +22,8 @@ export async function shiftRowAction(page: Page, row: Locator, label: string) {
 export async function openShiftWorkspace(page: Page, shiftName: string) {
   await page.getByRole('row').filter({ hasText: shiftName }).getByRole('button', { name: /^More actions for / }).click();
   await page.getByRole('menuitem', { name: 'View details', exact: true }).click();
+  // Wait for the menu to finish closing, so a later menu lookup is not ambiguous.
+  await expect(page.getByRole('menu')).toHaveCount(0);
   await expect(page.getByRole('dialog', { name: `Manage — ${shiftName}`, exact: true })).toBeVisible();
 }
 

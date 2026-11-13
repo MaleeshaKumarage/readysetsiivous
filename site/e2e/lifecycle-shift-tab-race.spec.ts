@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
+import { openShiftWorkspace } from './shift-actions';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 
@@ -49,7 +50,7 @@ test('a workspace shift that leaves the current page stays open and usable', asy
     return route.fulfill({ headers, json: moved });
   });
   await page.goto('/admin/shifts/');
-  await page.getByRole('row').filter({ hasText: 'Moved visit' }).getByRole('button', { name: 'Manage', exact: true }).click();
+  await openShiftWorkspace(page, 'Moved visit');
   const dialog = page.getByRole('dialog', { name: 'Manage — Moved visit', exact: true });
   await expect(dialog).toBeVisible();
   // The open workspace is a modal over the tabs, so the tab change is dispatched to the tab itself.
