@@ -103,3 +103,12 @@ test('inventory is its own tab and shows the take-log form', async ({ page }) =>
   await expect(page.getByRole('heading', { name: 'Log an item taken' })).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
+
+// The employee header holds the portal switch, bell, profile, Portals and Sign out. On a phone it wraps instead of widening the page.
+test('the employee header with the portal switch fits the phone width', async ({ page }) => {
+  await setupAdminMocks(page);
+  await page.goto('/me/shifts/');
+  await expect(page.getByRole('navigation', { name: 'Switch portal' }).getByRole('link', { name: 'Employee', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});

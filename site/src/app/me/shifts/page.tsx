@@ -465,7 +465,7 @@ export default function MyShiftsPage() {
             <Logo size="md" />
             <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">My Shifts</h1>
           </div>
-          <nav className="flex items-center gap-3">
+          <nav className="flex flex-wrap items-center justify-end gap-3 min-w-0">
             {officeTarget && <PortalSwitch current="employee" officeHref={officeTarget.href} officeLabel={officeTarget.label} tenant={authTenant()} />}
             <NotificationBell settingsHref={`/account/profile/?tenant=${encodeURIComponent(authTenant())}#notifications`} />
             <Link href={`/account/profile/?tenant=${encodeURIComponent(authTenant())}`} className="notify-bell" aria-label="Profile" title="Profile"><UserRound size={22} aria-hidden="true" /></Link>
