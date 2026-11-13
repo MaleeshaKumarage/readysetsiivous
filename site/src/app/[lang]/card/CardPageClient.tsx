@@ -87,7 +87,7 @@ function CardContent({ lang }: { lang: Language }) {
             <a
               href={baseUrl('/contact.vcf')}
               download
-              className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-brand-500 text-white text-sm font-bold rounded-xl hover:bg-brand-600 transition-colors shadow-md shadow-brand-200 dark:shadow-brand-900/30"
+              className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-brand-700 text-white text-sm font-bold rounded-xl hover:bg-brand-800 transition-colors shadow-md shadow-brand-200 dark:shadow-brand-900/30"
             >
               {L.saveContact}
             </a>
@@ -97,7 +97,7 @@ function CardContent({ lang }: { lang: Language }) {
               href={getWhatsAppChatUrl()}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-whatsapp/10 text-whatsapp dark:text-green-400 text-sm font-semibold rounded-xl hover:bg-whatsapp/20 transition-colors border border-whatsapp/20"
+              className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-whatsapp/10 text-green-800 dark:text-green-400 text-sm font-semibold rounded-xl hover:bg-whatsapp/20 transition-colors border border-whatsapp/20"
             >
               {L.chatWhatsApp}
             </a>

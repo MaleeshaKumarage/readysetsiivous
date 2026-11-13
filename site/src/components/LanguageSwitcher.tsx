@@ -72,7 +72,7 @@ export default function LanguageSwitcher() {
         ref={buttonRef}
         onClick={() => setOpen(!open)}
         className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-200 hover:border-brand-400 dark:hover:border-brand-500 hover:text-brand-700 dark:hover:text-brand-400 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus:outline-none transition-colors"
-        aria-label={ariaLabel}
+        title={ariaLabel}
         aria-controls="language-options"
         aria-expanded={open}
       >
