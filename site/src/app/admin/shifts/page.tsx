@@ -132,6 +132,9 @@ export default function ShiftsAdminPage() {
   const [pricingOccurrence, setPricingOccurrence] = useState<ShiftOccurrence | undefined>();
   const [shiftPage, setShiftPage] = useState(1);
   const [pageRows, setPageRows] = useState<Shift[]>([]);
+  const [filterCompany, setFilterCompany] = useState<string | null>(null);
+  const [filterType, setFilterType] = useState<string | null>(null);
+  const [companyChoices, setCompanyChoices] = useState<{ value: string; label: string }[]>([]);
   const [pageTotal, setPageTotal] = useState(0);
   const [tabCounts, setTabCounts] = useState<{ active: number; completed: number; inactive: number } | null>(null);
   const [workspaceFetched, setWorkspaceFetched] = useState<Shift | null>(null);
@@ -227,7 +230,7 @@ export default function ShiftsAdminPage() {
     .catch((failure: Error) => { setAssignmentCounts(null); setCountError(failure.message); });
   // Only the newest tab/page request may update the list, so a slow earlier response cannot show the wrong tab.
   const loadSeq = useRef(0);
-  const load = () => { const seq = ++loadSeq.current; setLoading(true); return adminShifts.page({ tab: lifecycle, skip: (shiftPage - 1) * PAGE_SIZE, take: PAGE_SIZE }).then((r) => {
+  const load = () => { const seq = ++loadSeq.current; setLoading(true); return adminShifts.page({ tab: lifecycle, skip: (shiftPage - 1) * PAGE_SIZE, take: PAGE_SIZE, companyId: filterCompany, scheduleType: filterType }).then((r) => {
     if (seq !== loadSeq.current) return;
     // A reply without the paged shape cannot be shown; say so and keep the retry path instead of crashing the screen.
     if (!r || !Array.isArray(r.items) || typeof r.total !== 'number' || !r.counts) throw new Error('The shift list could not be read. Refresh the page to retry.');
@@ -235,7 +238,10 @@ export default function ShiftsAdminPage() {
     setLoading(false);
   }).catch((failure: Error) => { if (seq !== loadSeq.current) return; setListError(failure.message); setLoading(false); }); };
   // Reload the current tab and page whenever either changes, and once on mount.
-  useEffect(() => { void load(); }, [lifecycle, shiftPage]);
+  useEffect(() => { void load(); }, [lifecycle, shiftPage, filterCompany, filterType]);
+  useEffect(() => {
+    adminCompanies.list('', 0, 100).then(r => setCompanyChoices((r?.items ?? []).map(c => ({ value: c.id, label: c.name })))).catch(() => setCompanyChoices([]));
+  }, []);
   useEffect(() => { adminTenant.get().then(profile => {
     if (!profile) throw new Error('Could not load scheduling settings. Refresh the page to retry.');
     const zone = profile.timeZoneId?.trim() || 'Europe/Helsinki';
@@ -628,6 +634,12 @@ export default function ShiftsAdminPage() {
       {listError && <Text role="alert" c="red" mb="md">{listError}</Text>}
       {countError && <Text role="alert" c="red" mb="md">{countError}</Text>}
 
+      <Group grow align="flex-end" mb="sm">
+        <Select label="Filter by company" placeholder="All companies" clearable searchable data={companyChoices} value={filterCompany}
+          onChange={(value) => { setFilterCompany(value); setShiftPage(1); }} />
+        <Select label="Filter by shift type" placeholder="All types" clearable data={SCHEDULE_TYPES} value={filterType}
+          onChange={(value) => { setFilterType(value); setShiftPage(1); }} />
+      </Group>
       <LifecycleTabs value={lifecycle} onChange={changeLifecycle} label="Shift activity" disabled={assignBusy || templateSaving}
         showCompleted activeCount={activeCount} completedCount={completedCount} inactiveCount={inactiveCount}>
       {loading ? <Loader /> : pageTotal === 0 ? (

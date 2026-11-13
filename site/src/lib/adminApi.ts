@@ -705,8 +705,12 @@ export type ShiftTab = 'active' | 'completed' | 'inactive';
 export interface ShiftPageResult { items: Shift[]; total: number; counts: { active: number; completed: number; inactive: number } }
 export const adminShifts = {
   // One page of one tab, with counts for every tab. Never cached, so a save is visible in the counts at once.
-  page: (params: { tab: ShiftTab; skip: number; take: number }) =>
-    adminGet<ShiftPageResult>(`/api/v1/admin/shifts/page?${new URLSearchParams({ tab: params.tab, skip: String(params.skip), take: String(params.take) }).toString()}`, false),
+  page: (params: { tab: ShiftTab; skip: number; take: number; companyId?: string | null; scheduleType?: string | null }) => {
+    const query = new URLSearchParams({ tab: params.tab, skip: String(params.skip), take: String(params.take) });
+    if (params.companyId) query.set('companyId', params.companyId);
+    if (params.scheduleType) query.set('scheduleType', params.scheduleType);
+    return adminGet<ShiftPageResult>(`/api/v1/admin/shifts/page?${query.toString()}`, false);
+  },
   list: (companyId?: string, branchId?: string, includeInactive = false) => {
     const query = new URLSearchParams();
     if (companyId) query.set('companyId', companyId);

@@ -1,3 +1,4 @@
+using CleaningSuite.Domain.Shifts;
 using CleaningSuite.Api.Auth;
 using CleaningSuite.Application.Shifts;
 using CleaningSuite.Application.QualityCycle;
@@ -60,12 +61,13 @@ public class ShiftsAdminController : ControllerBase
         [FromQuery] string? q = null,
         [FromQuery] int skip = 0,
         [FromQuery] int take = 25,
+        [FromQuery] ShiftScheduleType? scheduleType = null,
         CancellationToken ct = default)
     {
         if (!ShiftHandlers.ListShiftPageQueryHandler.Tabs.Contains(tab)) return BadRequest("Tab must be active, completed or inactive.");
         skip = Math.Max(0, skip);
         take = Math.Clamp(take, 1, 100);
-        return Ok(await _mediator.Send(new ListShiftPageQuery(tab, companyId, branchId, q, skip, take), ct));
+        return Ok(await _mediator.Send(new ListShiftPageQuery(tab, companyId, branchId, q, skip, take, scheduleType), ct));
     }
 
     [HttpGet("{id:guid}")]
