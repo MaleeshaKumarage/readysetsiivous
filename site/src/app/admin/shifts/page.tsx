@@ -155,6 +155,7 @@ export default function ShiftsAdminPage() {
   const [expandedVisits, setExpandedVisits] = useState<ShiftOccurrence[]>([]);
   const [expandedLoading, setExpandedLoading] = useState(false);
   const [visitsOpen, setVisitsOpen] = useState(true);
+  const [expandedFrom, setExpandedFrom] = useState('');
   const [expandedError, setExpandedError] = useState('');
   const expandGeneration = useRef(0);
   const toggleExpanded = async (shift: Shift) => {
@@ -163,6 +164,7 @@ export default function ShiftsAdminPage() {
     setExpandedId(shift.id); setExpandedVisits([]); setExpandedError(''); setExpandedLoading(true); setVisitsOpen(true);
     try {
       const today = localInputValue(new Date().toISOString(), timeZoneId).slice(0, 10);
+      setExpandedFrom(today);
       const fromUtc = tenantLocalToUtc(`${today}T00:00`, timeZoneId);
       const nextDayUtc = tenantLocalToUtc(`${addCalendarDays(today, 32)}T00:00`, timeZoneId);
       const result = await adminShifts.occurrences(shift.id, fromUtc, new Date(Date.parse(nextDayUtc) - 1).toISOString());
@@ -770,6 +772,7 @@ export default function ShiftsAdminPage() {
                           <CalendarDays size={16} aria-hidden />
                           <span>Visits</span>
                           {!expandedLoading && <Badge variant="subtle">{expandedVisits.length}</Badge>}
+                          <span style={{ fontWeight: 400, color: 'var(--mantine-color-dimmed)', fontSize: 'var(--mantine-font-size-sm)' }}>{`Next 31 days from ${expandedFrom}`}</span>
                         </button>
                         {expandedLoading && <Text size="sm" c="dimmed">Loading visits…</Text>}
                         {expandedError && <Text size="sm" c="red" role="alert">{expandedError}</Text>}
