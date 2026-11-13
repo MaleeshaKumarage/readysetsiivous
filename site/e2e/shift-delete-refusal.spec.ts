@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
+import { confirmShiftPopup } from './shift-actions';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const REFUSAL = 'This shift has started or completed visits that may not be invoiced yet. Keep it deactivated so its work and billing stay available.';
@@ -21,6 +22,7 @@ test('deleting an inactive shift with started visits is refused, explains why, a
   await page.getByRole('button', { name: 'More actions for Morning clean' }).click();
   page.once('dialog', dialog => dialog.accept());
   await page.getByRole('menuitem', { name: 'Delete', exact: true }).click();
+  await confirmShiftPopup(page, 'Delete');
   await expect(page.getByText(REFUSAL).first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'More actions for Morning clean' })).toBeVisible();
   expect(deletes).toBe(1);

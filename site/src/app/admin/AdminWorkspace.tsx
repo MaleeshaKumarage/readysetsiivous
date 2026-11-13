@@ -146,7 +146,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               <Text role="alert">{access === 'error' ? accessError : 'This account cannot access tenant administration.'}</Text>
               {access === 'error' && <Button onClick={() => void verifyAccess()}>{ACCESS_RETRY_LABEL}</Button>}
               <Button component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="light"><LayoutGrid size={16} aria-hidden="true" />Portals</Button>
-              <Button onClick={signOut} variant="subtle">Sign out</Button>
+              <ActionIcon variant="subtle" onClick={signOut} aria-label="Sign out" style={{ alignSelf: "flex-start" }}><LogOut size={20} aria-hidden="true" /></ActionIcon>
             </Stack>
           </Paper>
         </Group>
@@ -212,11 +212,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             </Group>
             <Group gap={4} wrap="wrap" justify="flex-end" className="admin-actions" style={{ minWidth: 0 }}>
               {hasOwnWorkIdentity && <PortalSwitch current="office" officeHref={isAdmin() ? '/admin/' : '/manager/'} officeLabel={isAdmin() ? 'Office' : 'Manager'} tenant={authTenant()} />}
-              {hasOwnWorkIdentity && <Box visibleFrom="sm"><Button component={Link} href="/me/shifts/" variant="light" size="xs">My shifts</Button></Box>}
               <NotificationBell settingsHref={`/account/profile/?tenant=${encodeURIComponent(authTenant())}#notifications`} />
-              <Button component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="subtle" size="xs" visibleFrom="xs"><LayoutGrid size={16} aria-hidden="true" />Portals</Button>
               <ActionIcon component={Link} href={`/account/profile/?tenant=${encodeURIComponent(authTenant())}`} variant="subtle" aria-label="Profile"><UserRound size={20} /></ActionIcon>
-              <ActionIcon component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="subtle" hiddenFrom="xs" aria-label="Portals"><LayoutGrid size={20} /></ActionIcon>
               <Tooltip label="Sign out" withArrow><ActionIcon variant="subtle" color="gray" onClick={signOut} aria-label="Sign out"><LogOut size={20} /></ActionIcon></Tooltip>
             </Group>
           </Group>

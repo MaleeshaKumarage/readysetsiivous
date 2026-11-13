@@ -61,6 +61,11 @@ public class ShiftTabStorageDatabaseTests
         Assert.True(completed.Items[0].ChecklistCompleted);
         var search = await read.ListTabPageAsync(ShiftTabs.Active, company, null, "WEEKLY", 0, 25);
         Assert.Equal(["Weekly clean"], search.Items.Select(s => s.Name).ToArray());
+        // The schedule-type filter reads the stored schedule in the database, not just the mock.
+        var weeklyOnly = await read.ListTabPageAsync(ShiftTabs.Active, company, null, null, 0, 25, default, ShiftScheduleType.Weekly);
+        Assert.Equal(["Weekly clean"], weeklyOnly.Items.Select(s => s.Name).ToArray());
+        var oneTimeOnly = await read.ListTabPageAsync(ShiftTabs.Active, company, null, null, 0, 25, default, ShiftScheduleType.OneTime);
+        Assert.Equal(["Open visit"], oneTimeOnly.Items.Select(s => s.Name).ToArray());
         var second = await read.ListTabPageAsync(ShiftTabs.Active, company, null, null, 1, 1);
         Assert.Equal(2, second.Total);
         Assert.Equal(["Weekly clean"], second.Items.Select(s => s.Name).ToArray());

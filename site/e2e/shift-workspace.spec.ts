@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks, shiftsResponse } from './admin-helpers';
-import { openShiftWorkspace, shiftAction } from './shift-actions';
+import { openShiftWorkspace, shiftAction, confirmShiftPopup } from './shift-actions';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 
@@ -45,13 +45,13 @@ async function setup(page: Page) {
   });
 }
 
-test('each shift row exposes one primary Manage action and a More actions menu', async ({ page }) => {
+test('each shift row exposes one More actions menu, with details first and no separate Manage button', async ({ page }) => {
   await setup(page); await page.goto('/admin/shifts/');
   const row = page.getByRole('row').filter({ hasText: 'Workspace shift' }).first();
-  await expect(row.getByRole('button', { name: 'Manage', exact: true })).toBeVisible();
+  await expect(row.getByRole('button', { name: 'Manage', exact: true })).toHaveCount(0);
   await expect(row.getByRole('cell', { name: 'Active', exact: true })).toBeVisible();
   await row.getByRole('button', { name: 'More actions for Workspace shift', exact: true }).click();
-  for (const label of ['Pricing', 'Edit', 'Employees', 'Occurrences', 'Checklist template', 'Deactivate']) {
+  for (const label of ['Pricing', 'Edit schedule', 'Assign employees', 'Occurrences', 'Checklist template', 'Deactivate']) {
     await expect(page.getByRole('menuitem', { name: label, exact: true })).toBeVisible();
   }
   await expect(page.getByRole('menuitem', { name: 'Schedule one-time visit', exact: true })).toHaveCount(0);
@@ -80,16 +80,14 @@ test('workspace next step reports assigned cleaners when a shift is staffed', as
 
 test('workspace assign action closes the workspace and opens the existing assignment panel', async ({ page }) => {
   await setup(page); await page.goto('/admin/shifts/');
-  await openShiftWorkspace(page, 'Workspace shift');
-  await page.getByRole('dialog', { name: 'Manage — Workspace shift', exact: true }).getByRole('button', { name: 'Assign employees', exact: true }).click();
+  await shiftAction(page, 'Workspace shift', 'Assign employees');
   await expect(page.getByRole('dialog', { name: 'Manage — Workspace shift', exact: true })).toHaveCount(0);
   await expect(page.getByRole('textbox', { name: 'Assign employees', exact: true })).toBeVisible();
 });
 
 test('workspace Edit schedule opens the existing Edit shift dialog for that shift', async ({ page }) => {
   await setup(page); await page.goto('/admin/shifts/');
-  await openShiftWorkspace(page, 'Workspace shift');
-  await page.getByRole('dialog', { name: 'Manage — Workspace shift', exact: true }).getByRole('button', { name: 'Edit schedule', exact: true }).click();
+  await shiftAction(page, 'Workspace shift', 'Edit schedule');
   await expect(page.getByRole('dialog', { name: 'Manage — Workspace shift', exact: true })).toHaveCount(0);
   const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
   await expect(edit).toBeVisible();
@@ -99,8 +97,7 @@ test('workspace Edit schedule opens the existing Edit shift dialog for that shif
 
 test('workspace Checklist template opens the existing template dialog for that shift', async ({ page }) => {
   await setup(page); await page.goto('/admin/shifts/');
-  await openShiftWorkspace(page, 'Workspace shift');
-  await page.getByRole('dialog', { name: 'Manage — Workspace shift', exact: true }).getByRole('button', { name: 'Checklist template', exact: true }).click();
+  await shiftAction(page, 'Workspace shift', 'Checklist template');
   await expect(page.getByRole('dialog', { name: 'Manage — Workspace shift', exact: true })).toHaveCount(0);
   const template = page.getByRole('dialog', { name: 'Assign checklist template', exact: true });
   await expect(template).toBeVisible();
@@ -109,16 +106,14 @@ test('workspace Checklist template opens the existing template dialog for that s
 
 test('workspace Pricing opens the existing shift pricing dialog for that shift', async ({ page }) => {
   await setup(page); await page.goto('/admin/shifts/');
-  await openShiftWorkspace(page, 'Workspace shift');
-  await page.getByRole('dialog', { name: 'Manage — Workspace shift', exact: true }).getByRole('button', { name: 'Pricing', exact: true }).click();
+  await shiftAction(page, 'Workspace shift', 'Pricing');
   await expect(page.getByRole('dialog', { name: 'Manage — Workspace shift', exact: true })).toHaveCount(0);
   await expect(page.getByRole('dialog').filter({ hasText: 'Shift pricing — Workspace shift' })).toBeVisible();
 });
 
 test('workspace Occurrences opens the existing occurrences dialog for that shift', async ({ page }) => {
   await setup(page); await page.goto('/admin/shifts/');
-  await openShiftWorkspace(page, 'Workspace shift');
-  await page.getByRole('dialog', { name: 'Manage — Workspace shift', exact: true }).getByRole('button', { name: 'Occurrences', exact: true }).click();
+  await shiftAction(page, 'Workspace shift', 'Occurrences');
   await expect(page.getByRole('dialog', { name: 'Occurrences — Workspace shift', exact: true })).toBeVisible();
 });
 
@@ -127,7 +122,8 @@ test('on-call workspace explains dated visits and offers one-time scheduling', a
   await openShiftWorkspace(page, 'Workspace on-call');
   const dialog = page.getByRole('dialog', { name: 'Manage — Workspace on-call', exact: true });
   await expect(dialog.getByText('Next step: Admin: schedule a dated visit, then assign a cleaner.', { exact: true })).toBeVisible();
-  await dialog.getByRole('button', { name: 'Schedule one-time visit', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await shiftAction(page, 'Workspace on-call', 'Schedule one-time visit');
   await expect(page.getByRole('dialog', { name: 'Change occurrence', exact: true })).toBeVisible();
 });
 
@@ -147,16 +143,19 @@ test('inactive shift workspace offers only reactivate and delete', async ({ page
   await openShiftWorkspace(page, 'Workspace paused');
   const dialog = page.getByRole('dialog', { name: 'Manage — Workspace paused', exact: true });
   await expect(dialog.getByText('Next step: Admin: reactivate to schedule again, or delete if permanent removal is intended.', { exact: true })).toBeVisible();
-  await expect(dialog.getByRole('button', { name: 'Reactivate', exact: true })).toBeVisible();
-  await expect(dialog.getByRole('button', { name: 'Delete', exact: true })).toBeVisible();
-  await expect(dialog.getByRole('button', { name: 'Occurrences', exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: 'Reactivate', exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'More actions for Workspace paused', exact: true }).click();
+  await expect(page.getByRole('menuitem', { name: 'Reactivate', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Delete', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Occurrences', exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
 });
 
 test('workspace Reactivate restores the shift and closes the workspace', async ({ page }) => {
   await setup(page); await page.goto('/admin/shifts/');
   await page.getByRole('tab', { name: /^Inactive/ }).click();
-  await openShiftWorkspace(page, 'Workspace paused');
-  await page.getByRole('dialog', { name: 'Manage — Workspace paused', exact: true }).getByRole('button', { name: 'Reactivate', exact: true }).click();
+  await shiftAction(page, 'Workspace paused', 'Reactivate'); await confirmShiftPopup(page, 'Reactivate');
   await expect(page.getByRole('dialog', { name: 'Manage — Workspace paused', exact: true })).toHaveCount(0);
   await expect(page.getByRole('row').filter({ hasText: 'Workspace paused' })).toHaveCount(0);
   await page.getByRole('tab', { name: /^Active/ }).click();
@@ -165,34 +164,31 @@ test('workspace Reactivate restores the shift and closes the workspace', async (
 
 test('workspace Deactivate and Delete move and remove the shift', async ({ page }) => {
   await setup(page); await page.goto('/admin/shifts/');
-  await openShiftWorkspace(page, 'Workspace staffed');
-  await page.getByRole('dialog', { name: 'Manage — Workspace staffed', exact: true }).getByRole('button', { name: 'Deactivate', exact: true }).click();
+  await shiftAction(page, 'Workspace staffed', 'Deactivate'); await confirmShiftPopup(page, 'Deactivate');
   await expect(page.getByRole('dialog', { name: 'Manage — Workspace staffed', exact: true })).toHaveCount(0);
   await expect(page.getByRole('row').filter({ hasText: 'Workspace staffed' })).toHaveCount(0);
   await page.getByRole('tab', { name: /^Inactive/ }).click();
-  await openShiftWorkspace(page, 'Workspace staffed');
   page.once('dialog', dialog => dialog.accept());
-  await page.getByRole('dialog', { name: 'Manage — Workspace staffed', exact: true }).getByRole('button', { name: 'Delete', exact: true }).click();
+  await shiftAction(page, 'Workspace staffed', 'Delete'); await confirmShiftPopup(page, 'Delete');
   await expect(page.getByRole('dialog', { name: 'Manage — Workspace staffed', exact: true })).toHaveCount(0);
   await expect(page.getByRole('row').filter({ hasText: 'Workspace staffed' })).toHaveCount(0);
 });
 
 test('row menu action still reaches the existing Employees panel', async ({ page }) => {
   await setup(page); await page.goto('/admin/shifts/');
-  await shiftAction(page, 'Workspace shift', 'Employees');
+  await shiftAction(page, 'Workspace shift', 'Assign employees');
   await expect(page.getByRole('textbox', { name: 'Assign employees', exact: true })).toBeVisible();
 });
 
 test('phone-width workspace has no horizontal overflow and its actions stay inside the viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await setup(page); await page.goto('/admin/shifts/');
-  await openShiftWorkspace(page, 'Workspace shift');
-  const dialog = page.getByRole('dialog', { name: 'Manage — Workspace shift', exact: true });
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
+  await page.getByRole('button', { name: 'More actions for Workspace shift', exact: true }).click();
   const viewport = page.viewportSize();
   for (const label of ['Edit schedule', 'Assign employees', 'Occurrences', 'Pricing']) {
-    const box = await dialog.getByRole('button', { name: label, exact: true }).boundingBox();
+    const box = await page.getByRole('menuitem', { name: label, exact: true }).boundingBox();
     expect(box).not.toBeNull();
     if (box && viewport) {
       expect(box.x).toBeGreaterThanOrEqual(0);
@@ -209,8 +205,7 @@ test('editing a shift keeps its generated name read-only, and saving sends the n
     return route.fallback();
   });
   await page.goto('/admin/shifts/');
-  await openShiftWorkspace(page, 'Workspace shift');
-  await page.getByRole('dialog', { name: 'Manage — Workspace shift', exact: true }).getByRole('button', { name: 'Edit schedule', exact: true }).click();
+  await shiftAction(page, 'Workspace shift', 'Edit schedule');
   const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
   const nameField = edit.getByRole('textbox', { name: 'Name', exact: true });
   await expect(nameField).toHaveValue('Workspace shift');

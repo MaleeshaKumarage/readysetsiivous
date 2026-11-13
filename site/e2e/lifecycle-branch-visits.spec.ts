@@ -67,7 +67,7 @@ async function setup(page: Page, options: { addFailures?: number; cleanerConflic
     return route.fulfill({ status: 200, headers, json });
   });
   await page.goto('/admin/shifts/');
-  await expect(page.getByRole('button', { name: 'Add visit', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: `More actions for ${MAIN}`, exact: true })).toBeVisible();
   return state;
 }
 
@@ -84,8 +84,10 @@ async function chooseProperty(page: Page) {
 
 test('admin adds a single-day visit by choosing only the property, date and time', async ({ page }) => {
   const state = await setup(page);
-  await page.getByRole('button', { name: 'Add visit', exact: true }).click();
-  const dialog = await chooseProperty(page);
+  await shiftAction(page, MAIN, 'Add visit');
+  // Opened from the property's row, so the company and property are fixed; they are not asked again.
+  const dialog = page.getByRole('dialog', { name: 'Add visit', exact: true });
+  await expect(dialog.getByLabel('Property', { exact: true })).toHaveValue(MAIN);
   // Company details and prices are never asked for: they come from the property.
   await expect(dialog.getByLabel(/price|vat|business id|address/i)).toHaveCount(0);
   await dialog.getByLabel(/^Date/).fill('2026-11-12');
@@ -248,14 +250,14 @@ test('a main shift has no whole-shift employees action; other shifts keep theirs
   await setup(page);
   await page.getByRole('button', { name: `More actions for ${MAIN}`, exact: true }).click();
   await expect(page.getByRole('menuitem', { name: 'Add visit', exact: true })).toBeVisible();
-  await expect(page.getByRole('menuitem', { name: 'Employees', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: 'Assign employees', exact: true })).toHaveCount(0);
   await expect(page.getByRole('menuitem', { name: 'Schedule one-time visit', exact: true })).toHaveCount(0);
   await expect(page.getByRole('menuitem', { name: 'Pricing', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   // The first menu must be gone before the next one opens, or its closing layer swallows the click.
   await expect(page.getByRole('menu')).toHaveCount(0);
   await page.getByRole('button', { name: 'More actions for Morning clean', exact: true }).click();
-  await expect(page.getByRole('menuitem', { name: 'Employees', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Assign employees', exact: true })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Add visit', exact: true })).toHaveCount(0);
 });
 
@@ -269,19 +271,22 @@ test('a new shift no longer offers One-time: single visits are added with Add vi
   await expect(page.getByRole('option', { name: 'One-time', exact: true })).toHaveCount(0);
 });
 
-test('the Manage dialog of a main shift adds visits and has no whole-shift assignment or separate price', async ({ page }) => {
+test('the details of a main shift explain visits, and its row menu has no whole-shift assignment or separate price', async ({ page }) => {
   const state = await setup(page);
-  await page.getByRole('row').filter({ hasText: MAIN }).getByRole('button', { name: 'Manage', exact: true }).click();
+  await page.getByRole('button', { name: `More actions for ${MAIN}`, exact: true }).click();
+  await page.getByRole('menuitem', { name: 'View details', exact: true }).click();
   const workspace = page.getByRole('dialog', { name: `Manage — ${MAIN}`, exact: true });
   await expect(workspace.getByRole('status')).toHaveText('Next step: Admin: add a visit. It is offered to the default cleaner, or to the cleaner you choose.');
   await expect(workspace).toContainText('Every booking and every added visit for this property is a numbered visit on this shift.');
   await expect(workspace).toContainText('Each visit uses the property price in force on its date.');
-  // A whole-shift assignment or a shift-level price would bypass the visit's own offer and the property price.
-  await expect(workspace.getByRole('button', { name: 'Assign employees', exact: true })).toHaveCount(0);
-  await expect(workspace.getByRole('button', { name: 'Pricing', exact: true })).toHaveCount(0);
-  await expect(workspace.getByRole('button', { name: 'Schedule one-time visit', exact: true })).toHaveCount(0);
-  await workspace.getByRole('button', { name: 'Add visit', exact: true }).click();
+  await page.keyboard.press('Escape');
   await expect(workspace).toHaveCount(0);
+  // A whole-shift assignment or a shift-level price would bypass the visit's own offer and the property price.
+  await page.getByRole('button', { name: `More actions for ${MAIN}`, exact: true }).click();
+  await expect(page.getByRole('menuitem', { name: 'Assign employees', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: 'Pricing', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: 'Schedule one-time visit', exact: true })).toHaveCount(0);
+  await page.getByRole('menuitem', { name: 'Add visit', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Add visit', exact: true });
   await expect(dialog.getByLabel('Property', { exact: true })).toHaveValue(MAIN);
   await dialog.getByLabel(/^Date/).fill('2026-11-19');
@@ -290,13 +295,12 @@ test('the Manage dialog of a main shift adds visits and has no whole-shift assig
   expect(state.adds).toEqual([expect.objectContaining({ branchId: 'branch', fromDate: '2026-11-19', toDate: '2026-11-19' })]);
 });
 
-test('the Manage dialog of an ordinary shift keeps its assignment and pricing actions', async ({ page }) => {
+test('an ordinary shift keeps its assignment and pricing actions in its row menu', async ({ page }) => {
   await setup(page);
-  await page.getByRole('row').filter({ hasText: 'Morning clean' }).getByRole('button', { name: 'Manage', exact: true }).click();
-  const workspace = page.getByRole('dialog', { name: 'Manage — Morning clean', exact: true });
-  await expect(workspace.getByRole('button', { name: 'Assign employees', exact: true })).toBeVisible();
-  await expect(workspace.getByRole('button', { name: 'Pricing', exact: true })).toBeVisible();
-  await expect(workspace.getByRole('button', { name: 'Add visit', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'More actions for Morning clean', exact: true }).click();
+  await expect(page.getByRole('menuitem', { name: 'Assign employees', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Pricing', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Add visit', exact: true })).toHaveCount(0);
 });
 
 test('a new visit is Normal unless Deep is chosen, and the choice is sent with it', async ({ page }) => {

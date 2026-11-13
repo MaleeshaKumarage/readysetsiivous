@@ -5,7 +5,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import {
   Title, Button, Table, Modal, TextInput, Select, MultiSelect, Group, Stack, Text, Loader, ActionIcon, NumberInput, Menu,
 } from '@mantine/core';
-import { Plus, Trash2, Pencil, MoreHorizontal } from 'lucide-react';
+import { Plus, Trash2, Pencil, MoreHorizontal, Eye, UserPlus, CalendarDays, CalendarPlus, ListChecks, Receipt, PauseCircle, PlayCircle } from 'lucide-react';
 import {
   adminShifts, adminBranchVisits, adminCompanies, adminEmployees, adminTenant,
   type Shift, type Branch, type Employee, type ShiftAssignment, type ShiftOccurrence,
@@ -18,6 +18,7 @@ import { CompanyPicker } from '@/components/admin/CompanyPicker';
 import { AddVisitDialog } from '@/components/admin/AddVisitDialog';
 import { visitLabel } from '@/lib/visitLabel';
 import { LifecycleTabs, type LifecycleStatus } from '@/components/LifecycleTabs';
+import { TodayKpis } from '@/components/admin/TodayKpis';
 import { ListPager, PAGE_SIZE } from '@/components/ListPager';
 import { ShiftWorkspace, scheduleLabel } from '@/components/admin/ShiftWorkspace';
 import { autoShiftName } from '@/lib/shiftName';
@@ -132,6 +133,9 @@ export default function ShiftsAdminPage() {
   const [pricingOccurrence, setPricingOccurrence] = useState<ShiftOccurrence | undefined>();
   const [shiftPage, setShiftPage] = useState(1);
   const [pageRows, setPageRows] = useState<Shift[]>([]);
+  const [filterCompany, setFilterCompany] = useState<string | null>(null);
+  const [filterType, setFilterType] = useState<string | null>(null);
+  const [companyChoices, setCompanyChoices] = useState<{ value: string; label: string }[]>([]);
   const [pageTotal, setPageTotal] = useState(0);
   const [tabCounts, setTabCounts] = useState<{ active: number; completed: number; inactive: number } | null>(null);
   const [workspaceFetched, setWorkspaceFetched] = useState<Shift | null>(null);
@@ -217,25 +221,34 @@ export default function ShiftsAdminPage() {
   // Every freshly loaded roster also updates that shift's count, so the column always shows the newest
   // of the two sources: a later bulk reload (after another admin's change) replaces an older roster count.
   const [assignmentCounts, setAssignmentCounts] = useState<Record<string, number> | null>(null);
+  const [assigneeNames, setAssigneeNames] = useState<Record<string, string[]>>({});
   const [countError, setCountError] = useState('');
   const storeRoster = (id: string, roster: ShiftAssignment[]) => {
     setAssignments(m => ({ ...m, [id]: roster }));
     setAssignmentCounts(c => c && { ...c, [id]: roster.filter(a => a.isActive).length });
+    setAssigneeNames(n => ({ ...n, [id]: roster.filter(a => a.isActive).map(a => assigneeName(a.employeeId)) }));
   };
+  const loadAssigneeNames = (ids: string[]) => adminShifts.assigneeNames(ids)
+    .then(names => { setAssigneeNames(names); setCountError(''); })
+    .catch(() => { setAssigneeNames({}); setCountError('Could not load employee names. Refresh the page to retry.'); });
+  const assigneeName = (id: string) => { const person = employees.find(e => e.id === id); return person ? `${person.firstName} ${person.lastName}`.trim() : 'Unknown employee'; };
   const loadAssignmentCounts = () => adminShifts.assignmentCounts()
     .then(counts => { setAssignmentCounts(counts); setCountError(''); })
-    .catch((failure: Error) => { setAssignmentCounts(null); setCountError(failure.message); });
+    .catch(() => { setAssignmentCounts(null); });
   // Only the newest tab/page request may update the list, so a slow earlier response cannot show the wrong tab.
   const loadSeq = useRef(0);
-  const load = () => { const seq = ++loadSeq.current; setLoading(true); return adminShifts.page({ tab: lifecycle, skip: (shiftPage - 1) * PAGE_SIZE, take: PAGE_SIZE }).then((r) => {
+  const load = () => { const seq = ++loadSeq.current; setLoading(true); return adminShifts.page({ tab: lifecycle, skip: (shiftPage - 1) * PAGE_SIZE, take: PAGE_SIZE, companyId: filterCompany, scheduleType: filterType }).then((r) => {
     if (seq !== loadSeq.current) return;
     // A reply without the paged shape cannot be shown; say so and keep the retry path instead of crashing the screen.
     if (!r || !Array.isArray(r.items) || typeof r.total !== 'number' || !r.counts) throw new Error('The shift list could not be read. Refresh the page to retry.');
-    setPageRows(r.items); setPageTotal(r.total); setTabCounts(r.counts); setListError(''); void loadAssignmentCounts();
+    setPageRows(r.items); setPageTotal(r.total); setTabCounts(r.counts); setListError(''); void loadAssignmentCounts(); void loadAssigneeNames(r.items.map(s => s.id));
     setLoading(false);
   }).catch((failure: Error) => { if (seq !== loadSeq.current) return; setListError(failure.message); setLoading(false); }); };
   // Reload the current tab and page whenever either changes, and once on mount.
-  useEffect(() => { void load(); }, [lifecycle, shiftPage]);
+  useEffect(() => { void load(); }, [lifecycle, shiftPage, filterCompany, filterType]);
+  useEffect(() => {
+    adminCompanies.list('', 0, 100).then(r => setCompanyChoices((r?.items ?? []).map(c => ({ value: c.id, label: c.name })))).catch(() => setCompanyChoices([]));
+  }, []);
   useEffect(() => { adminTenant.get().then(profile => {
     if (!profile) throw new Error('Could not load scheduling settings. Refresh the page to retry.');
     const zone = profile.timeZoneId?.trim() || 'Europe/Helsinki';
@@ -381,6 +394,15 @@ export default function ShiftsAdminPage() {
     }
   };
 
+  // Deactivate, Reactivate and Delete open this popup first; it runs the task only when confirmed.
+  const [confirmAction, setConfirmAction] = useState<{ title: string; body: string; confirmLabel: string; color?: string; run: () => Promise<void> } | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const runConfirm = async () => {
+    if (!confirmAction) return;
+    setConfirmBusy(true);
+    try { await confirmAction.run(); setConfirmAction(null); }
+    finally { setConfirmBusy(false); }
+  };
   const deactivate = async (id: string) => { await adminShifts.deactivate(id); if (assignOpen === id) closeAssignments(); await load(); };
   const reactivate = async (id: string) => {
     setRestoring(id); setListError('');
@@ -391,7 +413,6 @@ export default function ShiftsAdminPage() {
     finally { setRestoring(null); }
   };
   const deleteShift = async (shift: Shift) => {
-    if (!window.confirm(`Permanently delete inactive shift “${shift.name}” and remove its employee assignments? Completed checklist records, photos and reports will remain in history.`)) return;
     setRestoring(shift.id); setListError('');
     try { await adminShifts.deleteInactive(shift.id); await load(); }
     catch (failure) { setListError(failure instanceof Error ? failure.message : 'Could not delete shift. Please retry.'); }
@@ -620,7 +641,6 @@ export default function ShiftsAdminPage() {
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
         <Title order={2} component="h1">Shifts</Title>
         <Group gap="xs" wrap="wrap">
-          <Button variant="default" leftSection={<Plus size={16} />} disabled={!schedulingReady} onClick={() => setVisitDialog({ preset: null })}>Add visit</Button>
           <Button leftSection={<Plus size={16} />} disabled={!schedulingReady} onClick={openCreate}>Add shift</Button>
         </Group>
       </Group>
@@ -628,6 +648,13 @@ export default function ShiftsAdminPage() {
       {listError && <Text role="alert" c="red" mb="md">{listError}</Text>}
       {countError && <Text role="alert" c="red" mb="md">{countError}</Text>}
 
+      <TodayKpis />
+      <Group grow align="flex-end" mb="sm">
+        <Select label="Filter by company" placeholder="All companies" clearable searchable data={companyChoices} value={filterCompany}
+          onChange={(value) => { setFilterCompany(value); setShiftPage(1); }} />
+        <Select label="Filter by shift type" placeholder="All types" clearable data={SCHEDULE_TYPES} value={filterType}
+          onChange={(value) => { setFilterType(value); setShiftPage(1); }} />
+      </Group>
       <LifecycleTabs value={lifecycle} onChange={changeLifecycle} label="Shift activity" disabled={assignBusy || templateSaving}
         showCompleted activeCount={activeCount} completedCount={completedCount} inactiveCount={inactiveCount}>
       {loading ? <Loader /> : pageTotal === 0 ? (
@@ -637,7 +664,7 @@ export default function ShiftsAdminPage() {
         <Table.ScrollContainer minWidth={600} tabIndex={0} role="region" aria-label="Shifts table">
           <Table striped highlightOnHover withTableBorder>
             <Table.Thead>
-              <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Schedule</Table.Th><Table.Th>Employees</Table.Th><Table.Th>Status</Table.Th><Table.Th w={200}>Actions</Table.Th></Table.Tr>
+              <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Schedule</Table.Th><Table.Th>Employee names</Table.Th><Table.Th>Status</Table.Th><Table.Th w={200}>Actions</Table.Th></Table.Tr>
             </Table.Thead>
             <Table.Tbody>
               {pageRows.map((s) => (
@@ -645,74 +672,31 @@ export default function ShiftsAdminPage() {
                   <Table.Tr>
                     <Table.Td fw={500}>{s.name}</Table.Td>
                     <Table.Td>{scheduleLabel(s)}</Table.Td>
-                    <Table.Td>{assignmentCounts ? (assignmentCounts[s.id] ?? 0) : assignments[s.id] ? assignments[s.id].filter(a => a.isActive).length : '—'}</Table.Td>
+                    <Table.Td>{assigneeNames[s.id] ? (assigneeNames[s.id].length === 0 ? 'None' : assigneeNames[s.id].join(', ')) : assignmentCounts ? `${assignmentCounts[s.id] ?? 0} assigned` : '—'}</Table.Td>
                     <Table.Td><Text size="sm">{shiftView(s) === 'inactive' ? 'Inactive' : shiftView(s) === 'completed' ? 'Completed' : s.schedule.type === 6 && s.schedule.oneTimeDate && s.schedule.oneTimeDate.slice(0, 10) < new Date().toLocaleDateString('en-CA', { timeZone: timeZoneId }) ? 'Past visit · check completion' : 'Active'}</Text></Table.Td>
                     <Table.Td>
                       <Group gap={6} wrap="nowrap">
-                        <Button size="xs" variant="light" onClick={() => setWorkspaceId(s.id)}>Manage</Button>
                         <Menu shadow="md" width={230} position="bottom-end" withinPortal>
                           <Menu.Target>
                             <ActionIcon variant="light" size="md" aria-label={`More actions for ${s.name}`}><MoreHorizontal size={16} /></ActionIcon>
                           </Menu.Target>
                           <Menu.Dropdown>
-                            {isAdmin() && !s.isBranchMain && <Menu.Item onClick={() => { setPricingShift(s); setPricingOccurrence(undefined); }}>Pricing</Menu.Item>}
-                            {isAdmin() && <Menu.Item leftSection={<Pencil size={13} />} onClick={() => openEdit(s)}>Edit</Menu.Item>}
-                            {s.isActive && !s.isBranchMain && <Menu.Item disabled={assignBusy} onClick={() => openAssign(s.id)}>Employees</Menu.Item>}
-                            {s.isActive && <Menu.Item onClick={() => openOccurrences(s)}>Occurrences</Menu.Item>}
-                            {s.isActive && s.isBranchMain && <Menu.Item onClick={() => setVisitDialog({ preset: { companyId: s.companyId, branchId: s.branchId, propertyName: s.name } })}>Add visit</Menu.Item>}
-                            {s.isActive && !s.isBranchMain && s.schedule.type === 4 && <Menu.Item onClick={() => { void openOccurrences(s); openOccurrenceEditor(undefined, '4'); }}>Schedule one-time visit</Menu.Item>}
-                            {isAdmin() && s.isActive && <Menu.Item onClick={() => { setTemplateShift(s); setAssignedTemplate(s.qualityCycleTemplateId ?? null); setTemplateError(''); }}>Checklist template</Menu.Item>}
-                            {s.isActive && <Menu.Item color="red" disabled={assignBusy} onClick={() => deactivate(s.id)}>Deactivate</Menu.Item>}
-                            {!s.isActive && <Menu.Item disabled={!!restoring} onClick={() => reactivate(s.id)}>Reactivate</Menu.Item>}
-                            {!s.isActive && <Menu.Item color="red" disabled={!!restoring} onClick={() => deleteShift(s)}>Delete</Menu.Item>}
+                            <Menu.Item leftSection={<Eye size={13} />} onClick={() => setWorkspaceId(s.id)}>View details</Menu.Item>
+                            {isAdmin() && !s.isBranchMain && <Menu.Item leftSection={<Receipt size={13} />} onClick={() => { setPricingShift(s); setPricingOccurrence(undefined); }}>Pricing</Menu.Item>}
+                            {isAdmin() && <Menu.Item leftSection={<Pencil size={13} />} onClick={() => openEdit(s)}>Edit schedule</Menu.Item>}
+                            {s.isActive && !s.isBranchMain && <Menu.Item disabled={assignBusy} leftSection={<UserPlus size={13} />} onClick={() => openAssign(s.id)}>Assign employees</Menu.Item>}
+                            {s.isActive && <Menu.Item leftSection={<CalendarDays size={13} />} onClick={() => openOccurrences(s)}>Occurrences</Menu.Item>}
+                            {s.isActive && s.isBranchMain && <Menu.Item leftSection={<Plus size={13} />} onClick={() => setVisitDialog({ preset: { companyId: s.companyId, branchId: s.branchId, propertyName: s.name } })}>Add visit</Menu.Item>}
+                            {s.isActive && !s.isBranchMain && s.schedule.type === 4 && <Menu.Item leftSection={<CalendarPlus size={13} />} onClick={() => { void openOccurrences(s); openOccurrenceEditor(undefined, '4'); }}>Schedule one-time visit</Menu.Item>}
+                            {isAdmin() && s.isActive && <Menu.Item leftSection={<ListChecks size={13} />} onClick={() => { setTemplateShift(s); setAssignedTemplate(s.qualityCycleTemplateId ?? null); setTemplateError(''); }}>Checklist template</Menu.Item>}
+                            {s.isActive && <Menu.Item color="red" leftSection={<PauseCircle size={13} />} disabled={assignBusy} onClick={() => setConfirmAction({ title: `Deactivate “${s.name}”?`, body: 'It stops taking new visits. You can reactivate it later from the Inactive tab.', confirmLabel: 'Deactivate', color: 'red', run: () => deactivate(s.id) })}>Deactivate</Menu.Item>}
+                            {!s.isActive && <Menu.Item leftSection={<PlayCircle size={13} />} disabled={!!restoring} onClick={() => setConfirmAction({ title: `Reactivate “${s.name}”?`, body: 'It returns to the Active tab and can take visits again.', confirmLabel: 'Reactivate', run: () => reactivate(s.id) })}>Reactivate</Menu.Item>}
+                            {!s.isActive && <Menu.Item color="red" leftSection={<Trash2 size={13} />} disabled={!!restoring} onClick={() => setConfirmAction({ title: `Delete “${s.name}”?`, body: 'Permanently delete this inactive shift and remove its employee assignments. Completed checklist records, photos and reports will remain in history.', confirmLabel: 'Delete', color: 'red', run: () => deleteShift(s) })}>Delete</Menu.Item>}
                           </Menu.Dropdown>
                         </Menu>
                       </Group>
                     </Table.Td>
                   </Table.Tr>
-                  {assignOpen === s.id && (
-                    <Table.Tr key={s.id + '-assign'}>
-                      <Table.Td colSpan={5} p="sm">
-                        <Group align="flex-end" mb="xs" wrap="wrap" gap="xs">
-                          <MultiSelect
-                            label="Assign employees"
-                            placeholder="Select employees"
-                            data={employees.filter(e => e.isActive && !(assignments[s.id] ?? []).some(a => a.isActive && a.employeeId === e.id)).map((e) => ({ value: e.id, label: `${e.firstName} ${e.lastName}${e.email ? ` (${e.email})` : ''}` }))}
-                            value={assignSel}
-                            onChange={setAssignSel}
-                            style={{ flex: 1, minWidth: 200 }}
-                            searchable
-                            disabled={assignLoading || assignBusy || !assignments[s.id]}
-                          />
-                          <Button size="xs" loading={assignBusy} disabled={assignLoading || !assignSel.length || !assignments[s.id]} onClick={() => doAssign(s.id)}>Assign</Button>
-                          <Button size="xs" variant="default" disabled={assignLoading || assignBusy} onClick={async () => {
-                            const version = ++assignmentGeneration.current;
-                            setAssignLoading(true); setAssignError(''); setAssignStatus('');
-                            try {
-                              const a = await refreshAssignments(s.id, version);
-                              if (version === assignmentGeneration.current) setAssignSel(selected => selected.filter(id => !a.some(x => x.isActive && x.employeeId === id)));
-                            } catch (e) { if (version === assignmentGeneration.current) setAssignError(e instanceof Error ? e.message : 'Could not load assignments. Please retry.'); }
-                            finally { if (version === assignmentGeneration.current) setAssignLoading(false); }
-                          }}>Refresh assignments</Button>
-                        </Group>
-                        <Text size="sm" c="dimmed">Overlapping shifts are checked when you assign employees. Any conflict will be shown here.</Text>
-                        {assignError && <Text role="alert" aria-label="Assignment error" c="red">{assignError}</Text>}
-                        {assignStatus && <Text role="status">{assignStatus}</Text>}
-                        {assignLoading ? <Text>Loading assignments…</Text> : !assignments[s.id] ? <Text>Assignments could not be loaded. Use Refresh assignments to retry.</Text> : assignments[s.id].length === 0 ? (
-                          <Text size="sm" c="dimmed">No employees assigned.</Text>
-                        ) : (
-                          <Stack gap={4}>
-                            {(assignments[s.id] ?? []).map((a) => (
-                              <Group key={a.id} justify="space-between" wrap="wrap" gap="xs">
-                                <Text size="sm">{employeeName(a.employeeId)}</Text>
-                                <ActionIcon variant="subtle" color="red" size="sm" disabled={assignBusy || assignLoading} aria-label={`Unassign ${employeeName(a.employeeId)}`} onClick={() => doUnassign(s.id, a.employeeId)}><Trash2 size={14} /></ActionIcon>
-                              </Group>
-                            ))}
-                          </Stack>
-                        )}
-                      </Table.Td>
-                    </Table.Tr>
-                  )}
                 </Fragment>
               ))}
             </Table.Tbody>
@@ -722,20 +706,60 @@ export default function ShiftsAdminPage() {
       )}
       </LifecycleTabs>
 
-      {workspaceShift && <ShiftWorkspace shift={workspaceShift} isAdmin={isAdmin()} busy={assignBusy || Boolean(restoring)}
+      {workspaceShift && <ShiftWorkspace shift={workspaceShift}
         employeeCount={assignmentCounts ? (assignmentCounts[workspaceShift.id] ?? 0) : assignments[workspaceShift.id] ? assignments[workspaceShift.id].filter(a => a.isActive).length : undefined}
         templateName={templates.find(t => t.id === workspaceShift.qualityCycleTemplateId)?.title ?? null}
-        onClose={() => setWorkspaceId(null)}
-        onEdit={fromWorkspace(s => { void openEdit(s); })}
-        onPricing={fromWorkspace(s => { setPricingShift(s); setPricingOccurrence(undefined); })}
-        onAssign={fromWorkspace(s => { void openAssign(s.id); })}
-        onOccurrences={fromWorkspace(s => { void openOccurrences(s); })}
-        onScheduleOneTime={fromWorkspace(s => { void openOccurrences(s); openOccurrenceEditor(undefined, '4'); })}
-        onAddVisit={fromWorkspace(s => setVisitDialog({ preset: { companyId: s.companyId, branchId: s.branchId, propertyName: s.name } }))}
-        onTemplate={fromWorkspace(s => { setTemplateShift(s); setAssignedTemplate(s.qualityCycleTemplateId ?? null); setTemplateError(''); })}
-        onDeactivate={fromWorkspace(s => { void deactivate(s.id); })}
-        onReactivate={fromWorkspace(s => { void reactivate(s.id); })}
-        onDelete={fromWorkspace(s => { void deleteShift(s); })} />}
+        onClose={() => setWorkspaceId(null)} />}
+      {assignOpen && <Modal opened onClose={closeAssignments} title={`Assign employees — ${pageRows.find(r => r.id === assignOpen)?.name ?? ''}`} size="lg" radius="md">
+        <Stack gap="sm">
+          <Group align="flex-end" mb="xs" wrap="wrap" gap="xs">
+            <MultiSelect
+              label="Assign employees"
+              placeholder="Select employees"
+              data={employees.filter(e => e.isActive && !(assignments[assignOpen] ?? []).some(a => a.isActive && a.employeeId === e.id)).map((e) => ({ value: e.id, label: `${e.firstName} ${e.lastName}${e.email ? ` (${e.email})` : ''}` }))}
+              value={assignSel}
+              onChange={setAssignSel}
+              style={{ flex: 1, minWidth: 200 }}
+              searchable
+              disabled={assignLoading || assignBusy || !assignments[assignOpen]}
+            />
+            <Button size="xs" loading={assignBusy} disabled={assignLoading || !assignSel.length || !assignments[assignOpen]} onClick={() => doAssign(assignOpen)}>Assign</Button>
+            <Button size="xs" variant="default" disabled={assignLoading || assignBusy} onClick={async () => {
+              const version = ++assignmentGeneration.current;
+              setAssignLoading(true); setAssignError(''); setAssignStatus('');
+              try {
+                const a = await refreshAssignments(assignOpen, version);
+                if (version === assignmentGeneration.current) setAssignSel(selected => selected.filter(id => !a.some(x => x.isActive && x.employeeId === id)));
+              } catch (e) { if (version === assignmentGeneration.current) setAssignError(e instanceof Error ? e.message : 'Could not load assignments. Please retry.'); }
+              finally { if (version === assignmentGeneration.current) setAssignLoading(false); }
+            }}>Refresh assignments</Button>
+          </Group>
+          <Text size="sm" c="dimmed">Overlapping shifts are checked when you assign employees. Any conflict will be shown here.</Text>
+          {assignError && <Text role="alert" aria-label="Assignment error" c="red">{assignError}</Text>}
+          {assignStatus && <Text role="status">{assignStatus}</Text>}
+          {assignLoading ? <Text>Loading assignments…</Text> : !assignments[assignOpen] ? <Text>Assignments could not be loaded. Use Refresh assignments to retry.</Text> : assignments[assignOpen].length === 0 ? (
+            <Text size="sm" c="dimmed">No employees assigned.</Text>
+          ) : (
+            <Stack gap={4}>
+              {(assignments[assignOpen] ?? []).map((a) => (
+                <Group key={a.id} justify="space-between" wrap="wrap" gap="xs">
+                  <Text size="sm">{employeeName(a.employeeId)}</Text>
+                  <ActionIcon variant="subtle" color="red" size="sm" disabled={assignBusy || assignLoading} aria-label={`Unassign ${employeeName(a.employeeId)}`} onClick={() => doUnassign(assignOpen, a.employeeId)}><Trash2 size={14} /></ActionIcon>
+                </Group>
+              ))}
+            </Stack>
+          )}
+        </Stack>
+      </Modal>}
+      <Modal opened={Boolean(confirmAction)} onClose={() => { if (!confirmBusy) setConfirmAction(null); }} title={confirmAction?.title ?? ''} size="sm" radius="md">
+        <Stack>
+          <Text size="sm">{confirmAction?.body}</Text>
+          <Group justify="flex-end">
+            <Button variant="default" disabled={confirmBusy} onClick={() => setConfirmAction(null)}>Cancel</Button>
+            <Button color={confirmAction?.color} loading={confirmBusy} onClick={() => void runConfirm()}>{confirmAction?.confirmLabel ?? 'Confirm'}</Button>
+          </Group>
+        </Stack>
+      </Modal>
       {pricingShift && <ShiftPricingDialog key={`${pricingShift.id}-${pricingOccurrence?.startUtc ?? "plan"}`} shift={pricingShift} occurrence={pricingOccurrence} onClose={() => { setPricingShift(null); setPricingOccurrence(undefined); }} />}
       <Modal opened={Boolean(occurrenceShift)} onClose={() => { if (occurrenceSaving) return; occurrenceGeneration.current++; setOccurrenceShift(null); setEditingOccurrence(null); }} closeButtonProps={{ disabled: occurrenceSaving }} closeOnEscape={!occurrenceSaving} closeOnClickOutside={!occurrenceSaving} title={`Occurrences${occurrenceShift ? ` — ${occurrenceShift.name}` : ''}`} size="xl">
         <Stack>

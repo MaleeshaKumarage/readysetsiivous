@@ -76,9 +76,12 @@ test('unbound tenant owner keeps administration without a personal shift shortcu
   await page.goto('/admin/employees/');
   await expect(page.getByRole('button', { name: 'Add employee' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveCount(0);
-  await page.getByRole('link', { name: 'Portals', exact: true }).click();
+  // The header has no Portals button now; the profile page links back to the portal screen.
+  await page.getByRole('link', { name: 'Profile', exact: true }).click();
+  await page.getByRole('link', { name: 'Back to your account' }).click();
   await expect(page).toHaveURL(/account\/\?tenant=readysetsiivous/);
   await expect(page.getByText('To receive shifts, add an Administrator profile', { exact: false })).toBeVisible();
   await page.getByRole('link', { name: 'Office portal' }).click();
-  await expect(page.getByRole('link', { name: 'Portals', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Office portal' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Portals', exact: true })).toHaveCount(0);
 });

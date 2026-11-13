@@ -69,7 +69,8 @@ test('each cleaner has a donut split by customer against the 37.5 hour full week
   await expect(page.getByText('40.0 of 37.5 h · over')).toBeVisible();
   const list = page.getByRole('region', { name: "Cleaners' weekly hours" });
   await expect(list).toBeVisible();
-  const scrollable = await list.evaluate(el => getComputedStyle(el).overflowY === 'auto' && el.scrollHeight > el.clientHeight);
+  // One row: the donuts sit side by side and the row scrolls sideways when there are more cleaners than fit.
+  const scrollable = await list.evaluate(el => getComputedStyle(el).overflowX === 'auto' && el.scrollWidth > el.clientWidth && el.scrollHeight <= el.clientHeight + 1);
   expect(scrollable).toBe(true);
 });
 

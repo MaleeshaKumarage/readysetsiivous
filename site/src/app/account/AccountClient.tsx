@@ -47,7 +47,7 @@ export default function AccountClient() {
       <div className="partner-header-actions">
         {account && <Link href={profileHref} className="notify-bell" aria-label="Profile" title="Profile"><UserRound size={22} aria-hidden="true" /></Link>}
         {!isPartner() && account && <NotificationBell settingsHref={`${profileHref}#notifications`} />}
-        {authed && <Button variant="ghost" size="sm" className="partner-quiet" onClick={() => logout().catch(() => setError('Sign-out failed. Please retry.'))}><LogOut size={17} aria-hidden="true" />Sign out</Button>}
+        {authed && <button type="button" className="notify-bell" aria-label="Sign out" title="Sign out" onClick={() => logout().catch(() => setError('Sign-out failed. Please retry.'))}><LogOut size={22} aria-hidden="true" /></button>}
       </div>
     </div></header>
 

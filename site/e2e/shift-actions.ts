@@ -18,8 +18,16 @@ export async function shiftRowAction(page: Page, row: Locator, label: string) {
   await page.getByRole('menuitem', { name: label, exact: true }).click();
 }
 
-/** Opens the shift workspace for the named shift row. */
+/** Opens the shift workspace for the named shift row from its More actions menu. */
 export async function openShiftWorkspace(page: Page, shiftName: string) {
-  await page.getByRole('row').filter({ hasText: shiftName }).getByRole('button', { name: 'Manage', exact: true }).click();
+  await page.getByRole('row').filter({ hasText: shiftName }).getByRole('button', { name: /^More actions for / }).click();
+  await page.getByRole('menuitem', { name: 'View details', exact: true }).click();
   await expect(page.getByRole('dialog', { name: `Manage — ${shiftName}`, exact: true })).toBeVisible();
+}
+
+/** Confirms the Deactivate, Reactivate or Delete popup opened from a shift's More actions menu. */
+export async function confirmShiftPopup(page: Page, label: 'Deactivate' | 'Reactivate' | 'Delete') {
+  const popup = page.getByRole('dialog', { name: new RegExp(`^${label} “`) });
+  await expect(popup).toBeVisible();
+  await popup.getByRole('button', { name: label, exact: true }).click();
 }

@@ -361,7 +361,7 @@ for (const role of ['admin', 'manager'] as const) {
     await page.route(/\/api\/v1\/(admin|manager)\//, route => route.fulfill({ status: 200, headers,
       json: route.request().url().endsWith('/companies') ? { items: [], total: 0 } : [] }));
     await page.goto(role === 'admin' ? '/admin/employees/' : '/manager/');
-    await (isMobile && role === 'admin' ? page.getByRole('navigation', { name: 'Switch portal' }).getByRole('link', { name: 'Employee', exact: true }) : page.getByRole('link', { name: 'My shifts', exact: true })).click();
+    await page.getByRole('navigation', { name: 'Switch portal' }).getByRole('link', { name: 'Employee', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'My Shifts', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'AAA1 weekday shift' })).toBeVisible();
     await page.getByRole('button', { name: 'Start', exact: true }).click();
@@ -376,15 +376,11 @@ for (const role of ['admin', 'manager'] as const) {
     expect(work.startCalls).toBe(1); expect(work.endCalls).toBe(1);
     expect(work.submitted.items).toEqual([{ itemText: 'Corridor', isChecked: true }, { itemText: 'Gym', isChecked: false }]);
     expect(work.submitted.employeeId).toBeUndefined();
-    await page.getByRole('link', { name: 'Portals', exact: true }).click();
-    await expect(page).toHaveURL(/account\/\?tenant=readysetsiivous/);
-    await expect(page.getByRole('heading', { name: 'Account ready' })).toBeVisible();
-    await page.getByRole('link', { name: role === 'admin' ? 'Office portal' : 'Manager portal' }).click();
-    await expect(isMobile && role === 'admin' ? page.getByRole('navigation', { name: 'Switch portal' }).getByRole('link', { name: 'Employee', exact: true }) : page.getByRole('link', { name: 'My shifts', exact: true })).toBeVisible();
-    if (role === 'admin') {
-      await page.getByRole('link', { name: 'Portals', exact: true }).click();
-      await expect(page.getByRole('heading', { name: 'Account ready' })).toBeVisible();
-    }
+    // Back to management with the portal toggle; the header has no My shifts or Portals button.
+    await page.getByRole('navigation', { name: 'Switch portal' }).getByRole('link', { name: role === 'admin' ? 'Office' : 'Manager', exact: true }).click();
+    await expect(page).toHaveURL(role === 'admin' ? /\/admin\/(\?.*)?$/ : /\/manager\/(\?.*)?$/);
+    await expect(page.getByRole('navigation', { name: 'Switch portal' }).getByRole('link', { name: 'Employee', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveCount(0);
   });
 
   test(`${role} own-shift navigation remains available with no assignments`, async ({ page }) => {

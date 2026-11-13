@@ -128,7 +128,8 @@ for (const priorScheme of [null, 'dark'] as const) test(`leaving admin restores 
   await page.getByRole('link', { name: 'Office portal' }).click();
   await expect(page.getByRole('heading', { name: 'Office portal', exact: true })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-mantine-color-scheme', 'light');
-  await page.getByRole('link', { name: 'Portals', exact: true }).filter({ visible: true }).click();
+  await page.getByRole('link', { name: 'Profile', exact: true }).filter({ visible: true }).click();
+  await page.getByRole('link', { name: 'Back to your account' }).click();
   await expect(page).toHaveURL(/\/account\//);
   await expect.poll(() => page.locator('html').getAttribute('data-mantine-color-scheme')).toBe(priorScheme);
   await expect(page.locator('html')).not.toHaveAttribute('data-admin-theme');
@@ -151,10 +152,10 @@ test('phone header with own shifts and invoice form remain within viewport', asy
   await expect.poll(() => page.getByText('No invoices yet.', { exact: true }).evaluate(element => getComputedStyle(element).color)).toBe('rgb(70, 84, 139)');
   await page.screenshot({ path: testInfo.outputPath('invoices-own-shifts-375.png'), fullPage: true });
   await page.keyboard.press('Escape'); await expect(page.getByRole('dialog', { name: 'Create shift invoice' })).toHaveCount(0);
-  const accountLink = page.getByRole('banner').getByRole('link', { name: 'Portals', exact: true }).filter({ visible: true });
-  await expect(accountLink).toBeVisible();
-  await expect(accountLink).toHaveAttribute('href', '/account/?tenant=readysetsiivous');
-  await accountLink.click();
+  const profileLink = page.getByRole('banner').getByRole('link', { name: 'Profile', exact: true }).filter({ visible: true });
+  await expect(profileLink).toBeVisible();
+  await profileLink.click();
+  await page.getByRole('link', { name: 'Back to your account' }).click();
   await expect(page).toHaveURL(/\/account\/\?tenant=readysetsiivous$/);
   await expect(page.getByRole('heading', { name: 'Your account', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Office portal', exact: true })).toBeVisible();

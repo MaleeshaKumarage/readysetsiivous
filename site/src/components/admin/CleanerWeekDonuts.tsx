@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Button, Group, Paper, SimpleGrid, Stack, Text } from '@mantine/core';
+import { Button, Group, Paper, Stack, Text } from '@mantine/core';
 import { authorizedFetch } from '@/lib/adminApi';
 
 type CompanyHours = { companyId: string; customerName: string; scheduledHours: number };
@@ -91,10 +91,10 @@ export function CleanerWeekDonuts() {
       </Group>
     </Group>
     {week.employees.length === 0 ? <Text c="dimmed" size="sm">No active cleaners.</Text> : <div role="region" aria-label="Cleaners' weekly hours" tabIndex={0}
-      style={{ maxHeight: 520, overflowY: 'auto', paddingRight: 4 }}>
-      <SimpleGrid cols={{ base: 2, sm: 3, lg: 4 }} spacing="md">
-        {week.employees.map(person => <Donut key={person.employeeId} name={person.name} companies={person.companies ?? []} total={person.scheduledHours} full={week.fullTimeHours} />)}
-      </SimpleGrid>
+      style={{ display: 'flex', flexWrap: 'nowrap', gap: 16, overflowX: 'auto', overflowY: 'hidden', paddingBottom: 6 }}>
+      {week.employees.map(person => <div key={person.employeeId} style={{ flex: '0 0 150px' }}>
+        <Donut name={person.name} companies={person.companies ?? []} total={person.scheduledHours} full={week.fullTimeHours} />
+      </div>)}
     </div>}
   </Paper>;
 }

@@ -55,7 +55,7 @@ test('admin requires a start date, supports an open end date, and edits the rang
   await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
   await expect(page.getByRole('cell', { name: DATED_NAME, exact: true })).toBeVisible();
   expect(writes[0].validFrom).toBe('2026-11-01'); expect(writes[0].validUntil).toBeUndefined();
-  await shiftAction(page, DATED_NAME, 'Edit');
+  await shiftAction(page, DATED_NAME, 'Edit schedule');
   const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
   await expect(edit.getByRole('textbox', { name: 'Start date', exact: true })).toHaveValue('2026-11-01');
   await edit.getByRole('textbox', { name: 'Start date', exact: true }).fill('');
@@ -66,7 +66,7 @@ test('admin requires a start date, supports an open end date, and edits the rang
   await edit.getByLabel('End date (optional)', { exact: true }).fill('2026-11-30');
   await edit.getByRole('button', { name: 'Save changes' }).click();
   await expect(edit).toHaveCount(0); expect(writes[1].validUntil).toBe('2026-11-30');
-  await shiftAction(page, DATED_NAME, 'Edit');
+  await shiftAction(page, DATED_NAME, 'Edit schedule');
   await expect(edit.getByLabel('End date (optional)', { exact: true })).toHaveValue('2026-11-30');
   await edit.getByLabel('End date (optional)', { exact: true }).fill('');
   await edit.getByRole('button', { name: 'Save changes' }).click();
@@ -74,7 +74,7 @@ test('admin requires a start date, supports an open end date, and edits the rang
   expect(writes[2].validFrom).toBe('2026-11-01'); expect(writes[2].validUntil).toBeUndefined();
   shifts = [{ ...shifts[0], id: 'legacy', name: 'Legacy cleaning', validFrom: null, validUntil: null }];
   await page.reload();
-  await shiftAction(page, 'Legacy cleaning', 'Edit');
+  await shiftAction(page, 'Legacy cleaning', 'Edit schedule');
   await expect(edit.getByRole('textbox', { name: 'Start date', exact: true })).toHaveValue('');
   await expect(edit.getByRole('textbox', { name: 'Start date', exact: true })).not.toHaveAttribute('required');
   // A real edit before saving, so the save is not a no-op.

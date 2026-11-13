@@ -1,6 +1,6 @@
 import { selectDailyScheduleIfEmpty } from './admin-helpers';
 import { test, expect } from '@playwright/test';
-import { shiftAction } from './shift-actions';
+import { shiftAction, confirmShiftPopup } from './shift-actions';
 import { setupAdminMocks, shiftsResponse } from './admin-helpers';
 import { autoShiftName } from '../src/lib/shiftName';
 const AAMUVUORO_NAME = autoShiftName({ street: null, city: null, roomCount: null, bedCount: null });
@@ -804,7 +804,7 @@ test.describe('Admin Panel - Shifts Page', () => {
     await expect(page.getByRole('cell', { name: AAMUVUORO_NAME, exact: true })).toBeVisible();
 
     // Assign employee
-    await shiftAction(page, AAMUVUORO_NAME, 'Employees');
+    await shiftAction(page, AAMUVUORO_NAME, 'Assign employees');
     await expect(page.getByText('No employees assigned.')).toBeVisible();
 
     await page.locator('input[placeholder="Select employees"]').click();
@@ -817,8 +817,10 @@ test.describe('Admin Panel - Shifts Page', () => {
     await page.getByRole('button', { name: 'Unassign' }).first().click({ force: true });
     await expect(page.getByText('No employees assigned.')).toBeVisible();
 
+    // Close the assignment popup before using the row menu.
+    await page.keyboard.press('Escape');
     // Deactivate shift
-    await shiftAction(page, AAMUVUORO_NAME, 'Deactivate');
+    await shiftAction(page, AAMUVUORO_NAME, 'Deactivate'); await confirmShiftPopup(page, 'Deactivate');
     await expect(page.getByRole('button', { name: `More actions for ${AAMUVUORO_NAME}`, exact: true })).not.toBeVisible();
   });
 

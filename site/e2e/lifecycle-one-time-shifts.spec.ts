@@ -10,6 +10,11 @@ const visitShift = {
   validFrom: '2026-10-01T00:00:00', validUntil: '2026-10-01T00:00:00',
   schedule: { type: 6, oneTimeDate: '2026-10-01', oneTimeStart: '09:00', oneTimeEnd: '11:30' },
 };
+// The property's main shift: Add visit is offered from its More actions menu.
+const propertyShift = {
+  id: 'property', companyId: 'company', branchId: 'branch', name: 'AAA1 property', isActive: true, notes: null, qualityCycleTemplateId: null,
+  isBranchMain: true, defaultEmployeeId: null, schedule: { type: 4 },
+};
 const legacyOnCallShift = {
   id: 'legacy', companyId: 'company', branchId: 'branch', name: 'Legacy on-call', isActive: true, notes: null, qualityCycleTemplateId: null,
   validFrom: '2026-10-01T00:00:00', validUntil: null, schedule: { type: 4 },
@@ -21,7 +26,7 @@ async function mockAdmin(page: Page, seeded: any[] = [], options: { failFirstCre
   await setupAdminMocks(page);
   await page.clock.install({ time: new Date('2026-11-03T10:00:00Z') });
   const mock: AdminMock = { writes: [], posts: [], visitPosts: [], visitsAdded: 0 };
-  let shifts = seeded;
+  let shifts = [...seeded, propertyShift];
   await page.route(/\/api\/v1\/admin\//, async route => {
     const method = route.request().method();
     const path = new URL(route.request().url()).pathname;
@@ -79,11 +84,9 @@ async function fillCommon(page: Page, dialog: Locator) {
 // A single visit is added to the property's shift with Add visit; only the property, date and times are asked for.
 async function openAddVisit(page: Page) {
   await page.goto('/admin/shifts/');
-  await page.getByRole('button', { name: 'Add visit', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Add visit', exact: true });
-  await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'AAA', exact: true }).click();
-  await dialog.getByLabel('Property', { exact: true }).click(); await page.getByRole('option', { name: 'AAA1', exact: true }).click();
-  return dialog;
+  // Opened from the property's row, so the company and property are already fixed and not asked again.
+  await shiftAction(page, 'AAA1 property', 'Add visit');
+  return page.getByRole('dialog', { name: 'Add visit', exact: true });
 }
 
 test('one-time is retired for new shifts, on-call stays, and existing on-call shifts retain their schedule', async ({ page }) => {
@@ -95,7 +98,7 @@ test('one-time is retired for new shifts, on-call stays, and existing on-call sh
   await page.getByRole('option', { name: 'Daily', exact: true }).click();
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
 
-  await shiftAction(page, 'Legacy on-call', 'Edit');
+  await shiftAction(page, 'Legacy on-call', 'Edit schedule');
   const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
   await expect(edit.getByLabel('Schedule', { exact: true })).toHaveValue('On-call / flexible');
   await edit.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(edit).toHaveCount(0);
@@ -144,7 +147,7 @@ test('date, start and end errors block the save and keep the draft', async ({ pa
 test('edit restores the one-time date and times and saves a changed end time', async ({ page }) => {
   const mock = await mockAdmin(page, [visitShift]);
   await page.goto('/admin/shifts/');
-  await shiftAction(page, 'Past visit', 'Edit');
+  await shiftAction(page, 'Past visit', 'Edit schedule');
   const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
   await expect(edit.getByLabel('Schedule', { exact: true })).toHaveValue('One-time');
   await expect(edit.getByRole('textbox', { name: 'Date', exact: true })).toHaveValue('2026-10-01');
