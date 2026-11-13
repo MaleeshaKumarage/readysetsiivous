@@ -733,7 +733,7 @@ export default function ShiftsAdminPage() {
         <Text size="xs" c="dimmed" hiddenFrom="sm" mb={6}>Scroll sideways to see all columns.</Text>
         <Table.ScrollContainer minWidth={600} tabIndex={0} role="region" aria-label="Shifts table">
           <Table striped highlightOnHover withTableBorder>
-            <Table.Thead className="bg-accent-50 text-accent-950">
+            <Table.Thead className="bg-brand-500 text-accent-950">
               <Table.Tr><Table.Th fw={700}>Name</Table.Th><Table.Th fw={700}>Schedule</Table.Th><Table.Th fw={700}>Employee names</Table.Th><Table.Th fw={700}>Status</Table.Th><Table.Th w={200} fw={700}>Actions</Table.Th></Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -758,7 +758,7 @@ export default function ShiftsAdminPage() {
                         return (
                           <Stack gap={4}>
                             <p className="text-sm font-semibold text-accent-950">{address || s.name}</p>
-                            {chips.length > 0 && <Group gap={6}>{chips.map(c => <Badge key={c} variant="outline">{c}</Badge>)}</Group>}
+                            {chips.length > 0 && <Group gap={6}>{chips.map(c => <Badge key={c} variant="subtle">{c}</Badge>)}</Group>}
                             {address && <span className="sr-only">{s.name}</span>}
                           </Stack>
                         );
@@ -812,7 +812,7 @@ export default function ShiftsAdminPage() {
                           {visitsOpen && expandedVisits.length > 0 && (
                             <div className="mt-3 overflow-x-auto rounded-xl border border-accent-100">
                               <table className="w-full text-left text-sm text-gray-900">
-                                <thead className="bg-accent-50 text-accent-950">
+                                <thead className="bg-brand-500 text-accent-950">
                                   <tr>
                                     <th className="px-3 py-2 font-bold"><span className="inline-flex items-center gap-1.5"><ListChecks size={14} aria-hidden />Visit</span></th>
                                     <th className="px-3 py-2 font-bold"><span className="inline-flex items-center gap-1.5"><Clock size={14} aria-hidden />Starts</span></th>
