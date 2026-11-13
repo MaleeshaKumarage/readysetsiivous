@@ -62,12 +62,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     defaults:
       run:
         working-directory: site
+    # Official Playwright image: browsers and their system dependencies are preinstalled.
+    # Its tag must match the @playwright/test version pinned in site/package-lock.json (checked below).
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -76,10 +80,16 @@ jobs:
           cache: 'npm'
           cache-dependency-path: site/package-lock.json
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - name: Check Playwright image matches the pinned version
+        run: |
+          PINNED=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")
+          if [ "$PINNED" != "1.63.0" ]; then
+            echo "@playwright/test $PINNED is pinned, but the container image is v1.63.0-noble. Update container.image in ci-build-test.yml."
+            exit 1
+          fi
       - run: npm run build
-      - name: Run Playwright shard ${{ matrix.shard }}/4
-        run: npm run test:e2e -- --shard=${{ matrix.shard }}/4
+      - name: Run Playwright shard ${{ matrix.shard }}/10
+        run: npm run test:e2e -- --shard=${{ matrix.shard }}/10
       - name: Upload blob report
         if: always()
         uses: actions/upload-artifact@v4
