@@ -130,7 +130,7 @@ test('direct link to a section loads only that tab', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   const requests = await mockWorkspace(page);
   await page.goto(ws(CUSTOMER, 'agreements'));
-  await expect(page.getByRole('cell', { name: 'Main cleaning agreement', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Main cleaning agreement', exact: true })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'Other customer agreement', exact: true })).toHaveCount(0);
   expect(requests.filter(r => /shifts|invoices/.test(r))).toEqual([]);
 });
@@ -190,7 +190,7 @@ test('retrying a failed tab loads it once', async ({ page }) => {
   await expect(page.getByRole('alert').filter({ hasText: 'Agreements could not be loaded.' })).toBeVisible();
   failure.value = false;
   await page.getByRole('button', { name: 'Retry agreements' }).click();
-  await expect(page.getByRole('cell', { name: 'Main cleaning agreement', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Main cleaning agreement', exact: true })).toBeVisible();
   expect(requests.filter(r => r.startsWith('GET /api/v1/admin/agreements?')).length).toBe(2);
 });
 
@@ -217,7 +217,7 @@ test('late agreements response does not overwrite the Work tab', async ({ page }
   await expect(page.getByRole('cell', { name: 'Weekly visit', exact: true })).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Work' })).toHaveAttribute('aria-selected', 'true');
   await page.getByRole('tab', { name: 'Agreements' }).click();
-  await expect(page.getByRole('cell', { name: 'Main cleaning agreement', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Main cleaning agreement', exact: true })).toBeVisible();
 });
 
 test('Back returns to the filtered companies list page', async ({ page }) => {
