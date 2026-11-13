@@ -2,12 +2,14 @@
 
 import { showError } from '@/lib/toast';
 import { useEffect, useState } from 'react';
-import { Title, Button, Table, Modal, TextInput, Textarea, Group, Stack, Text, Loader, Badge, NumberInput } from '@mantine/core';
+import { Title, Button, Modal, TextInput, Textarea, Group, Stack, Text, Loader, Badge, NumberInput } from '@mantine/core';
 import { Plus } from 'lucide-react';
 import { serviceFieldsFromForm } from '@/lib/serviceFields';
 import { adminServices } from '@/lib/adminApi';
 import { setServiceActivity } from '@/lib/serviceLifecycleApi';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
+import { DsGrid } from '@/components/ds/DsGrid';
+import { Badge as DsBadge, Button as DsButton } from '@/ds';
 
 type ServiceRowLocal = { id: string; slug: string; category: string; name: { values: Record<string, string> }; description: { values: Record<string, string> }; additionalInfo: { values: Record<string, string> } | null; icon: string; imageUrl?: string | null; currency?: string; durationMinutes: number; priceNet: number; vatRatePercent: number; isActive: boolean; isFeatured: boolean; sortOrder: number };
 
@@ -121,43 +123,26 @@ export default function ServicesAdminPage() {
       {loading ? <Loader /> : visibleServices.length === 0 ? (
         <Text c="dimmed">{services.length === 0 ? 'No services yet.' : `No ${status} services.`}</Text>
       ) : (
-        <Table.ScrollContainer minWidth={550}>
-          <Table striped highlightOnHover withTableBorder>
-            <Table.Thead>
-              <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Price</Table.Th><Table.Th>Duration</Table.Th><Table.Th>Status</Table.Th><Table.Th w={120}></Table.Th></Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {visibleServices.map((s) => (
-                <Table.Tr key={s.id}>
-                  <Table.Td fw={500}>{s.name?.values?.fi ?? s.name?.values?.en ?? ''}</Table.Td>
-                  <Table.Td>{s.priceNet?.toFixed(2)} € excl. VAT{s.vatRatePercent != null ? ` (${s.vatRatePercent}%)` : ''}</Table.Td>
-                  <Table.Td>{s.durationMinutes} min</Table.Td>
-                  <Table.Td>
-                    {s.isActive
-                      ? <Badge color="green">Active</Badge>
-                      : <Badge color="gray">Inactive</Badge>}
-                  </Table.Td>
-                  <Table.Td>
-                    <Group gap={6} wrap="nowrap">
-                      <Button size="xs" variant="light" onClick={() => openEdit(s)}>Edit</Button>
-                      <Button
-                        size="xs"
-                        variant="subtle"
-                        color={s.isActive ? 'red' : 'green'}
-                        loading={activityBusy === s.id}
-                        disabled={activityBusy !== null && activityBusy !== s.id}
-                        onClick={() => toggleStatus(s)}
-                      >
-                        {s.isActive ? 'Deactivate' : 'Reactivate'}
-                      </Button>
-                      {!s.isActive && <Button size="xs" variant="subtle" color="red" loading={activityBusy === s.id} disabled={activityBusy !== null && activityBusy !== s.id} onClick={() => deleteService(s)}>Delete</Button>}
-                    </Group>
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
+        <DsGrid<ServiceRowLocal>
+          label="Services"
+          rows={visibleServices}
+          getRowId={(service) => service.id}
+          columns={[
+            { headerName: 'Name', colId: 'name', valueGetter: p => p.data?.name?.values?.fi ?? p.data?.name?.values?.en ?? '', cellClass: 'font-medium', flex: 2 },
+            { headerName: 'Price', colId: 'price', valueGetter: p => p.data ? `${p.data.priceNet?.toFixed(2)} € excl. VAT${p.data.vatRatePercent != null ? ` (${p.data.vatRatePercent}%)` : ''}` : '', flex: 2 },
+            { headerName: 'Duration', colId: 'duration', valueGetter: p => p.data ? `${p.data.durationMinutes} min` : '' },
+            { headerName: 'Status', colId: 'status', sortable: false, cellRenderer: (p: { data?: ServiceRowLocal }) => p.data ? <DsBadge variant={p.data.isActive ? 'green' : 'subtle'}>{p.data.isActive ? 'Active' : 'Inactive'}</DsBadge> : null },
+            { headerName: '', colId: 'actions', sortable: false, minWidth: 260, flex: 0, width: 280, cellRenderer: (p: { data?: ServiceRowLocal }) => p.data ? (
+              <div className="flex flex-wrap items-center gap-2 py-1">
+                <DsButton variant="outline" onClick={() => openEdit(p.data as ServiceRowLocal)}>Edit</DsButton>
+                <DsButton variant="ghost" className={p.data.isActive ? 'text-red-600' : 'text-green-700'} disabled={activityBusy !== null && activityBusy !== p.data.id} onClick={() => toggleStatus(p.data as ServiceRowLocal)}>
+                  {p.data.isActive ? 'Deactivate' : 'Reactivate'}
+                </DsButton>
+                {!p.data.isActive && <DsButton variant="ghost" className="text-red-600" disabled={activityBusy !== null && activityBusy !== p.data.id} onClick={() => deleteService(p.data as ServiceRowLocal)}>Delete</DsButton>}
+              </div>
+            ) : null },
+          ]}
+        />
       )}
       </LifecycleTabs>
 
