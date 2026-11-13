@@ -93,6 +93,8 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
     await page.goto('/admin/');
 
     await expect(page.getByRole('heading', { name: 'Office portal' })).toBeVisible();
+    // A header wider than the phone makes mobile emulation zoom out, which moves the Sign out target.
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     const signOut = page.getByRole('banner').getByRole('button', { name: 'Sign out', exact: true });
     await expect(signOut).toBeVisible();
     await expect(signOut).toBeInViewport();

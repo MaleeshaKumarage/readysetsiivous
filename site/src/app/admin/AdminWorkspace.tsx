@@ -206,11 +206,11 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       >
         <AppShell.Header className="admin-header">
           <Group h="100%" justify="space-between" wrap="nowrap" gap="xs">
-            <Group gap="xs" wrap="nowrap" className="admin-context">
+            <Group gap="xs" wrap="nowrap" className="admin-context" style={{ minWidth: 0, flexShrink: 1 }}>
               <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" aria-label="Toggle navigation" aria-expanded={opened} aria-controls="admin-navigation" />
               <div style={{ minWidth: 0 }}><Text size="xs" c="dimmed" className="admin-eyebrow" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Tenant administration</Text><Text fw={600} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{NAV_GROUPS.flatMap(group => group.items).filter(item => item.href ? pathname.startsWith(base + item.href) : pathname === '/admin' || pathname === '/admin/').sort((a, b) => b.href.length - a.href.length)[0]?.label ?? 'Workspace'}</Text></div>
             </Group>
-            <Group gap={4} wrap="nowrap">
+            <Group gap={4} wrap="wrap" justify="flex-end" className="admin-actions" style={{ minWidth: 0 }}>
               {hasOwnWorkIdentity && <PortalSwitch current="office" officeHref={isAdmin() ? '/admin/' : '/manager/'} officeLabel={isAdmin() ? 'Office' : 'Manager'} tenant={authTenant()} />}
               {hasOwnWorkIdentity && <Box visibleFrom="sm"><Button component={Link} href="/me/shifts/" variant="light" size="xs">My shifts</Button></Box>}
               <NotificationBell settingsHref={`/account/profile/?tenant=${encodeURIComponent(authTenant())}#notifications`} />
