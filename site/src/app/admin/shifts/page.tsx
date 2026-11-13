@@ -702,8 +702,8 @@ export default function ShiftsAdminPage() {
         <Text size="xs" c="dimmed" hiddenFrom="sm" mb={6}>Scroll sideways to see all columns.</Text>
         <Table.ScrollContainer minWidth={600} tabIndex={0} role="region" aria-label="Shifts table">
           <Table striped highlightOnHover withTableBorder>
-            <Table.Thead>
-              <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Schedule</Table.Th><Table.Th>Employee names</Table.Th><Table.Th>Status</Table.Th><Table.Th w={200}>Actions</Table.Th></Table.Tr>
+            <Table.Thead style={{ background: 'var(--mantine-color-gray-2)' }}>
+              <Table.Tr><Table.Th fw={700}>Name</Table.Th><Table.Th fw={700}>Schedule</Table.Th><Table.Th fw={700}>Employee names</Table.Th><Table.Th fw={700}>Status</Table.Th><Table.Th w={200} fw={700}>Actions</Table.Th></Table.Tr>
             </Table.Thead>
             <Table.Tbody>
               {pageRows.map((s) => (
@@ -779,12 +779,12 @@ export default function ShiftsAdminPage() {
                         {!expandedLoading && !expandedError && expandedVisits.length === 0 && <Text size="sm" c="dimmed">No visits in the next 31 days.</Text>}
                         {visitsOpen && expandedVisits.length > 0 && (
                           <Table withTableBorder>
-                            <Table.Thead><Table.Tr>
-                              <Table.Th><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><ListChecks size={14} aria-hidden />Visit</span></Table.Th>
-                              <Table.Th><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Clock size={14} aria-hidden />Starts</span></Table.Th>
-                              <Table.Th><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Sparkles size={14} aria-hidden />Type</span></Table.Th>
-                              <Table.Th><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><UserRound size={14} aria-hidden />Cleaner</span></Table.Th>
-                              <Table.Th><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><CircleCheck size={14} aria-hidden />Status</span></Table.Th>
+                            <Table.Thead style={{ background: 'var(--mantine-color-gray-2)' }}><Table.Tr>
+                              <Table.Th fw={700}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><ListChecks size={14} aria-hidden />Visit</span></Table.Th>
+                              <Table.Th fw={700}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Clock size={14} aria-hidden />Starts</span></Table.Th>
+                              <Table.Th fw={700}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Sparkles size={14} aria-hidden />Type</span></Table.Th>
+                              <Table.Th fw={700}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><UserRound size={14} aria-hidden />Cleaner</span></Table.Th>
+                              <Table.Th fw={700}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><CircleCheck size={14} aria-hidden />Status</span></Table.Th>
                             </Table.Tr></Table.Thead>
                             <Table.Tbody>
                               {expandedVisits.map((item) => (
