@@ -1,5 +1,6 @@
 'use client';
 
+import { DsGrid } from '@/components/ds/DsGrid';
 import { showError } from '@/lib/toast';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import {
@@ -15,6 +16,14 @@ import { BranchPriceHistory } from '@/components/admin/BranchPriceHistory';
 import { adminQualityCycle, type QualityCycleTemplate } from '@/lib/qualityCycleApi';
 
 const emptyForm = { businessId: '', name: '', contactName: '', contactEmail: '', contactPhone: '', notes: '', isPartnerEnabled: false, isQualityCycle: false, qualityCycleTemplateId: '' };
+
+type CompanyGridRow = { kind: 'company'; company: Company } | { kind: 'branches'; company: Company };
+// One row per company, plus a full-width branch row directly under the expanded company.
+function companyGridRows(companies: Company[], expandedId: string | null): CompanyGridRow[] {
+  return companies.flatMap(company => company.id === expandedId
+    ? [{ kind: 'company' as const, company }, { kind: 'branches' as const, company }]
+    : [{ kind: 'company' as const, company }]);
+}
 
 export default function CompaniesAdminPage() {
   const quoteRequests = useQuoteRequests();
@@ -348,63 +357,14 @@ export default function CompaniesAdminPage() {
     finally { setActionBusy(null); }
   };
 
-  return (
-    <>
-      <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
-        <Title order={2} component="h1">Companies</Title>
-        <Button leftSection={<Plus size={16} />} onClick={() => { setEditingCompany(null); setForm(emptyForm); setError(''); setModalOpen(true); void loadQualityTemplates(); }}>Add company</Button>
-      </Group>
-
-      {actionError && <Text c="red" role="alert" mb="sm">{actionError}</Text>}
-      <form role="search" onSubmit={e => { e.preventDefault(); setPage(1); setQuery(searchText.trim()); }} style={{ marginBottom: 12 }}>
-        <TextInput label="Search companies" placeholder="Name or business ID" value={searchText} onChange={e => setSearchText(e.currentTarget.value)} />
-      </form>
-      <LifecycleTabs value={status} onChange={next => { setStatus(next); setPage(1); setExpanded(null); branchGeneration.current++; setBranchLoading(null); setBranchLoadError(''); }} label="Company activity"
-        activeCount={loading || listError ? undefined : counts?.active}
-        inactiveCount={loading || listError ? undefined : counts?.inactive}>
-      {loading ? (
-        <Loader />
-      ) : listError ? (
-        <Stack><Text role="alert" c="red">{listError}</Text><Button variant="light" onClick={() => void reload()}>Refresh companies</Button></Stack>
-      ) : tableRows.length === 0 ? (
-        <Text c="dimmed">{counts !== null && counts.all === 0 && !query ? 'No companies yet. Add one to get started.' : query ? 'No companies match this search.' : `No ${status} companies.`}</Text>
-      ) : (
-        <Stack gap={6}><Text size="xs" c="dimmed" hiddenFrom="sm">Scroll sideways to see all columns.</Text>
-        <Table.ScrollContainer minWidth={550} tabIndex={0} role="region" aria-label="Companies table">
-          <Table striped highlightOnHover withTableBorder>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Name</Table.Th>
-                <Table.Th>Business ID</Table.Th>
-                <Table.Th>Contact</Table.Th>
-                <Table.Th w={120}>Branches</Table.Th>
-                <Table.Th>Activity</Table.Th><Table.Th w={170}>Actions</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {tableRows.map((c) => {
-                const currentBranches = companyBranchesMap[c.id] ?? [];
-                const visibleBranches = currentBranches.filter(branch => inLifecycle(branch, branchStatus));
-                const isExpanded = expanded === c.id;
-                return (
-                  <Fragment key={c.id}>
-                    <Table.Tr>
-                      <Table.Td fw={500}>{c.name}</Table.Td>
-                      <Table.Td>{c.businessId}</Table.Td>
-                      <Table.Td>{c.contactName || '—'}</Table.Td>
-                      <Table.Td>
-                        <Button variant="subtle" size="xs" onClick={() => toggleBranches(c.id)}>
-                          {isExpanded ? currentBranches.length : 'Branches'} <ChevronDown size={14} />
-                        </Button>
-                      </Table.Td>
-                      <Table.Td><Button size="xs" variant="light" color={c.isActive ? 'red' : undefined}
-                        loading={actionBusy === c.id} disabled={actionBusy !== null && actionBusy !== c.id}
-                        onClick={() => void changeActivity(c.id, c.isActive)}>{c.isActive ? 'Deactivate' : 'Reactivate'}</Button></Table.Td>
-                      <Table.Td><Group gap={4} wrap="nowrap"><Button size="xs" variant="subtle" component={Link} href={`/admin/companies/customer/?id=${c.id}&section=overview&back=${encodeURIComponent(listQuery)}`} aria-label={`Open ${c.name}`}>Open</Button><Button size="xs" variant="subtle" leftSection={<Pencil size={13} />} onClick={() => openCompanyEdit(c)}>Edit</Button>{!c.isActive && <Button size="xs" color="red" variant="subtle" loading={actionBusy === c.id} disabled={!!actionBusy} onClick={() => void deleteCompany(c)}>Delete</Button>}</Group></Table.Td>
-                    </Table.Tr>
-                    {isExpanded && (
-                      <Table.Tr>
-                        <Table.Td colSpan={6} p="sm">
+  const renderCompanyActions = (c: Company) => (
+    <Group gap={4} wrap="nowrap"><Group gap={4} wrap="nowrap"><Button size="xs" variant="subtle" component={Link} href={`/admin/companies/customer/?id=${c.id}&section=overview&back=${encodeURIComponent(listQuery)}`} aria-label={`Open ${c.name}`}>Open</Button><Button size="xs" variant="subtle" leftSection={<Pencil size={13} />} onClick={() => openCompanyEdit(c)}>Edit</Button>{!c.isActive && <Button size="xs" color="red" variant="subtle" loading={actionBusy === c.id} disabled={!!actionBusy} onClick={() => void deleteCompany(c)}>Delete</Button>}</Group></Group>
+  );
+  const renderBranchPanel = (c: Company) => {
+    const currentBranches = companyBranchesMap[c.id] ?? [];
+    const visibleBranches = currentBranches.filter(branch => inLifecycle(branch, branchStatus));
+    return (
+      <div className="p-3">
                           <Group justify="space-between" align="center" mb="xs" wrap="wrap" gap="xs">
                             <Text size="sm" fw={600}>Branches</Text>
                             <Button size="xs" variant="light" leftSection={<Plus size={14} />} onClick={() => { setEditingBranch(null); setBranchForm({ name: '', street: '', postalCode: '', city: '', country: '', contactPhone: '', contactEmail: '', roomCount: '' as number | string, bedCount: '' as number | string, sizeM2: '' as number | string, priceNet: '' as number | string, vatRatePercent: 25.5 as number | string, estimatedDurationMinutes: '' as number | string, priceEffectiveFrom: '', priceMode: 'PerOccurrence' }); setBranchError(''); setBranchModal(true); }}>Add branch</Button>
@@ -433,15 +393,54 @@ export default function CompaniesAdminPage() {
                             </Stack>
                           )}
                           </LifecycleTabs>
-                        </Table.Td>
-                      </Table.Tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer></Stack>
+      </div>
+    );
+  };
+  return (
+    <>
+      <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
+        <Title order={2} component="h1">Companies</Title>
+        <Button leftSection={<Plus size={16} />} onClick={() => { setEditingCompany(null); setForm(emptyForm); setError(''); setModalOpen(true); void loadQualityTemplates(); }}>Add company</Button>
+      </Group>
+
+      {actionError && <Text c="red" role="alert" mb="sm">{actionError}</Text>}
+      <form role="search" onSubmit={e => { e.preventDefault(); setPage(1); setQuery(searchText.trim()); }} style={{ marginBottom: 12 }}>
+        <TextInput label="Search companies" placeholder="Name or business ID" value={searchText} onChange={e => setSearchText(e.currentTarget.value)} />
+      </form>
+      <LifecycleTabs value={status} onChange={next => { setStatus(next); setPage(1); setExpanded(null); branchGeneration.current++; setBranchLoading(null); setBranchLoadError(''); }} label="Company activity"
+        activeCount={loading || listError ? undefined : counts?.active}
+        inactiveCount={loading || listError ? undefined : counts?.inactive}>
+      {loading ? (
+        <Loader />
+      ) : listError ? (
+        <Stack><Text role="alert" c="red">{listError}</Text><Button variant="light" onClick={() => void reload()}>Refresh companies</Button></Stack>
+      ) : tableRows.length === 0 ? (
+        <Text c="dimmed">{counts !== null && counts.all === 0 && !query ? 'No companies yet. Add one to get started.' : query ? 'No companies match this search.' : `No ${status} companies.`}</Text>
+      ) : (
+        <Stack gap={6}><Text size="xs" c="dimmed" hiddenFrom="sm">Scroll sideways to see all columns.</Text>
+        <DsGrid<CompanyGridRow>
+          label="Companies"
+          rows={companyGridRows(tableRows, expanded)}
+          getRowId={(row) => row.kind === 'company' ? row.company.id : `${row.company.id}-branches`}
+          isFullWidthRow={(row) => row.kind === 'branches'}
+          fullWidthRow={(row) => row.kind === 'branches' ? renderBranchPanel(row.company) : null}
+          columns={[
+            { headerName: 'Name', colId: 'name', flex: 2, cellRenderer: (p: { data?: CompanyGridRow }) => p.data?.kind === 'company' ? <span className="font-medium">{p.data.company.name}</span> : null },
+            { headerName: 'Business ID', colId: 'businessId', valueGetter: p => p.data?.kind === 'company' ? p.data.company.businessId : '' },
+            { headerName: 'Contact', colId: 'contact', valueGetter: p => p.data?.kind === 'company' ? (p.data.company.contactName || '—') : '' },
+            { headerName: 'Branches', colId: 'branches', sortable: false, cellRenderer: (p: { data?: CompanyGridRow }) => p.data?.kind === 'company' ? (
+              <Button variant="subtle" size="xs" onClick={() => void toggleBranches(p.data!.company.id)}>
+                {expanded === p.data.company.id ? (companyBranchesMap[p.data.company.id] ?? []).length : 'Branches'} <ChevronDown size={14} />
+              </Button>
+            ) : null },
+            { headerName: 'Activity', colId: 'activity', sortable: false, cellRenderer: (p: { data?: CompanyGridRow }) => p.data?.kind === 'company' ? (
+              <Button size="xs" variant="light" color={p.data.company.isActive ? 'red' : undefined}
+                loading={actionBusy === p.data.company.id} disabled={actionBusy !== null && actionBusy !== p.data.company.id}
+                onClick={() => void changeActivity(p.data!.company.id, p.data!.company.isActive)}>{p.data.company.isActive ? 'Deactivate' : 'Reactivate'}</Button>
+            ) : null },
+            { headerName: 'Actions', colId: 'actions', sortable: false, minWidth: 180, flex: 0, width: 200, cellRenderer: (p: { data?: CompanyGridRow }) => p.data?.kind === 'company' ? renderCompanyActions(p.data.company) : null },
+          ]}
+        /></Stack>
       )}
       {!loading && !listError && total > 0 && (
         <Group justify="space-between" mt="sm" wrap="wrap" gap="sm">
