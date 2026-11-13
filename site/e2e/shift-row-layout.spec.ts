@@ -41,14 +41,13 @@ test('shift rows show the address with size, rooms and beds as tags, and a row c
   const requests: string[] = [];
   await page.route(/\/api\/v1\/admin\/shifts\/shift-layout\/occurrences/, route => { requests.push(route.request().url()); return route.continue(); });
   const header = visits.getByRole('button', { name: /Visits/ });
-  const month = page.getByRole('textbox', { name: 'Month' });
+  const month = page.getByRole('combobox', { name: 'Month' });
   await expect(month).toBeVisible();
   const headerBox = await header.boundingBox();
   const monthBox = await month.boundingBox();
   expect(Math.abs((headerBox?.y ?? 0) - (monthBox?.y ?? 0))).toBeLessThan(30);
-  await month.click();
-  const chosen = await page.getByRole('option').nth(5).textContent();
-  await page.getByRole('option').nth(5).click();
+  const chosen = await month.locator('option').nth(5).getAttribute('value');
+  await month.selectOption({ index: 5 });
   await expect(month).toHaveValue(chosen ?? '');
   await expect.poll(() => requests.length).toBeGreaterThan(0);
   await page.screenshot({ path: testInfo.outputPath('shift-rows-expanded.png'), fullPage: true });

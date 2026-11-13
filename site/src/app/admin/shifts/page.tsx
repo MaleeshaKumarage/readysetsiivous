@@ -24,7 +24,7 @@ import { ShiftWorkspace, scheduleLabel } from '@/components/admin/ShiftWorkspace
 import { autoShiftName } from '@/lib/shiftName';
 import { employeeLabel } from '@/lib/employeeLabel';
 import { DEEP_SURCHARGE_EUR } from '@/lib/cleaningPricing';
-import { Badge } from '@/ds';
+import { Badge, Button as DsButton, Card as DsCard } from '@/ds';
 
 // The price version in force today (or the earliest when all start later): the default billing price for a new shift.
 const defaultPriceVersion = (versions?: { effectiveFrom: string }[] | null) => {
@@ -733,7 +733,7 @@ export default function ShiftsAdminPage() {
         <Text size="xs" c="dimmed" hiddenFrom="sm" mb={6}>Scroll sideways to see all columns.</Text>
         <Table.ScrollContainer minWidth={600} tabIndex={0} role="region" aria-label="Shifts table">
           <Table striped highlightOnHover withTableBorder>
-            <Table.Thead style={{ background: 'var(--mantine-color-gray-2)' }}>
+            <Table.Thead className="bg-accent-50 text-accent-950">
               <Table.Tr><Table.Th fw={700}>Name</Table.Th><Table.Th fw={700}>Schedule</Table.Th><Table.Th fw={700}>Employee names</Table.Th><Table.Th fw={700}>Status</Table.Th><Table.Th w={200} fw={700}>Actions</Table.Th></Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -757,7 +757,7 @@ export default function ShiftsAdminPage() {
                         ].filter((c): c is string => !!c) : [];
                         return (
                           <Stack gap={4}>
-                            <Text fw={500} size="sm">{address || s.name}</Text>
+                            <p className="text-sm font-semibold text-accent-950">{address || s.name}</p>
                             {chips.length > 0 && <Group gap={6}>{chips.map(c => <Badge key={c} variant="outline">{c}</Badge>)}</Group>}
                             {address && <span className="sr-only">{s.name}</span>}
                           </Stack>
@@ -793,45 +793,49 @@ export default function ShiftsAdminPage() {
                   {expandedId === s.id && (
                     <Table.Tr>
                       <Table.Td colSpan={5} data-testid="row-visits">
-                        <Group justify="space-between" wrap="nowrap" align="center" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          aria-expanded={visitsOpen}
-                          onClick={(e) => { e.stopPropagation(); setVisitsOpen(open => !open); }}
-                          style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 0, padding: '6px 0', cursor: 'pointer', font: 'inherit', fontWeight: 600, color: 'inherit', minHeight: 44 }}
-                        >
-                          {visitsOpen ? <ChevronDown size={16} aria-hidden /> : <ChevronRight size={16} aria-hidden />}
-                          <CalendarDays size={16} aria-hidden />
-                          <span>Visits</span>
-                          {!expandedLoading && <Badge variant="subtle">{expandedVisits.length}</Badge>}
-                        </button>
-                          <Select aria-label="Month" size="xs" w={220} allowDeselect={false} data={monthChoices()} value={expandedMonth} onChange={changeExpandedMonth} />
-                        </Group>
-                        {expandedLoading && <Text size="sm" c="dimmed">Loading visits…</Text>}
-                        {expandedError && <Text size="sm" c="red" role="alert">{expandedError}</Text>}
-                        {!expandedLoading && !expandedError && expandedVisits.length === 0 && <Text size="sm" c="dimmed">No visits in this month.</Text>}
-                        {visitsOpen && expandedVisits.length > 0 && (
-                          <Table withTableBorder>
-                            <Table.Thead style={{ background: 'var(--mantine-color-gray-2)' }}><Table.Tr>
-                              <Table.Th fw={700}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><ListChecks size={14} aria-hidden />Visit</span></Table.Th>
-                              <Table.Th fw={700}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Clock size={14} aria-hidden />Starts</span></Table.Th>
-                              <Table.Th fw={700}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Sparkles size={14} aria-hidden />Type</span></Table.Th>
-                              <Table.Th fw={700}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><UserRound size={14} aria-hidden />Cleaner</span></Table.Th>
-                              <Table.Th fw={700}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><CircleCheck size={14} aria-hidden />Status</span></Table.Th>
-                            </Table.Tr></Table.Thead>
-                            <Table.Tbody>
-                              {expandedVisits.map((item) => (
-                                <Table.Tr key={item.exceptionId ?? item.startUtc}>
-                                  <Table.Td>{visitLabel(item, timeZoneId) || s.name}</Table.Td>
-                                  <Table.Td>{new Date(item.startUtc).toLocaleString(undefined, { timeZone: timeZoneId })}</Table.Td>
-                                  <Table.Td>{item.visitNumber ? <Badge variant={item.visitCleaningType === 'Deep' ? 'navy' : 'subtle'}>{`${item.visitCleaningType ?? 'Normal'} cleaning`}</Badge> : '—'}</Table.Td>
-                                  <Table.Td>{(item.assigneeIds ?? []).map(employeeName).join(', ') || (item.offeredEmployeeId ? `Offer sent to ${employeeName(item.offeredEmployeeId)}` : 'Unassigned')}</Table.Td>
-                                  <Table.Td><Badge variant="outline">{item.visitNumber && item.workStatus ? WORK_STATUS_LABEL[item.workStatus] ?? item.workStatus : item.status ? OCCURRENCE_STATUSES.find(x => x.value === String(item.status))?.label : 'Scheduled'}</Badge></Table.Td>
-                                </Table.Tr>
-                              ))}
-                            </Table.Tbody>
-                          </Table>
-                        )}
+                        <DsCard padding="sm">
+                          <div className="flex flex-wrap items-center justify-between gap-3" onClick={(e) => e.stopPropagation()}>
+                            <DsButton variant="ghost" aria-expanded={visitsOpen} onClick={() => setVisitsOpen(open => !open)}>
+                              {visitsOpen ? <ChevronDown size={16} aria-hidden /> : <ChevronRight size={16} aria-hidden />}
+                              <CalendarDays size={16} aria-hidden />
+                              Visits
+                              {!expandedLoading && <Badge variant="subtle">{expandedVisits.length}</Badge>}
+                            </DsButton>
+                            <select aria-label="Month" value={expandedMonth} onChange={(e) => changeExpandedMonth(e.currentTarget.value)}
+                              className="min-h-11 rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20">
+                              {monthChoices().map(choice => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
+                            </select>
+                          </div>
+                          {expandedLoading && <p className="mt-3 text-sm text-gray-500">Loading visits…</p>}
+                          {expandedError && <p role="alert" className="mt-3 text-sm text-red-600">{expandedError}</p>}
+                          {!expandedLoading && !expandedError && expandedVisits.length === 0 && <p className="mt-3 text-sm text-gray-500">No visits in this month.</p>}
+                          {visitsOpen && expandedVisits.length > 0 && (
+                            <div className="mt-3 overflow-x-auto rounded-xl border border-accent-100">
+                              <table className="w-full text-left text-sm text-gray-900">
+                                <thead className="bg-accent-50 text-accent-950">
+                                  <tr>
+                                    <th className="px-3 py-2 font-bold"><span className="inline-flex items-center gap-1.5"><ListChecks size={14} aria-hidden />Visit</span></th>
+                                    <th className="px-3 py-2 font-bold"><span className="inline-flex items-center gap-1.5"><Clock size={14} aria-hidden />Starts</span></th>
+                                    <th className="px-3 py-2 font-bold"><span className="inline-flex items-center gap-1.5"><Sparkles size={14} aria-hidden />Type</span></th>
+                                    <th className="px-3 py-2 font-bold"><span className="inline-flex items-center gap-1.5"><UserRound size={14} aria-hidden />Cleaner</span></th>
+                                    <th className="px-3 py-2 font-bold"><span className="inline-flex items-center gap-1.5"><CircleCheck size={14} aria-hidden />Status</span></th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {expandedVisits.map((item) => (
+                                    <tr key={item.exceptionId ?? item.startUtc} className="border-t border-accent-100 align-top">
+                                      <td className="px-3 py-2">{visitLabel(item, timeZoneId) || s.name}</td>
+                                      <td className="px-3 py-2">{new Date(item.startUtc).toLocaleString(undefined, { timeZone: timeZoneId })}</td>
+                                      <td className="px-3 py-2">{item.visitNumber ? <Badge variant={item.visitCleaningType === 'Deep' ? 'navy' : 'subtle'}>{`${item.visitCleaningType ?? 'Normal'} cleaning`}</Badge> : '—'}</td>
+                                      <td className="px-3 py-2">{(item.assigneeIds ?? []).map(employeeName).join(', ') || (item.offeredEmployeeId ? `Offer sent to ${employeeName(item.offeredEmployeeId)}` : 'Unassigned')}</td>
+                                      <td className="px-3 py-2"><Badge variant="outline">{item.visitNumber && item.workStatus ? WORK_STATUS_LABEL[item.workStatus] ?? item.workStatus : item.status ? OCCURRENCE_STATUSES.find(x => x.value === String(item.status))?.label : 'Scheduled'}</Badge></td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </DsCard>
                       </Table.Td>
                     </Table.Tr>
                   )}

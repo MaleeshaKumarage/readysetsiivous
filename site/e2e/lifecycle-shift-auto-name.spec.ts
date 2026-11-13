@@ -38,7 +38,7 @@ test('Add shift has no Name field and names the shift from the property in the d
   const name = await createShift(page, fullProperty);
   expect(name).toBe('Cleaning - Kauppakatu 1, 55100 Imatra |34m2|2H|3V');
   // The row shows the property address on its first line; the shift name is still on the row for screen readers.
-  await expect(page.getByRole('row').filter({ hasText: name })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: String(name) })).toBeVisible();
   await expect(page.getByText('Kauppakatu 1, 55100 Imatra', { exact: true })).toBeVisible();
 });
 
