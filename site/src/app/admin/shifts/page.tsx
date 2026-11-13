@@ -734,7 +734,7 @@ export default function ShiftsAdminPage() {
         <Table.ScrollContainer minWidth={600} tabIndex={0} role="region" aria-label="Shifts table">
           <Table striped highlightOnHover withTableBorder>
             <Table.Thead className="bg-brand-500 text-accent-950">
-              <Table.Tr className="bg-brand-500 text-accent-950"><Table.Th fw={700} className="bg-brand-500 text-accent-950">Name</Table.Th><Table.Th fw={700} className="bg-brand-500 text-accent-950">Schedule</Table.Th><Table.Th fw={700} className="bg-brand-500 text-accent-950">Employee names</Table.Th><Table.Th fw={700} className="bg-brand-500 text-accent-950">Status</Table.Th><Table.Th w={200} fw={700} className="bg-brand-500 text-accent-950">Actions</Table.Th></Table.Tr>
+              <Table.Tr className="!bg-brand-500 !text-accent-950"><Table.Th fw={700} className="!bg-brand-500 !text-accent-950">Name</Table.Th><Table.Th fw={700} className="!bg-brand-500 !text-accent-950">Schedule</Table.Th><Table.Th fw={700} className="!bg-brand-500 !text-accent-950">Employee names</Table.Th><Table.Th fw={700} className="!bg-brand-500 !text-accent-950">Status</Table.Th><Table.Th w={200} fw={700} className="!bg-brand-500 !text-accent-950">Actions</Table.Th></Table.Tr>
             </Table.Thead>
             <Table.Tbody>
               {pageRows.map((s) => (
