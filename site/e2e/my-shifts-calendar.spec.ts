@@ -55,6 +55,16 @@ test('Today is default; past weeks show daily counts while folded, with only one
   await expect(page.getByRole('heading', { name: 'Past corridor' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Previous day' })).toBeVisible();
   const olderDay = older.getByRole('button', { name: /08\/10\/2026 Thursday.*1 shift/ });
+  // The newer week is still settling after its expansion, so the older day can move under the pointer.
+  // Scroll it into view, then wait until its box is unchanged between two checks before clicking.
+  await olderDay.scrollIntoViewIfNeeded();
+  let previousBox = '';
+  await expect.poll(async () => {
+    const box = JSON.stringify(await olderDay.boundingBox());
+    const settled = box === previousBox;
+    previousBox = box;
+    return settled;
+  }, { timeout: 10_000 }).toBe(true);
   try {
     await olderDay.click({ timeout: 10_000 });
   } catch (failure) {
