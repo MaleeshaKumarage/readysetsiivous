@@ -90,6 +90,8 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
   test('sign out button returns user to unauthenticated login view', async ({ page, isMobile }) => {
     if (isMobile) await page.setViewportSize({ width: 375, height: 1000 });
     await setupAdminMocks(page, { authenticated: true });
+    // The office dashboard also loads its daily charts; answer them locally so no request leaves the test.
+    await page.route(/\/api\/v1\/admin\/dashboard\/daily/, route => route.fulfill({ status: 200, headers: CORS_HEADERS, json: { month: '2026-11', days: [] } }));
     await page.goto('/admin/');
 
     await expect(page.getByRole('heading', { name: 'Office portal' })).toBeVisible();
