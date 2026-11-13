@@ -12,6 +12,8 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:3000',
     serviceWorkers: 'block',
+    // Keep a trace for failing tests in CI so a failure can be replayed from the blob report.
+    trace: process.env.CI ? 'retain-on-failure' : 'off',
   },
   projects: [
     {
