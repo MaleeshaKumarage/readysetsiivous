@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry, themeQuartz, type ColDef } from 'ag-grid-community';
 
@@ -29,10 +29,14 @@ export interface DsGridProps<T> {
   /** Row id, so updates keep the same rows. */
   getRowId?: (row: T) => string;
   height?: number | string;
+  /** Rows that span the full width (group headings). Return true for those rows. */
+  isFullWidthRow?: (row: T) => boolean;
+  /** What a full-width row shows. */
+  fullWidthRow?: (row: T) => ReactNode;
 }
 
 /** The design-system table: AG Grid with the navy and gold theme. Use this for every table. */
-export function DsGrid<T>({ rows, columns, label, getRowId, height = 'auto' }: DsGridProps<T>) {
+export function DsGrid<T>({ rows, columns, label, getRowId, height = 'auto', isFullWidthRow, fullWidthRow }: DsGridProps<T>) {
   const defaultColDef = useMemo<ColDef<T>>(() => ({ resizable: true, sortable: true, flex: 1, minWidth: 110 }), []);
   return (
     <div role="region" aria-label={label} style={{ height, width: '100%' }}>
@@ -44,7 +48,16 @@ export function DsGrid<T>({ rows, columns, label, getRowId, height = 'auto' }: D
         getRowId={getRowId ? (params) => getRowId(params.data) : undefined}
         domLayout={height === 'auto' ? 'autoHeight' : 'normal'}
         suppressCellFocus
+        suppressColumnVirtualisation
+        isFullWidthRow={isFullWidthRow ? (params) => !!params.rowNode.data && isFullWidthRow(params.rowNode.data) : undefined}
+        fullWidthCellRenderer={fullWidthRow ? FullWidthRow : undefined}
+        fullWidthCellRendererParams={fullWidthRow ? { render: fullWidthRow } : undefined}
       />
     </div>
   );
+}
+
+// Renders a full-width row through the render prop passed in fullWidthCellRendererParams.
+function FullWidthRow(params: { data?: unknown; render?: (row: unknown) => ReactNode }) {
+  return params.data && params.render ? <div className="px-3 py-2 font-bold text-accent-950">{params.render(params.data)}</div> : null;
 }
