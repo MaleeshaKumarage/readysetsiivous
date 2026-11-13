@@ -772,7 +772,7 @@ export default function ShiftsAdminPage() {
                           <CalendarDays size={16} aria-hidden />
                           <span>Visits</span>
                           {!expandedLoading && <Badge variant="subtle">{expandedVisits.length}</Badge>}
-                          <span style={{ fontWeight: 400, color: 'var(--mantine-color-dimmed)', fontSize: 'var(--mantine-font-size-sm)' }}>{`Next 31 days from ${expandedFrom}`}</span>
+                          <span style={{ fontWeight: 600, fontSize: 'var(--mantine-font-size-sm)' }}>{`Next 31 days from ${expandedFrom}`}</span>
                         </button>
                         {expandedLoading && <Text size="sm" c="dimmed">Loading visits…</Text>}
                         {expandedError && <Text size="sm" c="red" role="alert">{expandedError}</Text>}
