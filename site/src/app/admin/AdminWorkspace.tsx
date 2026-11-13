@@ -19,6 +19,7 @@ import {
   LayoutDashboard, ListChecks, Sparkles, FileSignature, Users, Building2, CalendarClock, CalendarCheck2, CheckSquare, Receipt, LogOut, LogIn, UserRound, Package, LayoutGrid,
 } from 'lucide-react';
 import { initAuth, isAuthenticated, isAdmin, authTenant, refreshToken, login, logout } from '@/lib/auth';
+import { showError } from '@/lib/toast';
 import { API_URL } from '@/lib/api';
 import { PwaInstallButton } from '@/components/PwaInstallButton';
 import { QuoteRequestBanner, QuoteRequestProvider, PartnerPendingBadge } from '@/components/QuoteRequests';
@@ -35,6 +36,11 @@ const NAV_GROUPS = [
 ];
 
 
+
+// Sign-out that reports a failure instead of leaving the user signed in with no explanation.
+function signOut() {
+  logout().catch(() => showError('Sign-out failed. Please retry.', 'Not signed out'));
+}
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -140,7 +146,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               <Text role="alert">{access === 'error' ? accessError : 'This account cannot access tenant administration.'}</Text>
               {access === 'error' && <Button onClick={() => void verifyAccess()}>{ACCESS_RETRY_LABEL}</Button>}
               <Button component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="light"><LayoutGrid size={16} aria-hidden="true" />Portals</Button>
-              <Button onClick={() => logout()} variant="subtle">Sign out</Button>
+              <Button onClick={signOut} variant="subtle">Sign out</Button>
             </Stack>
           </Paper>
         </Group>
@@ -211,7 +217,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               <Button component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="subtle" size="xs" visibleFrom="xs"><LayoutGrid size={16} aria-hidden="true" />Portals</Button>
               <ActionIcon component={Link} href={`/account/profile/?tenant=${encodeURIComponent(authTenant())}`} variant="subtle" aria-label="Profile"><UserRound size={20} /></ActionIcon>
               <ActionIcon component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="subtle" hiddenFrom="xs" aria-label="Portals"><LayoutGrid size={20} /></ActionIcon>
-              <Tooltip label="Sign out" withArrow><ActionIcon variant="subtle" color="gray" onClick={() => logout()} aria-label="Sign out"><LogOut size={20} /></ActionIcon></Tooltip>
+              <Tooltip label="Sign out" withArrow><ActionIcon variant="subtle" color="gray" onClick={signOut} aria-label="Sign out"><LogOut size={20} /></ActionIcon></Tooltip>
             </Group>
           </Group>
         </AppShell.Header>

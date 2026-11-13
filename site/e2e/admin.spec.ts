@@ -58,6 +58,21 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
     await expect(page.getByRole('heading', { name: 'Shifts' })).toBeVisible();
   });
 
+  test('a failed sign-out says so and keeps the user signed in', async ({ page, isMobile }) => {
+    if (isMobile) await page.setViewportSize({ width: 375, height: 1000 });
+    // A saved push device makes sign-out try to remove it first; refusing that removal makes sign-out fail.
+    await page.addInitScript(() => localStorage.setItem('readyset-push-device-v1', JSON.stringify({ identity: 'readysetsiivous:mock-subject', id: 'device-1' })));
+    await page.route(/\/api\/v1\/me\/notifications\/subscription\/device-1$/, route => route.fulfill({ status: 500, headers: CORS_HEADERS, json: { title: 'Unavailable' } }));
+    await setupAdminMocks(page, { authenticated: true });
+    await page.goto('/admin/');
+
+    await expect(page.getByRole('heading', { name: 'Office portal' })).toBeVisible();
+    await page.getByRole('banner').getByRole('button', { name: 'Sign out', exact: true }).click();
+    await expect(page.getByText('Sign-out failed. Please retry.', { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: 'Office portal' })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('__MOCK_LOGGED_OUT__'))).toBeNull();
+  });
+
   test('sign out button returns user to unauthenticated login view', async ({ page, isMobile }) => {
     if (isMobile) await page.setViewportSize({ width: 375, height: 1000 });
     await setupAdminMocks(page, { authenticated: true });
