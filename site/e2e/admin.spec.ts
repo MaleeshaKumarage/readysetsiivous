@@ -123,8 +123,9 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
       throw failure;
     });
     console.log('SIGNOUT_TRACE_OK ' + JSON.stringify(trace));
-    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('__MOCK_LOGGED_OUT__')), { timeout: 15_000 }).toBe('true');
-    await expect.poll(() => page.evaluate(() => (window as unknown as { __MOCK_AUTHED__: boolean }).__MOCK_AUTHED__), { timeout: 15_000 }).toBe(false);
+    // Reads during the sign-out reload can land between documents; a failed read is retried by the poll.
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('__MOCK_LOGGED_OUT__')).catch(() => null), { timeout: 15_000 }).toBe('true');
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __MOCK_AUTHED__: boolean }).__MOCK_AUTHED__).catch(() => null), { timeout: 15_000 }).toBe(false);
     await expect(page.getByText('Sign in with your ReadySetSiivous admin account.')).toBeVisible({ timeout: 15_000 });
     await page.reload();
     await expect(page.getByText('Sign in with your ReadySetSiivous admin account.')).toBeVisible();
