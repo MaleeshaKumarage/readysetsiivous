@@ -130,3 +130,30 @@ jobs:
           path: site/playwright-report
           retention-days: 7
           if-no-files-found: ignore
+
+  dependency-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.402
+
+      # Fails the job on any known-vulnerable NuGet package, direct or transitive.
+      - name: NuGet vulnerable packages
+        run: |
+          set -o pipefail
+          dotnet list api/CleaningSuite.Backend.sln package --vulnerable --include-transitive | tee nuget-audit.txt
+          if grep -q "has the following vulnerable packages" nuget-audit.txt; then
+            echo "::error::Vulnerable NuGet packages found"
+            exit 1
+          fi
+
+      # Reports production npm vulnerabilities at critical level. Non-blocking until the
+      # Next.js major upgrade lands; remove continue-on-error once this step passes.
+      - name: npm production audit (critical)
+        working-directory: site
+        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=critical
