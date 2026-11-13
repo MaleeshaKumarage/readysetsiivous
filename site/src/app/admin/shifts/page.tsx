@@ -144,8 +144,9 @@ export default function ShiftsAdminPage() {
     let live = true;
     for (const companyId of new Set(pageRows.map(s => s.companyId))) {
       adminCompanies.get(companyId).then((d) => {
-        if (!live || !d) return;
-        setPropertyById(prev => ({ ...prev, ...Object.fromEntries(d.branches.map(b => [b.id, b])) }));
+        if (!live || !Array.isArray(d?.branches)) return;
+        const branches = d.branches;
+        setPropertyById(prev => ({ ...prev, ...Object.fromEntries(branches.map(b => [b.id, b])) }));
       }).catch(() => { /* the row keeps its shift name */ });
     }
     return () => { live = false; };
