@@ -72,7 +72,7 @@ for (const [language, title, acknowledge, done] of [
     });
     await page.goto('/quality-report/?tenant=tenant-a&token=reader-token');
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
-    await expect(page.getByRole('cell', { name: '43.50', exact: true })).toBeVisible(); expect(posts).toBe(0);
+    await expect(page.getByRole('gridcell', { name: '43.50', exact: true })).toBeVisible(); expect(posts).toBe(0);
     await expect(page.locator('main')).toHaveAttribute('lang', language);
     await page.screenshot({ path: testInfo.outputPath(`recipient-${language}.png`), fullPage: true });
     await page.getByRole('button', { name: acknowledge, exact: true }).click();
@@ -232,7 +232,7 @@ test.describe('Admin Panel - Quality Cycle Page', () => {
     const calls = await setupReportWorkspace(page);
     await selectReportShifts(page);
     await page.getByRole('button', { name: 'Load report', exact: true }).click();
-    await expect(page.getByRole('cell', { name: 'Weekday 2 hours', exact: true })).toBeVisible();
+    await expect(page.getByRole('gridcell', { name: 'Weekday 2 hours', exact: true })).toBeVisible();
     await page.getByRole('textbox', { name: 'Report language', exact: true }).click();
     await page.getByRole('option', { name: 'Finnish', exact: true }).click();
     const downloadPromise = page.waitForEvent('download');

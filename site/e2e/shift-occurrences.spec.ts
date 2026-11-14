@@ -65,7 +65,7 @@ test('visit override choices exclude active partners and save only selected work
   await editor.getByRole('textbox', { name: /^Employees/ }).click(); await expect(page.getByRole('option', { name: 'Test Cleaner', exact: true })).toBeVisible(); await expect(page.getByRole('option', { name: 'Active Partner', exact: true })).toHaveCount(0);
   await page.getByRole('option', { name: 'Test Cleaner', exact: true }).click(); await page.keyboard.press('Escape'); await editor.getByLabel('Assignment reason').fill('Staff coverage for this visit');
   await editor.getByRole('button', { name: 'Preview assignment', exact: true }).click(); await expect(editor.getByText('Selected visit: Test Cleaner', { exact: true })).toBeVisible();
-  await editor.getByRole('button', { name: 'Save assignment', exact: true }).click(); await expect(editor).toHaveCount(0); await expect(list.getByRole('cell').filter({ hasText: 'Test Cleaner' })).toBeVisible();
+  await editor.getByRole('button', { name: 'Save assignment', exact: true }).click(); await expect(editor).toHaveCount(0); await expect(list.getByRole('gridcell').filter({ hasText: 'Test Cleaner' })).toBeVisible();
   expect(writes.map(({ employeeIds, preview, mode }) => ({ employeeIds, preview, mode }))).toEqual([{ employeeIds: ['cleaner'], preview: true, mode: 1 }, { employeeIds: ['cleaner'], preview: false, mode: 1 }]);
 });
 
@@ -233,18 +233,19 @@ test('phone occurrence exceptions scroll internally and keep restore actions rea
   ] }));
   await shiftAction(page, 'Morning clean', 'Occurrences');
   const dialog = page.getByRole('dialog', { name: /Occurrences/ });
-  await expect(dialog.getByRole('cell', { name: 'Customer requested a later visit', exact: true })).toBeVisible();
-  await expect(dialog.getByRole('cell', { name: 'Requested deep clean', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('gridcell', { name: 'Customer requested a later visit', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('gridcell', { name: 'Requested deep clean', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  const viewport = dialog.locator('.mantine-ScrollArea-viewport');
-  expect(await viewport.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
-  await viewport.evaluate(element => { element.scrollLeft = element.scrollWidth; });
+  // The nearest scrollable ancestor of a visit cell is the grid's horizontal scroller.
+  const cell = dialog.getByRole('gridcell', { name: 'Requested deep clean', exact: true });
+  expect(await cell.evaluate(el => { let p: HTMLElement | null = el.parentElement; while (p) { const o = getComputedStyle(p).overflowX; if ((o === 'auto' || o === 'scroll' || o === 'hidden') && p.scrollWidth > p.clientWidth) return true; p = p.parentElement; } return false; })).toBe(true);
+  await cell.evaluate(el => { let p: HTMLElement | null = el.parentElement; while (p) { const o = getComputedStyle(p).overflowX; if ((o === 'auto' || o === 'scroll' || o === 'hidden') && p.scrollWidth > p.clientWidth) { p.scrollLeft = p.scrollWidth; return; } p = p.parentElement; } });
   for (const name of ['Restore', 'Delete extra']) {
     const action = dialog.getByRole('button', { name, exact: true });
     await action.scrollIntoViewIfNeeded(); await expect(action).toBeInViewport();
     await action.click({ trial: true });
   }
-  expect(await viewport.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+  expect(await cell.evaluate(el => { let p: HTMLElement | null = el.parentElement; while (p) { const o = getComputedStyle(p).overflowX; if ((o === 'auto' || o === 'scroll' || o === 'hidden') && p.scrollWidth > p.clientWidth) return p.scrollLeft; p = p.parentElement; } return 0; })).toBeGreaterThan(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(state.writes).toHaveLength(0); expect(state.deletes).toBe(0);
 });

@@ -92,9 +92,9 @@ test('a refused shift save shows the reason in the dialog, keeps the company and
   await expect(dialog.getByLabel('Company', { exact: true })).toHaveValue('Methehe Oy');
   await expect(dialog.getByRole('textbox', { name: 'Start date', exact: true })).toHaveValue(/.+/);
   await expect(dialog.getByLabel('Branch', { exact: true })).toHaveValue('Main branch');
-  await expect(page.getByRole('cell', { name: FLOW_NAME, exact: true })).toHaveCount(0);
+  await expect(page.getByRole('gridcell', { name: FLOW_NAME, exact: true })).toHaveCount(0);
   await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
-  await expect(page.getByRole('cell', { name: FLOW_NAME, exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: FLOW_NAME, exact: true })).toBeVisible();
   expect(state.creates).toBe(2);
 });
 
@@ -103,7 +103,7 @@ test('a failed assignment shows an assignment error, nothing is assigned, and a 
   await page.goto('/admin/shifts/');
   const dialog = await fillShiftDialog(page);
   await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
-  await expect(page.getByRole('cell', { name: FLOW_NAME, exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: FLOW_NAME, exact: true })).toBeVisible();
   await shiftAction(page, FLOW_NAME, 'Assign employees');
   await page.getByRole('textbox', { name: 'Assign employees', exact: true }).click();
   await page.getByRole('option', { name: 'Alice Cleaner', exact: true }).click();

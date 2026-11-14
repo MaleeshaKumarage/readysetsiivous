@@ -27,7 +27,7 @@ test('company conflict retains values and permits corrected retry', async ({ pag
   await dialog.getByLabel('Business ID').fill('7654321-0');
   await dialog.getByRole('button', { name: 'Create company', exact: true }).click();
   await expect(dialog).not.toBeVisible();
-  await expect(page.getByRole('cell', { name: 'New company', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'New company', exact: true })).toBeVisible();
 });
 
 test('branch parent failure is visible and retains values', async ({ page }) => {

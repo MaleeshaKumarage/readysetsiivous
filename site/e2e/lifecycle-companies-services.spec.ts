@@ -16,16 +16,16 @@ test('service activation and deactivation move records between lifecycle tabs', 
     return route.fulfill({ headers, json: services });
   });
   await page.goto('/admin/services/');
-  await expect(page.getByRole('cell', { name: 'Service 0', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Service 1', exact: true })).not.toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Service 0', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Service 1', exact: true })).not.toBeVisible();
   await page.getByRole('button', { name: 'Deactivate', exact: true }).click();
   await expect(page.getByText('No active services.', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: /^Inactive/ }).click();
-  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Service 0', exact: true }) });
+  const row = page.getByRole('row').filter({ has: page.getByRole('gridcell', { name: 'Service 0', exact: true }) });
   await row.getByRole('button', { name: 'Reactivate', exact: true }).click();
-  await expect(page.getByRole('cell', { name: 'Service 0', exact: true })).not.toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Service 0', exact: true })).not.toBeVisible();
   await page.getByRole('tab', { name: /^Active/ }).click();
-  await expect(page.getByRole('cell', { name: 'Service 0', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Service 0', exact: true })).toBeVisible();
 });
 
 test('branch contact email persists on creation and editing after reload', async ({ page }) => {

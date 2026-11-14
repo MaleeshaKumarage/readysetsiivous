@@ -60,7 +60,7 @@ test('schedule is explicit and on-call creation does not invent a daily visit', 
   // Closing the occurrences window returns to the list, which now includes the shift just created.
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: /Occurrences/ })).toHaveCount(0);
-  await expect(page.getByRole('cell', { name: ONCALL_NAME, exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: ONCALL_NAME, exact: true })).toBeVisible();
 });
 
 test('past unfinished one-time shift asks the admin to check completion', async ({ page }) => {
@@ -71,7 +71,7 @@ test('past unfinished one-time shift asks the admin to check completion', async 
 test('recurring schedules show HH:mm and retain biweekly and monthly times', async ({ page }) => {
   await setupShifts(page);
   for (const label of ['Daily 08:00–09:00', 'Monday, Wednesday 10:00–12:00', 'Bi-weekly Friday 14:00–15:00', 'Monthly day 15 13:00–14:00']) {
-    await expect(page.getByRole('cell', { name: label, exact: true })).toBeVisible();
+    await expect(page.getByRole('gridcell', { name: label, exact: true })).toBeVisible();
   }
 });
 

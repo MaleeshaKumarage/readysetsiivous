@@ -130,8 +130,8 @@ test('direct link to a section loads only that tab', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   const requests = await mockWorkspace(page);
   await page.goto(ws(CUSTOMER, 'agreements'));
-  await expect(page.getByRole('cell', { name: 'Main cleaning agreement', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Other customer agreement', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('gridcell', { name: 'Main cleaning agreement', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Other customer agreement', exact: true })).toHaveCount(0);
   expect(requests.filter(r => /shifts|invoices/.test(r))).toEqual([]);
 });
 
@@ -190,7 +190,7 @@ test('retrying a failed tab loads it once', async ({ page }) => {
   await expect(page.getByRole('alert').filter({ hasText: 'Agreements could not be loaded.' })).toBeVisible();
   failure.value = false;
   await page.getByRole('button', { name: 'Retry agreements' }).click();
-  await expect(page.getByRole('cell', { name: 'Main cleaning agreement', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Main cleaning agreement', exact: true })).toBeVisible();
   expect(requests.filter(r => r.startsWith('GET /api/v1/admin/agreements?')).length).toBe(2);
 });
 
@@ -212,24 +212,24 @@ test('late agreements response does not overwrite the Work tab', async ({ page }
   await mockWorkspace(page, { agreementsGate: gate });
   await page.goto(ws(CUSTOMER, 'agreements'));
   await page.getByRole('tab', { name: 'Work' }).click();
-  await expect(page.getByRole('cell', { name: 'Weekly visit', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Weekly visit', exact: true })).toBeVisible();
   release();
-  await expect(page.getByRole('cell', { name: 'Weekly visit', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Weekly visit', exact: true })).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Work' })).toHaveAttribute('aria-selected', 'true');
   await page.getByRole('tab', { name: 'Agreements' }).click();
-  await expect(page.getByRole('cell', { name: 'Main cleaning agreement', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Main cleaning agreement', exact: true })).toBeVisible();
 });
 
 test('Back returns to the filtered companies list page', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   await mockWorkspace(page);
   await page.goto('/admin/companies/?status=active&page=1&size=25');
-  await expect(page.getByRole('cell', { name: 'Acme Oy', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Acme Oy', exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'Open Acme Oy' }).click();
   await expect(page.getByRole('heading', { name: 'Acme Oy' })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/admin\/companies\/\?status=active/);
-  await expect(page.getByRole('cell', { name: 'Acme Oy', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Acme Oy', exact: true })).toBeVisible();
 });
 
 test('opening a customer keeps the list filter in the back link', async ({ page }) => {
@@ -280,15 +280,15 @@ test('work tab shows inactive shifts only on the Inactive tab', async ({ page })
   await page.goto(ws(CUSTOMER, 'work'));
   await expect(page.getByText('No active shifts.', { exact: true })).toBeVisible();
   await page.getByRole('tablist', { name: 'Shift activity' }).getByRole('tab', { name: /^Inactive/ }).click();
-  await expect(page.getByRole('cell', { name: 'Closed route', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Closed route', exact: true })).toBeVisible();
 });
 
 test('invoices tab lists only this customer’s invoices', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   const requests = await mockWorkspace(page);
   await page.goto(ws(CUSTOMER, 'invoices'));
-  await expect(page.getByRole('cell', { name: 'INV-100', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'INV-200', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('gridcell', { name: 'INV-100', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'INV-200', exact: true })).toHaveCount(0);
   expect(requests.some(r => r.startsWith('GET /api/v1/admin/invoices?companyId=' + CUSTOMER))).toBe(true);
 });
 
@@ -328,7 +328,7 @@ test('work tab shows an error and retry reloads shifts once', async ({ page }) =
   await expect(page.getByRole('alert').filter({ hasText: 'Shifts could not be loaded.' })).toBeVisible();
   failure.value = false;
   await page.getByRole('button', { name: 'Retry shifts' }).click();
-  await expect(page.getByRole('cell', { name: 'Weekly visit', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Weekly visit', exact: true })).toBeVisible();
   expect(requests.filter(r => r.startsWith('GET /api/v1/admin/shifts?')).length).toBe(2);
 });
 
@@ -345,8 +345,8 @@ test('work tab lists only this customer’s shifts and requests them by company'
   const otherShift = { ...shifts[0], id: 'shift-other-tenant', companyId: OTHER_TENANT, name: 'Other tenant visit' };
   const requests = await mockWorkspace(page, { shiftsList: [shifts[0], otherShift] });
   await page.goto(ws(CUSTOMER, 'work'));
-  await expect(page.getByRole('cell', { name: 'Weekly visit', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Other tenant visit', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('gridcell', { name: 'Weekly visit', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Other tenant visit', exact: true })).toHaveCount(0);
   expect(requests.some(r => r.startsWith(`GET /api/v1/admin/shifts?companyId=${CUSTOMER}`))).toBe(true);
 });
 
@@ -369,7 +369,7 @@ test('invoices error shows retry while overview stays usable', async ({ page }) 
   await page.getByRole('tab', { name: 'Invoices' }).click();
   failure.value = false;
   await page.getByRole('button', { name: 'Retry invoices' }).click();
-  await expect(page.getByRole('cell', { name: 'INV-100', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'INV-100', exact: true })).toBeVisible();
   expect(requests.filter(r => r.startsWith('GET /api/v1/admin/invoices?companyId=')).length).toBe(2);
 });
 
@@ -409,7 +409,7 @@ test('agreement summaries show the customer name', async ({ page }) => {
   await page.goto('/admin/agreements/');
   await page.getByRole('dialog', { name: 'New agreement', exact: true }).waitFor({ state: 'detached' }).catch(() => undefined);
   const row = page.getByRole('row').filter({ hasText: 'Main cleaning agreement' });
-  await expect(row.getByRole('cell', { name: 'Acme Oy', exact: true })).toBeVisible();
+  await expect(row.getByRole('gridcell', { name: 'Acme Oy', exact: true })).toBeVisible();
 });
 
 test('non-admin session cannot read the customer workspace', async ({ page }) => {

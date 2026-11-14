@@ -1,5 +1,6 @@
 'use client';
 
+import { DsGrid } from '@/components/ds/DsGrid';
 import { useEffect, useRef, useState } from 'react';
 import { Title, Button, Table, Modal, Group, Stack, Text, Loader, Badge, Select, SegmentedControl, TextInput } from '@mantine/core';
 import { isAdmin } from '@/lib/auth';
@@ -192,24 +193,18 @@ export default function BookingsAdminPage() {
           ) : dayRows.length === 0 ? (
             <Text c="dimmed">No bookings for this employee on {dayDate}.</Text>
           ) : (
-            <Table.ScrollContainer minWidth={500}>
-              <Table striped withTableBorder>
-                <Table.Thead>
-                  <Table.Tr><Table.Th>Time</Table.Th><Table.Th>Booking</Table.Th><Table.Th>Customer</Table.Th><Table.Th>Service</Table.Th><Table.Th>Status</Table.Th></Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {dayRows.map(row => (
-                    <Table.Tr key={row.id}>
-                      <Table.Td>{row.startLocalTime}</Table.Td>
-                      <Table.Td fw={500}>{row.bookingNumber}</Table.Td>
-                      <Table.Td>{row.customer.name}</Table.Td>
-                      <Table.Td>{row.service.nameFi}</Table.Td>
-                      <Table.Td><Badge color={STATUS_COLOR[row.status] ?? 'gray'}>{row.status}</Badge></Table.Td>
-                    </Table.Tr>
-                  ))}
-                </Table.Tbody>
-              </Table>
-            </Table.ScrollContainer>
+            <DsGrid<(typeof dayRows)[number]>
+                label="Bookings for the day"
+                rows={dayRows}
+                getRowId={(row) => row.id}
+                columns={[
+                  { headerName: 'Time', colId: 'time', valueGetter: p => p.data?.startLocalTime ?? '' },
+                  { headerName: 'Booking', colId: 'booking', valueGetter: p => p.data?.bookingNumber ?? '' },
+                  { headerName: 'Customer', colId: 'customer', flex: 2, valueGetter: p => p.data?.customer.name ?? '' },
+                  { headerName: 'Service', colId: 'service', flex: 2, valueGetter: p => p.data?.service.nameFi ?? '' },
+                  { headerName: 'Status', colId: 'status', sortable: false, cellRenderer: (p: { data?: (typeof dayRows)[number] }) => p.data ? <Badge color={STATUS_COLOR[p.data.status] ?? 'gray'}>{p.data.status}</Badge> : null },
+                ]}
+              />
           )}
         </>
       ) : null}
@@ -220,26 +215,20 @@ export default function BookingsAdminPage() {
       {loading ? <Loader /> : loadError ? null : bookings.length === 0 ? (
         <Text c="dimmed">No bookings{statusFilter ? ` with status ${statusFilter}` : ''}.</Text>
       ) : (
-        <Table.ScrollContainer minWidth={600}>
-          <Table striped highlightOnHover withTableBorder>
-            <Table.Thead>
-              <Table.Tr><Table.Th>Booking</Table.Th><Table.Th>When</Table.Th><Table.Th>Customer</Table.Th><Table.Th>Service</Table.Th><Table.Th>Status</Table.Th><Table.Th>Employee</Table.Th><Table.Th w={110}></Table.Th></Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {bookings.map(booking => (
-                <Table.Tr key={booking.id}>
-                  <Table.Td fw={500}>{booking.bookingNumber}</Table.Td>
-                  <Table.Td>{booking.startLocalDate} {booking.startLocalTime}</Table.Td>
-                  <Table.Td>{booking.customer.name}</Table.Td>
-                  <Table.Td>{booking.service.nameFi}</Table.Td>
-                  <Table.Td><Badge color={STATUS_COLOR[booking.status] ?? 'gray'}>{booking.status}</Badge></Table.Td>
-                  <Table.Td>{booking.employeeName ?? 'Unassigned'}</Table.Td>
-                  <Table.Td><Button size="xs" variant="light" onClick={() => { setSelected(booking); setActionError(''); setAssigneeId(null); }}>Details</Button></Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
+        <DsGrid<(typeof bookings)[number]>
+          label="Bookings"
+          rows={bookings}
+          getRowId={(booking) => booking.id}
+          columns={[
+            { headerName: 'Booking', colId: 'booking', valueGetter: p => p.data?.bookingNumber ?? '' },
+            { headerName: 'When', colId: 'when', valueGetter: p => p.data ? `${p.data.startLocalDate} ${p.data.startLocalTime}` : '' },
+            { headerName: 'Customer', colId: 'customer', flex: 2, valueGetter: p => p.data?.customer.name ?? '' },
+            { headerName: 'Service', colId: 'service', flex: 2, valueGetter: p => p.data?.service.nameFi ?? '' },
+            { headerName: 'Status', colId: 'status', sortable: false, cellRenderer: (p: { data?: (typeof bookings)[number] }) => p.data ? <Badge color={STATUS_COLOR[p.data.status] ?? 'gray'}>{p.data.status}</Badge> : null },
+            { headerName: 'Employee', colId: 'employee', valueGetter: p => p.data ? (p.data.employeeName ?? 'Unassigned') : '' },
+            { headerName: '', colId: 'details', sortable: false, width: 130, flex: 0, cellRenderer: (p: { data?: (typeof bookings)[number] }) => p.data ? <Button size="xs" variant="light" onClick={() => { setSelected(p.data!); setActionError(''); setAssigneeId(null); }}>Details</Button> : null },
+          ]}
+        />
       )}
       </>)}
 

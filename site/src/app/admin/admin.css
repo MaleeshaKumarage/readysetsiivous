@@ -19,7 +19,8 @@ html[data-admin-theme='light'] .mantine-Paper-root { background-color: white; }
 html[data-admin-theme='light'] .mantine-Input-input { background-color: white; color: var(--mantine-color-text); border-color: #cbd2df; min-height: 42px; }
 html[data-admin-theme='light'] .mantine-InputWrapper-label { font-weight: 600; margin-bottom: 5px; }
 html[data-admin-theme='light'] .mantine-Table-table { background: white; }
-html[data-admin-theme='light'] .mantine-Table-th { background: #eef1f7; color: #465168; font-size: 12px; font-weight: 700; white-space: nowrap; }
+/* Table headers use the design-system brand gold with navy text, on every admin table. */
+html[data-admin-theme='light'] .mantine-Table-th { background: #c9a340; color: #0a1741; font-size: 12px; font-weight: 700; white-space: nowrap; }
 html[data-admin-theme='light'] .mantine-Table-th, html[data-admin-theme='light'] .mantine-Table-td { padding: 14px 16px; border-color: #e3e7ef; }
 html[data-admin-theme='light'] .mantine-TableScrollContainer-root { border: 1px solid #e3e7ef; border-radius: 10px; background: white; }
 html[data-admin-theme='light'] .mantine-TableScrollContainer-root .mantine-Table-table { border: 0; }

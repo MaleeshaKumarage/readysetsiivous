@@ -1,7 +1,9 @@
 'use client';
 
+import { DsGrid } from '@/components/ds/DsGrid';
 import { useLanguage } from '@/hooks/useLanguage';
 
+type ChecklistRow = { key: string; standard: boolean; deep: boolean };
 const CHECKLIST_ITEMS: { key: string; standard: boolean; deep: boolean }[] = [
   { key: 'dusting', standard: true, deep: true },
   { key: 'vacuuming', standard: true, deep: true },
@@ -34,25 +36,13 @@ export default function Checklist() {
         {/* Desktop table */}
         <div className="mt-12 hidden sm:block max-w-3xl mx-auto">
           <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm dark:shadow-gray-950/30">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50 dark:bg-gray-800">
-                  <th className="text-left px-6 py-4 text-sm font-bold text-gray-700 dark:text-gray-200">
-                    {t('checklist.items.dusting')}
-                  </th>
-                  <th className="text-left px-6 py-4 text-sm font-bold text-gray-700 dark:text-gray-200">
-                    {t('checklist.standard')}
-                  </th>
-                  <th className="text-left px-6 py-4 text-sm font-bold text-gray-700 dark:text-gray-200">
-                    {t('checklist.deep')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                {CHECKLIST_ITEMS.map(({ key, standard, deep }) => (
-                  <tr key={key} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
-                    <td className="px-6 py-3.5 text-sm text-gray-700 dark:text-gray-300">{t(`checklist.items.${key}`)}</td>
-                    <td className="px-6 py-3.5">
+            <DsGrid<ChecklistRow>
+            label={t('checklist.standard')}
+            rows={CHECKLIST_ITEMS.map(({ key, standard, deep }) => ({ key, standard, deep }))}
+            getRowId={(row) => row.key}
+            columns={[
+              { headerName: t('checklist.items.dusting'), colId: 'item', flex: 2, cellRenderer: (p: { data?: ChecklistRow }) => p.data ? <span className="text-sm text-gray-700 dark:text-gray-300">{t(`checklist.items.${p.data.key}`)}</span> : null },
+              { headerName: t('checklist.standard'), colId: 'standard', sortable: false, cellRenderer: (p: { data?: ChecklistRow }) => { if (!p.data) return null; const { standard, deep, key } = p.data; return <>
                       {standard ? (
                         <span className="inline-flex items-center gap-1 text-brand-600 dark:text-brand-400 text-sm font-semibold">
                           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -68,8 +58,8 @@ export default function Checklist() {
                           {t('checklist.notIncluded')}
                         </span>
                       )}
-                    </td>
-                    <td className="px-6 py-3.5">
+                    </>; } },
+              { headerName: t('checklist.deep'), colId: 'deep', sortable: false, cellRenderer: (p: { data?: ChecklistRow }) => { if (!p.data) return null; const { standard, deep, key } = p.data; return <>
                       {deep ? (
                         <span className="inline-flex items-center gap-1 text-brand-600 dark:text-brand-400 text-sm font-semibold">
                           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -85,11 +75,9 @@ export default function Checklist() {
                           {t('checklist.notIncluded')}
                         </span>
                       )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </>; } },
+            ]}
+          />
           </div>
         </div>
 

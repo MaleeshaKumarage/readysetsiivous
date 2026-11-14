@@ -1,4 +1,5 @@
 'use client';
+import { DsGrid } from '@/components/ds/DsGrid';
 import { showError } from '@/lib/toast';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -67,7 +68,19 @@ export default function LeadsPage() {
     <Group justify="space-between"><Title order={2} component="h1">Leads</Title><Button onClick={openNew}>New lead</Button></Group>
     <Group align="end"><TextInput className="admin-filter-field" label="Search leads" placeholder="Company, business ID or email" maxLength={200} value={search} onChange={event => { setSearch(event.target.value); setSkip(0); }} /><Select className="admin-filter-field" label="Lead filter" value={filter} onChange={value => { setFilter(value || 'Active'); setSkip(0); }} data={['Active', 'Inactive', 'Converted', ...statuses]} /></Group>
     {listError ? <><Text role="alert" c="red">{listError}</Text><Button onClick={reload}>Retry loading leads</Button></> : loading ? <Loader /> : <>
-      {rows.length === 0 ? <Text>No leads in this view.</Text> : <Table.ScrollContainer minWidth={680}><Table striped withTableBorder><Table.Thead><Table.Tr>{['Company', 'Branch', 'Contact', 'Status', 'Images', 'Actions'].map(label => <Table.Th key={label}>{label}</Table.Th>)}</Table.Tr></Table.Thead><Table.Tbody>{rows.map(row => <Table.Tr key={row.id}><Table.Td>{row.fields.name}<Text size="xs">{row.fields.businessId}</Text></Table.Td><Table.Td>{leadBranches(row.fields, row.id).map(b => b.name || 'Unnamed branch').join(', ') || 'No branches'}</Table.Td><Table.Td>{row.fields.primaryEmail || row.fields.contactPhone || '—'}{row.fields.emails.length > 1 && <Text size="xs">{row.fields.emails.length} email addresses</Text>}</Table.Td><Table.Td><Badge>{row.status}</Badge></Table.Td><Table.Td>{row.imageCount}/3</Table.Td><Table.Td><Button size="xs" onClick={() => void openDetail(row.id)}>View lead</Button></Table.Td></Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer>}
+      {rows.length === 0 ? <Text>No leads in this view.</Text> : <DsGrid<(typeof rows)[number]>
+              label="Leads"
+              rows={rows}
+              getRowId={(row) => row.id}
+              columns={[
+                { headerName: 'Company', colId: 'company', flex: 2, cellRenderer: (p: { data?: (typeof rows)[number] }) => p.data ? <div><div>{p.data.fields.name}</div><div className="text-xs text-gray-600">{p.data.fields.businessId}</div></div> : null },
+                { headerName: 'Branch', colId: 'branch', flex: 2, valueGetter: p => p.data ? (leadBranches(p.data.fields, p.data.id).map(b => b.name || 'Unnamed branch').join(', ') || 'No branches') : '' },
+                { headerName: 'Contact', colId: 'contact', flex: 2, cellRenderer: (p: { data?: (typeof rows)[number] }) => p.data ? <div>{p.data.fields.primaryEmail || p.data.fields.contactPhone || '—'}{p.data.fields.emails.length > 1 && <div className="text-xs text-gray-600">{p.data.fields.emails.length} email addresses</div>}</div> : null },
+                { headerName: 'Status', colId: 'status', sortable: false, cellRenderer: (p: { data?: (typeof rows)[number] }) => p.data ? <Badge>{p.data.status}</Badge> : null },
+                { headerName: 'Images', colId: 'images', valueGetter: p => p.data ? `${p.data.imageCount}/3` : '' },
+                { headerName: 'Actions', colId: 'actions', sortable: false, cellRenderer: (p: { data?: (typeof rows)[number] }) => p.data ? <Button size="xs" onClick={() => void openDetail(p.data!.id)}>View lead</Button> : null },
+              ]}
+            />}
       <Group><Button disabled={skip === 0} onClick={() => setSkip(x => Math.max(0, x - 25))}>Previous</Button><Text>{total ? `${skip + 1}–${Math.min(skip + 25, total)} of ${total}` : '0 leads'}</Text><Button disabled={skip + 25 >= total} onClick={() => setSkip(x => x + 25)}>Next</Button></Group>
     </>}
     <Modal opened={opened} onClose={close} closeButtonProps={{ 'aria-label': 'Close lead' }} title={detail ? detail.lead.fields.name : 'New lead'} size="xl" closeOnClickOutside={false} withCloseButton={!busy && !detailLoading && !collaborationBusy}>

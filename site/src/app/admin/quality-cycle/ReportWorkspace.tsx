@@ -1,5 +1,6 @@
 'use client';
 
+import { DsGrid } from '@/components/ds/DsGrid';
 import { showError } from '@/lib/toast';
 import { useEffect, useRef, useState } from 'react';
 import { Badge, Button, Group, Modal, MultiSelect, NumberInput, Paper, SegmentedControl, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core';
@@ -105,15 +106,25 @@ export default function ReportWorkspace() {
       <Text size="sm">{report.periods?.map(p => `${dateLabel(p.from)} – ${dateLabel(p.to)}`).join('; ')} · {report.timeZoneId}</Text>
       <Text size="sm" c="dimmed">Scheduled hours count each visit once. Actual hours sum each cleaner’s submitted work time; incomplete timings are excluded.</Text>
       <Group><Button disabled={busy || !report.shifts.length} onClick={() => download()}>Export all selected shifts</Button><Button variant="light" disabled={busy || !report.shifts.length} onClick={() => openShare()}>Share all selected shifts</Button></Group>
-      <Table.ScrollContainer minWidth={1000}><Table withTableBorder striped>
-        <Table.Thead><Table.Tr>{['Company', 'Branch', 'Shift', 'Scheduled occurrences', 'Completed occurrences', 'Scheduled hours', 'Actual hours', 'Actions'].map(title => <Table.Th key={title}>{title}</Table.Th>)}</Table.Tr></Table.Thead>
-        <Table.Tbody>{report.shifts.map(row => <Table.Tr key={`${row.shiftId}-${row.branchId}`}>
-          <Table.Td>{row.companyName}</Table.Td><Table.Td>{row.branchName}</Table.Td><Table.Td>{row.shiftName}</Table.Td>
-          <Table.Td>{row.scheduledOccurrences}</Table.Td><Table.Td>{row.completedOccurrences}</Table.Td><Table.Td>{row.scheduledHours.toFixed(2)}</Table.Td>
-          <Table.Td>{row.recordedStaffHours == null ? 'Not available' : row.recordedStaffHours.toFixed(2)}{(row.incompleteTimingRecords ?? 0) > 0 && <Text size="xs" c="dimmed">{row.incompleteTimingRecords} incomplete</Text>}</Table.Td>
-          <Table.Td><Group gap="xs"><Button size="xs" disabled={busy} onClick={() => download(row.shiftId)}>Export shift</Button><Button size="xs" variant="light" disabled={busy} onClick={() => openShare(row.shiftId)}>Share shift</Button></Group></Table.Td>
-        </Table.Tr>)}</Table.Tbody>
-      </Table></Table.ScrollContainer>
+      <DsGrid<(typeof report.shifts)[number]>
+        label="Quality report shifts"
+        rows={report.shifts}
+        getRowId={(row) => `${row.shiftId}-${row.branchId}`}
+        columns={[
+          { headerName: 'Company', colId: 'company', valueGetter: p => p.data?.companyName ?? '' },
+          { headerName: 'Branch', colId: 'branch', valueGetter: p => p.data?.branchName ?? '' },
+          { headerName: 'Shift', colId: 'shift', flex: 2, valueGetter: p => p.data?.shiftName ?? '' },
+          { headerName: 'Scheduled occurrences', colId: 'scheduled', valueGetter: p => p.data?.scheduledOccurrences ?? '' },
+          { headerName: 'Completed occurrences', colId: 'completed', valueGetter: p => p.data?.completedOccurrences ?? '' },
+          { headerName: 'Scheduled hours', colId: 'scheduledHours', valueGetter: p => p.data ? p.data.scheduledHours.toFixed(2) : '' },
+          { headerName: 'Actual hours', colId: 'actualHours', cellRenderer: (p: { data?: (typeof report.shifts)[number] }) => p.data ? (
+            <div>{p.data.recordedStaffHours == null ? 'Not available' : p.data.recordedStaffHours.toFixed(2)}{(p.data.incompleteTimingRecords ?? 0) > 0 && <div className="text-xs text-gray-600">{p.data.incompleteTimingRecords} incomplete</div>}</div>
+          ) : null },
+          { headerName: 'Actions', colId: 'actions', sortable: false, minWidth: 260, flex: 0, width: 280, cellRenderer: (p: { data?: (typeof report.shifts)[number] }) => p.data ? (
+            <div className="flex items-center gap-2"><Button size="xs" disabled={busy} onClick={() => download(p.data!.shiftId)}>Export shift</Button><Button size="xs" variant="light" disabled={busy} onClick={() => openShare(p.data!.shiftId)}>Share shift</Button></div>
+          ) : null },
+        ]}
+      />
       {!report.shifts.length && <Text>No reportable visits for these shifts and dates.</Text>}
     </Stack></Paper>}
     <Paper withBorder p="md"><Stack>

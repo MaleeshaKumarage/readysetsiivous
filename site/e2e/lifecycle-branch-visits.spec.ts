@@ -212,8 +212,10 @@ test('admin sets the default cleaner and changes the cleaner of one visit', asyn
   const state = await setup(page);
   await shiftAction(page, MAIN, 'Occurrences');
   const list = page.getByRole('dialog', { name: /Occurrences/ });
-  await list.getByRole('textbox', { name: 'Default cleaner', exact: true }).click();
-  await page.getByRole('option', { name: 'Second Cleaner', exact: true }).click();
+  const cleanerField = list.getByRole('textbox', { name: 'Default cleaner', exact: true });
+  await cleanerField.click();
+  await expect(page.getByRole('option', { name: 'Second Cleaner', exact: true })).toBeAttached();
+  await cleanerField.fill('Second Cleaner'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
   await expect(list.getByRole('textbox', { name: 'Default cleaner', exact: true })).toHaveValue('Second Cleaner');
   expect(state.defaultWrites).toEqual([{ employeeId: 'second' }]);
 

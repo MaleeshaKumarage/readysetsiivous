@@ -233,10 +233,10 @@ test('a failed list refresh after an action keeps the rows on screen with an err
     return route.fulfill({ status: 204, headers });
   });
   await page.goto('/admin/employees/');
-  await expect(page.getByRole('cell', { name: 'Test Cleaner' })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Test Cleaner' })).toBeVisible();
   await page.getByRole('button', { name: 'Deactivate', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Employees could not be loaded. Reload and retry.' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Test Cleaner' })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Test Cleaner' })).toBeVisible();
 });
 
 test('a failed employee list recovers when a later load succeeds', async ({ page }) => {
@@ -252,7 +252,7 @@ test('a failed employee list recovers when a later load succeeds', async ({ page
   healthy = true;
   await page.reload();
   await expect(page.getByRole('alert').filter({ hasText: 'Employees could not be loaded' })).toHaveCount(0);
-  await expect(page.getByRole('cell', { name: 'Test Cleaner' })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Test Cleaner' })).toBeVisible();
 });
 
 test('clearing an existing certification expiry sends null and the field stays empty after reload', async ({ page }) => {

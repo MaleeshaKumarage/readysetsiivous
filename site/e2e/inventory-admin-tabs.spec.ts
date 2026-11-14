@@ -78,20 +78,20 @@ async function setup(page: Page, options: { pageOneRows?: unknown[] } = {}): Pro
 test('each admin tab renders its own panel', async ({ page }) => {
   await setup(page);
   await page.goto('/admin/inventory/');
-  await expect(page.getByRole('cell', { name: 'Keys', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Keys', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Export CSV' })).toBeVisible();
 
   await page.getByRole('tab', { name: 'Locations', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Add location' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Main store', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Main store', exact: true })).toBeVisible();
 
   await page.getByRole('tab', { name: 'Items', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Add item' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Keys', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Keys', exact: true })).toBeVisible();
 
   await page.getByRole('tab', { name: 'Take log', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Export CSV' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Keys', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Keys', exact: true })).toBeVisible();
 });
 
 test('the photo dialog closes with its close button', async ({ page }) => {
@@ -123,7 +123,7 @@ test('Cancel closes the item dialog without saving', async ({ page }) => {
 
   expect(state.posts).toHaveLength(0);
   expect(state.puts).toHaveLength(0);
-  await expect(page.getByRole('cell', { name: 'Discarded item', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('gridcell', { name: 'Discarded item', exact: true })).toHaveCount(0);
 });
 
 test('an entry whose photos were purged shows Deleted and no photo button', async ({ page }) => {
@@ -158,15 +158,15 @@ test('after a photo fails to load, opening another entry shows its photos', asyn
 test('the employee filter sends the chosen employee and narrows the log, including a deactivated employee', async ({ page }) => {
   const state = await setup(page);
   await page.goto('/admin/inventory/');
-  await expect(page.getByRole('cell', { name: 'Keys', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Keys', exact: true })).toBeVisible();
 
   await page.locator('input[aria-label="Employee"]').click();
   await page.getByRole('option', { name: 'Ben Cleaner (inactive)' }).click();
   await page.getByRole('button', { name: 'Apply' }).click();
 
   await expect.poll(() => state.usageQueries.at(-1)?.searchParams.get('employeeId')).toBe('employee-b');
-  await expect(page.getByRole('cell', { name: 'Bedsheets', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Keys', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('gridcell', { name: 'Bedsheets', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Keys', exact: true })).toHaveCount(0);
 });
 
 test('the photo dialog opens for an entry and closes with Escape', async ({ page }) => {
@@ -192,10 +192,10 @@ test('Load more fetches the next page when a full page was returned', async ({ p
   const hundred = Array.from({ length: 100 }, (_, index) => ({ ...keysRow, id: `row-${index}`, itemName: `Item ${index}`, photoIds: [], photosPurged: true }));
   const state = await setup(page, { pageOneRows: hundred });
   await page.goto('/admin/inventory/');
-  await expect(page.getByRole('cell', { name: 'Item 0', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Item 0', exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Load more', exact: true }).click();
-  await expect(page.getByRole('cell', { name: 'Late entry', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Late entry', exact: true })).toBeVisible();
   expect(state.usageQueries.at(-1)?.searchParams.get('skip')).toBe('100');
   await expect(page.getByRole('button', { name: 'Load more', exact: true })).toHaveCount(0);
 });
@@ -233,7 +233,7 @@ test('a location can be added from the Locations tab', async ({ page }) => {
   await page.getByRole('dialog').getByRole('button', { name: 'Save', exact: true }).click();
 
   await expect(page.getByText('Location added.')).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Warehouse B', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Warehouse B', exact: true })).toBeVisible();
   expect(state.posts.at(-1)?.body).toEqual({ name: 'Warehouse B' });
 });
 
@@ -248,7 +248,7 @@ test('an item can be added with a unit from the Items tab', async ({ page }) => 
   await page.getByRole('dialog').getByRole('button', { name: 'Save', exact: true }).click();
 
   await expect(page.getByText('Item added.')).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Tissues', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Tissues', exact: true })).toBeVisible();
   expect(state.posts.at(-1)?.body).toEqual({ name: 'Tissues', unit: 'box' });
 });
 
@@ -269,7 +269,7 @@ test('an existing item can be edited from the Items tab', async ({ page }) => {
 test('Export CSV downloads the log for the filters currently applied', async ({ page }) => {
   const state = await setup(page);
   await page.goto('/admin/inventory/');
-  await expect(page.getByRole('cell', { name: 'Keys', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Keys', exact: true })).toBeVisible();
 
   await page.locator('input[aria-label="Employee"]').click();
   await page.getByRole('option', { name: 'Ana Keeper' }).click();

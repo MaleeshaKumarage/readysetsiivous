@@ -56,11 +56,11 @@ test('lifecycle tabs show full-tenant counts and the server status filter', asyn
   await page.goto('/admin/companies/');
   const tabs = page.getByRole('tablist', { name: 'Company activity' });
   await expect(tabs.getByRole('tab', { name: 'Active (100)', exact: true })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('cell', { name: 'Company 0', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Company 100', exact: true })).not.toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 0', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 100', exact: true })).not.toBeVisible();
   await tabs.getByRole('tab', { name: 'Inactive (1)', exact: true }).click();
-  await expect(page.getByRole('cell', { name: 'Company 100', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Company 0', exact: true })).not.toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 100', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 0', exact: true })).not.toBeVisible();
   expect(requests.at(-1)?.searchParams.get('status')).toBe('inactive');
 });
 
@@ -68,16 +68,16 @@ test('pages and page size are served by the server and a size change returns to 
   await setupAdminMocks(page, { authenticated: true });
   await mockCompanies(page);
   await page.goto('/admin/companies/');
-  await expect(page.getByRole('cell', { name: 'Company 24', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Company 25', exact: true })).not.toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 24', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 25', exact: true })).not.toBeVisible();
   await page.getByRole('button', { name: '2', exact: true }).click();
-  await expect(page.getByRole('cell', { name: 'Company 25', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 25', exact: true })).toBeVisible();
   await expect(page).toHaveURL(/page=2/);
   await page.getByRole('textbox', { name: 'Companies per page' }).click();
   await page.getByRole('option', { name: '50', exact: true }).click();
   await expect(page).toHaveURL(/size=50/);
   await expect(page).toHaveURL(/page=1/);
-  await expect(page.getByRole('cell', { name: 'Company 49', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 49', exact: true })).toBeVisible();
 });
 
 test('search filters by name or business ID and resets to page one', async ({ page }) => {
@@ -87,14 +87,14 @@ test('search filters by name or business ID and resets to page one', async ({ pa
   await page.getByRole('button', { name: '2', exact: true }).click();
   await page.getByRole('textbox', { name: 'Search companies' }).fill('Company 10');
   await page.getByRole('textbox', { name: 'Search companies' }).press('Enter');
-  await expect(page.getByRole('cell', { name: 'Company 10', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Company 0', exact: true })).not.toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 10', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 0', exact: true })).not.toBeVisible();
   await expect(page).toHaveURL(/q=Company(\+|%20)10/);
   await expect(page).toHaveURL(/page=1/);
   await page.getByRole('textbox', { name: 'Search companies' }).fill('ID-10');
   await page.getByRole('textbox', { name: 'Search companies' }).press('Enter');
-  await expect(page.getByRole('cell', { name: 'Company 10', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Company 0', exact: true })).not.toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 10', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 0', exact: true })).not.toBeVisible();
   await page.getByRole('textbox', { name: 'Search companies' }).fill('no-such-company');
   await page.getByRole('textbox', { name: 'Search companies' }).press('Enter');
   await expect(page.getByText('No companies match this search.', { exact: true })).toBeVisible();
@@ -111,7 +111,7 @@ test('Back restores the previous page and status after a filter change', async (
   await page.goBack();
   await expect(page).toHaveURL(/page=2/);
   await expect(page).toHaveURL(/status=active/);
-  await expect(page.getByRole('cell', { name: 'Company 25', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 25', exact: true })).toBeVisible();
 });
 
 test('a page past the last populated page moves to the last page', async ({ page }) => {
@@ -119,7 +119,7 @@ test('a page past the last populated page moves to the last page', async ({ page
   await mockCompanies(page);
   await page.goto('/admin/companies/?status=active&page=9&size=25');
   await expect(page).toHaveURL(/page=4/);
-  await expect(page.getByRole('cell', { name: 'Company 75', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 75', exact: true })).toBeVisible();
 });
 
 test('list failure shows a retryable error and refresh loads the current page', async ({ page }) => {
@@ -130,7 +130,7 @@ test('list failure shows a retryable error and refresh loads the current page', 
   await expect(page.getByRole('alert').filter({ hasText: 'Companies could not be loaded. Refresh to retry.' })).toBeVisible();
   failure.value = false;
   await page.getByRole('button', { name: 'Refresh companies' }).click();
-  await expect(page.getByRole('cell', { name: 'Company 0', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 0', exact: true })).toBeVisible();
 });
 
 test('creating a company from a later page returns to the Active tab, page one, and shows it', async ({ page }) => {
@@ -146,14 +146,14 @@ test('creating a company from a later page returns to the Active tab, page one, 
   await expect(dialog).toHaveCount(0);
   await expect(page).toHaveURL(/status=active/);
   await expect(page).toHaveURL(/page=1/);
-  await expect(page.getByRole('cell', { name: 'Brand New Oy', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Brand New Oy', exact: true })).toBeVisible();
 });
 
 test('deep link to a company on a later page still shows its branch list', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   await mockCompanies(page);
   await page.goto('/admin/companies/?company=company-60');
-  await expect(page.getByRole('cell', { name: 'Company 60', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 60', exact: true })).toBeVisible();
   await expect(page.getByText('Active branch', { exact: true })).toBeVisible();
 });
 
@@ -184,7 +184,7 @@ test('summary failure keeps the list and hides only the tab counts', async ({ pa
   await setupAdminMocks(page, { authenticated: true });
   await mockCompanies(page, { failSummary: true });
   await page.goto('/admin/companies/');
-  await expect(page.getByRole('cell', { name: 'Company 0', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 0', exact: true })).toBeVisible();
   const tabs = page.getByRole('tablist', { name: 'Company activity' });
   await expect(tabs.getByRole('tab', { name: 'Active', exact: true })).toBeVisible();
   await expect(tabs.getByRole('tab', { name: /Active \(/ })).not.toBeVisible();
@@ -219,8 +219,8 @@ test('a direct URL restores the search text and filtered results', async ({ page
   await mockCompanies(page);
   await page.goto('/admin/companies/?status=active&page=1&size=25&q=Company%2010');
   await expect(page.getByRole('textbox', { name: 'Search companies' })).toHaveValue('Company 10');
-  await expect(page.getByRole('cell', { name: 'Company 10', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Company 0', exact: true })).not.toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 10', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 0', exact: true })).not.toBeVisible();
 });
 
 test('Back after a search restores the unfiltered list and empty search box', async ({ page }) => {
@@ -229,10 +229,10 @@ test('Back after a search restores the unfiltered list and empty search box', as
   await page.goto('/admin/companies/');
   await page.getByRole('textbox', { name: 'Search companies' }).fill('Company 10');
   await page.getByRole('textbox', { name: 'Search companies' }).press('Enter');
-  await expect(page.getByRole('cell', { name: 'Company 0', exact: true })).not.toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 0', exact: true })).not.toBeVisible();
   await page.goBack();
   await expect(page.getByRole('textbox', { name: 'Search companies' })).toHaveValue('');
-  await expect(page.getByRole('cell', { name: 'Company 0', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 0', exact: true })).toBeVisible();
 });
 
 test('a slow summary never holds the company rows and counts appear when it resolves', async ({ page }) => {
@@ -241,7 +241,7 @@ test('a slow summary never holds the company rows and counts appear when it reso
   const gate = new Promise<void>(resolve => { release = resolve; });
   await mockCompanies(page, { summaryGate: gate });
   await page.goto('/admin/companies/');
-  await expect(page.getByRole('cell', { name: 'Company 0', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 0', exact: true })).toBeVisible();
   await expect(page.getByRole('tablist', { name: 'Company activity' }).getByRole('tab', { name: 'Active (100)', exact: true })).not.toBeVisible();
   release();
   await expect(page.getByRole('tablist', { name: 'Company activity' }).getByRole('tab', { name: 'Active (100)', exact: true })).toBeVisible();
@@ -260,9 +260,9 @@ test('deactivating the open deep-linked company removes its branch panel', async
   await mockCompanies(page, { list: companies.map(c => ({ ...c })) });
   await page.goto('/admin/companies/?company=company-60');
   await expect(page.getByText('Active branch', { exact: true })).toBeVisible();
-  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Company 60', exact: true }) });
+  const row = page.getByRole('row').filter({ has: page.getByRole('gridcell', { name: 'Company 60', exact: true }) });
   await row.getByRole('button', { name: 'Deactivate', exact: true }).click();
-  await expect(page.getByRole('cell', { name: 'Company 60', exact: true })).not.toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 60', exact: true })).not.toBeVisible();
   await expect(page.getByText('Active branch', { exact: true })).not.toBeVisible();
 });
 
@@ -272,8 +272,8 @@ test('the last page of a longer list is reachable from the pagination control', 
   await page.goto('/admin/companies/');
   await page.getByRole('button', { name: '4', exact: true }).click();
   await expect(page).toHaveURL(/page=4/);
-  await expect(page.getByRole('cell', { name: 'Company 75', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Company 74', exact: true })).not.toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 75', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 74', exact: true })).not.toBeVisible();
 });
 
 test('collapsing the pinned deep-linked company removes its row and branch panel', async ({ page }) => {
@@ -281,10 +281,10 @@ test('collapsing the pinned deep-linked company removes its row and branch panel
   await mockCompanies(page);
   await page.goto('/admin/companies/?company=company-60');
   await expect(page.getByText('Active branch', { exact: true })).toBeVisible();
-  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Company 60', exact: true }) }).first();
+  const row = page.getByRole('row').filter({ has: page.getByRole('gridcell', { name: 'Company 60', exact: true }) }).first();
   await row.getByRole('button', { name: /Branches|^\d+$/ }).first().click();
   await expect(page.getByText('Active branch', { exact: true })).not.toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Company 60', exact: true })).not.toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 60', exact: true })).not.toBeVisible();
 });
 
 test('clicking Next and a non-adjacent page number moves through the pages', async ({ page }) => {
@@ -293,19 +293,19 @@ test('clicking Next and a non-adjacent page number moves through the pages', asy
   await page.goto('/admin/companies/');
   await page.getByRole('button', { name: 'Next page' }).click();
   await expect(page).toHaveURL(/page=2/);
-  await expect(page.getByRole('cell', { name: 'Company 25', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 25', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Previous page' }).click();
   await expect(page).toHaveURL(/page=1/);
   await page.getByRole('button', { name: '3', exact: true }).click();
   await expect(page).toHaveURL(/page=3/);
-  await expect(page.getByRole('cell', { name: 'Company 50', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 50', exact: true })).toBeVisible();
 });
 
 test('a deleted or mistyped company id is ignored and the list still loads', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
   await mockCompanies(page);
   await page.goto('/admin/companies/?company=does-not-exist');
-  await expect(page.getByRole('cell', { name: 'Company 0', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 0', exact: true })).toBeVisible();
   await expect(page.getByRole('tablist', { name: 'Branch activity' })).toHaveCount(0);
 });
 
@@ -313,7 +313,7 @@ test('a failed company detail request leaves the list usable', async ({ page }) 
   await setupAdminMocks(page, { authenticated: true });
   await mockCompanies(page);
   await page.goto('/admin/companies/?company=company-fail');
-  await expect(page.getByRole('cell', { name: 'Company 0', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Company 0', exact: true })).toBeVisible();
   await expect(page.getByText('Active branch', { exact: true })).not.toBeVisible();
 });
 
@@ -322,7 +322,7 @@ test('dismissing the pinned company drops ?company= from the URL', async ({ page
   await mockCompanies(page);
   await page.goto('/admin/companies/?company=company-60');
   await expect(page.getByText('Active branch', { exact: true })).toBeVisible();
-  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Company 60', exact: true }) }).first();
+  const row = page.getByRole('row').filter({ has: page.getByRole('gridcell', { name: 'Company 60', exact: true }) }).first();
   await row.getByRole('button', { name: /Branches|^\d+$/ }).first().click();
   await expect(page).not.toHaveURL(/company=/);
   await page.reload();

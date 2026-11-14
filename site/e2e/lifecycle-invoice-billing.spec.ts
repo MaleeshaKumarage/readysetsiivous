@@ -37,7 +37,7 @@ test('admin previews shift charges then issues the exact preview snapshot', asyn
   await page.getByRole('button', { name: 'Preview invoice', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Invoice preview' })).toBeVisible();
   await expect(page.getByText('Net €150.00 · VAT €38.25 · Total €188.25')).toBeVisible();
   await page.getByRole('button', { name: 'Issue invoice', exact: true }).click(); await expect(page.getByRole('status')).toHaveText('Invoice INV-1 issued.');
-  expect(calls.issues).toEqual([{ ...calls.previews[0], previewToken: 'bound-token' }]); await expect(page.getByRole('cell', { name: 'INV-1', exact: true })).toBeVisible();
+  expect(calls.issues).toEqual([{ ...calls.previews[0], previewToken: 'bound-token' }]); await expect(page.getByRole('gridcell', { name: 'INV-1', exact: true })).toBeVisible();
 });
 test('changing filters invalidates a preview and its in-flight response', async ({ page }) => {
   const calls = await setup(page, { delayPreview: true }); await fillInvoice(page); await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
@@ -142,12 +142,12 @@ test('invoice PDF downloads and paid or void actions refresh status with explici
     if (path.endsWith('/void')) { voids++; status = 'Voided'; return route.fulfill({ status: 204, headers }); }
     reads++; return route.fulfill({ headers, json: [{ ...invoice, status }] });
   });
-  await page.goto('/admin/invoices/'); const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'INV-1', exact: true }) });
+  await page.goto('/admin/invoices/'); const row = page.getByRole('row').filter({ has: page.getByRole('gridcell', { name: 'INV-1', exact: true }) });
   const download = page.waitForEvent('download'); await row.getByRole('button', { name: 'PDF', exact: true }).click(); expect((await download).suggestedFilename()).toBe('invoice-invoice.pdf'); expect(downloads).toBe(1);
-  const before = reads; await row.getByRole('button', { name: 'Mark paid', exact: true }).click(); await expect(row.getByRole('cell', { name: 'Paid', exact: true })).toBeVisible(); expect(reads).toBeGreaterThan(before); expect(paid).toHaveLength(1); expect(Number.isFinite(Date.parse(paid[0].paidAtUtc))).toBe(true); await expect(row.getByRole('button', { name: 'Mark paid', exact: true })).toHaveCount(0);
+  const before = reads; await row.getByRole('button', { name: 'Mark paid', exact: true }).click(); await expect(row.getByRole('gridcell', { name: 'Paid', exact: true })).toBeVisible(); expect(reads).toBeGreaterThan(before); expect(paid).toHaveLength(1); expect(Number.isFinite(Date.parse(paid[0].paidAtUtc))).toBe(true); await expect(row.getByRole('button', { name: 'Mark paid', exact: true })).toHaveCount(0);
   status = 'Issued'; await page.reload(); await expect(row.getByRole('button', { name: 'Void', exact: true })).toBeVisible();
-  page.once('dialog', dialog => { expect(dialog.message()).toContain('INV-1'); return dialog.dismiss(); }); await row.getByRole('button', { name: 'Void', exact: true }).click(); expect(voids).toBe(0); await expect(row.getByRole('cell', { name: 'Issued', exact: true })).toBeVisible();
-  page.once('dialog', dialog => dialog.accept()); await row.getByRole('button', { name: 'Void', exact: true }).click(); await expect(row.getByRole('cell', { name: 'Voided', exact: true })).toBeVisible(); expect(voids).toBe(1); await expect(row.getByRole('button', { name: 'Void', exact: true })).toHaveCount(0);
+  page.once('dialog', dialog => { expect(dialog.message()).toContain('INV-1'); return dialog.dismiss(); }); await row.getByRole('button', { name: 'Void', exact: true }).click(); expect(voids).toBe(0); await expect(row.getByRole('gridcell', { name: 'Issued', exact: true })).toBeVisible();
+  page.once('dialog', dialog => dialog.accept()); await row.getByRole('button', { name: 'Void', exact: true }).click(); await expect(row.getByRole('gridcell', { name: 'Voided', exact: true })).toBeVisible(); expect(voids).toBe(1); await expect(row.getByRole('button', { name: 'Void', exact: true })).toHaveCount(0);
 });
 
 test('on-call occurrence price requires a reason and saves only that visit', async ({ page }) => {
@@ -173,10 +173,10 @@ test('hourly pricing shows history and saves VAT while cancelling edits sends no
     return route.fulfill({ headers, json: { plans, overrides: [] } });
   });
   await page.goto('/admin/shifts/'); await shiftAction(page, 'Biweekly', 'Pricing'); let dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('cell', { name: '€150.00', exact: true })).toBeVisible(); await dialog.getByRole('textbox', { name: 'Rate before VAT (€)', exact: true }).fill('999'); await dialog.getByRole('button', { name: 'Cancel', exact: true }).click(); expect(calls.pricing).toEqual([]);
+  await expect(dialog.getByRole('gridcell', { name: '€150.00', exact: true })).toBeVisible(); await dialog.getByRole('textbox', { name: 'Rate before VAT (€)', exact: true }).fill('999'); await dialog.getByRole('button', { name: 'Cancel', exact: true }).click(); expect(calls.pricing).toEqual([]);
   await shiftAction(page, 'Biweekly', 'Pricing'); dialog = page.getByRole('dialog'); await expect(dialog.getByRole('textbox', { name: 'Rate before VAT (€)', exact: true })).toHaveValue('150');
   await dialog.getByRole('textbox', { name: 'Pricing basis', exact: true }).click(); await page.getByRole('option', { name: 'Per scheduled hour', exact: true }).click(); await dialog.getByRole('textbox', { name: 'Rate before VAT (€)', exact: true }).fill('35'); await dialog.getByRole('textbox', { name: 'VAT (%)', exact: true }).fill('14'); await dialog.getByRole('textbox', { name: 'Effective from', exact: true }).fill('2026-11-01'); await dialog.getByRole('button', { name: 'Save price', exact: true }).click(); await expect(dialog).toHaveCount(0);
-  expect(calls.pricing).toEqual([{ mode: 'Hourly', rateNet: 35, vatRatePercent: 14, effectiveFrom: '2026-11-01' }]); await shiftAction(page, 'Biweekly', 'Pricing'); await expect(page.getByRole('dialog').getByRole('cell', { name: '€35.00', exact: true })).toBeVisible(); await expect(page.getByRole('dialog').getByRole('cell', { name: '€150.00', exact: true })).toBeVisible();
+  expect(calls.pricing).toEqual([{ mode: 'Hourly', rateNet: 35, vatRatePercent: 14, effectiveFrom: '2026-11-01' }]); await shiftAction(page, 'Biweekly', 'Pricing'); await expect(page.getByRole('dialog').getByRole('gridcell', { name: '€35.00', exact: true })).toBeVisible(); await expect(page.getByRole('dialog').getByRole('gridcell', { name: '€150.00', exact: true })).toBeVisible();
 });
 
 test('a refused mark-paid explains the next step as a toast and in the list, and the list stays usable', async ({ page }) => {
@@ -188,7 +188,7 @@ test('a refused mark-paid explains the next step as a toast and in the list, and
     return route.fulfill({ status: 409, headers, json: { title: 'Invoice conflict', detail: MESSAGE } });
   });
   await page.goto('/admin/invoices/');
-  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'INV-1', exact: true }) });
+  const row = page.getByRole('row').filter({ has: page.getByRole('gridcell', { name: 'INV-1', exact: true }) });
   await row.getByRole('button', { name: 'Mark paid', exact: true }).click();
   await expect(page.getByText('Invoice action not completed').first()).toBeVisible();
   await expect(page.getByText(MESSAGE).first()).toBeVisible();
@@ -269,7 +269,7 @@ test('a refused void shows the reason as a toast and the invoice stays issued', 
     return route.fulfill({ status: 409, headers, json: { title: 'Invoice conflict', detail: VOID_REFUSED } });
   });
   await page.goto('/admin/invoices/');
-  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'INV-1', exact: true }) });
+  const row = page.getByRole('row').filter({ has: page.getByRole('gridcell', { name: 'INV-1', exact: true }) });
   page.once('dialog', dialog => dialog.accept());
   await row.getByRole('button', { name: 'Void', exact: true }).click();
   await expect(page.getByText('Invoice action not completed').first()).toBeVisible();

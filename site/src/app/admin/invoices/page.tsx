@@ -2,6 +2,7 @@
 
 import { showError } from '@/lib/toast';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { DsGrid } from '@/components/ds/DsGrid';
 import { Badge, Button, Checkbox, Group, Modal, MultiSelect, NumberInput, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { adminCompanies, adminShifts, adminTenant, type Company, type Shift } from '@/lib/adminApi';
 import { invoiceBillingApi, InvoiceRequestError, type BillingAddress, type InvoiceIssuer, type MonthlyOverride, type ShiftInvoice, type ShiftInvoiceInput, type ManualInvoiceInput, type UnstartedVisit } from '@/lib/invoiceBillingApi';
@@ -23,6 +24,24 @@ function completionMonthOptions(now: Date, earliest?: string | null) {
     const date = new Date(Date.UTC(year, month - index, 1));
     return { value: date.toISOString().slice(0, 7), label: monthLabel.format(date) };
   });
+}
+
+type PreviewLine = ShiftInvoice['lines'][number];
+type BranchHeading = { name: string; branchKey: string };
+type ShiftPreviewRow = PreviewLine | BranchHeading;
+function isBranchHeading(row: ShiftPreviewRow): row is BranchHeading {
+  return 'branchKey' in row;
+}
+// Branch headings first, then that branch's visits by period, for each branch in name order.
+function shiftPreviewRows(lines: PreviewLine[]): ShiftPreviewRow[] {
+  const branches = [...new Map(lines.map(line => [line.branchId || line.branchName || '', line.branchName || ''])).entries()]
+    .sort((a, b) => a[1].localeCompare(b[1]));
+  return branches.flatMap(([branchKey, branchName]) => [
+    ...(branchName ? [{ name: branchName, branchKey }] : []),
+    ...lines
+      .filter(line => (line.branchId || line.branchName || '') === branchKey)
+      .sort((a, b) => (a.periodFrom || '').localeCompare(b.periodFrom || '')),
+  ]);
 }
 
 export default function InvoicesPage() {
@@ -170,10 +189,61 @@ export default function InvoicesPage() {
     </Stack></fieldset></Modal>
     </Stack>
     <Modal opened={Boolean(preview)} onClose={closePreview} closeButtonProps={{ disabled: previewLocked }} closeOnClickOutside={!previewLocked} closeOnEscape={!previewLocked} title="Invoice preview" size="xl" radius="md">{preview && <Stack>{error && <Text role="alert" c="red">{error}</Text>}{uncertain && <Text role="alert" c="orange">The issue result could not be confirmed. Retry issuing to retrieve the same invoice safely before editing or starting another invoice.</Text>}{preview.issuerIsSample && <Badge color="orange">Sample issuer details</Badge>}<Text fw={600}>{preview.issuer.companyName} · {preview.issuer.businessId}</Text><Text size="sm">{preview.issuer.companyAddress.street}, {preview.issuer.companyAddress.postalCode} {preview.issuer.companyAddress.city} · IBAN {preview.issuer.bankAccountIBAN} · BIC {preview.issuer.bankBic}</Text><Text>{preview.customer.name}{!manual && <> · {preview.periodFrom?.slice(0, 10) ?? from} – {preview.periodTo?.slice(0, 10) ?? to}</>}</Text>
-      {manual ? <Table.ScrollContainer minWidth={580}><Table><Table.Thead><Table.Tr>{['Description', 'Quantity', 'Unit price (net)', 'Net', 'VAT', 'Total'].map(label => <Table.Th key={label}>{label}</Table.Th>)}</Table.Tr></Table.Thead><Table.Tbody>{preview.lines.map((line, index) => <Table.Tr key={line.lineKey || index}><Table.Td>{line.description}</Table.Td><Table.Td>{line.quantity}</Table.Td><Table.Td>{money(line.unitPriceNet)}</Table.Td><Table.Td>{money(line.netAmount)}</Table.Td><Table.Td>{money(line.vatAmount)} ({line.vatRatePercent}%)</Table.Td><Table.Td>{money(line.total)}</Table.Td></Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer> : <Table.ScrollContainer minWidth={850}><Table><Table.Thead><Table.Tr>{['Shift / branch', 'Period', 'Scheduled hours', 'Occurrences', 'Basis / quantity', 'Net', 'VAT', 'Total'].map(label => <Table.Th key={label}>{label}</Table.Th>)}</Table.Tr></Table.Thead><Table.Tbody>{[...new Map(preview.lines.map(line => [line.branchId || line.branchName || '', line.branchName || ''])).entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([branchKey, branchName]) => <Fragment key={branchKey}>{branchName && <Table.Tr><Table.Th colSpan={8}>{branchName}</Table.Th></Table.Tr>}{preview.lines.filter(line => (line.branchId || line.branchName || '') === branchKey).sort((a, b) => (a.periodFrom || '').localeCompare(b.periodFrom || '')).map((line, index) => <Table.Tr key={line.lineKey || index}><Table.Td>{line.shiftName || line.description}<Text size="xs">{line.branchName}</Text>{line.completedOn && <Text size="xs">Completed on: {line.completedOn.slice(0, 10)}</Text>}{line.overrideReason && <Text size="xs">Override: {line.overrideReason}</Text>}</Table.Td><Table.Td>{line.periodFrom?.slice(0, 10)} – {line.periodTo?.slice(0, 10)}</Table.Td><Table.Td>{line.hours == null ? '—' : new Intl.NumberFormat('en', { maximumFractionDigits: 2 }).format(line.hours)}</Table.Td><Table.Td>{line.occurrences ?? '—'}</Table.Td><Table.Td>{line.pricingMode} × {new Intl.NumberFormat('en', { maximumFractionDigits: 4 }).format(line.quantity)}<Text size="xs">{line.description}</Text></Table.Td><Table.Td>{money(line.netAmount)}</Table.Td><Table.Td>{money(line.vatAmount)} ({line.vatRatePercent}%)</Table.Td><Table.Td>{money(line.total)}</Table.Td></Table.Tr>)}</Fragment>)}</Table.Tbody></Table></Table.ScrollContainer>}
+      {manual ? (
+        <DsGrid<PreviewLine>
+          label="Manual invoice lines"
+          rows={preview.lines}
+          getRowId={(line) => line.lineKey || ''}
+          columns={[
+            { headerName: 'Description', colId: 'description', valueGetter: p => p.data?.description ?? '', flex: 3 },
+            { headerName: 'Quantity', colId: 'quantity', valueGetter: p => p.data?.quantity ?? '' },
+            { headerName: 'Unit price (net)', colId: 'unit', valueGetter: p => p.data ? money(p.data.unitPriceNet) : '' },
+            { headerName: 'Net', colId: 'net', valueGetter: p => p.data ? money(p.data.netAmount) : '' },
+            { headerName: 'VAT', colId: 'vat', valueGetter: p => p.data ? `${money(p.data.vatAmount)} (${p.data.vatRatePercent}%)` : '' },
+            { headerName: 'Total', colId: 'total', valueGetter: p => p.data ? money(p.data.total) : '' },
+          ]}
+        />
+      ) : (
+        <DsGrid<ShiftPreviewRow>
+          label="Shift invoice lines"
+          rows={shiftPreviewRows(preview.lines)}
+          isFullWidthRow={(row) => isBranchHeading(row)}
+          fullWidthRow={(row) => isBranchHeading(row) ? row.name : null}
+          columns={[
+            { headerName: 'Shift / branch', colId: 'shift', flex: 3, cellRenderer: (p: { data?: ShiftPreviewRow }) => {
+              const line = p.data && !isBranchHeading(p.data) ? p.data : null;
+              if (!line) return null;
+              return <div><div>{line.shiftName || line.description}</div><div className="text-xs text-gray-600">{line.branchName}</div>{line.completedOn && <div className="text-xs text-gray-600">Completed on: {line.completedOn.slice(0, 10)}</div>}{line.overrideReason && <div className="text-xs text-gray-600">Override: {line.overrideReason}</div>}</div>;
+            } },
+            { headerName: 'Period', colId: 'period', valueGetter: p => p.data && !isBranchHeading(p.data) ? `${p.data.periodFrom?.slice(0, 10)} – ${p.data.periodTo?.slice(0, 10)}` : '' },
+            { headerName: 'Scheduled hours', colId: 'hours', valueGetter: p => p.data && !isBranchHeading(p.data) ? (p.data.hours == null ? '—' : new Intl.NumberFormat('en', { maximumFractionDigits: 2 }).format(p.data.hours)) : '' },
+            { headerName: 'Occurrences', colId: 'occurrences', valueGetter: p => p.data && !isBranchHeading(p.data) ? (p.data.occurrences ?? '—') : '' },
+            { headerName: 'Basis / quantity', colId: 'basis', valueGetter: p => p.data && !isBranchHeading(p.data) ? `${p.data.pricingMode} × ${new Intl.NumberFormat('en', { maximumFractionDigits: 4 }).format(p.data.quantity)} ${p.data.description}` : '' },
+            { headerName: 'Net', colId: 'net', valueGetter: p => p.data && !isBranchHeading(p.data) ? money(p.data.netAmount) : '' },
+            { headerName: 'VAT', colId: 'vat', valueGetter: p => p.data && !isBranchHeading(p.data) ? `${money(p.data.vatAmount)} (${p.data.vatRatePercent}%)` : '' },
+            { headerName: 'Total', colId: 'total', valueGetter: p => p.data && !isBranchHeading(p.data) ? money(p.data.total) : '' },
+          ]}
+        />
+      )}
       {!manual && Boolean(preview.unstartedVisits?.length) && <Stack gap="xs" aria-label="Unstarted visits"><Text fw={600}>Scheduled visits not started yet</Text><Text size="sm">Tick a visit to bill it on this invoice. Unticked visits are not billed. Each change refreshes the preview.</Text>{preview.unstartedVisits!.map(visit => <Checkbox key={unstartedKey(visit)} label={`${visit.shiftName} · ${formatVisitTime(visit.startUtc)} · ${Math.round((new Date(visit.endUtc).getTime() - new Date(visit.startUtc).getTime()) / 3600000 * 100) / 100} h`} checked={visit.included} disabled={busy || issuing || uncertain} onChange={event => chooseUnstarted(visit, event.currentTarget.checked)} />)}</Stack>}
       <Text fw={700}>Net {money(preview.total.net)} · VAT {money(preview.total.vat)} · Total {money(preview.total.gross)}</Text><Text size="sm">Issuing saves an immutable invoice. Check dates, address and totals first.</Text><Button loading={busy} disabled={!preview.previewToken} onClick={issue}>{uncertain ? 'Retry issuing invoice' : 'Issue invoice'}</Button>
     </Stack>}</Modal>
-    <Title order={2}>Issued invoices</Title><Text size="xs" c="dimmed" hiddenFrom="sm" mb={6}>Scroll sideways to see all columns.</Text><Table.ScrollContainer minWidth={680} tabIndex={0} role="region" aria-label="Issued invoices table"><Table><Table.Thead><Table.Tr><Table.Th>Invoice</Table.Th><Table.Th>Customer</Table.Th><Table.Th>Issued / due</Table.Th><Table.Th>Total</Table.Th><Table.Th>Status</Table.Th><Table.Th>Actions</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{invoices.map(invoice => <Table.Tr key={invoice.id}><Table.Td>{invoice.invoiceNumber}{invoice.issuerIsSample && <Badge color="orange" size="md" styles={{ label: { fontSize: '0.75rem' } }}>Sample issuer details</Badge>}</Table.Td><Table.Td>{invoice.customer.name}</Table.Td><Table.Td>{invoice.issueDate.slice(0, 10)} / {invoice.dueDate.slice(0, 10)}</Table.Td><Table.Td>{money(invoice.total.gross)}</Table.Td><Table.Td>{invoice.status}</Table.Td><Table.Td><Group gap="xs"><Button size="xs" variant="light" disabled={busy} onClick={() => run(() => invoiceBillingApi.download(invoice.id))}>PDF</Button>{invoice.status === 'Issued' && <><Button size="xs" variant="light" disabled={busy} onClick={() => run(async () => { await invoiceBillingApi.markPaid(invoice.id); await loadInvoices(); setStatus('Invoice marked paid.'); })}>Mark paid</Button><Button size="xs" variant="subtle" color="red" disabled={busy} onClick={() => { if (window.confirm(`Void invoice ${invoice.invoiceNumber}?`)) void run(async () => { await invoiceBillingApi.void(invoice.id); await loadInvoices(); setStatus('Invoice voided.'); }); }}>Void</Button></>}</Group></Table.Td></Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer>{!invoices.length && <Text c="dimmed">No invoices yet.</Text>}
+    <Title order={2}>Issued invoices</Title><Text size="xs" c="dimmed" hiddenFrom="sm" mb={6}>Scroll sideways to see all columns.</Text><DsGrid<ShiftInvoice>
+      label="Issued invoices table"
+      rows={invoices}
+      getRowId={(invoice) => invoice.id}
+      columns={[
+        { headerName: 'Invoice', colId: 'invoice', flex: 2, cellRenderer: (p: { data?: ShiftInvoice }) => p.data ? <div>{p.data.invoiceNumber}{p.data.issuerIsSample && <Badge color="orange" size="md" styles={{ label: { fontSize: '0.75rem' } }}>Sample issuer details</Badge>}</div> : null },
+        { headerName: 'Customer', colId: 'customer', flex: 2, valueGetter: p => p.data?.customer.name ?? '' },
+        { headerName: 'Issued / due', colId: 'dates', valueGetter: p => p.data ? `${p.data.issueDate.slice(0, 10)} / ${p.data.dueDate.slice(0, 10)}` : '' },
+        { headerName: 'Total', colId: 'total', valueGetter: p => p.data ? money(p.data.total.gross) : '' },
+        { headerName: 'Status', colId: 'status', valueGetter: p => p.data?.status ?? '' },
+        { headerName: 'Actions', colId: 'actions', sortable: false, minWidth: 260, flex: 0, width: 300, cellRenderer: (p: { data?: ShiftInvoice }) => {
+          if (!p.data) return null;
+          const invoice = p.data;
+          return <Group gap="xs"><Button size="xs" variant="light" disabled={busy} onClick={() => run(() => invoiceBillingApi.download(invoice.id))}>PDF</Button>{invoice.status === 'Issued' && <><Button size="xs" variant="light" disabled={busy} onClick={() => run(async () => { await invoiceBillingApi.markPaid(invoice.id); await loadInvoices(); setStatus('Invoice marked paid.'); })}>Mark paid</Button><Button size="xs" variant="subtle" color="red" disabled={busy} onClick={() => { if (window.confirm(`Void invoice ${invoice.invoiceNumber}?`)) void run(async () => { await invoiceBillingApi.void(invoice.id); await loadInvoices(); setStatus('Invoice voided.'); }); }}>Void</Button></>}</Group>;
+        } },
+      ]}
+    />{!invoices.length && <Text c="dimmed">No invoices yet.</Text>}
   </Stack>;
 }

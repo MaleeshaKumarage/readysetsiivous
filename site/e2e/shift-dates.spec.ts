@@ -53,7 +53,7 @@ test('admin requires a start date, supports an open end date, and edits the rang
   await expect(dialog.getByText('End date must be on or after the start date.')).toBeVisible(); expect(writes).toHaveLength(0);
   await dialog.getByLabel('End date (optional)', { exact: true }).fill('');
   await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
-  await expect(page.getByRole('cell', { name: DATED_NAME, exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: DATED_NAME, exact: true })).toBeVisible();
   expect(writes[0].validFrom).toBe('2026-11-01'); expect(writes[0].validUntil).toBeUndefined();
   await shiftAction(page, DATED_NAME, 'Edit schedule');
   const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
@@ -134,7 +134,7 @@ test('on-call shifts keep scheduling dated visits and remain available for new s
   await expect(create.getByLabel('Schedule', { exact: true })).toHaveValue('On-call / flexible');
   await create.getByRole('button', { name: 'Cancel', exact: true }).click();
   expect(shiftWrites).toHaveLength(0);
-  await expect(page.getByRole('cell', { name: 'One-time cleaning', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'One-time cleaning', exact: true })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: 'One-time cleaning' })).toContainText('On-call');
   delayNextLoad = true;
   await shiftAction(page, 'One-time cleaning', 'Schedule one-time visit');
@@ -160,13 +160,13 @@ test('on-call shifts keep scheduling dated visits and remain available for new s
   await expect(editor).toBeHidden();
   expect(visitWrites).toEqual([{ originalStartUtc: null, startUtc: '2030-01-10T07:00:00.000Z', endUtc: '2030-01-10T09:00:00.000Z', status: 4, reason: 'Agreed one-time cleaning', employeeId: 'cleaner' }]);
   await expect(list.getByText('One-time visit scheduled.', { exact: false })).toBeVisible();
-  await expect(list.getByRole('cell', { name: 'Test Cleaner', exact: false })).toBeVisible();
+  await expect(list.getByRole('gridcell', { name: 'Test Cleaner', exact: false })).toBeVisible();
   await expect(list.getByLabel('From', { exact: true })).toHaveValue('2030-01-10');
   expect(occurrenceQueries.at(-1)?.get('from')).toBe('2030-01-09T22:00:00.000Z');
   const staleResponse = page.waitForResponse(response => response.url().includes('/occurrences?') && !response.url().includes('2030-01-09'));
   releaseOldLoad(); await staleResponse;
   await page.waitForLoadState('networkidle');
-  await expect(list.getByRole('cell', { name: 'Test Cleaner', exact: false })).toBeVisible();
+  await expect(list.getByRole('gridcell', { name: 'Test Cleaner', exact: false })).toBeVisible();
   await expect(list.getByText('No occurrences in this period.')).toHaveCount(0);
   expect(visitWrites).toHaveLength(1);
 });

@@ -1,5 +1,6 @@
 'use client';
 
+import { DsGrid } from '@/components/ds/DsGrid';
 import { useEffect, useState } from 'react';
 import { Button, Group, Loader, Modal, NumberInput, Select, Stack, Table, Text, TextInput } from '@mantine/core';
 import { invoiceBillingApi, type BranchPriceVersion, type PricingPlan, type ShiftPricing } from '@/lib/invoiceBillingApi';
@@ -50,8 +51,28 @@ export function ShiftPricingDialog({ shift, occurrence, onClose }: { shift: Shif
         <NumberInput label="VAT (%)" min={0} max={50} decimalScale={2} value={plan.vatRatePercent} onChange={value => setPlan({ ...plan, vatRatePercent: Number(value) })} /></>}
       {(occurrence || !linked) && <NumberInput label={occurrence ? 'Visit price before VAT (€)' : 'Rate before VAT (€)'} min={0} decimalScale={2} required value={plan.rateNet} onChange={value => setPlan({ ...plan, rateNet: Number(value) })} />}
       {occurrence && <TextInput label="Reason for visit price override" required maxLength={500} value={reason} onChange={event => setReason(event.target.value)} />}
-      {!occurrence && linked && <><Text fw={600}>Price history for this property</Text><Table><Table.Thead><Table.Tr><Table.Th>From</Table.Th><Table.Th>Basis</Table.Th><Table.Th>Net rate</Table.Th><Table.Th>VAT</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{[...versions].sort(byDate).map(item => <Table.Tr key={item.effectiveFrom}><Table.Td>{item.effectiveFrom}</Table.Td><Table.Td>{modeLabel[item.mode] ?? item.mode}</Table.Td><Table.Td>€{item.priceNet.toFixed(2)}</Table.Td><Table.Td>{item.vatRatePercent}%</Table.Td></Table.Tr>)}</Table.Tbody></Table></>}
-      {!occurrence && !linked && pricing && pricing.plans.length > 0 && <><Text fw={600}>Pricing history</Text><Table><Table.Thead><Table.Tr><Table.Th>From</Table.Th><Table.Th>Basis</Table.Th><Table.Th>Net rate</Table.Th><Table.Th>VAT</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{pricing.plans.map(item => <Table.Tr key={item.effectiveFrom}><Table.Td>{item.effectiveFrom}</Table.Td><Table.Td>{item.mode}</Table.Td><Table.Td>€{item.rateNet.toFixed(2)}</Table.Td><Table.Td>{item.vatRatePercent}%</Table.Td></Table.Tr>)}</Table.Tbody></Table></>}
+      {!occurrence && linked && <><Text fw={600}>Price history for this property</Text><DsGrid<(typeof versions)[number]>
+        label="Price versions"
+        rows={[...versions].sort(byDate)}
+        getRowId={(item) => item.effectiveFrom}
+        columns={[
+          { headerName: 'From', colId: 'from', valueGetter: p => p.data?.effectiveFrom ?? '' },
+          { headerName: 'Basis', colId: 'basis', valueGetter: p => p.data ? (modeLabel[p.data.mode] ?? p.data.mode) : '' },
+          { headerName: 'Net rate', colId: 'net', valueGetter: p => p.data ? `€${p.data.priceNet.toFixed(2)}` : '' },
+          { headerName: 'VAT', colId: 'vat', valueGetter: p => p.data ? `${p.data.vatRatePercent}%` : '' },
+        ]}
+      /></>}
+      {!occurrence && !linked && pricing && pricing.plans.length > 0 && <><Text fw={600}>Pricing history</Text><DsGrid<(typeof pricing.plans)[number]>
+          label="Pricing history"
+          rows={pricing.plans}
+          getRowId={(item) => item.effectiveFrom}
+          columns={[
+            { headerName: 'From', colId: 'from', valueGetter: p => p.data?.effectiveFrom ?? '' },
+            { headerName: 'Basis', colId: 'basis', valueGetter: p => p.data?.mode ?? '' },
+            { headerName: 'Net rate', colId: 'net', valueGetter: p => p.data ? `€${p.data.rateNet.toFixed(2)}` : '' },
+            { headerName: 'VAT', colId: 'vat', valueGetter: p => p.data ? `${p.data.vatRatePercent}%` : '' },
+          ]}
+        /></>}
       {error && <Text role="alert" c="red">{error}</Text>}
       <Group justify="flex-end"><Button variant="default" disabled={busy} onClick={onClose}>Cancel</Button><Button loading={busy} disabled={!pricing || (!occurrence && !linked && !plan.effectiveFrom) || (linked && !versionFrom) || (!!occurrence && !reason.trim())} onClick={save}>Save price</Button></Group>
     </Stack>

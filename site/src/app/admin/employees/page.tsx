@@ -4,6 +4,7 @@ import { showError } from '@/lib/toast';
 import { useEffect, useState } from 'react';
 import { Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge, TagsInput, NumberInput, Textarea } from '@mantine/core';
 import { isAdmin } from '@/lib/auth';
+import { DsGrid } from '@/components/ds/DsGrid';
 import { Plus } from 'lucide-react';
 import { adminEmployees, adminCompanies, authorizedFetch, invalidateAdminCache, type Company, type Employee } from '@/lib/adminApi';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
@@ -213,33 +214,33 @@ export default function EmployeesAdminPage() {
       ) : visibleEmployees.length === 0 ? (
         <Text c="dimmed">No {lifecycle} employees. Check the {lifecycle === 'active' ? 'Inactive' : 'Active'} tab.</Text>
       ) : (
-        <Table.ScrollContainer minWidth={550}>
-          <Table striped highlightOnHover withTableBorder>
-            <Table.Thead>
-              <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Email</Table.Th><Table.Th>Role / company</Table.Th><Table.Th>Status</Table.Th><Table.Th>Registration</Table.Th><Table.Th w={120}></Table.Th></Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {pagedEmployees.map((e) => (
-                <Table.Tr key={e.id}>
-                  <Table.Td fw={500}>{e.firstName} {e.lastName}</Table.Td>
-                  <Table.Td>{e.email}</Table.Td>
-                  <Table.Td>{e.role}{e.role === 'partner' && <Text size="xs">{companies.find(c => c.id === e.partnerCompanyId)?.name ?? 'Company unavailable'}</Text>}</Table.Td>
-                  <Table.Td>{e.isActive ? <Badge color="green">Active</Badge> : <Badge color="gray">Inactive</Badge>}</Table.Td>
-                  <Table.Td>{e.keycloakUserId ? <Badge color="green">Invited</Badge> : <Badge color="gray">Not invited</Badge>}</Table.Td>
-                  <Table.Td><Group gap="xs" wrap="wrap">
-                    {isAdmin() && e.role === 'admin' && e.isActive && !e.identitySyncPending && <Button size="xs" variant="light" loading={calendarBusy === e.id} disabled={!!calendarBusy} onClick={() => changeCalendarAccess(e)}>{e.shiftCalendarEnabled ? 'Disable shift calendar' : 'Enable shift calendar'}</Button>}
-                    {isAdmin() && <Button size="xs" variant="light" onClick={() => openEdit(e)}>Edit</Button>}
-                    {isAdmin() && e.isActive && <Button size="xs" variant="light" loading={inviteBusy === e.id} disabled={Boolean(inviteBusy && inviteBusy !== e.id)} onClick={() => invite(e)}>{e.keycloakUserId ? 'Resend setup email' : 'Invite'}</Button>}
-                    {isAdmin() && e.isActive && e.identitySyncPending && <Button size="xs" loading={restoring === e.id} disabled={!!restoring} onClick={() => reactivate(e)}>Retry reactivation</Button>}
-                    {isAdmin() && !e.isActive && <Button size="xs" loading={restoring === e.id} disabled={!!restoring} onClick={() => reactivate(e)}>Reactivate</Button>}
-                    {isAdmin() && !e.isActive && <Button size="xs" color="red" variant="subtle" loading={restoring === e.id} disabled={!!restoring} onClick={() => deleteEmployee(e)}>Delete</Button>}
-                    {isAdmin() && e.isActive && <Button size="xs" variant="subtle" color="red" onClick={() => deactivate(e.id)}>Deactivate</Button>}
-                  </Group></Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
+        <DsGrid<Employee>
+          label="Employees"
+          rows={pagedEmployees}
+          getRowId={(e) => e.id}
+          columns={[
+            { headerName: 'Name', colId: 'name', valueGetter: p => p.data ? `${p.data.firstName} ${p.data.lastName}` : '', cellClass: 'font-medium', flex: 2 },
+            { headerName: 'Email', colId: 'email', valueGetter: p => p.data?.email ?? '', flex: 2 },
+            { headerName: 'Role / company', colId: 'role', flex: 2, cellRenderer: (p: { data?: Employee }) => p.data ? <span>{p.data.role}{p.data.role === 'partner' && <span className="block text-xs">{companies.find(c => c.id === p.data?.partnerCompanyId)?.name ?? 'Company unavailable'}</span>}</span> : null },
+            { headerName: 'Status', colId: 'status', sortable: false, cellRenderer: (p: { data?: Employee }) => p.data ? (p.data.isActive ? <Badge color="green">Active</Badge> : <Badge color="gray">Inactive</Badge>) : null },
+            { headerName: 'Registration', colId: 'registration', sortable: false, cellRenderer: (p: { data?: Employee }) => p.data ? (p.data.keycloakUserId ? <Badge color="green">Invited</Badge> : <Badge color="gray">Not invited</Badge>) : null },
+            { headerName: '', colId: 'actions', sortable: false, minWidth: 320, flex: 0, width: 360, cellRenderer: (p: { data?: Employee }) => {
+              const e = p.data;
+              if (!e) return null;
+              return (
+                <Group gap="xs" wrap="wrap">
+                                    {isAdmin() && e.role === 'admin' && e.isActive && !e.identitySyncPending && <Button size="xs" variant="light" loading={calendarBusy === e.id} disabled={!!calendarBusy} onClick={() => changeCalendarAccess(e)}>{e.shiftCalendarEnabled ? 'Disable shift calendar' : 'Enable shift calendar'}</Button>}
+                                    {isAdmin() && <Button size="xs" variant="light" onClick={() => openEdit(e)}>Edit</Button>}
+                                    {isAdmin() && e.isActive && <Button size="xs" variant="light" loading={inviteBusy === e.id} disabled={Boolean(inviteBusy && inviteBusy !== e.id)} onClick={() => invite(e)}>{e.keycloakUserId ? 'Resend setup email' : 'Invite'}</Button>}
+                                    {isAdmin() && e.isActive && e.identitySyncPending && <Button size="xs" loading={restoring === e.id} disabled={!!restoring} onClick={() => reactivate(e)}>Retry reactivation</Button>}
+                                    {isAdmin() && !e.isActive && <Button size="xs" loading={restoring === e.id} disabled={!!restoring} onClick={() => reactivate(e)}>Reactivate</Button>}
+                                    {isAdmin() && !e.isActive && <Button size="xs" color="red" variant="subtle" loading={restoring === e.id} disabled={!!restoring} onClick={() => deleteEmployee(e)}>Delete</Button>}
+                                    {isAdmin() && e.isActive && <Button size="xs" variant="subtle" color="red" onClick={() => deactivate(e.id)}>Deactivate</Button>}
+                </Group>
+              );
+            } },
+          ]}
+        />
       )}
       {visibleEmployees.length > EMPLOYEE_PAGE_SIZE && (
         <Group justify="space-between" mt="sm" wrap="wrap" gap="sm" role="navigation" aria-label="Employee pages">

@@ -42,8 +42,8 @@ test('Employees column names the active assignees from one bulk request after re
   await page.reload();
   const morning = page.getByRole('row').filter({ hasText: 'Morning shift' });
   const evening = page.getByRole('row').filter({ hasText: 'Evening shift' });
-  await expect(morning.getByRole('cell').nth(2)).toHaveText('Liisa Lakaisija, Sami Siivooja');
-  await expect(evening.getByRole('cell').nth(2)).toHaveText('None');
+  await expect(morning.getByRole('gridcell').nth(2)).toHaveText('Liisa Lakaisija, Sami Siivooja');
+  await expect(evening.getByRole('gridcell').nth(2)).toHaveText('None');
   expect(calls.perShift).toBe(0);
   expect(calls.names).toBeGreaterThan(0);
 });
@@ -52,7 +52,7 @@ test('Employees column reports a failed names load instead of showing zero', asy
   await mockShifts(page, { status: 500 });
   await page.goto('/admin/shifts/');
   const morning = page.getByRole('row').filter({ hasText: 'Morning shift' });
-  await expect(morning.getByRole('cell').nth(2)).toHaveText('—');
+  await expect(morning.getByRole('gridcell').nth(2)).toHaveText('—');
   await expect(page.getByRole('alert').filter({ hasText: 'Could not load employee names. Refresh the page to retry.' })).toBeVisible();
 });
 
@@ -60,16 +60,16 @@ test('opening Assign employees fills the names from the freshly loaded roster, n
   await mockShifts(page, { status: 200, json: { 's-1': ['Liisa Lakaisija'], 's-2': [] } }, roster);
   await page.goto('/admin/shifts/');
   const morning = page.getByRole('row').filter({ hasText: 'Morning shift' });
-  await expect(morning.getByRole('cell').nth(2)).toHaveText('Liisa Lakaisija');
+  await expect(morning.getByRole('gridcell').nth(2)).toHaveText('Liisa Lakaisija');
   await shiftRowAction(page, morning, 'Assign employees');
-  await expect(page.getByRole('row').filter({ hasText: 'Morning shift' }).first().getByRole('cell').nth(2)).toHaveText('Sami Siivooja');
+  await expect(page.getByRole('row').filter({ hasText: 'Morning shift' }).first().getByRole('gridcell').nth(2)).toHaveText('Sami Siivooja');
 });
 
 test('when the names load fails, an opened roster still fills that shift\'s names', async ({ page }) => {
   await mockShifts(page, { status: 500 }, roster);
   await page.goto('/admin/shifts/');
   const morning = page.getByRole('row').filter({ hasText: 'Morning shift' });
-  await expect(morning.getByRole('cell').nth(2)).toHaveText('—');
+  await expect(morning.getByRole('gridcell').nth(2)).toHaveText('—');
   await shiftRowAction(page, morning, 'Assign employees');
-  await expect(page.getByRole('row').filter({ hasText: 'Morning shift' }).first().getByRole('cell').nth(2)).toHaveText('Sami Siivooja');
+  await expect(page.getByRole('row').filter({ hasText: 'Morning shift' }).first().getByRole('gridcell').nth(2)).toHaveText('Sami Siivooja');
 });

@@ -132,14 +132,14 @@ test('manager lead list paginates and recovers failed detail and private image l
   const state = await setup(page, 'manager');
   state.leadRows = Array.from({ length: 26 }, (_, index) => ({ ...state.lead, id: index === 0 ? id : `lead-${index}`, fields: { ...fields, name: `Prospect ${index}` } }));
   await page.goto('/manager/leads/');
-  await expect(page.getByRole('cell', { name: 'Prospect 0', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Prospect 25', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('gridcell', { name: 'Prospect 0', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Prospect 25', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect.poll(() => state.queries.some(q => q.includes('/leads?') && q.includes('skip=25'))).toBe(true);
-  await expect(page.getByRole('cell', { name: 'Prospect 25', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Prospect 25', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Previous', exact: true }).click();
-  await expect(page.getByRole('cell', { name: 'Prospect 0', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Prospect 0', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Previous', exact: true })).toBeDisabled();
   state.detailFailure = true;
   await page.getByRole('button', { name: 'View lead', exact: true }).first().click();

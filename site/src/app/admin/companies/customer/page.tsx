@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { DsGrid } from '@/components/ds/DsGrid';
+import { Badge as DsBadge } from '@/ds';
 import { Badge, Button, Group, Loader, Stack, Table, Tabs, Text, Title } from '@mantine/core';
 import { ArrowLeft, Plus } from 'lucide-react';
 import { adminAgreements, adminInvoices, adminShifts, authorizedFetch, type AgreementListItem, type CompanyDetail, type Invoice, type Shift } from '@/lib/adminApi';
@@ -198,21 +200,17 @@ export default function CustomerWorkspacePage() {
                   {!agreements || agreements.status === 'loading' ? <Loader size="sm" /> : agreements.status === 'error' ? (
                     <Stack><Text role="alert" c="red">Agreements could not be loaded.</Text><Button variant="light" size="xs" onClick={() => void loadAgreements(company.id)}>Retry agreements</Button></Stack>
                   ) : agreements.items.length === 0 ? <Text size="sm" c="dimmed">No agreements for this customer yet.</Text> : (
-                    <Table.ScrollContainer minWidth={420}>
-                      <Table striped withTableBorder>
-                        <Table.Thead><Table.Tr><Table.Th>Title</Table.Th><Table.Th>Code</Table.Th><Table.Th>Signers</Table.Th><Table.Th>Status</Table.Th></Table.Tr></Table.Thead>
-                        <Table.Tbody>
-                          {agreements.items.map(agreement => (
-                            <Table.Tr key={agreement.id}>
-                              <Table.Td>{agreement.title}</Table.Td>
-                              <Table.Td>{agreement.code}</Table.Td>
-                              <Table.Td>{agreement.signedCount} / {agreement.signerCount}</Table.Td>
-                              <Table.Td><Badge color={agreement.isActive ? 'green' : 'gray'}>{agreement.isActive ? agreement.status : `Inactive · ${agreement.status}`}</Badge></Table.Td>
-                            </Table.Tr>
-                          ))}
-                        </Table.Tbody>
-                      </Table>
-                    </Table.ScrollContainer>
+                    <DsGrid<(typeof agreements.items)[number]>
+                      label="Customer agreements"
+                      rows={agreements.items}
+                      getRowId={(agreement) => agreement.id}
+                      columns={[
+                        { headerName: 'Title', colId: 'title', valueGetter: p => p.data?.title ?? '', flex: 2 },
+                        { headerName: 'Code', colId: 'code', valueGetter: p => p.data?.code ?? '' },
+                        { headerName: 'Signers', colId: 'signers', valueGetter: p => p.data ? `${p.data.signedCount} / ${p.data.signerCount}` : '' },
+                        { headerName: 'Status', colId: 'status', sortable: false, cellRenderer: (p: { data?: (typeof agreements.items)[number] }) => p.data ? <DsBadge variant={p.data.isActive ? 'green' : 'subtle'}>{p.data.isActive ? p.data.status : `Inactive · ${p.data.status}`}</DsBadge> : null },
+                      ]}
+                    />
                   )}
                 </Stack>
               </Tabs.Panel>
@@ -232,22 +230,18 @@ export default function CustomerWorkspacePage() {
                       const visible = shifts.items.filter(shift => inLifecycle(shift, workStatus));
                       if (visible.length === 0) return <Text size="sm" c="dimmed">{shifts.items.length === 0 ? 'No shifts for this customer yet.' : `No ${workStatus} shifts.`}</Text>;
                       return (
-                        <Table.ScrollContainer minWidth={520}>
-                          <Table striped withTableBorder>
-                            <Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Property</Table.Th><Table.Th>Status</Table.Th><Table.Th>Valid from</Table.Th><Table.Th>Valid until</Table.Th></Table.Tr></Table.Thead>
-                            <Table.Tbody>
-                              {visible.map(shift => (
-                                <Table.Tr key={shift.id}>
-                                  <Table.Td>{shift.name}</Table.Td>
-                                  <Table.Td>{branchName.get(shift.branchId) ?? '—'}</Table.Td>
-                                  <Table.Td>{shift.isCompleted ? 'Completed' : shift.isActive ? 'Active' : 'Inactive'}</Table.Td>
-                                  <Table.Td>{dateOnly(shift.validFrom)}</Table.Td>
-                                  <Table.Td>{dateOnly(shift.validUntil)}</Table.Td>
-                                </Table.Tr>
-                              ))}
-                            </Table.Tbody>
-                          </Table>
-                        </Table.ScrollContainer>
+                        <DsGrid<(typeof visible)[number]>
+                          label="Customer shifts"
+                          rows={visible}
+                          getRowId={(shift) => shift.id}
+                          columns={[
+                            { headerName: 'Name', colId: 'name', flex: 2, valueGetter: p => p.data?.name ?? '' },
+                            { headerName: 'Property', colId: 'property', valueGetter: p => p.data ? (branchName.get(p.data.branchId) ?? '—') : '' },
+                            { headerName: 'Status', colId: 'status', valueGetter: p => p.data ? (p.data.isCompleted ? 'Completed' : p.data.isActive ? 'Active' : 'Inactive') : '' },
+                            { headerName: 'Valid from', colId: 'from', valueGetter: p => p.data ? dateOnly(p.data.validFrom) : '' },
+                            { headerName: 'Valid until', colId: 'until', valueGetter: p => p.data ? dateOnly(p.data.validUntil) : '' },
+                          ]}
+                        />
                       );
                     })()}
                   </LifecycleTabs>
@@ -263,22 +257,18 @@ export default function CustomerWorkspacePage() {
                   {!invoices || invoices.status === 'loading' ? <Loader size="sm" /> : invoices.status === 'error' ? (
                     <Stack><Text role="alert" c="red">Invoices could not be loaded.</Text><Button variant="light" size="xs" onClick={() => void loadInvoices(company.id)}>Retry invoices</Button></Stack>
                   ) : invoices.items.length === 0 ? <Text size="sm" c="dimmed">No invoices for this customer yet.</Text> : (
-                    <Table.ScrollContainer minWidth={520}>
-                      <Table striped withTableBorder>
-                        <Table.Thead><Table.Tr><Table.Th>Invoice</Table.Th><Table.Th>Issued</Table.Th><Table.Th>Due</Table.Th><Table.Th>Status</Table.Th><Table.Th>Total</Table.Th></Table.Tr></Table.Thead>
-                        <Table.Tbody>
-                          {invoices.items.map(invoice => (
-                            <Table.Tr key={invoice.id}>
-                              <Table.Td>{invoice.invoiceNumber}</Table.Td>
-                              <Table.Td>{dateOnly(invoice.issueDate)}</Table.Td>
-                              <Table.Td>{dateOnly(invoice.dueDate)}</Table.Td>
-                              <Table.Td>{invoice.status}</Table.Td>
-                              <Table.Td>{money(invoice.total.gross)}</Table.Td>
-                            </Table.Tr>
-                          ))}
-                        </Table.Tbody>
-                      </Table>
-                    </Table.ScrollContainer>
+                    <DsGrid<(typeof invoices.items)[number]>
+                      label="Customer invoices"
+                      rows={invoices.items}
+                      getRowId={(invoice) => invoice.id}
+                      columns={[
+                        { headerName: 'Invoice', colId: 'invoice', valueGetter: p => p.data?.invoiceNumber ?? '' },
+                        { headerName: 'Issued', colId: 'issued', valueGetter: p => p.data ? dateOnly(p.data.issueDate) : '' },
+                        { headerName: 'Due', colId: 'due', valueGetter: p => p.data ? dateOnly(p.data.dueDate) : '' },
+                        { headerName: 'Status', colId: 'status', valueGetter: p => p.data?.status ?? '' },
+                        { headerName: 'Total', colId: 'total', valueGetter: p => p.data ? money(p.data.total.gross) : '' },
+                      ]}
+                    />
                   )}
                 </Stack>
               </Tabs.Panel>

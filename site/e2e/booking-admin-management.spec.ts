@@ -61,13 +61,13 @@ test('admin lists bookings and filters by status on the server', async ({ page }
   await setupAdminMocks(page, { authenticated: true });
   const { queries } = await mockBookings(page, fixtures());
   await page.goto('/admin/bookings/');
-  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'BK-1004', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'BK-1001', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'BK-1004', exact: true })).toBeVisible();
 
   await page.getByRole('textbox', { name: 'Filter by status', exact: true }).click();
   await page.getByRole('option', { name: 'Confirmed', exact: true }).click();
-  await expect(page.getByRole('cell', { name: 'BK-1002', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('gridcell', { name: 'BK-1002', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'BK-1001', exact: true })).toHaveCount(0);
   expect(queries.some(q => q.includes('status=Confirmed'))).toBe(true);
 });
 
@@ -121,7 +121,7 @@ test('Bookings navigation link is listed under Operations and opens the bookings
   await link.click();
   await expect(page).toHaveURL(/\/admin\/bookings\/?$/);
   await expect(page.getByRole('heading', { name: 'Bookings', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'BK-1001', exact: true })).toBeVisible();
 });
 
 test('confirmed booking can be completed and then offers no further actions', async ({ page }) => {
@@ -201,15 +201,15 @@ test('switching the status filter back to All statuses drops the filter and rest
   await page.goto('/admin/bookings/');
   await page.getByRole('textbox', { name: 'Filter by status', exact: true }).click();
   await page.getByRole('option', { name: 'Confirmed', exact: true }).click();
-  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('gridcell', { name: 'BK-1001', exact: true })).toHaveCount(0);
   await page.getByRole('textbox', { name: 'Filter by status', exact: true }).click();
   await page.getByRole('option', { name: 'New', exact: true }).click();
-  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'BK-1001', exact: true })).toBeVisible();
   await page.getByRole('textbox', { name: 'Filter by status', exact: true }).click();
   await page.getByRole('option', { name: 'All statuses', exact: true }).click();
-  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'BK-1002', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'BK-1004', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'BK-1001', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'BK-1002', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'BK-1004', exact: true })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Filter by status', exact: true })).toHaveValue('All statuses');
   expect(queries.some(q => q.includes('status=Confirmed'))).toBe(true);
   expect(queries.some(q => q.includes('status=New'))).toBe(true);
@@ -227,18 +227,18 @@ test('a slow earlier filter response cannot overwrite the rows of a newer filter
     return route.fulfill({ status: 200, headers, json: fixtures().filter(b => b.status === 'Confirmed') });
   });
   await page.goto('/admin/bookings/');
-  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'BK-1001', exact: true })).toBeVisible();
 
   await page.getByRole('textbox', { name: 'Filter by status', exact: true }).click();
   await page.getByRole('option', { name: 'Confirmed', exact: true }).click();
   await page.getByRole('textbox', { name: 'Filter by status', exact: true }).click();
   await page.getByRole('option', { name: 'New', exact: true }).click();
-  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'BK-1001', exact: true })).toBeVisible();
 
   releaseConfirmed();
   await page.waitForResponse(response => response.url().includes('status=Confirmed'));
-  await expect(page.getByRole('cell', { name: 'BK-1002', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'BK-1002', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('gridcell', { name: 'BK-1001', exact: true })).toBeVisible();
 });
 
 test('a failed filter change shows only the alert, never stale rows or the empty message', async ({ page }) => {
@@ -249,12 +249,12 @@ test('a failed filter change shows only the alert, never stale rows or the empty
     return route.fulfill({ status: 500, headers, json: { detail: 'Database unavailable' } });
   });
   await page.goto('/admin/bookings/');
-  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'BK-1001', exact: true })).toBeVisible();
 
   await page.getByRole('textbox', { name: 'Filter by status', exact: true }).click();
   await page.getByRole('option', { name: 'Completed', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Bookings could not be loaded. Reload and retry.' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('gridcell', { name: 'BK-1001', exact: true })).toHaveCount(0);
   await expect(page.getByText('No bookings with status Completed.', { exact: true })).toHaveCount(0);
   await expect(page.getByText('No bookings.', { exact: true })).toHaveCount(0);
 });
@@ -352,8 +352,8 @@ test('day view lists the chosen employee bookings for the chosen day', async ({ 
   await page.getByLabel('Day', { exact: true }).fill('2026-11-10');
   await page.getByRole('textbox', { name: 'Employee', exact: true }).click();
   await page.getByRole('option', { name: 'Ada Cleaner', exact: true }).click();
-  await expect(page.getByRole('cell', { name: 'BK-1002', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('gridcell', { name: 'BK-1002', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'BK-1001', exact: true })).toHaveCount(0);
   expect(scheduleQueries.some(q => q.includes('date=2026-11-10') && q.includes('employeeId=e-1'))).toBe(true);
 });
 
@@ -364,11 +364,11 @@ test('switching back from the day view to Bookings restores the list and its fil
   await page.getByText('Day view', { exact: true }).click();
   await expect(page.getByText('Choose a day and an employee to see their bookings.')).toBeVisible();
   await page.locator('label').filter({ hasText: /^Bookings$/ }).click();
-  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'BK-1001', exact: true })).toBeVisible();
   await page.getByRole('textbox', { name: 'Filter by status', exact: true }).click();
   await page.getByRole('option', { name: 'Confirmed', exact: true }).click();
-  await expect(page.getByRole('cell', { name: 'BK-1002', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('gridcell', { name: 'BK-1002', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'BK-1001', exact: true })).toHaveCount(0);
 });
 
 test('day view shows an empty message and a recoverable error', async ({ page }) => {
@@ -408,7 +408,7 @@ test('day view reports a failed schedule load and recovers when the selection ch
   await page.getByRole('textbox', { name: 'Employee', exact: true }).click();
   await page.getByRole('option', { name: 'Ben Second', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'The day schedule could not be loaded' })).toHaveCount(0);
-  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'BK-1001', exact: true })).toBeVisible();
 });
 
 test('day view can show a deactivated employee schedule, while assignment offers only active employees', async ({ page }) => {
@@ -426,7 +426,7 @@ test('day view can show a deactivated employee schedule, while assignment offers
   await page.getByLabel('Day', { exact: true }).fill('2026-11-10');
   await page.getByRole('textbox', { name: 'Employee', exact: true }).click();
   await page.getByRole('option', { name: 'Ben Former', exact: true }).click();
-  await expect(page.getByRole('cell', { name: 'BK-1002', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'BK-1002', exact: true })).toBeVisible();
   expect(scheduleQueries.some(q => q.includes('employeeId=e-2'))).toBe(true);
 
   await page.getByText('Bookings', { exact: true }).last().click();
@@ -490,11 +490,11 @@ test('changing the day view selection replaces the rows and a late earlier respo
   await page.getByRole('option', { name: 'Ada Cleaner', exact: true }).click();
   await page.getByRole('textbox', { name: 'Employee', exact: true }).click();
   await page.getByRole('option', { name: 'Ben Second', exact: true }).click();
-  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'BK-1001', exact: true })).toBeVisible();
   releaseAda();
   await page.waitForResponse(response => response.url().includes('employeeId=e-1'));
-  await expect(page.getByRole('cell', { name: 'BK-1002', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'BK-1002', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('gridcell', { name: 'BK-1001', exact: true })).toBeVisible();
 });
 
 test('manager is blocked from the bookings administration page', async ({ page }) => {
@@ -503,5 +503,5 @@ test('manager is blocked from the bookings administration page', async ({ page }
   await mockBookings(page, fixtures());
   await page.goto('/admin/bookings/');
   await expect(page.getByRole('heading', { name: 'Admin access required' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'BK-1001', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('gridcell', { name: 'BK-1001', exact: true })).toHaveCount(0);
 });

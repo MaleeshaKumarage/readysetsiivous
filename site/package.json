@@ -20,6 +20,8 @@
     "@mantine/hooks": "^7.17.8",
     "@mantine/notifications": "^7.17.8",
     "@microsoft/signalr": "^10.0.11",
+    "ag-grid-community": "36.2.0",
+    "ag-grid-react": "36.2.0",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.2.5",
     "framer-motion": "^13.1.1",

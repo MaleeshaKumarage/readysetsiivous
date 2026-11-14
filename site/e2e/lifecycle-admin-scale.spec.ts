@@ -31,8 +31,8 @@ test('invoices list renders every generated invoice and its table stays reachabl
   await installScaleRoutes(page, data);
   await page.goto('/admin/invoices/');
   await expect(page.getByRole('heading', { name: 'Issued invoices', exact: true })).toBeAttached({ timeout: 15000 });
-  await expect(page.locator('table tbody tr')).toHaveCount(SCALE.companies);
-  await expect(page.locator('table tbody tr').filter({ hasText: data.invoices[0].invoiceNumber })).toHaveCount(1);
+  await expect(page.getByRole('row').filter({ has: page.getByRole('gridcell') })).toHaveCount(SCALE.companies);
+  await expect(page.getByRole('row').filter({ has: page.getByRole('gridcell') }).filter({ hasText: data.invoices[0].invoiceNumber })).toHaveCount(1);
   await page.getByRole('heading', { name: 'Issued invoices', exact: true }).scrollIntoViewIfNeeded();
   await expect(page.getByRole('heading', { name: 'Issued invoices', exact: true })).toBeVisible();
 });
@@ -58,11 +58,11 @@ test('expanding a company lists exactly its own generated branches', async ({ pa
   await setupAdminMocks(page);
   await installScaleRoutes(page, data);
   await page.goto('/admin/companies/');
-  const row = page.locator('tbody tr').filter({ hasText: company.name }).first();
+  const row = page.getByRole('row').filter({ has: page.getByRole('gridcell') }).filter({ hasText: company.name }).first();
   await expect(row).toBeVisible({ timeout: 15000 });
   await row.getByRole('button', { name: 'Branches', exact: false }).click();
   // The expansion is the row directly under the company; scope every assertion to it so other companies' branches cannot match.
-  const panel = row.locator('xpath=following-sibling::tr[1]');
+  const panel = row.locator('xpath=following-sibling::*[1]');
   await expect(panel.getByText('Branches', { exact: true })).toBeVisible();
   await expect(panel.getByText(/^Branch \d+ · Helsinki/)).toHaveCount(branches.length);
   for (const branch of branches) {

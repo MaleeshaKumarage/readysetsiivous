@@ -16,7 +16,7 @@ test('services list states that the price excludes VAT and shows the rate', asyn
     return route.fulfill({ status: 200, headers, json: [service] });
   });
   await page.goto('/admin/services/');
-  await expect(page.getByRole('cell', { name: '20.00 € excl. VAT (25.5%)', exact: true })).toBeVisible({ timeout: 30000 });
+  await expect(page.getByRole('gridcell', { name: '20.00 € excl. VAT (25.5%)', exact: true })).toBeVisible({ timeout: 30000 });
 });
 
 test('shift list uses one time format for every schedule type and shows monthly times', async ({ page }) => {
@@ -37,7 +37,7 @@ test('shift list uses one time format for every schedule type and shows monthly 
   await listed;
   await expect(page.getByText('Daily 08:00–17:00', { exact: true })).toBeVisible({ timeout: 30000 });
   await expect(page.getByText('Monthly day 15 13:00–14:00', { exact: true })).toBeVisible();
-  await expect(page.getByRole('table').getByText(/:\d{2}:\d{2}/)).toHaveCount(0);
+  await expect(page.getByRole('grid').getByText(/:\d{2}:\d{2}/)).toHaveCount(0);
 });
 
 test('assignee picker shows each employee email so similar names can be told apart', async ({ page }) => {
@@ -123,7 +123,7 @@ test('weekly shifts show HH:mm times with no seconds for both day branches', asy
   await listed;
   await expect(page.getByText('Monday, Wednesday 08:00–17:00', { exact: true })).toBeVisible({ timeout: 30000 });
   await expect(page.getByText('Friday 09:00–12:00', { exact: true })).toBeVisible();
-  await expect(page.getByRole('table').getByText(/:\d{2}:\d{2}/)).toHaveCount(0);
+  await expect(page.getByRole('grid').getByText(/:\d{2}:\d{2}/)).toHaveCount(0);
 });
 
 test('a deactivated shift future visit is listed under Cancelled', async ({ page }) => {
@@ -158,7 +158,7 @@ test('a service without a VAT rate shows the net price and no broken VAT suffix'
     return route.fulfill({ status: 200, headers, json: [service] });
   });
   await page.goto('/admin/services/');
-  await expect(page.getByRole('cell', { name: '15.00 € excl. VAT', exact: true })).toBeVisible({ timeout: 30000 });
+  await expect(page.getByRole('gridcell', { name: '15.00 € excl. VAT', exact: true })).toBeVisible({ timeout: 30000 });
   await expect(page.getByText('undefined', { exact: false })).toHaveCount(0);
   await expect(page.getByText('(null%)', { exact: false })).toHaveCount(0);
 });
@@ -178,7 +178,7 @@ test('one-time shifts show their date and HH:mm times with no seconds', async ({
   await page.goto('/admin/shifts/');
   await listed;
   await expect(page.getByText('One-time 2026-11-20 09:30–11:00', { exact: true })).toBeVisible({ timeout: 30000 });
-  await expect(page.getByRole('table').getByText(/:\d{2}:\d{2}/)).toHaveCount(0);
+  await expect(page.getByRole('grid').getByText(/:\d{2}:\d{2}/)).toHaveCount(0);
 });
 
 test('workspace schedule shows HH:mm labels for daily, weekly, monthly and one-time shifts', async ({ page }) => {
