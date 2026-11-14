@@ -719,7 +719,7 @@ export default function ShiftsAdminPage() {
   const renderVisitsPanel = (s: Shift) => (
     <div className="p-3" data-testid="row-visits">
                         <DsCard padding="sm">
-                          <div className="flex flex-wrap items-center justify-between gap-3" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex flex-nowrap items-center justify-between gap-3 min-w-0" onClick={(e) => e.stopPropagation()}>
                             <DsButton variant="ghost" aria-expanded={visitsOpen} onClick={() => setVisitsOpen(open => !open)}>
                               {visitsOpen ? <ChevronDown size={16} aria-hidden /> : <ChevronRight size={16} aria-hidden />}
                               <CalendarDays size={16} aria-hidden />
