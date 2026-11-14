@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Sparkles, FileSignature, Users, Building2, CalendarClock, Receipt, CheckSquare, ArrowUpRight } from 'lucide-react';
 import { Title, SimpleGrid, Paper, Group, Text, ThemeIcon, Stack } from '@mantine/core';
 import { DashboardStatus } from '@/components/admin/DashboardStatus';
-import { DashboardCharts } from '@/components/admin/DashboardCharts';
+import { LazyDashboardCharts as DashboardCharts } from '@/components/LazySections';
 import { portalTheme } from '@/lib/portalTheme';
 import Image from 'next/image';
 import './office.css';
