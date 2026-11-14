@@ -17,7 +17,7 @@ public sealed class DiskLeadFileStore(IConfiguration config,ITenantContext tenan
     }
     public async Task SaveAsync(Guid leadId,LeadImage image,byte[] content,CancellationToken ct)
     {
-        var path=PathFor(leadId,image);Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var path=PathFor(leadId,image);content=CleaningSuite.Infrastructure.Uploads.ImageCompressor.Compress(content,image.Extension);Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var created=false;
         try { await using var stream=new FileStream(path,FileMode.CreateNew,FileAccess.Write,FileShare.None);created=true;await stream.WriteAsync(content,ct); }
         catch { if(created) await DeleteAsync(leadId,image);throw; }

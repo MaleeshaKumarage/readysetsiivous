@@ -21,6 +21,8 @@ public sealed class DiskKeyRequestFileStore(IConfiguration config, ITenantContex
     {
         var path = PathFor(requestId, photo);
         var temporary = path + ".tmp";
+        content = ImageCompressor.Compress(content, photo.Extension);
+        photo.SizeBytes = content.Length;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         try
         {

@@ -36,6 +36,7 @@ public class DiskAgreementFileStore : IAgreementFileStore
     public async Task<string> SaveSignatureAsync(string tenantId, Guid agreementId, Guid signerId, byte[] png, CancellationToken ct = default)
     {
         var path = Path.Combine(Dir(tenantId, agreementId), $"{signerId:N}-{Guid.NewGuid():N}.png");
+        png = CleaningSuite.Infrastructure.Uploads.ImageCompressor.Compress(png, ".png");
         try
         {
             await using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);

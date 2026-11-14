@@ -94,6 +94,7 @@ public class ServicesAdminController : ControllerBase
         await input.CopyToAsync(buffer, ct);
         var content = buffer.ToArray();
         var ext = _uploadValidator.ValidateServiceImage(content);
+        content = CleaningSuite.Infrastructure.Uploads.ImageCompressor.Compress(content, ext);
 
         var uploadsPath = _configuration["Uploads:Path"] ?? Path.Combine(Directory.GetCurrentDirectory(), "uploads");
         Directory.CreateDirectory(uploadsPath);

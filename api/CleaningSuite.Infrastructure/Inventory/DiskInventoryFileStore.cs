@@ -20,6 +20,7 @@ public sealed class DiskInventoryFileStore(IConfiguration config, ITenantContext
     public async Task SaveAsync(Guid usageId, InventoryPhoto photo, byte[] content, CancellationToken ct)
     {
         var path = PathFor(usageId, photo);
+        content = CleaningSuite.Infrastructure.Uploads.ImageCompressor.Compress(content, photo.Extension);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         // Write beside the final file, then rename it into place. A cancelled write, crash or IO error leaves only
         // a temporary file, never a truncated photo at the final path, and a retry can still save the photo.
