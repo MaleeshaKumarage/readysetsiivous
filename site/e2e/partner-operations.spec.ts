@@ -73,9 +73,11 @@ test('completion month offers exactly 36 months without older shifts and can be 
     if (path === '/shift-preview') previews.push(req.postDataJSON() as ShiftInvoiceInput);
     return route.fulfill({ status: 404, headers });
   });
+  const companiesLoaded = page.waitForResponse(response => /\/api\/v1\/admin\/companies(\?|$)/.test(response.url()) && response.request().method() === 'GET');
   await page.goto('/admin/invoices/');
+  await companiesLoaded;
   await page.getByRole('button', { name: 'New invoice', exact: true }).click();
-  const companyField = page.getByRole('textbox', { name: 'Company', exact: true }); if ((await companyField.inputValue()) !== 'Owner company') { await companyField.fill('Owner company'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter'); }
+  const companyField = page.getByRole('textbox', { name: 'Company', exact: true }); if ((await companyField.inputValue()) !== 'Owner company') { await companyField.click(); await expect(page.getByRole('option', { name: 'Owner company', exact: true })).toBeAttached(); await companyField.fill('Owner company'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter'); }
   const month = page.getByRole('textbox', { name: 'Completion month', exact: true });
   await month.click();
   await expect(page.getByRole('option', { name: 'November 2026', exact: true })).toBeAttached();
@@ -118,10 +120,12 @@ test('partner month previews all company visits and issues the exact approved pa
     if (path === '/shifts') { issues.push(req.postDataJSON() as ShiftInvoiceInput & { previewToken: string }); records = [{ ...preview, id: 'issued-one', invoiceNumber: 'RSS-2026-001', status: 'Issued' }]; return route.fulfill({ headers, json: records[0] }); }
     return route.fulfill({ status: 404, headers });
   });
+  const companiesLoaded = page.waitForResponse(response => /\/api\/v1\/admin\/companies(\?|$)/.test(response.url()) && response.request().method() === 'GET');
   await page.goto('/admin/invoices/');
+  await companiesLoaded;
   await page.getByRole('button', { name: 'New invoice', exact: true }).click();
   await expect(page.getByLabel('Completed cleaning month', { exact: true })).not.toBeChecked();
-  const companyField = page.getByRole('textbox', { name: 'Company', exact: true }); if ((await companyField.inputValue()) !== 'Owner company') { await companyField.fill('Owner company'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter'); }
+  const companyField = page.getByRole('textbox', { name: 'Company', exact: true }); if ((await companyField.inputValue()) !== 'Owner company') { await companyField.click(); await expect(page.getByRole('option', { name: 'Owner company', exact: true })).toBeAttached(); await companyField.fill('Owner company'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter'); }
   await expect(page.getByLabel('Completed cleaning month', { exact: true })).toBeChecked();
   await expect(page.getByRole('textbox', { name: 'Completion month', exact: true })).toBeVisible();
   await page.getByRole('textbox', { name: 'Completion month', exact: true }).click();
@@ -180,9 +184,11 @@ test('a month with several completed visits of one shift previews one line per v
     if (path === '/shift-preview') { const input = req.postDataJSON() as ShiftInvoiceInput; return route.fulfill({ headers, json: { ...preview, periodFrom: input.from, periodTo: input.to, lines: preview.lines } }); }
     return route.fulfill({ status: 404, headers });
   });
+  const companiesLoaded = page.waitForResponse(response => /\/api\/v1\/admin\/companies(\?|$)/.test(response.url()) && response.request().method() === 'GET');
   await page.goto('/admin/invoices/');
+  await companiesLoaded;
   await page.getByRole('button', { name: 'New invoice', exact: true }).click();
-  const companyField = page.getByRole('textbox', { name: 'Company', exact: true }); if ((await companyField.inputValue()) !== 'Owner company') { await companyField.fill('Owner company'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter'); }
+  const companyField = page.getByRole('textbox', { name: 'Company', exact: true }); if ((await companyField.inputValue()) !== 'Owner company') { await companyField.click(); await expect(page.getByRole('option', { name: 'Owner company', exact: true })).toBeAttached(); await companyField.fill('Owner company'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter'); }
   await page.getByRole('textbox', { name: 'Completion month', exact: true }).click();
   await pickMonth(page, 'October 2026');
   await page.getByLabel(/^Billing street/).fill('Customer road 2'); await page.getByLabel(/^Billing postalCode/).fill('33100'); await page.getByLabel(/^Billing city/).fill('Tampere');
