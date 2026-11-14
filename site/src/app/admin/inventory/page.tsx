@@ -1,5 +1,6 @@
 'use client';
 
+import { DsGrid } from '@/components/ds/DsGrid';
 import { useEffect, useRef, useState } from 'react';
 import { Title, Tabs, Table, Button, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge, Switch, Checkbox, Alert } from '@mantine/core';
 import { inventoryAcknowledgments, type InventoryAcknowledgment } from '@/lib/inventoryAcknowledgmentApi';
@@ -139,46 +140,36 @@ function LogTab() {
       {rows === null && loading && <Loader size="sm" />}
       {rows !== null && rows.length === 0 && <Text c="dimmed">No entries match these filters.</Text>}
       {rows !== null && rows.length > 0 && (
-        <Table.ScrollContainer minWidth={720}>
-          <Table striped withTableBorder>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Select</Table.Th>
-                <Table.Th>Taken</Table.Th>
-                <Table.Th>Employee</Table.Th>
-                <Table.Th>Location</Table.Th>
-                <Table.Th>Item</Table.Th>
-                <Table.Th>Quantity</Table.Th>
-                <Table.Th>Note</Table.Th>
-                <Table.Th>Photos</Table.Th>
-                <Table.Th>Acknowledgment</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {rows.map(row => (
-                <Table.Tr key={row.id}>
-                  <Table.Td><Checkbox styles={{ root: { minHeight: 44, display: 'flex', alignItems: 'center' } }} aria-label={`Select ${row.itemName} by ${row.employeeName}`} checked={selected.includes(row.id)}
-                    disabled={loading || !!ackError || !!acknowledgments[row.id] || row.photosPurged || row.photoIds.length === 0 || (!selected.includes(row.id) && selected.length >= 50)}
-                    onChange={event => { const checked = event.currentTarget.checked; setSelected(previous => checked ? [...previous, row.id] : previous.filter(id => id !== row.id)); }} /></Table.Td>
-                  <Table.Td>{takenLabel(row.takenUtc)}</Table.Td>
-                  <Table.Td>{row.employeeName}</Table.Td>
-                  <Table.Td>{row.locationName}</Table.Td>
-                  <Table.Td>{row.itemName}</Table.Td>
-                  <Table.Td>{row.quantity} {row.unit}</Table.Td>
-                  <Table.Td>{row.note}</Table.Td>
-                  <Table.Td>
-                    {row.photosPurged ? <Text size="sm" c="dimmed">Deleted</Text> : (
-                      <Button size="xs" variant="subtle" onClick={() => setPhotoView(row)}>View {row.photoIds.length}</Button>
-                    )}
-                  </Table.Td>
-                  <Table.Td>{ackError ? <Text size="sm" c="dimmed">Status unavailable</Text> : acknowledgments[row.id] ? <Button variant="subtle" size="xs" onClick={() => setResponseView(acknowledgments[row.id])}>
-                    {acknowledgments[row.id].status === 'Pending' ? 'Awaiting acknowledgment' : acknowledgments[row.id].status === 'Acknowledged' ? 'Acknowledged' : 'Issue reported'}
-                  </Button> : <Text size="sm" c="dimmed">Not requested</Text>}</Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
+        <DsGrid<(typeof rows)[number]>
+          label="Inventory takes"
+          rows={rows}
+          getRowId={(row) => row.id}
+          columns={[
+            { headerName: 'Select', colId: 'select', sortable: false, width: 90, flex: 0, cellRenderer: (p: { data?: (typeof rows)[number] }) => p.data ? (
+              <Checkbox styles={{ root: { minHeight: 44, display: 'flex', alignItems: 'center' } }} aria-label={`Select ${p.data.itemName} by ${p.data.employeeName}`} checked={selected.includes(p.data.id)}
+                disabled={loading || !!ackError || !!acknowledgments[p.data.id] || p.data.photosPurged || p.data.photoIds.length === 0 || (!selected.includes(p.data.id) && selected.length >= 50)}
+                onChange={event => { const checked = event.currentTarget.checked; const id = p.data!.id; setSelected(previous => checked ? [...previous, id] : previous.filter(x => x !== id)); }} />
+            ) : null },
+            { headerName: 'Taken', colId: 'taken', valueGetter: p => p.data ? takenLabel(p.data.takenUtc) : '' },
+            { headerName: 'Employee', colId: 'employee', valueGetter: p => p.data?.employeeName ?? '' },
+            { headerName: 'Location', colId: 'location', valueGetter: p => p.data?.locationName ?? '' },
+            { headerName: 'Item', colId: 'item', valueGetter: p => p.data?.itemName ?? '' },
+            { headerName: 'Quantity', colId: 'quantity', valueGetter: p => p.data ? `${p.data.quantity} ${p.data.unit}` : '' },
+            { headerName: 'Note', colId: 'note', flex: 2, valueGetter: p => p.data?.note ?? '' },
+            { headerName: 'Photos', colId: 'photos', sortable: false, cellRenderer: (p: { data?: (typeof rows)[number] }) => p.data ? (
+              p.data.photosPurged ? <Text size="sm" c="dimmed">Deleted</Text> : (
+                <Button size="xs" variant="subtle" onClick={() => setPhotoView(p.data!)}>View {p.data.photoIds.length}</Button>
+              )
+            ) : null },
+            { headerName: 'Acknowledgment', colId: 'ack', sortable: false, flex: 2, cellRenderer: (p: { data?: (typeof rows)[number] }) => {
+              if (!p.data) return null;
+              const row = p.data;
+              return ackError ? <Text size="sm" c="dimmed">Status unavailable</Text> : acknowledgments[row.id] ? <Button variant="subtle" size="xs" onClick={() => setResponseView(acknowledgments[row.id])}>
+                {acknowledgments[row.id].status === 'Pending' ? 'Awaiting acknowledgment' : acknowledgments[row.id].status === 'Acknowledged' ? 'Acknowledged' : 'Issue reported'}
+              </Button> : <Text size="sm" c="dimmed">Not requested</Text>;
+            } },
+          ]}
+        />
       )}
       {hasMore && (
         <Group>
@@ -284,20 +275,16 @@ function LocationsTab() {
       <Group><Button onClick={openCreate}>Add location</Button></Group>
       {rows === null && <Loader size="sm" />}
       {rows !== null && (
-        <Table.ScrollContainer minWidth={420}>
-          <Table striped withTableBorder>
-            <Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Status</Table.Th><Table.Th aria-label="Actions" /></Table.Tr></Table.Thead>
-            <Table.Tbody>
-              {rows.map(row => (
-                <Table.Tr key={row.id}>
-                  <Table.Td>{row.name}</Table.Td>
-                  <Table.Td><Badge color={row.isActive ? 'green' : 'gray'}>{row.isActive ? 'Active' : 'Inactive'}</Badge></Table.Td>
-                  <Table.Td><Button size="xs" variant="subtle" onClick={() => openEdit(row)} aria-label={`Edit ${row.name}`}>Edit</Button></Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
+        <DsGrid<(typeof rows)[number]>
+          label="Inventory items"
+          rows={rows}
+          getRowId={(row) => row.id}
+          columns={[
+            { headerName: 'Name', colId: 'name', flex: 2, valueGetter: p => p.data?.name ?? '' },
+            { headerName: 'Status', colId: 'status', sortable: false, cellRenderer: (p: { data?: (typeof rows)[number] }) => p.data ? <Badge color={p.data.isActive ? 'green' : 'gray'}>{p.data.isActive ? 'Active' : 'Inactive'}</Badge> : null },
+            { headerName: '', colId: 'actions', sortable: false, width: 120, flex: 0, cellRenderer: (p: { data?: (typeof rows)[number] }) => p.data ? <Button size="xs" variant="subtle" onClick={() => openEdit(p.data!)} aria-label={`Edit ${p.data.name}`}>Edit</Button> : null },
+          ]}
+        />
       )}
       <EditModal
         title={editing?.mode === 'create' ? 'Add location' : 'Edit location'}
@@ -367,31 +354,21 @@ function ItemsTab() {
       <Group><Button onClick={openCreate}>Add item</Button></Group>
       {rows === null && <Loader size="sm" />}
       {rows !== null && (
-        <Table.ScrollContainer minWidth={520}>
-          <Table striped withTableBorder>
-            <Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Unit</Table.Th><Table.Th>Status</Table.Th><Table.Th aria-label="Actions" /></Table.Tr></Table.Thead>
-            <Table.Tbody>
-              {rows.map(row => (
-                <Table.Tr key={row.id}>
-                  <Table.Td>{row.name}</Table.Td>
-                  <Table.Td>{row.unit}</Table.Td>
-                  <Table.Td>
-                    <Group gap={6}>
-                      <Badge color={row.isActive ? 'green' : 'gray'}>{row.isActive ? 'Active' : 'Inactive'}</Badge>
-                      {!row.isVerified && <Badge color="yellow">Needs review</Badge>}
-                    </Group>
-                  </Table.Td>
-                  <Table.Td>
-                    <Group gap={4} wrap="nowrap">
-                      {!row.isVerified && <Button size="xs" variant="light" onClick={() => verify(row)} aria-label={`Verify ${row.name}`}>Verify</Button>}
-                      <Button size="xs" variant="subtle" onClick={() => openEdit(row)} aria-label={`Edit ${row.name}`}>Edit</Button>
-                    </Group>
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
+        <DsGrid<(typeof rows)[number]>
+          label="Inventory items with units"
+          rows={rows}
+          getRowId={(row) => row.id}
+          columns={[
+            { headerName: 'Name', colId: 'name', flex: 2, valueGetter: p => p.data?.name ?? '' },
+            { headerName: 'Unit', colId: 'unit', valueGetter: p => p.data?.unit ?? '' },
+            { headerName: 'Status', colId: 'status', sortable: false, cellRenderer: (p: { data?: (typeof rows)[number] }) => p.data ? (
+              <div className="flex flex-wrap items-center gap-1.5"><Badge color={p.data.isActive ? 'green' : 'gray'}>{p.data.isActive ? 'Active' : 'Inactive'}</Badge>{!p.data.isVerified && <Badge color="yellow">Needs review</Badge>}</div>
+            ) : null },
+            { headerName: '', colId: 'actions', sortable: false, minWidth: 200, flex: 0, width: 220, cellRenderer: (p: { data?: (typeof rows)[number] }) => p.data ? (
+              <div className="flex items-center gap-1">{!p.data.isVerified && <Button size="xs" variant="light" onClick={() => verify(p.data!)} aria-label={`Verify ${p.data.name}`}>Verify</Button>}<Button size="xs" variant="subtle" onClick={() => openEdit(p.data!)} aria-label={`Edit ${p.data.name}`}>Edit</Button></div>
+            ) : null },
+          ]}
+        />
       )}
       <EditModal
         title={editing?.mode === 'create' ? 'Add item' : 'Edit item'}

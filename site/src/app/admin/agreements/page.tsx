@@ -1,5 +1,6 @@
 'use client';
 
+import { DsGrid } from '@/components/ds/DsGrid';
 import { showError } from '@/lib/toast';
 import { useCallback, useEffect, useState } from 'react';
 import { Title, Button, Table, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge, ActionIcon, Tooltip, CopyButton, Paper } from '@mantine/core';
@@ -249,14 +250,17 @@ export default function AgreementsPage() {
           {repairLoading && <Loader size="sm" />}
           {!repairLoading && repairPreview?.agreements.length === 0 && <Text size="sm" c="dimmed">No eligible legacy agreements need repair.</Text>}
           {!repairLoading && repairPreview && repairPreview.agreements.length > 0 && <>
-          <Table.ScrollContainer minWidth={650}><Table withTableBorder>
-            <Table.Thead><Table.Tr><Table.Th>Agreement</Table.Th><Table.Th>Status</Table.Th><Table.Th>Company</Table.Th><Table.Th>Action</Table.Th></Table.Tr></Table.Thead>
-            <Table.Tbody>{repairPreview.agreements.map(item => <Table.Tr key={item.agreementId}>
-              <Table.Td>{item.title}</Table.Td><Table.Td>{item.status}</Table.Td>
-              <Table.Td><Select aria-label={`Company for ${item.title}`} placeholder="Choose company" searchable data={repairPreview.companies.map(company => ({ value: company.id, label: `${company.name}${company.isActive ? '' : ' (inactive)'}` }))} value={repairSelections[item.agreementId] ?? null} onChange={value => setRepairSelections(current => ({ ...current, [item.agreementId]: value }))} /></Table.Td>
-              <Table.Td><Button size="xs" loading={repairBusy === item.agreementId} disabled={!repairSelections[item.agreementId] || !!repairBusy} onClick={() => repairCompany(item.agreementId)}>Apply reviewed link</Button></Table.Td>
-            </Table.Tr>)}</Table.Tbody>
-          </Table></Table.ScrollContainer>
+          <DsGrid<(typeof repairPreview.agreements)[number]>
+              label="Agreements to repair"
+              rows={repairPreview.agreements}
+              getRowId={(item) => item.agreementId}
+              columns={[
+                { headerName: 'Agreement', colId: 'agreement', flex: 2, valueGetter: p => p.data?.title ?? '' },
+                { headerName: 'Status', colId: 'status', valueGetter: p => p.data?.status ?? '' },
+                { headerName: 'Company', colId: 'company', flex: 2, sortable: false, cellRenderer: (p: { data?: (typeof repairPreview.agreements)[number] }) => p.data ? <Select aria-label={`Company for ${p.data.title}`} placeholder="Choose company" searchable data={repairPreview.companies.map(company => ({ value: company.id, label: `${company.name}${company.isActive ? '' : ' (inactive)'}` }))} value={repairSelections[p.data!.agreementId] ?? null} onChange={value => setRepairSelections(current => ({ ...current, [p.data!.agreementId]: value }))} /> : null },
+                { headerName: 'Action', colId: 'action', sortable: false, cellRenderer: (p: { data?: (typeof repairPreview.agreements)[number] }) => p.data ? <Button size="xs" loading={repairBusy === p.data!.agreementId} disabled={!repairSelections[p.data!.agreementId] || !!repairBusy} onClick={() => repairCompany(p.data!.agreementId)}>Apply reviewed link</Button> : null },
+              ]}
+            />
           </>}
         </Stack>
       </Paper>}
@@ -267,33 +271,29 @@ export default function AgreementsPage() {
       ) : visibleItems.length === 0 ? (
         <Text c="dimmed">No {lifecycle} agreements. Check the {lifecycle === 'active' ? 'Inactive' : 'Active'} tab.</Text>
       ) : (
-        <Table.ScrollContainer minWidth={600}>
-          <Table striped highlightOnHover withTableBorder>
-            <Table.Thead>
-              <Table.Tr><Table.Th>Title</Table.Th><Table.Th>Customer</Table.Th><Table.Th>Code</Table.Th><Table.Th>Signers</Table.Th><Table.Th>Status</Table.Th><Table.Th w={180}>Actions</Table.Th></Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {visibleItems.map((a) => (
-                <Table.Tr key={a.id}>
-                  <Table.Td fw={500}>{a.title}</Table.Td>
-                  <Table.Td>{a.companyName ?? '—'}</Table.Td>
-                  <Table.Td>{a.code}</Table.Td>
-                  <Table.Td>{a.signedCount} / {a.signerCount}</Table.Td>
-                  <Table.Td><Badge color={a.isActive ? 'green' : 'gray'}>{a.status}</Badge></Table.Td>
-                  <Table.Td>
-                    <Group gap={6} wrap="wrap">
+        <DsGrid<(typeof visibleItems)[number]>
+          label="Agreements"
+          rows={visibleItems}
+          getRowId={(a) => a.id}
+          columns={[
+            { headerName: 'Title', colId: 'title', flex: 2, valueGetter: p => p.data?.title ?? '' },
+            { headerName: 'Customer', colId: 'customer', valueGetter: p => p.data?.companyName ?? '—' },
+            { headerName: 'Code', colId: 'code', valueGetter: p => p.data?.code ?? '' },
+            { headerName: 'Signers', colId: 'signers', valueGetter: p => p.data ? `${p.data.signedCount} / ${p.data.signerCount}` : '' },
+            { headerName: 'Status', colId: 'status', sortable: false, cellRenderer: (p: { data?: (typeof visibleItems)[number] }) => p.data ? <Badge color={p.data.isActive ? 'green' : 'gray'}>{p.data.status}</Badge> : null },
+            { headerName: 'Actions', colId: 'actions', sortable: false, minWidth: 180, flex: 0, width: 200, cellRenderer: (p: { data?: (typeof visibleItems)[number] }) => {
+              if (!p.data) return null;
+              const a = p.data;
+              return <Group gap={6} wrap="wrap">
                       <Button size="xs" variant="light" leftSection={<Eye size={14} />} onClick={() => openDetail(a.id)}>Signers</Button>
                       <Button size="xs" variant="outline" onClick={() => handleDownload(a.id)}>PDF</Button>
                       <Button size="xs" loading={lifecycleBusy === a.id} disabled={!!lifecycleBusy || (!a.isActive && a.status === 'Cancelled')} onClick={() => changeActivity(a)}>{a.isActive ? 'Deactivate' : 'Reactivate'}</Button>
                       {!a.isActive && <Button size="xs" color="red" variant="subtle" loading={lifecycleBusy === a.id} disabled={!!lifecycleBusy} onClick={() => deleteAgreement(a)}>Delete</Button>}
                       {!a.isActive && a.status === 'Cancelled' && <Text size="xs">Cancelled agreements cannot be reactivated.</Text>}
-                    </Group>
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
+                    </Group>;
+            } },
+          ]}
+        />
       )}
       </LifecycleTabs>
 

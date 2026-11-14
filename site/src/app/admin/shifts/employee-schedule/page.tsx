@@ -1,5 +1,6 @@
 'use client';
 
+import { DsGrid } from '@/components/ds/DsGrid';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Badge, Button, Group, Loader, Paper, ScrollArea, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { adminEmployees, adminShifts, adminTenant, type Employee, type EmployeeDaySchedule, type OverlapFinding, type ScheduleVisit } from '@/lib/adminApi';
@@ -97,33 +98,34 @@ export default function EmployeeSchedulePage() {
       {!loading && !error && schedule && staff.length > 0 && schedule.length === 0 && <Text>No visits this week. Choose another week or check the shift schedules.</Text>}
       {!loading && !error && schedule && staff.length > 0 && (
         <ScrollArea type="auto">
-          <Table withTableBorder withColumnBorders miw={860}>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Cleaner</Table.Th>
-                {days.map(day => <Table.Th key={day}>{new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</Table.Th>)}
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {staff.map(employee => (
-                <Table.Tr key={employee.id}>
-                  <Table.Th>{employee.firstName} {employee.lastName}</Table.Th>
-                  {days.map(day => {
-                    const visits = visitsFor(employee.id, day);
-                    return (
-                      <Table.Td key={day} aria-label={`${employee.firstName} ${employee.lastName}, ${day}`}>
-                        {overlapFor(employee.id, day) && <Badge color="red" size="sm" mb={4}>Overlap</Badge>}
-                        <Stack gap={4}>
-                          {visits.length === 0 && <Text size="sm" c="dimmed">Free</Text>}
-                          {visits.map(visit => <Paper key={`${visit.shiftId}-${visit.startUtc}`} p={4} withBorder><Text size="xs">{visitLabel(visit)}</Text></Paper>)}
-                        </Stack>
-                      </Table.Td>
-                    );
-                  })}
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
+          <DsGrid<(typeof staff)[number]>
+            label="Employee schedule"
+            rows={staff}
+            getRowId={(employee) => employee.id}
+            columns={[
+              { headerName: 'Cleaner', colId: 'cleaner', flex: 1, minWidth: 160, valueGetter: p => p.data ? `${p.data.firstName} ${p.data.lastName}` : '' },
+              ...days.map(day => ({
+                headerName: new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }),
+                colId: `day-${day}`,
+                sortable: false,
+                minWidth: 150,
+                cellRenderer: (p: { data?: (typeof staff)[number] }) => {
+                  if (!p.data) return null;
+                  const employee = p.data;
+                  const visits = visitsFor(employee.id, day);
+                  return (
+                    <div aria-label={`${employee.firstName} ${employee.lastName}, ${day}`}>
+                      {overlapFor(employee.id, day) && <Badge color="red" size="sm" mb={4}>Overlap</Badge>}
+                      <Stack gap={4}>
+                        {visits.length === 0 && <Text size="sm" c="dimmed">Free</Text>}
+                        {visits.map(visit => <Paper key={`${visit.shiftId}-${visit.startUtc}`} p={4} withBorder><Text size="xs">{visitLabel(visit)}</Text></Paper>)}
+                      </Stack>
+                    </div>
+                  );
+                },
+              })),
+            ]}
+          />
         </ScrollArea>
       )}
     </Stack>

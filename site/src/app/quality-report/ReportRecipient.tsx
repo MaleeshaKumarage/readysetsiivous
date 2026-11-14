@@ -1,5 +1,6 @@
 'use client';
 
+import { DsGrid } from '@/components/ds/DsGrid';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { API_URL } from '@/lib/api';
@@ -41,8 +42,19 @@ export default function ReportRecipient() {
       {error && <div role="alert"><p>{t.error}</p><button className="mt-3 rounded border px-4 py-2" onClick={() => setAttempt(value => value + 1)}>{t.retry}</button></div>}
       {report && <>
         <p>{report.periods?.map(p => `${dateLabel(p.from)} – ${dateLabel(p.to)}`).join('; ') ?? `${report.year}-${String(report.month).padStart(2, '0')}`}</p>
-        <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left text-sm"><thead><tr>{[t.company, t.branch, t.shift, t.scheduled, t.completed, t.plannedHours, t.actualHours].map(label => <th className="border-b p-2" key={label}>{label}</th>)}</tr></thead>
-          <tbody>{report.shifts.map((shift, index) => <tr key={index}>{[shift.companyName, shift.branchName, shift.shiftName, shift.scheduledOccurrences, shift.completedOccurrences, shift.scheduledHours.toFixed(2), shift.actualHours == null ? t.unavailable : shift.actualHours.toFixed(2) + ((shift.incompleteTimingRecords ?? 0) > 0 ? ' (' + shift.incompleteTimingRecords + ' ' + t.incomplete + ')' : '')].map((value, column) => <td key={column} className="border-b p-2">{value}</td>)}</tr>)}</tbody></table></div>
+        <div className="overflow-x-auto"><DsGrid<(typeof report.shifts)[number]>
+          label="Quality report shifts"
+          rows={report.shifts}
+          columns={[
+            { headerName: t.company, colId: 'company', valueGetter: p => p.data?.companyName ?? '' },
+            { headerName: t.branch, colId: 'branch', valueGetter: p => p.data?.branchName ?? '' },
+            { headerName: t.shift, colId: 'shift', flex: 2, valueGetter: p => p.data?.shiftName ?? '' },
+            { headerName: t.scheduled, colId: 'scheduled', valueGetter: p => p.data?.scheduledOccurrences ?? '' },
+            { headerName: t.completed, colId: 'completed', valueGetter: p => p.data?.completedOccurrences ?? '' },
+            { headerName: t.plannedHours, colId: 'planned', valueGetter: p => p.data ? p.data.scheduledHours.toFixed(2) : '' },
+            { headerName: t.actualHours, colId: 'actual', valueGetter: p => p.data ? (p.data.actualHours == null ? t.unavailable : p.data.actualHours.toFixed(2) + ((p.data.incompleteTimingRecords ?? 0) > 0 ? ' (' + p.data.incompleteTimingRecords + ' ' + t.incomplete + ')' : '')) : '' },
+          ]}
+        /></div>
         <a className="inline-flex rounded bg-[#0a1741] px-4 py-2 font-semibold text-white" href={`${base}/pdf`} target="_blank" rel="noreferrer">{t.pdf}</a>
         <p className="text-sm">{t.expires}: {new Date(report.expiresUtc).toLocaleDateString(lang)}</p>
         <p className="text-sm">{t.notice}</p>

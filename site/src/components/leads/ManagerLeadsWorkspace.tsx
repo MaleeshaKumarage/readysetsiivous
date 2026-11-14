@@ -1,4 +1,5 @@
 'use client';
+import { DsGrid } from '@/components/ds/DsGrid';
 import { useEffect, useRef, useState } from 'react';
 import { Badge, Button, Group, Loader, Modal, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { leadCollaborationApi as api, type CollaborationDetail } from '@/lib/leadCollaborationApi';
@@ -22,7 +23,17 @@ export function ManagerLeadsWorkspace() {
   return <Stack><Title order={2}>Leads</Title><Text>View prospects, record voice notes and manage internal follow-ups. Customer conversion and lead administration remain with tenant admins.</Text>
     <Group><TextInput label="Search leads" value={search} maxLength={200} onChange={e => { setSearch(e.target.value); setSkip(0); }} /><Select label="Lead filter" value={filter} data={['Active', 'Inactive', 'Converted', 'New', 'Contacted', 'In discussion', 'Lost']} onChange={value => { setFilter(value || 'Active'); setSkip(0); }} /></Group>
     {error && <Text role="alert" c="red">{error}</Text>}<Button variant="default" onClick={() => setRefresh(x => x + 1)}>Refresh leads</Button>
-    {loading ? <Loader /> : <><Table.ScrollContainer minWidth={500}><Table><Table.Thead><Table.Tr><Table.Th>Company</Table.Th><Table.Th>Branch</Table.Th><Table.Th>Status</Table.Th><Table.Th>Actions</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{rows.map(row => <Table.Tr key={row.id}><Table.Td>{row.fields.name}</Table.Td><Table.Td>{leadBranches(row.fields, row.id).map(branch => branch.name).join(', ') || 'No branches'}</Table.Td><Table.Td><Badge>{row.status}</Badge></Table.Td><Table.Td><Button onClick={() => void open(row.id)}>View lead</Button></Table.Td></Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer>{!rows.length && <Text>No leads in this view.</Text>}</>}
+    {loading ? <Loader /> : <><DsGrid<(typeof rows)[number]>
+          label="Leads"
+          rows={rows}
+          getRowId={(row) => row.id}
+          columns={[
+            { headerName: 'Company', colId: 'company', flex: 2, valueGetter: p => p.data?.fields.name ?? '' },
+            { headerName: 'Branch', colId: 'branch', flex: 2, valueGetter: p => p.data ? (leadBranches(p.data.fields, p.data.id).map(branch => branch.name).join(', ') || 'No branches') : '' },
+            { headerName: 'Status', colId: 'status', sortable: false, cellRenderer: (p: { data?: (typeof rows)[number] }) => p.data ? <Badge>{p.data.status}</Badge> : null },
+            { headerName: 'Actions', colId: 'actions', sortable: false, cellRenderer: (p: { data?: (typeof rows)[number] }) => p.data ? <Button onClick={() => void open(p.data!.id)}>View lead</Button> : null },
+          ]}
+        />{!rows.length && <Text>No leads in this view.</Text>}</>}
     <Group><Button disabled={!skip} onClick={() => setSkip(x => Math.max(0, x - 25))}>Previous</Button><Text>{total} leads</Text><Button disabled={skip + 25 >= total} onClick={() => setSkip(x => x + 25)}>Next</Button></Group>
     <Modal opened={opened} onClose={close} closeButtonProps={{ 'aria-label': 'Close lead' }} withCloseButton={!busy} closeOnClickOutside={false} title={detail?.lead.fields.name || 'Lead'} size="xl">
       {!detail ? detailError ? <Stack><Text role="alert" c="red">{detailError}</Text><Button onClick={() => selected && void open(selected)}>Retry loading lead</Button></Stack> : <Loader /> : <Stack>

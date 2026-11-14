@@ -33,10 +33,12 @@ export interface DsGridProps<T> {
   isFullWidthRow?: (row: T) => boolean;
   /** What a full-width row shows. */
   fullWidthRow?: (row: T) => ReactNode;
+  /** Called when a row is clicked (full-width rows included; check the row kind in the handler). */
+  onRowClicked?: (row: T) => void;
 }
 
 /** The design-system table: AG Grid with the navy and gold theme. Use this for every table. */
-export function DsGrid<T>({ rows, columns, label, getRowId, height = 'auto', isFullWidthRow, fullWidthRow }: DsGridProps<T>) {
+export function DsGrid<T>({ rows, columns, label, getRowId, height = 'auto', isFullWidthRow, fullWidthRow, onRowClicked }: DsGridProps<T>) {
   const defaultColDef = useMemo<ColDef<T>>(() => ({ resizable: true, sortable: true, flex: 1, minWidth: 110 }), []);
   return (
     <div role="region" aria-label={label} style={{ height, width: '100%' }}>
@@ -49,6 +51,7 @@ export function DsGrid<T>({ rows, columns, label, getRowId, height = 'auto', isF
         domLayout={height === 'auto' ? 'autoHeight' : 'normal'}
         suppressCellFocus
         suppressColumnVirtualisation
+        onRowClicked={onRowClicked ? (event) => { if (event.data) onRowClicked(event.data); } : undefined}
         isFullWidthRow={isFullWidthRow ? (params) => !!params.rowNode.data && isFullWidthRow(params.rowNode.data) : undefined}
         fullWidthCellRenderer={fullWidthRow ? FullWidthRow : undefined}
         fullWidthCellRendererParams={fullWidthRow ? { render: fullWidthRow } : undefined}

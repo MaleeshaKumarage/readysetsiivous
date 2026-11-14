@@ -1,4 +1,5 @@
 'use client';
+import { DsGrid } from '@/components/ds/DsGrid';
 import { useEffect, useRef, useState } from 'react';
 import { Card } from '@/ds/Card';
 import { Button } from '@/ds/Button';
@@ -122,7 +123,17 @@ export default function EntertainmentClient() {
       <div>{lobby?.players.map(p => <span className="mr-4" key={p.playerId}>{p.name} <b>{scores[p.playerId] ?? 0}</b></span>)}</div>
       <p data-testid="sentence-en" className="text-2xl">{round.sentenceEn}</p>
       {!translator && (revealedAnswer ? <p data-testid="sentence-fi-revealed">{revealedAnswer}</p> : <Button data-testid="sentence-fi" disabled={disabled} onClick={() => void send('RevealAnswer', session.groupId, session.playerId, round.roundId)}>Reveal Finnish answer</Button>)}
-      <table className="w-full text-left"><caption>Hint words</caption><thead><tr><th>English</th><th>Finnish</th></tr></thead><tbody>{round.hints.map((hint, index) => <tr key={index}><td>{hint.english}</td><td>{hints[index] !== undefined ? <span data-testid="revealed-word">{hints[index]}</span> : <button type="button" data-testid="covered-word" aria-label={`Reveal Finnish for ${hint.english}`} disabled={disabled || !!evaluation} onClick={() => void send('RevealHint', session.groupId, session.playerId, index, round.roundId)}>Reveal</button>}</td></tr>)}</tbody></table>
+      <DsGrid<{ english: string; index: number }>
+              label="Hint words"
+              rows={round.hints.map((hint, index) => ({ english: hint.english, index }))}
+              getRowId={(row) => String(row.index)}
+              columns={[
+                { headerName: 'English', colId: 'english', valueGetter: p => p.data?.english ?? '' },
+                { headerName: 'Finnish', colId: 'finnish', sortable: false, cellRenderer: (p: { data?: { english: string; index: number } }) => p.data ? (hints[p.data.index] !== undefined
+                  ? <span data-testid="revealed-word">{hints[p.data.index]}</span>
+                  : <button type="button" data-testid="covered-word" aria-label={`Reveal Finnish for ${p.data.english}`} disabled={disabled || !!evaluation} onClick={() => void send('RevealHint', session.groupId, session.playerId, p.data!.index, round.roundId)}>Reveal</button>) : null },
+              ]}
+            />
       {translator && <><Field label="Your Finnish answer"><Textarea aria-label="Your Finnish answer" value={answer} maxLength={2000} disabled={!!evaluation} onChange={e => setAnswer(e.target.value)} /></Field>
         {!evaluation && <Button disabled={disabled || !answer.trim()} onClick={() => void send('CheckAnswer', session.groupId, session.playerId, round.roundId, answer)}>Check answer</Button>}</>}
       {evaluation && <div data-testid="answer-feedback" aria-live="polite" className="space-y-3"><h3>{evaluation.isCorrect ? 'Meaning correct' : 'Meaning not fully matched'}</h3>
