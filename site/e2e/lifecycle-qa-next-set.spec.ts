@@ -37,7 +37,7 @@ test('shift list uses one time format for every schedule type and shows monthly 
   await listed;
   await expect(page.getByText('Daily 08:00–17:00', { exact: true })).toBeVisible({ timeout: 30000 });
   await expect(page.getByText('Monthly day 15 13:00–14:00', { exact: true })).toBeVisible();
-  await expect(page.getByRole('table').getByText(/:\d{2}:\d{2}/)).toHaveCount(0);
+  await expect(page.getByRole('grid').getByText(/:\d{2}:\d{2}/)).toHaveCount(0);
 });
 
 test('assignee picker shows each employee email so similar names can be told apart', async ({ page }) => {
@@ -123,7 +123,7 @@ test('weekly shifts show HH:mm times with no seconds for both day branches', asy
   await listed;
   await expect(page.getByText('Monday, Wednesday 08:00–17:00', { exact: true })).toBeVisible({ timeout: 30000 });
   await expect(page.getByText('Friday 09:00–12:00', { exact: true })).toBeVisible();
-  await expect(page.getByRole('table').getByText(/:\d{2}:\d{2}/)).toHaveCount(0);
+  await expect(page.getByRole('grid').getByText(/:\d{2}:\d{2}/)).toHaveCount(0);
 });
 
 test('a deactivated shift future visit is listed under Cancelled', async ({ page }) => {
@@ -178,7 +178,7 @@ test('one-time shifts show their date and HH:mm times with no seconds', async ({
   await page.goto('/admin/shifts/');
   await listed;
   await expect(page.getByText('One-time 2026-11-20 09:30–11:00', { exact: true })).toBeVisible({ timeout: 30000 });
-  await expect(page.getByRole('table').getByText(/:\d{2}:\d{2}/)).toHaveCount(0);
+  await expect(page.getByRole('grid').getByText(/:\d{2}:\d{2}/)).toHaveCount(0);
 });
 
 test('workspace schedule shows HH:mm labels for daily, weekly, monthly and one-time shifts', async ({ page }) => {
