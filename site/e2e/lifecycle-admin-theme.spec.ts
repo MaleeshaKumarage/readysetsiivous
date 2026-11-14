@@ -1,3 +1,4 @@
+import { expectGridLaidOut } from './grid-layout';
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
 async function readable(locator: Locator) {
@@ -211,11 +212,12 @@ test('dashboard groups link to workspaces and sidebar brand returns home on phon
 for (const [section, record, actionName] of [
   ['companies', 'Fixture company Oy', 'Edit'], ['employees', 'Active Cleaner', 'Edit'],
   ['agreements', 'Signed history', 'Signers'], ['services', 'Service 0', 'Edit'], ['invoices', 'INV-1', 'PDF'],
-]) test(`populated ${section} table keeps actions reachable at 375px`, async ({ page }) => {
+]) test(`populated ${section} table keeps actions reachable at 375px`, async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 375, height: 1000 }); await setupPopulatedWorkspace(page);
   await page.goto(`/admin/${section}/`);
   const row = page.getByRole('row').filter({ has: page.getByRole('gridcell', { name: record, exact: true }).or(page.getByRole('gridcell', { name: record, exact: true })) });
   await expect(row).toBeVisible();
+  await expectGridLaidOut(page, testInfo, `${section}-375px`);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   // The nearest scrollable ancestor of the row is the table's horizontal scroller (Mantine or AG Grid).
   const scrollable = await row.evaluate(el => {
