@@ -138,8 +138,8 @@ test('partner month previews all company visits and issues the exact approved pa
   await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Invoice preview', exact: true })).toBeVisible();
   await expect(page.getByRole('gridcell', { name: /Lake apartment cleaning/ })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: branch.name, exact: true })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: 'Forest apartment', exact: true })).toBeVisible();
+  await expect(page.getByText(branch.name, { exact: true })).toBeVisible();
+  await expect(page.getByText('Forest apartment', { exact: true })).toBeVisible();
   await expect(page.getByText('Completed on: 2026-12-01', { exact: true })).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'Invoice preview', exact: true })).not.toContainText(/partner/i);
   await expect(page.getByText('Net €140.00 · VAT €35.70 · Total €175.70', { exact: true })).toBeVisible();

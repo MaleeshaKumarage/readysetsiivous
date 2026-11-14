@@ -41,7 +41,7 @@ export interface DsGridProps<T> {
 export function DsGrid<T>({ rows, columns, label, getRowId, height = 'auto', isFullWidthRow, fullWidthRow, onRowClicked }: DsGridProps<T>) {
   const defaultColDef = useMemo<ColDef<T>>(() => ({ resizable: true, sortable: true, flex: 1, minWidth: 110 }), []);
   return (
-    <div role="region" aria-label={label} style={{ height, width: '100%' }}>
+    <div role="region" aria-label={label} tabIndex={0} style={{ height, width: '100%' }}>
       <AgGridReact<T>
         theme={dsTheme}
         rowData={rows}

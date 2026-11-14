@@ -62,7 +62,7 @@ test('expanding a company lists exactly its own generated branches', async ({ pa
   await expect(row).toBeVisible({ timeout: 15000 });
   await row.getByRole('button', { name: 'Branches', exact: false }).click();
   // The expansion is the row directly under the company; scope every assertion to it so other companies' branches cannot match.
-  const panel = row.locator('xpath=following-sibling::tr[1]');
+  const panel = row.locator('xpath=following-sibling::*[1]');
   await expect(panel.getByText('Branches', { exact: true })).toBeVisible();
   await expect(panel.getByText(/^Branch \d+ · Helsinki/)).toHaveCount(branches.length);
   for (const branch of branches) {

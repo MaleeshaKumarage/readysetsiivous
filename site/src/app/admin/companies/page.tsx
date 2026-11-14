@@ -419,7 +419,7 @@ export default function CompaniesAdminPage() {
       ) : (
         <Stack gap={6}><Text size="xs" c="dimmed" hiddenFrom="sm">Scroll sideways to see all columns.</Text>
         <DsGrid<CompanyGridRow>
-          label="Companies"
+          label="Companies table"
           rows={companyGridRows(tableRows, expanded)}
           getRowId={(row) => row.kind === 'company' ? row.company.id : `${row.company.id}-branches`}
           isFullWidthRow={(row) => row.kind === 'branches'}
