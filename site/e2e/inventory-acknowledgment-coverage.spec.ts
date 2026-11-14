@@ -25,11 +25,11 @@ test('log columns line up and selection rules disable ineligible rows and clear'
   await page.route(/\/api\/v1\/admin\/inventory\/usage(\?.*)?$/, route => json(route, many));
   await page.goto('/admin/inventory/');
 
-  const table = page.getByRole('table');
-  await expect(table.locator('thead th')).toHaveCount(9);
-  await expect(table.locator('tbody tr').first().locator('td')).toHaveCount(9);
-  await expect(table.locator('thead th').nth(2)).toHaveText('Employee');
-  await expect(table.locator('tbody tr').first().locator('td').nth(2)).toHaveText('Private Cleaner');
+  const table = page.getByRole('grid');
+  await expect(table.getByRole('columnheader')).toHaveCount(9);
+  await expect(table.getByRole('row').nth(1).getByRole('gridcell')).toHaveCount(9);
+  await expect(table.getByRole('columnheader').nth(2)).toHaveText('Employee');
+  await expect(table.getByRole('row').nth(1).getByRole('gridcell').nth(2)).toHaveText('Private Cleaner');
 
   await expect(page.getByRole('checkbox', { name: 'Select Unphotographed by Private Cleaner' })).toBeDisabled();
   for (let index = 0; index < 50; index += 1) {
