@@ -50,6 +50,7 @@ test('a workspace shift that leaves the current page stays open and usable', asy
     return route.fulfill({ headers, json: moved });
   });
   await page.goto('/admin/shifts/');
+  await page.waitForLoadState('networkidle');
   await openShiftWorkspace(page, 'Moved visit');
   const dialog = page.getByRole('dialog', { name: 'Manage — Moved visit', exact: true });
   await expect(dialog).toBeVisible();
