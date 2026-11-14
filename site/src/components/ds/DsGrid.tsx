@@ -39,7 +39,8 @@ export interface DsGridProps<T> {
 
 /** The design-system table: AG Grid with the navy and gold theme. Use this for every table. */
 export function DsGrid<T>({ rows, columns, label, getRowId, height = 'auto', isFullWidthRow, fullWidthRow, onRowClicked }: DsGridProps<T>) {
-  const defaultColDef = useMemo<ColDef<T>>(() => ({ resizable: true, sortable: true, flex: 1, minWidth: 110 }), []);
+  // Cells wrap and rows grow to fit their content, so phone widths do not overlap or clip text.
+  const defaultColDef = useMemo<ColDef<T>>(() => ({ resizable: true, sortable: true, flex: 1, minWidth: 110, wrapText: true, autoHeight: true }), []);
   return (
     <div role="region" aria-label={label} tabIndex={0} style={{ height, width: '100%' }}>
       <AgGridReact<T>
