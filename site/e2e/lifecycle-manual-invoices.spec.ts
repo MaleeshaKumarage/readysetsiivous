@@ -97,7 +97,7 @@ test('lost issue response locks edits and retry sends same submission exactly on
   await page.keyboard.press('Escape'); await expect(page.getByRole('dialog', { name: 'Invoice preview' })).toBeVisible();
   await page.getByRole('button', { name: 'Retry issuing invoice', exact: true }).click();
   await expect(page.getByRole('status')).toHaveText('Invoice 2026-0001 issued.'); expect(calls.issues).toHaveLength(2); expect(calls.issues[0]).toEqual(calls.issues[1]);
-  await expect(page.getByRole('cell', { name: '2026-0001', exact: true })).toHaveCount(1);
+  await expect(page.getByRole('gridcell', { name: '2026-0001', exact: true })).toHaveCount(1);
 });
 test('stale preview requires preview again and preserves rows', async ({ page }) => {
   await setup(page, { stale: true }); await fill(page); await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();

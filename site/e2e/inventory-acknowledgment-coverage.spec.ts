@@ -298,7 +298,7 @@ test('load more keeps the selection, while a fresh load clears it', async ({ pag
   await page.goto('/admin/inventory/');
   await page.getByRole('checkbox', { name: 'Select Stock 0 by Private Cleaner' }).check();
   await page.getByRole('button', { name: 'Load more' }).click();
-  await expect(page.getByRole('cell', { name: 'Late entry', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Late entry', exact: true })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: 'Select Stock 0 by Private Cleaner' })).toBeChecked();
   await expect(page.getByRole('button', { name: 'Request acknowledgment (1)' })).toBeEnabled();
 
@@ -334,7 +334,7 @@ test('a retry reuses the batch id, and editing the message starts a new batch', 
 test('partner search is sent as the admin types, and unrequested entries show Not requested', async ({ page }) => {
   const state = await setup(page);
   await page.goto('/admin/inventory/');
-  await expect(page.getByRole('cell', { name: 'Not requested', exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Not requested', exact: true }).first()).toBeVisible();
   await page.getByRole('checkbox', { name: 'Select Keys by Private Cleaner' }).check();
   const dialog = await openRequestModal(page, 'Keys');
   await dialog.getByLabel('Partner company', { exact: true }).click();
@@ -373,7 +373,7 @@ test('admin rows show Status unavailable when the acknowledgment lookup fails', 
   await setup(page, { failLookup: true });
   await page.goto('/admin/inventory/');
   await expect(page.getByText(/Acknowledgment statuses could not be loaded/)).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Status unavailable', exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Status unavailable', exact: true }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Awaiting acknowledgment', exact: true })).toHaveCount(0);
 });
 

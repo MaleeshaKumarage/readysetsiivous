@@ -49,7 +49,7 @@ test('each shift row exposes one More actions menu, with details first and no se
   await setup(page); await page.goto('/admin/shifts/');
   const row = page.getByRole('row').filter({ hasText: 'Workspace shift' }).first();
   await expect(row.getByRole('button', { name: 'Manage', exact: true })).toHaveCount(0);
-  await expect(row.getByRole('cell', { name: 'Active', exact: true })).toBeVisible();
+  await expect(row.getByRole('gridcell', { name: 'Active', exact: true })).toBeVisible();
   await row.getByRole('button', { name: 'More actions for Workspace shift', exact: true }).click();
   for (const label of ['Pricing', 'Edit schedule', 'Assign employees', 'Occurrences', 'Checklist template', 'Deactivate']) {
     await expect(page.getByRole('menuitem', { name: label, exact: true })).toBeVisible();
@@ -131,7 +131,7 @@ test('completed one-time shift shows Completed status and a no-further-visits ne
   await setup(page); await page.goto('/admin/shifts/');
   await page.getByRole('tab', { name: /^Completed/ }).click();
   const row = page.getByRole('row').filter({ hasText: 'Workspace done' });
-  await expect(row.getByRole('cell', { name: 'Completed', exact: true })).toBeVisible();
+  await expect(row.getByRole('gridcell', { name: 'Completed', exact: true })).toBeVisible();
   await openShiftWorkspace(page, 'Workspace done');
   await expect(page.getByRole('dialog', { name: 'Manage — Workspace done', exact: true }).getByText('Next step: Completed. No further visits.', { exact: true })).toBeVisible();
 });
@@ -139,7 +139,7 @@ test('completed one-time shift shows Completed status and a no-further-visits ne
 test('inactive shift workspace offers only reactivate and delete', async ({ page }) => {
   await setup(page); await page.goto('/admin/shifts/');
   await page.getByRole('tab', { name: /^Inactive/ }).click();
-  await expect(page.getByRole('row').filter({ hasText: 'Workspace paused' }).getByRole('cell', { name: 'Inactive', exact: true })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'Workspace paused' }).getByRole('gridcell', { name: 'Inactive', exact: true })).toBeVisible();
   await openShiftWorkspace(page, 'Workspace paused');
   const dialog = page.getByRole('dialog', { name: 'Manage — Workspace paused', exact: true });
   await expect(dialog.getByText('Next step: Admin: reactivate to schedule again, or delete if permanent removal is intended.', { exact: true })).toBeVisible();

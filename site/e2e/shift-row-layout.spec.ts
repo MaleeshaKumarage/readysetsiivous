@@ -28,15 +28,15 @@ test('shift rows show the address with size, rooms and beds as tags, and a row c
   await expect(row.getByText('34 m²', { exact: true })).toBeVisible();
   await expect(row.getByText('3 rooms', { exact: true })).toBeVisible();
   await expect(row.getByText('5 beds', { exact: true })).toBeVisible();
-  await expect(row.getByRole('cell', { name: 'Ann Adams', exact: true })).toBeVisible();
+  await expect(row.getByRole('gridcell', { name: 'Ann Adams', exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('shift-rows.png'), fullPage: true });
 
   await expect(page.getByTestId('row-visits')).toHaveCount(0);
   await row.getByText('Lakeside 4, 00100 Helsinki', { exact: true }).click();
   const visits = page.getByTestId('row-visits');
   await expect(visits).toBeVisible();
-  await expect(visits.getByRole('cell', { name: 'Deep cleaning', exact: true })).toBeVisible();
-  await expect(visits.getByRole('cell', { name: 'Unassigned', exact: true })).toBeVisible();
+  await expect(visits.getByRole('gridcell', { name: 'Deep cleaning', exact: true })).toBeVisible();
+  await expect(visits.getByRole('gridcell', { name: 'Unassigned', exact: true })).toBeVisible();
   // The month list sits on the Visits header line and reloads the visits for the chosen month.
   const requests: string[] = [];
   await page.route(/\/api\/v1\/admin\/shifts\/shift-layout\/occurrences/, route => { requests.push(route.request().url()); return route.continue(); });
@@ -53,11 +53,11 @@ test('shift rows show the address with size, rooms and beds as tags, and a row c
   await page.screenshot({ path: testInfo.outputPath('shift-rows-expanded.png'), fullPage: true });
   // The visits section collapses on its own header without collapsing the row.
   await visits.getByRole('button', { name: /Visits/ }).click();
-  await expect(visits.getByRole('cell', { name: 'Deep cleaning', exact: true })).toHaveCount(0);
+  await expect(visits.getByRole('gridcell', { name: 'Deep cleaning', exact: true })).toHaveCount(0);
   await expect(visits.getByRole('button', { name: /Visits/ })).toHaveAttribute('aria-expanded', 'false');
   await expect(visits).toBeVisible();
   await visits.getByRole('button', { name: /Visits/ }).click();
-  await expect(visits.getByRole('cell', { name: 'Deep cleaning', exact: true })).toBeVisible();
+  await expect(visits.getByRole('gridcell', { name: 'Deep cleaning', exact: true })).toBeVisible();
   await row.getByText('Lakeside 4, 00100 Helsinki', { exact: true }).click();
   await expect(visits).toHaveCount(0);
   await expect(page.getByRole('dialog')).toHaveCount(0);

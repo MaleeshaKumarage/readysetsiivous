@@ -51,7 +51,12 @@ export function DsGrid<T>({ rows, columns, label, getRowId, height = 'auto', isF
         domLayout={height === 'auto' ? 'autoHeight' : 'normal'}
         suppressCellFocus
         suppressColumnVirtualisation
-        onRowClicked={onRowClicked ? (event) => { if (event.data) onRowClicked(event.data); } : undefined}
+        onRowClicked={onRowClicked ? (event) => {
+          // A click on a control inside the row (button, menu, input) is not a row click.
+          const target = event.event?.target as Element | null | undefined;
+          if (target && target.closest?.('button, a, input, select, textarea, label, [role="menu"], [role="menuitem"], [role="option"], [data-stop-row]')) return;
+          if (event.data) onRowClicked(event.data);
+        } : undefined}
         isFullWidthRow={isFullWidthRow ? (params) => !!params.rowNode.data && isFullWidthRow(params.rowNode.data) : undefined}
         fullWidthCellRenderer={fullWidthRow ? FullWidthRow : undefined}
         fullWidthCellRendererParams={fullWidthRow ? { render: fullWidthRow } : undefined}

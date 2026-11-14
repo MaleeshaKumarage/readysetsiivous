@@ -203,13 +203,13 @@ test('active administrators and tenant managers can be assigned as working staff
 test('the Employees column names the assigned employees and follows assign and unassign', async ({ page }) => {
   await setup(page);
   const row = page.getByRole('row').filter({ hasText: 'Shift one' }).first();
-  await expect(row.getByRole('cell').nth(2)).toHaveText(/None|0 assigned/);
+  await expect(row.getByRole('gridcell').nth(2)).toHaveText(/None|0 assigned/);
   await select(page, 'Alice Cleaner'); await select(page, 'Bob Cleaner');
   await page.getByRole('button', { name: 'Assign', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Unassign Bob Cleaner' })).toBeVisible();
-  await expect(row.getByRole('cell').nth(2)).toHaveText('Alice Cleaner, Bob Cleaner');
+  await expect(row.getByRole('gridcell').nth(2)).toHaveText('Alice Cleaner, Bob Cleaner');
   await page.getByRole('button', { name: 'Unassign Alice Cleaner' }).click();
   await expect(page.getByRole('button', { name: 'Unassign Alice Cleaner' })).toHaveCount(0);
-  await expect(row.getByRole('cell').nth(2)).toHaveText('Bob Cleaner');
+  await expect(row.getByRole('gridcell').nth(2)).toHaveText('Bob Cleaner');
   await expect(page.getByRole('alert').filter({ hasText: 'employee counts' })).toHaveCount(0);
 });

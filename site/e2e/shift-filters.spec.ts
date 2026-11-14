@@ -53,5 +53,5 @@ test('the Employees column names each assigned employee', async ({ page }) => {
   await page.route(/\/api\/v1\/admin\/shifts\/assignee-names/, route => route.fulfill({ headers, json: { 'shift-named': ['Ann Adams', 'Ben Bell'] } }));
   await page.goto('/admin/shifts/');
   const row = page.getByRole('row').filter({ hasText: 'Lake apartment' });
-  await expect(row.getByRole('cell', { name: 'Ann Adams, Ben Bell', exact: true })).toBeVisible();
+  await expect(row.getByRole('gridcell', { name: 'Ann Adams, Ben Bell', exact: true })).toBeVisible();
 });

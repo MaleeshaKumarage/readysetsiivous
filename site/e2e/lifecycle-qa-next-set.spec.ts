@@ -16,7 +16,7 @@ test('services list states that the price excludes VAT and shows the rate', asyn
     return route.fulfill({ status: 200, headers, json: [service] });
   });
   await page.goto('/admin/services/');
-  await expect(page.getByRole('cell', { name: '20.00 € excl. VAT (25.5%)', exact: true })).toBeVisible({ timeout: 30000 });
+  await expect(page.getByRole('gridcell', { name: '20.00 € excl. VAT (25.5%)', exact: true })).toBeVisible({ timeout: 30000 });
 });
 
 test('shift list uses one time format for every schedule type and shows monthly times', async ({ page }) => {
@@ -158,7 +158,7 @@ test('a service without a VAT rate shows the net price and no broken VAT suffix'
     return route.fulfill({ status: 200, headers, json: [service] });
   });
   await page.goto('/admin/services/');
-  await expect(page.getByRole('cell', { name: '15.00 € excl. VAT', exact: true })).toBeVisible({ timeout: 30000 });
+  await expect(page.getByRole('gridcell', { name: '15.00 € excl. VAT', exact: true })).toBeVisible({ timeout: 30000 });
   await expect(page.getByText('undefined', { exact: false })).toHaveCount(0);
   await expect(page.getByText('(null%)', { exact: false })).toHaveCount(0);
 });

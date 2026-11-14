@@ -74,7 +74,7 @@ test('admin creates a shift, assigns a cleaner, and invoices its unstarted visit
   await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'Methehe Oy', exact: true }).click();
   await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'Main branch', exact: true }).click();
   await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
-  await expect(page.getByRole('cell', { name: FLOW_NAME, exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: FLOW_NAME, exact: true })).toBeVisible();
   expect(state.shiftWrites).toHaveLength(1); expect(state.shiftWrites[0]).toMatchObject({ companyId: 'company', branchId: 'branch', name: FLOW_NAME });
 
   // 2. Assign a cleaner from the row's More actions.

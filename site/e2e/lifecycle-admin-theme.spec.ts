@@ -101,7 +101,7 @@ for (const width of [375, 768, 1440]) test(`workspace navigation and surfaces at
   if (width < 768) await burger.click();
   await expect(navigation.getByRole('link', { name: 'Leads', exact: true })).toHaveAttribute('aria-current', 'page');
   if (width < 768) await page.keyboard.press('Escape');
-  await expect(page.getByRole('cell', { name: 'Workspace preview company' })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Workspace preview company' })).toBeVisible();
   await noOverflow();
   await page.screenshot({ path: testInfo.outputPath(`leads-${width}.png`), fullPage: true });
   await page.getByRole('textbox', { name: 'Lead filter', exact: true }).click();
@@ -214,7 +214,7 @@ for (const [section, record, actionName] of [
 ]) test(`populated ${section} table keeps actions reachable at 375px`, async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 1000 }); await setupPopulatedWorkspace(page);
   await page.goto(`/admin/${section}/`);
-  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: record, exact: true }).or(page.getByRole('gridcell', { name: record, exact: true })) });
+  const row = page.getByRole('row').filter({ has: page.getByRole('gridcell', { name: record, exact: true }).or(page.getByRole('gridcell', { name: record, exact: true })) });
   await expect(row).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   // The nearest scrollable ancestor of the row is the table's horizontal scroller (Mantine or AG Grid).

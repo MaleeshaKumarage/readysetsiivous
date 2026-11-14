@@ -403,8 +403,8 @@ test.describe('Admin Panel - Agreements Page', () => {
     await page.getByRole('button', { name: 'Create' }).click();
 
     await expect(modal).not.toBeVisible();
-    await expect(page.getByRole('cell', { name: 'Siivoussopimus 2025' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'AGR-2025-001' })).toBeVisible();
+    await expect(page.getByRole('gridcell', { name: 'Siivoussopimus 2025' })).toBeVisible();
+    await expect(page.getByRole('gridcell', { name: 'AGR-2025-001' })).toBeVisible();
     await expect(page.getByText('Pending').first()).toBeVisible();
   });
 
@@ -645,8 +645,8 @@ test.describe('Admin Panel - Companies & Branches Page', () => {
     await page.getByRole('button', { name: 'Create company' }).click();
 
     await expect(page.getByRole('dialog', { name: 'Add company' })).not.toBeVisible();
-    await expect(page.getByRole('cell', { name: 'Nordic Clean Ltd', exact: true })).toBeVisible();
-    await expect(page.getByRole('cell', { name: '9999999-9' })).toBeVisible();
+    await expect(page.getByRole('gridcell', { name: 'Nordic Clean Ltd', exact: true })).toBeVisible();
+    await expect(page.getByRole('gridcell', { name: '9999999-9' })).toBeVisible();
 
     // Expand branches
     await page.locator('button').filter({ has: page.locator('.lucide-chevron-down') }).click();
@@ -805,7 +805,7 @@ test.describe('Admin Panel - Shifts Page', () => {
     await selectDailyScheduleIfEmpty(page); await modal.getByRole('button', { name: 'Create shift' }).click();
 
     await expect(modal).not.toBeVisible();
-    await expect(page.getByRole('cell', { name: AAMUVUORO_NAME, exact: true })).toBeVisible();
+    await expect(page.getByRole('gridcell', { name: AAMUVUORO_NAME, exact: true })).toBeVisible();
 
     // Assign employee
     await shiftAction(page, AAMUVUORO_NAME, 'Assign employees');

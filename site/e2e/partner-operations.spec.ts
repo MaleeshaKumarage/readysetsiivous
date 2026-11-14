@@ -137,7 +137,7 @@ test('partner month previews all company visits and issues the exact approved pa
   await page.getByLabel(/^Billing street/).fill('Customer road 2'); await page.getByLabel(/^Billing postalCode/).fill('33100'); await page.getByLabel(/^Billing city/).fill('Tampere');
   await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Invoice preview', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: /Lake apartment cleaning/ })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: /Lake apartment cleaning/ })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: branch.name, exact: true })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'Forest apartment', exact: true })).toBeVisible();
   await expect(page.getByText('Completed on: 2026-12-01', { exact: true })).toBeVisible();
@@ -155,7 +155,7 @@ test('partner month previews all company visits and issues the exact approved pa
   await page.getByRole('button', { name: 'Issue invoice', exact: true }).click();
   await expect(page.getByText('Invoice RSS-2026-001 issued.', { exact: true })).toBeVisible();
   expect(issues).toEqual([{ ...previews[1], previewToken: 'frozen-preview-token' }]);
-  await expect(page.getByRole('cell', { name: 'RSS-2026-001', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'RSS-2026-001', exact: true })).toBeVisible();
 });
 
 test('a month with several completed visits of one shift previews one line per visit, each with its own completion date', async ({ page }) => {
@@ -188,7 +188,7 @@ test('a month with several completed visits of one shift previews one line per v
   await page.getByLabel(/^Billing street/).fill('Customer road 2'); await page.getByLabel(/^Billing postalCode/).fill('33100'); await page.getByLabel(/^Billing city/).fill('Tampere');
   await page.getByRole('button', { name: 'Preview invoice', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Invoice preview', exact: true })).toBeVisible();
-  const lineCells = page.getByRole('cell', { name: /Lake apartment cleaning/ });
+  const lineCells = page.getByRole('gridcell', { name: /Lake apartment cleaning/ });
   await expect(lineCells).toHaveCount(3);
   for (const day of ['2026-10-05', '2026-10-09', '2026-10-12']) await expect(page.getByText('Completed on: ' + day, { exact: true })).toBeVisible();
   await expect(page.getByText('Net €120.00 · VAT €30.60 · Total €150.60', { exact: true })).toBeVisible();

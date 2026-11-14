@@ -19,6 +19,6 @@ test('a shift list reply without the page shape explains the problem and recover
   await expect(page.getByRole('heading', { name: 'Shifts', exact: true })).toBeVisible();
   broken = false;
   await page.reload();
-  await expect(page.getByRole('cell', { name: 'Office clean', exact: true })).toBeVisible();
+  await expect(page.getByRole('gridcell', { name: 'Office clean', exact: true })).toBeVisible();
   await expect(page.getByRole('alert').filter({ hasText: 'could not be read' })).toHaveCount(0);
 });

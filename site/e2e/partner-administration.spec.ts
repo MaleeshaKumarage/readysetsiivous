@@ -20,7 +20,7 @@ test('company partner access persists through create and edit', async ({ page })
   await dialog.getByLabel('Business ID').fill(initialCompany.businessId); await dialog.getByLabel(/^Name/).fill(initialCompany.name);
   await dialog.getByLabel('Enable partner access').check(); await dialog.getByRole('button', { name: 'Create company' }).click();
   await expect(dialog).not.toBeVisible(); expect(writes[0]).toMatchObject({ method: 'POST', body: { isPartnerEnabled: true } });
-  await page.getByRole('row').filter({ has: page.getByRole('cell', { name: initialCompany.name, exact: true }) }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.getByRole('row').filter({ has: page.getByRole('gridcell', { name: initialCompany.name, exact: true }) }).getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(dialog.getByLabel('Enable partner access')).toBeChecked();
   await dialog.getByLabel('Enable partner access').uncheck(); await dialog.getByRole('button', { name: 'Save changes' }).click();
   await expect(dialog).not.toBeVisible(); expect(writes[1]).toMatchObject({ method: 'PUT', body: { id: initialCompany.id, isPartnerEnabled: false } });
@@ -126,7 +126,7 @@ test('quality cycle option requires a template and persists through create and e
   await dialog.getByRole('button', { name: 'Create company' }).click();
   await expect(dialog).not.toBeVisible();
   expect(writes[0]).toMatchObject({ method: 'POST', body: { isPartnerEnabled: true, isQualityCycleEnabled: true, qualityCycleTemplateId: template.id } });
-  await page.getByRole('row').filter({ has: page.getByRole('cell', { name: initialCompany.name, exact: true }) }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.getByRole('row').filter({ has: page.getByRole('gridcell', { name: initialCompany.name, exact: true }) }).getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(dialog.getByLabel('Quality cycle', { exact: true })).toBeChecked();
   await expect(dialog.getByLabel('Quality cycle template')).toHaveValue('Monthly checklist');
   await dialog.getByLabel('Quality cycle', { exact: true }).uncheck(); await dialog.getByRole('button', { name: 'Save changes' }).click();
