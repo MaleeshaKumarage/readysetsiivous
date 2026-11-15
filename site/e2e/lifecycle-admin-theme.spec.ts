@@ -1,3 +1,4 @@
+import { expectGridLaidOut } from './table-layout';
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
 async function readable(locator: Locator) {
@@ -101,7 +102,7 @@ for (const width of [375, 768, 1440]) test(`workspace navigation and surfaces at
   if (width < 768) await burger.click();
   await expect(navigation.getByRole('link', { name: 'Leads', exact: true })).toHaveAttribute('aria-current', 'page');
   if (width < 768) await page.keyboard.press('Escape');
-  await expect(page.getByRole('gridcell', { name: 'Workspace preview company' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Workspace preview company' })).toBeVisible();
   await noOverflow();
   await page.screenshot({ path: testInfo.outputPath(`leads-${width}.png`), fullPage: true });
   await page.getByRole('textbox', { name: 'Lead filter', exact: true }).click();
@@ -211,11 +212,12 @@ test('dashboard groups link to workspaces and sidebar brand returns home on phon
 for (const [section, record, actionName] of [
   ['companies', 'Fixture company Oy', 'Edit'], ['employees', 'Active Cleaner', 'Edit'],
   ['agreements', 'Signed history', 'Signers'], ['services', 'Service 0', 'Edit'], ['invoices', 'INV-1', 'PDF'],
-]) test(`populated ${section} table keeps actions reachable at 375px`, async ({ page }) => {
+]) test(`populated ${section} table keeps actions reachable at 375px`, async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 375, height: 1000 }); await setupPopulatedWorkspace(page);
   await page.goto(`/admin/${section}/`);
-  const row = page.getByRole('row').filter({ has: page.getByRole('gridcell', { name: record, exact: true }).or(page.getByRole('gridcell', { name: record, exact: true })) });
+  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: record, exact: true }).or(page.getByRole('cell', { name: record, exact: true })) });
   await expect(row).toBeVisible();
+  await expectGridLaidOut(page, testInfo, `${section}-375px`);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   // The nearest scrollable ancestor of the row is the table's horizontal scroller (Mantine or AG Grid).
   const scrollable = await row.evaluate(el => {
@@ -250,4 +252,30 @@ test('populated quality checklist cards keep actions reachable at 375px', async 
   await edit.scrollIntoViewIfNeeded(); await expect(edit).toBeInViewport(); await edit.click();
   await expect(page.getByRole('textbox', { name: 'Template Title', exact: true })).toHaveValue('Activities checklist');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('populated shifts table shows address, size, rooms and beds readably at 375px', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 375, height: 1000 });
+  await setupPopulatedWorkspace(page);
+  const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS' };
+  const address = 'Kivikatu 2 B 2, 55100 Imatra';
+  const shift = { id: 'shift-long', companyId: 'company', branchId: 'branch-long', name: `Cleaning - ${address} |45m2|2H|2V`, isActive: true, schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' } };
+  await page.route(/\/api\/v1\/admin\/shifts(?:\/page)?(?:\?.*)?$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    const tab = new URL(route.request().url()).searchParams.get('tab') ?? 'active';
+    const items = tab === 'active' ? [shift] : [];
+    return route.fulfill({ headers, json: { items, total: items.length, counts: { active: 1, completed: 0, inactive: 0 } } });
+  });
+  await page.route(/\/api\/v1\/admin\/companies\/company$/, route => route.fulfill({ headers, json: {
+    company: { id: 'company', name: 'Fixture company Oy', isActive: true },
+    branches: [{ id: 'branch-long', name: 'Kivikatu', street: 'Kivikatu 2 B 2', postalCode: '55100', city: 'Imatra', sizeM2: 45, roomCount: 2, bedCount: 2, isActive: true, priceVersions: [] }],
+  } }));
+  await page.goto('/admin/shifts/');
+  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: /Kivikatu 2 B 2/ }) }).first();
+  await expect(row).toBeVisible();
+  await expect(row.getByText('45 m²', { exact: true })).toBeVisible();
+  await expect(row.getByText('2 rooms', { exact: true })).toBeVisible();
+  await expect(row.getByText('2 beds', { exact: true })).toBeVisible();
+  await expectGridLaidOut(page, testInfo, 'shifts-375px');
+  await expect(row.getByRole('button', { name: /^More actions for / })).toBeVisible();
 });
