@@ -44,8 +44,21 @@ test('the visits and hours charts plot each day of the month, and customers foll
   // Sorting by name puts Alpha before Beta in the legend.
   await page.getByRole('textbox', { name: 'Sort customers by' }).click();
   await page.getByRole('option', { name: 'Customer name', exact: true }).click();
-  const legend = await visits.locator('xpath=ancestor::div[1]').locator('p').allInnerTexts().then(all => all.filter(text => text === 'Alpha Oy' || text === 'Beta Ltd'));
+  const legend = await visits.locator('xpath=ancestor::div[1]').getByRole('group', { name: /^Visits per day.* legend$/ }).getByRole('button').allInnerTexts().then(all => all.filter(text => text === 'Alpha Oy' || text === 'Beta Ltd'));
   expect(legend).toEqual(['Alpha Oy', 'Beta Ltd']);
+});
+
+test('clicking a legend entry hides its line and clicking again shows it', async ({ page }) => {
+  await setup(page);
+  await page.goto('/admin/');
+  const visits = page.getByRole('img', { name: /^Visits per day/ });
+  await expect(visits).toBeVisible();
+  const alpha = visits.locator('xpath=ancestor::div[1]').getByRole('button', { name: 'Alpha Oy' });
+  await expect(alpha).toHaveAttribute('aria-pressed', 'true');
+  await alpha.click();
+  await expect(alpha).toHaveAttribute('aria-pressed', 'false');
+  await alpha.click();
+  await expect(alpha).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('the month buttons move the charts to another month', async ({ page }) => {
