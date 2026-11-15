@@ -20,7 +20,12 @@ export async function expectGridLaidOut(page: Page, testInfo: TestInfo, name: st
   const clipped = await page.getByRole('gridcell').evaluateAll(cells =>
     cells.filter(cell => {
       const content = cell.querySelector('*') ?? cell;
-      return content.scrollHeight > cell.clientHeight + 2 || content.scrollWidth > cell.clientWidth + 2;
+      if (content.scrollHeight > cell.clientHeight + 2 || content.scrollWidth > cell.clientWidth + 2) return true;
+      const box = cell.getBoundingClientRect();
+      return Array.from(cell.querySelectorAll('*')).some(el => {
+        const b = el.getBoundingClientRect();
+        return b.height > 0 && (b.bottom > box.bottom + 2 || b.top < box.top - 2 || b.right > box.right + 2 || b.left < box.left - 2);
+      });
     }).map(cell => (cell.textContent ?? '').trim().slice(0, 60)));
   expect(clipped, `${name} has no clipped cell text`).toEqual([]);
 

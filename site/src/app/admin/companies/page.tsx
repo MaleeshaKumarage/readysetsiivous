@@ -429,7 +429,7 @@ export default function CompaniesAdminPage() {
             { headerName: 'Business ID', colId: 'businessId', valueGetter: p => p.data?.kind === 'company' ? p.data.company.businessId : '' },
             { headerName: 'Contact', colId: 'contact', valueGetter: p => p.data?.kind === 'company' ? (p.data.company.contactName || '—') : '' },
             { headerName: 'Branches', colId: 'branches', sortable: false, cellRenderer: (p: { data?: CompanyGridRow }) => p.data?.kind === 'company' ? (
-              <Button variant="subtle" size="xs" onClick={() => void toggleBranches(p.data!.company.id)}>
+              <Button variant="subtle" size="xs" px={6} onClick={() => void toggleBranches(p.data!.company.id)}>
                 {expanded === p.data.company.id ? (companyBranchesMap[p.data.company.id] ?? []).length : 'Branches'} <ChevronDown size={14} />
               </Button>
             ) : null },

@@ -253,3 +253,29 @@ test('populated quality checklist cards keep actions reachable at 375px', async 
   await expect(page.getByRole('textbox', { name: 'Template Title', exact: true })).toHaveValue('Activities checklist');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
+
+test('populated shifts table shows address, size, rooms and beds readably at 375px', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 375, height: 1000 });
+  await setupPopulatedWorkspace(page);
+  const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS' };
+  const address = 'Kivikatu 2 B 2, 55100 Imatra';
+  const shift = { id: 'shift-long', companyId: 'company', branchId: 'branch-long', name: `Cleaning - ${address} |45m2|2H|2V`, isActive: true, schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' } };
+  await page.route(/\/api\/v1\/admin\/shifts(?:\/page)?(?:\?.*)?$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    const tab = new URL(route.request().url()).searchParams.get('tab') ?? 'active';
+    const items = tab === 'active' ? [shift] : [];
+    return route.fulfill({ headers, json: { items, total: items.length, counts: { active: 1, completed: 0, inactive: 0 } } });
+  });
+  await page.route(/\/api\/v1\/admin\/companies\/company$/, route => route.fulfill({ headers, json: {
+    company: { id: 'company', name: 'Fixture company Oy', isActive: true },
+    branches: [{ id: 'branch-long', name: 'Kivikatu', street: 'Kivikatu 2 B 2', postalCode: '55100', city: 'Imatra', sizeM2: 45, roomCount: 2, bedCount: 2, isActive: true, priceVersions: [] }],
+  } }));
+  await page.goto('/admin/shifts/');
+  const row = page.getByRole('row').filter({ has: page.getByRole('gridcell', { name: /Kivikatu 2 B 2/ }) }).first();
+  await expect(row).toBeVisible();
+  await expect(row.getByText('45 m²', { exact: true })).toBeVisible();
+  await expect(row.getByText('2 rooms', { exact: true })).toBeVisible();
+  await expect(row.getByText('2 beds', { exact: true })).toBeVisible();
+  await expectGridLaidOut(page, testInfo, 'shifts-375px');
+  await expect(row.getByRole('button', { name: /^More actions for / })).toBeVisible();
+});

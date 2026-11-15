@@ -40,9 +40,9 @@ export interface DsGridProps<T> {
 /** The design-system table: AG Grid with the navy and gold theme. Use this for every table. */
 export function DsGrid<T>({ rows, columns, label, getRowId, height = 'auto', isFullWidthRow, fullWidthRow, onRowClicked }: DsGridProps<T>) {
   // Cells wrap and rows grow to fit their content, so phone widths do not overlap or clip text.
-  const defaultColDef = useMemo<ColDef<T>>(() => ({ resizable: true, sortable: true, flex: 1, minWidth: 110, wrapText: true, autoHeight: true }), []);
+  const defaultColDef = useMemo<ColDef<T>>(() => ({ resizable: true, sortable: true, flex: 1, minWidth: 110, wrapText: true, autoHeight: true, cellStyle: { paddingBottom: 4 } }), []);
   return (
-    <div role="region" aria-label={label} tabIndex={0} style={{ height, width: '100%' }}>
+    <div role="region" aria-label={label} tabIndex={0} style={{ height, width: '100%', lineHeight: 1.4 }}>
       <AgGridReact<T>
         theme={dsTheme}
         rowData={rows}
