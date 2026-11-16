@@ -2,14 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { Button, Group, Paper, Stack, Text } from '@mantine/core';
+import { AgCharts } from 'ag-charts-react';
+import '@/lib/agCharts';
+import type { AgChartOptions } from 'ag-charts-community';
 import { authorizedFetch } from '@/lib/adminApi';
 
 type CompanyHours = { companyId: string; customerName: string; scheduledHours: number };
 type Person = { employeeId: string; name: string; scheduledHours: number; companies: CompanyHours[] };
 type Week = { weekStart: string; fullTimeHours: number; employees: Person[] };
 
-const RADIUS = 38;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 const COLORS = ['#0b1a3a', '#c9a24a', '#4f46e5', '#0891b2', '#db2777', '#65a30d', '#94a3b8'];
 
 function shiftWeek(weekStart: string, days: number) {
@@ -23,24 +24,27 @@ function weekLabel(weekStart: string) {
   return `${fmt(new Date(Date.UTC(y, m - 1, d)))} – ${fmt(new Date(Date.UTC(y, m - 1, d + 6)))}`;
 }
 
-/** One donut per cleaner: the scheduled hours of the week, split by customer, against a full-time week. */
+/** One donut per cleaner on AG Charts: the scheduled hours of the week, split by customer, with the rest of a full-time week shown as free time. */
 function Donut({ name, companies, total, full }: { name: string; companies: CompanyHours[]; total: number; full: number }) {
-  let offset = 0;
   const over = full > 0 && total > full;
+  const free = Math.max(0, full - total);
+  const slices = [
+    ...companies.map((company, index) => ({ label: company.customerName, hours: company.scheduledHours, color: COLORS[index % COLORS.length] })),
+    ...(free > 0 ? [{ label: 'Free time', hours: free, color: '#e5e7eb' }] : []),
+  ];
+  const options: AgChartOptions = {
+    data: slices,
+    height: 120,
+    background: { visible: false },
+    series: [{ type: 'donut', angleKey: 'hours', calloutLabelKey: 'label', sectorLabelKey: 'hours', innerRadiusRatio: 0.7, fills: slices.map(slice => slice.color), strokes: ['#ffffff'], sectorLabel: { enabled: false }, calloutLabel: { enabled: false }, tooltip: { renderer: ({ datum }) => ({ title: String(datum.label), content: `${Number(datum.hours).toFixed(1)} h` }) } }],
+    legend: { enabled: false },
+    padding: { top: 0, bottom: 0, left: 0, right: 0 },
+  };
   return <Stack gap={4} align="center">
-    <svg viewBox="0 0 100 100" width={120} height={120} role="img" aria-label={`${name}: ${total.toFixed(1)} of ${full} scheduled hours, ${companies.map(c => `${c.customerName} ${c.scheduledHours.toFixed(1)}`).join(', ') || 'no visits'}`}>
-      <circle cx="50" cy="50" r={RADIUS} fill="none" stroke="#e5e7eb" strokeWidth="12" />
-      {companies.map((company, index) => {
-        const share = full > 0 ? company.scheduledHours / full : 0;
-        // Segments stop at the full circle, so a cleaner over the full week does not draw over earlier customers.
-        const length = Math.max(0, Math.min(CIRCUMFERENCE - offset, CIRCUMFERENCE * share));
-        const segment = <circle key={company.companyId} cx="50" cy="50" r={RADIUS} fill="none" stroke={COLORS[index % COLORS.length]} strokeWidth="12"
-          strokeDasharray={`${length} ${CIRCUMFERENCE}`} strokeDashoffset={-offset} transform="rotate(-90 50 50)" />;
-        offset += length;
-        return segment;
-      })}
-      <text x="50" y="54" textAnchor="middle" fontSize="16" fontWeight="700" fill="#0b1a3a">{total.toFixed(1)}</text>
-    </svg>
+    <div role="img" aria-label={`${name}: ${total.toFixed(1)} of ${full} scheduled hours, ${companies.map(c => `${c.customerName} ${c.scheduledHours.toFixed(1)}`).join(', ') || 'no visits'}`} style={{ position: 'relative', width: 120, height: 120 }}>
+      <AgCharts options={options} />
+      <Text fw={700} size="md" c="#0b1a3a" style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>{total.toFixed(1)}</Text>
+    </div>
     <Text size="sm" fw={600} ta="center">{name}</Text>
     <Text size="xs" c={over ? 'orange' : 'dimmed'} ta="center">{total.toFixed(1)} of {full} h{over ? ' · over' : ''}</Text>
     <Stack gap={2} w="100%">
