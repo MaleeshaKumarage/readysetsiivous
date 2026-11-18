@@ -362,6 +362,7 @@ public class DefaultExceptionHandler : IExceptionHandler
             CleaningSuite.Application.Leads.LeadConflictException => (409, "Lead conflict"),
             CleaningSuite.Application.Inventory.InventoryConflictException => (409, "Inventory conflict"),
             CleaningSuite.Application.Companies.CompanyConflictException => (409, "Company business ID conflict"),
+            CleaningSuite.Application.Companies.BranchNameConflictException => (409, "Property name conflict"),
             CleaningSuite.Application.Common.InactiveRecordDeleteConflictException => (409, "Record cannot be deleted"),
             CleaningSuite.Application.Common.UploadPayloadTooLargeException => (413, "Payload too large"),
             BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge } => (413, "Payload too large"),

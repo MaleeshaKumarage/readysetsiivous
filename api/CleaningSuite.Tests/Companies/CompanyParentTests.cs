@@ -46,6 +46,7 @@ public class CompanyParentTests
         var companies = new Mock<ICompanyRepository>();
         companies.Setup(c => c.GetAsync(companyId, It.IsAny<CancellationToken>())).Returns(lookup.Task);
         var branches = new Mock<IBranchRepository>();
+        branches.Setup(b => b.ListByCompanyAsync(companyId, true, It.IsAny<CancellationToken>())).ReturnsAsync([]);
         var handler = new CompanyHandlers.BranchCommands.CreateBranchCommandHandler(branches.Object, companies.Object);
 
         var creation = handler.Handle(new CreateBranchCommand(companyId, "Branch"), CancellationToken.None);

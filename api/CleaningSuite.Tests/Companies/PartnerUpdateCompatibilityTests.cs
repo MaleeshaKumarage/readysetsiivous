@@ -184,6 +184,7 @@ public sealed class PartnerUpdateCompatibilityTests
     private static async Task<BranchDto> Update(Branch branch, UpdateBranchCommand input)
     {
         var repository = new Mock<IBranchRepository>(); repository.Setup(r => r.GetAsync(branch.Id, default)).ReturnsAsync(branch);
+        repository.Setup(r => r.ListByCompanyAsync(branch.CompanyId, true, default)).ReturnsAsync([branch]);
         return await new CompanyHandlers.BranchCommands.UpdateBranchCommandHandler(repository.Object)
             .Handle(input with { Id = branch.Id }, default);
     }

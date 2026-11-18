@@ -152,6 +152,7 @@ public class QualityCycleSelectedReportTests
         var companies = new Mock<ICompanyRepository>(); companies.Setup(r => r.GetAsync(company.Id, default)).ReturnsAsync(company);
         var branches = new Mock<IBranchRepository>(); Branch? saved = null;
         branches.Setup(r => r.SaveAsync(It.IsAny<Branch>(), default)).Callback<Branch, CancellationToken>((b, _) => saved = b).Returns(Task.CompletedTask);
+        branches.Setup(r => r.ListByCompanyAsync(company.Id, true, default)).ReturnsAsync([]);
         var command = new CreateBranchCommand(company.Id, "Office", ContactEmail: "branch@example.test");
         Assert.True((await new CompanyValidators.CreateBranchCommandValidator().ValidateAsync(command)).IsValid);
         Assert.False((await new CompanyValidators.CreateBranchCommandValidator().ValidateAsync(command with { ContactEmail = "bad address" })).IsValid);
