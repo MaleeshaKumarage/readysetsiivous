@@ -7,7 +7,8 @@ import { NotificationBell } from '@/components/NotificationBell';
 import { PortalSwitch } from '@/components/PortalSwitch';
 import './admin.css';
 import { adminTheme } from '@/lib/adminTheme';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { ThemeContext } from '@/context/ThemeContext';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -119,15 +120,22 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('admin-calendar-access-changed', refreshAccess);
   }, []);
 
+  // The admin is light on every device. Tailwind's dark: variants follow the site's dark class, so it is removed here
+  // and put back for the public site when the admin unmounts.
+  const { theme } = useContext(ThemeContext);
+  const themeRef = useRef(theme);
+  useEffect(() => { themeRef.current = theme; }, [theme]);
   useLayoutEffect(() => {
     const root = document.documentElement;
     const previous = root.getAttribute('data-admin-theme');
     root.setAttribute('data-admin-theme', 'light');
+    root.classList.remove('dark');
     return () => {
       if (previous === null) root.removeAttribute('data-admin-theme');
       else root.setAttribute('data-admin-theme', previous);
       if (previousScheme.current === null) root.removeAttribute('data-mantine-color-scheme');
       else root.setAttribute('data-mantine-color-scheme', previousScheme.current);
+      if (themeRef.current === 'dark') root.classList.add('dark');
     };
   }, []);
 
