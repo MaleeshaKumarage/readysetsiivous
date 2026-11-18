@@ -420,7 +420,7 @@ export default function CompaniesAdminPage() {
                             <Stack gap={4}>
                               {visibleBranches.map((b) => (
                                 <Group key={b.id} role="group" aria-label={'Branch ' + b.name} justify="space-between" wrap="wrap" gap="xs">
-                                  <Stack gap={4}><Text size="sm">{b.name}{b.city ? ` · ${b.city}` : ''}{b.priceNet != null && <Text component="span" size="xs"> · €{b.priceNet.toFixed(2)} excl. VAT</Text>}{b.pricingReady && <Badge size="xs" ml="xs">Partner booking ready</Badge>}</Text><BranchPriceHistory branchName={b.name} versions={b.priceVersions ?? []} /><QuoteRequestedBadge branch={b} /></Stack>
+                                  <Stack gap={4}><Text size="sm">{b.name}{b.city ? ` · ${b.city}` : ''}{b.priceNet != null && <Text component="span" size="xs"> · €{b.priceNet.toFixed(2)} excl. VAT</Text>}{b.pricingReady && <Badge size="xs" ml="xs">Partner booking ready</Badge>}</Text><QuoteRequestedBadge branch={b} /></Stack>
                                   <Group gap="xs">{!b.isActive && <Badge color="gray" size="xs">Inactive</Badge>}
                                     <Button size="xs" variant="subtle" leftSection={<Pencil size={13} />} onClick={() => openBranchEdit(b)}>Edit</Button>
                                     <Button size="xs" variant="light" color={b.isActive ? 'red' : undefined}
@@ -540,6 +540,7 @@ export default function CompaniesAdminPage() {
           <Group grow><TextInput label="Price effective from (blank = today)" type="date" value={branchForm.priceEffectiveFrom} onChange={event => setBranchForm(current => ({ ...current, priceEffectiveFrom: event.target.value }))} /><Select label="Pricing basis" allowDeselect={false} value={branchForm.priceMode} onChange={value => setBranchForm(current => ({ ...current, priceMode: value ?? 'PerOccurrence' }))} data={[{ value: 'PerOccurrence', label: 'Per completed visit' }, { value: 'Monthly', label: 'Fixed monthly fee' }, { value: 'Hourly', label: 'Per scheduled hour' }]} /></Group>
           <NumberInput label="Fixed cleaning price, excl. VAT (€)" min={0} decimalScale={2} value={branchForm.priceNet} onChange={value => setBranchForm(current => ({ ...current, priceNet: value }))} description="Leave blank until a quote has been agreed. New requests use this price; existing requests keep their agreed price." />
           <Group grow><NumberInput label="VAT (%)" min={0} max={50} decimalScale={2} value={branchForm.vatRatePercent} onChange={value => setBranchForm(current => ({ ...current, vatRatePercent: value }))} /><NumberInput label="Estimated cleaning duration (minutes)" min={1} allowDecimal={false} value={branchForm.estimatedDurationMinutes} onChange={value => setBranchForm(current => ({ ...current, estimatedDurationMinutes: value }))} /></Group>
+          {editingBranch && <BranchPriceHistory branchName={editingBranch.name} versions={editingBranch.priceVersions ?? []} />}
           <Group justify="flex-end" mt="xs">
             <Button variant="default" onClick={() => setBranchModal(false)}>Cancel</Button>
             <Button loading={branchSaving} onClick={submitBranch}>{editingBranch ? 'Save changes' : 'Add branch'}</Button>

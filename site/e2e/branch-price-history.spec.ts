@@ -23,6 +23,15 @@ function applyBranchWrite(state: any, body: any) {
   return state;
 }
 
+// The price history is a small table in the Edit branch dialog: one row per version, newest first.
+async function expectPriceHistory(page: Page, branchName: string, rows: string[][]) {
+  const table = page.getByRole('table', { name: `Price history for ${branchName}` });
+  await expect(table.getByTestId('price-history-row')).toHaveCount(rows.length);
+  for (const [index, cells] of rows.entries()) await expect(table.getByTestId('price-history-row').nth(index).getByRole('cell')).toHaveText(cells);
+  // The price history is not repeated on the branch list rows.
+  await expect(page.getByRole('list', { name: /Price history/ })).toHaveCount(0);
+}
+
 async function setupCompany(page: Page, branchName: string, versions: any[]) {
   await setupAdminMocks(page);
   const writes: any[] = [];
@@ -55,12 +64,11 @@ test('branch price is saved with its effective date and basis, and history shows
   await expect(page.getByRole('dialog', { name: 'Edit branch' })).toHaveCount(0);
 
   expect(writes).toEqual([expect.objectContaining({ priceNet: 120, priceEffectiveFrom: '2020-06-01', priceMode: 'Hourly' })]);
-  const history = page.getByRole('list', { name: 'Price history for Main' });
-  await expect(history.getByRole('listitem')).toHaveText(['01/06/2020 - Present EUR 120.00', '01/01/2020 - 01/06/2020 EUR 100.00']);
 
-  // Reopening shows the saved basis.
+  // Reopening shows the saved basis and the price history table under the form.
   await page.getByRole('group', { name: 'Branch Main' }).getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Pricing basis', exact: true })).toHaveValue('Per scheduled hour');
+  await expectPriceHistory(page, 'Main', [['01/06/2020 - Present', 'EUR 120.00'], ['01/01/2020 - 01/06/2020', 'EUR 100.00']]);
 });
 
 test('editing only the name keeps the billing basis and adds no price version', async ({ page }) => {
@@ -75,9 +83,9 @@ test('editing only the name keeps the billing basis and adds no price version', 
   expect(writes).toEqual([expect.objectContaining({ name: 'Main renamed', priceNet: 100, priceMode: 'Monthly' })]);
   expect(writes[0].priceEffectiveFrom).toBeUndefined();
   // Single version: one open-ended row, and the stored basis is still Monthly.
-  await expect(page.getByRole('list', { name: 'Price history for Main renamed' }).getByRole('listitem')).toHaveText(['01/01/2020 - Present EUR 100.00']);
   await page.getByRole('group', { name: 'Branch Main renamed' }).getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Pricing basis', exact: true })).toHaveValue('Fixed monthly fee');
+  await expectPriceHistory(page, 'Main renamed', [['01/01/2020 - Present', 'EUR 100.00']]);
 });
 
 test('create shift lets the admin pick an older branch price version', async ({ page }) => {

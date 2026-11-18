@@ -1,4 +1,4 @@
-import { Stack, Text } from '@mantine/core';
+import { Stack, Table, Text } from '@mantine/core';
 
 export type PriceVersionRow = { effectiveFrom: string; priceNet: number };
 
@@ -30,13 +30,21 @@ export function BranchPriceHistory({ branchName, versions }: { branchName: strin
   if (versions.length === 0) return null;
   const rows = priceHistoryRows(versions);
   return (
-    <Stack gap={2} role="list" aria-label={`Price history for ${branchName}`}>
-      <Text size="xs" fw={600}>Price history</Text>
-      {rows.map(row => (
-        <Text key={row.key} role="listitem" size="xs" data-testid="price-history-row">
-          {row.range} <Text component="span" size="xs" fw={600}>{row.price}</Text>
-        </Text>
-      ))}
+    <Stack gap={4}>
+      <Text size="sm" fw={600}>Price history</Text>
+      <Table aria-label={`Price history for ${branchName}`} withTableBorder withColumnBorders={false} verticalSpacing={4} horizontalSpacing="sm" fz="xs">
+        <Table.Thead>
+          <Table.Tr><Table.Th>Period</Table.Th><Table.Th>Price excl. VAT</Table.Th></Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {rows.map(row => (
+            <Table.Tr key={row.key} data-testid="price-history-row">
+              <Table.Td>{row.range}</Table.Td>
+              <Table.Td fw={600}>{row.price}</Table.Td>
+            </Table.Tr>
+          ))}
+        </Table.Tbody>
+      </Table>
     </Stack>
   );
 }
