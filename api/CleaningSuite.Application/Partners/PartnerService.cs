@@ -131,6 +131,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         await using var lease = await reservation.AcquireAsync(ct);
         var (_, company) = await Partner(actor, ct);
         ValidateBranchDetails(body);
+        BranchNameRule.EnsureUnique(await Db.Query<Domain.Companies.Branch>().Where(b => b.CompanyId == company.Id).ToListAsync(ct), body.Name, null);
         var branch = Domain.Companies.Branch.Create(company.Id, body.Name, body.Street, body.PostalCode,
             body.City, body.Country, body.ContactPhone);
         try { branch.SetPropertyCounts(body.RoomCount, body.BedCount); }
