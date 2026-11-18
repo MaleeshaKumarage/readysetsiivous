@@ -98,7 +98,7 @@ test('admin adds an extra visit with a replacement employee and deletes it', asy
   const state = await setup(page);
   await shiftAction(page, 'Morning clean', 'Occurrences');
   const list = page.getByRole('dialog', { name: /Occurrences/ });
-  await list.getByRole('button', { name: 'Add extra visit' }).click();
+  await list.getByRole('button', { name: 'Add visit' }).click();
   const editor = page.getByRole('dialog', { name: 'Change occurrence' });
   await editor.getByLabel(/Start/).fill('2026-11-03T09:00');
   await editor.getByLabel(/End/).fill('2026-11-03T11:00');

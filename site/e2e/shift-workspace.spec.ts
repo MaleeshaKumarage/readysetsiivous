@@ -54,7 +54,7 @@ test('each shift row exposes one More actions menu, with details first and no se
   for (const label of ['Pricing', 'Edit schedule', 'Assign employees', 'Occurrences', 'Checklist template', 'Deactivate']) {
     await expect(page.getByRole('menuitem', { name: label, exact: true })).toBeVisible();
   }
-  await expect(page.getByRole('menuitem', { name: 'Schedule one-time visit', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: 'Add visit', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
 });
 
@@ -123,7 +123,7 @@ test('on-call workspace explains dated visits and offers one-time scheduling', a
   const dialog = page.getByRole('dialog', { name: 'Manage — Workspace on-call', exact: true });
   await expect(dialog.getByText('Next step: Admin: schedule a dated visit, then assign a cleaner.', { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
-  await shiftAction(page, 'Workspace on-call', 'Schedule one-time visit');
+  await shiftAction(page, 'Workspace on-call', 'Add visit');
   await expect(page.getByRole('dialog', { name: 'Change occurrence', exact: true })).toBeVisible();
 });
 

@@ -137,7 +137,7 @@ test('on-call shifts keep scheduling dated visits and remain available for new s
   await expect(page.getByRole('cell', { name: 'One-time cleaning', exact: true })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: 'One-time cleaning' })).toContainText('On-call');
   delayNextLoad = true;
-  await shiftAction(page, 'One-time cleaning', 'Schedule one-time visit');
+  await shiftAction(page, 'One-time cleaning', 'Add visit');
   await expect.poll(() => occurrenceQueries.length).toBe(1);
   const editor = page.getByRole('dialog', { name: 'Change occurrence', exact: true });
   await expect(editor).toBeVisible();

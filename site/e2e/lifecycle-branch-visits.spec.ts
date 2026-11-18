@@ -197,7 +197,7 @@ test('a visit added from the open list appears there with the next number', asyn
   await shiftAction(page, MAIN, 'Occurrences');
   const list = page.getByRole('dialog', { name: /Occurrences/ });
   // A main shift takes visits through Add visit only, so each one is numbered.
-  await expect(list.getByRole('button', { name: 'Add extra visit', exact: true })).toHaveCount(0);
+  await expect(list.getByRole('button', { name: 'Add visit', exact: true })).toHaveCount(1);
   await list.getByRole('button', { name: 'Add visit', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Add visit', exact: true });
   await dialog.getByLabel(/^Date/).fill('2026-11-17');
@@ -248,12 +248,11 @@ test('a cleaner change refused by the server shows why and leaves the visit as i
   await expect(list.getByRole('row').filter({ hasText: '#1 ·' })).toContainText('Offer sent to Test Cleaner');
 });
 
-test('a main shift has no whole-shift employees action; other shifts keep theirs', async ({ page }) => {
+test('a main shift assigns a default cleaner from its row; other shifts keep whole-shift assignment', async ({ page }) => {
   await setup(page);
   await page.getByRole('button', { name: `More actions for ${MAIN}`, exact: true }).click();
   await expect(page.getByRole('menuitem', { name: 'Add visit', exact: true })).toBeVisible();
-  await expect(page.getByRole('menuitem', { name: 'Assign employees', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('menuitem', { name: 'Schedule one-time visit', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: 'Assign employees', exact: true })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Pricing', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   // The first menu must be gone before the next one opens, or its closing layer swallows the click.
@@ -283,11 +282,9 @@ test('the details of a main shift explain visits, and its row menu has no whole-
   await expect(workspace).toContainText('Each visit uses the property price in force on its date.');
   await page.keyboard.press('Escape');
   await expect(workspace).toHaveCount(0);
-  // A whole-shift assignment or a shift-level price would bypass the visit's own offer and the property price.
   await page.getByRole('button', { name: `More actions for ${MAIN}`, exact: true }).click();
-  await expect(page.getByRole('menuitem', { name: 'Assign employees', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: 'Assign employees', exact: true })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Pricing', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('menuitem', { name: 'Schedule one-time visit', exact: true })).toHaveCount(0);
   await page.getByRole('menuitem', { name: 'Add visit', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Add visit', exact: true });
   await expect(dialog.getByLabel('Property', { exact: true })).toHaveValue(MAIN);
@@ -414,4 +411,17 @@ test('admin changes the cleaning type of a finished visit it added', async ({ pa
   await editor.getByRole('button', { name: 'Save cleaning type', exact: true }).click();
   await expect(page.getByRole('dialog').filter({ hasText: 'Save cleaning type' })).toHaveCount(0);
   expect(state.cleaningTypeWrites).toEqual([expect.objectContaining({ cleaningType: 'Deep' })]);
+});
+
+test('assign employees on a main shift saves the default cleaner that new visits are offered to', async ({ page }) => {
+  const state = await setup(page);
+  await page.getByRole('button', { name: `More actions for ${MAIN}`, exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Assign employees', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: `Assign employees — ${MAIN}`, exact: true });
+  await dialog.getByLabel('Default cleaner', { exact: true }).click();
+  await page.getByRole('option', { name: 'Second Cleaner', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+
+  await expect(dialog).toHaveCount(0);
+  expect(state.defaultWrites).toEqual([{ employeeId: 'second' }]);
 });
