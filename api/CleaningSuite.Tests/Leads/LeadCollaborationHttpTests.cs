@@ -29,6 +29,7 @@ public class LeadCollaborationHttpTests
         // This server fixture accepts the request cancellation token, unlike the deterministic service fixture.
         f.Leads.Setup(x=>x.GetAsync(f.Lead.Id,It.IsAny<CancellationToken>())).ReturnsAsync(f.Lead);
         f.Leads.Setup(x=>x.LockAsync(f.Lead.Id,It.IsAny<CancellationToken>())).ReturnsAsync(Mock.Of<IAsyncDisposable>());
+        f.Leads.Setup(x=>x.BusinessIdMatchesAsync(It.IsAny<string>(),It.IsAny<Guid>(),It.IsAny<CancellationToken>())).ReturnsAsync([]);
         f.Probe.Setup(x=>x.ValidateAsync(It.IsAny<byte[]>(),It.IsAny<CancellationToken>())).ReturnsAsync(new LeadAudioInfo(".webm","audio/webm",1));
         f.Repository.Setup(x=>x.VoiceAsync(f.Lead.Id,It.IsAny<Guid>(),It.IsAny<CancellationToken>())).ReturnsAsync((Guid leadId,Guid noteId,CancellationToken ct)=>f.Voices.SingleOrDefault(x=>x.Id==noteId));
         f.Repository.Setup(x=>x.SaveVoiceAsync(It.IsAny<LeadVoiceNote>(),It.IsAny<CancellationToken>())).Callback((LeadVoiceNote note,CancellationToken ct)=>{note.Version=Guid.NewGuid();f.Voices.Add(note);}).Returns(Task.CompletedTask);

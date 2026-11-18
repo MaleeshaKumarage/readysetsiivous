@@ -5,7 +5,7 @@ namespace CleaningSuite.Application.Leads;
 
 public class LeadConflictException(string message) : Exception(message);
 public record LeadRow(Guid Id, Guid Version, LeadFields Fields, bool IsActive, string Status, int ImageCount, Guid? CompanyId, Guid? BranchId, DateTime? ConvertedUtc, DateTime UpdatedUtc, IReadOnlyList<LeadConvertedBranch>? ConvertedBranches=null);
-public record LeadDetail(LeadRow Lead, IReadOnlyList<LeadImage> Images, bool CustomerAvailable);
+public record LeadDetail(LeadRow Lead, IReadOnlyList<LeadImage> Images, bool CustomerAvailable, string? BusinessIdWarning = null);
 public interface ILeadRepository
 {
     Task<IAsyncDisposable> LockAsync(Guid id,CancellationToken ct);
@@ -15,6 +15,8 @@ public interface ILeadRepository
     Task DeleteAsync(Lead lead,CancellationToken ct);
     Task ConvertAsync(Lead lead,Company company,IReadOnlyList<Branch> branches,CancellationToken ct);
     Task<bool> CustomerAvailableAsync(Guid companyId,IReadOnlyList<Guid> branchIds,CancellationToken ct);
+    /// <summary>Descriptions such as customer "X" or lead "Y" that already use this business ID (converted leads are not listed separately).</summary>
+    Task<IReadOnlyList<string>> BusinessIdMatchesAsync(string businessId,Guid exceptLeadId,CancellationToken ct);
 }
 public interface ILeadFileStore
 {
@@ -42,7 +44,14 @@ public sealed class LeadService(ILeadRepository repository,ILeadFileStore files,
     public async Task<LeadDetail> CreateAsync(LeadFields fields,CancellationToken ct)
     {
         var lead=new Lead { CreatedUtc=clock.GetUtcNow().UtcDateTime,UpdatedUtc=clock.GetUtcNow().UtcDateTime };lead.Fields=LeadValidation.Normalize(fields,lead.Id);
-        await repository.SaveAsync(lead,ct);return new(Row(lead),lead.Images,false);
+        var warning=await BusinessIdWarningAsync(lead,Guid.Empty,ct);
+        await repository.SaveAsync(lead,ct);return new(Row(lead),lead.Images,false,warning);
+    }
+    // Warn only (#314): a lead keeps its business ID even when another customer or lead already uses it.
+    private async Task<string?> BusinessIdWarningAsync(Lead lead,Guid exceptLeadId,CancellationToken ct)
+    {
+        var matches=await repository.BusinessIdMatchesAsync(lead.Fields.BusinessId,exceptLeadId,ct);
+        return matches.Count==0 ? null : $"Business ID {lead.Fields.BusinessId} is already used by {string.Join(" and ",matches)}. The lead was saved; check that it is the same business before converting.";
     }
     private static void Editable(Lead lead,Guid version,bool active=false)
     {
@@ -53,8 +62,10 @@ public sealed class LeadService(ILeadRepository repository,ILeadFileStore files,
     public async Task<LeadDetail> UpdateAsync(Guid id,Guid version,LeadFields fields,CancellationToken ct)
     {
         await using var lease=await repository.LockAsync(id,ct);var lead=await Require(id,ct);Editable(lead,version);
-        lead.Fields=LeadValidation.Normalize(fields,lead.Id,lead.Fields);lead.UpdatedUtc=clock.GetUtcNow().UtcDateTime;await repository.SaveAsync(lead,ct);
-        return new(Row(lead),lead.Images,false);
+        lead.Fields=LeadValidation.Normalize(fields,lead.Id,lead.Fields);lead.UpdatedUtc=clock.GetUtcNow().UtcDateTime;
+        var warning=await BusinessIdWarningAsync(lead,lead.Id,ct);
+        await repository.SaveAsync(lead,ct);
+        return new(Row(lead),lead.Images,false,warning);
     }
     public async Task<LeadDetail> SetActiveAsync(Guid id,Guid version,bool active,CancellationToken ct)
     {
