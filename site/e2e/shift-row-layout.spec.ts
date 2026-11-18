@@ -98,7 +98,6 @@ test('the expanded visits stay readable when the device is in dark mode', async 
     return {
       cardBackground: luminance(parse(getComputedStyle(card).backgroundColor)),
       textColour: luminance(parse(getComputedStyle(cell).color)),
-      visitsBackground: luminance(parse(getComputedStyle(cell).backgroundColor === 'rgba(0, 0, 0, 0)' ? getComputedStyle(card).backgroundColor : getComputedStyle(cell).backgroundColor)),
     };
   });
   // Dark text must sit on a light card: the card is bright and the text is much darker than it.

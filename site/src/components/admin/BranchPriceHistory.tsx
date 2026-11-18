@@ -32,7 +32,7 @@ export function BranchPriceHistory({ branchName, versions }: { branchName: strin
   return (
     <Stack gap={4}>
       <Text size="sm" fw={600}>Price history</Text>
-      <Table aria-label={`Price history for ${branchName}`} withTableBorder withColumnBorders={false} verticalSpacing={4} horizontalSpacing="sm" fz="xs" data-testid="price-history-table">
+      <Table aria-label={`Price history for ${branchName}`} withTableBorder withColumnBorders={false} verticalSpacing={4} horizontalSpacing="sm" fz="xs">
         <Table.Thead>
           <Table.Tr><Table.Th>Period</Table.Th><Table.Th>Price excl. VAT</Table.Th></Table.Tr>
         </Table.Thead>
