@@ -5,7 +5,7 @@ import { Button } from '@/ds/Button';
 import { Input, Textarea, Field } from '@/ds/Input';
 import { CEFR_LEVELS, CefrLevel, EntertainmentSession, Lobby, RoundStarted, AnswerEvaluation, Standing, createEntertainmentGroup, joinEntertainmentGroup, getEntertainmentLobby, loadEntertainmentSession, saveEntertainmentSession, clearEntertainmentSession } from '@/lib/entertainmentApi';
 import { createEntertainmentHub } from '@/lib/entertainmentHub';
-import { WordComparison } from './WordComparison';
+import { LazyWordComparison as WordComparison } from '@/components/LazySections';
 import type { HubConnection } from '@microsoft/signalr';
 
 type View = 'landing' | 'create' | 'join' | 'lobby' | 'game' | 'results';

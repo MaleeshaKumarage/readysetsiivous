@@ -1,3 +1,4 @@
+import { createTtlCache } from './ttlCache';
 // Cleaning Suite API client. Public endpoints only — admin uses the token path.
 // Static export must never call this at build time; fetch happens client-side.
 
@@ -91,10 +92,13 @@ async function getJson<T>(path: string, timeoutMs = 8000): Promise<T | null> {
   }
 }
 
+// The public service list changes rarely; cache it for five minutes per language.
+const servicesCache = createTtlCache<PublicService[]>(5 * 60 * 1000);
+
 export async function fetchServices(lang: string): Promise<PublicService[] | null> {
-  return getJson<PublicService[]>(
+  return servicesCache.getOrLoad(`services:${lang}`, () => getJson<PublicService[]>(
     `/api/v1/public/${TENANT_SLUG}/services?lang=${encodeURIComponent(lang)}`
-  );
+  ));
 }
 
 export async function fetchAvailability(

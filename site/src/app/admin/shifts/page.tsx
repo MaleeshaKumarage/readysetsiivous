@@ -18,7 +18,7 @@ import { CompanyPicker } from '@/components/admin/CompanyPicker';
 import { AddVisitDialog } from '@/components/admin/AddVisitDialog';
 import { visitLabel } from '@/lib/visitLabel';
 import { LifecycleTabs, type LifecycleStatus } from '@/components/LifecycleTabs';
-import { TodayKpis } from '@/components/admin/TodayKpis';
+import { LazyTodayKpis as TodayKpis } from '@/components/LazySections';
 import { ListPager, PAGE_SIZE } from '@/components/ListPager';
 import { ShiftWorkspace, scheduleLabel } from '@/components/admin/ShiftWorkspace';
 import { autoShiftName } from '@/lib/shiftName';
