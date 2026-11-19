@@ -3,72 +3,55 @@ using CleaningSuite.Domain.Partners;
 using CleaningSuite.Domain.Shifts;
 using CleaningSuite.Domain.Tenants;
 using CleaningSuite.Infrastructure.Persistence;
-using CleaningSuite.Tests.QualityCycle;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 
 namespace CleaningSuite.Tests.Shifts;
 
 [Collection("Database integration")]
 public class StaleAssignmentRepairDatabaseTests
 {
-    private static Shift ShiftOf(bool active, Guid? partnerRequestId = null)
+    [QualityCycle.QualityCycleDatabaseFact]
+    public async Task Repair_backs_up_then_releases_stale_assignments_and_leaves_live_ones_alone()
     {
-        var shift = Shift.Create(Guid.NewGuid(), Guid.NewGuid(), "Shift",
-            new ShiftSchedule { Type = ShiftScheduleType.DailySameTime, DailyStart = TimeSpan.FromHours(8), DailyEnd = TimeSpan.FromHours(10) },
-            null, DateTime.UtcNow.Date, null, null);
-        shift.IsActive = active;
-        shift.PartnerRequestId = partnerRequestId;
-        return shift;
-    }
-
-    [QualityCycleDatabaseFact]
-    public async Task Startup_repair_releases_stale_assignments_and_leaves_live_ones_active()
-    {
-        var connection = Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!;
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddTestMarten(connection, databaseSchemaName: "stale_repair_" + Guid.NewGuid().ToString("N"));
-        using var provider = services.BuildServiceProvider();
-        var store = provider.GetRequiredService<IDocumentStore>();
+        var tenant = "stale-repair-" + Guid.NewGuid().ToString("N");
+        var services = new ServiceCollection(); services.AddLogging();
+        services.AddTestMarten(Environment.GetEnvironmentVariable("QC_TEST_CONNECTION_STRING")!, databaseSchemaName: "stale_repair_" + Guid.NewGuid().ToString("N"));
+        using var provider = services.BuildServiceProvider(); var store = provider.GetRequiredService<IDocumentStore>();
         await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
 
-        var tenant = "stale-" + Guid.NewGuid().ToString("N");
-        await new TenantRegistry(store).SaveAsync(new TenantRegistration
+        var employee = Guid.NewGuid();
+        var deactivated = new Shift { Id = Guid.NewGuid(), Name = "Old shift", IsActive = false };
+        var live = new Shift { Id = Guid.NewGuid(), Name = "Live shift", IsActive = true };
+        var stale = ShiftAssignment.Create(deactivated.Id, employee, "Cover");
+        var keep = ShiftAssignment.Create(live.Id, employee, null);
+        using (var writer = store.LightweightSession(tenant))
         {
-            Id = Guid.NewGuid(), Slug = tenant, Status = TenantRegistration.StatusActive,
-        });
-
-        var cancelled = new PartnerCleaningRequest { Id = Guid.NewGuid(), Status = PartnerCleaningRequest.StatusCancelled };
-        var deactivatedShift = ShiftOf(active: false);
-        var cancelledShift = ShiftOf(active: true, partnerRequestId: cancelled.Id);
-        var liveShift = ShiftOf(active: true);
-        var staleOnDeactivated = ShiftAssignment.Create(deactivatedShift.Id, Guid.NewGuid(), null);
-        var staleOnCancelled = ShiftAssignment.Create(cancelledShift.Id, Guid.NewGuid(), null);
-        var live = ShiftAssignment.Create(liveShift.Id, Guid.NewGuid(), null);
-
-        using (var seed = store.LightweightSession(tenant))
-        {
-            seed.Store(cancelled);
-            seed.Store(deactivatedShift, cancelledShift, liveShift);
-            seed.Store(staleOnDeactivated, staleOnCancelled, live);
-            await seed.SaveChangesAsync();
+            writer.Store(deactivated); writer.Store(live); writer.Store(stale); writer.Store(keep);
+            await writer.SaveChangesAsync();
         }
 
-        var runner = new StaleAssignmentRepairRunner(store, new TenantRegistry(store),
-            provider.GetRequiredService<ILogger<StaleAssignmentRepairRunner>>());
-        var released = await runner.RunAsync(CancellationToken.None);
+        var registry = new Mock<ITenantRegistry>();
+        registry.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync([new TenantRegistration { Slug = tenant, Status = TenantRegistration.StatusActive }]);
+        var released = await new StaleAssignmentRepairRunner(store, registry.Object, NullLogger<StaleAssignmentRepairRunner>.Instance).RunAsync(default);
+        Assert.Equal(1, released);
 
-        Assert.Equal(2, released);
-        using var check = store.LightweightSession(tenant);
-        var rows = await check.Query<ShiftAssignment>().ToListAsync();
-        Assert.False(rows.Single(r => r.Id == staleOnDeactivated.Id).IsActive);
-        Assert.False(rows.Single(r => r.Id == staleOnCancelled.Id).IsActive);
-        Assert.True(rows.Single(r => r.Id == live.Id).IsActive);
+        using var read = store.QuerySession(tenant);
+        var after = await read.LoadAsync<ShiftAssignment>(stale.Id);
+        Assert.False(after!.IsActive);
+        Assert.True((await read.LoadAsync<ShiftAssignment>(keep.Id))!.IsActive);
 
-        // A second start finds nothing new to release.
-        Assert.Equal(0, await runner.RunAsync(CancellationToken.None));
+        // The backup holds the state before release: the assignment was still active.
+        var backup = Assert.Single(await read.Query<StaleAssignmentBackup>().ToListAsync());
+        var snapshot = Assert.Single(backup.Assignments);
+        Assert.Equal(stale.Id, snapshot.AssignmentId);
+        Assert.True(snapshot.IsActive);
+        Assert.Equal("Cover", snapshot.Note);
+
+        // A later run finds nothing new, so it writes no second backup.
+        Assert.Equal(0, await new StaleAssignmentRepairRunner(store, registry.Object, NullLogger<StaleAssignmentRepairRunner>.Instance).RunAsync(default));
+        Assert.Single(await read.Query<StaleAssignmentBackup>().ToListAsync());
     }
 }

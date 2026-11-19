@@ -37,9 +37,22 @@ public sealed class StaleAssignmentRepairRunner(IDocumentStore store, ITenantReg
             if (stale.Count == 0) continue;
 
             var now = DateTime.UtcNow;
+            // Snapshot the state before release, so the change can be reversed by hand (#367). Saved in the same transaction.
+            var backup = new StaleAssignmentBackup
+            {
+                TakenUtc = now,
+                Assignments = stale.Select(a => new StaleAssignmentSnapshot
+                {
+                    AssignmentId = a.Id, ShiftId = a.ShiftId, EmployeeId = a.EmployeeId, AssignedAtUtc = a.AssignedAtUtc,
+                    IsActive = a.IsActive, Note = a.Note, UnassignedAtUtc = a.UnassignedAtUtc,
+                    Periods = a.Periods.Select(p => new ShiftAssignmentPeriod { FromUtc = p.FromUtc, ToUtc = p.ToUtc }).ToList(),
+                }).ToList(),
+            };
+            session.Store(backup);
             foreach (var assignment in stale) assignment.Release(now);
             foreach (var assignment in stale) session.Store(assignment);
             await session.SaveChangesAsync(ct);
+            logger.LogInformation("Stale assignment repair tenant {Tenant}: backup {BackupId} holds {Count} prior states", tenant, backup.Id, stale.Count);
 
             foreach (var assignment in stale)
                 logger.LogInformation("Stale assignment released tenant {Tenant} shift {ShiftId} employee {EmployeeId}", tenant, assignment.ShiftId, assignment.EmployeeId);
