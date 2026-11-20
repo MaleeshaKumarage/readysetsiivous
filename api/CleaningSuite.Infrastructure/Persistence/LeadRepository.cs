@@ -32,6 +32,13 @@ public sealed class LeadRepository(ITenantSession tenant,IConfiguration config) 
         foreach(var id in branchIds) if((await Session.LoadAsync<Branch>(id,ct))?.CompanyId!=companyId) return false;
         return true;
     }
+    public async Task<IReadOnlyList<string>> BusinessIdMatchesAsync(string businessId,Guid exceptLeadId,CancellationToken ct)
+    {
+        if(string.IsNullOrWhiteSpace(businessId)) return [];
+        var leads=await Session.Query<Lead>().Where(x=>x.Fields.BusinessId==businessId && x.CompanyId==null && x.Id!=exceptLeadId).Select(x=>x.Fields.Name).ToListAsync(ct);
+        var companies=await Session.Query<Company>().Where(x=>x.BusinessId==businessId).Select(x=>x.Name).ToListAsync(ct);
+        return leads.Select(name=>$"lead \"{name}\"").Concat(companies.Select(name=>$"customer \"{name}\"")).ToArray();
+    }
     public async Task ConvertAsync(Lead lead,Company company,IReadOnlyList<Branch> branches,CancellationToken ct)
     {
         await LeadCollaborationRepository.CancelForLeadAsync(Session,lead,false,ct);Session.Store(company);foreach(var branch in branches) Session.Store(branch);Session.Store(lead);

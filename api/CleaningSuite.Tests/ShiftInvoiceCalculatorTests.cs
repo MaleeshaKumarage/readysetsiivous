@@ -80,6 +80,18 @@ public class ShiftInvoiceCalculatorTests
         Assert.Empty(Calculate(shift,Price("Monthly",150,new(2026,10,1)),new(2026,10,1),new(2026,10,31)));
     }
     [Fact]
+    public void Hourly_visit_that_never_started_bills_no_hours_while_the_completed_visit_bills_its_hours()
+    {
+        // Two scheduled 2-hour visits at 40 EUR/h: one completed, one never started (no recorded start).
+        var completed=new BillableShiftVisit(new DateTime(2026,10,5,8,0,0),new DateTime(2026,10,5,10,0,0),BranchId,"Biweekly",true);
+        var neverStarted=new BillableShiftVisit(new DateTime(2026,10,12,8,0,0),new DateTime(2026,10,12,10,0,0),BranchId,"Biweekly",false,Unstarted:true);
+        var line=Assert.Single(Calculate(Shift(),Price("Hourly",40,new(2026,10,1)),new(2026,10,1),new(2026,10,31),new[]{completed,neverStarted}));
+        Assert.Equal(2m,line.Quantity);
+        Assert.Equal(80m,line.NetAmount);
+        Assert.Equal(1,line.Occurrences);
+    }
+
+    [Fact]
     public void Monthly_override_replaces_proration_and_keeps_explanation()
     {
         var s=Shift(); var lines=Calculate(s,Price("Monthly",150,new(2026,10,1)),new(2026,10,17),new(2026,10,31),overrides:[new(s.Id,"2026-10",100,"Agreed amount")]);

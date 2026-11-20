@@ -498,6 +498,8 @@ public class CompanyHandlers
                 branch.ContactEmail = request.ContactEmail?.Trim();
                 ApplyProperty(branch, request.RoomCount, request.BedCount, request.PriceNet, request.VatRatePercent, request.EstimatedDurationMinutes, request.PriceMode, request.PriceEffectiveFrom);
                 ApplySize(branch, request.SizeM2);
+                // Checked after the input is validated, so invalid input never reaches the repository.
+                BranchNameRule.EnsureUnique(await _repository.ListByCompanyAsync(request.CompanyId, true, ct), request.Name, null);
                 await _repository.SaveAsync(branch, ct);
                 return MapBranch(branch);
             }
@@ -519,6 +521,9 @@ public class CompanyHandlers
             await using var lease = _reservation is null ? null : await _reservation.AcquireAsync(ct);
                 var branch = await _repository.GetAsync(request.Id, ct)
                     ?? throw new NotFoundException("Branch", request.Id);
+                // Only a rename is checked, so an existing duplicate name never blocks an unrelated edit.
+                if (BranchNameRule.Changed(branch.Name, request.Name))
+                    BranchNameRule.EnsureUnique(await _repository.ListByCompanyAsync(branch.CompanyId, true, ct), request.Name, branch.Id);
                 branch.Update(
                     request.Name,
                     request.Street,
