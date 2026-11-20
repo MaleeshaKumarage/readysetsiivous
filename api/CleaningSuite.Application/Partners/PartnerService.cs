@@ -881,8 +881,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         var branch = await Db.LoadAsync<Branch>(item.BranchId, ct);
         var employee = item.AcceptedEmployeeId.HasValue ? await Db.LoadAsync<Employee>(item.AcceptedEmployeeId.Value, ct) : null;
         var forms = await VisitForms(item, ct);
-        var started = forms.Where(x => x.StartedAtUtc.HasValue).Select(x => x.StartedAtUtc).Min();
-        var ended = forms.Where(x => x.IsSubmitted && x.EndedAtUtc.HasValue).Select(x => x.EndedAtUtc).Max();
+        var (started, ended) = RecordedTimes(forms);
         var status = item.Status;
         if (status == "Accepted" && started.HasValue) status = forms.Count > 0 && forms.All(x => x.IsSubmitted) ? "Completed" : "InProgress";
         return new(item.Id, item.Revision, item.CompanyId, item.BranchId, branch?.Name ?? "Property", item.FromDate,
@@ -891,6 +890,13 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
             item.PlannedEndUtc, employee is null ? null : staff ? $"{employee.FirstName} {employee.LastName}".Trim() : null, started,
             status == "Completed" ? ended : null, staff ? item.OfferedEmployeeId : null, staff ? item.OfferId : null,
             item.CleaningType ?? CleaningTypes.Normal);
+    }
+
+    // The partner view shows the same recorded times as the admin calendar: one representative record (#368).
+    public static (DateTime? Started, DateTime? Ended) RecordedTimes(IReadOnlyList<QualityCycleForm> forms)
+    {
+        var form = RecordedWork.Representative(forms);
+        return (form?.StartedAtUtc, form is { IsSubmitted: true } ? form.EndedAtUtc : null);
     }
 
     // Quality Cycle checklists recorded for the accepted cleaner's linked visit occurrence.
@@ -909,13 +915,13 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         var company = (await Partner(actor, ct)).Company;
         var request = await Request(id, company.Id, ct);
         var forms = await VisitForms(request, ct);
-        var started = forms.Where(x => x.StartedAtUtc.HasValue).Select(x => x.StartedAtUtc).Min();
+        var (started, ended) = RecordedTimes(forms);
         var completed = request.Status == PartnerCleaningRequest.StatusAccepted && started.HasValue && forms.Count > 0 && forms.All(x => x.IsSubmitted);
         if (!completed) throw new ShiftConflictException("This visit has not been completed yet.");
         var branch = await Db.LoadAsync<Branch>(request.BranchId, ct);
         var messages = await Db.Query<PartnerChangeRequest>().Where(x => x.CompanyId == company.Id && x.RequestId == id).ToListAsync(ct);
         return new(request.Id, branch?.Name ?? "Property", request.FromDate, request.ToDate, request.PlannedStartUtc, request.PlannedEndUtc,
-            started, forms.Where(x => x.EndedAtUtc.HasValue).Select(x => x.EndedAtUtc).Max(),
+            started, ended,
             forms.OrderBy(x => x.StartedAtUtc).Select(PartnerCompletionView.Report).ToArray(),
             messages.OrderByDescending(x => x.CreatedUtc).Select(MapChange).ToArray());
     }
