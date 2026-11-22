@@ -21,6 +21,8 @@ public sealed class StaleAssignmentRepairRunner(IDocumentStore store, ITenantReg
         {
             if (registration.Status != TenantRegistration.StatusActive) continue;
             var tenant = registration.Slug;
+            // The one-time release runs once per tenant; a later start does not repeat it.
+            if (await StartupRepairGuard.IsCompleteAsync(store, tenant, StartupRepairMarker.StaleAssignmentRelease, ct)) continue;
             using var session = store.LightweightSession(tenant);
 
             var shifts = await session.Query<Shift>().ToListAsync(ct);
@@ -34,7 +36,11 @@ public sealed class StaleAssignmentRepairRunner(IDocumentStore store, ITenantReg
 
             var active = await session.Query<ShiftAssignment>().Where(assignment => assignment.IsActive).ToListAsync(ct);
             var stale = StaleAssignmentRule.Find(active, shiftsById, statuses);
-            if (stale.Count == 0) continue;
+            if (stale.Count == 0)
+            {
+                await StartupRepairGuard.MarkCompleteAsync(store, tenant, StartupRepairMarker.StaleAssignmentRelease, "nothing stale", ct);
+                continue;
+            }
 
             var now = DateTime.UtcNow;
             // Snapshot the state before release, so the change can be reversed by hand (#367). Saved in the same transaction.
@@ -57,6 +63,7 @@ public sealed class StaleAssignmentRepairRunner(IDocumentStore store, ITenantReg
             foreach (var assignment in stale)
                 logger.LogInformation("Stale assignment released tenant {Tenant} shift {ShiftId} employee {EmployeeId}", tenant, assignment.ShiftId, assignment.EmployeeId);
             logger.LogInformation("Stale assignment repair tenant {Tenant}: {Released} released", tenant, stale.Count);
+            await StartupRepairGuard.MarkCompleteAsync(store, tenant, StartupRepairMarker.StaleAssignmentRelease, $"released {stale.Count}", ct);
             total += stale.Count;
         }
         return total;

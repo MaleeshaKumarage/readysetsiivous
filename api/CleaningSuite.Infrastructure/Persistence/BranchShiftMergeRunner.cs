@@ -30,7 +30,17 @@ public sealed class BranchShiftMergeRunner(IDocumentStore store, ITenantRegistry
         foreach (var registration in await registry.ListAsync(ct))
         {
             if (registration.Status != TenantRegistration.StatusActive) continue;
-            results.Add(await RunTenantAsync(registration.Slug, apply, ct));
+            // A completed merge is never repeated: the one-time marker is checked before any work is planned.
+            if (apply && await StartupRepairGuard.IsCompleteAsync(store, registration.Slug, StartupRepairMarker.BranchShiftMerge, ct))
+            {
+                logger.LogInformation("Branch shift merge tenant {Tenant} already completed; skipped.", registration.Slug);
+                continue;
+            }
+            var result = await RunTenantAsync(registration.Slug, apply, ct);
+            results.Add(result);
+            if (apply && result.Failed == 0)
+                await StartupRepairGuard.MarkCompleteAsync(store, registration.Slug, StartupRepairMarker.BranchShiftMerge,
+                    $"merged {result.Merged}, removed {result.Removed}, kept for review {result.Kept}", ct);
         }
         return results;
     }
