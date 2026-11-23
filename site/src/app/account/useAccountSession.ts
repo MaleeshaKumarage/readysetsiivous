@@ -16,7 +16,7 @@ export function accountName(account: Account | null): string {
 /** Role labels shown on the account pages. Uses the signed-in login's roles. */
 export function accountRoles(account: Account | null): string[] {
   if (!account) return [];
-  return [isAdmin() && 'Administrator', isManager() && 'Manager', isPartner() ? 'Partner' : account.employee && 'Cleaner'].filter(Boolean) as string[];
+  return [isAdmin() && 'Administrator', isManager() && 'Manager', isPartner() ? 'Partner' : account.employee && 'Employee'].filter(Boolean) as string[];
 }
 
 /** Loads and verifies the signed-in account for a tenant. Shared by the account page and the profile page. */
