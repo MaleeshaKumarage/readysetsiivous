@@ -285,6 +285,10 @@ export default function ShiftsAdminPage() {
   const [cleanerSaving, setCleanerSaving] = useState(false);
   const [cleanerError, setCleanerError] = useState('');
   const [defaultCleanerError, setDefaultCleanerError] = useState('');
+  // Assign employees on a property's main shift sets its default cleaner (new visits are offered to them).
+  const [defaultCleanerFor, setDefaultCleanerFor] = useState<Shift | null>(null);
+  const [defaultCleanerPick, setDefaultCleanerPick] = useState<string | null>(null);
+  const [defaultCleanerSaving, setDefaultCleanerSaving] = useState(false);
   useEffect(() => () => { assignmentGeneration.current++; }, []);
 
   // The shift list has no assignee data, so the Employees column uses one bulk count request.
@@ -618,12 +622,15 @@ export default function ShiftsAdminPage() {
     await openOccurrences(clashing, `Showing ${shiftName}. The overlapping visit is marked below.`, clashStartUtc);
   };
 
-  const openOccurrenceEditor = (occurrence?: ShiftOccurrence, status = '1') => {
+  // A new one-time visit on an on-call shift prefills its default cleaner and notes; the user only sets date and times.
+  const openOccurrenceEditor = (occurrence?: ShiftOccurrence, status = '1', shift: Shift | null = occurrenceShift) => {
+    const quick = !occurrence && status === '4' && shift?.schedule.type === 4 ? shift : null;
     setEditingOccurrence(occurrence ?? { startUtc: '', endUtc: '' });
     setOccurrenceStatus(occurrence?.status ? String(occurrence.status) : status);
     setOccurrenceStart(occurrence?.startUtc ? localInputValue(occurrence.startUtc, timeZoneId) : '');
     setOccurrenceEnd(occurrence?.endUtc ? localInputValue(occurrence.endUtc, timeZoneId) : '');
-    setOccurrenceReason(occurrence?.reason ?? ''); setOccurrenceEmployee(occurrence?.employeeId ?? null); setOccurrenceEditError('');
+    setOccurrenceReason(occurrence?.reason ?? (quick ? (quick.notes?.trim() || 'Quick visit') : ''));
+    setOccurrenceEmployee(occurrence?.employeeId ?? quick?.defaultEmployeeId ?? null); setOccurrenceEditError('');
   };
 
   const saveOccurrence = async () => {
@@ -778,9 +785,10 @@ export default function ShiftsAdminPage() {
                             {isAdmin() && !s.isBranchMain && <Menu.Item leftSection={<Receipt size={13} />} onClick={() => { setPricingShift(s); setPricingOccurrence(undefined); }}>Pricing</Menu.Item>}
                             {isAdmin() && <Menu.Item leftSection={<Pencil size={13} />} onClick={() => openEdit(s)}>Edit schedule</Menu.Item>}
                             {s.isActive && !s.isBranchMain && <Menu.Item disabled={assignBusy} leftSection={<UserPlus size={13} />} onClick={() => openAssign(s.id)}>Assign employees</Menu.Item>}
+                            {s.isActive && s.isBranchMain && <Menu.Item leftSection={<UserPlus size={13} />} onClick={() => { setDefaultCleanerError(''); setDefaultCleanerPick(s.defaultEmployeeId ?? null); setDefaultCleanerFor(s); }}>Assign employees</Menu.Item>}
                             {s.isActive && <Menu.Item leftSection={<CalendarDays size={13} />} onClick={() => openOccurrences(s)}>Occurrences</Menu.Item>}
                             {s.isActive && s.isBranchMain && <Menu.Item leftSection={<Plus size={13} />} onClick={() => setVisitDialog({ preset: { companyId: s.companyId, branchId: s.branchId, propertyName: s.name } })}>Add visit</Menu.Item>}
-                            {s.isActive && !s.isBranchMain && s.schedule.type === 4 && <Menu.Item leftSection={<CalendarPlus size={13} />} onClick={() => { void openOccurrences(s); openOccurrenceEditor(undefined, '4'); }}>Schedule one-time visit</Menu.Item>}
+                            {s.isActive && !s.isBranchMain && s.schedule.type === 4 && <Menu.Item leftSection={<CalendarPlus size={13} />} onClick={() => { void openOccurrences(s); openOccurrenceEditor(undefined, '4', s); }}>Add visit</Menu.Item>}
                             {isAdmin() && s.isActive && <Menu.Item leftSection={<ListChecks size={13} />} onClick={() => { setTemplateShift(s); setAssignedTemplate(s.qualityCycleTemplateId ?? null); setTemplateError(''); }}>Checklist template</Menu.Item>}
                             {s.isActive && <Menu.Item color="red" leftSection={<PauseCircle size={13} />} disabled={assignBusy} onClick={() => setConfirmAction({ title: `Deactivate “${s.name}”?`, body: 'It stops taking new visits. You can reactivate it later from the Inactive tab.', confirmLabel: 'Deactivate', color: 'red', run: () => deactivate(s.id) })}>Deactivate</Menu.Item>}
                             {!s.isActive && <Menu.Item leftSection={<PlayCircle size={13} />} disabled={!!restoring} onClick={() => setConfirmAction({ title: `Reactivate “${s.name}”?`, body: 'It returns to the Active tab and can take visits again.', confirmLabel: 'Reactivate', run: () => reactivate(s.id) })}>Reactivate</Menu.Item>}
@@ -852,6 +860,26 @@ export default function ShiftsAdminPage() {
         employeeCount={assignmentCounts ? (assignmentCounts[workspaceShift.id] ?? 0) : assignments[workspaceShift.id] ? assignments[workspaceShift.id].filter(a => a.isActive).length : undefined}
         templateName={templates.find(t => t.id === workspaceShift.qualityCycleTemplateId)?.title ?? null}
         onClose={() => setWorkspaceId(null)} />}
+      {defaultCleanerFor && <Modal opened onClose={() => { if (!defaultCleanerSaving) setDefaultCleanerFor(null); }} closeButtonProps={{ disabled: defaultCleanerSaving }} title={`Assign employees — ${defaultCleanerFor.name}`} size="md" radius="md">
+        <Stack>
+          <Select label="Default cleaner" description="New visits are offered to this cleaner. Visits already added keep their cleaner." clearable searchable
+            placeholder="None: new visits start unassigned" value={defaultCleanerPick} onChange={setDefaultCleanerPick}
+            data={employees.filter(e => e.isActive).map(e => ({ value: e.id, label: `${e.firstName} ${e.lastName}` }))} />
+          {defaultCleanerError && <Text role="alert" c="red">{defaultCleanerError}</Text>}
+          <Group justify="flex-end">
+            <Button variant="default" disabled={defaultCleanerSaving} onClick={() => setDefaultCleanerFor(null)}>Cancel</Button>
+            <Button loading={defaultCleanerSaving} onClick={async () => {
+              if (defaultCleanerSaving) return;
+              setDefaultCleanerSaving(true); setDefaultCleanerError('');
+              const result = await adminBranchVisits.setDefaultEmployee(defaultCleanerFor.id, defaultCleanerPick);
+              setDefaultCleanerSaving(false);
+              if (!result.ok) { setDefaultCleanerError(result.message); return; }
+              setDefaultCleanerFor(null);
+              await load();
+            }}>Save</Button>
+          </Group>
+        </Stack>
+      </Modal>}
       {assignOpen && <Modal opened onClose={closeAssignments} title={`Assign employees — ${pageRows.find(r => r.id === assignOpen)?.name ?? ''}`} size="lg" radius="md">
         <Stack gap="sm">
           <Group align="flex-end" mb="xs" wrap="wrap" gap="xs">
@@ -914,7 +942,7 @@ export default function ShiftsAdminPage() {
             <Button variant="default" loading={occurrenceLoading} onClick={() => loadOccurrences()}>Load</Button>
             {occurrenceShift?.isBranchMain
               ? <Button onClick={() => setVisitDialog({ preset: { companyId: occurrenceShift.companyId, branchId: occurrenceShift.branchId, propertyName: occurrenceShift.name } })}>Add visit</Button>
-              : <Button onClick={() => openOccurrenceEditor(undefined, '4')}>Add extra visit</Button>}
+              : <Button onClick={() => openOccurrenceEditor(undefined, '4')}>Add visit</Button>}
           </Group>
           {occurrenceShift?.isBranchMain && <>
             <Select label="Default cleaner" description="Each new visit is offered to this cleaner. Visits already added keep their cleaner." placeholder="None: new visits start unassigned"

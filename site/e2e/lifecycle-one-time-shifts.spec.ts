@@ -102,7 +102,7 @@ test('one-time is retired for new shifts, on-call stays, and existing on-call sh
   const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
   await expect(edit.getByLabel('Schedule', { exact: true })).toHaveValue('On-call / flexible');
   await edit.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(edit).toHaveCount(0);
-  await page.getByRole('row').filter({ hasText: 'Legacy on-call' }).getByRole('button', { name: /^More actions for / }).click(); await expect(page.getByRole('menuitem', { name: 'Schedule one-time visit', exact: true })).toBeVisible(); await page.keyboard.press('Escape');
+  await page.getByRole('row').filter({ hasText: 'Legacy on-call' }).getByRole('button', { name: /^More actions for / }).click(); await expect(page.getByRole('menuitem', { name: 'Add visit', exact: true })).toBeVisible(); await page.keyboard.press('Escape');
 });
 
 test('admin adds a past visit from one form without a second visit popup', async ({ page }) => {
