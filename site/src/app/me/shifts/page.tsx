@@ -516,7 +516,7 @@ export default function MyShiftsPage() {
             <Loader2 className="w-6 h-6 animate-spin" />
           </div>
         ) : error && occurrences.length === 0 ? (
-          <Button onClick={() => loadShifts()}>Retry loading shifts</Button>
+          <Button onClick={() => loadShifts(view, undefined, false, pastFilter)}>Retry loading shifts</Button>
         ) : occurrences.length === 0 ? (
           <Card variant="elevated" padding="lg" className="text-center text-gray-500 dark:text-gray-400">
             <p>{view === 'today' ? 'No shifts today.' : 'No shifts scheduled.'}</p>
