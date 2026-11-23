@@ -80,12 +80,13 @@ test('the phone layout does not widen the page', async ({ page, isMobile }) => {
 
 test('Accept still sends the decision for that offer', async ({ page }) => {
   await setup(page);
-  const requests: string[] = [];
+  const bodies: unknown[] = [];
   await page.route(/\/api\/v1\/me\/partner-offers\/offer-riverside\/accept$/, route => {
-    requests.push(route.request().url());
+    bodies.push(route.request().postDataJSON());
     return route.fulfill({ headers, json: {} });
   });
   await openOffers(page);
   await page.getByRole('article', { name: 'Riverside offer' }).getByRole('button', { name: 'Accept cleaning', exact: true }).click();
-  await expect.poll(() => requests.length).toBe(1);
+  await expect.poll(() => bodies.length).toBe(1);
+  expect(bodies[0]).toEqual({ version: 1, plannedStartLocal: null });
 });

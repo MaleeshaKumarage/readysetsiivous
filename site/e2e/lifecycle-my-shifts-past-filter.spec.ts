@@ -109,7 +109,7 @@ test('Clear dates resets both fields and returns to the default window', async (
   expect(lastRequest(requests)).toEqual({ from: null, to: null, view: 'past' });
 });
 
-test('the To field cannot be set before From, and From cannot pass To', async ({ page }) => {
+test('the date fields carry min and max bounds that keep the range in order', async ({ page }) => {
   await setup(page);
   await openPast(page);
   await page.getByLabel('From date', { exact: true }).fill('2026-11-10');
@@ -119,11 +119,11 @@ test('the To field cannot be set before From, and From cannot pass To', async ({
 });
 
 test('dates cannot be set after today', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-11-23T10:00:00Z'));
   await setup(page);
   await openPast(page);
-  const today = await page.getByLabel('To date', { exact: true }).getAttribute('max');
-  expect(today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-  await expect(page.getByLabel('From date', { exact: true })).toHaveAttribute('max', today as string);
+  await expect(page.getByLabel('To date', { exact: true })).toHaveAttribute('max', '2026-11-23');
+  await expect(page.getByLabel('From date', { exact: true })).toHaveAttribute('max', '2026-11-23');
 });
 
 test('a failed past load shows a retry that reloads the same range', async ({ page }) => {
