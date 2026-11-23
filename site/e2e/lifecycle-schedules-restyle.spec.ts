@@ -63,3 +63,37 @@ test('the Schedules controls do not widen the page on a phone', async ({ page, i
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
 });
+
+test('the header is a bordered white bar with 44px profile and sign-out controls', async ({ page }) => {
+  await setup(page);
+  await page.goto('/me/shifts/');
+  const header = page.locator('.employee-header');
+  await expect(header).toBeVisible();
+  const radius = await header.evaluate(el => parseFloat(getComputedStyle(el).borderTopLeftRadius));
+  expect(radius).toBeGreaterThanOrEqual(12);
+  for (const name of ['Profile', 'Sign out']) {
+    const box = await page.getByRole('link', { name, exact: true }).or(page.getByRole('button', { name, exact: true })).first().boundingBox();
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+  }
+});
+
+test('a shift card has the gold left edge from the design', async ({ page }) => {
+  await setup(page);
+  await page.route(/\/api\/v1\/me\/shifts\/calendar(\?.*)?$/, route => route.fulfill({
+    headers,
+    json: {
+      occurrences: [{ shiftId: 'riverside', shiftName: 'Riverside clean', startUtc: '2026-11-23T08:00:00Z', endUtc: '2026-11-23T12:00:00Z', timeZoneId: 'Europe/Helsinki', form: null }],
+      timeZoneId: 'Europe/Helsinki', fromLocalDate: '2026-11-23', toLocalDate: '2026-11-23',
+    },
+  }));
+  await page.goto('/me/shifts/');
+  const card = page.getByRole('group', { name: /Riverside clean/ });
+  await expect(card).toBeVisible();
+  const { width, color } = await card.evaluate(el => {
+    const s = getComputedStyle(el);
+    return { width: parseFloat(s.borderLeftWidth), color: s.borderLeftColor };
+  });
+  expect(width).toBeGreaterThanOrEqual(4);
+  expect(color).not.toBe('rgba(0, 0, 0, 0)');
+});
