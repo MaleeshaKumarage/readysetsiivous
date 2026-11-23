@@ -15,7 +15,7 @@ export interface LeadFields {
 }
 export const emptyLead: LeadFields = { branches: [], name: '', businessId: '', contactName: '', contactPhone: '', notes: '', description: '', emails: [], primaryEmail: '', status: 'New', branchName: '', street: '', postalCode: '', city: '', country: '', branchPhone: '', branchEmail: '' };
 export interface LeadRow { id: string; version: string; fields: LeadFields; isActive: boolean; status: string; imageCount: number; companyId: string | null; branchId: string | null; convertedUtc: string | null; updatedUtc: string; convertedBranches?: { sourceBranchId: string; companyBranchId: string }[] }
-export interface LeadDetail { lead: LeadRow; images: { id: string; extension: string }[]; customerAvailable: boolean }
+export interface LeadDetail { lead: LeadRow; images: { id: string; extension: string }[]; customerAvailable: boolean; businessIdWarning?: string | null }
 const root = '/api/v1/admin/leads';
 async function read<T>(response: Response): Promise<T> {
   if (!response.ok) {

@@ -94,6 +94,20 @@ public class VisitAssignmentTests
         await Assert.ThrowsAsync<ShiftConflictException>(() => s.Run(s.Command()));
     }
 
+    [Fact]
+    public async Task Inactive_shift_and_visit_outside_its_window_cannot_be_assigned()
+    {
+        var inactive = new Setup(); inactive.Shift.IsActive = false;
+        var inactiveError = await Assert.ThrowsAsync<ShiftConflictException>(() => inactive.Run(inactive.Command()));
+        Assert.Equal("Activate the shift before assigning visits.", inactiveError.Message);
+        Assert.Empty(inactive.History.Where(x => x.EmployeeId == inactive.B));
+
+        var outside = new Setup();
+        // The shift ends on Start + 4 days; a visit five days later is not on its roster.
+        await Assert.ThrowsAsync<ShiftConflictException>(() => outside.Run(outside.Command() with { OriginalStartUtc = Start.AddDays(5) }));
+        Assert.DoesNotContain(outside.History, x => x.EmployeeId == outside.B);
+    }
+
     [Theory]
     [InlineData(OccurrenceAssignmentMode.Replace)] [InlineData(OccurrenceAssignmentMode.Add)]
     public async Task Handover_preserves_past_and_future_one_off_overrides(OccurrenceAssignmentMode mode)

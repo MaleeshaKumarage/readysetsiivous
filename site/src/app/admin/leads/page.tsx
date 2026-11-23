@@ -50,7 +50,7 @@ export default function LeadsPage() {
   const openedFromLink = useRef(false);
   useEffect(() => { const requested = new URLSearchParams(window.location.search).get('lead'); if (requested && !openedFromLink.current) { openedFromLink.current = true; void openDetail(requested); } return () => { openedFromLink.current = false; }; }, []);
   const perform = async (name: string, action: () => Promise<LeadDetail>, replaceForm = true) => { setBusy(name); setError(''); setMessage('');
-    try { const result = await action(); setDetail(result); if (replaceForm) setForm(result.lead.fields); reload(); setMessage(name === 'Saving' ? 'Lead saved.' : 'Lead updated.'); return result; }
+    try { const result = await action(); setDetail(result); if (replaceForm) setForm(result.lead.fields); reload(); setMessage([name === 'Saving' ? 'Lead saved.' : 'Lead updated.', result.businessIdWarning].filter(Boolean).join(' ')); return result; }
     catch (failure) { const message = errorText(failure); setError(message); showError(message, 'Lead action not completed'); return null; } finally { setBusy(''); }
   };
   const save = () => { if ((form.branches || []).some(branch => !branch.name.trim())) { setError('Enter a name for each added branch, or remove the draft branch.'); return; } if (!form.name.trim()) { setError('Company name is required.'); return; } void perform('Saving', () => detail ? leadsApi.update(detail.lead, form) : leadsApi.create(form)); };
