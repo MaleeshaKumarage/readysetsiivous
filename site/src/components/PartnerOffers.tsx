@@ -31,7 +31,7 @@ export function PartnerOffers({ onAccepted }: { onAccepted: () => void }) {
     catch (e) { setError(e instanceof Error ? e.message : 'Your decision could not be confirmed. Refresh offers before retrying.'); }
     finally { setBusy(false); }
   }
-  return <section aria-busy={busy || loading} aria-label="Cleaning offers" className="grid gap-4 text-gray-900 dark:text-gray-100 lg:grid-cols-2">
+  return <section aria-busy={busy || loading} aria-label="Cleaning offers" className="grid grid-cols-1 gap-4 text-gray-900 dark:text-gray-100 lg:grid-cols-2">
     <Card className="space-y-4 lg:col-span-2">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">Cleaning offers awaiting your acceptance</h2>
