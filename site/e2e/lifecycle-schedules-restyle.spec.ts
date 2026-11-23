@@ -97,3 +97,23 @@ test('a shift card has the gold left edge from the design', async ({ page }) => 
   expect(width).toBeGreaterThanOrEqual(4);
   expect(color).not.toBe('rgba(0, 0, 0, 0)');
 });
+
+test('the schedule column is wider on desktop and the Start button is a 44px target', async ({ page, isMobile }) => {
+  await setup(page);
+  await page.route(/\/api\/v1\/me\/shifts\/calendar(\?.*)?$/, route => route.fulfill({
+    headers,
+    json: {
+      occurrences: [{ shiftId: 'oakfield', shiftName: 'Oakfield clean', startUtc: '2026-11-01T08:00:00Z', endUtc: '2026-11-01T12:00:00Z', timeZoneId: 'Europe/Helsinki', form: null }],
+      timeZoneId: 'Europe/Helsinki', fromLocalDate: '2026-11-01', toLocalDate: '2026-11-01',
+    },
+  }));
+  await page.goto('/me/shifts/');
+  const start = page.getByRole('button', { name: 'Start', exact: true });
+  await expect(start).toBeVisible();
+  const box = await start.boundingBox();
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+  if (!isMobile) {
+    const width = await page.locator('.employee-content').evaluate(el => el.getBoundingClientRect().width);
+    expect(width).toBeGreaterThan(700);
+  }
+});
