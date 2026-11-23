@@ -210,14 +210,14 @@ export function InventoryPanel() {
       )}
 
       {ready && authed && (
-        <>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
           {loadError && (
             <div role="alert" className="mb-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-200">
               {loadError} <button className="underline" onClick={() => loadAll()}>Try again</button>
             </div>
           )}
 
-          <section aria-labelledby="log-heading" className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+          <section aria-labelledby="log-heading" className="rounded-2xl border border-l-4 border-l-brand-400 border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-900">
             <h2 id="log-heading" className="mb-4 text-lg font-semibold">Log an item taken</h2>
             <form onSubmit={save} className="space-y-4" noValidate>
               <div>
@@ -354,7 +354,7 @@ export function InventoryPanel() {
             {history !== null && history.length > 0 && (
               <ul className="space-y-3">
                 {history.map(entry => (
-                  <li key={entry.id} className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+                  <li key={entry.id} className="rounded-2xl border border-l-4 border-l-brand-400 border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
                     <div className="flex flex-wrap justify-between gap-2 text-sm">
                       <span className="font-medium">{entry.itemName}: {entry.quantity} {entry.unit}</span>
                       <span className="text-gray-500">{takenLabel(entry.takenUtc)}</span>
@@ -371,7 +371,7 @@ export function InventoryPanel() {
               </ul>
             )}
           </section>
-        </>
+        </div>
       )}
     </div>
   );
