@@ -286,7 +286,7 @@ export default function MyShiftsPage() {
               const today = tenantDateKey(new Date(now), o.timeZoneId);
               const canStart = scheduledDate <= today;
               return (
-                <Card key={key} role="group" aria-label={`${o.shiftName} ${o.startUtc}`} variant="elevated" padding="none" className="employee-job overflow-hidden">
+                <Card key={key} role="group" aria-label={`${o.shiftName} ${o.startUtc}`} variant="elevated" padding="none" className="employee-job overflow-hidden border-l-4 border-l-brand-400">
                   <div className="p-5 space-y-3">
                     <div className="employee-job-heading flex items-start justify-between gap-3">
                       <div>
@@ -326,14 +326,14 @@ export default function MyShiftsPage() {
                     )}
                     {o.isDeleted && <p className="text-sm text-gray-500">Deleted shift · historical record</p>}
                     {status === 'not-started' && !o.isDeleted && (
-                      <Button size="sm" onClick={() => handleStart(o)} disabled={busy || !canStart} className="gap-1.5">
+                      <Button size="sm" onClick={() => handleStart(o)} disabled={busy || !canStart} className="min-h-11 w-full gap-1.5 sm:w-auto">
                         <Play className="w-4 h-4" /> Start
                       </Button>
                     )}
                     {status === 'not-started' && !canStart && <p className="text-sm text-gray-500">Available on the scheduled date. The actual start time will be recorded.</p>}
 
                     {status === 'in-progress' && !o.isDeleted && (
-                      <Button variant="outline" size="sm" disabled={photoReading || submitting} onClick={() => openForm(o)} className="gap-1.5">
+                      <Button variant="outline" size="sm" disabled={photoReading || submitting} onClick={() => openForm(o)} className="min-h-11 w-full gap-1.5 sm:w-auto">
                         {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         Record activities & end
                       </Button>
@@ -458,8 +458,8 @@ export default function MyShiftsPage() {
 
   return (
     <div className="employee-portal py-8 px-4 sm:px-6">
-      <div className="employee-content max-w-2xl mx-auto space-y-6">
-        <div className="employee-header flex flex-wrap items-center justify-between gap-3">
+      <div className="employee-content mx-auto max-w-2xl space-y-6 lg:max-w-5xl">
+        <div className="employee-header flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-900">
           <div className="flex items-center gap-3">
             <Logo size="md" />
             <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">My Shifts</h1>
@@ -485,12 +485,12 @@ export default function MyShiftsPage() {
           </div>
         )}
 
-        <div role="tablist" aria-label="Shift dates" className="flex gap-2">
+        <div role="tablist" aria-label="Shift dates" className="flex w-full gap-2 sm:w-auto">
           {(['past', 'today', 'future'] as const).map((tab, index, tabs) => <button
             key={tab} id={`shift-tab-${tab}`} type="button" role="tab" aria-selected={view === tab}
             aria-controls="my-shifts-panel" tabIndex={view === tab ? 0 : -1}
             disabled={busy || photoReading || submitting}
-            className={`rounded-lg border px-4 py-2 font-semibold focus-visible:outline focus-visible:outline-2 ${view === tab ? 'bg-accent-900 text-white dark:bg-brand-400 dark:text-accent-950' : 'bg-white text-gray-800 dark:bg-gray-800 dark:text-gray-100'}`}
+            className={`min-h-11 flex-1 rounded-lg border px-4 py-2 font-semibold focus-visible:outline focus-visible:outline-2 sm:flex-none ${view === tab ? 'bg-accent-900 text-white dark:bg-brand-400 dark:text-accent-950' : 'bg-white text-gray-800 dark:bg-gray-800 dark:text-gray-100'}`}
             onClick={() => changeView(tab)} onKeyDown={event => {
               let next = index;
               if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
@@ -502,9 +502,9 @@ export default function MyShiftsPage() {
             }}>{tab[0].toUpperCase() + tab.slice(1)}</button>)}
         </div>
 
-        {view === 'past' && <div className="mb-4 flex flex-wrap items-end gap-3 text-sm font-semibold text-gray-800 dark:text-gray-100">
-          <label className="flex items-center gap-2">From <input type="date" aria-label="From date" value={pastFilter.from} max={pastFilter.to || calendarDay.current || undefined} disabled={busy || photoReading || submitting} onChange={e => applyPastFilter({ ...pastFilter, from: e.target.value })} className="rounded-lg border px-2 py-1 font-normal" /></label>
-          <label className="flex items-center gap-2">To <input type="date" aria-label="To date" value={pastFilter.to} min={pastFilter.from || undefined} max={calendarDay.current || undefined} disabled={busy || photoReading || submitting} onChange={e => applyPastFilter({ ...pastFilter, to: e.target.value })} className="rounded-lg border px-2 py-1 font-normal" /></label>
+        {view === 'past' && <div role="group" aria-label="Completed between dates" className="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-gray-200 bg-white p-3 text-sm font-semibold text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+          <label className="flex items-center gap-2">From <input type="date" aria-label="From date" value={pastFilter.from} max={pastFilter.to || calendarDay.current || undefined} disabled={busy || photoReading || submitting} onChange={e => applyPastFilter({ ...pastFilter, from: e.target.value })} className="min-h-11 min-w-0 rounded-lg border px-2 py-1 font-normal" /></label>
+          <label className="flex items-center gap-2">To <input type="date" aria-label="To date" value={pastFilter.to} min={pastFilter.from || undefined} max={calendarDay.current || undefined} disabled={busy || photoReading || submitting} onChange={e => applyPastFilter({ ...pastFilter, to: e.target.value })} className="min-h-11 min-w-0 rounded-lg border px-2 py-1 font-normal" /></label>
           {(pastFilter.from || pastFilter.to) && <Button variant="outline" disabled={busy || photoReading || submitting} onClick={() => applyPastFilter({ from: '', to: '' })}>Clear dates</Button>}
         </div>}
         <div id="my-shifts-panel" role="tabpanel" aria-labelledby={`shift-tab-${view}`}>
