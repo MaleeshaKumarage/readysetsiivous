@@ -99,6 +99,7 @@ test('a shift card has the gold left edge from the design', async ({ page }) => 
 });
 
 test('the schedule column is wider on desktop and the Start button is a 44px target', async ({ page, isMobile }) => {
+  await page.clock.setFixedTime(new Date('2026-11-23T10:00:00Z'));
   await setup(page);
   await page.route(/\/api\/v1\/me\/shifts\/calendar(\?.*)?$/, route => route.fulfill({
     headers,
