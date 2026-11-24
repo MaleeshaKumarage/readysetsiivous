@@ -135,8 +135,8 @@ export default function ShiftCalendar({ occurrences, renderShift, disabled, onCl
           </div>
         </div>
         <div id={`week-${week}`} hidden={!expanded}>
-          {days.map(({ day, shifts }) => <div key={day} id={`day-${day}`} hidden={!expanded || openDay !== day} className="mt-4 space-y-4" role="region" aria-label={`Shifts on ${day}`}>
-            {shifts.map(renderShift)}
+          {days.map(({ day, shifts }) => <div key={day} id={`day-${day}`} hidden={!expanded || openDay !== day} className="mt-4" role="region" aria-label={`Shifts on ${day}`}>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">{shifts.map(renderShift)}</div>
           </div>)}
         </div>
       </section>;
