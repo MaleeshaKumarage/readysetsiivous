@@ -48,7 +48,7 @@ test('real employee and tenant manager login, clocking, isolation, reinvite and 
   const shiftCard = page.getByRole('group', { name: /^Live employee shift / }).first();
   await expect(shiftCard).toBeVisible();
   await shiftCard.getByRole('button', { name: 'Start', exact: true }).click();
-  await shiftCard.getByRole('button', { name: 'Record activities & end', exact: true }).click();
+  await shiftCard.getByRole('button', { name: 'Add shift photos', exact: true }).click();
   await shiftCard.getByRole('checkbox', { name: 'Corridor', exact: true }).check();
   await shiftCard.getByRole('button', { name: 'End shift', exact: true }).click();
   await expect(shiftCard.getByText('Done', { exact: true })).toBeVisible();
