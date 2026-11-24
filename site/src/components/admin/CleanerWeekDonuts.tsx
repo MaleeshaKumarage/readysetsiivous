@@ -24,7 +24,7 @@ function weekLabel(weekStart: string) {
   return `${fmt(new Date(Date.UTC(y, m - 1, d)))} – ${fmt(new Date(Date.UTC(y, m - 1, d + 6)))}`;
 }
 
-/** One donut per cleaner on AG Charts: the scheduled hours of the week, split by customer, with the rest of a full-time week shown as free time. */
+/** One donut per employee on AG Charts: the scheduled hours of the week, split by customer, with the rest of a full-time week shown as free time. */
 function Donut({ name, companies, total, full }: { name: string; companies: CompanyHours[]; total: number; full: number }) {
   const over = full > 0 && total > full;
   const free = Math.max(0, full - total);
@@ -85,7 +85,7 @@ export function CleanerWeekDonuts() {
   return <Paper withBorder p="md" radius="md" className="office-card">
     <Group justify="space-between" mb="sm" wrap="wrap">
       <div>
-        <Text fw={650}>Scheduled hours per cleaner, by customer</Text>
+        <Text fw={650}>Scheduled hours per employee, by customer</Text>
         <Text size="xs" c="dimmed">Week {weekLabel(week.weekStart)} · full time is {week.fullTimeHours} h</Text>
       </div>
       <Group gap="xs">
@@ -94,7 +94,7 @@ export function CleanerWeekDonuts() {
         <Button size="xs" variant="default" onClick={() => setRequested(shiftWeek(week.weekStart, 7))}>Next week</Button>
       </Group>
     </Group>
-    {week.employees.length === 0 ? <Text c="dimmed" size="sm">No active cleaners.</Text> : <div role="region" aria-label="Cleaners' weekly hours" tabIndex={0}
+    {week.employees.length === 0 ? <Text c="dimmed" size="sm">No active employees.</Text> : <div role="region" aria-label="Employees' weekly hours" tabIndex={0}
       style={{ display: 'flex', flexWrap: 'nowrap', gap: 16, overflowX: 'auto', overflowY: 'hidden', paddingBottom: 6 }}>
       {week.employees.map(person => <div key={person.employeeId} style={{ flex: '0 0 150px' }}>
         <Donut name={person.name} companies={person.companies ?? []} total={person.scheduledHours} full={week.fullTimeHours} />

@@ -63,7 +63,7 @@ test('owner portal shows that a save is in progress and blocks a second submissi
   expect(backend.writes.filter(write => write.path.endsWith('/change-requests'))).toHaveLength(1);
 });
 
-test('owner and cleaner see a readable message when the server gives no detail', async ({ page, browser }, testInfo) => {
+test('owner and employee see a readable message when the server gives no detail', async ({ page, browser }, testInfo) => {
   const backend = new PartnerFlowBackend({ priced: true });
   await prepareRolePage(page, backend, 'owner');
   await page.goto('/partner/');
@@ -73,8 +73,8 @@ test('owner and cleaner see a readable message when the server gives no detail',
   await page.getByRole('button', { name: 'Send change request', exact: true }).click();
   await expect(page.locator('p[role="alert"]').filter({ hasText: 'Request failed (500). Refresh to check whether your change was saved before retrying.' })).toContainText('Request failed (500). Refresh to check whether your change was saved before retrying.');
 
-  backend.seedOffer(backend.seedRequest(backend.branches[0], WINDOW), 'cleaner');
-  const cleaner = await openActor(browser, testInfo, backend, 'cleaner');
+  backend.seedOffer(backend.seedRequest(backend.branches[0], WINDOW), 'employee');
+  const cleaner = await openActor(browser, testInfo, backend, 'employee');
   await cleaner.page.goto('/me/shifts/');
   await chooseEmployeeSection(cleaner.page, 'Offers');
   await expect(cleaner.page.getByRole('article', { name: `${PROPERTY} offer`, exact: true })).toBeVisible();
@@ -90,7 +90,7 @@ test('staff sees a clear empty state on every partner operations tab', async ({ 
   const backend = new PartnerFlowBackend();
   const staff = await openActor(browser, testInfo, backend, 'admin');
   await staffTab(staff.page, 'Requests');
-  await expect(staff.page.getByText('No requests waiting for a cleaner.', { exact: true })).toBeVisible();
+  await expect(staff.page.getByText('No requests waiting for an employee.', { exact: true })).toBeVisible();
   await staffTab(staff.page, 'Assigned');
   await expect(staff.page.getByText('No assigned visits.', { exact: true })).toBeVisible();
   await staffTab(staff.page, 'Quote requests');
@@ -152,11 +152,11 @@ test('staff edit refuses a window that ends before it starts with a readable mes
   await staff.context.close();
 });
 
-// ----- cleaner: accepted flexible visit and the Finnish partner portal -----
+// ----- employee: accepted flexible visit and the Finnish partner portal -----
 
 test('owner in Finnish sees a flexible visit described in Finnish', async ({ page }) => {
   const backend = new PartnerFlowBackend({ priced: true });
-  backend.seedAccepted(backend.seedRequest(backend.branches[0], WINDOW), 'cleaner', null);
+  backend.seedAccepted(backend.seedRequest(backend.branches[0], WINDOW), 'employee', null);
   await page.addInitScript(() => localStorage.setItem('readyset:partner-language', 'fi'));
   await prepareRolePage(page, backend, 'owner');
   await page.goto('/partner/');

@@ -285,7 +285,7 @@ export default function ShiftsAdminPage() {
   const [cleanerSaving, setCleanerSaving] = useState(false);
   const [cleanerError, setCleanerError] = useState('');
   const [defaultCleanerError, setDefaultCleanerError] = useState('');
-  // Assign employees on a property's main shift sets its default cleaner (new visits are offered to them).
+  // Assign employees on a property's main shift sets its default employee (new visits are offered to them).
   const [defaultCleanerFor, setDefaultCleanerFor] = useState<Shift | null>(null);
   const [defaultCleanerPick, setDefaultCleanerPick] = useState<string | null>(null);
   const [defaultCleanerSaving, setDefaultCleanerSaving] = useState(false);
@@ -610,7 +610,7 @@ export default function ShiftsAdminPage() {
   };
 
   // Opens the clashing shift's visit list from an overlap refusal, with the overlapping visit marked. The assignment
-  // dialog stays open if that shift cannot be loaded, so the admin keeps the cleaner and reason they had chosen.
+  // dialog stays open if that shift cannot be loaded, so the admin keeps the employee and reason they had chosen.
   const openClashingShift = async (shiftId: string, shiftName: string, clashStartUtc: string) => {
     // adminGet resolves to null on a failed request instead of throwing, so a null shift is the failure case.
     const clashing = await adminShifts.get(shiftId, true);
@@ -622,7 +622,7 @@ export default function ShiftsAdminPage() {
     await openOccurrences(clashing, `Showing ${shiftName}. The overlapping visit is marked below.`, clashStartUtc);
   };
 
-  // A new one-time visit on an on-call shift prefills its default cleaner and notes; the user only sets date and times.
+  // A new one-time visit on an on-call shift prefills its default employee and notes; the user only sets date and times.
   const openOccurrenceEditor = (occurrence?: ShiftOccurrence, status = '1', shift: Shift | null = occurrenceShift) => {
     const quick = !occurrence && status === '4' && shift?.schedule.type === 4 ? shift : null;
     setEditingOccurrence(occurrence ?? { startUtc: '', endUtc: '' });
@@ -647,7 +647,7 @@ export default function ShiftsAdminPage() {
         status, reason: occurrenceReason.trim(), employeeId: occurrenceEmployee,
       });
       setEditingOccurrence(null);
-      setShiftNotice(status === 4 ? 'One-time visit scheduled. It appears in the shift calendar; assigned cleaners see it in My shifts.' : 'Visit updated.');
+      setShiftNotice(status === 4 ? 'One-time visit scheduled. It appears in the shift calendar; assigned employees see it in My shifts.' : 'Visit updated.');
       // Keep a newly scheduled date visible even when it is outside the old list window.
       const savedDay = occurrenceStart.slice(0, 10);
       if (savedDay < occurrenceFrom || savedDay > occurrenceTo) {
@@ -661,7 +661,7 @@ export default function ShiftsAdminPage() {
   // A new visit shows up under its property's shift; an open visit list reloads to include it.
   const visitAdded = async (visit: { number: number; shiftId: string; startUtc: string; status: string }, propertyName: string) => {
     setVisitDialog(null);
-    const outcome = visit.status === 'Assigned' ? 'The cleaner has it in My shifts.' : visit.status === 'Offered' ? 'An offer was sent to the cleaner.' : 'It has no cleaner yet.';
+    const outcome = visit.status === 'Assigned' ? 'The employee has it in My shifts.' : visit.status === 'Offered' ? 'An offer was sent to the employee.' : 'It has no employee yet.';
     setShiftNotice(`Visit #${visit.number} added to ${propertyName}. ${outcome}`);
     await load();
     if (occurrenceShift?.id === visit.shiftId) {
@@ -825,7 +825,7 @@ export default function ShiftsAdminPage() {
                                     <th className="px-3 py-2 font-bold"><span className="inline-flex items-center gap-1.5"><ListChecks size={14} aria-hidden />Visit</span></th>
                                     <th className="px-3 py-2 font-bold"><span className="inline-flex items-center gap-1.5"><Clock size={14} aria-hidden />Starts</span></th>
                                     <th className="px-3 py-2 font-bold"><span className="inline-flex items-center gap-1.5"><Sparkles size={14} aria-hidden />Type</span></th>
-                                    <th className="px-3 py-2 font-bold"><span className="inline-flex items-center gap-1.5"><UserRound size={14} aria-hidden />Cleaner</span></th>
+                                    <th className="px-3 py-2 font-bold"><span className="inline-flex items-center gap-1.5"><UserRound size={14} aria-hidden />Employee</span></th>
                                     <th className="px-3 py-2 font-bold"><span className="inline-flex items-center gap-1.5"><CircleCheck size={14} aria-hidden />Status</span></th>
                                   </tr>
                                 </thead>
@@ -862,7 +862,7 @@ export default function ShiftsAdminPage() {
         onClose={() => setWorkspaceId(null)} />}
       {defaultCleanerFor && <Modal opened onClose={() => { if (!defaultCleanerSaving) setDefaultCleanerFor(null); }} closeButtonProps={{ disabled: defaultCleanerSaving }} title={`Assign employees — ${defaultCleanerFor.name}`} size="md" radius="md">
         <Stack>
-          <Select label="Default cleaner" description="New visits are offered to this cleaner. Visits already added keep their cleaner." clearable searchable
+          <Select label="Default employee" description="New visits are offered to this employee. Visits already added keep their employee." clearable searchable
             placeholder="None: new visits start unassigned" value={defaultCleanerPick} onChange={setDefaultCleanerPick}
             data={employees.filter(e => e.isActive).map(e => ({ value: e.id, label: `${e.firstName} ${e.lastName}` }))} />
           {defaultCleanerError && <Text role="alert" c="red">{defaultCleanerError}</Text>}
@@ -934,7 +934,7 @@ export default function ShiftsAdminPage() {
       <Modal opened={Boolean(occurrenceShift)} onClose={() => { if (occurrenceSaving) return; occurrenceGeneration.current++; setOccurrenceShift(null); setEditingOccurrence(null); }} closeButtonProps={{ disabled: occurrenceSaving }} closeOnEscape={!occurrenceSaving} closeOnClickOutside={!occurrenceSaving} title={`Occurrences${occurrenceShift ? ` — ${occurrenceShift.name}` : ''}`} size="xl">
         <Stack>
           <Text size="sm" c="dimmed">Times use the tenant time zone: {timeZoneId}. Changes apply only to the selected visit.</Text>
-          {occurrenceShift?.schedule.type === 4 && <Text size="sm">On-call shifts have no automatic visits. Schedule each visit with a date and time. Choose a cleaner below or assign employees to this shift.</Text>}
+          {occurrenceShift?.schedule.type === 4 && <Text size="sm">On-call shifts have no automatic visits. Schedule each visit with a date and time. Choose an employee below or assign employees to this shift.</Text>}
           {shiftNotice && <Text role="status">{shiftNotice}</Text>}
           <Group align="flex-end" wrap="wrap">
             <TextInput label="From" type="date" value={occurrenceFrom} onChange={e => setOccurrenceFrom(e.target.value)} />
@@ -945,7 +945,7 @@ export default function ShiftsAdminPage() {
               : <Button onClick={() => openOccurrenceEditor(undefined, '4')}>Add visit</Button>}
           </Group>
           {occurrenceShift?.isBranchMain && <>
-            <Select label="Default cleaner" description="Each new visit is offered to this cleaner. Visits already added keep their cleaner." placeholder="None: new visits start unassigned"
+            <Select label="Default employee" description="Each new visit is offered to this employee. Visits already added keep their employee." placeholder="None: new visits start unassigned"
               clearable searchable value={occurrenceShift.defaultEmployeeId ?? null} onChange={value => { void saveDefaultCleaner(value); }}
               data={employees.filter(e => e.isActive && e.role !== 'partner').map(e => ({ value: e.id, label: employeeLabel(e, employees) }))} />
             {defaultCleanerError && <Text role="alert" c="red">{defaultCleanerError}</Text>}
@@ -961,13 +961,13 @@ export default function ShiftsAdminPage() {
                 <Table.Td>{new Date(item.endUtc).toLocaleString(undefined, { timeZone: timeZoneId })}</Table.Td>
                 <Table.Td data-testid="occurrence-status">{item.visitNumber && item.workStatus ? WORK_STATUS_LABEL[item.workStatus] ?? item.workStatus : item.status ? OCCURRENCE_STATUSES.find(x => x.value === String(item.status))?.label : 'Scheduled'}</Table.Td>
                 <Table.Td><Text size="sm">{(item.assigneeIds ?? []).map(employeeName).join(', ') || (item.offeredEmployeeId ? `Offer sent to ${employeeName(item.offeredEmployeeId)}` : 'Unassigned')}</Text>
-                  <Text size="xs" c="dimmed">{item.visitNumber ? (item.isPartnerBooking ? 'Partner booking' : item.offeredEmployeeId ? 'Waiting for the cleaner to accept' : (item.assigneeIds ?? []).length ? 'Accepted' : 'No cleaner yet') : item.assignmentSource ?? 'Recurring'}</Text>{item.visitNumber ? <Text size="xs" c="dimmed">{item.visitCleaningType ?? 'Normal'} cleaning</Text> : null}{item.visitNumber && item.offeredEmployeeId && Date.parse(item.endUtc) < Date.now() ? <Text size="xs" c="orange" data-testid="past-offer-note">This visit has already ended. The cleaner can still accept the offer. To change the cleaner, delete this visit and add it again.</Text> : null}{item.assignmentLockReason && <Text size="xs" c="dimmed">{item.assignmentLockReason}</Text>}</Table.Td>
+                  <Text size="xs" c="dimmed">{item.visitNumber ? (item.isPartnerBooking ? 'Partner booking' : item.offeredEmployeeId ? 'Waiting for the employee to accept' : (item.assigneeIds ?? []).length ? 'Accepted' : 'No employee yet') : item.assignmentSource ?? 'Recurring'}</Text>{item.visitNumber ? <Text size="xs" c="dimmed">{item.visitCleaningType ?? 'Normal'} cleaning</Text> : null}{item.visitNumber && item.offeredEmployeeId && Date.parse(item.endUtc) < Date.now() ? <Text size="xs" c="orange" data-testid="past-offer-note">This visit has already ended. The employee can still accept the offer. To change the employee, delete this visit and add it again.</Text> : null}{item.assignmentLockReason && <Text size="xs" c="dimmed">{item.assignmentLockReason}</Text>}</Table.Td>
                 <Table.Td>{item.reason ?? '—'}</Table.Td>
                 <Table.Td><Group gap={4} wrap="nowrap">
                   {item.isPartnerBooking ? <><Text size="xs" c="dimmed">Managed under Partner requests</Text><Button size="xs" variant="light" onClick={() => { setCleanerVisit(item); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Change cleaning type</Button></> : <>
                   {isAdmin() && (occurrenceShift?.schedule.type === 4 || occurrenceShift?.schedule.type === 6) && <Button size="xs" variant="light" onClick={() => { setPricingShift(occurrenceShift); setPricingOccurrence(item); }}>Visit price</Button>}
                   {occurrenceShift?.isBranchMain
-                    ? <Button size="xs" variant="light" disabled={item.canAssign === false} onClick={() => { setCleanerVisit(item); setCleanerChoice(item.assigneeIds?.[0] ?? item.offeredEmployeeId ?? null); setCleanerError(''); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Change cleaner</Button>
+                    ? <Button size="xs" variant="light" disabled={item.canAssign === false} onClick={() => { setCleanerVisit(item); setCleanerChoice(item.assigneeIds?.[0] ?? item.offeredEmployeeId ?? null); setCleanerError(''); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Change employee</Button>
                     : <Button size="xs" variant="light" disabled={item.canAssign === false || item.status === 2 || item.status === 3} onClick={() => setAssigningVisit(item)}>Assign</Button>}
                   {occurrenceShift?.isBranchMain && item.exceptionId && <Button size="xs" variant="light" onClick={() => { setCleanerVisit(item); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Change cleaning type</Button>}
                   <Button size="xs" variant="subtle" onClick={() => openOccurrenceEditor(item)}>Change</Button>
@@ -983,15 +983,15 @@ export default function ShiftsAdminPage() {
 
       <AddVisitDialog opened={Boolean(visitDialog)} preset={visitDialog?.preset ?? null} employees={employees} timeZoneId={timeZoneId}
         onClose={() => setVisitDialog(null)} onAdded={(visit, propertyName) => { void visitAdded(visit, propertyName); }} />
-      <Modal opened={Boolean(cleanerVisit)} onClose={() => { if (!cleanerSaving) setCleanerVisit(null); }} closeButtonProps={{ disabled: cleanerSaving }} title={cleanerVisit?.isPartnerBooking ? 'Cleaning type' : 'Change cleaner'}>
+      <Modal opened={Boolean(cleanerVisit)} onClose={() => { if (!cleanerSaving) setCleanerVisit(null); }} closeButtonProps={{ disabled: cleanerSaving }} title={cleanerVisit?.isPartnerBooking ? 'Cleaning type' : 'Change employee'}>
         <Stack>
           <Text size="sm">{cleanerVisit && visitLabel(cleanerVisit, timeZoneId)}</Text>
           {!cleanerVisit?.isPartnerBooking && <>
-          <Select label="Cleaner" placeholder="Unassigned" clearable searchable value={cleanerChoice} onChange={setCleanerChoice}
-            description="The cleaner gets an offer and holds the visit once accepted. A cleaner who already holds it is released."
+          <Select label="Employee" placeholder="Unassigned" clearable searchable value={cleanerChoice} onChange={setCleanerChoice}
+            description="The employee gets an offer and holds the visit once accepted. An employee who already holds it is released."
             data={employees.filter(e => e.isActive && e.role !== 'partner').map(e => ({ value: e.id, label: employeeLabel(e, employees) }))} />
           {cleanerError && <Text role="alert" c="red">{cleanerError}</Text>}
-          <Group justify="flex-end"><Button variant="default" disabled={cleanerSaving} onClick={() => setCleanerVisit(null)}>Cancel</Button><Button loading={cleanerSaving} onClick={saveCleaner}>Save cleaner</Button></Group>
+          <Group justify="flex-end"><Button variant="default" disabled={cleanerSaving} onClick={() => setCleanerVisit(null)}>Cancel</Button><Button loading={cleanerSaving} onClick={saveCleaner}>Save employee</Button></Group>
           </>}
           <Select label="Cleaning type" allowDeselect={false} value={cleaningTypeChoice ?? cleanerVisit?.visitCleaningType ?? 'Normal'} onChange={setCleaningTypeChoice}
             description={cleaningTypeChoice === 'Deep' || (!cleaningTypeChoice && cleanerVisit?.visitCleaningType === 'Deep') ? `Deep cleaning adds €${DEEP_SURCHARGE_EUR} excl. VAT to this visit.` : 'Every visit starts as Normal. You can change it at any time, including after the cleaning is done.'}
@@ -1050,7 +1050,7 @@ export default function ShiftsAdminPage() {
             <TextInput label="End date (optional)" type="date" min={validFrom || undefined} value={validUntil} onChange={e => setValidUntil(e.target.value)} />
           </Group>}
           <Select label="Schedule" required withAsterisk={false} placeholder="Choose a schedule type" allowDeselect={false} data={SCHEDULE_TYPES.filter(type => type.value !== '6' || editingShift?.schedule.type === 6)} value={scheduleType || null} onChange={(v) => { if (v) setScheduleType(v); }} />
-          {scheduleType === '4' && <Text size="sm">On-call is a reusable shift without scheduled dates. After creating it, enter the date, time and cleaner for a one-time visit. Only dated visits appear on calendars.</Text>}
+          {scheduleType === '4' && <Text size="sm">On-call is a reusable shift without scheduled dates. After creating it, enter the date, time and employee for a one-time visit. Only dated visits appear on calendars.</Text>}
 
           {scheduleType === '2' && (
             <MultiSelect

@@ -7,7 +7,7 @@ const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Head
 const TOTAL = 500;
 const items = Array.from({ length: TOTAL }, (_, index) => ({
   source: 'shift', id: `visit-${index}`, reference: `Weekly ${index}`, customerName: `Customer ${String(index).padStart(3, '0')}`,
-  scheduledLocal: '2026-11-13 16:00', status: 'Scheduled', stateLabel: 'Needs cleaner', assigneeName: null, href: '/admin/shifts/calendar/',
+  scheduledLocal: '2026-11-13 16:00', status: 'Scheduled', stateLabel: 'Needs employee', assigneeName: null, href: '/admin/shifts/calendar/',
 }));
 
 async function setup(page: Page) {

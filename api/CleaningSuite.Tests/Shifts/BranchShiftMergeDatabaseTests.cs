@@ -124,7 +124,7 @@ public class BranchShiftMergeDatabaseTests
             Assert.Equal(BranchShiftMergeRecord.OutcomeMerged, backup.Outcome); Assert.Equal(main.Id, backup.MainShiftId); Assert.Equal(1, backup.VisitNumber);
             Assert.Contains("Partner visit 08:00", backup.BackupJson); Assert.Contains(earlier.Shift.Id.ToString(), backup.BackupJson);
         }
-        // Each cleaner still has exactly their own visit.
+        // Each employee still has exactly their own visit.
         using (var read = f.Session())
         {
             var handler = new QualityCycleHandlers.GetMyShiftsQueryHandler(new ShiftRepository(read), new QualityCycleRepository(read, f.Store),
@@ -260,7 +260,7 @@ public class BranchShiftMergeDatabaseTests
         Assert.Single(shifts, x => x.IsBranchMain);
     }
 
-    /// <summary>A one-time shift as staff created them before Add visit: its own shift, whole-shift cleaners and price.</summary>
+    /// <summary>A one-time shift as staff created them before Add visit: its own shift, whole-shift employees and price.</summary>
     private static async Task<Shift> OneTime(Fixture f, string start, string end, Employee[] cleaners, ShiftBillingProfile? billing = null,
         bool active = true, string? notes = null, Guid? template = null)
     {
@@ -315,7 +315,7 @@ public class BranchShiftMergeDatabaseTests
             Assert.Empty(await reader.Query<ShiftBillingProfile>().ToListAsync());
             Assert.Equal(BranchShiftMergeRecord.OutcomeMerged, (await reader.LoadAsync<BranchShiftMergeRecord>(solo.Id))!.Outcome);
         }
-        // The cleaners see exactly the visits they had before.
+        // The employees see exactly the visits they had before.
         var mine = await Mine(f, f.Cleaner);
         Assert.Equal(new int?[] { 1, 2 }, mine.Select(x => x.VisitNumber).ToArray());
         Assert.Equal(2, Assert.Single(await Mine(f, f.Second)).VisitNumber);
@@ -389,7 +389,7 @@ public class BranchShiftMergeDatabaseTests
         using var reader = f.Reader();
         Assert.Equal(new[] { hourly.Id, moved.Id, worked.Id }.Order(), (await reader.Query<Shift>().ToListAsync()).Select(x => x.Id).Order());
         Assert.Equal(BranchShiftMergeRecord.OutcomeRemoved, (await reader.LoadAsync<BranchShiftMergeRecord>(dropped.Id))!.Outcome);
-        // Kept shifts keep their cleaners, price and work records exactly as they were.
+        // Kept shifts keep their employees, price and work records exactly as they were.
         Assert.Equal(3, (await reader.Query<ShiftAssignment>().ToListAsync()).Count);
         Assert.Equal("Hourly", Assert.Single(Assert.Single(await reader.Query<ShiftBillingProfile>().ToListAsync()).Plans).Mode);
         Assert.Equal(worked.Id, Assert.Single(await reader.Query<QualityCycleForm>().ToListAsync()).ShiftId);

@@ -7,11 +7,11 @@ public static class StaffAlertCopy
 
     public static (string Title, string Body, string Link) For(string kind) => kind switch
     {
-        "StaffPartnerAccepted" => ("Cleaner accepted partner work", "A cleaner accepted a partner cleaning. Open partner requests to check the plan.", "/admin/partner-requests/"),
-        "StaffPartnerOfferDeclined" => ("Cleaner declined partner offer", "A cleaner declined a partner cleaning offer. Arrange another cleaner.", "/admin/partner-requests/"),
+        "StaffPartnerAccepted" => ("Employee accepted partner work", "An employee accepted a partner cleaning. Open partner requests to check the plan.", "/admin/partner-requests/"),
+        "StaffPartnerOfferDeclined" => ("Employee declined partner offer", "An employee declined a partner cleaning offer. Arrange another employee.", "/admin/partner-requests/"),
         "StaffPartnerRequestChanged" => ("Partner changed a request", "A partner changed a cleaning request. Review it in partner requests.", "/admin/partner-requests/"),
         "StaffPartnerRequestCancelled" => ("Partner cancelled a request", "A partner cancelled a cleaning request.", "/admin/partner-requests/"),
-        "StaffVisitOfferDeclined" => ("Cleaner declined a visit", "A cleaner declined a visit offer. Assign another cleaner.", "/admin/shifts/"),
+        "StaffVisitOfferDeclined" => ("Employee declined a visit", "An employee declined a visit offer. Assign another employee.", "/admin/shifts/"),
         _ => ("Notification", "Open the admin app to review it.", "/admin/"),
     };
 }

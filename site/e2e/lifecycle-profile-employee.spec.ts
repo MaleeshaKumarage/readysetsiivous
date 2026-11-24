@@ -24,11 +24,11 @@ test('the employee Details and Work preferences cards have the gold edge', async
   }
 });
 
-test('the role reads Employee, not Cleaner', async ({ page }) => {
+test('the role reads Employee, not Employee', async ({ page }) => {
   await setup(page);
   await page.goto('/account/profile/?tenant=tenant-a');
   await expect(page.getByText('Roles: Employee', { exact: true })).toBeVisible();
-  await expect(page.getByText('Cleaner', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Employee', { exact: true })).toHaveCount(0);
 });
 
 test('the profile does not widen a phone', async ({ page, isMobile }) => {

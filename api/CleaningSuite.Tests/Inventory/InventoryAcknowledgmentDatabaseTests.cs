@@ -46,7 +46,7 @@ public sealed class InventoryAcknowledgmentDatabaseTests(InventoryAcknowledgment
         var other = Company.Create("8765432-1", "Other partner"); other.IsPartnerEnabled = true;
         var owner = new Employee { Role = Employee.RolePartner, PartnerCompanyId = company.Id, FirstName = "Test", LastName = "Owner" };
         var otherOwner = new Employee { Role = Employee.RolePartner, PartnerCompanyId = other.Id };
-        var first = new InventoryUsage { EmployeeId = Guid.NewGuid(), EmployeeName = "Private Cleaner Name", ItemName = "Keys", LocationName = "Store", Quantity = 2, Unit = "pcs", Note = "Spare set", TakenUtc = DateTime.UtcNow, Photos = [new(Guid.NewGuid(), ".png")] };
+        var first = new InventoryUsage { EmployeeId = Guid.NewGuid(), EmployeeName = "Private Employee Name", ItemName = "Keys", LocationName = "Store", Quantity = 2, Unit = "pcs", Note = "Spare set", TakenUtc = DateTime.UtcNow, Photos = [new(Guid.NewGuid(), ".png")] };
         var second = new InventoryUsage { ItemName = "Bedsheets", LocationName = "Store", Quantity = 4, Unit = "pcs", TakenUtc = DateTime.UtcNow, Photos = [new(Guid.NewGuid(), ".png")] };
         using var db = fixture.Store.LightweightSession(tenant);
         db.Store(company); db.Store(other); db.Store(owner); db.Store(otherOwner); db.Store(first); db.Store(second);

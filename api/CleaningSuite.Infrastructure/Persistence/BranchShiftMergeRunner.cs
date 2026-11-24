@@ -142,7 +142,7 @@ public sealed class BranchShiftMergeRunner(IDocumentStore store, ITenantRegistry
             main.CoverVisitDate(localDate);
             if (oneTime)
             {
-                // The one-time shift's generated visit becomes a stored visit on the main shift, held by the same cleaners.
+                // The one-time shift's generated visit becomes a stored visit on the main shift, held by the same employees.
                 visit = ShiftOccurrenceException.Create(main.Id, null, visitStart.Value, current.VisitEndUtc!.Value, ShiftOccurrenceExceptionStatus.Extra,
                     "Merged from a one-time shift", current.EmployeeIds.Count == 1 ? current.EmployeeIds[0] : null);
                 visit.Id = BranchShiftMerge.OneTimeVisitId(shift.Id);

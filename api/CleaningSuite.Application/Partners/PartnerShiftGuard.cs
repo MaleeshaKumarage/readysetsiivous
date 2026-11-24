@@ -21,7 +21,7 @@ public static class PartnerShiftGuard
     }
 
     /// <summary>
-    /// A branch main shift cannot be switched off or removed while it still holds partner bookings: their cleaners
+    /// A branch main shift cannot be switched off or removed while it still holds partner bookings: their employees
     /// would lose the visits while the requests stayed accepted.
     /// </summary>
     public static async Task EnsureNoBookingsAsync(IShiftRepository shifts, Shift shift, CancellationToken ct)

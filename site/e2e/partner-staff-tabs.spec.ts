@@ -10,7 +10,7 @@ const branchFor = (index: number) => ({ id: `22222222-2222-4222-8222-${String(in
 const requestFor = (index: number, status: string): CleaningRequest => ({
   id: `33333333-3333-4333-8333-${String(index).padStart(12, '0')}`, version: 3, companyId, branchId: branchFor(index).id, branchName: `Property ${index}`,
   fromDate: '2026-12-01', toDate: '2026-12-02', exactStartLocalTime: null, notes: null, priceNet: 70, vatRatePercent: 25.5, estimatedDurationMinutes: 120,
-  status, firstAcceptedAtUtc: '2026-11-20T10:00:00Z', linkedShiftId: null, plannedStartUtc: null, plannedEndUtc: null, acceptedCleanerName: 'Test Cleaner', actualStartUtc: null, actualEndUtc: null, offeredEmployeeId: null,
+  status, firstAcceptedAtUtc: '2026-11-20T10:00:00Z', linkedShiftId: null, plannedStartUtc: null, plannedEndUtc: null, acceptedCleanerName: 'Test Employee', actualStartUtc: null, actualEndUtc: null, offeredEmployeeId: null,
 } as unknown as CleaningRequest);
 
 async function setup(page: Page, requests: CleaningRequest[]) {

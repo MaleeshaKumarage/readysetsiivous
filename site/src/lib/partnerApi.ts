@@ -2,10 +2,10 @@ import { authorizedFetch, type Branch, type ShiftSchedule } from './adminApi';
 
 export interface PartnerIdentity { realm: string; person: { id: string; firstName: string; lastName: string; role: string; isActive: boolean }; company: { id: string; name: string; isActive: boolean; isPartnerEnabled: boolean }; timeZoneId: string }
 export interface CleaningRequest { id: string; version: number; companyId: string; branchId: string; branchName: string; fromDate: string; toDate: string; exactStartLocalTime: string | null; notes: string | null; cleaningType?: string; priceNet: number; vatRatePercent: number; estimatedDurationMinutes: number; status: string; firstAcceptedAtUtc: string | null; linkedShiftId: string | null; plannedStartUtc: string | null; plannedEndUtc: string | null; acceptedCleanerName: string | null; actualStartUtc: string | null; actualEndUtc: string | null; offeredEmployeeId?: string | null; offerId?: string | null }
-// One-time portal setup. Photo sections are the photos every cleaner must attach before a visit can end.
-// Account details: billing and invoice facts, a contact person, and how the cleaner gets in.
+// One-time portal setup. Photo sections are the photos every employee must attach before a visit can end.
+// Account details: billing and invoice facts, a contact person, and how the employee gets in.
 export interface PartnerAccount { billingName?: string | null; invoiceAddress?: string | null; businessId?: string | null; invoiceReference?: string | null; contactName?: string | null; contactPhone?: string | null; contactEmail?: string | null; accessInstructions?: string | null }
-// General instructions are read by the cleaner before every visit; a visit's own instructions are appended after them.
+// General instructions are read by the employee before every visit; a visit's own instructions are appended after them.
 export interface PartnerSettings { photoLabels: string[]; generalInstructions?: string | null; account?: PartnerAccount }
 // What the owner asks for on a cleaning request. Structured actions can be applied by staff; "Message" needs a reply.
 export type PartnerChangeAction = 'Message' | 'Reschedule' | 'Instructions' | 'Cancel';
@@ -13,7 +13,7 @@ export interface PartnerRequestChangeInput { message: string; action: PartnerCha
 export interface PartnerChange { id: string; companyId: string; branchId: string | null; requestId: string | null; kind: string; message: string; createdUtc: string; resolvedUtc: string | null; resolution: string | null; action?: string; proposedFromDate?: string | null; proposedToDate?: string | null; proposedExactStartLocalTime?: string | null; proposedNotes?: string | null }
 export interface CleanerOffer { id: string; requestId: string; version: number; branchName: string; street: string | null; postalCode: string | null; city: string | null; fromDate: string; toDate: string; exactStartLocalTime: string | null; plannedStartUtc: string | null; estimatedDurationMinutes: number; notes: string | null; timeZoneId: string; cleaningType?: string }
 export interface PartnerShift { id: string; branchId: string; branchName: string; name: string; isActive: boolean; schedule: ShiftSchedule; validFrom: string | null; validUntil: string | null }
-// Partner-safe completed-visit summary. The cleaner is masked to an initial; no employee ids or full names.
+// Partner-safe completed-visit summary. The employee is masked to an initial; no employee ids or full names.
 export interface PartnerCompletionTask { text: string; done: boolean }
 export interface PartnerCompletionPhoto { url: string; note: string }
 export interface PartnerCompletionReport { templateTitle: string; startedAtUtc: string | null; endedAtUtc: string | null; tasks: PartnerCompletionTask[]; cleanerNotes: string | null; photos: PartnerCompletionPhoto[] }

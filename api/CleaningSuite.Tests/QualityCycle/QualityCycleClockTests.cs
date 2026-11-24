@@ -214,7 +214,7 @@ public class QualityCycleClockTests
     [Fact]
     public async Task End_BeforeStartRejectsWithoutWriting()
     {
-        var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Cleaner", Guid.Empty, "Shift activities", FromUtc, new());
+        var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Employee", Guid.Empty, "Shift activities", FromUtc, new());
         var repository = new Mock<IQualityCycleRepository>(); repository.Setup(r => r.GetFormAsync(form.Id, It.IsAny<CancellationToken>())).ReturnsAsync(form);
         await Assert.ThrowsAsync<QualityCycleConflictException>(() => new QualityCycleHandlers.EndQualityCycleFormCommandHandler(repository.Object, NoopUploadContentValidator.Instance, WorkAccessFixtures.ActiveShifts(), WorkAccessFixtures.ActiveEmployees(), WorkAccessFixtures.Reservation)
             .Handle(new(form.Id, form.EmployeeId, new()), default));
@@ -294,7 +294,7 @@ public class QualityCycleClockTests
         shifts.Setup(r => r.ListAssignmentsByEmployeeAsync(employee.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { ExistingAssignment(shift.Id, employee.Id) });
         shifts.Setup(r => r.GetAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(shift);
-        var foreign = QualityCycleForm.Create(shift.Id, shift.Name, Guid.NewGuid(), "Other cleaner", template.Id, template.Title, FromUtc.AddHours(8), template.Items);
+        var foreign = QualityCycleForm.Create(shift.Id, shift.Name, Guid.NewGuid(), "Other employee", template.Id, template.Title, FromUtc.AddHours(8), template.Items);
         forms.Setup(r => r.GetFormByShiftOccurrenceAsync(shift.Id, employee.Id, It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync(foreign);
         var result = await new QualityCycleHandlers.GetMyShiftsQueryHandler(shifts.Object, forms.Object, WorkAccessFixtures.ActiveEmployees(), WorkAccessFixtures.Reservation).Handle(new(employee.Id, FromUtc, ToUtc), default);
         Assert.NotEmpty(result); Assert.All(result, r => Assert.Null(r.Form));

@@ -27,7 +27,7 @@ public class BranchVisitContractTests
         var cleaner = JsonSerializer.Deserialize<SetVisitEmployee>("""{"employeeId":"22222222-2222-4222-8222-222222222222","offerRevision":3}""", Api)!;
         Assert.Equal(3, cleaner.OfferRevision); Assert.NotNull(cleaner.EmployeeId);
         Assert.Null(JsonSerializer.Deserialize<SetDefaultEmployee>("""{"employeeId":null}""", Api)!.EmployeeId);
-        // A cleaner answers a visit offer with the same body as a partner offer.
+        // An employee answers a visit offer with the same body as a partner offer.
         Assert.Equal(4, JsonSerializer.Deserialize<PartnerAcceptance>("""{"version":4,"plannedStartLocal":null}""", Api)!.Version);
     }
 

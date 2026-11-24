@@ -22,7 +22,7 @@ public class DeactivateWithActiveShiftsTests
     private static (Mock<IEmployeeRepository> employees, Mock<IShiftRepository> shifts, DeactivateEmployeeHandler handler, Employee employee) Setup(
         IReadOnlyList<ShiftAssignment> assignments, IReadOnlyList<Shift> shifts)
     {
-        var employee = new Employee { Id = Guid.NewGuid(), Email = "cleaner@example.test", IsActive = true, Role = Employee.RoleEmployee };
+        var employee = new Employee { Id = Guid.NewGuid(), Email = "employee@example.test", IsActive = true, Role = Employee.RoleEmployee };
         var employees = new Mock<IEmployeeRepository>();
         employees.Setup(x => x.GetByIdAsync(employee.Id, It.IsAny<CancellationToken>())).ReturnsAsync(employee);
         var tenant = new Mock<ITenantContext>(); tenant.SetupGet(x => x.TenantId).Returns("synthetic");

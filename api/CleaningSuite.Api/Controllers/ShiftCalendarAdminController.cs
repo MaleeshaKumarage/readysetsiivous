@@ -144,7 +144,7 @@ public class ShiftCalendarAdminController(IShiftRepository shifts, IEmployeeRepo
         }
         form.WorkTimeCorrections.Add(new(User.FindFirstValue("sub")!, now, body.Reason.Trim(), form.StartedAtUtc, form.EndedAtUtc, actualStart, actualEnd));
         // This operation explicitly records BOTH start and end, completing a past
-        // visit even when the cleaner previously started it. It is not a start-only
+        // visit even when the employee previously started it. It is not a start-only
         // timer correction. Retain all existing checklist answers and evidence.
         form.StartedAtUtc = actualStart; form.EndedAtUtc = actualEnd; form.IsSubmitted = true;
         form.SubmittedUtc ??= now; form.UpdatedUtc = now;
@@ -152,7 +152,7 @@ public class ShiftCalendarAdminController(IShiftRepository shifts, IEmployeeRepo
         return Ok(new { form.Id, form.Version, actualStartUtc = actualStart, actualEndUtc = actualEnd });
     }
 
-    /// <summary>Attaches photos an admin received after the visit (for example from the cleaner by chat). Needs a work record, which "Record work" creates.</summary>
+    /// <summary>Attaches photos an admin received after the visit (for example from the employee by chat). Needs a work record, which "Record work" creates.</summary>
     [HttpPost("work-photos")]
     public async Task<IActionResult> AddWorkPhotos(WorkPhotosBody body, CancellationToken ct)
     {

@@ -75,7 +75,7 @@ public class QualityCyclePdfLocalizationTests
     private static readonly string[] EnglishSystemPhrases = [
         "Cleaning Quality Report", "PROPERTY & SERVICE", "REPORT SUMMARY", "MONTHLY SUMMARY",
         "Company:", "Branch:", "Address:", "Shift:", "Reference ", "Scheduled occurrences:", "Scheduled hours:",
-        "Recorded occurrences:", "Missing:", "Pending:", "Cleaner tasks:", "submitted", "Recorded staff hours:",
+        "Recorded occurrences:", "Missing:", "Pending:", "Employee tasks:", "submitted", "Recorded staff hours:",
         "Incomplete timing records:", "Scheduled hours describe visits.", "ACTIVITIES PERFORMED",
         "Activities are measured by recorded visits", "Activity", "Days", "Occurrences", "VISIT RECORD",
         "Scheduled date / start", "Hours", "Submitted / expected", "Recorded", "Missing", "Pending",
@@ -83,8 +83,8 @@ public class QualityCyclePdfLocalizationTests
         "Photos & Notes", "Appendix - shift photos and notes", "Shift date:", "Photo note", "Shift note",
         "No note recorded for this historical entry.", "Photo unavailable:", "Generated ", "Page ",
         "Monthly Summary Report", "Total Shift Occurrences Logged:", "Completed Forms:",
-        "No Quality Cycle form submissions recorded for this month.", "Date:", "Cleaner:", "COMPLETED", "PENDING",
-        "Checklist Items:", "Cleaner Notes:", "Attached Photos:", "photo(s) attached", "Not available", "Not recorded",
+        "No Quality Cycle form submissions recorded for this month.", "Date:", "Employee:", "COMPLETED", "PENDING",
+        "Checklist Items:", "Employee Notes:", "Attached Photos:", "photo(s) attached", "Not available", "Not recorded",
     ];
     [Theory]
     [InlineData("en", "Visit: #3 · Admin panel")] [InlineData("fi", "Käynti: #3 · Admin panel")] [InlineData("sv", "Besök: #3 · Admin panel")]

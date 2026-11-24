@@ -94,7 +94,7 @@ public class PartnerInvoiceTests
     public async Task Multi_cleaner_visit_requires_everyone_and_uses_last_actual_finish()
     {
         var f = new Fixture(1); var id=f.Requests[0].LinkedShiftId!.Value; var extra=Guid.NewGuid();
-        f.Rosters[id].Add(ShiftOccurrenceAssignment.Create(id,null,f.Visits[id].Id,OccurrenceAssignmentMode.Add,[extra],"Second cleaner"));
+        f.Rosters[id].Add(ShiftOccurrenceAssignment.Create(id,null,f.Visits[id].Id,OccurrenceAssignmentMode.Add,[extra],"Second employee"));
         var first=f.Forms[id][0];
         await Assert.ThrowsAsync<ValidationException>(()=>f.Service.PreviewAsync(f.Input,default));
         f.Forms[id].Add(new(){Id=Guid.NewGuid(),ShiftId=id,EmployeeId=extra,ShiftOccurrenceUtc=first.ShiftOccurrenceUtc,IsSubmitted=true,EndedAtUtc=new(2026,11,2,12,0,0,DateTimeKind.Utc)});

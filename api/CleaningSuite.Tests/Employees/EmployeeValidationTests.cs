@@ -13,7 +13,7 @@ public class EmployeeValidationTests
     public void CreateEmployeeValidator_Succeeds_WithValidEmployeeFields()
     {
         var fields = new EmployeeFields(
-            Email: "cleaner@example.com",
+            Email: "employee@example.com",
             FirstName: "Matti",
             LastName: "Meikäläinen",
             Phone: "+358401234567",

@@ -170,7 +170,7 @@ async function setupPopulatedWorkspace(page: Page) {
   const issuer = { companyName: 'Supplier', businessId: '123', companyAddress: { street: 'Street', postalCode: '00100', city: 'Helsinki', country: 'FI' }, email: 'supplier@example.test', phone: '', bankAccountIBAN: 'FI123', bankBic: 'BIC', paymentTermsDays: 14, defaultVatRatePercent: 25.5 };
   const responses: Record<string, unknown> = {
     companies: { items: [{ id: 'company', name: 'Fixture company Oy', businessId: '1234567-8', isActive: true }], total: 1 },
-    employees: [{ id: 'active', firstName: 'Active', lastName: 'Cleaner', email: 'active@example.com', role: 'employee', isActive: true }],
+    employees: [{ id: 'active', firstName: 'Active', lastName: 'Employee', email: 'active@example.com', role: 'employee', isActive: true }],
     services: [{ id: 'service-0', slug: 'service-0', name: { values: { fi: 'Service 0' } }, description: { values: { fi: 'Description' } }, isActive: true, priceNet: 10, durationMinutes: 60, vatRatePercent: 25.5, category: 'cleaning', icon: 'Sparkles', sortOrder: 0, isFeatured: false }],
     agreements: [{ id: 'signed', title: 'Signed history', code: 'signed', status: 'Completed', isActive: true, signerCount: 1, signedCount: 1 }],
     'agreements/legacy-repairs': { agreements: [], companies: [] },
@@ -210,7 +210,7 @@ test('dashboard groups link to workspaces and sidebar brand returns home on phon
 });
 
 for (const [section, record, actionName] of [
-  ['companies', 'Fixture company Oy', 'Edit'], ['employees', 'Active Cleaner', 'Edit'],
+  ['companies', 'Fixture company Oy', 'Edit'], ['employees', 'Active Employee', 'Edit'],
   ['agreements', 'Signed history', 'Signers'], ['services', 'Service 0', 'Edit'], ['invoices', 'INV-1', 'PDF'],
 ]) test(`populated ${section} table keeps actions reachable at 375px`, async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 375, height: 1000 }); await setupPopulatedWorkspace(page);

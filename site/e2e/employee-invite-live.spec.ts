@@ -88,7 +88,7 @@ test('real employee and tenant manager login, clocking, isolation, reinvite and 
   await continuation.close();
   const stillWorks = await request.post(`${fixture.keycloakUrl}/realms/${fixture.realm}/protocol/openid-connect/token`, { form: { grant_type: 'password', client_id: 'cleaning-suite-web', username: fixture.email, password, scope: 'openid email' } });
   expect(stillWorks.status()).toBe(200);
-  const fields = (role: string) => ({ fields: { email: fixture.email, firstName: 'Invite', lastName: 'Cleaner', phone: '', role, defaultHours: {}, skills: [], serviceAreas: [], certifications: [] }, isActive: true });
+  const fields = (role: string) => ({ fields: { email: fixture.email, firstName: 'Invite', lastName: 'Employee', phone: '', role, defaultHours: {}, skills: [], serviceAreas: [], certifications: [] }, isActive: true });
   const managerPromotion = await request.put(`${api}/api/v1/admin/employees/${fixture.employeeId}`, { headers: { Authorization: `Bearer ${ownerJwt}` }, data: fields('manager') });
   expect(managerPromotion.status()).toBe(204);
   expect((await request.get(`${api}/api/v1/me`, { headers: { Authorization: `Bearer ${employeeJwt}` } })).status()).toBe(403);

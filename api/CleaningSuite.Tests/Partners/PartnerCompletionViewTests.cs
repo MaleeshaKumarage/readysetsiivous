@@ -73,7 +73,7 @@ public class PartnerCompletionViewTests
 
     private static QualityCycleForm SubmittedForm(string? notes, params (string Item, bool Done)[] tasks)
     {
-        var form = QualityCycleForm.Create(Guid.NewGuid(), "Morning clean", Guid.NewGuid(), "Test Cleaner",
+        var form = QualityCycleForm.Create(Guid.NewGuid(), "Morning clean", Guid.NewGuid(), "Test Employee",
             Guid.NewGuid(), "Apartment checklist", new DateTime(2026, 12, 1, 8, 0, 0, DateTimeKind.Utc), tasks.Select(t => t.Item).ToList());
         form.Start(new DateTime(2026, 12, 1, 8, 5, 0, DateTimeKind.Utc));
         var items = form.Items.Select((item, index) => new QualityCycleFormItem { ItemText = item.ItemText, IsChecked = tasks[index].Done }).ToList();

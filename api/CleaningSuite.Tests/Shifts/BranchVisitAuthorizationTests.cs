@@ -16,7 +16,7 @@ using Moq;
 
 namespace CleaningSuite.Tests.Shifts;
 
-/// <summary>Branch visits are managed by administrators and managers only. Cleaners and partners are refused before any data is read.</summary>
+/// <summary>Branch visits are managed by administrators and managers only. Employees and partners are refused before any data is read.</summary>
 public class BranchVisitAuthorizationTests
 {
     [Theory]

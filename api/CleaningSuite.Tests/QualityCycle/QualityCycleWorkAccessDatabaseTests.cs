@@ -101,7 +101,7 @@ public class QualityCycleWorkAccessDatabaseTests
             var reservation = new ShiftWorkReservation(configuration, commandSession);
             var operation = update
                 ? new UpdateEmployeeHandler(employees, identities.Object, context, identityLock, reservation).Handle(new(employee.Id,
-                    new EmployeeFields(employee.Email, "Synthetic", "Cleaner", "", Employee.RoleEmployee, null, [], null, null, null, null, null), false), timeout.Token)
+                    new EmployeeFields(employee.Email, "Synthetic", "Employee", "", Employee.RoleEmployee, null, [], null, null, null, null, null), false), timeout.Token)
                 : new DeactivateEmployeeHandler(employees, identities.Object, context, identityLock, reservation, WorkAccessFixtures.NoAssignedShifts()).Handle(new(employee.Id), timeout.Token);
             try
             {
@@ -165,7 +165,7 @@ public class QualityCycleWorkAccessDatabaseTests
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(25));
             Task Disable() => useUpdate
                 ? new UpdateEmployeeHandler(employees, identities, context, identityLock, employeeLock).Handle(new(employee.Id,
-                    new EmployeeFields(employee.Email, "Synthetic", "Cleaner", "", Employee.RoleEmployee, null, [], null, null, null, null, null), false), timeout.Token)
+                    new EmployeeFields(employee.Email, "Synthetic", "Employee", "", Employee.RoleEmployee, null, [], null, null, null, null, null), false), timeout.Token)
                 : new DeactivateEmployeeHandler(employees, identities, context, identityLock, employeeLock, WorkAccessFixtures.NoAssignedShifts()).Handle(new(employee.Id), timeout.Token);
             Task Work() => operation switch
             {

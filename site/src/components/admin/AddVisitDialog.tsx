@@ -94,11 +94,11 @@ export function AddVisitDialog({ opened, onClose, onAdded, employees, timeZoneId
         <Select label="Cleaning type" allowDeselect={false} value={cleaningType} onChange={value => setCleaningType(value ?? 'Normal')}
           description={cleaningType === 'Deep' ? `Deep cleaning adds €${DEEP_SURCHARGE_EUR} excl. VAT to this visit.` : 'Every visit starts as Normal. You can change it later, including after the cleaning is done.'}
           data={[{ value: 'Normal', label: 'Normal' }, { value: 'Deep', label: 'Deep' }]} />
-        <Select label="Cleaner" allowDeselect={false} searchable value={cleaner} onChange={value => setCleaner(value ?? DEFAULT_CLEANER)}
-          description="The cleaner gets an offer. It is theirs once accepted, or at once if they accept work automatically."
-          data={[{ value: DEFAULT_CLEANER, label: "Shift's default cleaner" }, { value: NO_CLEANER, label: 'Leave unassigned' },
+        <Select label="Employee" allowDeselect={false} searchable value={cleaner} onChange={value => setCleaner(value ?? DEFAULT_CLEANER)}
+          description="The employee gets an offer. It is theirs once accepted, or at once if they accept work automatically."
+          data={[{ value: DEFAULT_CLEANER, label: "Shift's default employee" }, { value: NO_CLEANER, label: 'Leave unassigned' },
             ...employees.filter(employee => employee.isActive && employee.role !== 'partner').map(employee => ({ value: employee.id, label: employeeLabel(employee, employees) }))]} />
-        <Textarea label="Notes for the cleaner (optional)" maxLength={4000} autosize minRows={2} value={notes} onChange={event => setNotes(event.target.value)} />
+        <Textarea label="Notes for the employee (optional)" maxLength={4000} autosize minRows={2} value={notes} onChange={event => setNotes(event.target.value)} />
         {error && <Text role="alert" c="red">{error}</Text>}
         <Group justify="flex-end">
           <Button variant="default" disabled={saving} onClick={onClose}>Cancel</Button>

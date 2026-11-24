@@ -4,12 +4,12 @@ import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers'
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 
-// An active on-call flexible shift with a default cleaner and notes.
+// An active on-call flexible shift with a default employee and notes.
 const quickShift = {
   id: 'quick', companyId: 'company', branchId: 'branch', name: 'Quick on-call', isActive: true, notes: 'Gate code 42',
   defaultEmployeeId: 'emp-1', validFrom: '2026-10-01T00:00:00', validUntil: null, schedule: { type: 4 },
 };
-// Same shift without notes or a default cleaner.
+// Same shift without notes or a default employee.
 const bareShift = { ...quickShift, id: 'bare', name: 'Bare on-call', notes: null, defaultEmployeeId: null };
 // A dated one-time shift: no quick visit action.
 const datedShift = {
@@ -39,7 +39,7 @@ async function mockAdmin(page: Page, seeded: any[]) {
   return exceptionWrites;
 }
 
-test('on-call quick visit prefills the default cleaner and notes; the user sets only date and times', async ({ page }) => {
+test('on-call quick visit prefills the default employee and notes; the user sets only date and times', async ({ page }) => {
   const writes = await mockAdmin(page, [quickShift]);
   await page.goto('/admin/shifts/');
   await shiftAction(page, 'Quick on-call', 'Add visit');
@@ -56,7 +56,7 @@ test('on-call quick visit prefills the default cleaner and notes; the user sets 
   await expect(page.getByText('One-time visit scheduled.')).toBeVisible();
 });
 
-test('quick visit uses "Quick visit" as the reason and no cleaner when the shift has neither', async ({ page }) => {
+test('quick visit uses "Quick visit" as the reason and no employee when the shift has neither', async ({ page }) => {
   const writes = await mockAdmin(page, [bareShift]);
   await page.goto('/admin/shifts/');
   await shiftAction(page, 'Bare on-call', 'Add visit');

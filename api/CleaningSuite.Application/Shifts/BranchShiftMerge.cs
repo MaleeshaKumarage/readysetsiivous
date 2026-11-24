@@ -14,7 +14,7 @@ public sealed record BranchShiftMergeFinding(Guid ShiftId, Guid BranchId, Guid? 
     /// <summary>"PartnerBooking" or "OneTime".</summary>
     public string Kind { get; init; } = BranchShiftMerge.KindPartnerBooking;
     public DateTime? VisitEndUtc { get; init; }
-    /// <summary>The cleaners who hold a one-time shift's visit today.</summary>
+    /// <summary>The employees who hold a one-time shift's visit today.</summary>
     public IReadOnlyList<Guid> EmployeeIds { get; init; } = [];
     /// <summary>The one-time shift's own price, kept on the visit when it differs from the property price on that date.</summary>
     public ShiftOccurrencePrice? KeptPrice { get; init; }
@@ -25,7 +25,7 @@ public sealed record BranchShiftMergeFinding(Guid ShiftId, Guid BranchId, Guid? 
 /// own a shift, and one-time shifts staff created. An active one becomes one visit on the main shift. A shift left
 /// over from a cancelled or re-opened booking, or a deactivated one-time shift, with no work and no invoice, is
 /// removed. Anything unusual is kept and reported for a person to review: the plan never guesses with work records,
-/// cleaners or prices.
+/// employees or prices.
 /// </summary>
 public static class BranchShiftMerge
 {

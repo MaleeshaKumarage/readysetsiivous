@@ -30,7 +30,7 @@ async function setup(page: Page) {
     }
     const json = path.endsWith('/companies') ? { items: [{ id: 'company', name: 'Company', isActive: true }], total: 1 }
       : path.endsWith('/companies/company') ? { company: { id: 'company', name: 'Company', isActive: true }, branches: [{ id: 'branch', name: 'Branch', isActive: true }] }
-      : path.endsWith('/employees') ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', isActive: true }] : [];
+      : path.endsWith('/employees') ? [{ id: 'employee', firstName: 'Test', lastName: 'Employee', isActive: true }] : [];
     return route.fulfill({ status: 200, headers, json });
   });
   return { get loads() { return loads; } };
@@ -77,7 +77,7 @@ test('late admin assignment response is discarded when lifecycle tabs change', a
   await page.route(/\/admin\/shifts\/active\/assignments$/, async route => {
     if (route.request().method() !== 'GET' || !delayed) return route.fallback();
     delayed = false; started = true; await gate;
-    return route.fulfill({ status: 200, headers, json: [{ id: 'late', employeeId: 'cleaner', isActive: true }] });
+    return route.fulfill({ status: 200, headers, json: [{ id: 'late', employeeId: 'employee', isActive: true }] });
   });
   await page.goto('/admin/shifts/'); await shiftAction(page, 'Active shift', 'Assign employees');
   await expect.poll(() => started).toBe(true);
@@ -87,5 +87,5 @@ test('late admin assignment response is discarded when lifecycle tabs change', a
   release(); await expect(page.getByRole('textbox', { name: 'Assign employees', exact: true })).toHaveCount(0);
   await shiftAction(page, 'Active shift', 'Assign employees');
   await expect(page.getByText('No employees assigned.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Unassign Test Cleaner' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Unassign Test Employee' })).toHaveCount(0);
 });

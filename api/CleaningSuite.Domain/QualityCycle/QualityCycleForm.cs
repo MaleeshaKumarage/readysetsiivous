@@ -41,7 +41,7 @@ public class QualityCycleForm : BaseDocument
     public DateTime? EndedAtUtc { get; set; }
     public DateTime? ShiftDeletedUtc { get; set; }
     public List<WorkTimeCorrection> WorkTimeCorrections { get; set; } = new();
-    /// <summary>Photos an admin added after the visit, each with who, when and why. The cleaner's own photos stay in Photos.</summary>
+    /// <summary>Photos an admin added after the visit, each with who, when and why. The employee's own photos stay in Photos.</summary>
     public List<WorkPhotoAddition> WorkPhotoAdditions { get; set; } = new();
 
     public static QualityCycleForm Create(

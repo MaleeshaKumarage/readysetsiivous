@@ -1,6 +1,6 @@
 import { authorizedFetch } from './adminApi';
 
-export interface NotificationEvent { key: string; group: 'Cleaner' | 'Staff' | string; label: string; description: string; app: boolean; emailAvailable: boolean }
+export interface NotificationEvent { key: string; group: 'Employee' | 'Staff' | string; label: string; description: string; app: boolean; emailAvailable: boolean }
 export interface NotificationPreferences { events: NotificationEvent[] }
 
 async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {

@@ -63,7 +63,7 @@ public sealed class PartnerOffersController(PartnerService service, CleaningSuit
 {
     private Guid Actor => (HttpContext.Items["Employee"] as Employee)?.Id
         ?? throw new UnauthorizedAccessException("An active linked staff account is required.");
-    // A cleaner's offers are partner bookings and staff-added visits together; both are answered the same way.
+    // An employee's offers are partner bookings and staff-added visits together; both are answered the same way.
     [HttpGet] public async Task<IActionResult> Offers(CancellationToken ct) =>
         Ok((await service.Offers(Actor, ct)).Concat(await visits.Offers(Actor, ct)).ToArray());
     [HttpPost("{id:guid}/accept")] public async Task<IActionResult> Accept(Guid id, PartnerAcceptance body, CancellationToken ct)

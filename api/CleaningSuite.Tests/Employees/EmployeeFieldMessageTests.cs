@@ -10,7 +10,7 @@ namespace CleaningSuite.Tests.Employees;
 public class EmployeeFieldMessageTests
 {
     private static EmployeeFields Fields(string role = "employee", decimal? payRate = null) => new(
-        Email: "cleaner@example.test", FirstName: "Ann", LastName: "Cleaner", Phone: "+358401234567",
+        Email: "employee@example.test", FirstName: "Ann", LastName: "Employee", Phone: "+358401234567",
         Role: role, ColorHex: null, DefaultHours: new Dictionary<string, WorkHours>(), Skills: null,
         ServiceAreas: null, PayRate: payRate, Certifications: null, Notes: null);
 

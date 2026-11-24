@@ -47,7 +47,7 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
                             summary.Item().Text($"{T("Cleaner tasks")}: {shift.SubmittedTasks}/{shift.TotalTasks} {T("submitted")}");
                             summary.Item().Text($"{T("Recorded staff hours")}: {(shift.RecordedStaffHours.HasValue ? shift.RecordedStaffHours.Value.ToString("0.##") : T("Not available"))}").SemiBold();
                             if (shift.IncompleteTimingRecords is > 0) summary.Item().Text($"{T("Incomplete timing records")}: {shift.IncompleteTimingRecords}");
-                            summary.Item().Text(T("Scheduled hours describe visits. Recorded staff hours sum each cleaner’s actual submitted duration; incomplete timings are excluded. Missing means no submission, not a failed cleaning activity.")).FontSize(8);
+                            summary.Item().Text(T("Scheduled hours describe visits. Recorded staff hours sum each employee’s actual submitted duration; incomplete timings are excluded. Missing means no submission, not a failed cleaning activity.")).FontSize(8);
                         });
                         col.Item().Element(x => ReportPdfTheme.Band(x, T("ACTIVITIES PERFORMED")));
                         col.Item().Text(T("Activities are measured by recorded visits and distinct days. Unchecked items are not failures.")).FontSize(8);
