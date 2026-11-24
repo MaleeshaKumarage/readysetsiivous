@@ -4,7 +4,7 @@ namespace CleaningSuite.Application.Partners;
 
 /// <summary>
 /// Partner-facing view of a completed visit. Deliberately omits employee ids and full names, shift internals,
-/// email delivery state, work-time corrections, access tokens and the cleaner's identity.
+/// email delivery state, work-time corrections, access tokens and the employee's identity.
 /// </summary>
 public sealed record PartnerCompletionDto(
     Guid RequestId,
@@ -33,7 +33,7 @@ public sealed record PartnerCompletionPhoto(string Url, string Note);
 
 public static class PartnerCompletionView
 {
-    /// <summary>Shows the first letter of the cleaner's first name, e.g. "T.". Null when no name is recorded.</summary>
+    /// <summary>Shows the first letter of the employee's first name, e.g. "T.". Null when no name is recorded.</summary>
     public static string? MaskCleaner(string? firstName)
     {
         var trimmed = firstName?.Trim();

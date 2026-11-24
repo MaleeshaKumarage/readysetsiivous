@@ -112,7 +112,7 @@ public sealed class PushReminderScheduler(IPartnerStore store, IShiftRepository 
         }
         if (intent.Kind == "VisitOffer")
         {
-            // Sent only while the visit is still waiting on this cleaner's answer to this offer.
+            // Sent only while the visit is still waiting on this employee's answer to this offer.
             if (!intent.ExtraExceptionId.HasValue || !intent.OfferId.HasValue) return false;
             var offered = await store.Session.LoadAsync<CleaningSuite.Domain.Shifts.ShiftOccurrenceException>(intent.ExtraExceptionId.Value, ct);
             return offered is not null && offered.OfferedEmployeeId == intent.EmployeeId && offered.OfferId == intent.OfferId

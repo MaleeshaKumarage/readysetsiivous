@@ -58,7 +58,7 @@ public class ShiftCalendarTests
         var from = new DateTime(2026, 10, 15, 0, 0, 0, DateTimeKind.Utc); var to = from.AddDays(6);
         // 22:00 UTC is the following local date in Helsinki. The fixed clock's local date is October 18.
         var start = new DateTime(2026, 10, 17, 22, 0, 0, DateTimeKind.Utc).AddDays(dayOffset);
-        var form = QualityCycleForm.Create(shift, "Cleaning", employee, "Cleaner", Guid.NewGuid(), "Activities", start, ["Corridor"], start.AddHours(2));
+        var form = QualityCycleForm.Create(shift, "Cleaning", employee, "Employee", Guid.NewGuid(), "Activities", start, ["Corridor"], start.AddHours(2));
         form.StartedAtUtc = start; form.IsSubmitted = submitted;
         if (lifecycle == "deleted") form.ShiftDeletedUtc = start.AddHours(3);
         var shifts = new Mock<IShiftRepository>();
@@ -91,7 +91,7 @@ public class ShiftCalendarTests
     [Fact]
     public async Task Detached_checklist_cannot_be_submitted_using_an_old_public_token()
     {
-        var form = QualityCycleForm.Create(Guid.NewGuid(), "Deleted shift", Guid.NewGuid(), "Cleaner", Guid.NewGuid(), "Activities", DateTime.UtcNow.AddHours(-2), ["Corridor"]);
+        var form = QualityCycleForm.Create(Guid.NewGuid(), "Deleted shift", Guid.NewGuid(), "Employee", Guid.NewGuid(), "Activities", DateTime.UtcNow.AddHours(-2), ["Corridor"]);
         form.ShiftDeletedUtc = DateTime.UtcNow;
         var forms = new Mock<IQualityCycleRepository>();
         forms.Setup(x => x.GetFormByTokenAsync(form.Token, It.IsAny<CancellationToken>())).ReturnsAsync(form);
@@ -136,7 +136,7 @@ public class ShiftCalendarTests
         var from = new DateTime(2026, 10, 16, 0, 0, 0, DateTimeKind.Utc);
         var shifts = new Mock<IShiftRepository>();
         shifts.Setup(x => x.ListAssignmentsByEmployeeAsync(employee, It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<ShiftAssignment>());
-        var recorded = QualityCycleForm.Create(Guid.NewGuid(), "Historic corridor shift", employee, "Cleaner", Guid.NewGuid(), "Activities", from.AddHours(8), ["Corridor"], from.AddHours(10));
+        var recorded = QualityCycleForm.Create(Guid.NewGuid(), "Historic corridor shift", employee, "Employee", Guid.NewGuid(), "Activities", from.AddHours(8), ["Corridor"], from.AddHours(10));
         recorded.IsSubmitted = true; recorded.Items[0].IsChecked = true;
         if (deleted) recorded.ShiftDeletedUtc = from.AddDays(1);
         else shifts.Setup(x => x.GetAsync(recorded.ShiftId, It.IsAny<CancellationToken>()))

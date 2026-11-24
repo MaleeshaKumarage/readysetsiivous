@@ -11,7 +11,7 @@ test('a dropped connection while deactivating says the change may have been save
     const request = route.request(); const path = new URL(request.url()).pathname;
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS });
     if (path.endsWith('/deactivate') && request.method() === 'POST') { deactivations++; return route.abort('failed'); }
-    if (request.method() === 'GET') return route.fulfill({ status: 200, headers: CORS, json: [{ id: 'emp-1', firstName: 'Test', lastName: 'Cleaner', email: 'test.cleaner@example.test', role: 'employee', isActive: true }] });
+    if (request.method() === 'GET') return route.fulfill({ status: 200, headers: CORS, json: [{ id: 'emp-1', firstName: 'Test', lastName: 'Employee', email: 'test.employee@example.test', role: 'employee', isActive: true }] });
     return route.fulfill({ status: 200, headers: CORS, json: {} });
   });
   await page.goto('/admin/employees/');

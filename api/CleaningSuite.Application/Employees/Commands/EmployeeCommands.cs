@@ -231,7 +231,7 @@ public class DeactivateEmployeeHandler : IRequestHandler<DeactivateEmployeeComma
         return Unit.Value;
     }
 
-    // A cleaner still assigned to an active shift has ongoing work. Deactivating them would leave that work
+    // An employee still assigned to an active shift has ongoing work. Deactivating them would leave that work
     // assigned to a former employee, so the admin must reassign or remove it first.
     private async Task RefuseWhileAssignedToActiveShifts(Guid employeeId, CancellationToken ct)
     {
@@ -241,7 +241,7 @@ public class DeactivateEmployeeHandler : IRequestHandler<DeactivateEmployeeComma
         var activeShifts = (await _shifts.ListByIdsAsync(shiftIds, ct)).Count(shift => shift.IsActive);
         if (activeShifts > 0)
             throw new CleaningSuite.Application.Shifts.ShiftConflictException(
-                $"This cleaner is still assigned to {activeShifts} active shift(s). Reassign or remove them first, then deactivate the cleaner.");
+                $"This employee is still assigned to {activeShifts} active shift(s). Reassign or remove them first, then deactivate the employee.");
     }
 }
 

@@ -4,7 +4,7 @@ import { setupAdminMocks } from './admin-helpers';
 export const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization' };
 export const photo = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
 export const company = { id: 'company-one', name: 'Partner One', isActive: true, isPartnerEnabled: true };
-export const usage = ['Keys', 'Bedsheets'].map((name, index) => ({ id: `usage-${index}`, employeeId: 'cleaner', employeeName: 'Private Cleaner', locationId: 'store', locationName: 'Main store', itemId: `item-${index}`, itemName: name, quantity: index + 1, unit: 'pcs', note: 'Collected at reception', takenUtc: '2026-11-09T08:00:00Z', photoIds: [`photo-${index}`], photosPurged: false, version: 'v1' }));
+export const usage = ['Keys', 'Bedsheets'].map((name, index) => ({ id: `usage-${index}`, employeeId: 'employee', employeeName: 'Private Employee', locationId: 'store', locationName: 'Main store', itemId: `item-${index}`, itemName: name, quantity: index + 1, unit: 'pcs', note: 'Collected at reception', takenUtc: '2026-11-09T08:00:00Z', photoIds: [`photo-${index}`], photosPurged: false, version: 'v1' }));
 export function acknowledgment(row = usage[0]) { return { ...row, batchId: 'batch-one', companyId: company.id, companyName: company.name, message: 'Please confirm collection', status: 'Pending', responseNote: '', respondedByName: null, respondedUtc: null, createdUtc: '2026-11-09T09:00:00Z' }; }
 
 export async function setup(page: Page, options: { pending?: boolean; rows?: any[]; failSend?: boolean; failResponse?: boolean; failLookup?: boolean; expiredPhoto?: boolean } = {}) {

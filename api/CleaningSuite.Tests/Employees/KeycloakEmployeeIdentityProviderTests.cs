@@ -218,7 +218,7 @@ public class KeycloakEmployeeIdentityProviderTests
         Assert.Equal(new[] { "managed-users", "app-employee", "app-manager", "app-admin", "app-partner" }, lookups);
         Assert.DoesNotContain(transport.Requests, r => r.Path.Contains("/groups?") && !r.Path.Contains("/users/"));
     }
-    private static Employee Employee() => new() { Email = "cleaner@example.invalid", FirstName = "Test", LastName = "Cleaner" };
+    private static Employee Employee() => new() { Email = "employee@example.invalid", FirstName = "Test", LastName = "Employee" };
     [Theory]
     [InlineData("admin", "manager")] [InlineData("manager", "employee")] [InlineData("manager", "admin")] [InlineData("employee", "partner")] [InlineData("partner", "employee")] [InlineData("partner", "admin")]
     public async Task ManagerRoleTransitionsRemoveOtherManagedRolesAndPreserveUnrelatedAccess(string from, string to)
@@ -308,7 +308,7 @@ public class KeycloakEmployeeIdentityProviderTests
             if (path.EndsWith("/role-mappings/realm/composite")) return Json(new[] { new { id = Role, name = Role }, new { id = UnexpectedInheritedAdmin ? "admin" : "", name = UnexpectedInheritedAdmin ? "admin" : "" } }.Where(r=>r.id != "").ToArray());
             if (path.EndsWith("/role-mappings/realm")) return Json(new[] { new { id = LegacyDirectRole ? Role : "unrelated", name = LegacyDirectRole ? Role : "unrelated" } });
             if (path.Contains("/roles/")) return Json(new { id = path.Split('/').Last(), name = path.Split('/').Last() });
-            object user = new { id = "user-a", email = "cleaner@example.invalid", enabled = true, emailVerified = Verified,
+            object user = new { id = "user-a", email = "employee@example.invalid", enabled = true, emailVerified = Verified,
                 attributes = Owner is null ? new Dictionary<string, string[]>() : new Dictionary<string, string[]> { ["cleaning_employee_id"] = new[] { Owner } },
                 requiredActions = PendingPassword ? new[] { "UPDATE_PASSWORD" } : Array.Empty<string>() };
             if (path.Contains("/users?")) return Json(MissingUser ? Array.Empty<object>() : new[] { user });

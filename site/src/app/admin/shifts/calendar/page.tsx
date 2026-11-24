@@ -131,7 +131,7 @@ export default function ShiftCalendarPage() {
     <Modal opened={!!photoFor} onClose={() => { if (!photoSaving) setPhotoFor(null); }} title="Add photos to this visit" closeOnClickOutside={!photoSaving} closeOnEscape={!photoSaving}>
       <Stack>
         <Text fw={600}>{photoFor?.person.name} · {photoFor?.visit.shiftName}</Text>
-        <Text size="sm" c="dimmed">Use this for photos the cleaner sent you outside the app. Each photo needs its own note, and the reason is kept with the visit.</Text>
+        <Text size="sm" c="dimmed">Use this for photos the employee sent you outside the app. Each photo needs its own note, and the reason is kept with the visit.</Text>
         {photoError && <Text role="alert" c="red">{photoError}</Text>}
         <input type="file" aria-label="Choose photos" accept="image/png,image/jpeg,image/webp,image/bmp" multiple disabled={photoSaving} onChange={event => { void addPhotos(event.currentTarget.files); event.currentTarget.value = ''; }} />
         {photoItems.map((photo, index) => <Stack gap={4} key={index}>

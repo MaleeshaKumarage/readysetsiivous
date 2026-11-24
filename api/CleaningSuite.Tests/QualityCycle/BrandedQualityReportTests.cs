@@ -65,7 +65,7 @@ public class BrandedQualityReportTests
         shift.CreatedUtc = Start.AddMonths(-1);
         var a = Guid.NewGuid(); var b = Guid.NewGuid();
         var forms = new[] { a, b }.Select(id => {
-            var form = QualityCycleForm.Create(shift.Id, shift.Name, id, "Cleaner", shift.QualityCycleTemplateId!.Value, "Activities", Start, ["Corridor"], Start.AddHours(2));
+            var form = QualityCycleForm.Create(shift.Id, shift.Name, id, "Employee", shift.QualityCycleTemplateId!.Value, "Activities", Start, ["Corridor"], Start.AddHours(2));
             form.CompanyId = company.Id; form.BranchId = branch.Id; form.IsSubmitted = true; form.Items[0].IsChecked = true;
             form.StartedAtUtc = Start; form.EndedAtUtc = Start.AddHours(2); return form;
         }).ToArray();

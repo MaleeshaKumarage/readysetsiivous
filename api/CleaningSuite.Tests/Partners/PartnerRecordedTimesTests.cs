@@ -11,7 +11,7 @@ public class PartnerRecordedTimesTests
 
     private static QualityCycleForm Submitted(DateTime started, DateTime ended)
     {
-        var form = QualityCycleForm.Create(Guid.NewGuid(), "Jukankatu", Employee, "Cleaner", Guid.NewGuid(), "Checklist", Start, new() { "Floor" }, Start.AddHours(2));
+        var form = QualityCycleForm.Create(Guid.NewGuid(), "Jukankatu", Employee, "Employee", Guid.NewGuid(), "Checklist", Start, new() { "Floor" }, Start.AddHours(2));
         form.IsSubmitted = true; form.StartedAtUtc = started; form.EndedAtUtc = ended;
         return form;
     }
@@ -19,7 +19,7 @@ public class PartnerRecordedTimesTests
     [Fact]
     public void Partner_times_match_the_calendar_representative_record()
     {
-        // One cleaner, two submitted records: an 80-minute visit, then a 36-second record that ends later (#368).
+        // One employee, two submitted records: an 80-minute visit, then a 36-second record that ends later (#368).
         var full = Submitted(Start, Start.AddMinutes(80));
         var brief = Submitted(Start.AddMinutes(85), Start.AddMinutes(85).AddSeconds(36));
         var forms = new List<QualityCycleForm> { full, brief };

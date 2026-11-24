@@ -45,7 +45,7 @@ function isCalendarDate(value: string): boolean {
 
 /** The first view shows this many days from today (tenant time zone), so a busy schedule opens on work that is due soon. */
 const DEFAULT_WINDOW_DAYS = 14;
-/** Assignee filter value for work with no cleaner. Sent to the server as unassigned=true. */
+/** Assignee filter value for work with no employee. Sent to the server as unassigned=true. */
 const UNASSIGNED = 'unassigned';
 /** Used until the tenant's own time zone loads, and if it cannot be loaded. Matches the shift pages' fallback. */
 const DEFAULT_ZONE = 'Europe/Helsinki';

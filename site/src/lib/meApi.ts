@@ -47,11 +47,11 @@ export interface MyShiftOccurrence {
   // On a property's main visit shift: the visit's number and where it came from ("AdminPanel" or "PartnerPortal").
   visitNumber?: number | null;
   visitSource?: string | null;
-  // Visit instructions from the request or shift. Shown before the cleaner starts.
+  // Visit instructions from the request or shift. Shown before the employee starts.
   notes?: string | null;
   // Photo sections the partner requires. The visit cannot end until each has a photo.
   requiredPhotoLabels?: string[] | null;
-  // How to get in and who to call, from the partner's account setup. Shown before the cleaner starts.
+  // How to get in and who to call, from the partner's account setup. Shown before the employee starts.
   accessInstructions?: string | null;
   contactName?: string | null;
   contactPhone?: string | null;

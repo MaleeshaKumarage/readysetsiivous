@@ -128,7 +128,7 @@ test('changing calendar days preserves activity selections, shift notes and phot
   await expect(page.getByRole('button', { name: 'Remove photo' })).toHaveCount(1);
 });
 
-test('instructions from the request are shown to the cleaner before the visit starts', async ({ page }) => {
+test('instructions from the request are shown to the employee before the visit starts', async ({ page }) => {
   await setupWork(page, { future: true, instructions: 'Use the back door.\nKeys are in the lockbox.' });
   await page.goto('/me/shifts/');
   const instructions = page.getByRole('region', { name: 'Visit instructions' });
@@ -137,7 +137,7 @@ test('instructions from the request are shown to the cleaner before the visit st
   await expect(instructions).toContainText('Keys are in the lockbox.');
 });
 
-test('access instructions and the contact are shown to the cleaner before the visit starts', async ({ page }) => {
+test('access instructions and the contact are shown to the employee before the visit starts', async ({ page }) => {
   await setupWork(page, { future: true, access: 'Key safe, code 4321', contactName: 'Olivia Oy', contactPhone: '+358 40 000 0000' });
   await page.goto('/me/shifts/');
   const details = page.getByRole('region', { name: 'Visit instructions' });
@@ -496,7 +496,7 @@ test('A01 preference focus refresh preserves manual offer drafts and an in-fligh
   release(); await expect(page.getByText('No pending cleaning offers.', { exact: true })).toBeVisible();
 });
 
-test('general instructions and the visit instructions both reach the cleaner, with the line break kept', async ({ page }) => {
+test('general instructions and the visit instructions both reach the employee, with the line break kept', async ({ page }) => {
   await setupWork(page, { future: true, instructions: 'Use the side door.\n\nAfter guest checkout, from 15:00.' });
   await page.goto('/me/shifts/');
   const instructions = page.getByRole('region', { name: 'Visit instructions' });

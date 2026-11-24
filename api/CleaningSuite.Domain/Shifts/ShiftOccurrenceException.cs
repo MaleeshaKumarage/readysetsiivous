@@ -43,7 +43,7 @@ public class ShiftOccurrenceException : BaseDocument
     /// merge name that shift, so the visit is still recognised as billed.
     /// </summary>
     public Guid? LegacyShiftId { get; set; }
-    /// <summary>The cleaner this visit is waiting on. The visit is nobody's work until the offer is accepted.</summary>
+    /// <summary>The employee this visit is waiting on. The visit is nobody's work until the offer is accepted.</summary>
     public Guid? OfferedEmployeeId { get; set; }
     public Guid? OfferId { get; set; }
     /// <summary>Counts every offer change, so an answer to an older offer is refused.</summary>

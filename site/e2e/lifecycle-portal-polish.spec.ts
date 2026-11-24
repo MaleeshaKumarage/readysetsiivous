@@ -78,8 +78,8 @@ for(const fixed of [false,true]) {
 // A synthetic in-progress visit. No production identities, photos or API writes are used.
 async function cleaner(page: Page) {
   const backend = new PartnerFlowBackend();
-  await prepareRolePage(page, backend, 'cleaner');
-  const form: any = {id:'form-one',shiftId:'shift-one',employeeId:'cleaner',templateId:'template-one',templateTitle:'Apartment checklist',items:[{itemText:'Kitchen',isChecked:false}],photos:[],photoUrls:[],isSubmitted:false,startedAtUtc:new Date().toISOString(),cleanerNotes:''};
+  await prepareRolePage(page, backend, 'employee');
+  const form: any = {id:'form-one',shiftId:'shift-one',employeeId:'employee',templateId:'template-one',templateTitle:'Apartment checklist',items:[{itemText:'Kitchen',isChecked:false}],photos:[],photoUrls:[],isSubmitted:false,startedAtUtc:new Date().toISOString(),cleanerNotes:''};
   const occurrence = {shiftId:'shift-one',shiftName:'Lake apartment – checkout cleaning',startUtc:new Date(Date.now()-3600000).toISOString(),endUtc:new Date(Date.now()+3600000).toISOString(),timeZoneId:'Europe/Helsinki',form,notes:'Prepare fresh linen.',accessInstructions:'Use the side door.',contactName:'Property manager',contactPhone:'+358400000000',requiredPhotoLabels:['After']};
   const writes: any[] = [];
   await page.route(/\/api\/v1\/me\/shifts(?:\/calendar)?(?:\?.*)?$/, route => route.fulfill({headers:CORS,json:route.request().url().includes('/calendar')?{occurrences:[occurrence],timeZoneId:'Europe/Helsinki',fromLocalDate:'2026-11-09',toLocalDate:'2026-11-10'}:[occurrence]}));
@@ -93,7 +93,7 @@ async function cleaner(page: Page) {
 }
 const photo = {name:'after.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64')};
 
-test('cleaner sections remain fully visible at 320px, with keyboard navigation and dark theme', async ({page}) => {
+test('employee sections remain fully visible at 320px, with keyboard navigation and dark theme', async ({page}) => {
   await cleaner(page);
   await page.addInitScript(() => localStorage.setItem('theme','dark'));
   await page.goto('/me/shifts/');
@@ -126,7 +126,7 @@ test('cleaner sections remain fully visible at 320px, with keyboard navigation a
   await noOverflow(page);
 });
 
-test('cleaner evidence is touch-friendly and preserves required photos, optional checklist and end payload', async ({page},info) => {
+test('employee evidence is touch-friendly and preserves required photos, optional checklist and end payload', async ({page},info) => {
   const state = await cleaner(page);
   await page.setViewportSize({width:390,height:667});
   await page.goto('/me/shifts/');
@@ -162,11 +162,11 @@ test('admin pending counts, request ordering, statuses and quote links keep thei
   const backend = new PartnerFlowBackend({priced:true});
   backend.seedRequest(backend.branches[0],{fromDate:'2026-12-01',toDate:'2026-12-02'});
   const second = backend.seedRequest(backend.branches[0],{fromDate:'2026-12-03',toDate:'2026-12-04'});
-  backend.seedOffer(second,'cleaner');
+  backend.seedOffer(second,'employee');
   backend.addBranch({name:'Harbour studio',companyId:OWNER_COMPANY.id,quoteRequestedUtc:'2026-11-01T10:00:00Z'});
   await prepareRolePage(page,backend,'admin');
   await page.goto('/admin/partner-requests/');
-  const requestsHelp = page.getByText('The Requests badge counts requests needing arrangement; this list also includes offers awaiting a cleaner’s response.');
+  const requestsHelp = page.getByText('The Requests badge counts requests needing arrangement; this list also includes offers awaiting an employee’s response.');
   await expect(requestsHelp).toBeVisible();
   await expect(page.getByRole('tab',{name:'Requests',exact:true})).toContainText('1');
   await page.getByRole('tab',{name:'Assigned',exact:true}).click();
@@ -200,7 +200,7 @@ test('employee PWA preserves native prompt dismissal, iOS instructions and insta
   await expect(page.getByRole('status').filter({hasText:'In Safari, tap Share'})).toBeVisible();
 });
 
-test('standalone cleaner retains app identity, safe layout and preference content without an install prompt', async ({page}) => {
+test('standalone employee retains app identity, safe layout and preference content without an install prompt', async ({page}) => {
   await cleaner(page);
   await page.addInitScript(()=>{
     Object.defineProperty(navigator,'standalone',{configurable:true,value:true});
@@ -218,7 +218,7 @@ test('standalone cleaner retains app identity, safe layout and preference conten
   expect(await page.locator('.employee-portal').evaluate(el=>getComputedStyle(el).minHeight)).toBe('667px');
 });
 
-for (const role of ['owner','admin','cleaner'] as const) {
+for (const role of ['owner','admin','employee'] as const) {
   test(`${role} workspace honors display-cutout insets without obscuring controls`, async ({page,context}) => {
     const backend = new PartnerFlowBackend({priced:true});
     await prepareRolePage(page,backend,role);

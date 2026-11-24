@@ -139,7 +139,7 @@ public class QualityCycleRepository : IQualityCycleRepository
     public async Task<bool> TryCreateFormAsync(QualityCycleForm form, CancellationToken ct = default)
     {
         // A separate insert transaction prevents a competing generator from overwriting
-        // a cleaner's existing task or poisoning the request's tracked session.
+        // an employee's existing task or poisoning the request's tracked session.
         await using var session = _store.LightweightSession(_tenant.TenantId);
         try
         {

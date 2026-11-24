@@ -32,11 +32,11 @@ export function scheduleLabel(shift: Shift) {
 export function nextStep(shift: Shift, employeeCount: number | undefined) {
   if (!shift.isActive) return 'Admin: reactivate to schedule again, or delete if permanent removal is intended.';
   if (shift.isCompleted) return 'Completed. No further visits.';
-  if (shift.isBranchMain) return 'Admin: add a visit. It is offered to the default cleaner, or to the cleaner you choose.';
-  if (shift.schedule.type === 4) return 'Admin: schedule a dated visit, then assign a cleaner.';
+  if (shift.isBranchMain) return 'Admin: add a visit. It is offered to the default employee, or to the employee you choose.';
+  if (shift.schedule.type === 4) return 'Admin: schedule a dated visit, then assign an employee.';
   if (employeeCount === undefined) return 'Assignments loading.';
   if (employeeCount === 0) return 'Admin: assign employees to this shift.';
-  return 'Assigned cleaners see visits in My shifts. Admin: review visit changes under Occurrences.';
+  return 'Assigned employees see visits in My shifts. Admin: review visit changes under Occurrences.';
 }
 
 export type ShiftWorkspaceProps = {
@@ -72,13 +72,13 @@ export function ShiftWorkspace({ shift, employeeCount, templateName, onClose }: 
 
         <Stack gap={4} component="section" aria-labelledby={`ws-assignees-${shift.id}`}>
           <Title order={5} id={`ws-assignees-${shift.id}`}><Users size={16} aria-hidden="true" className="shift-section-icon" />Assignees</Title>
-          {isMain ? <Text size="sm">Each visit has its own cleaner. Set the default cleaner for new visits under Occurrences.</Text>
+          {isMain ? <Text size="sm">Each visit has its own employee. Set the default employee for new visits under Occurrences.</Text>
             : <Text size="sm">{employeeCount === undefined ? 'Loading assignments…' : `${employeeCount} assigned`}</Text>}
         </Stack>
 
         <Stack gap={4} component="section" aria-labelledby={`ws-visits-${shift.id}`}>
           <Title order={5} id={`ws-visits-${shift.id}`}><ListChecks size={16} aria-hidden="true" className="shift-section-icon" />Visits</Title>
-          {isOnCall && <Text size="sm">On-call shifts have no automatic visits. Schedule each one with a date, time and cleaner.</Text>}
+          {isOnCall && <Text size="sm">On-call shifts have no automatic visits. Schedule each one with a date, time and employee.</Text>}
           {isMain && <Text size="sm">Every booking and every added visit for this property is a numbered visit on this shift.</Text>}
           {!isMain && !isOnCall && <Text size="sm">Visits follow the schedule above.</Text>}
         </Stack>

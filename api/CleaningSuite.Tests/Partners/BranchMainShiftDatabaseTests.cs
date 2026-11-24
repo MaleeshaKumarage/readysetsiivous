@@ -23,7 +23,7 @@ using Moq;
 namespace CleaningSuite.Tests.Partners;
 
 /// <summary>
-/// A branch has one main shift. Each partner booking is one numbered visit on it, with its own cleaner, instructions
+/// A branch has one main shift. Each partner booking is one numbered visit on it, with its own employee, instructions
 /// and frozen price. Runs on real PostgreSQL because identity, uniqueness and invoice blocking are persistence rules.
 /// </summary>
 [Collection("Database integration")]
@@ -47,7 +47,7 @@ public class BranchMainShiftDatabaseTests
         Assert.Equal(new int?[] { 1, 2 }, visits.Select(x => x.Sequence).ToArray());
         Assert.Equal(new Guid?[] { first.Id, second.Id }, visits.Select(x => x.PartnerRequestId).ToArray());
         Assert.All(visits, x => Assert.Equal(ShiftOccurrenceException.SourcePartnerPortal, x.Source));
-        // Both visits reach the cleaner through the shared roster rules.
+        // Both visits reach the employee through the shared roster rules.
         using var session = f.Session();
         var roster = await new ShiftRepository(session).ResolveRosterAsync(shift, Fixture.DayStart, Fixture.DayStart.AddDays(1), Zone, default);
         Assert.Equal(2, roster.Count); Assert.All(roster, x => Assert.Equal(f.Cleaner.Id, Assert.Single(x.EmployeeIds)));
@@ -75,7 +75,7 @@ public class BranchMainShiftDatabaseTests
     {
         using var f = await Fixture.Create();
         var first = await f.Accepted("08:00", f.Cleaner);
-        // Same property, same clock time, another cleaner: on a shared shift this must not end the first cleaner's work.
+        // Same property, same clock time, another employee: on a shared shift this must not end the first employee's work.
         var second = await f.Accepted("08:00", f.Second);
 
         using var reader = f.Reader();
@@ -165,7 +165,7 @@ public class BranchMainShiftDatabaseTests
     public async Task A_booking_that_already_owns_a_shift_keeps_it()
     {
         using var f = await Fixture.Create();
-        // A request accepted before main shifts existed: it owns a whole shift and has been sent back for a new cleaner.
+        // A request accepted before main shifts existed: it owns a whole shift and has been sent back for a new employee.
         PartnerRequestDto request;
         using (var session = f.Session())
             request = await f.Service(session).Create(f.Partner.Id, new(Guid.NewGuid(), f.Branch.Id, Fixture.Day, Fixture.Day, "08:00"), default);
@@ -311,7 +311,7 @@ public class BranchMainShiftDatabaseTests
         await Assert.ThrowsAsync<ShiftConflictException>(() => new ShiftHandlers.DeleteShiftOccurrenceExceptionCommandHandler(repository, f.Profiles.Object, Fixture.Context(f.Tenant))
             .Handle(new(shiftId, visit.Id), default));
         var shift = (await repository.GetAsync(shiftId, default))!;
-        // Switching the shared shift off would silently take the visit away from its cleaner.
+        // Switching the shared shift off would silently take the visit away from its employee.
         await Assert.ThrowsAsync<ShiftConflictException>(() => PartnerShiftGuard.EnsureNoBookingsAsync(repository, shift, default));
         Assert.Throws<ShiftConflictException>(() => PartnerShiftGuard.EnsureMainStaysPut(shift, shift.CompanyId, shift.BranchId, new ShiftSchedule { Type = ShiftScheduleType.Weekly }));
         PartnerShiftGuard.EnsureMainStaysPut(shift, shift.CompanyId, shift.BranchId, shift.Schedule);
@@ -331,8 +331,8 @@ public class BranchMainShiftDatabaseTests
         public Branch Branch { get; private set; } = null!;
         public Employee Partner { get; private set; } = null!;
         public Employee Admin { get; } = new() { Role = Employee.RoleAdmin, KeycloakUserId = "synthetic-admin", IsActive = true };
-        public Employee Cleaner { get; } = new() { Role = Employee.RoleEmployee, KeycloakUserId = "synthetic-cleaner", FirstName = "First", LastName = "Cleaner", IsActive = true, AutoAcceptWork = false };
-        public Employee Second { get; } = new() { Role = Employee.RoleEmployee, KeycloakUserId = "synthetic-second", FirstName = "Second", LastName = "Cleaner", IsActive = true, AutoAcceptWork = false };
+        public Employee Cleaner { get; } = new() { Role = Employee.RoleEmployee, KeycloakUserId = "synthetic-cleaner", FirstName = "First", LastName = "Employee", IsActive = true, AutoAcceptWork = false };
+        public Employee Second { get; } = new() { Role = Employee.RoleEmployee, KeycloakUserId = "synthetic-second", FirstName = "Second", LastName = "Employee", IsActive = true, AutoAcceptWork = false };
         public Mock<ITenantProfileRepository> Profiles { get; } = new();
         private Fixture(ServiceProvider provider) { this.provider = provider; Store = provider.GetRequiredService<IDocumentStore>(); }
 
@@ -367,7 +367,7 @@ public class BranchMainShiftDatabaseTests
             new InvoiceRepository(session), new CompanyRepository(session), new BranchRepository(session), new QualityCycleRepository(session, Store),
             Profiles.Object, Context(Tenant), new ShiftWorkReservation(Config(), session), TimeProvider.System, new PartnerInvoiceSource(new PartnerStore(session)));
 
-        /// <summary>A booking at a clock time on the test day, offered to and accepted by the given cleaner.</summary>
+        /// <summary>A booking at a clock time on the test day, offered to and accepted by the given employee.</summary>
         public async Task<PartnerRequestDto> Accepted(string time, Employee cleaner, string? notes = null)
         {
             using var session = Session(); var service = Service(session);
@@ -376,7 +376,7 @@ public class BranchMainShiftDatabaseTests
             return await service.Accept(cleaner.Id, offered.OfferId!.Value, new(offered.Version), default);
         }
 
-        /// <summary>The cleaner's work record for a booking's visit: started, and optionally finished.</summary>
+        /// <summary>The employee's work record for a booking's visit: started, and optionally finished.</summary>
         public async Task Record(PartnerRequestDto booking, Employee cleaner, bool submitted)
         {
             using var writer = Store.LightweightSession(Tenant);

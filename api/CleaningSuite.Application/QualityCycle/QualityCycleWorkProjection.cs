@@ -2,7 +2,7 @@ using CleaningSuite.Application.QualityCycle;
 
 namespace CleaningSuite.Application.QualityCycle;
 
-// Public-safe projection: no cleaner identity, form ID or submission token.
+// Public-safe projection: no employee identity, form ID or submission token.
 public record QualityCycleWorkTiming(DateTime ScheduledStartUtc, DateTime ScheduledEndUtc,
     DateTime? ActualStartUtc, DateTime? ActualEndUtc, decimal? StaffHours);
 public record QualityCycleWorkTotals(IReadOnlyList<QualityCycleWorkTiming> Records, decimal? StaffHours, int IncompleteRecords);

@@ -35,7 +35,7 @@ async function setup(page: Page, options: { role?: string; documentRole?: string
       const json = path === '/time-zone' ? { timeZoneId: 'Europe/Helsinki' }
         : path === '/companies' ? { items: [{ id: company, name: 'AAA', isActive: true }], total: 1 }
         : path.endsWith('/branches') ? [{ id: branch1, companyId: company, name: 'AAA1', isActive: true }, { id: branch2, companyId: company, name: 'AAA2', isActive: true }]
-        : path === '/employees' ? [{ id: cleaner, firstName: 'Test', lastName: 'Cleaner', phone: '', isActive: true }, { id: 'inactive', firstName: 'Inactive', lastName: 'Cleaner', phone: '', isActive: false }]
+        : path === '/employees' ? [{ id: cleaner, firstName: 'Test', lastName: 'Employee', phone: '', isActive: true }, { id: 'inactive', firstName: 'Inactive', lastName: 'Employee', phone: '', isActive: false }]
         : path.includes('/assignments') ? assignments : shifts;
       return route.fulfill({ status: 200, headers, json });
     }
@@ -76,7 +76,7 @@ test('tenant manager sees both branches and creates, edits, assigns, removes and
   await page.getByLabel('Shift name', { exact: true }).fill('Edited branch2 shift'); await page.getByRole('button', { name: 'Save shift' }).click();
   const edited = page.getByRole('article', { name: 'Edited branch2 shift' }); await edited.getByRole('button', { name: 'Employees' }).click();
   await edited.getByLabel('Employee', { exact: true }).selectOption(cleaner); await edited.getByRole('button', { name: 'Assign employee' }).click();
-  await expect(edited.getByText('Test Cleaner', { exact: true })).toBeVisible(); await edited.getByRole('button', { name: 'Remove assignment' }).click();
+  await expect(edited.getByText('Test Employee', { exact: true })).toBeVisible(); await edited.getByRole('button', { name: 'Remove assignment' }).click();
   await expect(edited.getByText('No employees assigned.')).toBeVisible(); await edited.getByRole('button', { name: 'Close assignments' }).click();
   await edited.getByRole('button', { name: 'Deactivate shift' }).click(); await expect(edited).toHaveCount(0);
   await page.getByRole('tab', { name: /^Inactive/ }).click(); await expect(edited).toBeVisible();
@@ -134,7 +134,7 @@ test('verification and operational failures are visible and retry preserves ente
   await page.getByRole('button', { name: 'Save shift' }).click(); const retained = page.getByRole('article', { name: 'Retained name' });
   await retained.getByRole('button', { name: 'Employees' }).click(); await retained.getByLabel('Employee', { exact: true }).selectOption(cleaner);
   await retained.getByRole('button', { name: 'Assign employee' }).click(); await expect(page.getByRole('main').getByRole('alert')).toContainText('assign failed');
-  await retained.getByRole('button', { name: 'Assign employee' }).click(); await expect(retained.getByText('Test Cleaner', { exact: true })).toBeVisible();
+  await retained.getByRole('button', { name: 'Assign employee' }).click(); await expect(retained.getByText('Test Employee', { exact: true })).toBeVisible();
   await retained.getByRole('button', { name: 'Deactivate shift' }).click(); await expect(page.getByRole('main').getByRole('alert')).toContainText('deactivate failed');
   await retained.getByRole('button', { name: 'Deactivate shift' }).click(); await expect(retained).toHaveCount(0);
 });
@@ -148,7 +148,7 @@ test('manager overlap is visible, selection survives and inactive employees are 
   });
   await page.goto('/manager/'); const card = page.getByRole('article', { name: 'AAA1 weekdays' });
   await card.getByRole('button', { name: 'Employees' }).click();
-  await expect(card.getByRole('option', { name: 'Inactive Cleaner' })).toHaveCount(0);
+  await expect(card.getByRole('option', { name: 'Inactive Employee' })).toHaveCount(0);
   await card.getByLabel('Employee', { exact: true }).selectOption(cleaner);
   await card.getByRole('button', { name: 'Assign employee' }).click();
   await expect(page.getByRole('main').getByRole('alert')).toContainText('Employee is already assigned to an overlapping shift.');

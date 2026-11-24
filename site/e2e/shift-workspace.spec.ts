@@ -40,7 +40,7 @@ async function setup(page: Page) {
     if (path.endsWith('/shifts')) return route.fulfill({ status: 200, headers, json: shifts });
     const json = path.endsWith('/companies') ? { items: [{ id: 'company', name: 'Company', isActive: true }], total: 1 }
       : path.endsWith('/companies/company') ? { company: { id: 'company', name: 'Company', isActive: true }, branches: [{ id: 'branch', name: 'Branch', isActive: true }] }
-      : path.endsWith('/employees') ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', isActive: true }] : [];
+      : path.endsWith('/employees') ? [{ id: 'employee', firstName: 'Test', lastName: 'Employee', isActive: true }] : [];
     return route.fulfill({ status: 200, headers, json });
   });
 }
@@ -70,12 +70,12 @@ test('workspace sections show schedule, assignees, visits, checklist and pricing
   await expect(dialog.getByText('0 assigned', { exact: true })).toBeVisible();
 });
 
-test('workspace next step reports assigned cleaners when a shift is staffed', async ({ page }) => {
+test('workspace next step reports assigned employees when a shift is staffed', async ({ page }) => {
   await setup(page); await page.goto('/admin/shifts/');
   await openShiftWorkspace(page, 'Workspace staffed');
   const dialog = page.getByRole('dialog', { name: 'Manage — Workspace staffed', exact: true });
   await expect(dialog.getByText('1 assigned', { exact: true })).toBeVisible();
-  await expect(dialog.getByText('Next step: Assigned cleaners see visits in My shifts. Admin: review visit changes under Occurrences.', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('Next step: Assigned employees see visits in My shifts. Admin: review visit changes under Occurrences.', { exact: true })).toBeVisible();
 });
 
 test('workspace assign action closes the workspace and opens the existing assignment panel', async ({ page }) => {
@@ -121,7 +121,7 @@ test('on-call workspace explains dated visits and offers one-time scheduling', a
   await setup(page); await page.goto('/admin/shifts/');
   await openShiftWorkspace(page, 'Workspace on-call');
   const dialog = page.getByRole('dialog', { name: 'Manage — Workspace on-call', exact: true });
-  await expect(dialog.getByText('Next step: Admin: schedule a dated visit, then assign a cleaner.', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('Next step: Admin: schedule a dated visit, then assign an employee.', { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
   await shiftAction(page, 'Workspace on-call', 'Add visit');
   await expect(page.getByRole('dialog', { name: 'Change occurrence', exact: true })).toBeVisible();

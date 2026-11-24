@@ -78,7 +78,7 @@ public class VisitAssignmentTests
     [InlineData(false)] [InlineData(true)]
     public async Task Started_or_submitted_work_is_locked(bool submitted)
     {
-        var s = new Setup(); var form = QualityCycleForm.Create(s.Shift.Id, "Daily", s.A, "Cleaner", Guid.NewGuid(), "Tasks", Start, []);
+        var s = new Setup(); var form = QualityCycleForm.Create(s.Shift.Id, "Daily", s.A, "Employee", Guid.NewGuid(), "Tasks", Start, []);
         form.StartedAtUtc = submitted ? null : Start; form.IsSubmitted = submitted; s.Evidence.Add(form);
         await Assert.ThrowsAsync<ShiftConflictException>(() => s.Run(s.Command()));
         s.Shifts.Verify(x => x.SaveOccurrenceAssignmentAsync(It.IsAny<ShiftOccurrenceAssignment>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -127,7 +127,7 @@ public class VisitAssignmentTests
     [Fact]
     public async Task Occurrence_list_exposes_started_work_lock_before_opening_assignment_editor()
     {
-        var s = new Setup(); var form = QualityCycleForm.Create(s.Shift.Id, "Daily", s.A, "Cleaner", Guid.NewGuid(), "Tasks", Start, []);
+        var s = new Setup(); var form = QualityCycleForm.Create(s.Shift.Id, "Daily", s.A, "Employee", Guid.NewGuid(), "Tasks", Start, []);
         form.StartedAtUtc = Start; s.Evidence.Add(form);
         var list = await new ShiftHandlers.GetShiftOccurrencesQueryHandler(s.Shifts.Object, forms: s.Forms.Object, clock: new Clock())
             .Handle(new(s.Shift.Id, Start.Date, Start.Date), default);
@@ -158,7 +158,7 @@ public class VisitAssignmentTests
     [Fact]
     public async Task Old_unstarted_public_checklist_token_does_not_authorize_a_replaced_cleaner()
     {
-        var s = new Setup(); var form = QualityCycleForm.Create(s.Shift.Id, "Daily", s.A, "Cleaner", Guid.NewGuid(), "Tasks", Start, [], Start.AddHours(2));
+        var s = new Setup(); var form = QualityCycleForm.Create(s.Shift.Id, "Daily", s.A, "Employee", Guid.NewGuid(), "Tasks", Start, [], Start.AddHours(2));
         s.Overrides.Add(ShiftOccurrenceAssignment.Create(s.Shift.Id, Start, null, OccurrenceAssignmentMode.Replace, [s.B], "Cover"));
         s.Forms.Setup(x => x.GetFormByTokenAsync(form.Token, It.IsAny<CancellationToken>())).ReturnsAsync(form);
         var handler = new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(s.Forms.Object, Mock.Of<CleaningSuite.Application.Common.IUploadContentValidator>(), s.Shifts.Object, s.Employees.Object, WorkAccessFixtures.Reservation, new Clock());
@@ -215,7 +215,7 @@ public class VisitAssignmentTests
         var s = new Setup(); var zone = TimeZoneInfo.Utc;
         var own = await s.Shifts.Object.ResolveRosterAsync(s.Shift, Start, Start.AddDays(1), zone, default);
         var visit = Assert.Single(own);
-        // The same visit, offered for a different cleaner under a different original-start key, must not clash with itself.
+        // The same visit, offered for a different employee under a different original-start key, must not clash with itself.
         var candidate = new[] { visit with { OriginalStartUtc = null, EmployeeIds = [s.B] } };
         await VisitAssignmentSafety.CheckConflicts(s.Shifts.Object, s.Shift, candidate, zone, default);
     }
@@ -231,7 +231,7 @@ public class VisitAssignmentTests
         Assert.Equal(Start.AddHours(2), conflict.EndUtc);
         Assert.Equal("Daily", conflict.Recurrence);
         Assert.False(conflict.OpenEnded);
-        Assert.Contains("Choose another cleaner, change the time", ex.Message);
+        Assert.Contains("Choose another employee, change the time", ex.Message);
         Assert.Contains("No assignments were saved.", ex.Message);
     }
 

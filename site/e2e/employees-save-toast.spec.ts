@@ -6,7 +6,7 @@ const EMAIL_TAKEN = 'Another employee already uses this email. Use a different e
 
 test('a rejected employee edit explains the duplicate email as a toast and in the dialog, and keeps the edited values', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
-  const employee = { id: 'emp-a', email: 'alice@example.invalid', firstName: 'Alice', lastName: 'Cleaner', role: 'employee', isActive: true, phone: '', defaultHours: {}, skills: [], serviceAreas: [] };
+  const employee = { id: 'emp-a', email: 'alice@example.invalid', firstName: 'Alice', lastName: 'Employee', role: 'employee', isActive: true, phone: '', defaultHours: {}, skills: [], serviceAreas: [] };
   await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, r => r.fulfill({ headers, json: [employee] }));
   await page.route(/\/api\/v1\/admin\/employees\/emp-a$/, r => {
     if (r.request().method() === 'OPTIONS') return r.fulfill({ headers, status: 200 });

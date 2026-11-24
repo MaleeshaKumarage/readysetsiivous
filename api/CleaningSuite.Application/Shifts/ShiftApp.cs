@@ -31,7 +31,7 @@ public record ShiftDto(
 {
     /// <summary>True for a property's main visit shift: its visits are added with Add visit, each with a number.</summary>
     public bool IsBranchMain { get; init; }
-    /// <summary>On a main visit shift: the cleaner each new visit is offered to.</summary>
+    /// <summary>On a main visit shift: the employee each new visit is offered to.</summary>
     public Guid? DefaultEmployeeId { get; init; }
 }
 
@@ -560,9 +560,9 @@ public class ShiftHandlers
                 ?? throw new NotFoundException("Shift", request.ShiftId);
             CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
             if (!shift.IsActive) throw new ShiftConflictException("Activate the shift before changing its occurrences.");
-            // A main shift's visits are numbered and offered to a cleaner, which only Add visit does.
+            // A main shift's visits are numbered and offered to an employee, which only Add visit does.
             if (shift.IsBranchMain && request.Status == ShiftOccurrenceExceptionStatus.Extra && !request.Id.HasValue)
-                throw new ShiftConflictException("Add visits to this shift with Add visit, so each one gets its number and its cleaner's offer.");
+                throw new ShiftConflictException("Add visits to this shift with Add visit, so each one gets its number and its employee's offer.");
 
             var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
             var start = NormalizeUtc(request.StartUtc); var end = NormalizeUtc(request.EndUtc);
@@ -603,7 +603,7 @@ public class ShiftHandlers
                 if (shift.IsBranchMain && (await shifts.ListOccurrenceExceptionsAsync(shift.Id, start, start.AddSeconds(1), ct) ?? [])
                     .Any(x => x.Id != item.Id && x.StartUtc == start))
                     throw new ShiftConflictException("Another visit on this shift starts at the same time. Choose a different start time.");
-                // On a main shift the cleaner is set through the visit's offer, so a time change keeps whoever holds it.
+                // On a main shift the employee is set through the visit's offer, so a time change keeps whoever holds it.
                 item.Update(shift.Id, original, start, end, request.Status, request.Reason, shift.IsBranchMain ? item.EmployeeId : request.EmployeeId);
             }
             var (rangeFrom, rangeTo) = TenantTimeZone.LocalDatesForUtcRange(start, end, zone);
@@ -706,8 +706,8 @@ public class ShiftHandlers
             var shift = await _repository.GetAsync(request.ShiftId, ct)
                 ?? throw new NotFoundException("Shift", request.ShiftId);
             CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
-            // A whole-shift assignment would give every unanswered visit of a main shift to this cleaner, skipping its offer.
-            if (shift.IsBranchMain) throw new ShiftConflictException("This is the property's main visit shift. Set its default cleaner under Occurrences, or choose a cleaner on each visit.");
+            // A whole-shift assignment would give every unanswered visit of a main shift to this employee, skipping its offer.
+            if (shift.IsBranchMain) throw new ShiftConflictException("This is the property's main visit shift. Set its default employee under Occurrences, or choose an employee on each visit.");
 
             // Resolve the employee before doing anything else, so a typo or stale id fails fast
             // instead of persisting a ShiftAssignment that points at a non-existent employee.

@@ -86,7 +86,7 @@ public record GetQualityCycleSummaryPdfQuery(Guid ShiftId, int Year, int Month) 
 // Employee clock/flow commands & queries
 public record StartQualityCycleFormCommand(Guid ShiftId, Guid EmployeeId, DateTime OccurrenceStartUtc, DateTime OccurrenceEndUtc) : IRequest<QualityCycleFormDto>;
 public record EndQualityCycleFormCommand(Guid FormId, Guid EmployeeId, List<QualityCycleFormItemDto> Items, List<string>? PhotoUrls = null, string? CleanerNotes = null, List<QualityCyclePhoto>? Photos = null) : IRequest<QualityCycleFormDto>;
-// Notes carry the visit instructions. The cleaner sees them before starting.
+// Notes carry the visit instructions. The employee sees them before starting.
 public record MyShiftOccurrenceDto(Guid ShiftId, string ShiftName, DateTime StartUtc, DateTime EndUtc, QualityCycleFormDto? Form, string TimeZoneId = "Europe/Helsinki", bool IsDeleted = false, string? Notes = null, IReadOnlyList<string>? RequiredPhotoLabels = null,
     string? AccessInstructions = null, string? ContactName = null, string? ContactPhone = null,
     // The visit's number and origin on a branch main shift ("AdminPanel" or "PartnerPortal"); null on other shifts.

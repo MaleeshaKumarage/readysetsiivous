@@ -35,7 +35,7 @@ public record PartnerRequestChange(string Message, string? Action = null, DateOn
     string? ExactStartLocalTime = null, string? Notes = null);
 // Staff apply a requested change to the request, at the request version they reviewed.
 public record PartnerChangeApply(int Version, string Resolution);
-// Photo sections the cleaner must attach to each visit, in the order shown to the cleaner.
+// Photo sections the employee must attach to each visit, in the order shown to the employee.
 public record PartnerSettingsDto(IReadOnlyList<string> PhotoLabels, PartnerAccountDetails Account, string? GeneralInstructions = null);
 // Account is optional: a save without it keeps the stored account details unchanged.
 public record PartnerSettingsInput(IReadOnlyList<string>? PhotoLabels, PartnerAccountDetails? Account = null, string? GeneralInstructions = null);

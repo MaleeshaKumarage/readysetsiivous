@@ -14,7 +14,7 @@ public class Shift : BaseDocument
     public bool IsBranchMain { get; set; }
     /// <summary>The last visit number given out on a branch main shift. Numbers only go up and are never reused.</summary>
     public int OccurrenceCounter { get; set; }
-    /// <summary>On a branch main shift: the cleaner each new visit is offered to. Null leaves new visits unassigned.</summary>
+    /// <summary>On a branch main shift: the employee each new visit is offered to. Null leaves new visits unassigned.</summary>
     public Guid? DefaultEmployeeId { get; set; }
 
     /// <summary>The id of a branch's main shift. Derived from the branch, so two writers can never create two mains.</summary>
@@ -37,7 +37,7 @@ public class Shift : BaseDocument
     public string Name { get; set; } = string.Empty;
     public ShiftSchedule Schedule { get; set; } = new();
     public string? Notes { get; set; }
-    // Photo sections the cleaner must attach before ending a partner visit. Copied from the partner's settings at acceptance.
+    // Photo sections the employee must attach before ending a partner visit. Copied from the partner's settings at acceptance.
     public List<string> RequiredPhotoLabels { get; set; } = new();
     // Partner access and contact details, copied from the partner's settings at acceptance.
     public string? PartnerAccessInstructions { get; set; }

@@ -235,16 +235,16 @@ test('company shifts show in the same queue with their own source filter, includ
 });
 
 
-test('an ended visit nobody started needs action as overdue, with or without an assigned cleaner', async ({ page }) => {
+test('an ended visit nobody started needs action as overdue, with or without an assigned employee', async ({ page }) => {
   const state = await setup(page);
-  const overdue: QueueItem = { source: 'shift', id: 'occurrence-overdue', reference: 'Weekly office clean', customerName: 'Owner company', scheduledLocal: '2026-10-20 10:00', status: 'needs-action', stateLabel: 'Overdue · not started', assigneeName: 'Test Cleaner', href: '/admin/shifts/calendar/' };
+  const overdue: QueueItem = { source: 'shift', id: 'occurrence-overdue', reference: 'Weekly office clean', customerName: 'Owner company', scheduledLocal: '2026-10-20 10:00', status: 'needs-action', stateLabel: 'Overdue · not started', assigneeName: 'Test Employee', href: '/admin/shifts/calendar/' };
   const endedUnassigned: QueueItem = { ...overdue, id: 'occurrence-unassigned', reference: 'Evening lobby clean', scheduledLocal: '2026-10-21 18:00', assigneeName: null };
   state.counts = { 'needs-action': 2, scheduled: 0, 'in-progress': 0, completed: 0, cancelled: 0 };
   state.items = { 'needs-action': [overdue, endedUnassigned] };
   await page.goto('/admin/work-queue/');
   await expect(page.getByRole('tab', { name: 'Needs action (2)' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('listitem').filter({ hasText: 'Weekly office clean' }).getByText('Overdue · not started', { exact: true })).toBeVisible();
-  // Past unstarted work needs action with the overdue label; without a cleaner it also shows an Unassigned badge.
+  // Past unstarted work needs action with the overdue label; without an employee it also shows an Unassigned badge.
   await expect(page.getByRole('listitem').filter({ hasText: 'Evening lobby clean' }).getByText('Overdue · not started', { exact: true })).toBeVisible();
   await expect(page.getByRole('listitem').filter({ hasText: 'Evening lobby clean' }).getByText('Unassigned', { exact: true })).toBeVisible();
   await expect(page.getByRole('listitem').filter({ hasText: 'Weekly office clean' }).getByText('Unassigned', { exact: true })).toHaveCount(0);
@@ -252,7 +252,7 @@ test('an ended visit nobody started needs action as overdue, with or without an 
 
 test('a past assigned company visit nobody started reads Not started, and Open company shift opens the calendar', async ({ page }) => {
   const state = await setup(page);
-  const missed: QueueItem = { source: 'shift', id: 'occurrence-missed', reference: 'Weekly office clean', customerName: 'Owner company', scheduledLocal: '2026-10-20 10:00', status: 'scheduled', stateLabel: 'Not started', assigneeName: 'Test Cleaner', href: '/admin/shifts/calendar/' };
+  const missed: QueueItem = { source: 'shift', id: 'occurrence-missed', reference: 'Weekly office clean', customerName: 'Owner company', scheduledLocal: '2026-10-20 10:00', status: 'scheduled', stateLabel: 'Not started', assigneeName: 'Test Employee', href: '/admin/shifts/calendar/' };
   const upcoming: QueueItem = { ...missed, id: 'occurrence-upcoming', scheduledLocal: '2026-11-12 10:00', stateLabel: 'Scheduled' };
   state.counts = { 'needs-action': 1, scheduled: 2, 'in-progress': 0, completed: 0, cancelled: 0 };
   state.items = { ...state.items, scheduled: [missed, upcoming] };

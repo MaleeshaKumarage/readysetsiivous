@@ -20,7 +20,7 @@ namespace CleaningSuite.Tests.Shifts;
 
 /// <summary>
 /// Staff add visits to a branch's main shift by date or date range. Each visit gets the next number, the source
-/// "AdminPanel", and an offer to the shift's default cleaner or to a chosen one. Real PostgreSQL throughout.
+/// "AdminPanel", and an offer to the shift's default employee or to a chosen one. Real PostgreSQL throughout.
 /// </summary>
 [Collection("Database integration")]
 public class BranchVisitServiceDatabaseTests
@@ -143,7 +143,7 @@ public class BranchVisitServiceDatabaseTests
             Assert.Equal(Fixture.Day, offer.FromDate); Assert.Equal("08:00", offer.ExactStartLocalTime); Assert.Equal(120, offer.EstimatedDurationMinutes);
             Assert.Empty(await f.Visits(session).Offers(f.Second.Id, default));
         }
-        // Another cleaner cannot take the offer, and an answer to an older version is refused.
+        // Another employee cannot take the offer, and an answer to an older version is refused.
         using (var session = f.Session()) Assert.Null(await f.Visits(session).Accept(f.Second.Id, offer.Id, offer.Version, default));
         using (var session = f.Session())
             await Assert.ThrowsAsync<ShiftConflictException>(() => f.Visits(session).Accept(f.Cleaner.Id, offer.Id, offer.Version - 1, default));
@@ -200,7 +200,7 @@ public class BranchVisitServiceDatabaseTests
         PartnerCleanerOfferDto firstOffer;
         using (var session = f.Session()) firstOffer = Assert.Single(await f.Visits(session).Offers(f.Cleaner.Id, default));
 
-        // Waiting offer: the first cleaner's offer is withdrawn and the second cleaner is offered the visit.
+        // Waiting offer: the first employee's offer is withdrawn and the second employee is offered the visit.
         BranchVisitDto moved;
         using (var session = f.Session()) moved = await f.Visits(session).SetEmployee(visit.ShiftId, visit.Id, new(f.Second.Id, visit.OfferRevision), default);
         Assert.Equal(f.Second.Id, moved.OfferedEmployeeId);
@@ -218,7 +218,7 @@ public class BranchVisitServiceDatabaseTests
         using (var session = f.Session()) held = (await f.Visits(session).Accept(f.Second.Id, secondOffer.Id, secondOffer.Version, default))!;
         Assert.Single(await Mine(f, f.Second));
 
-        // Accepted, not started: the holder is released and the visit is offered back to the first cleaner.
+        // Accepted, not started: the holder is released and the visit is offered back to the first employee.
         BranchVisitDto back;
         using (var session = f.Session()) back = await f.Visits(session).SetEmployee(visit.ShiftId, visit.Id, new(f.Cleaner.Id, held.OfferRevision), default);
         Assert.Equal(BranchVisitService.StatusOffered, back.Status); Assert.Null(back.EmployeeId);
@@ -228,7 +228,7 @@ public class BranchVisitServiceDatabaseTests
         BranchVisitDto final;
         using (var session = f.Session()) final = (await f.Visits(session).Accept(f.Cleaner.Id, thirdOffer.Id, thirdOffer.Version, default))!;
 
-        // Once work has started the cleaner cannot be changed.
+        // Once work has started the employee cannot be changed.
         using (var writer = f.Store.LightweightSession(f.Tenant))
         {
             writer.Store(new QualityCycleForm { Id = Guid.NewGuid(), Token = Guid.NewGuid().ToString("N"), ShiftId = final.ShiftId, CompanyId = f.Company.Id,
@@ -378,7 +378,7 @@ public class BranchVisitServiceDatabaseTests
         using (var writer = f.Store.LightweightSession(f.Tenant))
         {
             writer.Store(new QualityCycleForm { Id = Guid.NewGuid(), Token = Guid.NewGuid().ToString("N"), ShiftId = added.ShiftId, CompanyId = f.Company.Id, BranchId = f.Branch.Id,
-                EmployeeId = f.Cleaner.Id, EmployeeName = "First Cleaner", ShiftName = "Visit", ShiftOccurrenceUtc = booked.PlannedStartUtc!.Value,
+                EmployeeId = f.Cleaner.Id, EmployeeName = "First Employee", ShiftName = "Visit", ShiftOccurrenceUtc = booked.PlannedStartUtc!.Value,
                 ShiftOccurrenceEndUtc = booked.PlannedEndUtc!.Value, StartedAtUtc = booked.PlannedStartUtc, IsSubmitted = true, EndedAtUtc = booked.PlannedEndUtc,
                 SubmittedUtc = booked.PlannedEndUtc, CleanerNotes = "All rooms done" });
             await writer.SaveChangesAsync();

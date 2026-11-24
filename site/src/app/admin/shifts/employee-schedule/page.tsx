@@ -64,7 +64,7 @@ export default function EmployeeSchedulePage() {
   // Times are shown in the tenant zone, the same zone the server uses to group visits by day.
   const timeOf = (value: string) => new Date(value).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZone });
   const visitsFor = (employeeId: string, day: string) => schedule?.find(row => row.employeeId === employeeId && row.localDay.slice(0, 10) === day)?.visits ?? [];
-  // Flag a cell when one of its visits is part of an overlap finding for this cleaner.
+  // Flag a cell when one of its visits is part of an overlap finding for this employee.
   const sameVisit = (a: ScheduleVisit, b: ScheduleVisit) => a.shiftId === b.shiftId && a.startUtc === b.startUtc;
   const overlapFor = (employeeId: string, day: string) => visitsFor(employeeId, day).some(visit => overlaps.some(finding => finding.employeeId === employeeId
     && (sameVisit(finding.earlier, visit) || sameVisit(finding.later, visit))));
@@ -85,7 +85,7 @@ export default function EmployeeSchedulePage() {
     <Stack p="md" gap="md">
       <Title order={2}>Employee schedule</Title>
       <Group align="flex-end">
-        {employeeFilter && <Button variant="subtle" onClick={() => setEmployeeFilter(null)}>Show all cleaners</Button>}
+        {employeeFilter && <Button variant="subtle" onClick={() => setEmployeeFilter(null)}>Show all employees</Button>}
         <TextInput type="date" label="Week starting" value={weekStart} onChange={event => { if (event.currentTarget.value) setWeekStart(mondayOf(event.currentTarget.value)); }} />
         <Button variant="default" onClick={() => setWeekStart(addDays(weekStart, -DAYS))}>Previous week</Button>
         <Button variant="default" onClick={() => setWeekStart(addDays(weekStart, DAYS))}>Next week</Button>
@@ -93,14 +93,14 @@ export default function EmployeeSchedulePage() {
       </Group>
       {loading && <Loader aria-label="Loading schedule" />}
       {error && <Alert color="red" title="Schedule unavailable"><Stack gap="xs"><Text>{error}</Text><Button size="xs" variant="light" onClick={() => setReloadKey(key => key + 1)}>Retry</Button></Stack></Alert>}
-      {!loading && !error && schedule && staff.length === 0 && <Text>No active cleaners yet. Add employees, then their visits appear here.</Text>}
+      {!loading && !error && schedule && staff.length === 0 && <Text>No active employees yet. Add employees, then their visits appear here.</Text>}
       {!loading && !error && schedule && staff.length > 0 && schedule.length === 0 && <Text>No visits this week. Choose another week or check the shift schedules.</Text>}
       {!loading && !error && schedule && staff.length > 0 && (
         <ScrollArea type="auto">
           <Table withTableBorder withColumnBorders miw={860}>
             <Table.Thead>
               <Table.Tr>
-                <Table.Th>Cleaner</Table.Th>
+                <Table.Th>Employee</Table.Th>
                 {days.map(day => <Table.Th key={day}>{new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</Table.Th>)}
               </Table.Tr>
             </Table.Thead>

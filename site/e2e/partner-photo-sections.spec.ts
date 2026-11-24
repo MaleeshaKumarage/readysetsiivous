@@ -19,7 +19,7 @@ test('owner sets the photo sections once, and each new visit request shows them'
 
   await page.getByRole('tab', { name: /^Properties/ }).click();
   await page.getByRole('button', { name: 'Request cleaning', exact: true }).click();
-  await expect(page.getByText('Photos the cleaner must attach: Before, Keys, Balcony', { exact: true })).toBeVisible();
+  await expect(page.getByText('Photos the employee must attach: Before, Keys, Balcony', { exact: true })).toBeVisible();
 });
 
 test('owner sets general instructions once; each new visit request shows that they apply', async ({ page }) => {
@@ -41,7 +41,7 @@ test('owner sets general instructions once; each new visit request shows that th
 
   await page.getByRole('tab', { name: /^Properties/ }).click();
   await page.getByRole('button', { name: 'Request cleaning', exact: true }).click();
-  await expect(page.getByText('The cleaner reads your general instructions first, then the instructions for this visit.', { exact: true })).toBeVisible();
+  await expect(page.getByText('The employee reads your general instructions first, then the instructions for this visit.', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Cleaning instructions', { exact: true })).toHaveValue('');
 });
 
@@ -109,22 +109,22 @@ test('unsaved general instructions survive a refresh of the portal', async ({ pa
   expect(backend.generalInstructions).toBe('Stored general text');
 });
 
-test('owner sets access instructions, and clearing them removes them for the cleaner', async ({ page }) => {
+test('owner sets access instructions, and clearing them removes them for the employee', async ({ page }) => {
   const backend = new PartnerFlowBackend({ priced: true });
   await prepareRolePage(page, backend, 'owner');
 
   await page.goto('/partner/');
   await page.getByRole('tab', { name: /^Settings/ }).click();
-  await page.getByRole('textbox', { name: 'Access instructions for the cleaner', exact: true }).fill('Key safe 4321');
+  await page.getByRole('textbox', { name: 'Access instructions for the employee', exact: true }).fill('Key safe 4321');
   await page.getByRole('button', { name: 'Save photo sections', exact: true }).click();
   await expect(page.getByText('Photo sections saved. New visits will require them.', { exact: true })).toBeVisible();
   expect(backend.account.accessInstructions).toBe('Key safe 4321');
 
   await page.reload();
   await page.getByRole('tab', { name: /^Settings/ }).click();
-  await expect(page.getByRole('textbox', { name: 'Access instructions for the cleaner', exact: true })).toHaveValue('Key safe 4321');
+  await expect(page.getByRole('textbox', { name: 'Access instructions for the employee', exact: true })).toHaveValue('Key safe 4321');
 
-  await page.getByRole('textbox', { name: 'Access instructions for the cleaner', exact: true }).fill('');
+  await page.getByRole('textbox', { name: 'Access instructions for the employee', exact: true }).fill('');
   await page.getByRole('button', { name: 'Save photo sections', exact: true }).click();
   await expect(page.getByText('Photo sections saved. New visits will require them.', { exact: true })).toBeVisible();
   expect(backend.account.accessInstructions).toBeFalsy();

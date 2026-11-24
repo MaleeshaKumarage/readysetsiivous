@@ -11,7 +11,7 @@ namespace CleaningSuite.Tests.QualityCycle;
 public class QualityCyclePhotoNotesTests
 {
     private static QualityCycleForm Form() => QualityCycleForm.Create(Guid.NewGuid(), "Daily", Guid.NewGuid(),
-        "Cleaner identity", Guid.NewGuid(), "Activities", DateTime.UtcNow.AddHours(-1), new() { "Gym" });
+        "Employee identity", Guid.NewGuid(), "Activities", DateTime.UtcNow.AddHours(-1), new() { "Gym" });
 
     [Theory]
     [InlineData(null)] [InlineData("")] [InlineData("  \n ")]

@@ -19,7 +19,7 @@ async function openChangeDialog(page: Page) {
 test('owner proposes new dates, and the change list shows the proposal', async ({ page }) => {
   const backend = new PartnerFlowBackend({ priced: true });
   // Accepted visits are changed through staff; unaccepted requests are edited directly.
-  backend.seedAccepted(backend.seedRequest(backend.branches[0], WINDOW), 'cleaner', '2026-12-01T10:00');
+  backend.seedAccepted(backend.seedRequest(backend.branches[0], WINDOW), 'employee', '2026-12-01T10:00');
   await prepareRolePage(page, backend, 'owner');
 
   await openChangeDialog(page);
@@ -38,7 +38,7 @@ test('owner proposes new dates, and the change list shows the proposal', async (
 
 test('owner asks to cancel an accepted visit with a reason', async ({ page }) => {
   const backend = new PartnerFlowBackend({ priced: true });
-  backend.seedAccepted(backend.seedRequest(backend.branches[0], WINDOW), 'cleaner', '2026-12-01T10:00');
+  backend.seedAccepted(backend.seedRequest(backend.branches[0], WINDOW), 'employee', '2026-12-01T10:00');
   await prepareRolePage(page, backend, 'owner');
 
   await openChangeDialog(page);

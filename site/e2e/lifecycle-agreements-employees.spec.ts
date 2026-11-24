@@ -63,7 +63,7 @@ test('agreement lifecycle preserves completed and partial documents independentl
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith('/document')) return route.fulfill({ headers, contentType: 'application/pdf', body: '%PDF-1.4\nSigned document\n%%EOF' });
     const item = items.find(item => path.endsWith(`/${item.id}`));
-    if (item) return route.fulfill({ headers, json: { ...item, signers: [{ id: 'signer', name: 'Signed cleaner', email: 'signed@example.com', token: 'preserved-token', status: 'Signed' }] } });
+    if (item) return route.fulfill({ headers, json: { ...item, signers: [{ id: 'signer', name: 'Signed employee', email: 'signed@example.com', token: 'preserved-token', status: 'Signed' }] } });
     listRequests++;
     return route.fulfill({ headers, json: items });
   });
@@ -80,7 +80,7 @@ test('agreement lifecycle preserves completed and partial documents independentl
   await historic.getByRole('button', { name: 'PDF', exact: true }).click();
   expect((await download).suggestedFilename()).toBe('agreement-historic.pdf');
   await historic.getByRole('button', { name: 'Signers' }).click();
-  await expect(page.getByRole('dialog').getByText('Signed cleaner', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog').getByText('Signed employee', { exact: true })).toBeVisible();
   await expect(page.getByRole('dialog').getByText('Signed', { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
   const partial = page.getByRole('row').filter({ hasText: 'Inactive partial' });
@@ -88,7 +88,7 @@ test('agreement lifecycle preserves completed and partial documents independentl
   await partial.getByRole('button', { name: 'PDF', exact: true }).click();
   expect((await partialDownload).suggestedFilename()).toBe('agreement-partial.pdf');
   await partial.getByRole('button', { name: 'Signers' }).click();
-  await expect(page.getByRole('dialog').getByText('Signed cleaner', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog').getByText('Signed employee', { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
   await page.getByRole('tab', { name: 'Active (2)', exact: true }).click();
   await expect(page.getByText('Active draft', { exact: true })).toBeVisible();
@@ -100,8 +100,8 @@ test('employees request all lifecycle records and inactive employees offer react
   let includeInactive = '';
   let listRequests = 0;
   const employees = [
-    { id: 'active', firstName: 'Active', lastName: 'Cleaner', email: 'active@example.com', role: 'employee', isActive: true },
-    { id: 'inactive', firstName: 'Retired', lastName: 'Cleaner', email: 'retired@example.com', role: 'employee', isActive: false },
+    { id: 'active', firstName: 'Active', lastName: 'Employee', email: 'active@example.com', role: 'employee', isActive: true },
+    { id: 'inactive', firstName: 'Retired', lastName: 'Employee', email: 'retired@example.com', role: 'employee', isActive: false },
   ];
   await page.route('**/api/v1/admin/employees**', async route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
@@ -110,27 +110,27 @@ test('employees request all lifecycle records and inactive employees offer react
     return route.fulfill({ headers, json: employees });
   });
   await page.goto('/admin/employees/');
-  await expect(page.getByText('Active Cleaner', { exact: true })).toBeVisible();
+  await expect(page.getByText('Active Employee', { exact: true })).toBeVisible();
   expect(includeInactive).toBe('true');
   const initialListRequests = listRequests;
   await page.getByRole('tab', { name: 'Inactive (1)', exact: true }).click();
-  const retired = page.getByRole('row').filter({ hasText: 'Retired Cleaner' });
+  const retired = page.getByRole('row').filter({ hasText: 'Retired Employee' });
   await expect(retired).toBeVisible();
   await expect(retired.getByRole('button', { name: 'Reactivate' })).toBeVisible();
   await expect(retired.getByRole('button', { name: 'Invite', exact: true })).toHaveCount(0);
   await page.getByRole('tab', { name: 'Active (1)', exact: true }).click();
-  await expect(page.getByRole('row').filter({ hasText: 'Active Cleaner' }).getByRole('button', { name: 'Invite', exact: true })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'Active Employee' }).getByRole('button', { name: 'Invite', exact: true })).toBeVisible();
   expect(listRequests).toBe(initialListRequests);
 });
 
 test('inactive-only employees and agreements show helpful Active empty states', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
-  await page.route('**/api/v1/admin/employees**', route => route.fulfill({ headers, json: [{ id: 'old', firstName: 'Old', lastName: 'Cleaner', email: 'old@example.com', role: 'employee', isActive: false }] }));
+  await page.route('**/api/v1/admin/employees**', route => route.fulfill({ headers, json: [{ id: 'old', firstName: 'Old', lastName: 'Employee', email: 'old@example.com', role: 'employee', isActive: false }] }));
   await page.route('**/api/v1/admin/agreements**', route => route.fulfill({ headers, json: new URL(route.request().url()).pathname.endsWith('/legacy-repairs') ? { agreements: [], companies: [] } : [{ id: 'old', title: 'Old agreement', code: 'old', status: 'Completed', isActive: false, signerCount: 1, signedCount: 1 }] }));
   await page.goto('/admin/employees/');
   await expect(page.getByText('No active employees. Check the Inactive tab.')).toBeVisible();
   await page.getByRole('tab', { name: 'Inactive (1)', exact: true }).click();
-  await expect(page.getByText('Old Cleaner', { exact: true })).toBeVisible();
+  await expect(page.getByText('Old Employee', { exact: true })).toBeVisible();
   await page.goto('/admin/agreements/');
   await expect(page.getByText('No active agreements. Check the Inactive tab.')).toBeVisible();
   await page.getByRole('tab', { name: 'Inactive (1)', exact: true }).click();

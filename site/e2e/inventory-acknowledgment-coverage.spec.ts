@@ -10,7 +10,7 @@ function json(route: Route, body: unknown, status = 200) {
 }
 
 async function openRequestModal(page: Page, itemName: string) {
-  await page.getByRole('checkbox', { name: `Select ${itemName} by Private Cleaner` }).check();
+  await page.getByRole('checkbox', { name: `Select ${itemName} by Private Employee` }).check();
   await page.getByRole('button', { name: /Request acknowledgment \(\d+\)/ }).click();
   return page.getByRole('dialog');
 }
@@ -29,19 +29,19 @@ test('log columns line up and selection rules disable ineligible rows and clear'
   await expect(table.getByRole('columnheader')).toHaveCount(9);
   await expect(table.getByRole('row').nth(1).getByRole('cell')).toHaveCount(9);
   await expect(table.getByRole('columnheader').nth(2)).toHaveText('Employee');
-  await expect(table.getByRole('row').nth(1).getByRole('cell').nth(2)).toHaveText('Private Cleaner');
+  await expect(table.getByRole('row').nth(1).getByRole('cell').nth(2)).toHaveText('Private Employee');
 
-  await expect(page.getByRole('checkbox', { name: 'Select Unphotographed by Private Cleaner' })).toBeDisabled();
+  await expect(page.getByRole('checkbox', { name: 'Select Unphotographed by Private Employee' })).toBeDisabled();
   for (let index = 0; index < 50; index += 1) {
-    await page.getByRole('checkbox', { name: `Select Item ${index} by Private Cleaner` }).check();
+    await page.getByRole('checkbox', { name: `Select Item ${index} by Private Employee` }).check();
   }
   await expect(page.getByRole('button', { name: 'Request acknowledgment (50)' })).toBeEnabled();
-  await expect(page.getByRole('checkbox', { name: 'Select Item 50 by Private Cleaner' })).toBeDisabled();
+  await expect(page.getByRole('checkbox', { name: 'Select Item 50 by Private Employee' })).toBeDisabled();
 
   await page.getByRole('button', { name: 'Clear selection' }).click();
   await expect(page.getByRole('button', { name: 'Request acknowledgment (0)' })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Clear selection' })).toHaveCount(0);
-  await expect(page.getByRole('checkbox', { name: 'Select Item 50 by Private Cleaner' })).toBeEnabled();
+  await expect(page.getByRole('checkbox', { name: 'Select Item 50 by Private Employee' })).toBeEnabled();
 });
 
 test('a failed status lookup is recovered by Reload log', async ({ page }) => {
@@ -56,7 +56,7 @@ test('a failed status lookup is recovered by Reload log', async ({ page }) => {
   await expect(page.getByText(/Acknowledgment statuses could not be loaded/)).toBeVisible();
   await page.getByRole('button', { name: 'Reload log' }).click();
   await expect(page.getByText(/Acknowledgment statuses could not be loaded/)).toHaveCount(0);
-  await expect(page.getByRole('checkbox', { name: 'Select Keys by Private Cleaner' })).toBeEnabled();
+  await expect(page.getByRole('checkbox', { name: 'Select Keys by Private Employee' })).toBeEnabled();
   expect(lookups).toBeGreaterThanOrEqual(2);
 });
 
@@ -282,8 +282,8 @@ test('partner evidence shows a loading status until the photos arrive', async ({
 test('an entry that already has an acknowledgment cannot be selected again', async ({ page }) => {
   await setup(page, { pending: true });
   await page.goto('/admin/inventory/');
-  await expect(page.getByRole('checkbox', { name: 'Select Keys by Private Cleaner' })).toBeDisabled();
-  await expect(page.getByRole('checkbox', { name: 'Select Bedsheets by Private Cleaner' })).toBeEnabled();
+  await expect(page.getByRole('checkbox', { name: 'Select Keys by Private Employee' })).toBeDisabled();
+  await expect(page.getByRole('checkbox', { name: 'Select Bedsheets by Private Employee' })).toBeEnabled();
 });
 
 test('load more keeps the selection, while a fresh load clears it', async ({ page }) => {
@@ -296,15 +296,15 @@ test('load more keeps the selection, while a fresh load clears it', async ({ pag
     return json(route, skip === '100' ? second : first);
   });
   await page.goto('/admin/inventory/');
-  await page.getByRole('checkbox', { name: 'Select Stock 0 by Private Cleaner' }).check();
+  await page.getByRole('checkbox', { name: 'Select Stock 0 by Private Employee' }).check();
   await page.getByRole('button', { name: 'Load more' }).click();
   await expect(page.getByRole('cell', { name: 'Late entry', exact: true })).toBeVisible();
-  await expect(page.getByRole('checkbox', { name: 'Select Stock 0 by Private Cleaner' })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Select Stock 0 by Private Employee' })).toBeChecked();
   await expect(page.getByRole('button', { name: 'Request acknowledgment (1)' })).toBeEnabled();
 
   // A fresh load (Apply) drops the selection.
   await page.getByRole('button', { name: 'Apply', exact: true }).click();
-  await expect(page.getByRole('checkbox', { name: 'Select Stock 0 by Private Cleaner' })).not.toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Select Stock 0 by Private Employee' })).not.toBeChecked();
   await expect(page.getByRole('button', { name: 'Request acknowledgment (0)' })).toBeDisabled();
 });
 
@@ -335,7 +335,7 @@ test('partner search is sent as the admin types, and unrequested entries show No
   const state = await setup(page);
   await page.goto('/admin/inventory/');
   await expect(page.getByRole('cell', { name: 'Not requested', exact: true }).first()).toBeVisible();
-  await page.getByRole('checkbox', { name: 'Select Keys by Private Cleaner' }).check();
+  await page.getByRole('checkbox', { name: 'Select Keys by Private Employee' }).check();
   const dialog = await openRequestModal(page, 'Keys');
   await dialog.getByLabel('Partner company', { exact: true }).click();
   await dialog.getByLabel('Partner company', { exact: true }).fill('Partner');

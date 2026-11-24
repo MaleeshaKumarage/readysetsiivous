@@ -38,7 +38,7 @@ public class ShiftDeletionDatabaseTests
             Schedule = new() { Type = ShiftScheduleType.DailySameTime, DailyStart = TimeSpan.FromHours(8), DailyEnd = TimeSpan.FromHours(10) } };
         var employee = Guid.NewGuid();
         var assignment = new ShiftAssignment { ShiftId = shift.Id, EmployeeId = employee, IsActive = true, AssignedAtUtc = day.AddDays(-2) };
-        var form = QualityCycleForm.Create(shift.Id, shift.Name, employee, "Cleaner", Guid.NewGuid(), "Activities", day, ["Corridor"], day.AddHours(2));
+        var form = QualityCycleForm.Create(shift.Id, shift.Name, employee, "Employee", Guid.NewGuid(), "Activities", day, ["Corridor"], day.AddHours(2));
         form.CompanyId = company.Id; form.BranchId = branch.Id;
         form.Start(day); form.Submit([new() { ItemText = "Corridor", IsChecked = true }], null, "Completed", [new("data:image/png;base64,fixture", "Floor cleaned")], day.AddHours(2));
         var exception = ShiftOccurrenceException.Create(shift.Id, null, day.AddHours(4), day.AddHours(7), ShiftOccurrenceExceptionStatus.Extra, "Extra", employee);

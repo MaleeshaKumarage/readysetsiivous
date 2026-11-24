@@ -344,7 +344,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         await EnsureUnstartedUnbilled(request, ct);
         var employee = await Db.LoadAsync<Employee>(body.EmployeeId, ct);
         if (employee is not { IsActive: true, IdentitySyncPending: false } || !Employee.IsWorkRole(employee.Role))
-            throw new ValidationException("Select an active cleaner, manager or administrator.");
+            throw new ValidationException("Select an active employee, manager or administrator.");
         // Automatic acceptance only applies to employees who can sign in to accept; others get an ordinary offer.
         var automatic = employee.AutoAcceptWork && !string.IsNullOrWhiteSpace(employee.KeycloakUserId);
         DateTime? planned = null;
@@ -420,7 +420,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         await ActiveCompany(request.CompanyId, ct);
         await Branch(request.BranchId, request.CompanyId, ct);
         await EnsureUnstartedUnbilled(request, ct);
-        // No start time means a flexible visit: the cleaner works any time within the requested dates.
+        // No start time means a flexible visit: the employee works any time within the requested dates.
         DateTime? start = request.OfferPlannedStartUtc;
         if (start.HasValue)
         {
@@ -536,7 +536,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         occurrence.RequiredPhotoLabels = portalSettings?.PhotoLabels.ToList() ?? [];
         var roster = ShiftVisitRoster.Resolve(shift.Id, [], [occurrence], [], []);
         await VisitAssignmentSafety.CheckConflicts(shifts, shift, roster, zone, ct);
-        // An earlier hand-made roster change for this visit would hide the cleaner who has just accepted it.
+        // An earlier hand-made roster change for this visit would hide the employee who has just accepted it.
         Db.Delete<ShiftOccurrenceAssignment>(ShiftOccurrenceAssignment.Identity(shift.Id, null, occurrenceId));
         var previousEmployee = request.AcceptedEmployeeId;
         request.LinkedShiftId = shift.Id; request.OccurrenceStartUtc = start; request.AcceptedEmployeeId = actor;
@@ -546,7 +546,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         await ShiftTabs.StoreAsync(Db, shift, ct); Db.Store(occurrence); Db.Store(request);
         if (push is not null)
         {
-            // The previous cleaner is removed; the person who accepted is assigned (not when accepted automatically).
+            // The previous employee is removed; the person who accepted is assigned (not when accepted automatically).
             var removed = previousEmployee is { } previous && previous != actor ? new[] { previous } : Array.Empty<Guid>();
             await push.StageScheduleChangeAsync(Db, shift.Id, removed, DateTimeOffset.UtcNow, ct, kind: "ShiftRemoved", detail: await RequestDetail(request, ct));
             await push.StageScheduleChangeAsync(Db, shift.Id, automatic ? Array.Empty<Guid>() : new[] { actor }, DateTimeOffset.UtcNow, ct, kind: "ShiftAssigned", detail: await RequestDetail(request, ct));
@@ -619,7 +619,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
     }
 
     /// <summary>
-    /// The instructions the cleaner reads for a visit: the company's general instructions first, then the
+    /// The instructions the employee reads for a visit: the company's general instructions first, then the
     /// instructions written for this visit. Either part may be empty.
     /// </summary>
     public static string? VisitNotes(string? generalInstructions, string? visitInstructions)
@@ -706,7 +706,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
                 change.ProposedExactStartLocalTime = string.IsNullOrWhiteSpace(body.ExactStartLocalTime) ? null : body.ExactStartLocalTime;
                 break;
             case "Instructions":
-                if (string.IsNullOrWhiteSpace(body.Notes)) throw new ValidationException("Write the new instructions for the cleaner.");
+                if (string.IsNullOrWhiteSpace(body.Notes)) throw new ValidationException("Write the new instructions for the employee.");
                 if (body.Notes.Trim().Length > 4000) throw new ValidationException("Use at most 4000 characters for cleaning instructions.");
                 change.ProposedNotes = body.Notes.Trim();
                 break;
@@ -819,7 +819,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         if (notes?.Length > 4000) throw new ValidationException("Use at most 4000 characters for cleaning instructions.");
         request.FromDate = from; request.ToDate = to; request.ExactStartLocalTime = string.IsNullOrWhiteSpace(exact) ? null : exact;
         request.Notes = notes?.Trim();
-        // The cleaner sees the shift's notes, so an edited request keeps its linked shift's instructions current.
+        // The employee sees the shift's notes, so an edited request keeps its linked shift's instructions current.
         if (request.OccurrenceStartUtc.HasValue)
         {
             // On a branch main shift the instructions belong to this request's visit, not to the shared shift.
@@ -899,7 +899,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         return (form?.StartedAtUtc, form is { IsSubmitted: true } ? form.EndedAtUtc : null);
     }
 
-    // Quality Cycle checklists recorded for the accepted cleaner's linked visit occurrence.
+    // Quality Cycle checklists recorded for the accepted employee's linked visit occurrence.
     private async Task<List<QualityCycleForm>> VisitForms(PartnerCleaningRequest item, CancellationToken ct)
     {
         if (!item.LinkedShiftId.HasValue) return [];
@@ -909,7 +909,7 @@ public sealed class PartnerService(IPartnerStore store, IShiftWorkReservation re
         return forms.Where(x => x.EmployeeId == item.AcceptedEmployeeId && x.ShiftOccurrenceUtc == (item.OccurrenceStartUtc ?? item.PlannedStartUtc)).ToList();
     }
 
-    /// <summary>Read-only completed-visit summary for the partner owning the request. Cleaner identity is masked.</summary>
+    /// <summary>Read-only completed-visit summary for the partner owning the request. Employee identity is masked.</summary>
     public async Task<PartnerCompletionDto> Completion(Guid actor, Guid id, CancellationToken ct)
     {
         var company = (await Partner(actor, ct)).Company;

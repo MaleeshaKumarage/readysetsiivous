@@ -31,8 +31,8 @@ public record BranchVisitDto(Guid Id, Guid ShiftId, Guid BranchId, int Number, s
 public record BranchMainDto(Guid ShiftId, Guid BranchId, string Name, bool IsActive, Guid? DefaultEmployeeId, IReadOnlyList<BranchVisitDto> Visits);
 
 /// <summary>
-/// Visits that staff add to a branch's main shift, and the offer each one makes to a cleaner. A visit is offered to
-/// the chosen cleaner, or to the shift's default cleaner. A cleaner who accepts work automatically gets it at once;
+/// Visits that staff add to a branch's main shift, and the offer each one makes to an employee. A visit is offered to
+/// the chosen employee, or to the shift's default employee. An employee who accepts work automatically gets it at once;
 /// anyone else must accept the offer before the visit is theirs. Every change is one commit under the tenant work reservation.
 /// </summary>
 public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reservation, IShiftRepository shifts,
@@ -101,7 +101,7 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
         return new(shift.Id, shift.BranchId, shift.Name, shift.IsActive, shift.DefaultEmployeeId, visits);
     }
 
-    /// <summary>Sets the cleaner that new visits of a main shift are offered to. Visits already added are not changed.</summary>
+    /// <summary>Sets the employee that new visits of a main shift are offered to. Visits already added are not changed.</summary>
     public async Task<BranchMainDto> SetDefaultEmployee(Guid shiftId, SetDefaultEmployee body, CancellationToken ct)
     {
         await using var lease = await reservation.AcquireAsync(ct);
@@ -113,8 +113,8 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
     }
 
     /// <summary>
-    /// Changes who a visit is for. A waiting offer is withdrawn and the new cleaner is offered the visit.
-    /// A cleaner who had accepted is released, until work has started. Null leaves the visit unassigned.
+    /// Changes who a visit is for. A waiting offer is withdrawn and the new employee is offered the visit.
+    /// An employee who had accepted is released, until work has started. Null leaves the visit unassigned.
     /// </summary>
     public async Task<BranchVisitDto> SetEmployee(Guid shiftId, Guid visitId, SetVisitEmployee body, CancellationToken ct)
     {
@@ -160,7 +160,7 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
         return Map(visit, shift, zone, zoneId);
     }
 
-    /// <summary>Visit offers waiting for this cleaner's answer, in the shape cleaners already see offers in.</summary>
+    /// <summary>Visit offers waiting for this employee's answer, in the shape employees already see offers in.</summary>
     public async Task<IReadOnlyList<PartnerCleanerOfferDto>> Offers(Guid actor, CancellationToken ct)
     {
         var waiting = await Db.Query<ShiftOccurrenceException>().Where(x => x.OfferedEmployeeId == actor).ToListAsync(ct);
@@ -183,7 +183,7 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
         return result;
     }
 
-    /// <summary>Accepts a visit offer. Returns null when the id is not a visit offer for this cleaner, so the caller can try a partner offer.</summary>
+    /// <summary>Accepts a visit offer. Returns null when the id is not a visit offer for this employee, so the caller can try a partner offer.</summary>
     public async Task<BranchVisitDto?> Accept(Guid actor, Guid offerId, int version, CancellationToken ct)
     {
         await using var lease = await reservation.AcquireAsync(ct);
@@ -200,7 +200,7 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
         return Map(visit, shift, zone, zoneId);
     }
 
-    /// <summary>Declines a visit offer. Returns false when the id is not a visit offer for this cleaner.</summary>
+    /// <summary>Declines a visit offer. Returns false when the id is not a visit offer for this employee.</summary>
     // "Which visit" text for an alert: the property and the local start time.
     private async Task<string?> VisitText(Shift shift, DateTime? start, TimeZoneInfo zone, CancellationToken ct)
     {
@@ -208,7 +208,7 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
         return VisitDetail.Describe(branch?.Name, start, zone);
     }
 
-    /// <summary>Declines a visit offer. Returns false when the id is not a visit offer for this cleaner.</summary>
+    /// <summary>Declines a visit offer. Returns false when the id is not a visit offer for this employee.</summary>
     public async Task<bool> Decline(Guid actor, Guid offerId, int version, CancellationToken ct)
     {
         await using var lease = await reservation.AcquireAsync(ct);
@@ -228,7 +228,7 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
         return true;
     }
 
-    /// <summary>Gives the visit to a cleaner who accepts work automatically, or leaves an offer waiting for the cleaner's answer.</summary>
+    /// <summary>Gives the visit to an employee who accepts work automatically, or leaves an offer waiting for the employee's answer.</summary>
     private async Task OfferTo(Shift shift, ShiftOccurrenceException visit, Guid employeeId, TimeZoneInfo zone, CancellationToken ct)
     {
         var employee = await Worker(employeeId, ct);
@@ -261,7 +261,7 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
         var forms = await Db.Query<QualityCycleForm>().Where(x => x.ShiftId == shiftId).ToListAsync(ct);
         var invoices = await Db.Query<Invoice>().Where(x => x.Lines.Any(l => l.ShiftId == shiftId)).ToListAsync(ct);
         if (BranchMainShifts.VisitLockReason(forms, invoices, shiftId, startUtc) is { } reason)
-            throw new ShiftConflictException($"{reason}, so its cleaner cannot be changed.");
+            throw new ShiftConflictException($"{reason}, so its employee cannot be changed.");
     }
 
     private async Task<Shift> Main(Guid shiftId, CancellationToken ct)
@@ -283,7 +283,7 @@ public class BranchVisitService(IPartnerStore store, IShiftWorkReservation reser
     {
         var employee = await Db.LoadAsync<Employee>(id, ct);
         if (employee is not { IsActive: true, IdentitySyncPending: false } || !Employee.IsWorkRole(employee.Role))
-            throw new ValidationException([new ValidationFailure("EmployeeId", "Select an active cleaner, manager or administrator.")]);
+            throw new ValidationException([new ValidationFailure("EmployeeId", "Select an active employee, manager or administrator.")]);
         return employee;
     }
 

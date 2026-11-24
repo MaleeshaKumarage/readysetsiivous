@@ -11,7 +11,7 @@ public sealed record ShiftOverlapVisit(Guid ShiftId, string ShiftName, DateTime 
 
 public sealed record ShiftOverlapFinding(Guid EmployeeId, ShiftOverlapVisit Earlier, ShiftOverlapVisit Later);
 
-// Finds cleaners booked on two visits that overlap in time. Back-to-back visits (one ends when the next starts) are not overlaps.
+// Finds employees booked on two visits that overlap in time. Back-to-back visits (one ends when the next starts) are not overlaps.
 public static class OverlapAudit
 {
     public static IReadOnlyList<ShiftOverlapFinding> Find(IEnumerable<(Guid EmployeeId, ShiftOverlapVisit Visit)> visits)
@@ -80,7 +80,7 @@ public static class ScheduleVisits
         return visits;
     }
 
-    // Groups visits by cleaner and tenant-local day, earliest visit first.
+    // Groups visits by employee and tenant-local day, earliest visit first.
     public static IReadOnlyList<EmployeeDaySchedule> GroupByDay(IEnumerable<(Guid EmployeeId, ShiftOverlapVisit Visit)> visits, TimeZoneInfo zone) =>
         visits.GroupBy(x => (x.EmployeeId, Day: TenantTimeZone.LocalDate(x.Visit.StartUtc, zone)))
             .Select(g => new EmployeeDaySchedule(g.Key.EmployeeId, g.Key.Day, g.Select(x => x.Visit).OrderBy(v => v.StartUtc).ToList()))

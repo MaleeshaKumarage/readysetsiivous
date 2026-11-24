@@ -8,7 +8,7 @@ import { adminShifts, VisitConflictError, type Employee, type ShiftConflictDetai
 export function VisitAssigneesDialog({ shiftId, visit, employees, timeZone, onClose, onSaved, onOpenConflict }: {
   shiftId: string; visit: ShiftOccurrence; employees: Employee[]; timeZone: string;
   onClose: () => void; onSaved: () => Promise<void>;
-  // Opens the clashing shift's visits so the admin can move or remove the overlapping cleaner there.
+  // Opens the clashing shift's visits so the admin can move or remove the overlapping employee there.
   onOpenConflict: (shiftId: string, shiftName: string, clashStartUtc: string) => Promise<void>;
 }) {
   const [scope, setScope] = useState('visit');
@@ -23,7 +23,7 @@ export function VisitAssigneesDialog({ shiftId, visit, employees, timeZone, onCl
   const changed = () => { setPreview(null); setError(''); setConflicts([]); };
   const formatTime = (value: string) => new Date(value).toLocaleString(undefined, { timeZone });
   const formatEnd = (value: string) => new Date(value).toLocaleTimeString(undefined, { timeZone, hour: '2-digit', minute: '2-digit' });
-  // Removes the overlapping cleaner from the clashing visit only, then re-previews this assignment.
+  // Removes the overlapping employee from the clashing visit only, then re-previews this assignment.
   const removeClash = async (conflict: ShiftConflictDetail) => {
     if (busy) return;
     setBusy(true); setError('');
@@ -37,7 +37,7 @@ export function VisitAssigneesDialog({ shiftId, visit, employees, timeZone, onCl
       if (!clash) throw new Error('That overlapping visit is no longer scheduled. Reload occurrences and preview again.');
       const clashCurrent = clash.overrideEmployeeIds ?? clash.assigneeIds ?? [];
       const clashing = clashCurrent.filter(id => selected.includes(id));
-      if (clashing.length === 0) throw new Error('The selected cleaners are no longer on the overlapping visit. Preview again to continue.');
+      if (clashing.length === 0) throw new Error('The selected employees are no longer on the overlapping visit. Preview again to continue.');
       await adminShifts.setVisitAssignees(conflict.shiftId, {
         originalStartUtc: clash.status === 4 ? null : clash.originalStartUtc ?? clash.startUtc,
         extraExceptionId: clash.status === 4 ? clash.exceptionId ?? null : null,
@@ -47,7 +47,7 @@ export function VisitAssigneesDialog({ shiftId, visit, employees, timeZone, onCl
       });
       removed = true;
     } catch (failure) {
-      const message = failure instanceof Error ? failure.message : 'Could not remove the overlapping cleaner. Reload occurrences and retry.';
+      const message = failure instanceof Error ? failure.message : 'Could not remove the overlapping employee. Reload occurrences and retry.';
       setError(message); showError(message, 'Overlap not changed');
       return;
     } finally {
@@ -100,7 +100,7 @@ export function VisitAssigneesDialog({ shiftId, visit, employees, timeZone, onCl
       {preview && <Alert title="Assignment preview"><Text>Selected visit: {preview.employeeIds.map(name).join(', ') || 'Unassigned'}</Text><Text size="sm">{preview.message}</Text></Alert>}
       {error && <Text role="alert" c="red">{error}</Text>}
       {conflicts.map(conflict => <Alert key={`${conflict.shiftId}-${conflict.startUtc}`} color="orange" title={`Overlaps ${conflict.shiftName}`}>
-        <Text size="sm">{formatTime(conflict.startUtc)} to {formatEnd(conflict.endUtc)}. Remove the overlapping cleaner from that visit, then assign them here.</Text>
+        <Text size="sm">{formatTime(conflict.startUtc)} to {formatEnd(conflict.endUtc)}. Remove the overlapping employee from that visit, then assign them here.</Text>
         {conflict.recurrence && <Text size="sm">{conflict.recurrence}{conflict.openEnded ? ' · No end date; this assignment can conflict with future visits.' : ''}</Text>}
         {selected.map(id => <Text key={id} component="a" td="underline" size="sm" display="block" href={`/admin/shifts/employee-schedule/?employee=${encodeURIComponent(id)}&date=${encodeURIComponent(new Date(conflict.startUtc).toLocaleDateString('en-CA', { timeZone }))}`}>Open assignments for {name(id)}</Text>)}
         <Group mt="sm" gap="xs">

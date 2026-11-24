@@ -55,11 +55,11 @@ public class EmployeeIdentityIntegrationTests
             Assert.NotNull(await new EmployeeRepository(factory).GetByEmailAsync("mixedcase@example.invalid"));
         }
         var locks = new EmployeeIdentityLock(Configuration());
-        await using var first = await locks.AcquireAsync(tenant, "Cleaner@Example.invalid");
+        await using var first = await locks.AcquireAsync(tenant, "Employee@Example.invalid");
         using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(400));
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => locks.AcquireAsync(tenant, " cleaner@example.invalid ", cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => locks.AcquireAsync(tenant, " employee@example.invalid ", cancellation.Token));
         // Different tenants never block each other on the same email.
-        await using var other = await locks.AcquireAsync(tenant + "-other", "Cleaner@example.invalid");
+        await using var other = await locks.AcquireAsync(tenant + "-other", "Employee@example.invalid");
     }
     [EmployeeIdentityKeycloakFact]
     public async Task NativeSetupEmailBindsIdentityRetriesDeliveryAndSerializesParallelInvites()
@@ -82,7 +82,7 @@ public class EmployeeIdentityIntegrationTests
         var ownerId = (await admin.GetUserIdByUsernameAsync(realm, "owner@" + realm + ".invalid"))!;
         await admin.UpdateUserAsync(realm, ownerId, new { emailVerified = true, requiredActions = Array.Empty<string>(), credentials = new[] { new { type = "password", value = "InviteOwnerTestOnly2026", temporary = false } } });
         using (var registry = store.LightweightSession("registry")) { registry.Store(new TenantRegistration { Slug = realm, Status = TenantRegistration.StatusActive }); await registry.SaveChangesAsync(); }
-        var employee = new Employee { Email = "cleaner@" + realm + ".invalid", FirstName = "Invite", LastName = "Cleaner", Role = "employee" };
+        var employee = new Employee { Email = "employee@" + realm + ".invalid", FirstName = "Invite", LastName = "Employee", Role = "employee" };
         using (var session = store.LightweightSession(realm)) { session.Store(employee); await session.SaveChangesAsync(); }
         var identity = new KeycloakEmployeeIdentityProvider(new TenantKeycloakClients(http, config), config);
         var runtimeClient = new TenantKeycloakClients(http, config).ForTenant(realm);

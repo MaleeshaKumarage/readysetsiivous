@@ -20,7 +20,7 @@ async function setup(page: Page, options: { scheduleStatus?: number; empty?: boo
       const day = dayOf(request.url());
       if (options.empty) return route.fulfill({ headers, json: [] });
       return route.fulfill({ headers, json: [
-        { employeeId: 'cleaner', localDay: `${day}T00:00:00`, visits: [
+        { employeeId: 'employee', localDay: `${day}T00:00:00`, visits: [
           { shiftId: 'shift', shiftName: 'Morning clean', startUtc: `${day}T06:00:00Z`, endUtc: `${day}T08:00:00Z` },
           { shiftId: 'other', shiftName: 'Evening deep clean', startUtc: `${day}T06:30:00Z`, endUtc: `${day}T08:30:00Z` },
         ] },
@@ -31,13 +31,13 @@ async function setup(page: Page, options: { scheduleStatus?: number; empty?: boo
     }
     if (path.endsWith('/overlap-audit')) {
       const day = dayOf(request.url());
-      return route.fulfill({ headers, json: [{ employeeId: 'cleaner',
+      return route.fulfill({ headers, json: [{ employeeId: 'employee',
         earlier: { shiftId: 'shift', shiftName: 'Morning clean', startUtc: `${day}T06:00:00Z`, endUtc: `${day}T08:00:00Z` },
         later: { shiftId: 'other', shiftName: 'Evening deep clean', startUtc: `${day}T06:30:00Z`, endUtc: `${day}T08:30:00Z` } }] });
     }
     if (path.endsWith('/employees')) return route.fulfill({ headers, json: [
-      { id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true },
-      { id: 'second', firstName: 'Second', lastName: 'Cleaner', role: 'employee', isActive: true },
+      { id: 'employee', firstName: 'Test', lastName: 'Employee', role: 'employee', isActive: true },
+      { id: 'second', firstName: 'Second', lastName: 'Employee', role: 'employee', isActive: true },
       { id: 'partner-owner', firstName: 'Active', lastName: 'Partner', role: 'partner', isActive: true },
     ] });
     if (path.endsWith('/tenant')) return route.fulfill({ headers, json: { companyName: 'QA', timeZoneId: 'Europe/Helsinki' } });
@@ -48,17 +48,17 @@ async function setup(page: Page, options: { scheduleStatus?: number; empty?: boo
   return { requests, stopFailing: () => { failing = false; } };
 }
 
-test('admin sees each cleaner by day with visits and overlaps flagged', async ({ page }) => {
+test('admin sees each employee by day with visits and overlaps flagged', async ({ page }) => {
   const state = await setup(page);
   const first = state.requests[0];
   await expect(page.getByRole('heading', { name: 'Employee schedule' })).toBeVisible();
-  const cell = page.getByLabel(`Test Cleaner, ${first}`);
+  const cell = page.getByLabel(`Test Employee, ${first}`);
   await expect(cell.getByText('Overlap')).toBeVisible();
   await expect(cell.getByText(/Morning clean 08:00/)).toBeVisible();
   await expect(cell.getByText(/Evening deep clean 08:30/)).toBeVisible();
-  await expect(page.getByLabel(`Second Cleaner, ${addDay(first, 1)}`).getByText(/Morning clean 08:00/)).toBeVisible();
+  await expect(page.getByLabel(`Second Employee, ${addDay(first, 1)}`).getByText(/Morning clean 08:00/)).toBeVisible();
   await expect(page.getByText('Active Partner')).toHaveCount(0);
-  await expect(page.getByLabel(`Second Cleaner, ${addDay(first, 1)}`).getByText('Overlap')).toHaveCount(0);
+  await expect(page.getByLabel(`Second Employee, ${addDay(first, 1)}`).getByText('Overlap')).toHaveCount(0);
 });
 
 test('a week with no visits says so and points to other weeks', async ({ page }) => {
@@ -71,7 +71,7 @@ test('a failed load explains the problem and can be retried', async ({ page }) =
   await expect(page.getByText('Could not load the schedule. Check your connection, then retry.')).toBeVisible();
   state.stopFailing();
   await page.getByRole('button', { name: 'Retry' }).click();
-  await expect(page.getByLabel(`Test Cleaner, ${state.requests[0]}`).getByText(/Morning clean 08:00/)).toBeVisible();
+  await expect(page.getByLabel(`Test Employee, ${state.requests[0]}`).getByText(/Morning clean 08:00/)).toBeVisible();
 });
 
 test('previous and next week move the requested range by seven days', async ({ page }) => {
@@ -121,14 +121,14 @@ test('a failed overlap audit shows a retryable error instead of reporting no ove
   await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
 });
 
-test('an empty staff list says there are no active cleaners yet', async ({ page }) => {
+test('an empty staff list says there are no active employees yet', async ({ page }) => {
   await setupAdminMocks(page);
   await page.route(/\/api\/v1\/admin\/employees/, route => route.fulfill({ headers, json: [] }));
   await page.route(/\/api\/v1\/admin\/shifts\/employee-schedule/, route => route.fulfill({ headers, json: [] }));
   await page.route(/\/api\/v1\/admin\/shifts\/overlap-audit/, route => route.fulfill({ headers, json: [] }));
   await page.route(/\/api\/v1\/admin\/tenant$/, route => route.fulfill({ headers, json: { companyName: 'QA', timeZoneId: 'Europe/Helsinki' } }));
   await page.goto('/admin/shifts/employee-schedule/');
-  await expect(page.getByText('No active cleaners yet. Add employees, then their visits appear here.')).toBeVisible();
+  await expect(page.getByText('No active employees yet. Add employees, then their visits appear here.')).toBeVisible();
 });
 
 test('the Employee schedule navigation item opens the page', async ({ page }) => {
@@ -167,12 +167,12 @@ test('the Reload button in the time-zone error recovers the schedule once the zo
 });
 
 
-test('conflict deep link opens the selected cleaner and week, with a way back to all cleaners', async ({ page }) => {
+test('conflict deep link opens the selected employee and week, with a way back to all employees', async ({ page }) => {
   const state = await setup(page);
-  await page.goto('/admin/shifts/employee-schedule/?employee=cleaner&date=2030-01-15');
+  await page.goto('/admin/shifts/employee-schedule/?employee=employee&date=2030-01-15');
   await expect.poll(() => state.requests.at(-1)).toBe('2030-01-14');
-  await expect(page.getByRole('rowheader', { name: 'Test Cleaner', exact: true })).toBeVisible();
-  await expect(page.getByRole('rowheader', { name: 'Second Cleaner', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Show all cleaners', exact: true }).click();
-  await expect(page.getByRole('rowheader', { name: 'Second Cleaner', exact: true })).toBeVisible();
+  await expect(page.getByRole('rowheader', { name: 'Test Employee', exact: true })).toBeVisible();
+  await expect(page.getByRole('rowheader', { name: 'Second Employee', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Show all employees', exact: true }).click();
+  await expect(page.getByRole('rowheader', { name: 'Second Employee', exact: true })).toBeVisible();
 });

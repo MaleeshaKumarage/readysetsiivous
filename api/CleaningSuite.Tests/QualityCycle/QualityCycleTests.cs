@@ -149,7 +149,7 @@ public class QualityCycleTests
     {
         var templateItems = new List<string> { "Task 1", "Task 2" };
         var form = QualityCycleForm.Create(
-            Guid.NewGuid(), "Morning Shift", Guid.NewGuid(), "John Cleaner", Guid.NewGuid(), "Daily Template", DateTime.UtcNow, templateItems);
+            Guid.NewGuid(), "Morning Shift", Guid.NewGuid(), "John Employee", Guid.NewGuid(), "Daily Template", DateTime.UtcNow, templateItems);
 
         var submissionItems = new List<QualityCycleFormItem>
         {
@@ -172,7 +172,7 @@ public class QualityCycleTests
     public void SubmitQualityCycleForm_WhenAlreadySubmitted_ThrowsInvalidOperationException()
     {
         var form = QualityCycleForm.Create(
-            Guid.NewGuid(), "Shift", Guid.NewGuid(), "Cleaner", Guid.NewGuid(), "Template", DateTime.UtcNow, new List<string> { "Task 1" });
+            Guid.NewGuid(), "Shift", Guid.NewGuid(), "Employee", Guid.NewGuid(), "Template", DateTime.UtcNow, new List<string> { "Task 1" });
         form.Submit(new List<QualityCycleFormItem> { new() { ItemText = "Task 1", IsChecked = true } }, null, null);
 
         Assert.Throws<InvalidOperationException>(() => form.Submit(new List<QualityCycleFormItem>(), null, null));
@@ -182,7 +182,7 @@ public class QualityCycleTests
     public void SubmitQualityCycleForm_RejectsModifiedChecklistWithoutMutation()
     {
         var form = QualityCycleForm.Create(
-            Guid.NewGuid(), "Shift", Guid.NewGuid(), "Cleaner", Guid.NewGuid(), "Template", DateTime.UtcNow, new List<string> { "Task A", "Task B" });
+            Guid.NewGuid(), "Shift", Guid.NewGuid(), "Employee", Guid.NewGuid(), "Template", DateTime.UtcNow, new List<string> { "Task A", "Task B" });
 
         var submittedItems = new List<QualityCycleFormItem>
         {
@@ -335,7 +335,7 @@ public class QualityCycleTests
     public async Task GetQualityCycleFormByTokenQueryHandler_WhenExists_ReturnsDto()
     {
         var repoMock = new Mock<IQualityCycleRepository>();
-        var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Cleaner", Guid.NewGuid(), "Template", DateTime.UtcNow, new List<string> { "Item 1" });
+        var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Employee", Guid.NewGuid(), "Template", DateTime.UtcNow, new List<string> { "Item 1" });
         form.Start();
         repoMock.Setup(r => r.GetFormByTokenAsync(form.Token, It.IsAny<CancellationToken>())).ReturnsAsync(form);
 
@@ -360,7 +360,7 @@ public class QualityCycleTests
     {
         var repoMock = new Mock<IQualityCycleRepository>();
         var form = QualityCycleForm.Create(
-            Guid.NewGuid(), "Shift 1", Guid.NewGuid(), "Cleaner 1", Guid.NewGuid(), "Template 1", DateTime.UtcNow, new List<string> { "Item 1" });
+            Guid.NewGuid(), "Shift 1", Guid.NewGuid(), "Employee 1", Guid.NewGuid(), "Template 1", DateTime.UtcNow, new List<string> { "Item 1" });
 
         form.Start();
         repoMock.Setup(x => x.GetFormByTokenAsync(form.Token, It.IsAny<CancellationToken>())).ReturnsAsync(form);
@@ -384,7 +384,7 @@ public class QualityCycleTests
     {
         var repoMock = new Mock<IQualityCycleRepository>();
         var form = QualityCycleForm.Create(
-            Guid.NewGuid(), "Shift 1", Guid.NewGuid(), "Cleaner 1", Guid.NewGuid(), "Template 1", DateTime.UtcNow.AddHours(-1), new List<string> { "Item 1" });
+            Guid.NewGuid(), "Shift 1", Guid.NewGuid(), "Employee 1", Guid.NewGuid(), "Template 1", DateTime.UtcNow.AddHours(-1), new List<string> { "Item 1" });
         form.Start();
         repoMock.Setup(x => x.GetFormByTokenAsync(form.Token, It.IsAny<CancellationToken>())).ReturnsAsync(form);
         var handler = new QualityCycleHandlers.SubmitQualityCycleFormCommandHandler(repoMock.Object, NoopUploadContentValidator.Instance, WorkAccessFixtures.ActiveShifts(), WorkAccessFixtures.ActiveEmployees(), WorkAccessFixtures.Reservation);

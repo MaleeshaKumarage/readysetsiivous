@@ -29,7 +29,7 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
         var assigneeKey = assignee is not null && Guid.TryParse(assignee, out var parsedKey) ? parsedKey.ToString() : assignee;
         // Partner requests carry no assignee of their own, so an assignee filter leaves them out.
         if (assignee is not null) includePartners = false;
-        // Unassigned work: occurrences and bookings with no cleaner. Partner requests have no assignee of their own, so they stay in.
+        // Unassigned work: occurrences and bookings with no employee. Partner requests have no assignee of their own, so they stay in.
         var unassignedOnly = query.UnassignedOnly;
         var fromDay = query.DateFrom is null ? (DateOnly?)null : DateOnly.ParseExact(query.DateFrom, "yyyy-MM-dd");
         var toDay = query.DateTo is null ? (DateOnly?)null : DateOnly.ParseExact(query.DateTo, "yyyy-MM-dd");

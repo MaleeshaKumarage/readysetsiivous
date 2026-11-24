@@ -1,8 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 import { PartnerFlowBackend, prepareRolePage, type VisitSeed } from './partner-flow-backend';
 
-// The owner opens a finished visit from Completed requests and reads what the cleaner recorded.
-// The visit view shows what the cleaner recorded, not who the cleaner was.
+// The owner opens a finished visit from Completed requests and reads what the employee recorded.
+// The visit view shows what the employee recorded, not who the employee was.
 
 const PROPERTY = 'Lake apartment';
 const WINDOW = { fromDate: '2026-12-01', toDate: '2026-12-01' };
@@ -21,14 +21,14 @@ async function openCompletedVisit(page: Page) {
   await expect(visitDialog(page)).toBeVisible();
 }
 
-// A visit the cleaner finished: the request is accepted for 'cleaner' at PLANNED, then completed with the given work.
+// A visit the employee finished: the request is accepted for 'employee' at PLANNED, then completed with the given work.
 function finishedVisit(backend: PartnerFlowBackend, visit: VisitSeed) {
-  const request = backend.seedAccepted(backend.seedRequest(backend.branches[0], WINDOW), 'cleaner', PLANNED);
+  const request = backend.seedAccepted(backend.seedRequest(backend.branches[0], WINDOW), 'employee', PLANNED);
   backend.completeVisit(request, visit);
   return request;
 }
 
-test('owner reads the checklist, notes and photos of a completed visit, without the cleaner', async ({ page }) => {
+test('owner reads the checklist, notes and photos of a completed visit, without the employee', async ({ page }) => {
   const backend = new PartnerFlowBackend({ priced: true });
   finishedVisit(backend, {
     tasks: [{ text: 'Vacuum floors', done: true }, { text: 'Restock towels', done: false }],
@@ -51,10 +51,10 @@ test('owner reads the checklist, notes and photos of a completed visit, without 
   await expect.poll(() => photo.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
   await expect(dialog.getByText('Kitchen after clean', { exact: true })).toBeVisible();
 
-  // The visit view carries no cleaner information: no name, no initial, no cleaner row.
-  await expect(dialog).not.toContainText('Test Cleaner');
+  // The visit view carries no employee information: no name, no initial, no employee row.
+  await expect(dialog).not.toContainText('Test Employee');
   await expect(dialog.getByText('T.', { exact: true })).toHaveCount(0);
-  await expect(dialog.getByText('Cleaner', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByText('Employee', { exact: true })).toHaveCount(0);
 });
 
 test('a completed visit with no checklist, notes or photos says so', async ({ page }) => {
@@ -74,7 +74,7 @@ test('a completed visit with no checklist, notes or photos says so', async ({ pa
 test('messages about a completed visit appear with the staff response', async ({ page }) => {
   const backend = new PartnerFlowBackend({ priced: true });
   const request = finishedVisit(backend, { tasks: [{ text: 'Vacuum floors', done: true }] });
-  backend.changes.push({ id: 'change-1', companyId: request.companyId, branchId: request.branchId, requestId: request.id, kind: 'CleaningRequest', message: 'Please use the back door.', resolvedUtc: '2026-11-30T12:00:00Z', resolution: 'Passed on to the cleaner.' });
+  backend.changes.push({ id: 'change-1', companyId: request.companyId, branchId: request.branchId, requestId: request.id, kind: 'CleaningRequest', message: 'Please use the back door.', resolvedUtc: '2026-11-30T12:00:00Z', resolution: 'Passed on to the employee.' });
   await prepareRolePage(page, backend, 'owner');
 
   await openCompletedVisit(page);
@@ -82,12 +82,12 @@ test('messages about a completed visit appear with the staff response', async ({
 
   await expect(dialog.getByRole('heading', { name: 'Messages about this visit', exact: true })).toBeVisible();
   await expect(dialog.getByText('Please use the back door.', { exact: true })).toBeVisible();
-  await expect(dialog.getByText('Passed on to the cleaner.')).toBeVisible();
+  await expect(dialog.getByText('Passed on to the employee.')).toBeVisible();
 });
 
 test('an accepted visit that is still in progress has no visit summary yet', async ({ page }) => {
   const backend = new PartnerFlowBackend({ priced: true });
-  backend.seedAccepted(backend.seedRequest(backend.branches[0], WINDOW), 'cleaner', PLANNED);
+  backend.seedAccepted(backend.seedRequest(backend.branches[0], WINDOW), 'employee', PLANNED);
   await prepareRolePage(page, backend, 'owner');
 
   await page.goto('/partner/');

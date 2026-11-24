@@ -117,7 +117,7 @@ export function DashboardCharts() {
       <Group justify="space-between" mb={4} wrap="wrap">
         <div>
           <Text fw={650}>Scheduled hours vs actual hours per day</Text>
-          <Text size="xs" c="dimmed">Scheduled: visit length. Actual: submitted cleaner time. A visit without a valid submitted time adds no actual hours.</Text>
+          <Text size="xs" c="dimmed">Scheduled: visit length. Actual: submitted employee time. A visit without a valid submitted time adds no actual hours.</Text>
         </div>
         {monthSwitcher}
       </Group>

@@ -145,7 +145,7 @@ public class PartnerWorkflowTests
         var offer = await fixture.SubmitOffer();
         using (var session = fixture.Session()) await fixture.Service(session).Accept(fixture.Cleaner.Id, offer.OfferId!.Value, new(offer.Version), default);
         using var declining = fixture.Session();
-        // The cleaner still holds the offer at its old version; the real reason is that it is no longer waiting for an answer.
+        // The employee still holds the offer at its old version; the real reason is that it is no longer waiting for an answer.
         var ex = await Assert.ThrowsAsync<ShiftConflictException>(() => fixture.Service(declining).Decline(fixture.Cleaner.Id, offer.OfferId!.Value, new(offer.Version), default));
         Assert.Contains("no longer waiting for your answer", ex.Message);
     }
@@ -222,7 +222,7 @@ public class PartnerWorkflowTests
         {
             Assert.Single(await reader.Query<Shift>().ToListAsync());
             Assert.Empty(await reader.Query<ShiftAssignment>().ToListAsync());
-            // The moved visit keeps its number and now belongs to the replacement cleaner only.
+            // The moved visit keeps its number and now belongs to the replacement employee only.
             var visit = Assert.Single(await reader.Query<ShiftOccurrenceException>().ToListAsync());
             Assert.Equal(replacement.Id, visit.EmployeeId); Assert.Equal(1, visit.Sequence);
         }
@@ -316,7 +316,7 @@ public class PartnerWorkflowTests
     {
         using var fixture = await Fixture.Create();
         // Added but not yet signed in: the stored preference is on, but automatic acceptance needs a login to accept.
-        var pending = new Employee { Role = Employee.RoleEmployee, KeycloakUserId = "", FirstName = "Pending", LastName = "Cleaner", AutoAcceptWork = true };
+        var pending = new Employee { Role = Employee.RoleEmployee, KeycloakUserId = "", FirstName = "Pending", LastName = "Employee", AutoAcceptWork = true };
         using (var writer = fixture.Store.LightweightSession(fixture.Tenant)) { writer.Store(pending); await writer.SaveChangesAsync(); }
         PartnerRequestDto offered;
         using (var session = fixture.Session())
@@ -693,7 +693,7 @@ public class PartnerWorkflowTests
         return branch;
     }
 
-    // The partner's photo sections and general instructions must reach the cleaner's visit once it is offered and accepted.
+    // The partner's photo sections and general instructions must reach the employee's visit once it is offered and accepted.
     [QualityCycle.QualityCycleDatabaseFact]
     public async Task Partner_photo_sections_and_instructions_reach_the_cleaner_on_offer_and_on_the_accepted_visit()
     {
@@ -760,7 +760,7 @@ public class PartnerWorkflowTests
         public Branch Branch { get; private set; } = null!;
         public Employee Partner { get; private set; } = null!;
         public Employee Admin { get; } = new() { Role = Employee.RoleAdmin, KeycloakUserId = "synthetic-admin", AutoAcceptWork = false };
-        public Employee Cleaner { get; } = new() { Role = Employee.RoleEmployee, KeycloakUserId = "synthetic-cleaner", FirstName = "Cleaner", LastName = "Test", AutoAcceptWork = false };
+        public Employee Cleaner { get; } = new() { Role = Employee.RoleEmployee, KeycloakUserId = "synthetic-cleaner", FirstName = "Employee", LastName = "Test", AutoAcceptWork = false };
         private Fixture(ServiceProvider provider) { this.provider = provider; Store = provider.GetRequiredService<IDocumentStore>(); }
         public static async Task<Fixture> Create()
         {

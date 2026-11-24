@@ -10,7 +10,7 @@ namespace CleaningSuite.Application.Shifts;
 public static class RecordedWork
 {
     /// <summary>
-    /// Picks the record that represents one cleaner's work on one occurrence: a submitted record
+    /// Picks the record that represents one employee's work on one occurrence: a submitted record
     /// beats an unfinished one, then the latest recorded end, then the latest start.
     /// </summary>
     public static T? Representative<T>(IEnumerable<T> records, Func<T, bool> submitted, Func<T, DateTime?> started, Func<T, DateTime?> ended) =>

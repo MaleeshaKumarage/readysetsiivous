@@ -20,7 +20,7 @@ async function fixture(page: Page, role: 'partner' | 'admin' = 'partner') {
     if (req.method() !== 'GET') { writes.push({ path, method: req.method() }); return route.fulfill({ status: 409, headers, json: { detail: 'Unexpected mutation from a local cancellation.' } }); }
     reads.push(path);
     const suffix = path.split('/partner')[1];
-    const json = path === '/api/v1/partner/me' ? identity : path.endsWith('/employees') ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true }]
+    const json = path === '/api/v1/partner/me' ? identity : path.endsWith('/employees') ? [{ id: 'employee', firstName: 'Test', lastName: 'Employee', role: 'employee', isActive: true }]
       : path.endsWith('/companies') ? { items: [{ id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }], total: 1 }
       : suffix === '/branches' || suffix === '/quotes' ? [branch]
       : suffix === '/requests' ? [pending, accepted]
@@ -56,8 +56,8 @@ test('owner cancels valid property, cleaning and staff-change drafts without any
 test('staff cancels valid offer, pricing, resolution, reschedule and property drafts without writes', async ({ page }) => {
   const state = await fixture(page, 'admin'); await page.goto('/admin/partner-requests/');
   const card = page.getByRole('article', { name: `${branch.name} request`, exact: true }).first();
-  await card.getByRole('button', { name: 'Arrange cleaner / time', exact: true }).click();
-  const offer = page.getByRole('dialog', { name: /^Arrange / }); await offer.getByLabel('Cleaner', { exact: true }).selectOption('cleaner'); await offer.getByLabel('Planned start (tenant local time, optional)').fill('2026-12-01T10:00'); await cancel(offer, state.writes);
+  await card.getByRole('button', { name: 'Arrange employee / time', exact: true }).click();
+  const offer = page.getByRole('dialog', { name: /^Arrange / }); await offer.getByLabel('Employee', { exact: true }).selectOption('employee'); await offer.getByLabel('Planned start (tenant local time, optional)').fill('2026-12-01T10:00'); await cancel(offer, state.writes);
   await card.getByRole('button', { name: 'Edit / reschedule request', exact: true }).click();
   const edit = page.getByRole('dialog', { name: /^Edit \/ reschedule / }); await edit.getByLabel('From date', { exact: true }).fill('2026-12-10'); await edit.getByLabel('To date', { exact: true }).fill('2026-12-11'); await edit.getByLabel('Cleaning instructions').fill('Unsaved reschedule'); await cancel(edit, state.writes);
   await expect(card.getByText('2026-12-01 – 2026-12-02', { exact: true })).toBeVisible();

@@ -6,12 +6,12 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
 
 const employees = [
   { id: 'employee-a', firstName: 'Ana', lastName: 'Keeper', email: 'ana@example.test', role: 'employee', isActive: true, identitySyncPending: false, skills: [], serviceAreas: [], defaultHours: {} },
-  { id: 'employee-b', firstName: 'Ben', lastName: 'Cleaner', email: 'ben@example.test', role: 'employee', isActive: true, identitySyncPending: false, skills: [], serviceAreas: [], defaultHours: {} },
+  { id: 'employee-b', firstName: 'Ben', lastName: 'Employee', email: 'ben@example.test', role: 'employee', isActive: true, identitySyncPending: false, skills: [], serviceAreas: [], defaultHours: {} },
 ];
 
 const usageRows = [
   { id: 'usage-1', employeeId: 'employee-a', employeeName: 'Ana Keeper', locationId: 'loc-1', locationName: 'Main store', itemId: 'item-1', itemName: 'Keys', unit: 'pcs', quantity: 2, note: 'Spare set', takenUtc: '2026-11-03T08:30:00Z', photoIds: ['photo-1', 'photo-2'], photosPurged: false, version: 'v1' },
-  { id: 'usage-2', employeeId: 'employee-b', employeeName: 'Ben Cleaner', locationId: 'loc-1', locationName: 'Main store', itemId: 'item-2', itemName: 'Bedsheets', unit: 'pcs', quantity: 4, note: '', takenUtc: '2026-05-02T08:30:00Z', photoIds: [], photosPurged: true, version: 'v1' },
+  { id: 'usage-2', employeeId: 'employee-b', employeeName: 'Ben Employee', locationId: 'loc-1', locationName: 'Main store', itemId: 'item-2', itemName: 'Bedsheets', unit: 'pcs', quantity: 4, note: '', takenUtc: '2026-05-02T08:30:00Z', photoIds: [], photosPurged: true, version: 'v1' },
 ];
 
 async function setup(page: Page) {
@@ -60,7 +60,7 @@ test('log shows every employee entry and sends the chosen date range to the serv
 
   await expect(page.getByRole('cell', { name: 'Keys', exact: true })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'Ana Keeper', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Ben Cleaner', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Ben Employee', exact: true })).toBeVisible();
   await expect(page.getByText('Deleted', { exact: true })).toBeVisible();
 
   await page.getByLabel('From', { exact: true }).fill('2026-11-01');
@@ -173,7 +173,7 @@ test('selecting an employee filters the log by that employee', async ({ page }) 
   const state = await setup(page);
   await page.goto('/admin/inventory/');
   await page.getByRole('textbox', { name: 'Employee' }).click();
-  await page.getByRole('option', { name: 'Ben Cleaner' }).click();
+  await page.getByRole('option', { name: 'Ben Employee' }).click();
   await page.getByRole('button', { name: 'Apply' }).click();
   await expect.poll(() => state.usageQueries.at(-1)).toContain('employeeId=employee-b');
 });

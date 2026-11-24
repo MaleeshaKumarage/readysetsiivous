@@ -164,7 +164,7 @@ test('pending action badges exclude cancelled and already arranged work, then re
   for (const name of ['Requests', 'Quote requests', 'Changes']) await expect(page.getByRole('tab', { name, exact: true }).getByLabel('1 pending', { exact: true })).toHaveText('1');
   await expect(page.getByRole('article', { name: 'Cancelled apartment request', exact: true })).toHaveCount(0);
   await expect(page.getByRole('article', { name: 'Arranged apartment request', exact: true })).toBeVisible();
-  const action = page.getByRole('button', { name: 'Arrange cleaner / time', exact: true }).first();
+  const action = page.getByRole('button', { name: 'Arrange employee / time', exact: true }).first();
   await expect(action).toHaveClass(/mantine-Button-root/);
   await page.screenshot({ path: testInfo.outputPath('admin-partner-requests.png'), fullPage: true });
   state.work = [request, { ...request, id: 'second-pending' }];

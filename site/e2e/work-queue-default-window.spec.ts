@@ -19,7 +19,7 @@ async function setup(page: Page) {
     queries.push(url.searchParams);
     return route.fulfill({ headers, json: { view: 'needs-action', source: 'all', items: [], total: 0, counts: { 'needs-action': 0, scheduled: 0, 'in-progress': 0, completed: 0, cancelled: 0 } } });
   });
-  await page.route('**/api/v1/admin/employees**', route => route.fulfill({ headers, json: [{ id: 'emp-1', firstName: 'Ada', lastName: 'Cleaner', isActive: true }] }));
+  await page.route('**/api/v1/admin/employees**', route => route.fulfill({ headers, json: [{ id: 'emp-1', firstName: 'Ada', lastName: 'Employee', isActive: true }] }));
   return { queries, last: () => queries.at(-1) };
 }
 
@@ -61,7 +61,7 @@ test('dates in a link are used as chosen, with no default unassigned filter', as
   await expect(windowNotice(page)).toHaveCount(0);
 });
 
-test('choosing Unassigned in the assignee list sends the unassigned filter, and a named cleaner sends the assignee', async ({ page }) => {
+test('choosing Unassigned in the assignee list sends the unassigned filter, and a named employee sends the assignee', async ({ page }) => {
   const { last } = await setup(page);
   await page.goto('/admin/work-queue/?view=needs-action&range=all&assignee=all');
   await expect.poll(() => last()?.has('unassigned')).toBe(false);
@@ -69,7 +69,7 @@ test('choosing Unassigned in the assignee list sends the unassigned filter, and 
   await page.getByRole('option', { name: 'Unassigned', exact: true }).click();
   await expect.poll(() => last()?.get('unassigned')).toBe('true');
   await page.getByRole('textbox', { name: 'Assignee', exact: true }).click();
-  await page.getByRole('option', { name: 'Ada Cleaner', exact: true }).click();
+  await page.getByRole('option', { name: 'Ada Employee', exact: true }).click();
   await expect.poll(() => last()?.get('assignee')).toBe('emp-1');
   expect(last()?.has('unassigned')).toBe(false);
 });

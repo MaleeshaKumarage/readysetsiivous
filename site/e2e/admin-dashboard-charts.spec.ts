@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
 
-// Dashboard charts: visits and hours per day of a chosen month, sortable customers, and each cleaner's weekly donut split by customer.
+// Dashboard charts: visits and hours per day of a chosen month, sortable customers, and each employee's weekly donut split by customer.
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 
 // A day list for the requested month: Alpha Oy has visits on the 3rd and 9th, Beta Ltd on the 9th.
@@ -71,18 +71,18 @@ test('the month buttons move the charts to another month', async ({ page }) => {
   await expect(page.getByText(/Visits per day|No visits in/).first()).toBeVisible();
 });
 
-test('each cleaner has a donut split by customer against the 37.5 hour full week, in a scrollable list', async ({ page }) => {
+test('each employee has a donut split by customer against the 37.5 hour full week, in a scrollable list', async ({ page }) => {
   await setup(page);
-  const people = Array.from({ length: 9 }, (_, index) => ({ employeeId: `e${index}`, name: `Cleaner ${index + 1}`, scheduledHours: index === 1 ? 40 : 30 - index,
+  const people = Array.from({ length: 9 }, (_, index) => ({ employeeId: `e${index}`, name: `Employee ${index + 1}`, scheduledHours: index === 1 ? 40 : 30 - index,
     companies: [{ companyId: 'c1', customerName: 'Alpha Oy', scheduledHours: 20 }, { companyId: 'c2', customerName: 'Beta Ltd', scheduledHours: index === 1 ? 20 : 10 - index }] }));
   await page.route(/\/api\/v1\/admin\/dashboard\/employee-hours/, route => route.fulfill({ status: 200, headers, json: { weekStart: '2026-11-09', fullTimeHours: 37.5, employees: people } }));
   await page.goto('/admin/');
-  await expect(page.getByRole('img', { name: /^Cleaner 1: 30\.0 of 37\.5 scheduled hours, Alpha Oy 20\.0, Beta Ltd 10\.0/ })).toBeVisible();
-  await expect(page.getByRole('img', { name: /^Cleaner 2: 40\.0 of 37\.5 scheduled hours/ })).toBeVisible();
+  await expect(page.getByRole('img', { name: /^Employee 1: 30\.0 of 37\.5 scheduled hours, Alpha Oy 20\.0, Beta Ltd 10\.0/ })).toBeVisible();
+  await expect(page.getByRole('img', { name: /^Employee 2: 40\.0 of 37\.5 scheduled hours/ })).toBeVisible();
   await expect(page.getByText('40.0 of 37.5 h · over')).toBeVisible();
-  const list = page.getByRole('region', { name: "Cleaners' weekly hours" });
+  const list = page.getByRole('region', { name: "Employees' weekly hours" });
   await expect(list).toBeVisible();
-  // One row: the donuts sit side by side and the row scrolls sideways when there are more cleaners than fit.
+  // One row: the donuts sit side by side and the row scrolls sideways when there are more employees than fit.
   const scrollable = await list.evaluate(el => getComputedStyle(el).overflowX === 'auto' && el.scrollWidth > el.clientWidth && el.scrollHeight <= el.clientHeight + 1);
   expect(scrollable).toBe(true);
 });

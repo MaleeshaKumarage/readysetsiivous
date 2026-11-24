@@ -12,7 +12,7 @@ public class RecordedWorkTests
 
     private static QualityCycleForm Form(Action<QualityCycleForm>? configure = null)
     {
-        var form = QualityCycleForm.Create(Guid.NewGuid(), "Jukankatu", Employee, "Cleaner", Guid.NewGuid(), "Checklist", Start, new() { "Floor" }, Start.AddHours(2));
+        var form = QualityCycleForm.Create(Guid.NewGuid(), "Jukankatu", Employee, "Employee", Guid.NewGuid(), "Checklist", Start, new() { "Floor" }, Start.AddHours(2));
         configure?.Invoke(form);
         return form;
     }

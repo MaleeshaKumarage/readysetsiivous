@@ -24,8 +24,8 @@ async function setup(page: Page, requests: CleaningRequest[], changes: PartnerCh
   await setupAdminMocks(page);
   await page.route(/\/api\/v1\/admin\/companies(?:\?.*)?$/, route => route.fulfill({ headers, json: { items: [{ id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }], total: 1 } }));
   await page.route(/\/api\/v1\/admin\/employees$/, route => route.fulfill({ headers, json: [
-    { id: 'auto', firstName: 'Auto', lastName: 'Cleaner', isActive: true, role: 'employee', autoAcceptWork: true, keycloakUserId: 'k-1' },
-    { id: 'manual', firstName: 'Manual', lastName: 'Cleaner', isActive: true, role: 'employee', autoAcceptWork: false },
+    { id: 'auto', firstName: 'Auto', lastName: 'Employee', isActive: true, role: 'employee', autoAcceptWork: true, keycloakUserId: 'k-1' },
+    { id: 'manual', firstName: 'Manual', lastName: 'Employee', isActive: true, role: 'employee', autoAcceptWork: false },
   ] }));
   const branches = Array.from({ length: 40 }, (_, index) => branchFor(index));
   let current = [...requests];
@@ -48,18 +48,18 @@ async function setup(page: Page, requests: CleaningRequest[], changes: PartnerCh
 }
 
 test.describe('partner operations actions open as modal dialogs', () => {
-  test('Arrange cleaner opens a dialog in view and sends the offer', async ({ page }) => {
+  test('Arrange employee opens a dialog in view and sends the offer', async ({ page }) => {
     const { writes } = await setup(page, Array.from({ length: 8 }, (_, index) => requestFor(index)));
     await page.goto('/admin/partner-requests/');
     const card = page.getByRole('article', { name: 'Property 7 request' });
-    await card.getByRole('button', { name: 'Arrange cleaner / time', exact: true }).click();
+    await card.getByRole('button', { name: 'Arrange employee / time', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Arrange Property 7', exact: true });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole('combobox', { name: 'Cleaner', exact: true })).toBeInViewport();
-    await dialog.getByRole('combobox', { name: 'Cleaner', exact: true }).selectOption('manual');
+    await expect(dialog.getByRole('combobox', { name: 'Employee', exact: true })).toBeInViewport();
+    await dialog.getByRole('combobox', { name: 'Employee', exact: true }).selectOption('manual');
     await dialog.getByRole('button', { name: 'Send cleaning offer', exact: true }).click();
     await expect(dialog).toHaveCount(0);
-    await expect(page.getByText('Offer sent. Waiting for cleaner acceptance.', { exact: true })).toBeVisible();
+    await expect(page.getByText('Offer sent. Waiting for employee acceptance.', { exact: true })).toBeVisible();
     expect(writes[0]).toMatchObject({ method: 'POST', path: `/requests/${requestFor(7).id}/offer`, body: { employeeId: 'manual', version: 7 } });
   });
 
@@ -118,7 +118,7 @@ test.describe('partner operations completed work and large lists', () => {
     await expect(page.getByRole('article', { name: 'Property 2 request' }).getByRole('button', { name: 'Cancel request', exact: true })).toHaveCount(0);
     await page.getByRole('tab', { name: 'Completed requests', exact: true }).click();
     await expect(page.getByRole('article', { name: 'Property 1 request' }).getByRole('button', { name: 'Cancel request', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('article', { name: 'Property 1 request' }).getByRole('button', { name: 'Arrange cleaner / time', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('article', { name: 'Property 1 request' }).getByRole('button', { name: 'Arrange employee / time', exact: true })).toHaveCount(0);
   });
 
   test('large request lists page 25 at a time with Previous and Next', async ({ page }) => {
@@ -164,11 +164,11 @@ test.describe('partner operations completed work and large lists', () => {
     const { writes } = await setup(page, [requestFor(0)]);
     await page.goto('/admin/partner-requests/');
     const card = page.getByRole('article', { name: 'Property 0 request' });
-    const opener = card.getByRole('button', { name: 'Arrange cleaner / time', exact: true });
+    const opener = card.getByRole('button', { name: 'Arrange employee / time', exact: true });
     const dialog = page.getByRole('dialog', { name: 'Arrange Property 0', exact: true });
     await opener.click();
     await expect(dialog).toBeVisible();
-    await dialog.getByRole('combobox', { name: 'Cleaner', exact: true }).selectOption('manual');
+    await dialog.getByRole('combobox', { name: 'Employee', exact: true }).selectOption('manual');
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
     await opener.click();
@@ -207,7 +207,7 @@ test('a manager opening the partner-request push link uses the same actions thro
     if (req.method() === 'OPTIONS') return route.fulfill({ headers });
     if (req.method() === 'GET') {
       const json = path === '/companies' ? { items: [{ id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }], total: 1 }
-        : path === '/employees' ? [{ id: 'manual', firstName: 'Manual', lastName: 'Cleaner', isActive: true, role: 'employee', autoAcceptWork: false }]
+        : path === '/employees' ? [{ id: 'manual', firstName: 'Manual', lastName: 'Employee', isActive: true, role: 'employee', autoAcceptWork: false }]
         : path === '/time-zone' ? { timeZoneId: 'Europe/Helsinki' } : path === '/partner/requests' ? current
         : path === '/partner/branches' ? [branchFor(0), branchFor(1), branchFor(2)] : [];
       return route.fulfill({ headers, json });
@@ -222,9 +222,9 @@ test('a manager opening the partner-request push link uses the same actions thro
   });
   // The PartnerRequest push for managers opens this path (see PushDeliveryService).
   await page.goto('/manager/partner-requests/?tenant=readysetsiivous');
-  await page.getByRole('article', { name: 'Property 0 request' }).getByRole('button', { name: 'Arrange cleaner / time', exact: true }).click();
+  await page.getByRole('article', { name: 'Property 0 request' }).getByRole('button', { name: 'Arrange employee / time', exact: true }).click();
   const arrange = page.getByRole('dialog', { name: 'Arrange Property 0', exact: true });
-  await arrange.getByRole('combobox', { name: 'Cleaner', exact: true }).selectOption('manual');
+  await arrange.getByRole('combobox', { name: 'Employee', exact: true }).selectOption('manual');
   await arrange.getByRole('button', { name: 'Send cleaning offer', exact: true }).click();
   await expect(arrange).toHaveCount(0);
   await page.getByRole('article', { name: 'Property 1 request' }).getByRole('button', { name: 'Cancel request', exact: true }).click();

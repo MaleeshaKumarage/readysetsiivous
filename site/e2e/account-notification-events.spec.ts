@@ -5,12 +5,12 @@ import { setupAdminMocks } from './admin-helpers';
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization,Content-Type', 'Access-Control-Allow-Methods': 'GET,PUT,OPTIONS' };
 
 const cleanerEvents = [
-  { key: 'ShiftAssigned', group: 'Cleaner', label: 'Assigned to a shift', description: 'A visit or shift is given to you.', app: true, emailAvailable: false },
-  { key: 'ShiftRemoved', group: 'Cleaner', label: 'Removed from a shift', description: 'A visit or shift is taken off your schedule.', app: true, emailAvailable: false },
-  { key: 'ShiftUpdated', group: 'Cleaner', label: 'Shift changed', description: 'Times or details of a shift you are on have changed.', app: true, emailAvailable: false },
+  { key: 'ShiftAssigned', group: 'Employee', label: 'Assigned to a shift', description: 'A visit or shift is given to you.', app: true, emailAvailable: false },
+  { key: 'ShiftRemoved', group: 'Employee', label: 'Removed from a shift', description: 'A visit or shift is taken off your schedule.', app: true, emailAvailable: false },
+  { key: 'ShiftUpdated', group: 'Employee', label: 'Shift changed', description: 'Times or details of a shift you are on have changed.', app: true, emailAvailable: false },
 ];
 const staffEvents = [
-  { key: 'StaffVisitOfferDeclined', group: 'Staff', label: 'Cleaner declined a visit', description: 'A cleaner declined a visit offer.', app: true, emailAvailable: false },
+  { key: 'StaffVisitOfferDeclined', group: 'Staff', label: 'Employee declined a visit', description: 'An employee declined a visit offer.', app: true, emailAvailable: false },
 ];
 
 async function setup(page: Page, roles: string[], employeeRole: string, events: typeof cleanerEvents) {
@@ -35,9 +35,9 @@ async function setup(page: Page, roles: string[], employeeRole: string, events: 
   return state;
 }
 
-test('a cleaner sees only cleaner events and can switch one off in the app', async ({ page }) => {
+test('an employee sees only employee events and can switch one off in the app', async ({ page }) => {
   const state = await setup(page, ['employee'], 'employee', cleanerEvents);
-  await expect(page.getByRole('heading', { name: 'For cleaners', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'For employees', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'For staff', exact: true })).toHaveCount(0);
 
   const removed = page.getByRole('switch', { name: 'Removed from a shift: in the app' });
@@ -55,9 +55,9 @@ test('a cleaner sees only cleaner events and can switch one off in the app', asy
 
 test('an administrator who is also an employee sees both groups', async ({ page }) => {
   await setup(page, ['admin', 'employee'], 'admin', [...cleanerEvents, ...staffEvents]);
-  await expect(page.getByRole('heading', { name: 'For cleaners', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'For employees', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'For staff', exact: true })).toBeVisible();
-  await expect(page.getByRole('switch', { name: 'Cleaner declined a visit: in the app' })).toBeChecked();
+  await expect(page.getByRole('switch', { name: 'Employee declined a visit: in the app' })).toBeChecked();
 });
 
 test('a failed save puts the switch back and says why', async ({ page }) => {

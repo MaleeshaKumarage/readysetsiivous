@@ -44,10 +44,10 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
                             summary.Spacing(4);
                             summary.Item().Text($"{T("Scheduled occurrences")}: {shift.ScheduledOccurrences} | {T("Scheduled hours")}: {shift.ScheduledHours:0.##}");
                             summary.Item().Text($"{T("Recorded occurrences")}: {shift.CompletedOccurrences} | {T("Missing")}: {shift.MissingOccurrences} | {T("Pending")}: {shift.PendingOccurrences}");
-                            summary.Item().Text($"{T("Cleaner tasks")}: {shift.SubmittedTasks}/{shift.TotalTasks} {T("submitted")}");
+                            summary.Item().Text($"{T("Employee tasks")}: {shift.SubmittedTasks}/{shift.TotalTasks} {T("submitted")}");
                             summary.Item().Text($"{T("Recorded staff hours")}: {(shift.RecordedStaffHours.HasValue ? shift.RecordedStaffHours.Value.ToString("0.##") : T("Not available"))}").SemiBold();
                             if (shift.IncompleteTimingRecords is > 0) summary.Item().Text($"{T("Incomplete timing records")}: {shift.IncompleteTimingRecords}");
-                            summary.Item().Text(T("Scheduled hours describe visits. Recorded staff hours sum each cleaner’s actual submitted duration; incomplete timings are excluded. Missing means no submission, not a failed cleaning activity.")).FontSize(8);
+                            summary.Item().Text(T("Scheduled hours describe visits. Recorded staff hours sum each employee’s actual submitted duration; incomplete timings are excluded. Missing means no submission, not a failed cleaning activity.")).FontSize(8);
                         });
                         col.Item().Element(x => ReportPdfTheme.Band(x, T("ACTIVITIES PERFORMED")));
                         col.Item().Text(T("Activities are measured by recorded visits and distinct days. Unchecked items are not failures.")).FontSize(8);
@@ -254,7 +254,7 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
                             formBox.Item().Row(r =>
                             {
                                 r.RelativeItem().Text($"{T("Date")}: {form.ShiftOccurrenceUtc:yyyy-MM-dd HH:mm UTC}").Bold();
-                                r.RelativeItem().Text($"{T("Cleaner")}: {form.EmployeeName}").SemiBold();
+                                r.RelativeItem().Text($"{T("Employee")}: {form.EmployeeName}").SemiBold();
                                 r.ConstantItem(100).AlignRight().Text(T(form.IsSubmitted ? "COMPLETED" : "PENDING"))
                                     .Bold()
                                     .FontColor(form.IsSubmitted ? Colors.Green.Medium : Colors.Red.Medium);
@@ -280,7 +280,7 @@ public class QualityCyclePdfGenerator : IQualityCyclePdfGenerator
 
                                 if (!string.IsNullOrWhiteSpace(form.CleanerNotes))
                                 {
-                                    formBox.Item().PaddingTop(6).Text($"{T("Cleaner Notes")}: {form.CleanerNotes}").Italic().FontSize(9);
+                                    formBox.Item().PaddingTop(6).Text($"{T("Employee Notes")}: {form.CleanerNotes}").Italic().FontSize(9);
                                 }
 
                                 if (form.PhotoUrls != null && form.PhotoUrls.Count > 0)

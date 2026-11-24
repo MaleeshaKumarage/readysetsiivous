@@ -120,7 +120,7 @@ test('on-call shifts keep scheduling dated visits and remain available for new s
     return route.fulfill({ headers, json: isShiftsRoute(path) ? shiftsResponse(shifts, route.request().url())
       : path.endsWith('/companies/company') ? { company: { id: 'company', name: 'AAA', isActive: true }, branches: [{ id: 'branch', companyId: 'company', name: 'Property', isActive: true }] }
       : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'AAA', isActive: true }], total: 1 }
-      : path.endsWith('/employees') ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true }]
+      : path.endsWith('/employees') ? [{ id: 'employee', firstName: 'Test', lastName: 'Employee', role: 'employee', isActive: true }]
       : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
   });
   await page.goto('/admin/shifts/');
@@ -147,7 +147,7 @@ test('on-call shifts keep scheduling dated visits and remain available for new s
   await editor.getByRole('textbox', { name: /^Start \(Europe\/Helsinki\)/ }).fill('2030-01-10T09:00');
   await editor.getByRole('textbox', { name: /^End \(Europe\/Helsinki\)/ }).fill('2030-01-10T11:00');
   await editor.getByLabel('Replacement employee (optional)', { exact: true }).click();
-  await page.getByRole('option', { name: 'Test Cleaner', exact: true }).click();
+  await page.getByRole('option', { name: 'Test Employee', exact: true }).click();
   await editor.getByRole('textbox', { name: /^Reason/ }).fill('Agreed one-time cleaning');
   await editor.getByRole('button', { name: 'Save occurrence', exact: true }).click();
   await expect.poll(() => visitWrites.length).toBe(1);
@@ -158,15 +158,15 @@ test('on-call shifts keep scheduling dated visits and remain available for new s
   await expect(editor).toBeVisible();
   releaseSave();
   await expect(editor).toBeHidden();
-  expect(visitWrites).toEqual([{ originalStartUtc: null, startUtc: '2030-01-10T07:00:00.000Z', endUtc: '2030-01-10T09:00:00.000Z', status: 4, reason: 'Agreed one-time cleaning', employeeId: 'cleaner' }]);
+  expect(visitWrites).toEqual([{ originalStartUtc: null, startUtc: '2030-01-10T07:00:00.000Z', endUtc: '2030-01-10T09:00:00.000Z', status: 4, reason: 'Agreed one-time cleaning', employeeId: 'employee' }]);
   await expect(list.getByText('One-time visit scheduled.', { exact: false })).toBeVisible();
-  await expect(list.getByRole('cell', { name: 'Test Cleaner', exact: false })).toBeVisible();
+  await expect(list.getByRole('cell', { name: 'Test Employee', exact: false })).toBeVisible();
   await expect(list.getByLabel('From', { exact: true })).toHaveValue('2030-01-10');
   expect(occurrenceQueries.at(-1)?.get('from')).toBe('2030-01-09T22:00:00.000Z');
   const staleResponse = page.waitForResponse(response => response.url().includes('/occurrences?') && !response.url().includes('2030-01-09'));
   releaseOldLoad(); await staleResponse;
   await page.waitForLoadState('networkidle');
-  await expect(list.getByRole('cell', { name: 'Test Cleaner', exact: false })).toBeVisible();
+  await expect(list.getByRole('cell', { name: 'Test Employee', exact: false })).toBeVisible();
   await expect(list.getByText('No occurrences in this period.')).toHaveCount(0);
   expect(visitWrites).toHaveLength(1);
 });

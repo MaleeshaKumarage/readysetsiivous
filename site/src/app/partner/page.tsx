@@ -51,9 +51,9 @@ export default function PartnerPage() {
   const [settingsReady, setSettingsReady] = useState(false), [settingsFailed, setSettingsFailed] = useState(false);
   // Last loaded or saved settings, and the current form. A reload applies the stored copy only when the form has no unsaved edits.
   const settingsSaved = useRef<string | null>(null), settingsDraft = useRef('');
-  // General instructions the cleaner reads before every visit. Each visit's own instructions are appended after them.
+  // General instructions the employee reads before every visit. Each visit's own instructions are appended after them.
   const [generalInstructions, setGeneralInstructions] = useState('');
-  // Access instructions (key-safe or door codes) the cleaner sees before a visit. The rest of the stored account is kept as loaded.
+  // Access instructions (key-safe or door codes) the employee sees before a visit. The rest of the stored account is kept as loaded.
   const [accessInstructions, setAccessInstructions] = useState(''), [account, setAccount] = useState<PartnerAccount>({});
   useEffect(() => { settingsDraft.current = settingsKey(photoLabels, generalInstructions, accessInstructions); }, [photoLabels, generalInstructions, accessInstructions]);
   const [from, setFrom] = useState(''), [to, setTo] = useState(''), [exact, setExact] = useState(false), [time, setTime] = useState(''), [notes, setNotes] = useState(''), [cleaningType, setCleaningType] = useState('Normal');
