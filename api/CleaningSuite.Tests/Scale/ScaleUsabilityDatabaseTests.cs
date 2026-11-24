@@ -170,7 +170,7 @@ public class ScaleUsabilityDatabaseTests
 
         for (var i = 0; i < EmployeeCount; i++)
         {
-            var employee = new Employee { FirstName = "Cleaner", LastName = $"{i:000}", Role = Employee.RoleEmployee, IsActive = true, KeycloakUserId = $"sub-{i}" };
+            var employee = new Employee { FirstName = "Employee", LastName = $"{i:000}", Role = Employee.RoleEmployee, IsActive = true, KeycloakUserId = $"sub-{i}" };
             employees.Add(employee);
             devices.Add(new PushDevice { EmployeeId = employee.Id, Subject = $"sub-{i}", Enabled = true, OptedInUtc = Now.UtcDateTime.AddDays(-30), CreatedUtc = Now.UtcDateTime.AddDays(-30) });
         }

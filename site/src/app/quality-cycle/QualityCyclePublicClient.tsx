@@ -335,7 +335,7 @@ export default function QualityCyclePublicClient() {
               )}
             </div>
 
-            {/* Cleaner Notes */}
+            {/* Employee Notes */}
             <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
               <label className="block text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
                 Notes / Comments (Optional)

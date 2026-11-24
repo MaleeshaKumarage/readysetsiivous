@@ -1,5 +1,5 @@
 /**
- * The name shown for an employee in cleaner pickers and offer text. When two people share a name, the email is
+ * The name shown for an employee in employee pickers and offer text. When two people share a name, the email is
  * added so the admin can tell them apart; otherwise the plain name is shown, as before.
  */
 export function employeeLabel(employee: { firstName: string; lastName: string; email?: string }, all: { firstName: string; lastName: string }[]): string {

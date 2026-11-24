@@ -25,7 +25,7 @@ async function setup(page: Page, allowed = true) {
     const specialVisit = (id: string, cancelled: boolean, ambiguous: boolean, assigned: boolean) => ({
       shiftId: id, shiftName: id, companyName: 'Test company', branchName: 'Helsinki branch',
       startUtc: `${date}T11:00:00Z`, endUtc: `${date}T13:00:00Z`, exceptionId: id, cancelled, ambiguous, needsReview: false,
-      assignees: assigned ? [{ employeeId: 'special', name: 'Assigned Cleaner', status: 'Not started', actualStartUtc: null, actualEndUtc: null, hours: null, version: null, canRecord: false, review: null }] : [],
+      assignees: assigned ? [{ employeeId: 'special', name: 'Assigned Employee', status: 'Not started', actualStartUtc: null, actualEndUtc: null, hours: null, version: null, canRecord: false, review: null }] : [],
     });
     // Server-computed review flags: past visits without completion are missing; a recorded visit is unusual until a reasoned correction.
     const aliceReview = !past ? null : state.saved && !state.partialWork ? (state.unusual ? { kind: 'unusual-duration', label: 'Actual duration differs from scheduled' } : null)
@@ -34,9 +34,9 @@ async function setup(page: Page, allowed = true) {
     const visits: any[] = date > '2026-11-01' ? [] : [{
       shiftId: 'shift', shiftName: `Cleaning ${date}`, companyName: 'Test company', branchName: 'Helsinki branch',
       startUtc: `${date}T08:00:00Z`, endUtc: `${date}T10:00:00Z`, exceptionId: null, cancelled: false, ambiguous: false, needsReview: !!aliceReview || !!bobReview,
-      assignees: [{ employeeId: 'alice', name: 'Alice Cleaner', status: state.partialWork ? 'Started' : state.saved ? 'Recorded' : 'Not started', actualStartUtc: state.saved ? `${date}T08:15:00Z` : null,
+      assignees: [{ employeeId: 'alice', name: 'Alice Employee', status: state.partialWork ? 'Started' : state.saved ? 'Recorded' : 'Not started', actualStartUtc: state.saved ? `${date}T08:15:00Z` : null,
         actualEndUtc: state.saved && !state.partialWork ? `${date}T10:15:00Z` : null, hours: state.saved && !state.partialWork ? 2 : null, version: state.saved ? '11111111-1111-1111-1111-111111111111' : null, canRecord: past, review: aliceReview },
-        { employeeId: 'bob', name: 'Bob Cleaner', status: 'Not started', actualStartUtc: null, actualEndUtc: null, hours: null, version: null, canRecord: past, review: bobReview }],
+        { employeeId: 'bob', name: 'Bob Employee', status: 'Not started', actualStartUtc: null, actualEndUtc: null, hours: null, version: null, canRecord: past, review: bobReview }],
     }];
     if (state.settled && past) visits.push({ shiftId: 'settled', shiftName: 'Settled clean', companyName: 'Test company', branchName: 'Helsinki branch',
       startUtc: `${date}T12:00:00Z`, endUtc: `${date}T14:00:00Z`, exceptionId: 'settled', cancelled: false, ambiguous: false, needsReview: false,
@@ -53,9 +53,9 @@ async function setup(page: Page, allowed = true) {
 test('daily cards show employees and save actual tenant-local work times with a reason', async ({ page }) => {
   const state = await setup(page); await page.goto('/admin/shifts/calendar/');
   await expect(page.getByRole('heading', { name: 'Cleaning 2026-10-30' })).toBeVisible();
-  await expect(page.getByText('Alice Cleaner', { exact: true })).toBeVisible();
-  await expect(page.getByText('Bob Cleaner', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Record work for Alice Cleaner' }).click();
+  await expect(page.getByText('Alice Employee', { exact: true })).toBeVisible();
+  await expect(page.getByText('Bob Employee', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Record work for Alice Employee' }).click();
   await expect(page.getByLabel('Actual start')).toHaveValue('2026-10-30T10:00');
   await expect(page.getByText('Work duration: 2.00 hours', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Save work times' }).click();
@@ -66,8 +66,8 @@ test('daily cards show employees and save actual tenant-local work times with a 
   await page.getByRole('button', { name: 'Save work times' }).click();
   await expect(page.getByRole('status')).toContainText('Work times saved');
   expect(state.saved).toMatchObject({ employeeId: 'alice', actualStartLocal: '2026-10-30T10:15', actualEndLocal: '2026-10-30T12:15', reason: 'Timesheet received', version: null });
-  await expect(page.getByRole('button', { name: 'Correct times for Alice Cleaner' })).toBeVisible();
-  await page.getByRole('button', { name: 'Correct times for Alice Cleaner' }).click();
+  await expect(page.getByRole('button', { name: 'Correct times for Alice Employee' })).toBeVisible();
+  await page.getByRole('button', { name: 'Correct times for Alice Employee' }).click();
   await expect(page.getByLabel('Actual start')).toHaveValue('2026-10-30T10:15');
   await expect(page.getByLabel('Actual end')).toHaveValue('2026-10-30T12:15');
   await page.getByRole('textbox', { name: 'Reason', exact: true }).fill('Corrected timesheet');
@@ -81,7 +81,7 @@ for (const status of [409, 500]) {
   test(`failed work save (${status}) retains the dialog and entered values`, async ({ page }) => {
     const state = await setup(page); state.saved = {}; state.saveFailure = status;
     await page.goto('/admin/shifts/calendar/');
-    await page.getByRole('button', { name: 'Correct times for Alice Cleaner' }).click();
+    await page.getByRole('button', { name: 'Correct times for Alice Employee' }).click();
     await page.getByRole('textbox', { name: 'Reason', exact: true }).fill('Correction to retain');
     await page.getByRole('button', { name: 'Save work times' }).click();
     const dialog = page.getByRole('dialog');
@@ -100,13 +100,13 @@ test('cancelled, overlapping, and unassigned visits show their distinct states',
   await expect(page.getByText('Cancelled', { exact: true })).toBeVisible();
   await expect(page.getByText('Overlapping visits require review before work times can be recorded.', { exact: true })).toBeVisible();
   await expect(page.getByText('Unassigned', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Record work for Assigned Cleaner' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Record work for Assigned Employee' })).toHaveCount(0);
 });
 
 test('revoked permission during save closes work entry and hides calendar data', async ({ page }) => {
   const state = await setup(page); state.saveFailure = 403;
   await page.goto('/admin/shifts/calendar/');
-  await page.getByRole('button', { name: 'Record work for Alice Cleaner' }).click();
+  await page.getByRole('button', { name: 'Record work for Alice Employee' }).click();
   await page.getByRole('textbox', { name: 'Reason', exact: true }).fill('Pending entry');
   await page.getByRole('button', { name: 'Save work times' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -155,7 +155,7 @@ test('employee page grants and revokes calendar access for admins only', async (
   await page.route(/\/api\/v1\/me$/, route => route.fulfill({ headers, json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: ['admin'] })], canUseShiftCalendar: ownAccess, employee: null } }));
   await page.route(/\/api\/v1\/admin\/companies(?:\?.*)?$/, route => route.fulfill({ headers, json: { items: [], total: 0 } }));
   const people = [{ id: 'admin-one', firstName: 'Admin', lastName: 'One', email: 'admin@example.invalid', role: 'admin', isActive: true, shiftCalendarEnabled: false },
-    { id: 'cleaner', firstName: 'Cleaner', lastName: 'One', email: 'cleaner@example.invalid', role: 'employee', isActive: true }];
+    { id: 'employee', firstName: 'Employee', lastName: 'One', email: 'employee@example.invalid', role: 'employee', isActive: true }];
   await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, route => route.fulfill({ headers, json: people }));
   const updates: boolean[] = [];
   await page.route(/\/api\/v1\/admin\/employees\/admin-one\/shift-calendar-access$/, route => {
@@ -210,7 +210,7 @@ test('a started visit prefills its actual start and scheduled end before admin c
   await page.goto('/admin/shifts/calendar/');
   await expect(page.getByText('Started', { exact: true })).toBeVisible();
   await expect(page.getByText(/Actual:.*Not ended/)).toBeVisible();
-  await page.getByRole('button', { name: 'Correct times for Alice Cleaner' }).click();
+  await page.getByRole('button', { name: 'Correct times for Alice Employee' }).click();
   await expect(page.getByLabel('Actual start')).toHaveValue('2026-10-30T10:15');
   await expect(page.getByLabel('Actual end')).toHaveValue('2026-10-30T12:00');
   await expect(page.getByText(/Saving records this past visit as completed/)).toBeVisible();
@@ -275,7 +275,7 @@ test('unusual duration is flagged, explained in the correction, and clears after
   await page.goto('/admin/shifts/calendar/');
   await expect(page.getByText('Unusual time', { exact: true })).toBeVisible();
   await expect(page.getByText('Actual duration differs from scheduled', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Correct times for Alice Cleaner' }).click();
+  await page.getByRole('button', { name: 'Correct times for Alice Employee' }).click();
   await expect(page.getByText(/Review: Actual duration differs from scheduled/)).toBeVisible();
   await expect(page.getByRole('dialog').getByText(/^Scheduled: /)).toBeVisible();
   await expect(page.getByLabel('Actual start')).toHaveValue('2026-10-30T10:15');
@@ -294,13 +294,13 @@ test('a dropped load connection shows a plain reload message and Retry recovers'
   await expect(page.getByText('The connection was lost before the server confirmed the request')).toHaveCount(0);
   state.abortGet = false;
   await alert.getByRole('button', { name: 'Retry' }).click();
-  await expect(page.getByRole('button', { name: 'Record work for Alice Cleaner' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Record work for Alice Employee' })).toBeVisible();
 });
 
 test('a lost save response explains that the save may have happened; reloading shows the recorded work', async ({ page }) => {
   const state = await setup(page); state.abortPut = true;
   await page.goto('/admin/shifts/calendar/');
-  await page.getByRole('button', { name: 'Record work for Alice Cleaner' }).click();
+  await page.getByRole('button', { name: 'Record work for Alice Employee' }).click();
   await page.getByRole('textbox', { name: 'Reason', exact: true }).fill('Timesheet received');
   await page.getByRole('button', { name: 'Save work times' }).click();
   const dialog = page.getByRole('dialog');
@@ -310,7 +310,7 @@ test('a lost save response explains that the save may have happened; reloading s
   await page.getByRole('button', { name: 'Close work times' }).click();
   await expect(dialog).toHaveCount(0);
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Correct times for Alice Cleaner' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Correct times for Alice Employee' })).toBeVisible();
   expect(state.saved).toMatchObject({ reason: 'Timesheet received' });
 });
 
@@ -340,14 +340,14 @@ test('a partner-accepted visit on the admin calendar can be recorded and its sav
     return route.fulfill({ headers, json: { date: '2026-10-30', today: '2026-11-01', timeZoneId: 'Europe/Helsinki', occurrences: [{
       shiftId: 'partner-shift', shiftName: 'Cleaning — Lake apartment', companyName: 'Owner company', branchName: 'Lake apartment',
       startUtc: '2026-10-30T08:00:00Z', endUtc: '2026-10-30T10:00:00Z', exceptionId: 'partner-visit', cancelled: false, ambiguous: false, needsReview: !saved,
-      assignees: [{ employeeId: 'partner-cleaner', name: 'Partner Cleaner', status: saved ? 'Recorded' : 'Not started', actualStartUtc: saved ? '2026-10-30T08:15:00Z' : null,
+      assignees: [{ employeeId: 'partner-cleaner', name: 'Partner Employee', status: saved ? 'Recorded' : 'Not started', actualStartUtc: saved ? '2026-10-30T08:15:00Z' : null,
         actualEndUtc: saved ? '2026-10-30T10:15:00Z' : null, hours: saved ? 2 : null, version: saved ? '33333333-3333-3333-3333-333333333333' : null, canRecord: true,
         review: saved ? null : { kind: 'missing-completion', label: 'No completion recorded' } }],
     }] } });
   });
   await page.goto('/admin/shifts/calendar/');
   await expect(page.getByRole('heading', { name: 'Cleaning — Lake apartment' })).toBeVisible();
-  const record = page.getByRole('button', { name: 'Record work for Partner Cleaner' });
+  const record = page.getByRole('button', { name: 'Record work for Partner Employee' });
   await expect(record).toBeEnabled();
   // Keyboard: Enter opens the dialog, Escape closes it and returns focus to the Record button, Enter reopens it.
   await record.focus(); await page.keyboard.press('Enter');
@@ -362,8 +362,8 @@ test('a partner-accepted visit on the admin calendar can be recorded and its sav
   await page.getByRole('button', { name: 'Save work times' }).click();
   await expect(page.getByText('Work times saved.', { exact: true })).toBeVisible();
   expect(state.saved).toMatchObject({ employeeId: 'partner-cleaner', actualStartLocal: '2026-10-30T10:15', actualEndLocal: '2026-10-30T12:15' });
-  await expect(page.getByRole('button', { name: 'Correct times for Partner Cleaner' })).toBeVisible();
-  await page.getByRole('button', { name: 'Correct times for Partner Cleaner' }).click();
+  await expect(page.getByRole('button', { name: 'Correct times for Partner Employee' })).toBeVisible();
+  await page.getByRole('button', { name: 'Correct times for Partner Employee' }).click();
   await expect(page.getByLabel('Actual start')).toHaveValue('2026-10-30T10:15');
   await expect(page.getByLabel('Actual end')).toHaveValue('2026-10-30T12:15');
 });
@@ -376,7 +376,7 @@ test('calendar renders the server-chosen completed duration with no review flag 
     return route.fulfill({ headers, json: { date: '2026-10-30', today: '2026-11-01', timeZoneId: 'Europe/Helsinki', occurrences: [{
       shiftId: 'shift', shiftName: 'Cleaning 2026-10-30', companyName: 'Test company', branchName: 'Helsinki branch',
       startUtc: '2026-10-30T08:00:00Z', endUtc: '2026-10-30T10:00:00Z', exceptionId: null, cancelled: false, ambiguous: false, needsReview: false,
-      assignees: [{ employeeId: 'alice', name: 'Alice Cleaner', status: 'Recorded', actualStartUtc: '2026-10-30T08:00:00Z', actualEndUtc: '2026-10-30T09:20:00Z',
+      assignees: [{ employeeId: 'alice', name: 'Alice Employee', status: 'Recorded', actualStartUtc: '2026-10-30T08:00:00Z', actualEndUtc: '2026-10-30T09:20:00Z',
         hours: 80 / 60, version: '11111111-1111-1111-1111-111111111111', canRecord: true, review: null }],
     }] } });
   });
@@ -386,7 +386,7 @@ test('calendar renders the server-chosen completed duration with no review flag 
   await expect(page.getByText('Missing completion', { exact: true })).toHaveCount(0);
 });
 
-test('an admin attaches photos the cleaner sent outside the app to a recorded visit, with a note and a reason', async ({ page }) => {
+test('an admin attaches photos the employee sent outside the app to a recorded visit, with a note and a reason', async ({ page }) => {
   const state = await setup(page); state.settled = true; await page.goto('/admin/shifts/calendar/');
   const posted: any[] = [];
   await page.route(/\/api\/v1\/admin\/shifts\/calendar\/work-photos$/, route => {
@@ -401,11 +401,11 @@ test('an admin attaches photos the cleaner sent outside the app to a recorded vi
   await expect(page.getByRole('dialog').getByRole('alert')).toContainText('Add a separate note for each photo.');
   expect(posted).toHaveLength(0);
   await page.getByLabel('Note for photo 1').fill('Kitchen after cleaning');
-  await page.getByRole('textbox', { name: 'Reason', exact: true }).fill('Cleaner sent these by chat');
+  await page.getByRole('textbox', { name: 'Reason', exact: true }).fill('Employee sent these by chat');
   await page.getByRole('button', { name: 'Save photos' }).click();
   await expect(page.getByRole('status')).toContainText('Photos added to the visit');
   expect(posted).toHaveLength(1);
-  expect(posted[0]).toMatchObject({ employeeId: 'carol', reason: 'Cleaner sent these by chat', version: '22222222-2222-2222-2222-222222222222',
+  expect(posted[0]).toMatchObject({ employeeId: 'carol', reason: 'Employee sent these by chat', version: '22222222-2222-2222-2222-222222222222',
     photos: [{ note: 'Kitchen after cleaning' }] });
   expect(posted[0].photos[0].url).toMatch(/^data:image\/png;base64,/);
 });

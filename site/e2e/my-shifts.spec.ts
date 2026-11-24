@@ -128,7 +128,7 @@ test('changing calendar days preserves activity selections, shift notes and phot
   await expect(page.getByRole('button', { name: 'Remove photo' })).toHaveCount(1);
 });
 
-test('instructions from the request are shown to the cleaner before the visit starts', async ({ page }) => {
+test('instructions from the request are shown to the employee before the visit starts', async ({ page }) => {
   await setupWork(page, { future: true, instructions: 'Use the back door.\nKeys are in the lockbox.' });
   await page.goto('/me/shifts/');
   const instructions = page.getByRole('region', { name: 'Visit instructions' });
@@ -137,7 +137,7 @@ test('instructions from the request are shown to the cleaner before the visit st
   await expect(instructions).toContainText('Keys are in the lockbox.');
 });
 
-test('access instructions and the contact are shown to the cleaner before the visit starts', async ({ page }) => {
+test('access instructions and the contact are shown to the employee before the visit starts', async ({ page }) => {
   await setupWork(page, { future: true, access: 'Key safe, code 4321', contactName: 'Olivia Oy', contactPhone: '+358 40 000 0000' });
   await page.goto('/me/shifts/');
   const details = page.getByRole('region', { name: 'Visit instructions' });
@@ -361,7 +361,7 @@ for (const role of ['admin', 'manager'] as const) {
     await page.route(/\/api\/v1\/(admin|manager)\//, route => route.fulfill({ status: 200, headers,
       json: route.request().url().endsWith('/companies') ? { items: [], total: 0 } : [] }));
     await page.goto(role === 'admin' ? '/admin/employees/' : '/manager/');
-    await (isMobile && role === 'admin' ? page.getByRole('navigation', { name: 'Switch portal' }).getByRole('link', { name: 'Employee', exact: true }) : page.getByRole('link', { name: 'My shifts', exact: true })).click();
+    await page.getByRole('navigation', { name: 'Switch portal' }).getByRole('link', { name: 'Employee', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'My Shifts', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'AAA1 weekday shift' })).toBeVisible();
     await page.getByRole('button', { name: 'Start', exact: true }).click();
@@ -376,15 +376,11 @@ for (const role of ['admin', 'manager'] as const) {
     expect(work.startCalls).toBe(1); expect(work.endCalls).toBe(1);
     expect(work.submitted.items).toEqual([{ itemText: 'Corridor', isChecked: true }, { itemText: 'Gym', isChecked: false }]);
     expect(work.submitted.employeeId).toBeUndefined();
-    await page.getByRole('link', { name: 'Portals', exact: true }).click();
-    await expect(page).toHaveURL(/account\/\?tenant=readysetsiivous/);
-    await expect(page.getByRole('heading', { name: 'Account ready' })).toBeVisible();
-    await page.getByRole('link', { name: role === 'admin' ? 'Office portal' : 'Manager portal' }).click();
-    await expect(isMobile && role === 'admin' ? page.getByRole('navigation', { name: 'Switch portal' }).getByRole('link', { name: 'Employee', exact: true }) : page.getByRole('link', { name: 'My shifts', exact: true })).toBeVisible();
-    if (role === 'admin') {
-      await page.getByRole('link', { name: 'Portals', exact: true }).click();
-      await expect(page.getByRole('heading', { name: 'Account ready' })).toBeVisible();
-    }
+    // Back to management with the portal toggle; the header has no My shifts or Portals button.
+    await page.getByRole('navigation', { name: 'Switch portal' }).getByRole('link', { name: role === 'admin' ? 'Office' : 'Manager', exact: true }).click();
+    await expect(page).toHaveURL(role === 'admin' ? /\/admin\/(\?.*)?$/ : /\/manager\/(\?.*)?$/);
+    await expect(page.getByRole('navigation', { name: 'Switch portal' }).getByRole('link', { name: 'Employee', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveCount(0);
   });
 
   test(`${role} own-shift navigation remains available with no assignments`, async ({ page }) => {
@@ -500,7 +496,7 @@ test('A01 preference focus refresh preserves manual offer drafts and an in-fligh
   release(); await expect(page.getByText('No pending cleaning offers.', { exact: true })).toBeVisible();
 });
 
-test('general instructions and the visit instructions both reach the cleaner, with the line break kept', async ({ page }) => {
+test('general instructions and the visit instructions both reach the employee, with the line break kept', async ({ page }) => {
   await setupWork(page, { future: true, instructions: 'Use the side door.\n\nAfter guest checkout, from 15:00.' });
   await page.goto('/me/shifts/');
   const instructions = page.getByRole('region', { name: 'Visit instructions' });

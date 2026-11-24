@@ -3,9 +3,9 @@ import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers'
 import { shiftActionAt } from './shift-actions';
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const people = [
-  { id: 'alice', firstName: 'Alice', lastName: 'Cleaner', isActive: true },
-  { id: 'bob', firstName: 'Bob', lastName: 'Cleaner', isActive: true },
-  { id: 'inactive', firstName: 'Inactive', lastName: 'Cleaner', isActive: false },
+  { id: 'alice', firstName: 'Alice', lastName: 'Employee', isActive: true },
+  { id: 'bob', firstName: 'Bob', lastName: 'Employee', isActive: true },
+  { id: 'inactive', firstName: 'Inactive', lastName: 'Employee', isActive: false },
   { id: 'partner-owner', firstName: 'Active', lastName: 'Partner', role: 'partner', isActive: true },
 ];
 type Failure = 'conflict' | 'server' | 'html' | 'network' | 'saved-network';
@@ -51,7 +51,7 @@ async function setup(page: Page, options: { failure?: Failure; partial?: boolean
     return route.fulfill({ status: 200, headers, json });
   });
   await page.goto('/admin/shifts/');
-  await shiftActionAt(page, 'Employees', 0);
+  await shiftActionAt(page, 'Assign employees', 0);
   return { writes, get reads() { return reads; } };
 }
 async function select(page: Page, name: string) {
@@ -62,43 +62,43 @@ async function select(page: Page, name: string) {
 test('legacy shift roster excludes active partners while allowing staff assignment', async ({ page }) => {
   const state = await setup(page);
   await page.getByRole('textbox', { name: 'Assign employees', exact: true }).click();
-  await expect(page.getByRole('option', { name: 'Alice Cleaner', exact: true })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'Alice Employee', exact: true })).toBeVisible();
   await expect(page.getByRole('option', { name: 'Active Partner', exact: true })).toHaveCount(0);
-  await page.getByRole('option', { name: 'Alice Cleaner', exact: true }).click(); await page.keyboard.press('Escape');
+  await page.getByRole('option', { name: 'Alice Employee', exact: true }).click(); await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Assign', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Unassign Alice Cleaner', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Unassign Alice Employee', exact: true })).toBeVisible();
   expect(state.writes).toEqual(['alice']);
 });
 const alert = (page: Page) => page.getByRole('alert', { name: 'Assignment error' });
 
 test('overlap error names employee and keeps selection for a successful retry', async ({ page }) => {
   const state = await setup(page, { failure: 'conflict' });
-  await select(page, 'Alice Cleaner');
+  await select(page, 'Alice Employee');
   await page.getByRole('button', { name: 'Assign', exact: true }).click();
-  await expect(alert(page)).toHaveText('Alice Cleaner: Employee is already assigned to an overlapping shift.');
+  await expect(alert(page)).toHaveText('Alice Employee: Employee is already assigned to an overlapping shift.');
   await expect(page.getByRole('button', { name: 'Assign', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Assign', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('Assigned 1 employee.');
-  await expect(page.getByRole('button', { name: 'Unassign Alice Cleaner' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Unassign Alice Employee' })).toBeVisible();
   await expect(alert(page)).toHaveCount(0); expect(state.writes).toEqual(['alice', 'alice']);
 });
 
 for (const failure of ['server', 'html', 'network'] as const) test(`${failure} failure is visible and retry retains employee`, async ({ page }) => {
-  const state = await setup(page, { failure }); await select(page, 'Alice Cleaner');
+  const state = await setup(page, { failure }); await select(page, 'Alice Employee');
   await page.getByRole('button', { name: 'Assign', exact: true }).click();
   await expect(alert(page)).toContainText(failure === 'network' ? 'Could not confirm the operation.' : 'Could not assign employee. Please retry.');
   await expect(alert(page)).not.toContainText('Internal diagnostic');
   await page.getByRole('button', { name: 'Assign', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Unassign Alice Cleaner' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Unassign Alice Employee' })).toBeVisible();
   expect(state.writes).toEqual(['alice', 'alice']);
 });
 
 test('partial success retains only failed employee and reports both outcomes', async ({ page }) => {
-  const state = await setup(page, { partial: true }); await select(page, 'Alice Cleaner'); await select(page, 'Bob Cleaner');
+  const state = await setup(page, { partial: true }); await select(page, 'Alice Employee'); await select(page, 'Bob Employee');
   await page.getByRole('button', { name: 'Assign', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('Assigned 1 employee. 1 assignment could not be confirmed.');
-  await expect(alert(page)).toContainText('Bob Cleaner: Employee is already assigned to an overlapping shift.');
-  await expect(page.getByRole('button', { name: 'Unassign Alice Cleaner' })).toBeVisible();
+  await expect(alert(page)).toContainText('Bob Employee: Employee is already assigned to an overlapping shift.');
+  await expect(page.getByRole('button', { name: 'Unassign Alice Employee' })).toBeVisible();
   await page.getByRole('button', { name: 'Assign', exact: true }).click();
   await expect.poll(() => state.writes.length).toBe(3); expect(state.writes).toEqual(['alice', 'bob', 'bob']);
 });
@@ -106,15 +106,16 @@ test('partial success retains only failed employee and reports both outcomes', a
 test('inactive and already assigned employees are omitted; removed employee becomes selectable', async ({ page }) => {
   const state = await setup(page, { assigned: true });
   await page.getByRole('textbox', { name: 'Assign employees', exact: true }).click();
-  await expect(page.getByRole('option', { name: 'Bob Cleaner' })).toBeVisible();
-  await expect(page.getByRole('option', { name: 'Alice Cleaner' })).toHaveCount(0);
-  await expect(page.getByRole('option', { name: 'Inactive Cleaner' })).toHaveCount(0);
+  await expect(page.getByRole('option', { name: 'Bob Employee' })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'Alice Employee' })).toHaveCount(0);
+  await expect(page.getByRole('option', { name: 'Inactive Employee' })).toHaveCount(0);
   await page.getByRole('textbox', { name: 'Assign employees', exact: true }).press('Escape');
-  await page.getByRole('button', { name: 'Unassign Alice Cleaner' }).click();
+  await page.getByRole('button', { name: 'Unassign Alice Employee' }).click();
   await expect(page.getByText('No employees assigned.')).toBeVisible();
-  await select(page, 'Alice Cleaner');
-  await shiftActionAt(page, 'Employees', 0);
-  await shiftActionAt(page, 'Employees', 0);
+  await select(page, 'Alice Employee');
+  // The assignment popup covers the rows, so it is closed before its row's menu opens again.
+  await page.keyboard.press('Escape');
+  await shiftActionAt(page, 'Assign employees', 0);
   await expect(page.getByText('No employees assigned.')).toBeVisible(); expect(state.reads).toBe(3);
 });
 
@@ -128,26 +129,26 @@ test('failed roster load is not presented as an empty roster and can be refreshe
 
 test('failed removal keeps the roster and explains the error', async ({ page }) => {
   await setup(page, { assigned: true, removeFailure: true });
-  await page.getByRole('button', { name: 'Unassign Alice Cleaner' }).click();
-  await expect(alert(page)).toContainText('Alice Cleaner: You do not have permission to remove this assignment.');
-  await page.getByRole('button', { name: 'Unassign Alice Cleaner' }).click(); await expect(page.getByText('No employees assigned.')).toBeVisible();
+  await page.getByRole('button', { name: 'Unassign Alice Employee' }).click();
+  await expect(alert(page)).toContainText('Alice Employee: You do not have permission to remove this assignment.');
+  await page.getByRole('button', { name: 'Unassign Alice Employee' }).click(); await expect(page.getByText('No employees assigned.')).toBeVisible();
 });
 
 test('lost response after server saves is reconciled without retrying the saved employee', async ({ page }) => {
-  const state = await setup(page, { failure: 'saved-network' }); await select(page, 'Alice Cleaner');
+  const state = await setup(page, { failure: 'saved-network' }); await select(page, 'Alice Employee');
   await page.getByRole('button', { name: 'Assign', exact: true }).click();
   await expect(alert(page)).toContainText('Could not confirm the operation.');
-  await expect(page.getByRole('button', { name: 'Unassign Alice Cleaner' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Unassign Alice Employee' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Assign', exact: true })).toBeDisabled(); expect(state.writes).toEqual(['alice']);
 });
 
 test('successful assignment with failed refresh blocks further changes until refresh', async ({ page }) => {
-  await setup(page, { refreshFailure: true }); await select(page, 'Alice Cleaner');
+  await setup(page, { refreshFailure: true }); await select(page, 'Alice Employee');
   await page.getByRole('button', { name: 'Assign', exact: true }).click();
   await expect(alert(page)).toContainText('Could not refresh assignments.');
   await expect(page.getByRole('textbox', { name: 'Assign employees', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Refresh assignments' }).click();
-  await expect(page.getByRole('button', { name: 'Unassign Alice Cleaner' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Unassign Alice Employee' })).toBeVisible();
 });
 
 test('pending assignment locks mutations and row navigation', async ({ page }) => {
@@ -157,30 +158,33 @@ test('pending assignment locks mutations and row navigation', async ({ page }) =
     if (route.request().method() !== 'POST') return route.fallback();
     await held; return route.fallback();
   });
-  await select(page, 'Alice Cleaner'); await page.getByRole('button', { name: 'Assign', exact: true }).click();
+  await select(page, 'Alice Employee'); await page.getByRole('button', { name: 'Assign', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Assign employees', exact: true })).toBeDisabled();
-  for (const name of ['Employees', 'Deactivate']) {
+  for (const name of ['Assign employees', 'Deactivate']) {
     for (const button of await page.getByRole('button', { name, exact: true }).all()) await expect(button).toBeDisabled();
   }
   await expect(page.getByRole('button', { name: 'Refresh assignments' })).toBeDisabled();
-  release(); await expect(page.getByRole('button', { name: 'Unassign Alice Cleaner' })).toBeVisible();
+  release(); await expect(page.getByRole('button', { name: 'Unassign Alice Employee' })).toBeVisible();
   expect(state.writes).toEqual(['alice']);
 });
 
 test('late failed roster read does not overwrite another opened row', async ({ page }) => {
   await setup(page); let release!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
-  await shiftActionAt(page, 'Employees', 0);
-  // Wait for the first menu to finish closing; a closing menu keeps its "Employees" item in the DOM and makes the next lookup ambiguous.
-  await expect(page.getByRole('menu')).toHaveCount(0);
+  // Setup has already opened shift one's popup; close it before its row is reopened, so the reopened popup is the only one open.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: /^Assign employees — / })).toHaveCount(0);
   await page.route(/\/shifts\/one\/assignments$/, async route => {
     if (route.request().method() !== 'GET') return route.fallback();
     await held; return route.fulfill({ status: 500, headers, body: 'old failure' });
   });
-  await shiftActionAt(page, 'Employees', 0);
+  await shiftActionAt(page, 'Assign employees', 0);
   await expect(page.getByText('Loading assignments…')).toBeVisible();
+  // Closing the popup while its read is held makes that read stale.
+  await page.keyboard.press('Escape');
+  // A closing menu keeps its item in the DOM, which makes the next lookup ambiguous; wait for it to close first.
   await expect(page.getByRole('menu')).toHaveCount(0);
-  await shiftActionAt(page, 'Employees', 1);
+  await shiftActionAt(page, 'Assign employees', 1);
   await expect(page.getByText('No employees assigned.')).toBeVisible();
   const response = page.waitForResponse(r => r.url().endsWith('/shifts/one/assignments') && r.status() === 500);
   release(); await response;
@@ -196,16 +200,16 @@ test('active administrators and tenant managers can be assigned as working staff
   expect(state.writes).toEqual(['working-admin', 'working-manager']);
 });
 
-test('Employees count in the shift row follows assign and unassign', async ({ page }) => {
+test('the Employees column names the assigned employees and follows assign and unassign', async ({ page }) => {
   await setup(page);
   const row = page.getByRole('row').filter({ hasText: 'Shift one' }).first();
-  await expect(row.getByRole('cell').nth(2)).toHaveText('0');
-  await select(page, 'Alice Cleaner'); await select(page, 'Bob Cleaner');
+  await expect(row.getByRole('cell').nth(2)).toHaveText(/None|0 assigned/);
+  await select(page, 'Alice Employee'); await select(page, 'Bob Employee');
   await page.getByRole('button', { name: 'Assign', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Unassign Bob Cleaner' })).toBeVisible();
-  await expect(row.getByRole('cell').nth(2)).toHaveText('2');
-  await page.getByRole('button', { name: 'Unassign Alice Cleaner' }).click();
-  await expect(page.getByRole('button', { name: 'Unassign Alice Cleaner' })).toHaveCount(0);
-  await expect(row.getByRole('cell').nth(2)).toHaveText('1');
+  await expect(page.getByRole('button', { name: 'Unassign Bob Employee' })).toBeVisible();
+  await expect(row.getByRole('cell').nth(2)).toHaveText('Alice Employee, Bob Employee');
+  await page.getByRole('button', { name: 'Unassign Alice Employee' }).click();
+  await expect(page.getByRole('button', { name: 'Unassign Alice Employee' })).toHaveCount(0);
+  await expect(row.getByRole('cell').nth(2)).toHaveText('Bob Employee');
   await expect(page.getByRole('alert').filter({ hasText: 'employee counts' })).toHaveCount(0);
 });

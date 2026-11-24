@@ -35,6 +35,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!mounted) return;
     const root = document.documentElement;
+    // The admin workspace is always light; it restores the dark class itself when it unmounts.
+    if (root.getAttribute('data-admin-theme') === 'light') return;
     if (theme === 'dark') {
       root.classList.add('dark');
     } else {

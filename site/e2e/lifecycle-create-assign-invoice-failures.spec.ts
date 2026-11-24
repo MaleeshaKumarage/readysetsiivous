@@ -9,7 +9,7 @@ const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Meth
 const issuer = { companyName: 'Supplier', businessId: '123', companyAddress: { street: 'Street', postalCode: '00100', city: 'Helsinki', country: 'FI' }, email: 'supplier@example.test', phone: '', bankAccountIBAN: 'FI2112345600000785', bankBic: 'NDEAFIHH', paymentTermsDays: 14, defaultVatRatePercent: 25.5 };
 const company = { id: 'company', name: 'Methehe Oy', businessId: '1234567-8', isActive: true, isPartnerEnabled: false };
 const branch = { id: 'branch', companyId: 'company', name: 'Main branch', isActive: true };
-const alice = { id: 'alice', firstName: 'Alice', lastName: 'Cleaner', role: 'employee', isActive: true };
+const alice = { id: 'alice', firstName: 'Alice', lastName: 'Employee', role: 'employee', isActive: true };
 
 type Failures = { createShift?: string; assign?: boolean; preview?: string; issue?: string; seedShift?: boolean };
 
@@ -98,21 +98,21 @@ test('a refused shift save shows the reason in the dialog, keeps the company and
   expect(state.creates).toBe(2);
 });
 
-test('a failed assignment shows an assignment error, nothing is assigned, and a retry assigns the cleaner', async ({ page }) => {
+test('a failed assignment shows an assignment error, nothing is assigned, and a retry assigns the employee', async ({ page }) => {
   const state = await setup(page, { assign: true });
   await page.goto('/admin/shifts/');
   const dialog = await fillShiftDialog(page);
   await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
   await expect(page.getByRole('cell', { name: FLOW_NAME, exact: true })).toBeVisible();
-  await shiftAction(page, FLOW_NAME, 'Employees');
+  await shiftAction(page, FLOW_NAME, 'Assign employees');
   await page.getByRole('textbox', { name: 'Assign employees', exact: true }).click();
-  await page.getByRole('option', { name: 'Alice Cleaner', exact: true }).click();
+  await page.getByRole('option', { name: 'Alice Employee', exact: true }).click();
   await page.getByRole('textbox', { name: 'Assign employees', exact: true }).press('Escape');
   await page.getByRole('button', { name: 'Assign', exact: true }).click();
   await expect(page.getByRole('alert', { name: 'Assignment error' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Unassign Alice Cleaner', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Unassign Alice Employee', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Assign', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Unassign Alice Cleaner', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Unassign Alice Employee', exact: true })).toBeVisible();
   expect(state.assignments).toEqual(['alice']);
 });
 

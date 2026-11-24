@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { notificationPreferencesApi, type NotificationEvent } from '@/lib/notificationPreferencesApi';
 
-const GROUP_TITLE: Record<string, string> = { Cleaner: 'For cleaners', Staff: 'For staff' };
+const GROUP_TITLE: Record<string, string> = { Employee: 'For employees', Staff: 'For staff' };
 
 /**
  * Per-event choices for the signed-in person's role. The App switch turns the event off in the inbox and push.

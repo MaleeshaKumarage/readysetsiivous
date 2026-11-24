@@ -109,7 +109,7 @@ test('staff save the key request fee from Partner operations', async ({ page }) 
 const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 const photoId = '44444444-4444-4444-8444-444444444444';
 
-test('staff assign a cleaner, complete a key request and attach a completion photo', async ({ page }) => {
+test('staff assign an employee, complete a key request and attach a completion photo', async ({ page }) => {
   await setupAdminMocks(page);
   const cleaner = { id: 'emp-1', firstName: 'Aino', lastName: 'Virtanen', isActive: true, role: 'employee' };
   const retired = { id: 'emp-2', firstName: 'Old', lastName: 'Worker', isActive: false, role: 'employee' };
@@ -161,7 +161,7 @@ test('staff assign a cleaner, complete a key request and attach a completion pho
   await expect(page.getByRole('img', { name: /Key request photo/ })).toBeVisible();
 });
 
-test('manager assigns a cleaner, completes a key request and attaches a photo through manager routes', async ({ page }) => {
+test('manager assigns an employee, completes a key request and attaches a photo through manager routes', async ({ page }) => {
   await page.addInitScript(() => { (window as unknown as { __MOCK_ROLES__: string[] }).__MOCK_ROLES__ = ['manager']; });
   await setupAdminMocks(page);
   await page.route(/\/api\/v1\/me$/, route => route.fulfill({ headers, json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: ['manager'] })], employee: { id: 'manager', firstName: 'Tenant', lastName: 'Manager', role: 'manager', isActive: true } } }));

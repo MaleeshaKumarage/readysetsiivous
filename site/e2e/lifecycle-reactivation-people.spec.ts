@@ -3,7 +3,7 @@ import { setupAdminMocks } from './admin-helpers';
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization' };
 test('inactive employee reactivation shows failure then restores same invited profile', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
-  const employee = { id: 'employee-a', email: 'old@example.invalid', firstName: 'Existing', lastName: 'Cleaner', role: 'employee', isActive: false, keycloakUserId: 'same-login' };
+  const employee = { id: 'employee-a', email: 'old@example.invalid', firstName: 'Existing', lastName: 'Employee', role: 'employee', isActive: false, keycloakUserId: 'same-login' };
   await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, r => r.fulfill({ headers, json: [employee] }));
   let calls = 0;
   await page.route(/\/employees\/employee-a\/reactivate$/, r => {
@@ -51,7 +51,7 @@ test('signed agreement restores activity without changing completed status; canc
 
 test('pending identity sync offers retry after page reload on active profile', async ({ page }) => {
   await setupAdminMocks(page, { authenticated: true });
-  const employee = { id: 'pending-a', email: 'pending@example.invalid', firstName: 'Pending', lastName: 'Cleaner', role: 'employee', isActive: true, identitySyncPending: true, keycloakUserId: 'same-login' };
+  const employee = { id: 'pending-a', email: 'pending@example.invalid', firstName: 'Pending', lastName: 'Employee', role: 'employee', isActive: true, identitySyncPending: true, keycloakUserId: 'same-login' };
   await page.route(/\/api\/v1\/admin\/employees(?:\?.*)?$/, r => r.fulfill({ headers, json: [employee] }));
   await page.route(/\/employees\/pending-a\/reactivate$/, r => { if (r.request().method() !== 'OPTIONS') employee.identitySyncPending = false; return r.fulfill({ headers, status: 204 }); });
   await page.goto('/admin/employees/'); await page.reload();

@@ -9,7 +9,7 @@ const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Meth
 const issuer = { companyName: 'Supplier', businessId: '123', companyAddress: { street: 'Street', postalCode: '00100', city: 'Helsinki', country: 'FI' }, email: 'supplier@example.test', phone: '', bankAccountIBAN: 'FI2112345600000785', bankBic: 'NDEAFIHH', paymentTermsDays: 14, defaultVatRatePercent: 25.5 };
 const company = { id: 'company', name: 'Methehe Oy', businessId: '1234567-8', isActive: true, isPartnerEnabled: false };
 const branch = { id: 'branch', companyId: 'company', name: 'Main branch', isActive: true };
-const alice = { id: 'alice', firstName: 'Alice', lastName: 'Cleaner', role: 'employee', isActive: true };
+const alice = { id: 'alice', firstName: 'Alice', lastName: 'Employee', role: 'employee', isActive: true };
 
 // One shared state for the whole flow: a shift created in the dialog is what the assignment and invoice steps use.
 function flowState() {
@@ -64,7 +64,7 @@ async function setup(page: Page) {
   return state;
 }
 
-test('admin creates a shift, assigns a cleaner, and invoices its unstarted visit after ticking it in', async ({ page }) => {
+test('admin creates a shift, assigns an employee, and invoices its unstarted visit after ticking it in', async ({ page }) => {
   const state = await setup(page);
 
   // 1. Create the shift.
@@ -77,13 +77,13 @@ test('admin creates a shift, assigns a cleaner, and invoices its unstarted visit
   await expect(page.getByRole('cell', { name: FLOW_NAME, exact: true })).toBeVisible();
   expect(state.shiftWrites).toHaveLength(1); expect(state.shiftWrites[0]).toMatchObject({ companyId: 'company', branchId: 'branch', name: FLOW_NAME });
 
-  // 2. Assign a cleaner from the row's More actions.
-  await shiftAction(page, FLOW_NAME, 'Employees');
+  // 2. Assign an employee from the row's More actions.
+  await shiftAction(page, FLOW_NAME, 'Assign employees');
   await page.getByRole('textbox', { name: 'Assign employees', exact: true }).click();
-  await page.getByRole('option', { name: 'Alice Cleaner', exact: true }).click();
+  await page.getByRole('option', { name: 'Alice Employee', exact: true }).click();
   await page.getByRole('textbox', { name: 'Assign employees', exact: true }).press('Escape');
   await page.getByRole('button', { name: 'Assign', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Unassign Alice Cleaner', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Unassign Alice Employee', exact: true })).toBeVisible();
   expect(state.assignWrites).toEqual(['alice']);
 
   // 3. Invoice the shift. The visit has no started work, so it is listed unticked and not billed.

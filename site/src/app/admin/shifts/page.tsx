@@ -5,7 +5,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import {
   Title, Button, Table, Modal, TextInput, Select, MultiSelect, Group, Stack, Text, Loader, ActionIcon, NumberInput, Menu,
 } from '@mantine/core';
-import { Plus, Trash2, Pencil, MoreHorizontal } from 'lucide-react';
+import { Plus, Trash2, Pencil, MoreHorizontal, Eye, UserPlus, CalendarDays, CalendarPlus, ListChecks, Receipt, PauseCircle, PlayCircle, ChevronDown, ChevronRight, Sparkles, UserRound, CircleCheck, Clock } from 'lucide-react';
 import {
   adminShifts, adminBranchVisits, adminCompanies, adminEmployees, adminTenant,
   type Shift, type Branch, type Employee, type ShiftAssignment, type ShiftOccurrence,
@@ -18,11 +18,13 @@ import { CompanyPicker } from '@/components/admin/CompanyPicker';
 import { AddVisitDialog } from '@/components/admin/AddVisitDialog';
 import { visitLabel } from '@/lib/visitLabel';
 import { LifecycleTabs, type LifecycleStatus } from '@/components/LifecycleTabs';
+import { LazyTodayKpis as TodayKpis } from '@/components/LazySections';
 import { ListPager, PAGE_SIZE } from '@/components/ListPager';
 import { ShiftWorkspace, scheduleLabel } from '@/components/admin/ShiftWorkspace';
 import { autoShiftName } from '@/lib/shiftName';
 import { employeeLabel } from '@/lib/employeeLabel';
 import { DEEP_SURCHARGE_EUR } from '@/lib/cleaningPricing';
+import { Badge, Button as DsButton, Card as DsCard } from '@/ds';
 
 // The price version in force today (or the earliest when all start later): the default billing price for a new shift.
 const defaultPriceVersion = (versions?: { effectiveFrom: string }[] | null) => {
@@ -132,7 +134,79 @@ export default function ShiftsAdminPage() {
   const [pricingOccurrence, setPricingOccurrence] = useState<ShiftOccurrence | undefined>();
   const [shiftPage, setShiftPage] = useState(1);
   const [pageRows, setPageRows] = useState<Shift[]>([]);
+  const [filterCompany, setFilterCompany] = useState<string | null>(null);
+  const [filterType, setFilterType] = useState<string | null>(null);
+  const [companyChoices, setCompanyChoices] = useState<{ value: string; label: string }[]>([]);
   const [pageTotal, setPageTotal] = useState(0);
+  // Property details for the rows on this page, keyed by branch id. A failed load leaves the row on its shift name.
+  const [propertyById, setPropertyById] = useState<Record<string, Branch>>({});
+  useEffect(() => {
+    let live = true;
+    for (const companyId of new Set(pageRows.map(s => s.companyId))) {
+      adminCompanies.get(companyId).then((d) => {
+        if (!live || !Array.isArray(d?.branches)) return;
+        const branches = d.branches;
+        setPropertyById(prev => ({ ...prev, ...Object.fromEntries(branches.map(b => [b.id, b])) }));
+      }).catch(() => { /* the row keeps its shift name */ });
+    }
+    return () => { live = false; };
+  }, [pageRows]);
+  // The visits shown under an expanded row, for one calendar month in tenant time. Separate from the visits popup.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedVisits, setExpandedVisits] = useState<ShiftOccurrence[]>([]);
+  const [expandedLoading, setExpandedLoading] = useState(false);
+  const [visitsOpen, setVisitsOpen] = useState(true);
+  const [expandedMonth, setExpandedMonth] = useState('');
+  const [expandedError, setExpandedError] = useState('');
+  const expandGeneration = useRef(0);
+  const expandedShift = useRef<Shift | null>(null);
+  // Loads the visits of one shift for a date range (tenant-local dates, both inclusive).
+  const loadExpandedVisits = async (shift: Shift, from: string, to: string) => {
+    const version = ++expandGeneration.current;
+    setExpandedLoading(true); setExpandedError('');
+    try {
+      const fromUtc = tenantLocalToUtc(`${from}T00:00`, timeZoneId);
+      const nextDayUtc = tenantLocalToUtc(`${addCalendarDays(to, 1)}T00:00`, timeZoneId);
+      const result = await adminShifts.occurrences(shift.id, fromUtc, new Date(Date.parse(nextDayUtc) - 1).toISOString());
+      if (!result) throw new Error('The visits could not be loaded. Change the dates to retry.');
+      if (version === expandGeneration.current) setExpandedVisits(result);
+    } catch (failure) {
+      if (version === expandGeneration.current) setExpandedError(failure instanceof Error ? failure.message : 'The visits could not be loaded.');
+    } finally {
+      if (version === expandGeneration.current) setExpandedLoading(false);
+    }
+  };
+  // First and last day of a month (YYYY-MM), as tenant-local dates.
+  const monthRange = (ym: string): [string, string] => {
+    const [year, month] = ym.split('-').map(Number);
+    const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return [`${ym}-01`, `${ym}-${String(days).padStart(2, '0')}`];
+  };
+  // Two months back to nine months ahead of the current tenant-local month.
+  const monthChoices = (): { value: string; label: string }[] => {
+    const [year, month] = localInputValue(new Date().toISOString(), timeZoneId).slice(0, 7).split('-').map(Number);
+    return Array.from({ length: 12 }, (_, i) => {
+      const date = new Date(Date.UTC(year, month - 1 - 2 + i, 1));
+      return { value: date.toISOString().slice(0, 7), label: date.toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' }) };
+    });
+  };
+  const toggleExpanded = async (shift: Shift) => {
+    if (expandedId === shift.id) { setExpandedId(null); expandGeneration.current++; return; }
+    const month = localInputValue(new Date().toISOString(), timeZoneId).slice(0, 7);
+    const [from, to] = monthRange(month);
+    setExpandedId(shift.id); setExpandedVisits([]); setVisitsOpen(true);
+    setExpandedMonth(month);
+    expandedShift.current = shift;
+    await loadExpandedVisits(shift, from, to);
+  };
+  const changeExpandedMonth = (month: string | null) => {
+    if (!month) return;
+    setExpandedMonth(month);
+    const shift = expandedShift.current;
+    if (!shift) return;
+    const [from, to] = monthRange(month);
+    void loadExpandedVisits(shift, from, to);
+  };
   const [tabCounts, setTabCounts] = useState<{ active: number; completed: number; inactive: number } | null>(null);
   const [workspaceFetched, setWorkspaceFetched] = useState<Shift | null>(null);
   const [loading, setLoading] = useState(true);
@@ -211,31 +285,44 @@ export default function ShiftsAdminPage() {
   const [cleanerSaving, setCleanerSaving] = useState(false);
   const [cleanerError, setCleanerError] = useState('');
   const [defaultCleanerError, setDefaultCleanerError] = useState('');
+  // Assign employees on a property's main shift sets its default employee (new visits are offered to them).
+  const [defaultCleanerFor, setDefaultCleanerFor] = useState<Shift | null>(null);
+  const [defaultCleanerPick, setDefaultCleanerPick] = useState<string | null>(null);
+  const [defaultCleanerSaving, setDefaultCleanerSaving] = useState(false);
   useEffect(() => () => { assignmentGeneration.current++; }, []);
 
   // The shift list has no assignee data, so the Employees column uses one bulk count request.
   // Every freshly loaded roster also updates that shift's count, so the column always shows the newest
   // of the two sources: a later bulk reload (after another admin's change) replaces an older roster count.
   const [assignmentCounts, setAssignmentCounts] = useState<Record<string, number> | null>(null);
+  const [assigneeNames, setAssigneeNames] = useState<Record<string, string[]>>({});
   const [countError, setCountError] = useState('');
   const storeRoster = (id: string, roster: ShiftAssignment[]) => {
     setAssignments(m => ({ ...m, [id]: roster }));
     setAssignmentCounts(c => c && { ...c, [id]: roster.filter(a => a.isActive).length });
+    setAssigneeNames(n => ({ ...n, [id]: roster.filter(a => a.isActive).map(a => assigneeName(a.employeeId)) }));
   };
+  const loadAssigneeNames = (ids: string[]) => adminShifts.assigneeNames(ids)
+    .then(names => { setAssigneeNames(names); setCountError(''); })
+    .catch(() => { setAssigneeNames({}); setCountError('Could not load employee names. Refresh the page to retry.'); });
+  const assigneeName = (id: string) => { const person = employees.find(e => e.id === id); return person ? `${person.firstName} ${person.lastName}`.trim() : 'Unknown employee'; };
   const loadAssignmentCounts = () => adminShifts.assignmentCounts()
     .then(counts => { setAssignmentCounts(counts); setCountError(''); })
-    .catch((failure: Error) => { setAssignmentCounts(null); setCountError(failure.message); });
+    .catch(() => { setAssignmentCounts(null); });
   // Only the newest tab/page request may update the list, so a slow earlier response cannot show the wrong tab.
   const loadSeq = useRef(0);
-  const load = () => { const seq = ++loadSeq.current; setLoading(true); return adminShifts.page({ tab: lifecycle, skip: (shiftPage - 1) * PAGE_SIZE, take: PAGE_SIZE }).then((r) => {
+  const load = () => { const seq = ++loadSeq.current; setLoading(true); return adminShifts.page({ tab: lifecycle, skip: (shiftPage - 1) * PAGE_SIZE, take: PAGE_SIZE, companyId: filterCompany, scheduleType: filterType }).then((r) => {
     if (seq !== loadSeq.current) return;
     // A reply without the paged shape cannot be shown; say so and keep the retry path instead of crashing the screen.
     if (!r || !Array.isArray(r.items) || typeof r.total !== 'number' || !r.counts) throw new Error('The shift list could not be read. Refresh the page to retry.');
-    setPageRows(r.items); setPageTotal(r.total); setTabCounts(r.counts); setListError(''); void loadAssignmentCounts();
+    setPageRows(r.items); setPageTotal(r.total); setTabCounts(r.counts); setListError(''); void loadAssignmentCounts(); void loadAssigneeNames(r.items.map(s => s.id));
     setLoading(false);
   }).catch((failure: Error) => { if (seq !== loadSeq.current) return; setListError(failure.message); setLoading(false); }); };
   // Reload the current tab and page whenever either changes, and once on mount.
-  useEffect(() => { void load(); }, [lifecycle, shiftPage]);
+  useEffect(() => { void load(); }, [lifecycle, shiftPage, filterCompany, filterType]);
+  useEffect(() => {
+    adminCompanies.list('', 0, 100).then(r => setCompanyChoices((r?.items ?? []).map(c => ({ value: c.id, label: c.name })))).catch(() => setCompanyChoices([]));
+  }, []);
   useEffect(() => { adminTenant.get().then(profile => {
     if (!profile) throw new Error('Could not load scheduling settings. Refresh the page to retry.');
     const zone = profile.timeZoneId?.trim() || 'Europe/Helsinki';
@@ -381,6 +468,15 @@ export default function ShiftsAdminPage() {
     }
   };
 
+  // Deactivate, Reactivate and Delete open this popup first; it runs the task only when confirmed.
+  const [confirmAction, setConfirmAction] = useState<{ title: string; body: string; confirmLabel: string; color?: string; run: () => Promise<void> } | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const runConfirm = async () => {
+    if (!confirmAction) return;
+    setConfirmBusy(true);
+    try { await confirmAction.run(); setConfirmAction(null); }
+    finally { setConfirmBusy(false); }
+  };
   const deactivate = async (id: string) => { await adminShifts.deactivate(id); if (assignOpen === id) closeAssignments(); await load(); };
   const reactivate = async (id: string) => {
     setRestoring(id); setListError('');
@@ -391,7 +487,6 @@ export default function ShiftsAdminPage() {
     finally { setRestoring(null); }
   };
   const deleteShift = async (shift: Shift) => {
-    if (!window.confirm(`Permanently delete inactive shift “${shift.name}” and remove its employee assignments? Completed checklist records, photos and reports will remain in history.`)) return;
     setRestoring(shift.id); setListError('');
     try { await adminShifts.deleteInactive(shift.id); await load(); }
     catch (failure) { setListError(failure instanceof Error ? failure.message : 'Could not delete shift. Please retry.'); }
@@ -515,7 +610,7 @@ export default function ShiftsAdminPage() {
   };
 
   // Opens the clashing shift's visit list from an overlap refusal, with the overlapping visit marked. The assignment
-  // dialog stays open if that shift cannot be loaded, so the admin keeps the cleaner and reason they had chosen.
+  // dialog stays open if that shift cannot be loaded, so the admin keeps the employee and reason they had chosen.
   const openClashingShift = async (shiftId: string, shiftName: string, clashStartUtc: string) => {
     // adminGet resolves to null on a failed request instead of throwing, so a null shift is the failure case.
     const clashing = await adminShifts.get(shiftId, true);
@@ -527,12 +622,15 @@ export default function ShiftsAdminPage() {
     await openOccurrences(clashing, `Showing ${shiftName}. The overlapping visit is marked below.`, clashStartUtc);
   };
 
-  const openOccurrenceEditor = (occurrence?: ShiftOccurrence, status = '1') => {
+  // A new one-time visit on an on-call shift prefills its default employee and notes; the user only sets date and times.
+  const openOccurrenceEditor = (occurrence?: ShiftOccurrence, status = '1', shift: Shift | null = occurrenceShift) => {
+    const quick = !occurrence && status === '4' && shift?.schedule.type === 4 ? shift : null;
     setEditingOccurrence(occurrence ?? { startUtc: '', endUtc: '' });
     setOccurrenceStatus(occurrence?.status ? String(occurrence.status) : status);
     setOccurrenceStart(occurrence?.startUtc ? localInputValue(occurrence.startUtc, timeZoneId) : '');
     setOccurrenceEnd(occurrence?.endUtc ? localInputValue(occurrence.endUtc, timeZoneId) : '');
-    setOccurrenceReason(occurrence?.reason ?? ''); setOccurrenceEmployee(occurrence?.employeeId ?? null); setOccurrenceEditError('');
+    setOccurrenceReason(occurrence?.reason ?? (quick ? (quick.notes?.trim() || 'Quick visit') : ''));
+    setOccurrenceEmployee(occurrence?.employeeId ?? quick?.defaultEmployeeId ?? null); setOccurrenceEditError('');
   };
 
   const saveOccurrence = async () => {
@@ -549,7 +647,7 @@ export default function ShiftsAdminPage() {
         status, reason: occurrenceReason.trim(), employeeId: occurrenceEmployee,
       });
       setEditingOccurrence(null);
-      setShiftNotice(status === 4 ? 'One-time visit scheduled. It appears in the shift calendar; assigned cleaners see it in My shifts.' : 'Visit updated.');
+      setShiftNotice(status === 4 ? 'One-time visit scheduled. It appears in the shift calendar; assigned employees see it in My shifts.' : 'Visit updated.');
       // Keep a newly scheduled date visible even when it is outside the old list window.
       const savedDay = occurrenceStart.slice(0, 10);
       if (savedDay < occurrenceFrom || savedDay > occurrenceTo) {
@@ -563,7 +661,7 @@ export default function ShiftsAdminPage() {
   // A new visit shows up under its property's shift; an open visit list reloads to include it.
   const visitAdded = async (visit: { number: number; shiftId: string; startUtc: string; status: string }, propertyName: string) => {
     setVisitDialog(null);
-    const outcome = visit.status === 'Assigned' ? 'The cleaner has it in My shifts.' : visit.status === 'Offered' ? 'An offer was sent to the cleaner.' : 'It has no cleaner yet.';
+    const outcome = visit.status === 'Assigned' ? 'The employee has it in My shifts.' : visit.status === 'Offered' ? 'An offer was sent to the employee.' : 'It has no employee yet.';
     setShiftNotice(`Visit #${visit.number} added to ${propertyName}. ${outcome}`);
     await load();
     if (occurrenceShift?.id === visit.shiftId) {
@@ -620,7 +718,6 @@ export default function ShiftsAdminPage() {
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
         <Title order={2} component="h1">Shifts</Title>
         <Group gap="xs" wrap="wrap">
-          <Button variant="default" leftSection={<Plus size={16} />} disabled={!schedulingReady} onClick={() => setVisitDialog({ preset: null })}>Add visit</Button>
           <Button leftSection={<Plus size={16} />} disabled={!schedulingReady} onClick={openCreate}>Add shift</Button>
         </Group>
       </Group>
@@ -628,6 +725,13 @@ export default function ShiftsAdminPage() {
       {listError && <Text role="alert" c="red" mb="md">{listError}</Text>}
       {countError && <Text role="alert" c="red" mb="md">{countError}</Text>}
 
+      <TodayKpis />
+      <Group grow align="flex-end" mb="sm">
+        <Select label="Filter by company" placeholder="All companies" clearable searchable data={companyChoices} value={filterCompany}
+          onChange={(value) => { setFilterCompany(value); setShiftPage(1); }} />
+        <Select label="Filter by shift type" placeholder="All types" clearable data={SCHEDULE_TYPES} value={filterType}
+          onChange={(value) => { setFilterType(value); setShiftPage(1); }} />
+      </Group>
       <LifecycleTabs value={lifecycle} onChange={changeLifecycle} label="Shift activity" disabled={assignBusy || templateSaving}
         showCompleted activeCount={activeCount} completedCount={completedCount} inactiveCount={inactiveCount}>
       {loading ? <Loader /> : pageTotal === 0 ? (
@@ -636,80 +740,110 @@ export default function ShiftsAdminPage() {
         <Text size="xs" c="dimmed" hiddenFrom="sm" mb={6}>Scroll sideways to see all columns.</Text>
         <Table.ScrollContainer minWidth={600} tabIndex={0} role="region" aria-label="Shifts table">
           <Table striped highlightOnHover withTableBorder>
-            <Table.Thead>
-              <Table.Tr><Table.Th>Name</Table.Th><Table.Th>Schedule</Table.Th><Table.Th>Employees</Table.Th><Table.Th>Status</Table.Th><Table.Th w={200}>Actions</Table.Th></Table.Tr>
+            <Table.Thead className="bg-brand-500 text-accent-950">
+              <Table.Tr className="!bg-brand-500 !text-accent-950"><Table.Th fw={700} className="!bg-brand-500 !text-accent-950">Name</Table.Th><Table.Th fw={700} className="!bg-brand-500 !text-accent-950">Schedule</Table.Th><Table.Th fw={700} className="!bg-brand-500 !text-accent-950">Employee names</Table.Th><Table.Th fw={700} className="!bg-brand-500 !text-accent-950">Status</Table.Th><Table.Th w={200} fw={700} className="!bg-brand-500 !text-accent-950">Actions</Table.Th></Table.Tr>
             </Table.Thead>
             <Table.Tbody>
               {pageRows.map((s) => (
                 <Fragment key={s.id}>
-                  <Table.Tr>
-                    <Table.Td fw={500}>{s.name}</Table.Td>
-                    <Table.Td>{scheduleLabel(s)}</Table.Td>
-                    <Table.Td>{assignmentCounts ? (assignmentCounts[s.id] ?? 0) : assignments[s.id] ? assignments[s.id].filter(a => a.isActive).length : '—'}</Table.Td>
-                    <Table.Td><Text size="sm">{shiftView(s) === 'inactive' ? 'Inactive' : shiftView(s) === 'completed' ? 'Completed' : s.schedule.type === 6 && s.schedule.oneTimeDate && s.schedule.oneTimeDate.slice(0, 10) < new Date().toLocaleDateString('en-CA', { timeZone: timeZoneId }) ? 'Past visit · check completion' : 'Active'}</Text></Table.Td>
+                  <Table.Tr
+                    tabIndex={0}
+                    aria-expanded={expandedId === s.id}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => void toggleExpanded(s)}
+                    onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); void toggleExpanded(s); } }}
+                  >
                     <Table.Td>
+                      {(() => {
+                        const branch = propertyById[s.branchId];
+                        const address = branch ? [branch.street?.trim(), [branch.postalCode?.trim(), branch.city?.trim()].filter(Boolean).join(' ')].filter(Boolean).join(', ') : '';
+                        const chips = branch ? [
+                          branch.sizeM2 != null ? `${branch.sizeM2} m²` : null,
+                          branch.roomCount != null ? `${branch.roomCount} ${branch.roomCount === 1 ? 'room' : 'rooms'}` : null,
+                          branch.bedCount != null ? `${branch.bedCount} ${branch.bedCount === 1 ? 'bed' : 'beds'}` : null,
+                        ].filter((c): c is string => !!c) : [];
+                        return (
+                          <Stack gap={4}>
+                            <p className="text-sm font-semibold text-accent-950">{address || s.name}</p>
+                            {chips.length > 0 && <Group gap={6}>{chips.map(c => <Badge key={c} variant="subtle">{c}</Badge>)}</Group>}
+                            {address && <span className="sr-only">{s.name}</span>}
+                          </Stack>
+                        );
+                      })()}
+                    </Table.Td>
+                    <Table.Td>{scheduleLabel(s)}</Table.Td>
+                    <Table.Td>{assigneeNames[s.id] ? (assigneeNames[s.id].length === 0 ? 'None' : assigneeNames[s.id].join(', ')) : assignmentCounts ? `${assignmentCounts[s.id] ?? 0} assigned` : '—'}</Table.Td>
+                    <Table.Td><Text size="sm">{shiftView(s) === 'inactive' ? 'Inactive' : shiftView(s) === 'completed' ? 'Completed' : s.schedule.type === 6 && s.schedule.oneTimeDate && s.schedule.oneTimeDate.slice(0, 10) < new Date().toLocaleDateString('en-CA', { timeZone: timeZoneId }) ? 'Past visit · check completion' : 'Active'}</Text></Table.Td>
+                    <Table.Td onClick={(e) => e.stopPropagation()}>
                       <Group gap={6} wrap="nowrap">
-                        <Button size="xs" variant="light" onClick={() => setWorkspaceId(s.id)}>Manage</Button>
                         <Menu shadow="md" width={230} position="bottom-end" withinPortal>
                           <Menu.Target>
                             <ActionIcon variant="light" size="md" aria-label={`More actions for ${s.name}`}><MoreHorizontal size={16} /></ActionIcon>
                           </Menu.Target>
                           <Menu.Dropdown>
-                            {isAdmin() && !s.isBranchMain && <Menu.Item onClick={() => { setPricingShift(s); setPricingOccurrence(undefined); }}>Pricing</Menu.Item>}
-                            {isAdmin() && <Menu.Item leftSection={<Pencil size={13} />} onClick={() => openEdit(s)}>Edit</Menu.Item>}
-                            {s.isActive && !s.isBranchMain && <Menu.Item disabled={assignBusy} onClick={() => openAssign(s.id)}>Employees</Menu.Item>}
-                            {s.isActive && <Menu.Item onClick={() => openOccurrences(s)}>Occurrences</Menu.Item>}
-                            {s.isActive && s.isBranchMain && <Menu.Item onClick={() => setVisitDialog({ preset: { companyId: s.companyId, branchId: s.branchId, propertyName: s.name } })}>Add visit</Menu.Item>}
-                            {s.isActive && !s.isBranchMain && s.schedule.type === 4 && <Menu.Item onClick={() => { void openOccurrences(s); openOccurrenceEditor(undefined, '4'); }}>Schedule one-time visit</Menu.Item>}
-                            {isAdmin() && s.isActive && <Menu.Item onClick={() => { setTemplateShift(s); setAssignedTemplate(s.qualityCycleTemplateId ?? null); setTemplateError(''); }}>Checklist template</Menu.Item>}
-                            {s.isActive && <Menu.Item color="red" disabled={assignBusy} onClick={() => deactivate(s.id)}>Deactivate</Menu.Item>}
-                            {!s.isActive && <Menu.Item disabled={!!restoring} onClick={() => reactivate(s.id)}>Reactivate</Menu.Item>}
-                            {!s.isActive && <Menu.Item color="red" disabled={!!restoring} onClick={() => deleteShift(s)}>Delete</Menu.Item>}
+                            <Menu.Item leftSection={<Eye size={13} />} onClick={() => setWorkspaceId(s.id)}>View details</Menu.Item>
+                            {isAdmin() && !s.isBranchMain && <Menu.Item leftSection={<Receipt size={13} />} onClick={() => { setPricingShift(s); setPricingOccurrence(undefined); }}>Pricing</Menu.Item>}
+                            {isAdmin() && <Menu.Item leftSection={<Pencil size={13} />} onClick={() => openEdit(s)}>Edit schedule</Menu.Item>}
+                            {s.isActive && !s.isBranchMain && <Menu.Item disabled={assignBusy} leftSection={<UserPlus size={13} />} onClick={() => openAssign(s.id)}>Assign employees</Menu.Item>}
+                            {s.isActive && s.isBranchMain && <Menu.Item leftSection={<UserPlus size={13} />} onClick={() => { setDefaultCleanerError(''); setDefaultCleanerPick(s.defaultEmployeeId ?? null); setDefaultCleanerFor(s); }}>Assign employees</Menu.Item>}
+                            {s.isActive && <Menu.Item leftSection={<CalendarDays size={13} />} onClick={() => openOccurrences(s)}>Occurrences</Menu.Item>}
+                            {s.isActive && s.isBranchMain && <Menu.Item leftSection={<Plus size={13} />} onClick={() => setVisitDialog({ preset: { companyId: s.companyId, branchId: s.branchId, propertyName: s.name } })}>Add visit</Menu.Item>}
+                            {s.isActive && !s.isBranchMain && s.schedule.type === 4 && <Menu.Item leftSection={<CalendarPlus size={13} />} onClick={() => { void openOccurrences(s); openOccurrenceEditor(undefined, '4', s); }}>Add visit</Menu.Item>}
+                            {isAdmin() && s.isActive && <Menu.Item leftSection={<ListChecks size={13} />} onClick={() => { setTemplateShift(s); setAssignedTemplate(s.qualityCycleTemplateId ?? null); setTemplateError(''); }}>Checklist template</Menu.Item>}
+                            {s.isActive && <Menu.Item color="red" leftSection={<PauseCircle size={13} />} disabled={assignBusy} onClick={() => setConfirmAction({ title: `Deactivate “${s.name}”?`, body: 'It stops taking new visits. You can reactivate it later from the Inactive tab.', confirmLabel: 'Deactivate', color: 'red', run: () => deactivate(s.id) })}>Deactivate</Menu.Item>}
+                            {!s.isActive && <Menu.Item leftSection={<PlayCircle size={13} />} disabled={!!restoring} onClick={() => setConfirmAction({ title: `Reactivate “${s.name}”?`, body: 'It returns to the Active tab and can take visits again.', confirmLabel: 'Reactivate', run: () => reactivate(s.id) })}>Reactivate</Menu.Item>}
+                            {!s.isActive && <Menu.Item color="red" leftSection={<Trash2 size={13} />} disabled={!!restoring} onClick={() => setConfirmAction({ title: `Delete “${s.name}”?`, body: 'Permanently delete this inactive shift and remove its employee assignments. Completed checklist records, photos and reports will remain in history.', confirmLabel: 'Delete', color: 'red', run: () => deleteShift(s) })}>Delete</Menu.Item>}
                           </Menu.Dropdown>
                         </Menu>
                       </Group>
                     </Table.Td>
                   </Table.Tr>
-                  {assignOpen === s.id && (
-                    <Table.Tr key={s.id + '-assign'}>
-                      <Table.Td colSpan={5} p="sm">
-                        <Group align="flex-end" mb="xs" wrap="wrap" gap="xs">
-                          <MultiSelect
-                            label="Assign employees"
-                            placeholder="Select employees"
-                            data={employees.filter(e => e.isActive && !(assignments[s.id] ?? []).some(a => a.isActive && a.employeeId === e.id)).map((e) => ({ value: e.id, label: `${e.firstName} ${e.lastName}${e.email ? ` (${e.email})` : ''}` }))}
-                            value={assignSel}
-                            onChange={setAssignSel}
-                            style={{ flex: 1, minWidth: 200 }}
-                            searchable
-                            disabled={assignLoading || assignBusy || !assignments[s.id]}
-                          />
-                          <Button size="xs" loading={assignBusy} disabled={assignLoading || !assignSel.length || !assignments[s.id]} onClick={() => doAssign(s.id)}>Assign</Button>
-                          <Button size="xs" variant="default" disabled={assignLoading || assignBusy} onClick={async () => {
-                            const version = ++assignmentGeneration.current;
-                            setAssignLoading(true); setAssignError(''); setAssignStatus('');
-                            try {
-                              const a = await refreshAssignments(s.id, version);
-                              if (version === assignmentGeneration.current) setAssignSel(selected => selected.filter(id => !a.some(x => x.isActive && x.employeeId === id)));
-                            } catch (e) { if (version === assignmentGeneration.current) setAssignError(e instanceof Error ? e.message : 'Could not load assignments. Please retry.'); }
-                            finally { if (version === assignmentGeneration.current) setAssignLoading(false); }
-                          }}>Refresh assignments</Button>
-                        </Group>
-                        <Text size="sm" c="dimmed">Overlapping shifts are checked when you assign employees. Any conflict will be shown here.</Text>
-                        {assignError && <Text role="alert" aria-label="Assignment error" c="red">{assignError}</Text>}
-                        {assignStatus && <Text role="status">{assignStatus}</Text>}
-                        {assignLoading ? <Text>Loading assignments…</Text> : !assignments[s.id] ? <Text>Assignments could not be loaded. Use Refresh assignments to retry.</Text> : assignments[s.id].length === 0 ? (
-                          <Text size="sm" c="dimmed">No employees assigned.</Text>
-                        ) : (
-                          <Stack gap={4}>
-                            {(assignments[s.id] ?? []).map((a) => (
-                              <Group key={a.id} justify="space-between" wrap="wrap" gap="xs">
-                                <Text size="sm">{employeeName(a.employeeId)}</Text>
-                                <ActionIcon variant="subtle" color="red" size="sm" disabled={assignBusy || assignLoading} aria-label={`Unassign ${employeeName(a.employeeId)}`} onClick={() => doUnassign(s.id, a.employeeId)}><Trash2 size={14} /></ActionIcon>
-                              </Group>
-                            ))}
-                          </Stack>
-                        )}
+                  {expandedId === s.id && (
+                    <Table.Tr>
+                      <Table.Td colSpan={5} data-testid="row-visits">
+                        <DsCard padding="sm">
+                          <div className="flex flex-wrap items-center justify-between gap-3" onClick={(e) => e.stopPropagation()}>
+                            <DsButton variant="ghost" aria-expanded={visitsOpen} onClick={() => setVisitsOpen(open => !open)}>
+                              {visitsOpen ? <ChevronDown size={16} aria-hidden /> : <ChevronRight size={16} aria-hidden />}
+                              <CalendarDays size={16} aria-hidden />
+                              Visits
+                              {!expandedLoading && <Badge variant="subtle">{expandedVisits.length}</Badge>}
+                            </DsButton>
+                            <select aria-label="Month" value={expandedMonth} onChange={(e) => changeExpandedMonth(e.currentTarget.value)}
+                              className="min-h-11 rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20">
+                              {monthChoices().map(choice => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
+                            </select>
+                          </div>
+                          {expandedLoading && <p className="mt-3 text-sm text-gray-500">Loading visits…</p>}
+                          {expandedError && <p role="alert" className="mt-3 text-sm text-red-600">{expandedError}</p>}
+                          {!expandedLoading && !expandedError && expandedVisits.length === 0 && <p className="mt-3 text-sm text-gray-500">No visits in this month.</p>}
+                          {visitsOpen && expandedVisits.length > 0 && (
+                            <div className="mt-3 overflow-x-auto rounded-xl border border-accent-100">
+                              <table className="w-full text-left text-sm text-gray-900">
+                                <thead className="bg-brand-500 text-accent-950">
+                                  <tr>
+                                    <th className="px-3 py-2 font-bold"><span className="inline-flex items-center gap-1.5"><ListChecks size={14} aria-hidden />Visit</span></th>
+                                    <th className="px-3 py-2 font-bold"><span className="inline-flex items-center gap-1.5"><Clock size={14} aria-hidden />Starts</span></th>
+                                    <th className="px-3 py-2 font-bold"><span className="inline-flex items-center gap-1.5"><Sparkles size={14} aria-hidden />Type</span></th>
+                                    <th className="px-3 py-2 font-bold"><span className="inline-flex items-center gap-1.5"><UserRound size={14} aria-hidden />Employee</span></th>
+                                    <th className="px-3 py-2 font-bold"><span className="inline-flex items-center gap-1.5"><CircleCheck size={14} aria-hidden />Status</span></th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {expandedVisits.map((item) => (
+                                    <tr key={item.exceptionId ?? item.startUtc} className="border-t border-accent-100 align-top">
+                                      <td className="px-3 py-2">{visitLabel(item, timeZoneId) || s.name}</td>
+                                      <td className="px-3 py-2">{new Date(item.startUtc).toLocaleString(undefined, { timeZone: timeZoneId })}</td>
+                                      <td className="px-3 py-2">{item.visitNumber ? <Badge variant={item.visitCleaningType === 'Deep' ? 'navy' : 'subtle'}>{`${item.visitCleaningType ?? 'Normal'} cleaning`}</Badge> : '—'}</td>
+                                      <td className="px-3 py-2">{(item.assigneeIds ?? []).map(employeeName).join(', ') || (item.offeredEmployeeId ? `Offer sent to ${employeeName(item.offeredEmployeeId)}` : 'Unassigned')}</td>
+                                      <td className="px-3 py-2"><Badge variant="outline">{item.visitNumber && item.workStatus ? WORK_STATUS_LABEL[item.workStatus] ?? item.workStatus : item.status ? OCCURRENCE_STATUSES.find(x => x.value === String(item.status))?.label : 'Scheduled'}</Badge></td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </DsCard>
                       </Table.Td>
                     </Table.Tr>
                   )}
@@ -722,25 +856,85 @@ export default function ShiftsAdminPage() {
       )}
       </LifecycleTabs>
 
-      {workspaceShift && <ShiftWorkspace shift={workspaceShift} isAdmin={isAdmin()} busy={assignBusy || Boolean(restoring)}
+      {workspaceShift && <ShiftWorkspace shift={workspaceShift}
         employeeCount={assignmentCounts ? (assignmentCounts[workspaceShift.id] ?? 0) : assignments[workspaceShift.id] ? assignments[workspaceShift.id].filter(a => a.isActive).length : undefined}
         templateName={templates.find(t => t.id === workspaceShift.qualityCycleTemplateId)?.title ?? null}
-        onClose={() => setWorkspaceId(null)}
-        onEdit={fromWorkspace(s => { void openEdit(s); })}
-        onPricing={fromWorkspace(s => { setPricingShift(s); setPricingOccurrence(undefined); })}
-        onAssign={fromWorkspace(s => { void openAssign(s.id); })}
-        onOccurrences={fromWorkspace(s => { void openOccurrences(s); })}
-        onScheduleOneTime={fromWorkspace(s => { void openOccurrences(s); openOccurrenceEditor(undefined, '4'); })}
-        onAddVisit={fromWorkspace(s => setVisitDialog({ preset: { companyId: s.companyId, branchId: s.branchId, propertyName: s.name } }))}
-        onTemplate={fromWorkspace(s => { setTemplateShift(s); setAssignedTemplate(s.qualityCycleTemplateId ?? null); setTemplateError(''); })}
-        onDeactivate={fromWorkspace(s => { void deactivate(s.id); })}
-        onReactivate={fromWorkspace(s => { void reactivate(s.id); })}
-        onDelete={fromWorkspace(s => { void deleteShift(s); })} />}
+        onClose={() => setWorkspaceId(null)} />}
+      {defaultCleanerFor && <Modal opened onClose={() => { if (!defaultCleanerSaving) setDefaultCleanerFor(null); }} closeButtonProps={{ disabled: defaultCleanerSaving }} title={`Assign employees — ${defaultCleanerFor.name}`} size="md" radius="md">
+        <Stack>
+          <Select label="Default employee" description="New visits are offered to this employee. Visits already added keep their employee." clearable searchable
+            placeholder="None: new visits start unassigned" value={defaultCleanerPick} onChange={setDefaultCleanerPick}
+            data={employees.filter(e => e.isActive).map(e => ({ value: e.id, label: `${e.firstName} ${e.lastName}` }))} />
+          {defaultCleanerError && <Text role="alert" c="red">{defaultCleanerError}</Text>}
+          <Group justify="flex-end">
+            <Button variant="default" disabled={defaultCleanerSaving} onClick={() => setDefaultCleanerFor(null)}>Cancel</Button>
+            <Button loading={defaultCleanerSaving} onClick={async () => {
+              if (defaultCleanerSaving) return;
+              setDefaultCleanerSaving(true); setDefaultCleanerError('');
+              const result = await adminBranchVisits.setDefaultEmployee(defaultCleanerFor.id, defaultCleanerPick);
+              setDefaultCleanerSaving(false);
+              if (!result.ok) { setDefaultCleanerError(result.message); return; }
+              setDefaultCleanerFor(null);
+              await load();
+            }}>Save</Button>
+          </Group>
+        </Stack>
+      </Modal>}
+      {assignOpen && <Modal opened onClose={closeAssignments} title={`Assign employees — ${pageRows.find(r => r.id === assignOpen)?.name ?? ''}`} size="lg" radius="md">
+        <Stack gap="sm">
+          <Group align="flex-end" mb="xs" wrap="wrap" gap="xs">
+            <MultiSelect
+              label="Assign employees"
+              placeholder="Select employees"
+              data={employees.filter(e => e.isActive && !(assignments[assignOpen] ?? []).some(a => a.isActive && a.employeeId === e.id)).map((e) => ({ value: e.id, label: `${e.firstName} ${e.lastName}${e.email ? ` (${e.email})` : ''}` }))}
+              value={assignSel}
+              onChange={setAssignSel}
+              style={{ flex: 1, minWidth: 200 }}
+              searchable
+              disabled={assignLoading || assignBusy || !assignments[assignOpen]}
+            />
+            <Button size="xs" loading={assignBusy} disabled={assignLoading || !assignSel.length || !assignments[assignOpen]} onClick={() => doAssign(assignOpen)}>Assign</Button>
+            <Button size="xs" variant="default" disabled={assignLoading || assignBusy} onClick={async () => {
+              const version = ++assignmentGeneration.current;
+              setAssignLoading(true); setAssignError(''); setAssignStatus('');
+              try {
+                const a = await refreshAssignments(assignOpen, version);
+                if (version === assignmentGeneration.current) setAssignSel(selected => selected.filter(id => !a.some(x => x.isActive && x.employeeId === id)));
+              } catch (e) { if (version === assignmentGeneration.current) setAssignError(e instanceof Error ? e.message : 'Could not load assignments. Please retry.'); }
+              finally { if (version === assignmentGeneration.current) setAssignLoading(false); }
+            }}>Refresh assignments</Button>
+          </Group>
+          <Text size="sm" c="dimmed">Overlapping shifts are checked when you assign employees. Any conflict will be shown here.</Text>
+          {assignError && <Text role="alert" aria-label="Assignment error" c="red">{assignError}</Text>}
+          {assignStatus && <Text role="status">{assignStatus}</Text>}
+          {assignLoading ? <Text>Loading assignments…</Text> : !assignments[assignOpen] ? <Text>Assignments could not be loaded. Use Refresh assignments to retry.</Text> : assignments[assignOpen].length === 0 ? (
+            <Text size="sm" c="dimmed">No employees assigned.</Text>
+          ) : (
+            <Stack gap={4}>
+              {(assignments[assignOpen] ?? []).map((a) => (
+                <Group key={a.id} justify="space-between" wrap="wrap" gap="xs">
+                  <Text size="sm">{employeeName(a.employeeId)}</Text>
+                  <ActionIcon variant="subtle" color="red" size="sm" disabled={assignBusy || assignLoading} aria-label={`Unassign ${employeeName(a.employeeId)}`} onClick={() => doUnassign(assignOpen, a.employeeId)}><Trash2 size={14} /></ActionIcon>
+                </Group>
+              ))}
+            </Stack>
+          )}
+        </Stack>
+      </Modal>}
+      <Modal opened={Boolean(confirmAction)} onClose={() => { if (!confirmBusy) setConfirmAction(null); }} title={confirmAction?.title ?? ''} size="sm" radius="md">
+        <Stack>
+          <Text size="sm">{confirmAction?.body}</Text>
+          <Group justify="flex-end">
+            <Button variant="default" disabled={confirmBusy} onClick={() => setConfirmAction(null)}>Cancel</Button>
+            <Button color={confirmAction?.color} loading={confirmBusy} onClick={() => void runConfirm()}>{confirmAction?.confirmLabel ?? 'Confirm'}</Button>
+          </Group>
+        </Stack>
+      </Modal>
       {pricingShift && <ShiftPricingDialog key={`${pricingShift.id}-${pricingOccurrence?.startUtc ?? "plan"}`} shift={pricingShift} occurrence={pricingOccurrence} onClose={() => { setPricingShift(null); setPricingOccurrence(undefined); }} />}
       <Modal opened={Boolean(occurrenceShift)} onClose={() => { if (occurrenceSaving) return; occurrenceGeneration.current++; setOccurrenceShift(null); setEditingOccurrence(null); }} closeButtonProps={{ disabled: occurrenceSaving }} closeOnEscape={!occurrenceSaving} closeOnClickOutside={!occurrenceSaving} title={`Occurrences${occurrenceShift ? ` — ${occurrenceShift.name}` : ''}`} size="xl">
         <Stack>
           <Text size="sm" c="dimmed">Times use the tenant time zone: {timeZoneId}. Changes apply only to the selected visit.</Text>
-          {occurrenceShift?.schedule.type === 4 && <Text size="sm">On-call shifts have no automatic visits. Schedule each visit with a date and time. Choose a cleaner below or assign employees to this shift.</Text>}
+          {occurrenceShift?.schedule.type === 4 && <Text size="sm">On-call shifts have no automatic visits. Schedule each visit with a date and time. Choose an employee below or assign employees to this shift.</Text>}
           {shiftNotice && <Text role="status">{shiftNotice}</Text>}
           <Group align="flex-end" wrap="wrap">
             <TextInput label="From" type="date" value={occurrenceFrom} onChange={e => setOccurrenceFrom(e.target.value)} />
@@ -748,10 +942,10 @@ export default function ShiftsAdminPage() {
             <Button variant="default" loading={occurrenceLoading} onClick={() => loadOccurrences()}>Load</Button>
             {occurrenceShift?.isBranchMain
               ? <Button onClick={() => setVisitDialog({ preset: { companyId: occurrenceShift.companyId, branchId: occurrenceShift.branchId, propertyName: occurrenceShift.name } })}>Add visit</Button>
-              : <Button onClick={() => openOccurrenceEditor(undefined, '4')}>Add extra visit</Button>}
+              : <Button onClick={() => openOccurrenceEditor(undefined, '4')}>Add visit</Button>}
           </Group>
           {occurrenceShift?.isBranchMain && <>
-            <Select label="Default cleaner" description="Each new visit is offered to this cleaner. Visits already added keep their cleaner." placeholder="None: new visits start unassigned"
+            <Select label="Default employee" description="Each new visit is offered to this employee. Visits already added keep their employee." placeholder="None: new visits start unassigned"
               clearable searchable value={occurrenceShift.defaultEmployeeId ?? null} onChange={value => { void saveDefaultCleaner(value); }}
               data={employees.filter(e => e.isActive && e.role !== 'partner').map(e => ({ value: e.id, label: employeeLabel(e, employees) }))} />
             {defaultCleanerError && <Text role="alert" c="red">{defaultCleanerError}</Text>}
@@ -767,13 +961,13 @@ export default function ShiftsAdminPage() {
                 <Table.Td>{new Date(item.endUtc).toLocaleString(undefined, { timeZone: timeZoneId })}</Table.Td>
                 <Table.Td data-testid="occurrence-status">{item.visitNumber && item.workStatus ? WORK_STATUS_LABEL[item.workStatus] ?? item.workStatus : item.status ? OCCURRENCE_STATUSES.find(x => x.value === String(item.status))?.label : 'Scheduled'}</Table.Td>
                 <Table.Td><Text size="sm">{(item.assigneeIds ?? []).map(employeeName).join(', ') || (item.offeredEmployeeId ? `Offer sent to ${employeeName(item.offeredEmployeeId)}` : 'Unassigned')}</Text>
-                  <Text size="xs" c="dimmed">{item.visitNumber ? (item.isPartnerBooking ? 'Partner booking' : item.offeredEmployeeId ? 'Waiting for the cleaner to accept' : (item.assigneeIds ?? []).length ? 'Accepted' : 'No cleaner yet') : item.assignmentSource ?? 'Recurring'}</Text>{item.visitNumber ? <Text size="xs" c="dimmed">{item.visitCleaningType ?? 'Normal'} cleaning</Text> : null}{item.visitNumber && item.offeredEmployeeId && Date.parse(item.endUtc) < Date.now() ? <Text size="xs" c="orange" data-testid="past-offer-note">This visit has already ended. The cleaner can still accept the offer. To change the cleaner, delete this visit and add it again.</Text> : null}{item.assignmentLockReason && <Text size="xs" c="dimmed">{item.assignmentLockReason}</Text>}</Table.Td>
+                  <Text size="xs" c="dimmed">{item.visitNumber ? (item.isPartnerBooking ? 'Partner booking' : item.offeredEmployeeId ? 'Waiting for the employee to accept' : (item.assigneeIds ?? []).length ? 'Accepted' : 'No employee yet') : item.assignmentSource ?? 'Recurring'}</Text>{item.visitNumber ? <Text size="xs" c="dimmed">{item.visitCleaningType ?? 'Normal'} cleaning</Text> : null}{item.visitNumber && item.offeredEmployeeId && Date.parse(item.endUtc) < Date.now() ? <Text size="xs" c="orange" data-testid="past-offer-note">This visit has already ended. The employee can still accept the offer. To change the employee, delete this visit and add it again.</Text> : null}{item.assignmentLockReason && <Text size="xs" c="dimmed">{item.assignmentLockReason}</Text>}</Table.Td>
                 <Table.Td>{item.reason ?? '—'}</Table.Td>
                 <Table.Td><Group gap={4} wrap="nowrap">
                   {item.isPartnerBooking ? <><Text size="xs" c="dimmed">Managed under Partner requests</Text><Button size="xs" variant="light" onClick={() => { setCleanerVisit(item); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Change cleaning type</Button></> : <>
                   {isAdmin() && (occurrenceShift?.schedule.type === 4 || occurrenceShift?.schedule.type === 6) && <Button size="xs" variant="light" onClick={() => { setPricingShift(occurrenceShift); setPricingOccurrence(item); }}>Visit price</Button>}
                   {occurrenceShift?.isBranchMain
-                    ? <Button size="xs" variant="light" disabled={item.canAssign === false} onClick={() => { setCleanerVisit(item); setCleanerChoice(item.assigneeIds?.[0] ?? item.offeredEmployeeId ?? null); setCleanerError(''); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Change cleaner</Button>
+                    ? <Button size="xs" variant="light" disabled={item.canAssign === false} onClick={() => { setCleanerVisit(item); setCleanerChoice(item.assigneeIds?.[0] ?? item.offeredEmployeeId ?? null); setCleanerError(''); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Change employee</Button>
                     : <Button size="xs" variant="light" disabled={item.canAssign === false || item.status === 2 || item.status === 3} onClick={() => setAssigningVisit(item)}>Assign</Button>}
                   {occurrenceShift?.isBranchMain && item.exceptionId && <Button size="xs" variant="light" onClick={() => { setCleanerVisit(item); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Change cleaning type</Button>}
                   <Button size="xs" variant="subtle" onClick={() => openOccurrenceEditor(item)}>Change</Button>
@@ -789,15 +983,15 @@ export default function ShiftsAdminPage() {
 
       <AddVisitDialog opened={Boolean(visitDialog)} preset={visitDialog?.preset ?? null} employees={employees} timeZoneId={timeZoneId}
         onClose={() => setVisitDialog(null)} onAdded={(visit, propertyName) => { void visitAdded(visit, propertyName); }} />
-      <Modal opened={Boolean(cleanerVisit)} onClose={() => { if (!cleanerSaving) setCleanerVisit(null); }} closeButtonProps={{ disabled: cleanerSaving }} title={cleanerVisit?.isPartnerBooking ? 'Cleaning type' : 'Change cleaner'}>
+      <Modal opened={Boolean(cleanerVisit)} onClose={() => { if (!cleanerSaving) setCleanerVisit(null); }} closeButtonProps={{ disabled: cleanerSaving }} title={cleanerVisit?.isPartnerBooking ? 'Cleaning type' : 'Change employee'}>
         <Stack>
           <Text size="sm">{cleanerVisit && visitLabel(cleanerVisit, timeZoneId)}</Text>
           {!cleanerVisit?.isPartnerBooking && <>
-          <Select label="Cleaner" placeholder="Unassigned" clearable searchable value={cleanerChoice} onChange={setCleanerChoice}
-            description="The cleaner gets an offer and holds the visit once accepted. A cleaner who already holds it is released."
+          <Select label="Employee" placeholder="Unassigned" clearable searchable value={cleanerChoice} onChange={setCleanerChoice}
+            description="The employee gets an offer and holds the visit once accepted. An employee who already holds it is released."
             data={employees.filter(e => e.isActive && e.role !== 'partner').map(e => ({ value: e.id, label: employeeLabel(e, employees) }))} />
           {cleanerError && <Text role="alert" c="red">{cleanerError}</Text>}
-          <Group justify="flex-end"><Button variant="default" disabled={cleanerSaving} onClick={() => setCleanerVisit(null)}>Cancel</Button><Button loading={cleanerSaving} onClick={saveCleaner}>Save cleaner</Button></Group>
+          <Group justify="flex-end"><Button variant="default" disabled={cleanerSaving} onClick={() => setCleanerVisit(null)}>Cancel</Button><Button loading={cleanerSaving} onClick={saveCleaner}>Save employee</Button></Group>
           </>}
           <Select label="Cleaning type" allowDeselect={false} value={cleaningTypeChoice ?? cleanerVisit?.visitCleaningType ?? 'Normal'} onChange={setCleaningTypeChoice}
             description={cleaningTypeChoice === 'Deep' || (!cleaningTypeChoice && cleanerVisit?.visitCleaningType === 'Deep') ? `Deep cleaning adds €${DEEP_SURCHARGE_EUR} excl. VAT to this visit.` : 'Every visit starts as Normal. You can change it at any time, including after the cleaning is done.'}
@@ -856,7 +1050,7 @@ export default function ShiftsAdminPage() {
             <TextInput label="End date (optional)" type="date" min={validFrom || undefined} value={validUntil} onChange={e => setValidUntil(e.target.value)} />
           </Group>}
           <Select label="Schedule" required withAsterisk={false} placeholder="Choose a schedule type" allowDeselect={false} data={SCHEDULE_TYPES.filter(type => type.value !== '6' || editingShift?.schedule.type === 6)} value={scheduleType || null} onChange={(v) => { if (v) setScheduleType(v); }} />
-          {scheduleType === '4' && <Text size="sm">On-call is a reusable shift without scheduled dates. After creating it, enter the date, time and cleaner for a one-time visit. Only dated visits appear on calendars.</Text>}
+          {scheduleType === '4' && <Text size="sm">On-call is a reusable shift without scheduled dates. After creating it, enter the date, time and employee for a one-time visit. Only dated visits appear on calendars.</Text>}
 
           {scheduleType === '2' && (
             <MultiSelect

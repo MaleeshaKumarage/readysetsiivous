@@ -7,7 +7,7 @@ namespace CleaningSuite.Api;
 /// Runs every data repair in one place, on each API start. Repairs run in order, and each one is isolated: a failure
 /// is logged and the others still run. Every repair is safe to repeat, so the next start retries anything that failed.
 /// The shift validity correction runs only when DataCorrections:ShiftValidityWindow:Mode is set (Report or Apply).
-/// The branch shift merge reports by default and changes data only when DataCorrections:BranchShiftMerge:Mode is Apply.
+/// The branch shift merge applies on the first start and is then skipped by its one-time marker.
 /// StartupRepairs:Enabled turns the whole service off; it defaults to on.
 /// </summary>
 public sealed class StartupRepairService(IServiceScopeFactory scopes, IConfiguration configuration,
@@ -35,7 +35,7 @@ public sealed class StartupRepairService(IServiceScopeFactory scopes, IConfigura
         // the plan on every start; Apply performs it. A merged shift no longer exists, so a later start finds nothing to repeat.
         await RunAsync("branch shift merge", stoppingToken, async (services, ct) =>
         {
-            var mode = configuration["DataCorrections:BranchShiftMerge:Mode"] ?? "Report";
+            var mode = configuration["DataCorrections:BranchShiftMerge:Mode"] ?? "Apply";
             if (string.Equals(mode, "Off", StringComparison.OrdinalIgnoreCase)) return;
             await services.GetRequiredService<BranchShiftMergeRunner>().RunAsync(mode, ct);
         });

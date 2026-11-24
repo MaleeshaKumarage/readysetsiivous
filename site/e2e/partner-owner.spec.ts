@@ -332,7 +332,7 @@ test('manager navigation loads partner operations through manager routes only an
     if (req.method() === 'GET') {
       managerReads.push(path);
       if (path === '/partner/requests' && ++requestLoads === 1) return route.fulfill({ status: 503, headers, json: { detail: 'Partner requests temporarily unavailable.' } });
-      const json = path === '/companies' ? { items: [{ id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }], total: 1 } : path === '/employees' ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', isActive: true }] : path === '/time-zone' ? { timeZoneId: 'Europe/Helsinki' } : path === '/shifts' ? [] : path === '/partner/requests' ? [pending] : path === '/partner/branches' ? [quotedBranch] : path === '/partner/quotes' ? (quotedBranch.pricingReady ? [] : [quotedBranch]) : [];
+      const json = path === '/companies' ? { items: [{ id: companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }], total: 1 } : path === '/employees' ? [{ id: 'employee', firstName: 'Test', lastName: 'Employee', isActive: true }] : path === '/time-zone' ? { timeZoneId: 'Europe/Helsinki' } : path === '/shifts' ? [] : path === '/partner/requests' ? [pending] : path === '/partner/branches' ? [quotedBranch] : path === '/partner/quotes' ? (quotedBranch.pricingReady ? [] : [quotedBranch]) : [];
       return route.fulfill({ headers, json });
     }
     const body = req.postDataJSON() as Record<string, unknown>; writes.push({ path, method: req.method(), body }); quotedBranch = { ...quotedBranch, ...body, pricingReady: true }; return route.fulfill({ headers, json: quotedBranch });
@@ -363,7 +363,7 @@ test('owner load failure is distinct from an empty company and explicit refresh 
   await expect(page.getByRole('article', { name: priced.name, exact: true })).toBeVisible(); await expect(page.getByText('Properties are temporarily unavailable.', { exact: true })).toHaveCount(0); expect(loads).toBe(2); expect(state.writes).toHaveLength(0);
 });
 
-test('cleaner refreshes a failed offer read and a stale preplanned acceptance without automatic write retries', async ({ page }) => {
+test('employee refreshes a failed offer read and a stale preplanned acceptance without automatic write retries', async ({ page }) => {
   await setupAdminMocks(page); await page.addInitScript(() => { (window as unknown as { __MOCK_ROLES__: string[] }).__MOCK_ROLES__ = ['employee']; });
   await page.route(/\/api\/v1\/me\/work-preferences$/, route => route.fulfill({ headers, json: { autoAcceptWork: false } }));
   let loads = 0, accepted = false;

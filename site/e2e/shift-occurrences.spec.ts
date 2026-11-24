@@ -25,7 +25,7 @@ async function setup(page: Page) {
       return route.fulfill({ status: 200, headers, json: occurrences });
     }
     const json = isShiftsRoute(path) ? shiftsResponse([{ id: 'shift', name: 'Morning clean', companyId: 'company', branchId: 'branch', isActive: true, schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' } }], route.request().url())
-      : path.endsWith('/employees') ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true }, { id: 'second', firstName: 'Second', lastName: 'Cleaner', role: 'employee', isActive: true }, { id: 'partner-owner', firstName: 'Active', lastName: 'Partner', role: 'partner', isActive: true }]
+      : path.endsWith('/employees') ? [{ id: 'employee', firstName: 'Test', lastName: 'Employee', role: 'employee', isActive: true }, { id: 'second', firstName: 'Second', lastName: 'Employee', role: 'employee', isActive: true }, { id: 'partner-owner', firstName: 'Active', lastName: 'Partner', role: 'partner', isActive: true }]
       : path.endsWith('/companies') ? { items: [], total: 0 }
       : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [];
     return route.fulfill({ status: 200, headers, json });
@@ -59,14 +59,14 @@ test('visit override choices exclude active partners and save only selected work
     if (!body.preview) saved = true;
     return route.fulfill({ headers, json: { employeeIds: body.employeeIds, preview: body.preview, message: 'Only this visit changes.' } });
   });
-  await page.route(/\/occurrences(?:\?.*)?$/, route => route.fulfill({ headers, json: [{ startUtc: '2026-11-02T06:00:00.000Z', endUtc: '2026-11-02T08:00:00.000Z', assigneeIds: saved ? ['cleaner'] : [], rosterVersion: saved ? 'v2' : 'v1' }] }));
+  await page.route(/\/occurrences(?:\?.*)?$/, route => route.fulfill({ headers, json: [{ startUtc: '2026-11-02T06:00:00.000Z', endUtc: '2026-11-02T08:00:00.000Z', assigneeIds: saved ? ['employee'] : [], rosterVersion: saved ? 'v2' : 'v1' }] }));
   await shiftAction(page, 'Morning clean', 'Occurrences'); const list = page.getByRole('dialog', { name: /Occurrences/ });
   await list.getByRole('button', { name: 'Assign', exact: true }).click(); const editor = page.getByRole('dialog', { name: 'Assign visit', exact: true });
-  await editor.getByRole('textbox', { name: /^Employees/ }).click(); await expect(page.getByRole('option', { name: 'Test Cleaner', exact: true })).toBeVisible(); await expect(page.getByRole('option', { name: 'Active Partner', exact: true })).toHaveCount(0);
-  await page.getByRole('option', { name: 'Test Cleaner', exact: true }).click(); await page.keyboard.press('Escape'); await editor.getByLabel('Assignment reason').fill('Staff coverage for this visit');
-  await editor.getByRole('button', { name: 'Preview assignment', exact: true }).click(); await expect(editor.getByText('Selected visit: Test Cleaner', { exact: true })).toBeVisible();
-  await editor.getByRole('button', { name: 'Save assignment', exact: true }).click(); await expect(editor).toHaveCount(0); await expect(list.getByRole('cell').filter({ hasText: 'Test Cleaner' })).toBeVisible();
-  expect(writes.map(({ employeeIds, preview, mode }) => ({ employeeIds, preview, mode }))).toEqual([{ employeeIds: ['cleaner'], preview: true, mode: 1 }, { employeeIds: ['cleaner'], preview: false, mode: 1 }]);
+  await editor.getByRole('textbox', { name: /^Employees/ }).click(); await expect(page.getByRole('option', { name: 'Test Employee', exact: true })).toBeVisible(); await expect(page.getByRole('option', { name: 'Active Partner', exact: true })).toHaveCount(0);
+  await page.getByRole('option', { name: 'Test Employee', exact: true }).click(); await page.keyboard.press('Escape'); await editor.getByLabel('Assignment reason').fill('Staff coverage for this visit');
+  await editor.getByRole('button', { name: 'Preview assignment', exact: true }).click(); await expect(editor.getByText('Selected visit: Test Employee', { exact: true })).toBeVisible();
+  await editor.getByRole('button', { name: 'Save assignment', exact: true }).click(); await expect(editor).toHaveCount(0); await expect(list.getByRole('cell').filter({ hasText: 'Test Employee' })).toBeVisible();
+  expect(writes.map(({ employeeIds, preview, mode }) => ({ employeeIds, preview, mode }))).toEqual([{ employeeIds: ['employee'], preview: true, mode: 1 }, { employeeIds: ['employee'], preview: false, mode: 1 }]);
 });
 
 test('admin cancellation requires a reason', async ({ page }) => {
@@ -84,7 +84,7 @@ test('admin records a company-cancelled scheduled occurrence', async ({ page }) 
   const editor = page.getByRole('dialog', { name: 'Change occurrence' });
   await editor.getByLabel('Action').click();
   await page.getByRole('option', { name: 'Company cancelled' }).click();
-  await editor.getByLabel('Reason').fill('Cleaner unavailable');
+  await editor.getByLabel('Reason').fill('Employee unavailable');
   await editor.getByRole('button', { name: 'Save occurrence' }).click();
 
   expect(state.writes[0]).toMatchObject({
@@ -98,13 +98,13 @@ test('admin adds an extra visit with a replacement employee and deletes it', asy
   const state = await setup(page);
   await shiftAction(page, 'Morning clean', 'Occurrences');
   const list = page.getByRole('dialog', { name: /Occurrences/ });
-  await list.getByRole('button', { name: 'Add extra visit' }).click();
+  await list.getByRole('button', { name: 'Add visit' }).click();
   const editor = page.getByRole('dialog', { name: 'Change occurrence' });
   await editor.getByLabel(/Start/).fill('2026-11-03T09:00');
   await editor.getByLabel(/End/).fill('2026-11-03T11:00');
   await editor.getByLabel('Replacement employee (optional)').click();
   await expect(page.getByRole('option', { name: 'Active Partner', exact: true })).toHaveCount(0);
-  await page.getByRole('option', { name: 'Test Cleaner' }).click();
+  await page.getByRole('option', { name: 'Test Employee' }).click();
   await editor.getByLabel('Reason').fill('Requested deep clean');
   await editor.getByRole('button', { name: 'Save occurrence' }).click();
   expect(state.writes[0]).toMatchObject({
@@ -112,7 +112,7 @@ test('admin adds an extra visit with a replacement employee and deletes it', asy
     startUtc: '2026-11-03T07:00:00.000Z',
     endUtc: '2026-11-03T09:00:00.000Z',
     status: 4,
-    employeeId: 'cleaner',
+    employeeId: 'employee',
   });
   await list.getByRole('button', { name: 'Delete extra' }).click();
   expect(state.deletes).toBe(1);
@@ -157,7 +157,7 @@ for (const mode of ['Replace regular assignees', 'Add extra employees', 'Restore
     const dialog = page.getByRole('dialog', { name: 'Assign visit', exact: true });
     await dialog.getByLabel('Assignment action').click(); await page.getByRole('option', { name: mode, exact: true }).click();
     if (!mode.startsWith('Restore')) {
-      await dialog.getByLabel('Employees').click(); await page.getByRole('option', { name: 'Test Cleaner', exact: true }).click(); await page.keyboard.press('Escape');
+      await dialog.getByLabel('Employees').click(); await page.getByRole('option', { name: 'Test Employee', exact: true }).click(); await page.keyboard.press('Escape');
     }
     await dialog.getByLabel('Assignment reason').fill('Planned coverage');
     await expect(dialog.getByRole('button', { name: 'Save assignment' })).toBeDisabled();
@@ -180,7 +180,7 @@ test('handover previews and saves from the chosen date', async ({ page }) => {
   await page.getByRole('dialog', { name: /Occurrences/ }).getByRole('button', { name: 'Assign', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Assign visit', exact: true });
   await dialog.getByLabel('Apply to').click(); await page.getByRole('option', { name: 'From this date onward' }).click();
-  await dialog.getByLabel('Employees').click(); await page.getByRole('option', { name: 'Test Cleaner', exact: true }).click(); await page.keyboard.press('Escape');
+  await dialog.getByLabel('Employees').click(); await page.getByRole('option', { name: 'Test Employee', exact: true }).click(); await page.keyboard.press('Escape');
   await dialog.getByLabel('Assignment reason').fill('Permanent handover');
   await dialog.getByRole('button', { name: 'Preview assignment' }).click();
   await expect(dialog.getByText(/Replace also removes later recurring handovers/)).toBeVisible();
@@ -194,25 +194,25 @@ test('team assignment includes both selected employees in preview and request', 
   await shiftAction(page, 'Morning clean', 'Occurrences');
   await page.getByRole('dialog', { name: /Occurrences/ }).getByRole('button', { name: 'Assign', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Assign visit', exact: true });
-  await dialog.getByLabel('Employees').click(); await page.getByRole('option', { name: 'Test Cleaner', exact: true }).click();
-  await dialog.getByLabel('Employees').click(); await page.getByRole('option', { name: 'Second Cleaner', exact: true }).click(); await page.keyboard.press('Escape');
-  await dialog.getByLabel('Assignment reason').fill('Two cleaner team'); await dialog.getByRole('button', { name: 'Preview assignment' }).click();
-  await expect(dialog.getByText(/Selected visit:.*Test Cleaner.*Second Cleaner/)).toBeVisible();
+  await dialog.getByLabel('Employees').click(); await page.getByRole('option', { name: 'Test Employee', exact: true }).click();
+  await dialog.getByLabel('Employees').click(); await page.getByRole('option', { name: 'Second Employee', exact: true }).click(); await page.keyboard.press('Escape');
+  await dialog.getByLabel('Assignment reason').fill('Two employee team'); await dialog.getByRole('button', { name: 'Preview assignment' }).click();
+  await expect(dialog.getByText(/Selected visit:.*Test Employee.*Second Employee/)).toBeVisible();
   await dialog.getByRole('button', { name: 'Save assignment' }).click();
-  expect(calls.at(-1).employeeIds).toEqual(['cleaner', 'second']);
+  expect(calls.at(-1).employeeIds).toEqual(['employee', 'second']);
 });
 
 test('assignee cells explain named, unassigned and locked work; Cancel sends no assignment', async ({ page }) => {
   await setup(page); let writes = 0;
   await page.route(/\/visit-assignees$/, route => { writes++; return route.fulfill({ status: 500, headers }); });
   await page.route(/\/occurrences\?/, route => route.fulfill({ headers, json: [
-    { startUtc: '2026-11-02T06:00:00Z', endUtc: '2026-11-02T08:00:00Z', assigneeIds: ['cleaner'], assignmentSource: 'Replacement', canAssign: true },
+    { startUtc: '2026-11-02T06:00:00Z', endUtc: '2026-11-02T08:00:00Z', assigneeIds: ['employee'], assignmentSource: 'Replacement', canAssign: true },
     { startUtc: '2026-11-03T06:00:00Z', endUtc: '2026-11-03T08:00:00Z', assigneeIds: [], assignmentSource: 'Cancelled', status: 2, canAssign: false },
-    { startUtc: '2026-11-04T06:00:00Z', endUtc: '2026-11-04T08:00:00Z', assigneeIds: ['cleaner'], assignmentSource: 'Recurring', canAssign: false, assignmentLockReason: 'Started work cannot be reassigned.' },
+    { startUtc: '2026-11-04T06:00:00Z', endUtc: '2026-11-04T08:00:00Z', assigneeIds: ['employee'], assignmentSource: 'Recurring', canAssign: false, assignmentLockReason: 'Started work cannot be reassigned.' },
   ] }));
   await shiftAction(page, 'Morning clean', 'Occurrences');
   const list = page.getByRole('dialog', { name: /Occurrences/ }); const rows = list.getByRole('row');
-  await expect(rows.nth(1).getByText('Test Cleaner', { exact: true })).toBeVisible();
+  await expect(rows.nth(1).getByText('Test Employee', { exact: true })).toBeVisible();
   await expect(rows.nth(1).getByText('Replacement', { exact: true })).toBeVisible();
   await expect(rows.nth(2).getByText('Unassigned', { exact: true })).toBeVisible();
   await expect(rows.nth(2).getByRole('button', { name: 'Assign', exact: true })).toBeDisabled();
@@ -228,23 +228,24 @@ test('phone occurrence exceptions scroll internally and keep restore actions rea
   await page.setViewportSize({ width: 375, height: 1000 });
   const state = await setup(page);
   await page.route(/\/api\/v1\/admin\/shifts\/shift\/occurrences(?:\?.*)?$/, route => route.fulfill({ headers, json: [
-    { exceptionId: 'moved-visit', originalStartUtc: '2026-11-02T06:00:00.000Z', startUtc: '2026-11-02T07:00:00.000Z', endUtc: '2026-11-02T09:00:00.000Z', status: 1, reason: 'Customer requested a later visit', assigneeIds: ['cleaner'], rosterVersion: 'v1' },
-    { exceptionId: 'extra-visit', originalStartUtc: null, startUtc: '2026-11-03T07:00:00.000Z', endUtc: '2026-11-03T09:00:00.000Z', status: 4, reason: 'Requested deep clean', assigneeIds: ['cleaner'], rosterVersion: 'v1' },
+    { exceptionId: 'moved-visit', originalStartUtc: '2026-11-02T06:00:00.000Z', startUtc: '2026-11-02T07:00:00.000Z', endUtc: '2026-11-02T09:00:00.000Z', status: 1, reason: 'Customer requested a later visit', assigneeIds: ['employee'], rosterVersion: 'v1' },
+    { exceptionId: 'extra-visit', originalStartUtc: null, startUtc: '2026-11-03T07:00:00.000Z', endUtc: '2026-11-03T09:00:00.000Z', status: 4, reason: 'Requested deep clean', assigneeIds: ['employee'], rosterVersion: 'v1' },
   ] }));
   await shiftAction(page, 'Morning clean', 'Occurrences');
   const dialog = page.getByRole('dialog', { name: /Occurrences/ });
   await expect(dialog.getByRole('cell', { name: 'Customer requested a later visit', exact: true })).toBeVisible();
   await expect(dialog.getByRole('cell', { name: 'Requested deep clean', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  const viewport = dialog.locator('.mantine-ScrollArea-viewport');
-  expect(await viewport.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
-  await viewport.evaluate(element => { element.scrollLeft = element.scrollWidth; });
+  // The nearest scrollable ancestor of a visit cell is the grid's horizontal scroller.
+  const cell = dialog.getByRole('cell', { name: 'Requested deep clean', exact: true });
+  expect(await cell.evaluate(el => { let p: HTMLElement | null = el.parentElement; while (p) { const o = getComputedStyle(p).overflowX; if ((o === 'auto' || o === 'scroll' || o === 'hidden') && p.scrollWidth > p.clientWidth) return true; p = p.parentElement; } return false; })).toBe(true);
+  await cell.evaluate(el => { let p: HTMLElement | null = el.parentElement; while (p) { const o = getComputedStyle(p).overflowX; if ((o === 'auto' || o === 'scroll' || o === 'hidden') && p.scrollWidth > p.clientWidth) { p.scrollLeft = p.scrollWidth; return; } p = p.parentElement; } });
   for (const name of ['Restore', 'Delete extra']) {
     const action = dialog.getByRole('button', { name, exact: true });
     await action.scrollIntoViewIfNeeded(); await expect(action).toBeInViewport();
     await action.click({ trial: true });
   }
-  expect(await viewport.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+  expect(await cell.evaluate(el => { let p: HTMLElement | null = el.parentElement; while (p) { const o = getComputedStyle(p).overflowX; if ((o === 'auto' || o === 'scroll' || o === 'hidden') && p.scrollWidth > p.clientWidth) return p.scrollLeft; p = p.parentElement; } return 0; })).toBeGreaterThan(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(state.writes).toHaveLength(0); expect(state.deletes).toBe(0);
 });

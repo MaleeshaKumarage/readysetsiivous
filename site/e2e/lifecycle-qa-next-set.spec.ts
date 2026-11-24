@@ -60,7 +60,7 @@ test('assignee picker shows each employee email so similar names can be told apa
   await page.goto('/admin/shifts/');
   await listed;
   await expect(page.getByRole('button', { name: /^More actions for / }).first()).toBeVisible({ timeout: 30000 });
-  await shiftActionAt(page, 'Employees', 0);
+  await shiftActionAt(page, 'Assign employees', 0);
   await page.getByRole('textbox', { name: 'Assign employees', exact: true }).click();
   await expect(page.getByRole('option', { name: 'Maleesha Kumarage (maleesha@hiava.fi)', exact: true })).toBeVisible();
   await expect(page.getByRole('option', { name: 'Maleesha MSK (maleesha.msk@gmail.com)', exact: true })).toBeVisible();

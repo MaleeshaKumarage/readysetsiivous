@@ -35,7 +35,7 @@ public class QualityCycleWorkAccessTests
         {
             Tenant.SetupGet(x => x.TenantId).Returns("synthetic");
             Profiles.Setup(x => x.GetAsync("synthetic", It.IsAny<CancellationToken>())).ReturnsAsync(new TenantProfile { TimeZoneId = "UTC" });
-            Form = QualityCycleForm.Create(Shift.Id, Shift.Name, Employee.Id, "Original cleaner", Guid.NewGuid(), "Original checklist", Start, ["Optional task"], Start.AddHours(2));
+            Form = QualityCycleForm.Create(Shift.Id, Shift.Name, Employee.Id, "Original employee", Guid.NewGuid(), "Original checklist", Start, ["Optional task"], Start.AddHours(2));
             if (stage > 0) Form.Start(Start.AddMinutes(12));
             if (stage > 1) Form.Submit([new() { ItemText = "Optional task", IsChecked = false }], null, "History", [new("/synthetic.png", "Original photo")], Start.AddHours(1));
             var assignment = ShiftAssignment.Create(Shift.Id, Employee.Id, null); assignment.AssignedAtUtc = Start.AddDays(-1); Roster.Add(assignment);
@@ -106,7 +106,7 @@ public class QualityCycleWorkAccessTests
     {
         var s = new Setup(1); s.Roster.Clear();
         var before = await s.Read();
-        Assert.Equal("Original cleaner", before.EmployeeName); Assert.Equal("Original checklist", before.TemplateTitle);
+        Assert.Equal("Original employee", before.EmployeeName); Assert.Equal("Original checklist", before.TemplateTitle);
         var finished = publicToken ? await s.Submit() : await s.End();
         Assert.Equal(before.StartedAtUtc, finished.StartedAtUtc); Assert.Equal(Start, finished.ShiftOccurrenceUtc);
         Assert.Equal(s.Employee.Id, finished.EmployeeId); Assert.False(Assert.Single(finished.Items).IsChecked);

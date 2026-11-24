@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Title, Tabs, Table, Button, Modal, TextInput, Select, Group, Stack, Text, Loader, Badge, Switch, Checkbox, Alert } from '@mantine/core';
 import { inventoryAcknowledgments, type InventoryAcknowledgment } from '@/lib/inventoryAcknowledgmentApi';
 import { AdminInventoryAcknowledgmentRequest } from '@/components/AdminInventoryAcknowledgmentRequest';
+import { AdminSupplyRequests } from '@/components/AdminSupplyRequests';
 import { Download } from 'lucide-react';
 import { showError, showSuccess } from '@/lib/toast';
 import { adminEmployees, type Employee } from '@/lib/adminApi';
@@ -443,10 +444,12 @@ export default function InventoryAdminPage() {
           <Tabs.Tab value="log">Take log</Tabs.Tab>
           <Tabs.Tab value="locations">Locations</Tabs.Tab>
           <Tabs.Tab value="items">Items</Tabs.Tab>
+          <Tabs.Tab value="supplies">Supply requests</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="log" pt="md"><LogTab /></Tabs.Panel>
         <Tabs.Panel value="locations" pt="md"><LocationsTab /></Tabs.Panel>
         <Tabs.Panel value="items" pt="md"><ItemsTab /></Tabs.Panel>
+        <Tabs.Panel value="supplies" pt="md"><AdminSupplyRequests /></Tabs.Panel>
       </Tabs>
     </Stack>
   );

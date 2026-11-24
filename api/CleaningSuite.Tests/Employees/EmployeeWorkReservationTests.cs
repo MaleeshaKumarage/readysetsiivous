@@ -51,7 +51,7 @@ public class EmployeeWorkReservationTests
         employees.Setup(x => x.SaveAsync(It.IsAny<Employee>(), default)).Callback<Employee, CancellationToken>((record, _) => saved.Add(record)).Returns(Task.CompletedTask);
         var operation = update
             ? new UpdateEmployeeHandler(employees.Object, identity.Object, tenant.Object, locks.Object, reservation).Handle(new(employee.Id,
-                new EmployeeFields(employee.Email, "Synthetic", "Cleaner", "", Employee.RoleEmployee, null, [], null, null, null, null, null), false), default)
+                new EmployeeFields(employee.Email, "Synthetic", "Employee", "", Employee.RoleEmployee, null, [], null, null, null, null, null), false), default)
             : new DeactivateEmployeeHandler(employees.Object, identity.Object, tenant.Object, locks.Object, reservation, WorkAccessFixtures.NoAssignedShifts()).Handle(new(employee.Id), default);
         await entered.Task.WaitAsync(TimeSpan.FromSeconds(2));
         Assert.False(operation.IsCompleted); Assert.False(reservation.Held); Assert.True(identityHeld);

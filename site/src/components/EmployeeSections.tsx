@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { ChevronDown, Menu } from 'lucide-react';
+import { ChevronDown, LogOut, Menu } from 'lucide-react';
 import { authTenant, logout } from '@/lib/auth';
 import { Button } from '@/ds/Button';
 import { Card } from '@/ds/Card';
@@ -120,23 +120,23 @@ export function InventorySection() {
 export function SettingsSection({ autoAcceptWork }: { autoAcceptWork: boolean | null }) {
   const account = `/account/?tenant=${encodeURIComponent(authTenant())}`;
   return (
-    <div id="employee-panel-settings" role="tabpanel" aria-labelledby="employee-tab-settings" className="space-y-4">
-      <Card variant="elevated" padding="lg" className="space-y-3">
+    <div id="employee-panel-settings" role="tabpanel" aria-labelledby="employee-tab-settings" className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <Card variant="elevated" padding="lg" className="h-full space-y-3 border-l-4 border-l-brand-400">
         <h2 className="font-semibold text-gray-900 dark:text-gray-100">Cleaning offers</h2>
         <p className="text-sm text-gray-600 dark:text-gray-300">
           {autoAcceptWork === null ? 'Checking your preference…' : autoAcceptWork ? 'Automatic acceptance is on.' : 'Automatic acceptance is off. You review each offer yourself.'}
         </p>
         <Link className="text-sm underline text-gray-900 dark:text-gray-100" href={account}>Change work preferences in My account</Link>
       </Card>
-      <Card variant="elevated" padding="lg" className="space-y-3">
+      <Card variant="elevated" padding="lg" className="h-full space-y-3 border-l-4 border-l-brand-400">
         <h2 className="font-semibold text-gray-900 dark:text-gray-100">App</h2>
         <PwaInstallButton audience="employee" language="en" />
       </Card>
-      <Card variant="elevated" padding="lg" className="space-y-3">
+      <Card variant="elevated" padding="lg" className="h-full space-y-3 border-l-4 border-l-brand-400">
         <h2 className="font-semibold text-gray-900 dark:text-gray-100">Account</h2>
         <div className="flex flex-wrap gap-3">
           <Link className="rounded-lg border border-gray-900 px-4 py-2 text-sm text-gray-900 dark:border-gray-100 dark:text-gray-100" href={account}>My account</Link>
-          <Button variant="ghost" size="sm" onClick={() => logout()}>Sign out</Button>
+          <button type="button" className="notify-bell" aria-label="Sign out" title="Sign out" onClick={() => logout()}><LogOut size={22} aria-hidden="true" /></button>
         </div>
       </Card>
     </div>

@@ -4,8 +4,8 @@ import { setup, enterPartner } from './inventory-acknowledgment-helpers';
 test('admin bulk request appears in partner inbox, responses return to admin with history', async ({ page }, testInfo) => {
   const state = await setup(page);
   await page.goto('/admin/inventory/');
-  await page.getByRole('checkbox', { name: 'Select Keys by Private Cleaner' }).check();
-  await page.getByRole('checkbox', { name: 'Select Bedsheets by Private Cleaner' }).check();
+  await page.getByRole('checkbox', { name: 'Select Keys by Private Employee' }).check();
+  await page.getByRole('checkbox', { name: 'Select Bedsheets by Private Employee' }).check();
   await page.getByRole('button', { name: 'Request acknowledgment (2)' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Partner company', { exact: true }).click();
@@ -19,14 +19,14 @@ test('admin bulk request appears in partner inbox, responses return to admin wit
   await dialog.getByRole('button', { name: 'Send acknowledgment request' }).click();
   await expect(page.getByText('Acknowledgment request sent to the partner portal.')).toBeVisible();
   expect(state.requests).toHaveLength(1); expect(state.requests[0].usageIds).toEqual(['usage-0', 'usage-1']);
-  await expect(page.getByRole('checkbox', { name: 'Select Keys by Private Cleaner' })).toBeDisabled();
+  await expect(page.getByRole('checkbox', { name: 'Select Keys by Private Employee' })).toBeDisabled();
   await enterPartner(page);
   await page.getByRole('button', { name: 'Needs acknowledgment (2)' }).click();
   const inbox = page.getByRole('region', { name: 'Inventory acknowledgments' });
   // Wait for the loaded entry before checking the absence, so the check runs against rendered content.
   const entry = inbox.getByRole('article', { name: 'Keys Main store' });
   await expect(entry).toBeVisible();
-  await expect(inbox.getByText('Private Cleaner')).toHaveCount(0);
+  await expect(inbox.getByText('Private Employee')).toHaveCount(0);
   await entry.getByRole('button', { name: 'Review entry' }).click();
   await expect(entry.getByRole('img', { name: 'Keys photo 1' })).toBeVisible();
   await expect(entry.getByText('Please confirm collection')).toBeVisible();
@@ -92,18 +92,18 @@ test('failed status lookup disables sharing until the log is reloaded', async ({
   });
   await page.goto('/admin/inventory/');
   await expect(page.getByText(/Acknowledgment statuses could not be loaded/)).toBeVisible();
-  await expect(page.getByRole('checkbox', { name: 'Select Keys by Private Cleaner' })).toBeDisabled();
+  await expect(page.getByRole('checkbox', { name: 'Select Keys by Private Employee' })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Request acknowledgment (0)' })).toBeDisabled();
   await page.getByRole('button', { name: 'Reload log' }).click();
   await expect(page.getByText(/Acknowledgment statuses could not be loaded/)).toHaveCount(0);
-  await expect(page.getByRole('checkbox', { name: 'Select Keys by Private Cleaner' })).toBeEnabled();
-  await page.getByRole('checkbox', { name: 'Select Keys by Private Cleaner' }).check();
+  await expect(page.getByRole('checkbox', { name: 'Select Keys by Private Employee' })).toBeEnabled();
+  await page.getByRole('checkbox', { name: 'Select Keys by Private Employee' }).check();
   await expect(page.getByRole('button', { name: 'Request acknowledgment (1)' })).toBeEnabled();
 });
 
 test('send conflict keeps reviewed entries and confirmation visible', async ({ page }) => {
   const state = await setup(page, { failSend: true }); await page.goto('/admin/inventory/');
-  await page.getByRole('checkbox', { name: 'Select Keys by Private Cleaner' }).check();
+  await page.getByRole('checkbox', { name: 'Select Keys by Private Employee' }).check();
   await page.getByRole('button', { name: 'Request acknowledgment (1)' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Partner company', { exact: true }).click(); await page.getByRole('option', { name: 'Partner One' }).click();

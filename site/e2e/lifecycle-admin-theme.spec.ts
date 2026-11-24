@@ -1,3 +1,4 @@
+import { expectGridLaidOut } from './table-layout';
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
 async function readable(locator: Locator) {
@@ -128,7 +129,8 @@ for (const priorScheme of [null, 'dark'] as const) test(`leaving admin restores 
   await page.getByRole('link', { name: 'Office portal' }).click();
   await expect(page.getByRole('heading', { name: 'Office portal', exact: true })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-mantine-color-scheme', 'light');
-  await page.getByRole('link', { name: 'Portals', exact: true }).filter({ visible: true }).click();
+  await page.getByRole('link', { name: 'Profile', exact: true }).filter({ visible: true }).click();
+  await page.getByRole('link', { name: 'Back to your account' }).click();
   await expect(page).toHaveURL(/\/account\//);
   await expect.poll(() => page.locator('html').getAttribute('data-mantine-color-scheme')).toBe(priorScheme);
   await expect(page.locator('html')).not.toHaveAttribute('data-admin-theme');
@@ -151,10 +153,10 @@ test('phone header with own shifts and invoice form remain within viewport', asy
   await expect.poll(() => page.getByText('No invoices yet.', { exact: true }).evaluate(element => getComputedStyle(element).color)).toBe('rgb(70, 84, 139)');
   await page.screenshot({ path: testInfo.outputPath('invoices-own-shifts-375.png'), fullPage: true });
   await page.keyboard.press('Escape'); await expect(page.getByRole('dialog', { name: 'Create shift invoice' })).toHaveCount(0);
-  const accountLink = page.getByRole('banner').getByRole('link', { name: 'Portals', exact: true }).filter({ visible: true });
-  await expect(accountLink).toBeVisible();
-  await expect(accountLink).toHaveAttribute('href', '/account/?tenant=readysetsiivous');
-  await accountLink.click();
+  const profileLink = page.getByRole('banner').getByRole('link', { name: 'Profile', exact: true }).filter({ visible: true });
+  await expect(profileLink).toBeVisible();
+  await profileLink.click();
+  await page.getByRole('link', { name: 'Back to your account' }).click();
   await expect(page).toHaveURL(/\/account\/\?tenant=readysetsiivous$/);
   await expect(page.getByRole('heading', { name: 'Your account', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Office portal', exact: true })).toBeVisible();
@@ -168,7 +170,7 @@ async function setupPopulatedWorkspace(page: Page) {
   const issuer = { companyName: 'Supplier', businessId: '123', companyAddress: { street: 'Street', postalCode: '00100', city: 'Helsinki', country: 'FI' }, email: 'supplier@example.test', phone: '', bankAccountIBAN: 'FI123', bankBic: 'BIC', paymentTermsDays: 14, defaultVatRatePercent: 25.5 };
   const responses: Record<string, unknown> = {
     companies: { items: [{ id: 'company', name: 'Fixture company Oy', businessId: '1234567-8', isActive: true }], total: 1 },
-    employees: [{ id: 'active', firstName: 'Active', lastName: 'Cleaner', email: 'active@example.com', role: 'employee', isActive: true }],
+    employees: [{ id: 'active', firstName: 'Active', lastName: 'Employee', email: 'active@example.com', role: 'employee', isActive: true }],
     services: [{ id: 'service-0', slug: 'service-0', name: { values: { fi: 'Service 0' } }, description: { values: { fi: 'Description' } }, isActive: true, priceNet: 10, durationMinutes: 60, vatRatePercent: 25.5, category: 'cleaning', icon: 'Sparkles', sortOrder: 0, isFeatured: false }],
     agreements: [{ id: 'signed', title: 'Signed history', code: 'signed', status: 'Completed', isActive: true, signerCount: 1, signedCount: 1 }],
     'agreements/legacy-repairs': { agreements: [], companies: [] },
@@ -208,21 +210,35 @@ test('dashboard groups link to workspaces and sidebar brand returns home on phon
 });
 
 for (const [section, record, actionName] of [
-  ['companies', 'Fixture company Oy', 'Edit'], ['employees', 'Active Cleaner', 'Edit'],
+  ['companies', 'Fixture company Oy', 'Edit'], ['employees', 'Active Employee', 'Edit'],
   ['agreements', 'Signed history', 'Signers'], ['services', 'Service 0', 'Edit'], ['invoices', 'INV-1', 'PDF'],
-]) test(`populated ${section} table keeps actions reachable at 375px`, async ({ page }) => {
+]) test(`populated ${section} table keeps actions reachable at 375px`, async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 375, height: 1000 }); await setupPopulatedWorkspace(page);
   await page.goto(`/admin/${section}/`);
-  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: record, exact: true }) });
+  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: record, exact: true }).or(page.getByRole('cell', { name: record, exact: true })) });
   await expect(row).toBeVisible();
+  await expectGridLaidOut(page, testInfo, `${section}-375px`);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  const viewport = page.locator('.mantine-ScrollArea-viewport').filter({ has: row });
-  expect(await viewport.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
-  await viewport.evaluate(element => { element.scrollLeft = element.scrollWidth; });
+  // The nearest scrollable ancestor of the row is the table's horizontal scroller (Mantine or AG Grid).
+  const scrollable = await row.evaluate(el => {
+    let p: HTMLElement | null = el.parentElement;
+    while (p) { const o = getComputedStyle(p).overflowX; if ((o === 'auto' || o === 'scroll' || o === 'hidden') && p.scrollWidth > p.clientWidth) return true; p = p.parentElement; }
+    return false;
+  });
+  expect(scrollable).toBe(true);
+  await row.evaluate(el => {
+    let p: HTMLElement | null = el.parentElement;
+    while (p) { const o = getComputedStyle(p).overflowX; if ((o === 'auto' || o === 'scroll' || o === 'hidden') && p.scrollWidth > p.clientWidth) { p.scrollLeft = p.scrollWidth; return; } p = p.parentElement; }
+  });
   const action = row.getByRole('button', { name: actionName, exact: true });
   await action.scrollIntoViewIfNeeded(); await expect(action).toBeInViewport();
   await action.click({ trial: true });
-  expect(await viewport.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+  const moved = await row.evaluate(el => {
+    let p: HTMLElement | null = el.parentElement;
+    while (p) { const o = getComputedStyle(p).overflowX; if ((o === 'auto' || o === 'scroll' || o === 'hidden') && p.scrollWidth > p.clientWidth) return p.scrollLeft; p = p.parentElement; }
+    return 0;
+  });
+  expect(moved).toBeGreaterThan(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
@@ -236,4 +252,30 @@ test('populated quality checklist cards keep actions reachable at 375px', async 
   await edit.scrollIntoViewIfNeeded(); await expect(edit).toBeInViewport(); await edit.click();
   await expect(page.getByRole('textbox', { name: 'Template Title', exact: true })).toHaveValue('Activities checklist');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('populated shifts table shows address, size, rooms and beds readably at 375px', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 375, height: 1000 });
+  await setupPopulatedWorkspace(page);
+  const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS' };
+  const address = 'Kivikatu 2 B 2, 55100 Imatra';
+  const shift = { id: 'shift-long', companyId: 'company', branchId: 'branch-long', name: `Cleaning - ${address} |45m2|2H|2V`, isActive: true, schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' } };
+  await page.route(/\/api\/v1\/admin\/shifts(?:\/page)?(?:\?.*)?$/, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    const tab = new URL(route.request().url()).searchParams.get('tab') ?? 'active';
+    const items = tab === 'active' ? [shift] : [];
+    return route.fulfill({ headers, json: { items, total: items.length, counts: { active: 1, completed: 0, inactive: 0 } } });
+  });
+  await page.route(/\/api\/v1\/admin\/companies\/company$/, route => route.fulfill({ headers, json: {
+    company: { id: 'company', name: 'Fixture company Oy', isActive: true },
+    branches: [{ id: 'branch-long', name: 'Kivikatu', street: 'Kivikatu 2 B 2', postalCode: '55100', city: 'Imatra', sizeM2: 45, roomCount: 2, bedCount: 2, isActive: true, priceVersions: [] }],
+  } }));
+  await page.goto('/admin/shifts/');
+  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: /Kivikatu 2 B 2/ }) }).first();
+  await expect(row).toBeVisible();
+  await expect(row.getByText('45 m²', { exact: true })).toBeVisible();
+  await expect(row.getByText('2 rooms', { exact: true })).toBeVisible();
+  await expect(row.getByText('2 beds', { exact: true })).toBeVisible();
+  await expectGridLaidOut(page, testInfo, 'shifts-375px');
+  await expect(row.getByRole('button', { name: /^More actions for / })).toBeVisible();
 });

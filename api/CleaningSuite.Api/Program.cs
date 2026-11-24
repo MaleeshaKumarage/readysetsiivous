@@ -119,6 +119,8 @@ builder.Services.AddScoped<CleaningSuite.Application.Inventory.IInventoryReposit
 builder.Services.AddScoped<CleaningSuite.Application.Inventory.IInventoryFileStore, CleaningSuite.Infrastructure.Inventory.DiskInventoryFileStore>();
 builder.Services.AddScoped<CleaningSuite.Application.Inventory.InventoryService>();
 builder.Services.AddScoped<CleaningSuite.Application.Inventory.InventoryAcknowledgmentService>();
+builder.Services.AddScoped<CleaningSuite.Application.Inventory.ISupplyRequestRepository, CleaningSuite.Infrastructure.Persistence.SupplyRequestRepository>();
+builder.Services.AddScoped<CleaningSuite.Application.Inventory.SupplyRequestService>();
 builder.Services.AddScoped<CleaningSuite.Application.Leads.LeadService>();
 builder.Services.AddScoped<CleaningSuite.Application.Leads.ILeadCollaborationRepository, CleaningSuite.Infrastructure.Persistence.LeadCollaborationRepository>();
 builder.Services.AddScoped<CleaningSuite.Application.Leads.ILeadAudioStore, CleaningSuite.Infrastructure.Leads.DiskLeadAudioStore>();
@@ -362,6 +364,7 @@ public class DefaultExceptionHandler : IExceptionHandler
             CleaningSuite.Application.Leads.LeadConflictException => (409, "Lead conflict"),
             CleaningSuite.Application.Inventory.InventoryConflictException => (409, "Inventory conflict"),
             CleaningSuite.Application.Companies.CompanyConflictException => (409, "Company business ID conflict"),
+            CleaningSuite.Application.Companies.BranchNameConflictException => (409, "Property name conflict"),
             CleaningSuite.Application.Common.InactiveRecordDeleteConflictException => (409, "Record cannot be deleted"),
             CleaningSuite.Application.Common.UploadPayloadTooLargeException => (413, "Payload too large"),
             BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge } => (413, "Payload too large"),

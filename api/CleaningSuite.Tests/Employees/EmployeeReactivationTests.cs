@@ -16,8 +16,8 @@ public class EmployeeReactivationTests
     private readonly Mock<IEmployeeIdentityLock> _locks = new();
     private readonly Mock<ITenantContext> _tenant = new();
     private readonly Employee _employee = new() {
-        Email = "Cleaner@Example.invalid", IsActive = false, Role = Employee.RoleManager,
-        FirstName = "Existing", LastName = "Cleaner", Phone = "123", ColorHex = "#abcdef",
+        Email = "Employee@Example.invalid", IsActive = false, Role = Employee.RoleManager,
+        FirstName = "Existing", LastName = "Employee", Phone = "123", ColorHex = "#abcdef",
         Skills = ["windows"], ServiceAreas = ["north"], PayRate = 42,
         Certifications = [new() { Name = "Safety", ExpiresAtUtc = DateTime.UtcNow.AddYears(1) }],
         Notes = "Preserve", DefaultHours = new() { ["Monday"] = new() },
@@ -85,8 +85,8 @@ public class EmployeeReactivationTests
     public async Task CreateRejectsDuplicateIncludingInactiveWithNormalizedInput(bool active)
     {
         _employee.IsActive = active;
-        _employees.Setup(x => x.GetByEmailAsync("cleaner@example.invalid", default)).ReturnsAsync(_employee);
-        var fields = new EmployeeFields("  cleaner@example.invalid  ", "First", "Last", "", "employee", null, new(), null, null, null, null, null);
+        _employees.Setup(x => x.GetByEmailAsync("employee@example.invalid", default)).ReturnsAsync(_employee);
+        var fields = new EmployeeFields("  employee@example.invalid  ", "First", "Last", "", "employee", null, new(), null, null, null, null, null);
         var error = await Assert.ThrowsAsync<EmployeeIdentityConflictException>(() => new CreateEmployeeHandler(_employees.Object).Handle(new(fields), default));
         if (!active) { Assert.Contains("Inactive tab", error.Message); Assert.Contains("Reactivate", error.Message); }
         _employees.Verify(x => x.SaveAsync(It.IsAny<Employee>(), default), Times.Never);

@@ -1,8 +1,8 @@
 import { test, expect, Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
 
-// A cleaner's visit on a property's main shift keeps the shift name as its title and shows the visit's own name
-// under it: number, dates and where it came from. Nothing about the price reaches the cleaner.
+// An employee's visit on a property's main shift keeps the shift name as its title and shows the visit's own name
+// under it: number, dates and where it came from. Nothing about the price reaches the employee.
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization' };
 const MAIN = 'Cleaning - Testikatu 1, 00100 Helsinki |34m2|2H|1V';
@@ -36,7 +36,7 @@ test('a visit on a main shift shows the shift name and its own numbered name', a
   await expect(single.getByRole('heading', { name: MAIN, exact: true })).toBeVisible();
   await expect(single.getByTestId('visit-name')).toHaveText('#3 · Tue 10 Nov · Admin panel');
   await expect(single).toContainText('Ring the bell at the back door');
-  // The cleaner never sees a price.
+  // The employee never sees a price.
   await expect(single).not.toContainText(/€|\bEUR\b|price|\bVAT\b/i);
 
   await page.getByRole('button', { name: /21\/11\/2026 Saturday.*1 shift/ }).click();

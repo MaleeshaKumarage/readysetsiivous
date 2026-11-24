@@ -29,7 +29,7 @@ test('owner sees scoped properties, requests one visit and existing read-only sh
   await page.getByRole('article', { name: 'Lake apartment', exact: true }).getByRole('button', { name: 'Request cleaning' }).click();
   await page.getByLabel('From date', { exact: true }).fill('2026-12-01'); await page.getByLabel('To date', { exact: true }).fill('2026-12-02');
   await page.getByLabel('Cleaning instructions').fill('Clean after checkout.'); await page.getByRole('button', { name: 'Save cleaning request' }).click();
-  await expect(page.getByText('Cleaning request saved. Staff will arrange a cleaner.')).toBeVisible();
+  await expect(page.getByText('Cleaning request saved. Staff will arrange an employee.')).toBeVisible();
   expect(state.writes[0].body).toMatchObject({ branchId: branch.id, fromDate: '2026-12-01', toDate: '2026-12-02', exactStartLocalTime: null });
   await page.getByRole('tab', { name: 'Change requests', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Staff response' })).toBeVisible(); await expect(page.getByText('Fresh towels included.')).toBeVisible();
   expect(state.writes[0].body.clientRequestId).toMatch(/^[a-f0-9-]{36}$/); expect(state.writes[0].body).not.toHaveProperty('companyId'); expect(state.writes[0].body).not.toHaveProperty('priceNet');
@@ -39,7 +39,7 @@ test('owner sees scoped properties, requests one visit and existing read-only sh
 
 test('accepted request is locked and owner requests staff changes', async ({ page }) => {
   const state = await partnerSetup(page, { accepted: true }); await page.goto('/partner/'); await page.getByRole('tab', { name: 'Cleaning requests', exact: true }).click();
-  await expect(page.getByText('Cleaner:', { exact: false })).toHaveCount(0); await expect(page.getByText('Test Cleaner')).toHaveCount(0); await expect(page.getByRole('button', { name: 'Edit request', exact: true })).toHaveCount(0); await expect(page.getByRole('button', { name: 'Cancel request', exact: true })).toHaveCount(0);
+  await expect(page.getByText('Employee:', { exact: false })).toHaveCount(0); await expect(page.getByText('Test Employee')).toHaveCount(0); await expect(page.getByRole('button', { name: 'Edit request', exact: true })).toHaveCount(0); await expect(page.getByRole('button', { name: 'Cancel request', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Request a change or cancellation' }).click(); await page.getByLabel('Describe the requested change').fill('Please arrange a later visit.'); await page.getByRole('button', { name: 'Send change request' }).click();
   await expect(page.getByText('Change request sent to staff.')).toBeVisible(); expect(state.writes[0].path).toBe('/requests/request-one/change-requests');
 });
@@ -52,7 +52,7 @@ test('staff role cannot enter partner portal', async ({ page }) => {
   const state = await partnerSetup(page, { role: 'manager' }); await page.goto('/partner/'); await expect(page.getByText('Access denied.', { exact: false })).toBeVisible(); expect(state.companyReads).toBe(0);
 });
 
-test('cleaner may accept an unscheduled offer without a time, which becomes flexible within the dates; acceptance reloads work', async ({ page }, testInfo) => {
+test('employee may accept an unscheduled offer without a time, which becomes flexible within the dates; acceptance reloads work', async ({ page }, testInfo) => {
   await setupAdminMocks(page); await page.addInitScript(() => { (window as any).__MOCK_ROLES__ = ['employee']; });
   let offer: any = { id: 'offer-one', requestId: request.id, version: 4, branchName: branch.name, street: branch.street, city: branch.city, fromDate: request.fromDate, toDate: request.toDate, plannedStartUtc: null, exactStartLocalTime: null, estimatedDurationMinutes: 120, notes: 'After checkout', timeZoneId: 'Europe/Helsinki' };
   const decisions: any[] = []; let loads = 0;
@@ -79,7 +79,7 @@ test('cleaner may accept an unscheduled offer without a time, which becomes flex
 test('administrator prices a quote and offers work only to staff', async ({ page }) => {
   await setupAdminMocks(page); const writes: any[] = [];
   let currentRequest = { ...request, offeredEmployeeId: null as string | null };
-  await page.route(/\/api\/v1\/admin\/employees$/, route => route.fulfill({ headers, json: [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true }, { id: 'owner', firstName: 'Property', lastName: 'Owner', role: 'partner', isActive: true }] }));
+  await page.route(/\/api\/v1\/admin\/employees$/, route => route.fulfill({ headers, json: [{ id: 'employee', firstName: 'Test', lastName: 'Employee', role: 'employee', isActive: true }, { id: 'owner', firstName: 'Property', lastName: 'Owner', role: 'partner', isActive: true }] }));
   await page.route(/\/api\/v1\/admin\/companies(?:\?.*)?$/, route => route.fulfill({ headers, json: { items: [{ id: branch.companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }], total: 1 } }));
   await page.route(/\/api\/v1\/admin\/partner\//, route => {
     const req = route.request(), path = new URL(req.url()).pathname.split('/partner')[1]; if (req.method() === 'OPTIONS') return route.fulfill({ headers });
@@ -98,12 +98,12 @@ test('administrator prices a quote and offers work only to staff', async ({ page
   await partnerNav.click(); await page.getByRole('tab', { name: 'Quote requests', exact: true }).click(); await page.getByRole('button', { name: 'Set cleaning price' }).click();
   await page.getByLabel('Fixed cleaning price excl. VAT (€)').fill('85'); await page.getByLabel('Estimated duration (minutes)').fill('90'); await page.getByRole('button', { name: 'Save pricing' }).click(); await expect(page.getByText('Pricing saved.')).toBeVisible();
   expect(writes[0].body).toEqual({ priceNet: 85, vatRatePercent: 25.5, estimatedDurationMinutes: 90 });
-  await page.getByRole('tab', { name: 'Requests', exact: true }).click(); await page.getByRole('button', { name: 'Arrange cleaner / time' }).click();
-  await expect(page.getByRole('option', { name: 'Property Owner' })).toHaveCount(0); await page.getByLabel('Cleaner', { exact: true }).selectOption('cleaner'); await page.getByRole('button', { name: 'Send cleaning offer' }).click(); await expect(page.getByText('Offer sent. Waiting for cleaner acceptance.')).toBeVisible();
-  expect(writes[1].body).toEqual({ version: 1, employeeId: 'cleaner', plannedStartLocal: null });
-  await page.getByRole('button', { name: 'Arrange cleaner / time', exact: true }).click(); await expect(page.getByLabel('Cleaner', { exact: true })).toHaveValue('cleaner');
-  await page.getByLabel('Planned start (tenant local time, optional)').fill('2026-12-01T10:00'); await page.getByRole('button', { name: 'Send cleaning offer', exact: true }).click(); await expect(page.getByText('Offer sent. Waiting for cleaner acceptance.', { exact: true })).toBeVisible();
-  expect(writes[2]).toEqual({ path: `/requests/${request.id}/offer`, body: { version: 2, employeeId: 'cleaner', plannedStartLocal: '2026-12-01T10:00' } });
+  await page.getByRole('tab', { name: 'Requests', exact: true }).click(); await page.getByRole('button', { name: 'Arrange employee / time' }).click();
+  await expect(page.getByRole('option', { name: 'Property Owner' })).toHaveCount(0); await page.getByLabel('Employee', { exact: true }).selectOption('employee'); await page.getByRole('button', { name: 'Send cleaning offer' }).click(); await expect(page.getByText('Offer sent. Waiting for employee acceptance.')).toBeVisible();
+  expect(writes[1].body).toEqual({ version: 1, employeeId: 'employee', plannedStartLocal: null });
+  await page.getByRole('button', { name: 'Arrange employee / time', exact: true }).click(); await expect(page.getByLabel('Employee', { exact: true })).toHaveValue('employee');
+  await page.getByLabel('Planned start (tenant local time, optional)').fill('2026-12-01T10:00'); await page.getByRole('button', { name: 'Send cleaning offer', exact: true }).click(); await expect(page.getByText('Offer sent. Waiting for employee acceptance.', { exact: true })).toBeVisible();
+  expect(writes[2]).toEqual({ path: `/requests/${request.id}/offer`, body: { version: 2, employeeId: 'employee', plannedStartLocal: '2026-12-01T10:00' } });
 });
 
 test('switching inline staff editors resets fields to the newly selected record', async ({ page }) => {
@@ -127,7 +127,7 @@ test('switching inline staff editors resets fields to the newly selected record'
   await expect(page.getByLabel('From date', { exact: true })).toHaveValue('2026-12-10');
   await expect(page.getByLabel('Cleaning instructions')).toHaveValue('Forest instructions');
   await page.getByRole('button', { name: 'Save request changes' }).click();
-  await expect(page.getByText('Request updated. Arrange a new cleaner offer.')).toBeVisible();
+  await expect(page.getByText('Request updated. Arrange a new employee offer.')).toBeVisible();
   expect(writes[0]).toMatchObject({ path: '/requests/request-two', body: { fromDate: '2026-12-10', notes: 'Forest instructions' } });
   await page.getByRole('tab', { name: 'Properties', exact: true }).click();
   await page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Lake apartment · Owner company' }) }).getByRole('button', { name: 'Edit property' }).click();

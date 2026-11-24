@@ -6,7 +6,7 @@ const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Meth
 function shift(id: string, shiftName: string, startUtc: string, completed = false, isDeleted = false): MyShiftOccurrence {
   const endUtc = new Date(Date.parse(startUtc) + 7200000).toISOString();
   return { shiftId: id, shiftName, startUtc, endUtc, timeZoneId: 'Europe/Helsinki', isDeleted,
-    form: completed ? { id: `form-${id}`, shiftId: id, shiftName, employeeId: 'self', employeeName: 'Cleaner', templateId: 'template', templateTitle: 'Activities',
+    form: completed ? { id: `form-${id}`, shiftId: id, shiftName, employeeId: 'self', employeeName: 'Employee', templateId: 'template', templateTitle: 'Activities',
       shiftOccurrenceUtc: startUtc, shiftOccurrenceEndUtc: endUtc, token: 'self-token', items: [{ itemText: 'Corridor', isChecked: true }],
       photoUrls: [], isSubmitted: true, startedAtUtc: startUtc, endedAtUtc: endUtc, submittedUtc: endUtc, createdUtc: startUtc } : null };
 }

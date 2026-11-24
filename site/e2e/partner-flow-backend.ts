@@ -10,21 +10,21 @@ export const TENANT_TIME_ZONE = 'Europe/Helsinki';
 // Every date used by these flows is in December, when Helsinki is on UTC+02:00.
 const HELSINKI_WINTER_OFFSET = '+02:00';
 
-export type ActorKey = 'owner' | 'admin' | 'manager' | 'cleaner' | 'autoCleaner' | 'newCleaner' | 'unlinked';
-// What the cleaner submitted on a visit: Quality Cycle checklists, notes and photos. Mirrors the server's completed-visit view.
+export type ActorKey = 'owner' | 'admin' | 'manager' | 'employee' | 'autoCleaner' | 'newCleaner' | 'unlinked';
+// What the employee submitted on a visit: Quality Cycle checklists, notes and photos. Mirrors the server's completed-visit view.
 export interface VisitSeed { templateTitle?: string; tasks: { text: string; done: boolean }[]; cleanerNotes?: string | null; photos?: { url: string; note: string }[] }
 interface Person { id: string; firstName: string; lastName: string; role: string; isActive: boolean; autoAcceptWork?: boolean; keycloakUserId?: string | null }
-const ROLE_FOR_ACTOR: Record<ActorKey, string[]> = { owner: ['partner'], admin: ['admin'], manager: ['manager'], cleaner: ['employee'], autoCleaner: ['employee'], newCleaner: ['employee'], unlinked: ['employee'] };
+const ROLE_FOR_ACTOR: Record<ActorKey, string[]> = { owner: ['partner'], admin: ['admin'], manager: ['manager'], employee: ['employee'], autoCleaner: ['employee'], newCleaner: ['employee'], unlinked: ['employee'] };
 const PEOPLE: Record<ActorKey, Person> = {
   owner: { id: 'owner', firstName: 'Olivia', lastName: 'Owner', role: 'partner', isActive: true },
   admin: { id: 'admin', firstName: 'Ada', lastName: 'Admin', role: 'admin', isActive: true },
   manager: { id: 'manager', firstName: 'Mika', lastName: 'Manager', role: 'manager', isActive: true },
-  cleaner: { id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true, autoAcceptWork: false, keycloakUserId: 'kc-cleaner' },
+  employee: { id: 'employee', firstName: 'Test', lastName: 'Employee', role: 'employee', isActive: true, autoAcceptWork: false, keycloakUserId: 'kc-cleaner' },
   // No stored preference: the server default applies, which is automatic acceptance.
   newCleaner: { id: 'new-cleaner', firstName: 'Nina', lastName: 'Newstart', role: 'employee', isActive: true, keycloakUserId: 'kc-new' },
   // Added but not yet signed in: automatic acceptance cannot apply.
   unlinked: { id: 'unlinked', firstName: 'Ola', lastName: 'Pending', role: 'employee', isActive: true, keycloakUserId: null },
-  autoCleaner: { id: 'auto-cleaner', firstName: 'Auto', lastName: 'Cleaner', role: 'employee', isActive: true, autoAcceptWork: true, keycloakUserId: 'kc-auto' },
+  autoCleaner: { id: 'auto-cleaner', firstName: 'Auto', lastName: 'Employee', role: 'employee', isActive: true, autoAcceptWork: true, keycloakUserId: 'kc-auto' },
 };
 
 export interface BranchRecord { id: string; companyId: string; name: string; street: string | null; postalCode: string | null; city: string | null; country: string | null; contactPhone: string | null; contactEmail: string | null; roomCount: number | null; bedCount: number | null; isActive: boolean; pricingReady: boolean; priceNet: number | null; vatRatePercent: number | null; estimatedDurationMinutes: number | null; quoteRequestedUtc: string | null }
@@ -52,13 +52,13 @@ export class PartnerFlowBackend {
   visits: Record<string, VisitSeed> = {};
   // The owner's one-time photo sections (see PartnerPortalSettings).
   photoLabels: string[] = [];
-  // General instructions the cleaner reads before each visit; a visit's own instructions are appended after them.
+  // General instructions the employee reads before each visit; a visit's own instructions are appended after them.
   generalInstructions: string | null = null;
   // Stored account details. The portal no longer edits them, but a save must not erase them.
   account: Record<string, string | null> = {};
   writes: WriteRecord[] = [];
 
-  // Marks an accepted visit as finished by the cleaner, with the work they recorded.
+  // Marks an accepted visit as finished by the employee, with the work they recorded.
   completeVisit(request: RequestRecord, visit: VisitSeed): RequestRecord {
     request.status = 'Completed'; request.version++;
     this.visits[request.id] = visit;
@@ -146,7 +146,7 @@ export class PartnerFlowBackend {
   private dispatch(actor: ActorKey, method: string, path: string, body: any): unknown {
     const me = this.people[actor];
     if (method === 'GET' && path === 'me') {
-      // Administrators have no employee row; managers and cleaners are employees whose role must match the token role.
+      // Administrators have no employee row; managers and employees are employees whose role must match the token role.
       const roles = [JSON.stringify({ roles: ROLE_FOR_ACTOR[actor] })];
       if (actor === 'owner' || actor === 'admin') return { realm: 'readysetsiivous', roles, employee: null };
       return { realm: 'readysetsiivous', roles, employee: { id: me.id, firstName: me.firstName, lastName: me.lastName, role: me.role, isActive: me.isActive, keycloakUserId: me.keycloakUserId ?? null, autoAcceptWork: me.autoAcceptWork ?? true } };
@@ -313,7 +313,7 @@ export class PartnerFlowBackend {
     throw new ApiError(404, `No fake staff route for ${method} ${path}.`);
   }
 
-  // ----- cleaner (employee) API -----
+  // ----- employee (employee) API -----
   private employeeRoute(actor: ActorKey, method: string, path: string, body: any): unknown {
     const me = this.people[actor];
     if (me.role !== 'employee') throw new ApiError(403, 'Employee access is required.');
@@ -359,7 +359,7 @@ export class PartnerFlowBackend {
     this.checkVersion(request, version);
     if (request.status === 'Cancelled') throw new ApiError(409, 'Cancelled requests cannot be offered.');
     this.ensureUnstarted(request);
-    if (!employee || !employee.isActive || !['employee', 'manager', 'admin'].includes(employee.role)) throw new ApiError(400, 'Select an active cleaner, manager or administrator.');
+    if (!employee || !employee.isActive || !['employee', 'manager', 'admin'].includes(employee.role)) throw new ApiError(400, 'Select an active employee, manager or administrator.');
     const automatic = this.effectiveAutoAccept(employee);
     let planned: string | null = null;
     if (plannedStartLocal) planned = this.planStart(request, plannedStartLocal);

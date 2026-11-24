@@ -71,6 +71,7 @@ public class LeadServiceTests
         public Fixture()
         {
             Repo.Setup(x=>x.LockAsync(Lead.Id,default)).ReturnsAsync(new Lease());Repo.Setup(x=>x.GetAsync(Lead.Id,default)).ReturnsAsync(Lead);
+            Repo.Setup(x=>x.BusinessIdMatchesAsync(It.IsAny<string>(),It.IsAny<Guid>(),default)).ReturnsAsync([]);
             Repo.Setup(x=>x.SaveAsync(It.IsAny<Lead>(),default)).Callback<Lead,CancellationToken>((l,_)=>l.Version=Guid.NewGuid()).Returns(Task.CompletedTask);
             Repo.Setup(x=>x.ConvertAsync(Lead,It.IsAny<Company>(),It.IsAny<IReadOnlyList<Branch>>(),default)).Callback<Lead,Company,IReadOnlyList<Branch>,CancellationToken>((_,c,_,_)=>Company=c).Returns(Task.CompletedTask);
             Repo.Setup(x=>x.CustomerAvailableAsync(It.IsAny<Guid>(),It.IsAny<IReadOnlyList<Guid>>(),default)).ReturnsAsync(true);

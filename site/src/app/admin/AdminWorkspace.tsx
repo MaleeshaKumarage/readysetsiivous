@@ -7,7 +7,8 @@ import { NotificationBell } from '@/components/NotificationBell';
 import { PortalSwitch } from '@/components/PortalSwitch';
 import './admin.css';
 import { adminTheme } from '@/lib/adminTheme';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { ThemeContext } from '@/context/ThemeContext';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -39,6 +40,7 @@ const NAV_GROUPS = [
 
 // Sign-out that reports a failure instead of leaving the user signed in with no explanation.
 function signOut() {
+  console.warn('[diag] signOut handler ran');
   logout().catch(() => showError('Sign-out failed. Please retry.', 'Not signed out'));
 }
 
@@ -98,6 +100,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     return () => { verification.current++; };
   }, [verifyAccess]);
 
+  // TEMPORARY diagnostics for the sign-out CI failure; remove before merge.
+  useEffect(() => {
+    if (access !== 'allowed') return;
+    console.warn('[diag] header mounted');
+    return () => { console.warn('[diag] header unmounted'); };
+  }, [access]);
+
   useEffect(() => {
     const refreshAccess = async () => {
       try {
@@ -111,15 +120,22 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('admin-calendar-access-changed', refreshAccess);
   }, []);
 
+  // The admin is light on every device. Tailwind's dark: variants follow the site's dark class, so it is removed here
+  // and put back for the public site when the admin unmounts.
+  const { theme } = useContext(ThemeContext);
+  const themeRef = useRef(theme);
+  useEffect(() => { themeRef.current = theme; }, [theme]);
   useLayoutEffect(() => {
     const root = document.documentElement;
     const previous = root.getAttribute('data-admin-theme');
     root.setAttribute('data-admin-theme', 'light');
+    root.classList.remove('dark');
     return () => {
       if (previous === null) root.removeAttribute('data-admin-theme');
       else root.setAttribute('data-admin-theme', previous);
       if (previousScheme.current === null) root.removeAttribute('data-mantine-color-scheme');
       else root.setAttribute('data-mantine-color-scheme', previousScheme.current);
+      if (themeRef.current === 'dark') root.classList.add('dark');
     };
   }, []);
 
@@ -146,7 +162,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               <Text role="alert">{access === 'error' ? accessError : 'This account cannot access tenant administration.'}</Text>
               {access === 'error' && <Button onClick={() => void verifyAccess()}>{ACCESS_RETRY_LABEL}</Button>}
               <Button component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="light"><LayoutGrid size={16} aria-hidden="true" />Portals</Button>
-              <Button onClick={signOut} variant="subtle">Sign out</Button>
+              <ActionIcon variant="subtle" onClick={signOut} aria-label="Sign out" style={{ alignSelf: "flex-start" }}><LogOut size={20} aria-hidden="true" /></ActionIcon>
             </Stack>
           </Paper>
         </Group>
@@ -212,11 +228,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             </Group>
             <Group gap={4} wrap="wrap" justify="flex-end" className="admin-actions" style={{ minWidth: 0 }}>
               {hasOwnWorkIdentity && <PortalSwitch current="office" officeHref={isAdmin() ? '/admin/' : '/manager/'} officeLabel={isAdmin() ? 'Office' : 'Manager'} tenant={authTenant()} />}
-              {hasOwnWorkIdentity && <Box visibleFrom="sm"><Button component={Link} href="/me/shifts/" variant="light" size="xs">My shifts</Button></Box>}
               <NotificationBell settingsHref={`/account/profile/?tenant=${encodeURIComponent(authTenant())}#notifications`} />
-              <Button component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="subtle" size="xs" visibleFrom="xs"><LayoutGrid size={16} aria-hidden="true" />Portals</Button>
               <ActionIcon component={Link} href={`/account/profile/?tenant=${encodeURIComponent(authTenant())}`} variant="subtle" aria-label="Profile"><UserRound size={20} /></ActionIcon>
-              <ActionIcon component={Link} href={`/account/?tenant=${encodeURIComponent(authTenant())}`} variant="subtle" hiddenFrom="xs" aria-label="Portals"><LayoutGrid size={20} /></ActionIcon>
               <Tooltip label="Sign out" withArrow><ActionIcon variant="subtle" color="gray" onClick={signOut} aria-label="Sign out"><LogOut size={20} /></ActionIcon></Tooltip>
             </Group>
           </Group>

@@ -34,12 +34,12 @@ export function KeyRequestsSection() {
     {error && <p role="alert" className="text-red-600">{error}</p>}
     {notice && <p role="status">{notice}</p>}
     {items && items.length === 0 && <p>No key requests are assigned to you.</p>}
-    <ul className="space-y-4">
-      {(items ?? []).map(item => <li key={item.id} className="border rounded-xl p-4 space-y-3">
+    <ul className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {(items ?? []).map(item => <li key={item.id} className="h-full space-y-3 rounded-2xl border border-l-4 border-l-brand-400 bg-white p-5 shadow-sm dark:bg-gray-900">
         <p className="font-medium">{item.branchName} · {item.kind === 'Handover' ? 'Key handover' : 'Key pickup'} · {item.date}</p>
-        <p className="text-sm">{item.status === 'Completed' ? 'Completed' : 'To do'}</p>
+        <p className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-semibold ${item.status === 'Completed' ? 'bg-emerald-50 text-emerald-800' : 'bg-gray-100 text-gray-800'}`}>{item.status === 'Completed' ? 'Completed' : 'To do'}</p>
         {item.notes && <p className="text-sm">{item.notes}</p>}
-        {item.status === 'Requested' && <button className="border rounded px-3 py-2" type="button" disabled={busy}
+        {item.status === 'Requested' && <button className="min-h-11 w-full rounded-full border border-gray-900 px-4 py-2 font-semibold sm:w-auto dark:border-gray-100" type="button" disabled={busy}
           onClick={() => void run(() => myKeyRequestApi.complete(item), 'Key request marked completed.')}>Mark completed</button>}
         <KeyRequestPhotos heading="Photos" alt="Key request photo" photos={item.photos ?? []} busy={busy}
           uploadLabel={`Add photo for ${item.branchName} ${item.date}`} loadUrl={photoId => myKeyRequestApi.photoUrl(item.id, photoId)}

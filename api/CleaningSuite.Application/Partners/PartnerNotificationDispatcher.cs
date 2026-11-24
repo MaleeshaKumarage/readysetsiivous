@@ -43,7 +43,7 @@ public sealed class PartnerNotificationDispatcher(IPartnerStore store, IShiftWor
     public async Task DispatchAsync(Guid id, CancellationToken ct)
     {
         // Lock order is intent then scheduling. Only short database phases reserve scheduling;
-        // a slow provider must never prevent a cleaner from starting or ending a shift.
+        // a slow provider must never prevent an employee from starting or ending a shift.
         await using var deliveryLease = await deliveries.TryAcquireAsync(id, ct);
         if (deliveryLease is null) return;
         PartnerNotification item;
@@ -146,7 +146,7 @@ public sealed class PartnerNotificationDispatcher(IPartnerStore store, IShiftWor
         if (item.Audience == "Staff")
         { await Finish(item, "Skipped", "Staff alerts use app notifications, not email.", ct); return null; }
         if (item.Audience == "Employee" && !CurrentForRequest(item, request))
-        { await Finish(item, "Skipped", "This cleaner offer is no longer current.", ct); return null; }
+        { await Finish(item, "Skipped", "This employee offer is no longer current.", ct); return null; }
         return item;
     }
 
@@ -202,7 +202,7 @@ public sealed class PartnerNotificationDispatcher(IPartnerStore store, IShiftWor
                 bool started, complete;
                 if (request.OccurrenceStartUtc is { } visitStart)
                 {
-                    // A visit on a branch main shift: only its own records count, and its cleaner is the one who accepted it.
+                    // A visit on a branch main shift: only its own records count, and its employee is the one who accepted it.
                     var own = forms.Where(f => f.ShiftOccurrenceUtc == visitStart).ToList();
                     started = own.Any(f => f.StartedAtUtc.HasValue);
                     complete = request.AcceptedEmployeeId is { } cleaner && own.Any(f => f.EmployeeId == cleaner && f.IsSubmitted);

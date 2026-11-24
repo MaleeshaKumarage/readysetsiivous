@@ -3,18 +3,18 @@ import Navbar from '@/components/Navbar';
 import Hero from '@/components/Hero';
 import EmergencyCTA from '@/components/EmergencyCTA';
 import QuoteForm from '@/components/QuoteForm';
+import FAQ from '@/components/FAQ';
+import { LazyAbout as About } from '@/components/LazySections';
+import QRSection from '@/components/QRSection';
+import PaymentBanner from '@/components/PaymentBanner';
+import HowItWorks from '@/components/HowItWorks';
+import KeySecurity from '@/components/KeySecurity';
 // import Kotitalousvahennys from '@/components/Kotitalousvahennys'; // HIDDEN 2026-08-25: "Our Prices"
 import Services from '@/components/Services';
 // import PricingTransparency from '@/components/PricingTransparency'; // HIDDEN 2026-08-25: "What's Included in Our Prices"
 // import Checklist from '@/components/Checklist'; // HIDDEN 2026-08-25: "What's Included?"
-import KeySecurity from '@/components/KeySecurity';
 
-import FAQ from '@/components/FAQ';
-import About from '@/components/About';
-import HowItWorks from '@/components/HowItWorks';
 // import ResponsibleEmployer from '@/components/ResponsibleEmployer'; // HIDDEN 2026-08-25: "Cleaning You Can Feel Good About"
-import QRSection from '@/components/QRSection';
-import PaymentBanner from '@/components/PaymentBanner';
 import Footer from '@/components/Footer';
 import FloatingWhatsApp from '@/components/FloatingWhatsApp';
 

@@ -1,6 +1,8 @@
 'use client';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
+import { LogOut } from 'lucide-react';
+import { PortalSwitch } from '@/components/PortalSwitch';
 import { initAuth, isAuthenticated, isAdmin, isManager, authTenant, refreshToken, login, logout } from '@/lib/auth';
 import { API_URL } from '@/lib/api';
 import { ACCESS_VERIFY_ERROR, ACCESS_RETRY_LABEL, AccessVerificationError, verifyIdentity } from '@/lib/accessCopy';
@@ -39,7 +41,7 @@ export default function ManagerLayoutClient({ children }: { children: ReactNode 
   useEffect(() => { void verify(); return () => { version.current++; }; }, [verify]);
   return <main className="min-h-screen bg-gray-50 text-gray-900 p-4 sm:p-8">
     <div className="max-w-5xl mx-auto space-y-6">
-      <header className="flex flex-wrap justify-between gap-4 items-center"><h1 className="text-2xl font-bold">Tenant operations</h1><nav className="flex min-w-0 flex-wrap gap-x-4 gap-y-2"><Link className="underline" href="/manager/">Operations</Link><Link className="underline" href="/manager/leads/">Leads</Link><Link className="underline" href="/manager/partner-requests/">Partner requests</Link><Link className="underline" href={tenant ? `/account/?tenant=${encodeURIComponent(tenant)}` : '/account/'}>Account</Link>{hasOwnWorkIdentity && <Link className="underline" href="/me/shifts/">My shifts</Link>}{access !== 'anonymous' && <button className="underline" onClick={() => logout().catch(() => setAccess('error'))}>Sign out</button>}</nav></header>
+      <header className="flex flex-wrap justify-between gap-4 items-center"><h1 className="text-2xl font-bold">Tenant operations</h1><nav className="flex min-w-0 flex-wrap gap-x-4 gap-y-2"><Link className="underline" href="/manager/">Operations</Link><Link className="underline" href="/manager/leads/">Leads</Link><Link className="underline" href="/manager/partner-requests/">Partner requests</Link><Link className="underline" href={tenant ? `/account/?tenant=${encodeURIComponent(tenant)}` : '/account/'}>Account</Link>{hasOwnWorkIdentity && <PortalSwitch current="office" officeHref="/manager/" officeLabel="Manager" tenant={authTenant()} />}{access !== 'anonymous' && <button type="button" aria-label="Sign out" title="Sign out" className="inline-flex items-center justify-center min-h-11 min-w-11 rounded-full border border-gray-300 hover:bg-gray-100" onClick={() => logout().catch(() => setAccess('error'))}><LogOut size={18} aria-hidden="true" /></button>}</nav></header>
       {access === 'pending' && <p role="status">Checking access…</p>}
       {access === 'anonymous' && <button className="rounded bg-gray-900 text-white px-4 py-2" onClick={() => login()}>Sign in</button>}
       {access === 'denied' && <p role="alert">Access denied. Tenant manager or administrator access is required.</p>}

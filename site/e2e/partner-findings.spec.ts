@@ -36,12 +36,12 @@ test('a Normal request says Normal cleaning and adds no surcharge', async ({ bro
   } finally { await staff.context.close(); }
 });
 
-test('the cleaner sees Deep cleaning on the visit offer', async ({ page, browser }, testInfo) => {
+test('the employee sees Deep cleaning on the visit offer', async ({ page, browser }, testInfo) => {
   const { backend, branch } = pricedBackend();
   const request = backend.seedRequest(branch, WINDOW);
   request.cleaningType = 'Deep';
-  backend.seedOffer(request, 'cleaner', null);
-  const cleaner = await openActor(browser, testInfo, backend, 'cleaner');
+  backend.seedOffer(request, 'employee', null);
+  const cleaner = await openActor(browser, testInfo, backend, 'employee');
   try {
     await cleaner.page.goto('/me/shifts/');
     await chooseEmployeeSection(cleaner.page, 'Offers');
@@ -55,15 +55,15 @@ test('two employees with the same name are told apart by email in the staff Arra
   const { backend, branch } = pricedBackend();
   backend.seedRequest(branch, WINDOW);
   const people = backend.people as Record<string, any>;
-  people['dup-cleaner'] = { id: 'dup-cleaner', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true, autoAcceptWork: false, keycloakUserId: 'kc-dup' };
+  people['dup-cleaner'] = { id: 'dup-cleaner', firstName: 'Test', lastName: 'Employee', role: 'employee', isActive: true, autoAcceptWork: false, keycloakUserId: 'kc-dup' };
   try {
     const staff = await openActor(browser, testInfo, backend, 'admin');
     try {
       await staff.page.goto('/admin/partner-requests/');
-      await staff.page.getByRole('article', { name: 'Lake apartment request', exact: true }).getByRole('button', { name: 'Arrange cleaner / time', exact: true }).click();
-      const select = staff.page.getByLabel('Cleaner', { exact: true });
-      await expect(select.locator('option', { hasText: 'Test Cleaner (cleaner@example.invalid)' })).toHaveCount(1);
-      await expect(select.locator('option', { hasText: 'Test Cleaner (dup-cleaner@example.invalid)' })).toHaveCount(1);
+      await staff.page.getByRole('article', { name: 'Lake apartment request', exact: true }).getByRole('button', { name: 'Arrange employee / time', exact: true }).click();
+      const select = staff.page.getByLabel('Employee', { exact: true });
+      await expect(select.locator('option', { hasText: 'Test Employee (employee@example.invalid)' })).toHaveCount(1);
+      await expect(select.locator('option', { hasText: 'Test Employee (dup-cleaner@example.invalid)' })).toHaveCount(1);
     } finally { await staff.context.close(); }
   } finally { delete people['dup-cleaner']; }
 });
@@ -97,11 +97,11 @@ test('a Normal request on the owner card shows no surcharge line', async ({ page
   await expect(page.getByTestId('owner-deep-breakdown')).toHaveCount(0);
 });
 
-test('a cleaner offer with a set time says it is fixed and how to decline', async ({ page, browser }, testInfo) => {
+test('an employee offer with a set time says it is fixed and how to decline', async ({ page, browser }, testInfo) => {
   const { backend, branch } = pricedBackend();
   const request = backend.seedRequest(branch, WINDOW);
-  backend.seedOffer(request, 'cleaner', '2026-12-01T10:00');
-  const cleaner = await openActor(browser, testInfo, backend, 'cleaner');
+  backend.seedOffer(request, 'employee', '2026-12-01T10:00');
+  const cleaner = await openActor(browser, testInfo, backend, 'employee');
   try {
     await cleaner.page.goto('/me/shifts/');
     await chooseEmployeeSection(cleaner.page, 'Offers');

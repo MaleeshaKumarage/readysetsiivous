@@ -2,11 +2,11 @@ namespace CleaningSuite.Application.Notifications;
 
 /// <summary>
 /// The events a person can switch on or off in their profile. Keys are the push and inbox kinds the app sends.
-/// Cleaner events go to active employees; staff events go to administrators and managers.
+/// Employee events go to active employees; staff events go to administrators and managers.
 /// </summary>
 public static class NotificationEvents
 {
-    public const string CleanerGroup = "Cleaner";
+    public const string CleanerGroup = "Employee";
     public const string StaffGroup = "Staff";
 
     public sealed record Definition(string Key, string Group, string Label, string Description, bool EmailAvailable);
@@ -20,11 +20,11 @@ public static class NotificationEvents
         new("PartnerOffer", CleanerGroup, "Partner cleaning offer", "A partner cleaning is offered to you to approve.", false),
         new("WorkAutoAccepted", CleanerGroup, "Work accepted automatically", "Work was accepted for you because automatic acceptance is on.", false),
         new("PartnerRequest", StaffGroup, "New partner request", "A partner has sent a cleaning request to review.", false),
-        new("StaffPartnerAccepted", StaffGroup, "Cleaner accepted partner work", "A cleaner accepted a partner cleaning.", false),
-        new("StaffPartnerOfferDeclined", StaffGroup, "Cleaner declined partner offer", "A cleaner declined a partner cleaning offer.", false),
+        new("StaffPartnerAccepted", StaffGroup, "Employee accepted partner work", "An employee accepted a partner cleaning.", false),
+        new("StaffPartnerOfferDeclined", StaffGroup, "Employee declined partner offer", "An employee declined a partner cleaning offer.", false),
         new("StaffPartnerRequestChanged", StaffGroup, "Partner changed a request", "A partner changed a cleaning request.", false),
         new("StaffPartnerRequestCancelled", StaffGroup, "Partner cancelled a request", "A partner cancelled a cleaning request.", false),
-        new("StaffVisitOfferDeclined", StaffGroup, "Cleaner declined a visit", "A cleaner declined a visit offer.", false),
+        new("StaffVisitOfferDeclined", StaffGroup, "Employee declined a visit", "An employee declined a visit offer.", false),
     ];
 
     public static bool IsScheduleKind(string kind) => kind is "ShiftAssigned" or "ShiftRemoved" or "ShiftUpdated" or "ScheduleChanged";

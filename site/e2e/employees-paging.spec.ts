@@ -3,10 +3,10 @@ import { setupAdminMocks } from './admin-helpers';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS' };
 
-// Sixty active cleaners and five inactive ones, so the active tab spans three pages.
+// Sixty active employees and five inactive ones, so the active tab spans three pages.
 const employees = [
-  ...Array.from({ length: 60 }, (_, i) => ({ id: `active-${i}`, firstName: `Active${String(i).padStart(2, '0')}`, lastName: 'Cleaner', email: `active${i}@example.test`, role: 'employee', isActive: true, identitySyncPending: false, skills: [], serviceAreas: [], defaultHours: {} })),
-  ...Array.from({ length: 5 }, (_, i) => ({ id: `inactive-${i}`, firstName: `Former${i}`, lastName: 'Cleaner', email: `former${i}@example.test`, role: 'employee', isActive: false, identitySyncPending: false, skills: [], serviceAreas: [], defaultHours: {} })),
+  ...Array.from({ length: 60 }, (_, i) => ({ id: `active-${i}`, firstName: `Active${String(i).padStart(2, '0')}`, lastName: 'Employee', email: `active${i}@example.test`, role: 'employee', isActive: true, identitySyncPending: false, skills: [], serviceAreas: [], defaultHours: {} })),
+  ...Array.from({ length: 5 }, (_, i) => ({ id: `inactive-${i}`, firstName: `Former${i}`, lastName: 'Employee', email: `former${i}@example.test`, role: 'employee', isActive: false, identitySyncPending: false, skills: [], serviceAreas: [], defaultHours: {} })),
 ];
 
 async function setup(page: Page) {

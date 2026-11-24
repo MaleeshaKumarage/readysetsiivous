@@ -3,14 +3,14 @@ import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers'
 import { shiftAction } from './shift-actions';
 
 // A property has one main visit shift. Staff add visits to it by date or date range; each visit is numbered,
-// tagged with where it came from, and offered to a cleaner. The API is mocked here; the rules themselves are
+// tagged with where it came from, and offered to an employee. The API is mocked here; the rules themselves are
 // covered by the backend database tests (BranchVisitServiceDatabaseTests, BranchMainShiftDatabaseTests).
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const MAIN = 'Cleaning - Testikatu 1, 00100 Helsinki |34m2|2H|1V';
 
 const adminVisit = { startUtc: '2026-11-10T06:00:00.000Z', endUtc: '2026-11-10T08:00:00.000Z', exceptionId: 'visit-1', status: 4, reason: 'Added from the admin panel',
-  assigneeIds: [], rosterVersion: 'v1', canAssign: true, visitNumber: 1, visitSource: 'AdminPanel', visitCleaningType: 'Normal', offeredEmployeeId: 'cleaner', offerRevision: 1, isPartnerBooking: false };
+  assigneeIds: [], rosterVersion: 'v1', canAssign: true, visitNumber: 1, visitSource: 'AdminPanel', visitCleaningType: 'Normal', offeredEmployeeId: 'employee', offerRevision: 1, isPartnerBooking: false };
 const partnerVisit = { startUtc: '2026-11-10T10:00:00.000Z', endUtc: '2026-11-14T14:00:00.000Z', exceptionId: 'visit-2', status: 4, reason: 'Accepted partner cleaning',
   employeeId: 'second', assigneeIds: ['second'], rosterVersion: 'v1', canAssign: true, visitNumber: 2, visitSource: 'PartnerPortal', visitCleaningType: 'Normal', offerRevision: 0, isPartnerBooking: true };
 
@@ -45,7 +45,7 @@ async function setup(page: Page, options: { addFailures?: number; cleanerConflic
     }
     if (/\/visits\/[^/]+\/employee$/.test(path)) {
       const body = request.postDataJSON(); state.cleanerWrites.push({ path, ...body });
-      if (options.cleanerConflict) return route.fulfill({ status: 409, headers, json: { detail: 'Work has started on this visit, so its cleaner cannot be changed.' } });
+      if (options.cleanerConflict) return route.fulfill({ status: 409, headers, json: { detail: 'Work has started on this visit, so its employee cannot be changed.' } });
       state.occurrences = state.occurrences.map(item => item.exceptionId === 'visit-1' ? { ...item, offeredEmployeeId: body.employeeId, offerRevision: body.offerRevision + 2 } : item);
       return route.fulfill({ status: 200, headers, json: { id: 'visit-1', shiftId: 'main', number: 1, status: 'Offered', offeredEmployeeId: body.employeeId, offerRevision: body.offerRevision + 2 } });
     }
@@ -61,13 +61,13 @@ async function setup(page: Page, options: { addFailures?: number; cleanerConflic
       : path.endsWith('/companies/company') ? { company: { id: 'company', name: 'Acme Hotels', isActive: true }, branches: [{ id: 'branch', companyId: 'company', name: 'Helsinki Office', isActive: true }, { id: 'closed', companyId: 'company', name: 'Closed Office', isActive: false }] }
       : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'Acme Hotels', isActive: true }], total: 1 }
       : path.endsWith('/employees') ? (options.sameNameCleaners
-        ? [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', email: 'test.cleaner@example.com', role: 'employee', isActive: true }, { id: 'second', firstName: 'Test', lastName: 'Cleaner', email: 'second.cleaner@example.com', role: 'employee', isActive: true }]
-        : [{ id: 'cleaner', firstName: 'Test', lastName: 'Cleaner', role: 'employee', isActive: true }, { id: 'second', firstName: 'Second', lastName: 'Cleaner', role: 'employee', isActive: true }, { id: 'partner', firstName: 'Active', lastName: 'Partner', role: 'partner', isActive: true }])
+        ? [{ id: 'employee', firstName: 'Test', lastName: 'Employee', email: 'test.employee@example.com', role: 'employee', isActive: true }, { id: 'second', firstName: 'Test', lastName: 'Employee', email: 'second.employee@example.com', role: 'employee', isActive: true }]
+        : [{ id: 'employee', firstName: 'Test', lastName: 'Employee', role: 'employee', isActive: true }, { id: 'second', firstName: 'Second', lastName: 'Employee', role: 'employee', isActive: true }, { id: 'partner', firstName: 'Active', lastName: 'Partner', role: 'partner', isActive: true }])
       : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [];
     return route.fulfill({ status: 200, headers, json });
   });
   await page.goto('/admin/shifts/');
-  await expect(page.getByRole('button', { name: 'Add visit', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: `More actions for ${MAIN}`, exact: true })).toBeVisible();
   return state;
 }
 
@@ -84,14 +84,16 @@ async function chooseProperty(page: Page) {
 
 test('admin adds a single-day visit by choosing only the property, date and time', async ({ page }) => {
   const state = await setup(page);
-  await page.getByRole('button', { name: 'Add visit', exact: true }).click();
-  const dialog = await chooseProperty(page);
+  await shiftAction(page, MAIN, 'Add visit');
+  // Opened from the property's row, so the company and property are fixed; they are not asked again.
+  const dialog = page.getByRole('dialog', { name: 'Add visit', exact: true });
+  await expect(dialog.getByLabel('Property', { exact: true })).toHaveValue(MAIN);
   // Company details and prices are never asked for: they come from the property.
   await expect(dialog.getByLabel(/price|vat|business id|address/i)).toHaveCount(0);
   await dialog.getByLabel(/^Date/).fill('2026-11-12');
   await dialog.getByLabel(/^Start time/).fill('09:00');
   await dialog.getByLabel(/^End time/).fill('11:30');
-  await dialog.getByLabel('Notes for the cleaner (optional)').fill('Ring the bell at the back door');
+  await dialog.getByLabel('Notes for the employee (optional)').fill('Ring the bell at the back door');
   await dialog.getByRole('button', { name: 'Add visit', exact: true }).click();
 
   await expect(dialog).toHaveCount(0);
@@ -99,22 +101,22 @@ test('admin adds a single-day visit by choosing only the property, date and time
     notes: 'Ring the bell at the back door', employeeId: null, useDefaultEmployee: true, cleaningType: 'Normal' }]);
 });
 
-test('two cleaners with the same name are told apart by email in the cleaner list', async ({ page }) => {
+test('two employees with the same name are told apart by email in the employee list', async ({ page }) => {
   const state = await setup(page, { sameNameCleaners: true });
   await shiftAction(page, MAIN, 'Add visit');
   const dialog = page.getByRole('dialog', { name: 'Add visit', exact: true });
   await dialog.getByLabel(/^Date/).fill('2026-11-12');
-  await dialog.getByRole('textbox', { name: 'Cleaner', exact: true }).click();
-  await expect(page.getByRole('option', { name: 'Test Cleaner (test.cleaner@example.com)', exact: true })).toBeVisible();
-  await expect(page.getByRole('option', { name: 'Test Cleaner (second.cleaner@example.com)', exact: true })).toBeVisible();
-  await page.getByRole('option', { name: 'Test Cleaner (second.cleaner@example.com)', exact: true }).click();
+  await dialog.getByRole('textbox', { name: 'Employee', exact: true }).click();
+  await expect(page.getByRole('option', { name: 'Test Employee (test.employee@example.com)', exact: true })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'Test Employee (second.employee@example.com)', exact: true })).toBeVisible();
+  await page.getByRole('option', { name: 'Test Employee (second.employee@example.com)', exact: true }).click();
   await dialog.getByRole('button', { name: 'Add visit', exact: true }).click();
 
   await expect(dialog).toHaveCount(0);
   expect(state.adds[0]).toMatchObject({ fromDate: '2026-11-12', employeeId: 'second', useDefaultEmployee: false });
 });
 
-test('a date range is one visit, and a chosen cleaner is sent an offer', async ({ page }) => {
+test('a date range is one visit, and a chosen employee is sent an offer', async ({ page }) => {
   const state = await setup(page);
   await shiftAction(page, MAIN, 'Add visit');
   const dialog = page.getByRole('dialog', { name: 'Add visit', exact: true });
@@ -124,10 +126,10 @@ test('a date range is one visit, and a chosen cleaner is sent an offer', async (
   await dialog.getByLabel(/^Date/).fill('2026-11-21');
   await dialog.getByLabel('Last day (optional)').fill('2026-11-25');
   await expect(dialog.getByRole('status')).toHaveText('One visit covering 5 days, from 2026-11-21 08:00 to 2026-11-25 10:00.');
-  await dialog.getByRole('textbox', { name: 'Cleaner', exact: true }).click();
-  // Partners are not cleaners and are never offered a visit.
+  await dialog.getByRole('textbox', { name: 'Employee', exact: true }).click();
+  // Partners are not employees and are never offered a visit.
   await expect(page.getByRole('option', { name: 'Active Partner', exact: true })).toHaveCount(0);
-  await page.getByRole('option', { name: 'Second Cleaner', exact: true }).click();
+  await page.getByRole('option', { name: 'Second Employee', exact: true }).click();
   await dialog.getByRole('button', { name: 'Add visit', exact: true }).click();
 
   await expect(dialog).toHaveCount(0);
@@ -148,7 +150,7 @@ test('a visit can be left unassigned, and bad times are stopped before anything 
   await expect(dialog.getByRole('alert')).toHaveText('The end time must be after the start time.');
   expect(state.adds).toHaveLength(0);
   await dialog.getByLabel(/^End time/).fill('14:00');
-  await dialog.getByRole('textbox', { name: 'Cleaner', exact: true }).click();
+  await dialog.getByRole('textbox', { name: 'Employee', exact: true }).click();
   await page.getByRole('option', { name: 'Leave unassigned', exact: true }).click();
   await dialog.getByRole('button', { name: 'Add visit', exact: true }).click();
   await expect(dialog).toHaveCount(0);
@@ -160,11 +162,11 @@ test('a refused visit shows the reason, keeps what was typed, and a retry adds i
   await shiftAction(page, MAIN, 'Add visit');
   const dialog = page.getByRole('dialog', { name: 'Add visit', exact: true });
   await dialog.getByLabel(/^Date/).fill('2026-11-12');
-  await dialog.getByLabel('Notes for the cleaner (optional)').fill('Keys at reception');
+  await dialog.getByLabel('Notes for the employee (optional)').fill('Keys at reception');
   await dialog.getByRole('button', { name: 'Add visit', exact: true }).click();
   await expect(dialog.getByRole('alert')).toHaveText('This property has no cleaning price yet. Set the property price before adding a visit, so the visit can be invoiced.');
   await expect(dialog.getByLabel(/^Date/)).toHaveValue('2026-11-12');
-  await expect(dialog.getByLabel('Notes for the cleaner (optional)')).toHaveValue('Keys at reception');
+  await expect(dialog.getByLabel('Notes for the employee (optional)')).toHaveValue('Keys at reception');
   await dialog.getByRole('button', { name: 'Add visit', exact: true }).click();
   await expect(dialog).toHaveCount(0);
   expect(state.adds).toHaveLength(2);
@@ -177,13 +179,13 @@ test('the visit list names each visit with its number, dates and source', async 
   const list = page.getByRole('dialog', { name: /Occurrences/ });
   await expect(list.getByTestId('visit-name')).toHaveText(['#1 · Tue 10 Nov · Admin panel', '#2 · 10–14 Nov · Partner portal']);
   const first = list.getByRole('row').filter({ hasText: '#1 ·' });
-  await expect(first).toContainText('Offer sent to Test Cleaner');
-  await expect(first).toContainText('Waiting for the cleaner to accept');
+  await expect(first).toContainText('Offer sent to Test Employee');
+  await expect(first).toContainText('Waiting for the employee to accept');
   // A partner booking is changed through its request, so the visit list offers no actions for it.
   const booked = list.getByRole('row').filter({ hasText: '#2 ·' });
-  await expect(booked).toContainText('Second Cleaner');
+  await expect(booked).toContainText('Second Employee');
   await expect(booked).toContainText('Managed under Partner requests');
-  // A partner booking's cleaner is managed through its request, but its cleaning type can be set by staff.
+  // A partner booking's employee is managed through its request, but its cleaning type can be set by staff.
   await expect(booked.getByRole('button')).toHaveCount(1);
   await expect(booked.getByRole('button', { name: 'Change cleaning type', exact: true })).toBeVisible();
   // No price is shown in the visit list.
@@ -195,67 +197,68 @@ test('a visit added from the open list appears there with the next number', asyn
   await shiftAction(page, MAIN, 'Occurrences');
   const list = page.getByRole('dialog', { name: /Occurrences/ });
   // A main shift takes visits through Add visit only, so each one is numbered.
-  await expect(list.getByRole('button', { name: 'Add extra visit', exact: true })).toHaveCount(0);
+  await expect(list.getByRole('button', { name: 'Add visit', exact: true })).toHaveCount(1);
   await list.getByRole('button', { name: 'Add visit', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Add visit', exact: true });
   await dialog.getByLabel(/^Date/).fill('2026-11-17');
   await dialog.getByRole('button', { name: 'Add visit', exact: true }).click();
   await expect(dialog).toHaveCount(0);
-  await expect(list.getByRole('status')).toHaveText(`Visit #3 added to ${MAIN}. It has no cleaner yet.`);
+  await expect(list.getByRole('status')).toHaveText(`Visit #3 added to ${MAIN}. It has no employee yet.`);
   await expect(list.getByTestId('visit-name')).toHaveText(['#1 · Tue 10 Nov · Admin panel', '#2 · 10–14 Nov · Partner portal', '#3 · Tue 17 Nov · Admin panel']);
   expect(state.extraWrites).toBe(0);
 });
 
-test('admin sets the default cleaner and changes the cleaner of one visit', async ({ page }) => {
+test('admin sets the default employee and changes the employee of one visit', async ({ page }) => {
   const state = await setup(page);
   await shiftAction(page, MAIN, 'Occurrences');
   const list = page.getByRole('dialog', { name: /Occurrences/ });
-  await list.getByRole('textbox', { name: 'Default cleaner', exact: true }).click();
-  await page.getByRole('option', { name: 'Second Cleaner', exact: true }).click();
-  await expect(list.getByRole('textbox', { name: 'Default cleaner', exact: true })).toHaveValue('Second Cleaner');
+  const cleanerField = list.getByRole('textbox', { name: 'Default employee', exact: true });
+  await cleanerField.click();
+  await expect(page.getByRole('option', { name: 'Second Employee', exact: true })).toBeAttached();
+  await cleanerField.fill('Second Employee'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
+  await expect(list.getByRole('textbox', { name: 'Default employee', exact: true })).toHaveValue('Second Employee');
   expect(state.defaultWrites).toEqual([{ employeeId: 'second' }]);
 
-  await list.getByRole('row').filter({ hasText: '#1 ·' }).getByRole('button', { name: 'Change cleaner', exact: true }).click();
-  const editor = page.getByRole('dialog', { name: 'Change cleaner', exact: true });
+  await list.getByRole('row').filter({ hasText: '#1 ·' }).getByRole('button', { name: 'Change employee', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: 'Change employee', exact: true });
   await expect(editor).toContainText('#1 · Tue 10 Nov · Admin panel');
-  await expect(editor.getByRole('textbox', { name: 'Cleaner', exact: true })).toHaveValue('Test Cleaner');
-  await editor.getByRole('textbox', { name: 'Cleaner', exact: true }).click();
-  await page.getByRole('option', { name: 'Second Cleaner', exact: true }).click();
-  await editor.getByRole('button', { name: 'Save cleaner', exact: true }).click();
+  await expect(editor.getByRole('textbox', { name: 'Employee', exact: true })).toHaveValue('Test Employee');
+  await editor.getByRole('textbox', { name: 'Employee', exact: true }).click();
+  await page.getByRole('option', { name: 'Second Employee', exact: true }).click();
+  await editor.getByRole('button', { name: 'Save employee', exact: true }).click();
   await expect(editor).toHaveCount(0);
   // The version the screen was showing is sent, so a stale screen cannot overwrite a newer choice.
   expect(state.cleanerWrites).toEqual([{ path: '/api/v1/admin/branch-visits/shifts/main/visits/visit-1/employee', employeeId: 'second', offerRevision: 1 }]);
-  await expect(list.getByRole('row').filter({ hasText: '#1 ·' })).toContainText('Offer sent to Second Cleaner');
+  await expect(list.getByRole('row').filter({ hasText: '#1 ·' })).toContainText('Offer sent to Second Employee');
 });
 
-test('a cleaner change refused by the server shows why and leaves the visit as it was', async ({ page }) => {
+test('an employee change refused by the server shows why and leaves the visit as it was', async ({ page }) => {
   const state = await setup(page, { cleanerConflict: true });
   await shiftAction(page, MAIN, 'Occurrences');
   const list = page.getByRole('dialog', { name: /Occurrences/ });
-  await list.getByRole('row').filter({ hasText: '#1 ·' }).getByRole('button', { name: 'Change cleaner', exact: true }).click();
-  const editor = page.getByRole('dialog', { name: 'Change cleaner', exact: true });
-  await editor.getByRole('textbox', { name: 'Cleaner', exact: true }).click();
-  await page.getByRole('option', { name: 'Second Cleaner', exact: true }).click();
-  await editor.getByRole('button', { name: 'Save cleaner', exact: true }).click();
-  await expect(editor.getByRole('alert')).toHaveText('Work has started on this visit, so its cleaner cannot be changed.');
+  await list.getByRole('row').filter({ hasText: '#1 ·' }).getByRole('button', { name: 'Change employee', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: 'Change employee', exact: true });
+  await editor.getByRole('textbox', { name: 'Employee', exact: true }).click();
+  await page.getByRole('option', { name: 'Second Employee', exact: true }).click();
+  await editor.getByRole('button', { name: 'Save employee', exact: true }).click();
+  await expect(editor.getByRole('alert')).toHaveText('Work has started on this visit, so its employee cannot be changed.');
   await expect(editor).toBeVisible();
   expect(state.cleanerWrites).toHaveLength(1);
   await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
-  await expect(list.getByRole('row').filter({ hasText: '#1 ·' })).toContainText('Offer sent to Test Cleaner');
+  await expect(list.getByRole('row').filter({ hasText: '#1 ·' })).toContainText('Offer sent to Test Employee');
 });
 
-test('a main shift has no whole-shift employees action; other shifts keep theirs', async ({ page }) => {
+test('a main shift assigns a default employee from its row; other shifts keep whole-shift assignment', async ({ page }) => {
   await setup(page);
   await page.getByRole('button', { name: `More actions for ${MAIN}`, exact: true }).click();
   await expect(page.getByRole('menuitem', { name: 'Add visit', exact: true })).toBeVisible();
-  await expect(page.getByRole('menuitem', { name: 'Employees', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('menuitem', { name: 'Schedule one-time visit', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: 'Assign employees', exact: true })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Pricing', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   // The first menu must be gone before the next one opens, or its closing layer swallows the click.
   await expect(page.getByRole('menu')).toHaveCount(0);
   await page.getByRole('button', { name: 'More actions for Morning clean', exact: true }).click();
-  await expect(page.getByRole('menuitem', { name: 'Employees', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Assign employees', exact: true })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Add visit', exact: true })).toHaveCount(0);
 });
 
@@ -269,19 +272,20 @@ test('a new shift no longer offers One-time: single visits are added with Add vi
   await expect(page.getByRole('option', { name: 'One-time', exact: true })).toHaveCount(0);
 });
 
-test('the Manage dialog of a main shift adds visits and has no whole-shift assignment or separate price', async ({ page }) => {
+test('the details of a main shift explain visits, and its row menu has no whole-shift assignment or separate price', async ({ page }) => {
   const state = await setup(page);
-  await page.getByRole('row').filter({ hasText: MAIN }).getByRole('button', { name: 'Manage', exact: true }).click();
+  await page.getByRole('button', { name: `More actions for ${MAIN}`, exact: true }).click();
+  await page.getByRole('menuitem', { name: 'View details', exact: true }).click();
   const workspace = page.getByRole('dialog', { name: `Manage — ${MAIN}`, exact: true });
-  await expect(workspace.getByRole('status')).toHaveText('Next step: Admin: add a visit. It is offered to the default cleaner, or to the cleaner you choose.');
+  await expect(workspace.getByRole('status')).toHaveText('Next step: Admin: add a visit. It is offered to the default employee, or to the employee you choose.');
   await expect(workspace).toContainText('Every booking and every added visit for this property is a numbered visit on this shift.');
   await expect(workspace).toContainText('Each visit uses the property price in force on its date.');
-  // A whole-shift assignment or a shift-level price would bypass the visit's own offer and the property price.
-  await expect(workspace.getByRole('button', { name: 'Assign employees', exact: true })).toHaveCount(0);
-  await expect(workspace.getByRole('button', { name: 'Pricing', exact: true })).toHaveCount(0);
-  await expect(workspace.getByRole('button', { name: 'Schedule one-time visit', exact: true })).toHaveCount(0);
-  await workspace.getByRole('button', { name: 'Add visit', exact: true }).click();
+  await page.keyboard.press('Escape');
   await expect(workspace).toHaveCount(0);
+  await page.getByRole('button', { name: `More actions for ${MAIN}`, exact: true }).click();
+  await expect(page.getByRole('menuitem', { name: 'Assign employees', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Pricing', exact: true })).toHaveCount(0);
+  await page.getByRole('menuitem', { name: 'Add visit', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Add visit', exact: true });
   await expect(dialog.getByLabel('Property', { exact: true })).toHaveValue(MAIN);
   await dialog.getByLabel(/^Date/).fill('2026-11-19');
@@ -290,13 +294,12 @@ test('the Manage dialog of a main shift adds visits and has no whole-shift assig
   expect(state.adds).toEqual([expect.objectContaining({ branchId: 'branch', fromDate: '2026-11-19', toDate: '2026-11-19' })]);
 });
 
-test('the Manage dialog of an ordinary shift keeps its assignment and pricing actions', async ({ page }) => {
+test('an ordinary shift keeps its assignment and pricing actions in its row menu', async ({ page }) => {
   await setup(page);
-  await page.getByRole('row').filter({ hasText: 'Morning clean' }).getByRole('button', { name: 'Manage', exact: true }).click();
-  const workspace = page.getByRole('dialog', { name: 'Manage — Morning clean', exact: true });
-  await expect(workspace.getByRole('button', { name: 'Assign employees', exact: true })).toBeVisible();
-  await expect(workspace.getByRole('button', { name: 'Pricing', exact: true })).toBeVisible();
-  await expect(workspace.getByRole('button', { name: 'Add visit', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'More actions for Morning clean', exact: true }).click();
+  await expect(page.getByRole('menuitem', { name: 'Assign employees', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Pricing', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Add visit', exact: true })).toHaveCount(0);
 });
 
 test('a new visit is Normal unless Deep is chosen, and the choice is sent with it', async ({ page }) => {
@@ -324,8 +327,8 @@ test('a visit that is already cleaned can be changed from Normal to Deep', async
   const row = list.getByRole('row').filter({ hasText: '#3 ·' });
   await expect(row).toContainText('Normal cleaning');
 
-  await row.getByRole('button', { name: 'Change cleaner', exact: true }).click();
-  const modal = page.getByRole('dialog', { name: 'Change cleaner', exact: true });
+  await row.getByRole('button', { name: 'Change employee', exact: true }).click();
+  const modal = page.getByRole('dialog', { name: 'Change employee', exact: true });
   await modal.getByRole('textbox', { name: 'Cleaning type', exact: true }).click();
   await page.getByRole('option', { name: 'Deep', exact: true }).click();
   await expect(modal.getByText('Deep cleaning adds €15.00 excl. VAT to this visit.', { exact: true })).toBeVisible();
@@ -345,8 +348,8 @@ test('staff set Deep or Normal on a partner visit from the visit list, and the b
   await booked.getByRole('button', { name: 'Change cleaning type', exact: true }).click();
 
   const modal = page.getByRole('dialog', { name: 'Cleaning type', exact: true });
-  // The booking's cleaner is not changed from here: only the cleaning type is offered.
-  await expect(modal.getByRole('textbox', { name: 'Cleaner', exact: true })).toHaveCount(0);
+  // The booking's employee is not changed from here: only the cleaning type is offered.
+  await expect(modal.getByRole('textbox', { name: 'Employee', exact: true })).toHaveCount(0);
   await modal.getByRole('textbox', { name: 'Cleaning type', exact: true }).click();
   await page.getByRole('option', { name: 'Deep', exact: true }).click();
   await modal.getByRole('button', { name: 'Save cleaning type', exact: true }).click();
@@ -363,15 +366,15 @@ test('a cleaning type picked and cancelled on one visit is not carried to the ne
   state.occurrences = [adminVisit, { ...adminVisit, exceptionId: 'visit-3', visitNumber: 3, startUtc: '2026-11-12T06:00:00.000Z', endUtc: '2026-11-12T08:00:00.000Z' }];
   await shiftAction(page, MAIN, 'Occurrences');
   const list = page.getByRole('dialog', { name: /Occurrences/ });
-  const modal = page.getByRole('dialog', { name: 'Change cleaner', exact: true });
+  const modal = page.getByRole('dialog', { name: 'Change employee', exact: true });
 
-  await list.getByRole('row').filter({ hasText: '#1 ·' }).getByRole('button', { name: 'Change cleaner', exact: true }).click();
+  await list.getByRole('row').filter({ hasText: '#1 ·' }).getByRole('button', { name: 'Change employee', exact: true }).click();
   await modal.getByRole('textbox', { name: 'Cleaning type', exact: true }).click();
   await page.getByRole('option', { name: 'Deep', exact: true }).click();
   await modal.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(modal).toHaveCount(0);
 
-  await list.getByRole('row').filter({ hasText: '#3 ·' }).getByRole('button', { name: 'Change cleaner', exact: true }).click();
+  await list.getByRole('row').filter({ hasText: '#3 ·' }).getByRole('button', { name: 'Change employee', exact: true }).click();
   await expect(modal.getByRole('textbox', { name: 'Cleaning type', exact: true })).toHaveValue('Normal');
   await modal.getByRole('button', { name: 'Save cleaning type', exact: true }).click();
   await expect(modal).toHaveCount(0);
@@ -379,15 +382,15 @@ test('a cleaning type picked and cancelled on one visit is not carried to the ne
 });
 
 
-test('a visit that has already ended with a waiting offer says the cleaner can still accept it', async ({ page }) => {
+test('a visit that has already ended with a waiting offer says the employee can still accept it', async ({ page }) => {
   const state = await setup(page);
   state.occurrences = [{ ...adminVisit, startUtc: '2026-11-02T06:00:00.000Z', endUtc: '2026-11-02T08:00:00.000Z' }];
   await shiftAction(page, MAIN, 'Occurrences');
   const list = page.getByRole('dialog', { name: /Occurrences/ });
-  await expect(list.getByTestId('past-offer-note')).toContainText('The cleaner can still accept the offer. To change the cleaner, delete this visit and add it again.');
+  await expect(list.getByTestId('past-offer-note')).toContainText('The employee can still accept the offer. To change the employee, delete this visit and add it again.');
 });
 
-test('a visit row shows what its work is doing: Done once the cleaner has finished', async ({ page }) => {
+test('a visit row shows what its work is doing: Done once the employee has finished', async ({ page }) => {
   const state = await setup(page);
   state.occurrences = [{ ...adminVisit, workStatus: 'Completed' }, { ...partnerVisit, workStatus: 'Scheduled' }];
   await shiftAction(page, MAIN, 'Occurrences');
@@ -398,14 +401,27 @@ test('a visit row shows what its work is doing: Done once the cleaner has finish
 
 test('admin changes the cleaning type of a finished visit it added', async ({ page }) => {
   const state = await setup(page);
-  state.occurrences = [{ ...adminVisit, startUtc: '2026-11-02T06:00:00.000Z', endUtc: '2026-11-02T08:00:00.000Z', offeredEmployeeId: null, assigneeIds: ['cleaner'], employeeId: 'cleaner' }];
+  state.occurrences = [{ ...adminVisit, startUtc: '2026-11-02T06:00:00.000Z', endUtc: '2026-11-02T08:00:00.000Z', offeredEmployeeId: null, assigneeIds: ['employee'], employeeId: 'employee' }];
   await shiftAction(page, MAIN, 'Occurrences');
   const list = page.getByRole('dialog', { name: /Occurrences/ });
   await list.getByRole('button', { name: 'Change cleaning type' }).click();
-  const editor = page.getByRole('dialog', { name: /Change|Cleaner|Occurrence/ }).last();
+  const editor = page.getByRole('dialog', { name: /Change|Employee|Occurrence/ }).last();
   await editor.getByRole('textbox', { name: 'Cleaning type', exact: true }).click();
   await page.getByRole('option', { name: 'Deep', exact: true }).click();
   await editor.getByRole('button', { name: 'Save cleaning type', exact: true }).click();
   await expect(page.getByRole('dialog').filter({ hasText: 'Save cleaning type' })).toHaveCount(0);
   expect(state.cleaningTypeWrites).toEqual([expect.objectContaining({ cleaningType: 'Deep' })]);
+});
+
+test('assign employees on a main shift saves the default employee that new visits are offered to', async ({ page }) => {
+  const state = await setup(page);
+  await page.getByRole('button', { name: `More actions for ${MAIN}`, exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Assign employees', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: `Assign employees — ${MAIN}`, exact: true });
+  await dialog.getByLabel('Default employee', { exact: true }).click();
+  await page.getByRole('option', { name: 'Second Employee', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+
+  await expect(dialog).toHaveCount(0);
+  expect(state.defaultWrites).toEqual([{ employeeId: 'second' }]);
 });

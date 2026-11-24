@@ -119,7 +119,7 @@ public class AdminShiftCalendarTests
     public async Task Unusual_duration_is_flagged_until_a_reasoned_correction_is_recorded_and_no_time_is_edited_automatically()
     {
         var f = new Fixture();
-        var form = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Cleaner One", Guid.NewGuid(), "Checklist", f.Start, new() { "Floor" }, f.Start.AddHours(2));
+        var form = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Employee One", Guid.NewGuid(), "Checklist", f.Start, new() { "Floor" }, f.Start.AddHours(2));
         form.Start(f.Start); form.Submit(new() { new() { ItemText = "Floor", IsChecked = false } }, null, null, null, f.Start.AddHours(5));
         f.Forms.Setup(r => r.ListFormsAsync(null, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>())).ReturnsAsync(new[] { form });
         var before = await VisitAsync(f);
@@ -141,9 +141,9 @@ public class AdminShiftCalendarTests
     {
         var f = new Fixture();
         // A started-only record with a 36-second span used to win over the submitted 80-minute record.
-        var stray = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Cleaner One", Guid.NewGuid(), "Checklist", f.Start, new() { "Floor" }, f.Start.AddHours(2));
+        var stray = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Employee One", Guid.NewGuid(), "Checklist", f.Start, new() { "Floor" }, f.Start.AddHours(2));
         stray.StartedAtUtc = f.Start; stray.EndedAtUtc = f.Start.AddSeconds(36);
-        var submitted = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Cleaner One", Guid.NewGuid(), "Checklist", f.Start, new() { "Floor" }, f.Start.AddHours(2));
+        var submitted = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Employee One", Guid.NewGuid(), "Checklist", f.Start, new() { "Floor" }, f.Start.AddHours(2));
         submitted.Start(f.Start); submitted.Submit(new() { new() { ItemText = "Floor", IsChecked = true } }, null, null, null, f.Start.AddMinutes(80));
         f.Forms.Setup(r => r.ListFormsAsync(null, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>())).ReturnsAsync(new[] { stray, submitted });
 
@@ -159,7 +159,7 @@ public class AdminShiftCalendarTests
     public async Task An_unsubmitted_record_reports_no_duration_even_when_it_has_an_end_time()
     {
         var f = new Fixture();
-        var started = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Cleaner One", Guid.NewGuid(), "Checklist", f.Start, new() { "Floor" }, f.Start.AddHours(2));
+        var started = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Employee One", Guid.NewGuid(), "Checklist", f.Start, new() { "Floor" }, f.Start.AddHours(2));
         started.StartedAtUtc = f.Start; started.EndedAtUtc = f.Start.AddMinutes(30);
         f.Forms.Setup(r => r.ListFormsAsync(null, It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>())).ReturnsAsync(new[] { started });
 
@@ -198,7 +198,7 @@ public class AdminShiftCalendarTests
     public async Task Retry_on_an_existing_form_with_stale_version_conflicts_and_does_not_duplicate_the_correction()
     {
         var f = new Fixture(); var v1 = Guid.NewGuid();
-        var form = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Cleaner One", Guid.NewGuid(), "Checklist", f.Start, new() { "Floor" }, f.Start.AddHours(2));
+        var form = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Employee One", Guid.NewGuid(), "Checklist", f.Start, new() { "Floor" }, f.Start.AddHours(2));
         form.Start(f.Start); form.Version = v1;
         f.Forms.Setup(r => r.GetFormByShiftOccurrenceAsync(f.Shift.Id, f.Person.Id, f.Start, It.IsAny<CancellationToken>())).ReturnsAsync(form);
         f.Forms.Setup(r => r.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>()))
@@ -214,7 +214,7 @@ public class AdminShiftCalendarTests
     public async Task Photos_an_admin_receives_are_attached_to_the_visit_with_who_when_and_why()
     {
         var f = new Fixture(); var v1 = Guid.NewGuid();
-        var form = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Cleaner One", Guid.NewGuid(), "Checklist", f.Start, new() { "Floor" }, f.Start.AddHours(2));
+        var form = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Employee One", Guid.NewGuid(), "Checklist", f.Start, new() { "Floor" }, f.Start.AddHours(2));
         form.Start(f.Start); form.Version = v1; form.IsSubmitted = true;
         f.Forms.Setup(r => r.GetFormByShiftOccurrenceAsync(f.Shift.Id, f.Person.Id, f.Start, It.IsAny<CancellationToken>())).ReturnsAsync(form);
         f.Forms.Setup(r => r.SaveFormAsync(It.IsAny<QualityCycleForm>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
@@ -226,7 +226,7 @@ public class AdminShiftCalendarTests
         Assert.Equal("Kitchen after cleaning", photo.Note);
         var addition = Assert.Single(form.WorkPhotoAdditions);
         Assert.Equal("admin-subject", addition.AdminSubject);
-        Assert.Equal("Cleaner sent these by chat", addition.Reason);
+        Assert.Equal("Employee sent these by chat", addition.Reason);
         Assert.Equal(1, addition.PhotoCount);
     }
 
@@ -261,7 +261,7 @@ public class AdminShiftCalendarTests
         public Mock<IEmployeeRepository> Employees = new();
         public Mock<IQualityCycleRepository> Forms = new();
         public Mock<IShiftRepository> Shifts = new();
-        public Employee Person = new() { FirstName = "Cleaner", LastName = "One" };
+        public Employee Person = new() { FirstName = "Employee", LastName = "One" };
         public Employee Admin = new() { Email = "admin@example.invalid", Role = Employee.RoleAdmin, KeycloakUserId = "admin-subject", ShiftCalendarEnabled = true };
         public Shift Shift;
         public DateTime Start = DateTime.UtcNow.Date.AddDays(-3).AddHours(8);
@@ -284,7 +284,7 @@ public class AdminShiftCalendarTests
             Controller.ControllerContext = new() { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity(new[] {
                 new Claim("sub", "admin-subject"), new Claim("email_verified", "true") }, "test")) } };
         }
-        public ShiftCalendarAdminController.WorkPhotosBody PhotosBody(List<QualityCyclePhoto> photos, Guid? version) => new(Shift.Id, Person.Id, Start, null, "Cleaner sent these by chat", photos, version);
+        public ShiftCalendarAdminController.WorkPhotosBody PhotosBody(List<QualityCyclePhoto> photos, Guid? version) => new(Shift.Id, Person.Id, Start, null, "Employee sent these by chat", photos, version);
         public ShiftCalendarAdminController.WorkTimeBody Body(Guid? version = null) => new(Shift.Id, Person.Id, Start, null,
             Start.ToString("yyyy-MM-dd'T'HH:mm"), Start.AddHours(2).ToString("yyyy-MM-dd'T'HH:mm"), "Recorded from timesheet", version);
     }
@@ -314,7 +314,7 @@ public class AdminShiftCalendarTests
     public async Task Correction_preserves_checklist_photos_and_previous_times()
     {
         var f = new Fixture();
-        var form = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Cleaner One", Guid.NewGuid(), "Checklist", f.Start, new() { "Floor" }, f.Start.AddHours(2));
+        var form = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Employee One", Guid.NewGuid(), "Checklist", f.Start, new() { "Floor" }, f.Start.AddHours(2));
         form.Start(f.Start.AddMinutes(5)); form.Items[0].IsChecked = true;
         form.Photos.Add(new("photo", "Evidence")); form.CleanerNotes = "Original note"; form.Version = Guid.NewGuid();
         f.Forms.Setup(r => r.GetFormByShiftOccurrenceAsync(f.Shift.Id, f.Person.Id, f.Start, It.IsAny<CancellationToken>())).ReturnsAsync(form);
@@ -330,7 +330,7 @@ public class AdminShiftCalendarTests
     public async Task Removed_work_record_is_a_visit_conflict_not_a_calendar_access_denial()
     {
         var f = new Fixture();
-        var form = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Cleaner One", Guid.Empty, "Activities", f.Start, new());
+        var form = QualityCycleForm.Create(f.Shift.Id, "Daily clean", f.Person.Id, "Employee One", Guid.Empty, "Activities", f.Start, new());
         form.ShiftDeletedUtc = DateTime.UtcNow;
         f.Forms.Setup(r => r.GetFormByShiftOccurrenceAsync(f.Shift.Id, f.Person.Id, f.Start, It.IsAny<CancellationToken>())).ReturnsAsync(form);
         Assert.IsType<ConflictObjectResult>(await f.Controller.Record(f.Body(), default));
@@ -357,7 +357,7 @@ public class AdminShiftCalendarTests
     [Fact]
     public async Task Calendar_uses_effective_visit_roster_instead_of_recurring_employee()
     {
-        var f = new Fixture(); var replacement = new Employee { FirstName = "Replacement", LastName = "Cleaner" };
+        var f = new Fixture(); var replacement = new Employee { FirstName = "Replacement", LastName = "Employee" };
         f.Employees.Setup(e => e.ListAsync(true, It.IsAny<CancellationToken>())).ReturnsAsync(new[] { replacement, f.Person });
         var change = new ShiftOccurrenceAssignment { ShiftId = f.Shift.Id, OriginalStartUtc = f.Start,
             Mode = OccurrenceAssignmentMode.Replace, EmployeeIds = new() { replacement.Id } };

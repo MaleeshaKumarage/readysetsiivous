@@ -212,7 +212,7 @@ public class PushReminderDatabaseTests
         using var inboxQuery = f.Store.QuerySession(f.Tenant);
         var inbox = await inboxQuery.Query<CleaningSuite.Domain.Notifications.StaffInboxItem>().Where(i => i.Kind == "StaffPartnerAccepted").ToListAsync();
         Assert.Equal(new[] { admin.Id, manager.Id }.Order(), inbox.Select(x => x.EmployeeId).Order());
-        Assert.All(inbox, x => Assert.Equal("Cleaner accepted partner work", x.Title));
+        Assert.All(inbox, x => Assert.Equal("Employee accepted partner work", x.Title));
     }
 
     [QualityCycleDatabaseFact]

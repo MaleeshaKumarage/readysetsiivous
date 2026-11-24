@@ -103,7 +103,7 @@ export default function ReportWorkspace() {
     </Stack></Paper>
     {report && <Paper withBorder p="md"><Stack>
       <Text size="sm">{report.periods?.map(p => `${dateLabel(p.from)} – ${dateLabel(p.to)}`).join('; ')} · {report.timeZoneId}</Text>
-      <Text size="sm" c="dimmed">Scheduled hours count each visit once. Actual hours sum each cleaner’s submitted work time; incomplete timings are excluded.</Text>
+      <Text size="sm" c="dimmed">Scheduled hours count each visit once. Actual hours sum each employee’s submitted work time; incomplete timings are excluded.</Text>
       <Group><Button disabled={busy || !report.shifts.length} onClick={() => download()}>Export all selected shifts</Button><Button variant="light" disabled={busy || !report.shifts.length} onClick={() => openShare()}>Share all selected shifts</Button></Group>
       <Table.ScrollContainer minWidth={1000}><Table withTableBorder striped>
         <Table.Thead><Table.Tr>{['Company', 'Branch', 'Shift', 'Scheduled occurrences', 'Completed occurrences', 'Scheduled hours', 'Actual hours', 'Actions'].map(title => <Table.Th key={title}>{title}</Table.Th>)}</Table.Tr></Table.Thead>

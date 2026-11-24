@@ -51,7 +51,7 @@ public class QualityCycleWorkflowTests
     [Fact]
     public void CompletionRejectsMissingItemsAndAllowsUncheckedItemsWithoutNotes()
     {
-        var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Cleaner", Guid.NewGuid(), "Checklist", Now, new List<string> { "A", "B" });
+        var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Employee", Guid.NewGuid(), "Checklist", Now, new List<string> { "A", "B" });
         Assert.Throws<ArgumentException>(() => form.Submit(new List<QualityCycleFormItem> { new QualityCycleFormItem { ItemText = "A", IsChecked = true } }, null, "reason"));
         var items = new List<QualityCycleFormItem> { new QualityCycleFormItem { ItemText = "A", IsChecked = true }, new QualityCycleFormItem { ItemText = "B" } };
         Assert.False(form.IsSubmitted);
@@ -140,7 +140,7 @@ public class QualityCycleWorkflowTests
         var template = QualityCycleTemplate.Create("Activities", new() { "Corridor" });
         var shift = Shift.Create(Guid.NewGuid(), Guid.NewGuid(), "Daily", Daily(), null, null, null, template.Id);
         shift.CreatedUtc = clock.Value.AddDays(-1);
-        var employee = new CleaningSuite.Domain.Employees.Employee { Id = Guid.NewGuid(), FirstName = "Cleaner", Email = "test@example.com", IsActive = true };
+        var employee = new CleaningSuite.Domain.Employees.Employee { Id = Guid.NewGuid(), FirstName = "Employee", Email = "test@example.com", IsActive = true };
         var assignment = ShiftAssignment.Create(shift.Id, employee.Id, null); assignment.AssignedAtUtc = shift.CreatedUtc;
         var shifts = new Mock<IShiftRepository>(); var forms = new Mock<IQualityCycleRepository>();
         var employees = new Mock<CleaningSuite.Application.Employees.IEmployeeRepository>();
@@ -197,7 +197,7 @@ public class QualityCycleRepositoryIntegrationTests
         var template = QualityCycleTemplate.Create("Private", new List<string> { "Floor" }); await repoA.SaveTemplateAsync(template);
         Assert.Null(await repoB.GetTemplateAsync(template.Id)); Assert.Empty(await repoB.ListTemplatesAsync(null, null));
         var start = new DateTime(2026, 10, 1, 8, 0, 0, DateTimeKind.Utc);
-        var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Cleaner", template.Id, template.Title, start, template.Items, start.AddHours(2));
+        var form = QualityCycleForm.Create(Guid.NewGuid(), "Shift", Guid.NewGuid(), "Employee", template.Id, template.Title, start, template.Items, start.AddHours(2));
         form.Id = QualityCycleDispatcher.TaskId(form.ShiftId, form.EmployeeId, start);
         var results = await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => repoA.TryCreateFormAsync(form)));
         Assert.Single(results.Where(x => x));

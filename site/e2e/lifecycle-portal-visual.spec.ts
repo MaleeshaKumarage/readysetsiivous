@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { test, expect } from '@playwright/test';
 import { PartnerFlowBackend, OWNER_COMPANY, prepareRolePage } from './partner-flow-backend';
-for (const role of ['owner', 'admin', 'cleaner'] as const) {
+for (const role of ['owner', 'admin', 'employee'] as const) {
   test(`${role} workspace keeps its existing view`, async ({page}, info) => {
     const backend = new PartnerFlowBackend({priced:true});
     backend.addBranch({name:'Harbour studio', companyId:OWNER_COMPANY.id, city:'Helsinki'});

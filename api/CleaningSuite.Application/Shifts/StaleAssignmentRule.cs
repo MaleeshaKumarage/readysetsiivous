@@ -4,7 +4,7 @@ namespace CleaningSuite.Application.Shifts;
 
 /// <summary>
 /// Decides which active assignments are stale: the shift is deactivated, or it was created for a partner
-/// request that has been cancelled. Such assignments can block a cleaner with an overlap that has no visible visit.
+/// request that has been cancelled. Such assignments can block an employee with an overlap that has no visible visit.
 /// A pure rule, so the repair can be reviewed and tested before anything is changed.
 /// </summary>
 public static class StaleAssignmentRule

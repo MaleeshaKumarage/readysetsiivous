@@ -54,6 +54,8 @@ export default function ProfileClient() {
   const roles = accountRoles(account);
   const backHref = `/account/?tenant=${encodeURIComponent(tenant)}`;
 
+  // Employees get the redesigned cards (gold edge). Office and partner profiles keep the shared look.
+  const employeeView = !isPartner() && !!account?.employee;
   return <main lang="en" className="partner-portal" style={accountTheme}>
     <header className="partner-header"><div className="partner-shell partner-header-inner">
       <div className="partner-brand">
@@ -64,7 +66,7 @@ export default function ProfileClient() {
         </div>
       </div>
       <div className="partner-header-actions">
-        {authed && <Button variant="ghost" size="sm" className="partner-quiet" onClick={() => logout().catch(() => setError('Sign-out failed. Please retry.'))}><LogOut size={17} aria-hidden="true" />Sign out</Button>}
+        {authed && <button type="button" className="notify-bell" aria-label="Sign out" title="Sign out" onClick={() => logout().catch(() => setError('Sign-out failed. Please retry.'))}><LogOut size={22} aria-hidden="true" /></button>}
       </div>
     </div></header>
 
@@ -78,7 +80,7 @@ export default function ProfileClient() {
 
       {account && <div className="account-grid">
         <div className="account-section">
-          <Card className="partner-surface account-section" aria-labelledby="profile-details-heading">
+          <Card className={`partner-surface account-section${employeeView ? ' border-l-4 border-l-brand-400' : ''}`} aria-labelledby="profile-details-heading">
             <h2 id="profile-details-heading">Details</h2>
             <p><strong>{accountName(account)}</strong></p>
             <p>Tenant: {account.realm}</p>
@@ -86,7 +88,7 @@ export default function ProfileClient() {
             {roles.length > 0 && <p>Roles: {roles.join(', ')}</p>}
           </Card>
 
-          {showPreferences && <Card className="partner-surface account-section" aria-labelledby="preferences-heading">
+          {showPreferences && <Card className={`partner-surface account-section${employeeView ? ' border-l-4 border-l-brand-400' : ''}`} aria-labelledby="preferences-heading">
             <h2 id="preferences-heading">Work preferences</h2>
             {preferenceBusy && <p role="status">{preference === null ? 'Loading work preferences...' : 'Saving work preferences...'}</p>}
             {preferenceError && <><p role="alert" className="partner-alert partner-alert-error">{preferenceError}</p><Button variant="ghost" size="sm" disabled={preferenceBusy} onClick={() => preference === null ? void loadPreference() : void savePreference()}>Retry work preferences</Button></>}

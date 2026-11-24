@@ -9,7 +9,7 @@ public sealed record DashboardMonth(string Month, IReadOnlyList<DashboardCustome
 
 /// <summary>
 /// Counts per calendar month (tenant time zone) and customer: scheduled visits and their scheduled hours, and completed
-/// visits with the actual hours cleaners submitted. A submitted record with a missing or reversed time is not counted as hours.
+/// visits with the actual hours employees submitted. A submitted record with a missing or reversed time is not counted as hours.
 /// </summary>
 public static class DashboardMonthlyRules
 {

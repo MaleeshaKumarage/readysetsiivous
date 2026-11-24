@@ -15,7 +15,7 @@ public record GetAdminDashboardEmployeeHoursQuery(DateOnly? WeekStart) : IReques
 
 public static class DashboardEmployeeHoursRules
 {
-    /// <summary>The weekly hours of a full-time cleaner. A donut shows scheduled hours against this.</summary>
+    /// <summary>The weekly hours of a full-time employee. A donut shows scheduled hours against this.</summary>
     public const decimal FullTimeWeeklyHours = 37.5m;
 
     /// <summary>

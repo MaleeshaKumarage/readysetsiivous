@@ -44,9 +44,9 @@ public class PartnerCompletionDatabaseTests
         Assert.Equal("Kitchen after clean", Assert.Single(report.Photos).Note);
         Assert.Equal("Use the back door", Assert.Single(completion.Messages).Message);
 
-        // Nothing identifying the cleaner leaves the partner view.
+        // Nothing identifying the employee leaves the partner view.
         var json = JsonSerializer.Serialize(completion, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-        Assert.DoesNotContain("Test Cleaner", json);
+        Assert.DoesNotContain("Test Employee", json);
         Assert.DoesNotContain(seeded.Cleaner.Id.ToString(), json);
     }
 
@@ -64,7 +64,7 @@ public class PartnerCompletionDatabaseTests
         var staffView = await service.Requests(seeded.Staff.Id, true, null, default);
 
         Assert.Null(partnerView.AcceptedCleanerName);
-        Assert.Equal("Test Cleaner", staffView.Single(item => item.Id == seeded.Request.Id).AcceptedCleanerName);
+        Assert.Equal("Test Employee", staffView.Single(item => item.Id == seeded.Request.Id).AcceptedCleanerName);
     }
 
     [QualityCycleDatabaseFact]
@@ -265,7 +265,7 @@ public class PartnerCompletionDatabaseTests
         var owner = new Employee { Role = Employee.RolePartner, PartnerCompanyId = company.Id };
         var otherOwner = new Employee { Role = Employee.RolePartner, PartnerCompanyId = otherCompany.Id };
         var staff = new Employee { Role = Employee.RoleAdmin, FirstName = "Ada", LastName = "Admin", IsActive = true };
-        var cleaner = new Employee { FirstName = "Test", LastName = "Cleaner" };
+        var cleaner = new Employee { FirstName = "Test", LastName = "Employee" };
         var shiftId = Guid.NewGuid();
         var request = new PartnerCleaningRequest
         {
@@ -275,7 +275,7 @@ public class PartnerCompletionDatabaseTests
             LinkedShiftId = shiftId, AcceptedEmployeeId = cleaner.Id, PlannedStartUtc = Start, PlannedEndUtc = Start.AddMinutes(120),
             FirstAcceptedAtUtc = Start.AddDays(-1),
         };
-        var form = QualityCycleForm.Create(shiftId, "Cleaning", cleaner.Id, "Test Cleaner", Guid.NewGuid(), "Apartment checklist", Start, ["Vacuum floors", "Restock towels"]);
+        var form = QualityCycleForm.Create(shiftId, "Cleaning", cleaner.Id, "Test Employee", Guid.NewGuid(), "Apartment checklist", Start, ["Vacuum floors", "Restock towels"]);
         if (started) form.Start(Start.AddMinutes(5));
         if (finishedForm)
         {

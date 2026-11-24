@@ -15,7 +15,7 @@ public class EmployeeInviteTests
     private readonly Mock<IEmployeeIdentityProvider> _identity = new();
     private readonly Mock<IEmployeeIdentityLock> _locks = new();
     private readonly Mock<ITenantContext> _tenant = new();
-    private readonly Employee _employee = new() { Email = "cleaner@example.invalid", FirstName = "Test", LastName = "Cleaner" };
+    private readonly Employee _employee = new() { Email = "employee@example.invalid", FirstName = "Test", LastName = "Employee" };
     private static readonly DateTime Now = new(2026, 10, 13, 12, 0, 0, DateTimeKind.Utc);
     private sealed class Clock : TimeProvider { public override DateTimeOffset GetUtcNow() => Now; }
     private sealed class Lease : IAsyncDisposable { public ValueTask DisposeAsync() => ValueTask.CompletedTask; }

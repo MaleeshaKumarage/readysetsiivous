@@ -33,7 +33,7 @@ public static class WorkQueueLimits
 }
 
 /// <summary>
-/// One place for all bookings. Needs action waits for a cleaner; Scheduled is accepted or assigned work;
+/// One place for all bookings. Needs action waits for an employee; Scheduled is accepted or assigned work;
 /// In progress has started and not finished; Completed means the work is done, however it was ended;
 /// Cancelled is kept apart from Completed.
 /// </summary>
@@ -64,8 +64,8 @@ public static class WorkQueueRules
     }
 
     /// <summary>
-    /// The view of one company-shift occurrence. Completed needs a submitted form from every assigned cleaner, the same
-    /// rule invoicing uses. A future occurrence without a cleaner is Needs action; one with a cleaner is Scheduled.
+    /// The view of one company-shift occurrence. Completed needs a submitted form from every assigned employee, the same
+    /// rule invoicing uses. A future occurrence without an employee is Needs action; one with an employee is Scheduled.
     /// Once its window has ended, an unstarted occurrence needs action even when it has an assignee.
     /// </summary>
     public static string ShiftView(ShiftVisitRosterEntry visit, IReadOnlyList<QualityCycleForm> occurrenceForms, DateTime nowUtc)

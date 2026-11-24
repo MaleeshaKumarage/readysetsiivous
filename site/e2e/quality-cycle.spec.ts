@@ -363,7 +363,7 @@ test('selected reports show summary columns, support a custom inclusive range an
   expect(calls.previews[1].months).toBeUndefined();
 });
 test('legacy photo submission requires a note and retains evidence after server failure', async ({ page }) => {
-  const form = { id: 'photo-form', shiftName: 'Daily work', employeeName: 'Cleaner', shiftOccurrenceUtc: '2026-01-01T08:00:00Z',
+  const form = { id: 'photo-form', shiftName: 'Daily work', employeeName: 'Employee', shiftOccurrenceUtc: '2026-01-01T08:00:00Z',
     token: 'photo-token', items: [{ itemText: 'Corridor', isChecked: false }], photoUrls: [], cleanerNotes: '', isSubmitted: false };
   let requests = 0; let submitted: any;
   await page.route(/\/api\/v1\/public\/[^/]+\/quality-cycle\/photo-token$/, route => route.fulfill({ json: form, headers: CORS_HEADERS }));
@@ -413,7 +413,7 @@ test('token form preserves distinct notes for multiple photos', async ({ page })
 const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
 
 async function openDropForm(page: Page, token: string, onSubmit?: (body: any) => void) {
-  const form = { id: `${token}-form`, shiftName: 'Daily work', employeeName: 'Cleaner', shiftOccurrenceUtc: '2026-01-01T08:00:00Z',
+  const form = { id: `${token}-form`, shiftName: 'Daily work', employeeName: 'Employee', shiftOccurrenceUtc: '2026-01-01T08:00:00Z',
     token, items: [{ itemText: 'Corridor', isChecked: false }], photoUrls: [], cleanerNotes: '', isSubmitted: false };
   await page.route(new RegExp(`/quality-cycle/${token}$`), route => route.fulfill({ json: form, headers: CORS_HEADERS }));
   await page.route(new RegExp(`/quality-cycle/${token}/submit$`), route => {
@@ -499,7 +499,7 @@ test('a drop is ignored and cancelled while the form is submitting', async ({ pa
   let releaseSubmit: () => void = () => {};
   const gate = new Promise<void>(resolve => { releaseSubmit = resolve; });
   let submitted: any;
-  const form = { id: 'busy-form', shiftName: 'Daily work', employeeName: 'Cleaner', shiftOccurrenceUtc: '2026-01-01T08:00:00Z',
+  const form = { id: 'busy-form', shiftName: 'Daily work', employeeName: 'Employee', shiftOccurrenceUtc: '2026-01-01T08:00:00Z',
     token: 'busy-token', items: [], photoUrls: [], cleanerNotes: '', isSubmitted: false };
   await page.route(/\/quality-cycle\/busy-token$/, route => route.fulfill({ json: form, headers: CORS_HEADERS }));
   await page.route(/\/quality-cycle\/busy-token\/submit$/, async route => {
@@ -526,7 +526,7 @@ test('a drop is ignored and cancelled while the form is submitting', async ({ pa
 });
 
 test('legacy form permits notes without images and removing the final image makes notes optional', async ({ page }) => {
-  const form = { id: 'notes-form', shiftName: 'Daily work', employeeName: 'Cleaner', shiftOccurrenceUtc: '2026-01-01T08:00:00Z',
+  const form = { id: 'notes-form', shiftName: 'Daily work', employeeName: 'Employee', shiftOccurrenceUtc: '2026-01-01T08:00:00Z',
     token: 'notes-token', items: [], photoUrls: [], cleanerNotes: '', isSubmitted: false };
   let submitted: any;
   await page.route(/\/api\/v1\/public\/[^/]+\/quality-cycle\/notes-token$/, route => route.fulfill({ json: form, headers: CORS_HEADERS }));
@@ -544,9 +544,9 @@ test('legacy form permits notes without images and removing the final image make
   expect(submitted.photos).toEqual([]); expect(submitted.cleanerNotes).toBe('Gym unavailable today.');
 });
 
-test('cleaner records selected activities without completing every item or adding notes', async ({ page }) => {
+test('employee records selected activities without completing every item or adding notes', async ({ page }) => {
   let submitted: any;
-  const form = { id: 'record', shiftName: 'Daily work', employeeName: 'Cleaner', shiftOccurrenceUtc: '2026-01-01T08:00:00Z', token: 'activity-token', items: [{ itemText: 'Corridor', isChecked: false }, { itemText: 'Gym', isChecked: false }], photoUrls: [], isSubmitted: false };
+  const form = { id: 'record', shiftName: 'Daily work', employeeName: 'Employee', shiftOccurrenceUtc: '2026-01-01T08:00:00Z', token: 'activity-token', items: [{ itemText: 'Corridor', isChecked: false }, { itemText: 'Gym', isChecked: false }], photoUrls: [], isSubmitted: false };
   await page.route(/\/api\/v1\/public\/tenant-a\/quality-cycle\/activity-token(\/submit)?$/, route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS_HEADERS });
     if (route.request().method() === 'POST') { submitted = getBody(route); return route.fulfill({ status: 200, headers: CORS_HEADERS, json: { ...form, isSubmitted: true, taskStatus: 'Recorded', submittedUtc: new Date().toISOString() } }); }

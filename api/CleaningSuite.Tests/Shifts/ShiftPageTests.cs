@@ -34,8 +34,8 @@ public class ShiftPageTests
         repo.Setup(r => r.EnsureTabsAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         repo.Setup(r => r.CountTabsAsync(It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .Returns((Guid? company, Guid? branch, CancellationToken _) => Task.FromResult(Counts(shifts, company, branch)));
-        repo.Setup(r => r.ListTabPageAsync(It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .Returns((string tab, Guid? company, Guid? branch, string? search, int skip, int take, CancellationToken _) =>
+        repo.Setup(r => r.ListTabPageAsync(It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<ShiftScheduleType?>()))
+            .Returns((string tab, Guid? company, Guid? branch, string? search, int skip, int take, CancellationToken _, ShiftScheduleType? _2) =>
                 Task.FromResult(TabPage(shifts, tab, company, branch, search, skip, take)));
         return (new ShiftHandlers.ListShiftPageQueryHandler(repo.Object), done);
     }
@@ -111,5 +111,21 @@ public class ShiftPageTests
 
         Assert.Empty(other.Items);
         Assert.Equal(new ShiftTabCounts(0, 0, 0), other.Counts);
+    }
+
+    [Fact]
+    public async Task ScheduleTypeFilterIsPassedToTheRepository()
+    {
+        var repo = new Mock<IShiftRepository>();
+        repo.Setup(r => r.EnsureTabsAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        repo.Setup(r => r.CountTabsAsync(It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.FromResult(new ShiftTabCounts(0, 0, 0)));
+        repo.Setup(r => r.ListTabPageAsync(It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<ShiftScheduleType?>()))
+            .Returns(Task.FromResult<(IReadOnlyList<Shift> Items, int Total)>((new List<Shift>(), 0)));
+        var handler = new ShiftHandlers.ListShiftPageQueryHandler(repo.Object);
+
+        await handler.Handle(new ListShiftPageQuery("active", null, null, null, 0, 25, ShiftScheduleType.Weekly), CancellationToken.None);
+
+        repo.Verify(r => r.ListTabPageAsync("active", null, null, null, 0, 25, It.IsAny<CancellationToken>(), ShiftScheduleType.Weekly), Times.Once);
     }
 }

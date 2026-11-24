@@ -30,6 +30,6 @@ public sealed class PartnerAccountDetails
     public string? ContactName { get; set; }
     public string? ContactPhone { get; set; }
     public string? ContactEmail { get; set; }
-    /// <summary>How the cleaner gets in: key safe code, lockbox, door codes. Shown to the cleaner before the visit.</summary>
+    /// <summary>How the employee gets in: key safe code, lockbox, door codes. Shown to the employee before the visit.</summary>
     public string? AccessInstructions { get; set; }
 }

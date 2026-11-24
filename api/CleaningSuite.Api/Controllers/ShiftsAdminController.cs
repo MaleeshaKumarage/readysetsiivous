@@ -1,3 +1,4 @@
+using CleaningSuite.Domain.Shifts;
 using CleaningSuite.Api.Auth;
 using CleaningSuite.Application.Shifts;
 using CleaningSuite.Application.QualityCycle;
@@ -60,12 +61,13 @@ public class ShiftsAdminController : ControllerBase
         [FromQuery] string? q = null,
         [FromQuery] int skip = 0,
         [FromQuery] int take = 25,
+        [FromQuery] ShiftScheduleType? scheduleType = null,
         CancellationToken ct = default)
     {
         if (!ShiftHandlers.ListShiftPageQueryHandler.Tabs.Contains(tab)) return BadRequest("Tab must be active, completed or inactive.");
         skip = Math.Max(0, skip);
         take = Math.Clamp(take, 1, 100);
-        return Ok(await _mediator.Send(new ListShiftPageQuery(tab, companyId, branchId, q, skip, take), ct));
+        return Ok(await _mediator.Send(new ListShiftPageQuery(tab, companyId, branchId, q, skip, take, scheduleType), ct));
     }
 
     [HttpGet("{id:guid}")]
@@ -109,6 +111,15 @@ public class ShiftsAdminController : ControllerBase
     { await _mediator.Send(new DeleteShiftCommand(id), ct); return NoContent(); }
 
     // Not output-cached: counts must reflect assignment changes made moments earlier.
+    // Names of the active assignees for up to 100 shifts (comma-separated ids), for the Employees column.
+    [HttpGet("assignee-names")]
+    public async Task<IActionResult> AssigneeNames([FromQuery] string shiftIds, CancellationToken ct)
+    {
+        var ids = (shiftIds ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(value => Guid.TryParse(value, out var id) ? id : Guid.Empty).Where(id => id != Guid.Empty).Distinct().Take(100).ToArray();
+        return Ok(await _mediator.Send(new ListShiftAssigneeNamesQuery(ids), ct));
+    }
+
     [HttpGet("assignment-counts")]
     public async Task<IActionResult> AssignmentCounts(CancellationToken ct) =>
         Ok(await _mediator.Send(new ListShiftAssignmentCountsQuery(), ct));
