@@ -52,11 +52,6 @@ jobs:
           BEFORE_SHA: ${{ github.event.before }}
         run: python3 scripts/wait-api-release.py
 
-      - name: Enable GitHub Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
