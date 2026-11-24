@@ -1,5 +1,6 @@
 'use client';
 
+import { SupplyRequestPanel } from '@/components/SupplyRequestPanel';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { initAuth, login } from '@/lib/auth';
 import {
@@ -62,6 +63,7 @@ function PhotoPanel({ entry }: { entry: InventoryUsage }) {
 
 /** Log an item taken and see your own history. Used on its own page and inside the shifts modal. */
 export function InventoryPanel() {
+  const [view, setView] = useState<'log' | 'request'>('log');
   const [ready, setReady] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [locations, setLocations] = useState<InventoryLocation[]>([]);
@@ -210,6 +212,12 @@ export function InventoryPanel() {
       )}
 
       {ready && authed && (
+        <div className="space-y-6">
+          <div role="tablist" aria-label="Inventory views" className="flex gap-2">
+            <button type="button" role="tab" aria-selected={view === 'log'} onClick={() => setView('log')} className={`min-h-11 flex-1 rounded-lg border px-4 py-2 font-semibold sm:flex-none ${view === 'log' ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900' : 'bg-white text-gray-800 dark:bg-gray-800 dark:text-gray-100'}`}>Log items taken</button>
+            <button type="button" role="tab" aria-selected={view === 'request'} onClick={() => setView('request')} className={`min-h-11 flex-1 rounded-lg border px-4 py-2 font-semibold sm:flex-none ${view === 'request' ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900' : 'bg-white text-gray-800 dark:bg-gray-800 dark:text-gray-100'}`}>Request supplies</button>
+          </div>
+          {view === 'request' ? <SupplyRequestPanel /> : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
           {loadError && (
             <div role="alert" className="mb-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-200">
@@ -371,6 +379,8 @@ export function InventoryPanel() {
               </ul>
             )}
           </section>
+        </div>
+          )}
         </div>
       )}
     </div>
