@@ -46,6 +46,8 @@ const shape = (writes: WriteRecord[]) => writes.map(write => `${write.actor} ${w
 // ----- the flow -----
 
 test('one visit from owner request to employee acceptance and back to the owner', async ({ page, browser }, testInfo) => {
+  // Three browser sessions in one flow; it takes about 15s alone and can exceed the default 30s when a CI shard is busy.
+  test.setTimeout(90_000);
   const backend = new PartnerFlowBackend();
   await prepareRolePage(page, backend, 'owner');
   const staff = await openActor(browser, testInfo, backend, 'admin');
