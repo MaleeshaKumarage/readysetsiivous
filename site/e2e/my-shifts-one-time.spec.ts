@@ -64,7 +64,7 @@ test('an assigned past one-time visit appears under Past and can be started and 
   await expect(card.getByText(/Scheduled:.*Oct 1, 2026/)).toBeVisible();
   await card.getByRole('button', { name: 'Start', exact: true }).click();
   await expect(card.getByText(/^Actual start: /)).toBeVisible();
-  await card.getByRole('button', { name: 'Record activities & end' }).click();
+  await card.getByRole('button', { name: 'Add shift photos' }).click();
   await card.getByRole('button', { name: 'End shift', exact: true }).click();
   await expect(card.getByText('Done', { exact: true })).toBeVisible();
   expect(counts).toEqual({ starts: 1, ends: 1 });
@@ -92,7 +92,7 @@ test('a one-time visit on today is startable and can be ended on the same day', 
   await expect(card.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
   await card.getByRole('button', { name: 'Start', exact: true }).click();
   await expect(card.getByText(/^Actual start: /)).toBeVisible();
-  await card.getByRole('button', { name: 'Record activities & end' }).click();
+  await card.getByRole('button', { name: 'Add shift photos' }).click();
   await card.getByRole('button', { name: 'End shift', exact: true }).click();
   await expect(card.getByText('Done', { exact: true })).toBeVisible();
   expect(counts).toEqual({ starts: 1, ends: 1 });
