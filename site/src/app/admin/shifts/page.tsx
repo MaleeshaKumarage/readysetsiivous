@@ -225,6 +225,10 @@ export default function ShiftsAdminPage() {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [branchId, setBranchId] = useState<string | null>(null);
   const [priceFrom, setPriceFrom] = useState<string | null>(null);
+  // The shift's own contract price. 'branch' keeps the property price.
+  const [pricingChoice, setPricingChoice] = useState<'branch' | 'Monthly' | 'PerVisit'>('branch');
+  const [contractRate, setContractRate] = useState<string>('');
+  const [contractVat, setContractVat] = useState<string>('25.5');
   const [name, setName] = useState('');
   const [validFrom, setValidFrom] = useState('');
   const [validUntil, setValidUntil] = useState('');
@@ -395,7 +399,7 @@ export default function ShiftsAdminPage() {
   };
 
   const closeModal = () => {
-    setName(''); setNotes(''); setWeekDays([]); setCompanyId(null); setBranchId(null); setPriceFrom(null); setQualityCycleTemplateId(null); setScheduleType(''); setStart('08:00'); setEnd('17:00'); setWeekParity('1'); setMonthlyDay(1); setOneTimeDate(''); setOneTimeStart('08:00'); setOneTimeEnd('17:00'); setDailyTimes({}); setEditingShift(null); setError(''); setModalOpen(false);
+    setName(''); setNotes(''); setWeekDays([]); setCompanyId(null); setBranchId(null); setPriceFrom(null); setPricingChoice('branch'); setContractRate(''); setContractVat('25.5'); setQualityCycleTemplateId(null); setScheduleType(''); setStart('08:00'); setEnd('17:00'); setWeekParity('1'); setMonthlyDay(1); setOneTimeDate(''); setOneTimeStart('08:00'); setOneTimeEnd('17:00'); setDailyTimes({}); setEditingShift(null); setError(''); setModalOpen(false);
   };
 
   // A customer workspace link carries ?company= so the create form opens with that customer selected.
@@ -406,6 +410,8 @@ export default function ShiftsAdminPage() {
     const schedule = shift.schedule;
     setEditingShift(shift); setCompanyId(shift.companyId); setBranchId(shift.branchId);
     setName(shift.name); setNotes(shift.notes ?? ''); setQualityCycleTemplateId(shift.qualityCycleTemplateId ?? null);
+    setPricingChoice(shift.pricingMode === 0 ? 'Monthly' : shift.pricingMode === 1 ? 'PerVisit' : 'branch');
+    setContractRate(shift.rateNet != null ? String(shift.rateNet) : ''); setContractVat(shift.vatRatePercent != null ? String(shift.vatRatePercent) : '25.5');
     setValidFrom(shift.validFrom?.slice(0, 10) ?? ''); setValidUntil(shift.validUntil?.slice(0, 10) ?? '');
     setScheduleType(String(schedule.type));
     setStart((schedule.dailyStart ?? schedule.weeklyStart ?? schedule.biWeeklyStart ?? schedule.monthlyStart ?? '08:00').slice(0, 5));
@@ -441,6 +447,7 @@ export default function ShiftsAdminPage() {
     // A weekday without its own times uses the shown default (the same fallback the saved schedule uses).
     if (scheduleType === '1' && (!weekDays.length || weekDays.some(day => { const range = dailyTimes[day] ?? { start, end }; return !range.start || !range.end || range.end <= range.start; }))) { setError('Select at least one day and ensure each end time is after its start time.'); return; }
     if (scheduleType === '3' && weekDays.length === 0) { setError('Select a day.'); return; }
+    if (pricingChoice !== 'branch' && (!(Number(contractRate) > 0) || !(Number(contractVat) >= 0 && Number(contractVat) <= 100))) { setError('Enter a price above zero and a VAT rate from 0 to 100.'); return; }
     submitting.current = true; setSaving(true); setError('');
     const branchVersions = branches.find(b => b.id === branchId)?.priceVersions;
     const chosenPriceFrom = priceFrom && branchVersions?.some(v => v.effectiveFrom === priceFrom) ? priceFrom : defaultPriceVersion(branchVersions) ?? undefined;
@@ -449,9 +456,13 @@ export default function ShiftsAdminPage() {
     // The server builds every shift name from the property, so the name sent here is only a placeholder.
     const shiftName = autoShiftName(branches.find(b => b.id === branchId));
     if (!shiftName) { setError('Could not name this shift. Choose a property and schedule, then save again.'); return; }
+    // Editing always sends the price choice; the server clears the shift's own price when 'Property price' is chosen.
+    const priceFields = pricingChoice === 'branch'
+      ? { changePrice: true, pricingMode: null, rateNet: null, vatRatePercent: null }
+      : { changePrice: true, pricingMode: pricingChoice === 'Monthly' ? 0 : 1, rateNet: Number(contractRate), vatRatePercent: Number(contractVat) };
     const fields = { companyId, branchId, name: shiftName, schedule: buildSchedule(), notes: notes.trim() || undefined, isActive: editingShift?.isActive ?? true, validFrom: oneTime ? oneTimeDate : validFrom || undefined, validUntil: oneTime ? oneTimeDate : validUntil || undefined, qualityCycleTemplateId: qualityCycleTemplateId || undefined,
       // Creating a shift picks the branch price version it bills at; the default is the price in force today.
-      priceEffectiveFrom: editingShift ? undefined : chosenPriceFrom };
+      priceEffectiveFrom: editingShift ? undefined : chosenPriceFrom, ...priceFields };
     const result = await (editingShift ? adminShifts.update(editingShift.id, fields) : adminShifts.create(fields)).finally(() => { submitting.current = false; });
     setSaving(false);
     if (!result.ok) {
@@ -1045,6 +1056,13 @@ export default function ShiftsAdminPage() {
           </Group>}
           {!editingShift && (branches.find(b => b.id === branchId)?.priceVersions?.length ?? 0) > 1 && <Select label="Price version" description="The property price this shift is billed at. Defaults to the price in force today." allowDeselect={false} value={priceFrom && (branches.find(b => b.id === branchId)?.priceVersions ?? []).some(v => v.effectiveFrom === priceFrom) ? priceFrom : defaultPriceVersion(branches.find(b => b.id === branchId)?.priceVersions)} onChange={setPriceFrom}
             data={(branches.find(b => b.id === branchId)?.priceVersions ?? []).map(v => ({ value: v.effectiveFrom, label: `From ${v.effectiveFrom} · €${v.priceNet.toFixed(2)} excl. VAT` }))} />}
+          <Select label="Price for this shift" description="Property price uses the property's price. A shift price applies to this shift only." allowDeselect={false} value={pricingChoice}
+            onChange={value => setPricingChoice((value ?? 'branch') as 'branch' | 'Monthly' | 'PerVisit')}
+            data={[{ value: 'branch', label: 'Property price' }, { value: 'Monthly', label: 'Monthly fee' }, { value: 'PerVisit', label: 'Price per completed visit' }]} />
+          {pricingChoice !== 'branch' && <Group grow>
+            <TextInput label={pricingChoice === 'Monthly' ? 'Monthly fee excl. VAT (€)' : 'Price per visit excl. VAT (€)'} type="number" min={0} step="0.01" value={contractRate} onChange={e => setContractRate(e.target.value)} />
+            <TextInput label="VAT (%)" type="number" min={0} max={100} step="0.1" value={contractVat} onChange={e => setContractVat(e.target.value)} />
+          </Group>}
           {scheduleType !== '6' && <Group grow>
             <TextInput label="Start date" type="date" required={!editingShift || Boolean(editingShift.validFrom)} value={validFrom} onChange={e => setValidFrom(e.target.value)} />
             <TextInput label="End date (optional)" type="date" min={validFrom || undefined} value={validUntil} onChange={e => setValidUntil(e.target.value)} />

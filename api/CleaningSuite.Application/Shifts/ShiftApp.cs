@@ -33,6 +33,10 @@ public record ShiftDto(
     public bool IsBranchMain { get; init; }
     /// <summary>On a main visit shift: the employee each new visit is offered to.</summary>
     public Guid? DefaultEmployeeId { get; init; }
+    /// <summary>The shift's own contract price. Null: the shift bills at the branch price.</summary>
+    public ShiftPricingMode? PricingMode { get; init; }
+    public decimal? RateNet { get; init; }
+    public decimal? VatRatePercent { get; init; }
 }
 
 public record ShiftAssignmentDto(
@@ -146,7 +150,11 @@ public record CreateShiftCommand(
     DateTime? ValidUntil = null,
     Guid? QualityCycleTemplateId = null,
     // The branch price version to bill at. Omitted: the version in force today (or the only version).
-    DateOnly? PriceEffectiveFrom = null) : IRequest<ShiftDto>;
+    DateOnly? PriceEffectiveFrom = null,
+    // The shift's own contract price. Omitted: the shift bills at the branch price.
+    ShiftPricingMode? PricingMode = null,
+    decimal? RateNet = null,
+    decimal? VatRatePercent = null) : IRequest<ShiftDto>;
 
 public record UpdateShiftCommand(
     Guid Id,
@@ -158,7 +166,12 @@ public record UpdateShiftCommand(
     bool IsActive = true,
     DateTime? ValidFrom = null,
     DateTime? ValidUntil = null,
-    Guid? QualityCycleTemplateId = null) : IRequest<ShiftDto>;
+    Guid? QualityCycleTemplateId = null,
+    // Only when ChangePrice is true does the update touch the shift's price; then all three values set it, or none clears it.
+    bool ChangePrice = false,
+    ShiftPricingMode? PricingMode = null,
+    decimal? RateNet = null,
+    decimal? VatRatePercent = null) : IRequest<ShiftDto>;
 
 public record DeactivateShiftCommand(Guid Id) : IRequest;
 public record ReactivateShiftCommand(Guid Id) : IRequest<ShiftDto>;
@@ -251,6 +264,7 @@ public class ShiftHandlers
                 request.ValidUntil,
                 request.QualityCycleTemplateId);
             shift.EnsureQualityCycleHistory();
+            shift.SetContractPrice(request.PricingMode, request.RateNet, request.VatRatePercent);
             await _repository.SaveAsync(shift, ct);
             if (priceVersion is not null && _billing is not null)
                 await _billing.SaveAsync(new ShiftBillingProfile { Id = shift.Id, ShiftId = shift.Id, BranchPriceEffectiveFrom = priceVersion.EffectiveFrom }, ct);
@@ -294,6 +308,7 @@ public class ShiftHandlers
             var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
             EnsureOneTimeTimesExist(request.Schedule, zone);
             shift.EnsureQualityCycleHistory();
+            if (request.ChangePrice) shift.SetContractPrice(request.PricingMode, request.RateNet, request.VatRatePercent);
             shift.Update(
                 request.CompanyId,
                 request.BranchId,
@@ -835,7 +850,7 @@ public class ShiftHandlers
 
     private static ShiftDto MapShift(Shift shift) =>
         new(shift.Id, shift.CompanyId, shift.BranchId, shift.Name, shift.Schedule, shift.Notes, shift.IsActive, shift.ValidFrom, shift.ValidUntil, shift.QualityCycleTemplateId)
-            { IsBranchMain = shift.IsBranchMain, DefaultEmployeeId = shift.DefaultEmployeeId };
+            { IsBranchMain = shift.IsBranchMain, DefaultEmployeeId = shift.DefaultEmployeeId, PricingMode = shift.PricingMode, RateNet = shift.RateNet, VatRatePercent = shift.VatRatePercent };
 
     private static ShiftAssignmentDto MapAssignment(ShiftAssignment assignment) =>
         new(assignment.Id, assignment.ShiftId, assignment.EmployeeId, assignment.AssignedAtUtc, assignment.IsActive, assignment.Note);

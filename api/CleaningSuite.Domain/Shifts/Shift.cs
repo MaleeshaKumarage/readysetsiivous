@@ -44,6 +44,12 @@ public class Shift : BaseDocument
     public string? PartnerContactName { get; set; }
     public string? PartnerContactPhone { get; set; }
     public Guid? QualityCycleTemplateId { get; set; }
+    /// <summary>How this shift is billed. Null on shifts created before contract pricing: they keep the branch price.</summary>
+    public ShiftPricingMode? PricingMode { get; set; }
+    /// <summary>Net price (excl. VAT). Monthly: the fee for each calendar month. PerVisit: the price of one completed visit.</summary>
+    public decimal? RateNet { get; set; }
+    /// <summary>VAT percentage for the shift's own price. Null with no price falls back to the branch price.</summary>
+    public decimal? VatRatePercent { get; set; }
     public bool IsActive { get; set; }
     /// <summary>Stored list tab (active, completed or inactive). Kept current by ShiftTabs.StoreAsync so the list can page in the database.</summary>
     public string Tab { get; set; } = string.Empty;
@@ -63,6 +69,24 @@ public class Shift : BaseDocument
         if (!schedule.IsOneTime || schedule.OneTimeDate is null) return (validFrom, validUntil);
         var date = schedule.OneTimeDate.Value.Date;
         return (date, date);
+    }
+
+    /// <summary>
+    /// Sets the shift's own contract price. Pass all three values, or none to fall back to the branch price.
+    /// </summary>
+    public void SetContractPrice(ShiftPricingMode? mode, decimal? rateNet, decimal? vatRatePercent)
+    {
+        if (mode is null && rateNet is null && vatRatePercent is null)
+        {
+            PricingMode = null; RateNet = null; VatRatePercent = null;
+            return;
+        }
+        if (mode is null || rateNet is null || vatRatePercent is null)
+            throw new ArgumentException("A shift price needs its pricing mode, rate and VAT together.");
+        if (rateNet <= 0) throw new ArgumentException("The shift price must be more than zero.", nameof(rateNet));
+        if (vatRatePercent < 0 || vatRatePercent > 100) throw new ArgumentException("VAT must be between 0 and 100.", nameof(vatRatePercent));
+        PricingMode = mode; RateNet = rateNet; VatRatePercent = vatRatePercent;
+        UpdatedUtc = DateTime.UtcNow;
     }
 
     public void RecordQualityCyclePlan(DateTime effectiveUtc)
@@ -164,4 +188,11 @@ public class Shift : BaseDocument
         IsActive = false;
         UpdatedUtc = DateTime.UtcNow;
     }
+}
+
+/// <summary>How a shift's contract price is charged.</summary>
+public enum ShiftPricingMode
+{
+    Monthly,
+    PerVisit,
 }

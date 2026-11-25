@@ -579,6 +579,10 @@ export interface Shift {
   validFrom?: string | null;
   validUntil?: string | null;
   qualityCycleTemplateId?: string | null;
+  /** The shift's own contract price: 0 = monthly fee, 1 = price per completed visit. Null: the branch price applies. */
+  pricingMode?: number | null;
+  rateNet?: number | null;
+  vatRatePercent?: number | null;
   /** One-time visit whose checklist has been submitted. */
   isCompleted?: boolean;
   /** A property's main visit shift: visits are added with Add visit and numbered. */

@@ -258,6 +258,24 @@ public class ShiftInvoiceServiceTests
         Assert.Contains(preview.Invoice.Lines, line => line.ShiftId == f.Shift.Id);
     }
 
+    [Fact]
+    public async Task A_shift_with_its_own_monthly_fee_bills_that_fee_instead_of_the_branch_price()
+    {
+        var f = new Fixture();
+        f.Shift.SetContractPrice(ShiftPricingMode.Monthly, 300m, 25.5m);
+        var preview = await f.Service.PreviewAsync(f.Request, default);
+        Assert.Equal(300m, preview.Invoice.Total.Net);
+    }
+
+    [Fact]
+    public async Task A_shift_with_its_own_per_visit_price_bills_each_completed_visit_at_that_price()
+    {
+        var f = new Fixture();
+        f.Shift.SetContractPrice(ShiftPricingMode.PerVisit, 40m, 25.5m);
+        var preview = await f.Service.PreviewAsync(f.Request, default);
+        Assert.Equal(200m, preview.Invoice.Total.Net);
+    }
+
     private sealed class Fixture
     {
         public readonly Mock<IInvoiceRepository> Invoices=new();public readonly Mock<IShiftWorkReservation> Reservation=new();

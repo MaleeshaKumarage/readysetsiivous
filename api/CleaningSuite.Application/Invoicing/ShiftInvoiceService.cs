@@ -142,8 +142,17 @@ public class ShiftInvoiceService(IShiftRepository shifts, IShiftBillingRepositor
                     Invalid("A partner visit has no accepted request or was cancelled. Refresh the selection to continue.");
                 pricing = new() { Id = shift.Id, ShiftId = shift.Id, CreatedUtc = partnerRequest!.CreatedUtc, UpdatedUtc = partnerRequest.CreatedUtc, Plans = [new("PerOccurrence", partnerRequest.PriceNet, partnerRequest.VatRatePercent, new(2000, 1, 1))] };
             }
+            // A shift with its own contract price bills at that price: a monthly fee or a price per completed visit.
+            // A partner booking keeps the price frozen on its request. Shifts without a price keep the branch price below.
+            var contractPriced = shift.PricingMode is not null && shift.RateNet is not null && shift.VatRatePercent is not null;
+            if (partnerRequest is null && contractPriced)
+            {
+                var planMode = shift.PricingMode == ShiftPricingMode.Monthly ? "Monthly" : "PerOccurrence";
+                pricing = new() { Id = shift.Id, ShiftId = shift.Id, CreatedUtc = pricing.CreatedUtc, UpdatedUtc = pricing.UpdatedUtc,
+                    Overrides = pricing.Overrides, Plans = [new(planMode, shift.RateNet!.Value, shift.VatRatePercent!.Value, new(2000, 1, 1))] };
+            }
             // A shift billed at a branch price reads that version from the branch: one price, never a copy on the shift.
-            if (partnerRequest is null && pricing.BranchPriceEffectiveFrom is { } branchFrom)
+            if (partnerRequest is null && !contractPriced && pricing.BranchPriceEffectiveFrom is { } branchFrom)
             {
                 var branchForPrice = await branches.GetAsync(shift.BranchId, ct);
                 var version = branchForPrice?.VersionFrom(branchFrom);

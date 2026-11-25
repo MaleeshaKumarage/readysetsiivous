@@ -42,6 +42,7 @@ public class ShiftBillingSettingsService(IShiftRepository shifts, IShiftBillingR
         var shift = await shifts.GetAsync(id, ct) ?? throw new NotFoundException("Shift", id);
         if (shift.IsBranchMain) throw new ShiftConflictException("This is the property's main visit shift. Each visit uses the property price in force on its date. Change the property price instead.");
         if (shift.PartnerRequestId.HasValue) throw new ShiftConflictException("Partner visit pricing is frozen when requested. Update branch pricing for future requests instead.");
+        if (shift.PricingMode is not null) throw new ShiftConflictException("This shift has its own contract price. Change the price on the shift instead.");
         if (plan.Mode is not ("Monthly" or "Hourly" or "PerOccurrence")) Invalid("Choose monthly, hourly or per-occurrence pricing.");
         if (plan.Mode == "PerOccurrence" && !shift.Schedule.IsVisitPriced) Invalid("Per-occurrence pricing is for on-call and one-time shifts.");
         Rate(plan.RateNet, plan.VatRatePercent);
@@ -65,6 +66,7 @@ public class ShiftBillingSettingsService(IShiftRepository shifts, IShiftBillingR
         var shift = await shifts.GetAsync(id, ct) ?? throw new NotFoundException("Shift", id);
         if (shift.IsBranchMain) throw new ShiftConflictException("This is the property's main visit shift. Each visit uses the property price in force on its date. Change the property price instead.");
         if (shift.PartnerRequestId.HasValue) throw new ShiftConflictException("Partner visit pricing is frozen when requested. Update branch pricing for future requests instead.");
+        if (shift.PricingMode is not null) throw new ShiftConflictException("This shift has its own contract price. Change the price on the shift instead.");
         if (branches is null) Invalid("Branch prices are unavailable right now. Reload the page and try again.");
         var branch = await branches!.GetAsync(shift.BranchId, ct) ?? throw new NotFoundException("Branch", shift.BranchId);
         if (branch.VersionFrom(effectiveFrom) is null) Invalid("Choose a price version from this shift's branch.");
