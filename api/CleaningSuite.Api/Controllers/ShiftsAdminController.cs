@@ -159,6 +159,16 @@ public class ShiftsAdminController : ControllerBase
         [FromBody] SaveShiftOccurrenceExceptionCommand command, CancellationToken ct) =>
         Ok(await _mediator.Send(command with { ShiftId = id }, ct));
 
+    /// <summary>Cancels a manually created visit. It can be restored later.</summary>
+    [HttpPost("{id:guid}/visits/{visitId:guid}/cancel")]
+    public async Task<IActionResult> CancelVisit(Guid id, Guid visitId, [FromBody] CancelVisitBody body, CancellationToken ct) =>
+        Ok(await _mediator.Send(new CancelManualVisitCommand(id, visitId, body.Status, body.Reason), ct));
+
+    /// <summary>Restores a cancelled manual visit with its original number and details.</summary>
+    [HttpPost("{id:guid}/visits/{visitId:guid}/restore")]
+    public async Task<IActionResult> RestoreVisit(Guid id, Guid visitId, CancellationToken ct) =>
+        Ok(await _mediator.Send(new RestoreManualVisitCommand(id, visitId), ct));
+
     [HttpDelete("{id:guid}/occurrence-exceptions/{exceptionId:guid}")]
     public async Task<IActionResult> DeleteOccurrenceException(Guid id, Guid exceptionId, CancellationToken ct)
     {
@@ -191,3 +201,4 @@ public class ShiftsAdminController : ControllerBase
 }
 
 public record SetTemplateBody(Guid? TemplateId);
+public record CancelVisitBody(CleaningSuite.Domain.Shifts.ShiftOccurrenceExceptionStatus Status, string Reason);

@@ -65,6 +65,7 @@ public static class MartenConfig
         options.Schema.For<CleaningSuite.Domain.Inventory.InventoryItem>().Index(x => x.IsActive)
             .UniqueIndex(Marten.Schema.UniqueIndexType.Computed, InventoryItemNameIndexName, Marten.Schema.Indexing.Unique.TenancyScope.PerTenant, x => x.NormalizedName);
         options.Schema.For<CleaningSuite.Domain.Inventory.InventoryUsage>().Index(x => x.EmployeeId).Index(x => x.TakenUtc);
+        options.Schema.For<CleaningSuite.Domain.Shifts.CancelledVisit>().Index(x => x.ShiftId).Index(x => x.StartUtc);
         options.Schema.For<CleaningSuite.Domain.Inventory.SupplyRequest>().Index(x => x.EmployeeId).Index(x => x.Status).Index(x => x.CreatedUtc);
         options.Schema.For<CleaningSuite.Domain.Inventory.InventoryAcknowledgment>().Index(x => x.CompanyId).Index(x => x.BatchId).Index(x => x.CreatedUtc);
         options.Schema.For<CleaningSuite.Domain.Leads.LeadFollowUp>().Index(x => x.LeadId).Index(x => x.NextCheckUtc).Index(x => x.State);

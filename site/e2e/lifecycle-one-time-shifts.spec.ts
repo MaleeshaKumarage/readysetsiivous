@@ -120,7 +120,7 @@ test('admin adds a past visit from one form without a second visit popup', async
   // The visit is not a shift of its own, and no second popup asks for its date again.
   expect(mock.posts).toHaveLength(0);
   await expect(page.getByRole('dialog', { name: /^Occurrences/ })).toHaveCount(0);
-  await expect(page.getByRole('dialog', { name: 'Change occurrence', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'Change visit', exact: true })).toHaveCount(0);
 });
 
 test('date, start and end errors block the save and keep the draft', async ({ page }) => {
@@ -199,7 +199,7 @@ test('one-time visit price saves only that visit from the occurrences dialog', a
     return route.fulfill({ headers, json: { plans: [], overrides: [] } });
   });
   await page.goto('/admin/shifts/');
-  await shiftAction(page, 'Past visit', 'Occurrences');
+  await shiftAction(page, 'Past visit', 'Visits');
   await page.getByRole('button', { name: 'Visit price', exact: true }).click();
   const dialog = page.getByRole('dialog').filter({ hasText: 'Visit price — Past visit' });
   await dialog.getByRole('textbox', { name: 'Visit price before VAT (€)', exact: true }).fill('75');

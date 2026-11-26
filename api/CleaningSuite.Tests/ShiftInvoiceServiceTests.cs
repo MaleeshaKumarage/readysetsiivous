@@ -276,6 +276,30 @@ public class ShiftInvoiceServiceTests
         Assert.Equal(200m, preview.Invoice.Total.Net);
     }
 
+    [Fact]
+    public async Task A_monthly_fee_shift_refuses_a_price_for_one_visit()
+    {
+        var f = new Fixture();
+        f.Shift.SetContractPrice(ShiftPricingMode.Monthly, 300m, 25.5m);
+        var visit = new DateTime(2026, 10, 2, 13, 0, 0, DateTimeKind.Utc);
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => f.Settings.SaveOccurrenceAsync(f.Shift.Id, new(visit, 50m, "Extra work"), default));
+        Assert.Contains("monthly fee", Assert.Single(ex.Errors).ErrorMessage);
+    }
+
+    [Fact]
+    public async Task A_per_visit_shift_accepts_a_price_for_one_visit_on_a_weekly_schedule()
+    {
+        var f = new Fixture();
+        f.Shift.SetContractPrice(ShiftPricingMode.PerVisit, 40m, 25.5m);
+        var visit = new DateTime(2026, 10, 2, 13, 0, 0, DateTimeKind.Utc);
+        await f.Settings.SaveOccurrenceAsync(f.Shift.Id, new(visit, 55m, "Extra rooms"), default);
+        var stored = Assert.Single(f.Pricing.Overrides);
+        Assert.Equal(55m, stored.RateNet);
+        // The invoice bills that visit at its own price and the others at the shift price: 55 + 4 x 40.
+        var preview = await f.Service.PreviewAsync(f.Request, default);
+        Assert.Equal(215m, preview.Invoice.Total.Net);
+    }
+
     private sealed class Fixture
     {
         public readonly Mock<IInvoiceRepository> Invoices=new();public readonly Mock<IShiftWorkReservation> Reservation=new();
