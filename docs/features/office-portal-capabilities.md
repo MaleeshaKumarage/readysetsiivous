@@ -12,6 +12,7 @@ Pages are documented one at a time. A page not listed yet has not been inventori
 | Bookings | `/admin/bookings/` | Inventoried |
 | Shift calendar (work order calendar in the redesign) | `/admin/shifts/calendar/` | Inventoried |
 | Employee schedule | `/admin/shifts/employee-schedule/` | Inventoried |
+| Work queue | `/admin/work-queue/` | Inventoried |
 
 ## Office shell (every page)
 
@@ -360,3 +361,37 @@ Clicking a visit opens its details (a slide-over on wide screens, a bottom sheet
 - "No active employees yet. Add employees, then their visits appear here."
 - "No visits this week. Choose another week or check the shift schedules."
 - "Choose at least one employee to see their visits."
+
+## Work queue
+
+Route: `/admin/work-queue/`. Source: `site/src/app/admin/work-queue/page.tsx`.
+
+One list of all work from public bookings, partner requests and company shifts. Every filter is kept in the page address, so a filtered view can be shared or bookmarked; the dashboard tiles link here.
+
+### Views (tabs)
+
+**Needs action**, **Scheduled**, **In progress**, **Completed** and **Cancelled**, each with its count.
+
+### Filters
+
+- **Source**: All sources, Public bookings, Partner requests, Company shifts.
+- **Search**: customer, booking number or company.
+- **From** and **To** dates. An invalid or reversed range is ignored.
+- **Assignee**: Anyone, Unassigned, or an employee. With an employee chosen, partner requests (which have no assignee) are hidden, and the page says so.
+- The first view shows overdue and upcoming work: from 180 days back to 14 days ahead in the tenant time zone. The page says "Showing overdue and upcoming work (from to to)" with a **Show all work** button that clears the dates and the assignee.
+- Changing a filter returns to page 1.
+
+### Work items
+
+Each item shows the customer, the reference and scheduled time, a state badge (for example "Not started" or "Overdue · not started", highlighted), an **Unassigned** badge for overdue unassigned shift visits, the source (Public booking, Company shift or Partner request) and the assignee.
+
+- **Open**: a public booking opens a details drawer; a company shift opens the shift; a partner request opens Partner operations.
+- Empty states: "Nothing in this view." or "Nothing in this view matches (search)."
+- Errors show with **Retry**.
+- Pages of 25: "Showing 1–25 of N", **Previous**, "Page X of Y", **Next**.
+
+### Booking drawer
+
+- Customer, contact (phone and email), service and length, start, status, assigned employee.
+- Actions by status, as on the Bookings page: New offers **Confirm** and **Cancel booking**; Confirmed offers **Mark completed** and **Cancel booking**. Cancelling asks for confirmation first.
+- "This booking could not be loaded. Retry." and "The action could not be completed. Refresh and check the booking status."
