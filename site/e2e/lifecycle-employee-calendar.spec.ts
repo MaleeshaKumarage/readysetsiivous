@@ -136,3 +136,35 @@ test('the shift calendar link is offered only to admins who can use the calendar
   await expect.poll(() => requested.includes(MONDAY)).toBe(true);
   await expect(page.getByLabel('Calendar date')).toHaveValue(MONDAY);
 });
+
+test('visit details stay closed until a visit is picked', async ({ page }) => {
+  await setup(page);
+  await expect(page.getByRole('group', { name: `Neil Park, ${MONDAY}` })).toBeVisible();
+  await expect(details(page)).toHaveCount(0);
+  await page.getByRole('group', { name: `Neil Park, ${MONDAY}` }).getByRole('button', { name: /^Deep clean/ }).click();
+  await expect(details(page)).toBeVisible();
+  await expect(details(page).getByRole('button', { name: 'Close visit details' })).toBeFocused();
+});
+
+test('on desktop, picking another visit while the panel is open switches the details', async ({ page, isMobile }) => {
+  // On phones the details sheet covers the list, so another visit is picked after closing it.
+  test.skip(isMobile, 'The phone sheet covers the visit list.');
+  await setup(page);
+  await page.getByRole('group', { name: `Neil Park, ${MONDAY}` }).getByRole('button', { name: /^Deep clean/ }).click();
+  await expect(details(page).getByRole('heading', { name: 'Deep clean' })).toBeVisible();
+  await page.getByRole('group', { name: `Aiden Grey, ${MONDAY}` }).getByRole('button', { name: /^Lawn service/ }).click();
+  await expect(details(page).getByRole('heading', { name: 'Lawn service' })).toBeVisible();
+  await expect(details(page).getByRole('heading', { name: 'Deep clean' })).toHaveCount(0);
+  await expect(details(page)).toHaveCount(1);
+});
+
+test('on desktop, Escape closes the panel and returns focus to the visit', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'Phones have no hardware Escape key.');
+  await setup(page);
+  const card = page.getByRole('group', { name: `Neil Park, ${MONDAY}` }).getByRole('button', { name: /^Deep clean/ });
+  await card.click();
+  await expect(details(page)).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(details(page)).toHaveCount(0);
+  await expect(card).toBeFocused();
+});

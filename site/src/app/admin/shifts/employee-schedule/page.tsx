@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Alert, Loader } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { Badge, Button, Card, Eyebrow, Heading, MultiSelect, buttonClasses, cx, type BadgeVariant } from '@/ds';
@@ -69,6 +69,17 @@ function Donut({ done, total }: { done: number; total: number }) {
   </svg>;
 }
 
+/** Desktop visit details: slides in from the right over the calendar, below the admin header. No backdrop, so other visits stay clickable. */
+function SlideOver({ children }: { children: ReactNode }) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => { const frame = requestAnimationFrame(() => setShown(true)); return () => cancelAnimationFrame(frame); }, []);
+  return <aside aria-label="Visit details" style={{ top: 'var(--app-shell-header-offset, 0px)' }}
+    className={cx('fixed bottom-0 right-0 z-40 w-[22rem] max-w-full overflow-y-auto border-l border-gray-100 bg-gray-50 p-4 shadow-xl shadow-accent-900/10',
+      'transition-transform duration-200 ease-out motion-reduce:transition-none', shown ? 'translate-x-0' : 'translate-x-full')}>
+    {children}
+  </aside>;
+}
+
 export default function EmployeeSchedulePage() {
   const [anchor, setAnchor] = useState(() => isoDate(new Date()));
   const [view, setView] = useState<'day' | 'week'>('day');
@@ -87,6 +98,23 @@ export default function EmployeeSchedulePage() {
   // The link's date and employee are read before the first load, so a deep link does not load this week first.
   const [ready, setReady] = useState(false);
   const wide = useMediaQuery('(min-width: 48em)', true);
+  // Focus moves into the details when they open and back to the visit that opened them when they close.
+  const opener = useRef<HTMLButtonElement | null>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const detailsOpen = selectedKey !== null;
+  const closeDetails = () => {
+    setSelectedKey(null);
+    const back = opener.current;
+    setTimeout(() => { if (back?.isConnected) back.focus(); }, 0);
+  };
+  useEffect(() => { if (detailsOpen) closeButton.current?.focus(); }, [detailsOpen]);
+  useEffect(() => {
+    if (!detailsOpen) return;
+    // Escape closes the details, unless something inside already used it (an open dropdown list closes itself first).
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !event.defaultPrevented) closeDetails(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [detailsOpen]);
 
   useEffect(() => {
     // A conflict link opens one employee's week; a date opens that day or week.
@@ -197,7 +225,7 @@ export default function EmployeeSchedulePage() {
   const visitButton = (item: Placed, style?: CSSProperties) => {
     const status = statusOf(item.visit);
     const time = `${formatTime(item.visit.startUtc)}–${formatTime(item.visit.endUtc)}`;
-    return <button key={item.key} type="button" onClick={() => setSelectedKey(item.key)} aria-pressed={selectedKey === item.key}
+    return <button key={item.key} type="button" onClick={event => { opener.current = event.currentTarget; setSelectedKey(item.key); }} aria-pressed={selectedKey === item.key}
       aria-label={`${item.visit.shiftName}, ${time}, ${status.label}${item.overlap ? ', overlaps another visit' : ''}`}
       style={style}
       className={cx('overflow-hidden rounded-xl border border-l-4 px-2 py-1.5 text-left text-gray-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500',
@@ -229,7 +257,7 @@ export default function EmployeeSchedulePage() {
           <Heading as="h2" size="sm">{visit.shiftName}</Heading>
           {place && <p className="text-sm text-gray-700">{place}</p>}
         </div>
-        <button type="button" onClick={() => setSelectedKey(null)} aria-label="Close visit details"
+        <button ref={closeButton} type="button" onClick={closeDetails} aria-label="Close visit details"
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-gray-300 text-gray-700 hover:border-brand-300">×</button>
       </div>
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2.5 text-sm">
@@ -307,8 +335,8 @@ export default function EmployeeSchedulePage() {
       {!loading && !error && schedule && staff.length > 0 && view === 'day' && columns.length === 0 && <p className="text-gray-700">Choose at least one employee to see their visits.</p>}
 
       {!loading && !error && schedule && columns.length > 0 && (
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-          <section aria-label="Visits" className="min-w-0 flex-1">
+        <div>
+          <section aria-label="Visits" className="min-w-0">
             {wide ? (
               <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white">
                 <div style={{ minWidth: 56 + columns.length * (view === 'week' ? 120 : 150) }}>
@@ -358,16 +386,11 @@ export default function EmployeeSchedulePage() {
             )}
           </section>
 
-          {wide ? (
-            <aside aria-label="Visit details" className="w-full shrink-0 lg:w-80">
-              {details ?? <Card padding="sm"><Heading as="h2" size="sm">No visit selected</Heading>
-                <p className="mt-1 text-sm text-gray-700">Select a visit to see its time, place, checklist and notes.</p></Card>}
-            </aside>
-          ) : details && (
+          {details && (wide ? <SlideOver key="details">{details}</SlideOver> : (
             <aside aria-label="Visit details" className="fixed inset-x-0 bottom-0 z-40 max-h-[80vh] overflow-y-auto rounded-t-3xl bg-white p-4 shadow-xl shadow-accent-900/10">
               {details}
             </aside>
-          )}
+          ))}
         </div>
       )}
     </div>
