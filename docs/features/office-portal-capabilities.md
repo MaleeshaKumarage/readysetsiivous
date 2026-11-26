@@ -14,6 +14,7 @@ Pages are documented one at a time. A page not listed yet has not been inventori
 | Employee schedule | `/admin/shifts/employee-schedule/` | Inventoried |
 | Work queue | `/admin/work-queue/` | Inventoried |
 | Partner operations | `/admin/partner-requests/` | Inventoried |
+| Quality Cycle | `/admin/quality-cycle/` | Inventoried |
 
 ## Office shell (every page)
 
@@ -446,3 +447,51 @@ Work for partner companies: pricing their properties, arranging one-time cleanin
 - **Add property** and a list of partner properties: name, address, an Inactive badge, and the price (or that it needs a price).
 - **Edit property** and **Set cleaning price** per property.
 - Property form: company (new properties only), property name (required), street, postal code, city, country, contact phone, contact email, rooms and beds (optional), and **Active property**.
+
+## Quality Cycle
+
+Route: `/admin/quality-cycle/`. Source: `site/src/app/admin/quality-cycle/page.tsx`, `ReportWorkspace.tsx`. Admins only; others see "Only admins can manage checklist templates and view reports."
+
+"Create checklist templates and prepare, export or share client quality reports." A switch chooses **Checklist Templates** or **Reports**.
+
+### Checklist templates
+
+- **New template**.
+- **Existing Templates** with **Active** and **Inactive** tabs and counts.
+- Each template: title, description, and its checklist items (count and list).
+- Per template: **Edit**; **Deactivate** (active) or **Reactivate** (inactive); **Delete** (inactive only, after a confirmation: templates used by a shift or checklist history are kept).
+- States: "Loading templates…", "No quality cycle templates created yet.", "No (status) checklist templates. Select (other) to view your other templates."
+
+### Template editor (dialog)
+
+- **Template Title** (required), **Description** (optional).
+- **Checklist Items (up to 10)**: one field per item, **Add Item**, and a remove button per item (when there is more than one).
+- **Create Template** or **Update Template**, and **Cancel**.
+
+### Reports: build a report
+
+- **Shifts**: choose up to 50 (inactive ones are marked).
+- Period: **Months** (a year and up to 12 months) or **Date range** (from and to, inclusive).
+- **Report language**: English, Finnish or Swedish.
+- **Load report**.
+
+### Reports: loaded report
+
+- The periods and time zone, and how hours are counted: scheduled hours count each visit once; actual hours sum each employee's submitted work time, without incomplete timings.
+- **Export all selected shifts** (PDF download) and **Share all selected shifts**.
+- A table per shift: company, branch, shift, scheduled visits, completed visits, scheduled hours, actual hours (with the number of incomplete records), and **Export shift** and **Share shift**.
+- "No reportable visits for these shifts and dates."
+
+### Share quality report (dialog)
+
+- Sends the chosen shifts as one report; the link expires in 30 days.
+- **Recipient source**: a known contact for these shifts, or **Other email address**; **Recipient email**.
+- **PDF and email language**: English, Finnish or Swedish.
+- **Send report**.
+
+### Shared reports
+
+- **Refresh shared reports**.
+- Links expire after 30 days and include report photos and notes. Acknowledgment records receipt through the link, not a signature.
+- Each share: recipient (or "Existing report link"), a status badge (Acknowledged, Email failed, Email sent or Link created), an Inactive badge when revoked or expired, the period, language and expiry, when the email provider accepted it, when it was acknowledged, and any email error.
+- Actions while active: **Open report**, **Retry email** (when the email was not sent) and **Revoke**.
