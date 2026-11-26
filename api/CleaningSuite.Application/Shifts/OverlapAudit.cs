@@ -82,6 +82,23 @@ public sealed record EmployeeScheduleVisit(Guid ShiftId, string ShiftName, DateT
     /// <summary>Ticked items on this employee's checklist for the visit. Null when the visit has no checklist yet.</summary>
     public int? ChecklistDone { get; init; }
     public int? ChecklistTotal { get; init; }
+
+    // What the calendar needs to move or reassign the visit with the existing visit endpoints.
+    /// <summary>The generated start of a moved scheduled visit; null for an unchanged or manual visit.</summary>
+    public DateTime? OriginalStartUtc { get; init; }
+    /// <summary>Set for a manual visit (status Extra); it is moved and reassigned by this id.</summary>
+    public Guid? ExtraExceptionId { get; init; }
+    public ShiftOccurrenceExceptionStatus? Status { get; init; }
+    /// <summary>The employee stored on the visit's change record. A move sends it back unchanged, since a move replaces it.</summary>
+    public Guid? VisitEmployeeId { get; init; }
+    public IReadOnlyList<Guid> AssigneeIds { get; init; } = Array.Empty<Guid>();
+    public string RosterVersion { get; init; } = "";
+    public Guid? AssignmentVersion { get; init; }
+    /// <summary>A property main shift's visit: its employee changes through the offer flow, not reassignment.</summary>
+    public bool IsBranchMain { get; init; }
+    public bool IsPartnerBooking { get; init; }
+    /// <summary>Why the visit cannot be moved or reassigned from the calendar; null when it can.</summary>
+    public string? MoveLockReason { get; init; }
 }
 
 public sealed record EmployeeDaySchedule(Guid EmployeeId, DateTime LocalDay, IReadOnlyList<EmployeeScheduleVisit> Visits);
@@ -155,6 +172,7 @@ public sealed class EmployeeScheduleQueryHandler(IShiftRepository repository, IT
         var windowFrom = TenantTimeZone.StartOfLocalDay(localFrom, zone);
         var windowTo = TenantTimeZone.StartOfLocalDay(localTo.AddDays(1), zone);
         var nowUtc = (clock ?? TimeProvider.System).GetUtcNow().UtcDateTime;
+        var today = TenantTimeZone.LocalDate(nowUtc, zone);
         // A moved visit keeps its checklist under its original start, which can fall just outside the window.
         var savedForms = forms is null || entries.Count == 0 ? new List<QualityCycleForm>()
             : (await forms.ListFormsAsync(null, windowFrom.AddDays(-7), windowTo.AddDays(7), ct) ?? []).Where(f => f.ShiftDeletedUtc is null).ToList();
@@ -177,6 +195,12 @@ public sealed class EmployeeScheduleQueryHandler(IShiftRepository repository, IT
             var (done, total) = ScheduleVisits.Checklist(occurrenceForms.Where(f => f.EmployeeId == employeeId)
                 .OrderByDescending(f => f.IsSubmitted).ThenByDescending(f => f.UpdatedUtc).FirstOrDefault());
             var record = (entry.ExtraExceptionId ?? entry.Occurrence.ExceptionId) is { } changeId && records.TryGetValue(changeId, out var found) ? found : null;
+            var partnerBooking = shift.PartnerRequestId.HasValue || record?.PartnerRequestId is not null;
+            // The same rules the visit endpoints enforce, so the calendar never offers a move the server refuses.
+            var moveLock = partnerBooking ? "Manage this visit through Partner requests."
+                : TenantTimeZone.LocalDate(entry.Occurrence.StartUtc, zone) < today ? "Past visits cannot be moved or reassigned."
+                : occurrenceForms.Any(f => f.IsSubmitted || f.StartedAtUtc.HasValue) ? "Started or completed work cannot be moved or reassigned."
+                : null;
             visits.Add((employeeId, new EmployeeScheduleVisit(shift.Id, shift.Name, entry.Occurrence.StartUtc, entry.Occurrence.EndUtc)
             {
                 ExceptionId = entry.Occurrence.ExceptionId,
@@ -188,6 +212,16 @@ public sealed class EmployeeScheduleQueryHandler(IShiftRepository repository, IT
                 VisitNumber = shift.IsBranchMain && entry.ExtraExceptionId is not null ? record?.Sequence : null,
                 ChecklistDone = done,
                 ChecklistTotal = total,
+                OriginalStartUtc = entry.Occurrence.OriginalStartUtc,
+                ExtraExceptionId = entry.ExtraExceptionId,
+                Status = entry.Occurrence.Status,
+                VisitEmployeeId = entry.Occurrence.EmployeeId,
+                AssigneeIds = entry.EmployeeIds,
+                RosterVersion = entry.RosterVersion,
+                AssignmentVersion = entry.Assignment?.Version,
+                IsBranchMain = shift.IsBranchMain,
+                IsPartnerBooking = partnerBooking,
+                MoveLockReason = moveLock,
             }));
         }
         return ScheduleVisits.GroupByDay(visits, zone);

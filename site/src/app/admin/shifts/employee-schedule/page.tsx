@@ -1,12 +1,20 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from 'react';
 import { Alert, Loader } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { Badge, Button, Card, Eyebrow, Heading, MultiSelect, buttonClasses, cx, type BadgeVariant } from '@/ds';
 import { adminEmployees, adminShifts, adminTenant, authorizedFetch, type Employee, type EmployeeDaySchedule, type OverlapFinding, type ScheduleVisit } from '@/lib/adminApi';
 
 const DAYS = 7;
+// Drag and drop: drops snap to 15 minutes and save at once with these reasons; Undo reverses them.
+const SNAP_MINUTES = 15;
+const MOVE_REASON = 'Moved in the employee calendar';
+const ASSIGN_REASON = 'Reassigned in the employee calendar';
+const UNDO_REASON = 'Undo in the employee calendar';
+const MODE_REPLACE = 1;
+const STATUS_MOVED = 1;
+const STATUS_EXTRA = 4;
 // Tall enough that a one-hour visit shows its name, time and status in a narrow week column.
 const HOUR_PX = 72;
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -107,6 +115,11 @@ export default function EmployeeSchedulePage() {
   // Working hours and working days by default; the full day and the weekend are opt-in.
   const [showFullDay, setShowFullDay] = useState(false);
   const [showWeekends, setShowWeekends] = useState(false);
+  // Drag and drop (desktop grid only).
+  const dragged = useRef<{ item: Placed; grabMinutes: number } | null>(null);
+  const [dropHint, setDropHint] = useState<{ column: string; minutes: number; duration: number } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<{ text: string; error?: boolean; undo?: () => Promise<void> } | null>(null);
   // The link's date and employee are read before the first load, so a deep link does not load this week first.
   const [ready, setReady] = useState(false);
   const wide = useMediaQuery('(min-width: 48em)', true);
@@ -181,6 +194,21 @@ export default function EmployeeSchedulePage() {
   };
   const sameVisit = (a: ScheduleVisit, b: ScheduleVisit) => a.shiftId === b.shiftId && a.startUtc === b.startUtc;
 
+  /** A workplace-local day and minute as a UTC instant, correct across clock changes. */
+  const zonedToUtc = (day: string, minutes: number) => {
+    const [y, m, d] = day.split('-').map(Number);
+    const wanted = Date.UTC(y, m - 1, d, Math.floor(minutes / 60), minutes % 60);
+    let instant = wanted;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const seen = local(new Date(instant).toISOString());
+      const [sy, sm, sd] = seen.day.split('-').map(Number);
+      const shown = Date.UTC(sy, sm - 1, sd, Math.floor(seen.minutes / 60), seen.minutes % 60);
+      if (shown === wanted) break;
+      instant += wanted - shown;
+    }
+    return new Date(instant).toISOString();
+  };
+
   // Each employee's visits on each day of the week, positioned in minutes from local midnight.
   const placedFor = (employeeId: string, day: string): Placed[] =>
     (schedule?.find(row => row.employeeId === employeeId && row.localDay.slice(0, 10) === day)?.visits ?? []).map(visit => {
@@ -238,14 +266,128 @@ export default function EmployeeSchedulePage() {
     <div className="space-y-4 p-4"><Heading as="h2" size="md">Employee schedule</Heading><Loader /></div>
   );
 
+  // ---- Drag and drop ----
+  const isManual = (visit: ScheduleVisit) => visit.status === STATUS_EXTRA;
+  const movable = (item: Placed) => wide && !saving && typeof item.visit.rosterVersion === 'string' && !item.visit.moveLockReason
+    && item.visit.workStatus !== 'InProgress' && item.visit.workStatus !== 'Completed';
+  // A drop on another employee's column reassigns the visit; main-shift visits change employee through their offer instead.
+  const canDropOn = (item: Placed, column: Column) => column.employeeId === item.employeeId
+    || (!item.visit.isBranchMain && !(item.visit.assigneeIds ?? []).includes(column.employeeId));
+
+  const move = (visit: ScheduleVisit, startUtc: string, endUtc: string, reason: string, exceptionId?: string | null) =>
+    adminShifts.saveOccurrenceException(visit.shiftId, {
+      id: (isManual(visit) ? visit.extraExceptionId ?? visit.exceptionId : exceptionId ?? visit.exceptionId) ?? null,
+      originalStartUtc: isManual(visit) ? null : visit.originalStartUtc ?? visit.startUtc,
+      startUtc, endUtc, status: isManual(visit) ? STATUS_EXTRA : STATUS_MOVED, reason,
+      // A move replaces the employee on the visit's record, so the current one is sent back unchanged.
+      employeeId: visit.visitEmployeeId ?? null,
+    });
+  const reassign = (visit: ScheduleVisit, from: string, to: string, reason: string) =>
+    adminShifts.setVisitAssignees(visit.shiftId, {
+      originalStartUtc: isManual(visit) ? null : visit.originalStartUtc ?? visit.startUtc,
+      extraExceptionId: isManual(visit) ? visit.extraExceptionId ?? visit.exceptionId ?? null : null,
+      mode: MODE_REPLACE, employeeIds: [...(visit.assigneeIds ?? []).filter(id => id !== from), to],
+      reason, rosterVersion: visit.rosterVersion ?? '', assignmentVersion: visit.assignmentVersion ?? null, fromThisDate: false, preview: false,
+    });
+  /** The visit as the server has it now, for an undo that needs fresh roster versions. */
+  const freshVisit = async (employeeId: string, visit: ScheduleVisit, startUtc: string) => {
+    const rows = await adminShifts.employeeSchedule(weekStart, weekEnd);
+    const original = visit.originalStartUtc ?? (isManual(visit) ? null : visit.startUtc);
+    return rows?.filter(row => row.employeeId === employeeId).flatMap(row => row.visits).find(item => item.shiftId === visit.shiftId
+      && (isManual(visit) ? (item.extraExceptionId ?? item.exceptionId) === (visit.extraExceptionId ?? visit.exceptionId)
+        : (item.originalStartUtc ?? item.startUtc) === original || Date.parse(item.startUtc) === Date.parse(startUtc)));
+  };
+  const failureText = (failure: unknown) => failure instanceof Error && failure.message ? failure.message : 'Could not save the change. Reload and try again.';
+  const when = (day: string, startUtc: string) =>
+    `${new Date(`${day}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} ${formatTime(startUtc)}`;
+
+  const dropMinutes = (column: Column, event: DragEvent<HTMLDivElement>, grabMinutes: number, duration: number) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const pointer = firstHour * 60 + ((event.clientY - rect.top) / HOUR_PX) * 60;
+    const snapped = Math.round((pointer - grabMinutes) / SNAP_MINUTES) * SNAP_MINUTES;
+    return Math.min(24 * 60 - duration, Math.max(0, snapped));
+  };
+  const onColumnDragOver = (column: Column, event: DragEvent<HTMLDivElement>) => {
+    const drag = dragged.current;
+    if (!drag || !canDropOn(drag.item, column)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    const duration = Math.round((Date.parse(drag.item.visit.endUtc) - Date.parse(drag.item.visit.startUtc)) / 60000);
+    const minutes = dropMinutes(column, event, drag.grabMinutes, duration);
+    if (dropHint?.column !== column.key || dropHint.minutes !== minutes) setDropHint({ column: column.key, minutes, duration });
+  };
+  const onColumnDrop = async (column: Column, event: DragEvent<HTMLDivElement>) => {
+    const drag = dragged.current;
+    dragged.current = null; setDropHint(null);
+    if (!drag || !canDropOn(drag.item, column)) return;
+    event.preventDefault();
+    const { item } = drag; const visit = item.visit;
+    const durationMs = Date.parse(visit.endUtc) - Date.parse(visit.startUtc);
+    const startUtc = zonedToUtc(column.day, dropMinutes(column, event, drag.grabMinutes, Math.round(durationMs / 60000)));
+    const endUtc = new Date(Date.parse(startUtc) + durationMs).toISOString();
+    const timeChanged = Date.parse(startUtc) !== Date.parse(visit.startUtc);
+    const employeeChanged = column.employeeId !== item.employeeId;
+    if (!timeChanged && !employeeChanged) return;
+    const from = staff.find(employee => employee.id === item.employeeId);
+    const to = staff.find(employee => employee.id === column.employeeId);
+    setSaving(true); setNotice({ text: 'Saving…' }); setSelectedKey(null);
+    let reassigned = false;
+    try {
+      // Reassign first: it checks the roster version, so a stale calendar is refused before anything changes.
+      if (employeeChanged) { await reassign(visit, item.employeeId, column.employeeId, ASSIGN_REASON); reassigned = true; }
+      const moved = timeChanged ? await move(visit, startUtc, endUtc, MOVE_REASON) : null;
+      const parts = [employeeChanged ? `Reassigned ${visit.shiftName} from ${nameOf(from)} to ${nameOf(to)}` : `Moved ${visit.shiftName}`,
+        timeChanged ? `${employeeChanged ? 'and moved it' : ''} to ${when(column.day, startUtc)}`.trim() : ''].filter(Boolean);
+      setNotice({ text: `${parts.join(' ')}.`, undo: async () => {
+        if (moved) await move(visit, visit.startUtc, visit.endUtc, UNDO_REASON, moved.exceptionId);
+        if (employeeChanged) {
+          const current = await freshVisit(column.employeeId, visit, startUtc);
+          if (!current) throw new Error('The visit changed again, so it cannot be undone here. Reload and check it.');
+          await reassign(current, column.employeeId, item.employeeId, UNDO_REASON);
+        }
+      } });
+    } catch (failure) {
+      setNotice({ error: true, text: reassigned
+        ? `Reassigned ${visit.shiftName} to ${nameOf(to)}, but the time could not be changed: ${failureText(failure)}`
+        : failureText(failure),
+        undo: reassigned ? async () => {
+          const current = await freshVisit(column.employeeId, visit, visit.startUtc);
+          if (!current) throw new Error('The visit changed again, so it cannot be undone here. Reload and check it.');
+          await reassign(current, column.employeeId, item.employeeId, UNDO_REASON);
+        } : undefined });
+    } finally {
+      setSaving(false); setReloadKey(key => key + 1);
+    }
+  };
+  const undoLast = async () => {
+    const undo = notice?.undo;
+    if (!undo) return;
+    setSaving(true); setNotice({ text: 'Undoing…' });
+    try { await undo(); setNotice({ text: 'Change undone.' }); }
+    catch (failure) { setNotice({ error: true, text: failureText(failure) }); }
+    finally { setSaving(false); setReloadKey(key => key + 1); }
+  };
+
   const visitButton = (item: Placed, style?: CSSProperties) => {
     const status = statusOf(item.visit);
     const time = `${formatTime(item.visit.startUtc)}–${formatTime(item.visit.endUtc)}`;
     return <button key={item.key} type="button" onClick={event => { opener.current = event.currentTarget; setSelectedKey(item.key); }} aria-pressed={selectedKey === item.key}
       aria-label={`${item.visit.shiftName}, ${time}, ${status.label}${item.overlap ? ', overlaps another visit' : ''}`}
       style={style}
+      {...(style && movable(item) ? {
+        draggable: true,
+        onDragStart: (event: DragEvent<HTMLButtonElement>) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          dragged.current = { item, grabMinutes: Math.round(((event.clientY - rect.top) / HOUR_PX) * 60) };
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/plain', item.key);
+        },
+        onDragEnd: () => { dragged.current = null; setDropHint(null); },
+      } : {})}
+      title={style && item.visit.moveLockReason ? item.visit.moveLockReason : undefined}
       className={cx('overflow-hidden rounded-xl border border-l-4 px-2 py-1.5 text-left text-gray-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500',
-        status.block, selectedKey === item.key && 'ring-2 ring-accent-900', style ? 'absolute' : 'w-full')}>
+        status.block, selectedKey === item.key && 'ring-2 ring-accent-900', style ? 'absolute' : 'w-full',
+        style && movable(item) && 'cursor-grab active:cursor-grabbing')}>
       <span className="block truncate text-xs font-bold leading-tight">{item.visit.shiftName}</span>
       <span className="mt-0.5 block text-[11px] tabular-nums text-gray-700">{time}</span>
       <span className="mt-1 flex flex-wrap items-center gap-1">
@@ -345,6 +487,7 @@ export default function EmployeeSchedulePage() {
         {(wide || view === 'week') && <div className="flex flex-wrap items-center gap-x-6 sm:col-span-full" role="group" aria-label="Show more">
           {wide && <Toggle label="Show 24 h" checked={showFullDay} onChange={setShowFullDay} />}
           {view === 'week' && <Toggle label="Show weekends" checked={showWeekends} onChange={setShowWeekends} />}
+          {wide && <span className="text-sm text-gray-500">Drag a visit to change its time{view === 'day' ? ' or employee' : ' or day'}.</span>}
         </div>}
       </div>
 
@@ -357,6 +500,14 @@ export default function EmployeeSchedulePage() {
       </p>}
       {!loading && !error && schedule && staff.length > 0 && view === 'day' && columns.length === 0 && <p className="text-gray-700">Choose at least one employee to see their visits.</p>}
 
+      {notice && <div role="status" className={cx('flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm',
+        notice.error ? 'border-red-200 bg-red-50 text-red-600' : 'border-gray-200 bg-white text-gray-700')}>
+        <span>{notice.text}</span>
+        <span className="flex gap-2">
+          {notice.undo && !saving && <Button size="sm" variant="outline" onClick={() => { void undoLast(); }}>Undo</Button>}
+          {!saving && <Button size="sm" variant="ghost" onClick={() => setNotice(null)} aria-label="Dismiss message">×</Button>}
+        </span>
+      </div>}
       {!loading && !error && schedule && columns.length > 0 && (
         <div>
           <section aria-label="Visits" className="min-w-0">
@@ -380,7 +531,17 @@ export default function EmployeeSchedulePage() {
                       const layout = lanes(column.visits);
                       return <div key={column.key} role="group" aria-label={`${nameOf(staff.find(e => e.id === column.employeeId))}, ${column.day}`}
                         className="relative border-l border-gray-100"
+                        onDragOver={event => onColumnDragOver(column, event)}
+                        onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null) && dropHint?.column === column.key) setDropHint(null); }}
+                        onDrop={event => { void onColumnDrop(column, event); }}
                         style={{ height: (lastHour - firstHour) * HOUR_PX, backgroundImage: 'repeating-linear-gradient(to bottom, #f3f4f6 0, #f3f4f6 1px, transparent 1px, transparent 72px)' }}>
+                        {dropHint?.column === column.key && <div aria-hidden="true" data-testid="drop-marker"
+                          className="pointer-events-none absolute inset-x-1 z-10 rounded-xl border-2 border-dashed border-brand-500 bg-brand-50/70"
+                          style={{ top: ((dropHint.minutes - firstHour * 60) / 60) * HOUR_PX, height: Math.max(24, (dropHint.duration / 60) * HOUR_PX) }}>
+                          <span className="m-1 inline-block rounded-full bg-brand-500 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-accent-950">
+                            {String(Math.floor(dropHint.minutes / 60)).padStart(2, '0')}:{String(dropHint.minutes % 60).padStart(2, '0')}
+                          </span>
+                        </div>}
                         {column.visits.map(item => {
                           const place = layout.get(item.key) ?? { lane: 0, lanes: 1 };
                           const width = 100 / Math.max(1, place.lanes);

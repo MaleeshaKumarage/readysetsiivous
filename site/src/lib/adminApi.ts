@@ -614,6 +614,16 @@ export interface ScheduleVisit {
   visitNotes?: string | null; visitNumber?: number | null;
   /** This employee's checklist for the visit: ticked items and all items. Null before a checklist exists. */
   checklistDone?: number | null; checklistTotal?: number | null;
+  // Identity and versions for moving or reassigning the visit from the calendar.
+  originalStartUtc?: string | null; extraExceptionId?: string | null;
+  /** 1 moved, 4 manual (extra) visit; null for an unchanged scheduled visit. */
+  status?: number | null;
+  /** The employee stored on the visit's change record; a move sends it back unchanged. */
+  visitEmployeeId?: string | null;
+  assigneeIds?: string[]; rosterVersion?: string; assignmentVersion?: string | null;
+  isBranchMain?: boolean; isPartnerBooking?: boolean;
+  /** Why the calendar cannot move or reassign this visit; null when it can. */
+  moveLockReason?: string | null;
 }
 export interface EmployeeDaySchedule { employeeId: string; localDay: string; visits: ScheduleVisit[] }
 export interface OverlapFinding { employeeId: string; earlier: ScheduleVisit; later: ScheduleVisit }

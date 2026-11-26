@@ -78,6 +78,37 @@ public class EmployeeScheduleTests
 
     private static readonly DateTime Start = new(2026, 12, 7, 7, 0, 0, DateTimeKind.Utc);
 
+    /// <summary>A fixed "now", so a visit's past or future does not depend on the day the tests run.</summary>
+    private sealed class FixedClock(DateTime utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => new(utcNow, TimeSpan.Zero);
+    }
+    private static readonly TimeProvider BeforeTheVisit = new FixedClock(new DateTime(2026, 12, 1, 9, 0, 0, DateTimeKind.Utc));
+
+    private static Mock<IShiftRepository> RosterOf(Shift shift, ShiftOccurrenceException visit)
+    {
+        var shifts = new Mock<IShiftRepository>();
+        shifts.Setup(x => x.ListForReportingAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new[] { shift });
+        shifts.Setup(x => x.ListOccurrenceExceptionsAsync(shift.Id, It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { visit });
+        shifts.Setup(x => x.ListAssignmentHistoryAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<ShiftAssignment>());
+        shifts.Setup(x => x.ListOccurrenceAssignmentsAsync(shift.Id, It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<ShiftOccurrenceAssignment>());
+        return shifts;
+    }
+
+    private static async Task<EmployeeScheduleVisit> OnlyVisit(Shift shift, ShiftOccurrenceException visit, TimeProvider clock, params QualityCycleForm[] saved)
+    {
+        var forms = new Mock<IQualityCycleRepository>();
+        forms.Setup(x => x.ListFormsAsync(It.IsAny<Guid?>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(saved.ToList());
+        var days = await new EmployeeScheduleQueryHandler(RosterOf(shift, visit).Object, null!, null!, forms.Object, clock: clock)
+            .Handle(new EmployeeScheduleQuery(new DateTime(2026, 12, 7), new DateTime(2026, 12, 7)), default);
+        return Assert.Single(Assert.Single(days).Visits);
+    }
+
+    private static Shift OnCall(string name) =>
+        Shift.Create(Guid.NewGuid(), Guid.NewGuid(), name, new ShiftSchedule { Type = ShiftScheduleType.OnCallFlexible }, null, null, null);
+
     [Fact]
     public async Task A_visit_carries_its_place_notes_work_state_and_the_employees_own_checklist()
     {
@@ -108,7 +139,7 @@ public class EmployeeScheduleTests
         var branches = new Mock<IBranchRepository>();
         branches.Setup(x => x.GetAsync(branch.Id, It.IsAny<CancellationToken>())).ReturnsAsync(branch);
 
-        var days = await new EmployeeScheduleQueryHandler(shifts.Object, null!, null!, forms.Object, companies.Object, branches.Object)
+        var days = await new EmployeeScheduleQueryHandler(shifts.Object, null!, null!, forms.Object, companies.Object, branches.Object, BeforeTheVisit)
             .Handle(new EmployeeScheduleQuery(new DateTime(2026, 12, 7), new DateTime(2026, 12, 7)), default);
 
         var day = Assert.Single(days);
@@ -123,6 +154,43 @@ public class EmployeeScheduleTests
         Assert.Equal(2, item.ChecklistDone);
         Assert.Equal(4, item.ChecklistTotal);
         Assert.False(string.IsNullOrEmpty(item.WorkStatus));
+        // Identity and versions for moving or reassigning it with the visit endpoints.
+        Assert.Equal(visit.Id, item.ExtraExceptionId);
+        Assert.Equal(ShiftOccurrenceExceptionStatus.Extra, item.Status);
+        Assert.Null(item.OriginalStartUtc);
+        Assert.Equal(employee, item.VisitEmployeeId);
+        Assert.Contains(employee, item.AssigneeIds);
+        Assert.False(item.IsPartnerBooking);
+        // Its checklist has started, so the calendar must not offer to move it.
+        Assert.Equal("Started or completed work cannot be moved or reassigned.", item.MoveLockReason);
+    }
+
+    [Fact]
+    public async Task A_future_visit_without_started_work_can_be_moved()
+    {
+        var employee = Guid.NewGuid(); var shift = OnCall("Deep clean");
+        var visit = ShiftOccurrenceException.Create(shift.Id, null, Start, Start.AddHours(2), ShiftOccurrenceExceptionStatus.Extra, "Added", employee);
+        var item = await OnlyVisit(shift, visit, BeforeTheVisit);
+        Assert.Null(item.MoveLockReason);
+    }
+
+    [Fact]
+    public async Task A_past_visit_cannot_be_moved()
+    {
+        var employee = Guid.NewGuid(); var shift = OnCall("Deep clean");
+        var visit = ShiftOccurrenceException.Create(shift.Id, null, Start, Start.AddHours(2), ShiftOccurrenceExceptionStatus.Extra, "Added", employee);
+        var item = await OnlyVisit(shift, visit, new FixedClock(new DateTime(2026, 12, 9, 9, 0, 0, DateTimeKind.Utc)));
+        Assert.Equal("Past visits cannot be moved or reassigned.", item.MoveLockReason);
+    }
+
+    [Fact]
+    public async Task A_partner_booking_is_managed_through_partner_requests()
+    {
+        var employee = Guid.NewGuid(); var shift = OnCall("Partner clean"); shift.PartnerRequestId = Guid.NewGuid();
+        var visit = ShiftOccurrenceException.Create(shift.Id, null, Start, Start.AddHours(2), ShiftOccurrenceExceptionStatus.Extra, "Added", employee);
+        var item = await OnlyVisit(shift, visit, BeforeTheVisit);
+        Assert.True(item.IsPartnerBooking);
+        Assert.Equal("Manage this visit through Partner requests.", item.MoveLockReason);
     }
 
     [Fact]
