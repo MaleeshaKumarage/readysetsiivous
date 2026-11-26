@@ -175,8 +175,8 @@ test('a refused visit shows the reason, keeps what was typed, and a retry adds i
 
 test('the visit list names each visit with its number, dates and source', async ({ page }) => {
   await setup(page);
-  await shiftAction(page, MAIN, 'Occurrences');
-  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  await shiftAction(page, MAIN, 'Visits');
+  const list = page.getByRole('dialog', { name: /^Visits/ });
   await expect(list.getByTestId('visit-name')).toHaveText(['#1 · Tue 10 Nov · Admin panel', '#2 · 10–14 Nov · Partner portal']);
   const first = list.getByRole('row').filter({ hasText: '#1 ·' });
   await expect(first).toContainText('Offer sent to Test Employee');
@@ -194,8 +194,8 @@ test('the visit list names each visit with its number, dates and source', async 
 
 test('a visit added from the open list appears there with the next number', async ({ page }) => {
   const state = await setup(page);
-  await shiftAction(page, MAIN, 'Occurrences');
-  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  await shiftAction(page, MAIN, 'Visits');
+  const list = page.getByRole('dialog', { name: /^Visits/ });
   // A main shift takes visits through Add visit only, so each one is numbered.
   await expect(list.getByRole('button', { name: 'Add visit', exact: true })).toHaveCount(1);
   await list.getByRole('button', { name: 'Add visit', exact: true }).click();
@@ -210,8 +210,8 @@ test('a visit added from the open list appears there with the next number', asyn
 
 test('admin sets the default employee and changes the employee of one visit', async ({ page }) => {
   const state = await setup(page);
-  await shiftAction(page, MAIN, 'Occurrences');
-  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  await shiftAction(page, MAIN, 'Visits');
+  const list = page.getByRole('dialog', { name: /^Visits/ });
   const cleanerField = list.getByRole('textbox', { name: 'Default employee', exact: true });
   await cleanerField.click();
   await expect(page.getByRole('option', { name: 'Second Employee', exact: true })).toBeAttached();
@@ -234,8 +234,8 @@ test('admin sets the default employee and changes the employee of one visit', as
 
 test('an employee change refused by the server shows why and leaves the visit as it was', async ({ page }) => {
   const state = await setup(page, { cleanerConflict: true });
-  await shiftAction(page, MAIN, 'Occurrences');
-  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  await shiftAction(page, MAIN, 'Visits');
+  const list = page.getByRole('dialog', { name: /^Visits/ });
   await list.getByRole('row').filter({ hasText: '#1 ·' }).getByRole('button', { name: 'Change employee', exact: true }).click();
   const editor = page.getByRole('dialog', { name: 'Change employee', exact: true });
   await editor.getByRole('textbox', { name: 'Employee', exact: true }).click();
@@ -322,8 +322,8 @@ test('a visit that is already cleaned can be changed from Normal to Deep', async
   const state = await setup(page);
   // A visit whose cleaning is already done (the clock is set to 3 November 2026).
   state.occurrences = [{ ...adminVisit, exceptionId: 'visit-done', startUtc: '2026-10-20T06:00:00.000Z', endUtc: '2026-10-20T08:00:00.000Z', visitNumber: 3, visitCleaningType: 'Normal' }];
-  await shiftAction(page, MAIN, 'Occurrences');
-  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  await shiftAction(page, MAIN, 'Visits');
+  const list = page.getByRole('dialog', { name: /^Visits/ });
   const row = list.getByRole('row').filter({ hasText: '#3 ·' });
   await expect(row).toContainText('Normal cleaning');
 
@@ -341,8 +341,8 @@ test('a visit that is already cleaned can be changed from Normal to Deep', async
 
 test('staff set Deep or Normal on a partner visit from the visit list, and the booking follows', async ({ page }) => {
   const state = await setup(page);
-  await shiftAction(page, MAIN, 'Occurrences');
-  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  await shiftAction(page, MAIN, 'Visits');
+  const list = page.getByRole('dialog', { name: /^Visits/ });
   const booked = list.getByRole('row').filter({ hasText: '#2 ·' });
   await expect(booked).toContainText('Normal cleaning');
   await booked.getByRole('button', { name: 'Change cleaning type', exact: true }).click();
@@ -364,8 +364,8 @@ test('a cleaning type picked and cancelled on one visit is not carried to the ne
   const state = await setup(page);
   // Two Normal visits, so the same modal opens for each in turn.
   state.occurrences = [adminVisit, { ...adminVisit, exceptionId: 'visit-3', visitNumber: 3, startUtc: '2026-11-12T06:00:00.000Z', endUtc: '2026-11-12T08:00:00.000Z' }];
-  await shiftAction(page, MAIN, 'Occurrences');
-  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  await shiftAction(page, MAIN, 'Visits');
+  const list = page.getByRole('dialog', { name: /^Visits/ });
   const modal = page.getByRole('dialog', { name: 'Change employee', exact: true });
 
   await list.getByRole('row').filter({ hasText: '#1 ·' }).getByRole('button', { name: 'Change employee', exact: true }).click();
@@ -385,16 +385,16 @@ test('a cleaning type picked and cancelled on one visit is not carried to the ne
 test('a visit that has already ended with a waiting offer says the employee can still accept it', async ({ page }) => {
   const state = await setup(page);
   state.occurrences = [{ ...adminVisit, startUtc: '2026-11-02T06:00:00.000Z', endUtc: '2026-11-02T08:00:00.000Z' }];
-  await shiftAction(page, MAIN, 'Occurrences');
-  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  await shiftAction(page, MAIN, 'Visits');
+  const list = page.getByRole('dialog', { name: /^Visits/ });
   await expect(list.getByTestId('past-offer-note')).toContainText('The employee can still accept the offer. To change the employee, delete this visit and add it again.');
 });
 
 test('a visit row shows what its work is doing: Done once the employee has finished', async ({ page }) => {
   const state = await setup(page);
   state.occurrences = [{ ...adminVisit, workStatus: 'Completed' }, { ...partnerVisit, workStatus: 'Scheduled' }];
-  await shiftAction(page, MAIN, 'Occurrences');
-  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  await shiftAction(page, MAIN, 'Visits');
+  const list = page.getByRole('dialog', { name: /^Visits/ });
   await expect(list.getByRole('row').filter({ hasText: '#1 ·' }).getByTestId('occurrence-status')).toHaveText('Done');
   await expect(list.getByRole('row').filter({ hasText: '#2 ·' }).getByTestId('occurrence-status')).toHaveText('Scheduled');
 });
@@ -402,8 +402,8 @@ test('a visit row shows what its work is doing: Done once the employee has finis
 test('admin changes the cleaning type of a finished visit it added', async ({ page }) => {
   const state = await setup(page);
   state.occurrences = [{ ...adminVisit, startUtc: '2026-11-02T06:00:00.000Z', endUtc: '2026-11-02T08:00:00.000Z', offeredEmployeeId: null, assigneeIds: ['employee'], employeeId: 'employee' }];
-  await shiftAction(page, MAIN, 'Occurrences');
-  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  await shiftAction(page, MAIN, 'Visits');
+  const list = page.getByRole('dialog', { name: /^Visits/ });
   await list.getByRole('button', { name: 'Change cleaning type' }).click();
   const editor = page.getByRole('dialog', { name: /Change|Employee|Occurrence/ }).last();
   await editor.getByRole('textbox', { name: 'Cleaning type', exact: true }).click();

@@ -44,11 +44,11 @@ test('on-call quick visit prefills the default employee and notes; the user sets
   await page.goto('/admin/shifts/');
   await shiftAction(page, 'Quick on-call', 'Add visit');
 
-  const editor = page.getByRole('dialog', { name: 'Change occurrence', exact: true });
+  const editor = page.getByRole('dialog', { name: 'Change visit', exact: true });
   await expect(editor.getByRole('textbox', { name: 'Reason', exact: true })).toHaveValue('Gate code 42');
   await editor.getByLabel(/^Start \(/).fill('2026-11-20T09:00');
   await editor.getByLabel(/^End \(/).fill('2026-11-20T11:00');
-  await editor.getByRole('button', { name: 'Save occurrence', exact: true }).click();
+  await editor.getByRole('button', { name: 'Save visit', exact: true }).click();
 
   await expect(editor).toHaveCount(0);
   expect(writes).toHaveLength(1);
@@ -61,11 +61,11 @@ test('quick visit uses "Quick visit" as the reason and no employee when the shif
   await page.goto('/admin/shifts/');
   await shiftAction(page, 'Bare on-call', 'Add visit');
 
-  const editor = page.getByRole('dialog', { name: 'Change occurrence', exact: true });
+  const editor = page.getByRole('dialog', { name: 'Change visit', exact: true });
   await expect(editor.getByRole('textbox', { name: 'Reason', exact: true })).toHaveValue('Quick visit');
   await editor.getByLabel(/^Start \(/).fill('2026-11-21T09:00');
   await editor.getByLabel(/^End \(/).fill('2026-11-21T11:00');
-  await editor.getByRole('button', { name: 'Save occurrence', exact: true }).click();
+  await editor.getByRole('button', { name: 'Save visit', exact: true }).click();
 
   await expect(editor).toHaveCount(0);
   expect(writes).toHaveLength(1);

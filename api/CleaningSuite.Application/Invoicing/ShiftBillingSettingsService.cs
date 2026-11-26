@@ -42,6 +42,7 @@ public class ShiftBillingSettingsService(IShiftRepository shifts, IShiftBillingR
         var shift = await shifts.GetAsync(id, ct) ?? throw new NotFoundException("Shift", id);
         if (shift.IsBranchMain) throw new ShiftConflictException("This is the property's main visit shift. Each visit uses the property price in force on its date. Change the property price instead.");
         if (shift.PartnerRequestId.HasValue) throw new ShiftConflictException("Partner visit pricing is frozen when requested. Update branch pricing for future requests instead.");
+        if (shift.PricingMode is not null) throw new ShiftConflictException("This shift has its own contract price. Change the price on the shift instead.");
         if (plan.Mode is not ("Monthly" or "Hourly" or "PerOccurrence")) Invalid("Choose monthly, hourly or per-occurrence pricing.");
         if (plan.Mode == "PerOccurrence" && !shift.Schedule.IsVisitPriced) Invalid("Per-occurrence pricing is for on-call and one-time shifts.");
         Rate(plan.RateNet, plan.VatRatePercent);
@@ -65,6 +66,7 @@ public class ShiftBillingSettingsService(IShiftRepository shifts, IShiftBillingR
         var shift = await shifts.GetAsync(id, ct) ?? throw new NotFoundException("Shift", id);
         if (shift.IsBranchMain) throw new ShiftConflictException("This is the property's main visit shift. Each visit uses the property price in force on its date. Change the property price instead.");
         if (shift.PartnerRequestId.HasValue) throw new ShiftConflictException("Partner visit pricing is frozen when requested. Update branch pricing for future requests instead.");
+        if (shift.PricingMode is not null) throw new ShiftConflictException("This shift has its own contract price. Change the price on the shift instead.");
         if (branches is null) Invalid("Branch prices are unavailable right now. Reload the page and try again.");
         var branch = await branches!.GetAsync(shift.BranchId, ct) ?? throw new NotFoundException("Branch", shift.BranchId);
         if (branch.VersionFrom(effectiveFrom) is null) Invalid("Choose a price version from this shift's branch.");
@@ -99,7 +101,12 @@ public class ShiftBillingSettingsService(IShiftRepository shifts, IShiftBillingR
         await using var lease = await reservation.AcquireAsync(ct);
         var shift = await shifts.GetAsync(id, ct) ?? throw new NotFoundException("Shift", id);
         if (shift.PartnerRequestId.HasValue) throw new ShiftConflictException("Partner visit pricing is frozen when requested. Update branch pricing for future requests instead.");
-        if (!shift.Schedule.IsVisitPriced) Invalid("Visit price overrides are for on-call and one-time shifts.");
+        // A shift's own price decides: a monthly fee is shared across the month, so a single visit has no price of its own;
+        // a per-visit price can be changed for one visit, whatever the schedule.
+        if (shift.PricingMode == ShiftPricingMode.Monthly)
+            Invalid("This shift is billed by a monthly fee, so a single visit cannot have its own price. Change the shift to a per-visit price first.");
+        var contractPerVisit = shift.PricingMode == ShiftPricingMode.PerVisit && shift.RateNet is not null;
+        if (!contractPerVisit && !shift.Schedule.IsVisitPriced) Invalid("Visit price overrides are for on-call and one-time shifts.");
         Rate(price.RateNet, 0);
         if (price.OccurrenceStartUtc.Kind != DateTimeKind.Utc || string.IsNullOrWhiteSpace(price.Reason) || price.Reason.Length > 1000)
             Invalid("Provide a UTC visit start and an override reason of at most 1,000 characters.");
@@ -130,7 +137,7 @@ public class ShiftBillingSettingsService(IShiftRepository shifts, IShiftBillingR
             if ((versions.LastOrDefault(v => v.EffectiveFrom <= date) ?? versions.FirstOrDefault())?.Mode != "PerOccurrence")
                 Invalid("Set a per-visit price on the property before adding a visit price override.");
         }
-        else if (profile.Plans.Where(p => p.EffectiveFrom <= date).OrderByDescending(p => p.EffectiveFrom).FirstOrDefault()?.Mode != "PerOccurrence")
+        else if (!contractPerVisit && profile.Plans.Where(p => p.EffectiveFrom <= date).OrderByDescending(p => p.EffectiveFrom).FirstOrDefault()?.Mode != "PerOccurrence")
             Invalid("Configure per-completed-visit pricing effective on this visit's date before adding a visit price override.");
         profile.Overrides.RemoveAll(p => p.OccurrenceStartUtc == price.OccurrenceStartUtc);
         profile.Overrides.Add(price with { Reason = price.Reason.Trim() });
