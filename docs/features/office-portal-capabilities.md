@@ -11,6 +11,7 @@ Pages are documented one at a time. A page not listed yet has not been inventori
 | Shifts (work orders in the redesign) | `/admin/shifts/` | Inventoried |
 | Bookings | `/admin/bookings/` | Inventoried |
 | Shift calendar (work order calendar in the redesign) | `/admin/shifts/calendar/` | Inventoried |
+| Employee schedule | `/admin/shifts/employee-schedule/` | Inventoried |
 
 ## Office shell (every page)
 
@@ -311,3 +312,51 @@ Sorted by start time. Each card shows:
 - For photos the employee sent outside the app.
 - Choose one or more photos (PNG, JPEG, WebP or BMP); each needs its own note. A required reason is kept with the visit.
 - Errors: "Choose at least one photo.", a missing note, and "Enter a reason."
+
+## Employee schedule
+
+Route: `/admin/shifts/employee-schedule/`. Source: `site/src/app/admin/shifts/employee-schedule/page.tsx`.
+
+A calendar of every employee's visits, where visits can be moved by dragging.
+
+### Controls
+
+- View: **Day** (one column per chosen employee) or **Week** (one employee, one column per day).
+- **Previous day / Today / Next day**, or **Previous week / This week / Next week** in week view.
+- **Date** picker (day view) or **Week starting** picker (week view; any date jumps to that week's Monday).
+- **Employees** (day view, several) or **Employee** (week view, one), and **Show all employees**.
+- **Show 24 h** (wide screens): the grid normally runs 08:00–17:00, widened to fit earlier or later visits; this shows the whole day.
+- **Show weekends** (week view).
+- Hint on wide screens: "Drag a visit to change its time or employee" (day view) or "…or day" (week view).
+
+### Grid
+
+- Each column header: the employee (or day), their working hours for that day ("08:00–16:00" or "No hours set"), and the number of visits.
+- Visits sit at their time, sized by length. Overlapping visits share the column side by side.
+- Each visit shows its status: Scheduled, In progress, Completed or Needs action, and an overlap mark when the overlap audit finds a double booking for that employee.
+- On phones the grid becomes a list per column ("No visits" when empty).
+
+### Drag and drop (wide screens)
+
+- Drag a visit up or down to change its time; drops snap to 15 minutes. A marker shows the drop time.
+- In day view, drop on another employee's column to reassign the visit. In week view, drop on another day.
+- A visit cannot be moved when it is in progress or completed, or when it is locked. A main-shift visit changes employee through its offer instead, so it cannot be dropped on another employee who is not already assigned.
+- Each drop saves at once with a recorded reason. The message says what changed, with **Undo**; **×** dismisses it.
+
+### Visit details
+
+Clicking a visit opens its details (a slide-over on wide screens, a bottom sheet on phones; Escape closes):
+
+- Status, an **Overlap** badge, shift name, company and branch.
+- Visit date and time, visit number, employee, duration, site address.
+- Checklist progress ("N of M done", or "No checklist yet").
+- A warning when it overlaps another visit for the same employee.
+- Visit notes.
+- **Open in shift calendar** (for admins with calendar access).
+
+### States
+
+- "Could not load the schedule. Check your connection, then retry." with **Retry**; a separate error with **Reload**.
+- "No active employees yet. Add employees, then their visits appear here."
+- "No visits this week. Choose another week or check the shift schedules."
+- "Choose at least one employee to see their visits."
