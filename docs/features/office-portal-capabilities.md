@@ -8,6 +8,7 @@ Pages are documented one at a time. A page not listed yet has not been inventori
 | --- | --- | --- |
 | Office shell (every page) | all `/admin/` routes | Inventoried |
 | Dashboard | `/admin/` | Inventoried |
+| Shifts (work orders in the redesign) | `/admin/shifts/` | Inventoried |
 
 ## Office shell (every page)
 
@@ -115,3 +116,120 @@ Cards that link to the main pages, in three groups:
 ### Not on the dashboard
 
 - The "Today" figures (visits in progress now, scheduled visits today, scheduled hours today) are a component that the Shifts page uses, not the dashboard.
+
+## Shifts
+
+Route: `/admin/shifts/`. Source: `site/src/app/admin/shifts/page.tsx`, `site/src/components/admin/ShiftWorkspace.tsx`, `AddVisitDialog.tsx`, `TodayKpis.tsx`, `site/src/components/ShiftPricingDialog.tsx`, `VisitAssigneesDialog.tsx`, `LifecycleTabs.tsx`. The redesign calls a shift a **work order**.
+
+A shift belongs to one company and one branch (property). A property has one main shift; partner bookings and added visits become its numbered visits. Times use the tenant time zone, which the page shows.
+
+### Page
+
+- **Add shift** (disabled until scheduling data has loaded).
+- **Today** figures: visits in progress now, scheduled visits today, scheduled hours today. Each loads on its own and shows "Could not load" on failure.
+- Filters: **Filter by company** (searchable) and **Filter by shift type** (the seven schedule types). Changing a filter returns to page 1.
+- Tabs: **Active**, **Completed** and **Inactive**, each with a count.
+- Empty states: "No shifts yet." or "No (tab) shifts. Check the (other) tab."
+- Pages of results with a pager.
+
+### Shift list
+
+Columns: Name, Schedule, Employee names, Status, actions.
+
+- Name shows the property address, with chips for size (m²), rooms and beds.
+- Employee names: the assigned employees, "None", or "N assigned".
+- Status: Active, Completed, Inactive, or "Past visit · check completion" for a one-time shift whose date has passed.
+- Clicking a row (or Enter or Space on it) expands it to show its **Visits**:
+  - A **Month** dropdown chooses the month shown.
+  - The visit list can be collapsed and shows a count.
+  - Each visit: visit name, start, cleaning type (Normal or Deep), employee (or "Offer sent to …", or "Unassigned"), status.
+  - States: "Loading visits…", an error message, "No visits in this month."
+
+### Row actions (More menu)
+
+| Action | Who | When | What it does |
+| --- | --- | --- | --- |
+| View details | all | always | Opens the shift workspace (below) |
+| Pricing | admin | not a main shift | Opens the pricing dialog |
+| Edit schedule | admin | always | Opens the shift form in edit mode |
+| Assign employees | all | active, not a main shift | Opens the assignment dialog |
+| Assign employees | all | active main shift | Sets the default employee for new visits |
+| Visits | all | active | Opens the visits dialog |
+| Add visit | all | active main shift, or active on-call shift | Opens the add-visit dialog |
+| Checklist template | admin | active | Assigns a checklist template |
+| Deactivate | all | active | Confirms, then stops new visits; can be reactivated |
+| Reactivate | all | inactive | Confirms, then returns it to Active |
+| Delete | all | inactive | Confirms, then deletes it and its assignments; records, photos and reports stay |
+
+### Add shift and Edit schedule (form)
+
+- Company (active companies; an inactive company only when editing a shift that has one) and **Branch** (property).
+- Name is generated from the property (cleaning type, address, size, rooms and beds). It is shown read-only when editing.
+- **Price version** (when the property has more than one): defaults to the price in force today.
+- **Price for this shift**: Property price, Monthly fee, or Price per completed visit. The last two need a price excluding VAT and a VAT rate.
+- **Start date** (required) and **End date** (optional, not before the start), except for one-time shifts.
+- **Schedule** type and its fields:
+  - Daily: start and end time.
+  - Varied times by weekday: days, then a start and end time for each day.
+  - Specific days: days, start and end time.
+  - Bi-weekly: week parity (Week 1 or Week 2), day, start and end time.
+  - On-call / flexible: no dates; visits are added one by one later.
+  - Monthly: day of month (1–31), start and end time.
+  - One-time: date, start time and end time (only kept when editing an existing one-time shift; new one-time work is an added visit).
+- Notes, and a **Quality cycle template**.
+- Validation messages: schedule type required; one-time date and times required, end after start; start date required; end date on or after start date; company and branch required; at least one day for specific days; each varied day needs valid times; a price above zero and VAT 0–100 for a shift price.
+
+### Shift workspace (View details)
+
+Side panel showing the shift's status, schedule, assignees, checklist template, pricing and visits, with a "Next step" hint (for example, on-call shifts need visits scheduled by hand). Changes are made from the row's More menu.
+
+### Assign employees (regular shift)
+
+- Multi-select of active employees not already assigned, then **Assign**.
+- **Refresh assignments**.
+- Overlapping shifts are checked on assign, and conflicts are shown.
+- Assigned employees are listed, each with an **Unassign** button.
+
+### Default employee (main shift)
+
+- Choose the employee that new visits are offered to, or none (new visits start unassigned). Visits already added keep their employee.
+
+### Visits dialog
+
+- **From** and **To** dates, then **Load**. Changes apply to the selected visit only.
+- **Add visit**.
+- For a main shift: **Default employee** for new visits.
+- Each visit shows start, end, status, assignees (with the offer state: partner booking, waiting for the employee to accept, accepted, or no employee yet), reason, and an overlap flag.
+- Visit actions, depending on the visit:
+  - **Pricing** for one visit (per-visit priced, on-call or one-time shifts).
+  - **Change employee** (main shift): offer the visit to an employee, or leave it unassigned. An employee who held it is released.
+  - **Change cleaning type**: Normal or Deep. Deep adds €15.00 excl. VAT. Allowed at any time, including after the cleaning.
+  - **Assign** (regular shift): see Assign visit.
+  - **Change**: move or change the time, with start, end, an optional replacement employee (regular shifts), a required reason and optional notes for the employee.
+  - **Cancel**: a recurring visit by customer or company (with reason); an extra visit through the Cancel visit dialog.
+  - **Restore** a changed or cancelled visit, or **Delete visit** for an extra visit.
+  - Partner bookings: managed under Partner requests; only the cleaning type can be changed here.
+  - A cancelled manual visit stays listed with **Restore**.
+
+### Add visit
+
+Property, date, last day (optional, for several days), start and end time, cleaning type (Normal or Deep), employee (the shift's default employee, unassigned, or a chosen employee who gets an offer), and notes for the employee.
+
+### Assign visit
+
+- Apply to: this occurrence only, or from this date onward.
+- Action: replace regular assignees, add extra employees, or restore the recurring assignment (this occurrence only).
+- Employees and a reason.
+- **Preview assignment** shows the result first, including overlaps with other shifts (each with a link to the clashing shift). **Save assignment** applies it.
+
+### Cancel visit
+
+Cancelled by (customer or company) and a reason. The visit leaves the employee's schedule and is not invoiced; it stays in the list so it can be restored.
+
+### Pricing dialog
+
+Pricing basis (fixed monthly fee, per visit, or property price), net rate, VAT, effective from, the property price version, a reason when a single visit's price is overridden, and the property's price history.
+
+### Checklist template
+
+Choose a checklist template for the shift's company and branch, or none. It applies to upcoming visits and to the current visit if it has no checklist yet; started and submitted checklists keep their items.
