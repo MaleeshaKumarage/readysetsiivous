@@ -51,7 +51,7 @@ test('each shift row exposes one More actions menu, with details first and no se
   await expect(row.getByRole('button', { name: 'Manage', exact: true })).toHaveCount(0);
   await expect(row.getByRole('cell', { name: 'Active', exact: true })).toBeVisible();
   await row.getByRole('button', { name: 'More actions for Workspace shift', exact: true }).click();
-  for (const label of ['Pricing', 'Edit schedule', 'Assign employees', 'Occurrences', 'Checklist template', 'Deactivate']) {
+  for (const label of ['Pricing', 'Edit schedule', 'Assign employees', 'Visits', 'Checklist template', 'Deactivate']) {
     await expect(page.getByRole('menuitem', { name: label, exact: true })).toBeVisible();
   }
   await expect(page.getByRole('menuitem', { name: 'Add visit', exact: true })).toHaveCount(0);
@@ -113,8 +113,8 @@ test('workspace Pricing opens the existing shift pricing dialog for that shift',
 
 test('workspace Occurrences opens the existing occurrences dialog for that shift', async ({ page }) => {
   await setup(page); await page.goto('/admin/shifts/');
-  await shiftAction(page, 'Workspace shift', 'Occurrences');
-  await expect(page.getByRole('dialog', { name: 'Occurrences — Workspace shift', exact: true })).toBeVisible();
+  await shiftAction(page, 'Workspace shift', 'Visits');
+  await expect(page.getByRole('dialog', { name: 'Visits — Workspace shift', exact: true })).toBeVisible();
 });
 
 test('on-call workspace explains dated visits and offers one-time scheduling', async ({ page }) => {
@@ -124,7 +124,7 @@ test('on-call workspace explains dated visits and offers one-time scheduling', a
   await expect(dialog.getByText('Next step: Admin: schedule a dated visit, then assign an employee.', { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
   await shiftAction(page, 'Workspace on-call', 'Add visit');
-  await expect(page.getByRole('dialog', { name: 'Change occurrence', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Change visit', exact: true })).toBeVisible();
 });
 
 test('completed one-time shift shows Completed status and a no-further-visits next step', async ({ page }) => {
@@ -148,7 +148,7 @@ test('inactive shift workspace offers only reactivate and delete', async ({ page
   await page.getByRole('button', { name: 'More actions for Workspace paused', exact: true }).click();
   await expect(page.getByRole('menuitem', { name: 'Reactivate', exact: true })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Delete', exact: true })).toBeVisible();
-  await expect(page.getByRole('menuitem', { name: 'Occurrences', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: 'Visits', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
 });
 
@@ -187,7 +187,7 @@ test('phone-width workspace has no horizontal overflow and its actions stay insi
   expect(overflow).toBeLessThanOrEqual(0);
   await page.getByRole('button', { name: 'More actions for Workspace shift', exact: true }).click();
   const viewport = page.viewportSize();
-  for (const label of ['Edit schedule', 'Assign employees', 'Occurrences', 'Pricing']) {
+  for (const label of ['Edit schedule', 'Assign employees', 'Visits', 'Pricing']) {
     const box = await page.getByRole('menuitem', { name: label, exact: true }).boundingBox();
     expect(box).not.toBeNull();
     if (box && viewport) {

@@ -158,7 +158,7 @@ test('on-call occurrence price requires a reason and saves only that visit', asy
     if (route.request().method() === 'PUT') { writes.push(route.request().postDataJSON()); return route.fulfill({ headers, json: {} }); }
     return route.fulfill({ headers, json: [visit] });
   });
-  await page.goto('/admin/shifts/'); await shiftAction(page, 'Biweekly', 'Occurrences'); await page.getByRole('button', { name: 'Visit price', exact: true }).click();
+  await page.goto('/admin/shifts/'); await shiftAction(page, 'Biweekly', 'Visits'); await page.getByRole('button', { name: 'Visit price', exact: true }).click();
   const dialog = page.getByRole('dialog').filter({ hasText: 'Visit price — Biweekly' });
   await dialog.getByRole('textbox', { name: 'Visit price before VAT (€)', exact: true }).fill('75'); await expect(dialog.getByRole('button', { name: 'Save price', exact: true })).toBeDisabled();
   await dialog.getByRole('textbox', { name: 'Reason for visit price override', exact: true }).fill('Extra cleaning requested'); await dialog.getByRole('button', { name: 'Save price', exact: true }).click(); await expect(dialog).toHaveCount(0);

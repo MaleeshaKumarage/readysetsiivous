@@ -56,10 +56,10 @@ test('schedule is explicit and on-call creation does not invent a daily visit', 
   await dialog.getByRole('button', { name: 'Create shift', exact: true }).click();
   await expect.poll(() => writes.length).toBe(1);
   expect(writes[0].schedule).toEqual({ type: 4 });
-  await expect(page.getByRole('dialog', { name: /Occurrences/ })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: /^Visits/ })).toBeVisible();
   // Closing the occurrences window returns to the list, which now includes the shift just created.
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog', { name: /Occurrences/ })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: /^Visits/ })).toHaveCount(0);
   await expect(page.getByRole('cell', { name: ONCALL_NAME, exact: true })).toBeVisible();
 });
 
